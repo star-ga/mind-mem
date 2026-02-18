@@ -1,0 +1,43 @@
+// Category distillation scoring kernel
+// Scores block-category affinity for thematic summary generation
+import std.tensor;
+
+// Score N blocks against C categories using keyword/tag/entity overlap.
+// Each input is a pre-computed [N, C] overlap matrix (flat row-major).
+// Returns [N, C] affinity matrix.
+fn category_affinity(
+    keyword_overlap: tensor<f32[N, C]>,
+    tag_match: tensor<f32[N, C]>,
+    entity_match: tensor<f32[N, C]>,
+    kw_weight: f32,
+    tag_weight: f32,
+    ent_weight: f32
+) -> tensor<f32[N, C]> {
+    return kw_weight * keyword_overlap + tag_weight * tag_match + ent_weight * entity_match;
+}
+
+// Score query relevance to C categories.
+// query_kw: [K] keyword TF-IDF weights for the query.
+// cat_kw: [C, K] keyword profile per category (row-major).
+// Returns [C] relevance scores normalized by query mass.
+fn query_category_relevance(
+    query_kw: tensor<f32[K]>,
+    cat_kw: tensor<f32[C, K]>
+) -> tensor<f32[C]> {
+    let dots = matmul(cat_kw, reshape(query_kw, [K, 1]));
+    let flat = reshape(dots, [C]);
+    let q_sum = sum_all(query_kw) + 1e-6;
+    return flat / q_sum;
+}
+
+// Soft-threshold affinity scores to produce category assignments.
+// Uses steep sigmoid around threshold — blocks near the boundary get
+// partial assignment weight instead of a hard 0/1 cutoff.
+// Steepness of 20.0 gives ~0.01 at threshold-0.23, ~0.99 at threshold+0.23.
+fn category_assign(
+    affinity: tensor<f32[N, C]>,
+    threshold: f32
+) -> tensor<f32[N, C]> {
+    let shifted = (affinity - threshold) * 20.0;
+    return 1.0 / (1.0 + exp(shifted * -1.0));
+}

@@ -11,7 +11,7 @@ Requires the MIND compiler (`mindc`). See [mindlang.dev](https://mindlang.dev) f
 ```bash
 # Compile all kernels to a single shared library
 mindc mind/bm25.mind mind/rrf.mind mind/reranker.mind mind/abstention.mind \
-      mind/ranking.mind mind/importance.mind \
+      mind/ranking.mind mind/importance.mind mind/category.mind \
       --emit=shared -o lib/libmindmem.so
 
 # Or compile individually for testing
@@ -29,6 +29,7 @@ mindc mind/rrf.mind --emit=shared -o lib/librrf.so
 | `abstention.mind` | `entity_overlap`, `confidence_score`                                                 | Confidence gating               |
 | `ranking.mind`    | `weighted_rank`, `top_k_mask`                                                        | Evidence ranking                |
 | `importance.mind` | `importance_score`                                                                   | A-MEM importance scoring        |
+| `category.mind`   | `category_affinity`, `query_category_relevance`, `category_assign`                   | Category distillation scoring   |
 
 ## FFI
 

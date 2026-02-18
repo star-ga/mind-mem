@@ -91,6 +91,12 @@ class MindMemKernel:
             self._lib.top_k_mask.restype = None
             self._lib.weighted_rank.argtypes = [_fp, _fp, _i, _fp]
             self._lib.weighted_rank.restype = None
+            self._lib.category_affinity.argtypes = [_fp, _fp, _fp, _f, _f, _f, _i, _i, _fp]
+            self._lib.category_affinity.restype = None
+            self._lib.query_category_relevance.argtypes = [_fp, _fp, _i, _i, _fp]
+            self._lib.query_category_relevance.restype = None
+            self._lib.category_assign.argtypes = [_fp, _f, _i, _i, _fp]
+            self._lib.category_assign.restype = None
         except AttributeError:
             pass  # Some builds may not export all functions
 
@@ -218,6 +224,58 @@ class MindMemKernel:
         out = arr_t()
         self._lib.weighted_rank(
             arr_t(*scores), arr_t(*weights), ctypes.c_int(n), out,
+        )
+        return list(out)
+
+    def category_affinity_py(self, kw_overlap: list[float], tag_match: list[float],
+                              ent_match: list[float], n_blocks: int, n_cats: int,
+                              kw_w: float = 0.5, tag_w: float = 0.3,
+                              ent_w: float = 0.2) -> list[float]:
+        """Category affinity scoring via compiled MIND kernel.
+
+        All inputs are flat row-major [N*C]. Returns flat [N*C] affinity scores.
+        """
+        total = n_blocks * n_cats
+        arr_t = ctypes.c_float * total
+        out = arr_t()
+        self._lib.category_affinity(
+            arr_t(*kw_overlap), arr_t(*tag_match), arr_t(*ent_match),
+            ctypes.c_float(kw_w), ctypes.c_float(tag_w), ctypes.c_float(ent_w),
+            ctypes.c_int(n_blocks), ctypes.c_int(n_cats), out,
+        )
+        return list(out)
+
+    def query_category_relevance_py(self, query_kw: list[float],
+                                     cat_kw: list[float], n_cats: int,
+                                     n_keywords: int) -> list[float]:
+        """Query-category relevance via compiled MIND kernel.
+
+        query_kw: flat [K] keyword weights.
+        cat_kw: flat row-major [C*K] category keyword profiles.
+        Returns [C] relevance scores.
+        """
+        qk_t = ctypes.c_float * n_keywords
+        ck_t = ctypes.c_float * (n_cats * n_keywords)
+        out_t = ctypes.c_float * n_cats
+        out = out_t()
+        self._lib.query_category_relevance(
+            qk_t(*query_kw), ck_t(*cat_kw),
+            ctypes.c_int(n_cats), ctypes.c_int(n_keywords), out,
+        )
+        return list(out)
+
+    def category_assign_py(self, affinity: list[float], threshold: float,
+                            n_blocks: int, n_cats: int) -> list[float]:
+        """Soft category assignment via compiled MIND kernel.
+
+        Returns [N*C] sigmoid-thresholded assignment weights.
+        """
+        total = n_blocks * n_cats
+        arr_t = ctypes.c_float * total
+        out = arr_t()
+        self._lib.category_assign(
+            arr_t(*affinity), ctypes.c_float(threshold),
+            ctypes.c_int(n_blocks), ctypes.c_int(n_cats), out,
         )
         return list(out)
 
