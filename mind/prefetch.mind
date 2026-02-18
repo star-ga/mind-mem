@@ -1,0 +1,29 @@
+// Prefetch context scoring kernel
+// Ranks candidate blocks by relevance to recent conversation signals
+import std.tensor;
+
+// Score N candidate blocks against S signals.
+// signal_overlap: [N, S] matrix of signal-block keyword overlap counts.
+// recency: [N] recency weights (higher = more recent block).
+// Returns [N] aggregated prefetch scores.
+fn prefetch_score(
+    signal_overlap: tensor<f32[N, S]>,
+    recency: tensor<f32[N]>,
+    signal_weight: f32,
+    recency_weight: f32
+) -> tensor<f32[N]> {
+    // Sum signal overlap across all signals per block
+    let signal_sum = reduce_sum(signal_overlap, axis=1);
+    return signal_weight * signal_sum + recency_weight * recency;
+}
+
+// Deduplicate and top-k selection.
+// scores: [N] aggregated scores from prefetch_score.
+// mask: [N] binary mask (1.0 = candidate, 0.0 = already seen/deduped).
+// Returns [N] masked scores suitable for argsort.
+fn prefetch_select(
+    scores: tensor<f32[N]>,
+    mask: tensor<f32[N]>
+) -> tensor<f32[N]> {
+    return scores * mask;
+}
