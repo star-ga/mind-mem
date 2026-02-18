@@ -344,7 +344,7 @@ def main():
     print(f"  Done in {elapsed:.1f}s ({len(per_question)} evaluated, {skipped} skipped)")
 
     # Step 3: Aggregate and report
-    print(f"\n[3/3] Computing metrics...")
+    print("\n[3/3] Computing metrics...")
     agg = aggregate_results(per_question)
     print_results_table(agg)
 

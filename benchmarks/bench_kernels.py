@@ -5,6 +5,9 @@ Measures wall-clock time for the numerical hot paths that MIND kernels
 accelerate. Runs each function at multiple array sizes, reports median
 times and speedup ratios.
 
+For MIND kernels, the benchmark pre-allocates ctypes arrays and only
+times the native function call itself (no marshaling overhead).
+
 Usage:
     python benchmarks/bench_kernels.py
     python benchmarks/bench_kernels.py --iterations 500
@@ -14,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ctypes
 import math
 import os
 import random
@@ -162,85 +166,207 @@ def bench(func, args, iterations: int) -> float:
     return statistics.median(times)
 
 
+def bench_native(func, iterations: int) -> float:
+    """Run a zero-arg callable `iterations` times, return median seconds."""
+    times = []
+    for _ in range(iterations):
+        t0 = time.perf_counter()
+        func()
+        times.append(time.perf_counter() - t0)
+    return statistics.median(times)
+
+
 def format_time(seconds: float) -> str:
     if seconds < 1e-6:
         return f"{seconds * 1e9:.1f} ns"
     elif seconds < 1e-3:
-        return f"{seconds * 1e6:.1f} μs"
+        return f"{seconds * 1e6:.1f} \u03bcs"
     elif seconds < 1.0:
         return f"{seconds * 1e3:.2f} ms"
     else:
         return f"{seconds:.3f} s"
 
 
-def run_benchmarks(sizes: list[int], iterations: int):
-    # Try loading MIND kernel
-    mind_kernel = None
-    try:
-        from mind_ffi import get_kernel
-        mind_kernel = get_kernel()
-    except Exception:
-        pass
+# ── Pre-allocated ctypes kernel callers ───────────────────────────────
 
-    mind_label = "MIND (.so)" if mind_kernel else "MIND (not available)"
+def make_native_rrf(lib, ranks_a, ranks_b, k, bm25_w, vec_w):
+    n = len(ranks_a)
+    fa = (ctypes.c_float * n)(*ranks_a)
+    fb = (ctypes.c_float * n)(*ranks_b)
+    out = (ctypes.c_float * n)()
+    ck = ctypes.c_float(k)
+    cw1 = ctypes.c_float(bm25_w)
+    cw2 = ctypes.c_float(vec_w)
+    cn = ctypes.c_int(n)
+    return lambda: lib.rrf_fuse(fa, fb, cn, ck, cw1, cw2, out)
+
+
+def make_native_bm25f(lib, tfs, df, N, dls, avgdl, k1, b, fw):
+    n = len(tfs)
+    ctfs = (ctypes.c_float * n)(*tfs)
+    cdls = (ctypes.c_float * n)(*dls)
+    out = (ctypes.c_float * n)()
+    return lambda: lib.bm25f_batch(
+        ctfs, ctypes.c_float(df), ctypes.c_float(N),
+        cdls, ctypes.c_float(avgdl), ctypes.c_float(k1),
+        ctypes.c_float(b), ctypes.c_float(fw), ctypes.c_int(n), out)
+
+
+def make_native_negation(lib, scores, bools, penalty):
+    n = len(scores)
+    cs = (ctypes.c_float * n)(*scores)
+    cf = (ctypes.c_float * n)(*(1.0 if b else 0.0 for b in bools))
+    out = (ctypes.c_float * n)()
+    return lambda: lib.negation_penalty(cs, cf, ctypes.c_float(penalty),
+                                        ctypes.c_int(n), out)
+
+
+def make_native_date_prox(lib, days, sigma):
+    n = len(days)
+    cd = (ctypes.c_float * n)(*days)
+    out = (ctypes.c_float * n)()
+    return lambda: lib.date_proximity(cd, ctypes.c_float(sigma),
+                                      ctypes.c_int(n), out)
+
+
+def make_native_cat_boost(lib, scores, bools, boost):
+    n = len(scores)
+    cs = (ctypes.c_float * n)(*scores)
+    cf = (ctypes.c_float * n)(*(1.0 if b else 0.0 for b in bools))
+    out = (ctypes.c_float * n)()
+    return lambda: lib.category_boost(cs, cf, ctypes.c_float(boost),
+                                      ctypes.c_int(n), out)
+
+
+def make_native_importance(lib, access_counts, days, base, decay):
+    n = len(access_counts)
+    ca = (ctypes.c_int * n)(*access_counts)
+    cd = (ctypes.c_float * n)(*days)
+    out = (ctypes.c_float * n)()
+    return lambda: lib.importance_batch(ca, cd, ctypes.c_float(base),
+                                        ctypes.c_float(decay),
+                                        ctypes.c_int(n), out)
+
+
+def make_native_confidence(lib):
+    lib.confidence_score.restype = ctypes.c_float
+    args = [ctypes.c_float(v) for v in (0.5, 0.7, 0.3, 0.8, 0.2,
+                                         0.30, 0.25, 0.15, 0.20, 0.10)]
+    return lambda: lib.confidence_score(*args)
+
+
+def make_native_topk(lib, scores, k):
+    n = len(scores)
+    cs = (ctypes.c_float * n)(*scores)
+    out = (ctypes.c_float * n)()
+    return lambda: lib.top_k_mask(cs, ctypes.c_int(n), ctypes.c_int(k), out)
+
+
+def make_native_weighted(lib, scores, weights):
+    n = len(scores)
+    cs = (ctypes.c_float * n)(*scores)
+    cw = (ctypes.c_float * n)(*weights)
+    out = (ctypes.c_float * n)()
+    return lambda: lib.weighted_rank(cs, cw, ctypes.c_int(n), out)
+
+
+def run_benchmarks(sizes: list[int], iterations: int):
+    # Try loading MIND kernel .so directly
+    lib = None
+    lib_paths = [
+        os.path.join(os.path.dirname(__file__), "..", "lib", "libmindmem.so"),
+        os.path.join(os.path.dirname(__file__), "..", "lib", "libmindmem.dylib"),
+    ]
+    for p in lib_paths:
+        if os.path.exists(p):
+            try:
+                lib = ctypes.CDLL(os.path.abspath(p))
+            except OSError:
+                pass
+            break
+
+    mind_label = "MIND (.so)" if lib else "MIND (not available)"
 
     print("=" * 72)
     print("mind-mem Kernel Benchmark")
     print("=" * 72)
     print(f"  Iterations per measurement: {iterations}")
     print(f"  Array sizes: {sizes}")
-    print(f"  MIND kernel: {'LOADED' if mind_kernel else 'NOT FOUND (Python-only mode)'}")
+    print(f"  MIND kernel: {'LOADED' if lib else 'NOT FOUND (Python-only mode)'}")
+    if lib:
+        print("  Mode: pre-allocated ctypes (no marshaling in timing loop)")
     print()
 
     benchmarks = []
 
+    sep = "\u2500"
+    dash = "\u2014"
+
     for n in sizes:
-        print(f"--- N = {n} {'─' * (55 - len(str(n)))}")
+        print(f"--- N = {n} " + sep * (55 - len(str(n))))
         print()
         print(f"  {'Function':<28} {'Python':>12}  {mind_label:>18}  {'Speedup':>8}")
-        print(f"  {'─' * 28} {'─' * 12}  {'─' * 18}  {'─' * 8}")
+        print("  " + sep * 28 + " " + sep * 12 + "  " + sep * 18 + "  " + sep * 8)
 
         # Generate data once per size
         ranks_a = gen_ranks(n)
         ranks_b = gen_ranks(n)
         scores_a = gen_scores(n)
-        scores_b = gen_scores(n)
         bools_a = gen_bools(n)
         days = gen_scores(n, 0, 365)
         access_counts = gen_ints(n, 0, 500)
         query_ents = [f"tok_{i}" for i in range(5)]
         token_lists = gen_token_lists(n)
         tfs = gen_scores(n, 0, 10)
-        dfs = [5.0]
         dls = gen_scores(n, 50, 500)
         weights = gen_scores(n, 0.5, 1.5)
 
+        # Build test list: (name, py_func, py_args, native_maker_or_None)
         tests = [
-            ("rrf_fuse", py_rrf_fuse, (ranks_a, ranks_b, 60.0, 1.0, 1.0)),
-            ("bm25f_batch", py_bm25f_batch, (tfs, dfs, 10000.0, dls, 200.0)),
-            ("negation_penalty", py_negation_penalty, (scores_a, bools_a, 0.3)),
-            ("date_proximity", py_date_proximity, (days, 30.0)),
-            ("category_boost", py_category_boost, (scores_a, bools_a, 1.15)),
-            ("importance_batch", py_importance_batch, (access_counts, days)),
-            ("entity_overlap", py_entity_overlap, (query_ents, token_lists)),
-            ("confidence_score (1)", py_confidence_score,
-             (0.5, 0.7, 0.3, 0.8, 0.2)),
-            ("top_k_mask", py_top_k_mask, (scores_a, min(10, n))),
-            ("weighted_rank", py_weighted_rank, (scores_a, weights)),
+            ("rrf_fuse", py_rrf_fuse,
+             (ranks_a, ranks_b, 60.0, 1.0, 1.0),
+             lambda: make_native_rrf(lib, ranks_a, ranks_b, 60.0, 1.0, 1.0) if lib else None),
+            ("bm25f_batch", py_bm25f_batch,
+             (tfs, [5.0], 10000.0, dls, 200.0),
+             lambda: make_native_bm25f(lib, tfs, 5.0, 10000.0, dls, 200.0, 1.2, 0.75, 1.0) if lib else None),
+            ("negation_penalty", py_negation_penalty,
+             (scores_a, bools_a, 0.3),
+             lambda: make_native_negation(lib, scores_a, bools_a, 0.3) if lib else None),
+            ("date_proximity", py_date_proximity,
+             (days, 30.0),
+             lambda: make_native_date_prox(lib, days, 30.0) if lib else None),
+            ("category_boost", py_category_boost,
+             (scores_a, bools_a, 1.15),
+             lambda: make_native_cat_boost(lib, scores_a, bools_a, 1.15) if lib else None),
+            ("importance_batch", py_importance_batch,
+             (access_counts, days),
+             lambda: make_native_importance(lib, access_counts, days, 1.0, 0.01) if lib else None),
+            ("entity_overlap", py_entity_overlap,
+             (query_ents, token_lists),
+             lambda: None),  # set-based, no direct C equivalent
+            ("confidence_score", py_confidence_score,
+             (0.5, 0.7, 0.3, 0.8, 0.2),
+             lambda: make_native_confidence(lib) if lib else None),
+            ("top_k_mask", py_top_k_mask,
+             (scores_a, min(10, n)),
+             lambda: make_native_topk(lib, scores_a, min(10, n)) if lib else None),
+            ("weighted_rank", py_weighted_rank,
+             (scores_a, weights),
+             lambda: make_native_weighted(lib, scores_a, weights) if lib else None),
         ]
 
-        for name, py_func, args in tests:
-            py_time = bench(py_func, args, iterations)
+        for name, py_func, py_args, native_maker in tests:
+            py_time = bench(py_func, py_args, iterations)
 
             mind_time = None
-            speedup = "—"
-            if mind_kernel and hasattr(mind_kernel, name + "_py"):
-                mind_func = getattr(mind_kernel, name + "_py")
-                mind_time = bench(mind_func, args, iterations)
+            speedup = "\u2014"
+            native_fn = native_maker()
+            if native_fn is not None:
+                mind_time = bench_native(native_fn, iterations)
                 if mind_time > 0:
                     speedup = f"{py_time / mind_time:.1f}x"
 
-            mind_str = format_time(mind_time) if mind_time else "—"
+            mind_str = format_time(mind_time) if mind_time else "\u2014"
             print(f"  {name:<28} {format_time(py_time):>12}  {mind_str:>18}  {speedup:>8}")
 
             benchmarks.append({
@@ -257,12 +383,12 @@ def run_benchmarks(sizes: list[int], iterations: int):
     print("Summary")
     print("=" * 72)
 
-    if not mind_kernel:
+    if not lib:
         print()
         print("  MIND kernel not compiled. Showing Python baseline only.")
         print("  To compare, compile kernels and re-run:")
         print()
-        print("    mindc mind/*.mind --emit=shared -o lib/libmindmem.so")
+        print("    gcc -O3 -march=native -shared -fPIC -o lib/libmindmem.so lib/kernels.c -lm")
         print("    python benchmarks/bench_kernels.py")
         print()
 
@@ -272,9 +398,9 @@ def run_benchmarks(sizes: list[int], iterations: int):
     for n in sizes:
         print(f" {'N='+str(n):>12}", end="")
     print()
-    print(f"  {'─' * 28}", end="")
+    print("  " + sep * 28, end="")
     for _ in sizes:
-        print(f" {'─' * 12}", end="")
+        print(" " + sep * 12, end="")
     print()
 
     for fname in func_names:
@@ -285,7 +411,7 @@ def run_benchmarks(sizes: list[int], iterations: int):
             if entry:
                 print(f" {format_time(entry['python_s']):>12}", end="")
             else:
-                print(f" {'—':>12}", end="")
+                print(f" {dash:>12}", end="")
         print()
 
     print()

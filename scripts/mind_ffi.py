@@ -65,16 +65,114 @@ class MindMemKernel:
     def rrf_fuse_py(self, bm25_ranks: list[float], vector_ranks: list[float],
                     k: float = 60.0, bm25_w: float = 1.0,
                     vector_w: float = 1.0) -> list[float]:
-        """RRF fusion via compiled MIND kernel. Pure-Python-compatible signature."""
+        """RRF fusion via compiled MIND kernel."""
         N = len(bm25_ranks)
         arr_t = ctypes.c_float * N
         out = arr_t()
-        bm25_arr = arr_t(*bm25_ranks)
-        vec_arr = arr_t(*vector_ranks)
         self._lib.rrf_fuse(
-            bm25_arr, vec_arr, ctypes.c_int(N),
+            arr_t(*bm25_ranks), arr_t(*vector_ranks), ctypes.c_int(N),
             ctypes.c_float(k), ctypes.c_float(bm25_w), ctypes.c_float(vector_w),
             out,
+        )
+        return list(out)
+
+    def bm25f_batch_py(self, tfs: list[float], dfs: list[float], N_docs: float,
+                       dls: list[float], avgdl: float,
+                       k1: float = 1.2, b: float = 0.75,
+                       field_weight: float = 1.0) -> list[float]:
+        """BM25F batch scoring via compiled MIND kernel."""
+        n = len(tfs)
+        arr_t = ctypes.c_float * n
+        out = arr_t()
+        self._lib.bm25f_batch(
+            arr_t(*tfs), ctypes.c_float(dfs[0]), ctypes.c_float(N_docs),
+            arr_t(*dls), ctypes.c_float(avgdl),
+            ctypes.c_float(k1), ctypes.c_float(b), ctypes.c_float(field_weight),
+            ctypes.c_int(n), out,
+        )
+        return list(out)
+
+    def negation_penalty_py(self, scores: list[float], has_negation: list[bool],
+                            penalty: float = 0.3) -> list[float]:
+        """Negation penalty via compiled MIND kernel."""
+        n = len(scores)
+        arr_t = ctypes.c_float * n
+        out = arr_t()
+        flags = arr_t(*(1.0 if b else 0.0 for b in has_negation))
+        self._lib.negation_penalty(
+            arr_t(*scores), flags, ctypes.c_float(penalty), ctypes.c_int(n), out,
+        )
+        return list(out)
+
+    def date_proximity_py(self, days_diff: list[float],
+                          sigma: float = 30.0) -> list[float]:
+        """Gaussian date proximity via compiled MIND kernel."""
+        n = len(days_diff)
+        arr_t = ctypes.c_float * n
+        out = arr_t()
+        self._lib.date_proximity(
+            arr_t(*days_diff), ctypes.c_float(sigma), ctypes.c_int(n), out,
+        )
+        return list(out)
+
+    def category_boost_py(self, scores: list[float], matches: list[bool],
+                          boost: float = 1.15) -> list[float]:
+        """Category boost via compiled MIND kernel."""
+        n = len(scores)
+        arr_t = ctypes.c_float * n
+        out = arr_t()
+        flags = arr_t(*(1.0 if b else 0.0 for b in matches))
+        self._lib.category_boost(
+            arr_t(*scores), flags, ctypes.c_float(boost), ctypes.c_int(n), out,
+        )
+        return list(out)
+
+    def importance_batch_py(self, access_counts: list[int], days_since: list[float],
+                            base: float = 1.0, decay: float = 0.01) -> list[float]:
+        """Importance batch scoring via compiled MIND kernel."""
+        n = len(access_counts)
+        float_arr = ctypes.c_float * n
+        int_arr = ctypes.c_int * n
+        out = float_arr()
+        self._lib.importance_batch(
+            int_arr(*access_counts), float_arr(*days_since),
+            ctypes.c_float(base), ctypes.c_float(decay), ctypes.c_int(n), out,
+        )
+        return list(out)
+
+    def confidence_score_py(self, entity_overlap: float, bm25_norm: float,
+                            speaker_cov: float, evidence_density: float,
+                            negation_asym: float,
+                            weights: tuple = (0.30, 0.25, 0.15, 0.20, 0.10)) -> float:
+        """Confidence score via compiled MIND kernel."""
+        self._lib.confidence_score.restype = ctypes.c_float
+        return self._lib.confidence_score(
+            ctypes.c_float(entity_overlap), ctypes.c_float(bm25_norm),
+            ctypes.c_float(speaker_cov), ctypes.c_float(evidence_density),
+            ctypes.c_float(negation_asym),
+            ctypes.c_float(weights[0]), ctypes.c_float(weights[1]),
+            ctypes.c_float(weights[2]), ctypes.c_float(weights[3]),
+            ctypes.c_float(weights[4]),
+        )
+
+    def top_k_mask_py(self, scores: list[float], k: int) -> list[bool]:
+        """Top-K mask via compiled MIND kernel."""
+        n = len(scores)
+        arr_t = ctypes.c_float * n
+        out = arr_t()
+        self._lib.top_k_mask(
+            arr_t(*scores), ctypes.c_int(n), ctypes.c_int(k), out,
+        )
+        return [v > 0.5 for v in out]
+
+    def weighted_rank_py(self, scores: list[float],
+                         weights: list[float]) -> list[float]:
+        """Weighted rank via compiled MIND kernel."""
+        n = len(scores)
+        arr_t = ctypes.c_float * n
+        out = arr_t()
+        self._lib.weighted_rank(
+            arr_t(*scores), arr_t(*weights), ctypes.c_int(n), out,
         )
         return list(out)
 
