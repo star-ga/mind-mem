@@ -1693,6 +1693,23 @@ def recall(workspace: str, query: str, limit: int = 10, active_only: bool = Fals
     if not query_tokens:
         return []
 
+    # Load .mind kernel overrides if available
+    _kernel_bm25_k1 = BM25_K1
+    _kernel_bm25_b = BM25_B
+    _kernel_field_weights = None
+    try:
+        from mind_ffi import get_mind_dir, load_kernel_config, get_kernel_param
+        mind_dir = get_mind_dir(workspace)
+        recall_kernel = load_kernel_config(os.path.join(mind_dir, "recall.mind"))
+        if recall_kernel:
+            _kernel_bm25_k1 = get_kernel_param(recall_kernel, "bm25", "k1", BM25_K1)
+            _kernel_bm25_b = get_kernel_param(recall_kernel, "bm25", "b", BM25_B)
+            fields_section = recall_kernel.get("fields", {})
+            if fields_section:
+                _kernel_field_weights = fields_section
+    except ImportError:
+        pass
+
     # Detect query type for category-specific tuning
     query_type = detect_query_type(query)
     qparams = _QUERY_TYPE_PARAMS.get(query_type, _QUERY_TYPE_PARAMS["single-hop"])
@@ -1776,6 +1793,11 @@ def recall(workspace: str, query: str, limit: int = 10, active_only: bool = Fals
     if not all_blocks:
         return []
 
+    # --- Kernel overrides: local aliases for BM25 params ---
+    _fw = _kernel_field_weights if _kernel_field_weights else FIELD_WEIGHTS
+    _k1 = float(_kernel_bm25_k1)
+    _b = float(_kernel_bm25_b)
+
     # --- BM25F: per-field tokenization + flat token list for IDF ---
     doc_field_tokens = []   # [{field: [tokens]}] per block
     doc_flat_tokens = []    # [[all_tokens]] per block (for IDF + bigrams)
@@ -1794,7 +1816,7 @@ def recall(workspace: str, query: str, limit: int = 10, active_only: bool = Fals
         seen = set()
         wdl = 0.0
         for field, tokens in ft.items():
-            w = FIELD_WEIGHTS.get(field, 1.0)
+            w = _fw.get(field, 1.0)
             wdl += len(tokens) * w
             for t in tokens:
                 seen.add(t)
@@ -1821,7 +1843,7 @@ def recall(workspace: str, query: str, limit: int = 10, active_only: bool = Fals
         weighted_tf = Counter()
         wdl = 0.0
         for field, tokens in ft.items():
-            w = FIELD_WEIGHTS.get(field, 1.0)
+            w = _fw.get(field, 1.0)
             wdl += len(tokens) * w
             for t in tokens:
                 weighted_tf[t] += w
@@ -1831,8 +1853,8 @@ def recall(workspace: str, query: str, limit: int = 10, active_only: bool = Fals
             if qt in weighted_tf:
                 wtf = weighted_tf[qt]
                 idf = math.log((N - df.get(qt, 0) + 0.5) / (df.get(qt, 0) + 0.5) + 1)
-                numerator = wtf * (BM25_K1 + 1)
-                denominator = wtf + BM25_K1 * (1 - BM25_B + BM25_B * wdl / avg_wdl)
+                numerator = wtf * (_k1 + 1)
+                denominator = wtf + _k1 * (1 - _b + _b * wdl / avg_wdl)
                 score += idf * numerator / denominator
 
         if score <= 0:
@@ -1861,7 +1883,7 @@ def recall(workspace: str, query: str, limit: int = 10, active_only: bool = Fals
                         if qt in ctf:
                             freq = ctf[qt]
                             idf = math.log((N - df.get(qt, 0) + 0.5) / (df.get(qt, 0) + 0.5) + 1)
-                            cs += idf * freq * (BM25_K1 + 1) / (freq + BM25_K1 * (1 - BM25_B + BM25_B * cdl / max(avg_wdl, 1)))
+                            cs += idf * freq * (_k1 + 1) / (freq + _k1 * (1 - _b + _b * cdl / max(avg_wdl, 1)))
                     best_chunk_score = max(best_chunk_score, cs)
                 # Blend: take the better of full-block or best-chunk score
                 if best_chunk_score > score:

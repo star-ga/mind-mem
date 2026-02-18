@@ -1,0 +1,25 @@
+# hybrid.mind — Hybrid BM25+Vector recall fusion kernel
+# Controls RRF fusion parameters for multi-signal retrieval.
+
+[fusion]
+# RRF constant (higher = flatter rank contribution)
+rrf_k = 60
+# Weight multipliers for each signal
+bm25_weight = 1.0
+vector_weight = 1.0
+
+[vector]
+# Embedding model for vector recall
+model = all-MiniLM-L6-v2
+# Enable vector recall (requires sentence-transformers)
+enabled = false
+# Use ONNX runtime for faster inference
+onnx_backend = false
+# Similarity threshold for vector results
+min_similarity = 0.3
+
+[fallback]
+# Fall back to BM25-only if vector backend fails
+graceful_degradation = true
+# Log warning when falling back
+log_fallback = true

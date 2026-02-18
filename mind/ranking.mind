@@ -1,0 +1,31 @@
+// Evidence ranking: combine multiple scoring signals for final ranking
+import std.tensor;
+
+fn weighted_rank(
+    bm25_scores: tensor<f32[N]>,
+    recency_scores: tensor<f32[N]>,
+    graph_scores: tensor<f32[N]>,
+    importance_scores: tensor<f32[N]>,
+    w_bm25: f32,
+    w_recency: f32,
+    w_graph: f32,
+    w_importance: f32
+) -> tensor<f32[N]> {
+    let s1 = bm25_scores * w_bm25;
+    let s2 = recency_scores * w_recency;
+    let s3 = graph_scores * w_graph;
+    let s4 = importance_scores * w_importance;
+    return s1 + s2 + s3 + s4;
+}
+
+// Top-K selection: returns mask of top-K elements
+fn top_k_mask(
+    scores: tensor<f32[N]>,
+    threshold: f32
+) -> tensor<f32[N]> {
+    // Binary mask: 1.0 where score >= threshold, 0.0 otherwise
+    // In MIND, we approximate with a steep sigmoid
+    let diff = scores - threshold;
+    let steep = diff * 100.0;
+    return 1.0 / (1.0 + exp(steep * -1.0));
+}

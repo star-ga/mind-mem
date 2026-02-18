@@ -1,0 +1,19 @@
+# temporal.mind — Temporal query tuning kernel
+# Optimized parameters for time-sensitive queries.
+
+[scoring]
+recency_weight = 0.6
+date_boost = 2.0
+expand_query = true
+extra_limit_factor = 1.5
+
+[date_normalization]
+# Enable month name → numeric month token injection
+month_expansion = true
+# Enable YYYY-MM combo tokens
+year_month_combo = true
+
+[decay]
+# Recency decay: score = max(floor, 1.0 - days_old / horizon)
+horizon_days = 365
+floor = 0.1

@@ -1,0 +1,26 @@
+// A-MEM: auto-maintained importance scores for memory blocks
+import std.tensor;
+
+fn importance_score(
+    access_counts: tensor<f32[N]>,
+    days_since_access: tensor<f32[N]>,
+    connection_degrees: tensor<f32[N]>,
+    decay_rate: f32,
+    access_weight: f32,
+    recency_weight: f32,
+    connection_weight: f32
+) -> tensor<f32[N]> {
+    // Log-scaled access frequency
+    let freq = log(access_counts + 1.0);
+    // Exponential recency decay
+    let recency = exp(decay_rate * days_since_access * -1.0);
+    // Normalize connection degree
+    let conn = log(connection_degrees + 1.0);
+    // Weighted combination
+    let raw = access_weight * freq + recency_weight * recency + connection_weight * conn;
+    // Clamp to [0.8, 1.5] range for reranking boost
+    // Linear map: normalized raw score -> [0.8, 1.5]
+    let max_est = access_weight * 3.0 + recency_weight * 1.0 + connection_weight * 3.0;
+    let normalized = raw / (max_est + 1e-6);
+    return 0.8 + normalized * 0.7;
+}

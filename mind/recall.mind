@@ -1,0 +1,41 @@
+# recall.mind — BM25 retrieval tuning kernel
+# Controls core BM25 scoring parameters and field weights.
+
+[bm25]
+k1 = 1.2
+b = 0.75
+
+[fields]
+# BM25F field weight multipliers (higher = more important)
+Statement = 3.0
+Title = 2.5
+Name = 2.0
+Summary = 1.5
+Description = 1.2
+Purpose = 1.2
+RootCause = 1.2
+Fix = 1.2
+Prevention = 1.0
+Tags = 0.8
+Keywords = 0.8
+Context = 0.5
+Rationale = 0.5
+ProposedFix = 0.5
+History = 0.3
+
+[retrieval]
+# Wide retrieval pool size before reranking
+wide_k = 200
+# Maximum expansion terms from static synonym dict
+max_expansions = 8
+# Bigram phrase match boost factor
+bigram_boost = 0.25
+# Chunk scoring blend (best_chunk vs full_block)
+chunk_blend_alpha = 0.6
+
+[boost]
+# Status-based score multipliers
+active_boost = 1.2
+todo_doing_boost = 1.1
+# Priority-based boost for P0/P1
+high_priority_boost = 1.1
