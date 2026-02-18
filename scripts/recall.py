@@ -531,6 +531,93 @@ def expand_query(tokens: list[str], max_expansions: int = 8,
     return expanded
 
 
+def _rm3_language_model(doc_tokens, collection_freq, total_tokens, mu=2000.0):
+    """JM-smoothed document language model.
+    P(w|D) = (tf(w,D) + mu * P(w|C)) / (|D| + mu)
+    where P(w|C) = cf(w) / total_tokens
+    """
+    tf = Counter(doc_tokens)
+    doc_len = len(doc_tokens)
+    probs = {}
+    vocab = set(doc_tokens) | set(collection_freq.keys())
+    for w in vocab:
+        p_collection = collection_freq.get(w, 0) / max(total_tokens, 1)
+        p_doc = (tf.get(w, 0) + mu * p_collection) / (doc_len + mu)
+        probs[w] = p_doc
+    return probs
+
+
+def rm3_expand(query_tokens, top_docs, collection_freq, total_tokens,
+               alpha=0.6, fb_terms=10, fb_docs=5, min_idf=1.0,
+               doc_freq=None, N=1):
+    """RM3 pseudo-relevance feedback query expansion.
+
+    Estimates P(w|R) from top-K docs using JM-smoothed language models.
+    Selects top fb_terms expansion terms by P(w|R) not in original query.
+    Interpolates: P'(w|Q) = alpha * P(w|Q) + (1-alpha) * P(w|R)
+
+    Args:
+        query_tokens: list of stemmed query tokens
+        top_docs: list of (doc_tokens, score) tuples from initial retrieval
+        collection_freq: dict mapping token -> collection frequency
+        total_tokens: total tokens in collection
+        alpha: interpolation weight (1.0 = original query only)
+        fb_terms: number of expansion terms to add
+        fb_docs: number of feedback documents to use
+        min_idf: minimum IDF for expansion terms
+        doc_freq: dict mapping token -> document frequency (for IDF filtering)
+        N: total number of documents in collection
+
+    Returns:
+        dict mapping token -> weight (original tokens + expansion tokens)
+    """
+    if not top_docs or alpha >= 1.0:
+        return {t: 1.0 for t in query_tokens}
+
+    # Use top fb_docs
+    feedback = top_docs[:fb_docs]
+
+    # Compute P(w|R) = avg P(w|D) across feedback docs
+    relevance_model = Counter()
+    for doc_tokens, _score in feedback:
+        lm = _rm3_language_model(doc_tokens, collection_freq, total_tokens)
+        for w, p in lm.items():
+            relevance_model[w] += p
+
+    # Normalize
+    total_p = sum(relevance_model.values())
+    if total_p > 0:
+        for w in relevance_model:
+            relevance_model[w] /= total_p
+
+    # Filter: remove original query tokens, apply IDF filter
+    query_set = set(query_tokens)
+    expansion_candidates = {}
+    for w, p in relevance_model.items():
+        if w in query_set:
+            continue
+        # IDF filter
+        if doc_freq and N > 0 and min_idf > 0:
+            df_val = doc_freq.get(w, 0)
+            if df_val > 0:
+                idf = math.log(N / df_val)
+                if idf < min_idf:
+                    continue
+        expansion_candidates[w] = p
+
+    # Select top fb_terms
+    expansion = sorted(expansion_candidates.items(), key=lambda x: x[1], reverse=True)[:fb_terms]
+
+    # Interpolate: P'(w|Q) = alpha * P(w|Q) + (1-alpha) * P(w|R)
+    result = {}
+    for t in query_tokens:
+        result[t] = alpha * 1.0 + (1 - alpha) * relevance_model.get(t, 0)
+    for t, p in expansion:
+        result[t] = (1 - alpha) * p
+
+    return result
+
+
 def extract_text(block: dict) -> str:
     """Extract searchable text from a block."""
     parts = []
@@ -1740,12 +1827,117 @@ def recall(workspace: str, query: str, limit: int = 10, active_only: bool = Fals
                     "via_graph": True,
                 })
 
+    # --- RM3 Dynamic Query Expansion ---
+    # When enabled via config, use RM3 (Relevance Model 3) instead of the
+    # simpler PRF heuristic below.  RM3 estimates a relevance language model
+    # from top-K feedback docs, then interpolates expansion terms with the
+    # original query.  Skipped for adversarial queries (static expansions only).
+    is_adversarial = query_type == "adversarial"
+    _rm3_used = False
+
+    config_path = os.path.join(workspace, "mind-mem.json")
+    rm3_config = {}
+    if os.path.isfile(config_path):
+        try:
+            with open(config_path) as _f:
+                _cfg = json.load(_f)
+            rm3_config = _cfg.get("recall", {}).get("rm3", {})
+        except (OSError, json.JSONDecodeError, KeyError):
+            pass
+
+    if rm3_config.get("enabled", False) and not is_adversarial and results:
+        results.sort(key=lambda r: r["score"], reverse=True)
+
+        # Build collection frequency from all flat doc tokens
+        collection_freq = Counter()
+        total_collection_tokens = 0
+        for flat_toks in doc_flat_tokens:
+            for t in flat_toks:
+                collection_freq[t] += 1
+                total_collection_tokens += 1
+
+        # Prepare top docs as (doc_tokens, score) tuples
+        result_id_to_idx = {}
+        for i, block in enumerate(all_blocks):
+            result_id_to_idx[block.get("_id", "")] = i
+
+        top_doc_tokens = []
+        for r in results[:rm3_config.get("fb_docs", 5)]:
+            idx = result_id_to_idx.get(r["_id"])
+            if idx is not None:
+                top_doc_tokens.append((doc_flat_tokens[idx], r["score"]))
+
+        expanded_weights = rm3_expand(
+            query_tokens, top_doc_tokens,
+            collection_freq, total_collection_tokens,
+            alpha=rm3_config.get("alpha", 0.6),
+            fb_terms=rm3_config.get("fb_terms", 10),
+            fb_docs=rm3_config.get("fb_docs", 5),
+            min_idf=rm3_config.get("min_idf", 1.0),
+            doc_freq={t: c for t, c in df.items()},
+            N=N,
+        )
+
+        # Re-score all blocks using RM3-expanded weighted query
+        expansion_terms_rm3 = [t for t in expanded_weights if t not in set(query_tokens)]
+        if expansion_terms_rm3:
+            _rm3_used = True
+            rm3_weight = 0.4
+            for i, block in enumerate(all_blocks):
+                ft = doc_field_tokens[i]
+                flat = doc_flat_tokens[i]
+                if not flat:
+                    continue
+
+                weighted_tf_rm3 = Counter()
+                wdl = 0.0
+                for field, tokens in ft.items():
+                    w = FIELD_WEIGHTS.get(field, 1.0)
+                    wdl += len(tokens) * w
+                    for t in tokens:
+                        weighted_tf_rm3[t] += w
+
+                rm3_score = 0.0
+                for et in expansion_terms_rm3:
+                    if et in weighted_tf_rm3:
+                        wtf = weighted_tf_rm3[et]
+                        idf = math.log((N - df.get(et, 0) + 0.5) / (df.get(et, 0) + 0.5) + 1)
+                        numerator = wtf * (BM25_K1 + 1)
+                        denominator = wtf + BM25_K1 * (1 - BM25_B + BM25_B * wdl / avg_wdl)
+                        rm3_score += idf * numerator / denominator * expanded_weights[et]
+
+                if rm3_score > 0:
+                    bid = block.get("_id", "?")
+                    found = False
+                    for r in results:
+                        if r["_id"] == bid:
+                            r["score"] = round(r["score"] + rm3_score * rm3_weight, 4)
+                            found = True
+                            break
+                    if not found:
+                        result = {
+                            "_id": bid,
+                            "type": get_block_type(bid),
+                            "score": round(rm3_score * rm3_weight, 4),
+                            "excerpt": get_excerpt(block),
+                            "file": block.get("_source_file", "?"),
+                            "line": block.get("_line", 0),
+                            "status": block.get("Status", ""),
+                        }
+                        if block.get("DiaID"):
+                            result["DiaID"] = block["DiaID"]
+                        results.append(result)
+
+            _log.info("rm3_expansion", expansion_terms=expansion_terms_rm3[:5],
+                      alpha=rm3_config.get("alpha", 0.6))
+
     # --- Pseudo-Relevance Feedback (PRF) ---
     # For single-hop, open-domain, and multi-hop queries, bridge the lexical
     # gap by extracting expansion terms from top-5 initial results and
     # re-scoring.  Multi-hop benefits from PRF because scattered facts often
     # use different vocabulary than the query.
-    if query_type in ("single-hop", "open-domain", "multi-hop") and results:
+    # Skipped when RM3 was used (they serve the same purpose).
+    if not _rm3_used and query_type in ("single-hop", "open-domain", "multi-hop") and results:
         results.sort(key=lambda r: r["score"], reverse=True)
         prf_top = results[:5]
 
