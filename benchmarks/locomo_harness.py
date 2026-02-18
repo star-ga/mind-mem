@@ -58,7 +58,7 @@ def download_dataset(force: bool = False) -> list[dict]:
         with open(CACHE_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    print(f"[dataset] Downloading LoCoMo dataset from GitHub...")
+    print("[dataset] Downloading LoCoMo dataset from GitHub...")
     os.makedirs(CACHE_DIR, exist_ok=True)
     try:
         req = urllib.request.Request(
@@ -150,7 +150,7 @@ def build_workspace(sample: dict, base_dir: str) -> str:
             lines.append(f"[{block_id}]")
             lines.append(f"Statement: [{resolved_speaker}] {text}")
             lines.append(f"Date: {date_str}")
-            lines.append(f"Status: active")
+            lines.append("Status: active")
             lines.append(f"DiaID: {dia_id}")
             lines.append(f"Tags: session-{session_num}, {resolved_speaker}")
             lines.append("")

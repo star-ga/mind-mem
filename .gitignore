@@ -5,3 +5,6 @@ __pycache__/
 benchmarks/results/
 benchmarks/*.jsonl
 benchmarks/*results*.json*
+lib/*.so
+lib/*.dylib
+lib/*.o

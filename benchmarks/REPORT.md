@@ -111,6 +111,48 @@ Pure deterministic retrieval pipeline — no vector DB, no embeddings required.
 | Knowledge update |      72 |     80.6 |     88.9 |     91.7 |     .844 |
 | Single-session   |      56 |     82.1 |     89.3 |     89.3 |     .847 |
 
+## MIND Kernel Benchmark
+
+Compiled C99 kernels (`gcc -O3 -march=native`) vs pure Python list comprehensions.
+Pre-allocated ctypes arrays; timing measures native function call only (no marshaling).
+
+### Per-Function Speedup
+
+| Function         |  N=100 |  N=500 | N=1000 | N=5000 | N=10000 |
+|------------------|-------:|-------:|-------:|-------:|--------:|
+| rrf_fuse         |  9.2x  |  30.3x |  44.2x |  71.9x |   78.8x |
+| bm25f_batch      |  26.3x |  51.4x |  88.9x | 192.4x |  231.4x |
+| negation_penalty |  3.4x  |  11.4x |  18.0x |  16.0x |   12.1x |
+| date_proximity   |  8.4x  |  19.0x |  22.4x |  26.6x |   27.2x |
+| category_boost   |  3.4x  |  11.8x |  19.0x |  16.7x |   12.9x |
+| importance_batch |  21.7x |  38.0x |  42.3x |  47.1x |   49.0x |
+| confidence_score |  0.8x  |   0.8x |   0.8x |   0.8x |    0.8x |
+| top_k_mask       |  3.0x  |   6.1x |   8.2x |  11.0x |   12.2x |
+| weighted_rank    |  5.6x  |  25.1x |  45.1x | 116.3x |   98.8x |
+
+### Overall
+
+| Metric              | Value        |
+|---------------------|--------------|
+| Total Python time   | 27.94 ms     |
+| Total MIND time     | 551.6 μs     |
+| **Overall speedup** | **50.7x**    |
+| Iterations          | 500          |
+| Compiler            | gcc -O3 -march=native |
+
+**Notes:**
+- `confidence_score` is scalar (5 features) — ctypes call overhead exceeds the computation
+- `entity_overlap` uses set operations — not benchmarked via C kernel
+- `bm25f_batch` shows the largest speedup (231x) due to Python's per-element `math.log()` overhead
+- Speedups grow with N: Python's interpreter overhead is O(N), C benefits from SIMD/ILP
+
+### Reproduction
+
+```bash
+gcc -O3 -march=native -shared -fPIC -o lib/libmindmem.so lib/kernels.c -lm
+python benchmarks/bench_kernels.py --iterations 500 --sizes 100,500,1000,5000,10000
+```
+
 ## Result Files
 
 | File                                        | Description                          |
