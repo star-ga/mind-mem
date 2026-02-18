@@ -1,0 +1,11 @@
+{
+  "recall": {
+    "backend": "scan",
+    "rrf_k": 60,
+    "bm25_weight": 1.0,
+    "vector_weight": 1.0,
+    "vector_model": "all-MiniLM-L6-v2",
+    "vector_enabled": false,
+    "onnx_backend": false
+  }
+}
