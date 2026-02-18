@@ -187,7 +187,7 @@ def get_kernel_param(config: dict, section: str, key: str, default=None):
 # --- INI-style .mind config parsing ---
 # .mind files use a simple [section] / key = value format for tuning params.
 
-import re as _re
+import re as _re  # noqa: E402
 
 
 def _parse_value(raw: str):

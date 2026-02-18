@@ -63,15 +63,15 @@ import sys
 SCRIPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scripts")
 sys.path.insert(0, SCRIPT_DIR)
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP  # noqa: E402
 
-from block_parser import parse_file, get_active, get_by_id
-from recall import recall as recall_engine
-from sqlite_index import query_index as fts_query, _db_path as fts_db_path
-from observability import get_logger, metrics
-from mind_ffi import (
+from block_parser import parse_file, get_active  # noqa: E402
+from recall import recall as recall_engine  # noqa: E402
+from sqlite_index import query_index as fts_query, _db_path as fts_db_path  # noqa: E402
+from observability import get_logger, metrics  # noqa: E402
+from mind_ffi import (  # noqa: E402
     list_kernels as ffi_list_kernels, get_mind_dir,
-    load_all_kernels, load_kernel_config, load_all_kernel_configs,
+    load_kernel_config, load_all_kernel_configs,
     is_available as mind_kernel_available,
 )
 
