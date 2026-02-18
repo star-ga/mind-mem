@@ -15,13 +15,23 @@ Resources (read-only):
     mind-mem://recall/{query}    — BM25 recall search
     mind-mem://ledger            — Shared fact ledger (multi-agent)
 
-Tools:
+Tools (16):
     recall               — Search memory with BM25
     propose_update       — Propose a new decision/task (writes to SIGNALS.md, never source of truth)
     approve_apply        — Apply a staged proposal (dry-run by default)
     rollback_proposal    — Rollback an applied proposal by receipt timestamp
     scan                 — Run integrity scan
     list_contradictions  — List detected contradictions with resolution status
+    hybrid_search        — Full hybrid BM25+Vector recall with RRF fusion
+    find_similar         — Find blocks similar to a given block
+    intent_classify      — Show routing strategy for a query
+    index_stats          — Block counts, index status, kernel info
+    reindex              — Trigger FTS index rebuild
+    memory_evolution     — A-MEM metadata for a block
+    list_mind_kernels    — List available .mind kernel configs
+    get_mind_kernel      — Read a specific .mind kernel
+    category_summary     — Category summaries for a topic
+    prefetch             — Pre-assemble context from conversation signals
 
 Transport:
     stdio (default, for Claude Code / Claude Desktop)
@@ -636,6 +646,24 @@ def reindex(include_vectors: bool = False) -> str:
         except (ImportError, Exception) as e:
             results["vectors_error"] = str(e)
 
+    # Regenerate category summaries
+    try:
+        from category_distiller import CategoryDistiller
+        config_path = os.path.join(ws, "mind-mem.json")
+        extra_cats = {}
+        if os.path.isfile(config_path):
+            try:
+                with open(config_path) as f:
+                    cfg = json.load(f)
+                extra_cats = cfg.get("categories", {}).get("extra_categories", {})
+            except (OSError, json.JSONDecodeError):
+                pass
+        distiller = CategoryDistiller(extra_categories=extra_cats if extra_cats else None)
+        written = distiller.distill(ws)
+        results["categories"] = len(written)
+    except (ImportError, Exception) as e:
+        results["categories_error"] = str(e)
+
     metrics.inc("mcp_reindex")
     _log.info("mcp_reindex", results=results)
     return json.dumps(results, indent=2)
@@ -679,6 +707,89 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
 
     except Exception as e:
         return json.dumps({"error": str(e), "block_id": block_id}, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Category & Prefetch tools (13-14)
+# ---------------------------------------------------------------------------
+
+@mcp.tool
+def category_summary(topic: str, limit: int = 3) -> str:
+    """Returns category summaries relevant to a given topic.
+
+    Uses the category distiller to find and return thematic summary files
+    matching the topic. Categories are auto-generated from memory blocks.
+
+    Args:
+        topic: Topic or query to find relevant categories for.
+        limit: Maximum number of category summaries to return (default: 3).
+
+    Returns:
+        Concatenated category summaries with block references.
+    """
+    ws = _workspace()
+    try:
+        from category_distiller import CategoryDistiller
+        config_path = os.path.join(ws, "mind-mem.json")
+        extra_cats = {}
+        if os.path.isfile(config_path):
+            try:
+                with open(config_path) as f:
+                    cfg = json.load(f)
+                extra_cats = cfg.get("categories", {}).get("extra_categories", {})
+            except (OSError, json.JSONDecodeError):
+                pass
+        distiller = CategoryDistiller(extra_categories=extra_cats if extra_cats else None)
+        context = distiller.get_category_context(topic, ws, limit=max(1, min(limit, 10)))
+        cats = distiller.get_categories_for_query(topic)
+        metrics.inc("mcp_category_summary")
+        _log.info("mcp_category_summary", topic=topic, matched_categories=cats[:limit])
+        if not context:
+            return json.dumps({
+                "topic": topic,
+                "status": "no_categories",
+                "hint": "Run reindex to generate category files, or add blocks with matching tags.",
+            }, indent=2)
+        return json.dumps({
+            "topic": topic,
+            "matched_categories": cats[:limit],
+            "content": context,
+        }, indent=2)
+    except ImportError:
+        return json.dumps({"error": "category_distiller module not available"})
+    except Exception as e:
+        return json.dumps({"error": str(e), "topic": topic}, indent=2)
+
+
+@mcp.tool
+def prefetch(signals: str, limit: int = 5) -> str:
+    """Pre-assembles likely-needed context from recent conversation signals.
+
+    Given entity mentions, topic keywords, or short phrases from the current
+    conversation, anticipates what memory blocks will be needed next.
+
+    Args:
+        signals: Comma-separated list of recent signals (entity names, topics,
+                 keywords from the conversation).
+        limit: Maximum blocks to return (default: 5).
+
+    Returns:
+        JSON array of pre-ranked blocks ready for context injection.
+    """
+    ws = _workspace()
+    signal_list = [s.strip() for s in signals.split(",") if s.strip()]
+    if not signal_list:
+        return json.dumps({"error": "No signals provided. Pass comma-separated keywords."})
+
+    limit = max(1, min(limit, 20))
+    try:
+        from recall import prefetch_context
+        results = prefetch_context(ws, signal_list, limit=limit)
+        metrics.inc("mcp_prefetch_queries")
+        _log.info("mcp_prefetch", signals=signal_list, results=len(results))
+        return json.dumps(results, indent=2, default=str)
+    except Exception as e:
+        return json.dumps({"error": str(e), "signals": signal_list}, indent=2)
 
 
 # ---------------------------------------------------------------------------
