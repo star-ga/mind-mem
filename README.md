@@ -1,7 +1,7 @@
 <p align="center">
   <h1 align="center">mind-mem</h1>
   <p align="center">
-    <strong>Memory for AI agents. Intelligence, compiled.</strong>
+    <strong>Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent.</strong>
   </p>
   <p align="center">
     Local-first &bull; Zero-infrastructure &bull; Governance-aware &bull; MIND-accelerated
@@ -19,7 +19,7 @@
 
 ---
 
-Drop-in memory layer for AI coding agents (Claude Code, Claude Desktop, Cursor, Windsurf, OpenClaw, or any MCP-compatible client). Upgrades your agent from "chat history + notes" to a governed **Memory OS** with hybrid search, RRF fusion, intent routing, compiled MIND kernels, structured persistence, contradiction detection, drift analysis, safe governance, and full audit trail.
+Drop-in memory layer for AI coding agents — Claude Code, Claude Desktop, Cursor, Windsurf, OpenClaw, or any MCP-compatible client. Upgrades your agent from "chat history + notes" to a governed **Memory OS** with hybrid search, RRF fusion, intent routing, optional MIND kernels, structured persistence, contradiction detection, drift analysis, safe governance, and full audit trail.
 
 > **If your agent runs for weeks, it will drift. mind-mem prevents silent drift.**
 
