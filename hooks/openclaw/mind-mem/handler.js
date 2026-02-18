@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 // Resolve MIND_MEM_WORKSPACE from hook config env, process env, or default
-function resolveWorkspace(event: any): string {
+function resolveWorkspace(event) {
   const hookEnv = event.context?.cfg?.hooks?.internal?.entries?.["mind-mem"]?.env;
   return (
     hookEnv?.MIND_MEM_WORKSPACE ||
@@ -20,26 +20,26 @@ function resolveWorkspace(event: any): string {
 }
 
 // Find mind-mem scripts directory (relative to workspace or standard locations)
-function resolveScriptsDir(workspace: string): string | null {
+function resolveScriptsDir(workspace) {
   // Check .mind-mem/scripts/ (cloned into project)
-  const dotMemOs = path.join(workspace, ".mind-mem", "scripts");
-  if (fs.existsSync(dotMemOs)) return dotMemOs;
+  const dotMindMem = path.join(workspace, ".mind-mem", "scripts");
+  if (fs.existsSync(dotMindMem)) return dotMindMem;
 
   // Check mind-mem/scripts/ in workspace parent
-  const parentMemOs = path.join(path.dirname(workspace), "mind-mem", "scripts");
-  if (fs.existsSync(parentMemOs)) return parentMemOs;
+  const parentMindMem = path.join(path.dirname(workspace), "mind-mem", "scripts");
+  if (fs.existsSync(parentMindMem)) return parentMindMem;
 
   // Check MIND_MEM_HOME env var
-  const memOsHome = process.env.MIND_MEM_HOME;
-  if (memOsHome) {
-    const homeScripts = path.join(memOsHome, "scripts");
+  const mindMemHome = process.env.MIND_MEM_HOME;
+  if (mindMemHome) {
+    const homeScripts = path.join(mindMemHome, "scripts");
     if (fs.existsSync(homeScripts)) return homeScripts;
   }
 
   return null;
 }
 
-const handler = async (event: any): Promise<void> => {
+const handler = async (event) => {
   const workspace = resolveWorkspace(event);
 
   if (event.type === "agent" && event.action === "bootstrap") {
