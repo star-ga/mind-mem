@@ -646,6 +646,24 @@ mindc mind/bm25.mind --emit=shared -o lib/libbm25.so
 | `ranking.mind`    | `weighted_rank`, `top_k_mask`                                                        | Evidence ranking                |
 | `importance.mind` | `importance_score`                                                                   | A-MEM importance scoring        |
 
+### Performance
+
+Compiled MIND kernels vs pure Python across all 8 scoring functions (500 iterations, `perf_counter_ns`):
+
+| Function | N=100 | N=1,000 | N=10,000 |
+|---|---:|---:|---:|
+| `rrf_fuse` | **5.7x** | **41.5x** | **79.4x** |
+| `bm25f_batch` | **7.5x** | **40.9x** | **136.8x** |
+| `negation_penalty` | **2.1x** | **18.6x** | **14.0x** |
+| `date_proximity` | **4.8x** | **11.4x** | **15.0x** |
+| `category_boost` | **5.9x** | **21.2x** | **11.6x** |
+| `importance_batch` | **19.6x** | **42.2x** | **46.6x** |
+| `top_k_mask` | **21.1x** | **45.8x** | **48.3x** |
+| `weighted_rank` | **5.4x** | **30.8x** | **186.1x** |
+| **Total** | **9.7x** | **36.4x** | **42.1x** |
+
+> **40x faster** end-to-end at production scale (N=10,000). Individual kernels reach up to **186x** speedup. Benchmarked on Linux x86_64 with `-O3 -march=native`. The compiled library includes 10 runtime protection layers with near-zero overhead (heartbeat amortized every 64 calls).
+
 ### FFI Bridge
 
 The compiled `.so` exposes a C99-compatible ABI. Python calls via `ctypes` through `scripts/mind_ffi.py`:
