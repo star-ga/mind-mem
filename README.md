@@ -19,9 +19,30 @@
 
 ---
 
-Drop-in memory layer for AI coding agents — Claude Code, Claude Desktop, Cursor, Windsurf, OpenClaw, or any MCP-compatible client. Upgrades your agent from "chat history + notes" to a governed **Memory OS** with hybrid search, RRF fusion, intent routing, optional MIND kernels, structured persistence, contradiction detection, drift analysis, safe governance, and full audit trail.
+Drop-in memory layer for AI coding agents — Claude Code, Claude Desktop, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed, OpenClaw, or any MCP-compatible client. Upgrades your agent from "chat history + notes" to a governed **Memory OS** with hybrid search, RRF fusion, intent routing, optional MIND kernels, structured persistence, contradiction detection, drift analysis, safe governance, and full audit trail.
 
 > **If your agent runs for weeks, it will drift. mind-mem prevents silent drift.**
+
+### Shared Memory Across All Your AI Agents
+
+**This is the killer feature.** When you install mind-mem, all your AI coding agents share the same memory workspace. Claude Code, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed — every MCP-compatible client connects to the same persistent memory through a single workspace.
+
+What this means in practice:
+
+- A decision made in **Claude Code** is instantly recalled by **Codex CLI** and **Gemini CLI**
+- Entity knowledge (projects, tools, people) accumulates from **all sessions across all agents**
+- Contradictions detected by one agent are flagged to all others
+- Your memory doesn't fragment across tools — it compounds
+
+**One install script, all agents configured in seconds:**
+
+```bash
+git clone https://github.com/star-ga/mind-mem.git
+cd mind-mem
+./install.sh --all    # Auto-detects and configures every AI coding client on your machine
+```
+
+The installer auto-detects Claude Code, Claude Desktop, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed, and OpenClaw — creates a shared workspace and wires the MCP server into each client's config. SQLite WAL mode ensures safe concurrent access: one writer, many readers, zero corruption.
 
 ### Trust Signals
 
@@ -217,16 +238,53 @@ python3 benchmarks/locomo_harness.py --conv-ids 4,7,8
 
 ## Quick Start
 
-Get from zero to validated workspace in under 3 minutes.
+### Universal Installer (Recommended)
 
-### 1. Clone
+```bash
+git clone https://github.com/star-ga/mind-mem.git
+cd mind-mem
+./install.sh --all
+```
+
+This auto-detects every AI coding client on your machine and configures mind-mem for all of them. Supported clients:
+
+| Client | Config Location | Format |
+|--------|----------------|--------|
+| **Claude Code CLI** | `~/.claude/mcp.json` | JSON |
+| **Claude Desktop** | `~/.config/Claude/claude_desktop_config.json` | JSON |
+| **Codex CLI** (OpenAI) | `~/.codex/config.toml` | TOML |
+| **Gemini CLI** (Google) | `~/.gemini/settings.json` | JSON |
+| **Cursor** | `~/.cursor/mcp.json` | JSON |
+| **Windsurf** | `~/.codeium/windsurf/mcp_config.json` | JSON |
+| **Zed** | `~/.config/zed/settings.json` | JSON |
+| **OpenClaw** | `~/.openclaw/hooks/mind-mem/` | JS hook |
+
+Selective install:
+
+```bash
+./install.sh --claude-code --codex --gemini         # Only specific clients
+./install.sh --all --workspace ~/my-project/memory  # Custom workspace path
+```
+
+Uninstall:
+
+```bash
+./uninstall.sh          # Remove from all clients (keeps workspace data)
+./uninstall.sh --purge  # Remove everything including workspace data
+```
+
+### Manual Setup
+
+For manual or per-project setup:
+
+**1. Clone into your project**
 
 ```bash
 cd /path/to/your/project
 git clone https://github.com/star-ga/mind-mem.git .mind-mem
 ```
 
-### 2. Initialize workspace
+**2. Initialize workspace**
 
 ```bash
 python3 .mind-mem/scripts/init_workspace.py .
@@ -234,7 +292,7 @@ python3 .mind-mem/scripts/init_workspace.py .
 
 Creates 12 directories, 19 template files, and `mind-mem.json` config. **Never overwrites existing files.**
 
-### 3. Validate
+**3. Validate**
 
 ```bash
 bash .mind-mem/scripts/validate.sh .
@@ -244,7 +302,7 @@ python3 .mind-mem/scripts/validate_py.py .
 
 Expected: `74 checks | 74 passed | 0 issues`.
 
-### 4. First scan
+**4. First scan**
 
 ```bash
 python3 .mind-mem/scripts/intel_scan.py .
@@ -252,7 +310,7 @@ python3 .mind-mem/scripts/intel_scan.py .
 
 Expected: `0 critical | 0 warnings` on a fresh workspace.
 
-### 5. Verify recall + capture
+**5. Verify recall + capture**
 
 ```bash
 python3 .mind-mem/scripts/recall.py --query "test" --workspace .
@@ -262,15 +320,7 @@ python3 .mind-mem/scripts/capture.py .
 # → capture: no daily log for YYYY-MM-DD, nothing to scan (correct)
 ```
 
-### 6. Add skills (optional)
-
-```bash
-cp -r .mind-mem/skills/* .claude/skills/ 2>/dev/null || true
-```
-
-Gives you `/scan`, `/apply`, and `/recall` slash commands in Claude Code.
-
-### 7. Add hooks (optional)
+**6. Add hooks (optional)**
 
 **Option A: Claude Code hooks** (recommended)
 
@@ -298,32 +348,13 @@ cp -r .mind-mem/hooks/openclaw/mind-mem ~/.openclaw/hooks/mind-mem
 openclaw hooks enable mind-mem
 ```
 
-Configure workspace path in `~/.openclaw/openclaw.json`:
-
-```json
-{
-  "hooks": {
-    "internal": {
-      "entries": {
-        "mind-mem": {
-          "enabled": true,
-          "env": { "MIND_MEM_WORKSPACE": "/path/to/your/workspace" }
-        }
-      }
-    }
-  }
-}
-```
-
-You're live. Start in `detect_only` for one week, then move to `propose`.
-
-### 8. Smoke Test (optional)
+**7. Smoke Test (optional)**
 
 ```bash
 bash .mind-mem/scripts/smoke_test.sh
 ```
 
-Creates a temp workspace, runs init → validate → scan → recall → capture → pytest, then cleans up. All 11 checks should pass.
+Creates a temp workspace, runs init → validate → scan → recall → capture → pytest, then cleans up.
 
 ---
 
@@ -623,7 +654,7 @@ mind-mem includes 6 `.mind` kernel source files — numerical hot paths written 
 
 ### Compilation
 
-Requires the MIND compiler (`mindc`). See [mindlang.dev](https://mindlang.dev) for installation.
+Requires the [MIND compiler](https://mindlang.dev) (`mindc`). The MIND runtime and compiler are developed separately and available under enterprise license. Contact [STARGA Inc](https://star.ga) for access.
 
 ```bash
 # Compile all kernels to a single shared library
@@ -879,9 +910,17 @@ mind-mem ships with a [Model Context Protocol](https://modelcontextprotocol.io/)
 pip install fastmcp
 ```
 
-### Claude Code
+### Automatic Setup (Recommended)
 
-Add to `~/.claude/mcp.json` (global) or `.mcp.json` (per-project):
+```bash
+./install.sh --all
+```
+
+Configures all detected clients automatically. See [Quick Start](#quick-start).
+
+### Manual Setup
+
+For Claude Code, Claude Desktop, Cursor, Windsurf, and Gemini CLI, add to the respective JSON config under `mcpServers`:
 
 ```json
 {
@@ -895,33 +934,36 @@ Add to `~/.claude/mcp.json` (global) or `.mcp.json` (per-project):
 }
 ```
 
-### Claude Desktop
+| Client | Config File |
+|--------|------------|
+| **Claude Code CLI** | `~/.claude/mcp.json` |
+| **Claude Desktop** | `~/.config/Claude/claude_desktop_config.json` |
+| **Gemini CLI** | `~/.gemini/settings.json` |
+| **Cursor** | `~/.cursor/mcp.json` |
+| **Windsurf** | `~/.codeium/windsurf/mcp_config.json` |
 
-Add to `~/.claude/claude_desktop_config.json`:
+For **Codex CLI** (TOML format), add to `~/.codex/config.toml`:
 
-```json
-{
-  "mcpServers": {
-    "mind-mem": {
-      "command": "python3",
-      "args": ["/path/to/mind-mem/mcp_server.py"],
-      "env": {"MIND_MEM_WORKSPACE": "/path/to/your/workspace"}
-    }
-  }
-}
+```toml
+[mcp_servers.mind-mem]
+command = "python3"
+args = ["/path/to/mind-mem/mcp_server.py"]
+
+[mcp_servers.mind-mem.env]
+MIND_MEM_WORKSPACE = "/path/to/your/workspace"
 ```
 
-### Cursor / Windsurf
-
-Add to your MCP config (`.cursor/mcp.json` or equivalent):
+For **Zed**, add to `~/.config/zed/settings.json` under `context_servers`:
 
 ```json
 {
-  "mcpServers": {
+  "context_servers": {
     "mind-mem": {
-      "command": "python3",
-      "args": ["/path/to/mind-mem/mcp_server.py"],
-      "env": {"MIND_MEM_WORKSPACE": "."}
+      "command": {
+        "path": "python3",
+        "args": ["/path/to/mind-mem/mcp_server.py"],
+        "env": {"MIND_MEM_WORKSPACE": "/path/to/your/workspace"}
+      }
     }
   }
 }

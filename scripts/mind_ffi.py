@@ -47,10 +47,15 @@ class MindMemKernel:
         if lib_path:
             self._lib = ctypes.CDLL(str(lib_path))
         else:
-            env_path = os.environ.get("MIND_MEM_LIB")
-            if env_path and Path(env_path).exists():
-                self._lib = ctypes.CDLL(env_path)
-            else:
+            env_path = os.environ.get("MIND_MEM_LIB", "")
+            if env_path:
+                # Restrict to allowed directories (prevent arbitrary .so loading)
+                resolved = Path(env_path).resolve()
+                allowed = [Path(__file__).parent.parent / "lib"]
+                if any(str(resolved).startswith(str(d.resolve())) for d in allowed) and resolved.exists():
+                    self._lib = ctypes.CDLL(str(resolved))
+
+            if self._lib is None:
                 for p in _LIB_SEARCH_PATHS:
                     if p.exists():
                         self._lib = ctypes.CDLL(str(p))
@@ -62,13 +67,45 @@ class MindMemKernel:
                 "Compile with: mindc mind/*.mind --emit=shared -o lib/libmindmem.so"
             )
 
+        # Declare argtypes for all kernel functions (prevents silent memory corruption)
+        _f = ctypes.c_float
+        _i = ctypes.c_int
+        _fp = ctypes.POINTER(ctypes.c_float)
+        _ip = ctypes.POINTER(ctypes.c_int)
+        try:
+            self._lib.rrf_fuse.argtypes = [_fp, _fp, _i, _f, _f, _f, _fp]
+            self._lib.rrf_fuse.restype = None
+            self._lib.bm25f_batch.argtypes = [_fp, _f, _f, _fp, _f, _f, _f, _f, _i, _fp]
+            self._lib.bm25f_batch.restype = None
+            self._lib.negation_penalty.argtypes = [_fp, _fp, _f, _i, _fp]
+            self._lib.negation_penalty.restype = None
+            self._lib.date_proximity.argtypes = [_fp, _f, _i, _fp]
+            self._lib.date_proximity.restype = None
+            self._lib.category_boost.argtypes = [_fp, _fp, _f, _i, _fp]
+            self._lib.category_boost.restype = None
+            self._lib.importance_batch.argtypes = [_ip, _fp, _f, _f, _i, _fp]
+            self._lib.importance_batch.restype = None
+            self._lib.confidence_score.argtypes = [_f, _f, _f, _f, _f, _f, _f, _f, _f, _f]
+            self._lib.confidence_score.restype = _f
+            self._lib.top_k_mask.argtypes = [_fp, _i, _i, _fp]
+            self._lib.top_k_mask.restype = None
+            self._lib.weighted_rank.argtypes = [_fp, _fp, _i, _fp]
+            self._lib.weighted_rank.restype = None
+        except AttributeError:
+            pass  # Some builds may not export all functions
+
         # Check if the library includes runtime protection
         self._protected = False
         try:
+            self._lib.mindmem_protected.argtypes = []
             self._lib.mindmem_protected.restype = ctypes.c_int
             self._protected = bool(self._lib.mindmem_protected())
         except AttributeError:
             pass  # Unprotected build (dev/CI fallback)
+
+    def is_protected(self) -> bool:
+        """Return True if the loaded library includes runtime protection."""
+        return self._protected
 
     def rrf_fuse_py(self, bm25_ranks: list[float], vector_ranks: list[float],
                     k: float = 60.0, bm25_w: float = 1.0,

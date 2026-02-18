@@ -725,13 +725,17 @@ def get_mind_kernel(name: str) -> str:
     Returns:
         JSON with the full kernel configuration, or error if not found.
     """
+    import re as _re
+    if not _re.match(r'^[a-zA-Z0-9_-]{1,64}$', name):
+        return json.dumps({"error": f"Invalid kernel name: {name}"})
+
     ws = _workspace()
     mind_dir = get_mind_dir(ws)
     path = os.path.join(mind_dir, f"{name}.mind")
 
     cfg = load_kernel_config(path)
     if not cfg:
-        return json.dumps({"error": f"Kernel '{name}' not found at {path}"})
+        return json.dumps({"error": f"Kernel '{name}' not found"})
 
     metrics.inc("mcp_kernel_reads")
     _log.info("mcp_get_kernel", name=name, sections=list(cfg.keys()))
