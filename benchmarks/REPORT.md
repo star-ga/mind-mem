@@ -5,7 +5,7 @@
 ## Environment
 
 | Component       | Value                                    |
-|-----------------|------------------------------------------|
+| --------------- | ---------------------------------------- |
 | Python          | 3.12.3                                   |
 | OS              | Linux 6.17.0-14-generic (x86_64)         |
 | SQLite          | system (FTS5 enabled)                    |
@@ -32,7 +32,7 @@ Requires `OPENAI_API_KEY` in environment.
 ## Overall Results
 
 | Metric      | Score     |
-|-------------|-----------|
+| ----------- | --------- |
 | **Acc>=50** | **67.3%** |
 | Mean Score  | **61.4**  |
 | Acc>=75     | **48.8%** |
@@ -40,7 +40,7 @@ Requires `OPENAI_API_KEY` in environment.
 ## Per-Category (Acc>=50)
 
 | Category    | N        | Acc>=50   | Mean     |
-|-------------|----------|-----------|----------|
+| ----------- | -------- | --------- | -------- |
 | **Overall** | **1986** | **67.3%** | **61.4** |
 | open-domain | 841      | 86.6%     | 78.3     |
 | temporal    | 96       | 78.1%     | 65.7     |
@@ -51,7 +51,7 @@ Requires `OPENAI_API_KEY` in environment.
 ## Per-Conversation Breakdown
 
 | Conv    | Sample  | N        | Mean     | Acc>=50   |
-|---------|---------|----------|----------|-----------|
+| ------- | ------- | -------- | -------- | --------- |
 | 0       | conv-40 | 199      | 64.2     | 74.9%     |
 | 1       | conv-41 | 105      | 61.8     | 67.6%     |
 | 2       | conv-42 | 193      | 64.4     | 71.0%     |
@@ -67,7 +67,7 @@ Requires `OPENAI_API_KEY` in environment.
 ## Competitive Landscape
 
 | System       |     Score | Approach                                |
-|--------------|----------:|-----------------------------------------|
+| ------------ | --------: | --------------------------------------- |
 | Memobase     |     75.8% | Specialized extraction                  |
 | Letta        |     74.0% | Files + agent tool use                  |
 | Mem0         |     68.5% | Graph + LLM extraction                  |
@@ -104,7 +104,7 @@ Pure deterministic retrieval pipeline — no vector DB, no embeddings required.
 ## LongMemEval (ICLR 2025, 470 questions)
 
 | Category         |       N |      R@1 |      R@5 |     R@10 |      MRR |
-|------------------|--------:|---------:|---------:|---------:|---------:|
+| ---------------- | ------: | -------: | -------: | -------: | -------: |
 | **Overall**      | **470** | **73.2** | **85.3** | **88.1** | **.784** |
 | Multi-session    |     121 |     83.5 |     95.9 |     95.9 |     .885 |
 | Temporal         |     127 |     76.4 |     91.3 |     92.9 |     .826 |
@@ -118,26 +118,26 @@ Pre-allocated ctypes arrays; timing measures native function call only (no marsh
 
 ### Per-Function Speedup
 
-| Function         |  N=100 |  N=500 | N=1000 | N=5000 | N=10000 |
-|------------------|-------:|-------:|-------:|-------:|--------:|
-| rrf_fuse         |  9.2x  |  30.3x |  44.2x |  71.9x |   78.8x |
-| bm25f_batch      |  26.3x |  51.4x |  88.9x | 192.4x |  231.4x |
-| negation_penalty |  3.4x  |  11.4x |  18.0x |  16.0x |   12.1x |
-| date_proximity   |  8.4x  |  19.0x |  22.4x |  26.6x |   27.2x |
-| category_boost   |  3.4x  |  11.8x |  19.0x |  16.7x |   12.9x |
-| importance_batch |  21.7x |  38.0x |  42.3x |  47.1x |   49.0x |
-| confidence_score |  0.8x  |   0.8x |   0.8x |   0.8x |    0.8x |
-| top_k_mask       |  3.0x  |   6.1x |   8.2x |  11.0x |   12.2x |
-| weighted_rank    |  5.6x  |  25.1x |  45.1x | 116.3x |   98.8x |
+| Function         | N=100 | N=500 | N=1000 | N=5000 | N=10000 |
+| ---------------- | ----: | ----: | -----: | -----: | ------: |
+| rrf_fuse         |  9.2x | 30.3x |  44.2x |  71.9x |   78.8x |
+| bm25f_batch      | 26.3x | 51.4x |  88.9x | 192.4x |  231.4x |
+| negation_penalty |  3.4x | 11.4x |  18.0x |  16.0x |   12.1x |
+| date_proximity   |  8.4x | 19.0x |  22.4x |  26.6x |   27.2x |
+| category_boost   |  3.4x | 11.8x |  19.0x |  16.7x |   12.9x |
+| importance_batch | 21.7x | 38.0x |  42.3x |  47.1x |   49.0x |
+| confidence_score |  0.8x |  0.8x |   0.8x |   0.8x |    0.8x |
+| top_k_mask       |  3.0x |  6.1x |   8.2x |  11.0x |   12.2x |
+| weighted_rank    |  5.6x | 25.1x |  45.1x | 116.3x |   98.8x |
 
 ### Overall
 
-| Metric              | Value        |
-|---------------------|--------------|
-| Total Python time   | 27.94 ms     |
-| Total MIND time     | 551.6 μs     |
-| **Overall speedup** | **50.7x**    |
-| Iterations          | 500          |
+| Metric              | Value                 |
+| ------------------- | --------------------- |
+| Total Python time   | 27.94 ms              |
+| Total MIND time     | 551.6 μs              |
+| **Overall speedup** | **50.7x**             |
+| Iterations          | 500                   |
 | Compiler            | gcc -O3 -march=native |
 
 **Notes:**

@@ -37,7 +37,7 @@ mind-mem is a hybrid MIND/Python memory system organized in three layers:
 ### Core Modules
 
 | Module               | Lines | Purpose                                                                         |
-|----------------------|-------|---------------------------------------------------------------------------------|
+| -------------------- | ----- | ------------------------------------------------------------------------------- |
 | `recall.py`          | ~2100 | BM25F + RM3 + graph scoring, stemming, query expansion, field boosts, reranking |
 | `intel_scan.py`      | ~1250 | Integrity scanning, contradiction detection, drift analysis                     |
 | `apply_engine.py`    | ~1200 | Proposal application, dry-run, rollback, audit trail                            |
@@ -48,7 +48,7 @@ mind-mem is a hybrid MIND/Python memory system organized in three layers:
 ### Search & Ranking Modules
 
 | Module                      | Lines | Purpose                                               |
-|-----------------------------|-------|-------------------------------------------------------|
+| --------------------------- | ----- | ----------------------------------------------------- |
 | `hybrid_recall.py`          | ~310  | HybridBackend: thread-parallel BM25+Vector+RRF        |
 | `intent_router.py`          | ~160  | 9-type intent classification with parameter mapping   |
 | `block_metadata.py`         | ~200  | A-MEM: access tracking, importance, keyword evolution |
@@ -60,7 +60,7 @@ mind-mem is a hybrid MIND/Python memory system organized in three layers:
 ### Governance & Support Modules
 
 | Module                  | Lines | Purpose                                    |
-|-------------------------|-------|--------------------------------------------|
+| ----------------------- | ----- | ------------------------------------------ |
 | `capture.py`            | ~330  | Auto-capture from daily logs (26 patterns) |
 | `compaction.py`         | ~340  | GC, archival, retention policies           |
 | `conflict_resolver.py`  | ~310  | Graduated conflict resolution pipeline     |

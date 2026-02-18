@@ -65,7 +65,7 @@ If the workspace is empty, you'll get "No results found" — that's correct.
 Claude Desktop can also read these resources directly:
 
 | Resource         | URI                            |
-|------------------|--------------------------------|
+| ---------------- | ------------------------------ |
 | Active decisions | `mind-mem://decisions`         |
 | All tasks        | `mind-mem://tasks`             |
 | Entities         | `mind-mem://entities/projects` |
@@ -76,7 +76,7 @@ Claude Desktop can also read these resources directly:
 ## Troubleshooting
 
 | Problem                                  | Solution                                                                 |
-|------------------------------------------|--------------------------------------------------------------------------|
+| ---------------------------------------- | ------------------------------------------------------------------------ |
 | Server doesn't appear in Claude Desktop  | Check the config JSON syntax. Restart Claude Desktop.                    |
 | "No module named 'fastmcp'"              | Run `pip install fastmcp` in the Python environment Claude Desktop uses. |
 | "MIND_MEM_WORKSPACE not set"             | Add the `env` block to your config.                                      |
