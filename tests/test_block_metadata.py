@@ -1,11 +1,9 @@
 """Tests for A-MEM block metadata evolution."""
 
-import json
 import os
 import sqlite3
 import tempfile
 import unittest
-from datetime import datetime, timezone, timedelta
 
 # Allow imports from scripts/
 import sys

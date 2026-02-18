@@ -177,8 +177,6 @@ class TestHybridBackendFallback(unittest.TestCase):
         hb = HybridBackend(config={"vector_enabled": False})
         # Patch _bm25_search to verify it gets called
         called = threading.Event()
-        original = hb._bm25_search
-
         def mock_bm25(*a, **kw):
             called.set()
             return [{"_id": "test", "score": 1.0}]

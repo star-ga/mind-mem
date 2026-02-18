@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from cross_encoder_reranker import CrossEncoderReranker, _check_available
+from cross_encoder_reranker import CrossEncoderReranker
 
 
 class TestCrossEncoderFallback(unittest.TestCase):
