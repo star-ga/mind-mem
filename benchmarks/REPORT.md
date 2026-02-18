@@ -153,9 +153,22 @@ gcc -O3 -march=native -shared -fPIC -o lib/libmindmem.so lib/kernels.c -lm
 python benchmarks/bench_kernels.py --iterations 500 --sizes 100,500,1000,5000,10000
 ```
 
-## Result Files
+## Running Benchmarks
 
-| File                                        | Description                          |
-|---------------------------------------------|--------------------------------------|
-| `benchmarks/locomo_judge_results_v9_1.json` | Full 10-conv results (1986 QA pairs) |
-| `benchmarks/locomo_judge_results_v3.json`   | Baseline comparison                  |
+```bash
+# LoCoMo (requires OPENAI_API_KEY)
+python benchmarks/locomo_judge.py \
+  --answerer gpt-4o-mini \
+  --judge gpt-4o-mini \
+  --top-k 10 \
+  --output benchmarks/results.json
+
+# LongMemEval
+python benchmarks/longmemeval_harness.py \
+  --output benchmarks/longmemeval_results.json
+
+# MIND kernel benchmark (requires compiled .so)
+python benchmarks/bench_kernels.py --iterations 500 --sizes 100,500,1000,5000,10000
+```
+
+Result files are generated locally and not checked into version control.
