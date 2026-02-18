@@ -21,14 +21,14 @@ mindc mind/rrf.mind --emit=shared -o lib/librrf.so
 
 ## Kernels
 
-| File | Functions | Purpose |
-|------|-----------|---------|
-| `bm25.mind` | `bm25f_doc`, `bm25f_batch`, `apply_recency`, `apply_graph_boost` | BM25F scoring with field boosts |
-| `rrf.mind` | `rrf_fuse`, `rrf_fuse_three` | Reciprocal Rank Fusion |
-| `reranker.mind` | `date_proximity_score`, `category_boost`, `negation_penalty`, `rerank_deterministic` | Deterministic reranking |
-| `abstention.mind` | `entity_overlap`, `confidence_score` | Confidence gating |
-| `ranking.mind` | `weighted_rank`, `top_k_mask` | Evidence ranking |
-| `importance.mind` | `importance_score` | A-MEM importance scoring |
+| File              | Functions                                                                            | Purpose                         |
+|-------------------|--------------------------------------------------------------------------------------|---------------------------------|
+| `bm25.mind`       | `bm25f_doc`, `bm25f_batch`, `apply_recency`, `apply_graph_boost`                     | BM25F scoring with field boosts |
+| `rrf.mind`        | `rrf_fuse`, `rrf_fuse_three`                                                         | Reciprocal Rank Fusion          |
+| `reranker.mind`   | `date_proximity_score`, `category_boost`, `negation_penalty`, `rerank_deterministic` | Deterministic reranking         |
+| `abstention.mind` | `entity_overlap`, `confidence_score`                                                 | Confidence gating               |
+| `ranking.mind`    | `weighted_rank`, `top_k_mask`                                                        | Evidence ranking                |
+| `importance.mind` | `importance_score`                                                                   | A-MEM importance scoring        |
 
 ## FFI
 

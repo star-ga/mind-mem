@@ -36,39 +36,39 @@ mind-mem is a hybrid MIND/Python memory system organized in three layers:
 
 ### Core Modules
 
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `recall.py` | ~2100 | BM25F + RM3 + graph scoring, stemming, query expansion, field boosts, reranking |
-| `intel_scan.py` | ~1250 | Integrity scanning, contradiction detection, drift analysis |
-| `apply_engine.py` | ~1200 | Proposal application, dry-run, rollback, audit trail |
-| `sqlite_index.py` | ~780 | FTS5 index + block_vectors + block_meta tables |
-| `evidence_packer.py` | ~250 | Structured evidence assembly for LLM context |
-| `block_parser.py` | ~520 | Markdown block grammar parsing (schema v1/v2) |
+| Module               | Lines | Purpose                                                                         |
+|----------------------|-------|---------------------------------------------------------------------------------|
+| `recall.py`          | ~2100 | BM25F + RM3 + graph scoring, stemming, query expansion, field boosts, reranking |
+| `intel_scan.py`      | ~1250 | Integrity scanning, contradiction detection, drift analysis                     |
+| `apply_engine.py`    | ~1200 | Proposal application, dry-run, rollback, audit trail                            |
+| `sqlite_index.py`    | ~780  | FTS5 index + block_vectors + block_meta tables                                  |
+| `evidence_packer.py` | ~250  | Structured evidence assembly for LLM context                                    |
+| `block_parser.py`    | ~520  | Markdown block grammar parsing (schema v1/v2)                                   |
 
 ### Search & Ranking Modules
 
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `hybrid_recall.py` | ~310 | HybridBackend: thread-parallel BM25+Vector+RRF |
-| `intent_router.py` | ~160 | 9-type intent classification with parameter mapping |
-| `block_metadata.py` | ~200 | A-MEM: access tracking, importance, keyword evolution |
-| `cross_encoder_reranker.py` | ~80 | Optional ms-marco-MiniLM cross-encoder |
-| `mind_ffi.py` | ~255 | ctypes FFI bridge to compiled MIND .so |
-| `abstention_classifier.py` | ~275 | Adversarial abstention (5-feature confidence gate) |
-| `recall_vector.py` | ~700 | Vector/embedding recall backends |
+| Module                      | Lines | Purpose                                               |
+|-----------------------------|-------|-------------------------------------------------------|
+| `hybrid_recall.py`          | ~310  | HybridBackend: thread-parallel BM25+Vector+RRF        |
+| `intent_router.py`          | ~160  | 9-type intent classification with parameter mapping   |
+| `block_metadata.py`         | ~200  | A-MEM: access tracking, importance, keyword evolution |
+| `cross_encoder_reranker.py` | ~80   | Optional ms-marco-MiniLM cross-encoder                |
+| `mind_ffi.py`               | ~255  | ctypes FFI bridge to compiled MIND .so                |
+| `abstention_classifier.py`  | ~275  | Adversarial abstention (5-feature confidence gate)    |
+| `recall_vector.py`          | ~700  | Vector/embedding recall backends                      |
 
 ### Governance & Support Modules
 
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `capture.py` | ~330 | Auto-capture from daily logs (26 patterns) |
-| `compaction.py` | ~340 | GC, archival, retention policies |
-| `conflict_resolver.py` | ~310 | Graduated conflict resolution pipeline |
-| `backup_restore.py` | ~410 | WAL, backup, restore, JSONL export |
-| `namespaces.py` | ~380 | Multi-agent namespace + ACL management |
-| `filelock.py` | ~150 | Cross-platform advisory file locking |
-| `observability.py` | ~180 | Structured JSON logging + metrics |
-| `transcript_capture.py` | ~200 | JSONL transcript signal extraction |
+| Module                  | Lines | Purpose                                    |
+|-------------------------|-------|--------------------------------------------|
+| `capture.py`            | ~330  | Auto-capture from daily logs (26 patterns) |
+| `compaction.py`         | ~340  | GC, archival, retention policies           |
+| `conflict_resolver.py`  | ~310  | Graduated conflict resolution pipeline     |
+| `backup_restore.py`     | ~410  | WAL, backup, restore, JSONL export         |
+| `namespaces.py`         | ~380  | Multi-agent namespace + ACL management     |
+| `filelock.py`           | ~150  | Cross-platform advisory file locking       |
+| `observability.py`      | ~180  | Structured JSON logging + metrics          |
+| `transcript_capture.py` | ~200  | JSONL transcript signal extraction         |
 
 ## Data Flow
 

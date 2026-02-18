@@ -25,15 +25,15 @@ Drop-in memory layer for AI coding agents — Claude Code, Claude Desktop, Curso
 
 ### Trust Signals
 
-| Principle | What it means |
-|---|---|
-| **Deterministic** | Same input, same output. No ML in the core, no probabilistic mutations. |
-| **Auditable** | Every apply logged with timestamp, receipt, and DIFF. Full traceability. |
-| **Local-first** | All data stays on disk. No cloud calls, no telemetry, no phoning home. |
-| **No vendor lock-in** | Plain Markdown files. Move to any system, any time. |
-| **Zero magic** | Every check is a grep, every mutation is a file write. Read the source in 30 min. |
-| **No silent mutation** | Nothing writes to source of truth without explicit `/apply`. Ever. |
-| **Zero infrastructure** | No Redis, no Postgres, no vector DB, no GPU. Python 3.10+ is all you need. |
+| Principle               | What it means                                                                     |
+|-------------------------|-----------------------------------------------------------------------------------|
+| **Deterministic**       | Same input, same output. No ML in the core, no probabilistic mutations.           |
+| **Auditable**           | Every apply logged with timestamp, receipt, and DIFF. Full traceability.          |
+| **Local-first**         | All data stays on disk. No cloud calls, no telemetry, no phoning home.            |
+| **No vendor lock-in**   | Plain Markdown files. Move to any system, any time.                               |
+| **Zero magic**          | Every check is a grep, every mutation is a file write. Read the source in 30 min. |
+| **No silent mutation**  | Nothing writes to source of truth without explicit `/apply`. Ever.                |
+| **Zero infrastructure** | No Redis, no Postgres, no vector DB, no GPU. Python 3.10+ is all you need.        |
 
 ---
 
@@ -68,14 +68,14 @@ Most memory plugins **store and retrieve**. That's table stakes.
 
 mind-mem also **detects when your memory is wrong** — contradictions between decisions, drift from informal choices never formalized, dead decisions nobody references, orphan tasks pointing at nothing — and offers a safe path to fix it.
 
-| Problem | Without mind-mem | With mind-mem |
-|---|---|---|
-| Contradicting decisions | Follows whichever seen last | Flags, links both, proposes fix |
-| Informal chat decision | Lost after session ends | Auto-captured, proposed to formalize |
-| Stale decision | Zombie confuses future sessions | Detected as dead, flagged |
-| Orphan task reference | Silent breakage | Caught in integrity scan |
-| Scattered recall quality | Single-mode search misses context | Hybrid BM25+Vector+RRF fusion finds it |
-| Ambiguous query intent | One-size-fits-all retrieval | 9-type intent router optimizes parameters |
+| Problem                  | Without mind-mem                  | With mind-mem                             |
+|--------------------------|-----------------------------------|-------------------------------------------|
+| Contradicting decisions  | Follows whichever seen last       | Flags, links both, proposes fix           |
+| Informal chat decision   | Lost after session ends           | Auto-captured, proposed to formalize      |
+| Stale decision           | Zombie confuses future sessions   | Detected as dead, flagged                 |
+| Orphan task reference    | Silent breakage                   | Caught in integrity scan                  |
+| Scattered recall quality | Single-mode search misses context | Hybrid BM25+Vector+RRF fusion finds it    |
+| Ambiguous query intent   | One-size-fits-all retrieval       | 9-type intent router optimizes parameters |
 
 ---
 
@@ -166,37 +166,37 @@ mind-mem's recall engine evaluated on two standard long-term memory benchmarks. 
 
 Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer with LLM, score against gold reference with judge LLM. Directly comparable methodology.
 
-| Category | N | Acc (>=50) | Mean Score |
-|---|--:|--:|--:|
-| **Overall** | **1986** | **67.3%** | **61.4** |
-| Open-domain | 841 | 86.6% | 78.3 |
-| Temporal | 96 | 78.1% | 65.7 |
-| Single-hop | 282 | 68.8% | 59.1 |
-| Multi-hop | 321 | 55.5% | 48.4 |
-| Adversarial | 446 | 36.3% | 39.5 |
+| Category    |        N | Acc (>=50) | Mean Score |
+|-------------|---------:|-----------:|-----------:|
+| **Overall** | **1986** |  **67.3%** |   **61.4** |
+| Open-domain |      841 |      86.6% |       78.3 |
+| Temporal    |       96 |      78.1% |       65.7 |
+| Single-hop  |      282 |      68.8% |       59.1 |
+| Multi-hop   |      321 |      55.5% |       48.4 |
+| Adversarial |      446 |      36.3% |       39.5 |
 
 > **Judge:** `gpt-4o-mini` (answerer + judge) | **N:** 1986 questions, 10 conversations | See [`benchmarks/REPORT.md`](benchmarks/REPORT.md) for full methodology and reproduction steps.
 
 ### Competitive Landscape
 
-| System | Score | Approach |
-|---|--:|---|
-| Memobase | 75.8% | Specialized extraction |
-| **Letta** | 74.0% | Files + agent tool use |
-| **Mem0** | 68.5% | Graph + LLM extraction |
+| System       |     Score | Approach                                |
+|--------------|----------:|-----------------------------------------|
+| Memobase     |     75.8% | Specialized extraction                  |
+| **Letta**    |     74.0% | Files + agent tool use                  |
+| **Mem0**     |     68.5% | Graph + LLM extraction                  |
 | **mind-mem** | **67.3%** | Deterministic BM25 + rule-based packing |
 
 > mind-mem reaches **98%** of Mem0's score with pure deterministic retrieval — no embeddings, no vector DB, no cloud calls, no LLM in the retrieval loop. mind-mem's unique value is **governance** (contradiction detection, drift analysis, audit trails) and **agent-agnostic shared memory** via MCP — areas these benchmarks don't measure.
 
 ### LongMemEval (ICLR 2025, 470 questions)
 
-| Category | N | R@1 | R@5 | R@10 | MRR |
-|---|--:|--:|--:|--:|--:|
-| **Overall** | **470** | **73.2** | **85.3** | **88.1** | **.784** |
-| Multi-session | 121 | 83.5 | 95.9 | 95.9 | .885 |
-| Temporal | 127 | 76.4 | 91.3 | 92.9 | .826 |
-| Knowledge update | 72 | 80.6 | 88.9 | 91.7 | .844 |
-| Single-session | 56 | 82.1 | 89.3 | 89.3 | .847 |
+| Category         |       N |      R@1 |      R@5 |     R@10 |      MRR |
+|------------------|--------:|---------:|---------:|---------:|---------:|
+| **Overall**      | **470** | **73.2** | **85.3** | **88.1** | **.784** |
+| Multi-session    |     121 |     83.5 |     95.9 |     95.9 |     .885 |
+| Temporal         |     127 |     76.4 |     91.3 |     92.9 |     .826 |
+| Knowledge update |      72 |     80.6 |     88.9 |     91.7 |     .844 |
+| Single-session   |      56 |     82.1 |     89.3 |     89.3 |     .847 |
 
 ### Run Benchmarks Yourself
 
@@ -361,10 +361,10 @@ TOTAL: 0 critical | 0 warnings | 16 info
 
 ## Commands
 
-| Command | What it does |
-|---|---|
-| `/scan` | Run integrity scan — contradictions, drift, dead decisions, impact graph, snapshot, briefing |
-| `/apply` | Review and apply proposals from scan results (dry-run first, then apply) |
+| Command           | What it does                                                                                    |
+|-------------------|-------------------------------------------------------------------------------------------------|
+| `/scan`           | Run integrity scan — contradictions, drift, dead decisions, impact graph, snapshot, briefing    |
+| `/apply`          | Review and apply proposals from scan results (dry-run first, then apply)                        |
 | `/recall <query>` | Search across all memory files with ranked results (add `--graph` for cross-reference boosting) |
 
 ---
@@ -473,80 +473,80 @@ your-workspace/
 
 Compared against every major memory solution for AI agents (as of 2026):
 
-| | [Mem0](https://github.com/mem0ai/mem0) | [SMem](https://supermemory.ai) | [c-mem](https://github.com/thedotmack/claude-mem) | [Letta](https://www.letta.com) | [Zep](https://www.getzep.com) | [LMem](https://github.com/langchain-ai) | [Cognee](https://www.cognee.ai) | [Gphlt](https://www.graphlit.com) | [ClawMem](https://github.com/yoloshii/ClawMem) | **mind-mem** |
-|:--|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| **Recall** | | | | | | | | | | |
-| Vector | Cloud | Cloud | Chroma | Yes | Yes | Yes | Yes | Yes | Yes | **Optional** |
-| Lexical | Filter | — | — | — | — | — | — | — | BM25 | **BM25F** |
-| Graph | Yes | — | — | — | Yes | — | Yes | Yes | Beam | **2-hop** |
-| Hybrid + RRF | Part | — | — | — | Yes | — | Yes | Yes | **Yes** | **Yes** |
-| Cross-encoder | — | — | — | — | — | — | — | — | qwen3 0.6B | **MiniLM 80MB** |
-| Intent routing | — | — | — | — | — | — | — | — | Yes | **9 types** |
-| Query expansion | — | — | — | — | — | — | — | — | QMD 1.7B | **RM3 (zero-dep)** |
-| **Persistence** | | | | | | | | | | |
-| Structured | JSON | JSON | SQL | Blk | Grph | KV | Grph | Grph | SQL | **Markdown** |
-| Entities | Yes | Yes | — | Yes | Yes | Yes | Yes | Yes | — | **Yes** |
-| Temporal | — | — | — | — | Yes | — | — | — | — | **Yes** |
-| Supersede | — | — | — | Yes | Yes | — | — | — | — | **Yes** |
-| Append-only | — | — | — | — | — | — | — | — | — | **Yes** |
-| A-MEM metadata | — | — | — | — | — | — | — | — | Yes | **Yes** |
-| **Integrity** | | | | | | | | | | |
-| Contradictions | — | — | — | — | — | — | — | — | — | **Yes** |
-| Drift detection | — | — | — | — | — | — | — | — | — | **Yes** |
-| Validation | — | — | — | — | — | — | — | — | — | **74+ rules** |
-| Impact graph | — | — | — | — | — | — | — | — | — | **Yes** |
-| Coverage | — | — | — | — | — | — | — | — | — | **Yes** |
-| Multi-agent | — | — | — | Yes | — | — | — | — | — | **ACL-based** |
-| Conflict res. | — | — | — | — | — | — | — | — | — | **Automatic** |
-| WAL/crash | — | — | — | — | — | — | — | — | — | **Yes** |
-| Backup/restore | — | — | — | — | — | — | — | — | — | **Yes** |
-| Abstention | — | — | — | — | — | — | — | — | — | **Yes** |
-| **Governance** | | | | | | | | | | |
-| Auto-capture | Auto | Auto | Auto | Self | Ext | Ext | Ext | Ing | Auto | **Propose** |
-| Proposal queue | — | — | — | — | — | — | — | — | — | **Yes** |
-| Rollback | — | — | — | — | — | — | — | — | — | **Yes** |
-| Mode governance | — | — | — | — | — | — | — | — | — | **3 modes** |
-| Audit trail | — | Part | — | — | — | — | — | — | — | **Full** |
-| **Operations** | | | | | | | | | | |
-| Local-only | — | — | Yes | — | — | — | — | — | Yes | **Yes** |
-| Zero deps | — | — | — | — | — | — | — | — | — | **Yes** |
-| No daemon | — | — | — | — | — | Yes | — | — | — | **Yes** |
-| GPU required | — | — | — | — | — | — | — | — | **4.5GB** | **No** |
-| Git-friendly | — | — | — | Part | — | — | — | — | — | **Yes** |
-| MCP server | — | — | — | — | — | — | — | — | — | **14 tools** |
-| MIND kernels | — | — | — | — | — | — | — | — | — | **6 kernels** |
+|                 | [Mem0](https://github.com/mem0ai/mem0) | [SMem](https://supermemory.ai) | [c-mem](https://github.com/thedotmack/claude-mem) | [Letta](https://www.letta.com) | [Zep](https://www.getzep.com) | [LMem](https://github.com/langchain-ai) | [Cognee](https://www.cognee.ai) | [Gphlt](https://www.graphlit.com) | [ClawMem](https://github.com/yoloshii/ClawMem) |    **mind-mem**    |
+|-----------------|:--------------------------------------:|:------------------------------:|:-------------------------------------------------:|:------------------------------:|:-----------------------------:|:---------------------------------------:|:-------------------------------:|:---------------------------------:|:----------------------------------------------:|:------------------:|
+| **Recall**      |                                        |                                |                                                   |                                |                               |                                         |                                 |                                   |                                                |                    |
+| Vector          |                 Cloud                  |             Cloud              |                       Chroma                      |              Yes               |              Yes              |                   Yes                   |               Yes               |                Yes                |                      Yes                       |    **Optional**    |
+| Lexical         |                 Filter                 |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                      BM25                      |     **BM25F**      |
+| Graph           |                  Yes                   |               —                |                         —                         |               —                |              Yes              |                    —                    |               Yes               |                Yes                |                      Beam                      |     **2-hop**      |
+| Hybrid + RRF    |                  Part                  |               —                |                         —                         |               —                |              Yes              |                    —                    |               Yes               |                Yes                |                    **Yes**                     |      **Yes**       |
+| Cross-encoder   |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                   qwen3 0.6B                   |  **MiniLM 80MB**   |
+| Intent routing  |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                      Yes                       |    **9 types**     |
+| Query expansion |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                    QMD 1.7B                    | **RM3 (zero-dep)** |
+| **Persistence** |                                        |                                |                                                   |                                |                               |                                         |                                 |                                   |                                                |                    |
+| Structured      |                  JSON                  |              JSON              |                        SQL                        |              Blk               |              Grph             |                    KV                   |               Grph              |                Grph               |                      SQL                       |    **Markdown**    |
+| Entities        |                  Yes                   |              Yes               |                         —                         |              Yes               |              Yes              |                   Yes                   |               Yes               |                Yes                |                       —                        |      **Yes**       |
+| Temporal        |                   —                    |               —                |                         —                         |               —                |              Yes              |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
+| Supersede       |                   —                    |               —                |                         —                         |              Yes               |              Yes              |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
+| Append-only     |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
+| A-MEM metadata  |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                      Yes                       |      **Yes**       |
+| **Integrity**   |                                        |                                |                                                   |                                |                               |                                         |                                 |                                   |                                                |                    |
+| Contradictions  |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
+| Drift detection |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
+| Validation      |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |   **74+ rules**    |
+| Impact graph    |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
+| Coverage        |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
+| Multi-agent     |                   —                    |               —                |                         —                         |              Yes               |               —               |                    —                    |                —                |                 —                 |                       —                        |   **ACL-based**    |
+| Conflict res.   |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |   **Automatic**    |
+| WAL/crash       |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
+| Backup/restore  |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
+| Abstention      |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
+| **Governance**  |                                        |                                |                                                   |                                |                               |                                         |                                 |                                   |                                                |                    |
+| Auto-capture    |                  Auto                  |              Auto              |                        Auto                       |              Self              |              Ext              |                   Ext                   |               Ext               |                Ing                |                      Auto                      |    **Propose**     |
+| Proposal queue  |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
+| Rollback        |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
+| Mode governance |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |    **3 modes**     |
+| Audit trail     |                   —                    |              Part              |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Full**      |
+| **Operations**  |                                        |                                |                                                   |                                |                               |                                         |                                 |                                   |                                                |                    |
+| Local-only      |                   —                    |               —                |                        Yes                        |               —                |               —               |                    —                    |                —                |                 —                 |                      Yes                       |      **Yes**       |
+| Zero deps       |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
+| No daemon       |                   —                    |               —                |                         —                         |               —                |               —               |                   Yes                   |                —                |                 —                 |                       —                        |      **Yes**       |
+| GPU required    |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                   **4.5GB**                    |       **No**       |
+| Git-friendly    |                   —                    |               —                |                         —                         |              Part              |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
+| MCP server      |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |    **14 tools**    |
+| MIND kernels    |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |   **6 kernels**    |
 
 ### mind-mem vs ClawMem (Head-to-Head)
 
 ClawMem requires 4.5GB VRAM across 3 llama-server instances (qwen3-reranker-0.6B + QMD 1.7B GGUF + embedding model). mind-mem closes every feature gap with CPU-friendly alternatives that require zero infrastructure:
 
-| Capability | ClawMem | mind-mem | Advantage |
-|---|---|---|---|
-| Hybrid search | BM25 + vector + RRF | BM25F + vector + RRF | mind-mem: field-weighted BM25F |
-| Cross-encoder | qwen3-reranker 0.6B (GPU) | ms-marco-MiniLM 80MB (CPU) | mind-mem: 7x smaller, no GPU |
-| Query expansion | QMD 1.7B GGUF (GPU) | RM3 pseudo-relevance (zero-dep) | mind-mem: no model needed |
-| Intent routing | Yes | 9 types with parameter mapping | mind-mem: more granular |
-| A-MEM metadata | Yes | Yes (importance, keywords, co-occurrence) | Equivalent |
-| Graph search | Multi-graph beam | 2-hop cross-reference | Different approach, both effective |
-| Governance | None | Contradiction detection, drift, audit | **mind-mem only** |
-| Infrastructure | 3x llama-server, 4.5GB VRAM | Python 3.10+ | **mind-mem: zero** |
-| MIND kernels | None | 6 compiled kernels (optional) | **mind-mem only** |
-| MCP server | None | 14 tools, 8 resources | **mind-mem only** |
+| Capability      | ClawMem                     | mind-mem                                  | Advantage                          |
+|-----------------|-----------------------------|-------------------------------------------|------------------------------------|
+| Hybrid search   | BM25 + vector + RRF         | BM25F + vector + RRF                      | mind-mem: field-weighted BM25F     |
+| Cross-encoder   | qwen3-reranker 0.6B (GPU)   | ms-marco-MiniLM 80MB (CPU)                | mind-mem: 7x smaller, no GPU       |
+| Query expansion | QMD 1.7B GGUF (GPU)         | RM3 pseudo-relevance (zero-dep)           | mind-mem: no model needed          |
+| Intent routing  | Yes                         | 9 types with parameter mapping            | mind-mem: more granular            |
+| A-MEM metadata  | Yes                         | Yes (importance, keywords, co-occurrence) | Equivalent                         |
+| Graph search    | Multi-graph beam            | 2-hop cross-reference                     | Different approach, both effective |
+| Governance      | None                        | Contradiction detection, drift, audit     | **mind-mem only**                  |
+| Infrastructure  | 3x llama-server, 4.5GB VRAM | Python 3.10+                              | **mind-mem: zero**                 |
+| MIND kernels    | None                        | 6 compiled kernels (optional)             | **mind-mem only**                  |
+| MCP server      | None                        | 14 tools, 8 resources                     | **mind-mem only**                  |
 
 ### What Each Tool Does Best
 
-| Tool | Strength | Trade-off |
-|---|---|---|
-| **Mem0** | Fast managed service, graph memory, multi-user scoping | Cloud-dependent, no integrity checking |
-| **Supermemory** | Fastest retrieval (ms), auto-ingestion from Drive/Notion | Cloud-dependent, auto-writes without review |
-| **claude-mem** | Purpose-built for Claude Code, ChromaDB vectors | Requires ChromaDB + Express worker, no integrity |
-| **Letta** | Self-editing memory blocks, sleep-time compute, 74% LoCoMo | Full agent runtime (heavy), not just memory |
-| **Zep** | Temporal knowledge graph, bi-temporal model, sub-second at scale | Cloud service, complex architecture |
-| **LangMem** | Native LangChain/LangGraph integration | Tied to LangChain ecosystem |
-| **Cognee** | Advanced chunking, web content bridging | Research-oriented, complex setup |
-| **Graphlit** | Multimodal ingestion, semantic search, managed platform | Cloud-only, managed service |
-| **ClawMem** | Full ML pipeline (cross-encoder + QMD + beam search) | 4.5GB VRAM, 3 GPU processes required |
-| **mind-mem** | Integrity + governance + zero deps + hybrid search + MIND kernels + 14 MCP tools | Lexical recall by default (vector/CE optional) |
+| Tool            | Strength                                                                         | Trade-off                                        |
+|-----------------|----------------------------------------------------------------------------------|--------------------------------------------------|
+| **Mem0**        | Fast managed service, graph memory, multi-user scoping                           | Cloud-dependent, no integrity checking           |
+| **Supermemory** | Fastest retrieval (ms), auto-ingestion from Drive/Notion                         | Cloud-dependent, auto-writes without review      |
+| **claude-mem**  | Purpose-built for Claude Code, ChromaDB vectors                                  | Requires ChromaDB + Express worker, no integrity |
+| **Letta**       | Self-editing memory blocks, sleep-time compute, 74% LoCoMo                       | Full agent runtime (heavy), not just memory      |
+| **Zep**         | Temporal knowledge graph, bi-temporal model, sub-second at scale                 | Cloud service, complex architecture              |
+| **LangMem**     | Native LangChain/LangGraph integration                                           | Tied to LangChain ecosystem                      |
+| **Cognee**      | Advanced chunking, web content bridging                                          | Research-oriented, complex setup                 |
+| **Graphlit**    | Multimodal ingestion, semantic search, managed platform                          | Cloud-only, managed service                      |
+| **ClawMem**     | Full ML pipeline (cross-encoder + QMD + beam search)                             | 4.5GB VRAM, 3 GPU processes required             |
+| **mind-mem**    | Integrity + governance + zero deps + hybrid search + MIND kernels + 14 MCP tools | Lexical recall by default (vector/CE optional)   |
 
 ### The Gap mind-mem Fills
 
@@ -654,14 +654,14 @@ mindc mind/bm25.mind --emit=shared -o lib/libbm25.so
 
 ### Kernel Index
 
-| File | Functions | Purpose |
-|------|-----------|---------|
-| `bm25.mind` | `bm25f_doc`, `bm25f_batch`, `apply_recency`, `apply_graph_boost` | BM25F scoring with field boosts |
-| `rrf.mind` | `rrf_fuse`, `rrf_fuse_three` | Reciprocal Rank Fusion |
-| `reranker.mind` | `date_proximity_score`, `category_boost`, `negation_penalty`, `rerank_deterministic` | Deterministic reranking |
-| `abstention.mind` | `entity_overlap`, `confidence_score` | Confidence gating |
-| `ranking.mind` | `weighted_rank`, `top_k_mask` | Evidence ranking |
-| `importance.mind` | `importance_score` | A-MEM importance scoring |
+| File              | Functions                                                                            | Purpose                         |
+|-------------------|--------------------------------------------------------------------------------------|---------------------------------|
+| `bm25.mind`       | `bm25f_doc`, `bm25f_batch`, `apply_recency`, `apply_graph_boost`                     | BM25F scoring with field boosts |
+| `rrf.mind`        | `rrf_fuse`, `rrf_fuse_three`                                                         | Reciprocal Rank Fusion          |
+| `reranker.mind`   | `date_proximity_score`, `category_boost`, `negation_penalty`, `rerank_deterministic` | Deterministic reranking         |
+| `abstention.mind` | `entity_overlap`, `confidence_score`                                                 | Confidence gating               |
+| `ranking.mind`    | `weighted_rank`, `top_k_mask`                                                        | Evidence ranking                |
+| `importance.mind` | `importance_score`                                                                   | A-MEM importance scoring        |
 
 ### FFI Bridge
 
@@ -765,11 +765,11 @@ python3 scripts/backup_restore.py wal-replay workspace/
 
 ## Governance Modes
 
-| Mode | What it does | When to use |
-|---|---|---|
-| `detect_only` | Scan + validate + report only | **Start here.** First week after install. |
-| `propose` | Report + generate fix proposals in `proposed/` | After a clean observation week with zero critical issues. |
-| `enforce` | Bounded auto-supersede + self-healing within constraints | Production mode. Requires explicit opt-in. |
+| Mode          | What it does                                             | When to use                                               |
+|---------------|----------------------------------------------------------|-----------------------------------------------------------|
+| `detect_only` | Scan + validate + report only                            | **Start here.** First week after install.                 |
+| `propose`     | Report + generate fix proposals in `proposed/`           | After a clean observation week with zero critical issues. |
+| `enforce`     | Bounded auto-supersede + self-healing within constraints | Production mode. Requires explicit opt-in.                |
 
 **Recommended rollout:**
 1. Install → run in `detect_only` for 7 days
@@ -844,27 +844,27 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 }
 ```
 
-| Key | Default | Description |
-|---|---|---|
-| `version` | `"1.0.0"` | Config schema version |
-| `auto_capture` | `true` | Run capture engine on session end |
-| `auto_recall` | `true` | Show recall context on session start |
-| `governance_mode` | `"detect_only"` | Governance mode (`detect_only`, `propose`, `enforce`) |
-| `recall.backend` | `"scan"` | `"scan"` (BM25), `"hybrid"` (BM25+Vector+RRF), or `"vector"` |
-| `recall.rrf_k` | `60` | RRF fusion parameter k |
-| `recall.bm25_weight` | `1.0` | BM25 weight in RRF fusion |
-| `recall.vector_weight` | `1.0` | Vector weight in RRF fusion |
-| `recall.vector_model` | `"all-MiniLM-L6-v2"` | Embedding model for vector search |
-| `recall.vector_enabled` | `false` | Enable vector search backend |
-| `recall.onnx_backend` | `false` | Use ONNX for local embeddings (no server needed) |
-| `proposal_budget.per_run` | `3` | Max proposals generated per scan |
-| `proposal_budget.per_day` | `6` | Max proposals per day |
-| `proposal_budget.backlog_limit` | `30` | Max pending proposals before pausing |
-| `compaction.archive_days` | `90` | Archive completed blocks older than N days |
-| `compaction.snapshot_days` | `30` | Remove apply snapshots older than N days |
-| `compaction.log_days` | `180` | Archive daily logs older than N days |
-| `compaction.signal_days` | `60` | Remove resolved/rejected signals older than N days |
-| `scan_schedule` | `"daily"` | `"daily"` or `"manual"` |
+| Key                             | Default              | Description                                                  |
+|---------------------------------|----------------------|--------------------------------------------------------------|
+| `version`                       | `"1.0.0"`            | Config schema version                                        |
+| `auto_capture`                  | `true`               | Run capture engine on session end                            |
+| `auto_recall`                   | `true`               | Show recall context on session start                         |
+| `governance_mode`               | `"detect_only"`      | Governance mode (`detect_only`, `propose`, `enforce`)        |
+| `recall.backend`                | `"scan"`             | `"scan"` (BM25), `"hybrid"` (BM25+Vector+RRF), or `"vector"` |
+| `recall.rrf_k`                  | `60`                 | RRF fusion parameter k                                       |
+| `recall.bm25_weight`            | `1.0`                | BM25 weight in RRF fusion                                    |
+| `recall.vector_weight`          | `1.0`                | Vector weight in RRF fusion                                  |
+| `recall.vector_model`           | `"all-MiniLM-L6-v2"` | Embedding model for vector search                            |
+| `recall.vector_enabled`         | `false`              | Enable vector search backend                                 |
+| `recall.onnx_backend`           | `false`              | Use ONNX for local embeddings (no server needed)             |
+| `proposal_budget.per_run`       | `3`                  | Max proposals generated per scan                             |
+| `proposal_budget.per_day`       | `6`                  | Max proposals per day                                        |
+| `proposal_budget.backlog_limit` | `30`                 | Max pending proposals before pausing                         |
+| `compaction.archive_days`       | `90`                 | Archive completed blocks older than N days                   |
+| `compaction.snapshot_days`      | `30`                 | Remove apply snapshots older than N days                     |
+| `compaction.log_days`           | `180`                | Archive daily logs older than N days                         |
+| `compaction.signal_days`        | `60`                 | Remove resolved/rejected signals older than N days           |
+| `scan_schedule`                 | `"daily"`            | `"daily"` or `"manual"`                                      |
 
 ---
 
@@ -938,35 +938,35 @@ MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py --transport http --p
 
 ### Resources (read-only)
 
-| URI | Description |
-|---|---|
-| `mind-mem://decisions` | Active decisions |
-| `mind-mem://tasks` | All tasks |
+| URI                          | Description                                   |
+|------------------------------|-----------------------------------------------|
+| `mind-mem://decisions`       | Active decisions                              |
+| `mind-mem://tasks`           | All tasks                                     |
 | `mind-mem://entities/{type}` | Entities (projects, people, tools, incidents) |
-| `mind-mem://signals` | Auto-captured signals pending review |
-| `mind-mem://contradictions` | Detected contradictions |
-| `mind-mem://health` | Workspace health summary |
-| `mind-mem://recall/{query}` | BM25 recall search results |
-| `mind-mem://ledger` | Shared fact ledger (multi-agent) |
+| `mind-mem://signals`         | Auto-captured signals pending review          |
+| `mind-mem://contradictions`  | Detected contradictions                       |
+| `mind-mem://health`          | Workspace health summary                      |
+| `mind-mem://recall/{query}`  | BM25 recall search results                    |
+| `mind-mem://ledger`          | Shared fact ledger (multi-agent)              |
 
 ### Tools (14 total)
 
-| Tool | Description |
-|---|---|
-| `recall` | Search memory with BM25 (query, limit, active_only) |
-| `propose_update` | Propose a decision/task — writes to SIGNALS.md only |
-| `approve_apply` | Apply a staged proposal (dry_run=True by default) |
-| `rollback_proposal` | Rollback an applied proposal by receipt timestamp |
-| `scan` | Run integrity scan (contradictions, drift, signals) |
-| `list_contradictions` | List contradictions with auto-resolution analysis |
-| `hybrid_search` | Hybrid BM25+Vector search with RRF fusion |
-| `find_similar` | Find blocks similar to a given block |
-| `intent_classify` | Classify query intent (9 types with parameter recommendations) |
-| `index_stats` | Index statistics, MIND kernel availability, block counts |
-| `reindex` | Rebuild FTS5 index (optionally including vectors) |
-| `memory_evolution` | View/trigger A-MEM metadata evolution for a block |
-| `list_mind_kernels` | List available MIND kernel configurations |
-| `get_mind_kernel` | Read a specific MIND kernel configuration as JSON |
+| Tool                  | Description                                                    |
+|-----------------------|----------------------------------------------------------------|
+| `recall`              | Search memory with BM25 (query, limit, active_only)            |
+| `propose_update`      | Propose a decision/task — writes to SIGNALS.md only            |
+| `approve_apply`       | Apply a staged proposal (dry_run=True by default)              |
+| `rollback_proposal`   | Rollback an applied proposal by receipt timestamp              |
+| `scan`                | Run integrity scan (contradictions, drift, signals)            |
+| `list_contradictions` | List contradictions with auto-resolution analysis              |
+| `hybrid_search`       | Hybrid BM25+Vector search with RRF fusion                      |
+| `find_similar`        | Find blocks similar to a given block                           |
+| `intent_classify`     | Classify query intent (9 types with parameter recommendations) |
+| `index_stats`         | Index statistics, MIND kernel availability, block counts       |
+| `reindex`             | Rebuild FTS5 index (optionally including vectors)              |
+| `memory_evolution`    | View/trigger A-MEM metadata evolution for a block              |
+| `list_mind_kernels`   | List available MIND kernel configurations                      |
+| `get_mind_kernel`     | Read a specific MIND kernel configuration as JSON              |
 
 ### Token Auth (HTTP)
 
@@ -987,19 +987,19 @@ MIND_MEM_TOKEN=your-secret python3 mcp_server.py --transport http --port 8765
 
 ### Threat Model
 
-| What we protect | How |
-|---|---|
-| Memory integrity | 74+ structural checks, ConstraintSignature validation |
-| Accidental overwrites | Proposal-based mutations only (never direct writes) |
-| Rollback safety | Snapshot before every apply, atomic `os.replace()` |
-| Symlink attacks | Symlink detection in restore paths |
-| Path traversal | All paths resolved via `os.path.realpath()`, workspace-relative only |
+| What we protect       | How                                                                  |
+|-----------------------|----------------------------------------------------------------------|
+| Memory integrity      | 74+ structural checks, ConstraintSignature validation                |
+| Accidental overwrites | Proposal-based mutations only (never direct writes)                  |
+| Rollback safety       | Snapshot before every apply, atomic `os.replace()`                   |
+| Symlink attacks       | Symlink detection in restore paths                                   |
+| Path traversal        | All paths resolved via `os.path.realpath()`, workspace-relative only |
 
-| What we do NOT protect against | Why |
-|---|---|
-| Malicious local user | Single-user CLI tool — filesystem access = data access |
-| Network attacks | No network calls, no listening ports, no telemetry |
-| Encrypted storage | Files are plaintext Markdown — use disk encryption if needed |
+| What we do NOT protect against | Why                                                          |
+|--------------------------------|--------------------------------------------------------------|
+| Malicious local user           | Single-user CLI tool — filesystem access = data access       |
+| Network attacks                | No network calls, no listening ports, no telemetry           |
+| Encrypted storage              | Files are plaintext Markdown — use disk encryption if needed |
 
 ### No Network Calls
 
@@ -1014,33 +1014,33 @@ mind-mem makes **zero network calls** from its core. No telemetry, no phoning ho
 
 ### Optional Dependencies
 
-| Package | Purpose | Install |
-|---|---|---|
-| `fastmcp` | MCP server | `pip install mind-mem[mcp]` |
-| `onnxruntime` + `tokenizers` | Local vector embeddings | `pip install mind-mem[embeddings]` |
-| `sentence-transformers` | Cross-encoder reranking | `pip install mind-mem[cross-encoder]` |
+| Package                      | Purpose                 | Install                               |
+|------------------------------|-------------------------|---------------------------------------|
+| `fastmcp`                    | MCP server              | `pip install mind-mem[mcp]`           |
+| `onnxruntime` + `tokenizers` | Local vector embeddings | `pip install mind-mem[embeddings]`    |
+| `sentence-transformers`      | Cross-encoder reranking | `pip install mind-mem[cross-encoder]` |
 
 ### Platform Support
 
-| Platform | Status | Notes |
-|----------|--------|-------|
-| Linux | Full | Primary target |
-| macOS | Full | POSIX-compliant shell scripts |
-| Windows (WSL/Git Bash) | Full | Use WSL2 or Git Bash for shell hooks |
-| Windows (native) | Python only | Use `validate_py.py`; hooks require WSL |
+| Platform               | Status      | Notes                                   |
+|------------------------|-------------|-----------------------------------------|
+| Linux                  | Full        | Primary target                          |
+| macOS                  | Full        | POSIX-compliant shell scripts           |
+| Windows (WSL/Git Bash) | Full        | Use WSL2 or Git Bash for shell hooks    |
+| Windows (native)       | Python only | Use `validate_py.py`; hooks require WSL |
 
 ---
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---|---|
-| `validate.sh` says "No mind-mem.json found" | Run in a workspace, not the repo root. Run `init_workspace.py` first. |
-| `recall` returns no results | Workspace is empty. Add decisions/tasks first. |
-| `capture` says "no daily log" | No `memory/YYYY-MM-DD.md` for today. Write something first. |
-| `intel_scan` finds 0 contradictions | Good — no conflicting decisions. |
-| Tests fail on Windows | Use `validate_py.py` instead of `validate.sh`. Hooks require WSL. |
-| MIND kernel not loading | Compile with `mindc mind/*.mind --emit=shared -o lib/libmindmem.so`. Or ignore — pure Python works identically. |
+| Problem                                     | Solution                                                                                                        |
+|---------------------------------------------|-----------------------------------------------------------------------------------------------------------------|
+| `validate.sh` says "No mind-mem.json found" | Run in a workspace, not the repo root. Run `init_workspace.py` first.                                           |
+| `recall` returns no results                 | Workspace is empty. Add decisions/tasks first.                                                                  |
+| `capture` says "no daily log"               | No `memory/YYYY-MM-DD.md` for today. Write something first.                                                     |
+| `intel_scan` finds 0 contradictions         | Good — no conflicting decisions.                                                                                |
+| Tests fail on Windows                       | Use `validate_py.py` instead of `validate.sh`. Hooks require WSL.                                               |
+| MIND kernel not loading                     | Compile with `mindc mind/*.mind --emit=shared -o lib/libmindmem.so`. Or ignore — pure Python works identically. |
 
 ---
 
