@@ -83,6 +83,7 @@ from mind_ffi import (  # noqa: E402
     list_kernels as ffi_list_kernels, get_mind_dir,
     load_kernel_config, load_all_kernel_configs,
     is_available as mind_kernel_available,
+    is_protected as mind_kernel_protected,
 )
 
 _log = get_logger("mcp_server")
@@ -612,6 +613,7 @@ def index_stats() -> str:
     kernels = ffi_list_kernels(mind_dir)
     stats["mind_kernels"] = kernels
     stats["mind_kernel_compiled"] = mind_kernel_available()
+    stats["mind_kernel_protected"] = mind_kernel_protected()
 
     metrics.inc("mcp_index_stats")
     _log.info("mcp_index_stats", stats=stats)

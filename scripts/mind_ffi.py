@@ -306,6 +306,14 @@ def is_available() -> bool:
     return _USE_MIND
 
 
+def is_protected() -> bool:
+    """Check if the MIND kernel has FORTRESS runtime protection."""
+    k = get_kernel()
+    if k is None:
+        return False
+    return k.is_protected()
+
+
 # --- Utility functions for .mind source file listing ---
 # Used by MCP tools to expose kernel metadata
 
