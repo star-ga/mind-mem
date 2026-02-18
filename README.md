@@ -47,7 +47,7 @@ The installer auto-detects Claude Code, Claude Desktop, Codex CLI, Gemini CLI, C
 ### Trust Signals
 
 | Principle               | What it means                                                                     |
-|-------------------------|-----------------------------------------------------------------------------------|
+| ----------------------- | --------------------------------------------------------------------------------- |
 | **Deterministic**       | Same input, same output. No ML in the core, no probabilistic mutations.           |
 | **Auditable**           | Every apply logged with timestamp, receipt, and DIFF. Full traceability.          |
 | **Local-first**         | All data stays on disk. No cloud calls, no telemetry, no phoning home.            |
@@ -90,7 +90,7 @@ Most memory plugins **store and retrieve**. That's table stakes.
 mind-mem also **detects when your memory is wrong** — contradictions between decisions, drift from informal choices never formalized, dead decisions nobody references, orphan tasks pointing at nothing — and offers a safe path to fix it.
 
 | Problem                  | Without mind-mem                  | With mind-mem                             |
-|--------------------------|-----------------------------------|-------------------------------------------|
+| ------------------------ | --------------------------------- | ----------------------------------------- |
 | Contradicting decisions  | Follows whichever seen last       | Flags, links both, proposes fix           |
 | Informal chat decision   | Lost after session ends           | Auto-captured, proposed to formalize      |
 | Stale decision           | Zombie confuses future sessions   | Detected as dead, flagged                 |
@@ -188,7 +188,7 @@ mind-mem's recall engine evaluated on two standard long-term memory benchmarks. 
 Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer with LLM, score against gold reference with judge LLM. Directly comparable methodology.
 
 | Category    |        N | Acc (>=50) | Mean Score |
-|-------------|---------:|-----------:|-----------:|
+| ----------- | -------: | ---------: | ---------: |
 | **Overall** | **1986** |  **67.3%** |   **61.4** |
 | Open-domain |      841 |      86.6% |       78.3 |
 | Temporal    |       96 |      78.1% |       65.7 |
@@ -201,7 +201,7 @@ Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer w
 ### Competitive Landscape
 
 | System       |     Score | Approach                                |
-|--------------|----------:|-----------------------------------------|
+| ------------ | --------: | --------------------------------------- |
 | Memobase     |     75.8% | Specialized extraction                  |
 | **Letta**    |     74.0% | Files + agent tool use                  |
 | **Mem0**     |     68.5% | Graph + LLM extraction                  |
@@ -212,7 +212,7 @@ Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer w
 ### LongMemEval (ICLR 2025, 470 questions)
 
 | Category         |       N |      R@1 |      R@5 |     R@10 |      MRR |
-|------------------|--------:|---------:|---------:|---------:|---------:|
+| ---------------- | ------: | -------: | -------: | -------: | -------: |
 | **Overall**      | **470** | **73.2** | **85.3** | **88.1** | **.784** |
 | Multi-session    |     121 |     83.5 |     95.9 |     95.9 |     .885 |
 | Temporal         |     127 |     76.4 |     91.3 |     92.9 |     .826 |
@@ -248,16 +248,16 @@ cd mind-mem
 
 This auto-detects every AI coding client on your machine and configures mind-mem for all of them. Supported clients:
 
-| Client | Config Location | Format |
-|--------|----------------|--------|
-| **Claude Code CLI** | `~/.claude/mcp.json` | JSON |
-| **Claude Desktop** | `~/.config/Claude/claude_desktop_config.json` | JSON |
-| **Codex CLI** (OpenAI) | `~/.codex/config.toml` | TOML |
-| **Gemini CLI** (Google) | `~/.gemini/settings.json` | JSON |
-| **Cursor** | `~/.cursor/mcp.json` | JSON |
-| **Windsurf** | `~/.codeium/windsurf/mcp_config.json` | JSON |
-| **Zed** | `~/.config/zed/settings.json` | JSON |
-| **OpenClaw** | `~/.openclaw/hooks/mind-mem/` | JS hook |
+| Client                  | Config Location                               | Format  |
+| ----------------------- | --------------------------------------------- | ------- |
+| **Claude Code CLI**     | `~/.claude/mcp.json`                          | JSON    |
+| **Claude Desktop**      | `~/.config/Claude/claude_desktop_config.json` | JSON    |
+| **Codex CLI** (OpenAI)  | `~/.codex/config.toml`                        | TOML    |
+| **Gemini CLI** (Google) | `~/.gemini/settings.json`                     | JSON    |
+| **Cursor**              | `~/.cursor/mcp.json`                          | JSON    |
+| **Windsurf**            | `~/.codeium/windsurf/mcp_config.json`         | JSON    |
+| **Zed**                 | `~/.config/zed/settings.json`                 | JSON    |
+| **OpenClaw**            | `~/.openclaw/hooks/mind-mem/`                 | JS hook |
 
 Selective install:
 
@@ -393,7 +393,7 @@ TOTAL: 0 critical | 0 warnings | 16 info
 ## Commands
 
 | Command           | What it does                                                                                    |
-|-------------------|-------------------------------------------------------------------------------------------------|
+| ----------------- | ----------------------------------------------------------------------------------------------- |
 | `/scan`           | Run integrity scan — contradictions, drift, dead decisions, impact graph, snapshot, briefing    |
 | `/apply`          | Review and apply proposals from scan results (dry-run first, then apply)                        |
 | `/recall <query>` | Search across all memory files with ranked results (add `--graph` for cross-reference boosting) |
@@ -505,9 +505,9 @@ your-workspace/
 Compared against every major memory solution for AI agents (as of 2026):
 
 |                 | [Mem0](https://github.com/mem0ai/mem0) | [SMem](https://supermemory.ai) | [c-mem](https://github.com/thedotmack/claude-mem) | [Letta](https://www.letta.com) | [Zep](https://www.getzep.com) | [LMem](https://github.com/langchain-ai) | [Cognee](https://www.cognee.ai) | [Gphlt](https://www.graphlit.com) | [ClawMem](https://github.com/yoloshii/ClawMem) |    **mind-mem**    |
-|-----------------|:--------------------------------------:|:------------------------------:|:-------------------------------------------------:|:------------------------------:|:-----------------------------:|:---------------------------------------:|:-------------------------------:|:---------------------------------:|:----------------------------------------------:|:------------------:|
+| --------------- | :------------------------------------: | :----------------------------: | :-----------------------------------------------: | :----------------------------: | :---------------------------: | :-------------------------------------: | :-----------------------------: | :-------------------------------: | :--------------------------------------------: | :----------------: |
 | **Recall**      |                                        |                                |                                                   |                                |                               |                                         |                                 |                                   |                                                |                    |
-| Vector          |                 Cloud                  |             Cloud              |                       Chroma                      |              Yes               |              Yes              |                   Yes                   |               Yes               |                Yes                |                      Yes                       |    **Optional**    |
+| Vector          |                 Cloud                  |             Cloud              |                      Chroma                       |              Yes               |              Yes              |                   Yes                   |               Yes               |                Yes                |                      Yes                       |    **Optional**    |
 | Lexical         |                 Filter                 |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                      BM25                      |     **BM25F**      |
 | Graph           |                  Yes                   |               —                |                         —                         |               —                |              Yes              |                    —                    |               Yes               |                Yes                |                      Beam                      |     **2-hop**      |
 | Hybrid + RRF    |                  Part                  |               —                |                         —                         |               —                |              Yes              |                    —                    |               Yes               |                Yes                |                    **Yes**                     |      **Yes**       |
@@ -515,7 +515,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | Intent routing  |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                      Yes                       |    **9 types**     |
 | Query expansion |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                    QMD 1.7B                    | **RM3 (zero-dep)** |
 | **Persistence** |                                        |                                |                                                   |                                |                               |                                         |                                 |                                   |                                                |                    |
-| Structured      |                  JSON                  |              JSON              |                        SQL                        |              Blk               |              Grph             |                    KV                   |               Grph              |                Grph               |                      SQL                       |    **Markdown**    |
+| Structured      |                  JSON                  |              JSON              |                        SQL                        |              Blk               |             Grph              |                   KV                    |              Grph               |               Grph                |                      SQL                       |    **Markdown**    |
 | Entities        |                  Yes                   |              Yes               |                         —                         |              Yes               |              Yes              |                   Yes                   |               Yes               |                Yes                |                       —                        |      **Yes**       |
 | Temporal        |                   —                    |               —                |                         —                         |               —                |              Yes              |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
 | Supersede       |                   —                    |               —                |                         —                         |              Yes               |              Yes              |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
@@ -533,7 +533,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | Backup/restore  |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
 | Abstention      |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
 | **Governance**  |                                        |                                |                                                   |                                |                               |                                         |                                 |                                   |                                                |                    |
-| Auto-capture    |                  Auto                  |              Auto              |                        Auto                       |              Self              |              Ext              |                   Ext                   |               Ext               |                Ing                |                      Auto                      |    **Propose**     |
+| Auto-capture    |                  Auto                  |              Auto              |                       Auto                        |              Self              |              Ext              |                   Ext                   |               Ext               |                Ing                |                      Auto                      |    **Propose**     |
 | Proposal queue  |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
 | Rollback        |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |      **Yes**       |
 | Mode governance |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |    **3 modes**     |
@@ -550,7 +550,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 ### What Each Tool Does Best
 
 | Tool            | Strength                                                                         | Trade-off                                        |
-|-----------------|----------------------------------------------------------------------------------|--------------------------------------------------|
+| --------------- | -------------------------------------------------------------------------------- | ------------------------------------------------ |
 | **Mem0**        | Fast managed service, graph memory, multi-user scoping                           | Cloud-dependent, no integrity checking           |
 | **Supermemory** | Fastest retrieval (ms), auto-ingestion from Drive/Notion                         | Cloud-dependent, auto-writes without review      |
 | **claude-mem**  | Purpose-built for Claude Code, ChromaDB vectors                                  | Requires ChromaDB + Express worker, no integrity |
@@ -669,7 +669,7 @@ mindc mind/bm25.mind --emit=shared -o lib/libbm25.so
 ### Kernel Index
 
 | File              | Functions                                                                            | Purpose                         |
-|-------------------|--------------------------------------------------------------------------------------|---------------------------------|
+| ----------------- | ------------------------------------------------------------------------------------ | ------------------------------- |
 | `bm25.mind`       | `bm25f_doc`, `bm25f_batch`, `apply_recency`, `apply_graph_boost`                     | BM25F scoring with field boosts |
 | `rrf.mind`        | `rrf_fuse`, `rrf_fuse_three`                                                         | Reciprocal Rank Fusion          |
 | `reranker.mind`   | `date_proximity_score`, `category_boost`, `negation_penalty`, `rerank_deterministic` | Deterministic reranking         |
@@ -681,17 +681,17 @@ mindc mind/bm25.mind --emit=shared -o lib/libbm25.so
 
 Compiled MIND kernels vs pure Python across all 8 scoring functions (500 iterations, `perf_counter_ns`):
 
-| Function | N=100 | N=1,000 | N=10,000 |
-|---|---:|---:|---:|
-| `rrf_fuse` | **5.7x** | **41.5x** | **79.4x** |
-| `bm25f_batch` | **7.5x** | **40.9x** | **136.8x** |
-| `negation_penalty` | **2.1x** | **18.6x** | **14.0x** |
-| `date_proximity` | **4.8x** | **11.4x** | **15.0x** |
-| `category_boost` | **5.9x** | **21.2x** | **11.6x** |
-| `importance_batch` | **19.6x** | **42.2x** | **46.6x** |
-| `top_k_mask` | **21.1x** | **45.8x** | **48.3x** |
-| `weighted_rank` | **5.4x** | **30.8x** | **186.1x** |
-| **Total** | **9.7x** | **36.4x** | **42.1x** |
+| Function           |     N=100 |   N=1,000 |   N=10,000 |
+| ------------------ | --------: | --------: | ---------: |
+| `rrf_fuse`         |  **5.7x** | **41.5x** |  **79.4x** |
+| `bm25f_batch`      |  **7.5x** | **40.9x** | **136.8x** |
+| `negation_penalty` |  **2.1x** | **18.6x** |  **14.0x** |
+| `date_proximity`   |  **4.8x** | **11.4x** |  **15.0x** |
+| `category_boost`   |  **5.9x** | **21.2x** |  **11.6x** |
+| `importance_batch` | **19.6x** | **42.2x** |  **46.6x** |
+| `top_k_mask`       | **21.1x** | **45.8x** |  **48.3x** |
+| `weighted_rank`    |  **5.4x** | **30.8x** | **186.1x** |
+| **Total**          |  **9.7x** | **36.4x** |  **42.1x** |
 
 > **40x faster** end-to-end at production scale (N=10,000). Individual kernels reach up to **186x** speedup. Benchmarked on Linux x86_64 with `-O3 -march=native`. The compiled library includes 10 runtime protection layers with near-zero overhead (heartbeat amortized every 64 calls).
 
@@ -798,7 +798,7 @@ python3 scripts/backup_restore.py wal-replay workspace/
 ## Governance Modes
 
 | Mode          | What it does                                             | When to use                                               |
-|---------------|----------------------------------------------------------|-----------------------------------------------------------|
+| ------------- | -------------------------------------------------------- | --------------------------------------------------------- |
 | `detect_only` | Scan + validate + report only                            | **Start here.** First week after install.                 |
 | `propose`     | Report + generate fix proposals in `proposed/`           | After a clean observation week with zero critical issues. |
 | `enforce`     | Bounded auto-supersede + self-healing within constraints | Production mode. Requires explicit opt-in.                |
@@ -877,7 +877,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 ```
 
 | Key                             | Default              | Description                                                  |
-|---------------------------------|----------------------|--------------------------------------------------------------|
+| ------------------------------- | -------------------- | ------------------------------------------------------------ |
 | `version`                       | `"1.0.0"`            | Config schema version                                        |
 | `auto_capture`                  | `true`               | Run capture engine on session end                            |
 | `auto_recall`                   | `true`               | Show recall context on session start                         |
@@ -934,13 +934,13 @@ For Claude Code, Claude Desktop, Cursor, Windsurf, and Gemini CLI, add to the re
 }
 ```
 
-| Client | Config File |
-|--------|------------|
-| **Claude Code CLI** | `~/.claude/mcp.json` |
-| **Claude Desktop** | `~/.config/Claude/claude_desktop_config.json` |
-| **Gemini CLI** | `~/.gemini/settings.json` |
-| **Cursor** | `~/.cursor/mcp.json` |
-| **Windsurf** | `~/.codeium/windsurf/mcp_config.json` |
+| Client              | Config File                                   |
+| ------------------- | --------------------------------------------- |
+| **Claude Code CLI** | `~/.claude/mcp.json`                          |
+| **Claude Desktop**  | `~/.config/Claude/claude_desktop_config.json` |
+| **Gemini CLI**      | `~/.gemini/settings.json`                     |
+| **Cursor**          | `~/.cursor/mcp.json`                          |
+| **Windsurf**        | `~/.codeium/windsurf/mcp_config.json`         |
 
 For **Codex CLI** (TOML format), add to `~/.codex/config.toml`:
 
@@ -982,7 +982,7 @@ MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py --transport http --p
 ### Resources (read-only)
 
 | URI                          | Description                                   |
-|------------------------------|-----------------------------------------------|
+| ---------------------------- | --------------------------------------------- |
 | `mind-mem://decisions`       | Active decisions                              |
 | `mind-mem://tasks`           | All tasks                                     |
 | `mind-mem://entities/{type}` | Entities (projects, people, tools, incidents) |
@@ -995,7 +995,7 @@ MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py --transport http --p
 ### Tools (14 total)
 
 | Tool                  | Description                                                    |
-|-----------------------|----------------------------------------------------------------|
+| --------------------- | -------------------------------------------------------------- |
 | `recall`              | Search memory with BM25 (query, limit, active_only)            |
 | `propose_update`      | Propose a decision/task — writes to SIGNALS.md only            |
 | `approve_apply`       | Apply a staged proposal (dry_run=True by default)              |
@@ -1031,7 +1031,7 @@ MIND_MEM_TOKEN=your-secret python3 mcp_server.py --transport http --port 8765
 ### Threat Model
 
 | What we protect       | How                                                                  |
-|-----------------------|----------------------------------------------------------------------|
+| --------------------- | -------------------------------------------------------------------- |
 | Memory integrity      | 74+ structural checks, ConstraintSignature validation                |
 | Accidental overwrites | Proposal-based mutations only (never direct writes)                  |
 | Rollback safety       | Snapshot before every apply, atomic `os.replace()`                   |
@@ -1039,7 +1039,7 @@ MIND_MEM_TOKEN=your-secret python3 mcp_server.py --transport http --port 8765
 | Path traversal        | All paths resolved via `os.path.realpath()`, workspace-relative only |
 
 | What we do NOT protect against | Why                                                          |
-|--------------------------------|--------------------------------------------------------------|
+| ------------------------------ | ------------------------------------------------------------ |
 | Malicious local user           | Single-user CLI tool — filesystem access = data access       |
 | Network attacks                | No network calls, no listening ports, no telemetry           |
 | Encrypted storage              | Files are plaintext Markdown — use disk encryption if needed |
@@ -1058,7 +1058,7 @@ mind-mem makes **zero network calls** from its core. No telemetry, no phoning ho
 ### Optional Dependencies
 
 | Package                      | Purpose                 | Install                               |
-|------------------------------|-------------------------|---------------------------------------|
+| ---------------------------- | ----------------------- | ------------------------------------- |
 | `fastmcp`                    | MCP server              | `pip install mind-mem[mcp]`           |
 | `onnxruntime` + `tokenizers` | Local vector embeddings | `pip install mind-mem[embeddings]`    |
 | `sentence-transformers`      | Cross-encoder reranking | `pip install mind-mem[cross-encoder]` |
@@ -1066,7 +1066,7 @@ mind-mem makes **zero network calls** from its core. No telemetry, no phoning ho
 ### Platform Support
 
 | Platform               | Status      | Notes                                   |
-|------------------------|-------------|-----------------------------------------|
+| ---------------------- | ----------- | --------------------------------------- |
 | Linux                  | Full        | Primary target                          |
 | macOS                  | Full        | POSIX-compliant shell scripts           |
 | Windows (WSL/Git Bash) | Full        | Use WSL2 or Git Bash for shell hooks    |
@@ -1077,7 +1077,7 @@ mind-mem makes **zero network calls** from its core. No telemetry, no phoning ho
 ## Troubleshooting
 
 | Problem                                     | Solution                                                                                                        |
-|---------------------------------------------|-----------------------------------------------------------------------------------------------------------------|
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `validate.sh` says "No mind-mem.json found" | Run in a workspace, not the repo root. Run `init_workspace.py` first.                                           |
 | `recall` returns no results                 | Workspace is empty. Add decisions/tasks first.                                                                  |
 | `capture` says "no daily log"               | No `memory/YYYY-MM-DD.md` for today. Write something first.                                                     |

@@ -125,7 +125,7 @@ This release represents a generational improvement in Mind-Mem retrieval quality
 ### Benchmark Results
 
 | Metric     | 1.0.0 | 1.0.1     | Delta   |
-|------------|-------|-----------|---------|
+| ---------- | ----- | --------- | ------- |
 | Acc>=50    | 58.2% | **67.3%** | +9.1pp  |
 | Mean Score | 54.3  | **61.4**  | +7.1    |
 | Acc>=75    | 36.5% | **48.8%** | +12.3pp |
