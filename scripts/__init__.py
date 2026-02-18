@@ -20,4 +20,4 @@ Core modules:
     transcript_capture — Transcript JSONL signal extraction
 """
 
-__version__ = "1.0.2"
+__version__ = "2.0.0"

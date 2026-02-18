@@ -1,6 +1,41 @@
 # Changelog
 
-All notable changes to Mind-Mem are documented in this file.
+All notable changes to mind-mem are documented in this file.
+
+## 2.0.0 (2026-02-18)
+
+**Category distillation, prefetch context, MemU comparison, MIND kernel integration**
+
+### Added
+- `scripts/category_distiller.py`: Deterministic category detection from block tags/keywords, generates `categories/*.md` thematic summaries with block references and `_manifest.json`
+- `prefetch_context()` in `scripts/recall.py`: Anticipatory pre-assembly of likely-needed blocks using intent routing + category summaries
+- 2 new MCP tools: `category_summary` (topic-based category retrieval), `prefetch` (signal-based context pre-assembly) — 14→16 total
+- `mind/prefetch.mind`: MIND kernel for signal-based prefetch scoring
+- MIND kernel batch categorization: `category_affinity` + `category_assign` C kernels integrated into category distiller with pure Python fallback
+- `is_protected()` module-level function in `mind_ffi.py` for FORTRESS protection detection
+- `mind_kernel_protected` field in `index_stats` MCP tool response
+- Configurable prompts section in `mind-mem.example.json` (`prompts` + `categories` config keys)
+- MemU added to README comparison chart (Full Feature Matrix + What Each Tool Does Best)
+- `tests/test_category_distiller.py`: 13 tests for category detection, distillation, context retrieval
+- `tests/test_prefetch_context.py`: 7 tests for signal-based prefetch
+
+### Changed
+- MCP tool count: 14 → 16
+- MIND kernel count: 6 → 9 (category_affinity, query_category_relevance, category_assign)
+- `reindex` MCP tool now regenerates category summaries automatically
+- Test count: 676 → 696
+
+## 1.0.2 (2026-02-18)
+
+**Category MIND kernels, version alignment**
+
+### Added
+- `mind/category.mind`: MIND kernel source for category distillation scoring
+- 3 new C category kernels in `lib/kernels.c`: `category_affinity`, `query_category_relevance`, `category_assign`
+- FFI wrappers for category kernels in `scripts/mind_ffi.py`
+
+### Changed
+- Version bumped to 1.0.2 in `pyproject.toml` and `scripts/init_workspace.py`
 
 ## 1.1.3 (2026-02-17)
 
