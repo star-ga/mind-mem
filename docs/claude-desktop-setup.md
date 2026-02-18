@@ -1,133 +1,95 @@
-# Getting Started with Mind-Mem in Claude Desktop
+# Claude Desktop Setup Guide
 
-Set up Mind-Mem as an MCP server in Claude Desktop in under 5 minutes.
+Step-by-step guide to connect mind-mem to Claude Desktop as an MCP server.
 
 ## Prerequisites
 
-- [Claude Desktop](https://claude.ai/download) installed
+- [Claude Desktop](https://claude.ai/desktop) installed
 - Python 3.10+
-- `fastmcp` installed: `pip install "fastmcp>=2.0"`
+- `fastmcp` installed: `pip install fastmcp`
 
-## 1. Clone Mind-Mem
-
-```bash
-git clone https://github.com/star-ga/mind-mem.git ~/mind-mem
-```
-
-## 2. Initialize a Workspace
+## Step 1: Initialize a workspace
 
 ```bash
-python3 ~/mind-mem/scripts/init_workspace.py ~/my-workspace
+# Create a workspace in your project directory
+python3 /path/to/mind-mem/scripts/init_workspace.py /path/to/your/workspace
 ```
 
-This creates the full directory structure (decisions, tasks, entities, intelligence, etc.) and `mind-mem.json` config.
+This creates the full directory structure with 12 directories and 19 template files.
 
-## 3. Configure Claude Desktop
+## Step 2: Configure Claude Desktop
 
-Open your Claude Desktop config file:
-
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Linux**: `~/.config/claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
-Add the `mind-mem` entry under `mcpServers`:
+Edit `~/.claude/claude_desktop_config.json` (create it if it doesn't exist):
 
 ```json
 {
   "mcpServers": {
     "mind-mem": {
       "command": "python3",
-      "args": ["/Users/you/mind-mem/mcp_server.py"],
+      "args": ["/path/to/mind-mem/mcp_server.py"],
       "env": {
-        "MIND_MEM_WORKSPACE": "/Users/you/my-workspace"
+        "MIND_MEM_WORKSPACE": "/path/to/your/workspace"
       }
     }
   }
 }
 ```
 
-Replace `/Users/you/` with your actual paths.
+Replace both paths with your actual paths.
 
-## 4. Restart Claude Desktop
+## Step 3: Restart Claude Desktop
 
-Quit and reopen Claude Desktop. You should see "mind-mem" listed as a connected MCP server.
+Quit and reopen Claude Desktop. The mind-mem server will start automatically.
 
-## 5. Test It
+## Step 4: Verify
 
-Try these in Claude Desktop:
+In Claude Desktop, you should now see mind-mem tools available:
 
-**Search memory:**
+- **recall** — Search memory with BM25
+- **propose_update** — Propose new decisions/tasks
+- **scan** — Run integrity scan
+- **hybrid_search** — BM25+Vector+RRF fusion search
+- **intent_classify** — Classify query intent
+- And 9 more tools (14 total)
+
+## Step 5: Test
+
+Ask Claude:
+
 > "Use the recall tool to search for 'authentication'"
 
-**Propose a decision:**
-> "Use propose_update to propose a decision: 'Use PostgreSQL for the user database' with rationale 'Better JSON support' and tags 'database, infrastructure'"
+If the workspace is empty, you'll get "No results found" — that's correct.
 
-**Run integrity scan:**
-> "Use the scan tool to check workspace health"
+## Available Resources
 
-**Check contradictions:**
-> "Use list_contradictions to check for conflicting decisions"
+Claude Desktop can also read these resources directly:
 
-## What to Expect
-
-### Resources (read-only context)
-
-Claude Desktop can read these automatically:
-
-| Resource | What it provides |
+| Resource | URI |
 |---|---|
-| `mind-mem://decisions` | Active decisions |
-| `mind-mem://tasks` | All tasks |
-| `mind-mem://health` | Workspace health summary |
-| `mind-mem://signals` | Pending signals |
-| `mind-mem://contradictions` | Detected contradictions |
-| `mind-mem://recall/{query}` | Search results |
-
-### Tools (actions)
-
-| Tool | What it does | Safety |
-|---|---|---|
-| `recall` | BM25 search across all memory | Read-only |
-| `propose_update` | Propose a decision or task | Writes to SIGNALS.md only |
-| `approve_apply` | Apply a staged proposal | Defaults to dry_run=True |
-| `rollback_proposal` | Rollback an applied proposal | Restores from snapshot |
-| `scan` | Run integrity scan | Read-only |
-| `list_contradictions` | Show contradictions | Read-only |
-
-### Safety Guarantees
-
-- `propose_update` **never** writes to `DECISIONS.md` or `TASKS.md` — all proposals land in `intelligence/SIGNALS.md`
-- `approve_apply` defaults to `dry_run=True` — you must explicitly set `dry_run=False` to apply
-- All resources are read-only — no tool can mutate source of truth without your explicit approval
-- Every apply creates a snapshot for rollback
-
-## HTTP Transport (Multi-Client)
-
-For remote access or multiple clients:
-
-```bash
-MIND_MEM_WORKSPACE=~/my-workspace python3 ~/mind-mem/mcp_server.py --transport http --port 8765
-```
-
-With token auth:
-
-```bash
-MIND_MEM_TOKEN=your-secret MIND_MEM_WORKSPACE=~/my-workspace python3 ~/mind-mem/mcp_server.py --transport http --port 8765
-```
+| Active decisions | `mind-mem://decisions` |
+| All tasks | `mind-mem://tasks` |
+| Entities | `mind-mem://entities/projects` |
+| Health summary | `mind-mem://health` |
+| Search results | `mind-mem://recall/your-query` |
+| Shared ledger | `mind-mem://ledger` |
 
 ## Troubleshooting
 
 | Problem | Solution |
 |---|---|
-| Server not appearing in Claude Desktop | Check paths in config, restart Claude Desktop |
-| "fastmcp not found" | Run `pip install "fastmcp>=2.0"` |
-| "No mind-mem.json found" | Run `init_workspace.py` first |
-| Recall returns empty | Workspace has no data yet — add some decisions first |
-| Token auth errors | Set `MIND_MEM_TOKEN` env var or use `--token` flag |
+| Server doesn't appear in Claude Desktop | Check the config JSON syntax. Restart Claude Desktop. |
+| "No module named 'fastmcp'" | Run `pip install fastmcp` in the Python environment Claude Desktop uses. |
+| "MIND_MEM_WORKSPACE not set" | Add the `env` block to your config. |
+| Tools fail with "No mind-mem.json found" | Run `init_workspace.py` on your workspace first. |
 
-## Next Steps
+## HTTP Transport (Remote)
 
-1. **Add decisions**: Use `propose_update` to start populating your workspace
-2. **Review signals**: Check `intelligence/SIGNALS.md` for pending proposals
-3. **Enable hooks**: Add session-start/end hooks for automatic scanning (see main README)
-4. **Try multi-agent**: Set up namespaces with `python3 maintenance/namespaces.py`
+For remote or multi-client setups:
+
+```bash
+MIND_MEM_WORKSPACE=/path/to/workspace \
+MIND_MEM_TOKEN=your-secret \
+python3 mcp_server.py --transport http --port 8765
+```
+
+Then configure Claude Desktop to use the HTTP endpoint instead of stdio.

@@ -1200,7 +1200,7 @@ def _category_match_boost(query: str, block_text: str, boost: float = 0.15) -> f
 
 
 # Reranker feature weights (tuned for LoCoMo coverage)
-# v1.0.2: Reduced speaker dominance (was 0.40), increased entity/phrase overlap
+# Reduced speaker dominance (was 0.40), increased entity/phrase overlap
 # to avoid "right speaker, wrong topic" over-preference.
 _RERANK_W_ENTITY = 0.30
 _RERANK_W_TIME = 0.15

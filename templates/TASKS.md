@@ -1,4 +1,4 @@
-# TASKS — Mem OS v2.0
+# TASKS — mind-mem v1.0
 
 > Schema: [T-YYYYMMDD-###]
 > Required fields: Title, Status, Priority, Project, Due, Owner, Context, Next, Dependencies, Sources, History

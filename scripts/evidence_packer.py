@@ -4,7 +4,7 @@ Builds structured, speaker-attributed evidence context from recall hits.
 No LLM dependency — prevents starvation and hallucination in adversarial
 and verification queries.
 
-v1.0.2: ALL query types now use structured [SPEAKER=...] [DATE=...] [DiaID=...]
+ALL query types use structured [SPEAKER=...] [DATE=...] [DiaID=...]
 format with category-specific ordering:
   - temporal: chronological by DiaID
   - multi-hop: hop-clustered (group by entity/topic)

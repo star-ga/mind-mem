@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mem OS Integrity Validator v1.1
+# mind-mem Integrity Validator v1.1
 # Based on: Integrity Validator Checklist v1.0 (Telegram:msg-3268)
 # Run: bash maintenance/validate.sh [workspace_path]
 # Creates: maintenance/validation-report.txt
@@ -43,7 +43,7 @@ if [[ ! -d "$REPORT_DIR" ]]; then
 fi
 
 cat > "$REPORT" <<EOF
-Mem OS Integrity Validation Report v1.1
+mind-mem Integrity Validation Report v1.1
 Date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 Workspace: $WS
 EOF
