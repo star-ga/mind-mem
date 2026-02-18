@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mem OS Smoke Test — end-to-end verification
+# mind-mem Smoke Test — end-to-end verification
 # Run: bash scripts/smoke_test.sh
 # Creates a temp workspace, runs init → validate → scan → recall → capture, then cleans up.
 # Exit code: 0 = all passed, 1 = failure
@@ -24,7 +24,7 @@ check() {
   fi
 }
 
-echo "=== Mem OS Smoke Test ==="
+echo "=== mind-mem Smoke Test ==="
 echo "Temp workspace: $TMPWS"
 echo ""
 

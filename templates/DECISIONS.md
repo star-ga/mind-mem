@@ -1,4 +1,4 @@
-# DECISIONS — Mem OS v2.0
+# DECISIONS — mind-mem v1.0
 
 > Schema: [D-YYYYMMDD-###]
 > Required fields: Date, Status, Scope, Statement, Rationale, Supersedes, Tags, Sources

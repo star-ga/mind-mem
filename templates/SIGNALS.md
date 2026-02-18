@@ -1,4 +1,4 @@
-# SIGNALS — Mem OS v2.0
+# SIGNALS — mind-mem v1.0
 
 > Raw signals: potential decisions, tasks, or events detected but not yet formalized.
 > ID format: [SIG-YYYYMMDD-###]

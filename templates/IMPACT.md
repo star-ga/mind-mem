@@ -1,4 +1,4 @@
-# IMPACT — Mem OS v2.0
+# IMPACT — mind-mem v1.0
 
 > Decision impact graph: decision -> affects -> projects/tasks/incidents.
 > ID format: [I-YYYYMMDD-###]

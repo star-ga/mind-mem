@@ -1,93 +1,65 @@
-# Contributing to Mind Mem
+# Contributing to mind-mem
 
-Thanks for your interest in contributing to Mind Mem.
+Contributions are welcome. Please follow these guidelines.
+
+## Getting Started
+
+1. Fork the repo
+2. Clone your fork
+3. Create a branch: `git checkout -b feature/your-feature`
+4. Make changes
+5. Run tests: `python -m pytest tests/ -x`
+6. Run lint: `ruff check scripts/ tests/ mcp_server.py`
+7. Commit and push
+8. Open a pull request
 
 ## Development Setup
 
 ```bash
 git clone https://github.com/star-ga/mind-mem.git
 cd mind-mem
-pip install -e ".[all]"
+python -m pip install -e ".[dev]"
+python -m pytest tests/ -x
 ```
 
-This installs mind-mem in editable mode with all optional dependencies (FastMCP for the MCP server, sentence-transformers for embedding re-rank).
+## Code Standards
 
-For core development only (no optional deps):
+- **Python 3.10+** — use modern syntax (type hints, `|` unions, etc.)
+- **Zero external dependencies** for core modules (scripts/*.py)
+- **ruff** for linting — zero errors required
+- **pytest** for testing — all tests must pass
 
-```bash
-pip install -e .
-```
+## Test Guidelines
 
-## Running Tests
+- Every new module needs a corresponding test file in `tests/`
+- Tests should be self-contained (use temp directories, mock externals)
+- Target: 100% pass rate across Ubuntu/macOS/Windows x Python 3.10/3.12/3.13
 
-```bash
-# Unit tests
-python3 -m pytest tests/ -v
+## Pull Request Checklist
 
-# Structural validation (74+ checks)
-bash maintenance/validate.sh /path/to/workspace
-# or cross-platform:
-python3 maintenance/validate_py.py /path/to/workspace
+- [ ] All tests pass (`python -m pytest tests/ -x`)
+- [ ] `ruff check` reports zero errors
+- [ ] New features have tests
+- [ ] No new external dependencies added to core
 
-# End-to-end smoke test
-bash scripts/smoke_test.sh
-```
+## Architecture Decisions
 
-## Setting Up the MCP Server Locally
+Before proposing significant architectural changes, please open an issue first to discuss the approach. See [docs/architecture.md](docs/architecture.md) for the current system design.
 
-1. Install the MCP dependency:
+## MIND Kernels
 
-```bash
-pip install "fastmcp>=2.0"
-```
+If modifying `.mind` files:
+- Follow MIND syntax (see [mind/README.md](mind/README.md))
+- Ensure pure Python fallback exists for every MIND function
+- Test both with and without compiled `.so`
 
-2. Initialize a test workspace:
+## Reporting Issues
 
-```bash
-python3 scripts/init_workspace.py /tmp/test-ws
-```
-
-3. Run the server:
-
-```bash
-# stdio transport (for Claude Code / Claude Desktop)
-MIND_MEM_WORKSPACE=/tmp/test-ws python3 mcp_server.py
-
-# HTTP transport (for multi-client / remote)
-MIND_MEM_WORKSPACE=/tmp/test-ws python3 mcp_server.py --transport http --port 8765
-```
-
-4. Add to Claude Desktop config (`~/.claude/claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "mind-mem": {
-      "command": "python3",
-      "args": ["/path/to/mind-mem/mcp_server.py"],
-      "env": {"MIND_MEM_WORKSPACE": "/path/to/workspace"}
-    }
-  }
-}
-```
-
-## Submitting to modelcontextprotocol/servers
-
-1. Fork `modelcontextprotocol/servers` on GitHub.
-2. Add an entry to the community servers section following the existing format.
-3. Include: server name, short description, install command, and link to this repo.
-4. Open a pull request with the addition.
-5. See `mcp-listing.md` in this repo for the prepared listing template.
-
-## Guidelines
-
-- Keep zero-dependency policy for core modules (stdlib only).
-- All mutations to source of truth must go through the apply engine.
-- Add tests for new functionality in `tests/`.
-- Run `python3 -m pytest tests/ -v` before submitting a PR.
-- Follow existing code style (120 char line length, type hints where practical).
-- No auto-write to source of truth (decisions/tasks) without going through the proposal pipeline.
-- No features that require a daemon or background process.
+Please include:
+- Python version
+- OS
+- Minimal reproduction steps
+- Expected vs actual behavior
 
 ## License
 

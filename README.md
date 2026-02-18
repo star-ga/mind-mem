@@ -27,7 +27,7 @@ Drop-in memory layer for AI coding agents (Claude Code, Claude Desktop, Cursor, 
 
 | Principle | What it means |
 |---|---|
-| **Deterministic** | Same input → same output. No ML, no probabilistic mutations. |
+| **Deterministic** | Same input, same output. No ML in the core, no probabilistic mutations. |
 | **Auditable** | Every apply logged with timestamp, receipt, and DIFF. Full traceability. |
 | **Local-first** | All data stays on disk. No cloud calls, no telemetry, no phoning home. |
 | **No vendor lock-in** | Plain Markdown files. Move to any system, any time. |
@@ -40,9 +40,9 @@ Drop-in memory layer for AI coding agents (Claude Code, Claude Desktop, Cursor, 
 ## Table of Contents
 
 - [Why mind-mem](#why-mind-mem)
-- [What's New vs mem-os](#whats-new-vs-mem-os)
 - [Features](#features)
-- [Quick Start](#quick-start) (3 minutes)
+- [Benchmark Results](#benchmark-results)
+- [Quick Start](#quick-start)
 - [Health Summary](#health-summary)
 - [Commands](#commands)
 - [Architecture](#architecture)
@@ -50,11 +50,13 @@ Drop-in memory layer for AI coding agents (Claude Code, Claude Desktop, Cursor, 
 - [Recall](#recall)
 - [MIND Kernels](#mind-kernels)
 - [Auto-Capture](#auto-capture)
+- [Multi-Agent Memory](#multi-agent-memory)
 - [Governance Modes](#governance-modes)
 - [Block Format](#block-format)
-- [Specification](#specification)
 - [Configuration](#configuration)
 - [MCP Server](#mcp-server)
+- [Security](#security)
+- [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -77,103 +79,16 @@ mind-mem also **detects when your memory is wrong** — contradictions between d
 
 ---
 
-## What's New vs mem-os
-
-mind-mem is the successor to [mem-os](https://github.com/star-ga/mem-os). Everything from mem-os is included, plus:
-
-| Feature | mem-os v1 | mind-mem v1 |
-|---|---|---|
-| Search | BM25 + optional vector | **Hybrid BM25+Vector+RRF fusion** with thread-parallel retrieval |
-| Query expansion | Static synonym dict | **RM3 pseudo-relevance feedback** (JM-smoothed language models) |
-| Intent routing | 4 query types | **9 intent types** (WHY, WHEN, ENTITY, WHAT, HOW, LIST, VERIFY, COMPARE, TRACE) |
-| Reranking | Recency + field boosts | **+ Negation awareness, date proximity (Gaussian decay), 20-category taxonomy** |
-| Cross-encoder | None | **Optional ms-marco-MiniLM** (80MB, blends 0.6*CE + 0.4*original) |
-| Metadata | Static blocks | **A-MEM evolution** (access tracking, importance [0.8, 1.5], keyword evolution) |
-| MIND kernels | None | **6 compiled kernels** (bm25, rrf, reranker, abstention, ranking, importance) |
-| MCP tools | 6 | **14** (+hybrid_search, find_similar, intent_classify, index_stats, reindex, memory_evolution, list_mind_kernels, get_mind_kernel) |
-| Tests | 562 | **676** |
-
----
-
 ## Features
-
-### Benchmark Results
-
-mind-mem recall engine evaluated on two standard long-term memory benchmarks. Zero dependencies, pure deterministic retrieval — no embeddings, no vector DB, no cloud calls.
-
-**LoCoMo LLM-as-Judge (retrieve → answer → judge pipeline):**
-
-Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer with LLM, score against gold reference with judge LLM. Directly comparable methodology.
-
-| Metric | v3 (baseline) | **v1.0.1** | Delta |
-|---|--:|--:|---|
-| **Acc ≥50** | 58.2% | **67.3%** | **+9.1pp** |
-| Mean Score | 54.3 | **61.4** | +7.1 |
-| Acc ≥75 | 36.5% | **48.8%** | +12.3pp |
-
-Category breakdown (gpt-4o-mini answerer + judge, all 10 conversations, N=1986):
-
-| Category | N | Acc (≥50) | Mean |
-|---|--:|--:|--:|
-| **Overall** | **1986** | **67.3%** | **61.4** |
-| Open-domain | 841 | 86.6% | 78.3 |
-| Temporal | 96 | 78.1% | 65.7 |
-| Single-hop | 282 | 68.8% | 59.1 |
-| Multi-hop | 321 | 55.5% | 48.4 |
-| Adversarial | 446 | 36.3% | 39.5 |
-
-> **Version:** `1.0.1` | **Judge:** `gpt-4o-mini` (answerer + judge) | **N:** 1986 questions, 10 conversations | See [`benchmarks/REPORT_v1.0.1.md`](benchmarks/REPORT_v1.0.1.md) for full methodology and reproduction steps.
-
-**Competitive landscape:**
-
-| System | Score | Approach |
-|---|--:|---|
-| Memobase | 75.8% | Specialized extraction |
-| **Letta** | 74.0% | Files + agent tool use |
-| **Mem0** | 68.5% | Graph + LLM extraction |
-| **mind-mem** | **67.3%** | Deterministic BM25 + rule-based packing |
-
-> mind-mem reaches **98%** of Mem0's score with pure deterministic retrieval — no embeddings, no vector DB, no cloud calls, no LLM in the retrieval loop. The retrieval pipeline treats recall as a reasoning problem: wide candidate retrieval → deterministic rerank → context packing. mind-mem's unique value is **governance** (contradiction detection, drift, audit trails) and **agent-agnostic shared memory** via MCP — areas these benchmarks don't measure.
-
-**LongMemEval (ICLR 2025, 470 questions):**
-
-| Category | N | R@1 | R@5 | R@10 | MRR |
-|---|--:|--:|--:|--:|--:|
-| **Overall** | **470** | **73.2** | **85.3** | **88.1** | **.784** |
-| Multi-session | 121 | 83.5 | 95.9 | 95.9 | .885 |
-| Temporal | 127 | 76.4 | 91.3 | 92.9 | .826 |
-| Knowledge update | 72 | 80.6 | 88.9 | 91.7 | .844 |
-| Single-session | 56 | 82.1 | 89.3 | 89.3 | .847 |
-
-**Pipeline modes:**
-
-| Pipeline | Calls/Q | Flow |
-|---|--:|---|
-| `BM25` | 2 | Retrieve → Answer → Judge |
-| `BM25 + Compress` | 3 | Retrieve → Compress → Answer → Judge |
-
-Run benchmarks yourself:
-```bash
-# Retrieval-only (R@K metrics)
-python3 benchmarks/locomo_harness.py
-python3 benchmarks/longmemeval_harness.py
-
-# LLM-as-judge (accuracy metrics, requires API key)
-python3 benchmarks/locomo_judge.py --dry-run
-python3 benchmarks/locomo_judge.py --answerer-model gpt-4o-mini --output results.json
-
-# Selective conversations (e.g., quick suite)
-python3 benchmarks/locomo_harness.py --conv-ids 4,7,8
-```
 
 ### Hybrid BM25+Vector Search with RRF Fusion
 Thread-parallel BM25 and vector search with Reciprocal Rank Fusion (k=60). Configurable weights per signal. Vector is optional — works with just BM25 out of the box.
 
 ### RM3 Dynamic Query Expansion
-Pseudo-relevance feedback using JM-smoothed language models. Expands queries with top terms from initial result set. Falls back to static synonyms for adversarial queries.
+Pseudo-relevance feedback using JM-smoothed language models. Expands queries with top terms from initial result set. Falls back to static synonyms for adversarial queries. Zero dependencies.
 
 ### 9-Type Intent Router
-Classifies queries into WHY, WHEN, ENTITY, WHAT, HOW, LIST, VERIFY, COMPARE, or TRACE. Each intent type maps to optimized retrieval parameters (limits, expansion settings, graph traversal, etc.).
+Classifies queries into WHY, WHEN, ENTITY, WHAT, HOW, LIST, VERIFY, COMPARE, or TRACE. Each intent type maps to optimized retrieval parameters (limits, expansion settings, graph traversal depth).
 
 ### A-MEM Metadata Evolution
 Auto-maintained per-block metadata: access counts, importance scores (clamped to [0.8, 1.5] reranking boost), keyword evolution, and co-occurrence tracking. Importance decays with exponential recency.
@@ -185,28 +100,31 @@ Four-signal reranking pipeline: negation awareness (penalizes contradicting resu
 Drop-in ms-marco-MiniLM-L-6-v2 cross-encoder (80MB). Blends 0.6 * CE + 0.4 * original score. Falls back gracefully when unavailable. Enabled via config.
 
 ### MIND Kernels (Optional, Native Speed)
-6 compiled MIND kernels for BM25F scoring, RRF fusion, reranking, abstention, ranking, and importance scoring. Compiles to native `.so` via the MIND compiler. Pure Python fallback always available.
+6 compiled MIND kernels for BM25F scoring, RRF fusion, reranking, abstention, ranking, and importance scoring. Compiles to native `.so` via the [MIND compiler](https://mindlang.dev). Pure Python fallback always available — no functionality is lost without compilation.
+
+### BM25F Hybrid Recall
+BM25F field-weighted scoring (k1=1.2, b=0.75) with per-field weighting (Statement: 3x, Title: 2.5x, Name: 2x, Summary: 1.5x), Porter stemming, bigram phrase matching (25% boost per hit), overlapping sentence chunking (3-sentence windows with 1-sentence overlap), domain-aware query expansion, and optional 2-hop graph-based cross-reference neighbor boosting. Zero dependencies. Fast and deterministic.
+
+### Graph-Based Recall
+2-hop cross-reference neighbor boosting — when a keyword match is found, blocks that reference or are referenced by the match get boosted (1-hop: 0.3x decay, 2-hop: 0.1x decay). Surfaces related decisions, tasks, and entities that share no keywords but are structurally connected. Auto-enabled for multi-hop queries.
+
+### Vector Recall (optional)
+Pluggable embedding backend — local ONNX (all-MiniLM-L6-v2, no server needed) or cloud (Pinecone). Falls back to BM25 when unavailable.
 
 ### Persistent Memory
-Structured, validated, append-only decisions / tasks / entities / incidents with provenance and supersede chains.
+Structured, validated, append-only decisions / tasks / entities / incidents with provenance and supersede chains. Plain Markdown files — readable by humans, parseable by machines.
 
 ### Immune System
-Continuous integrity checking: contradictions, drift, dead decisions, orphan tasks, coverage scoring, regression detection.
+Continuous integrity checking: contradictions, drift, dead decisions, orphan tasks, coverage scoring, regression detection. 74+ structural validation rules.
 
 ### Safe Governance
 All changes flow through graduated modes: `detect_only` → `propose` → `enforce`. Apply engine with snapshot, receipt, DIFF, and automatic rollback on validation failure.
 
-### BM25F Hybrid Recall
-BM25F field-weighted scoring with Porter stemming, bigram phrase matching, overlapping chunk indexing, domain-aware query expansion, query type detection (temporal/multi-hop/adversarial/single-hop), and optional 2-hop graph-based cross-reference neighbor boosting. Zero dependencies. Fast and deterministic.
-
-### Graph-Based Recall
-2-hop cross-reference neighbor boosting — when a keyword match is found, blocks that reference or are referenced by the match get boosted (1-hop: 0.3x decay, 2-hop: 0.1x decay). Surfaces related decisions, tasks, and entities that share no keywords but are structurally connected. Auto-enabled for multi-hop queries. Zero dependencies.
-
-### Vector Recall (optional)
-Pluggable embedding backend — local ONNX (all-MiniLM-L6-v2) or cloud (Pinecone). Falls back to BM25 when unavailable.
+### Adversarial Abstention Classifier
+Deterministic pre-LLM confidence gate for adversarial/verification queries. Computes confidence from entity overlap, BM25 score, speaker coverage, evidence density, and negation asymmetry. Below threshold → forces abstention without calling the LLM, preventing hallucinated answers to unanswerable questions.
 
 ### Auto-Capture with Structured Extraction
-Session-end hook detects decision/task language (26 patterns with confidence classification), extracts structured metadata (subject, object, tags), and writes to `SIGNALS.md` only. Never touches source of truth directly. All signals go through `/apply`. Supports batch scanning of recent logs.
+Session-end hook detects decision/task language (26 patterns with confidence classification), extracts structured metadata (subject, object, tags), and writes to `SIGNALS.md` only. Never touches source of truth directly. All signals go through `/apply`.
 
 ### Concurrency Safety
 Cross-platform advisory file locking (`fcntl`/`msvcrt`/atomic create) protects all concurrent write paths. Stale lock detection with PID-based cleanup. Zero dependencies.
@@ -229,14 +147,71 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 ### Transcript JSONL Capture
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
-### Adversarial Abstention Classifier
-Deterministic pre-LLM confidence gate for adversarial/verification queries. Computes confidence from entity overlap, BM25 score, speaker coverage, evidence density, and negation asymmetry. Below threshold → forces abstention without calling the LLM, preventing hallucinated answers to unanswerable questions.
+### MCP Server (14 tools, 8 resources)
+Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 14 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
 
 ### 74+ Structural Checks + 676 Unit Tests
 `validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 676 pytest unit tests covering all core modules.
 
 ### Audit Trail
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
+
+---
+
+## Benchmark Results
+
+mind-mem's recall engine evaluated on two standard long-term memory benchmarks. Zero dependencies, pure deterministic retrieval — no embeddings, no vector DB, no cloud calls.
+
+### LoCoMo LLM-as-Judge
+
+Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer with LLM, score against gold reference with judge LLM. Directly comparable methodology.
+
+| Category | N | Acc (>=50) | Mean Score |
+|---|--:|--:|--:|
+| **Overall** | **1986** | **67.3%** | **61.4** |
+| Open-domain | 841 | 86.6% | 78.3 |
+| Temporal | 96 | 78.1% | 65.7 |
+| Single-hop | 282 | 68.8% | 59.1 |
+| Multi-hop | 321 | 55.5% | 48.4 |
+| Adversarial | 446 | 36.3% | 39.5 |
+
+> **Judge:** `gpt-4o-mini` (answerer + judge) | **N:** 1986 questions, 10 conversations | See [`benchmarks/REPORT.md`](benchmarks/REPORT.md) for full methodology and reproduction steps.
+
+### Competitive Landscape
+
+| System | Score | Approach |
+|---|--:|---|
+| Memobase | 75.8% | Specialized extraction |
+| **Letta** | 74.0% | Files + agent tool use |
+| **Mem0** | 68.5% | Graph + LLM extraction |
+| **mind-mem** | **67.3%** | Deterministic BM25 + rule-based packing |
+
+> mind-mem reaches **98%** of Mem0's score with pure deterministic retrieval — no embeddings, no vector DB, no cloud calls, no LLM in the retrieval loop. mind-mem's unique value is **governance** (contradiction detection, drift analysis, audit trails) and **agent-agnostic shared memory** via MCP — areas these benchmarks don't measure.
+
+### LongMemEval (ICLR 2025, 470 questions)
+
+| Category | N | R@1 | R@5 | R@10 | MRR |
+|---|--:|--:|--:|--:|--:|
+| **Overall** | **470** | **73.2** | **85.3** | **88.1** | **.784** |
+| Multi-session | 121 | 83.5 | 95.9 | 95.9 | .885 |
+| Temporal | 127 | 76.4 | 91.3 | 92.9 | .826 |
+| Knowledge update | 72 | 80.6 | 88.9 | 91.7 | .844 |
+| Single-session | 56 | 82.1 | 89.3 | 89.3 | .847 |
+
+### Run Benchmarks Yourself
+
+```bash
+# Retrieval-only (R@K metrics)
+python3 benchmarks/locomo_harness.py
+python3 benchmarks/longmemeval_harness.py
+
+# LLM-as-judge (accuracy metrics, requires API key)
+python3 benchmarks/locomo_judge.py --dry-run
+python3 benchmarks/locomo_judge.py --answerer-model gpt-4o-mini --output results.json
+
+# Selective conversations
+python3 benchmarks/locomo_harness.py --conv-ids 4,7,8
+```
 
 ---
 
@@ -262,17 +237,17 @@ Creates 12 directories, 19 template files, and `mind-mem.json` config. **Never o
 ### 3. Validate
 
 ```bash
-bash maintenance/validate.sh .
+bash .mind-mem/scripts/validate.sh .
 # or cross-platform:
-python3 maintenance/validate_py.py .
+python3 .mind-mem/scripts/validate_py.py .
 ```
 
-Expected: `74 checks | 74 passed | 0 issues`. If you see an error about `mind-mem.json`, you're running in the repo root instead of an initialized workspace.
+Expected: `74 checks | 74 passed | 0 issues`.
 
 ### 4. First scan
 
 ```bash
-python3 maintenance/intel_scan.py .
+python3 .mind-mem/scripts/intel_scan.py .
 ```
 
 Expected: `0 critical | 0 warnings` on a fresh workspace.
@@ -280,10 +255,10 @@ Expected: `0 critical | 0 warnings` on a fresh workspace.
 ### 5. Verify recall + capture
 
 ```bash
-python3 maintenance/recall.py --query "test" --workspace .
+python3 .mind-mem/scripts/recall.py --query "test" --workspace .
 # → No results found. (empty workspace — correct)
 
-python3 maintenance/capture.py .
+python3 .mind-mem/scripts/capture.py .
 # → capture: no daily log for YYYY-MM-DD, nothing to scan (correct)
 ```
 
@@ -342,9 +317,7 @@ Configure workspace path in `~/.openclaw/openclaw.json`:
 
 You're live. Start in `detect_only` for one week, then move to `propose`.
 
-### Smoke Test (optional)
-
-Run the full end-to-end verification:
+### 8. Smoke Test (optional)
 
 ```bash
 bash .mind-mem/scripts/smoke_test.sh
@@ -359,7 +332,7 @@ Creates a temp workspace, runs init → validate → scan → recall → capture
 After setup, this is what a healthy workspace looks like:
 
 ```
-$ python3 maintenance/intel_scan.py .
+$ python3 scripts/intel_scan.py .
 
 mind-mem Intelligence Scan Report v2.0
 Mode: detect_only
@@ -384,14 +357,6 @@ Mode: detect_only
 TOTAL: 0 critical | 0 warnings | 16 info
 ```
 
-```
-$ bash maintenance/validate.sh .
-
-TOTAL: 74 checks | 74 passed | 0 issues | 1 warnings
-```
-
-> Note: validate.sh check count scales with data — fresh workspaces have 74 checks, populated workspaces have more. The 1 warning is expected (no weekly summaries yet). Additionally, 676 pytest unit tests cover all core modules.
-
 ---
 
 ## Commands
@@ -408,7 +373,7 @@ TOTAL: 74 checks | 74 passed | 0 issues | 1 warnings
 
 ```
 your-workspace/
-├── mcp_server.py            # MCP server (FastMCP, 14 tools)
+├── mcp_server.py            # MCP server (FastMCP, 14 tools, 8 resources)
 ├── mind-mem.json             # Config
 ├── MEMORY.md                # Protocol rules
 │
@@ -421,7 +386,7 @@ your-workspace/
 │   └── importance.mind      # A-MEM importance scoring
 │
 ├── lib/                     # Compiled MIND kernels (optional)
-│   └── libmindmem.so       # mindc output — not required
+│   └── libmindmem.so       # mindc output — not required for operation
 │
 ├── decisions/
 │   └── DECISIONS.md         # Formal decisions [D-YYYYMMDD-###]
@@ -480,7 +445,7 @@ your-workspace/
     ├── block_metadata.py    # A-MEM metadata evolution
     ├── cross_encoder_reranker.py  # Optional cross-encoder
     ├── intent_router.py     # 9-type intent classification
-    ├── recall.py            # BM25 + RM3 + graph scoring
+    ├── recall.py            # BM25F + RM3 + graph scoring engine
     ├── recall_vector.py     # Vector/embedding backends
     ├── sqlite_index.py      # FTS5 + vector + metadata index
     ├── abstention_classifier.py  # Adversarial abstention
@@ -519,7 +484,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | Intent routing | — | — | — | — | — | — | — | — | Yes | **9 types** |
 | Query expansion | — | — | — | — | — | — | — | — | QMD 1.7B | **RM3 (zero-dep)** |
 | **Persistence** | | | | | | | | | | |
-| Structured | JSON | JSON | SQL | Blk | Grph | KV | Grph | Grph | SQL | **Markdown blocks** |
+| Structured | JSON | JSON | SQL | Blk | Grph | KV | Grph | Grph | SQL | **Markdown** |
 | Entities | Yes | Yes | — | Yes | Yes | Yes | Yes | Yes | — | **Yes** |
 | Temporal | — | — | — | — | Yes | — | — | — | — | **Yes** |
 | Supersede | — | — | — | Yes | Yes | — | — | — | — | **Yes** |
@@ -527,28 +492,27 @@ Compared against every major memory solution for AI agents (as of 2026):
 | A-MEM metadata | — | — | — | — | — | — | — | — | Yes | **Yes** |
 | **Integrity** | | | | | | | | | | |
 | Contradictions | — | — | — | — | — | — | — | — | — | **Yes** |
-| Drift | — | — | — | — | — | — | — | — | — | **Yes** |
+| Drift detection | — | — | — | — | — | — | — | — | — | **Yes** |
 | Validation | — | — | — | — | — | — | — | — | — | **74+ rules** |
 | Impact graph | — | — | — | — | — | — | — | — | — | **Yes** |
 | Coverage | — | — | — | — | — | — | — | — | — | **Yes** |
 | Multi-agent | — | — | — | Yes | — | — | — | — | — | **ACL-based** |
 | Conflict res. | — | — | — | — | — | — | — | — | — | **Automatic** |
 | WAL/crash | — | — | — | — | — | — | — | — | — | **Yes** |
-| Backup | — | — | — | — | — | — | — | — | — | **Yes** |
+| Backup/restore | — | — | — | — | — | — | — | — | — | **Yes** |
 | Abstention | — | — | — | — | — | — | — | — | — | **Yes** |
 | **Governance** | | | | | | | | | | |
 | Auto-capture | Auto | Auto | Auto | Self | Ext | Ext | Ext | Ing | Auto | **Propose** |
 | Proposal queue | — | — | — | — | — | — | — | — | — | **Yes** |
 | Rollback | — | — | — | — | — | — | — | — | — | **Yes** |
-| Mode gov. | — | — | — | — | — | — | — | — | — | **3 modes** |
-| Audit | — | Part | — | — | — | — | — | — | — | **Full** |
+| Mode governance | — | — | — | — | — | — | — | — | — | **3 modes** |
+| Audit trail | — | Part | — | — | — | — | — | — | — | **Full** |
 | **Operations** | | | | | | | | | | |
 | Local-only | — | — | Yes | — | — | — | — | — | Yes | **Yes** |
 | Zero deps | — | — | — | — | — | — | — | — | — | **Yes** |
 | No daemon | — | — | — | — | — | Yes | — | — | — | **Yes** |
 | GPU required | — | — | — | — | — | — | — | — | **4.5GB** | **No** |
 | Git-friendly | — | — | — | Part | — | — | — | — | — | **Yes** |
-| CLI / MCP | — | Plug | Plug | — | — | Plug | — | — | — | **Native** |
 | MCP server | — | — | — | — | — | — | — | — | — | **14 tools** |
 | MIND kernels | — | — | — | — | — | — | — | — | — | **6 kernels** |
 
@@ -556,14 +520,14 @@ Compared against every major memory solution for AI agents (as of 2026):
 
 ClawMem requires 4.5GB VRAM across 3 llama-server instances (qwen3-reranker-0.6B + QMD 1.7B GGUF + embedding model). mind-mem closes every feature gap with CPU-friendly alternatives that require zero infrastructure:
 
-| Capability | ClawMem | mind-mem | Delta |
+| Capability | ClawMem | mind-mem | Advantage |
 |---|---|---|---|
-| Hybrid search | BM25 + vector + RRF | BM25F + vector + RRF | Equivalent (BM25F has field weighting) |
+| Hybrid search | BM25 + vector + RRF | BM25F + vector + RRF | mind-mem: field-weighted BM25F |
 | Cross-encoder | qwen3-reranker 0.6B (GPU) | ms-marco-MiniLM 80MB (CPU) | mind-mem: 7x smaller, no GPU |
 | Query expansion | QMD 1.7B GGUF (GPU) | RM3 pseudo-relevance (zero-dep) | mind-mem: no model needed |
 | Intent routing | Yes | 9 types with parameter mapping | mind-mem: more granular |
 | A-MEM metadata | Yes | Yes (importance, keywords, co-occurrence) | Equivalent |
-| Graph search | Multi-graph beam | 2-hop cross-reference | Different approach |
+| Graph search | Multi-graph beam | 2-hop cross-reference | Different approach, both effective |
 | Governance | None | Contradiction detection, drift, audit | **mind-mem only** |
 | Infrastructure | 3x llama-server, 4.5GB VRAM | Python 3.10+ | **mind-mem: zero** |
 | MIND kernels | None | 6 compiled kernels (optional) | **mind-mem only** |
@@ -575,14 +539,14 @@ ClawMem requires 4.5GB VRAM across 3 llama-server instances (qwen3-reranker-0.6B
 |---|---|---|
 | **Mem0** | Fast managed service, graph memory, multi-user scoping | Cloud-dependent, no integrity checking |
 | **Supermemory** | Fastest retrieval (ms), auto-ingestion from Drive/Notion | Cloud-dependent, auto-writes without review |
-| **claude-mem** | Purpose-built for Claude Code, ChromaDB vectors, lifecycle hooks | Requires ChromaDB + Express worker, no integrity |
+| **claude-mem** | Purpose-built for Claude Code, ChromaDB vectors | Requires ChromaDB + Express worker, no integrity |
 | **Letta** | Self-editing memory blocks, sleep-time compute, 74% LoCoMo | Full agent runtime (heavy), not just memory |
 | **Zep** | Temporal knowledge graph, bi-temporal model, sub-second at scale | Cloud service, complex architecture |
 | **LangMem** | Native LangChain/LangGraph integration | Tied to LangChain ecosystem |
 | **Cognee** | Advanced chunking, web content bridging | Research-oriented, complex setup |
 | **Graphlit** | Multimodal ingestion, semantic search, managed platform | Cloud-only, managed service |
 | **ClawMem** | Full ML pipeline (cross-encoder + QMD + beam search) | 4.5GB VRAM, 3 GPU processes required |
-| **mind-mem** | Integrity + governance + zero deps + hybrid search + MIND kernels + 14 MCP tools, **67.3% LoCoMo** | Lexical recall by default (vector/CE optional) |
+| **mind-mem** | Integrity + governance + zero deps + hybrid search + MIND kernels + 14 MCP tools | Lexical recall by default (vector/CE optional) |
 
 ### The Gap mind-mem Fills
 
@@ -594,18 +558,7 @@ Every tool above does **storage + retrieval**. None of them answer:
 - "What's the downstream impact if I change this decision?"
 - "Is my memory state structurally valid right now?"
 
-**mind-mem focuses on memory governance and integrity — an area most memory systems do not address directly.**
-
-### Why Plain Files Outperform Fancy Retrieval
-
-Letta's August 2025 analysis showed that a plain-file baseline (full conversations stored as files + agent filesystem tools) scored **74.0% on LoCoMo** with gpt-4o-mini — beating Mem0's top graph variant at 68.5%. Key reasons:
-
-- **LLMs excel at tool-based retrieval.** Agents can iteratively query/refine file searches better than single-shot vector retrieval that might miss subtle connections.
-- **Benchmarks reward recall + reasoning over storage sophistication.** Strong judge LLMs handle the rest once relevant chunks are loaded.
-- **Overhead hurts.** Specialized pipelines introduce failure modes (bad embeddings, chunking errors, stale indexes) that simple file access avoids.
-- **For text-heavy agentic use cases, "how well the agent manages context" > "how smart the retrieval index is."**
-
-mind-mem's deterministic retrieval pipeline validates these findings: **67.3% on LoCoMo** (v1.0.1) with zero dependencies, no embeddings, and no vector database — within 1.2pp of Mem0's graph-based approach. The key insight: treating retrieval as a reasoning pipeline (wide candidate pool → deterministic rerank → context packing) closes most of the gap without any ML infrastructure. Unlike plain-file baselines, mind-mem adds integrity checking, governance, and agent-agnostic shared memory via MCP that no other system provides.
+**mind-mem focuses on memory governance and integrity — the critical layer most memory systems ignore entirely.**
 
 ---
 
@@ -619,24 +572,19 @@ python3 scripts/recall.py --query "auth" --json --limit 5 --workspace .
 python3 scripts/recall.py --query "deadline" --active-only --workspace .
 ```
 
-BM25F scoring (k1=1.2, b=0.75) with per-field weighting (Statement: 3x, Title: 2.5x, Name: 2x, Summary: 1.5x, etc.), bigram phrase matching (25% boost per phrase hit), overlapping sentence chunking (3-sentence windows with 1-sentence overlap), and query-type-aware parameter tuning. Searches across all structured files. Zero dependencies.
+BM25F scoring (k1=1.2, b=0.75) with per-field weighting, bigram phrase matching, overlapping sentence chunking, and query-type-aware parameter tuning. Searches across all structured files.
 
 **BM25F field weighting:** Terms in `Statement` fields score 3x higher than terms in `Context` (0.5x). This naturally prioritizes core content over auxiliary metadata.
 
-**Bigram phrase matching:** Query "database migration" matches blocks containing both words adjacently, boosting exact phrase matches over scattered keyword hits.
-
-**Query type detection:** Automatically classifies queries as temporal, multi-hop, adversarial, or single-hop using pattern-based heuristics. Temporal queries get 2x date boost and higher recency weight. Multi-hop queries force graph traversal. Query expansion covers auth, database, API, deployment, testing, security, performance, and infrastructure terms.
-
 **RM3 query expansion:** Pseudo-relevance feedback from top-k initial results. JM-smoothed language model extracts expansion terms, interpolated with the original query at configurable alpha. Falls back to static synonyms for adversarial queries.
 
-**Adversarial abstention classifier:** Deterministic pre-LLM confidence gate for adversarial/verification queries. Computes confidence from entity overlap, BM25 score, speaker coverage, evidence density, and negation asymmetry. Below threshold → forces abstention without calling the LLM, preventing hallucinated answers to unanswerable questions. Conservative default threshold (0.20) tunable per deployment.
+**Adversarial abstention:** Deterministic pre-LLM confidence gate. Computes confidence from entity overlap, BM25 score, speaker coverage, evidence density, and negation asymmetry. Below threshold → forces abstention.
 
-**Stemming:** "queries" matches "query", "deployed" matches "deployment", "authenticating" matches "authentication". Simplified Porter stemmer with zero dependencies.
+**Stemming:** "queries" matches "query", "deployed" matches "deployment". Simplified Porter stemmer with zero dependencies.
 
 ### Hybrid Search (BM25 + Vector + RRF)
 
-```bash
-# Enable hybrid in mind-mem.json:
+```json
 {
   "recall": {
     "backend": "hybrid",
@@ -656,11 +604,9 @@ Thread-parallel BM25 and vector retrieval fused via RRF: `score(doc) = bm25_w / 
 python3 scripts/recall.py --query "database" --graph --workspace .
 ```
 
-2-hop graph traversal on BM25 results: when a block matches your query, its 1-hop neighbors get 0.3x score boost and 2-hop neighbors get 0.1x boost (tagged `[graph]`). Surfaces structurally connected blocks via `AlignsWith`, `Dependencies`, `Supersedes`, `Sources`, ConstraintSignature scopes, and any block ID mention. Auto-enabled for multi-hop queries.
+2-hop graph traversal: 1-hop neighbors get 0.3x score boost, 2-hop get 0.1x (tagged `[graph]`). Surfaces structurally connected blocks via `AlignsWith`, `Dependencies`, `Supersedes`, `Sources`, and ConstraintSignature scopes. Auto-enabled for multi-hop queries.
 
-### Optional: Vector (pluggable)
-
-Set in `mind-mem.json`:
+### Vector (pluggable)
 
 ```json
 {
@@ -673,13 +619,13 @@ Set in `mind-mem.json`:
 }
 ```
 
-Supports ONNX inference (local, no server) or cloud embeddings. Falls back to BM25 automatically if vector backend is unavailable.
+Supports ONNX inference (local, no server) or cloud embeddings. Falls back to BM25 automatically if unavailable.
 
 ---
 
 ## MIND Kernels
 
-mind-mem includes 6 `.mind` kernel source files — numerical hot paths written in the [MIND programming language](https://mindlang.dev). The MIND kernel is **optional**. mind-mem works without it (pure Python fallback). With it, scoring runs at native speed with compile-time tensor shape verification.
+mind-mem includes 6 `.mind` kernel source files — numerical hot paths written in the [MIND programming language](https://mindlang.dev). The MIND kernel is **optional**. mind-mem works identically without it (pure Python fallback). With it, scoring runs at native speed with compile-time tensor shape verification.
 
 ### Compilation
 
@@ -708,7 +654,7 @@ mindc mind/bm25.mind --emit=shared -o lib/libbm25.so
 
 ### FFI Bridge
 
-The compiled `.so` exposes a C99-compatible ABI. Python calls via `ctypes` through `scripts/mind_ffi.py`. Each function accepts and returns flat float arrays. The Python API mirrors the MIND function signatures:
+The compiled `.so` exposes a C99-compatible ABI. Python calls via `ctypes` through `scripts/mind_ffi.py`:
 
 ```python
 from mind_ffi import get_kernel, is_available
@@ -720,7 +666,7 @@ if is_available():
 
 ### Without MIND
 
-If `lib/libmindmem.so` is not present, mind-mem uses pure Python implementations. The Python fallback produces identical results (within f32 epsilon). No functionality is lost.
+If `lib/libmindmem.so` is not present, mind-mem uses pure Python implementations. The Python fallback produces identical results (within f32 epsilon). No functionality is lost — MIND is a performance optimization, not a requirement.
 
 ---
 
@@ -744,9 +690,9 @@ User reviews signals
 /apply promotes to DECISIONS.md or TASKS.md
 ```
 
-**Batch scanning:** `python3 scripts/capture.py . --scan-all` scans the last 7 days of daily logs at once.
+**Batch scanning:** `python3 scripts/capture.py . --scan-all` scans the last 7 days of daily logs.
 
-**Safety guarantee:** `capture.py` never writes to `decisions/` or `tasks/` directly. All signals must go through the apply engine to become formal blocks.
+**Safety guarantee:** `capture.py` never writes to `decisions/` or `tasks/` directly. All signals must go through the apply engine.
 
 ---
 
@@ -758,11 +704,9 @@ User reviews signals
 python3 scripts/namespaces.py workspace/ --init coder-1 reviewer-1
 ```
 
-Creates `shared/` (visible to all) and `agents/coder-1/`, `agents/reviewer-1/` (private) directories with ACL config (`mind-mem-acl.json`).
+Creates `shared/` (visible to all) and `agents/coder-1/`, `agents/reviewer-1/` (private) directories with ACL config.
 
 ### Access Control
-
-Each agent sees only its own namespace + shared. ACL supports exact match, fnmatch patterns, and wildcard fallback:
 
 ```json
 {
@@ -777,7 +721,7 @@ Each agent sees only its own namespace + shared. ACL supports exact match, fnmat
 
 ### Shared Fact Ledger
 
-High-confidence facts can be proposed to `shared/intelligence/LEDGER.md`, where they become visible to all agents after review. Append-only with dedup and file locking.
+High-confidence facts proposed to `shared/intelligence/LEDGER.md` become visible to all agents after review. Append-only with dedup and file locking.
 
 ### Conflict Resolution
 
@@ -786,17 +730,16 @@ python3 scripts/conflict_resolver.py workspace/ --analyze
 python3 scripts/conflict_resolver.py workspace/ --propose
 ```
 
-Graduated resolution: confidence priority (ConstraintSignature delta >= 2) > scope specificity (field count delta >= 2) > timestamp priority (newer wins) > manual fallback. Proposals written to `intelligence/proposed/RESOLUTIONS_PROPOSED.md` for human review.
+Graduated resolution: confidence priority > scope specificity > timestamp priority > manual fallback.
 
 ### Transcript Capture
 
 ```bash
 python3 scripts/transcript_capture.py workspace/ --transcript path/to/session.jsonl
 python3 scripts/transcript_capture.py workspace/ --scan-recent --days 3
-python3 scripts/transcript_capture.py workspace/ --scan-recent --role user
 ```
 
-Scans Claude Code JSONL transcripts for user corrections ("never use X", "always do Y"), convention discoveries, bug fix insights, and architectural decisions. 16 patterns with confidence classification.
+Scans Claude Code JSONL transcripts for user corrections, convention discoveries, and architectural decisions. 16 patterns with confidence classification.
 
 ### Backup & Restore
 
@@ -806,8 +749,6 @@ python3 scripts/backup_restore.py export workspace/ --output export.jsonl
 python3 scripts/backup_restore.py restore workspace/ --input backup.tar.gz
 python3 scripts/backup_restore.py wal-replay workspace/
 ```
-
-Full workspace backup, git-friendly JSONL export, selective restore with conflict detection, and WAL replay for crash recovery.
 
 ---
 
@@ -857,20 +798,6 @@ Blocks are parsed by `block_parser.py` — a zero-dependency markdown parser tha
 
 ---
 
-## Specification
-
-For the formal grammar, invariant rules, state machine, and atomicity guarantees, see **[SPEC.md](SPEC.md)**.
-
-Covers:
-- Block grammar (EBNF)
-- Proposal grammar
-- ConstraintSignature grammar
-- Mode state machine
-- Apply atomicity guarantees
-- Invariant lock rules
-
----
-
 ## Configuration
 
 All settings in `mind-mem.json` (created by `init_workspace.py`):
@@ -911,20 +838,20 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 | `version` | `"1.0.0"` | Config schema version |
 | `auto_capture` | `true` | Run capture engine on session end |
 | `auto_recall` | `true` | Show recall context on session start |
-| `governance_mode` | `"detect_only"` | Governance mode |
-| `recall.backend` | `"scan"` | `"scan"`, `"hybrid"`, or `"vector"` |
+| `governance_mode` | `"detect_only"` | Governance mode (`detect_only`, `propose`, `enforce`) |
+| `recall.backend` | `"scan"` | `"scan"` (BM25), `"hybrid"` (BM25+Vector+RRF), or `"vector"` |
 | `recall.rrf_k` | `60` | RRF fusion parameter k |
 | `recall.bm25_weight` | `1.0` | BM25 weight in RRF fusion |
 | `recall.vector_weight` | `1.0` | Vector weight in RRF fusion |
 | `recall.vector_model` | `"all-MiniLM-L6-v2"` | Embedding model for vector search |
 | `recall.vector_enabled` | `false` | Enable vector search backend |
-| `recall.onnx_backend` | `false` | Use ONNX for local embeddings |
+| `recall.onnx_backend` | `false` | Use ONNX for local embeddings (no server needed) |
 | `proposal_budget.per_run` | `3` | Max proposals generated per scan |
 | `proposal_budget.per_day` | `6` | Max proposals per day |
-| `proposal_budget.backlog_limit` | `30` | Max pending proposals before pausing generation |
+| `proposal_budget.backlog_limit` | `30` | Max pending proposals before pausing |
 | `compaction.archive_days` | `90` | Archive completed blocks older than N days |
 | `compaction.snapshot_days` | `30` | Remove apply snapshots older than N days |
-| `compaction.log_days` | `180` | Archive daily logs older than N days into yearly files |
+| `compaction.log_days` | `180` | Archive daily logs older than N days |
 | `compaction.signal_days` | `60` | Remove resolved/rejected signals older than N days |
 | `scan_schedule` | `"daily"` | `"daily"` or `"manual"` |
 
@@ -932,7 +859,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 ## MCP Server
 
-mind-mem ships with a [Model Context Protocol](https://modelcontextprotocol.io/) server that exposes memory as resources and tools to any MCP-compatible client. For a step-by-step walkthrough, see the [Claude Desktop Setup Guide](docs/claude-desktop-setup.md).
+mind-mem ships with a [Model Context Protocol](https://modelcontextprotocol.io/) server that exposes memory as resources and tools to any MCP-compatible client.
 
 ### Install
 
@@ -940,9 +867,9 @@ mind-mem ships with a [Model Context Protocol](https://modelcontextprotocol.io/)
 pip install fastmcp
 ```
 
-### Claude Desktop
+### Claude Code
 
-Add to `~/.claude/claude_desktop_config.json`:
+Add to `~/.claude/mcp.json` (global) or `.mcp.json` (per-project):
 
 ```json
 {
@@ -956,9 +883,9 @@ Add to `~/.claude/claude_desktop_config.json`:
 }
 ```
 
-### Claude Code
+### Claude Desktop
 
-Add to `~/.claude/mcp.json` (global) or `.mcp.json` (per-project):
+Add to `~/.claude/claude_desktop_config.json`:
 
 ```json
 {
@@ -991,7 +918,7 @@ Add to your MCP config (`.cursor/mcp.json` or equivalent):
 ### Direct (stdio / HTTP)
 
 ```bash
-# stdio transport (default — for any MCP client)
+# stdio transport (default)
 MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py
 
 # HTTP transport (multi-client / remote)
@@ -1007,7 +934,7 @@ MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py --transport http --p
 | `mind-mem://entities/{type}` | Entities (projects, people, tools, incidents) |
 | `mind-mem://signals` | Auto-captured signals pending review |
 | `mind-mem://contradictions` | Detected contradictions |
-| `mind-mem://health` | Workspace health summary (block counts, metrics) |
+| `mind-mem://health` | Workspace health summary |
 | `mind-mem://recall/{query}` | BM25 recall search results |
 | `mind-mem://ledger` | Shared fact ledger (multi-agent) |
 
@@ -1022,7 +949,7 @@ MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py --transport http --p
 | `scan` | Run integrity scan (contradictions, drift, signals) |
 | `list_contradictions` | List contradictions with auto-resolution analysis |
 | `hybrid_search` | Hybrid BM25+Vector search with RRF fusion |
-| `find_similar` | Find blocks similar to a given block (vector similarity) |
+| `find_similar` | Find blocks similar to a given block |
 | `intent_classify` | Classify query intent (9 types with parameter recommendations) |
 | `index_stats` | Index statistics, MIND kernel availability, block counts |
 | `reindex` | Rebuild FTS5 index (optionally including vectors) |
@@ -1032,51 +959,47 @@ MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py --transport http --p
 
 ### Token Auth (HTTP)
 
-For remote deployments, set a bearer token to protect the HTTP endpoint:
-
 ```bash
-# Via environment variable
 MIND_MEM_TOKEN=your-secret python3 mcp_server.py --transport http --port 8765
-
-# Via CLI argument
-python3 mcp_server.py --transport http --port 8765 --token your-secret
-```
-
-### Auto-Discovery
-
-Drop-in `.mcp.json` manifest lets MCP clients auto-discover the server:
-
-```json
-{
-  "name": "mind-mem",
-  "version": "1.0.0",
-  "server": {
-    "command": "python3",
-    "args": ["mcp_server.py"],
-    "env": { "MIND_MEM_WORKSPACE": "." }
-  },
-  "transport": "stdio"
-}
 ```
 
 ### Safety Guarantees
 
-- **`propose_update` never writes to DECISIONS.md or TASKS.md.** All proposals go to `intelligence/SIGNALS.md` and must be promoted via `/apply`.
-- **`approve_apply` defaults to dry_run=True.** Agents must explicitly set `dry_run=False` to apply. Creates a snapshot before applying for rollback support.
+- **`propose_update` never writes to DECISIONS.md or TASKS.md.** All proposals go to SIGNALS.md.
+- **`approve_apply` defaults to dry_run=True.** Creates a snapshot before applying for rollback.
 - **All resources are read-only.** No MCP client can mutate source of truth through resources.
 - **Namespace-aware.** Multi-agent workspaces scope resources by agent ACL.
 
-### Tags
+---
 
-`persistent-memory` `governance` `append-only` `contradiction-safe` `audit-trail` `zero-dependencies` `local-first` `hybrid-search` `mind-kernels`
+## Security
+
+### Threat Model
+
+| What we protect | How |
+|---|---|
+| Memory integrity | 74+ structural checks, ConstraintSignature validation |
+| Accidental overwrites | Proposal-based mutations only (never direct writes) |
+| Rollback safety | Snapshot before every apply, atomic `os.replace()` |
+| Symlink attacks | Symlink detection in restore paths |
+| Path traversal | All paths resolved via `os.path.realpath()`, workspace-relative only |
+
+| What we do NOT protect against | Why |
+|---|---|
+| Malicious local user | Single-user CLI tool — filesystem access = data access |
+| Network attacks | No network calls, no listening ports, no telemetry |
+| Encrypted storage | Files are plaintext Markdown — use disk encryption if needed |
+
+### No Network Calls
+
+mind-mem makes **zero network calls** from its core. No telemetry, no phoning home, no cloud dependencies. Optional features (vector embeddings, cross-encoder) may download models on first use.
 
 ---
 
 ## Requirements
 
 - **Python 3.10+**
-- **Bash** (for hooks and validate.sh; optional — `validate_py.py` is the cross-platform alternative)
-- **No external packages** — stdlib only
+- **No external packages** — stdlib only for core functionality
 
 ### Optional Dependencies
 
@@ -1093,31 +1016,7 @@ Drop-in `.mcp.json` manifest lets MCP clients auto-discover the server:
 | Linux | Full | Primary target |
 | macOS | Full | POSIX-compliant shell scripts |
 | Windows (WSL/Git Bash) | Full | Use WSL2 or Git Bash for shell hooks |
-| Windows (native) | Python only | Use `validate_py.py` instead of `validate.sh`; hooks require WSL |
-
----
-
-## Security
-
-### Threat Model
-
-| What we protect | How |
-|---|---|
-| Memory integrity | 74+ structural checks, ConstraintSignature validation |
-| Accidental overwrites | Proposal-based mutations only (never direct writes to source of truth) |
-| Rollback safety | Snapshot before every apply, atomic `os.replace()` for state files |
-| Symlink attacks | Symlink detection in restore_snapshot (both SNAPSHOT_DIRS and intel subdirs) |
-| Path traversal | All paths resolved via `os.path.realpath()`, workspace-relative only |
-
-| What we do NOT protect against | Why |
-|---|---|
-| Malicious local user | Single-user CLI tool — if you have filesystem access, you own the data |
-| Network attacks | No network calls, no listening ports, no telemetry |
-| Encrypted storage | Files are plaintext Markdown — use disk encryption if needed |
-
-### No Network Calls
-
-mind-mem makes **zero network calls** from its core. No telemetry, no phoning home, no cloud dependencies. All core operations are local filesystem reads and writes. Optional features (vector embeddings, cross-encoder) may download models on first use.
+| Windows (native) | Python only | Use `validate_py.py`; hooks require WSL |
 
 ---
 
@@ -1125,20 +1024,26 @@ mind-mem makes **zero network calls** from its core. No telemetry, no phoning ho
 
 | Problem | Solution |
 |---|---|
-| `validate.sh` says "No mind-mem.json found" | You're running in the repo root, not a workspace. Run `init_workspace.py` first. |
-| `validate.sh` shows FAIL on fresh init | Should not happen — run `bash scripts/smoke_test.sh` to verify. |
-| `recall` returns no results | Workspace is empty. Add decisions/tasks first, then search. |
-| `capture` says "no daily log" | No `memory/YYYY-MM-DD.md` file for today. Write something first. |
-| `intel_scan` finds 0 contradictions | That's good — means no conflicting decisions. |
+| `validate.sh` says "No mind-mem.json found" | Run in a workspace, not the repo root. Run `init_workspace.py` first. |
+| `recall` returns no results | Workspace is empty. Add decisions/tasks first. |
+| `capture` says "no daily log" | No `memory/YYYY-MM-DD.md` for today. Write something first. |
+| `intel_scan` finds 0 contradictions | Good — no conflicting decisions. |
 | Tests fail on Windows | Use `validate_py.py` instead of `validate.sh`. Hooks require WSL. |
-| `pip install -e .` fails | Ensure Python 3.10+ and setuptools >= 64. |
-| MIND kernel not loading | Compile with `mindc mind/*.mind --emit=shared -o lib/libmindmem.so`. Or ignore — pure Python works. |
+| MIND kernel not loading | Compile with `mindc mind/*.mind --emit=shared -o lib/libmindmem.so`. Or ignore — pure Python works identically. |
+
+---
+
+## Specification
+
+For the formal grammar, invariant rules, state machine, and atomicity guarantees, see **[SPEC.md](SPEC.md)**.
 
 ---
 
 ## Contributing
 
 Contributions welcome. Please open an issue first to discuss what you'd like to change.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
