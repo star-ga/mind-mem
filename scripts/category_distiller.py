@@ -71,6 +71,16 @@ except ImportError:
 
 log = get_logger("category_distiller")
 
+# Optional MIND kernel acceleration
+_mind_ffi = None
+try:
+    from mind_ffi import MindMemKernel
+    _k = MindMemKernel()
+    if _k._lib is not None:
+        _mind_ffi = _k
+except (ImportError, OSError):
+    pass
+
 
 # ---------------------------------------------------------------------------
 # CategoryDistiller
@@ -256,19 +266,111 @@ class CategoryDistiller:
     # Distillation pipeline
     # ------------------------------------------------------------------
 
+    def _batch_categorize_mind(self, blocks: list[dict]) -> dict[str, list[dict]]:
+        """Batch categorize using MIND C kernels when available.
+
+        Pre-computes keyword and tag overlap matrices [N, C], then uses
+        category_affinity + category_assign kernels for O(1)-per-element
+        scoring instead of nested Python loops.
+        """
+        cat_names = list(self.categories.keys())
+        n_blocks = len(blocks)
+        n_cats = len(cat_names)
+
+        # Pre-compute text and tags for each block
+        block_texts: list[str] = []
+        block_tags: list[list[str]] = []
+        for block in blocks:
+            parts = []
+            for field in ("Statement", "Description", "Tags", "Subject", "Rationale"):
+                val = block.get(field, "")
+                if val:
+                    parts.append(str(val).lower())
+            block_texts.append(" ".join(parts))
+            tags_str = block.get("Tags", "")
+            block_tags.append(
+                [t.strip().lower() for t in tags_str.split(",") if t.strip()]
+                if tags_str else []
+            )
+
+        # Build overlap matrices [N*C] flat
+        kw_overlap = [0.0] * (n_blocks * n_cats)
+        tag_match = [0.0] * (n_blocks * n_cats)
+        ent_match = [0.0] * (n_blocks * n_cats)  # placeholder for entity overlap
+
+        for bi in range(n_blocks):
+            text = block_texts[bi]
+            tags = block_tags[bi]
+            for ci, cat in enumerate(cat_names):
+                idx = bi * n_cats + ci
+                keywords = self.categories[cat]
+                kw_score = 0.0
+                tag_score = 0.0
+                for kw in keywords:
+                    kw_lower = kw.lower()
+                    if kw_lower in text:
+                        kw_score += 1.0
+                    if kw_lower in tags:
+                        tag_score += 1.0
+                kw_overlap[idx] = kw_score
+                tag_match[idx] = tag_score
+
+        # Call C kernels: affinity = kw_w * kw + tag_w * tag + ent_w * ent
+        affinity = _mind_ffi.category_affinity_py(
+            kw_overlap, tag_match, ent_match,
+            n_blocks=n_blocks, n_cats=n_cats,
+            kw_w=1.0, tag_w=3.0, ent_w=0.0,
+        )
+
+        # Assign categories with threshold
+        threshold = float(self._SCORE_THRESHOLD)
+        assignments = _mind_ffi.category_assign_py(
+            affinity, threshold, n_blocks=n_blocks, n_cats=n_cats,
+        )
+
+        # Build category map from assignment matrix
+        category_map: dict[str, list[dict]] = {}
+        for bi in range(n_blocks):
+            assigned_any = False
+            for ci, cat in enumerate(cat_names):
+                idx = bi * n_cats + ci
+                if assignments[idx] > 0.5:  # sigmoid output > 0.5 means assigned
+                    category_map.setdefault(cat, []).append(blocks[bi])
+                    assigned_any = True
+            if not assigned_any:
+                category_map.setdefault("uncategorized", []).append(blocks[bi])
+
+        log.info("batch_categorize_mind", n_blocks=n_blocks, n_cats=n_cats,
+                 categories_found=len(category_map))
+        return category_map
+
     def distill(self, workspace: str) -> list[str]:
         """Scan all blocks, cluster by category, write summary files.
 
         Returns list of written file paths (category markdowns + manifest).
+        Uses MIND C kernels for batch scoring when available, falls back
+        to pure Python per-block categorization.
         """
         blocks = self._scan_blocks(workspace)
 
-        # Categorise every block
-        category_map: dict[str, list[dict]] = {}
-        for block in blocks:
-            cats = self.categorize_block(block)
-            for cat in cats:
-                category_map.setdefault(cat, []).append(block)
+        # Use MIND kernels for batch scoring when available
+        if _mind_ffi is not None and len(blocks) > 0:
+            try:
+                category_map = self._batch_categorize_mind(blocks)
+            except Exception as exc:
+                log.warning("mind_batch_fallback", error=str(exc))
+                category_map = {}
+                for block in blocks:
+                    cats = self.categorize_block(block)
+                    for cat in cats:
+                        category_map.setdefault(cat, []).append(block)
+        else:
+            # Pure Python fallback
+            category_map = {}
+            for block in blocks:
+                cats = self.categorize_block(block)
+                for cat in cats:
+                    category_map.setdefault(cat, []).append(block)
 
         # Ensure output directory exists
         cat_dir = os.path.join(workspace, "categories")
