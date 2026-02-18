@@ -1,0 +1,14 @@
+{
+  "hooks": [
+    {
+      "event": "SessionStart",
+      "command": "bash hooks/session-start.sh",
+      "description": "Show memory health summary on session start"
+    },
+    {
+      "event": "Stop",
+      "command": "bash hooks/session-end.sh",
+      "description": "Run auto-capture on session end"
+    }
+  ]
+}

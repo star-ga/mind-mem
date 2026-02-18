@@ -1,0 +1,36 @@
+{
+  "governance_mode": "detect_only",
+  "version": "2.1",
+  "auto_apply_low_risk": false,
+  "flip_gate_week1_clean": false,
+  "last_scan": null,
+  "last_snapshot": null,
+  "last_briefing": null,
+  "proposal_budget": {
+    "per_run": 3,
+    "per_day": 6,
+    "backlog_limit": 30
+  },
+  "rate_limit": {
+    "max_auto_supersede_per_run": 3,
+    "cascade_allowed": false
+  },
+  "last_apply_ts": null,
+  "defer_cooldown_days": 7,
+  "kpi": {
+    "recall_hit_rate": null,
+    "citation_coverage": null,
+    "contradiction_rate": null,
+    "drift_rate": null
+  },
+  "counters": {
+    "contradictions_open": 0,
+    "contradictions_total": 0,
+    "drift_signals_open": 0,
+    "drift_signals_total": 0,
+    "impact_records": 0,
+    "audit_records": 0,
+    "snapshots": 0,
+    "briefings": 0
+  }
+}
