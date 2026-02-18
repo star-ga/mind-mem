@@ -172,7 +172,7 @@ def validate_proposal(proposal):
     # Reject paths with traversal components
     for i, op in enumerate(ops):
         f = op.get("file", "")
-        if ".." in f.split(os.sep) or ".." in f.split("/") or os.path.isabs(f):
+        if ".." in f.split(os.sep) or ".." in f.split("/") or os.path.isabs(f) or f.startswith("/"):
             errors.append(f"Ops[{i}]: path '{f}' contains traversal or is absolute")
 
     # FilesTouched must match Ops files
