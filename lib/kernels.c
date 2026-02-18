@@ -152,3 +152,58 @@ void weighted_rank(const float *scores, const float *weights,
     for (int i = 0; i < n; i++)
         out[i] = scores[i] * weights[i];
 }
+
+/* ── Category Affinity (distillation scoring) ──────────────── */
+/* Weighted sum of keyword/tag/entity overlap matrices [N*C flat]. */
+
+void category_affinity(const float *kw_overlap, const float *tag_match,
+                       const float *ent_match,
+                       float kw_w, float tag_w, float ent_w,
+                       int n_blocks, int n_cats, float *out) {
+    int total = n_blocks * n_cats;
+    for (int i = 0; i < total; i++)
+        out[i] = kw_w * kw_overlap[i] + tag_w * tag_match[i] + ent_w * ent_match[i];
+}
+
+/* ── Query-Category Relevance ──────────────────────────────── */
+/* Dot product of query keyword vector [K] against category profiles [C*K]. */
+
+void query_category_relevance(const float *query_kw, const float *cat_kw,
+                               int n_cats, int n_keywords, float *out) {
+    float q_sum = 0.0f;
+    for (int k = 0; k < n_keywords; k++)
+        q_sum += query_kw[k];
+    if (q_sum < 1e-6f) q_sum = 1e-6f;
+
+    for (int c = 0; c < n_cats; c++) {
+        float dot = 0.0f;
+        const float *row = cat_kw + c * n_keywords;
+        for (int k = 0; k < n_keywords; k++)
+            dot += row[k] * query_kw[k];
+        out[c] = dot / q_sum;
+    }
+}
+
+/* ── Category Assignment (soft sigmoid threshold) ──────────── */
+/* Steep sigmoid around threshold. Steepness 20 gives ~0.01 at -0.23. */
+
+void category_assign(const float *affinity, float threshold,
+                     int n_blocks, int n_cats, float *out) {
+    int total = n_blocks * n_cats;
+    for (int i = 0; i < total; i++) {
+        float shifted = (affinity[i] - threshold) * 20.0f;
+        out[i] = 1.0f / (1.0f + expf(-shifted));
+    }
+}
+
+/* ── Runtime Protection Probe ──────────────────────────────── */
+/* Returns 1 if FORTRESS protection is linked, 0 for dev/CI builds.
+ * Protected builds replace this with the real check from protection.mind. */
+
+int mindmem_protected(void) {
+#ifdef MIND_PROTECTED
+    return 1;
+#else
+    return 0;
+#endif
+}
