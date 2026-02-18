@@ -49,88 +49,88 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
 
 ## General Settings
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `version` | string | `"1.0.0"` | Config schema version |
-| `workspace_path` | string | `"."` | Path to workspace root |
-| `auto_capture` | bool | `true` | Run capture engine on session end hook |
-| `auto_recall` | bool | `true` | Show recall context on session start hook |
+| Key               | Type   | Default         | Description                                 |
+|-------------------|--------|-----------------|---------------------------------------------|
+| `version`         | string | `"1.0.0"`       | Config schema version                       |
+| `workspace_path`  | string | `"."`           | Path to workspace root                      |
+| `auto_capture`    | bool   | `true`          | Run capture engine on session end hook      |
+| `auto_recall`     | bool   | `true`          | Show recall context on session start hook   |
 | `governance_mode` | string | `"detect_only"` | One of: `detect_only`, `propose`, `enforce` |
-| `scan_schedule` | string | `"daily"` | `"daily"` or `"manual"` |
+| `scan_schedule`   | string | `"daily"`       | `"daily"` or `"manual"`                     |
 
 ## Recall Settings
 
 ### Backend Selection
 
-| `recall.backend` | Description |
-|---|---|
-| `"scan"` | BM25 full-text search only (default, zero dependencies) |
-| `"hybrid"` | BM25 + Vector search with RRF fusion (requires embeddings) |
-| `"vector"` | Vector-only search (requires embeddings) |
+| `recall.backend` | Description                                                |
+|------------------|------------------------------------------------------------|
+| `"scan"`         | BM25 full-text search only (default, zero dependencies)    |
+| `"hybrid"`       | BM25 + Vector search with RRF fusion (requires embeddings) |
+| `"vector"`       | Vector-only search (requires embeddings)                   |
 
 ### RRF Fusion
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `recall.rrf_k` | int | `60` | RRF smoothing parameter. Higher = more weight to lower-ranked results |
-| `recall.bm25_weight` | float | `1.0` | BM25 signal weight in RRF fusion |
-| `recall.vector_weight` | float | `1.0` | Vector signal weight in RRF fusion |
+| Key                    | Type  | Default | Description                                                           |
+|------------------------|-------|---------|-----------------------------------------------------------------------|
+| `recall.rrf_k`         | int   | `60`    | RRF smoothing parameter. Higher = more weight to lower-ranked results |
+| `recall.bm25_weight`   | float | `1.0`   | BM25 signal weight in RRF fusion                                      |
+| `recall.vector_weight` | float | `1.0`   | Vector signal weight in RRF fusion                                    |
 
 ### Vector Search
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `recall.vector_enabled` | bool | `false` | Enable vector search |
-| `recall.vector_model` | string | `"all-MiniLM-L6-v2"` | Embedding model name |
-| `recall.onnx_backend` | bool | `false` | Use ONNX for local inference (no server) |
+| Key                     | Type   | Default              | Description                              |
+|-------------------------|--------|----------------------|------------------------------------------|
+| `recall.vector_enabled` | bool   | `false`              | Enable vector search                     |
+| `recall.vector_model`   | string | `"all-MiniLM-L6-v2"` | Embedding model name                     |
+| `recall.onnx_backend`   | bool   | `false`              | Use ONNX for local inference (no server) |
 
 ### RM3 Query Expansion
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `recall.rm3.enabled` | bool | `false` | Enable RM3 pseudo-relevance feedback |
-| `recall.rm3.alpha` | float | `0.6` | Interpolation weight (1.0 = original query only) |
-| `recall.rm3.fb_terms` | int | `10` | Number of expansion terms from feedback docs |
-| `recall.rm3.fb_docs` | int | `5` | Number of feedback documents |
-| `recall.rm3.min_idf` | float | `1.0` | Minimum IDF for expansion terms |
+| Key                   | Type  | Default | Description                                      |
+|-----------------------|-------|---------|--------------------------------------------------|
+| `recall.rm3.enabled`  | bool  | `false` | Enable RM3 pseudo-relevance feedback             |
+| `recall.rm3.alpha`    | float | `0.6`   | Interpolation weight (1.0 = original query only) |
+| `recall.rm3.fb_terms` | int   | `10`    | Number of expansion terms from feedback docs     |
+| `recall.rm3.fb_docs`  | int   | `5`     | Number of feedback documents                     |
+| `recall.rm3.min_idf`  | float | `1.0`   | Minimum IDF for expansion terms                  |
 
 ### Cross-Encoder
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `recall.cross_encoder.enabled` | bool | `false` | Enable cross-encoder reranking |
-| `recall.cross_encoder.model` | string | `"cross-encoder/ms-marco-MiniLM-L-6-v2"` | Model name |
-| `recall.cross_encoder.blend_weight` | float | `0.6` | Blend factor (0.6 = 60% CE + 40% original) |
+| Key                                 | Type   | Default                                  | Description                                |
+|-------------------------------------|--------|------------------------------------------|--------------------------------------------|
+| `recall.cross_encoder.enabled`      | bool   | `false`                                  | Enable cross-encoder reranking             |
+| `recall.cross_encoder.model`        | string | `"cross-encoder/ms-marco-MiniLM-L-6-v2"` | Model name                                 |
+| `recall.cross_encoder.blend_weight` | float  | `0.6`                                    | Blend factor (0.6 = 60% CE + 40% original) |
 
 ## Proposal Budget
 
 Controls how many proposals the system generates to prevent overload.
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `proposal_budget.per_run` | int | `3` | Max proposals per scan run |
-| `proposal_budget.per_day` | int | `6` | Max proposals per calendar day |
-| `proposal_budget.backlog_limit` | int | `30` | Pause generation when pending proposals exceed this |
+| Key                             | Type | Default | Description                                         |
+|---------------------------------|------|---------|-----------------------------------------------------|
+| `proposal_budget.per_run`       | int  | `3`     | Max proposals per scan run                          |
+| `proposal_budget.per_day`       | int  | `6`     | Max proposals per calendar day                      |
+| `proposal_budget.backlog_limit` | int  | `30`    | Pause generation when pending proposals exceed this |
 
 ## Compaction
 
 Controls automated workspace maintenance (archival, cleanup).
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `compaction.archive_days` | int | `90` | Archive completed blocks older than N days |
-| `compaction.snapshot_days` | int | `30` | Remove apply snapshots older than N days |
-| `compaction.log_days` | int | `180` | Archive daily logs older than N days |
-| `compaction.signal_days` | int | `60` | Remove resolved/rejected signals older than N days |
+| Key                        | Type | Default | Description                                        |
+|----------------------------|------|---------|----------------------------------------------------|
+| `compaction.archive_days`  | int  | `90`    | Archive completed blocks older than N days         |
+| `compaction.snapshot_days` | int  | `30`    | Remove apply snapshots older than N days           |
+| `compaction.log_days`      | int  | `180`   | Archive daily logs older than N days               |
+| `compaction.signal_days`   | int  | `60`    | Remove resolved/rejected signals older than N days |
 
 ## Environment Variables
 
-| Variable | Description |
-|---|---|
-| `MIND_MEM_WORKSPACE` | Workspace path (overrides config file) |
-| `MIND_MEM_LOG_LEVEL` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
-| `MIND_MEM_LIB` | Path to compiled MIND library (overrides default search) |
-| `MIND_MEM_TOKEN` | Bearer token for HTTP MCP transport |
+| Variable             | Description                                              |
+|----------------------|----------------------------------------------------------|
+| `MIND_MEM_WORKSPACE` | Workspace path (overrides config file)                   |
+| `MIND_MEM_LOG_LEVEL` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`       |
+| `MIND_MEM_LIB`       | Path to compiled MIND library (overrides default search) |
+| `MIND_MEM_TOKEN`     | Bearer token for HTTP MCP transport                      |
 
 ## Example Configurations
 

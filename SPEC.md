@@ -43,18 +43,18 @@ Continuation  ::= Space Space { AnyChar }           (* appends to previous Value
 
 ### Required Fields by Type
 
-| Type | Required Fields |
-|---|---|
-| Decision (D-) | Date, Status, Scope, Statement, Rationale, Supersedes, Tags, Sources |
-| Task (T-) | Date, Status, Title, Priority, Project, Due, Owner, Context, Next, Dependencies, Sources, History |
-| Project (PRJ-) | Name, Status |
-| Person (PER-) | Name |
-| Tool (TOOL-) | Name |
-| Incident (INC-) | Date, Status, Summary |
-| Contradiction (C-) | Date, DecisionA, DecisionB, Description |
-| Drift (DREF-) | Date, Type, Source |
-| Signal (SIG-) | Date, Type, Source, Status, Excerpt |
-| Proposal (P-) | Date, Type, Status, Target |
+| Type               | Required Fields                                                                                   |
+|--------------------|---------------------------------------------------------------------------------------------------|
+| Decision (D-)      | Date, Status, Scope, Statement, Rationale, Supersedes, Tags, Sources                              |
+| Task (T-)          | Date, Status, Title, Priority, Project, Due, Owner, Context, Next, Dependencies, Sources, History |
+| Project (PRJ-)     | Name, Status                                                                                      |
+| Person (PER-)      | Name                                                                                              |
+| Tool (TOOL-)       | Name                                                                                              |
+| Incident (INC-)    | Date, Status, Summary                                                                             |
+| Contradiction (C-) | Date, DecisionA, DecisionB, Description                                                           |
+| Drift (DREF-)      | Date, Type, Source                                                                                |
+| Signal (SIG-)      | Date, Type, Source, Status, Excerpt                                                               |
+| Proposal (P-)      | Date, Type, Status, Target                                                                        |
 
 ### Status Values
 
@@ -205,15 +205,15 @@ No upward transition happens automatically. All upgrades require explicit action
 
 ### Mode Capabilities
 
-| Capability | detect_only | propose | enforce |
-|---|:---:|:---:|:---:|
-| Run integrity scan | Yes | Yes | Yes |
-| Detect contradictions | Yes | Yes | Yes |
-| Detect drift | Yes | Yes | Yes |
-| Generate proposals | No | Yes | Yes |
-| Apply proposals (manual) | No | Yes | Yes |
-| Auto-apply low-risk | No | No | Yes |
-| Supersede decisions | No | No | Yes |
+| Capability               | detect_only | propose | enforce |
+|--------------------------|:-----------:|:-------:|:-------:|
+| Run integrity scan       |     Yes     |   Yes   |   Yes   |
+| Detect contradictions    |     Yes     |   Yes   |   Yes   |
+| Detect drift             |     Yes     |   Yes   |   Yes   |
+| Generate proposals       |      No     |   Yes   |   Yes   |
+| Apply proposals (manual) |      No     |   Yes   |   Yes   |
+| Auto-apply low-risk      |      No     |    No   |   Yes   |
+| Supersede decisions      |      No     |    No   |   Yes   |
 
 ---
 
@@ -283,40 +283,40 @@ These invariants MUST hold at all times. Any operation that would violate them M
 
 ### Structural Invariants
 
-| # | Invariant | Enforcement |
-|---|---|---|
-| S1 | Every BlockID is unique within its file | validate.sh (per-file ID format checks) |
-| S2 | Every Decision must have Date, Status, Statement, Rationale, Supersedes, Tags, Sources | validate.sh |
-| S3 | Every Task must have Title, Status, Priority, Project, Due, Owner, Context, Next, Dependencies, Sources, History | validate.sh |
-| S4 | Every active Decision with integrity/security/memory/retrieval tags should have ConstraintSignatures | validate.sh (warning) |
-| S5 | Every ConstraintSignature must have id, domain, subject, predicate, object, modality, priority, scope, evidence | validate.sh (warning) |
-| S6 | Supersedes field must reference a valid D-ID or be "none" | validate.sh |
-| S7 | Active tasks should have AlignsWith or Justification | validate.sh (warning) |
-| S8 | Daily logs are append-only — existing content must not be modified | protocol |
-| S9 | Status values must be from the defined enum for each type | validate.sh |
+| #   | Invariant                                                                                                        | Enforcement                             |
+|-----|------------------------------------------------------------------------------------------------------------------|-----------------------------------------|
+| S1  | Every BlockID is unique within its file                                                                          | validate.sh (per-file ID format checks) |
+| S2  | Every Decision must have Date, Status, Statement, Rationale, Supersedes, Tags, Sources                           | validate.sh                             |
+| S3  | Every Task must have Title, Status, Priority, Project, Due, Owner, Context, Next, Dependencies, Sources, History | validate.sh                             |
+| S4  | Every active Decision with integrity/security/memory/retrieval tags should have ConstraintSignatures             | validate.sh (warning)                   |
+| S5  | Every ConstraintSignature must have id, domain, subject, predicate, object, modality, priority, scope, evidence  | validate.sh (warning)                   |
+| S6  | Supersedes field must reference a valid D-ID or be "none"                                                        | validate.sh                             |
+| S7  | Active tasks should have AlignsWith or Justification                                                             | validate.sh (warning)                   |
+| S8  | Daily logs are append-only — existing content must not be modified                                               | protocol                                |
+| S9  | Status values must be from the defined enum for each type                                                        | validate.sh                             |
 
 ### Semantic Invariants
 
-| # | Invariant | Enforcement |
-|---|---|---|
-| M1 | No two active decisions may share the same axis.key with conflicting hard constraints | intel_scan.py |
-| M2 | Decisions are never edited — they are superseded with a new decision | protocol |
-| M3 | Every memory claim must have a source (no source = no claim) | protocol |
-| M4 | Auto-capture writes to SIGNALS only, never to DECISIONS or TASKS | capture.py |
-| M5 | Mode transitions upward require explicit user action | state machine |
-| M6 | Proposals respect budget limits (per_run, per_day, backlog_limit) | intel_scan.py |
-| M7 | Dead decision detection exempts decisions with priority < 7 or enforcement in {invariant, structural} | intel_scan.py |
+| #   | Invariant                                                                                             | Enforcement   |
+|-----|-------------------------------------------------------------------------------------------------------|---------------|
+| M1  | No two active decisions may share the same axis.key with conflicting hard constraints                 | intel_scan.py |
+| M2  | Decisions are never edited — they are superseded with a new decision                                  | protocol      |
+| M3  | Every memory claim must have a source (no source = no claim)                                          | protocol      |
+| M4  | Auto-capture writes to SIGNALS only, never to DECISIONS or TASKS                                      | capture.py    |
+| M5  | Mode transitions upward require explicit user action                                                  | state machine |
+| M6  | Proposals respect budget limits (per_run, per_day, backlog_limit)                                     | intel_scan.py |
+| M7  | Dead decision detection exempts decisions with priority < 7 or enforcement in {invariant, structural} | intel_scan.py |
 
 ### Operational Invariants
 
-| # | Invariant | Enforcement |
-|---|---|---|
-| O1 | Apply engine takes snapshot before any mutation | apply_engine.py |
-| O2 | Apply engine rolls back on post-check failure | apply_engine.py |
-| O3 | Every applied proposal produces a receipt in its snapshot directory | apply_engine.py |
-| O4 | No cascade: proposals cannot trigger other proposals | apply_engine.py |
-| O5 | init_workspace.py never overwrites existing files | init_workspace.py |
-| O6 | validate.sh is idempotent (writes report to `maintenance/validation-report.txt`) | validate.sh |
+| #   | Invariant                                                                        | Enforcement       |
+|-----|----------------------------------------------------------------------------------|-------------------|
+| O1  | Apply engine takes snapshot before any mutation                                  | apply_engine.py   |
+| O2  | Apply engine rolls back on post-check failure                                    | apply_engine.py   |
+| O3  | Every applied proposal produces a receipt in its snapshot directory              | apply_engine.py   |
+| O4  | No cascade: proposals cannot trigger other proposals                             | apply_engine.py   |
+| O5  | init_workspace.py never overwrites existing files                                | init_workspace.py |
+| O6  | validate.sh is idempotent (writes report to `maintenance/validation-report.txt`) | validate.sh       |
 
 ---
 
@@ -324,22 +324,22 @@ These invariants MUST hold at all times. Any operation that would violate them M
 
 Which scripts are authorized to write to which files:
 
-| File/Directory | intel_scan.py | apply_engine.py | capture.py | init_workspace.py | validate.sh |
-|---|:---:|:---:|:---:|:---:|:---:|
-| decisions/ | Read | **Write** | Read | **Create** | Read |
-| tasks/ | Read | **Write** | Read | **Create** | Read |
-| entities/ | Read | **Write** | Read | **Create** | Read |
-| memory/*.md | Read | Read | Read | Read | Read |
-| memory/intel-state.json | **Write** | **Write** | Read | **Create** | Read |
-| intelligence/CONTRADICTIONS.md | **Write** | Read | Read | **Create** | Read |
-| intelligence/DRIFT.md | **Write** | Read | Read | **Create** | Read |
-| intelligence/SIGNALS.md | Read | **Write** | **Write** | **Create** | Read |
-| intelligence/IMPACT.md | **Write** | Read | Read | **Create** | Read |
-| intelligence/AUDIT.md | Read | **Write** | Read | **Create** | Read |
-| intelligence/SCAN_LOG.md | **Write** | Read | Read | **Create** | Read |
-| intelligence/proposed/ | **Write** | **Write** | Read | **Create** | Read |
-| intelligence/state/snapshots/ | **Write** | **Write** | Read | **Create** | Read |
-| mind-mem.json | Read | Read | Read | **Create** | Read |
+| File/Directory                 | intel_scan.py | apply_engine.py | capture.py | init_workspace.py | validate.sh |
+|--------------------------------|:-------------:|:---------------:|:----------:|:-----------------:|:-----------:|
+| decisions/                     |      Read     |    **Write**    |    Read    |     **Create**    |     Read    |
+| tasks/                         |      Read     |    **Write**    |    Read    |     **Create**    |     Read    |
+| entities/                      |      Read     |    **Write**    |    Read    |     **Create**    |     Read    |
+| memory/*.md                    |      Read     |       Read      |    Read    |        Read       |     Read    |
+| memory/intel-state.json        |   **Write**   |    **Write**    |    Read    |     **Create**    |     Read    |
+| intelligence/CONTRADICTIONS.md |   **Write**   |       Read      |    Read    |     **Create**    |     Read    |
+| intelligence/DRIFT.md          |   **Write**   |       Read      |    Read    |     **Create**    |     Read    |
+| intelligence/SIGNALS.md        |      Read     |    **Write**    | **Write**  |     **Create**    |     Read    |
+| intelligence/IMPACT.md         |   **Write**   |       Read      |    Read    |     **Create**    |     Read    |
+| intelligence/AUDIT.md          |      Read     |    **Write**    |    Read    |     **Create**    |     Read    |
+| intelligence/SCAN_LOG.md       |   **Write**   |       Read      |    Read    |     **Create**    |     Read    |
+| intelligence/proposed/         |   **Write**   |    **Write**    |    Read    |     **Create**    |     Read    |
+| intelligence/state/snapshots/  |   **Write**   |    **Write**    |    Read    |     **Create**    |     Read    |
+| mind-mem.json                  |      Read     |       Read      |    Read    |     **Create**    |     Read    |
 
 **Key rule**: `capture.py` may only write to `intelligence/SIGNALS.md`. It has no write access to any other file.
 

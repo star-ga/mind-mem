@@ -124,11 +124,11 @@ This release represents a generational improvement in Mind-Mem retrieval quality
 
 ### Benchmark Results
 
-| Metric | 1.0.0 | 1.0.1 | Delta |
-|---|---|---|---|
-| Acc>=50 | 58.2% | **67.3%** | +9.1pp |
-| Mean Score | 54.3 | **61.4** | +7.1 |
-| Acc>=75 | 36.5% | **48.8%** | +12.3pp |
+| Metric     | 1.0.0 | 1.0.1     | Delta   |
+|------------|-------|-----------|---------|
+| Acc>=50    | 58.2% | **67.3%** | +9.1pp  |
+| Mean Score | 54.3  | **61.4**  | +7.1    |
+| Acc>=75    | 36.5% | **48.8%** | +12.3pp |
 
 Per-category Acc>=50: Open-domain +10.8pp, Single-hop +12.8pp, Temporal +7.3pp, Multi-hop +6.9pp, Adversarial +5.6pp.
 
