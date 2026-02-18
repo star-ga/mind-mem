@@ -7,5 +7,14 @@
     "vector_model": "all-MiniLM-L6-v2",
     "vector_enabled": false,
     "onnx_backend": false
+  },
+  "prompts": {
+    "observation_compress": "",
+    "entity_extract": "",
+    "category_distill": ""
+  },
+  "categories": {
+    "enabled": true,
+    "extra_categories": {}
   }
 }

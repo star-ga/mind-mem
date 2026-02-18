@@ -2335,6 +2335,77 @@ def _load_backend(workspace: str) -> str:
     return None  # use built-in BM25 scan
 
 
+# ---------------------------------------------------------------------------
+# Prefetch Context — anticipatory pre-assembly for proactive memory
+# ---------------------------------------------------------------------------
+
+def prefetch_context(
+    workspace: str,
+    recent_signals: list[str],
+    limit: int = 5,
+) -> list[dict]:
+    """Given recent conversation signals (entity mentions, topic keywords),
+    pre-fetch memory blocks likely to be needed next.
+
+    Uses intent routing + category summaries to anticipate needs.
+    Returns pre-ranked blocks ready for context injection.
+
+    Args:
+        workspace: Workspace root path.
+        recent_signals: List of recent entity mentions, topic keywords, or
+            short phrases from the conversation that hint at upcoming needs.
+        limit: Maximum number of blocks to return.
+
+    Returns:
+        Deduplicated list of blocks ranked by relevance to the signals.
+    """
+    if not recent_signals:
+        return []
+
+    seen_ids: set[str] = set()
+    results: list[dict] = []
+
+    # 1. Direct recall for each signal
+    for signal in recent_signals:
+        signal = signal.strip()
+        if not signal:
+            continue
+        try:
+            hits = recall(workspace, signal, limit=limit, rerank=True)
+        except Exception:
+            hits = []
+        for block in hits:
+            bid = block.get("_id", "")
+            if bid and bid not in seen_ids:
+                seen_ids.add(bid)
+                results.append(block)
+
+    # 2. Category-aware boost: if category distiller is available,
+    #    pull in category context blocks that match the signals
+    try:
+        from category_distiller import CategoryDistiller
+        distiller = CategoryDistiller()
+        combined_query = " ".join(recent_signals)
+        relevant_cats = distiller.get_categories_for_query(combined_query)
+        if relevant_cats:
+            # Recall from category keywords as supplemental signal
+            cat_query = " ".join(relevant_cats[:3])
+            try:
+                cat_hits = recall(workspace, cat_query, limit=3, rerank=True)
+                for block in cat_hits:
+                    bid = block.get("_id", "")
+                    if bid and bid not in seen_ids:
+                        seen_ids.add(bid)
+                        results.append(block)
+            except Exception:
+                pass
+    except ImportError:
+        pass  # category_distiller not available — skip
+
+    # 3. Trim to limit and return
+    return results[:limit]
+
+
 def main():
     parser = argparse.ArgumentParser(description="mind-mem Recall Engine (BM25 + Graph)")
     parser.add_argument("--query", "-q", required=True, help="Search query")
