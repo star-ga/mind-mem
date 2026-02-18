@@ -117,7 +117,12 @@ class WAL:
         with open(entry_path, "r", encoding="utf-8") as f:
             entry = json.load(f)
 
-        target = os.path.join(self.workspace, entry["target"])
+        target = os.path.realpath(os.path.join(self.workspace, entry["target"]))
+        ws_real = os.path.realpath(self.workspace)
+        if not target.startswith(ws_real + os.sep):
+            _log.error("wal_rollback_blocked", entry_id=entry_id, reason="target escapes workspace")
+            os.unlink(entry_path)
+            return False
         backup = entry.get("backup")
 
         if backup:
