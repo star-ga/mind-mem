@@ -560,6 +560,17 @@ Every tool above does **storage + retrieval**. None of them answer:
 
 **mind-mem focuses on memory governance and integrity — the critical layer most memory systems ignore entirely.**
 
+### Why Plain Files Outperform Fancy Retrieval
+
+Letta's August 2025 analysis showed that a plain-file baseline (full conversations stored as files + agent filesystem tools) scored **74.0% on LoCoMo** with gpt-4o-mini — beating Mem0's top graph variant at 68.5%. Key reasons:
+
+- **LLMs excel at tool-based retrieval.** Agents can iteratively query/refine file searches better than single-shot vector retrieval that might miss subtle connections.
+- **Benchmarks reward recall + reasoning over storage sophistication.** Strong judge LLMs handle the rest once relevant chunks are loaded.
+- **Overhead hurts.** Specialized pipelines introduce failure modes (bad embeddings, chunking errors, stale indexes) that simple file access avoids.
+- **For text-heavy agentic use cases, "how well the agent manages context" > "how smart the retrieval index is."**
+
+mind-mem's deterministic retrieval pipeline validates these findings: **67.3% on LoCoMo** with zero dependencies, no embeddings, and no vector database — within 1.2pp of Mem0's graph-based approach. The key insight: treating retrieval as a reasoning pipeline (wide candidate pool → deterministic rerank → context packing) closes most of the gap without any ML infrastructure. Unlike plain-file baselines, mind-mem adds integrity checking, governance, and agent-agnostic shared memory via MCP that no other system provides.
+
 ---
 
 ## Recall
