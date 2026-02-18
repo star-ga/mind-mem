@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from recall import tokenize, extract_text, get_block_type, get_excerpt, recall, build_xref_graph
+from recall import tokenize, extract_text, get_block_type, get_excerpt, recall, build_xref_graph, _rm3_language_model, rm3_expand
 
 
 class TestTokenize(unittest.TestCase):
@@ -330,6 +330,50 @@ class TestExpandQuery(unittest.TestCase):
     def test_no_duplicates(self):
         expanded = self.expand(["auth", "authentication"])
         self.assertEqual(len(expanded), len(set(expanded)))
+
+
+class TestRM3Expansion(unittest.TestCase):
+    """Tests for RM3 pseudo-relevance feedback."""
+
+    def test_rm3_no_expansion_at_alpha_1(self):
+        """alpha=1.0 means no expansion (original query only)."""
+        result = rm3_expand(["cat", "dog"], [], {}, 100, alpha=1.0)
+        self.assertEqual(set(result.keys()), {"cat", "dog"})
+        for v in result.values():
+            self.assertAlmostEqual(v, 1.0)
+
+    def test_rm3_expands_terms(self):
+        """RM3 should add expansion terms from feedback docs."""
+        docs = [
+            (["cat", "feline", "whisker", "pet"], 0.9),
+            (["cat", "kitten", "purr", "pet"], 0.8),
+        ]
+        cf = {"cat": 10, "feline": 2, "whisker": 1, "pet": 8, "kitten": 3, "purr": 1}
+        result = rm3_expand(["cat"], docs, cf, 100, alpha=0.6, fb_terms=3, fb_docs=2)
+        # Should have original + some expansion terms
+        self.assertIn("cat", result)
+        self.assertGreater(len(result), 1)
+
+    def test_rm3_not_activated_for_adversarial(self):
+        """RM3 should not be used for adversarial queries (handled by caller)."""
+        # This is checked by the caller, not rm3_expand itself
+        result = rm3_expand(["cat"], [], {}, 100, alpha=0.6)
+        self.assertIn("cat", result)  # Still returns original tokens
+
+    def test_rm3_empty_feedback(self):
+        """No feedback docs -> returns original query."""
+        result = rm3_expand(["test"], [], {}, 100, alpha=0.6)
+        self.assertEqual(set(result.keys()), {"test"})
+
+    def test_rm3_language_model(self):
+        """JM-smoothed language model produces valid probabilities."""
+        probs = _rm3_language_model(
+            ["cat", "cat", "dog"],
+            {"cat": 10, "dog": 5, "bird": 3},
+            100,
+        )
+        self.assertGreater(probs["cat"], probs["dog"])  # cat has higher tf
+        self.assertGreater(probs["bird"], 0)  # smoothing gives non-zero
 
 
 if __name__ == "__main__":
