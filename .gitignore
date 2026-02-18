@@ -1,0 +1,7 @@
+*.pyc
+__pycache__/
+.venv*/
+*.egg-info/
+benchmarks/results/
+benchmarks/*.jsonl
+benchmarks/*results*.json*

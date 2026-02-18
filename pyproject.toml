@@ -1,0 +1,49 @@
+[project]
+name = "mind-mem"
+version = "1.0.0"
+description = "Memory for AI agents. Intelligence, compiled."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "STARGA Inc", email = "noreply@star.ga" }
+]
+keywords = ["memory", "ai-agent", "mind", "recall", "intelligence", "hybrid-search", "rrf", "governance"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.optional-dependencies]
+mcp = ["fastmcp>=2.0"]
+embeddings = ["sentence-transformers>=2.0"]
+cross-encoder = ["sentence-transformers>=2.0"]
+all = ["fastmcp>=2.0", "sentence-transformers>=2.0"]
+
+[project.urls]
+Homepage = "https://github.com/star-ga/mind-mem"
+Repository = "https://github.com/star-ga/mind-mem"
+Documentation = "https://mindlang.dev"
+Issues = "https://github.com/star-ga/mind-mem/issues"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+mind-mem-init = "mind_mem.init_workspace:main"
+mind-mem-scan = "mind_mem.intel_scan:main"
+mind-mem-recall = "mind_mem.recall:main"
+mind-mem-capture = "mind_mem.capture:main"
+mind-mem-validate = "mind_mem.validate_py:main"
+mind-mem-mcp = "mind_mem.mcp_entry:main"
+mind-mem-migrate = "mind_mem.schema_version:main"
+mind-mem-backup = "mind_mem.backup_restore:main"
+mind-mem-compact = "mind_mem.compaction:main"
+mind-mem-resolve = "mind_mem.conflict_resolver:main"
+
+[tool.setuptools]
+packages = ["mind_mem"]
+package-dir = {"mind_mem" = "scripts"}
