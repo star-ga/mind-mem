@@ -654,7 +654,7 @@ mind-mem includes 6 `.mind` kernel source files — numerical hot paths written 
 
 ### Compilation
 
-Requires the [MIND compiler](https://mindlang.dev) (`mindc`). The MIND runtime and compiler are developed separately and available under enterprise license. Contact [STARGA Inc](https://star.ga) for access.
+Requires the MIND compiler (`mindc`). See [mindlang.dev](https://mindlang.dev) for installation.
 
 ```bash
 # Compile all kernels to a single shared library
