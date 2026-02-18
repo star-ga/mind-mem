@@ -62,6 +62,14 @@ class MindMemKernel:
                 "Compile with: mindc mind/*.mind --emit=shared -o lib/libmindmem.so"
             )
 
+        # Check if the library includes runtime protection
+        self._protected = False
+        try:
+            self._lib.mindmem_protected.restype = ctypes.c_int
+            self._protected = bool(self._lib.mindmem_protected())
+        except AttributeError:
+            pass  # Unprotected build (dev/CI fallback)
+
     def rrf_fuse_py(self, bm25_ranks: list[float], vector_ranks: list[float],
                     k: float = 60.0, bm25_w: float = 1.0,
                     vector_w: float = 1.0) -> list[float]:
