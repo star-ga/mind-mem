@@ -109,6 +109,21 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS block_vectors (
+            id        TEXT PRIMARY KEY,
+            embedding BLOB NOT NULL,
+            model     TEXT NOT NULL DEFAULT ''
+        );
+
+        CREATE TABLE IF NOT EXISTS block_meta (
+            id TEXT PRIMARY KEY,
+            importance REAL DEFAULT 1.0,
+            access_count INTEGER DEFAULT 0,
+            last_accessed TEXT,
+            keywords TEXT DEFAULT '',
+            connections TEXT DEFAULT ''
+        );
     """)
 
     # Create standalone FTS5 virtual table (we manage sync ourselves)
