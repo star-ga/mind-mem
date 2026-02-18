@@ -516,23 +516,6 @@ Compared against every major memory solution for AI agents (as of 2026):
 | MCP server      |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |    **14 tools**    |
 | MIND kernels    |                   —                    |               —                |                         —                         |               —                |               —               |                    —                    |                —                |                 —                 |                       —                        |   **6 kernels**    |
 
-### mind-mem vs ClawMem (Head-to-Head)
-
-ClawMem requires 4.5GB VRAM across 3 llama-server instances (qwen3-reranker-0.6B + QMD 1.7B GGUF + embedding model). mind-mem closes every feature gap with CPU-friendly alternatives that require zero infrastructure:
-
-| Capability      | ClawMem                     | mind-mem                                  | Advantage                          |
-|-----------------|-----------------------------|-------------------------------------------|------------------------------------|
-| Hybrid search   | BM25 + vector + RRF         | BM25F + vector + RRF                      | mind-mem: field-weighted BM25F     |
-| Cross-encoder   | qwen3-reranker 0.6B (GPU)   | ms-marco-MiniLM 80MB (CPU)                | mind-mem: 7x smaller, no GPU       |
-| Query expansion | QMD 1.7B GGUF (GPU)         | RM3 pseudo-relevance (zero-dep)           | mind-mem: no model needed          |
-| Intent routing  | Yes                         | 9 types with parameter mapping            | mind-mem: more granular            |
-| A-MEM metadata  | Yes                         | Yes (importance, keywords, co-occurrence) | Equivalent                         |
-| Graph search    | Multi-graph beam            | 2-hop cross-reference                     | Different approach, both effective |
-| Governance      | None                        | Contradiction detection, drift, audit     | **mind-mem only**                  |
-| Infrastructure  | 3x llama-server, 4.5GB VRAM | Python 3.10+                              | **mind-mem: zero**                 |
-| MIND kernels    | None                        | 6 compiled kernels (optional)             | **mind-mem only**                  |
-| MCP server      | None                        | 14 tools, 8 resources                     | **mind-mem only**                  |
-
 ### What Each Tool Does Best
 
 | Tool            | Strength                                                                         | Trade-off                                        |
