@@ -1068,6 +1068,137 @@ _TEMPORAL_CONTENT_TOKENS = _MONTH_TOKENS | _DAY_TOKENS | frozenset({
     "planned", "planning", "going", "trip", "visit", "travel", "vacation",
 })
 
+# ---------------------------------------------------------------------------
+# Negation awareness
+# ---------------------------------------------------------------------------
+
+_NEGATION_PATTERNS = [
+    r'\bnot\b', r'\bnever\b', r"\bdidn't\b", r"\bdoesn't\b", r"\bwasn't\b",
+    r"\bisn't\b", r"\bwon't\b", r"\bcan't\b", r"\bcannot\b", r'\bno\b',
+    r"\bdon't\b", r"\bhasn't\b", r"\bhaven't\b", r"\bwouldn't\b",
+]
+
+
+def _detect_negation(query: str) -> tuple[bool, list[str]]:
+    """Detect negation in query. Returns (has_negation, negated_terms)."""
+    query_lower = query.lower()
+    has_neg = any(re.search(p, query_lower) for p in _NEGATION_PATTERNS)
+    if not has_neg:
+        return False, []
+    # Extract terms near negation words
+    negated = []
+    for pat in _NEGATION_PATTERNS:
+        for m in re.finditer(pat, query_lower):
+            # Get the next 1-3 words after negation
+            rest = query_lower[m.end():].strip().split()[:3]
+            negated.extend(rest)
+    return True, negated
+
+
+def _negation_penalty(block_text: str, negated_terms: list[str], penalty: float = 0.3) -> float:
+    """Penalize blocks that affirm what the query negates.
+    Returns multiplier in [1-penalty, 1.0]."""
+    if not negated_terms:
+        return 1.0
+    text_lower = block_text.lower()
+    affirm_count = sum(1 for t in negated_terms if t in text_lower)
+    if affirm_count == 0:
+        return 1.0
+    # More affirmed terms = bigger penalty
+    return max(1.0 - penalty * min(affirm_count / len(negated_terms), 1.0), 1.0 - penalty)
+
+
+# ---------------------------------------------------------------------------
+# Date proximity scoring
+# ---------------------------------------------------------------------------
+
+_DATE_PATTERN = re.compile(r'(\d{4})-(\d{2})-(\d{2})')
+
+
+def _extract_dates(text: str) -> list:
+    """Extract YYYY-MM-DD dates from text."""
+    from datetime import datetime as _dt
+    dates = []
+    for m in _DATE_PATTERN.finditer(text):
+        try:
+            dates.append(_dt(int(m.group(1)), int(m.group(2)), int(m.group(3))))
+        except ValueError:
+            continue
+    return dates
+
+
+def _date_proximity_score(query: str, block_text: str, sigma: float = 30.0) -> float:
+    """Gaussian decay based on date distance. Returns [0.5, 1.5] multiplier."""
+    query_dates = _extract_dates(query)
+    if not query_dates:
+        return 1.0  # No temporal signal
+    block_dates = _extract_dates(block_text)
+    if not block_dates:
+        return 0.8  # Mild penalty for no date when query has date
+
+    # Use closest date pair
+    min_delta = float('inf')
+    for qd in query_dates:
+        for bd in block_dates:
+            delta = abs((qd - bd).days)
+            min_delta = min(min_delta, delta)
+
+    # Gaussian decay
+    score = math.exp(-(min_delta ** 2) / (2 * sigma ** 2))
+    # Map to [0.5, 1.5] range
+    return 0.5 + score * 1.0
+
+
+# ---------------------------------------------------------------------------
+# Category match (20-category taxonomy)
+# ---------------------------------------------------------------------------
+
+_CATEGORIES = {
+    "IDENTITY": ["name", "who", "person", "identity", "called"],
+    "PREFERENCE": ["prefer", "like", "favorite", "enjoy", "hate", "dislike", "love"],
+    "EVENT": ["happened", "event", "occurred", "when", "took place", "attended"],
+    "RELATION": ["friend", "family", "married", "partner", "colleague", "relationship"],
+    "MEDICAL": ["health", "doctor", "medical", "allergy", "medication", "diagnosis"],
+    "WORK": ["job", "work", "company", "career", "position", "employed", "boss"],
+    "HOBBY": ["hobby", "interest", "sport", "play", "collect", "practice"],
+    "LOCATION": ["live", "city", "country", "address", "moved", "located", "where"],
+    "OPINION": ["think", "believe", "opinion", "view", "feel", "consider"],
+    "PLAN": ["plan", "going to", "will", "intend", "schedule", "future"],
+    "FOOD": ["eat", "food", "diet", "restaurant", "cook", "meal", "vegetarian"],
+    "EDUCATION": ["school", "university", "degree", "study", "learn", "course"],
+    "TRAVEL": ["travel", "trip", "visit", "vacation", "flew", "destination"],
+    "FINANCE": ["money", "salary", "invest", "budget", "cost", "price"],
+    "TECHNOLOGY": ["computer", "software", "app", "code", "program", "tech"],
+    "PETS": ["pet", "dog", "cat", "animal", "breed"],
+    "FAMILY": ["child", "parent", "sibling", "mother", "father", "daughter", "son"],
+    "SOCIAL": ["party", "gathering", "meeting", "social", "community"],
+    "APPEARANCE": ["wear", "look", "style", "clothes", "appearance"],
+    "HABIT": ["always", "usually", "routine", "habit", "every day", "morning"],
+}
+
+
+def _classify_categories(text: str) -> set[str]:
+    """Classify text into categories based on keyword matching."""
+    text_lower = text.lower()
+    cats = set()
+    for cat, keywords in _CATEGORIES.items():
+        if any(kw in text_lower for kw in keywords):
+            cats.add(cat)
+    return cats
+
+
+def _category_match_boost(query: str, block_text: str, boost: float = 0.15) -> float:
+    """Boost blocks matching query's category. Returns [1.0, 1.0+boost]."""
+    query_cats = _classify_categories(query)
+    if not query_cats:
+        return 1.0
+    block_cats = _classify_categories(block_text)
+    if not block_cats:
+        return 1.0
+    overlap = len(query_cats & block_cats)
+    return 1.0 + boost * min(overlap / len(query_cats), 1.0)
+
+
 # Reranker feature weights (tuned for LoCoMo coverage)
 # v1.0.2: Reduced speaker dominance (was 0.40), increased entity/phrase overlap
 # to avoid "right speaker, wrong topic" over-preference.
@@ -1147,6 +1278,7 @@ def rerank_hits(
     q_lower = query.lower()
     has_time_intent = bool(_TIME_INTENT_RE.search(q_lower))
     q_mentioned_speakers = _extract_speaker_names(query, hits)
+    has_neg, negated_terms = _detect_negation(query)
 
     # Plan-related boosting: if query mentions plan/going/trip, boost those verbs
     plan_intent = bool(re.search(r"\b(plan|going|trip|visit|travel|vacation)\b", q_lower))
@@ -1243,6 +1375,14 @@ def rerank_hits(
             + _RERANK_W_SPEAKER * speaker_bonus
         )
         h["score"] = round(bm25_score + feature_sum, 4)
+
+        # --- Phase 4: multiplicative reranking features ---
+        block_text = h.get("excerpt", "")
+        if has_neg:
+            h["score"] *= _negation_penalty(block_text, negated_terms)
+        h["score"] *= _date_proximity_score(query, block_text)
+        h["score"] *= _category_match_boost(query, block_text)
+        h["score"] = round(h["score"], 4)
 
         if debug:
             h["_rerank_features"] = {
