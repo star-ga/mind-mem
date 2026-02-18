@@ -611,6 +611,62 @@ class VectorBackend(RecallBackend):
 
 
 # ---------------------------------------------------------------------------
+# Batch Search (for RRF fusion in hybrid_recall.py)
+# ---------------------------------------------------------------------------
+
+
+def search_batch(
+    workspace: str,
+    query: str,
+    limit: int = 200,
+    active_only: bool = False,
+    config: dict | None = None,
+) -> list[dict]:
+    """Search using VectorBackend with the given (or default) config.
+
+    This is a convenience function used by HybridBackend to fetch a large
+    candidate pool for RRF fusion.  Unlike VectorBackend.search(), it
+    accepts workspace as the first positional arg so the calling convention
+    matches recall.recall().
+
+    Args:
+        workspace: Workspace root path.
+        query: Search query text.
+        limit: Maximum results (default 200 for RRF pool).
+        active_only: Only return active blocks.
+        config: Optional recall config dict. If None, loads from
+            ``<workspace>/mind-mem.json``.
+
+    Returns:
+        List of result dicts (same format as VectorBackend.search).
+        Returns empty list on any error (e.g. sentence-transformers missing).
+    """
+    if not query or not query.strip():
+        return []
+
+    if config is None:
+        config_path = os.path.join(workspace, "mind-mem.json")
+        config = {}
+        if os.path.isfile(config_path):
+            try:
+                with open(config_path) as f:
+                    full = json.load(f)
+                    config = full.get("recall", {})
+            except (OSError, json.JSONDecodeError):
+                pass
+
+    try:
+        backend = VectorBackend(config)
+        return backend.search(workspace, query, limit=limit, active_only=active_only)
+    except ImportError:
+        _log.info("search_batch_unavailable", reason="sentence-transformers not installed")
+        return []
+    except Exception as e:
+        _log.error("search_batch_failed", error=str(e))
+        return []
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
