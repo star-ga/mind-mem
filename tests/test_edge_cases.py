@@ -244,6 +244,10 @@ def _load_server(workspace: str):
     return mod
 
 
+@unittest.skipUnless(
+    importlib.util.find_spec("fastmcp") is not None,
+    "fastmcp not installed"
+)
 class TestMCPEdgeCases(unittest.TestCase):
 
     def setUp(self):

@@ -18,6 +18,8 @@ _SERVER_PATH = os.path.join(os.path.dirname(__file__), "..", "mcp_server.py")
 _SCRIPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "scripts")
 sys.path.insert(0, _SCRIPTS_DIR)
 
+_HAS_FASTMCP = importlib.util.find_spec("fastmcp") is not None
+
 
 def _load_server(workspace: str):
     """Load the mcp_server module with a given workspace."""
@@ -28,6 +30,7 @@ def _load_server(workspace: str):
     return mod
 
 
+@unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestMCPServerHelpers(unittest.TestCase):
     def setUp(self):
         self.td = tempfile.mkdtemp()
@@ -84,6 +87,7 @@ class TestMCPServerHelpers(unittest.TestCase):
         self.assertEqual(parsed[0]["_id"], "D-001")
 
 
+@unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestMCPResources(unittest.TestCase):
     def setUp(self):
         self.td = tempfile.mkdtemp()
@@ -178,6 +182,7 @@ class TestMCPResources(unittest.TestCase):
         self.assertIn("Signals", result)
 
 
+@unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestMCPRecallEngine(unittest.TestCase):
     """Test recall through the module's internal recall engine."""
 
@@ -214,6 +219,7 @@ class TestMCPRecallEngine(unittest.TestCase):
         self.assertEqual(len(results), 0)
 
 
+@unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestMCPApproveApply(unittest.TestCase):
     """Test the approve_apply MCP tool."""
 
@@ -273,6 +279,7 @@ class TestMCPApproveApply(unittest.TestCase):
         self.assertTrue(parsed["dry_run"])
 
 
+@unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestMCPRollback(unittest.TestCase):
     """Test the rollback_proposal MCP tool."""
 
@@ -317,6 +324,7 @@ class TestMCPRollback(unittest.TestCase):
         self.assertEqual(parsed["receipt_ts"], "20260215-143000")
 
 
+@unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestMCPTokenAuth(unittest.TestCase):
     """Test token auth helper."""
 
@@ -342,6 +350,7 @@ class TestMCPTokenAuth(unittest.TestCase):
         self.assertEqual(self.mod._check_token(), "test-secret-123")
 
 
+@unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestMCPServerMeta(unittest.TestCase):
     def setUp(self):
         self.td = tempfile.mkdtemp()
@@ -358,6 +367,7 @@ class TestMCPServerMeta(unittest.TestCase):
         self.assertIn("contradiction", self.mod.mcp.instructions.lower())
 
 
+@unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestTokenVerification(unittest.TestCase):
     """Security tests for MCP HTTP token enforcement."""
 

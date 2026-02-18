@@ -268,7 +268,7 @@ def _is_safe_tar_member(member: tarfile.TarInfo, ws: str) -> bool:
     device files, and any path that resolves outside the workspace.
     """
     # Reject absolute paths
-    if os.path.isabs(member.name):
+    if os.path.isabs(member.name) or member.name.startswith("/"):
         return False
     # Reject .. components
     if ".." in member.name.split(os.sep) or ".." in member.name.split("/"):
