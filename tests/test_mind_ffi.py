@@ -1,7 +1,8 @@
-"""Tests for MIND FFI bridge — kernel loading and fallback behavior."""
+"""Tests for MIND FFI bridge — kernel loading, config parsing, and fallback behavior."""
 
 import os
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
@@ -14,6 +15,10 @@ from mind_ffi import (
     get_mind_dir,
     load_kernel,
     load_all_kernels,
+    load_kernel_config,
+    load_all_kernel_configs,
+    get_kernel_param,
+    _parse_value,
 )
 
 
@@ -27,11 +32,7 @@ class TestKernelLoadingFallback(unittest.TestCase):
 
     def test_get_kernel_returns_none_without_so(self):
         """get_kernel() returns None when .so is not available."""
-        # Since we haven't compiled the .so, this should return None
-        # (or a cached kernel if one was somehow loaded)
         kernel = get_kernel()
-        # In CI without compiled .so, this should be None
-        # We don't assert None because local dev might have it
         self.assertTrue(kernel is None or isinstance(kernel, MindMemKernel))
 
     def test_is_available_returns_bool(self):
@@ -40,80 +41,253 @@ class TestKernelLoadingFallback(unittest.TestCase):
         self.assertIsInstance(result, bool)
 
 
+class TestParseValue(unittest.TestCase):
+    """Tests for INI value auto-detection."""
+
+    def test_bool_true(self):
+        self.assertIs(_parse_value("true"), True)
+        self.assertIs(_parse_value("True"), True)
+
+    def test_bool_false(self):
+        self.assertIs(_parse_value("false"), False)
+        self.assertIs(_parse_value("False"), False)
+
+    def test_integer(self):
+        self.assertEqual(_parse_value("42"), 42)
+        self.assertEqual(_parse_value("-1"), -1)
+
+    def test_float(self):
+        self.assertAlmostEqual(_parse_value("1.2"), 1.2)
+        self.assertAlmostEqual(_parse_value("0.75"), 0.75)
+        self.assertAlmostEqual(_parse_value("-0.5"), -0.5)
+
+    def test_string(self):
+        self.assertEqual(_parse_value("hello"), "hello")
+        self.assertEqual(_parse_value("morph_only"), "morph_only")
+
+    def test_comma_list(self):
+        result = _parse_value("a, b, c")
+        self.assertEqual(result, ["a", "b", "c"])
+
+    def test_comma_list_with_numbers(self):
+        result = _parse_value("1, 2, 3")
+        self.assertEqual(result, [1, 2, 3])
+
+
+class TestLoadKernelConfig(unittest.TestCase):
+    """Tests for INI-style .mind config loading."""
+
+    def test_load_basic_config(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False) as f:
+            f.write("[bm25]\nk1 = 1.2\nb = 0.75\n")
+            f.flush()
+            cfg = load_kernel_config(f.name)
+        os.unlink(f.name)
+        self.assertIn("bm25", cfg)
+        self.assertAlmostEqual(cfg["bm25"]["k1"], 1.2)
+        self.assertAlmostEqual(cfg["bm25"]["b"], 0.75)
+
+    def test_load_multiple_sections(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False) as f:
+            f.write("[section1]\nfoo = bar\n[section2]\ncount = 10\n")
+            f.flush()
+            cfg = load_kernel_config(f.name)
+        os.unlink(f.name)
+        self.assertEqual(cfg["section1"]["foo"], "bar")
+        self.assertEqual(cfg["section2"]["count"], 10)
+
+    def test_comments_ignored(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False) as f:
+            f.write("# This is a comment\n[sec]\n# Another comment\nkey = val\n")
+            f.flush()
+            cfg = load_kernel_config(f.name)
+        os.unlink(f.name)
+        self.assertEqual(cfg["sec"]["key"], "val")
+
+    def test_empty_lines_ignored(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False) as f:
+            f.write("[sec]\n\nkey = val\n\n")
+            f.flush()
+            cfg = load_kernel_config(f.name)
+        os.unlink(f.name)
+        self.assertEqual(cfg["sec"]["key"], "val")
+
+    def test_nonexistent_file_returns_empty(self):
+        cfg = load_kernel_config("/nonexistent/path/file.mind")
+        self.assertEqual(cfg, {})
+
+    def test_boolean_values(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".mind", delete=False) as f:
+            f.write("[flags]\nenabled = true\ndisabled = false\n")
+            f.flush()
+            cfg = load_kernel_config(f.name)
+        os.unlink(f.name)
+        self.assertIs(cfg["flags"]["enabled"], True)
+        self.assertIs(cfg["flags"]["disabled"], False)
+
+
 class TestKernelListing(unittest.TestCase):
     """Test .mind source file discovery."""
 
     def test_list_kernels_finds_mind_files(self):
-        """Should find .mind files in the mind/ directory."""
-        mind_dir = os.path.join(os.path.dirname(__file__), "..", "mind")
-        if os.path.isdir(mind_dir):
-            kernels = list_kernels(mind_dir)
-            self.assertIn("bm25", kernels)
-            self.assertIn("rrf", kernels)
-            self.assertIn("reranker", kernels)
-            self.assertIn("abstention", kernels)
-            self.assertIn("ranking", kernels)
-            self.assertIn("importance", kernels)
+        with tempfile.TemporaryDirectory() as td:
+            for name in ["recall.mind", "rm3.mind", "rerank.mind"]:
+                with open(os.path.join(td, name), "w") as f:
+                    f.write("[test]\nkey = val\n")
+            names = list_kernels(td)
+            self.assertEqual(names, ["recall", "rerank", "rm3"])
 
-    def test_list_kernels_empty_dir(self):
-        """Empty/nonexistent directory returns empty list."""
-        result = list_kernels("/nonexistent/dir")
-        self.assertEqual(result, [])
+    def test_list_kernels_ignores_non_mind(self):
+        with tempfile.TemporaryDirectory() as td:
+            with open(os.path.join(td, "recall.mind"), "w") as f:
+                f.write("[test]\n")
+            with open(os.path.join(td, "readme.txt"), "w") as f:
+                f.write("not a kernel\n")
+            names = list_kernels(td)
+            self.assertEqual(names, ["recall"])
+
+    def test_list_kernels_ignores_hidden(self):
+        with tempfile.TemporaryDirectory() as td:
+            with open(os.path.join(td, ".hidden.mind"), "w") as f:
+                f.write("[test]\n")
+            with open(os.path.join(td, "visible.mind"), "w") as f:
+                f.write("[test]\n")
+            names = list_kernels(td)
+            self.assertEqual(names, ["visible"])
+
+    def test_empty_directory(self):
+        with tempfile.TemporaryDirectory() as td:
+            self.assertEqual(list_kernels(td), [])
+
+    def test_nonexistent_directory(self):
+        self.assertEqual(list_kernels("/nonexistent/path"), [])
 
     def test_list_kernels_sorted(self):
-        """Results should be sorted alphabetically."""
         mind_dir = os.path.join(os.path.dirname(__file__), "..", "mind")
         if os.path.isdir(mind_dir):
             kernels = list_kernels(mind_dir)
             self.assertEqual(kernels, sorted(kernels))
 
 
-class TestLoadKernel(unittest.TestCase):
-    """Test loading .mind source metadata."""
-
-    def test_load_kernel_extracts_functions(self):
-        """Should extract function names from .mind source."""
-        mind_dir = os.path.join(os.path.dirname(__file__), "..", "mind")
-        bm25_path = os.path.join(mind_dir, "bm25.mind")
-        if os.path.isfile(bm25_path):
-            info = load_kernel(bm25_path)
-            self.assertIn("functions", info)
-            self.assertIn("bm25f_batch", info["functions"])
-            self.assertIn("bm25f_doc", info["functions"])
+class TestLoadKernelSource(unittest.TestCase):
+    """Test loading .mind source metadata (function extraction)."""
 
     def test_load_kernel_nonexistent(self):
-        """Nonexistent file returns empty dict."""
         result = load_kernel("/nonexistent/kernel.mind")
         self.assertEqual(result, {})
 
-    def test_load_all_kernels(self):
-        """Should load all kernels from mind/ directory."""
+    def test_load_kernel_returns_functions_list(self):
+        """Our INI-style kernels have no fn declarations."""
+        mind_dir = os.path.join(os.path.dirname(__file__), "..", "mind")
+        path = os.path.join(mind_dir, "recall.mind")
+        if os.path.isfile(path):
+            info = load_kernel(path)
+            self.assertIn("functions", info)
+            self.assertIsInstance(info["functions"], list)
+
+    def test_load_all_kernels_metadata(self):
         mind_dir = os.path.join(os.path.dirname(__file__), "..", "mind")
         if os.path.isdir(mind_dir):
             all_k = load_all_kernels(mind_dir)
-            self.assertIn("bm25", all_k)
-            self.assertIn("rrf", all_k)
-            # Each should have function list
-            self.assertIn("functions", all_k["rrf"])
-            self.assertIn("rrf_fuse", all_k["rrf"]["functions"])
+            self.assertGreater(len(all_k), 0)
+            for name, cfg in all_k.items():
+                self.assertIn("functions", cfg)
 
 
 class TestGetMindDir(unittest.TestCase):
     """Test mind/ directory resolution."""
 
-    def test_finds_package_level_mind_dir(self):
-        """Should find the package-level mind/ directory."""
-        mind_dir = get_mind_dir("")
-        self.assertTrue(os.path.isdir(mind_dir) or True)  # May not exist in CI
-
     def test_workspace_mind_preferred(self):
-        """Workspace-level mind/ should be preferred if it exists."""
-        import tempfile
         with tempfile.TemporaryDirectory() as ws:
             ws_mind = os.path.join(ws, "mind")
             os.makedirs(ws_mind)
             result = get_mind_dir(ws)
             self.assertEqual(result, ws_mind)
+
+    def test_fallback_to_package_level(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = get_mind_dir(td)
+            # Should return either workspace/mind or package-level
+            self.assertTrue(result.endswith("mind"))
+
+
+class TestLoadAllKernelConfigs(unittest.TestCase):
+    """Tests for loading all kernel configs from a directory."""
+
+    def test_loads_all(self):
+        with tempfile.TemporaryDirectory() as td:
+            with open(os.path.join(td, "recall.mind"), "w") as f:
+                f.write("[bm25]\nk1 = 1.2\n")
+            with open(os.path.join(td, "rm3.mind"), "w") as f:
+                f.write("[rm3]\nalpha = 0.6\n")
+            result = load_all_kernel_configs(td)
+            self.assertIn("recall", result)
+            self.assertIn("rm3", result)
+            self.assertAlmostEqual(result["recall"]["bm25"]["k1"], 1.2)
+            self.assertAlmostEqual(result["rm3"]["rm3"]["alpha"], 0.6)
+
+
+class TestGetKernelParam(unittest.TestCase):
+    """Tests for parameter extraction with defaults."""
+
+    def test_existing_param(self):
+        cfg = {"bm25": {"k1": 1.5}}
+        self.assertAlmostEqual(get_kernel_param(cfg, "bm25", "k1", 1.2), 1.5)
+
+    def test_missing_param_uses_default(self):
+        cfg = {"bm25": {"k1": 1.5}}
+        self.assertAlmostEqual(get_kernel_param(cfg, "bm25", "b", 0.75), 0.75)
+
+    def test_missing_section_uses_default(self):
+        cfg = {}
+        self.assertEqual(get_kernel_param(cfg, "bm25", "k1", 1.2), 1.2)
+
+
+class TestShippedKernels(unittest.TestCase):
+    """Tests that the shipped .mind kernel files parse correctly."""
+
+    def setUp(self):
+        self.mind_dir = os.path.join(os.path.dirname(__file__), "..", "mind")
+
+    def test_recall_kernel_loads(self):
+        cfg = load_kernel_config(os.path.join(self.mind_dir, "recall.mind"))
+        self.assertIn("bm25", cfg)
+        self.assertAlmostEqual(cfg["bm25"]["k1"], 1.2)
+        self.assertAlmostEqual(cfg["bm25"]["b"], 0.75)
+        self.assertIn("fields", cfg)
+        self.assertEqual(cfg["fields"]["Statement"], 3.0)
+
+    def test_rm3_kernel_loads(self):
+        cfg = load_kernel_config(os.path.join(self.mind_dir, "rm3.mind"))
+        self.assertIn("rm3", cfg)
+        self.assertIs(cfg["rm3"]["enabled"], False)
+        self.assertAlmostEqual(cfg["rm3"]["alpha"], 0.6)
+
+    def test_rerank_kernel_loads(self):
+        cfg = load_kernel_config(os.path.join(self.mind_dir, "rerank.mind"))
+        self.assertIn("weights", cfg)
+        self.assertAlmostEqual(cfg["weights"]["entity_overlap"], 0.30)
+
+    def test_temporal_kernel_loads(self):
+        cfg = load_kernel_config(os.path.join(self.mind_dir, "temporal.mind"))
+        self.assertIn("scoring", cfg)
+        self.assertAlmostEqual(cfg["scoring"]["recency_weight"], 0.6)
+
+    def test_adversarial_kernel_loads(self):
+        cfg = load_kernel_config(os.path.join(self.mind_dir, "adversarial.mind"))
+        self.assertIn("scoring", cfg)
+        self.assertEqual(cfg["scoring"]["expand_query"], "morph_only")
+
+    def test_hybrid_kernel_loads(self):
+        cfg = load_kernel_config(os.path.join(self.mind_dir, "hybrid.mind"))
+        self.assertIn("fusion", cfg)
+        self.assertEqual(cfg["fusion"]["rrf_k"], 60)
+
+    def test_all_six_kernels_listed(self):
+        names = list_kernels(self.mind_dir)
+        required = {"adversarial", "hybrid", "recall", "rerank", "rm3", "temporal"}
+        self.assertTrue(required.issubset(set(names)),
+                        f"Missing kernels: {required - set(names)}")
 
 
 class TestRRFPurePython(unittest.TestCase):
@@ -132,12 +306,8 @@ class TestRRFPurePython(unittest.TestCase):
             s = bm25_w / (k + bm25_ranks[i]) + vec_w / (k + vec_ranks[i])
             expected.append(s)
 
-        # Doc 0: 1/(60+1) + 1/(60+3) = 0.01639 + 0.01587 = 0.03226
-        # Doc 1: 1/(60+2) + 1/(60+1) = 0.01613 + 0.01639 = 0.03252
-        # Doc 2: 1/(60+3) + 1/(60+2) = 0.01587 + 0.01613 = 0.03200
         self.assertAlmostEqual(expected[0], 1/61 + 1/63, places=5)
         self.assertAlmostEqual(expected[1], 1/62 + 1/61, places=5)
-        # Doc 1 should score highest (best combined rank)
         self.assertGreater(expected[1], expected[0])
         self.assertGreater(expected[0], expected[2])
 
