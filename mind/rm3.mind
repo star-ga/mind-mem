@@ -1,0 +1,27 @@
+# rm3.mind — RM3 pseudo-relevance feedback kernel
+# Controls RM3 query expansion parameters.
+
+[rm3]
+enabled = false
+# Interpolation weight: 1.0 = original query only, 0.0 = expansion only
+alpha = 0.6
+# Number of expansion terms to add
+fb_terms = 10
+# Number of feedback documents to use
+fb_docs = 5
+# Minimum IDF for expansion terms (filters common words)
+min_idf = 1.0
+# Dirichlet smoothing parameter for document language model
+mu = 2000.0
+
+[prf]
+# Legacy PRF (used when RM3 is disabled)
+# Weight for expansion term scoring
+single_hop_weight = 0.4
+multi_hop_weight = 0.25
+# Minimum co-occurrence count in top-5 docs
+min_cooccurrence = 2
+# Max expansion terms from PRF
+max_terms = 8
+# Max document frequency ratio for expansion terms
+max_df_ratio = 0.3

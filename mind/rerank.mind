@@ -1,0 +1,24 @@
+# rerank.mind — Deterministic reranker kernel
+# Controls feature weights for the v7 reranking stage.
+
+[weights]
+entity_overlap = 0.30
+time_overlap = 0.15
+bigram_phrase = 0.15
+recency = 0.10
+speaker_match = 0.25
+speaker_mismatch = -0.10
+
+[context_pack]
+# Max adjacency expansions from question turns
+max_adjacency = 2
+# Max diversity-forced additions
+max_diversity = 5
+# Max pronoun-rescue additions
+max_pronoun_rescue = 3
+
+[anchor]
+# BM25 top-1 anchor: keep in final top-K even after reranking
+enabled = true
+# Position to insert anchor if it falls out of top-K
+insert_position = 1

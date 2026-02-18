@@ -1,0 +1,23 @@
+# adversarial.mind — Adversarial/negation query kernel
+# Parameters for distractor-prone and negation-bearing queries.
+
+[scoring]
+recency_weight = 0.3
+date_boost = 1.0
+# morph_only: lemma + month normalization only, no semantic synonyms
+expand_query = morph_only
+extra_limit_factor = 1.0
+
+[detection]
+# Adversarial score boost for strong negation at start
+strong_negation_boost = 3
+# "ever" keyword boost
+ever_boost = 2
+# Verification intent boost
+verification_boost = 1.5
+
+[skeptical]
+# Enable skeptical mode for superlative/distractor queries
+enabled = true
+# Force morph_only in skeptical mode
+force_morph_only = true

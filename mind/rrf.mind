@@ -1,0 +1,30 @@
+// RRF: fuse ranked lists from multiple retrievers
+// score(doc) = sum_over_retrievers(weight_i / (k + rank_i))
+import std.tensor;
+
+fn rrf_fuse(
+    bm25_ranks: tensor<f32[N]>,
+    vector_ranks: tensor<f32[N]>,
+    k: f32,
+    bm25_weight: f32,
+    vector_weight: f32
+) -> tensor<f32[N]> {
+    let bm25_scores = bm25_weight / (k + bm25_ranks);
+    let vector_scores = vector_weight / (k + vector_ranks);
+    return bm25_scores + vector_scores;
+}
+
+fn rrf_fuse_three(
+    ranks_a: tensor<f32[N]>,
+    ranks_b: tensor<f32[N]>,
+    ranks_c: tensor<f32[N]>,
+    k: f32,
+    weight_a: f32,
+    weight_b: f32,
+    weight_c: f32
+) -> tensor<f32[N]> {
+    let sa = weight_a / (k + ranks_a);
+    let sb = weight_b / (k + ranks_b);
+    let sc = weight_c / (k + ranks_c);
+    return sa + sb + sc;
+}

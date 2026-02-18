@@ -1,0 +1,52 @@
+// Deterministic reranking features (no model needed)
+import std.tensor;
+
+// Date proximity: Gaussian decay from query date to block date
+fn date_proximity_score(
+    date_deltas: tensor<f32[N]>,
+    sigma: f32
+) -> tensor<f32[N]> {
+    let neg_sq = date_deltas * date_deltas * -1.0;
+    let denom = 2.0 * sigma * sigma;
+    return exp(neg_sq / denom);
+}
+
+// Category match boost: taxonomy alignment score
+fn category_boost(
+    query_cats: tensor<f32[C]>,
+    doc_cats: tensor<f32[N, C]>,
+    boost: f32
+) -> tensor<f32[N]> {
+    let query_broad = reshape(query_cats, [1, C]);
+    let overlap = doc_cats * query_broad;
+    let match_score = sum(overlap, [1]);
+    return 1.0 + boost * match_score;
+}
+
+// Negation penalty: penalize blocks confirming X when query asks "NOT X"
+fn negation_penalty(
+    base_scores: tensor<f32[N]>,
+    negation_flags: tensor<f32[N]>,
+    penalty: f32
+) -> tensor<f32[N]> {
+    let multiplier = 1.0 - penalty * negation_flags;
+    return base_scores * multiplier;
+}
+
+// Combined reranking: apply all deterministic features
+fn rerank_deterministic(
+    base_scores: tensor<f32[N]>,
+    date_deltas: tensor<f32[N]>,
+    date_sigma: f32,
+    query_cats: tensor<f32[C]>,
+    doc_cats: tensor<f32[N, C]>,
+    cat_boost: f32,
+    negation_flags: tensor<f32[N]>,
+    neg_penalty: f32,
+    importance: tensor<f32[N]>
+) -> tensor<f32[N]> {
+    let date_score = date_proximity_score(date_deltas, date_sigma);
+    let cat_score = category_boost(query_cats, doc_cats, cat_boost);
+    let neg_adjusted = negation_penalty(base_scores, negation_flags, neg_penalty);
+    return neg_adjusted * date_score * cat_score * importance;
+}

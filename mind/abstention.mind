@@ -1,0 +1,26 @@
+// Confidence gating: decide whether to abstain from answering
+import std.tensor;
+
+fn entity_overlap(
+    query_entities: tensor<f32[E]>,
+    doc_entities: tensor<f32[N, E]>
+) -> tensor<f32[N]> {
+    let q_broad = reshape(query_entities, [1, E]);
+    let overlap = doc_entities * q_broad;
+    return sum(overlap, [1]);
+}
+
+fn confidence_score(
+    bm25_scores: tensor<f32[N]>,
+    overlaps: tensor<f32[N]>,
+    score_weight: f32,
+    overlap_weight: f32
+) -> tensor<f32> {
+    let weighted_scores = bm25_scores * score_weight;
+    let weighted_overlap = overlaps * overlap_weight;
+    let combined = weighted_scores + weighted_overlap;
+    let total = sum_all(combined);
+    // Normalize by N (approximate via sum/max)
+    let max_possible = sum_all(bm25_scores) * score_weight + sum_all(overlaps) * overlap_weight;
+    return total / (max_possible + 1e-6);
+}

@@ -69,6 +69,11 @@ from block_parser import parse_file, get_active, get_by_id
 from recall import recall as recall_engine
 from sqlite_index import query_index as fts_query, _db_path as fts_db_path
 from observability import get_logger, metrics
+from mind_ffi import (
+    list_kernels as ffi_list_kernels, get_mind_dir,
+    load_all_kernels, load_kernel_config, load_all_kernel_configs,
+    is_available as mind_kernel_available,
+)
 
 _log = get_logger("mcp_server")
 
@@ -461,6 +466,279 @@ def rollback_proposal(receipt_ts: str) -> str:
         "receipt_ts": receipt_ts,
         "success": success,
         "log": log_output[-2000:] if len(log_output) > 2000 else log_output,
+    }, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# New Tools (7-12) — Hybrid, similarity, intent, stats, reindex, evolution
+# ---------------------------------------------------------------------------
+
+@mcp.tool
+def hybrid_search(query: str, limit: int = 10, active_only: bool = False) -> str:
+    """Full hybrid BM25+Vector recall with RRF fusion.
+
+    Falls back to BM25-only when vector backend is unavailable.
+
+    Args:
+        query: Search query.
+        limit: Maximum results (default: 10).
+        active_only: Only return active blocks.
+
+    Returns:
+        JSON array of ranked results from fused retrieval.
+    """
+    ws = _workspace()
+    limit = max(1, min(limit, 100))
+    try:
+        from hybrid_recall import HybridBackend
+        config_path = os.path.join(ws, "mind-mem.json")
+        config = {}
+        if os.path.isfile(config_path):
+            try:
+                with open(config_path) as f:
+                    config = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                pass
+        hb = HybridBackend.from_config(config)
+        results = hb.search(query, ws, limit=limit, active_only=active_only)
+        backend = "hybrid"
+    except (ImportError, Exception):
+        results = recall_engine(ws, query, limit=limit, active_only=active_only)
+        backend = "scan_fallback"
+    metrics.inc("mcp_hybrid_search_queries")
+    _log.info("mcp_hybrid_search", query=query, backend=backend, results=len(results))
+    return json.dumps(results, indent=2, default=str)
+
+
+@mcp.tool
+def find_similar(block_id: str, limit: int = 5) -> str:
+    """Find blocks similar to a given block using vector similarity.
+
+    Requires vector backend (sentence-transformers). Falls back gracefully.
+
+    Args:
+        block_id: Source block ID to find similar blocks for.
+        limit: Maximum similar blocks to return (default: 5).
+
+    Returns:
+        JSON array of similar blocks with similarity scores.
+    """
+    ws = _workspace()
+    limit = max(1, min(limit, 50))
+    try:
+        from block_metadata import BlockMetadataManager
+        db_path = os.path.join(ws, "memory", "block_meta.db")
+        mgr = BlockMetadataManager(db_path)
+        co_blocks = mgr.get_co_occurring_blocks(block_id, limit=limit)
+        metrics.inc("mcp_find_similar_queries")
+        return json.dumps({
+            "source": block_id,
+            "similar": co_blocks,
+            "method": "co-occurrence",
+        }, indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e), "block_id": block_id}, indent=2)
+
+
+@mcp.tool
+def intent_classify(query: str) -> str:
+    """Show the routing strategy for a query.
+
+    Classifies query intent into one of 9 types (WHY, WHEN, ENTITY, WHAT,
+    HOW, LIST, VERIFY, COMPARE, TRACE) and returns retrieval parameters.
+
+    Args:
+        query: The query to classify.
+
+    Returns:
+        JSON with intent type, confidence, sub-intents, and parameters.
+    """
+    try:
+        from intent_router import IntentRouter
+        router = IntentRouter()
+        result = router.classify(query)
+        metrics.inc("mcp_intent_classify")
+        return json.dumps({
+            "query": query,
+            "intent": result.intent,
+            "confidence": result.confidence,
+            "sub_intents": result.sub_intents,
+            "params": result.params,
+        }, indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e), "query": query}, indent=2)
+
+
+@mcp.tool
+def index_stats() -> str:
+    """Block counts, index staleness, vector coverage, and MIND kernel status.
+
+    Returns:
+        JSON with workspace statistics.
+    """
+    ws = _workspace()
+    stats = {"workspace": ws}
+
+    # Count blocks by type
+    for kind in ["decisions", "tasks", "entities"]:
+        d = os.path.join(ws, kind)
+        if os.path.isdir(d):
+            count = 0
+            for fn in os.listdir(d):
+                if fn.endswith(".md"):
+                    try:
+                        blocks = parse_file(os.path.join(d, fn))
+                        count += len(blocks)
+                    except Exception:
+                        pass
+            stats[f"{kind}_blocks"] = count
+
+    # FTS index status
+    db = fts_db_path(ws)
+    stats["fts_index_exists"] = os.path.isfile(db) if db else False
+
+    # MIND kernel status
+    mind_dir = get_mind_dir(ws)
+    kernels = ffi_list_kernels(mind_dir)
+    stats["mind_kernels"] = kernels
+    stats["mind_kernel_compiled"] = mind_kernel_available()
+
+    metrics.inc("mcp_index_stats")
+    _log.info("mcp_index_stats", stats=stats)
+    return json.dumps(stats, indent=2)
+
+
+@mcp.tool
+def reindex(include_vectors: bool = False) -> str:
+    """Trigger FTS index rebuild, optionally with vector indexing.
+
+    Args:
+        include_vectors: Also rebuild vector index (requires sentence-transformers).
+
+    Returns:
+        JSON with reindex results.
+    """
+    ws = _workspace()
+    results = {"workspace": ws, "fts": False, "vectors": False}
+
+    try:
+        from sqlite_index import build_index
+        build_index(ws)
+        results["fts"] = True
+    except Exception as e:
+        results["fts_error"] = str(e)
+
+    if include_vectors:
+        try:
+            from recall_vector import rebuild_index
+            rebuild_index(ws)
+            results["vectors"] = True
+        except (ImportError, Exception) as e:
+            results["vectors_error"] = str(e)
+
+    metrics.inc("mcp_reindex")
+    _log.info("mcp_reindex", results=results)
+    return json.dumps(results, indent=2)
+
+
+@mcp.tool
+def memory_evolution(block_id: str, action: str = "get") -> str:
+    """A-MEM metadata for a block — importance, access patterns, keywords.
+
+    Args:
+        block_id: The block ID (e.g., "D-20260213-001").
+        action: "get" to read metadata, "update" to recompute importance.
+
+    Returns:
+        JSON with block importance, access_count, keywords, connections.
+    """
+    ws = _workspace()
+    db_path = os.path.join(ws, "memory", "block_meta.db")
+
+    try:
+        from block_metadata import BlockMetadataManager
+        mgr = BlockMetadataManager(db_path)
+
+        if action == "update":
+            importance = mgr.update_importance(block_id)
+            metrics.inc("mcp_evolution_updates")
+            return json.dumps({
+                "block_id": block_id,
+                "action": "updated",
+                "importance": round(importance, 4),
+            }, indent=2)
+        else:
+            importance = mgr.get_importance_boost(block_id)
+            co_blocks = mgr.get_co_occurring_blocks(block_id)
+            metrics.inc("mcp_evolution_reads")
+            return json.dumps({
+                "block_id": block_id,
+                "importance": round(importance, 4),
+                "co_occurring_blocks": co_blocks,
+            }, indent=2)
+
+    except Exception as e:
+        return json.dumps({"error": str(e), "block_id": block_id}, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Kernel config tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool
+def list_mind_kernels() -> str:
+    """List available .mind kernel configuration files.
+
+    Kernels define tuning parameters for recall, reranking, RM3 expansion,
+    and other pipeline components.
+
+    Returns:
+        JSON array of kernel names with their sections and parameters.
+    """
+    ws = _workspace()
+    mind_dir = get_mind_dir(ws)
+    all_cfgs = load_all_kernel_configs(mind_dir)
+
+    result = []
+    for name, cfg in sorted(all_cfgs.items()):
+        result.append({
+            "name": name,
+            "sections": list(cfg.keys()),
+            "path": os.path.join(mind_dir, f"{name}.mind"),
+        })
+
+    metrics.inc("mcp_kernel_list")
+    _log.info("mcp_list_kernels", count=len(result), mind_dir=mind_dir)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool
+def get_mind_kernel(name: str) -> str:
+    """Read a specific .mind kernel configuration as structured JSON.
+
+    Parses the INI-style [section] / key = value format.
+
+    Args:
+        name: Kernel name (e.g., "recall", "rm3", "rerank", "temporal",
+              "adversarial", "hybrid").
+
+    Returns:
+        JSON with the full kernel configuration, or error if not found.
+    """
+    ws = _workspace()
+    mind_dir = get_mind_dir(ws)
+    path = os.path.join(mind_dir, f"{name}.mind")
+
+    cfg = load_kernel_config(path)
+    if not cfg:
+        return json.dumps({"error": f"Kernel '{name}' not found at {path}"})
+
+    metrics.inc("mcp_kernel_reads")
+    _log.info("mcp_get_kernel", name=name, sections=list(cfg.keys()))
+    return json.dumps({
+        "name": name,
+        "path": path,
+        "config": cfg,
     }, indent=2)
 
 

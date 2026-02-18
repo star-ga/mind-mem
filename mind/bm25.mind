@@ -1,0 +1,65 @@
+// BM25F scoring kernel with field boosts and length normalization
+// Compiled: mindc mind/bm25.mind --emit=shared -o lib/libbm25.so
+import std.tensor;
+
+fn bm25f_doc(
+    tf: tensor<f32[F, T]>,
+    idf: tensor<f32[T]>,
+    boosts: tensor<f32[F]>,
+    field_lens: tensor<f32[F]>,
+    avg_lens: tensor<f32[F]>,
+    k1: f32,
+    b: f32
+) -> tensor<f32> {
+    let norm = 1.0 - b + b * (field_lens / avg_lens);
+    let norm_broad = reshape(norm, [F, 1]);
+    let numerator = tf * (k1 + 1.0);
+    let denominator = tf + k1 * norm_broad;
+    let saturated = numerator / denominator;
+    let idf_broad = reshape(idf, [1, T]);
+    let scored = saturated * idf_broad;
+    let per_field = sum(scored, [1]);
+    let boosted = per_field * boosts;
+    return sum_all(boosted);
+}
+
+fn bm25f_batch(
+    tfs: tensor<f32[N, F, T]>,
+    idf: tensor<f32[T]>,
+    boosts: tensor<f32[F]>,
+    all_lens: tensor<f32[N, F]>,
+    avg_lens: tensor<f32[F]>,
+    k1: f32,
+    b: f32
+) -> tensor<f32[N]> {
+    let avg_broad = reshape(avg_lens, [1, F]);
+    let norm = 1.0 - b + b * (all_lens / avg_broad);
+    let norm_broad = reshape(norm, [N, F, 1]);
+    let numer = tfs * (k1 + 1.0);
+    let denom = tfs + k1 * norm_broad;
+    let saturated = numer / denom;
+    let idf_broad = reshape(idf, [1, 1, T]);
+    let scored = saturated * idf_broad;
+    let per_field = sum(scored, [2]);
+    let boosted = per_field * reshape(boosts, [1, F]);
+    return sum(boosted, [1]);
+}
+
+fn apply_recency(
+    scores: tensor<f32[N]>,
+    ages_days: tensor<f32[N]>,
+    lambda: f32
+) -> tensor<f32[N]> {
+    let decay = exp(lambda * ages_days * -1.0);
+    return scores * decay;
+}
+
+fn apply_graph_boost(
+    scores: tensor<f32[N]>,
+    adjacency: tensor<f32[N, N]>,
+    alpha: f32
+) -> tensor<f32[N]> {
+    let neighbor_scores = matmul(adjacency, reshape(scores, [N, 1]));
+    let flat = reshape(neighbor_scores, [N]);
+    return scores + alpha * flat;
+}
