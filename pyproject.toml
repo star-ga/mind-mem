@@ -1,14 +1,14 @@
 [project]
 name = "mind-mem"
 version = "1.0.0"
-description = "Memory for AI agents. Intelligence, compiled."
+description = "Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
     { name = "STARGA Inc", email = "noreply@star.ga" }
 ]
-keywords = ["memory", "ai-agent", "mind", "recall", "intelligence", "hybrid-search", "rrf", "governance"]
+keywords = ["memory", "ai-agent", "mind", "recall", "mcp", "claude-code", "openclaw", "hybrid-search", "rrf", "governance"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
