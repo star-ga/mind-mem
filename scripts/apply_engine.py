@@ -198,11 +198,16 @@ def validate_proposal(proposal):
 def check_preconditions(ws):
     """Run validate.sh and intel_scan.py. Returns (ok, report)."""
     report = []
+    # Use scripts from our own installation directory, not from the workspace
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # P2: validate.sh
+    # P2: validate.sh (from installation, not workspace)
+    validate_sh = os.path.join(_script_dir, "validate.sh")
+    if not os.path.isfile(validate_sh):
+        validate_sh = os.path.join(ws, "maintenance/validate.sh")
     try:
         result = subprocess.run(
-            ["bash", os.path.join(ws, "maintenance/validate.sh"), ws],
+            ["bash", validate_sh, ws],
             capture_output=True, text=True, timeout=60
         )
         # Find the TOTAL line (contains "issues")
@@ -220,10 +225,13 @@ def check_preconditions(ws):
         report.append(f"validate: ERROR ({e})")
         return False, report
 
-    # P3: intel_scan.py
+    # P3: intel_scan.py (from installation, not workspace)
+    intel_scan = os.path.join(_script_dir, "intel_scan.py")
+    if not os.path.isfile(intel_scan):
+        intel_scan = os.path.join(ws, "maintenance/intel_scan.py")
     try:
         result = subprocess.run(
-            ["python3", os.path.join(ws, "maintenance/intel_scan.py"), ws],
+            ["python3", intel_scan, ws],
             capture_output=True, text=True, timeout=60
         )
         # Find the TOTAL line
@@ -277,7 +285,10 @@ def create_snapshot(ws, ts, files_touched=None):
     if files_touched:
         # Minimal snapshot: only snapshot files the proposal will modify
         for rel_path in files_touched:
-            src = os.path.join(ws, rel_path)
+            resolved = os.path.normpath(os.path.join(ws, rel_path))
+            if not resolved.startswith(ws + os.sep) and resolved != ws:
+                continue  # skip paths that escape workspace
+            src = resolved
             if os.path.isfile(src):
                 _safe_copy(src, os.path.join(snap_dir, rel_path))
         # Always snapshot config files (needed for rollback integrity)
