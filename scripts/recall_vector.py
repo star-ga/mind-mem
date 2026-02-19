@@ -83,11 +83,21 @@ class VectorBackend(RecallBackend):
         Raises:
             ImportError: If sentence-transformers is not installed
         """
+        # Validate config types to prevent injection from malformed mind-mem.json
+        if not isinstance(config, dict):
+            _log.warning("vector_config_invalid", reason="config is not a dict")
+            config = {}
+        _VALID_KEYS = {"backend", "provider", "model", "index_path", "dimension", "top_k"}
+        unknown = set(config.keys()) - _VALID_KEYS
+        if unknown:
+            _log.warning("vector_config_unknown_keys", keys=list(unknown))
+
         self.config = config
-        self.provider = config.get("provider", "local")
-        self.model_name = config.get("model", "all-MiniLM-L6-v2")
-        self.index_path = config.get("index_path", ".mind-mem-vectors")
-        self.dimension = config.get("dimension")
+        self.provider = str(config.get("provider", "local"))
+        self.model_name = str(config.get("model", "all-MiniLM-L6-v2"))
+        self.index_path = str(config.get("index_path", ".mind-mem-vectors"))
+        dim = config.get("dimension")
+        self.dimension = int(dim) if dim is not None else None
 
         # Lazy load embedding model
         self._model = None

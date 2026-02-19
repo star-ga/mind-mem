@@ -501,15 +501,19 @@ def query_index(
             (fts_query, max(retrieve_wide_k, limit)),
         ).fetchall()
     except sqlite3.OperationalError as e:
-        _log.warning("fts_query_error", error=str(e), query=fts_query)
+        _log.warning("fts_query_error_fallback", error=str(e), query=fts_query,
+                      msg="FTS5 query failed, falling back to in-memory BM25 scan")
         conn.close()
-        # Fallback to filesystem scan
+        # Fallback to filesystem scan — results are still valid but may be slower
         from recall import recall
-        return recall(
+        fallback_results = recall(
             workspace, query, limit=limit, active_only=active_only,
             graph_boost=graph_boost, retrieve_wide_k=retrieve_wide_k,
             rerank=rerank, rerank_debug=rerank_debug,
         )
+        for r in fallback_results:
+            r["_fallback"] = "bm25_scan"
+        return fallback_results
 
     results = []
     for row in rows:
@@ -562,8 +566,8 @@ def query_index(
 
     conn.close()
 
-    # Sort by score
-    results.sort(key=lambda r: r["score"], reverse=True)
+    # Sort by score, then by block ID for deterministic tiebreaking
+    results.sort(key=lambda r: (-r["score"], r.get("_id", "")))
 
     # Dedup
     seen_keys = set()
@@ -618,6 +622,11 @@ def _apply_graph_boost(
         seed_ids = list(result_ids) if hop == 0 else [
             nid for nid in neighbor_scores if nid not in result_ids
         ]
+        if not seed_ids:
+            break
+
+        # Sanitize: only allow string IDs matching block ID format
+        seed_ids = [sid for sid in seed_ids if isinstance(sid, str) and len(sid) < 100]
         if not seed_ids:
             break
 
