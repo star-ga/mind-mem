@@ -8,3 +8,5 @@ benchmarks/*results*.json*
 lib/*.so
 lib/*.dylib
 lib/*.o
+eval-results*.json
+PDR-*.md

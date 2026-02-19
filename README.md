@@ -539,10 +539,7 @@ your-workspace/
 | [**MemU**](https://github.com/supermemory/memu) | Hierarchical 3-layer memory, multimodal ingestion, LLM-based retrieval | Requires LLM for extraction and retrieval, no hybrid search |
 | **mind-mem** | Integrity + governance + zero deps + hybrid search + MIND kernels + 16 MCP tools | Lexical recall by default (vector/CE optional) |
 
-<details>
-<summary><strong>Full Feature Matrix</strong> — 30 features across 11 tools (click to expand)</summary>
-
-&nbsp;
+### Full Feature Matrix
 
 Compared against every major memory solution for AI agents (as of 2026):
 
@@ -588,8 +585,6 @@ Compared against every major memory solution for AI agents (as of 2026):
 | Git-friendly    |                   —                    |                   —                   |                            —                            |              Part              |               —               |                      —                      |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
 | MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **16 tools**   |
 | MIND kernels    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **16 source**  |
-
-</details>
 
 ### The Gap mind-mem Fills
 
