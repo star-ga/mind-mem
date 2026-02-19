@@ -1,6 +1,6 @@
 # Migration Guide: mem-os to mind-mem
 
-This guide covers migrating from `mem-os` (archived at `star-ga/mem-os`) to its successor `mind-mem` (`star-ga/mind-mem`, v1.0.2+). The workspace data format is compatible -- no data loss occurs during migration.
+This guide covers migrating from `mem-os` (archived at `star-ga/mem-os`) to its successor `mind-mem` (`star-ga/mind-mem`, v1.0.3+). The workspace data format is compatible -- no data loss occurs during migration.
 
 **Requirements:** Python 3.10+, FastMCP 2.0+ (for MCP server).
 
@@ -64,7 +64,7 @@ mv mem-os.json mind-mem.json
 
 ### New Config Keys
 
-mind-mem v1.0.2 adds two optional top-level keys not present in mem-os:
+mind-mem v1.0.3 adds two optional top-level keys not present in mem-os:
 
 ```json
 {
@@ -230,7 +230,7 @@ Update any client code or tool configurations that reference these URIs.
 
 ---
 
-## 7. New Features in mind-mem v1.0.2
+## 7. New Features in mind-mem v1.0.3
 
 These features are new in mind-mem and were not available in mem-os:
 
@@ -266,7 +266,7 @@ No existing workspace data is deleted or reformatted. All memory blocks, decisio
 
 ---
 
-## 9. Hook Migration (OpenClaw / naestro-bot)
+## 9. Hook Migration (OpenClaw)
 
 If you use mem-os hooks with OpenClaw, update the hook path:
 

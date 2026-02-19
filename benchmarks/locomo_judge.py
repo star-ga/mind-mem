@@ -17,7 +17,7 @@ Usage:
 Environment:
     MISTRAL_API_KEY — Required for Mistral models (default)
     OPENAI_API_KEY — Required for OpenAI models
-    Keys auto-loaded from ~/.claude-ultimate/.env if present
+    Keys auto-loaded from ~/.env if present
 
 Reference: Mem0 eval, Letta blog (Aug 2025), memobase LoCoMo fork.
 """
@@ -29,8 +29,8 @@ import json
 import os
 import sys
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 
 # Add scripts/ and benchmarks/ to path
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -53,7 +53,8 @@ def _load_heavy_imports():
     """Load recall engine and harness modules. Called only in subprocess mode."""
     global recall, download_dataset, build_workspace, _parse_sessions, CATEGORY_NAMES, detect_query_type
 
-    from recall import recall as _recall, detect_query_type as _dqt  # noqa: E402
+    from recall import detect_query_type as _dqt
+    from recall import recall as _recall  # noqa: E402
     recall = _recall
 
     detect_query_type = _dqt
@@ -65,11 +66,17 @@ def _load_heavy_imports():
         if _name.startswith("mind-mem."):
             _logging.getLogger(_name).handlers.clear()
 
+    from locomo_harness import (
+        CATEGORY_NAMES as _cn,
+    )
+    from locomo_harness import (
+        _parse_sessions as _ps,
+    )
+    from locomo_harness import (
+        build_workspace as _bw,
+    )
     from locomo_harness import (  # noqa: E402
         download_dataset as _dd,
-        build_workspace as _bw,
-        _parse_sessions as _ps,
-        CATEGORY_NAMES as _cn,
     )
     download_dataset = _dd
     build_workspace = _bw
@@ -81,12 +88,12 @@ def _load_heavy_imports():
 # ---------------------------------------------------------------------------
 
 def _load_env():
-    """Load API keys from ~/.claude-ultimate/.env if not already set."""
+    """Load API keys from environment .env file if not already set."""
     _ALLOWED_ENV_KEYS = {
         "MISTRAL_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
         "XAI_API_KEY", "DEEPSEEK_API_KEY", "PERPLEXITY_API_KEY",
     }
-    env_path = os.path.expanduser("~/.claude-ultimate/.env")
+    env_path = os.path.expanduser("~/.env")
     if os.path.isfile(env_path):
         with open(env_path, "r") as f:
             for line in f:
@@ -429,7 +436,7 @@ def evaluate_sample_with_judge(
         retrieved = recall(workspace, question, limit=top_k, active_only=False)
 
         # Step 2: Build context via mind-mem evidence packer (structured for ALL types)
-        from evidence_packer import pack_evidence, is_true_adversarial
+        from evidence_packer import is_true_adversarial, pack_evidence
 
         # Detect query type for packing strategy
         detected_type = "adversarial" if is_adversarial else detect_query_type(question)
@@ -652,8 +659,8 @@ def _run_single_conv(conv_index: int, args) -> None:
     Called either directly (--single-conv) or via subprocess from orchestrator.
     Loads only the needed conversation, processes it, writes JSONL, exits.
     """
-    import tempfile
     import shutil
+    import tempfile
 
     _load_heavy_imports()
     dataset = download_dataset()

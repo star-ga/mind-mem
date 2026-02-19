@@ -454,7 +454,7 @@ Request:
 Response:
 ```json
 {
-  "workspace": "/home/n/.openclaw/workspace",
+  "workspace": "/path/to/workspace",
   "checks": {
     "decisions": {
       "total": 24,
@@ -786,7 +786,7 @@ Request:
 Response:
 ```json
 {
-  "workspace": "/home/n/.openclaw/workspace",
+  "workspace": "/path/to/workspace",
   "decisions_blocks": 24,
   "tasks_blocks": 8,
   "entities_blocks": 15,
@@ -845,7 +845,7 @@ Request:
 Response:
 ```json
 {
-  "workspace": "/home/n/.openclaw/workspace",
+  "workspace": "/path/to/workspace",
   "fts": true,
   "vectors": true,
   "categories": 10
@@ -973,12 +973,12 @@ Response:
   {
     "name": "recall",
     "sections": ["bm25", "stemmer", "stopwords"],
-    "path": "/home/n/.openclaw/workspace/mind/recall.mind"
+    "path": "/path/to/workspace/mind/recall.mind"
   },
   {
     "name": "rerank",
     "sections": ["weights", "features"],
-    "path": "/home/n/.openclaw/workspace/mind/rerank.mind"
+    "path": "/path/to/workspace/mind/rerank.mind"
   }
 ]
 ```
@@ -1042,7 +1042,7 @@ Response:
 ```json
 {
   "name": "recall",
-  "path": "/home/n/.openclaw/workspace/mind/recall.mind",
+  "path": "/path/to/workspace/mind/recall.mind",
   "config": {
     "bm25": {
       "k1": "1.2",
