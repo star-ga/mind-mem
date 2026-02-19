@@ -328,17 +328,21 @@ class TestMCPEdgeCases(unittest.TestCase):
         self.assertIsInstance(parsed, dict)
 
     def test_recall_with_empty_query(self):
-        """MCP recall tool with empty query should return empty results."""
+        """MCP recall tool with empty query should return envelope with empty results."""
         result = self._call_tool(self.mod.recall, query="")
         parsed = json.loads(result)
-        self.assertIsInstance(parsed, list)
-        self.assertEqual(len(parsed), 0)
+        self.assertIsInstance(parsed, dict)
+        self.assertIn("results", parsed)
+        self.assertEqual(len(parsed["results"]), 0)
+        self.assertIn("_schema_version", parsed)
+        self.assertEqual(parsed["_schema_version"], "1.0")
 
     def test_recall_with_special_characters(self):
         """MCP recall with regex special chars should not crash."""
         result = self._call_tool(self.mod.recall, query="[test](.*)")
         parsed = json.loads(result)
-        self.assertIsInstance(parsed, list)
+        self.assertIsInstance(parsed, dict)
+        self.assertIn("results", parsed)
 
     def test_scan_on_minimal_workspace(self):
         """scan tool should work on a minimal workspace."""
