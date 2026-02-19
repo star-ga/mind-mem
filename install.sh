@@ -279,7 +279,11 @@ PYEOF
     warn "OpenClaw config not found at $oc_config (create it or install OpenClaw first)"
   fi
 
-  ok "OpenClaw hooks installed"
+  # Also configure ~/.claude/mcp.json — OpenClaw spawns Claude CLI which reads it
+  info "OpenClaw: configuring MCP server (Claude CLI used by OpenClaw reads ~/.claude/mcp.json)"
+  install_claude_code "$ws"
+
+  ok "OpenClaw hooks + MCP configured"
 }
 
 install_claude_code_hooks() {
