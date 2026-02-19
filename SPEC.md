@@ -352,7 +352,7 @@ This specification follows semantic versioning:
 - **Minor**: New optional fields or capabilities
 - **Patch**: Clarifications or corrections
 
-Current version: **1.0.3**
+Current version: **1.0.5**
 
 ---
 

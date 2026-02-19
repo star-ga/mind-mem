@@ -1,6 +1,6 @@
 # mind-mem Architecture
 
-Version 1.0.3 | February 2026
+Version 1.0.5 | February 2026
 
 ---
 
@@ -653,7 +653,7 @@ Semantic recall using sentence-transformers embeddings.
 |------------|--------------------------------|---------------------------------|
 | `local`    | `sentence-transformers`        | Local JSON index (default)      |
 | `qdrant`   | `qdrant-client`                | Qdrant vector database          |
-| `pinecone` | `pinecone-client`              | Pinecone cloud vector database  |
+| `pinecone` | `pinecone` (v3+)               | Pinecone cloud vector database  |
 
 Default model: `all-MiniLM-L6-v2`. ONNX backend available for faster
 CPU inference when `onnx_backend: true` in config.
@@ -871,7 +871,7 @@ its `write` list.
 
 ```json
 {
-  "version": "1.0.3",
+  "version": "1.0.5",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,

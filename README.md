@@ -886,13 +886,13 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 ```json
 {
-  "version": "1.0.0",
+  "version": "1.0.5",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,
   "governance_mode": "detect_only",
   "recall": {
-    "backend": "scan",
+    "backend": "bm25",
     "rrf_k": 60,
     "bm25_weight": 1.0,
     "vector_weight": 1.0,
@@ -917,7 +917,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 | Key                             | Default              | Description                                                  |
 | ------------------------------- | -------------------- | ------------------------------------------------------------ |
-| `version`                       | `"1.0.0"`            | Config schema version                                        |
+| `version`                       | `"1.0.5"`            | Config schema version                                        |
 | `auto_capture`                  | `true`               | Run capture engine on session end                            |
 | `auto_recall`                   | `true`               | Show recall context on session start                         |
 | `governance_mode`               | `"detect_only"`      | Governance mode (`detect_only`, `propose`, `enforce`)        |
