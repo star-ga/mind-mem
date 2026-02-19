@@ -262,8 +262,10 @@ class HybridBackend:
             db = _db_path(workspace)
             if os.path.isfile(db):
                 return query_index(workspace, query, limit=limit, **kwargs)
-        except (ImportError, Exception) as exc:
-            _log.debug("sqlite_index_fallback", error=str(exc))
+        except ImportError:
+            _log.debug("sqlite_index_not_available")
+        except Exception as exc:
+            _log.warning("sqlite_index_fallback", error=str(exc))
 
         try:
             from recall import recall
