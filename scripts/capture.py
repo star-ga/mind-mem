@@ -275,7 +275,8 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
                 if st.get("tags"):
                     f.write(f"Tags: {', '.join(st['tags'])}\n")
 
-                f.write(f"Action: Review and formalize as {'D-' if sig['type'] == 'decision' else 'T-'} block if warranted\n")
+                prefix = 'D-' if sig['type'] == 'decision' else 'T-'
+                f.write(f"Action: Review and formalize as {prefix} block if warranted\n")
                 f.write("\n---\n")
                 counter += 1
 

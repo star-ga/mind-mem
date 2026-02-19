@@ -79,7 +79,10 @@ class Validator:
 
         self.log("")
         self.log("=" * 43)
-        self.log(f"TOTAL: {self.checks} checks | {self.passed} passed | {self.issues} issues | {self.warnings} warnings")
+        self.log(
+            f"TOTAL: {self.checks} checks | {self.passed} passed"
+            f" | {self.issues} issues | {self.warnings} warnings"
+        )
         self.log("=" * 43)
 
         report = "\n".join(self.lines)

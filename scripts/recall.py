@@ -1353,7 +1353,11 @@ def rerank_hits(
             # Also check for date patterns (YYYY-MM-DD, "Month Day", etc.)
             if re.search(r"\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b", excerpt):
                 time_overlap = max(time_overlap, 0.5)
-            if re.search(r"\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}\b", excerpt, re.IGNORECASE):
+            month_pat = (
+                r"\b(?:January|February|March|April|May|June|July|August"
+                r"|September|October|November|December)\s+\d{1,2}\b"
+            )
+            if re.search(month_pat, excerpt, re.IGNORECASE):
                 time_overlap = max(time_overlap, 0.8)
             # Plan-intent boost
             if plan_intent and re.search(r"\b(plan|going|trip|visit|travel|vacation)\b", excerpt_lower):
@@ -1702,7 +1706,12 @@ def context_pack(
     return augmented
 
 
-def recall(workspace: str, query: str, limit: int = 10, active_only: bool = False, graph_boost: bool = False, agent_id: str | None = None, retrieve_wide_k: int = 200, rerank: bool = True, rerank_debug: bool = False) -> list[dict]:
+def recall(
+    workspace: str, query: str, limit: int = 10, active_only: bool = False,
+    graph_boost: bool = False, agent_id: str | None = None,
+    retrieve_wide_k: int = 200, rerank: bool = True,
+    rerank_debug: bool = False,
+) -> list[dict]:
     """Search across all memory files using BM25 scoring. Returns ranked results.
 
     Args:
@@ -2557,7 +2566,13 @@ def main():
                 rerank_tag = ""
                 if args.rerank_debug and "_rerank_features" in r:
                     feats = r["_rerank_features"]
-                    rerank_tag = f" [rerank: ent={feats['entity_overlap']:.2f} time={feats['time_overlap']:.2f} bi={feats['bigram_bonus']:.2f} rec={feats['recency_bonus']:.2f} spk={feats['speaker_bonus']:.2f}]"
+                    rerank_tag = (
+                        f" [rerank: ent={feats['entity_overlap']:.2f}"
+                        f" time={feats['time_overlap']:.2f}"
+                        f" bi={feats['bigram_bonus']:.2f}"
+                        f" rec={feats['recency_bonus']:.2f}"
+                        f" spk={feats['speaker_bonus']:.2f}]"
+                    )
                 print(f"[{r['score']:.3f}] {r['_id']} ({r['type']}{graph_tag}) — {r['excerpt'][:80]}{rerank_tag}")
                 print(f"        {r['file']}:{r['line']}")
 

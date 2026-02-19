@@ -185,7 +185,10 @@ def validate_proposal(proposal):
     if stored_fp and ops:
         computed_fp = compute_fingerprint(proposal)
         if computed_fp != stored_fp:
-            errors.append(f"Fingerprint mismatch: stored={stored_fp}, computed={computed_fp} (proposal may have been tampered)")
+            errors.append(
+                f"Fingerprint mismatch: stored={stored_fp}, computed={computed_fp}"
+                " (proposal may have been tampered)"
+            )
 
     return errors
 
@@ -409,7 +412,9 @@ def write_receipt(snap_dir, proposal, ts, pre_checks, status="in_progress"):
     lines.append("PreChecks:")
     for c in pre_checks:
         lines.append(f"- {c}")
-    lines.append(f"RollbackPlan: {proposal.get('Rollback', ['?'])[0] if isinstance(proposal.get('Rollback'), list) else proposal.get('Rollback', '?')}")
+    rb = proposal.get('Rollback', '?')
+    rb_val = rb[0] if isinstance(rb, list) else rb
+    lines.append(f"RollbackPlan: {rb_val}")
     lines.append(f"Status: {status}")
     lines.append("")
 
@@ -711,7 +716,10 @@ def _op_supersede_decision(filepath, op):
     sigs = old.get("ConstraintSignatures", [])
     has_invariant = any(s.get("enforcement") == "invariant" for s in sigs)
     if has_invariant:
-        return False, f"supersede_decision: {target} has invariant enforcement (manual edit required — invariants cannot be modified by automation)"
+        return False, (
+            f"supersede_decision: {target} has invariant enforcement"
+            " (manual edit required — invariants cannot be modified by automation)"
+        )
 
     # Step 1: Mark old decision as superseded
     ok, msg = _op_update_field(filepath, {"target": target, "field": "Status", "value": "superseded"})
@@ -835,7 +843,11 @@ def check_deferred_cooldown(ws, proposal):
                 try:
                     created_dt = datetime.fromisoformat(created)
                     if created_dt > cutoff:
-                        return False, f"Target {target} has {b.get('Status')} proposal {b.get('ProposalId')} within {cooldown_days}d cooldown"
+                        pid = b.get('ProposalId')
+                        return False, (
+                            f"Target {target} has {b.get('Status')} proposal"
+                            f" {pid} within {cooldown_days}d cooldown"
+                        )
                 except (ValueError, TypeError):
                     pass
     return True, "No cooldown conflict"
