@@ -122,7 +122,7 @@ Four-signal reranking pipeline: negation awareness (penalizes contradicting resu
 Drop-in ms-marco-MiniLM-L-6-v2 cross-encoder (80MB). Blends 0.6 * CE + 0.4 * original score. Falls back gracefully when unavailable. Enabled via config.
 
 ### MIND Kernels (Optional, Native Speed)
-6 compiled MIND kernels for BM25F scoring, RRF fusion, reranking, abstention, ranking, and importance scoring. Compiles to native `.so` via the [MIND compiler](https://mindlang.dev). Pure Python fallback always available — no functionality is lost without compilation.
+7 compiled MIND kernels for BM25F scoring, RRF fusion, reranking, abstention, ranking, importance, and category scoring. Compiles to native `.so` via the [MIND compiler](https://mindlang.dev). Pure Python fallback always available — no functionality is lost without compilation.
 
 ### BM25F Hybrid Recall
 BM25F field-weighted scoring (k1=1.2, b=0.75) with per-field weighting (Statement: 3x, Title: 2.5x, Name: 2x, Summary: 1.5x), Porter stemming, bigram phrase matching (25% boost per hit), overlapping sentence chunking (3-sentence windows with 1-sentence overlap), domain-aware query expansion, and optional 2-hop graph-based cross-reference neighbor boosting. Zero dependencies. Fast and deterministic.
@@ -169,11 +169,11 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 ### Transcript JSONL Capture
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
-### MCP Server (14 tools, 8 resources)
-Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 14 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
+### MCP Server (16 tools, 8 resources)
+Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 16 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
 
 ### 74+ Structural Checks + 676 Unit Tests
-`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 676 pytest unit tests covering all core modules.
+`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 729 pytest unit tests covering all core modules.
 
 ### Audit Trail
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
@@ -405,17 +405,27 @@ TOTAL: 0 critical | 0 warnings | 16 info
 
 ```
 your-workspace/
-├── mcp_server.py            # MCP server (FastMCP, 14 tools, 8 resources)
+├── mcp_server.py            # MCP server (FastMCP, 16 tools, 8 resources)
 ├── mind-mem.json             # Config
 ├── MEMORY.md                # Protocol rules
 │
-├── mind/                    # MIND source files (.mind)
+├── mind/                    # 16 MIND source files (.mind)
 │   ├── bm25.mind           # BM25F scoring kernel
 │   ├── rrf.mind            # Reciprocal Rank Fusion kernel
 │   ├── reranker.mind        # Deterministic reranking
 │   ├── abstention.mind      # Confidence gating
 │   ├── ranking.mind         # Evidence ranking
-│   └── importance.mind      # A-MEM importance scoring
+│   ├── importance.mind      # A-MEM importance scoring
+│   ├── category.mind        # Category relevance scoring
+│   ├── recall.mind          # Combined recall scoring
+│   ├── hybrid.mind          # BM25 + vector hybrid fusion
+│   ├── rm3.mind             # RM3 pseudo-relevance feedback
+│   ├── rerank.mind          # Score combination pipeline
+│   ├── adversarial.mind     # Adversarial query detection
+│   ├── temporal.mind        # Time-aware scoring
+│   ├── prefetch.mind        # Context pre-assembly
+│   ├── intent.mind          # Intent classification
+│   └── cross_encoder.mind   # Cross-encoder blending
 │
 ├── lib/                     # Compiled MIND kernels (optional)
 │   └── libmindmem.so       # mindc output — not required for operation
@@ -565,7 +575,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | GPU required    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                    **4.5GB**                    |                      No                      |     **No**     |
 | Git-friendly    |                   —                    |                   —                   |                            —                            |              Part              |               —               |                      —                      |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
 | MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **16 tools**   |
-| MIND kernels    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **9 kernels**  |
+| MIND kernels    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **16 source**  |
 
 </details>
 
@@ -657,7 +667,7 @@ Supports ONNX inference (local, no server) or cloud embeddings. Falls back to BM
 
 ## MIND Kernels
 
-mind-mem includes 14 `.mind` kernel source files — numerical hot paths written in the [MIND programming language](https://mindlang.dev). The MIND kernel is **optional**. mind-mem works identically without it (pure Python fallback). With it, scoring runs at native speed with compile-time tensor shape verification.
+mind-mem includes 16 `.mind` kernel source files — numerical hot paths written in the [MIND programming language](https://mindlang.dev). The MIND kernel is **optional**. mind-mem works identically without it (pure Python fallback). With it, scoring runs at native speed with compile-time tensor shape verification.
 
 ### Compilation
 
@@ -689,6 +699,8 @@ mindc mind/bm25.mind --emit=shared -o lib/libbm25.so
 | `rm3.mind`         | `rm3_weight`                                                                         | RM3 pseudo-relevance feedback        |
 | `adversarial.mind` | `adversarial_gate`                                                                   | Adversarial query detection          |
 | `temporal.mind`    | `temporal_decay`                                                                     | Time-aware scoring                   |
+| `intent.mind`      | `intent_params`                                                                      | Intent classification parameters     |
+| `cross_encoder.mind` | `ce_blend`                                                                         | Cross-encoder blending configuration |
 
 ### Performance
 
@@ -1012,7 +1024,7 @@ MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py --transport http --p
 | `mind-mem://recall/{query}`  | BM25 recall search results                    |
 | `mind-mem://ledger`          | Shared fact ledger (multi-agent)              |
 
-### Tools (14 total)
+### Tools (16)
 
 | Tool                  | Description                                                    |
 | --------------------- | -------------------------------------------------------------- |
@@ -1030,6 +1042,8 @@ MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py --transport http --p
 | `memory_evolution`    | View/trigger A-MEM metadata evolution for a block              |
 | `list_mind_kernels`   | List available MIND kernel configurations                      |
 | `get_mind_kernel`     | Read a specific MIND kernel configuration as JSON              |
+| `category_summary`    | Category summaries relevant to a given topic                   |
+| `prefetch`            | Pre-assemble context from recent conversation signals          |
 
 ### Token Auth (HTTP)
 
