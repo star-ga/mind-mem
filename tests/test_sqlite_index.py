@@ -9,8 +9,12 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from sqlite_index import (
-    build_index, query_index, index_status,
-    _connect, _db_path, _file_hash,
+    _connect,
+    _db_path,
+    _file_hash,
+    build_index,
+    index_status,
+    query_index,
 )
 
 

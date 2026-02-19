@@ -17,10 +17,11 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-mcp = ["fastmcp>=2.0"]
-embeddings = ["sentence-transformers>=2.0"]
-cross-encoder = ["sentence-transformers>=2.0"]
-all = ["fastmcp>=2.0", "sentence-transformers>=2.0"]
+test = ["pytest>=7.0"]
+mcp = ["fastmcp>=0.1"]
+embeddings = ["onnxruntime", "tokenizers"]
+cross-encoder = ["sentence-transformers"]
+all = ["fastmcp>=0.1", "sentence-transformers"]
 
 [project.urls]
 Homepage = "https://github.com/star-ga/mind-mem"
@@ -47,3 +48,19 @@ mind-mem-resolve = "mind_mem.conflict_resolver:main"
 [tool.setuptools]
 packages = ["mind_mem"]
 package-dir = {"mind_mem" = "scripts"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"mcp_server.py" = ["I001", "E402"]

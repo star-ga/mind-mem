@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from capture import scan_log, append_signals
+from capture import append_signals, scan_log
 
 
 class TestScanLog(unittest.TestCase):

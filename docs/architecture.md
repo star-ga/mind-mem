@@ -163,6 +163,23 @@ an LLM (the optional observation compression step is the sole exception).
         Results
 ```
 
+```mermaid
+flowchart TD
+    Q[Query] --> IR[Intent Router<br/>9 types]
+    IR --> QE[Query Expansion<br/>RM3 feedback]
+    QE --> AC[Abstention Check<br/>5-feature gate]
+    AC -->|below threshold| AB[Abstain]
+    AC -->|above threshold| HB[Hybrid Backend]
+    HB --> BM[BM25F<br/>FTS5 index] & VE[Vector<br/>embeddings]
+    BM & VE --> RRF[RRF Fusion<br/>k=60]
+    RRF --> RR[Deterministic Rerank<br/>4 signals]
+    RR --> CE[Cross-Encoder<br/>optional]
+    CE --> AM[A-MEM Boost]
+    AM --> CP[Context Packing]
+    CP --> EP[Evidence Packing]
+    EP --> R[Results]
+```
+
 ### Key Scoring Parameters
 
 | Parameter       | Default | Description                              |
@@ -453,6 +470,18 @@ pipeline with full audit trail and rollback capability.
   +------------------+     +-------------------+     +------------------+
 ```
 
+```mermaid
+flowchart LR
+    S[Signal Sources] --> ST[Staging Area<br/>SIGNALS.md]
+    ST --> R[Review]
+    R -->|approve| AE[Apply Engine<br/>atomic ops]
+    R -->|reject| RJ[Rejected]
+    R -->|defer| DF[Deferred]
+    AE --> SN[Snapshot] --> EX[Execute] --> RC[Receipt]
+    RC --> SC[Post-Scan<br/>intel_scan.py]
+    SC --> AU[Audit Trail]
+```
+
 ### Capture Engine (capture.py)
 
 The auto-capture engine scans daily logs for decision-like and task-like
@@ -720,6 +749,28 @@ workspace/
       memory/
 
   mind-mem-acl.json            Access control policies
+```
+
+```mermaid
+flowchart TD
+    subgraph Shared
+        SD[decisions/]
+        ST[tasks/]
+        SE[entities/]
+        SL[LEDGER.md]
+    end
+    subgraph Agent1[coder-1]
+        A1D[decisions/]
+        A1M[memory/]
+    end
+    subgraph Agent2[reviewer-1]
+        A2D[decisions/]
+        A2M[memory/]
+    end
+    Agent1 -->|read| Shared
+    Agent2 -->|read| Shared
+    Agent1 -->|propose| SL
+    ACL[mind-mem-acl.json] -.->|enforces| Agent1 & Agent2
 ```
 
 ### Access Control (namespaces.py)

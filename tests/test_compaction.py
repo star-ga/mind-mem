@@ -9,11 +9,11 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from compaction import (
-    archive_completed_blocks,
-    cleanup_snapshots,
-    cleanup_daily_logs,
-    compact_signals,
     _extract_block_text,
+    archive_completed_blocks,
+    cleanup_daily_logs,
+    cleanup_snapshots,
+    compact_signals,
 )
 from init_workspace import init
 

@@ -32,7 +32,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from block_parser import parse_file, get_active
+    from block_parser import get_active, parse_file
 except ImportError:
     # Minimal fallback when block_parser is unavailable — parse nothing gracefully.
     def parse_file(path: str) -> list[dict]:  # type: ignore[misc]

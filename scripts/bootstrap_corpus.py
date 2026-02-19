@@ -21,11 +21,11 @@ import sys
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from capture import append_signals, scan_log, find_all_logs
-from transcript_capture import parse_transcript, scan_transcript, find_recent_transcripts
-from session_summarizer import write_summary
-from entity_ingest import extract_entities, filter_new_entities, load_existing_entities, entities_to_signals
+from capture import append_signals, find_all_logs, scan_log
+from entity_ingest import entities_to_signals, extract_entities, filter_new_entities, load_existing_entities
 from observability import get_logger
+from session_summarizer import write_summary
+from transcript_capture import find_recent_transcripts, parse_transcript, scan_transcript
 
 _log = get_logger("bootstrap_corpus")
 

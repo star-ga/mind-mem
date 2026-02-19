@@ -8,12 +8,18 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from intel_scan import (
-    IntelReport, detect_contradictions, detect_drift, scopes_overlap,
-    check_signature_conflict, get_axis_key, load_all, generate_proposals,
-)
 from apply_engine import validate_proposal
 from block_parser import parse_file
+from intel_scan import (
+    IntelReport,
+    check_signature_conflict,
+    detect_contradictions,
+    detect_drift,
+    generate_proposals,
+    get_axis_key,
+    load_all,
+    scopes_overlap,
+)
 
 
 class TestIntelReport(unittest.TestCase):

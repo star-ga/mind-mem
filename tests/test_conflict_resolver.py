@@ -9,13 +9,13 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from conflict_resolver import (
     ResolutionStrategy,
-    analyze_contradiction,
-    resolve_contradictions,
-    generate_resolution_proposals,
+    _block_hash,
     _extract_date,
     _get_cs_priority,
     _get_scope_specificity,
-    _block_hash,
+    analyze_contradiction,
+    generate_resolution_proposals,
+    resolve_contradictions,
 )
 
 

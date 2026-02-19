@@ -9,10 +9,10 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from transcript_capture import (
-    parse_transcript,
-    scan_transcript,
     TRANSCRIPT_PATTERNS,
     XREF_PATTERN,
+    parse_transcript,
+    scan_transcript,
 )
 
 

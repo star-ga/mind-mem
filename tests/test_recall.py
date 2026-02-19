@@ -7,7 +7,16 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from recall import tokenize, extract_text, get_block_type, get_excerpt, recall, build_xref_graph, _rm3_language_model, rm3_expand
+from recall import (
+    _rm3_language_model,
+    build_xref_graph,
+    extract_text,
+    get_block_type,
+    get_excerpt,
+    recall,
+    rm3_expand,
+    tokenize,
+)
 
 
 class TestTokenize(unittest.TestCase):

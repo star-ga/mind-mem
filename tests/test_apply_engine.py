@@ -7,14 +7,23 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from apply_engine import (
-    _safe_resolve, validate_proposal, create_snapshot, restore_snapshot,
-    check_no_touch_window, check_fingerprint_dedup, compute_fingerprint,
-    rollback, apply_proposal, _op_supersede_decision, _op_replace_range,
-)
 import json
 import subprocess
 from datetime import datetime, timedelta
+
+from apply_engine import (
+    _op_replace_range,
+    _op_supersede_decision,
+    _safe_resolve,
+    apply_proposal,
+    check_fingerprint_dedup,
+    check_no_touch_window,
+    compute_fingerprint,
+    create_snapshot,
+    restore_snapshot,
+    rollback,
+    validate_proposal,
+)
 
 
 class TestSafeResolve(unittest.TestCase):
