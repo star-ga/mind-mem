@@ -168,7 +168,6 @@ class TestMCPResources(unittest.TestCase):
         else:
             result = fn()
         health = json.loads(result)
-        self.assertIn("workspace", health)
         self.assertIn("files", health)
         self.assertIn("decisions", health["files"])
         self.assertEqual(health["files"]["decisions"]["total"], 2)

@@ -87,7 +87,9 @@ class VectorBackend(RecallBackend):
         if not isinstance(config, dict):
             _log.warning("vector_config_invalid", reason="config is not a dict")
             config = {}
-        _VALID_KEYS = {"backend", "provider", "model", "index_path", "dimension", "top_k"}
+        _VALID_KEYS = {"backend", "provider", "model", "index_path", "dimension", "top_k",
+                       "pinecone_api_key", "pinecone_index", "qdrant_url", "qdrant_collection",
+                       "pinecone_environment"}
         unknown = set(config.keys()) - _VALID_KEYS
         if unknown:
             _log.warning("vector_config_unknown_keys", keys=list(unknown))
@@ -365,33 +367,34 @@ class VectorBackend(RecallBackend):
             embeddings: List of embedding vectors
         """
         try:
-            import pinecone
+            from pinecone import Pinecone, ServerlessSpec
         except ImportError as e:
             _log.error("pinecone_not_installed", error=str(e))
             raise ImportError(
                 "pinecone-client not installed. Install with: pip install pinecone-client"
             ) from e
 
-        api_key = self.config.get("pinecone_api_key")
-        environment = self.config.get("pinecone_environment")
+        api_key = os.environ.get("PINECONE_API_KEY") or self.config.get("pinecone_api_key")
         index_name = self.config.get("pinecone_index", "mind-mem")
 
-        if not api_key or not environment:
-            raise ValueError("pinecone_api_key and pinecone_environment required")
+        if not api_key:
+            raise ValueError("pinecone_api_key required (config or PINECONE_API_KEY env var)")
 
-        pinecone.init(api_key=api_key, environment=environment)
+        pc = Pinecone(api_key=api_key)
 
         # Create or recreate index
-        if index_name in pinecone.list_indexes():
-            pinecone.delete_index(index_name)
+        existing = [idx.name for idx in pc.list_indexes()]
+        if index_name in existing:
+            pc.delete_index(index_name)
 
-        pinecone.create_index(
+        pc.create_index(
             name=index_name,
             dimension=self.dimension,
             metric="cosine",
+            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
         )
 
-        index = pinecone.Index(index_name)
+        index = pc.Index(index_name)
 
         # Upload vectors
         vectors = [
@@ -576,16 +579,15 @@ class VectorBackend(RecallBackend):
             Ranked list of results
         """
         try:
-            import pinecone
+            from pinecone import Pinecone
         except ImportError as e:
             raise ImportError("pinecone-client not installed") from e
 
-        api_key = self.config.get("pinecone_api_key")
-        environment = self.config.get("pinecone_environment")
+        api_key = os.environ.get("PINECONE_API_KEY") or self.config.get("pinecone_api_key")
         index_name = self.config.get("pinecone_index", "mind-mem")
 
-        pinecone.init(api_key=api_key, environment=environment)
-        index = pinecone.Index(index_name)
+        pc = Pinecone(api_key=api_key)
+        index = pc.Index(index_name)
 
         # Generate query embedding
         query_emb = self.embed([query])[0]
@@ -674,6 +676,83 @@ def search_batch(
     except Exception as e:
         _log.error("search_batch_failed", error=str(e))
         return []
+
+
+# ---------------------------------------------------------------------------
+# Index Rebuild (called from MCP reindex tool)
+# ---------------------------------------------------------------------------
+
+
+def rebuild_index(workspace: str) -> int:
+    """Rebuild vector index for all blocks in the workspace.
+
+    Parses all block files, generates embeddings, and writes them to the
+    local vector index.
+
+    Args:
+        workspace: Workspace root path.
+
+    Returns:
+        Number of blocks indexed.
+
+    Raises:
+        ImportError: If sentence-transformers is not installed.
+    """
+    config_path = os.path.join(workspace, "mind-mem.json")
+    config: dict = {}
+    if os.path.isfile(config_path):
+        try:
+            with open(config_path) as f:
+                full = json.load(f)
+                config = full.get("recall", {})
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    backend = VectorBackend(config)
+
+    # Collect all blocks from workspace
+    from block_parser import parse_file as _parse
+    blocks: list[dict] = []
+    for subdir in ("decisions", "tasks", "entities", "intelligence"):
+        d = os.path.join(workspace, subdir)
+        if not os.path.isdir(d):
+            continue
+        for fn in sorted(os.listdir(d)):
+            if fn.endswith(".md"):
+                try:
+                    blocks.extend(_parse(os.path.join(d, fn)))
+                except Exception:
+                    pass
+
+    if not blocks:
+        _log.info("rebuild_index_empty", workspace=workspace)
+        return 0
+
+    # Build texts for embedding
+    texts = []
+    for b in blocks:
+        text = b.get("Statement", b.get("Description", b.get("Subject", "")))
+        texts.append(str(text))
+
+    embeddings = backend.model.encode(texts, show_progress_bar=False)
+
+    # Write to local index
+    index_dir = os.path.join(workspace, backend.index_path)
+    os.makedirs(index_dir, exist_ok=True)
+    index_data = []
+    for i, b in enumerate(blocks):
+        index_data.append({
+            "_id": b.get("_id", f"block_{i}"),
+            "embedding": embeddings[i].tolist(),
+            "text": texts[i],
+        })
+
+    index_file = os.path.join(index_dir, "index.json")
+    with open(index_file, "w", encoding="utf-8") as f:
+        json.dump(index_data, f)
+
+    _log.info("rebuild_index_complete", blocks=len(blocks), workspace=workspace)
+    return len(blocks)
 
 
 # ---------------------------------------------------------------------------

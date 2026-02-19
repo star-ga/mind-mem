@@ -53,7 +53,11 @@ class MindMemKernel:
                 # Restrict to allowed directories (prevent arbitrary .so loading)
                 resolved = Path(env_path).resolve()
                 allowed = [Path(__file__).parent.parent / "lib"]
-                if any(str(resolved).startswith(str(d.resolve())) for d in allowed) and resolved.exists():
+                in_allowed = any(
+                    resolved == d.resolve() or str(resolved).startswith(str(d.resolve()) + os.sep)
+                    for d in allowed
+                )
+                if in_allowed and resolved.exists():
                     self._lib = ctypes.CDLL(str(resolved), mode=_LAZY)
 
             if self._lib is None:

@@ -119,14 +119,14 @@ def _check_workspace(ws: str) -> str | None:
     """
     if not os.path.isdir(ws):
         return json.dumps({
-            "error": f"Workspace not found at '{ws}'. "
-                     f"Run: python3 scripts/init_workspace.py {ws}"
+            "error": "Workspace not found. "
+                     "Run: python3 scripts/init_workspace.py <path>"
         })
     decisions_dir = os.path.join(ws, "decisions")
     if not os.path.isdir(decisions_dir):
         return json.dumps({
-            "error": f"Workspace at '{ws}' is missing the 'decisions/' directory. "
-                     f"Run: python3 scripts/init_workspace.py {ws}"
+            "error": "Workspace is missing the 'decisions/' directory. "
+                     "Run: python3 scripts/init_workspace.py <path>"
         })
     return None
 
@@ -146,6 +146,19 @@ def _read_file(rel_path: str) -> str:
 def _blocks_to_json(blocks: list[dict]) -> str:
     """Convert parsed blocks to JSON string."""
     return json.dumps(blocks, indent=2, default=str)
+
+
+def _load_extra_categories(ws: str) -> dict:
+    """Load extra_categories from mind-mem.json config."""
+    config_path = os.path.join(ws, "mind-mem.json")
+    if os.path.isfile(config_path):
+        try:
+            with open(config_path) as f:
+                cfg = json.load(f)
+            return cfg.get("categories", {}).get("extra_categories", {})
+        except (OSError, json.JSONDecodeError):
+            pass
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +213,7 @@ def get_contradictions() -> str:
 def get_health() -> str:
     """Workspace health summary: block counts, coverage, and metrics."""
     ws = _workspace()
-    result = {"workspace": ws, "files": {}, "metrics": {}}
+    result = {"files": {}, "metrics": {}}
 
     corpus = {
         "decisions": "decisions/DECISIONS.md",
@@ -361,7 +374,7 @@ def scan() -> str:
     if ws_err:
         return ws_err
 
-    result = {"workspace": ws, "checks": {}}
+    result = {"checks": {}}
 
     # Parse decisions
     decisions_path = os.path.join(ws, "decisions", "DECISIONS.md")
@@ -556,7 +569,11 @@ def hybrid_search(query: str, limit: int = 10, active_only: bool = False) -> str
         hb = HybridBackend.from_config(config)
         results = hb.search(query, ws, limit=limit, active_only=active_only)
         backend = "hybrid"
-    except (ImportError, Exception):
+    except ImportError:
+        results = recall_engine(ws, query, limit=limit, active_only=active_only)
+        backend = "scan_fallback"
+    except Exception:
+        _log.warning("hybrid_search_failed", query=query)
         results = recall_engine(ws, query, limit=limit, active_only=active_only)
         backend = "scan_fallback"
     metrics.inc("mcp_hybrid_search_queries")
@@ -643,7 +660,7 @@ def index_stats() -> str:
         JSON with workspace statistics.
     """
     ws = _workspace()
-    stats = {"workspace": ws}
+    stats = {}
 
     # Count blocks by type
     for kind in ["decisions", "tasks", "entities"]:
@@ -689,7 +706,7 @@ def reindex(include_vectors: bool = False) -> str:
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
-    results = {"workspace": ws, "fts": False, "vectors": False}
+    results = {"fts": False, "vectors": False}
 
     try:
         from sqlite_index import build_index
@@ -706,27 +723,22 @@ def reindex(include_vectors: bool = False) -> str:
             results["vectors"] = True
         except ImportError:
             results["vectors_error"] = "sentence-transformers not installed"
-        except Exception as e:
-            _log.warning("reindex_vectors_failed", error=str(e))
+        except Exception:
+            _log.warning("reindex_vectors_failed")
             results["vectors_error"] = "Vector index rebuild failed"
 
     # Regenerate category summaries
     try:
         from category_distiller import CategoryDistiller
-        config_path = os.path.join(ws, "mind-mem.json")
-        extra_cats = {}
-        if os.path.isfile(config_path):
-            try:
-                with open(config_path) as f:
-                    cfg = json.load(f)
-                extra_cats = cfg.get("categories", {}).get("extra_categories", {})
-            except (OSError, json.JSONDecodeError):
-                pass
+        extra_cats = _load_extra_categories(ws)
         distiller = CategoryDistiller(extra_categories=extra_cats if extra_cats else None)
         written = distiller.distill(ws)
         results["categories"] = len(written)
-    except (ImportError, Exception) as e:
-        results["categories_error"] = str(e)
+    except ImportError:
+        pass  # category_distiller not available
+    except Exception:
+        _log.warning("reindex_categories_failed")
+        results["categories_error"] = "Category distillation failed"
 
     metrics.inc("mcp_reindex")
     _log.info("mcp_reindex", results=results)
@@ -803,15 +815,7 @@ def category_summary(topic: str, limit: int = 3) -> str:
     ws = _workspace()
     try:
         from category_distiller import CategoryDistiller
-        config_path = os.path.join(ws, "mind-mem.json")
-        extra_cats = {}
-        if os.path.isfile(config_path):
-            try:
-                with open(config_path) as f:
-                    cfg = json.load(f)
-                extra_cats = cfg.get("categories", {}).get("extra_categories", {})
-            except (OSError, json.JSONDecodeError):
-                pass
+        extra_cats = _load_extra_categories(ws)
         distiller = CategoryDistiller(extra_categories=extra_cats if extra_cats else None)
         context = distiller.get_category_context(topic, ws, limit=max(1, min(limit, 10)))
         cats = distiller.get_categories_for_query(topic)
@@ -830,8 +834,9 @@ def category_summary(topic: str, limit: int = 3) -> str:
         }, indent=2)
     except ImportError:
         return json.dumps({"error": "category_distiller module not available"})
-    except Exception as e:
-        return json.dumps({"error": str(e), "topic": topic}, indent=2)
+    except Exception:
+        _log.warning("category_summary_failed", topic=topic)
+        return json.dumps({"error": "Category summary lookup failed", "topic": topic}, indent=2)
 
 
 @mcp.tool
@@ -861,8 +866,9 @@ def prefetch(signals: str, limit: int = 5) -> str:
         metrics.inc("mcp_prefetch_queries")
         _log.info("mcp_prefetch", signals=signal_list, results=len(results))
         return json.dumps(results, indent=2, default=str)
-    except Exception as e:
-        return json.dumps({"error": str(e), "signals": signal_list}, indent=2)
+    except Exception:
+        _log.warning("prefetch_failed", signals=signal_list)
+        return json.dumps({"error": "Prefetch failed", "signals": signal_list}, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -888,11 +894,10 @@ def list_mind_kernels() -> str:
         result.append({
             "name": name,
             "sections": list(cfg.keys()),
-            "path": os.path.join(mind_dir, f"{name}.mind"),
         })
 
     metrics.inc("mcp_kernel_list")
-    _log.info("mcp_list_kernels", count=len(result), mind_dir=mind_dir)
+    _log.info("mcp_list_kernels", count=len(result))
     return json.dumps(result, indent=2)
 
 
@@ -925,7 +930,6 @@ def get_mind_kernel(name: str) -> str:
     _log.info("mcp_get_kernel", name=name, sections=list(cfg.keys()))
     return json.dumps({
         "name": name,
-        "path": path,
         "config": cfg,
     }, indent=2)
 
