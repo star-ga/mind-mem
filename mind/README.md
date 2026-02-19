@@ -31,6 +31,22 @@ mindc mind/rrf.mind --emit=shared -o lib/librrf.so
 | `importance.mind` | `importance_score`                                                                   | A-MEM importance scoring        |
 | `category.mind`   | `category_affinity`, `query_category_relevance`, `category_assign`                   | Category distillation scoring   |
 
+### Configuration Kernels
+
+INI-style `.mind` files that configure pipeline parameters (not compiled):
+
+| File                  | Sections                            | Purpose                          |
+| --------------------- | ----------------------------------- | -------------------------------- |
+| `recall.mind`         | `bm25`, `fields`                    | BM25 parameters and field boosts |
+| `rm3.mind`            | `expansion`, `feedback`             | RM3 query expansion tuning       |
+| `rerank.mind`         | `weights`, `context_pack`, `anchor` | Reranker weights and packing     |
+| `hybrid.mind`         | `fusion`, `vector`                  | Hybrid search tuning             |
+| `adversarial.mind`    | `features`, `abstention`            | Adversarial detection tuning     |
+| `temporal.mind`       | `decay`, `boost`                    | Temporal scoring adjustments     |
+| `prefetch.mind`       | `signals`, `ranking`                | Prefetch context tuning          |
+| `intent.mind`         | `routing`, `graph`, `weights`       | Intent router configuration      |
+| `cross_encoder.mind`  | `model`, `blending`, `normalization`| Cross-encoder reranker config    |
+
 ## FFI
 
 The compiled `.so` exposes a C99-compatible ABI. Python calls via `ctypes` through `scripts/mind_ffi.py`. Each function accepts and returns flat float arrays.

@@ -1,0 +1,20 @@
+# cross_encoder.mind — Cross-encoder reranker kernel configuration
+# Controls the optional neural reranking stage (requires sentence-transformers).
+
+[model]
+# Hugging Face model identifier for the cross-encoder.
+name = cross-encoder/ms-marco-MiniLM-L-6-v2
+
+[blending]
+# Weight for cross-encoder score in the final blend.
+# final = blend_weight * CE_normalized + (1 - blend_weight) * BM25_normalized
+blend_weight = 0.6
+
+# Maximum candidates to rerank with the cross-encoder.
+# Limits compute cost on large result sets.
+top_k = 10
+
+[normalization]
+# Score normalization method for both CE and BM25 scores before blending.
+# "minmax" normalizes to [0, 1] using per-batch min/max.
+method = minmax

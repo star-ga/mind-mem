@@ -4,13 +4,13 @@ All notable changes to mind-mem are documented in this file.
 
 ## 1.0.2 (2026-02-18)
 
-**Category distillation, prefetch context, MIND kernel integration, MemU comparison**
+**Category distillation, prefetch context, MIND kernel integration, full pipeline wiring**
 
 ### Added
 - `scripts/category_distiller.py`: Deterministic category detection from block tags/keywords, generates `categories/*.md` thematic summaries with block references and `_manifest.json`
 - `prefetch_context()` in `scripts/recall.py`: Anticipatory pre-assembly of likely-needed blocks using intent routing + category summaries
 - 2 new MCP tools: `category_summary` (topic-based category retrieval), `prefetch` (signal-based context pre-assembly) — 14→16 total
-- 14 MIND kernel source files (`.mind`) with C99 FFI bridge
+- 16 MIND kernel source files (`.mind`) with C99 FFI bridge: 7 compiled scoring kernels + 9 configuration kernels
 - MIND kernel batch categorization: `category_affinity` + `category_assign` C kernels integrated into category distiller with pure Python fallback
 - `is_protected()` module-level function in `mind_ffi.py` for FORTRESS protection detection
 - `mind_kernel_protected` field in `index_stats` MCP tool response
@@ -20,12 +20,26 @@ All notable changes to mind-mem are documented in this file.
 - `tests/test_prefetch_context.py`: 7 tests for signal-based prefetch
 - 3 new C category kernels in `lib/kernels.c`: `category_affinity`, `query_category_relevance`, `category_assign`
 - FFI wrappers for category kernels in `scripts/mind_ffi.py`
+- A-MEM block metadata wired into recall pipeline: importance boost on scoring, access tracking + keyword evolution on results
+- IntentRouter wired into recall pipeline: 9-type classification replaces `detect_query_type()`, with backward-compatible mapping and fallback
+- Cross-encoder reranking wired into recall pipeline: config-gated neural reranking stage with graceful degradation
+- `mind/intent.mind`: Intent router configuration kernel (routing thresholds, graph boost, per-intent weights)
+- `mind/cross_encoder.mind`: Cross-encoder configuration kernel (model, blend weight, normalization)
+- `docs/api-reference.md`: Complete reference for 16 MCP tools + 8 resources
+- `docs/configuration.md`: Every `mind-mem.json` key documented with defaults and examples
+- `docs/architecture.md`: 10-section architecture deep dive with ASCII diagrams
+- `docs/migration.md`: mem-os → mind-mem migration guide
 
 ### Changed
 - MCP tool count: 14 → 16
-- MIND kernel count: 6 → 14
+- MIND kernel count: 6 → 16 (14 + 2 new config kernels)
 - `reindex` MCP tool now regenerates category summaries automatically
-- Test count: 676 → 696
+
+### Security
+- Workspace containment check in `_read_file` (path traversal guard)
+- Path traversal guard on `FilesTouched` in `create_snapshot`
+- Prefer installation scripts over workspace copies in `check_preconditions`
+- Renamed `X-MemOS-Token` → `X-MindMem-Token` in server and tests
 
 ---
 
