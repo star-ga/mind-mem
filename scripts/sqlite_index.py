@@ -383,8 +383,8 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
                     bid = b.get("_id", "")
                     if bid:
                         all_block_ids.add(bid)
-            except (OSError, UnicodeDecodeError, ValueError):
-                pass
+            except (OSError, UnicodeDecodeError, ValueError) as e:
+                _log.debug("xref_scan_parse_failed", file=rel_path, error=str(e))
 
     if incremental:
         changed = _get_changed_files(conn, workspace)

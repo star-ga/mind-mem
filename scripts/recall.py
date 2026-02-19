@@ -1433,7 +1433,7 @@ def rerank_hits(
             }
 
     # Sort by reranked score
-    hits.sort(key=lambda r: r["score"], reverse=True)
+    hits.sort(key=lambda r: (r["score"], r.get("_id", "")), reverse=True)
 
     # Anchor rule: ensure BM25 top-1 is in final set
     if bm25_top1_id:
@@ -1826,7 +1826,8 @@ def recall(
             continue
         try:
             blocks = parse_file(path)
-        except (OSError, UnicodeDecodeError, ValueError):
+        except (OSError, UnicodeDecodeError, ValueError) as e:
+            _log.debug("corpus_parse_failed", file=rel_path, error=str(e))
             continue
         if active_only:
             blocks = get_active(blocks)
@@ -1847,7 +1848,8 @@ def recall(
                 continue
             try:
                 blocks = parse_file(full_path)
-            except (OSError, UnicodeDecodeError, ValueError):
+            except (OSError, UnicodeDecodeError, ValueError) as e:
+                _log.debug("corpus_parse_failed", file=ns_path, error=str(e))
                 continue
             if active_only:
                 blocks = get_active(blocks)
@@ -1896,6 +1898,12 @@ def recall(
     # Pre-compute query bigrams for phrase matching
     query_bigrams = get_bigrams(query_tokens)
 
+    # Pre-compute IDF per query token (constant across all docs)
+    _idf_cache = {}
+    for qt in query_tokens:
+        _df_qt = df.get(qt, 0)
+        _idf_cache[qt] = math.log((N - _df_qt + 0.5) / (_df_qt + 0.5) + 1)
+
     results = []
 
     for i, block in enumerate(all_blocks):
@@ -1918,7 +1926,7 @@ def recall(
         for qt in query_tokens:
             if qt in weighted_tf:
                 wtf = weighted_tf[qt]
-                idf = math.log((N - df.get(qt, 0) + 0.5) / (df.get(qt, 0) + 0.5) + 1)
+                idf = _idf_cache[qt]
                 numerator = wtf * (_k1 + 1)
                 denominator = wtf + _k1 * (1 - _b + _b * wdl / avg_wdl)
                 score += idf * numerator / denominator
@@ -1948,8 +1956,8 @@ def recall(
                     for qt in query_tokens:
                         if qt in ctf:
                             freq = ctf[qt]
-                            idf = math.log((N - df.get(qt, 0) + 0.5) / (df.get(qt, 0) + 0.5) + 1)
-                            cs += idf * freq * (_k1 + 1) / (freq + _k1 * (1 - _b + _b * cdl / max(avg_wdl, 1)))
+                            denom = freq + _k1 * (1 - _b + _b * cdl / max(avg_wdl, 1))
+                            cs += _idf_cache[qt] * freq * (_k1 + 1) / denom
                     best_chunk_score = max(best_chunk_score, cs)
                 # Blend: take the better of full-block or best-chunk score
                 if best_chunk_score > score:
@@ -2080,11 +2088,11 @@ def recall(
                 _cfg = json.load(_f)
             rm3_config = _cfg.get("recall", {}).get("rm3", {})
             ce_config = _cfg.get("recall", {}).get("cross_encoder", {})
-        except (OSError, json.JSONDecodeError, KeyError):
-            pass
+        except (OSError, json.JSONDecodeError, KeyError) as e:
+            _log.warning("rm3_config_load_failed", path=config_path, error=str(e))
 
     if rm3_config.get("enabled", False) and not is_adversarial and results:
-        results.sort(key=lambda r: r["score"], reverse=True)
+        results.sort(key=lambda r: (r["score"], r.get("_id", "")), reverse=True)
 
         # Build collection frequency from all flat doc tokens
         collection_freq = Counter()
@@ -2176,7 +2184,7 @@ def recall(
     # use different vocabulary than the query.
     # Skipped when RM3 was used (they serve the same purpose).
     if not _rm3_used and query_type in ("single-hop", "open-domain", "multi-hop") and results:
-        results.sort(key=lambda r: r["score"], reverse=True)
+        results.sort(key=lambda r: (r["score"], r.get("_id", "")), reverse=True)
         prf_top = results[:5]
 
         # Extract expansion terms: high-TF tokens from top-5 statements,
@@ -2257,7 +2265,7 @@ def recall(
     # 3. Re-score all blocks using bridge terms
     # 4. Merge new hits into results
     if query_type == "multi-hop" and results:
-        results.sort(key=lambda r: r["score"], reverse=True)
+        results.sort(key=lambda r: (r["score"], r.get("_id", "")), reverse=True)
         hop1_top = results[:10]
 
         # Extract bridge terms: capitalized entities from top-10 that aren't in query
@@ -2335,7 +2343,7 @@ def recall(
                       new_hits=sum(1 for r in results if r.get("via_chain")))
 
     # Sort by score descending
-    results.sort(key=lambda r: r["score"], reverse=True)
+    results.sort(key=lambda r: (r["score"], r.get("_id", "")), reverse=True)
 
     # --- v7: Two-stage pipeline — wide BM25 retrieve → dedup → rerank → top-k ---
     # Stage 1: Take wide candidate set (retrieve_wide_k)
@@ -2420,6 +2428,14 @@ def recall(
     return top
 
 
+_VALID_RECALL_KEYS = frozenset({
+    "backend", "limit", "rm3", "cross_encoder", "graph_boost",
+    "pinecone_api_key", "pinecone_index", "pinecone_namespace",
+    "qdrant_url", "qdrant_collection", "embedding_model",
+    "retrieve_wide_k", "rerank", "active_only",
+})
+
+
 def _load_backend(workspace: str) -> str:
     """Load recall backend from config. Falls back to BM25 scan.
 
@@ -2433,15 +2449,19 @@ def _load_backend(workspace: str) -> str:
         try:
             with open(config_path) as f:
                 cfg = json.load(f)
-            backend = cfg.get("recall", {}).get("backend", "scan")
+            recall_cfg = cfg.get("recall", {})
+            unknown = set(recall_cfg.keys()) - _VALID_RECALL_KEYS
+            if unknown:
+                _log.warning("unknown_recall_config_keys", keys=sorted(unknown))
+            backend = recall_cfg.get("backend", "scan")
             if backend == "sqlite":
                 return "sqlite"
             if backend == "vector":
                 try:
                     from recall_vector import VectorBackend
-                    return VectorBackend(cfg.get("recall", {}))
+                    return VectorBackend(recall_cfg)
                 except ImportError:
-                    pass  # fall through to scan
+                    _log.debug("vector_backend_unavailable", hint="install recall_vector")
         except (OSError, json.JSONDecodeError, KeyError) as e:
             _log.warning("config_load_failed", path=config_path, error=str(e))
     return None  # use built-in BM25 scan
