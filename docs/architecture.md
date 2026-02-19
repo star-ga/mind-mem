@@ -222,6 +222,8 @@ mind/
   adversarial.mind Adversarial query detection features
   category.mind    Category relevance scoring
   prefetch.mind    Anticipatory context prefetch scoring
+  intent.mind      Intent classification parameters
+  cross_encoder.mind  Cross-encoder blending configuration
 ```
 
 ### FFI Bridge (mind_ffi.py)
@@ -644,7 +646,7 @@ Default `blend_weight`: 0.6. Requires `sentence-transformers`.
 
 ### MIND Kernels (mind/*.mind)
 
-14 compiled scoring kernels accelerating numerical hot paths. Requires
+16 MIND kernel source files accelerating numerical hot paths. Requires
 the `mindc` compiler from the STARGA toolchain.
 
 When the compiled `.so` is absent:
