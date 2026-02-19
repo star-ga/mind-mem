@@ -22,8 +22,8 @@ import shutil
 import sys
 import tempfile
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 
 # Add scripts/ to path so we can import recall and block_parser
 _SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")

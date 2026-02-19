@@ -5,7 +5,7 @@ Scans SIGNALS.md and daily logs for entity references not yet tracked in
 entities/*.md. Proposes new entities as auto-capture-entity signals.
 
 Entity types:
-  - Projects: GitHub repo URLs, /home/n/*/ paths, PRJ-* refs
+  - Projects: GitHub repo URLs, local project paths, PRJ-* refs
   - Tools: Known CLI names, MCP server refs, TOOL-* refs
   - People: @handle mentions, PER-* refs
 
@@ -37,7 +37,7 @@ _log = get_logger("entity_ingest")
 PROJECT_PATTERNS = [
     # GitHub repo URLs
     (re.compile(r"https?://github\.com/([\w-]+)/([\w.-]+)"), "github_repo"),
-    # Local project paths under /home/n/
+    # Local project paths under user home directory
     (re.compile(r"/home/\w+/([\w.-]+)(?:/|$)"), "local_project"),
     # Explicit PRJ- references
     (re.compile(r"\bPRJ-([\w-]+)\b"), "prj_ref"),
@@ -48,7 +48,7 @@ TOOL_PATTERNS = [
     # MCP server references
     (re.compile(r"\bmcp[_-](?:server[_-])?([\w-]+)\b", re.I), "mcp_server"),
     # Known CLI tool invocations
-    (re.compile(r"\b(codex|gemini|claude|naestro|docker|kubectl|npm|pip|cargo|rustc|gcc|make)\b",
+    (re.compile(r"\b(codex|gemini|claude|docker|kubectl|npm|pip|cargo|rustc|gcc|make)\b",
                 re.I), "cli_tool"),
     # Explicit TOOL- references
     (re.compile(r"\bTOOL-([\w-]+)\b"), "tool_ref"),
@@ -65,7 +65,7 @@ IGNORE_DIRS = frozenset({
     "bin", "lib", "etc", "var", "tmp", "usr", "opt", "dev", "proc", "sys",
     "snap", "cache", "config", "local", "share", "node_modules", ".git",
     ".cache", ".local", ".config", ".openclaw", ".claude", ".ssh", ".gnupg",
-    ".npm", ".cargo", ".rustup", ".moltbot", ".claude-ultimate",
+    ".npm", ".cargo", ".rustup",
     "documents", "downloads", "desktop",
 })
 

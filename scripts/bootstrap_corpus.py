@@ -4,7 +4,7 @@
 Populates the mind-mem corpus by scanning:
 1. ALL JSONL transcripts in ~/.claude/projects/ (all time)
 2. ALL daily logs in workspace/memory/ (extended window)
-3. ~/CLAUDE.md and ~/.claude/projects/-home-n/memory/MEMORY.md for patterns
+3. ~/CLAUDE.md and MEMORY.md files for patterns
 4. Entity extraction on all collected text
 
 Safe to re-run: content_hash dedup in append_signals() prevents double-writing.
@@ -133,7 +133,7 @@ def main() -> None:
     print("Phase 3: Scanning CLAUDE.md and MEMORY.md...")
     md_files = [
         os.path.expanduser("~/CLAUDE.md"),
-        os.path.expanduser("~/.claude/projects/-home-n/memory/MEMORY.md"),
+        os.path.expanduser("~/.claude/MEMORY.md"),
     ]
 
     md_signals_detected = 0

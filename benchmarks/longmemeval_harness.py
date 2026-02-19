@@ -23,15 +23,14 @@ import shutil
 import sys
 import tempfile
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 
 # Add mind-mem scripts to path for recall imports
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
 from recall import recall  # noqa: E402
-
 
 # HuggingFace dataset URLs (cleaned release)
 HF_BASE = "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/main"

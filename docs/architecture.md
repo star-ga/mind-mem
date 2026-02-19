@@ -1,6 +1,6 @@
 # mind-mem Architecture
 
-Version 1.0.2 | February 2026
+Version 1.0.3 | February 2026
 
 ---
 
@@ -676,7 +676,7 @@ Default `blend_weight`: 0.6. Requires `sentence-transformers`.
 ### MIND Kernels (mind/*.mind)
 
 16 MIND kernel source files accelerating numerical hot paths. Requires
-the `mindc` compiler from the STARGA toolchain.
+the `mindc` compiler from the MIND toolchain.
 
 When the compiled `.so` is absent:
 - `MindMemKernel()` raises `OSError`
@@ -871,7 +871,7 @@ its `write` list.
 
 ```json
 {
-  "version": "1.0.2",
+  "version": "1.0.3",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,
