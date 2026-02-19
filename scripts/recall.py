@@ -2429,7 +2429,10 @@ def recall(
                 )
                 _log.info("cross_encoder_rerank", candidates=len(ce_input),
                           blend_weight=ce_config.get("blend_weight", 0.6))
-        except (ImportError, Exception) as e:
+        except ImportError:
+            _log.debug("cross_encoder_import_failed",
+                       hint="cross_encoder_reranker not installed")
+        except Exception as e:
             _log.warning("cross_encoder_unavailable", error=str(e))
 
     top = deduped[:limit]
