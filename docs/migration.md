@@ -1,6 +1,6 @@
 # Migration Guide: mem-os to mind-mem
 
-This guide covers migrating from `mem-os` (archived at `star-ga/mem-os`) to its successor `mind-mem` (`star-ga/mind-mem`, v1.0.3+). The workspace data format is compatible -- no data loss occurs during migration.
+This guide covers migrating from `mem-os` (archived at `star-ga/mem-os`) to its successor `mind-mem` (`star-ga/mind-mem`, v1.0.5). The workspace data format is compatible -- no data loss occurs during migration.
 
 **Requirements:** Python 3.10+, FastMCP 2.0+ (for MCP server).
 
@@ -230,7 +230,7 @@ Update any client code or tool configurations that reference these URIs.
 
 ---
 
-## 7. New Features in mind-mem v1.0.3
+## 7. New Features in mind-mem (v1.0.3+)
 
 These features are new in mind-mem and were not available in mem-os:
 
@@ -244,6 +244,10 @@ These features are new in mind-mem and were not available in mem-os:
 - **Intent router** -- Classifies queries into 9 types for optimized retrieval strategy
 - **Cross-encoder reranking** (optional, requires `sentence-transformers`)
 - **Configurable prompts** -- Override LLM prompts via `mind-mem.json`
+
+**v1.0.4** added MCP bug fixes, BRIEFINGS.md crash fix, and improved error messages.
+
+**v1.0.5** added full security audit hardening: workspace path removal from responses, atomic file writes, O(N²) performance fix in RM3, thread-safe metrics, Pinecone v3 API migration, and `startswith()` path traversal fix.
 
 ---
 

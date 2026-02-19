@@ -2,6 +2,60 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.0.5 (2026-02-19)
+
+**Full security + code quality audit hardening**
+
+### Security
+- Removed workspace paths from all MCP server responses (health, scan, index_stats, reindex)
+- Replaced raw `str(e)` exception leaks with generic error messages in MCP tools
+- Fixed `startswith()` path traversal prefix collision in `mind_ffi.py` (added `os.sep` check)
+- Removed absolute kernel paths from `list_mind_kernels` and `get_mind_kernel` responses
+- Sanitized `_check_workspace` to not leak full paths in error messages
+
+### Performance
+- Fixed O(N²) RM3 re-scoring in `recall.py` with O(1) `result_by_id` dict lookup
+- Fixed O(N) set rebuild in chain-of-retrieval with pre-built `existing_ids` set
+- Hoisted `datetime` imports out of hot-path functions (`date_score`, `_extract_dates`)
+- Added `threading.Lock` for thread-safe metrics in `observability.py`
+
+### Fixed
+- Split `except (ImportError, Exception):` into separate handlers in MCP server
+- Made compaction source file writes atomic (write-to-tmp + `os.replace()`)
+- Removed no-op `word = word` branches in recall.py (changed to `pass`)
+- Removed dead comments and unused code paths
+- Fixed f-string without placeholder in `intel_scan.py`
+
+### Improved
+- Extracted `_load_extra_categories()` helper to deduplicate CategoryDistiller config loading
+- Migrated Pinecone from v2 to v3 API in `recall_vector.py`
+- Added `PINECONE_API_KEY` environment variable support for vector search
+- Updated `_VALID_KEYS` to include Pinecone/Qdrant configuration keys
+
+### Changed
+- Version: 1.0.4 → 1.0.5
+
+---
+
+## 1.0.4 (2026-02-19)
+
+**MCP bug fixes + audit findings (security, error handling, DX)**
+
+### Security
+- Fixed path traversal guard in `create_snapshot` (`FilesTouched` containment)
+- Prefer installation scripts over workspace copies in `check_preconditions`
+
+### Fixed
+- BRIEFINGS.md crash on missing briefings section
+- `load_intel_state` crash on corrupt JSON
+- MCP `reindex` error message leak on failure
+
+### Improved
+- MCP error messages include workspace validation hints
+- Test count: 736 → 761
+
+---
+
 ## 1.0.3 (2026-02-19)
 
 **Documentation, CI/CD, MCP integration tests, LLM extraction prototype**

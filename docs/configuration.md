@@ -8,7 +8,7 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
 
 ```json
 {
-  "version": "1.0.2",
+  "version": "1.0.5",
   "schema_version": "2.1.0",
   "workspace_path": ".",
   "auto_capture": true,
@@ -80,7 +80,7 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `version` | string | `"1.0.2"` | Config file version. Set automatically by `init_workspace.py`. |
+| `version` | string | `"1.0.5"` | Config file version. Set automatically by `init_workspace.py`. |
 | `schema_version` | string | `"2.1.0"` | Workspace schema version. Used by `schema_version.py` for migrations. Falls back to `version` if absent. |
 | `workspace_path` | string | `"."` | Workspace root directory. Relative paths are resolved from the config file location. |
 | `auto_capture` | bool | `true` | Run the capture engine automatically on session-end hooks. When `false`, the session-end hook exits without capturing signals. |
@@ -161,11 +161,11 @@ Requires: `pip install qdrant-client`
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `recall.pinecone_api_key` | string | (none) | Pinecone API key. Required when provider is `"pinecone"`. |
+| `recall.pinecone_api_key` | string | (none) | Pinecone API key. Required when provider is `"pinecone"`. Can also be set via `PINECONE_API_KEY` environment variable. |
 | `recall.pinecone_environment` | string | (none) | Pinecone environment (e.g., `"us-east-1-aws"`). Required when provider is `"pinecone"`. |
 | `recall.pinecone_index` | string | `"mind-mem"` | Pinecone index name. |
 
-Requires: `pip install pinecone-client`
+Requires: `pip install pinecone` (v3+)
 
 ### RM3 Query Expansion
 
@@ -326,7 +326,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.0.2",
+  "version": "1.0.5",
   "governance_mode": "detect_only",
   "recall": {
     "backend": "scan"
@@ -338,7 +338,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.0.2",
+  "version": "1.0.5",
   "governance_mode": "propose",
   "recall": {
     "backend": "hybrid",
@@ -358,7 +358,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.0.2",
+  "version": "1.0.5",
   "governance_mode": "enforce",
   "recall": {
     "backend": "hybrid",
@@ -380,7 +380,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.0.2",
+  "version": "1.0.5",
   "recall": {
     "backend": "vector",
     "provider": "qdrant",
@@ -395,7 +395,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.0.2",
+  "version": "1.0.5",
   "auto_capture": true,
   "auto_ingest": {
     "enabled": true,
@@ -410,7 +410,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.0.2",
+  "version": "1.0.5",
   "governance_mode": "propose",
   "categories": {
     "enabled": true,
