@@ -9,16 +9,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 from mind_ffi import (
     MindMemKernel,
+    _parse_value,
     get_kernel,
+    get_kernel_param,
+    get_mind_dir,
     is_available,
     list_kernels,
-    get_mind_dir,
-    load_kernel,
-    load_all_kernels,
-    load_kernel_config,
     load_all_kernel_configs,
-    get_kernel_param,
-    _parse_value,
+    load_all_kernels,
+    load_kernel,
+    load_kernel_config,
 )
 
 

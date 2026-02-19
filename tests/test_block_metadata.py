@@ -2,11 +2,12 @@
 
 import os
 import sqlite3
-import tempfile
-import unittest
 
 # Allow imports from scripts/
 import sys
+import tempfile
+import unittest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 from block_metadata import BlockMetadataManager

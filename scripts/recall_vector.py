@@ -45,16 +45,16 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import helpers from recall.py
+from block_parser import parse_file
+from observability import get_logger, metrics, timed
 from recall import (
     CORPUS_FILES,
     RecallBackend,
-    extract_text,
-    get_excerpt,
-    get_block_type,
     date_score,
+    extract_text,
+    get_block_type,
+    get_excerpt,
 )
-from block_parser import parse_file
-from observability import get_logger, metrics, timed
 
 _log = get_logger("recall_vector")
 
@@ -310,7 +310,7 @@ class VectorBackend(RecallBackend):
         """
         try:
             from qdrant_client import QdrantClient
-            from qdrant_client.models import Distance, VectorParams, PointStruct
+            from qdrant_client.models import Distance, PointStruct, VectorParams
         except ImportError as e:
             _log.error("qdrant_client_not_installed", error=str(e))
             raise ImportError(
@@ -510,7 +510,7 @@ class VectorBackend(RecallBackend):
         """
         try:
             from qdrant_client import QdrantClient
-            from qdrant_client.models import Filter, FieldCondition, MatchValue
+            from qdrant_client.models import FieldCondition, Filter, MatchValue
         except ImportError as e:
             raise ImportError("qdrant-client not installed") from e
 

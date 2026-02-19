@@ -10,8 +10,8 @@ from datetime import datetime
 # Ensure scripts are importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
+from capture import append_signals, scan_log
 from init_workspace import init
-from capture import scan_log, append_signals
 from recall import recall
 
 

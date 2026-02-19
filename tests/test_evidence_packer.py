@@ -9,14 +9,13 @@ import sys
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
 
+from abstention_classifier import ABSTENTION_ANSWER  # noqa: E402
 from evidence_packer import (  # noqa: E402
     check_abstention,
     is_true_adversarial,
     pack_evidence,
     strip_semantic_prefix,
 )
-from abstention_classifier import ABSTENTION_ANSWER  # noqa: E402
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 

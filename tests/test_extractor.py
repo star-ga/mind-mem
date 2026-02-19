@@ -7,7 +7,7 @@ import sys
 # Add scripts/ to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from extractor import extract_facts, format_as_blocks, extract_from_conversation
+from extractor import extract_facts, extract_from_conversation, format_as_blocks
 
 
 class TestExtractFacts:

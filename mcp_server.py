@@ -73,17 +73,21 @@ import sys
 SCRIPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scripts")
 sys.path.insert(0, SCRIPT_DIR)
 
+from block_parser import get_active, parse_file  # noqa: E402
 from fastmcp import FastMCP  # noqa: E402
-
-from block_parser import parse_file, get_active  # noqa: E402
-from recall import recall as recall_engine  # noqa: E402
-from sqlite_index import query_index as fts_query, _db_path as fts_db_path  # noqa: E402
-from observability import get_logger, metrics  # noqa: E402
 from mind_ffi import (  # noqa: E402
-    list_kernels as ffi_list_kernels, get_mind_dir,
-    load_kernel_config, load_all_kernel_configs,
+    get_mind_dir,
     is_available as mind_kernel_available,
     is_protected as mind_kernel_protected,
+    list_kernels as ffi_list_kernels,
+    load_all_kernel_configs,
+    load_kernel_config,
+)
+from observability import get_logger, metrics  # noqa: E402
+from recall import recall as recall_engine  # noqa: E402
+from sqlite_index import (  # noqa: E402
+    _db_path as fts_db_path,
+    query_index as fts_query,
 )
 
 _log = get_logger("mcp_server")
@@ -106,6 +110,25 @@ def _workspace() -> str:
     """Resolve workspace path from environment."""
     ws = os.environ.get("MIND_MEM_WORKSPACE", ".")
     return os.path.abspath(ws)
+
+
+def _check_workspace(ws: str) -> str | None:
+    """Validate workspace exists and has expected structure.
+
+    Returns None if valid, or an error JSON string if invalid.
+    """
+    if not os.path.isdir(ws):
+        return json.dumps({
+            "error": f"Workspace not found at '{ws}'. "
+                     f"Run: python3 scripts/init_workspace.py {ws}"
+        })
+    decisions_dir = os.path.join(ws, "decisions")
+    if not os.path.isdir(decisions_dir):
+        return json.dumps({
+            "error": f"Workspace at '{ws}' is missing the 'decisions/' directory. "
+                     f"Run: python3 scripts/init_workspace.py {ws}"
+        })
+    return None
 
 
 def _read_file(rel_path: str) -> str:
@@ -246,6 +269,9 @@ def recall(query: str, limit: int = 10, active_only: bool = False) -> str:
         JSON array of ranked results with scores, IDs, and matched content.
     """
     ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
     limit = max(1, min(limit, 100))
     # Use FTS5 index when it exists, otherwise fall back to scan
     if os.path.isfile(fts_db_path(ws)):
@@ -288,7 +314,8 @@ def propose_update(
         return json.dumps({"error": f"block_type must be 'decision' or 'task', got '{block_type}'"})
 
     from datetime import datetime
-    from capture import append_signals, CONFIDENCE_TO_PRIORITY
+
+    from capture import CONFIDENCE_TO_PRIORITY, append_signals
 
     today = datetime.now().strftime("%Y-%m-%d")
     priority = CONFIDENCE_TO_PRIORITY.get(confidence, "P2")
@@ -330,6 +357,9 @@ def scan() -> str:
         JSON summary of scan results.
     """
     ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
 
     result = {"workspace": ws, "checks": {}}
 
@@ -417,10 +447,10 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
     if not re.match(r"^P-\d{8}-\d{3}$", proposal_id):
         return json.dumps({"error": f"Invalid proposal ID format: {proposal_id}. Expected P-YYYYMMDD-NNN."})
 
-    from apply_engine import apply_proposal
-
-    import io
     import contextlib
+    import io
+
+    from apply_engine import apply_proposal
 
     # Capture stdout from apply_engine (it prints progress)
     capture = io.StringIO()
@@ -461,10 +491,10 @@ def rollback_proposal(receipt_ts: str) -> str:
     if not re.match(r"^\d{8}-\d{6}$", receipt_ts):
         return json.dumps({"error": f"Invalid receipt timestamp format: {receipt_ts}. Expected YYYYMMDD-HHMMSS."})
 
-    from apply_engine import rollback as engine_rollback
-
-    import io
     import contextlib
+    import io
+
+    from apply_engine import rollback as engine_rollback
 
     capture = io.StringIO()
     with contextlib.redirect_stdout(capture):
@@ -502,6 +532,9 @@ def hybrid_search(query: str, limit: int = 10, active_only: bool = False) -> str
         JSON array of ranked results from fused retrieval.
     """
     ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
     limit = max(1, min(limit, 100))
     try:
         from hybrid_recall import HybridBackend
@@ -634,6 +667,9 @@ def reindex(include_vectors: bool = False) -> str:
         JSON with reindex results.
     """
     ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
     results = {"workspace": ws, "fts": False, "vectors": False}
 
     try:
@@ -641,7 +677,10 @@ def reindex(include_vectors: bool = False) -> str:
         build_index(ws)
         results["fts"] = True
     except Exception as e:
-        results["fts_error"] = str(e)
+        results["fts_error"] = (
+            f"{e}. Index not found or corrupt. "
+            f"Run the 'reindex' tool first, or: python3 scripts/sqlite_index.py --rebuild {ws}"
+        )
 
     if include_vectors:
         try:

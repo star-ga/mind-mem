@@ -24,20 +24,19 @@ from unittest.mock import patch
 # Ensure scripts are importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from block_parser import parse_file
-from init_workspace import init
-from recall import recall
 from apply_engine import (
+    SNAPSHOT_FILES,
+    _list_workspace_files,
     apply_proposal,
+    compute_fingerprint,
     create_snapshot,
     restore_snapshot,
-    compute_fingerprint,
-    _list_workspace_files,
-    SNAPSHOT_FILES,
 )
 from backup_restore import WAL
+from block_parser import parse_file
 from filelock import FileLock, LockTimeout
-
+from init_workspace import init
+from recall import recall
 
 # ---------------------------------------------------------------------------
 # Helper: Build a minimal workspace with valid blocks and proposals

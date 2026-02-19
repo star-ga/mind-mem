@@ -11,15 +11,14 @@ sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
 
 from abstention_classifier import (  # noqa: E402
     ABSTENTION_ANSWER,
-    AbstentionResult,
     DEFAULT_THRESHOLD,
+    AbstentionResult,
     _extract_query_entities,
     _extract_speaker_from_query,
     _speaker_in_hit,
     _term_overlap,
     classify_abstention,
 )
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 

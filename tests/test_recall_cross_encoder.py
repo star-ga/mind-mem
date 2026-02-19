@@ -1,11 +1,16 @@
 """Tests for cross-encoder reranker integration in recall pipeline."""
+import importlib.util
 import os
 import shutil
 import sys
 import tempfile
 import unittest
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+
+_HAS_SENTENCE_TRANSFORMERS = importlib.util.find_spec("sentence_transformers") is not None
 
 
 class TestCrossEncoderConfig(unittest.TestCase):
@@ -109,13 +114,13 @@ class TestCrossEncoderInRecall(unittest.TestCase):
 class TestCrossEncoderRerankerUnit(unittest.TestCase):
     """Unit tests for the CrossEncoderReranker class itself."""
 
+    @pytest.mark.skipif(
+        not _HAS_SENTENCE_TRANSFORMERS,
+        reason="sentence-transformers not installed (optional dependency for cross-encoder reranking)",
+    )
     def test_empty_candidates(self):
         """Reranker should handle empty candidate list."""
-        # Can't test full reranker without sentence-transformers,
-        # but we can test the edge case
         from cross_encoder_reranker import CrossEncoderReranker
-        if not CrossEncoderReranker.is_available():
-            self.skipTest("sentence-transformers not installed")
         ce = CrossEncoderReranker()
         result = ce.rerank("test query", [], top_k=5)
         self.assertEqual(result, [])

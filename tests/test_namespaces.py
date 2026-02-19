@@ -9,10 +9,10 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from namespaces import (
+    NAMESPACE_DIRS,
     NamespaceManager,
     SharedLedger,
     init_multi_agent_workspace,
-    NAMESPACE_DIRS,
 )
 
 

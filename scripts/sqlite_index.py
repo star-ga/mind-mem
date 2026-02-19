@@ -33,9 +33,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from block_parser import parse_file
 from observability import get_logger, metrics
 from recall import (
-    CORPUS_FILES, SEARCH_FIELDS, get_excerpt, get_block_type, date_score, detect_query_type,
-    _QUERY_TYPE_PARAMS, tokenize, expand_query, expand_months,
-    _parse_speaker_from_tags, rerank_hits, _BLOCK_ID_RE,
+    _BLOCK_ID_RE,
+    _QUERY_TYPE_PARAMS,
+    CORPUS_FILES,
+    SEARCH_FIELDS,
+    _parse_speaker_from_tags,
+    date_score,
+    detect_query_type,
+    expand_months,
+    expand_query,
+    get_block_type,
+    get_excerpt,
+    rerank_hits,
+    tokenize,
 )
 
 _log = get_logger("sqlite_index")

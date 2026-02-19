@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from intent_router import IntentRouter, IntentResult, INTENT_CONFIG
+from intent_router import INTENT_CONFIG, IntentResult, IntentRouter
 
 
 class TestIntentClassification(unittest.TestCase):

@@ -27,7 +27,7 @@ from abc import ABC, abstractmethod
 from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from block_parser import parse_file, get_active
+from block_parser import get_active, parse_file
 from observability import get_logger, metrics
 
 # A-MEM block metadata (optional — graceful degradation if unavailable)
@@ -1725,7 +1725,7 @@ def recall(workspace: str, query: str, limit: int = 10, active_only: bool = Fals
     _kernel_bm25_b = BM25_B
     _kernel_field_weights = None
     try:
-        from mind_ffi import get_mind_dir, load_kernel_config, get_kernel_param
+        from mind_ffi import get_kernel_param, get_mind_dir, load_kernel_config
         mind_dir = get_mind_dir(workspace)
         recall_kernel = load_kernel_config(os.path.join(mind_dir, "recall.mind"))
         if recall_kernel:

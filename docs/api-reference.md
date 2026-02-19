@@ -55,6 +55,16 @@ Search across all memory files with ranked retrieval. Uses FTS5 index when avail
 | `limit` | `integer` | `10` | Maximum number of results. Clamped to range [1, 100]. |
 | `active_only` | `boolean` | `false` | Only return blocks with `Status: active`. |
 
+#### Python Example
+
+```python
+result = await session.call_tool("recall", {
+    "query": "authentication decisions",
+    "limit": 5,
+    "active_only": True
+})
+```
+
 #### Return Format
 
 JSON array of ranked result objects.
@@ -153,6 +163,18 @@ Propose a new decision or task. Writes to `intelligence/SIGNALS.md` for human re
 | `tags` | `string` | `""` | Comma-separated tags (e.g., `"database, infrastructure"`). |
 | `confidence` | `string` | `"medium"` | Signal confidence level. One of `"high"`, `"medium"`, or `"low"`. Maps to priority: high=P1, medium=P2, low=P3. |
 
+#### Python Example
+
+```python
+result = await session.call_tool("propose_update", {
+    "block_type": "decision",
+    "statement": "Use Redis for session caching",
+    "rationale": "Persistence across restarts",
+    "tags": "infrastructure, caching",
+    "confidence": "high"
+})
+```
+
 #### Return Format
 
 ```json
@@ -219,6 +241,15 @@ Apply a staged proposal from `intelligence/proposed/`. Defaults to dry-run mode.
 |------|------|---------|-------------|
 | `proposal_id` | `string` | *(required)* | The proposal ID. Must match format `P-YYYYMMDD-NNN` (e.g., `"P-20260213-002"`). |
 | `dry_run` | `boolean` | `true` | If `true` (default), validate without executing. Set to `false` to actually apply the proposal. |
+
+#### Python Example
+
+```python
+result = await session.call_tool("approve_apply", {
+    "proposal_id": "P-20260218-001",
+    "dry_run": False
+})
+```
 
 #### Return Format
 
@@ -313,6 +344,14 @@ Rollback an applied proposal using its receipt timestamp. Restores the workspace
 |------|------|---------|-------------|
 | `receipt_ts` | `string` | *(required)* | Receipt timestamp from a prior `approve_apply` result. Must match format `YYYYMMDD-HHMMSS` (e.g., `"20260218-143022"`). |
 
+#### Python Example
+
+```python
+result = await session.call_tool("rollback_proposal", {
+    "receipt_ts": "20260218-143022"
+})
+```
+
 #### Return Format
 
 ```json
@@ -369,6 +408,12 @@ Run an integrity scan on the workspace. Checks decisions, contradictions, drift 
 #### Parameters
 
 None.
+
+#### Python Example
+
+```python
+result = await session.call_tool("scan", {})
+```
 
 #### Return Format
 
@@ -431,6 +476,12 @@ List detected contradictions between decisions with resolution analysis and stra
 #### Parameters
 
 None.
+
+#### Python Example
+
+```python
+result = await session.call_tool("list_contradictions", {})
+```
 
 #### Return Format
 

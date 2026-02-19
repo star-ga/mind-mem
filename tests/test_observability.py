@@ -6,7 +6,7 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from observability import get_logger, Metrics, timed
+from observability import Metrics, get_logger, timed
 
 
 class TestStructuredLogger(unittest.TestCase):
