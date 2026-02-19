@@ -729,7 +729,7 @@ mindc mind/bm25.mind --emit=shared -o lib/libbm25.so
 | `weighted_rank`    |  **5.1x** | **26.6x** | **121.8x** |
 | **Overall**        |           |           | **49.0x** |
 
-> **49x faster** end-to-end at production scale (N=5,000). Individual kernels reach up to **193x** speedup. The compiled library includes 12 runtime protection layers with near-zero overhead.
+> **49x faster** end-to-end at production scale (N=5,000). Individual kernels reach up to **193x** speedup. The compiled library includes 14 runtime protection layers with near-zero overhead.
 
 </details>
 
