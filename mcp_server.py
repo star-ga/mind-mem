@@ -131,11 +131,24 @@ def _check_workspace(ws: str) -> str | None:
     return None
 
 
+def _validate_path(ws: str, rel_path: str) -> str:
+    """Validate that rel_path resolves inside workspace. Returns resolved path.
+
+    Raises ValueError if the path escapes the workspace boundary.
+    """
+    ws_real = os.path.realpath(ws)
+    path = os.path.realpath(os.path.join(ws_real, rel_path))
+    if path != ws_real and not path.startswith(ws_real + os.sep):
+        raise ValueError("Invalid path: escapes workspace")
+    return path
+
+
 def _read_file(rel_path: str) -> str:
     """Read a file from workspace, return contents or error message."""
-    ws = os.path.realpath(_workspace())
-    path = os.path.realpath(os.path.join(ws, rel_path))
-    if path != ws and not path.startswith(ws + os.sep):
+    ws = _workspace()
+    try:
+        path = _validate_path(ws, rel_path)
+    except ValueError:
         return "Error: path escapes workspace"
     if not os.path.isfile(path):
         return f"File not found: {rel_path}"
@@ -286,16 +299,31 @@ def recall(query: str, limit: int = 10, active_only: bool = False) -> str:
     if ws_err:
         return ws_err
     limit = max(1, min(limit, 100))
-    # Use FTS5 index when it exists, otherwise fall back to scan
+    warnings = []
+    # Use FTS5 index when it exists, otherwise fall back to scan (#11)
     if os.path.isfile(fts_db_path(ws)):
         results = fts_query(ws, query, limit=limit, active_only=active_only)
         backend = "sqlite"
     else:
         results = recall_engine(ws, query, limit=limit, active_only=active_only)
         backend = "scan"
+        warnings.append("FTS5 index not found — using full scan. "
+                        "Run 'reindex' tool for faster queries.")
     metrics.inc("mcp_recall_queries")
     _log.info("mcp_recall", query=query, backend=backend, results=len(results))
-    return json.dumps(results, indent=2, default=str)
+    # Wrap in envelope with schema version and warnings (#11, recommendation)
+    envelope = {
+        "_schema_version": "1.0",
+        "backend": backend,
+        "query": query,
+        "count": len(results),
+        "results": results,
+    }
+    if warnings:
+        envelope["warnings"] = warnings
+    if not results:
+        envelope["message"] = "No matching blocks found. Try broader terms or check workspace."
+    return json.dumps(envelope, indent=2, default=str)
 
 
 @mcp.tool

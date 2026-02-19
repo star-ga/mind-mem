@@ -54,6 +54,17 @@ except ImportError:
 
 _log = get_logger("recall")
 
+# Log optional subsystem availability at import time (#5: hidden coupling)
+if not _HAS_BLOCK_META:
+    _log.info("optional_subsystem_unavailable", subsystem="block_metadata",
+              impact="A-MEM importance boost disabled")
+if not _HAS_INTENT_ROUTER:
+    _log.info("optional_subsystem_unavailable", subsystem="intent_router",
+              impact="falling back to detect_query_type()")
+if not _HAS_LLM_EXTRACTOR:
+    _log.info("optional_subsystem_unavailable", subsystem="llm_extractor",
+              impact="LLM enrichment disabled")
+
 
 # ---------------------------------------------------------------------------
 # RecallBackend interface — plug in vector/semantic backends here
@@ -1016,6 +1027,15 @@ _BLOCK_ID_RE = re.compile(
 # Graph neighbor boost factor: a neighbor gets this fraction of the referencing block's score
 GRAPH_BOOST_FACTOR = 0.4
 
+# Cap neighbors per hop to prevent blowup on dense graphs (recommendation)
+MAX_GRAPH_NEIGHBORS_PER_HOP = 50
+
+# Maximum rerank candidates to prevent latency spikes (#9)
+MAX_RERANK_CANDIDATES = 200
+
+# Maximum blocks to process in a single recall query (#15)
+MAX_BLOCKS_PER_QUERY = 50000
+
 
 def build_xref_graph(all_blocks: list[dict]) -> dict[str, set[str]]:
     """Build bidirectional adjacency graph from cross-references.
@@ -1861,6 +1881,13 @@ def recall(
     if not all_blocks:
         return []
 
+    # Cap blocks to prevent memory/latency blowup on huge workspaces (#15)
+    if len(all_blocks) > MAX_BLOCKS_PER_QUERY:
+        _log.warning("blocks_capped", total=len(all_blocks),
+                     cap=MAX_BLOCKS_PER_QUERY,
+                     hint="consider using FTS5 index for large workspaces")
+        all_blocks = all_blocks[:MAX_BLOCKS_PER_QUERY]
+
     # --- Kernel overrides: local aliases for BM25 params ---
     _fw = _kernel_field_weights if _kernel_field_weights else FIELD_WEIGHTS
     _k1 = float(_kernel_bm25_k1)
@@ -2034,14 +2061,19 @@ def recall(
                 for nid, ns in neighbor_scores.items()
                 if nid not in score_by_id
             ]
+            hop_added = 0
             for r in seeds:
                 rid = r["_id"]
-                for neighbor_id in xref_graph.get(rid, set()):
+                neighbors = xref_graph.get(rid, set())
+                for neighbor_id in neighbors:
+                    if hop_added >= MAX_GRAPH_NEIGHBORS_PER_HOP:
+                        break
                     boost = r["score"] * decay
                     if neighbor_id not in score_by_id:
                         neighbor_scores[neighbor_id] = (
                             neighbor_scores.get(neighbor_id, 0) + boost
                         )
+                        hop_added += 1
                     else:
                         neighbor_scores[neighbor_id] = (
                             neighbor_scores.get(neighbor_id, 0) + boost * 0.5
@@ -2374,25 +2406,28 @@ def recall(
 
         deduped.append(r)
 
-    # Stage 2: Deterministic rerank (v7)
+    # Stage 2: Deterministic rerank (v7) — cap candidates to prevent latency (#9)
     if rerank and len(deduped) > limit:
-        deduped = rerank_hits(query, deduped, debug=rerank_debug)
+        rerank_cap = min(len(deduped), MAX_RERANK_CANDIDATES)
+        deduped = rerank_hits(query, deduped[:rerank_cap], debug=rerank_debug)
 
-    # Stage 2.5: Optional cross-encoder neural reranking
+    # Stage 2.5: Optional cross-encoder neural reranking — capped (#9)
     if ce_config.get("enabled", False):
         try:
             from cross_encoder_reranker import CrossEncoderReranker
             if CrossEncoderReranker.is_available():
                 ce = CrossEncoderReranker()
-                for r in deduped:
+                ce_cap = min(len(deduped), MAX_RERANK_CANDIDATES)
+                ce_input = deduped[:ce_cap]
+                for r in ce_input:
                     if "content" not in r:
                         r["content"] = r.get("excerpt", "")
                 deduped = ce.rerank(
-                    query, deduped,
+                    query, ce_input,
                     top_k=ce_config.get("top_k", limit),
                     blend_weight=ce_config.get("blend_weight", 0.6),
                 )
-                _log.info("cross_encoder_rerank", candidates=len(deduped),
+                _log.info("cross_encoder_rerank", candidates=len(ce_input),
                           blend_weight=ce_config.get("blend_weight", 0.6))
         except (ImportError, Exception) as e:
             _log.warning("cross_encoder_unavailable", error=str(e))

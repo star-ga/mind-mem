@@ -588,9 +588,10 @@ def query_index(
             seen_keys.add(dia_key)
         deduped.append(r)
 
-    # Rerank
+    # Rerank — cap candidates to prevent latency spikes (#9)
     if rerank and len(deduped) > limit:
-        deduped = rerank_hits(query, deduped, debug=rerank_debug)
+        rerank_cap = min(len(deduped), 200)
+        deduped = rerank_hits(query, deduped[:rerank_cap], debug=rerank_debug)
 
     top = deduped[:limit]
 
@@ -636,12 +637,16 @@ def _apply_graph_boost(
             seed_ids,
         ).fetchall()
 
+        hop_added = 0
         for edge in edges:
             src, dst = edge["src"], edge["dst"]
             src_score = score_by_id.get(src, neighbor_scores.get(src, 0))
             boost = src_score * decay
             if dst not in result_ids:
+                if hop_added >= 50:  # Cap neighbors per hop
+                    break
                 neighbor_scores[dst] = neighbor_scores.get(dst, 0) + boost
+                hop_added += 1
             else:
                 neighbor_scores[dst] = neighbor_scores.get(dst, 0) + boost * 0.5
 

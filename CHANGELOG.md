@@ -49,6 +49,17 @@ All notable changes to mind-mem are documented in this file.
 - Build now fails if any of 8 leak categories (MIND source, attributes, TOML configs, hex auth key, RPATH, VM IR, protection internals, TOML comments) still have patterns in final binary
 - String count: 412 → 186 (all remaining are exported symbols + system calls)
 
+### Second audit pass — full fix
+- **#5 Hidden coupling**: Added `_log.info` for missing optional subsystems (block_metadata, intent_router, llm_extractor) at import time
+- **#9 Reranker latency**: Capped deterministic reranker and cross-encoder candidates at `MAX_RERANK_CANDIDATES` (200) in both BM25 and FTS paths
+- **#11 FTS fallback silent**: MCP `recall` tool now returns envelope `{"_schema_version": "1.0", "backend": ..., "results": [...], "warnings": [...]}` with fallback warnings
+- **#13 README accuracy**: Changed "Zero Dependencies" badge to "Zero Core Dependencies", added `ollama` to optional deps table, clarified optional deps in trust signals
+- **#15 Config caps**: Added `MAX_BLOCKS_PER_QUERY` (50,000) cap with warning log on huge workspaces
+- **Graph cap**: Capped graph neighbor expansion to `MAX_GRAPH_NEIGHBORS_PER_HOP` (50) per hop in both BM25 and FTS paths to prevent blowup on dense graphs
+- **Path validation**: Extracted reusable `_validate_path()` helper in `mcp_server.py` for consistent workspace containment checks
+- **Schema versioning**: MCP recall output now includes `_schema_version: "1.0"` for client compatibility detection
+- **No-results feedback**: Empty recall results include a `"message"` hint instead of bare empty array
+
 ---
 
 ## 1.0.4 (2026-02-19)

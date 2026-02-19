@@ -11,7 +11,7 @@
     <a href="https://github.com/star-ga/mind-mem/blob/main/LICENSE"><img src="https://img.shields.io/github/license/star-ga/mind-mem?style=flat-square&color=blue" alt="License"></a>
     <a href="https://github.com/star-ga/mind-mem/releases"><img src="https://img.shields.io/github/v/release/star-ga/mind-mem?style=flat-square&color=green" alt="Release"></a>
     <img src="https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+">
-    <img src="https://img.shields.io/badge/dependencies-zero-brightgreen?style=flat-square" alt="Zero Dependencies">
+    <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
     <img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible">
     <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
     <img src="https://img.shields.io/badge/security-audited-darkgreen?style=flat-square" alt="Security Audited">
@@ -55,7 +55,7 @@ The installer auto-detects Claude Code, Claude Desktop, Codex CLI, Gemini CLI, C
 | **No vendor lock-in**   | Plain Markdown files. Move to any system, any time.                               |
 | **Zero magic**          | Every check is a grep, every mutation is a file write. Read the source in 30 min. |
 | **No silent mutation**  | Nothing writes to source of truth without explicit `/apply`. Ever.                |
-| **Zero infrastructure** | No Redis, no Postgres, no vector DB, no GPU. Python 3.10+ is all you need.        |
+| **Zero infrastructure** | No Redis, no Postgres, no vector DB, no GPU. Python 3.10+ is all you need. Optional: `sentence-transformers` for vector search, `ollama` for LLM extraction. |
 
 ---
 
@@ -537,7 +537,7 @@ your-workspace/
 | [**Graphlit**](https://www.graphlit.com) | Multimodal ingestion, semantic search, managed platform | Cloud-only, managed service |
 | [**ClawMem**](https://github.com/yoloshii/ClawMem) | Full ML pipeline (cross-encoder + QMD + beam search) | 4.5GB VRAM, 3 GPU processes required |
 | [**MemU**](https://github.com/supermemory/memu) | Hierarchical 3-layer memory, multimodal ingestion, LLM-based retrieval | Requires LLM for extraction and retrieval, no hybrid search |
-| **mind-mem** | Integrity + governance + zero deps + hybrid search + MIND kernels + 16 MCP tools | Lexical recall by default (vector/CE optional) |
+| **mind-mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 16 MCP tools | Lexical recall by default (vector/CE optional) |
 
 ### Full Feature Matrix
 
@@ -579,7 +579,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | Audit trail     |                   —                    |                 Part                  |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       |    **Full**    |
 | **Operations**  |                                        |                                       |                                                         |                                |                               |                                             |                                 |                                      |                                                 |                                              |              |
 | Local-only      |                   —                    |                   —                   |                           Yes                           |               —                |               —               |                      —                      |                —                |                  —                   |                       Yes                       |                     Yes                      |    **Yes**     |
-| Zero deps       |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       |    **Yes**     |
+| Zero core deps  |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       |    **Yes**     |
 | No daemon       |                   —                    |                   —                   |                            —                            |               —                |               —               |                     Yes                     |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
 | GPU required    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                    **4.5GB**                    |                      No                      |     **No**     |
 | Git-friendly    |                   —                    |                   —                   |                            —                            |              Part              |               —               |                      —                      |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
@@ -1103,6 +1103,7 @@ mind-mem makes **zero network calls** from its core. No telemetry, no phoning ho
 | `fastmcp`                    | MCP server              | `pip install mind-mem[mcp]`           |
 | `onnxruntime` + `tokenizers` | Local vector embeddings | `pip install mind-mem[embeddings]`    |
 | `sentence-transformers`      | Cross-encoder reranking | `pip install mind-mem[cross-encoder]` |
+| `ollama`                     | LLM extraction (local)  | `pip install ollama`                  |
 
 ### Platform Support
 
