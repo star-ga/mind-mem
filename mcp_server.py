@@ -662,23 +662,37 @@ def index_stats() -> str:
     ws = _workspace()
     stats = {}
 
-    # Count blocks by type
-    for kind in ["decisions", "tasks", "entities"]:
-        d = os.path.join(ws, kind)
-        if os.path.isdir(d):
-            count = 0
-            for fn in os.listdir(d):
-                if fn.endswith(".md"):
-                    try:
-                        blocks = parse_file(os.path.join(d, fn))
-                        count += len(blocks)
-                    except Exception:
-                        pass
-            stats[f"{kind}_blocks"] = count
-
-    # FTS index status
+    # Use FTS index for block counts when available (O(1) vs O(N) file parsing)
     db = fts_db_path(ws)
-    stats["fts_index_exists"] = os.path.isfile(db) if db else False
+    fts_exists = os.path.isfile(db) if db else False
+    stats["fts_index_exists"] = fts_exists
+
+    if fts_exists:
+        try:
+            from sqlite_index import index_status as fts_status
+            fts_info = fts_status(ws)
+            stats["total_blocks"] = fts_info.get("blocks", 0)
+            stats["last_build"] = fts_info.get("last_build")
+            stats["stale_files"] = fts_info.get("stale_files", 0)
+            stats["db_size_bytes"] = fts_info.get("db_size_bytes", 0)
+        except Exception as e:
+            _log.debug("fts_status_failed", error=str(e))
+            fts_exists = False  # fall through to file scan
+
+    if not fts_exists:
+        # Fallback: count blocks by parsing files (O(N))
+        for kind in ["decisions", "tasks", "entities"]:
+            d = os.path.join(ws, kind)
+            if os.path.isdir(d):
+                count = 0
+                for fn in os.listdir(d):
+                    if fn.endswith(".md"):
+                        try:
+                            blocks = parse_file(os.path.join(d, fn))
+                            count += len(blocks)
+                        except Exception as e:
+                            _log.debug("index_stats_parse_failed", file=fn, error=str(e))
+                stats[f"{kind}_blocks"] = count
 
     # MIND kernel status
     mind_dir = get_mind_dir(ws)
