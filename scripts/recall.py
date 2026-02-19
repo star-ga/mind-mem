@@ -25,6 +25,7 @@ import re
 import sys
 from abc import ABC, abstractmethod
 from collections import Counter
+from datetime import datetime as _datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from block_parser import get_active, parse_file
@@ -273,7 +274,7 @@ def _stem(word: str) -> str:
     elif word.endswith("izing"):
         word = word[:-3] + "e"
     elif word.endswith("ize"):
-        word = word  # keep as-is
+        pass  # keep as-is
     elif word.endswith("ating"):
         word = word[:-3] + "e"
     elif word.endswith("ation"):
@@ -281,7 +282,7 @@ def _stem(word: str) -> str:
     elif word.endswith("ously"):
         word = word[:-5] + "ous"
     elif word.endswith("ous") and len(word) > 5:
-        word = word  # keep as-is
+        pass  # keep as-is
     elif word.endswith("ful"):
         word = word[:-3]
     elif word.endswith("ally"):
@@ -989,9 +990,8 @@ def date_score(block: dict) -> float:
     if not date_str:
         return 0.5
     try:
-        from datetime import datetime
-        d = datetime.strptime(date_str[:10], "%Y-%m-%d")
-        now = datetime.now()
+        d = _datetime.strptime(date_str[:10], "%Y-%m-%d")
+        now = _datetime.now()
         days_old = (now - d).days
         if days_old <= 0:
             return 1.0
@@ -1151,11 +1151,10 @@ _DATE_PATTERN = re.compile(r'(\d{4})-(\d{2})-(\d{2})')
 
 def _extract_dates(text: str) -> list:
     """Extract YYYY-MM-DD dates from text."""
-    from datetime import datetime as _dt
     dates = []
     for m in _DATE_PATTERN.finditer(text):
         try:
-            dates.append(_dt(int(m.group(1)), int(m.group(2)), int(m.group(3))))
+            dates.append(_datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))))
         except ValueError:
             continue
     return dates
@@ -1788,7 +1787,6 @@ def recall(
     # Skeptical mode: for distractor-prone queries, keep morph-only tokens
     # separate to penalize expansion-only matches later.
     skeptical = is_skeptical_query(query) and query_type in ("adversarial", "single-hop")
-    # morph_tokens preserved for future skeptical-mode penalty scoring
 
     # Query expansion: add domain synonyms
     # adversarial/verification queries use morph_only (no semantic synonyms)
@@ -2123,6 +2121,8 @@ def recall(
         if expansion_terms_rm3:
             _rm3_used = True
             rm3_weight = 0.4
+            # Build O(1) lookup index to avoid O(N²) linear scan
+            result_by_id = {r["_id"]: r for r in results}
             for i, block in enumerate(all_blocks):
                 ft = doc_field_tokens[i]
                 flat = doc_flat_tokens[i]
@@ -2148,13 +2148,10 @@ def recall(
 
                 if rm3_score > 0:
                     bid = block.get("_id", "?")
-                    found = False
-                    for r in results:
-                        if r["_id"] == bid:
-                            r["score"] = round(r["score"] + rm3_score * rm3_weight, 4)
-                            found = True
-                            break
-                    if not found:
+                    existing = result_by_id.get(bid)
+                    if existing:
+                        existing["score"] = round(existing["score"] + rm3_score * rm3_weight, 4)
+                    else:
                         result = {
                             "_id": bid,
                             "type": get_block_type(bid),
@@ -2167,6 +2164,7 @@ def recall(
                         if block.get("DiaID"):
                             result["DiaID"] = block["DiaID"]
                         results.append(result)
+                        result_by_id[bid] = result
 
             _log.info("rm3_expansion", expansion_terms=expansion_terms_rm3[:5],
                       alpha=rm3_config.get("alpha", 0.6))
@@ -2261,7 +2259,6 @@ def recall(
     if query_type == "multi-hop" and results:
         results.sort(key=lambda r: r["score"], reverse=True)
         hop1_top = results[:10]
-        # hop1_ids reserved for future deduplication in multi-hop bridging
 
         # Extract bridge terms: capitalized entities from top-10 that aren't in query
         query_lower_set = set(re.findall(r"[a-z]+", query.lower()))
@@ -2283,9 +2280,10 @@ def recall(
 
         if bridge_tokens:
             # Second retrieval pass using bridge terms
+            existing_ids = {r["_id"] for r in results}
             for i, block in enumerate(all_blocks):
                 bid = block.get("_id", "?")
-                if bid in {r["_id"] for r in results}:
+                if bid in existing_ids:
                     continue  # already in results
 
                 ft = doc_field_tokens[i]

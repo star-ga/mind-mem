@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import sys
+import threading
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -111,16 +112,19 @@ class Metrics:
     def __init__(self) -> None:
         self._counters: dict[str, int | float] = {}
         self._observations: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
 
     def inc(self, name: str, value: int | float = 1) -> None:
-        """Increment a counter."""
-        self._counters[name] = self._counters.get(name, 0) + value
+        """Increment a counter (thread-safe)."""
+        with self._lock:
+            self._counters[name] = self._counters.get(name, 0) + value
 
     def observe(self, name: str, value: float) -> None:
-        """Record an observation (e.g., latency, size)."""
-        if name not in self._observations:
-            self._observations[name] = []
-        self._observations[name].append(value)
+        """Record an observation (thread-safe)."""
+        with self._lock:
+            if name not in self._observations:
+                self._observations[name] = []
+            self._observations[name].append(value)
 
     def get(self, name: str) -> int | float:
         """Get counter value."""

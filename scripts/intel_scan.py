@@ -113,12 +113,21 @@ def load_all(ws):
 
 
 def load_intel_state(ws):
-    """Load intel-state.json."""
+    """Load intel-state.json. Returns defaults on missing or corrupt file."""
     path = f"{ws}/memory/intel-state.json"
+    defaults = {"governance_mode": "detect_only", "counters": {}}
     if os.path.exists(path):
-        with open(path) as f:
-            return json.load(f)
-    return {"governance_mode": "detect_only", "counters": {}}
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                print("[WARN] intel-state.json is not a dict, using defaults", file=sys.stderr)
+                return defaults
+            return data
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"[WARN] intel-state.json corrupt: {e}, using defaults", file=sys.stderr)
+            return defaults
+    return defaults
 
 
 def save_intel_state(ws, state):
@@ -780,6 +789,10 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
 
     # Append to BRIEFINGS.md
     briefing_path = f"{ws}/intelligence/BRIEFINGS.md"
+    if not os.path.isfile(briefing_path):
+        os.makedirs(os.path.dirname(briefing_path), exist_ok=True)
+        with open(briefing_path, "w") as f:
+            f.write("# Intelligence Briefings\n\n")
     with open(briefing_path, "r") as f:
         existing = f.read()
 
