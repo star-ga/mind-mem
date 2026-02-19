@@ -1770,7 +1770,7 @@ def recall(
             if fields_section:
                 _kernel_field_weights = fields_section
     except ImportError:
-        pass
+        _log.debug("mind_ffi_unavailable", hint="MIND kernels not installed")
     except Exception as e:
         _log.warning("mind_kernel_load_failed", error=str(e))
 
@@ -1832,7 +1832,7 @@ def recall(
             from namespaces import NamespaceManager
             ns_manager = NamespaceManager(workspace, agent_id=agent_id)
         except ImportError:
-            pass
+            _log.debug("namespaces_unavailable", agent_id=agent_id)
 
     # Load all blocks with source file tracking
     all_blocks = []
@@ -2496,7 +2496,8 @@ def _load_backend(workspace: str) -> str:
                     from recall_vector import VectorBackend
                     return VectorBackend(recall_cfg)
                 except ImportError:
-                    _log.debug("vector_backend_unavailable", hint="install recall_vector")
+                    _log.warning("vector_backend_unavailable",
+                                 hint="recall_vector not installed, falling back to BM25 scan")
         except (OSError, json.JSONDecodeError, KeyError) as e:
             _log.warning("config_load_failed", path=config_path, error=str(e))
     return None  # use built-in BM25 scan
@@ -2568,7 +2569,7 @@ def prefetch_context(
             except Exception as e:
                 _log.warning("prefetch_category_recall_failed", error=str(e))
     except ImportError:
-        pass  # category_distiller not available — skip
+        _log.debug("category_distiller_unavailable", hint="prefetch categories skipped")
 
     # 3. Trim to limit and return
     return results[:limit]
