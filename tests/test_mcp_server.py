@@ -403,11 +403,11 @@ class TestTokenVerification(unittest.TestCase):
 
     def test_alt_header_accepted(self):
         os.environ["MIND_MEM_TOKEN"] = "secret123"
-        self.assertTrue(self.mod.verify_token({"X-MemOS-Token": "secret123"}))
+        self.assertTrue(self.mod.verify_token({"X-MindMem-Token": "secret123"}))
 
     def test_alt_header_wrong_rejected(self):
         os.environ["MIND_MEM_TOKEN"] = "secret123"
-        self.assertFalse(self.mod.verify_token({"X-MemOS-Token": "wrong"}))
+        self.assertFalse(self.mod.verify_token({"X-MindMem-Token": "wrong"}))
 
 
 if __name__ == "__main__":

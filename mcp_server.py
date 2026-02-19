@@ -110,7 +110,10 @@ def _workspace() -> str:
 
 def _read_file(rel_path: str) -> str:
     """Read a file from workspace, return contents or error message."""
-    path = os.path.join(_workspace(), rel_path)
+    ws = _workspace()
+    path = os.path.normpath(os.path.join(ws, rel_path))
+    if not path.startswith(ws + os.sep) and path != ws:
+        return "Error: path escapes workspace"
     if not os.path.isfile(path):
         return f"File not found: {rel_path}"
     with open(path, "r", encoding="utf-8") as f:
@@ -873,7 +876,7 @@ def verify_token(headers: dict) -> bool:
 
     Returns True if:
       - No token is configured (open access), or
-      - Token matches via Authorization: Bearer <token> or X-MemOS-Token header.
+      - Token matches via Authorization: Bearer <token> or X-MindMem-Token header.
 
     Returns False if token is configured but missing/invalid.
     """
@@ -888,8 +891,8 @@ def verify_token(headers: dict) -> bool:
         if hmac.compare_digest(provided, expected):
             return True
 
-    # Try X-MemOS-Token header
-    alt = headers.get("x-memos-token", headers.get("X-MemOS-Token", ""))
+    # Try X-MindMem-Token header
+    alt = headers.get("x-mindmem-token", headers.get("X-MindMem-Token", ""))
     if alt and hmac.compare_digest(alt, expected):
         return True
 
