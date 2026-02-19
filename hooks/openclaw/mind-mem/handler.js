@@ -50,7 +50,7 @@ const handler = async (event) => {
 
       const raw = fs.readFileSync(statePath, "utf-8");
       const state = JSON.parse(raw);
-      const mode = state.self_correcting_mode || state.governance_mode || "unknown";
+      const mode = state.governance_mode || state.self_correcting_mode || "unknown";
       const lastScan = state.last_scan || "never";
       const contradictions = state.counters?.contradictions_open || 0;
       const drift = state.counters?.drift_signals_open || 0;
@@ -89,6 +89,23 @@ const handler = async (event) => {
       });
     } catch {
       // Non-fatal — capture failures shouldn't block /new
+    }
+
+    // Run transcript_capture to scan recent transcripts for entity ingestion
+    const transcriptCapturePy = path.join(scriptsDir, "transcript_capture.py");
+    if (fs.existsSync(transcriptCapturePy)) {
+      try {
+        execSync(
+          `python3 "${transcriptCapturePy}" "${workspace}" --scan-recent --days 1`,
+          {
+            timeout: 30_000,
+            stdio: "pipe",
+            env: { ...process.env, MIND_MEM_WORKSPACE: workspace },
+          }
+        );
+      } catch {
+        // Non-fatal — transcript capture failures shouldn't block /new
+      }
     }
     return;
   }
