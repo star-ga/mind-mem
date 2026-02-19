@@ -122,7 +122,7 @@ Four-signal reranking pipeline: negation awareness (penalizes contradicting resu
 Drop-in ms-marco-MiniLM-L-6-v2 cross-encoder (80MB). Blends 0.6 * CE + 0.4 * original score. Falls back gracefully when unavailable. Enabled via config.
 
 ### MIND Kernels (Optional, Native Speed)
-7 compiled MIND kernels for BM25F scoring, RRF fusion, reranking, abstention, ranking, importance, and category scoring. Compiles to native `.so` via the [MIND compiler](https://mindlang.dev). Pure Python fallback always available — no functionality is lost without compilation.
+15 compiled MIND scoring kernels (BM25F, RRF fusion, reranking, negation penalty, date proximity, category boost, importance, entity overlap, confidence, top-k, weighted rank, category affinity, query-category relevance, category assignment). Compiles to native `.so` via the [MIND compiler](https://mindlang.dev). Pure Python fallback always available — no functionality is lost without compilation.
 
 ### BM25F Hybrid Recall
 BM25F field-weighted scoring (k1=1.2, b=0.75) with per-field weighting (Statement: 3x, Title: 2.5x, Name: 2x, Summary: 1.5x), Porter stemming, bigram phrase matching (25% boost per hit), overlapping sentence chunking (3-sentence windows with 1-sentence overlap), domain-aware query expansion, and optional 2-hop graph-based cross-reference neighbor boosting. Zero dependencies. Fast and deterministic.
@@ -729,7 +729,7 @@ mindc mind/bm25.mind --emit=shared -o lib/libbm25.so
 | `weighted_rank`    |  **5.1x** | **26.6x** | **121.8x** |
 | **Overall**        |           |           | **49.0x** |
 
-> **49x faster** end-to-end at production scale (N=5,000). Individual kernels reach up to **193x** speedup. The compiled library includes 14 runtime protection layers with near-zero overhead.
+> **49x faster** end-to-end at production scale (N=5,000). Individual kernels reach up to **193x** speedup. The compiled library includes 12 runtime protection layers with near-zero overhead.
 
 </details>
 

@@ -26,7 +26,7 @@ All notable changes to mind-mem are documented in this file.
 
 ### Changed
 - `pyproject.toml`: added pytest/ruff configuration and `[test]` extras
-- Test count: 736 -> 737+
+- Test count: 736 -> 761
 
 ---
 
@@ -38,7 +38,7 @@ All notable changes to mind-mem are documented in this file.
 - `scripts/category_distiller.py`: Deterministic category detection from block tags/keywords, generates `categories/*.md` thematic summaries with block references and `_manifest.json`
 - `prefetch_context()` in `scripts/recall.py`: Anticipatory pre-assembly of likely-needed blocks using intent routing + category summaries
 - 2 new MCP tools: `category_summary` (topic-based category retrieval), `prefetch` (signal-based context pre-assembly) — 14→16 total
-- 16 MIND kernel source files (`.mind`) with C99 FFI bridge: 7 compiled scoring kernels + 9 configuration kernels
+- 16 MIND kernel source files (`.mind`) with C99 FFI bridge: 15 compiled scoring kernels + configuration parameters
 - MIND kernel batch categorization: `category_affinity` + `category_assign` C kernels integrated into category distiller with pure Python fallback
 - `is_protected()` module-level function in `mind_ffi.py` for FORTRESS protection detection
 - `mind_kernel_protected` field in `index_stats` MCP tool response
