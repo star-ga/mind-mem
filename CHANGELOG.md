@@ -35,6 +35,20 @@ All notable changes to mind-mem are documented in this file.
 ### Changed
 - Version: 1.0.4 → 1.0.5
 
+### Post-release audit fixes (de1e747)
+- Pre-computed IDF per query token before document loop (eliminates redundant `math.log` calls)
+- Added `_id` tie-breaker to all 5 result sort calls for deterministic ordering across platforms
+- Added `_VALID_RECALL_KEYS` whitelist for recall config section with unknown-key warnings
+- Replaced silent `except: pass` with debug/warning logging in corpus parsing, RM3 config, vector backend
+- Optimized `index_stats` MCP tool to use FTS index count (O(1)) instead of re-parsing all files (O(N))
+- Cleaned up dead silent catch in `sqlite_index.py` xref scan
+
+### FORTRESS binary hardening (ce33649)
+- Expanded binary patching keyword lists from ~25 to 130+ patterns (8 leak categories)
+- Added `patchelf --set-rpath '$ORIGIN'` to remove hardcoded build paths from ELF RPATH
+- Build now fails if any of 8 leak categories (MIND source, attributes, TOML configs, hex auth key, RPATH, VM IR, protection internals, TOML comments) still have patterns in final binary
+- String count: 412 → 186 (all remaining are exported symbols + system calls)
+
 ---
 
 ## 1.0.4 (2026-02-19)
