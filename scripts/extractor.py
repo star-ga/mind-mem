@@ -42,7 +42,8 @@ _IDENTITY_RE = re.compile(
 )
 # Secondary identity: "as a X woman/man/person/professional"
 _IDENTITY_AS_RE = re.compile(
-    r"\bas\s+(?:a |an )?(\w+(?:\s+\w+)?(?:\s+(?:woman|man|person|professional|artist|engineer|student|mother|father|parent)))\b",
+    r"\bas\s+(?:a |an )?(\w+(?:\s+\w+)?(?:\s+(?:woman|man|person|professional|"
+    r"artist|engineer|student|mother|father|parent)))\b",
     re.IGNORECASE,
 )
 
@@ -65,7 +66,8 @@ _ATTRIBUTE_RE = re.compile(
 
 # Preference: "I love/like/enjoy/prefer X", "my favorite X is Y"
 _PREFERENCE_RE = re.compile(
-    r"\b(?:i\s+(?:love|like|enjoy|prefer|adore|really like|am (?:into|fond of|passionate about)))\s+(.+?)(?:\.|,|!|\?|$)",
+    r"\b(?:i\s+(?:love|like|enjoy|prefer|adore|really like|"
+    r"am (?:into|fond of|passionate about)))\s+(.+?)(?:\.|,|!|\?|$)",
     re.IGNORECASE,
 )
 _FAVORITE_RE = re.compile(
@@ -157,7 +159,8 @@ _HABITUAL_RE = re.compile(
 
 # Third-person fact: "He/She is a X", "He/She works at X" (uses last speaker)
 _THIRD_PERSON_RE = re.compile(
-    r"\b(?:he|she)\s+(is\s+(?:a |an )?.+?|works?\s+(?:at|for|as)\s+.+?|lives?\s+(?:in|at|near)\s+.+?|plays?\s+.+?|loves?\s+.+?|likes?\s+.+?)(?:\.|,|!|\?|$)",
+    r"\b(?:he|she)\s+(is\s+(?:a |an )?.+?|works?\s+(?:at|for|as)\s+.+?"
+    r"|lives?\s+(?:in|at|near)\s+.+?|plays?\s+.+?|loves?\s+.+?|likes?\s+.+?)(?:\.|,|!|\?|$)",
     re.IGNORECASE,
 )
 
@@ -637,7 +640,8 @@ def extract_from_conversation(
         # positions, the extracted card wrongly attributes to the current speaker.
         # Fix by swapping the speaker prefix to the other speaker's name.
         coref_name = other_speaker.get(speaker_key, "")
-        if coref_name and re.search(r"\b(?:he|she)\s+(?:is|was|has|had|does|did|went|works?|lives?|plays?|loves?|likes?)\b", text, re.IGNORECASE):
+        coref_pat = r"\b(?:he|she)\s+(?:is|was|has|had|does|did|went|works?|lives?|plays?|loves?|likes?)\b"
+        if coref_name and re.search(coref_pat, text, re.IGNORECASE):
             sp_prefix = f"{speaker_name} "
             coref_prefix = f"{coref_name} "
             for card in cards:

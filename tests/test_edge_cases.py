@@ -48,7 +48,7 @@ class TestBlockParserEdgeCases(unittest.TestCase):
             "Status: active\n"
             "\n---\n\n"
             "[D-20260215-003]\n"
-            "Statement: \u0418\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c JWT \u0434\u043b\u044f \u0430\u0443\u0442\u0435\u043d\u0442\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438\n"
+            "Statement: \u0418\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c JWT \u0434\u043b\u044f \u0430\u0443\u0442\u0435\u043d\u0442\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438\n" # noqa: E501
             "Status: active\n"
         )
         blocks = parse_blocks(text)

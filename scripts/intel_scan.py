@@ -704,7 +704,11 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
 
     briefing_lines.append("Wins:")
     recent_done = [t for t in done_tasks
-                   if any(monday_str <= h[:10] <= sunday_str for h in t.get("History", []) if isinstance(h, str) and len(h) >= 10)]
+                   if any(
+                       monday_str <= h[:10] <= sunday_str
+                       for h in t.get("History", [])
+                       if isinstance(h, str) and len(h) >= 10
+                   )]
     if recent_done:
         for t in recent_done[:5]:
             briefing_lines.append(f"- {t['_id']}: {t.get('Title', '?')}")
