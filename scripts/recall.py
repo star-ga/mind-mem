@@ -1752,6 +1752,8 @@ def recall(
                 _kernel_field_weights = fields_section
     except ImportError:
         pass
+    except Exception as e:
+        _log.warning("mind_kernel_load_failed", error=str(e))
 
     # --- A-MEM block metadata manager (optional) ---
     meta_mgr = None
@@ -1761,8 +1763,8 @@ def recall(
             meta_dir = os.path.dirname(meta_db)
             if os.path.isdir(meta_dir):
                 meta_mgr = BlockMetadataManager(meta_db)
-        except Exception:
-            pass
+        except Exception as e:
+            _log.warning("block_metadata_init_failed", error=str(e))
 
     # --- Intent classification ---
     intent_params = {}
@@ -1773,7 +1775,8 @@ def recall(
             intent_params = intent_result.params
             _log.info("intent_classified", intent=intent_result.intent,
                       confidence=intent_result.confidence, query_type=query_type)
-        except Exception:
+        except Exception as e:
+            _log.warning("intent_classification_failed", error=str(e))
             query_type = detect_query_type(query)
     else:
         query_type = detect_query_type(query)
@@ -1979,8 +1982,8 @@ def recall(
             try:
                 importance = meta_mgr.get_importance_boost(block.get("_id", ""))
                 score *= importance
-            except Exception:
-                pass
+            except Exception as e:
+                _log.warning("amem_importance_boost_failed", block_id=block.get("_id", ""), error=str(e))
 
         # Build rich result payload with speaker + display text
         raw_excerpt = get_excerpt(block)
@@ -2400,15 +2403,15 @@ def recall(
             meta_mgr.record_access(returned_ids, query=query)
             for r in top:
                 meta_mgr.evolve_keywords(r["_id"], query_tokens, r.get("excerpt", ""))
-        except Exception:
-            pass
+        except Exception as e:
+            _log.warning("amem_access_record_failed", error=str(e))
 
     # --- Optional LLM extraction enrichment (config-gated) ---
     if _HAS_LLM_EXTRACTOR and top:
         try:
             top = _llm_enrich_results(top, workspace=workspace)
-        except Exception:
-            pass
+        except Exception as e:
+            _log.warning("llm_enrichment_failed", error=str(e))
 
     _log.info("query_complete", query=query, query_type=query_type,
               blocks_searched=N, wide_k=wide_k, reranked=rerank,
@@ -2441,8 +2444,8 @@ def _load_backend(workspace: str) -> str:
                     return VectorBackend(cfg.get("recall", {}))
                 except ImportError:
                     pass  # fall through to scan
-        except (OSError, json.JSONDecodeError, KeyError):
-            pass
+        except (OSError, json.JSONDecodeError, KeyError) as e:
+            _log.warning("config_load_failed", path=config_path, error=str(e))
     return None  # use built-in BM25 scan
 
 
@@ -2483,7 +2486,8 @@ def prefetch_context(
             continue
         try:
             hits = recall(workspace, signal, limit=limit, rerank=True)
-        except Exception:
+        except Exception as e:
+            _log.warning("prefetch_recall_failed", signal=signal, error=str(e))
             hits = []
         for block in hits:
             bid = block.get("_id", "")
@@ -2508,8 +2512,8 @@ def prefetch_context(
                     if bid and bid not in seen_ids:
                         seen_ids.add(bid)
                         results.append(block)
-            except Exception:
-                pass
+            except Exception as e:
+                _log.warning("prefetch_category_recall_failed", error=str(e))
     except ImportError:
         pass  # category_distiller not available — skip
 

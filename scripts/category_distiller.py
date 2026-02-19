@@ -97,7 +97,8 @@ class CategoryDistiller:
     DEFAULT_CATEGORIES = [
         "architecture", "decisions", "people", "preferences",
         "workflows", "bugs", "credentials", "integrations",
-        "goals", "constraints",
+        "goals", "constraints", "configuration", "memory",
+        "governance",
     ]
 
     # Keyword maps for deterministic categorisation.
@@ -106,42 +107,65 @@ class CategoryDistiller:
         "architecture": [
             "architecture", "design", "pattern", "schema", "layer",
             "api", "endpoint", "microservice", "database", "infra", "deploy",
+            "module", "component", "service", "backend", "frontend",
+            "protocol", "interface", "abstraction", "runtime",
         ],
         "decisions": [
             "decision", "decided", "chose", "adopted", "rejected",
-            "migrated", "switched",
+            "migrated", "switched", "approved", "deprecated",
+            "rationale", "trade-off", "tradeoff",
         ],
         "people": [
             "team", "person", "member", "hire", "onboard",
-            "contact", "stakeholder", "@",
+            "contact", "stakeholder", "@", "contributor", "maintainer",
         ],
         "preferences": [
             "prefer", "always", "never", "convention", "style",
-            "format", "standard", "rule",
+            "format", "standard", "rule", "policy", "guideline",
+            "practice", "enforce", "require",
         ],
         "workflows": [
             "workflow", "process", "pipeline", "ci", "cd",
-            "deploy", "release", "review", "merge",
+            "deploy", "release", "review", "merge", "build",
+            "test", "lint", "automation", "script", "hook",
         ],
         "bugs": [
             "bug", "fix", "error", "crash", "regression",
-            "issue", "debug", "patch", "hotfix",
+            "issue", "debug", "patch", "hotfix", "failure",
+            "broken", "corrupt", "invalid", "unexpected",
         ],
         "credentials": [
             "key", "token", "secret", "password", "auth",
             "oauth", "credential", "api-key", "certificate",
+            "permission", "access", "role",
         ],
         "integrations": [
             "integration", "webhook", "plugin", "extension",
-            "connector", "sdk", "library", "package",
+            "connector", "sdk", "library", "package", "mcp",
+            "hook", "provider", "client", "server",
         ],
         "goals": [
             "goal", "objective", "milestone", "target", "roadmap",
-            "plan", "deadline", "priority",
+            "plan", "deadline", "priority", "kpi", "metric",
+            "benchmark", "performance",
         ],
         "constraints": [
             "constraint", "limitation", "requirement", "must",
-            "cannot", "blocker", "dependency",
+            "cannot", "blocker", "dependency", "safety",
+            "security", "compliance", "boundary", "restriction",
+        ],
+        "configuration": [
+            "config", "configuration", "setting", "parameter",
+            "environment", "env", "variable", "flag", "option",
+        ],
+        "memory": [
+            "memory", "recall", "retrieval", "index", "search",
+            "context", "knowledge", "history", "signal", "capture",
+        ],
+        "governance": [
+            "governance", "audit", "contradiction", "drift",
+            "integrity", "scan", "compliance", "approval",
+            "proposal", "review", "oversight",
         ],
     }
 

@@ -133,9 +133,9 @@ def _check_workspace(ws: str) -> str | None:
 
 def _read_file(rel_path: str) -> str:
     """Read a file from workspace, return contents or error message."""
-    ws = _workspace()
-    path = os.path.normpath(os.path.join(ws, rel_path))
-    if not path.startswith(ws + os.sep) and path != ws:
+    ws = os.path.realpath(_workspace())
+    path = os.path.realpath(os.path.join(ws, rel_path))
+    if path != ws and not path.startswith(ws + os.sep):
         return "Error: path escapes workspace"
     if not os.path.isfile(path):
         return f"File not found: {rel_path}"
@@ -328,7 +328,7 @@ def propose_update(
         "confidence": confidence,
         "priority": priority,
         "structure": {
-            "subject": statement.split()[:3] if statement else [],
+            "subject": " ".join(statement.split()[:3]) if statement else "",
             "tags": [t.strip() for t in tags.split(",") if t.strip()],
         },
     }
@@ -375,13 +375,20 @@ def scan() -> str:
     else:
         result["checks"]["decisions"] = {"total": 0, "active": 0}
 
-    # Check contradictions
+    # Check contradictions — report both raw entries and resolvable ones
     contra_path = os.path.join(ws, "intelligence", "CONTRADICTIONS.md")
+    raw_count = 0
     if os.path.isfile(contra_path):
-        contras = parse_file(contra_path)
-        result["checks"]["contradictions"] = len(contras)
-    else:
-        result["checks"]["contradictions"] = 0
+        raw_count = len(parse_file(contra_path))
+    try:
+        from conflict_resolver import resolve_contradictions
+        resolutions = resolve_contradictions(ws)
+        result["checks"]["contradictions"] = {
+            "raw": raw_count,
+            "resolvable": len(resolutions),
+        }
+    except Exception:
+        result["checks"]["contradictions"] = {"raw": raw_count, "resolvable": 0}
 
     # Check drift
     drift_path = os.path.join(ws, "intelligence", "DRIFT.md")
@@ -583,8 +590,17 @@ def find_similar(block_id: str, limit: int = 5) -> str:
             "similar": co_blocks,
             "method": "co-occurrence",
         }, indent=2)
-    except Exception as e:
-        return json.dumps({"error": str(e), "block_id": block_id}, indent=2)
+    except ImportError:
+        return json.dumps({
+            "error": "find_similar requires block_metadata module",
+            "block_id": block_id,
+        }, indent=2)
+    except Exception:
+        _log.warning("find_similar_failed", block_id=block_id)
+        return json.dumps({
+            "error": "Failed to find similar blocks. The co-occurrence index may not be initialized.",
+            "block_id": block_id,
+        }, indent=2)
 
 
 @mcp.tool
@@ -612,8 +628,11 @@ def intent_classify(query: str) -> str:
             "sub_intents": result.sub_intents,
             "params": result.params,
         }, indent=2)
-    except Exception as e:
-        return json.dumps({"error": str(e), "query": query}, indent=2)
+    except ImportError:
+        return json.dumps({"error": "intent_router module not available", "query": query}, indent=2)
+    except Exception:
+        _log.warning("intent_classify_failed", query=query)
+        return json.dumps({"error": "Intent classification failed", "query": query}, indent=2)
 
 
 @mcp.tool
@@ -677,18 +696,19 @@ def reindex(include_vectors: bool = False) -> str:
         build_index(ws)
         results["fts"] = True
     except Exception as e:
-        results["fts_error"] = (
-            f"{e}. Index not found or corrupt. "
-            f"Run the 'reindex' tool first, or: python3 scripts/sqlite_index.py --rebuild {ws}"
-        )
+        _log.warning("reindex_fts_failed", error=str(e))
+        results["fts_error"] = "FTS index rebuild failed. Run: python3 scripts/sqlite_index.py build --workspace ."
 
     if include_vectors:
         try:
             from recall_vector import rebuild_index
             rebuild_index(ws)
             results["vectors"] = True
-        except (ImportError, Exception) as e:
-            results["vectors_error"] = str(e)
+        except ImportError:
+            results["vectors_error"] = "sentence-transformers not installed"
+        except Exception as e:
+            _log.warning("reindex_vectors_failed", error=str(e))
+            results["vectors_error"] = "Vector index rebuild failed"
 
     # Regenerate category summaries
     try:
@@ -749,8 +769,17 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
                 "co_occurring_blocks": co_blocks,
             }, indent=2)
 
-    except Exception as e:
-        return json.dumps({"error": str(e), "block_id": block_id}, indent=2)
+    except ImportError:
+        return json.dumps({
+            "error": "memory_evolution requires block_metadata module",
+            "block_id": block_id,
+        }, indent=2)
+    except Exception:
+        _log.warning("memory_evolution_failed", block_id=block_id)
+        return json.dumps({
+            "error": "Memory evolution lookup failed. Access history may not be initialized.",
+            "block_id": block_id,
+        }, indent=2)
 
 
 # ---------------------------------------------------------------------------
