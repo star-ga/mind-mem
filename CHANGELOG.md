@@ -2,6 +2,34 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.0.3 (2026-02-19)
+
+**Documentation, CI/CD, MCP integration tests, LLM extraction prototype**
+
+### Added
+- Mermaid architecture diagrams (recall pipeline, governance flow, multi-agent)
+- `docs/quickstart.md`: step-by-step tutorial for first-time setup
+- Python MCP client examples in `docs/api-reference.md`
+- 8 MCP integration tests (`tests/test_mcp_integration.py`)
+- GitHub Actions CI workflow (3 OS x 3 Python version matrix)
+- GitHub Actions release workflow for automated publishing
+- LLM extraction prototype (optional, config-gated via `llm_extraction` key)
+
+### Improved
+- MCP error messages now include workspace validation and actionable hints
+- README: added dated benchmark comparison table with infrastructure column
+- README: added troubleshooting FAQ section
+
+### Fixed
+- Skipped test now uses proper `@pytest.mark.skipif` instead of bare `skip()`
+- All E501 lint errors resolved (120-char line limit compliance)
+
+### Changed
+- `pyproject.toml`: added pytest/ruff configuration and `[test]` extras
+- Test count: 736 -> 737+
+
+---
+
 ## 1.0.2 (2026-02-18)
 
 **Category distillation, prefetch context, MIND kernel integration, full pipeline wiring**

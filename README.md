@@ -172,8 +172,8 @@ Scans Claude Code transcript files for user corrections, convention discoveries,
 ### MCP Server (16 tools, 8 resources)
 Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 16 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
 
-### 74+ Structural Checks + 736 Unit Tests
-`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 736 pytest unit tests covering all core modules.
+### 74+ Structural Checks + 761 Unit Tests
+`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 761 pytest unit tests covering all core modules.
 
 ### Audit Trail
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
@@ -209,6 +209,18 @@ Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer w
 | **mind-mem** | **67.3%** | Deterministic BM25 + rule-based packing |
 
 > mind-mem reaches **98%** of Mem0's score with pure deterministic retrieval — no embeddings, no vector DB, no cloud calls, no LLM in the retrieval loop. mind-mem's unique value is **governance** (contradiction detection, drift analysis, audit trails) and **agent-agnostic shared memory** via MCP — areas these benchmarks don't measure.
+
+### Benchmark Results (2026-02-18)
+
+| System | LoCoMo Acc>=50 | LongMemEval R@10 | Infrastructure | Dependencies |
+| --- | ---: | ---: | --- | --- |
+| Memobase | 75.8% | -- | Cloud + GPU | embeddings + vector DB |
+| Letta | 74.0% | -- | Cloud | embeddings + vector DB |
+| Mem0 | 68.5% | -- | Cloud (managed) | graph DB + embeddings |
+| **mind-mem** | **67.3%** | **88.1%** | **None (local)** | **Zero (stdlib)** |
+| full-context | 72.9% | -- | N/A | LLM context window |
+
+> mind-mem achieves 98% of Mem0's accuracy with zero infrastructure requirements.
 
 ### LongMemEval (ICLR 2025, 470 questions)
 
@@ -1118,6 +1130,28 @@ mind-mem makes **zero network calls** from its core. No telemetry, no phoning ho
 | `intel_scan` finds 0 contradictions         | Good — no conflicting decisions.                                                                                |
 | Tests fail on Windows                       | Use `validate_py.py` instead of `validate.sh`. Hooks require WSL.                                               |
 | MIND kernel not loading                     | Compile with `mindc mind/*.mind --emit=shared -o lib/libmindmem.so`. Or ignore — pure Python works identically. |
+
+### FAQ
+
+**No results from recall?**
+Check that the workspace path is correct and points to an initialized workspace
+containing decisions, tasks, or entities. If the FTS5 index is stale or missing,
+run the `reindex` MCP tool to rebuild it.
+
+**MCP connection failed?**
+Verify that `fastmcp` is installed (`pip install fastmcp`). Check the transport
+configuration in your client's MCP config (stdio vs HTTP). Ensure the
+`MIND_MEM_WORKSPACE` environment variable points to a valid workspace directory.
+
+**MIND kernels not loading?**
+Run `bash scripts/build.sh` to compile the MIND source files (requires `mindc`).
+If the MIND compiler is not available, mind-mem automatically uses the pure Python
+fallback with identical results.
+
+**Index corrupt?**
+Run the `reindex` MCP tool, or from the command line:
+`python3 scripts/sqlite_index.py --rebuild --workspace /path/to/workspace`.
+This drops and recreates the FTS5 index from all workspace files.
 
 ---
 

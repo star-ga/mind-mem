@@ -44,6 +44,13 @@ try:
 except ImportError:
     _HAS_INTENT_ROUTER = False
 
+# LLM Extractor (optional — config-gated, zero deps by default)
+try:
+    from llm_extractor import enrich_results as _llm_enrich_results
+    _HAS_LLM_EXTRACTOR = True
+except ImportError:
+    _HAS_LLM_EXTRACTOR = False
+
 _log = get_logger("recall")
 
 
@@ -2393,6 +2400,13 @@ def recall(
             meta_mgr.record_access(returned_ids, query=query)
             for r in top:
                 meta_mgr.evolve_keywords(r["_id"], query_tokens, r.get("excerpt", ""))
+        except Exception:
+            pass
+
+    # --- Optional LLM extraction enrichment (config-gated) ---
+    if _HAS_LLM_EXTRACTOR and top:
+        try:
+            top = _llm_enrich_results(top, workspace=workspace)
         except Exception:
             pass
 

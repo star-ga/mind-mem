@@ -16,5 +16,10 @@
   "categories": {
     "enabled": true,
     "extra_categories": {}
+  },
+  "extraction": {
+    "enabled": false,
+    "model": "phi3:mini",
+    "backend": "auto"
   }
 }
