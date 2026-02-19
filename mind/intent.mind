@@ -1,0 +1,24 @@
+# intent.mind — Intent router kernel configuration
+# Controls query intent classification and parameter overrides.
+
+[routing]
+# Minimum confidence threshold to accept IntentRouter classification.
+# Below this, falls back to legacy detect_query_type().
+min_confidence = 0.3
+
+[graph]
+# Minimum intent graph_depth to force graph boost in recall.
+min_depth_for_boost = 2
+
+[weights]
+# Per-intent confidence scaling factors.
+# Higher values make the router more decisive for that intent type.
+WHY = 1.0
+WHEN = 1.0
+ENTITY = 1.0
+WHAT = 1.0
+HOW = 1.0
+LIST = 1.0
+VERIFY = 1.2
+COMPARE = 1.0
+TRACE = 1.1
