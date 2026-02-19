@@ -65,9 +65,11 @@ All notable changes to mind-mem are documented in this file.
 - **HTTP auth warning**: MCP server logs warning when started on HTTP transport without token auth
 - **Block size cap**: Added `MAX_PARSE_SIZE` (100KB) in `block_parser.py` — files over 100KB are truncated
 - **Vector fallback escalation**: Upgraded vector backend unavailable message from `debug` to `warning`
-- **Test coverage**: Added 52 new tests (813 total, up from 761):
+- **Test coverage**: Added 60 new tests (821 total, up from 761):
   - `test_graph_boost.py` (29 tests): graph boost cross-refs, context packing, dialog adjacency, config validation, block cap
   - `test_fts_fallback.py` (23 tests): FTS fallback, envelope structure, block size cap, config key validation
+  - `test_concurrency_stress.py` (8 tests): thread-safe parallel recall, 1000-2000 block stress tests, graph boost contention
+- **Exception handler split**: Separated `(ImportError, Exception)` into distinct handlers in recall.py and hybrid_recall.py
 
 ---
 
