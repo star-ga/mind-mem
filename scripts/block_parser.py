@@ -21,6 +21,9 @@ import json
 import re
 import sys
 
+# Maximum input size to parse (100KB). Larger files are truncated with a warning.
+MAX_PARSE_SIZE = 100_000
+
 
 def parse_blocks(text: str) -> list[dict]:
     """Parse all [ID] blocks from text. Returns list of dicts.
@@ -429,9 +432,12 @@ def _coerce_value(s):
 
 
 def parse_file(filepath: str) -> list[dict]:
-    """Parse blocks from a file path."""
+    """Parse blocks from a file path. Files >100KB are truncated."""
     with open(filepath, "r", encoding="utf-8") as f:
-        return parse_blocks(f.read())
+        content = f.read(MAX_PARSE_SIZE + 1)
+    if len(content) > MAX_PARSE_SIZE:
+        content = content[:MAX_PARSE_SIZE]
+    return parse_blocks(content)
 
 
 def get_active(blocks: list[dict], status_field: str = "Status", active_value: str = "active") -> list[dict]:

@@ -60,6 +60,15 @@ All notable changes to mind-mem are documented in this file.
 - **Schema versioning**: MCP recall output now includes `_schema_version: "1.0"` for client compatibility detection
 - **No-results feedback**: Empty recall results include a `"message"` hint instead of bare empty array
 
+### In-depth audit — error transparency, test coverage, perf hardening
+- **Silent ImportError logging**: Added `_log.debug` to 3 silent `except ImportError: pass` blocks (mind_ffi, namespaces, category_distiller)
+- **HTTP auth warning**: MCP server logs warning when started on HTTP transport without token auth
+- **Block size cap**: Added `MAX_PARSE_SIZE` (100KB) in `block_parser.py` — files over 100KB are truncated
+- **Vector fallback escalation**: Upgraded vector backend unavailable message from `debug` to `warning`
+- **Test coverage**: Added 52 new tests (813 total, up from 761):
+  - `test_graph_boost.py` (29 tests): graph boost cross-refs, context packing, dialog adjacency, config validation, block cap
+  - `test_fts_fallback.py` (23 tests): FTS fallback, envelope structure, block size cap, config key validation
+
 ---
 
 ## 1.0.4 (2026-02-19)

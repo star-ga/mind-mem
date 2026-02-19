@@ -1036,6 +1036,10 @@ def main():
               workspace=_workspace(), auth="token" if token else "none")
 
     if args.transport == "http":
+        if not token:
+            _log.warning("mcp_http_no_auth",
+                         hint="HTTP transport running without token auth. "
+                              "Set MIND_MEM_TOKEN env var or use --token for security.")
         if token:
             # Enforce Bearer token auth on HTTP transport.
             # FastMCP's StaticTokenVerifier gates all requests.
