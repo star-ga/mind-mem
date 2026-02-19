@@ -693,23 +693,24 @@ mindc mind/bm25.mind --emit=shared -o lib/libbm25.so
 ### Performance
 
 <details>
-<summary>Compiled MIND kernels vs pure Python — 8 core scoring functions (500 iterations, <code>perf_counter_ns</code>)</summary>
+<summary>Compiled MIND kernels vs pure Python — 9 core scoring functions (200 iterations, <code>perf_counter</code>)</summary>
 
 &nbsp;
 
-| Function           |     N=100 |   N=1,000 |   N=10,000 |
-| ------------------ | --------: | --------: | ---------: |
-| `rrf_fuse`         |  **5.7x** | **41.5x** |  **79.4x** |
-| `bm25f_batch`      |  **7.5x** | **40.9x** | **136.8x** |
-| `negation_penalty` |  **2.1x** | **18.6x** |  **14.0x** |
-| `date_proximity`   |  **4.8x** | **11.4x** |  **15.0x** |
-| `category_boost`   |  **5.9x** | **21.2x** |  **11.6x** |
-| `importance_batch` | **19.6x** | **42.2x** |  **46.6x** |
-| `top_k_mask`       | **21.1x** | **45.8x** |  **48.3x** |
-| `weighted_rank`    |  **5.4x** | **30.8x** | **186.1x** |
-| **Total**          |  **9.7x** | **36.4x** |  **42.1x** |
+| Function           |     N=100 |   N=1,000 |   N=5,000 |
+| ------------------ | --------: | --------: | --------: |
+| `rrf_fuse`         | **10.8x** | **69.0x** | **72.5x** |
+| `bm25f_batch`      | **13.2x** | **113.8x** | **193.1x** |
+| `negation_penalty` |  **3.3x** |  **7.0x** | **18.4x** |
+| `date_proximity`   | **10.7x** | **15.3x** | **26.9x** |
+| `category_boost`   |  **3.3x** | **19.8x** | **17.7x** |
+| `importance_batch` | **22.3x** | **46.2x** | **48.6x** |
+| `confidence_score` |  **0.9x** |  **0.8x** |  **0.9x** |
+| `top_k_mask`       |  **3.1x** |  **8.1x** | **11.8x** |
+| `weighted_rank`    |  **5.1x** | **26.6x** | **121.8x** |
+| **Overall**        |           |           | **49.0x** |
 
-> **40x faster** end-to-end at production scale (N=10,000). Individual kernels reach up to **186x** speedup. Benchmarked on Linux x86_64 with `-O3 -march=native`. The compiled library includes 10 runtime protection layers with near-zero overhead (heartbeat amortized every 64 calls).
+> **49x faster** end-to-end at production scale (N=5,000). Individual kernels reach up to **193x** speedup. The compiled library includes 14 runtime protection layers with near-zero overhead.
 
 </details>
 

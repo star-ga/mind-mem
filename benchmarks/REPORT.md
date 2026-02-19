@@ -113,44 +113,45 @@ Pure deterministic retrieval pipeline — no vector DB, no embeddings required.
 
 ## MIND Kernel Benchmark
 
-Compiled C99 kernels (`gcc -O3 -march=native`) vs pure Python list comprehensions.
+Compiled MIND kernels vs pure Python list comprehensions.
 Pre-allocated ctypes arrays; timing measures native function call only (no marshaling).
 
-### Per-Function Speedup
+### Per-Function Speedup (MIND vs Python)
 
-| Function         | N=100 | N=500 | N=1000 | N=5000 | N=10000 |
-| ---------------- | ----: | ----: | -----: | -----: | ------: |
-| rrf_fuse         |  9.2x | 30.3x |  44.2x |  71.9x |   78.8x |
-| bm25f_batch      | 26.3x | 51.4x |  88.9x | 192.4x |  231.4x |
-| negation_penalty |  3.4x | 11.4x |  18.0x |  16.0x |   12.1x |
-| date_proximity   |  8.4x | 19.0x |  22.4x |  26.6x |   27.2x |
-| category_boost   |  3.4x | 11.8x |  19.0x |  16.7x |   12.9x |
-| importance_batch | 21.7x | 38.0x |  42.3x |  47.1x |   49.0x |
-| confidence_score |  0.8x |  0.8x |   0.8x |   0.8x |    0.8x |
-| top_k_mask       |  3.0x |  6.1x |   8.2x |  11.0x |   12.2x |
-| weighted_rank    |  5.6x | 25.1x |  45.1x | 116.3x |   98.8x |
+| Function         | N=100 | N=500 | N=1000 | N=5000 |
+| ---------------- | ----: | ----: | -----: | -----: |
+| rrf_fuse         | 10.8x | 41.4x |  69.0x |  72.5x |
+| bm25f_batch      | 13.2x | 66.7x | 113.8x | 193.1x |
+| negation_penalty |  3.3x | 11.4x |   7.0x |  18.4x |
+| date_proximity   | 10.7x | 23.8x |  15.3x |  26.9x |
+| category_boost   |  3.3x |  9.9x |  19.8x |  17.7x |
+| importance_batch | 22.3x | 40.1x |  46.2x |  48.6x |
+| confidence_score |  0.9x |  0.8x |   0.8x |   0.9x |
+| top_k_mask       |  3.1x |  6.3x |   8.1x |  11.8x |
+| weighted_rank    |  5.1x | 22.0x |  26.6x | 121.8x |
 
 ### Overall
 
-| Metric              | Value                 |
-| ------------------- | --------------------- |
-| Total Python time   | 27.94 ms              |
-| Total MIND time     | 551.6 μs              |
-| **Overall speedup** | **50.7x**             |
-| Iterations          | 500                   |
-| Compiler            | gcc -O3 -march=native |
+| Metric              | Value    |
+| ------------------- | -------- |
+| Total Python time   | 15.58 ms |
+| Total MIND time     | 318.0 μs |
+| **Overall speedup** | **49.0x** |
+| Iterations          | 200      |
+| Compiler            | mindc    |
+| Protection layers   | 14       |
 
 **Notes:**
 - `confidence_score` is scalar (5 features) — ctypes call overhead exceeds the computation
-- `entity_overlap` uses set operations — not benchmarked via C kernel
-- `bm25f_batch` shows the largest speedup (231x) due to Python's per-element `math.log()` overhead
-- Speedups grow with N: Python's interpreter overhead is O(N), C benefits from SIMD/ILP
+- `entity_overlap` uses set operations — not benchmarked via compiled kernel
+- `bm25f_batch` shows the largest speedup (193x) due to Python's per-element `math.log()` overhead
+- Speedups grow with N: Python's interpreter overhead is O(N), compiled kernels benefit from SIMD/ILP
+- Previous build (2 .mind files compiled): 40.1x overall. Current build (all 9 .mind files): **49.0x** (+22%)
 
 ### Reproduction
 
 ```bash
-gcc -O3 -march=native -shared -fPIC -o lib/libmindmem.so lib/kernels.c -lm
-python benchmarks/bench_kernels.py --iterations 500 --sizes 100,500,1000,5000,10000
+python benchmarks/bench_kernels.py --iterations 200 --sizes 100,500,1000,5000
 ```
 
 ## Running Benchmarks
@@ -168,7 +169,7 @@ python benchmarks/longmemeval_harness.py \
   --output benchmarks/longmemeval_results.json
 
 # MIND kernel benchmark (requires compiled .so)
-python benchmarks/bench_kernels.py --iterations 500 --sizes 100,500,1000,5000,10000
+python benchmarks/bench_kernels.py --iterations 200 --sizes 100,500,1000,5000
 ```
 
 Result files are generated locally and not checked into version control.

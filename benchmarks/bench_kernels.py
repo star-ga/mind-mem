@@ -386,9 +386,9 @@ def run_benchmarks(sizes: list[int], iterations: int):
     if not lib:
         print()
         print("  MIND kernel not compiled. Showing Python baseline only.")
-        print("  To compare, compile kernels and re-run:")
+        print("  To compare, build with mindc and re-run:")
         print()
-        print("    gcc -O3 -march=native -shared -fPIC -o lib/libmindmem.so lib/kernels.c -lm")
+        print("    cd /path/to/mind-mem-protected && ./build.sh")
         print("    python benchmarks/bench_kernels.py")
         print()
 
