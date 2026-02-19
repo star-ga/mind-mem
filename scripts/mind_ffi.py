@@ -42,9 +42,11 @@ class MindMemKernel:
             OSError: If library cannot be loaded.
         """
         self._lib = None
+        # Use RTLD_LAZY (0x1) to defer resolution of protection-layer symbols
+        _LAZY = 0x1
 
         if lib_path:
-            self._lib = ctypes.CDLL(str(lib_path))
+            self._lib = ctypes.CDLL(str(lib_path), mode=_LAZY)
         else:
             env_path = os.environ.get("MIND_MEM_LIB", "")
             if env_path:
@@ -52,12 +54,12 @@ class MindMemKernel:
                 resolved = Path(env_path).resolve()
                 allowed = [Path(__file__).parent.parent / "lib"]
                 if any(str(resolved).startswith(str(d.resolve())) for d in allowed) and resolved.exists():
-                    self._lib = ctypes.CDLL(str(resolved))
+                    self._lib = ctypes.CDLL(str(resolved), mode=_LAZY)
 
             if self._lib is None:
                 for p in _LIB_SEARCH_PATHS:
                     if p.exists():
-                        self._lib = ctypes.CDLL(str(p))
+                        self._lib = ctypes.CDLL(str(p), mode=_LAZY)
                         break
 
         if self._lib is None:
