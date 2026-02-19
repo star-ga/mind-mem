@@ -30,6 +30,20 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from block_parser import parse_file, get_active
 from observability import get_logger, metrics
 
+# A-MEM block metadata (optional — graceful degradation if unavailable)
+try:
+    from block_metadata import BlockMetadataManager
+    _HAS_BLOCK_META = True
+except ImportError:
+    _HAS_BLOCK_META = False
+
+# Intent Router (optional — falls back to detect_query_type)
+try:
+    from intent_router import get_router as _get_intent_router
+    _HAS_INTENT_ROUTER = True
+except ImportError:
+    _HAS_INTENT_ROUTER = False
+
 _log = get_logger("recall")
 
 
@@ -883,6 +897,19 @@ _QUERY_TYPE_PARAMS = {
     },
 }
 
+# IntentRouter → legacy query type mapping (backward compatible with _QUERY_TYPE_PARAMS)
+_INTENT_TO_QUERY_TYPE = {
+    "WHY": "multi-hop",
+    "WHEN": "temporal",
+    "ENTITY": "single-hop",
+    "WHAT": "single-hop",
+    "HOW": "single-hop",
+    "LIST": "open-domain",
+    "VERIFY": "adversarial",
+    "COMPARE": "multi-hop",
+    "TRACE": "multi-hop",
+}
+
 
 def chunk_text(text: str, chunk_size: int = 3, overlap: int = 1) -> list[str]:
     """Split text into overlapping sentence chunks.
@@ -1710,8 +1737,30 @@ def recall(workspace: str, query: str, limit: int = 10, active_only: bool = Fals
     except ImportError:
         pass
 
-    # Detect query type for category-specific tuning
-    query_type = detect_query_type(query)
+    # --- A-MEM block metadata manager (optional) ---
+    meta_mgr = None
+    if _HAS_BLOCK_META:
+        try:
+            meta_db = os.path.join(workspace, ".mind-mem", "block_meta.db")
+            meta_dir = os.path.dirname(meta_db)
+            if os.path.isdir(meta_dir):
+                meta_mgr = BlockMetadataManager(meta_db)
+        except Exception:
+            pass
+
+    # --- Intent classification ---
+    intent_params = {}
+    if _HAS_INTENT_ROUTER:
+        try:
+            intent_result = _get_intent_router().classify(query)
+            query_type = _INTENT_TO_QUERY_TYPE.get(intent_result.intent, "single-hop")
+            intent_params = intent_result.params
+            _log.info("intent_classified", intent=intent_result.intent,
+                      confidence=intent_result.confidence, query_type=query_type)
+        except Exception:
+            query_type = detect_query_type(query)
+    else:
+        query_type = detect_query_type(query)
     qparams = _QUERY_TYPE_PARAMS.get(query_type, _QUERY_TYPE_PARAMS["single-hop"])
 
     # Month normalization: inject numeric month tokens for date matching
@@ -1732,8 +1781,8 @@ def recall(workspace: str, query: str, limit: int = 10, active_only: bool = Fals
             mode = "morph_only"
         query_tokens = expand_query(query_tokens, mode=mode)
 
-    # Force graph boost for multi-hop queries
-    if qparams.get("graph_boost_override", False):
+    # Force graph boost for multi-hop queries or high intent graph_depth
+    if qparams.get("graph_boost_override", False) or intent_params.get("graph_depth", 0) >= 2:
         graph_boost = True
 
     # Adjust effective limit for retrieval (retrieve more candidates, trim later)
@@ -1909,6 +1958,14 @@ def recall(workspace: str, query: str, limit: int = 10, active_only: bool = Fals
         if priority in ("P0", "P1"):
             score *= 1.1
 
+        # --- A-MEM importance boost ---
+        if meta_mgr:
+            try:
+                importance = meta_mgr.get_importance_boost(block.get("_id", ""))
+                score *= importance
+            except Exception:
+                pass
+
         # Build rich result payload with speaker + display text
         raw_excerpt = get_excerpt(block)
         tags_str = block.get("Tags", "")
@@ -1999,11 +2056,13 @@ def recall(workspace: str, query: str, limit: int = 10, active_only: bool = Fals
 
     config_path = os.path.join(workspace, "mind-mem.json")
     rm3_config = {}
+    ce_config = {}
     if os.path.isfile(config_path):
         try:
             with open(config_path) as _f:
                 _cfg = json.load(_f)
             rm3_config = _cfg.get("recall", {}).get("rm3", {})
+            ce_config = _cfg.get("recall", {}).get("cross_encoder", {})
         except (OSError, json.JSONDecodeError, KeyError):
             pass
 
@@ -2294,10 +2353,39 @@ def recall(workspace: str, query: str, limit: int = 10, active_only: bool = Fals
     if rerank and len(deduped) > limit:
         deduped = rerank_hits(query, deduped, debug=rerank_debug)
 
+    # Stage 2.5: Optional cross-encoder neural reranking
+    if ce_config.get("enabled", False):
+        try:
+            from cross_encoder_reranker import CrossEncoderReranker
+            if CrossEncoderReranker.is_available():
+                ce = CrossEncoderReranker()
+                for r in deduped:
+                    if "content" not in r:
+                        r["content"] = r.get("excerpt", "")
+                deduped = ce.rerank(
+                    query, deduped,
+                    top_k=ce_config.get("top_k", limit),
+                    blend_weight=ce_config.get("blend_weight", 0.6),
+                )
+                _log.info("cross_encoder_rerank", candidates=len(deduped),
+                          blend_weight=ce_config.get("blend_weight", 0.6))
+        except (ImportError, Exception) as e:
+            _log.warning("cross_encoder_unavailable", error=str(e))
+
     top = deduped[:limit]
 
     # Stage 3: Context packing — augment top-K with adjacency/diversity/rescue
     top = context_pack(query, top, all_blocks, deduped, limit)
+
+    # --- A-MEM: record access and evolve keywords for returned blocks ---
+    if meta_mgr and top:
+        try:
+            returned_ids = [r["_id"] for r in top]
+            meta_mgr.record_access(returned_ids, query=query)
+            for r in top:
+                meta_mgr.evolve_keywords(r["_id"], query_tokens, r.get("excerpt", ""))
+        except Exception:
+            pass
 
     _log.info("query_complete", query=query, query_type=query_type,
               blocks_searched=N, wide_k=wide_k, reranked=rerank,
