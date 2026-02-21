@@ -234,11 +234,34 @@ class HybridBackend:
             metrics.inc("hybrid_searches_fused")
             result = fused[:limit]
 
+            # Cross-encoder reranking (post-fusion)
+            ce_cfg = self._config.get("cross_encoder", {})
+            if ce_cfg.get("enabled", False) and result:
+                try:
+                    from cross_encoder_reranker import CrossEncoderReranker
+                    if CrossEncoderReranker.is_available():
+                        ce = CrossEncoderReranker()
+                        for r in result:
+                            if "content" not in r:
+                                r["content"] = r.get("excerpt", "")
+                        result = ce.rerank(
+                            query, result,
+                            top_k=ce_cfg.get("top_k", limit),
+                            blend_weight=ce_cfg.get("blend_weight", 0.6),
+                        )
+                        _log.info("cross_encoder_rerank",
+                                  candidates=len(fused[:limit]),
+                                  blend_weight=ce_cfg.get("blend_weight", 0.6))
+                except ImportError as ie:
+                    _log.warning("cross_encoder_import_failed", error=str(ie))
+                except Exception as e:
+                    _log.warning("cross_encoder_unavailable", error=str(e))
+
             _log.info(
                 "hybrid_search_complete",
                 query=query,
                 results=len(result),
-                top_rrf=result[0]["rrf_score"] if result else 0,
+                top_rrf=result[0].get("rrf_score", 0) if result else 0,
             )
             return result
 
