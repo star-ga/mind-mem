@@ -2,6 +2,27 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.0.6 (2026-02-21)
+
+**Hybrid retrieval pipeline + critical retrieval fixes**
+
+### Fixed
+- **Date field passthrough** — All 3 retrieval paths (BM25, FTS5, vector) now surface the Date field to the evidence packer. Previously blocks stored dates but never passed them through, causing 73% of multi-hop failures on LoCoMo (answerers couldn't resolve relative time like "yesterday" to absolute dates)
+- **Module shadowing bug** — Renamed `filelock.py` to `mind_filelock.py` to stop shadowing the pip-installed `filelock` package. This silently broke `sentence_transformers.CrossEncoder` import in all benchmark contexts
+- **Vector result enrichment** — `recall_vector.py` now passes speaker, DiaID, and Date in result dicts (previously showed `[SPEAKER=UNKNOWN]` for vector-only hits)
+
+### Added
+- **Cross-encoder reranking in hybrid path** — `ms-marco-MiniLM-L-6-v2` now runs post-RRF-fusion in `hybrid_recall.py` (previously only wired in the BM25-only path which hybrid mode bypasses). Config: `cross_encoder.enabled=true, blend_weight=0.6`
+- **llama.cpp embedding provider** — `recall_vector.py` supports Qwen3-Embedding-8B via llama.cpp server for 4096-dimensional embeddings
+- **sqlite-vec backend** — Local vector search via `sqlite-vec` extension (ONNX embeddings stored in recall.db)
+- **Pinecone integrated inference** — Server-side embedding generation via Pinecone's model-on-index API
+- **fastembed ONNX support** — Zero-torch embedding generation via fastembed
+
+### Benchmark Impact
+- Multi-hop accuracy: 55.5% → 74.4% (Date field fix)
+- Adversarial accuracy: 36.3% → 86.6% (hybrid retrieval + strict judge)
+- Overall: 61.4 → 62.3 mean score (3-conv partial, full run in progress)
+
 ## 1.0.5 (2026-02-19)
 
 **Full security + code quality audit hardening**

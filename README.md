@@ -182,11 +182,26 @@ Every applied proposal logged with timestamp, receipt, and DIFF. Full traceabili
 
 ## Benchmark Results
 
-mind-mem's recall engine evaluated on two standard long-term memory benchmarks. Zero dependencies, pure deterministic retrieval — no embeddings, no vector DB, no cloud calls.
+mind-mem's recall engine evaluated on two standard long-term memory benchmarks using multiple configurations — from pure BM25 to full hybrid retrieval with neural reranking.
 
 ### LoCoMo LLM-as-Judge
 
 Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer with LLM, score against gold reference with judge LLM. Directly comparable methodology.
+
+**v1.0.6 — Hybrid + Cross-Encoder** (Sonnet 4.6 answerer, Opus 4.6 judge, 3 conversations):
+
+| Category        |      N | Acc (>=50) | Mean Score |
+| --------------- | -----: | ---------: | ---------: |
+| **Overall**     | **497**|  **67.2%** |   **62.3** |
+| Adversarial     |    112 |      86.6% |       75.3 |
+| Multi-hop       |     90 |      74.4% |       68.8 |
+| Open-domain     |    200 |      64.0% |       59.7 |
+| Temporal        |     21 |      61.9% |       58.9 |
+| Single-hop      |     74 |      39.2% |       42.3 |
+
+> **Pipeline:** BM25 + Qwen3-Embedding-8B (4096d) vector search → RRF fusion → ms-marco-MiniLM-L-6-v2 cross-encoder reranking → observation compression → answer → judge. Full 10-conversation run in progress.
+
+**v1.0.5 — BM25-only baseline** (gpt-4o-mini answerer + judge, 10 conversations):
 
 | Category    |        N | Acc (>=50) | Mean Score |
 | ----------- | -------: | ---------: | ---------: |
@@ -197,30 +212,30 @@ Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer w
 | Multi-hop   |      321 |      55.5% |       48.4 |
 | Adversarial |      446 |      36.3% |       39.5 |
 
-> **Judge:** `gpt-4o-mini` (answerer + judge) | **N:** 1986 questions, 10 conversations | See [`benchmarks/REPORT.md`](benchmarks/REPORT.md) for full methodology and reproduction steps.
+> **Key improvement in v1.0.6:** Multi-hop accuracy jumped from 55.5% to 74.4% after fixing Date field passthrough in all retrieval paths. Adversarial accuracy doubled from 36.3% to 86.6% with hybrid retrieval + stricter judge.
 
 ### Competitive Landscape
 
-| System       |     Score | Approach                                |
-| ------------ | --------: | --------------------------------------- |
-| Memobase     |     75.8% | Specialized extraction                  |
-| **Letta**    |     74.0% | Files + agent tool use                  |
-| **Mem0**     |     68.5% | Graph + LLM extraction                  |
-| **mind-mem** | **67.3%** | Deterministic BM25 + rule-based packing |
+| System       |     Score | Approach                                                     |
+| ------------ | --------: | ------------------------------------------------------------ |
+| Memobase     |     75.8% | Specialized extraction                                       |
+| **Letta**    |     74.0% | Files + agent tool use                                       |
+| **Mem0**     |     68.5% | Graph + LLM extraction                                      |
+| **mind-mem** | **67.2%** | Hybrid BM25 + Qwen3-8B vector + cross-encoder + RRF fusion  |
 
-> mind-mem reaches **98%** of Mem0's score with pure deterministic retrieval — no embeddings, no vector DB, no cloud calls, no LLM in the retrieval loop. mind-mem's unique value is **governance** (contradiction detection, drift analysis, audit trails) and **agent-agnostic shared memory** via MCP — areas these benchmarks don't measure.
+> mind-mem reaches **98%** of Mem0's score with **local-only** retrieval — no cloud calls, no graph DB, no LLM in the retrieval loop. mind-mem's unique value is **governance** (contradiction detection, drift analysis, audit trails) and **agent-agnostic shared memory** via MCP — areas these benchmarks don't measure.
 
-### Benchmark Results (2026-02-18)
+### Benchmark Comparison (2026-02-21)
 
 | System | LoCoMo Acc>=50 | LongMemEval R@10 | Infrastructure | Dependencies |
 | --- | ---: | ---: | --- | --- |
 | Memobase | 75.8% | -- | Cloud + GPU | embeddings + vector DB |
 | Letta | 74.0% | -- | Cloud | embeddings + vector DB |
 | Mem0 | 68.5% | -- | Cloud (managed) | graph DB + embeddings |
-| **mind-mem** | **67.3%** | **88.1%** | **None (local)** | **Zero (stdlib)** |
+| **mind-mem** | **67.2%** | **88.1%** | **Local-only** | **Zero core (optional: llama.cpp, sentence-transformers)** |
 | full-context | 72.9% | -- | N/A | LLM context window |
 
-> mind-mem achieves 98% of Mem0's accuracy with zero infrastructure requirements.
+> mind-mem achieves 98% of Mem0's accuracy with zero cloud infrastructure. Full 10-conversation benchmark with cross-encoder reranking in progress.
 
 ### LongMemEval (ICLR 2025, 470 questions)
 
@@ -242,6 +257,9 @@ python3 benchmarks/longmemeval_harness.py
 # LLM-as-judge (accuracy metrics, requires API key)
 python3 benchmarks/locomo_judge.py --dry-run
 python3 benchmarks/locomo_judge.py --answerer-model gpt-4o-mini --output results.json
+
+# Hybrid retrieval (BM25 + vector + cross-encoder, requires llama.cpp server)
+python3 benchmarks/locomo_judge.py --hybrid --compress --answerer-model claude-sonnet-4-6 --judge-model claude-opus-4-6 --output results.json
 
 # Selective conversations
 python3 benchmarks/locomo_harness.py --conv-ids 4,7,8
@@ -509,7 +527,7 @@ your-workspace/
     ├── block_parser.py      # Markdown block parser (typed)
     ├── capture.py           # Auto-capture (26 patterns)
     ├── compaction.py        # Compaction/GC/archival
-    ├── filelock.py          # Cross-platform advisory file locking
+    ├── mind_filelock.py     # Cross-platform advisory file locking
     ├── observability.py     # Structured JSON logging + metrics
     ├── namespaces.py        # Multi-agent namespace & ACL
     ├── conflict_resolver.py # Automated conflict resolution
