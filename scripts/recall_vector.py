@@ -272,7 +272,7 @@ class VectorBackend(RecallBackend):
             return os.path.join(workspace, custom)
         return os.path.join(workspace, ".mind-mem-index", "recall.db")
 
-    def _connect_sqlite_vec(self, workspace: str, readonly: bool = False) -> "sqlite3.Connection":
+    def _connect_sqlite_vec(self, workspace: str, readonly: bool = False):
         """Open recall.db with sqlite-vec extension loaded.
 
         Args:
@@ -305,7 +305,7 @@ class VectorBackend(RecallBackend):
         conn.enable_load_extension(False)
         return conn
 
-    def _init_vec_table(self, conn: "sqlite3.Connection", dimension: int) -> None:
+    def _init_vec_table(self, conn, dimension: int) -> None:
         """Create vec0 virtual table if it doesn't exist.
 
         Args:
