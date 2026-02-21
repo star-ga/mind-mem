@@ -8,7 +8,7 @@ import time
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from filelock import FileLock, LockTimeout
+from mind_filelock import FileLock, LockTimeout
 
 
 class TestFileLockBasic(unittest.TestCase):
