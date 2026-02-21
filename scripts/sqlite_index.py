@@ -558,6 +558,8 @@ def query_index(
         }
         if row["dia_id"]:
             result["DiaID"] = row["dia_id"]
+        if row["date"]:
+            result["Date"] = row["date"]
         results.append(result)
 
     # Graph boost

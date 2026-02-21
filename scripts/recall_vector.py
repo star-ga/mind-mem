@@ -88,8 +88,11 @@ class VectorBackend(RecallBackend):
             _log.warning("vector_config_invalid", reason="config is not a dict")
             config = {}
         _VALID_KEYS = {"backend", "provider", "model", "index_path", "dimension", "top_k",
-                       "pinecone_api_key", "pinecone_index", "qdrant_url", "qdrant_collection",
-                       "pinecone_environment"}
+                       "pinecone_api_key", "pinecone_index", "pinecone_namespace",
+                       "qdrant_url", "qdrant_collection", "pinecone_environment",
+                       "rrf_k", "bm25_weight", "vector_weight", "vector_model",
+                       "vector_enabled", "onnx_backend", "sqlite_vec_db",
+                       "llama_cpp_url"}
         unknown = set(config.keys()) - _VALID_KEYS
         if unknown:
             _log.warning("vector_config_unknown_keys", keys=list(unknown))
@@ -101,9 +104,16 @@ class VectorBackend(RecallBackend):
         dim = config.get("dimension")
         self.dimension = int(dim) if dim is not None else None
 
-        # Lazy load embedding model
+        # Lazy load embedding model (not needed for pinecone/llama_cpp)
         self._model = None
         self._model_loaded = False
+
+        # llama.cpp embedding server URL
+        self.llama_cpp_url = str(config.get("llama_cpp_url", "http://localhost:8090"))
+
+        # Pinecone integrated inference config
+        self.pinecone_index_name = str(config.get("pinecone_index", "mind-mem"))
+        self.pinecone_namespace = str(config.get("pinecone_namespace", "default"))
 
         _log.info("vector_backend_init", provider=self.provider, model=self.model_name)
 
@@ -112,8 +122,23 @@ class VectorBackend(RecallBackend):
         """Lazy-load embedding model on first access."""
         if not self._model_loaded:
             try:
-                from sentence_transformers import SentenceTransformer
-                self._model = SentenceTransformer(self.model_name)
+                # Temporarily remove scripts/ from sys.path so that
+                # sentence_transformers can find the real `filelock` package
+                # (scripts/filelock.py shadows it). We remove by realpath
+                # to catch both relative and absolute path variants.
+                _scripts_real = os.path.realpath(os.path.dirname(os.path.abspath(__file__)))
+                _saved = list(sys.path)
+                sys.path[:] = [p for p in sys.path
+                               if os.path.realpath(p) != _scripts_real]
+                try:
+                    from sentence_transformers import SentenceTransformer
+                finally:
+                    sys.path[:] = _saved
+                cache_dir = os.environ.get("SENTENCE_TRANSFORMERS_HOME")
+                self._model = SentenceTransformer(
+                    self.model_name,
+                    cache_folder=cache_dir,
+                )
                 self._model_loaded = True
                 _log.info("embedding_model_loaded", model=self.model_name)
             except ImportError as e:
@@ -166,6 +191,242 @@ class VectorBackend(RecallBackend):
             return 0.0
 
         return dot_product / (norm1 * norm2)
+
+    def embed_fastembed(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings using fastembed (ONNX, no torch required).
+
+        Args:
+            texts: List of text strings to embed
+
+        Returns:
+            List of embedding vectors
+
+        Raises:
+            ImportError: If fastembed is not installed
+        """
+        # Temporarily remove scripts/ from sys.path so fastembed's huggingface_hub
+        # import finds the real 'filelock' system package, not mind-mem's local stub.
+        import sys as _sys
+        _scripts_paths = [p for p in _sys.path if "mind-mem/scripts" in p or p.endswith("/scripts")]
+        for _p in _scripts_paths:
+            _sys.path.remove(_p)
+        try:
+            from fastembed import TextEmbedding
+        except ImportError as e:
+            raise ImportError(
+                "fastembed not installed. Install with: pip install fastembed"
+            ) from e
+        finally:
+            for _p in _scripts_paths:
+                _sys.path.insert(0, _p)
+
+        if not hasattr(self, "_fastembed_model") or self._fastembed_model is None:
+            _log.info("fastembed_model_loading", model=self.model_name)
+            self._fastembed_model = TextEmbedding(self.model_name)
+            _log.info("fastembed_model_loaded", model=self.model_name)
+
+        with timed("embed_fastembed"):
+            embeddings = list(self._fastembed_model.embed(texts))
+            metrics.inc("embeddings_generated", len(texts))
+            return [emb.tolist() for emb in embeddings]
+
+    def embed_llama_cpp(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings via a llama.cpp server's /embeddings endpoint.
+
+        Args:
+            texts: List of text strings to embed
+
+        Returns:
+            List of embedding vectors (each is a list of floats)
+        """
+        import urllib.request as _req
+
+        url = self.llama_cpp_url.rstrip("/") + "/embeddings"
+        BATCH = 32
+        all_embeddings = []
+        for i in range(0, len(texts), BATCH):
+            batch = texts[i:i + BATCH]
+            payload = json.dumps({"input": batch}).encode("utf-8")
+            req = _req.Request(url, data=payload, headers={"Content-Type": "application/json"})
+            with _req.urlopen(req, timeout=120) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+            # llama.cpp returns a list of {index, embedding} objects
+            if isinstance(result, list):
+                for item in result:
+                    emb = item.get("embedding", [])
+                    if isinstance(emb, list) and emb and isinstance(emb[0], list):
+                        emb = emb[0]
+                    all_embeddings.append(emb)
+            elif isinstance(result, dict) and "data" in result:
+                for item in result["data"]:
+                    all_embeddings.append(item["embedding"])
+            _log.debug("llama_cpp_batch_embedded", batch=i // BATCH + 1, count=len(batch))
+
+        metrics.inc("embeddings_generated", len(texts))
+        return all_embeddings
+
+    def _sqlite_vec_db_path(self, workspace: str) -> str:
+        """Return path to the sqlite-vec DB (shares recall.db with BM25 index)."""
+        custom = self.config.get("sqlite_vec_db")
+        if custom:
+            return os.path.join(workspace, custom)
+        return os.path.join(workspace, ".mind-mem-index", "recall.db")
+
+    def _connect_sqlite_vec(self, workspace: str, readonly: bool = False) -> "sqlite3.Connection":
+        """Open recall.db with sqlite-vec extension loaded.
+
+        Args:
+            workspace: Workspace root path
+            readonly: Open in read-only mode
+
+        Returns:
+            sqlite3 connection with vec0 support enabled
+        """
+        import sqlite3 as _sqlite3
+        try:
+            import sqlite_vec
+        except ImportError as e:
+            raise ImportError(
+                "sqlite-vec not installed. Install with: pip install sqlite-vec"
+            ) from e
+
+        db_path = self._sqlite_vec_db_path(workspace)
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+        if readonly:
+            conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        else:
+            conn = _sqlite3.connect(db_path)
+
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.enable_load_extension(True)
+        sqlite_vec.load(conn)
+        conn.enable_load_extension(False)
+        return conn
+
+    def _init_vec_table(self, conn: "sqlite3.Connection", dimension: int) -> None:
+        """Create vec0 virtual table if it doesn't exist.
+
+        Args:
+            conn: Connection with sqlite-vec loaded
+            dimension: Embedding dimension (e.g. 384 for bge-small)
+        """
+        conn.execute(f"""
+            CREATE VIRTUAL TABLE IF NOT EXISTS vec_blocks USING vec0(
+                block_id TEXT PRIMARY KEY,
+                embedding FLOAT[{dimension}]
+            )
+        """)
+        conn.commit()
+
+    def _index_sqlite_vec(self, workspace: str, blocks: list[dict], texts: list[str]) -> None:
+        """Build sqlite-vec index: embed texts locally, store in recall.db.
+
+        Args:
+            workspace: Workspace root path
+            blocks: Block metadata list
+            texts: Searchable text for each block
+        """
+        import sqlite_vec
+
+        _log.info("sqlite_vec_indexing_start", count=len(texts))
+
+        embeddings = self.embed_fastembed(texts)
+        if not embeddings:
+            _log.error("sqlite_vec_no_embeddings")
+            return
+
+        dim = len(embeddings[0])
+        if self.dimension is None:
+            self.dimension = dim
+
+        conn = self._connect_sqlite_vec(workspace)
+        try:
+            self._init_vec_table(conn, dim)
+            # Clear existing vectors before rebuild
+            conn.execute("DELETE FROM vec_blocks")
+            for block, emb in zip(blocks, embeddings):
+                conn.execute(
+                    "INSERT INTO vec_blocks(block_id, embedding) VALUES (?, ?)",
+                    (block["_id"], sqlite_vec.serialize_float32(emb)),
+                )
+            conn.commit()
+            _log.info("sqlite_vec_indexed", blocks=len(blocks), dimension=dim)
+        finally:
+            conn.close()
+
+        # Cache block metadata to a companion JSON (for search result enrichment)
+        meta_path = os.path.join(workspace, ".mind-mem-index", "vec_meta.json")
+        meta = {b["_id"]: b for b in blocks}
+        with open(meta_path, "w") as f:
+            json.dump(meta, f)
+
+    def _search_sqlite_vec(
+        self, workspace: str, query: str, limit: int, active_only: bool
+    ) -> list[dict]:
+        """ANN search via sqlite-vec vec0 table.
+
+        Args:
+            workspace: Workspace root path
+            query: Query text
+            limit: Max results
+            active_only: Filter to active blocks only
+
+        Returns:
+            Ranked list of result dicts
+        """
+        import sqlite_vec
+
+        # Embed query
+        query_emb = self.embed_fastembed([query])[0]
+        query_bytes = sqlite_vec.serialize_float32(query_emb)
+
+        # Load block metadata
+        meta_path = os.path.join(workspace, ".mind-mem-index", "vec_meta.json")
+        meta: dict = {}
+        if os.path.isfile(meta_path):
+            try:
+                with open(meta_path) as f:
+                    meta = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                pass
+
+        conn = self._connect_sqlite_vec(workspace, readonly=True)
+        try:
+            fetch_limit = limit * 3 if active_only else limit
+            rows = conn.execute(
+                """
+                SELECT block_id, distance
+                FROM vec_blocks
+                WHERE embedding MATCH ?
+                  AND k = ?
+                ORDER BY distance
+                """,
+                (query_bytes, fetch_limit),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        results = []
+        for block_id, distance in rows:
+            block = meta.get(block_id, {})
+            status = block.get("status", "")
+            if active_only and status != "active":
+                continue
+            # Convert cosine distance (0=identical, 2=opposite) to similarity score
+            score = round(1.0 - distance / 2.0, 4)
+            results.append({
+                "_id": block_id,
+                "type": block.get("type", "unknown"),
+                "score": score,
+                "excerpt": block.get("excerpt", ""),
+                "file": block.get("file", "?"),
+                "line": block.get("line", 0),
+                "status": status,
+            })
+
+        return results[:limit]
 
     def _get_index_path(self, workspace: str) -> str:
         """Get full path to local index file."""
@@ -269,10 +530,29 @@ class VectorBackend(RecallBackend):
                 _log.warning("no_searchable_text", workspace=workspace)
                 return
 
+            # sqlite-vec: local ONNX embeddings stored in recall.db
+            if self.provider == "sqlite_vec":
+                _log.info("sqlite_vec_indexing", count=len(texts))
+                self._index_sqlite_vec(workspace, block_metadata, texts)
+                metrics.inc("index_builds")
+                _log.info("indexing_complete", blocks=len(texts), provider=self.provider)
+                return
+
+            # Pinecone integrated inference: skip local embedding generation
+            if self.provider == "pinecone":
+                _log.info("pinecone_integrated_inference", count=len(texts))
+                self._index_pinecone_integrated(workspace, block_metadata, texts)
+                metrics.inc("index_builds")
+                _log.info("indexing_complete", blocks=len(texts), provider=self.provider)
+                return
+
             _log.info("generating_embeddings", count=len(texts))
 
-            # Generate embeddings
-            embeddings = self.embed(texts)
+            # Generate embeddings — route based on provider
+            if self.provider == "llama_cpp":
+                embeddings = self.embed_llama_cpp(texts)
+            else:
+                embeddings = self.embed(texts)
 
             if not embeddings:
                 _log.error("embedding_generation_failed")
@@ -283,13 +563,11 @@ class VectorBackend(RecallBackend):
                 self.dimension = len(embeddings[0])
                 _log.info("dimension_detected", dimension=self.dimension)
 
-            # Build index based on provider
-            if self.provider == "local":
+            # Build index based on provider (llama_cpp uses local JSON storage)
+            if self.provider in ("local", "llama_cpp"):
                 self._index_local(workspace, block_metadata, embeddings)
             elif self.provider == "qdrant":
                 self._index_qdrant(workspace, block_metadata, embeddings)
-            elif self.provider == "pinecone":
-                self._index_pinecone(workspace, block_metadata, embeddings)
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
 
@@ -358,52 +636,58 @@ class VectorBackend(RecallBackend):
         client.upsert(collection_name=collection, points=points)
         _log.info("qdrant_indexed", collection=collection, points=len(points))
 
-    def _index_pinecone(self, workspace: str, blocks: list[dict], embeddings: list[list[float]]):
-        """Build Pinecone vector index.
+    def _index_pinecone_integrated(self, workspace: str, blocks: list[dict], texts: list[str]):
+        """Index into Pinecone using integrated inference (server-side embeddings).
+
+        Upserts records with text content — Pinecone generates embeddings
+        server-side via the model configured on the index (e.g. multilingual-e5-large).
+        No local sentence-transformers or torch required.
 
         Args:
             workspace: Workspace path
             blocks: List of block metadata dicts
-            embeddings: List of embedding vectors
+            texts: List of text strings (content to embed)
         """
         try:
-            from pinecone import Pinecone, ServerlessSpec
+            from pinecone import Pinecone
         except ImportError as e:
             _log.error("pinecone_not_installed", error=str(e))
             raise ImportError(
-                "pinecone-client not installed. Install with: pip install pinecone-client"
+                "pinecone not installed. Install with: pip install pinecone"
             ) from e
 
         api_key = os.environ.get("PINECONE_API_KEY") or self.config.get("pinecone_api_key")
-        index_name = self.config.get("pinecone_index", "mind-mem")
-
         if not api_key:
             raise ValueError("pinecone_api_key required (config or PINECONE_API_KEY env var)")
 
         pc = Pinecone(api_key=api_key)
+        index = pc.Index(self.pinecone_index_name)
 
-        # Create or recreate index
-        existing = [idx.name for idx in pc.list_indexes()]
-        if index_name in existing:
-            pc.delete_index(index_name)
+        # Build records with text content for integrated inference
+        # The index's fieldMap maps "content" → embedding model
+        BATCH_SIZE = 96
+        total = 0
+        for i in range(0, len(blocks), BATCH_SIZE):
+            batch_blocks = blocks[i:i + BATCH_SIZE]
+            batch_texts = texts[i:i + BATCH_SIZE]
+            records = []
+            for block, text in zip(batch_blocks, batch_texts):
+                record = {
+                    "_id": block.get("_id", f"block-{i + len(records)}"),
+                    "content": text,
+                    "block_type": block.get("type", "unknown"),
+                    "excerpt": (block.get("excerpt", "") or "")[:500],
+                    "file": block.get("file", ""),
+                    "line": block.get("line", 0),
+                    "status": block.get("status", ""),
+                }
+                records.append(record)
 
-        pc.create_index(
-            name=index_name,
-            dimension=self.dimension,
-            metric="cosine",
-            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
-        )
+            index.upsert_records(self.pinecone_namespace, records)
+            total += len(records)
+            _log.info("pinecone_batch_upserted", batch=i // BATCH_SIZE + 1, count=len(records))
 
-        index = pc.Index(index_name)
-
-        # Upload vectors
-        vectors = [
-            (str(i), emb, block)
-            for i, (block, emb) in enumerate(zip(blocks, embeddings))
-        ]
-
-        index.upsert(vectors=vectors)
-        _log.info("pinecone_indexed", index=index_name, vectors=len(vectors))
+        _log.info("pinecone_indexed", index=self.pinecone_index_name, vectors=total)
 
     def search(self, workspace: str, query: str, limit: int = 10, active_only: bool = False) -> list[dict]:
         """Search using semantic/vector similarity.
@@ -423,7 +707,9 @@ class VectorBackend(RecallBackend):
         _log.info("vector_search_start", query=query, limit=limit, provider=self.provider)
 
         with timed("vector_search"):
-            if self.provider == "local":
+            if self.provider == "sqlite_vec":
+                results = self._search_sqlite_vec(workspace, query, limit, active_only)
+            elif self.provider in ("local", "llama_cpp"):
                 results = self._search_local(workspace, query, limit, active_only)
             elif self.provider == "qdrant":
                 results = self._search_qdrant(workspace, query, limit, active_only)
@@ -467,7 +753,10 @@ class VectorBackend(RecallBackend):
             return []
 
         # Generate query embedding
-        query_emb = self.embed([query])[0]
+        if self.provider == "llama_cpp":
+            query_emb = self.embed_llama_cpp([query])[0]
+        else:
+            query_emb = self.embed([query])[0]
 
         # Compute similarity scores
         results = []
@@ -495,7 +784,7 @@ class VectorBackend(RecallBackend):
             elif status in ("todo", "doing"):
                 score *= 1.1
 
-            results.append({
+            result_item = {
                 "_id": block.get("_id", "?"),
                 "type": block.get("type", "unknown"),
                 "score": round(score, 4),
@@ -503,7 +792,14 @@ class VectorBackend(RecallBackend):
                 "file": block.get("file", "?"),
                 "line": block.get("line", 0),
                 "status": status,
-            })
+            }
+            if block.get("speaker"):
+                result_item["speaker"] = block["speaker"]
+            if block.get("DiaID"):
+                result_item["DiaID"] = block["DiaID"]
+            if block.get("Date") or block.get("date"):
+                result_item["Date"] = block.get("Date") or block.get("date")
+            results.append(result_item)
 
         # Sort by score descending
         results.sort(key=lambda r: r["score"], reverse=True)
@@ -567,11 +863,14 @@ class VectorBackend(RecallBackend):
         return results
 
     def _search_pinecone(self, workspace: str, query: str, limit: int, active_only: bool) -> list[dict]:
-        """Search Pinecone vector database.
+        """Search Pinecone using integrated inference (server-side embeddings).
+
+        Sends text query directly — Pinecone generates the query embedding
+        server-side and returns ranked results. No local embedding required.
 
         Args:
             workspace: Workspace path
-            query: Search query
+            query: Search query text
             limit: Max results
             active_only: Filter to active blocks only
 
@@ -581,42 +880,38 @@ class VectorBackend(RecallBackend):
         try:
             from pinecone import Pinecone
         except ImportError as e:
-            raise ImportError("pinecone-client not installed") from e
+            raise ImportError("pinecone not installed") from e
 
         api_key = os.environ.get("PINECONE_API_KEY") or self.config.get("pinecone_api_key")
-        index_name = self.config.get("pinecone_index", "mind-mem")
+        if not api_key:
+            raise ValueError("pinecone_api_key required (config or PINECONE_API_KEY env var)")
 
         pc = Pinecone(api_key=api_key)
-        index = pc.Index(index_name)
-
-        # Generate query embedding
-        query_emb = self.embed([query])[0]
+        index = pc.Index(self.pinecone_index_name)
 
         # Build filter
         filter_dict = None
         if active_only:
             filter_dict = {"status": {"$eq": "active"}}
 
-        # Search
-        search_results = index.query(
-            vector=query_emb,
-            top_k=limit,
-            filter=filter_dict,
-            include_metadata=True,
+        # Search using integrated inference (text query, no local embedding)
+        search_results = index.search_records(
+            namespace=self.pinecone_namespace,
+            query={"inputs": {"text": query}, "top_k": limit, "filter": filter_dict or {}},
         )
 
         # Convert to standard format
         results = []
-        for match in search_results.matches:
-            metadata = match.metadata
+        for hit in search_results.get("result", {}).get("hits", []):
+            fields = hit.get("fields", {})
             results.append({
-                "_id": metadata.get("_id", "?"),
-                "type": metadata.get("type", "unknown"),
-                "score": round(match.score, 4),
-                "excerpt": metadata.get("excerpt", ""),
-                "file": metadata.get("file", "?"),
-                "line": metadata.get("line", 0),
-                "status": metadata.get("status", ""),
+                "_id": hit.get("_id", "?"),
+                "type": fields.get("block_type", "unknown"),
+                "score": round(hit.get("_score", 0.0), 4),
+                "excerpt": fields.get("excerpt", ""),
+                "file": fields.get("file", "?"),
+                "line": fields.get("line", 0),
+                "status": fields.get("status", ""),
             })
 
         return results

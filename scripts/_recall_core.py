@@ -411,9 +411,11 @@ def recall(
             "line": block.get("_line", 0),
             "status": status,
         }
-        # Pass through DiaID for benchmark evidence matching
+        # Pass through DiaID and Date for benchmark evidence matching
         if block.get("DiaID"):
             result["DiaID"] = block["DiaID"]
+        if block.get("Date"):
+            result["Date"] = block["Date"]
         results.append(result)
 
     # Graph-based neighbor boosting: 2-hop traversal for multi-hop recall
