@@ -224,3 +224,9 @@ class FileLock:
 
     def __repr__(self) -> str:
         return f"FileLock({self.path!r})"
+
+
+# Aliases for compatibility with huggingface_hub and other packages
+# that import BaseFileLock / SoftFileLock from filelock.
+BaseFileLock = FileLock
+SoftFileLock = FileLock
