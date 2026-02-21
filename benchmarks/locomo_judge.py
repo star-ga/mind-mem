@@ -859,7 +859,7 @@ def _setup_hybrid_workspace(workspace: str):
         "llama_cpp_url": "http://localhost:8090",
         "dimension": 4096,
         "index_path": ".mind-mem-vectors",
-        "cross_encoder": {"enabled": True, "blend_weight": 0.6},
+        "cross_encoder": {"enabled": False, "blend_weight": 0.6},
     }
     config = {
         "version": "1.0.6",
