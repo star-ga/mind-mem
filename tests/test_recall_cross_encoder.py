@@ -120,6 +120,9 @@ class TestCrossEncoderRerankerUnit(unittest.TestCase):
     )
     def test_empty_candidates(self):
         """Reranker should handle empty candidate list."""
+        import cross_encoder_reranker as _ce_mod
+        # Reset cached availability (may be stale from earlier test imports)
+        _ce_mod._CE_AVAILABLE = None
         from cross_encoder_reranker import CrossEncoderReranker
         ce = CrossEncoderReranker()
         result = ce.rerank("test query", [], top_k=5)

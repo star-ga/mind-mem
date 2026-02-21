@@ -34,8 +34,8 @@ from apply_engine import (
 )
 from backup_restore import WAL
 from block_parser import parse_file
-from mind_filelock import FileLock, LockTimeout
 from init_workspace import init
+from mind_filelock import FileLock, LockTimeout
 from recall import recall
 
 # ---------------------------------------------------------------------------
