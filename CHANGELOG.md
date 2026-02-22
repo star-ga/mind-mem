@@ -2,6 +2,25 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.1.1 (2026-02-22)
+
+**Test coverage push + Full 10-conv benchmark**
+
+### Test Coverage
+- `tests/test_recall_vector.py` — 36 new tests covering vector backend initialization, embedding generation, similarity search, ONNX fallback, Pinecone/Qdrant providers, and error paths
+- `tests/test_validate_py.py` — 30 new tests covering structural validation, schema checks, cross-reference integrity, and intelligence file validation
+- Total: **964 tests passing** (up from 898)
+
+### Benchmark
+- Full 10-conversation LoCoMo LLM-as-Judge benchmark completed (Mistral Large answerer + judge, BM25-only, top_k=18)
+- 1986 questions: **73.8% Acc≥50**, mean=70.5 (up from 67.3% / 61.4 on v1.0.0 baseline)
+- Adversarial accuracy: **92.4%** (up from 36.3% on v1.0.0 baseline)
+- Conv-0 detailed: mean=77.9, adversarial=82.3, temporal=88.5
+
+### CI
+- All 9 matrix jobs green (Ubuntu/macOS/Windows × Python 3.10/3.12/3.13)
+- Fixed test isolation issues in vector backend tests
+
 ## 1.1.0 (2026-02-22)
 
 **Multi-hop query decomposition + Recency decay**
