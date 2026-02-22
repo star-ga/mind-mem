@@ -216,11 +216,21 @@ def format_trajectory_md(block: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def compute_similarity(traj_a: dict, traj_b: dict) -> float:
+def compute_similarity(
+    traj_a: dict, traj_b: dict, reference_date: date | None = None
+) -> float:
     """Compute similarity between two trajectory blocks.
 
-    Uses task text overlap + tool overlap + outcome matching.
-    Returns score in [0.0, 1.0].
+    Uses task text overlap + tool overlap + outcome matching, then applies
+    exponential recency decay based on the age of ``traj_b`` (the candidate).
+
+    Args:
+        traj_a: Query trajectory (the current task).
+        traj_b: Candidate trajectory being compared.
+        reference_date: Date to measure age from. Defaults to ``date.today()``.
+
+    Returns:
+        Score in [0.0, 1.0].
     """
     config = _load_config()
     score = 0.0
@@ -250,4 +260,19 @@ def compute_similarity(traj_a: dict, traj_b: dict) -> float:
         score += outcome_match * outcome_w
         weight_sum += outcome_w
 
-    return min(score / max(weight_sum, 0.01), 1.0)
+    raw_score = min(score / max(weight_sum, 0.01), 1.0)
+
+    # Recency decay — exponential half-life on traj_b's age
+    decay = 1.0
+    date_str = traj_b.get("Date", "")
+    if date_str:
+        try:
+            traj_date = datetime.strptime(str(date_str), "%Y-%m-%d").date()
+            ref = reference_date if reference_date is not None else date.today()
+            age_days = max((ref - traj_date).days, 0)
+            halflife = max(config.get("recency_halflife", 30), 1)
+            decay = 0.5 ** (age_days / halflife)
+        except (ValueError, TypeError, ZeroDivisionError):
+            decay = 1.0
+
+    return min(raw_score * decay, 1.0)

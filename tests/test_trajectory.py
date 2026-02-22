@@ -5,6 +5,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import date, timedelta
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
@@ -187,6 +188,81 @@ class TestComputeSimilarity(unittest.TestCase):
 
     def test_empty_blocks(self):
         self.assertIsInstance(compute_similarity({}, {}), float)
+
+    def test_recency_decay_recent(self):
+        """Trajectory from today should score higher than same trajectory from 60 days ago."""
+        ref = date(2026, 2, 21)
+        a = {"Task": "deploy production", "Tools": "git, docker", "Outcome": "SUCCESS"}
+        b_today = {
+            "Task": "deploy production",
+            "Tools": "git, docker",
+            "Outcome": "SUCCESS",
+            "Date": ref.strftime("%Y-%m-%d"),
+        }
+        b_old = {
+            "Task": "deploy production",
+            "Tools": "git, docker",
+            "Outcome": "SUCCESS",
+            "Date": (ref - timedelta(days=60)).strftime("%Y-%m-%d"),
+        }
+        sim_today = compute_similarity(a, b_today, reference_date=ref)
+        sim_old = compute_similarity(a, b_old, reference_date=ref)
+        self.assertGreater(sim_today, sim_old)
+
+    def test_recency_decay_halflife(self):
+        """Trajectory from exactly 30 days ago should have ~50% of today's score."""
+        ref = date(2026, 2, 21)
+        a = {"Task": "deploy production", "Tools": "git, docker", "Outcome": "SUCCESS"}
+        b_today = {
+            "Task": "deploy production",
+            "Tools": "git, docker",
+            "Outcome": "SUCCESS",
+            "Date": ref.strftime("%Y-%m-%d"),
+        }
+        b_halflife = {
+            "Task": "deploy production",
+            "Tools": "git, docker",
+            "Outcome": "SUCCESS",
+            "Date": (ref - timedelta(days=30)).strftime("%Y-%m-%d"),
+        }
+        sim_today = compute_similarity(a, b_today, reference_date=ref)
+        sim_half = compute_similarity(a, b_halflife, reference_date=ref)
+        ratio = sim_half / sim_today
+        self.assertAlmostEqual(ratio, 0.5, places=2)
+
+    def test_recency_decay_missing_date(self):
+        """Trajectory without Date field should get full score (no penalty)."""
+        ref = date(2026, 2, 21)
+        a = {"Task": "deploy production", "Tools": "git, docker", "Outcome": "SUCCESS"}
+        b_with_date = {
+            "Task": "deploy production",
+            "Tools": "git, docker",
+            "Outcome": "SUCCESS",
+            "Date": ref.strftime("%Y-%m-%d"),
+        }
+        b_no_date = {
+            "Task": "deploy production",
+            "Tools": "git, docker",
+            "Outcome": "SUCCESS",
+        }
+        sim_dated = compute_similarity(a, b_with_date, reference_date=ref)
+        sim_no_date = compute_similarity(a, b_no_date, reference_date=ref)
+        self.assertAlmostEqual(sim_dated, sim_no_date, places=5)
+
+    def test_recency_decay_custom_reference(self):
+        """Custom reference_date should shift the decay calculation."""
+        a = {"Task": "deploy production", "Tools": "git, docker", "Outcome": "SUCCESS"}
+        b = {
+            "Task": "deploy production",
+            "Tools": "git, docker",
+            "Outcome": "SUCCESS",
+            "Date": "2026-01-01",
+        }
+        # With a reference date close to the trajectory date, decay should be small
+        sim_close = compute_similarity(a, b, reference_date=date(2026, 1, 2))
+        # With a reference date far from the trajectory date, decay should be large
+        sim_far = compute_similarity(a, b, reference_date=date(2026, 7, 1))
+        self.assertGreater(sim_close, sim_far)
 
 
 if __name__ == "__main__":

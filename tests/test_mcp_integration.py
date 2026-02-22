@@ -17,7 +17,7 @@ def _make_workspace(tmp_path):
         (ws / d).mkdir(parents=True, exist_ok=True)
 
     cfg = {
-        "version": "1.0.7",
+        "version": "1.1.0",
         "workspace_path": str(ws),
         "auto_capture": False,
         "auto_recall": False,

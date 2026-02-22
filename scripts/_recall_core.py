@@ -30,6 +30,7 @@ from _recall_detection import (
     _QUERY_TYPE_PARAMS,
     _parse_speaker_from_tags,
     chunk_text,
+    decompose_query,
     detect_query_type,
     extract_field_tokens,
     get_bigrams,
@@ -114,6 +115,7 @@ def recall(
     graph_boost: bool = False, agent_id: str | None = None,
     retrieve_wide_k: int = 200, rerank: bool = True,
     rerank_debug: bool = False,
+    _allow_decompose: bool = True,
 ) -> list[dict]:
     """Search across all memory files using BM25 scoring. Returns ranked results.
 
@@ -177,6 +179,41 @@ def recall(
     else:
         query_type = detect_query_type(query)
     qparams = _QUERY_TYPE_PARAMS.get(query_type, _QUERY_TYPE_PARAMS["single-hop"])
+
+    # --- Multi-hop query decomposition (#6) ---
+    # For multi-hop queries, try decomposing into sub-queries.  If the query
+    # decomposes into 2+ parts, run recall for each part independently with a
+    # reduced limit, then merge and deduplicate by _id (keeping highest score).
+    if query_type == "multi-hop" and _allow_decompose:
+        sub_queries = decompose_query(query)
+        if len(sub_queries) > 1:
+            _log.info("multihop_decomposition", sub_queries=sub_queries,
+                      count=len(sub_queries))
+            merged: dict[str, dict] = {}  # _id -> best result
+            sub_limit = max(5, limit // len(sub_queries))
+            for sq in sub_queries:
+                try:
+                    sub_results = recall(
+                        workspace, sq, limit=sub_limit,
+                        active_only=active_only, graph_boost=graph_boost,
+                        agent_id=agent_id, retrieve_wide_k=retrieve_wide_k,
+                        rerank=rerank, rerank_debug=rerank_debug,
+                        _allow_decompose=False,
+                    )
+                except Exception as e:
+                    _log.warning("sub_query_recall_failed", sub_query=sq, error=str(e))
+                    continue
+                for r in sub_results:
+                    rid = r["_id"]
+                    if rid not in merged or r["score"] > merged[rid]["score"]:
+                        merged[rid] = r
+            # Sort merged results by score descending, return up to limit
+            all_merged = sorted(merged.values(),
+                                key=lambda r: (r["score"], r.get("_id", "")),
+                                reverse=True)
+            _log.info("multihop_merged", total=len(all_merged),
+                      limit=limit, sub_queries=len(sub_queries))
+            return all_merged[:limit]
 
     # Month normalization: inject numeric month tokens for date matching
     query_tokens = expand_months(query, query_tokens)
