@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from _recall_detection import decompose_query, detect_query_type
+from _recall_detection import decompose_query
 
 
 class TestSimpleConjunctionSplit(unittest.TestCase):
@@ -151,7 +151,6 @@ class TestNonMultihopNotDecomposed(unittest.TestCase):
 
     def test_temporal_not_decomposed(self):
         q = "When did Caroline sell the car?"
-        qtype = detect_query_type(q)
         # Even though we call decompose_query, the recall pipeline only
         # calls it for multi-hop queries.  Verify the function itself
         # returns 1 part for a simple temporal query.
