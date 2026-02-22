@@ -11,11 +11,18 @@ sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
 
 from abstention_classifier import ABSTENTION_ANSWER  # noqa: E402
 from evidence_packer import (  # noqa: E402
+    _compute_relevance_note,
+    _extract_key_facts,
     check_abstention,
+    format_chain_of_note,
     is_true_adversarial,
     pack_evidence,
     strip_semantic_prefix,
 )
+
+# Config shortcuts
+_RAW = {"evidence_packing": "raw"}
+_CON = {"evidence_packing": "chain_of_note"}
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 
@@ -107,25 +114,180 @@ class TestCheckAbstention:
         assert should_abstain is False
 
 
+# ── _extract_key_facts ───────────────────────────────────────────────
+
+class TestExtractKeyFacts:
+    def test_extracts_statement_field(self):
+        r = _hit("Statement: Emma works at school. Other text.")
+        facts = _extract_key_facts(r)
+        assert any("Emma works at school" in f for f in facts)
+
+    def test_extracts_tags_field(self):
+        r = _hit("Tags: project, deadline, meeting")
+        facts = _extract_key_facts(r)
+        assert any("project" in f for f in facts)
+
+    def test_extracts_multiple_fields(self):
+        r = _hit("Statement: Emma is a teacher\nTags: education, work")
+        facts = _extract_key_facts(r)
+        assert len(facts) == 2
+
+    def test_fallback_first_sentence(self):
+        r = _hit("Emma went to the park. She played with her dog.")
+        facts = _extract_key_facts(r)
+        assert facts == ["Emma went to the park."]
+
+    def test_fallback_truncates_long_content(self):
+        r = _hit("A" * 200)
+        facts = _extract_key_facts(r)
+        assert len(facts) == 1
+        assert len(facts[0]) == 120
+
+    def test_empty_excerpt_returns_empty(self):
+        r = _hit("")
+        facts = _extract_key_facts(r)
+        assert facts == []
+
+
+# ── _compute_relevance_note ──────────────────────────────────────────
+
+class TestComputeRelevanceNote:
+    def test_matching_terms(self):
+        r = _hit("Emma mentioned her dog at the park")
+        note = _compute_relevance_note(r, "Did Emma mention her dog?")
+        assert note.startswith("matches query terms:")
+        assert "emma" in note
+        assert "dog" in note
+
+    def test_no_overlap(self):
+        r = _hit("The weather was sunny")
+        note = _compute_relevance_note(r, "Did Bob go skiing?")
+        assert note == "background context"
+
+    def test_no_question(self):
+        r = _hit("Some content")
+        note = _compute_relevance_note(r, "")
+        assert note == "general context"
+
+
+# ── format_chain_of_note ─────────────────────────────────────────────
+
+class TestFormatChainOfNote:
+    def test_basic_format_has_note_header(self):
+        hits = [_hit("Emma said hello", score=7.5, dia_id="D1:3")]
+        result = format_chain_of_note(hits)
+        assert "[Note 1]" in result
+        assert "Source: D1:3" in result
+        assert "score: 7.50" in result
+
+    def test_includes_content_line(self):
+        hits = [_hit("Emma said hello")]
+        result = format_chain_of_note(hits)
+        assert "Content: Emma said hello" in result
+
+    def test_includes_key_facts(self):
+        hits = [_hit("Emma said hello")]
+        result = format_chain_of_note(hits)
+        assert "Key facts:" in result
+
+    def test_includes_relevance(self):
+        hits = [_hit("Emma said hello")]
+        result = format_chain_of_note(hits, question="What did Emma say?")
+        assert "Relevance:" in result
+
+    def test_includes_speaker_and_date(self):
+        hits = [_hit("text", speaker="Alice", date="2024-03-15")]
+        result = format_chain_of_note(hits)
+        assert "Speaker: Alice" in result
+        assert "Date: 2024-03-15" in result
+
+    def test_multiple_notes_numbered(self):
+        hits = [_hit("First"), _hit("Second", dia_id="D2:1")]
+        result = format_chain_of_note(hits)
+        assert "[Note 1]" in result
+        assert "[Note 2]" in result
+
+    def test_empty_hits(self):
+        assert format_chain_of_note([]) == ""
+
+    def test_empty_excerpt_skipped(self):
+        hits = [_hit(""), _hit("real text")]
+        result = format_chain_of_note(hits)
+        assert "real text" in result
+        assert "[Note 1]" in result
+        # Only one note should be present
+        assert "[Note 2]" not in result
+
+    def test_strips_semantic_prefix(self):
+        hits = [_hit("(identity desc) Real content")]
+        result = format_chain_of_note(hits)
+        assert "(identity desc)" not in result
+        assert "Real content" in result
+
+    def test_respects_max_chars(self):
+        long_text = "x" * 3000
+        hits = [_hit(long_text, score=9.0), _hit(long_text, score=8.0)]
+        result = format_chain_of_note(hits, max_chars=200)
+        # Should have at most 1 note (or none if single note > 200)
+        note_count = result.count("[Note ")
+        assert note_count <= 1
+
+    def test_unknown_speaker_omits_speaker_line(self):
+        hits = [{"excerpt": "text", "score": 5.0}]
+        result = format_chain_of_note(hits)
+        # UNKNOWN speaker with no date => speaker line omitted
+        assert "Speaker:" not in result
+
+    def test_uses_block_id_fallback(self):
+        hits = [{"excerpt": "text", "score": 5.0, "block_id": "BLK-42"}]
+        result = format_chain_of_note(hits)
+        assert "Source: BLK-42" in result
+
+    def test_uses_hit_number_fallback(self):
+        hits = [{"excerpt": "text", "score": 5.0}]
+        result = format_chain_of_note(hits)
+        assert "Source: hit-1" in result
+
+    def test_statement_tag_extraction_in_note(self):
+        hits = [_hit("Statement: Emma teaches math")]
+        result = format_chain_of_note(hits)
+        assert "Key facts: Emma teaches math" in result
+
+
 # ── pack_evidence dispatch routing ───────────────────────────────────
 
 class TestPackEvidenceRouting:
     def test_empty_hits(self):
         assert pack_evidence([]) == ""
 
-    def test_default_structured(self):
+    def test_default_uses_chain_of_note(self):
         hits = [_hit("Emma said hello")]
         result = pack_evidence(hits)
+        assert "[Note 1]" in result
+        assert "Content:" in result
+        assert "Key facts:" in result
+
+    def test_raw_config_uses_structured(self):
+        hits = [_hit("Emma said hello")]
+        result = pack_evidence(hits, config=_RAW)
         assert "[SPEAKER=Emma]" in result
         assert "Emma said hello" in result
 
-    def test_routes_temporal(self):
+    def test_routes_temporal_chain_of_note(self):
         hits = [
             _hit("Event B", dia_id="D2:1"),
             _hit("Event A", dia_id="D1:1"),
         ]
         result = pack_evidence(hits, query_type="temporal")
         # Chronological: D1:1 should appear before D2:1
+        assert result.index("D1:1") < result.index("D2:1")
+
+    def test_routes_temporal_raw(self):
+        hits = [
+            _hit("Event B", dia_id="D2:1"),
+            _hit("Event A", dia_id="D1:1"),
+        ]
+        result = pack_evidence(hits, query_type="temporal", config=_RAW)
         assert result.index("[DiaID=D1:1]") < result.index("[DiaID=D2:1]")
 
     def test_routes_multihop(self):
@@ -142,58 +304,74 @@ class TestPackEvidenceRouting:
         assert "EVIDENCE_FOUND:" in result
         assert "DENIAL_EVIDENCE:" in result
 
-    def test_adversarial_non_true_falls_to_structured(self):
-        """query_type=adversarial but is_true_adversarial=False → _pack_structured."""
+    def test_adversarial_non_true_falls_to_chain_of_note(self):
+        """query_type=adversarial but is_true_adversarial=False -> chain_of_note."""
         hits = [_hit("Emma mentioned dogs")]
         result = pack_evidence(hits, question="What did Emma say?", query_type="adversarial")
-        # Structured format: no EVIDENCE_FOUND header
+        assert "EVIDENCE_FOUND:" not in result
+        assert "[Note 1]" in result
+
+    def test_adversarial_non_true_raw_falls_to_structured(self):
+        """query_type=adversarial but is_true_adversarial=False + raw -> _pack_structured."""
+        hits = [_hit("Emma mentioned dogs")]
+        result = pack_evidence(hits, question="What did Emma say?", query_type="adversarial", config=_RAW)
         assert "EVIDENCE_FOUND:" not in result
         assert "[SPEAKER=Emma]" in result
 
-    def test_unknown_query_type_uses_structured(self):
+    def test_unknown_query_type_uses_chain_of_note(self):
         hits = [_hit("some text")]
         result = pack_evidence(hits, query_type="unknown_type")
+        assert "[Note 1]" in result
+
+    def test_unknown_query_type_raw_uses_structured(self):
+        hits = [_hit("some text")]
+        result = pack_evidence(hits, query_type="unknown_type", config=_RAW)
         assert "[SPEAKER=Emma]" in result
 
+    def test_explicit_chain_of_note_config(self):
+        hits = [_hit("Emma said hello")]
+        result = pack_evidence(hits, config=_CON)
+        assert "[Note 1]" in result
 
-# ── _pack_structured ─────────────────────────────────────────────────
+
+# ── _pack_structured (raw mode) ─────────────────────────────────────
 
 class TestPackStructured:
     def test_includes_metadata_tags(self):
         hits = [_hit("Hello world", speaker="Alice", dia_id="D3:7", date="2024-06-15")]
-        result = pack_evidence(hits)
+        result = pack_evidence(hits, config=_RAW)
         assert "[SPEAKER=Alice]" in result
         assert "[DATE=2024-06-15]" in result
         assert "[DiaID=D3:7]" in result
 
     def test_strips_semantic_prefix(self):
         hits = [_hit("(identity desc) Real content")]
-        result = pack_evidence(hits)
+        result = pack_evidence(hits, config=_RAW)
         assert "(identity desc)" not in result
         assert "Real content" in result
 
     def test_respects_max_chars(self):
         long_text = "x" * 3000
         hits = [_hit(long_text, score=9.0), _hit(long_text, score=8.0)]
-        result = pack_evidence(hits, max_chars=100)
+        result = pack_evidence(hits, max_chars=100, config=_RAW)
         # Only one hit should fit (or none if first line > 100)
         lines = [ln for ln in result.split("\n") if ln.strip()]
         assert len(lines) <= 1
 
     def test_empty_excerpt_skipped(self):
         hits = [_hit(""), _hit("real text")]
-        result = pack_evidence(hits)
+        result = pack_evidence(hits, config=_RAW)
         assert "real text" in result
         lines = [ln for ln in result.split("\n") if ln.strip()]
         assert len(lines) == 1
 
     def test_missing_speaker_shows_unknown(self):
         hits = [{"excerpt": "text", "score": 5.0}]
-        result = pack_evidence(hits)
+        result = pack_evidence(hits, config=_RAW)
         assert "[SPEAKER=UNKNOWN]" in result
 
 
-# ── _pack_temporal ───────────────────────────────────────────────────
+# ── _pack_temporal (raw mode) ───────────────────────────────────────
 
 class TestPackTemporal:
     def test_sorts_by_dia_id(self):
@@ -202,7 +380,7 @@ class TestPackTemporal:
             _hit("First", dia_id="D1:1"),
             _hit("Second", dia_id="D2:5"),
         ]
-        result = pack_evidence(hits, query_type="temporal")
+        result = pack_evidence(hits, query_type="temporal", config=_RAW)
         lines = result.split("\n")
         assert "First" in lines[0]
         assert "Second" in lines[1]
@@ -213,7 +391,7 @@ class TestPackTemporal:
             _hit("No ID", dia_id=""),
             _hit("Has ID", dia_id="D1:1"),
         ]
-        result = pack_evidence(hits, query_type="temporal")
+        result = pack_evidence(hits, query_type="temporal", config=_RAW)
         lines = result.split("\n")
         assert "Has ID" in lines[0]
         assert "No ID" in lines[1]
@@ -223,13 +401,13 @@ class TestPackTemporal:
             _hit("Turn 10", dia_id="D1:10"),
             _hit("Turn 2", dia_id="D1:2"),
         ]
-        result = pack_evidence(hits, query_type="temporal")
+        result = pack_evidence(hits, query_type="temporal", config=_RAW)
         lines = result.split("\n")
         assert "Turn 2" in lines[0]
         assert "Turn 10" in lines[1]
 
 
-# ── _pack_multihop ───────────────────────────────────────────────────
+# ── _pack_multihop (raw mode) ──────────────────────────────────────
 
 class TestPackMultihop:
     def test_interleaves_speakers(self):
@@ -239,7 +417,7 @@ class TestPackMultihop:
             _hit("B1", speaker="Bob"),
             _hit("B2", speaker="Bob"),
         ]
-        result = pack_evidence(hits, query_type="multi-hop")
+        result = pack_evidence(hits, query_type="multi-hop", config=_RAW)
         lines = result.split("\n")
         # Round-robin: should alternate speakers
         speakers = []
@@ -262,7 +440,7 @@ class TestPackMultihop:
 
     def test_single_speaker(self):
         hits = [_hit("A1", speaker="Alice"), _hit("A2", speaker="Alice")]
-        result = pack_evidence(hits, query_type="multi-hop")
+        result = pack_evidence(hits, query_type="multi-hop", config=_RAW)
         assert result.count("Alice") == 2
 
 
@@ -312,3 +490,40 @@ class TestPackAdversarial:
         # The more relevant hit should appear first
         if len(lines) >= 2:
             assert "adopting" in lines[0] or "dogs" in lines[0]
+
+
+# ── chain_of_note with multi-hop interleaving ───────────────────────
+
+class TestChainOfNoteMultihop:
+    def test_interleaves_speakers_in_chain_of_note(self):
+        hits = [
+            _hit("A1", speaker="Alice"),
+            _hit("A2", speaker="Alice"),
+            _hit("B1", speaker="Bob"),
+            _hit("B2", speaker="Bob"),
+        ]
+        result = pack_evidence(hits, query_type="multi-hop")
+        # Both speakers should appear, interleaved in notes
+        lines = result.split("\n")
+        speaker_order = []
+        for line in lines:
+            if "Speaker: Alice" in line:
+                speaker_order.append("Alice")
+            elif "Speaker: Bob" in line:
+                speaker_order.append("Bob")
+        assert len(speaker_order) >= 2
+        assert speaker_order[0] != speaker_order[1]
+
+
+# ── chain_of_note temporal ordering ─────────────────────────────────
+
+class TestChainOfNoteTemporal:
+    def test_chronological_ordering(self):
+        hits = [
+            _hit("Event C", dia_id="D3:1"),
+            _hit("Event A", dia_id="D1:1"),
+            _hit("Event B", dia_id="D2:1"),
+        ]
+        result = pack_evidence(hits, query_type="temporal")
+        assert result.index("Event A") < result.index("Event B")
+        assert result.index("Event B") < result.index("Event C")

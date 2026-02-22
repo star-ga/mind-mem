@@ -41,6 +41,7 @@ from _recall_detection import (
 from _recall_expansion import expand_months, expand_query, rm3_expand
 from _recall_reranking import rerank_hits
 from _recall_scoring import build_xref_graph, date_score
+from _recall_temporal import apply_temporal_filter, resolve_time_reference
 from _recall_tokenization import tokenize
 from block_parser import get_active, parse_file
 from observability import get_logger, metrics
@@ -424,6 +425,16 @@ def recall(
         if priority in ("P0", "P1"):
             score *= 1.1
 
+        # --- Fact key boosting: entity overlap + adversarial negation ---
+        block_entities = block.get("_entities", [])
+        if block_entities:
+            entity_hits = sum(1 for eid in block_entities if eid.lower() in query.lower())
+            if entity_hits > 0:
+                score *= (1.0 + 0.15 * min(entity_hits, 3))
+
+        if query_type == "adversarial" and block.get("_has_negation", False):
+            score *= 1.2
+
         # --- A-MEM importance boost ---
         if meta_mgr:
             try:
@@ -530,12 +541,16 @@ def recall(
     config_path = os.path.join(workspace, "mind-mem.json")
     rm3_config = {}
     ce_config = {}
+    temporal_hard_filter_enabled = True  # default: on
     if os.path.isfile(config_path):
         try:
             with open(config_path) as _f:
                 _cfg = json.load(_f)
             rm3_config = _cfg.get("recall", {}).get("rm3", {})
             ce_config = _cfg.get("recall", {}).get("cross_encoder", {})
+            temporal_hard_filter_enabled = _cfg.get("recall", {}).get(
+                "temporal_hard_filter", True,
+            )
         except (OSError, json.JSONDecodeError, KeyError) as e:
             _log.warning("rm3_config_load_failed", path=config_path, error=str(e))
 
@@ -789,6 +804,17 @@ def recall(
 
             _log.info("chain_of_retrieval", bridge_terms=bridge_tokens[:5],
                       new_hits=sum(1 for r in results if r.get("via_chain")))
+
+    # --- Temporal hard filter (#13) ---
+    # For temporal queries, resolve date range from the query and exclude
+    # blocks whose Date falls outside the range. Undated blocks pass through.
+    if temporal_hard_filter_enabled and query_type == "temporal" and results:
+        t_start, t_end = resolve_time_reference(query)
+        if t_start is not None or t_end is not None:
+            pre_count = len(results)
+            results = apply_temporal_filter(results, t_start, t_end)
+            _log.info("temporal_hard_filter", start=str(t_start), end=str(t_end),
+                      pre=pre_count, post=len(results))
 
     # Sort by score descending
     results.sort(key=lambda r: (r["score"], r.get("_id", "")), reverse=True)

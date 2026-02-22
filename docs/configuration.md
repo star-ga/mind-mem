@@ -8,7 +8,7 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
 
 ```json
 {
-  "version": "1.1.2",
+  "version": "1.2.0",
   "schema_version": "2.1.0",
   "workspace_path": ".",
   "auto_capture": true,
@@ -80,7 +80,7 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `version` | string | `"1.1.2"` | Config file version. Set automatically by `init_workspace.py`. |
+| `version` | string | `"1.2.0"` | Config file version. Set automatically by `init_workspace.py`. |
 | `schema_version` | string | `"2.1.0"` | Workspace schema version. Used by `schema_version.py` for migrations. Falls back to `version` if absent. |
 | `workspace_path` | string | `"."` | Workspace root directory. Relative paths are resolved from the config file location. |
 | `auto_capture` | bool | `true` | Run the capture engine automatically on session-end hooks. When `false`, the session-end hook exits without capturing signals. |
@@ -326,7 +326,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.1.2",
+  "version": "1.2.0",
   "governance_mode": "detect_only",
   "recall": {
     "backend": "scan"
@@ -338,7 +338,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.1.2",
+  "version": "1.2.0",
   "governance_mode": "propose",
   "recall": {
     "backend": "hybrid",
@@ -358,7 +358,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.1.2",
+  "version": "1.2.0",
   "governance_mode": "enforce",
   "recall": {
     "backend": "hybrid",
@@ -380,7 +380,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.1.2",
+  "version": "1.2.0",
   "recall": {
     "backend": "vector",
     "provider": "qdrant",
@@ -395,7 +395,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.1.2",
+  "version": "1.2.0",
   "auto_capture": true,
   "auto_ingest": {
     "enabled": true,
@@ -410,7 +410,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.1.2",
+  "version": "1.2.0",
   "governance_mode": "propose",
   "categories": {
     "enabled": true,

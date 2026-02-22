@@ -221,5 +221,114 @@ class TestExtractRefs(unittest.TestCase):
         self.assertEqual(extract_refs(blocks), set())
 
 
+class TestFactKeyEnrichment(unittest.TestCase):
+    """Tests for _entities, _dates, _has_negation fact key fields."""
+
+    def test_entities_extracted(self):
+        text = (
+            "[D-20260213-001]\n"
+            "Statement: See T-20260213-002 and PRJ-abc for details\n"
+            "Status: active\n"
+        )
+        blocks = parse_blocks(text)
+        self.assertEqual(len(blocks), 1)
+        self.assertIn("_entities", blocks[0])
+        self.assertIn("T-20260213-002", blocks[0]["_entities"])
+        self.assertIn("PRJ-abc", blocks[0]["_entities"])
+
+    def test_entities_empty_when_none(self):
+        text = "[D-20260213-001]\nStatement: No entity IDs here\nStatus: active\n"
+        blocks = parse_blocks(text)
+        self.assertEqual(blocks[0]["_entities"], [])
+
+    def test_entities_deduplicated_and_sorted(self):
+        text = (
+            "[D-20260213-001]\n"
+            "Statement: Ref T-20260213-001 and T-20260213-001 again, also PER-xyz\n"
+        )
+        blocks = parse_blocks(text)
+        entities = blocks[0]["_entities"]
+        self.assertEqual(entities, sorted(set(entities)))
+        self.assertEqual(entities.count("T-20260213-001"), 1)
+
+    def test_dates_extracted(self):
+        text = (
+            "[D-20260213-001]\n"
+            "Statement: Decided on 2026-02-13 and reviewed 2026-03-01\n"
+        )
+        blocks = parse_blocks(text)
+        self.assertIn("_dates", blocks[0])
+        self.assertIn("2026-02-13", blocks[0]["_dates"])
+        self.assertIn("2026-03-01", blocks[0]["_dates"])
+
+    def test_dates_empty_when_none(self):
+        text = "[D-20260213-001]\nStatement: No dates in content\n"
+        blocks = parse_blocks(text)
+        self.assertEqual(blocks[0]["_dates"], [])
+
+    def test_dates_deduplicated_and_sorted(self):
+        text = (
+            "[D-20260213-001]\n"
+            "Statement: On 2026-02-13 we decided. Confirmed 2026-02-13.\n"
+        )
+        blocks = parse_blocks(text)
+        self.assertEqual(blocks[0]["_dates"].count("2026-02-13"), 1)
+
+    def test_has_negation_true(self):
+        text = "[D-20260213-001]\nStatement: We should never use plaintext passwords\n"
+        blocks = parse_blocks(text)
+        self.assertTrue(blocks[0]["_has_negation"])
+
+    def test_has_negation_false(self):
+        text = "[D-20260213-001]\nStatement: Use JWT tokens for authentication\n"
+        blocks = parse_blocks(text)
+        self.assertFalse(blocks[0]["_has_negation"])
+
+    def test_negation_patterns(self):
+        """Various negation patterns should be detected."""
+        negation_phrases = [
+            "not allowed",
+            "don't use this",
+            "won't work",
+            "shouldn't deploy",
+            "cannot proceed",
+            "can't be done",
+            "doesn't apply",
+            "didn't happen",
+        ]
+        for phrase in negation_phrases:
+            text = f"[D-20260213-001]\nStatement: {phrase}\n"
+            blocks = parse_blocks(text)
+            self.assertTrue(
+                blocks[0]["_has_negation"],
+                f"Expected negation for: {phrase}",
+            )
+
+    def test_fact_keys_across_separator(self):
+        """Fact keys should be present on both blocks separated by ---."""
+        text = (
+            "[D-20260213-001]\nStatement: See T-20260213-002 on 2026-01-15\n"
+            "---\n"
+            "[D-20260213-002]\nStatement: We never did this\n"
+        )
+        blocks = parse_blocks(text)
+        self.assertEqual(len(blocks), 2)
+        self.assertIn("T-20260213-002", blocks[0]["_entities"])
+        self.assertIn("2026-01-15", blocks[0]["_dates"])
+        self.assertFalse(blocks[0]["_has_negation"])
+        self.assertEqual(blocks[1]["_entities"], [])
+        self.assertTrue(blocks[1]["_has_negation"])
+
+    def test_fact_keys_from_list_fields(self):
+        """Entity IDs in list fields should also be extracted."""
+        text = (
+            "[D-20260213-001]\nTitle: Test\n"
+            "Sources:\n- D-20260213-002\n- PER-admin\n"
+        )
+        blocks = parse_blocks(text)
+        self.assertIn("D-20260213-002", blocks[0]["_entities"])
+        self.assertIn("PER-admin", blocks[0]["_entities"])
+
+
 if __name__ == "__main__":
     unittest.main()

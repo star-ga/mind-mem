@@ -2,6 +2,22 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.2.0 (2026-02-22)
+
+**Five enhancement features — closes #10, #11, #12, #13, #14**
+
+### Added
+- **#10 — BM25F weight grid search** (`benchmarks/grid_search.py`): One-at-a-time (11 combos) and full cartesian (243 combos) grid search over field weights. Evaluates against LoCoMo with MRR/R@k metrics. 14 new tests.
+- **#11 — Fact key expansion** (`scripts/block_parser.py`): Enriches each block with `_entities`, `_dates`, `_has_negation` via `_enrich_fact_keys()`. Entity overlap boosts recall up to 1.45x; adversarial negation boost 1.2x. 14 new tests.
+- **#12 — Chain-of-Note evidence packing** (`scripts/evidence_packer.py`): Structured `[Note N]` format with source, key facts, and relevance per block. Config toggle `evidence_packing: "chain_of_note"` (default) or `"raw"`. 38 new tests.
+- **#13 — Temporal hard filters** (`scripts/_recall_temporal.py`): Resolves relative time references ("last week", "yesterday") to date ranges and hard-filters blocks. Integrated into recall pipeline. 36 new tests.
+- **#14 — Cross-encoder A/B test** (`benchmarks/crossencoder_ab.py`): BM25 vs BM25+CE comparison. Result: +0.097 MRR (+24% relative), 58 questions improved, 17 regressed. Report section added.
+- `temporal_hard_filter` key added to `_VALID_RECALL_KEYS`
+
+### Changed
+- Version: 1.1.2 → 1.2.0
+- Total: **1055 tests passing** (up from 964)
+
 ## 1.1.2 (2026-02-22)
 
 **Post-release audit hardening**

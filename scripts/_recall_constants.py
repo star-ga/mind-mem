@@ -210,5 +210,5 @@ _VALID_RECALL_KEYS = frozenset({
     "backend", "limit", "rm3", "cross_encoder", "graph_boost",
     "pinecone_api_key", "pinecone_index", "pinecone_namespace",
     "qdrant_url", "qdrant_collection", "embedding_model",
-    "retrieve_wide_k", "rerank", "active_only",
+    "retrieve_wide_k", "rerank", "active_only", "temporal_hard_filter",
 })
