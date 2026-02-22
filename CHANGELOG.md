@@ -2,6 +2,27 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.0.7 (2026-02-21)
+
+**Retrieval quality push + Trajectory Memory foundation**
+
+### Retrieval Improvements
+- **top_k 10 → 18** — 80% more context blocks from RRF fusion pool (A/B tested: +3.0 mean, +6.3 acc@75 on conv-0)
+- **Temporal extra_limit_factor 1.5 → 2.0** — Wider candidate retrieval for date-bearing queries
+- **Temporal-multi-hop cross-boost** — "When did X do Y?" gets multi-hop signal boost in detection
+- **Evidence-grounded answerer prompt** — Replaced hallucination-encouraging rules with evidence-citing instructions
+- **Calibrated judge rubric** — 4-tier scoring replaces "core facts = 70+" anchor that inflated scores
+
+### Trajectory Memory (v1.2.0 foundation)
+- `mind/trajectory.mind` — Config kernel with schema, capture, recall, and consolidation settings
+- `scripts/trajectory.py` — Block parser, validator, ID generator, Markdown formatter, similarity computation
+- `tests/test_trajectory.py` — 19 tests covering ID generation, validation, parsing, roundtrip, similarity
+
+### Testing
+- `tests/test_recall_detection.py` — 32 tests for query type classification module
+- `benchmarks/compare_runs.py` — A/B benchmark comparison utility
+- Total: 873 tests passing (up from 822)
+
 ## 1.0.6 (2026-02-21)
 
 **Hybrid retrieval pipeline + critical retrieval fixes**
