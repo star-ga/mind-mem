@@ -9,7 +9,7 @@ from _recall_tokenization import tokenize
 
 __all__ = [
     "extract_text", "extract_field_tokens", "get_bigrams",
-    "is_skeptical_query", "detect_query_type",
+    "is_skeptical_query", "detect_query_type", "decompose_query",
     "_QUERY_TYPE_PARAMS", "_INTENT_TO_QUERY_TYPE",
     "chunk_text", "get_excerpt", "_parse_speaker_from_tags", "get_block_type",
 ]
@@ -286,6 +286,176 @@ _INTENT_TO_QUERY_TYPE = {
     "COMPARE": "multi-hop",
     "TRACE": "multi-hop",
 }
+
+
+# ---------------------------------------------------------------------------
+# Multi-hop Query Decomposition
+# ---------------------------------------------------------------------------
+
+# Conjunctions that indicate separate information needs
+_CONJUNCTION_SPLIT_RE = re.compile(
+    r"\s+(?:and\s+(?:also\s+)?|but\s+|also\s+|as\s+well\s+as\s+|plus\s+)",
+    re.IGNORECASE,
+)
+
+# Wh-word pattern for detecting question boundaries
+_WH_WORD_RE = re.compile(
+    r"\b(who|what|when|where|why|how)\b",
+    re.IGNORECASE,
+)
+
+# Minimum tokens for a valid sub-query (after splitting)
+_MIN_SUBQUERY_TOKENS = 3
+
+# Maximum sub-queries to prevent explosion
+_MAX_SUBQUERIES = 4
+
+
+_WH_WORDS_LOWER = {"what", "when", "where", "which", "who", "how", "why"}
+
+
+def _extract_entities(text: str) -> list[str]:
+    """Extract likely entity/topic words from text.
+
+    Returns capitalized words and multi-word noun phrases that serve as
+    shared context anchors for sub-queries.  Excludes wh-words (What, When, etc.)
+    which are interrogative, not content entities.
+    """
+    entities = []
+    # Capitalized words (proper nouns, project names, etc.)
+    for m in re.finditer(r"\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*)\b", text):
+        word = m.group(1)
+        if word.lower() not in _WH_WORDS_LOWER:
+            entities.append(word)
+    # Version patterns (v1.0.6, etc.)
+    for m in re.finditer(r"\bv?\d+\.\d+(?:\.\d+)?\b", text):
+        entities.append(m.group(0))
+    # Quoted strings
+    for m in re.finditer(r'"([^"]+)"', text):
+        entities.append(m.group(1))
+    return entities
+
+
+def _token_count(text: str) -> int:
+    """Count meaningful tokens (words) in text."""
+    return len([w for w in text.split() if len(w) > 1])
+
+
+def decompose_query(query: str) -> list[str]:
+    """Decompose a multi-hop query into sub-queries for independent retrieval.
+
+    Uses deterministic heuristics (no LLM calls):
+    1. Split on conjunctions: "and", "but", "or", "also", "as well as", "plus"
+    2. Split on question boundaries: multiple "?" or wh-words
+    3. Each sub-query must have at least 3 tokens
+    4. Maximum 4 sub-queries
+    5. Shared context (entities/topics) from the first clause is carried into
+       subsequent sub-queries that lack it.
+
+    Returns:
+        List of sub-query strings. Single-item list if no decomposition is possible.
+    """
+    query = query.strip()
+    if not query:
+        return []
+
+    # Strategy 1: Split on multiple question marks (explicit question boundaries)
+    if query.count("?") > 1:
+        parts = [p.strip() for p in query.split("?") if p.strip()]
+        # Re-append "?" for completeness (cosmetic, does not affect tokenization)
+        parts = [p + "?" if not p.endswith("?") else p for p in parts]
+        if len(parts) > 1:
+            parts = [p for p in parts if _token_count(p) >= _MIN_SUBQUERY_TOKENS]
+            if len(parts) > 1:
+                return _preserve_context(parts[:_MAX_SUBQUERIES], query)
+
+    # Strategy 2: Split on wh-word boundaries within a single sentence.
+    # Detect patterns like "When did X happen and how long did Y take?"
+    wh_positions = [m.start() for m in _WH_WORD_RE.finditer(query)]
+    if len(wh_positions) >= 2:
+        parts = []
+        for i, pos in enumerate(wh_positions):
+            end = wh_positions[i + 1] if i + 1 < len(wh_positions) else len(query)
+            segment = query[pos:end].strip().rstrip("?").rstrip(",").strip()
+            # Remove trailing conjunction words (word-boundary safe)
+            segment = re.sub(r"\s+(?:and|but|or|plus)\s*$", "", segment, flags=re.IGNORECASE)
+            if segment:
+                parts.append(segment)
+        parts = [p for p in parts if _token_count(p) >= _MIN_SUBQUERY_TOKENS]
+        if len(parts) > 1:
+            return _preserve_context(parts[:_MAX_SUBQUERIES], query)
+
+    # Strategy 3: Split on conjunctions
+    parts = _CONJUNCTION_SPLIT_RE.split(query)
+    parts = [p.strip().rstrip("?").strip() for p in parts if p.strip()]
+    parts = [p for p in parts if _token_count(p) >= _MIN_SUBQUERY_TOKENS]
+    if len(parts) > 1:
+        return _preserve_context(parts[:_MAX_SUBQUERIES], query)
+
+    # No decomposition possible — return original query
+    return [query]
+
+
+def _preserve_context(parts: list[str], original_query: str) -> list[str]:
+    """Carry shared entities/topics from the first clause into later sub-queries.
+
+    If the first clause mentions an entity (e.g., "the auth migration") and
+    a later clause does not, prepend the entity so each sub-query is
+    self-contained for retrieval.
+    """
+    if len(parts) <= 1:
+        return parts
+
+    # Extract entities from the full original query and the first clause
+    first_entities = _extract_entities(parts[0])
+    # Also extract key noun-like tokens from the first part (lowercased, len > 4,
+    # not wh-words or common verbs)
+    _skip = {
+        "what", "when", "where", "which", "who", "how", "why", "that", "this",
+        "there", "their", "these", "those", "about", "were", "have", "does",
+        "been", "being", "would", "could", "should", "will", "with", "from",
+        "they", "them", "than", "into", "also", "just", "some", "each",
+        # Common short function words (2-3 chars)
+        "the", "and", "for", "are", "but", "not", "you", "all", "can",
+        "had", "her", "was", "one", "our", "out", "did", "get", "has",
+        "him", "his", "she", "too", "use", "may", "its", "let", "say",
+        "any", "new", "now", "old", "see", "way", "own", "boy", "did",
+        "man", "run", "set", "try", "ask", "men", "ran", "few",
+        "it", "is", "in", "on", "at", "to", "up", "so", "we", "an",
+        "do", "if", "my", "no", "he", "by", "or", "as", "be", "go",
+    }
+    first_keywords = [
+        w for w in re.findall(r"[a-zA-Z0-9_./-]+", parts[0])
+        if len(w) >= 2 and w.lower() not in _skip
+    ]
+
+    # Combine entities and keywords for context candidates
+    context_tokens = first_entities + first_keywords
+    if not context_tokens:
+        return parts
+
+    # Deduplicate while preserving order
+    seen = set()
+    context_unique = []
+    for t in context_tokens:
+        tl = t.lower()
+        if tl not in seen:
+            seen.add(tl)
+            context_unique.append(t)
+
+    result = [parts[0]]
+    for part in parts[1:]:
+        part_lower = part.lower()
+        # Check if this sub-query already contains any of the context tokens
+        has_context = any(t.lower() in part_lower for t in context_unique)
+        if not has_context and context_unique:
+            # Prepend the most relevant context tokens (up to 3)
+            prefix = " ".join(context_unique[:3])
+            result.append(f"{prefix} {part}")
+        else:
+            result.append(part)
+
+    return result
 
 
 def chunk_text(text: str, chunk_size: int = 3, overlap: int = 1) -> list[str]:

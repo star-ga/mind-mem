@@ -2,6 +2,22 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.1.0 (2026-02-22)
+
+**Multi-hop query decomposition + Recency decay**
+
+### Multi-hop Query Decomposition (issue #6)
+- Deterministic query splitting on conjunctions, wh-word boundaries, and question marks
+- Context preservation: shared entities from first clause carried into sub-queries
+- Recursion-safe: sub-queries do not re-decompose (prevents infinite recursion)
+- Capped at 4 sub-queries, minimum 3 tokens per sub-query
+
+### Recency Decay for Trajectory Similarity (issue #9)
+- Exponential half-life decay on trajectory age (default 30 days)
+- Configurable via `recency_halflife` in `trajectory.mind`
+- Missing/unparseable dates receive no penalty (decay = 1.0)
+- Zero halflife guard prevents division by zero
+
 ## 1.0.7 (2026-02-21)
 
 **Retrieval quality push + Trajectory Memory foundation**
