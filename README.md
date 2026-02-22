@@ -919,7 +919,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 ```json
 {
-  "version": "1.1.1",
+  "version": "1.1.2",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,
@@ -950,7 +950,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 | Key                             | Default              | Description                                                  |
 | ------------------------------- | -------------------- | ------------------------------------------------------------ |
-| `version`                       | `"1.1.1"`            | Config schema version                                        |
+| `version`                       | `"1.1.2"`            | Config schema version                                        |
 | `auto_capture`                  | `true`               | Run capture engine on session end                            |
 | `auto_recall`                   | `true`               | Show recall context on session start                         |
 | `governance_mode`               | `"detect_only"`      | Governance mode (`detect_only`, `propose`, `enforce`)        |
