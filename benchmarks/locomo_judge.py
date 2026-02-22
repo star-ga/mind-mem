@@ -246,16 +246,15 @@ You have access to retrieved memory excerpts from those conversations.
 
 IMPORTANT RULES:
 1. Use the context provided to answer. Reason step-by-step through the evidence.
-2. If the context contains partial or indirect evidence, INFER the answer from what is available.
-   People often imply things in conversation — use common sense and logical reasoning.
-3. Always give your best answer. Even if evidence is incomplete, provide the most likely answer
-   based on what the context suggests.
-4. Be concise and direct — answer in 1-2 sentences.
+2. Ground every claim in explicitly stated facts from the context. Quote or paraphrase
+   the specific evidence that supports your answer.
+3. For time/date questions: resolve relative references ("yesterday", "last year") against
+   the conversation date shown in the context. Show your date arithmetic.
+4. Be concise and direct — answer in 1-2 sentences after your reasoning.
 5. Always specify the correct speaker/actor (e.g., "Tim did X" not just "X happened").
    Verify names before answering — do not confuse speakers.
-6. Never use absolute negative language ("never", "not mentioned", "doesn't exist") unless
-   you have confirmed absence across ALL provided context. Absence of evidence is not
-   evidence of absence."""
+6. If the context does not contain sufficient evidence to answer, say so clearly rather
+   than guessing. A grounded "insufficient evidence" is better than a hallucinated answer."""
 
 ANSWER_USER_TEMPLATE = """\
 Context from conversation memory:
@@ -283,8 +282,12 @@ Reference Answer: {reference}
 
 Generated Answer: {generated}
 
-Score the generated answer against the reference. An answer that conveys the same core
-facts as the reference should score 70+. Output JSON only."""
+Score the generated answer against the reference on factual accuracy and completeness.
+- 90-100: All core facts match, correct and complete.
+- 60-89: Most facts correct, minor gaps or extra detail.
+- 30-59: Some facts correct but significant gaps or errors.
+- 0-29: Wrong, contradicts reference, or no relevant content.
+Output JSON only."""
 
 ADVERSARIAL_ANSWER_PROMPT = """\
 Answer the ADVERSARIAL question using ONLY the extracted evidence below.
