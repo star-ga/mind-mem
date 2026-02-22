@@ -958,8 +958,8 @@ def main():
         help="Test with only the first conversation",
     )
     parser.add_argument(
-        "--top-k", type=int, default=10,
-        help="Number of blocks to retrieve per question (default: 10)",
+        "--top-k", type=int, default=18,
+        help="Number of blocks to retrieve per question (default: 18)",
     )
     parser.add_argument(
         "--answerer-model", type=str, default="mistral-small-latest",
