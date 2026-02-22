@@ -92,6 +92,9 @@ from _recall_scoring import (
     date_score,
 )
 
+# --- Temporal Filtering (_recall_temporal) ---
+from _recall_temporal import apply_temporal_filter, resolve_time_reference
+
 # --- Tokenization (_recall_tokenization) ---
 from _recall_tokenization import _stem, tokenize
 
@@ -125,6 +128,8 @@ __all__ = [
     "context_pack", "_parse_dia_id", "_block_to_result",
     # Core
     "RecallBackend", "recall", "_load_backend", "prefetch_context", "main",
+    # Temporal Filtering
+    "resolve_time_reference", "apply_temporal_filter",
 ]
 
 if __name__ == "__main__":

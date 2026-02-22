@@ -4,8 +4,12 @@ Builds structured, speaker-attributed evidence context from recall hits.
 No LLM dependency — prevents starvation and hallucination in adversarial
 and verification queries.
 
-ALL query types use structured [SPEAKER=...] [DATE=...] [DiaID=...]
-format with category-specific ordering:
+Supports two packing formats (configured via ``evidence_packing`` in config):
+  - **chain_of_note** (default): Chain-of-Note style structured evidence with
+    per-block key facts and relevance notes.
+  - **raw**: Legacy [SPEAKER=...] [DATE=...] [DiaID=...] flat format.
+
+ALL query types use category-specific ordering:
   - temporal: chronological by DiaID
   - multi-hop: hop-clustered (group by entity/topic)
   - adversarial (true): overlap-first with denial separation
@@ -87,6 +91,109 @@ def _overlap_score(r: dict, query_tokens: set) -> float:
     return sum(1 for t in query_tokens if t in excerpt) / max(1, len(query_tokens))
 
 
+def _interleave_by_speaker(hits: list[dict]) -> list[dict]:
+    """Interleave hits round-robin across speakers for multi-hop coverage."""
+    by_speaker: dict[str, list[dict]] = {}
+    for r in hits:
+        sp = r.get("speaker", "") or "UNKNOWN"
+        by_speaker.setdefault(sp, []).append(r)
+    speakers = list(by_speaker.keys())
+    max_per = max((len(v) for v in by_speaker.values()), default=0)
+    ordered: list[dict] = []
+    for idx in range(max_per):
+        for sp in speakers:
+            sp_hits = by_speaker[sp]
+            if idx < len(sp_hits):
+                ordered.append(sp_hits[idx])
+    return ordered
+
+
+_FACT_TAG_RE = re.compile(r"(?:Statement|Tags):\s*(.+)", re.IGNORECASE)
+
+
+def _extract_key_facts(r: dict) -> list[str]:
+    """Extract key facts from a hit's excerpt via Statement/Tags fields.
+
+    Deterministic regex extraction — no LLM.
+    """
+    excerpt = r.get("excerpt", "")
+    facts = []
+    for m in _FACT_TAG_RE.finditer(excerpt):
+        val = m.group(1).strip()
+        if val:
+            facts.append(val)
+    # If no Statement/Tags fields found, extract a short summary from content
+    if not facts:
+        clean = strip_semantic_prefix(excerpt.strip())
+        # Take first sentence or first 120 chars as a fact summary
+        dot = clean.find(".")
+        if 0 < dot < 120:
+            facts.append(clean[: dot + 1])
+        elif clean:
+            facts.append(clean[:120])
+    return facts
+
+
+def _compute_relevance_note(r: dict, question: str) -> str:
+    """Compute a brief keyword-overlap relevance note (deterministic)."""
+    if not question:
+        return "general context"
+    query_tokens = set(re.findall(r"[a-z]{2,}", question.lower()))
+    excerpt_lower = r.get("excerpt", "").lower()
+    matched = sorted(t for t in query_tokens if t in excerpt_lower)
+    if matched:
+        return f"matches query terms: {', '.join(matched)}"
+    return "background context"
+
+
+def format_chain_of_note(
+    hits: list[dict],
+    question: str = "",
+    max_chars: int = 6000,
+) -> str:
+    """Format hits as Chain-of-Note structured evidence.
+
+    Each block is formatted as:
+        [Note N] Source: <block_id> (score: X.XX)
+        Content: <block content>
+        Key facts: <extracted facts>
+        Relevance: <keyword overlap note>
+    """
+    notes = []
+    total = 0
+    note_num = 0
+    for r in hits:
+        text = r.get("excerpt", "")
+        if not text:
+            continue
+        note_num += 1
+        clean = strip_semantic_prefix(text.strip())
+        score = r.get("score", 0.0)
+        block_id = r.get("DiaID", "") or r.get("block_id", "") or f"hit-{note_num}"
+        speaker = r.get("speaker", "") or "UNKNOWN"
+        date = r.get("Date", "") or ""
+
+        facts = _extract_key_facts(r)
+        relevance = _compute_relevance_note(r, question)
+
+        lines = [f"[Note {note_num}] Source: {block_id} (score: {score:.2f})"]
+        if speaker != "UNKNOWN" or date:
+            meta = f"  Speaker: {speaker}"
+            if date:
+                meta += f" | Date: {date}"
+            lines.append(meta)
+        lines.append(f"  Content: {clean}")
+        lines.append(f"  Key facts: {'; '.join(facts)}")
+        lines.append(f"  Relevance: {relevance}")
+
+        block = "\n".join(lines)
+        if total + len(block) + 1 > max_chars:
+            break
+        notes.append(block)
+        total += len(block) + 1  # +1 for separator newline
+    return "\n".join(notes)
+
+
 def check_abstention(
     question: str,
     hits: list[dict],
@@ -107,25 +214,42 @@ def pack_evidence(
     question: str = "",
     query_type: str = "",
     max_chars: int = 6000,
+    config: dict | None = None,
 ) -> str:
     """Build structured evidence context from recall hits.
 
-    ALL query types now use structured [SPEAKER=...] [DATE=...] [DiaID=...]
-    format, with category-specific ordering and adversarial-specific
-    denial separation.
+    By default uses Chain-of-Note format with per-block key facts and
+    relevance notes.  Set ``config={"evidence_packing": "raw"}`` to use
+    the legacy flat format.
 
     Args:
         hits: Recall results with excerpt, speaker, tags, score.
         question: The query (used for adversarial classification).
         query_type: Category hint (adversarial, temporal, etc.).
         max_chars: Maximum context length.
+        config: Optional config dict; checks ``evidence_packing`` key.
 
     Returns:
         Formatted context string ready for LLM consumption.
     """
+    packing_mode = (config or {}).get("evidence_packing", "chain_of_note")
+
+    # Adversarial always uses its own specialized format
     if query_type == "adversarial" and is_true_adversarial(question):
         return _pack_adversarial(hits, question, max_chars)
-    elif query_type == "temporal":
+
+    if packing_mode == "chain_of_note":
+        # Apply category-specific ordering before formatting
+        if query_type == "temporal":
+            ordered = sorted(hits, key=_dia_sort_key)
+        elif query_type == "multi-hop":
+            ordered = _interleave_by_speaker(hits)
+        else:
+            ordered = hits
+        return format_chain_of_note(ordered, question=question, max_chars=max_chars)
+
+    # Raw / legacy format
+    if query_type == "temporal":
         return _pack_temporal(hits, max_chars)
     elif query_type == "multi-hop":
         return _pack_multihop(hits, max_chars)

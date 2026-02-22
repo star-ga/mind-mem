@@ -69,6 +69,70 @@ Requires `MISTRAL_API_KEY` in environment.
 
 ---
 
+## Cross-Encoder A/B Test (v1.1.1 baseline)
+
+Evaluates whether adding a cross-encoder reranker (ms-marco-MiniLM-L-6-v2, 80MB)
+on top of BM25 retrieval improves result quality. Measured on LoCoMo conv-0 (199 QA pairs).
+
+### Setup
+
+| Parameter    | Value                                      |
+| ------------ | ------------------------------------------ |
+| CE model     | `cross-encoder/ms-marco-MiniLM-L-6-v2`    |
+| Blend weight | 0.6 (60% CE + 40% BM25 original scores)   |
+| Top-k        | 18                                         |
+| CE pool      | 54 candidates (3x top-k) from BM25        |
+| Baseline     | BM25-only (v1.1.1), same conv-0 workspace |
+
+### Retrieval Quality (MRR = Mean Reciprocal Rank of gold-answer hit)
+
+| Category        |     N | MRR(BM25) | MRR(CE) | Delta   | Hit%(BM25) | Hit%(CE) | Improved | Regressed |
+| --------------- | ----: | --------: | ------: | ------: | ---------: | -------: | -------: | --------: |
+| **Overall**     | **199** | **0.4070** | **0.5041** | **+0.0971** | **71.4%** | **71.9%** | **58** | **17** |
+| adversarial     |    47 |    0.5093 |  0.5749 | +0.0656 |      83.0% |    80.9% |       13 |         6 |
+| multi-hop       |    37 |    0.2995 |  0.3712 | +0.0716 |      45.9% |    45.9% |        5 |         2 |
+| open-domain     |    70 |    0.4889 |  0.6331 | +0.1441 |      85.7% |    85.7% |       27 |         3 |
+| single-hop      |    32 |    0.2426 |  0.3445 | +0.1019 |      59.4% |    62.5% |       10 |         4 |
+| temporal        |    13 |    0.3066 |  0.3248 | +0.0182 |      53.8% |    61.5% |        3 |         2 |
+
+### Correlation with LLM-as-Judge Scores
+
+| Retrieval change | N   | Avg judge score |
+| ---------------- | --: | --------------: |
+| Improved by CE   |  58 |            77.1 |
+| Regressed by CE  |  17 |            82.9 |
+| Unchanged        | 124 |            77.6 |
+
+### Analysis
+
+- **Overall MRR improved by +0.097** (0.407 to 0.504), a 24% relative gain.
+- **Open-domain** benefits most (+0.144 MRR), likely because the cross-encoder better
+  distinguishes topically relevant passages for factual recall.
+- **Single-hop** also benefits substantially (+0.102 MRR) with a hit rate increase.
+- **Temporal** shows the weakest improvement (+0.018). CE models are trained on
+  passage relevance, not temporal reasoning -- date-proximity signals from BM25
+  reranking are already effective here.
+- **Hit rate** barely changes (71.4% to 71.9%), confirming the CE mainly reorders
+  within the existing candidate pool rather than surfacing new passages.
+- **Regression correlation** is counterintuitive: questions where CE regressed retrieval
+  have *higher* average judge scores (82.9 vs 77.1). This suggests CE regressions tend
+  to occur on already-easy questions where BM25 already places the answer at rank 1.
+
+### Verdict
+
+Cross-encoder reranking provides a **meaningful retrieval improvement** (+9.7pp MRR)
+with no additional API calls. The 80MB model runs on CPU in ~1s per question.
+Recommended for production deployments where retrieval quality matters more than latency.
+
+### Reproduction
+
+```bash
+pip install sentence-transformers
+python benchmarks/crossencoder_ab.py --blend-weight 0.6 --top-k 18
+```
+
+---
+
 ## v1.0.0 — BM25-only Baseline
 
 ### Environment

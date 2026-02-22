@@ -24,6 +24,24 @@ import sys
 # Maximum input size to parse (100KB). Larger files are truncated with a warning.
 MAX_PARSE_SIZE = 100_000
 
+# Entity ID patterns recognized in block content
+_ENTITY_ID_RE = re.compile(
+    r"\b(D-\d{8}-\d{3}|T-\d{8}-\d{3}|INC-\d{8}-[a-z0-9-]+"
+    r"|PRJ-[a-z0-9-]+|PER-[a-z0-9-]+|TOOL-[a-z0-9-]+"
+    r"|C-\d{8}-\d{3}|DREF-\d{8}-\d{3}|I-\d{8}-\d{3})\b"
+)
+
+# Date pattern: YYYY-MM-DD
+_DATE_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
+
+# Negation patterns for detecting negated blocks
+_NEGATION_RE = re.compile(
+    r"\b(not|never|don't|won't|shouldn't|cannot|can't|doesn't|didn't"
+    r"|wasn't|isn't|aren't|weren't|hasn't|haven't|wouldn't|couldn't"
+    r"|no\s+\w+|none)\b",
+    re.IGNORECASE,
+)
+
 
 def parse_blocks(text: str) -> list[dict]:
     """Parse all [ID] blocks from text. Returns list of dicts.
@@ -56,6 +74,7 @@ def parse_blocks(text: str) -> list[dict]:
             if current is not None:
                 _finalize_ops(current, in_ops, current_op)
                 _finalize_block(current, in_constraint_sigs, current_sig)
+                _enrich_fact_keys(current)
                 blocks.append(current)
             current = {"_id": id_match.group(1), "_line": lineno}
             current_field = None
@@ -299,6 +318,7 @@ def parse_blocks(text: str) -> list[dict]:
             if current is not None:
                 _finalize_ops(current, in_ops, current_op)
                 _finalize_block(current, in_constraint_sigs, current_sig)
+                _enrich_fact_keys(current)
                 blocks.append(current)
                 current = None
                 current_field = None
@@ -313,9 +333,30 @@ def parse_blocks(text: str) -> list[dict]:
     if current is not None:
         _finalize_ops(current, in_ops, current_op)
         _finalize_block(current, in_constraint_sigs, current_sig)
+        _enrich_fact_keys(current)
         blocks.append(current)
 
     return blocks
+
+
+def _enrich_fact_keys(block: dict) -> None:
+    """Extract and attach fact key fields: _entities, _dates, _has_negation."""
+    # Collect all text content from the block (non-underscore fields)
+    texts = []
+    for key, val in block.items():
+        if key.startswith("_"):
+            continue
+        if isinstance(val, str):
+            texts.append(val)
+        elif isinstance(val, list):
+            for item in val:
+                if isinstance(item, str):
+                    texts.append(item)
+    full_text = " ".join(texts)
+
+    block["_entities"] = sorted(set(_ENTITY_ID_RE.findall(full_text)))
+    block["_dates"] = sorted(set(_DATE_RE.findall(full_text)))
+    block["_has_negation"] = bool(_NEGATION_RE.search(full_text))
 
 
 def _finalize_ops(block, in_ops, current_op):
