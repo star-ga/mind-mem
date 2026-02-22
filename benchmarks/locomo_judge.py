@@ -865,7 +865,7 @@ def _setup_hybrid_workspace(workspace: str):
         "cross_encoder": {"enabled": False, "blend_weight": 0.6},
     }
     config = {
-        "version": "1.0.6",
+        "version": "1.0.7",
         "workspace_path": ".",
         "recall": recall_cfg,
     }
