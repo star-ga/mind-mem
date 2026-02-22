@@ -36,7 +36,10 @@
 
 - [x] **recall_vector.py test suite** — 36 tests covering VectorBackend init, cosine similarity, local index I/O, search_batch, provider routing
 - [x] **validate_py.py test suite** — 30 tests covering Validator, file structure, decisions, tasks, entities, provenance, cross-refs, intelligence
-- [x] **LoCoMo benchmark with Mistral Large** — full 10-conversation LLM-as-judge evaluation
+- [x] **LoCoMo benchmark with Mistral Large** — full 10-conversation LLM-as-judge evaluation (1986 questions, 134 min)
+  - Overall: mean=70.5, acc≥50=73.8%, acc≥75=65.6%
+  - Adversarial: mean=87.2, acc≥50=92.4% (+43pp over v1.0.5 baseline)
+  - BM25-only recall (v1.0.5 baseline used hybrid BM25+vector)
 - [x] 964 tests passing, CI green on all platforms
 
 ## v1.2.0 — Retrieval Quality Push
