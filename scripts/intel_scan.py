@@ -18,7 +18,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Import block parser from same directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -502,7 +502,7 @@ def detect_drift(data, report):
         report.ok("All active tasks have AlignsWith or Justification.")
 
     # 2e. Coverage score: % of non-exempt decisions referenced by active tasks or code
-    non_exempt = len(decisions) - dead_skipped_exempt - dead_skipped_low_priority
+    non_exempt = len(decisions) - dead_skipped_exempt - dead_skipped_low_priority - dead_skipped_enforced
     covered = non_exempt - len(dead_decisions)
     coverage_pct = (covered / non_exempt * 100) if non_exempt > 0 else 100.0
 
@@ -611,7 +611,7 @@ def generate_snapshot(data, ws, report):
 
     snapshot = {
         "date": today,
-        "generated_at": datetime.now().isoformat() + "Z",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "decisions": {
             "active": [d["_id"] for d in decisions if d.get("Status") == "active"],
             "superseded": [d["_id"] for d in decisions if d.get("Status") == "superseded"],
@@ -1044,8 +1044,11 @@ def generate_proposals(contradictions, drift_signals, ws, intel_state, report):
             break
         sig1 = c["sig1"]["sig"]
         sig2 = c["sig2"]["sig"]
-        p1 = int(sig1.get("priority", 5))
-        p2 = int(sig2.get("priority", 5))
+        try:
+            p1 = int(sig1.get("priority", 5))
+            p2 = int(sig2.get("priority", 5))
+        except (ValueError, TypeError):
+            p1 = p2 = 5
         # Propose superseding the lower-priority decision (skip invariants)
         e1 = sig1.get("enforcement", "")
         e2 = sig2.get("enforcement", "")
@@ -1189,7 +1192,7 @@ def main():
     report = IntelReport()
 
     report.lines.append("Mind Mem Intelligence Scan Report v2.0")
-    report.lines.append(f"Date: {datetime.now().isoformat()}Z")
+    report.lines.append(f"Date: {datetime.now(timezone.utc).isoformat()}")
     report.lines.append(f"Workspace: {ws}")
 
     # Load state
@@ -1230,7 +1233,7 @@ def main():
         generate_briefing(data, contradictions, drift_signals, impacts, ws, report)
 
         # Update intel-state
-        now = datetime.now().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat()
         intel_state["last_scan"] = now
         intel_state["last_snapshot"] = now
         intel_state["counters"]["contradictions_open"] = len(contradictions)
