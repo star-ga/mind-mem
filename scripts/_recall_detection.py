@@ -206,8 +206,18 @@ def detect_query_type(query: str) -> str:
     if _VERIFICATION_INTENT_RE.search(query_lower):
         scores["adversarial"] += 1.5
 
-    # Long queries with conjunctions are more likely multi-hop
+    # Temporal + entity action = temporal-multi-hop
+    # "When did X do Y?" requires finding the event + deriving the date
     word_count = len(query.split())
+    if temporal_hits > 0 and re.search(
+        r"\b(when did|when was|when is|when does)\b.*\b(do|did|go|went|start|began|"
+        r"get|got|buy|bought|sell|sold|move|moved|meet|met|visit|attend|join|leave|"
+        r"finish|complete|create|make|paint|write|run|play|watch|find|lose|give)\b",
+        query_lower,
+    ):
+        scores["multi-hop"] += 1.5  # Boost multi-hop for temporal reasoning chains
+
+    # Long queries with conjunctions are more likely multi-hop
     if word_count > 15 and multihop_hits > 0:
         scores["multi-hop"] += 2
 
@@ -235,7 +245,7 @@ _QUERY_TYPE_PARAMS = {
         "recency_weight": 0.6,     # Higher recency matters more
         "date_boost": 2.0,         # Boost blocks with dates
         "expand_query": True,      # Keep expansions
-        "extra_limit_factor": 1.5, # Retrieve more candidates
+        "extra_limit_factor": 2.0, # Retrieve more — date-bearing blocks are scattered
     },
     "adversarial": {
         "recency_weight": 0.3,     # Standard — adversarial needs same broad recall
