@@ -2,6 +2,20 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.1.2 (2026-02-22)
+
+**Post-release audit hardening**
+
+### Fixed
+- **#15** — Stale `filelock.py` reference in `init_workspace.py` `MAINTENANCE_SCRIPTS` (renamed to `mind_filelock.py` in v1.0.6, never updated)
+- **#16** — Coverage metric in `detect_drift()` did not subtract `dead_skipped_enforced` from denominator, deflating reported coverage
+- **#17** — Unguarded `int()` on `priority` field in `generate_proposals()` crashes on non-numeric values
+- **#18** — `apply_engine._get_mode()` returned `"unknown"` on failure, bypassing the `detect_only` mode gate. Now defaults to `"detect_only"` (safe default)
+- **#19** — `intel_scan.py` appended `"Z"` to `datetime.now()` (local time), producing incorrect ISO 8601 timestamps. Now uses `datetime.now(timezone.utc).isoformat()`
+
+### Changed
+- Version: 1.1.1 → 1.1.2
+
 ## 1.1.1 (2026-02-22)
 
 **Test coverage push + Full 10-conv benchmark**

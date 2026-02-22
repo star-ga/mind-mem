@@ -11,7 +11,7 @@ Core modules:
     capture         — Auto-capture engine (26 patterns)
     intel_scan      — Integrity scanner (contradictions, drift, impact)
     namespaces      — Multi-agent namespace & ACL engine
-    filelock        — Cross-platform advisory file locking
+    mind_filelock   — Cross-platform advisory file locking
     backup_restore  — WAL + backup/restore + JSONL export
     compaction      — Compaction/GC/archival
     observability   — Structured JSON logging + metrics
@@ -20,4 +20,4 @@ Core modules:
     transcript_capture — Transcript JSONL signal extraction
 """
 
-__version__ = "1.1.1"
+__version__ = "1.1.2"
