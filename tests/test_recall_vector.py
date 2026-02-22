@@ -6,7 +6,6 @@ import json
 import math
 import os
 import sys
-import tempfile
 
 import pytest
 
@@ -15,7 +14,6 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
 
 from recall_vector import VectorBackend, search_batch  # noqa: E402
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 
@@ -148,12 +146,12 @@ class TestGetIndexPath:
     def test_default_path(self):
         vb = _make_backend()
         path = vb._get_index_path("/workspace")
-        assert path == "/workspace/.mind-mem-vectors/index.json"
+        assert path == os.path.join("/workspace", ".mind-mem-vectors", "index.json")
 
     def test_custom_path(self):
         vb = _make_backend({"index_path": "my-vectors"})
         path = vb._get_index_path("/ws")
-        assert path == "/ws/my-vectors/index.json"
+        assert path == os.path.join("/ws", "my-vectors", "index.json")
 
 
 # ── _load_local_index / _save_local_index ────────────────────────────
@@ -188,7 +186,7 @@ class TestLocalIndex:
         vb = _make_backend({"index_path": "deep/nested/vectors"})
         workspace = str(tmp_path)
         vb._save_local_index(workspace, {"blocks": [], "embeddings": []})
-        assert os.path.isfile(os.path.join(workspace, "deep/nested/vectors/index.json"))
+        assert os.path.isfile(os.path.join(workspace, "deep", "nested", "vectors", "index.json"))
 
     def test_load_corrupt_json_returns_none(self, tmp_path):
         vb = _make_backend()
@@ -291,12 +289,12 @@ class TestSqliteVecDbPath:
     def test_default_path(self):
         vb = _make_backend()
         path = vb._sqlite_vec_db_path("/ws")
-        assert path == "/ws/.mind-mem-index/recall.db"
+        assert path == os.path.join("/ws", ".mind-mem-index", "recall.db")
 
     def test_custom_path(self):
         vb = _make_backend({"sqlite_vec_db": "custom/my.db"})
         path = vb._sqlite_vec_db_path("/ws")
-        assert path == "/ws/custom/my.db"
+        assert path == os.path.join("/ws", "custom", "my.db")
 
 
 # ── Provider validation ──────────────────────────────────────────────

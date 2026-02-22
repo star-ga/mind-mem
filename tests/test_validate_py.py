@@ -8,12 +8,10 @@ import sys
 
 import pytest
 
-# Ensure scripts/ is on path
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
 
 from validate_py import Validator  # noqa: E402
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 
@@ -205,7 +203,7 @@ class TestRunMinimalWorkspace:
     def test_all_sections_run(self, minimal_workspace):
         v = Validator(minimal_workspace)
         v.run()
-        section_headers = [l for l in v.lines if l.startswith("===")]
+        section_headers = [line for line in v.lines if line.startswith("===")]
         assert len(section_headers) >= 7  # Sections 0-6
 
     def test_report_contains_totals(self, minimal_workspace):
@@ -229,7 +227,7 @@ class TestCheckFileStructure:
     def test_missing_memory_md(self, empty_workspace):
         v = Validator(empty_workspace)
         v._check_file_structure()
-        fails = [l for l in v.lines if "MEMORY.md MISSING" in l]
+        fails = [line for line in v.lines if "MEMORY.md MISSING" in line]
         assert len(fails) == 1
 
     def test_memory_md_without_protocol_header(self, empty_workspace):
@@ -239,7 +237,7 @@ class TestCheckFileStructure:
             f.write("# Just some notes\n")
         v = Validator(empty_workspace)
         v._check_file_structure()
-        fails = [l for l in v.lines if "Protocol v1.0 header" in l]
+        fails = [line for line in v.lines if "Protocol v1.0 header" in line]
         assert len(fails) == 1
 
 
@@ -274,7 +272,7 @@ class TestCheckDecisions:
         )
         v = Validator(str(tmp_path))
         v._check_decisions()
-        fails = [l for l in v.lines if "invalid Scope" in l]
+        fails = [line for line in v.lines if "invalid Scope" in line]
         assert len(fails) == 1
 
 
@@ -298,7 +296,7 @@ class TestCheckTasks:
         )
         v = Validator(str(tmp_path))
         v._check_tasks()
-        fails = [l for l in v.lines if "invalid Priority" in l]
+        fails = [line for line in v.lines if "invalid Priority" in line]
         assert len(fails) == 1
 
 
@@ -361,7 +359,7 @@ class TestCheckCrossRefs:
             )
         v = Validator(minimal_workspace)
         v._check_cross_refs()
-        fails = [l for l in v.lines if "MISSING" in l and "T-20261231-999" in l]
+        fails = [line for line in v.lines if "MISSING" in line and "T-20261231-999" in line]
         assert len(fails) == 1
 
 
