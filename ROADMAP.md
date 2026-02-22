@@ -32,6 +32,13 @@
 - [x] **Benchmark comparison tool** — compare_runs.py for side-by-side A/B analysis
 - [x] 898 tests passing, CI green on all platforms
 
+## v1.1.1 — Test Coverage + Benchmark ✅ Released (2026-02-22)
+
+- [x] **recall_vector.py test suite** — 36 tests covering VectorBackend init, cosine similarity, local index I/O, search_batch, provider routing
+- [x] **validate_py.py test suite** — 30 tests covering Validator, file structure, decisions, tasks, entities, provenance, cross-refs, intelligence
+- [x] **LoCoMo benchmark with Mistral Large** — full 10-conversation LLM-as-judge evaluation
+- [x] 964 tests passing, CI green on all platforms
+
 ## v1.2.0 — Retrieval Quality Push
 
 Target: **top-3 on LoCoMo** (surpass current 76.7% mean)
