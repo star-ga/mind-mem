@@ -294,7 +294,7 @@ class TestSqliteVecDbPath:
     def test_custom_path(self):
         vb = _make_backend({"sqlite_vec_db": "custom/my.db"})
         path = vb._sqlite_vec_db_path("/ws")
-        assert path == os.path.join("/ws", "custom", "my.db")
+        assert os.path.normpath(path) == os.path.normpath("/ws/custom/my.db")
 
 
 # ── Provider validation ──────────────────────────────────────────────
