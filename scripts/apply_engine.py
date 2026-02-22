@@ -450,9 +450,9 @@ def _get_mode(ws="."):
     try:
         with open(os.path.join(ws, "memory/intel-state.json")) as f:
             state = json.load(f)
-        return state.get("governance_mode", state.get("self_correcting_mode", "unknown"))
+        return state.get("governance_mode", state.get("self_correcting_mode", "detect_only"))
     except Exception:
-        return "unknown"
+        return "detect_only"
 
 
 # ═══════════════════════════════════════════════

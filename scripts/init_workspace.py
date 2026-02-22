@@ -65,7 +65,7 @@ MAINTENANCE_SCRIPTS = [
     "capture.py",
     "validate.sh",
     "validate_py.py",
-    "filelock.py",
+    "mind_filelock.py",
     "compaction.py",
     "observability.py",
     "namespaces.py",
