@@ -265,6 +265,13 @@ class VectorBackend(RecallBackend):
         metrics.inc("embeddings_generated", len(texts))
         return all_embeddings
 
+    def _embed_for_provider(self, texts: list[str]) -> list[list[float]]:
+        """Route embedding to the configured backend (fastembed or llama_cpp)."""
+        backend = self.config.get("onnx_backend", True)
+        if backend == "llama_cpp" or str(backend).lower() == "llama_cpp":
+            return self.embed_llama_cpp(texts)
+        return self.embed_fastembed(texts)
+
     def _sqlite_vec_db_path(self, workspace: str) -> str:
         """Return path to the sqlite-vec DB (shares recall.db with BM25 index)."""
         custom = self.config.get("sqlite_vec_db")
@@ -332,7 +339,7 @@ class VectorBackend(RecallBackend):
 
         _log.info("sqlite_vec_indexing_start", count=len(texts))
 
-        embeddings = self.embed_fastembed(texts)
+        embeddings = self._embed_for_provider(texts)
         if not embeddings:
             _log.error("sqlite_vec_no_embeddings")
             return
@@ -343,9 +350,9 @@ class VectorBackend(RecallBackend):
 
         conn = self._connect_sqlite_vec(workspace)
         try:
+            # Drop and recreate to handle dimension changes (e.g. 384 → 4096)
+            conn.execute("DROP TABLE IF EXISTS vec_blocks")
             self._init_vec_table(conn, dim)
-            # Clear existing vectors before rebuild
-            conn.execute("DELETE FROM vec_blocks")
             for block, emb in zip(blocks, embeddings):
                 conn.execute(
                     "INSERT INTO vec_blocks(block_id, embedding) VALUES (?, ?)",
@@ -379,7 +386,7 @@ class VectorBackend(RecallBackend):
         import sqlite_vec
 
         # Embed query
-        query_emb = self.embed_fastembed([query])[0]
+        query_emb = self._embed_for_provider([query])[0]
         query_bytes = sqlite_vec.serialize_float32(query_emb)
 
         # Load block metadata
