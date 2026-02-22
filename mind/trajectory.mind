@@ -1,0 +1,54 @@
+# trajectory.mind — Trajectory Memory configuration kernel
+# Controls how task execution traces are captured, stored, and recalled.
+#
+# Trajectory blocks record full task execution traces so agents can learn
+# from past successes and failures without fine-tuning.
+# See ROADMAP.md v1.2.0 and issue #5 for design details.
+
+[schema]
+# Block ID prefix for trajectories
+prefix = "TRAJ-"
+# Required fields (block rejected if missing)
+required = ["Task", "Date", "Outcome"]
+# Optional fields
+optional = ["Duration", "Tools", "Steps", "Lessons", "Reward", "Context", "Error"]
+
+[outcome]
+# Valid outcome values
+values = ["SUCCESS", "FAILURE", "PARTIAL", "ABORTED"]
+# Reward range (0.0 = worst, 1.0 = best)
+reward_min = 0.0
+reward_max = 1.0
+# Default reward per outcome
+default_reward_success = 1.0
+default_reward_partial = 0.5
+default_reward_failure = 0.0
+default_reward_aborted = 0.0
+
+[capture]
+# Auto-capture from session transcripts
+auto_capture = true
+# Minimum session duration to consider (seconds)
+min_duration = 60
+# Minimum tool calls to qualify as a trajectory
+min_tool_calls = 3
+# Extract lessons from the final assistant message
+extract_lessons = true
+
+[recall]
+# How many similar trajectories to retrieve for a new task
+recall_limit = 5
+# Prefer recent trajectories (recency decay half-life in days)
+recency_halflife = 30
+# Weight outcome in similarity score (0.0 = ignore outcome, 1.0 = max weight)
+outcome_weight = 0.3
+# Boost trajectories with same tools as current context
+tool_overlap_boost = 1.5
+
+[consolidation]
+# Merge similar trajectories into patterns after N instances
+merge_threshold = 3
+# Similarity threshold for trajectory clustering (cosine)
+similarity_threshold = 0.85
+# Run consolidation every N sessions
+consolidation_interval = 10

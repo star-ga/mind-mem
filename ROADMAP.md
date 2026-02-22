@@ -15,8 +15,12 @@
 
 Target: **top-3 on LoCoMo** (currently 67.2%, need ~72%+)
 
-- [ ] **top_k 10 → 18** — More retrieval candidates for cross-encoder to rerank
-- [ ] **Query type detection fix** — `detect_query_type()` misclassifies "When did X do Y?" as temporal instead of multi-hop, missing the 3x `extra_limit_factor` boost
+- [x] **top_k 10 → 18** — 80% more context blocks from RRF fusion pool (e86b59e)
+- [x] **Temporal extra_limit_factor 1.5 → 2.0** — Wider candidate retrieval for date-bearing queries
+- [x] **Temporal-multi-hop cross-boost** — "When did X do Y?" gets multi-hop signal boost
+- [x] **Cross-encoder A/B tested** — ms-marco-MiniLM-L-6-v2 tested, net -0.8 on conv-0, reverted
+- [x] **Detection test suite** — 32 tests for _recall_detection.py (5c2a27a)
+- [x] **Benchmark comparison tool** — compare_runs.py for side-by-side A/B analysis (154a04c)
 - [ ] **Answerer prompt tuning** — Rules 2+3 force hallucination ("Always give your best answer", "INFER from partial evidence"). Replace with evidence-grounded instructions
 - [ ] **Judge prompt calibration** — Remove "core facts = 70+" anchor that inflates scores
 - [ ] **Abstention for multi-hop** — Currently only fires on adversarial; extend to low-confidence multi-hop
