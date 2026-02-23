@@ -45,6 +45,11 @@ from _recall_temporal import apply_temporal_filter, resolve_time_reference
 from _recall_tokenization import tokenize
 from block_parser import chunk_block, deduplicate_chunks, get_active, parse_file
 from observability import get_logger, metrics
+from retrieval_graph import (
+    get_hard_negative_ids,
+    log_retrieval,
+    propagate_scores,
+)
 
 # A-MEM block metadata (optional — graceful degradation if unavailable)
 try:
@@ -83,8 +88,56 @@ if not _HAS_LLM_EXTRACTOR:
 
 __all__ = [
     "RecallBackend",
-    "recall", "_load_backend", "prefetch_context", "main",
+    "recall", "_load_backend", "prefetch_context", "knee_cutoff", "main",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Knee score cutoff — adaptive top-K truncation
+# ---------------------------------------------------------------------------
+
+def knee_cutoff(
+    results: list[dict],
+    *,
+    min_results: int = 1,
+    min_score: float = 0.0,
+    max_drop_ratio: float = 0.5,
+) -> list[dict]:
+    """Dynamically truncate results at the steepest score drop.
+
+    Instead of returning a fixed top-K, find the "knee" where the score
+    drops sharply and cut there. This removes noise that hurts LLM judges.
+
+    Args:
+        results: Scored results sorted descending by score.
+        min_results: Always return at least this many.
+        min_score: Absolute floor — drop results below this score.
+        max_drop_ratio: Minimum relative drop (vs top score) to trigger cut.
+
+    Returns:
+        Truncated results list.
+    """
+    if len(results) <= min_results:
+        return results
+
+    scores = [r.get("score", 0) for r in results]
+    if not scores or scores[0] <= 0:
+        return results
+
+    best_cut = len(results)
+    max_drop = 0.0
+    for i in range(len(scores) - 1):
+        drop = scores[i] - scores[i + 1]
+        relative_drop = drop / scores[0] if scores[0] > 0 else 0
+        if relative_drop > max_drop_ratio and drop > max_drop:
+            max_drop = drop
+            best_cut = i + 1
+
+    best_cut = max(min_results, best_cut)
+
+    # Also filter by absolute minimum score
+    filtered = [r for r in results[:best_cut] if r.get("score", 0) >= min_score]
+    return filtered if filtered else results[:min_results]
 
 
 # ---------------------------------------------------------------------------
@@ -899,6 +952,14 @@ def recall(
         except Exception as e:
             _log.warning("cross_encoder_unavailable", error=str(e))
 
+    # Stage 2.6: Hard negative penalty — demote blocks flagged as misleading
+    hard_neg_ids = get_hard_negative_ids(workspace)
+    if hard_neg_ids and deduped:
+        for r in deduped:
+            if r.get("_id") in hard_neg_ids:
+                r["score"] = round(r["score"] * 0.7, 4)
+                r["_hard_negative"] = True
+
     # Stage 2.7: Optional LLM-based reranking — config-gated, stdlib only
     recall_cfg = {}
     if os.path.isfile(config_path):
@@ -916,6 +977,24 @@ def recall(
             query, deduped[:llm_cap],
             url=llm_url, model=llm_model, weight=llm_weight,
         )
+
+    # Stage 2.8: Co-retrieval graph propagation — boost co-occurring blocks
+    if deduped:
+        initial = {r["_id"]: r["score"] for r in deduped if r.get("_id")}
+        propagated = propagate_scores(workspace, initial)
+        for r in deduped:
+            rid = r.get("_id")
+            if rid and rid in propagated and propagated[rid] > r["score"]:
+                r["score"] = round(propagated[rid], 4)
+                r["_co_retrieval_boost"] = True
+
+    # Re-sort after propagation + hard negative adjustment
+    deduped.sort(key=lambda r: (r["score"], r.get("_id", "")), reverse=True)
+
+    # Stage 2.9: Knee score cutoff — adaptive truncation before context packing
+    if recall_cfg.get("knee_cutoff", True) and deduped:
+        min_sc = float(recall_cfg.get("min_score", 0.0))
+        deduped = knee_cutoff(deduped, min_results=min(3, limit), min_score=min_sc)
 
     top = deduped[:limit]
 
@@ -945,6 +1024,13 @@ def recall(
               top_score=top[0]["score"] if top else 0)
     metrics.inc("recall_queries")
     metrics.inc("recall_results", len(top))
+
+    # --- Retrieval logging (fire-and-forget) ---
+    try:
+        log_retrieval(workspace, query, top)
+    except Exception:
+        pass
+
     return top
 
 
