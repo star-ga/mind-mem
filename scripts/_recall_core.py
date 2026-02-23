@@ -39,11 +39,11 @@ from _recall_detection import (
     is_skeptical_query,
 )
 from _recall_expansion import expand_months, expand_query, rm3_expand
-from _recall_reranking import rerank_hits
+from _recall_reranking import llm_rerank, rerank_hits
 from _recall_scoring import build_xref_graph, date_score
 from _recall_temporal import apply_temporal_filter, resolve_time_reference
 from _recall_tokenization import tokenize
-from block_parser import get_active, parse_file
+from block_parser import chunk_block, deduplicate_chunks, get_active, parse_file
 from observability import get_logger, metrics
 
 # A-MEM block metadata (optional — graceful degradation if unavailable)
@@ -295,6 +295,24 @@ def recall(
 
     if not all_blocks:
         return []
+
+    # --- Overlapping chunk expansion (1.7) — config-gated ---
+    _chunk_cfg_path = os.path.join(workspace, "mind-mem.json")
+    _chunk_overlap = 0
+    _chunk_max_tokens = 400
+    if os.path.isfile(_chunk_cfg_path):
+        try:
+            with open(_chunk_cfg_path) as _cf:
+                _chunk_recall_cfg = json.load(_cf).get("recall", {})
+            _chunk_overlap = int(_chunk_recall_cfg.get("chunk_overlap", 0))
+            _chunk_max_tokens = int(_chunk_recall_cfg.get("max_chunk_tokens", 400))
+        except (OSError, json.JSONDecodeError, ValueError):
+            pass
+    if _chunk_overlap > 0:
+        expanded = []
+        for b in all_blocks:
+            expanded.extend(chunk_block(b, max_tokens=_chunk_max_tokens, overlap=_chunk_overlap))
+        all_blocks = expanded
 
     # Cap blocks to prevent memory/latency blowup on huge workspaces (#15)
     if len(all_blocks) > MAX_BLOCKS_PER_QUERY:
@@ -848,6 +866,10 @@ def recall(
 
         deduped.append(r)
 
+    # Stage 1.5: Chunk dedup — merge overlapping chunk results by base block ID
+    if _chunk_overlap > 0:
+        deduped = deduplicate_chunks(deduped)
+
     # Stage 2: Deterministic rerank (v7) — cap candidates to prevent latency (#9)
     if rerank and len(deduped) > limit:
         rerank_cap = min(len(deduped), MAX_RERANK_CANDIDATES)
@@ -876,6 +898,24 @@ def recall(
                        hint="cross_encoder_reranker not installed")
         except Exception as e:
             _log.warning("cross_encoder_unavailable", error=str(e))
+
+    # Stage 2.7: Optional LLM-based reranking — config-gated, stdlib only
+    recall_cfg = {}
+    if os.path.isfile(config_path):
+        try:
+            with open(config_path) as _llm_f:
+                recall_cfg = json.load(_llm_f).get("recall", {})
+        except (OSError, json.JSONDecodeError):
+            pass
+    if recall_cfg.get("llm_rerank", False) and deduped:
+        llm_url = recall_cfg.get("llm_rerank_url", "http://localhost:11434/api/generate")
+        llm_model = recall_cfg.get("llm_rerank_model", "qwen3-coder:30b")
+        llm_weight = float(recall_cfg.get("llm_rerank_weight", 0.3))
+        llm_cap = min(len(deduped), limit * 2)
+        deduped[:llm_cap] = llm_rerank(
+            query, deduped[:llm_cap],
+            url=llm_url, model=llm_model, weight=llm_weight,
+        )
 
     top = deduped[:limit]
 

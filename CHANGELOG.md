@@ -2,6 +2,28 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.6.0 (2026-02-22)
+
+**File watcher, LLM reranking, overlapping chunks — completes IMPL-PLAN Phase 1-3**
+
+### Added
+- **File Watcher Mode (1.5)**: `scripts/watcher.py` — `FileWatcher` class with mtime polling on background daemon thread. Detects new, modified, deleted `.md` files. Integrated into `mcp_server.py` with `--watch` and `--watch-interval` flags. Zero external deps (stdlib `threading`, `time`, `os`).
+- **LLM Reranking Stage (1.6)**: Optional LLM-based reranking via local Ollama in `_recall_reranking.py`. Config-gated (`recall.llm_rerank: true`), uses `urllib.request` (stdlib). Sends query + candidates to LLM for relevance scoring, blends with existing scores. Silent fallback on failure.
+- **Overlapping Chunks (1.7)**: `chunk_block()` in `block_parser.py` splits long blocks (>400 words) into overlapping windows for better recall at boundaries. `deduplicate_chunks()` merges chunk results by base block ID. Config-gated (`recall.chunk_overlap: 50`).
+- New config keys: `llm_rerank`, `llm_rerank_url`, `llm_rerank_model`, `llm_rerank_weight`, `chunk_overlap`, `max_chunk_tokens`.
+
+### Testing
+- 32 new tests across 3 files:
+  - `test_watcher.py`: 9 tests (new file detection, modification, deletion, ignore non-.md, ignore hidden dirs, stop, no-callback-on-unchanged, subdirectory, double-start)
+  - `test_recall_reranking.py`: 11 tests (deterministic reranker + LLM rerank with HTTP mocks)
+  - `test_block_parser_chunks.py`: 12 tests (chunking logic + dedup)
+- Total: **1315 tests passing** (up from 1283)
+
+### Changed
+- `_recall_core.py`: integrated LLM rerank (Stage 2.7) + chunk expansion + chunk dedup
+- `_recall_constants.py`: added 6 new valid recall config keys
+- Zero new dependencies — all features use Python stdlib only
+
 ## 1.5.1 (2026-02-22)
 
 **Block-level incremental FTS indexing — fixes #17 HIGH**

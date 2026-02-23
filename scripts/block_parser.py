@@ -551,6 +551,90 @@ def _validate_block(block: dict) -> None:
         raise ValueError("Block missing required _id field")
 
 
+def chunk_block(
+    block: dict,
+    max_tokens: int = 400,
+    overlap: int = 50,
+) -> list[dict]:
+    """Split a long block into overlapping chunks for improved recall.
+
+    Each chunk preserves all metadata from the parent block. The chunk's _id
+    gets a ".N" suffix (e.g., "D-20260129-001.0", "D-20260129-001.1").
+    The Statement/Description field is split into overlapping windows.
+
+    Short blocks (under max_tokens words) are returned as-is in a single-item list.
+
+    Args:
+        block: Parsed block dict.
+        max_tokens: Maximum words per chunk before splitting.
+        overlap: Number of words to overlap between adjacent chunks.
+
+    Returns:
+        List of chunk dicts (1 item if block is short enough).
+    """
+    # Find the primary text field to chunk
+    text_field = None
+    text_value = ""
+    for field in ("Statement", "Description", "Summary", "Title"):
+        val = block.get(field, "")
+        if isinstance(val, str) and len(val) > text_value.__len__():
+            text_field = field
+            text_value = val
+
+    if not text_field or not text_value:
+        return [block]
+
+    words = text_value.split()
+    if len(words) <= max_tokens:
+        return [block]
+
+    # Split into overlapping windows
+    chunks = []
+    base_id = block.get("_id", "?")
+    step = max(1, max_tokens - overlap)
+    idx = 0
+
+    start = 0
+    while start < len(words):
+        end = min(start + max_tokens, len(words))
+        chunk_text = " ".join(words[start:end])
+
+        chunk = dict(block)  # shallow copy
+        chunk["_id"] = f"{base_id}.{idx}"
+        chunk["_chunk_index"] = idx
+        chunk["_chunk_parent"] = base_id
+        chunk[text_field] = chunk_text
+        chunks.append(chunk)
+
+        if end >= len(words):
+            break
+        start += step
+        idx += 1
+
+    return chunks
+
+
+def deduplicate_chunks(results: list[dict]) -> list[dict]:
+    """Deduplicate chunked results by base block _id, keeping highest score."""
+    best: dict[str, dict] = {}
+    for r in results:
+        rid = r.get("_id", "")
+        # Extract base ID (strip .N suffix)
+        base = rid.rsplit(".", 1)[0] if "." in rid and rid.rsplit(".", 1)[1].isdigit() else rid
+        if base not in best or r.get("score", 0) > best[base].get("score", 0):
+            best[base] = r
+    # Preserve original order for equal-score items
+    seen = set()
+    deduped = []
+    for r in results:
+        rid = r.get("_id", "")
+        base = rid.rsplit(".", 1)[0] if "." in rid and rid.rsplit(".", 1)[1].isdigit() else rid
+        if base not in seen and best.get(base) is r:
+            seen.add(base)
+            deduped.append(r)
+    return deduped
+
+
 def get_active(blocks: list[dict], status_field: str = "Status", active_value: str = "active") -> list[dict]:
     """Filter blocks to only active ones."""
     return [b for b in blocks if b.get(status_field) == active_value]

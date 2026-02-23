@@ -172,7 +172,7 @@ Scans Claude Code transcript files for user corrections, convention discoveries,
 ### MCP Server (18 tools, 8 resources)
 Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 18 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
 
-### 74+ Structural Checks + 1274 Unit Tests
+### 74+ Structural Checks + 1315 Unit Tests
 `validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 1274 pytest unit tests covering all core modules.
 
 ### Audit Trail
@@ -919,7 +919,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 ```json
 {
-  "version": "1.5.1",
+  "version": "1.6.0",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,
@@ -950,7 +950,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 | Key                             | Default              | Description                                                  |
 | ------------------------------- | -------------------- | ------------------------------------------------------------ |
-| `version`                       | `"1.5.1"`            | Config schema version                                        |
+| `version`                       | `"1.6.0"`            | Config schema version                                        |
 | `auto_capture`                  | `true`               | Run capture engine on session end                            |
 | `auto_recall`                   | `true`               | Show recall context on session start                         |
 | `governance_mode`               | `"detect_only"`      | Governance mode (`detect_only`, `propose`, `enforce`)        |

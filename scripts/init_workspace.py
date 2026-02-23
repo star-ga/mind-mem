@@ -78,7 +78,7 @@ MAINTENANCE_SCRIPTS = [
 ]
 
 DEFAULT_CONFIG = {
-    "version": "1.5.1",
+    "version": "1.6.0",
     "workspace_path": ".",
     "auto_capture": True,
     "auto_recall": True,
