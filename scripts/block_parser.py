@@ -18,11 +18,37 @@ As library:
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sys
 
+_log = logging.getLogger("block_parser")
+
 # Maximum input size to parse (100KB). Larger files are truncated with a warning.
 MAX_PARSE_SIZE = 100_000
+
+
+class BlockCorruptedError(ValueError):
+    """Raised when a block fails to parse due to malformed content.
+
+    Attributes:
+        block_line_number: 1-based line where the block header was found.
+        file_path: Path of the file being parsed (if available).
+        context: Surrounding lines for debugging.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        block_line_number: int = 0,
+        file_path: str = "",
+        context: str = "",
+    ):
+        super().__init__(message)
+        self.block_line_number = block_line_number
+        self.file_path = file_path
+        self.context = context
 
 # Entity ID patterns recognized in block content
 _ENTITY_ID_RE = re.compile(
@@ -472,13 +498,57 @@ def _coerce_value(s):
     return s
 
 
-def parse_file(filepath: str) -> list[dict]:
-    """Parse blocks from a file path. Files >100KB are truncated."""
+def parse_file(filepath: str, *, strict: bool = False) -> list[dict]:
+    """Parse blocks from a file path. Files >100KB are truncated.
+
+    Args:
+        filepath: Path to the markdown file.
+        strict: If True, raise BlockCorruptedError on any per-block
+            parse failure instead of skipping the block.
+
+    Returns:
+        List of parsed block dicts.
+    """
     with open(filepath, "r", encoding="utf-8") as f:
         content = f.read(MAX_PARSE_SIZE + 1)
     if len(content) > MAX_PARSE_SIZE:
         content = content[:MAX_PARSE_SIZE]
-    return parse_blocks(content)
+
+    blocks = parse_blocks(content)
+    valid: list[dict] = []
+    for block in blocks:
+        try:
+            _validate_block(block)
+            valid.append(block)
+        except (ValueError, TypeError, KeyError) as exc:
+            line = block.get("_line", 0)
+            bid = block.get("_id", "<unknown>")
+            lines = content.split("\n")
+            start = max(0, line - 3)
+            end = min(len(lines), line + 3)
+            ctx = "\n".join(lines[start:end])
+            _log.warning(
+                "block_corrupted",
+                block_id=bid,
+                line=line,
+                file=filepath,
+                error=str(exc),
+                context=ctx,
+            )
+            if strict:
+                raise BlockCorruptedError(
+                    f"Corrupted block {bid} at line {line} in {filepath}: {exc}",
+                    block_line_number=line,
+                    file_path=filepath,
+                    context=ctx,
+                ) from exc
+    return valid
+
+
+def _validate_block(block: dict) -> None:
+    """Basic validation of a parsed block. Raises ValueError on problems."""
+    if not block.get("_id"):
+        raise ValueError("Block missing required _id field")
 
 
 def get_active(blocks: list[dict], status_field: str = "Status", active_value: str = "active") -> list[dict]:

@@ -2,6 +2,33 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.4.0 (2026-02-22)
+
+**Deep audit fixes + MCP completeness — closes #28, #29, #30, #31, #32, #33, #34, #35, #36, #37**
+
+### Added
+- **#35** — New MCP tools: `delete_memory_item` (admin-scope, removes block by ID) and `export_memory` (user-scope, exports workspace as JSONL)
+- **#36** — `_schema_version` field in all MCP JSON responses for forward compatibility
+- **#31** — Query-level observability: structured logging with tool_name, duration_ms, success/failure for every MCP tool call
+- **#37** — Configurable limits via `mind-mem.json` `limits` section: max_recall_results, max_similar_results, max_prefetch_results, max_category_results, query_timeout_seconds, rate_limit_calls_per_minute
+
+### Fixed
+- **#29** — SQLite "database is locked" now returns structured `database_busy` error with `retry_after_seconds` instead of crashing
+- **#30** — Corrupted blocks now log block line number and skip with warning (new `BlockCorruptedError` exception class)
+- **#32** — `BlockMetadataManager` shared state protected with `threading.RLock` for concurrent access
+- **#34** — FTS5 index now persists across queries; staleness check avoids redundant rebuilds
+- **#28** — Hybrid fallback chain validates config schema (bm25_weight, vector_weight, rrf_k) before initializing HybridBackend
+
+### Testing
+- **#33** — Concurrency stress tests: 20-thread parallel recall with deadlock detection and explicit `join(timeout=10)`
+- Total: **1241 tests passing** (up from 1157)
+- New test files: `test_mcp_v140.py`, `test_core_v140.py`, `test_concurrency_stress.py`
+
+### Changed
+- Version: 1.3.0 → 1.4.0
+- MCP tools: 16 → 18 (added delete_memory_item, export_memory)
+- Documentation: `docs/configuration.md` updated with limits section
+
 ## 1.3.0 (2026-02-22)
 
 **Security hardening + audit fixes — closes #20, #21, #22, #23, #24, #25, #26, #27**

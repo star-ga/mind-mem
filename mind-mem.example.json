@@ -21,5 +21,13 @@
     "enabled": false,
     "model": "phi3:mini",
     "backend": "auto"
+  },
+  "limits": {
+    "max_recall_results": 100,
+    "max_similar_results": 50,
+    "max_prefetch_results": 20,
+    "max_category_results": 10,
+    "query_timeout_seconds": 30,
+    "rate_limit_calls_per_minute": 120
   }
 }

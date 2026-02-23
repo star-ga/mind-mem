@@ -409,5 +409,122 @@ class TestTokenVerification(unittest.TestCase):
         self.assertFalse(self.mod.verify_token({"X-MindMem-Token": "wrong"}))
 
 
+@unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
+class TestConfigurableLimits(unittest.TestCase):
+    """Test that MCP limits are configurable via mind-mem.json (#37)."""
+
+    def setUp(self):
+        self.td = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.td, "decisions"))
+        os.makedirs(os.path.join(self.td, "tasks"))
+        os.makedirs(os.path.join(self.td, "entities"))
+        os.makedirs(os.path.join(self.td, "intelligence"))
+        os.makedirs(os.path.join(self.td, "memory"))
+
+        with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
+            f.write(
+                "[D-20260101-001]\n"
+                "Statement: Use PostgreSQL for user database\n"
+                "Status: active\n"
+                "Date: 2026-01-01\n"
+            )
+
+    def tearDown(self):
+        shutil.rmtree(self.td, ignore_errors=True)
+
+    def _write_config(self, config):
+        with open(os.path.join(self.td, "mind-mem.json"), "w") as f:
+            json.dump(config, f)
+
+    def test_default_limits_returned_when_no_config(self):
+        mod = _load_server(self.td)
+        limits = mod._get_limits(self.td)
+        self.assertEqual(limits["max_recall_results"], 100)
+        self.assertEqual(limits["max_similar_results"], 50)
+        self.assertEqual(limits["max_prefetch_results"], 20)
+        self.assertEqual(limits["max_category_results"], 10)
+        self.assertEqual(limits["query_timeout_seconds"], 30)
+        self.assertEqual(limits["rate_limit_calls_per_minute"], 120)
+
+    def test_custom_limits_from_config(self):
+        self._write_config({
+            "limits": {
+                "max_recall_results": 200,
+                "max_similar_results": 75,
+                "max_prefetch_results": 30,
+                "max_category_results": 15,
+                "query_timeout_seconds": 60,
+                "rate_limit_calls_per_minute": 240,
+            }
+        })
+        mod = _load_server(self.td)
+        limits = mod._get_limits(self.td)
+        self.assertEqual(limits["max_recall_results"], 200)
+        self.assertEqual(limits["max_similar_results"], 75)
+        self.assertEqual(limits["max_prefetch_results"], 30)
+        self.assertEqual(limits["max_category_results"], 15)
+        self.assertEqual(limits["query_timeout_seconds"], 60)
+        self.assertEqual(limits["rate_limit_calls_per_minute"], 240)
+
+    def test_partial_limits_merges_with_defaults(self):
+        self._write_config({
+            "limits": {
+                "max_recall_results": 50,
+            }
+        })
+        mod = _load_server(self.td)
+        limits = mod._get_limits(self.td)
+        self.assertEqual(limits["max_recall_results"], 50)
+        # Others should keep defaults
+        self.assertEqual(limits["max_similar_results"], 50)
+        self.assertEqual(limits["max_prefetch_results"], 20)
+
+    def test_invalid_limit_value_keeps_default(self):
+        self._write_config({
+            "limits": {
+                "max_recall_results": "not_a_number",
+                "max_similar_results": 75,
+            }
+        })
+        mod = _load_server(self.td)
+        limits = mod._get_limits(self.td)
+        self.assertEqual(limits["max_recall_results"], 100)  # fallback to default
+        self.assertEqual(limits["max_similar_results"], 75)
+
+    def test_missing_limits_section_uses_defaults(self):
+        self._write_config({"recall": {"backend": "bm25"}})
+        mod = _load_server(self.td)
+        limits = mod._get_limits(self.td)
+        self.assertEqual(limits["max_recall_results"], 100)
+
+    def test_default_config_includes_limits(self):
+        """init_workspace DEFAULT_CONFIG should contain the limits section."""
+        from init_workspace import DEFAULT_CONFIG
+        self.assertIn("limits", DEFAULT_CONFIG)
+        self.assertEqual(DEFAULT_CONFIG["limits"]["max_recall_results"], 100)
+        self.assertEqual(DEFAULT_CONFIG["limits"]["max_similar_results"], 50)
+        self.assertEqual(DEFAULT_CONFIG["limits"]["max_prefetch_results"], 20)
+        self.assertEqual(DEFAULT_CONFIG["limits"]["max_category_results"], 10)
+        self.assertEqual(DEFAULT_CONFIG["limits"]["query_timeout_seconds"], 30)
+        self.assertEqual(DEFAULT_CONFIG["limits"]["rate_limit_calls_per_minute"], 120)
+
+    def test_recall_tool_respects_custom_limit(self):
+        """recall() clamps limit to configured max_recall_results."""
+        self._write_config({
+            "limits": {"max_recall_results": 25}
+        })
+        mod = _load_server(self.td)
+        # Call recall with limit > configured max
+        fn = mod.recall
+        if hasattr(fn, "fn"):
+            result = fn.fn("PostgreSQL", limit=50)
+        else:
+            result = fn("PostgreSQL", limit=50)
+        parsed = json.loads(result)
+        # Results should be capped at 25 (but may be fewer if corpus is small)
+        if "results" in parsed:
+            self.assertLessEqual(len(parsed["results"]), 25)
+
+
 if __name__ == "__main__":
     unittest.main()

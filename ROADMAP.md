@@ -63,7 +63,21 @@
 - [x] **Error/edge case tests** — 102 new tests for failure modes
 - [x] 1157 tests passing, CI green on all platforms
 
-## v1.4.0 — Reflective Consolidation
+## v1.4.0 — Deep Audit Fixes + MCP Completeness ✅ Released (2026-02-22)
+
+- [x] **SQLite busy handling** — structured "database_busy" error with retry_after on locked DB (#29)
+- [x] **Corrupted block logging** — BlockCorruptedError with line number, skip-and-warn in parser (#30)
+- [x] **Query-level observability** — structured logging with tool_name, duration_ms, success for all MCP calls (#31)
+- [x] **BlockMetadataManager thread safety** — RLock on all DB/cache access paths (#32)
+- [x] **Concurrency stress tests** — 20-thread recall stress test with deadlock detection (#33)
+- [x] **FTS5 index persistence** — staleness check, skip rebuild when index is fresh (#34)
+- [x] **New MCP tools** — delete_memory_item (admin) and export_memory (user) (#35)
+- [x] **MCP schema versioning** — _schema_version field in all JSON responses (#36)
+- [x] **Configurable limits** — max_recall_results, query_timeout, rate_limit via mind-mem.json (#37)
+- [x] **Hybrid fallback validation** — strict schema checks on recall config before HybridBackend init (#28)
+- [x] 1241 tests passing, CI green on all platforms
+
+## v1.5.0 — Reflective Consolidation
 
 - [ ] Sleep-time memory consolidation (periodic background pass)
 - [ ] Pattern extraction from trajectory clusters

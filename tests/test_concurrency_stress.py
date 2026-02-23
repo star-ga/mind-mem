@@ -9,6 +9,7 @@ Tests cover:
 import os
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -282,6 +283,164 @@ class TestPerformanceStress(unittest.TestCase):
                 self.assertLessEqual(
                     len(results), limit,
                     f"limit={limit} but got {len(results)} results",
+                )
+
+
+# ===========================================================================
+# 3. Deadlock / Data-Corruption Stress
+# ===========================================================================
+
+class TestDeadlockStress(unittest.TestCase):
+    """Run 20 concurrent recall queries and verify no deadlock or corruption."""
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        content = _generate_blocks(100)
+        self.ws = _setup_workspace(self._tmpdir.name, decisions_content=content)
+
+    def tearDown(self):
+        self._tmpdir.cleanup()
+
+    def test_20_concurrent_queries_no_deadlock(self):
+        """20 concurrent recall queries all complete within 30s without deadlock."""
+        queries = [
+            "authentication JWT",
+            "database PostgreSQL",
+            "caching Redis",
+            "Kubernetes orchestration",
+            "GraphQL API",
+            "TLS communication",
+            "OpenTelemetry logging",
+            "HashiCorp Vault secrets",
+            "Terraform infrastructure",
+            "chaos engineering",
+            "authentication microservices",
+            "PostgreSQL relational",
+            "Redis session",
+            "container orchestration",
+            "API gateway",
+            "service communication",
+            "logging pipeline",
+            "secrets auto-rotation",
+            "infrastructure code",
+            "nightly staging tests",
+        ]
+
+        results = [None] * 20
+        errors = []
+        lock = threading.Lock()
+
+        def do_recall(idx, query):
+            try:
+                res = recall(self.ws, query, limit=5)
+                results[idx] = res
+            except Exception as exc:
+                with lock:
+                    errors.append((idx, exc))
+
+        threads = []
+        for i, q in enumerate(queries):
+            t = threading.Thread(target=do_recall, args=(i, q))
+            threads.append(t)
+
+        start = time.monotonic()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+        elapsed = time.monotonic() - start
+
+        # Verify all threads completed (not stuck/deadlocked)
+        for i, t in enumerate(threads):
+            self.assertFalse(
+                t.is_alive(),
+                f"Thread {i} is still alive after join — possible deadlock",
+            )
+
+        # Total wall time should be under 30s
+        self.assertLess(
+            elapsed, 30.0,
+            f"20 concurrent queries took {elapsed:.2f}s (limit: 30s)",
+        )
+
+        # No errors
+        self.assertEqual(
+            errors, [],
+            f"Concurrent queries raised errors: {errors}",
+        )
+
+        # All 20 queries returned results (no None entries)
+        for i, res in enumerate(results):
+            self.assertIsNotNone(
+                res,
+                f"Thread {i} returned None — query did not complete",
+            )
+            self.assertIsInstance(res, list)
+
+    def test_20_concurrent_queries_no_data_corruption(self):
+        """20 concurrent queries return consistent results — no cross-contamination."""
+        # Run each query twice: once serial, once concurrent.
+        # Results should contain the same block IDs.
+        queries = [
+            "authentication JWT",
+            "database PostgreSQL",
+            "caching Redis",
+            "Kubernetes orchestration",
+            "GraphQL API",
+        ]
+
+        # Serial baseline
+        serial_ids = {}
+        for q in queries:
+            res = recall(self.ws, q, limit=5)
+            serial_ids[q] = frozenset(r["_id"] for r in res)
+
+        # Concurrent run: 4 copies of each query = 20 threads
+        concurrent_ids = {q: [] for q in queries}
+        errors = []
+        lock = threading.Lock()
+
+        def do_recall(query):
+            try:
+                res = recall(self.ws, query, limit=5)
+                ids = frozenset(r["_id"] for r in res)
+                with lock:
+                    concurrent_ids[query].append(ids)
+            except Exception as exc:
+                with lock:
+                    errors.append(exc)
+
+        threads = []
+        for q in queries:
+            for _ in range(4):
+                t = threading.Thread(target=do_recall, args=(q,))
+                threads.append(t)
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+
+        for t in threads:
+            self.assertFalse(
+                t.is_alive(),
+                "Thread still alive after join — possible deadlock",
+            )
+
+        self.assertEqual(errors, [], f"Concurrent queries raised errors: {errors}")
+
+        # Each concurrent run of the same query should return the same IDs
+        for q in queries:
+            id_sets = concurrent_ids[q]
+            self.assertEqual(
+                len(id_sets), 4,
+                f"Expected 4 concurrent results for '{q}', got {len(id_sets)}",
+            )
+            for ids in id_sets:
+                self.assertEqual(
+                    ids, serial_ids[q],
+                    f"Concurrent result for '{q}' differs from serial baseline — "
+                    f"possible data corruption",
                 )
 
 

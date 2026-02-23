@@ -78,7 +78,7 @@ MAINTENANCE_SCRIPTS = [
 ]
 
 DEFAULT_CONFIG = {
-    "version": "1.3.0",
+    "version": "1.4.0",
     "workspace_path": ".",
     "auto_capture": True,
     "auto_recall": True,
@@ -102,6 +102,14 @@ DEFAULT_CONFIG = {
     "mcp_rate_limit": {
         "max_calls_per_minute": 120,
         "query_timeout_seconds": 30,
+    },
+    "limits": {
+        "max_recall_results": 100,
+        "max_similar_results": 50,
+        "max_prefetch_results": 20,
+        "max_category_results": 10,
+        "query_timeout_seconds": 30,
+        "rate_limit_calls_per_minute": 120,
     },
 }
 
