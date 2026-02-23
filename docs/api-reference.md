@@ -10,6 +10,51 @@ Complete reference for all 18 MCP tools and 8 MCP resources exposed by `mcp_serv
 
 ---
 
+## Quick Start Tutorial
+
+A 5-minute walkthrough of the most common MCP tool workflow.
+
+### 1. Search memory
+
+```python
+# Recall searches all memory files with ranked retrieval
+result = await session.call_tool("recall", {"query": "database decisions", "limit": 5})
+# Returns ranked results with scores, excerpts, and source locations
+```
+
+### 2. Propose a change
+
+```python
+# propose_update creates a proposal — never writes directly
+result = await session.call_tool("propose_update", {
+    "file": "decisions/DECISIONS.md",
+    "block_id": "D-20260223-001",
+    "field": "Status",
+    "old_value": "active",
+    "new_value": "superseded",
+    "reason": "Replaced by D-20260223-005"
+})
+# Returns proposal ID for review
+```
+
+### 3. Apply after review
+
+```python
+# approve_apply writes the change with full audit trail
+result = await session.call_tool("approve_apply", {"proposal_id": "P-20260223-001"})
+# Creates snapshot, writes DIFF, logs receipt — rollback available
+```
+
+### 4. Check workspace health
+
+```python
+# scan runs all integrity checks
+result = await session.call_tool("scan", {})
+# Returns contradictions, drift, dead decisions, coverage metrics
+```
+
+---
+
 ## Table of Contents
 
 - [Tools](#tools)

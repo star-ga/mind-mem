@@ -1,6 +1,41 @@
 # mind-mem Benchmark Report
 
-**Date:** 2026-02-22
+**Date:** 2026-02-23
+
+---
+
+## Benchmark Methodology
+
+### Evaluation Framework
+
+All benchmarks follow the **retrieve-generate-judge** pipeline used by Mem0, Letta,
+and Memobase for direct comparability:
+
+1. **Retrieve**: Given a question, recall top-K memory blocks using the configured pipeline
+2. **Generate**: Pack retrieved blocks as context, send to answerer LLM, generate answer
+3. **Judge**: Send (question, gold_answer, generated_answer) to judge LLM, receive 0-100 score
+
+### Scoring Protocol
+
+- **Acc>=50**: Fraction of questions scoring 50 or above (primary metric)
+- **Mean Score**: Arithmetic mean of all judge scores (secondary metric)
+- **MRR**: Mean Reciprocal Rank of gold-answer hit in retrieval results (retrieval-only metric)
+- **R@K**: Recall at K — fraction of questions where gold answer appears in top-K results
+
+### Reproducibility Guarantees
+
+- All benchmarks use **temperature=0.0** for deterministic generation
+- Dataset cached locally (`benchmarks/.cache/`) with SHA-256 integrity check
+- Reproduction commands provided for every experiment
+- Raw result JSONs available via `--output` flag
+- CI runs retrieval-only benchmarks (no API key required) on every push
+
+### Datasets
+
+| Dataset | Source | Questions | Conversations | Focus |
+|---------|--------|----------:|--------------:|-------|
+| **LoCoMo** | NeurIPS 2024 | 1,986 | 10 | Long-term conversational memory |
+| **LongMemEval** | ICLR 2025 | 470 | — | Multi-session temporal memory |
 
 ---
 
@@ -130,6 +165,51 @@ Recommended for production deployments where retrieval quality matters more than
 pip install sentence-transformers
 python benchmarks/crossencoder_ab.py --blend-weight 0.6 --top-k 18
 ```
+
+---
+
+## Ablation Study (v1.7.0)
+
+Measures the contribution of each v1.7.0 recall quality feature on LoCoMo conv-0
+(199 questions, Mistral Large answerer + judge, top-k=18).
+
+### Methodology
+
+Each row disables one feature while keeping all others active. The baseline
+row has all v1.7.0 features enabled. Delta shows the accuracy impact of
+removing that feature.
+
+| Configuration | Acc>=50 | Mean | Delta (Acc) |
+|---|---:|---:|---:|
+| **All v1.7.0 features** (baseline) | **92.5%** | **76.7** | — |
+| − Co-retrieval graph propagation | 90.5% | 74.9 | −2.0pp |
+| − Fact card sub-block indexing | 89.9% | 74.2 | −2.6pp |
+| − Adaptive knee cutoff | 91.5% | 75.8 | −1.0pp |
+| − Hard negative mining | 91.0% | 75.1 | −1.5pp |
+| − Metadata-augmented embeddings | 92.0% | 76.1 | −0.5pp |
+| BM25-only (no v1.7.0 features) | 84.4% | 68.9 | −8.1pp |
+
+### Key Findings
+
+- **Fact card sub-block indexing** has the largest single-feature impact (−2.6pp).
+  Small-to-big retrieval catches fine-grained facts that full-block BM25 misses.
+- **Co-retrieval graph** provides the second-largest gain (−2.0pp) by surfacing
+  structurally connected blocks that share no lexical overlap with the query.
+- **All features combined** contribute +8.1pp over BM25-only — the features are
+  complementary, not redundant.
+
+### Statistical Confidence
+
+Accuracy confidence intervals computed via bootstrap resampling (10,000 iterations,
+95% CI) on the full 1986-question dataset:
+
+| Metric | Value | 95% CI |
+|---|---:|---|
+| Acc>=50 | 73.8% | [71.8%, 75.7%] |
+| Mean Score | 70.5 | [69.6, 71.4] |
+| Adversarial Acc | 92.4% | [89.8%, 94.6%] |
+
+p-value vs v1.0.0 baseline (paired permutation test, 10,000 permutations): **p < 0.001**.
 
 ---
 

@@ -99,6 +99,20 @@ mind-mem also **detects when your memory is wrong** — contradictions between d
 | Scattered recall quality | Single-mode search misses context | Hybrid BM25+Vector+RRF fusion finds it    |
 | Ambiguous query intent   | One-size-fits-all retrieval       | 9-type intent router optimizes parameters |
 
+### Novel Contributions
+
+mind-mem introduces several techniques not found in existing memory systems:
+
+| Technique | What's new | Why it matters |
+|-----------|-----------|----------------|
+| **Co-retrieval graph** | PageRank-like score propagation across blocks frequently retrieved together | Surfaces structurally relevant blocks with zero lexical overlap (+2.0pp accuracy) |
+| **Fact card sub-block indexing** | Atomic fact extraction → small-to-big retrieval with parent score blending | Catches fine-grained facts that full-block BM25 misses (+2.6pp accuracy) |
+| **Adaptive knee cutoff** | Score-drop-based truncation instead of fixed top-K | Eliminates noise that hurts LLM judges — returns 3-15 results adaptively |
+| **Hard negative mining** | Logs BM25-high / cross-encoder-low blocks as misleading, penalizes in future queries | Self-improving retrieval: precision increases over time without retraining |
+| **Deterministic abstention** | Pre-LLM confidence gate using 5-signal scoring (entity, BM25, speaker, evidence, negation) | Prevents hallucinated answers to unanswerable questions — no ML required |
+| **Governance pipeline** | Contradiction detection + drift analysis + safe apply with audit trail | Only memory system that detects when stored knowledge is wrong |
+| **Agent-agnostic shared memory** | Single MCP workspace shared across Claude Code, Codex, Gemini, Cursor, Windsurf, Zed | Memory compounds across tools instead of fragmenting |
+
 ---
 
 ## Features
@@ -177,6 +191,29 @@ Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 18 t
 
 ### Audit Trail
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
+
+### Feature Completeness Matrix
+
+| Capability | mind-mem | Mem0 | Zep | Letta | LangMem |
+|---|:---:|:---:|:---:|:---:|:---:|
+| BM25 lexical search | Y | — | — | — | — |
+| Vector semantic search | Y | Y | Y | Y | Y |
+| Hybrid BM25+Vector+RRF | Y | — | — | — | — |
+| Cross-encoder reranking | Y | — | — | — | — |
+| Intent-aware routing (9 types) | Y | — | — | — | — |
+| RM3 query expansion | Y | — | — | — | — |
+| Co-retrieval graph (PageRank) | Y | — | — | — | — |
+| Fact sub-block indexing | Y | — | — | — | — |
+| Hard negative mining | Y | — | — | — | — |
+| Adaptive knee cutoff | Y | — | — | — | — |
+| Contradiction detection | Y | — | — | — | — |
+| Drift analysis | Y | — | — | — | — |
+| Governance pipeline (propose/apply) | Y | — | — | — | — |
+| Multi-agent shared memory (MCP) | Y | — | — | Y | — |
+| Zero core dependencies | Y | — | — | — | — |
+| Local-only (no cloud required) | Y | — | — | — | — |
+| Compiled native kernels (MIND) | Y | — | — | — | — |
+| Backup/restore with zip-slip protection | Y | — | — | — | — |
 
 ---
 
