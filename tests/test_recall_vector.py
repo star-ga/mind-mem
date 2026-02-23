@@ -310,3 +310,234 @@ class TestProviderValidation:
         for p in ("local", "qdrant", "pinecone", "sqlite_vec", "llama_cpp"):
             vb = _make_backend({"provider": p})
             assert vb.provider == p
+
+
+# ── Embedding Cache (P0) ─────────────────────────────────────────────
+
+
+class TestEmbeddingCache:
+    """Test embedding cache: sqlite3 + hashlib + struct — all stdlib."""
+
+    def _make_db(self, tmp_path):
+        """Create an in-memory-like cache DB for testing."""
+        import sqlite3
+        db_path = str(tmp_path / "test_cache.db")
+        conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA journal_mode=WAL")
+        vb = _make_backend()
+        vb._ensure_cache_tables(conn)
+        return conn, vb
+
+    def test_content_hash_deterministic(self):
+        vb = _make_backend()
+        h1 = vb._content_hash("hello world")
+        h2 = vb._content_hash("hello world")
+        assert h1 == h2
+        assert len(h1) == 64  # SHA-256 hex
+
+    def test_content_hash_different_for_different_text(self):
+        vb = _make_backend()
+        h1 = vb._content_hash("hello")
+        h2 = vb._content_hash("world")
+        assert h1 != h2
+
+    def test_serialize_deserialize_roundtrip(self):
+        vb = _make_backend()
+        original = [0.1, 0.2, 0.3, -1.5, 99.99]
+        blob = vb._serialize_embedding(original)
+        assert isinstance(blob, bytes)
+        assert len(blob) == 5 * 4  # 5 floats * 4 bytes
+
+        restored = vb._deserialize_embedding(blob, 5)
+        for a, b in zip(original, restored):
+            assert abs(a - b) < 1e-5
+
+    def test_serialize_empty(self):
+        vb = _make_backend()
+        blob = vb._serialize_embedding([])
+        assert blob == b""
+        restored = vb._deserialize_embedding(blob, 0)
+        assert restored == []
+
+    def test_cache_miss_returns_none(self, tmp_path):
+        conn, vb = self._make_db(tmp_path)
+        result = vb._get_cached_embedding(conn, "block-1", "hash-1")
+        assert result is None
+        conn.close()
+
+    def test_cache_store_and_hit(self, tmp_path):
+        conn, vb = self._make_db(tmp_path)
+        emb = [0.1, 0.2, 0.3]
+        vb._cache_embedding(conn, "block-1", "hash-1", emb)
+        conn.commit()
+
+        result = vb._get_cached_embedding(conn, "block-1", "hash-1")
+        assert result is not None
+        assert len(result) == 3
+        for a, b in zip(emb, result):
+            assert abs(a - b) < 1e-5
+        conn.close()
+
+    def test_cache_miss_on_hash_change(self, tmp_path):
+        conn, vb = self._make_db(tmp_path)
+        vb._cache_embedding(conn, "block-1", "hash-old", [0.1, 0.2])
+        conn.commit()
+
+        result = vb._get_cached_embedding(conn, "block-1", "hash-new")
+        assert result is None
+        conn.close()
+
+    def test_cache_upsert_overwrites(self, tmp_path):
+        conn, vb = self._make_db(tmp_path)
+        vb._cache_embedding(conn, "block-1", "hash-1", [1.0, 2.0])
+        conn.commit()
+
+        vb._cache_embedding(conn, "block-1", "hash-2", [3.0, 4.0])
+        conn.commit()
+
+        # Old hash should miss
+        assert vb._get_cached_embedding(conn, "block-1", "hash-1") is None
+        # New hash should hit
+        result = vb._get_cached_embedding(conn, "block-1", "hash-2")
+        assert result is not None
+        assert abs(result[0] - 3.0) < 1e-5
+        conn.close()
+
+    def test_invalidate_cache_for_model(self, tmp_path):
+        conn, vb = self._make_db(tmp_path)
+        vb._cache_embedding(conn, "b1", "h1", [1.0])
+        vb._cache_embedding(conn, "b2", "h2", [2.0])
+        conn.commit()
+
+        # Invalidate for a different model — should delete our entries
+        deleted = vb._invalidate_cache_for_model(conn, "different-model")
+        conn.commit()
+        assert deleted == 2
+
+        # Verify cache is empty
+        assert vb._get_cached_embedding(conn, "b1", "h1") is None
+        conn.close()
+
+    def test_invalidate_preserves_same_model(self, tmp_path):
+        conn, vb = self._make_db(tmp_path)
+        vb._cache_embedding(conn, "b1", "h1", [1.0])
+        conn.commit()
+
+        # Invalidate for the same model — should keep our entries
+        deleted = vb._invalidate_cache_for_model(conn, vb.model_name)
+        assert deleted == 0
+
+        result = vb._get_cached_embedding(conn, "b1", "h1")
+        assert result is not None
+        conn.close()
+
+    def test_high_dimensional_cache(self, tmp_path):
+        """Test with 384-dim embeddings (typical for bge-small)."""
+        conn, vb = self._make_db(tmp_path)
+        emb = [float(i) / 384 for i in range(384)]
+        vb._cache_embedding(conn, "block-big", "hash-big", emb)
+        conn.commit()
+
+        result = vb._get_cached_embedding(conn, "block-big", "hash-big")
+        assert result is not None
+        assert len(result) == 384
+        for a, b in zip(emb, result):
+            assert abs(a - b) < 1e-5
+        conn.close()
+
+
+# ── Dimension Mismatch Detection (P0) ────────────────────────────────
+
+
+class TestDimensionMismatch:
+    """Test vec_meta_info tracking and mismatch detection."""
+
+    def _make_db(self, tmp_path):
+        import sqlite3
+        db_path = str(tmp_path / "test_meta.db")
+        conn = sqlite3.connect(db_path)
+        vb = _make_backend()
+        vb._ensure_cache_tables(conn)
+        return conn, vb
+
+    def test_no_prior_metadata_is_match(self, tmp_path):
+        conn, vb = self._make_db(tmp_path)
+        assert vb._check_dimension_match(conn) is True
+        conn.close()
+
+    def test_same_model_is_match(self, tmp_path):
+        conn, vb = self._make_db(tmp_path)
+        vb._set_vec_meta(conn, "model_name", vb.model_name)
+        vb._set_vec_meta(conn, "dimension", "384")
+        vb.dimension = 384
+        conn.commit()
+
+        assert vb._check_dimension_match(conn) is True
+        conn.close()
+
+    def test_different_model_is_mismatch(self, tmp_path):
+        conn, vb = self._make_db(tmp_path)
+        vb._set_vec_meta(conn, "model_name", "completely-different-model")
+        conn.commit()
+
+        assert vb._check_dimension_match(conn) is False
+        conn.close()
+
+    def test_different_dimension_is_mismatch(self, tmp_path):
+        conn, vb = self._make_db(tmp_path)
+        vb._set_vec_meta(conn, "model_name", vb.model_name)
+        vb._set_vec_meta(conn, "dimension", "1024")
+        vb.dimension = 384
+        conn.commit()
+
+        assert vb._check_dimension_match(conn) is False
+        conn.close()
+
+    def test_meta_get_set_roundtrip(self, tmp_path):
+        conn, vb = self._make_db(tmp_path)
+        vb._set_vec_meta(conn, "test_key", "test_value")
+        conn.commit()
+
+        assert vb._get_vec_meta(conn, "test_key") == "test_value"
+        assert vb._get_vec_meta(conn, "nonexistent") is None
+        conn.close()
+
+    def test_meta_upsert(self, tmp_path):
+        conn, vb = self._make_db(tmp_path)
+        vb._set_vec_meta(conn, "key", "v1")
+        vb._set_vec_meta(conn, "key", "v2")
+        conn.commit()
+
+        assert vb._get_vec_meta(conn, "key") == "v2"
+        conn.close()
+
+    def test_dimension_none_skips_check(self, tmp_path):
+        """When current dimension is None, skip dimension comparison."""
+        conn, vb = self._make_db(tmp_path)
+        vb._set_vec_meta(conn, "model_name", vb.model_name)
+        vb._set_vec_meta(conn, "dimension", "384")
+        vb.dimension = None  # Not yet known
+        conn.commit()
+
+        assert vb._check_dimension_match(conn) is True
+        conn.close()
+
+
+# ── Circuit Breaker / Fallback ───────────────────────────────────────
+
+
+class TestCircuitBreaker:
+    """Test embedding provider circuit breaker state."""
+
+    def test_initial_state_empty(self):
+        vb = _make_backend()
+        assert vb._provider_failures == {}
+
+    def test_failures_tracked_across_calls(self):
+        """Circuit breaker state persists on the backend instance."""
+        vb = _make_backend()
+        import time
+        vb._provider_failures["test"] = (3, time.time())
+        assert "test" in vb._provider_failures
+        count, _ = vb._provider_failures["test"]
+        assert count == 3
