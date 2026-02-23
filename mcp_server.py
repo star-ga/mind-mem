@@ -1548,6 +1548,10 @@ def main():
                         help="HTTP port (only used with --transport http)")
     parser.add_argument("--token", default=None,
                         help="Bearer token for HTTP auth (or set MIND_MEM_TOKEN env var)")
+    parser.add_argument("--watch", action="store_true",
+                        help="Auto-reindex when workspace .md files change")
+    parser.add_argument("--watch-interval", type=float, default=5.0,
+                        help="File watch polling interval in seconds (default: 5.0)")
     args = parser.parse_args()
 
     # Set token from CLI arg if provided (env var takes precedence if both set)
@@ -1557,6 +1561,25 @@ def main():
     token = _check_token()
     _log.info("mcp_server_start", transport=args.transport,
               workspace=_workspace(), auth="token" if token else "none")
+
+    # File watcher: auto-reindex on .md changes
+    if args.watch:
+        from scripts.watcher import FileWatcher
+        from scripts.sqlite_index import build_index
+
+        ws = _workspace()
+        def _on_changes(changed_files: set[str]) -> None:
+            try:
+                result = build_index(ws, incremental=True)
+                _log.info("watch_reindex_complete",
+                          blocks_new=result.get("blocks_new", 0),
+                          blocks_modified=result.get("blocks_modified", 0))
+            except Exception as e:
+                _log.warning("watch_reindex_failed", error=str(e))
+
+        watcher = FileWatcher(ws, callback=_on_changes, interval=args.watch_interval)
+        watcher.start()
+        _log.info("file_watcher_enabled", interval=args.watch_interval)
 
     if args.transport == "http":
         if not token:

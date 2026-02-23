@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import re
+import urllib.error
+import urllib.request
 
 from _recall_scoring import (
     _category_match_boost,
@@ -13,8 +16,11 @@ from _recall_scoring import (
     _extract_speaker_names,
     _negation_penalty,
 )
+from observability import get_logger
 
-__all__ = ["rerank_hits"]
+_log = get_logger("reranking")
+
+__all__ = ["rerank_hits", "llm_rerank"]
 
 
 # ---------------------------------------------------------------------------
@@ -227,5 +233,112 @@ def rerank_hits(
                     anchor = hits.pop(i)
                     hits.insert(min(1, len(hits)), anchor)
                     break
+
+    return hits
+
+
+# ---------------------------------------------------------------------------
+# v8: Optional LLM Reranking — config-gated, uses urllib.request (stdlib)
+# ---------------------------------------------------------------------------
+
+def llm_rerank(
+    query: str,
+    hits: list[dict],
+    *,
+    url: str = "http://localhost:11434/api/generate",
+    model: str = "qwen3-coder:30b",
+    weight: float = 0.3,
+    timeout: float = 10.0,
+) -> list[dict]:
+    """Optional LLM-based reranking via local Ollama (or compatible API).
+
+    Sends query + candidate excerpts to the LLM, asks it to score relevance
+    as a JSON array of floats in [0,1]. Merges LLM scores with existing scores
+    using the given weight.
+
+    Falls back silently (returns original hits) on any failure.
+
+    Args:
+        query: The original search query.
+        hits: Candidates already scored by deterministic reranker.
+        url: Ollama-compatible generate endpoint.
+        model: Model name to use.
+        weight: Blend weight for LLM scores (0=ignore, 1=replace).
+        timeout: HTTP request timeout in seconds.
+
+    Returns:
+        Hits with blended scores, sorted descending.
+    """
+    if not hits:
+        return hits
+
+    # Build scoring prompt with numbered candidates
+    candidates = []
+    for i, h in enumerate(hits):
+        excerpt = h.get("excerpt", "")[:200]
+        candidates.append(f"{i}: {excerpt}")
+
+    prompt = (
+        f"Score the relevance of each candidate to the query.\n"
+        f"Query: {query}\n\n"
+        f"Candidates:\n" + "\n".join(candidates) + "\n\n"
+        f"Return ONLY a JSON array of {len(hits)} floats in [0,1], "
+        f"one per candidate. Example: [0.95, 0.3, 0.7]\n"
+        f"No explanation, just the JSON array."
+    )
+
+    payload = json.dumps({
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0.0, "num_predict": 256},
+    }).encode()
+
+    try:
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = json.loads(resp.read().decode())
+
+        response_text = body.get("response", "")
+        # Extract JSON array from response (may have surrounding text)
+        match = re.search(r"\[[\d.,\s]+\]", response_text)
+        if not match:
+            _log.warning("llm_rerank_parse_failed", response=response_text[:200])
+            return hits
+
+        scores = json.loads(match.group())
+        if len(scores) != len(hits):
+            _log.warning("llm_rerank_length_mismatch",
+                         expected=len(hits), got=len(scores))
+            return hits
+
+        # Validate and clamp scores
+        for i, s in enumerate(scores):
+            if not isinstance(s, (int, float)):
+                scores[i] = 0.5
+            else:
+                scores[i] = max(0.0, min(1.0, float(s)))
+
+        # Blend: final_score = (1 - weight) * existing + weight * llm_score * max_existing
+        max_existing = max((h["score"] for h in hits), default=1.0) or 1.0
+        for i, h in enumerate(hits):
+            blended = (1 - weight) * h["score"] + weight * scores[i] * max_existing
+            h["score"] = round(blended, 4)
+
+        hits.sort(key=lambda r: (r["score"], r.get("_id", "")), reverse=True)
+        _log.info("llm_rerank_applied", model=model, candidates=len(hits),
+                  weight=weight)
+
+    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        _log.warning("llm_rerank_network_failed", error=str(e))
+    except (json.JSONDecodeError, ValueError, TypeError, KeyError) as e:
+        _log.warning("llm_rerank_failed", error=str(e))
+    except Exception as e:
+        _log.warning("llm_rerank_unexpected_error", error=str(e))
 
     return hits

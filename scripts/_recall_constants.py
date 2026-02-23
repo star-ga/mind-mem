@@ -211,4 +211,6 @@ _VALID_RECALL_KEYS = frozenset({
     "pinecone_api_key", "pinecone_index", "pinecone_namespace",
     "qdrant_url", "qdrant_collection", "embedding_model",
     "retrieve_wide_k", "rerank", "active_only", "temporal_hard_filter",
+    "llm_rerank", "llm_rerank_url", "llm_rerank_model", "llm_rerank_weight",
+    "chunk_overlap", "max_chunk_tokens",
 })
