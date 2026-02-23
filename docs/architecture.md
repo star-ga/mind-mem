@@ -1,6 +1,6 @@
 # mind-mem Architecture
 
-Version 1.0.5 | February 2026
+Version 1.2.0 | February 2026
 
 ---
 
@@ -871,7 +871,7 @@ its `write` list.
 
 ```json
 {
-  "version": "1.0.5",
+  "version": "1.2.0",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,

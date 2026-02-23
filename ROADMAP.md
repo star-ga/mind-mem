@@ -42,15 +42,14 @@
   - BM25-only recall (v1.0.5 baseline used hybrid BM25+vector)
 - [x] 964 tests passing, CI green on all platforms
 
-## v1.2.0 — Retrieval Quality Push
+## v1.2.0 — Retrieval Quality Push ✅ Released (2026-02-22)
 
-Target: **top-3 on LoCoMo** (surpass current 76.7% mean)
-
-- [ ] **BM25F weight grid search** — optimize field weights for title/excerpt/tags
-- [ ] **Fact key expansion** — entity/date/negation per block for +3-6pp retrieval
-- [ ] **Structured evidence packing** — Chain-of-Note style for +5-10pp reading accuracy
-- [ ] **Time-aware hard filters** — resolve "last week" → date range for +7-11pp temporal
-- [ ] **Cross-encoder A/B re-test** — re-evaluate ms-marco-MiniLM-L-6-v2 with v1.1.0 baseline
+- [x] **BM25F weight grid search** (`benchmarks/grid_search.py`) — one-at-a-time (11) + full cartesian (243) combo search
+- [x] **Fact key expansion** — `_entities`, `_dates`, `_has_negation` per block; entity overlap boost up to 1.45x
+- [x] **Chain-of-Note evidence packing** — structured `[Note N]` format with config toggle
+- [x] **Temporal hard filters** (`scripts/_recall_temporal.py`) — relative time → date range → block filter
+- [x] **Cross-encoder A/B test** — +0.097 MRR (+24% relative) with ms-marco-MiniLM-L-6-v2
+- [x] 1055 tests passing, CI green on all platforms
 
 ## v1.3.0 — Reflective Consolidation
 
