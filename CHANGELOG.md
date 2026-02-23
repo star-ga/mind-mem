@@ -2,6 +2,24 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.5.1 (2026-02-22)
+
+**Block-level incremental FTS indexing — fixes #17 HIGH**
+
+### Added
+- Block-level incremental FTS indexing in `sqlite_index.py`: tracks per-block content hashes in `index_meta` table. On reindex, only NEW/MODIFIED/DELETED blocks are touched — unchanged blocks are skipped entirely. Turns O(blocks_per_file) into O(changed_blocks).
+- `_compute_block_hash()`: SHA-256 hash of block content (excludes `_line` to avoid false positives when blocks shift).
+- `_insert_block()` / `_delete_blocks()`: extracted helpers for clean block-level CRUD.
+- Build summary now reports `blocks_new`, `blocks_modified`, `blocks_deleted`, `blocks_unchanged`.
+
+### Testing
+- 13 new tests: `TestBlockLevelIncremental` (10), `TestComputeBlockHash` (4)
+- Total: **1274 tests passing** (up from 1261)
+
+### Changed
+- `sqlite_index.py`: `_index_file()` refactored from file-level to block-level incremental
+- Zero new dependencies — uses stdlib `hashlib`, `json`, `sqlite3`
+
 ## 1.5.0 (2026-02-22)
 
 **Embedding cache, incremental indexing, dimension safety, and provider fallback chain — closes #38, #39, #40, #41**
