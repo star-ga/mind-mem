@@ -1,20 +1,90 @@
-"""Recall engine scoring — date scores, graph boosting, negation, date proximity, categories, entity extraction."""
+"""Recall engine scoring — BM25F helper, date scores, graph boosting, negation, date proximity, categories."""
 
 from __future__ import annotations
 
 import math
 import re
+from collections import Counter
 from datetime import datetime as _datetime
 
-from _recall_constants import _BLOCK_ID_RE, SEARCH_FIELDS
+from _recall_constants import _BLOCK_ID_RE, BM25_B, BM25_K1, FIELD_WEIGHTS, SEARCH_FIELDS
 
 __all__ = [
+    "bm25f_score_terms", "compute_weighted_tf",
     "date_score", "build_xref_graph",
     "_detect_negation", "_negation_penalty",
     "_extract_dates", "_date_proximity_score",
     "_classify_categories", "_category_match_boost",
     "_extract_entities", "_extract_bigram_phrases", "_extract_speaker_names",
 ]
+
+
+# ---------------------------------------------------------------------------
+# BM25F scoring helper — single source of truth for all BM25 computations
+# ---------------------------------------------------------------------------
+
+def compute_weighted_tf(
+    field_tokens: dict[str, list[str]],
+    field_weights: dict[str, float] | None = None,
+) -> tuple[Counter, float]:
+    """Compute field-weighted term frequency and weighted document length.
+
+    Args:
+        field_tokens: {field_name: [tokens]} for a single document.
+        field_weights: Per-field weight multipliers (defaults to FIELD_WEIGHTS).
+
+    Returns:
+        (weighted_tf Counter, weighted_doc_length float).
+    """
+    fw = field_weights or FIELD_WEIGHTS
+    weighted_tf: Counter = Counter()
+    wdl = 0.0
+    for field, tokens in field_tokens.items():
+        w = fw.get(field, 1.0)
+        wdl += len(tokens) * w
+        for t in tokens:
+            weighted_tf[t] += w
+    return weighted_tf, wdl
+
+
+def bm25f_score_terms(
+    query_terms: list[str],
+    weighted_tf: Counter,
+    wdl: float,
+    idf_cache: dict[str, float],
+    avg_wdl: float,
+    *,
+    k1: float = BM25_K1,
+    b: float = BM25_B,
+) -> float:
+    """Score a document against query terms using the BM25F formula.
+
+    This is the single implementation of BM25F used by the main scoring loop,
+    RM3 re-scoring, PRF re-scoring, and bridge (chain-of-retrieval) re-scoring.
+
+    BM25F: sum over query terms of  idf(t) * (wtf * (k1+1)) / (wtf + k1*(1-b+b*wdl/avgdl))
+
+    Args:
+        query_terms: Tokenized query terms to score against.
+        weighted_tf: Field-weighted term frequency counter for the document.
+        wdl: Weighted document length (sum of field_len * field_weight).
+        idf_cache: Pre-computed {term: idf_value} for query terms.
+        avg_wdl: Average weighted document length across the corpus.
+        k1: BM25 term frequency saturation parameter.
+        b: BM25 document length normalization parameter.
+
+    Returns:
+        BM25F score (0.0 if no query terms match).
+    """
+    score = 0.0
+    for qt in query_terms:
+        wtf = weighted_tf.get(qt, 0)
+        if wtf > 0:
+            idf = idf_cache.get(qt, 0)
+            numerator = wtf * (k1 + 1)
+            denominator = wtf + k1 * (1 - b + b * wdl / avg_wdl)
+            score += idf * numerator / denominator
+    return score
 
 
 def date_score(block: dict) -> float:

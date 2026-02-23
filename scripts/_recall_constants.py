@@ -12,6 +12,13 @@ __all__ = [
     "GRAPH_BOOST_FACTOR", "_BLOCK_ID_RE",
     "MAX_BLOCKS_PER_QUERY", "MAX_GRAPH_NEIGHBORS_PER_HOP", "MAX_RERANK_CANDIDATES",
     "_VALID_RECALL_KEYS",
+    # Scoring boost/penalty factors
+    "STATUS_BOOST_ACTIVE", "STATUS_BOOST_WIP", "PRIORITY_BOOST",
+    "ENTITY_BOOST_PER_HIT", "MAX_ENTITY_HITS",
+    "ADVERSARIAL_NEGATION_BOOST", "BIGRAM_BOOST_PER_MATCH",
+    "CHUNK_BLEND_BEST", "CHUNK_BLEND_FULL",
+    "HARD_NEGATIVE_PENALTY", "PRF_WEIGHT_DEFAULT", "PRF_WEIGHT_MULTIHOP",
+    "RM3_BLEND_WEIGHT", "BRIDGE_SCORE_WEIGHT",
 ]
 
 # Fields to index for search (in priority order)
@@ -205,6 +212,42 @@ MAX_RERANK_CANDIDATES = 200
 
 # Maximum blocks to process in a single recall query (#15)
 MAX_BLOCKS_PER_QUERY = 50000
+
+# --- Scoring boost/penalty factors (named to avoid magic numbers) ---
+
+# Status boosts: active blocks are more relevant than archived ones
+STATUS_BOOST_ACTIVE = 1.2
+STATUS_BOOST_WIP = 1.1        # todo, doing
+
+# Priority boost for high-urgency blocks (P0/P1)
+PRIORITY_BOOST = 1.1
+
+# Entity overlap: per-entity relevance multiplier (capped at 3 entities)
+ENTITY_BOOST_PER_HIT = 0.15
+MAX_ENTITY_HITS = 3
+
+# Adversarial negation boost: reward blocks containing negated facts
+ADVERSARIAL_NEGATION_BOOST = 1.2
+
+# Bigram phrase match boost: per-matching-bigram multiplier
+BIGRAM_BOOST_PER_MATCH = 0.25
+
+# Chunk blending: when a sub-chunk outscores the full block, blend
+CHUNK_BLEND_BEST = 0.6        # weight for best chunk
+CHUNK_BLEND_FULL = 0.4        # weight for full-block score
+
+# Hard negative penalty: demote blocks flagged as misleading
+HARD_NEGATIVE_PENALTY = 0.7
+
+# Pseudo-relevance feedback (PRF) blending weight
+PRF_WEIGHT_DEFAULT = 0.4
+PRF_WEIGHT_MULTIHOP = 0.25    # lower for multi-hop to avoid query drift
+
+# RM3 expansion blending weight
+RM3_BLEND_WEIGHT = 0.4
+
+# Bridge (chain-of-retrieval) score blend — second-hop is supplementary
+BRIDGE_SCORE_WEIGHT = 0.3
 
 _VALID_RECALL_KEYS = frozenset({
     "backend", "limit", "rm3", "cross_encoder", "graph_boost",

@@ -15,14 +15,28 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _recall_constants import (
     _STOPWORDS,
     _VALID_RECALL_KEYS,
+    ADVERSARIAL_NEGATION_BOOST,
+    BIGRAM_BOOST_PER_MATCH,
     BM25_B,
     BM25_K1,
+    BRIDGE_SCORE_WEIGHT,
+    CHUNK_BLEND_BEST,
+    CHUNK_BLEND_FULL,
     CORPUS_FILES,
+    ENTITY_BOOST_PER_HIT,
     FIELD_WEIGHTS,
     GRAPH_BOOST_FACTOR,
+    HARD_NEGATIVE_PENALTY,
     MAX_BLOCKS_PER_QUERY,
+    MAX_ENTITY_HITS,
     MAX_GRAPH_NEIGHBORS_PER_HOP,
     MAX_RERANK_CANDIDATES,
+    PRF_WEIGHT_DEFAULT,
+    PRF_WEIGHT_MULTIHOP,
+    PRIORITY_BOOST,
+    RM3_BLEND_WEIGHT,
+    STATUS_BOOST_ACTIVE,
+    STATUS_BOOST_WIP,
 )
 from _recall_context import context_pack
 from _recall_detection import (
@@ -40,7 +54,7 @@ from _recall_detection import (
 )
 from _recall_expansion import expand_months, expand_query, rm3_expand
 from _recall_reranking import llm_rerank, rerank_hits
-from _recall_scoring import build_xref_graph, date_score
+from _recall_scoring import bm25f_score_terms, build_xref_graph, compute_weighted_tf, date_score
 from _recall_temporal import apply_temporal_filter, resolve_time_reference
 from _recall_tokenization import tokenize
 from block_parser import chunk_block, deduplicate_chunks, get_active, parse_file
@@ -426,23 +440,8 @@ def recall(
             continue
 
         # --- BM25F: field-weighted term frequency ---
-        # Compute weighted TF across all fields
-        weighted_tf = Counter()
-        wdl = 0.0
-        for field, tokens in ft.items():
-            w = _fw.get(field, 1.0)
-            wdl += len(tokens) * w
-            for t in tokens:
-                weighted_tf[t] += w
-
-        score = 0.0
-        for qt in query_tokens:
-            if qt in weighted_tf:
-                wtf = weighted_tf[qt]
-                idf = _idf_cache[qt]
-                numerator = wtf * (_k1 + 1)
-                denominator = wtf + _k1 * (1 - _b + _b * wdl / avg_wdl)
-                score += idf * numerator / denominator
+        weighted_tf, wdl = compute_weighted_tf(ft, _fw)
+        score = bm25f_score_terms(query_tokens, weighted_tf, wdl, _idf_cache, avg_wdl, k1=_k1, b=_b)
 
         if score <= 0:
             continue
@@ -452,10 +451,10 @@ def recall(
             doc_bigrams = get_bigrams(flat)
             phrase_matches = len(query_bigrams & doc_bigrams)
             if phrase_matches > 0:
-                score *= (1.0 + 0.25 * phrase_matches)
+                score *= (1.0 + BIGRAM_BOOST_PER_MATCH * phrase_matches)
 
         # --- Chunking boost: score best chunk separately, blend ---
-        # For long blocks, check if a chunk scores much higher
+        # For long blocks, check if a sub-chunk scores higher than the whole
         statement = block.get("Statement", "") or block.get("Title", "") or ""
         if len(statement) > 200:
             chunks = chunk_text(statement)
@@ -465,16 +464,13 @@ def recall(
                     ctokens = tokenize(chunk)
                     ctf = Counter(ctokens)
                     cdl = len(ctokens)
-                    cs = 0.0
-                    for qt in query_tokens:
-                        if qt in ctf:
-                            freq = ctf[qt]
-                            denom = freq + _k1 * (1 - _b + _b * cdl / max(avg_wdl, 1))
-                            cs += _idf_cache[qt] * freq * (_k1 + 1) / denom
+                    cs = bm25f_score_terms(
+                        query_tokens, ctf, cdl, _idf_cache,
+                        max(avg_wdl, 1), k1=_k1, b=_b,
+                    )
                     best_chunk_score = max(best_chunk_score, cs)
-                # Blend: take the better of full-block or best-chunk score
                 if best_chunk_score > score:
-                    score = 0.6 * best_chunk_score + 0.4 * score
+                    score = CHUNK_BLEND_BEST * best_chunk_score + CHUNK_BLEND_FULL * score
 
         # --- Boost factors (query-type-aware) ---
         recency = date_score(block)
@@ -488,23 +484,23 @@ def recall(
 
         status = block.get("Status", "")
         if status == "active":
-            score *= 1.2
+            score *= STATUS_BOOST_ACTIVE
         elif status in ("todo", "doing"):
-            score *= 1.1
+            score *= STATUS_BOOST_WIP
 
         priority = block.get("Priority", "")
         if priority in ("P0", "P1"):
-            score *= 1.1
+            score *= PRIORITY_BOOST
 
         # --- Fact key boosting: entity overlap + adversarial negation ---
         block_entities = block.get("_entities", [])
         if block_entities:
             entity_hits = sum(1 for eid in block_entities if eid.lower() in query.lower())
             if entity_hits > 0:
-                score *= (1.0 + 0.15 * min(entity_hits, 3))
+                score *= (1.0 + ENTITY_BOOST_PER_HIT * min(entity_hits, MAX_ENTITY_HITS))
 
         if query_type == "adversarial" and block.get("_has_negation", False):
-            score *= 1.2
+            score *= ADVERSARIAL_NEGATION_BOOST
 
         # --- A-MEM importance boost ---
         if meta_mgr:
@@ -662,28 +658,27 @@ def recall(
         expansion_terms_rm3 = [t for t in expanded_weights if t not in set(query_tokens)]
         if expansion_terms_rm3:
             _rm3_used = True
-            rm3_weight = 0.4
+            rm3_weight = RM3_BLEND_WEIGHT
             # Build O(1) lookup index to avoid O(N^2) linear scan
             result_by_id = {r["_id"]: r for r in results}
+            # Pre-compute IDF for expansion terms (not in original query idf_cache)
+            _rm3_idf = {}
+            for et in expansion_terms_rm3:
+                _rm3_idf[et] = math.log((N - df.get(et, 0) + 0.5) / (df.get(et, 0) + 0.5) + 1)
             for i, block in enumerate(all_blocks):
                 ft = doc_field_tokens[i]
                 flat = doc_flat_tokens[i]
                 if not flat:
                     continue
 
-                weighted_tf_rm3 = Counter()
-                wdl = 0.0
-                for field, tokens in ft.items():
-                    w = FIELD_WEIGHTS.get(field, 1.0)
-                    wdl += len(tokens) * w
-                    for t in tokens:
-                        weighted_tf_rm3[t] += w
+                weighted_tf_rm3, wdl = compute_weighted_tf(ft)
 
+                # Score expansion terms with term-level weight from RM3 model
                 rm3_score = 0.0
                 for et in expansion_terms_rm3:
-                    if et in weighted_tf_rm3:
-                        wtf = weighted_tf_rm3[et]
-                        idf = math.log((N - df.get(et, 0) + 0.5) / (df.get(et, 0) + 0.5) + 1)
+                    wtf = weighted_tf_rm3.get(et, 0)
+                    if wtf > 0:
+                        idf = _rm3_idf[et]
                         numerator = wtf * (BM25_K1 + 1)
                         denominator = wtf + BM25_K1 * (1 - BM25_B + BM25_B * wdl / avg_wdl)
                         rm3_score += idf * numerator / denominator * expanded_weights[et]
@@ -743,31 +738,21 @@ def recall(
         if expansion_terms:
             # Re-score all blocks with expanded query (original + PRF terms).
             # Multi-hop uses lower weight to avoid drifting away from the query.
-            prf_weight = 0.25 if query_type == "multi-hop" else 0.4
+            prf_weight = PRF_WEIGHT_MULTIHOP if query_type == "multi-hop" else PRF_WEIGHT_DEFAULT
+            # Pre-compute IDF for expansion terms
+            _prf_idf = {}
+            for et in expansion_terms:
+                _prf_idf[et] = math.log((N - df.get(et, 0) + 0.5) / (df.get(et, 0) + 0.5) + 1)
             for i, block in enumerate(all_blocks):
                 ft = doc_field_tokens[i]
                 flat = doc_flat_tokens[i]
                 if not flat:
                     continue
 
-                # Compute weighted TF
-                weighted_tf_prf = Counter()
-                wdl = 0.0
-                for field, tokens in ft.items():
-                    w = FIELD_WEIGHTS.get(field, 1.0)
-                    wdl += len(tokens) * w
-                    for t in tokens:
-                        weighted_tf_prf[t] += w
-
-                # Score only expansion terms
-                prf_score = 0.0
-                for et in expansion_terms:
-                    if et in weighted_tf_prf:
-                        wtf = weighted_tf_prf[et]
-                        idf = math.log((N - df.get(et, 0) + 0.5) / (df.get(et, 0) + 0.5) + 1)
-                        numerator = wtf * (BM25_K1 + 1)
-                        denominator = wtf + BM25_K1 * (1 - BM25_B + BM25_B * wdl / avg_wdl)
-                        prf_score += idf * numerator / denominator
+                weighted_tf_prf, wdl = compute_weighted_tf(ft)
+                prf_score = bm25f_score_terms(
+                    expansion_terms, weighted_tf_prf, wdl, _prf_idf, avg_wdl,
+                )
 
                 if prf_score > 0:
                     bid = block.get("_id", "?")
@@ -821,6 +806,10 @@ def recall(
         bridge_tokens = [t for t, c in bridge_terms.most_common(12) if c >= 2]
 
         if bridge_tokens:
+            # Pre-compute IDF for bridge terms
+            _bridge_idf = {}
+            for bt in bridge_tokens:
+                _bridge_idf[bt] = math.log((N - df.get(bt, 0) + 0.5) / (df.get(bt, 0) + 0.5) + 1)
             # Second retrieval pass using bridge terms
             existing_ids = {r["_id"] for r in results}
             for i, block in enumerate(all_blocks):
@@ -833,34 +822,21 @@ def recall(
                 if not flat:
                     continue
 
-                weighted_tf_br = Counter()
-                wdl = 0.0
-                for field, tokens in ft.items():
-                    w = FIELD_WEIGHTS.get(field, 1.0)
-                    wdl += len(tokens) * w
-                    for t in tokens:
-                        weighted_tf_br[t] += w
-
-                bridge_score = 0.0
-                for bt in bridge_tokens:
-                    if bt in weighted_tf_br:
-                        wtf = weighted_tf_br[bt]
-                        idf = math.log((N - df.get(bt, 0) + 0.5) / (df.get(bt, 0) + 0.5) + 1)
-                        numerator = wtf * (BM25_K1 + 1)
-                        denominator = wtf + BM25_K1 * (1 - BM25_B + BM25_B * wdl / avg_wdl)
-                        bridge_score += idf * numerator / denominator
+                weighted_tf_br, wdl = compute_weighted_tf(ft)
+                bridge_score = bm25f_score_terms(
+                    bridge_tokens, weighted_tf_br, wdl, _bridge_idf, avg_wdl,
+                )
 
                 if bridge_score > 0:
-                    # Also check original query overlap — bridge-only hits with
+                    # Require original query overlap — bridge-only hits with
                     # zero original query overlap are likely noise
                     orig_overlap = sum(1 for qt in query_tokens if qt in weighted_tf_br)
                     if orig_overlap > 0:
-                        # Blend: 0.3 * bridge_score (second hop is supplementary)
                         tags_str = block.get("Tags", "")
                         result = {
                             "_id": bid,
                             "type": get_block_type(bid),
-                            "score": round(bridge_score * 0.3, 4),
+                            "score": round(bridge_score * BRIDGE_SCORE_WEIGHT, 4),
                             "excerpt": get_excerpt(block),
                             "speaker": _parse_speaker_from_tags(tags_str),
                             "tags": tags_str,
@@ -957,7 +933,7 @@ def recall(
     if hard_neg_ids and deduped:
         for r in deduped:
             if r.get("_id") in hard_neg_ids:
-                r["score"] = round(r["score"] * 0.7, 4)
+                r["score"] = round(r["score"] * HARD_NEGATIVE_PENALTY, 4)
                 r["_hard_negative"] = True
 
     # Stage 2.7: Optional LLM-based reranking — config-gated, stdlib only
