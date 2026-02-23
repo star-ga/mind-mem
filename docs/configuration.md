@@ -8,7 +8,7 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
 
 ```json
 {
-  "version": "1.6.0",
+  "version": "1.7.0",
   "schema_version": "2.1.0",
   "workspace_path": ".",
   "auto_capture": true,
@@ -88,7 +88,7 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `version` | string | `"1.6.0"` | Config file version. Set automatically by `init_workspace.py`. |
+| `version` | string | `"1.7.0"` | Config file version. Set automatically by `init_workspace.py`. |
 | `schema_version` | string | `"2.1.0"` | Workspace schema version. Used by `schema_version.py` for migrations. Falls back to `version` if absent. |
 | `workspace_path` | string | `"."` | Workspace root directory. Relative paths are resolved from the config file location. |
 | `auto_capture` | bool | `true` | Run the capture engine automatically on session-end hooks. When `false`, the session-end hook exits without capturing signals. |
@@ -134,6 +134,15 @@ These settings control Reciprocal Rank Fusion when `backend` is `"hybrid"`. RRF 
 | `recall.rrf_k` | int | `60` | RRF smoothing constant. Higher values give more weight to lower-ranked results, reducing the dominance of top positions. |
 | `recall.bm25_weight` | float | `1.0` | Weight multiplier for the BM25 result list in RRF fusion. |
 | `recall.vector_weight` | float | `1.0` | Weight multiplier for the vector result list in RRF fusion. |
+
+### Result Filtering
+
+These settings control post-retrieval filtering and adaptive truncation.
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `recall.knee_cutoff` | bool | `true` | Enable adaptive knee-point truncation. When enabled, results are cut at the steepest score drop instead of a fixed top-K. |
+| `recall.min_score` | float | `0.0` | Minimum score threshold. Results below this score are discarded after retrieval. |
 
 ### Vector Search
 
@@ -364,7 +373,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.6.0",
+  "version": "1.7.0",
   "governance_mode": "detect_only",
   "recall": {
     "backend": "scan"
@@ -376,7 +385,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.6.0",
+  "version": "1.7.0",
   "governance_mode": "propose",
   "recall": {
     "backend": "hybrid",
@@ -396,7 +405,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.6.0",
+  "version": "1.7.0",
   "governance_mode": "enforce",
   "recall": {
     "backend": "hybrid",
@@ -418,7 +427,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.6.0",
+  "version": "1.7.0",
   "recall": {
     "backend": "vector",
     "provider": "qdrant",
@@ -433,7 +442,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.6.0",
+  "version": "1.7.0",
   "auto_capture": true,
   "auto_ingest": {
     "enabled": true,
@@ -448,7 +457,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.6.0",
+  "version": "1.7.0",
   "governance_mode": "propose",
   "categories": {
     "enabled": true,
