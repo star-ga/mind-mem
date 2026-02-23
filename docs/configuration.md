@@ -8,7 +8,7 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
 
 ```json
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "schema_version": "2.1.0",
   "workspace_path": ".",
   "auto_capture": true,
@@ -70,6 +70,14 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
     "transcript_scan": true,
     "entity_ingest": true,
     "intel_scan": true
+  },
+  "limits": {
+    "max_recall_results": 100,
+    "max_similar_results": 50,
+    "max_prefetch_results": 20,
+    "max_category_results": 10,
+    "query_timeout_seconds": 30,
+    "rate_limit_calls_per_minute": 120
   }
 }
 ```
@@ -80,7 +88,7 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `version` | string | `"1.3.0"` | Config file version. Set automatically by `init_workspace.py`. |
+| `version` | string | `"1.4.0"` | Config file version. Set automatically by `init_workspace.py`. |
 | `schema_version` | string | `"2.1.0"` | Workspace schema version. Used by `schema_version.py` for migrations. Falls back to `version` if absent. |
 | `workspace_path` | string | `"."` | Workspace root directory. Relative paths are resolved from the config file location. |
 | `auto_capture` | bool | `true` | Run the capture engine automatically on session-end hooks. When `false`, the session-end hook exits without capturing signals. |
@@ -270,6 +278,36 @@ Individual job toggles are only checked when `auto_ingest.enabled` is `true`. Wh
 
 ---
 
+## Limits
+
+Controls MCP server numeric limits for result caps, timeouts, and rate limiting. All values are integers. Missing keys fall back to their defaults.
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `limits.max_recall_results` | int | `100` | Maximum results cap for the `recall` and `hybrid_search` tools. User-provided `limit` values are clamped to `[1, max_recall_results]`. |
+| `limits.max_similar_results` | int | `50` | Maximum results cap for the `find_similar` tool. |
+| `limits.max_prefetch_results` | int | `20` | Maximum results cap for the `prefetch` tool. |
+| `limits.max_category_results` | int | `10` | Maximum category summaries returned by the `category_summary` tool. |
+| `limits.query_timeout_seconds` | int | `30` | Per-query timeout for MCP tool calls. |
+| `limits.rate_limit_calls_per_minute` | int | `120` | Sliding-window rate limiter: maximum MCP tool calls per 60-second window. |
+
+### Example
+
+```json
+{
+  "limits": {
+    "max_recall_results": 200,
+    "max_similar_results": 100,
+    "max_prefetch_results": 50,
+    "max_category_results": 20,
+    "query_timeout_seconds": 60,
+    "rate_limit_calls_per_minute": 240
+  }
+}
+```
+
+---
+
 ## Environment Variables
 
 Environment variables take precedence over config file values where applicable.
@@ -326,7 +364,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "governance_mode": "detect_only",
   "recall": {
     "backend": "scan"
@@ -338,7 +376,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "governance_mode": "propose",
   "recall": {
     "backend": "hybrid",
@@ -358,7 +396,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "governance_mode": "enforce",
   "recall": {
     "backend": "hybrid",
@@ -380,7 +418,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "recall": {
     "backend": "vector",
     "provider": "qdrant",
@@ -395,7 +433,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "auto_capture": true,
   "auto_ingest": {
     "enabled": true,
@@ -410,7 +448,7 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
 
 ```json
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "governance_mode": "propose",
   "categories": {
     "enabled": true,

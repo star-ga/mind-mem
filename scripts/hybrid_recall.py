@@ -32,6 +32,32 @@ from observability import get_logger, metrics, timed
 _log = get_logger("hybrid_recall")
 
 # ---------------------------------------------------------------------------
+# Schema validation
+# ---------------------------------------------------------------------------
+
+_NUMERIC_POSITIVE_KEYS = ("bm25_weight", "vector_weight", "rrf_k")
+
+
+def validate_recall_config(cfg: dict[str, Any]) -> list[str]:
+    """Validate recall config section. Returns list of error strings (empty = valid).
+
+    Checks that bm25_weight, vector_weight, and rrf_k are numeric and positive.
+    """
+    errors: list[str] = []
+    for key in _NUMERIC_POSITIVE_KEYS:
+        if key not in cfg:
+            continue
+        val = cfg[key]
+        try:
+            numeric = float(val)
+        except (TypeError, ValueError):
+            errors.append(f"{key} must be numeric, got {type(val).__name__}: {val!r}")
+            continue
+        if numeric <= 0:
+            errors.append(f"{key} must be positive, got {numeric}")
+    return errors
+
+# ---------------------------------------------------------------------------
 # RRF Fusion
 # ---------------------------------------------------------------------------
 
@@ -113,12 +139,27 @@ class HybridBackend:
 
     def __init__(self, config: dict[str, Any] | None = None):
         cfg = config or {}
+
+        # Validate numeric fields; fall back to defaults on bad values
+        errors = validate_recall_config(cfg)
+        if errors:
+            _log.warning(
+                "hybrid_config_validation_failed",
+                errors=errors,
+                fallback="bm25_only",
+            )
+            # Reset bad values to defaults so constructor doesn't raise
+            for key in _NUMERIC_POSITIVE_KEYS:
+                if any(key in e for e in errors):
+                    cfg.pop(key, None)
+
         self.rrf_k: int = int(cfg.get("rrf_k", 60))
         self.bm25_weight: float = float(cfg.get("bm25_weight", 1.0))
         self.vector_weight: float = float(cfg.get("vector_weight", 1.0))
         self.vector_enabled: bool = bool(cfg.get("vector_enabled", False))
         self.vector_model: str = cfg.get("vector_model", "all-MiniLM-L6-v2")
         self._config = cfg
+        self._config_errors: list[str] = errors
 
         # Probe vector availability once at init
         self._vector_available = self._check_vector() if self.vector_enabled else False
@@ -329,6 +370,24 @@ class HybridBackend:
 
     @staticmethod
     def from_config(config: dict[str, Any]) -> "HybridBackend":
-        """Create HybridBackend from a full mind-mem.json config dict."""
-        recall_cfg = config.get("recall", {})
+        """Create HybridBackend from a full mind-mem.json config dict.
+
+        Validates that ``config`` contains a ``recall`` section.  When
+        the section is missing or not a dict, logs a warning and falls
+        back to BM25-only defaults.
+        """
+        recall_cfg = config.get("recall")
+        if recall_cfg is None:
+            _log.warning(
+                "hybrid_config_missing_recall_section",
+                hint="Expected 'recall' key in config. Using BM25-only defaults.",
+            )
+            recall_cfg = {}
+        elif not isinstance(recall_cfg, dict):
+            _log.warning(
+                "hybrid_config_recall_not_dict",
+                type=type(recall_cfg).__name__,
+                hint="'recall' must be a dict. Using BM25-only defaults.",
+            )
+            recall_cfg = {}
         return HybridBackend(config=recall_cfg)

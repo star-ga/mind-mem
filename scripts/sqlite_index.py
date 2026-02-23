@@ -462,6 +462,11 @@ def query_index(
             rerank=rerank, rerank_debug=rerank_debug,
         )
 
+    # Staleness check: warn but don't auto-rebuild (#34)
+    if is_stale(workspace):
+        _log.info("index_stale", hint="Run 'reindex' tool to update the FTS5 index")
+        metrics.inc("index_stale_queries")
+
     query_tokens = tokenize(query)
     if not query_tokens:
         return []
@@ -686,6 +691,25 @@ def _apply_graph_boost(
 # ---------------------------------------------------------------------------
 # Status
 # ---------------------------------------------------------------------------
+
+def is_stale(workspace: str) -> bool:
+    """Check whether any corpus .md files have changed since last index build.
+
+    Returns True if the index doesn't exist or any file mtime differs from
+    the recorded state.  This is a lightweight O(files) check that avoids
+    hashing -- suitable for a pre-query gate.
+    """
+    db = _db_path(workspace)
+    if not os.path.isfile(db):
+        return True
+    try:
+        conn = _connect(workspace, readonly=True)
+        changed = _get_changed_files(conn, workspace)
+        conn.close()
+        return len(changed) > 0
+    except (OSError, sqlite3.OperationalError):
+        return True
+
 
 def index_status(workspace: str) -> dict:
     """Return index status: exists, block count, last build time, staleness."""
