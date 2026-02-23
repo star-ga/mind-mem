@@ -944,7 +944,7 @@ its `write` list.
 
 ```json
 {
-  "version": "1.6.0",
+  "version": "1.7.0",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,
