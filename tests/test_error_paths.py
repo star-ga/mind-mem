@@ -128,6 +128,7 @@ class TestCorruptedBlockFile(unittest.TestCase):
         with self.assertRaises((OSError, FileNotFoundError)):
             parse_file("/nonexistent/path/to/file.md")
 
+    @unittest.skipIf(sys.platform == "win32", "chmod 000 not enforced on Windows")
     def test_parse_file_permission_denied(self):
         """parse_file raises on unreadable file."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
