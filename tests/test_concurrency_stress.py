@@ -102,7 +102,7 @@ class TestConcurrentRecall(unittest.TestCase):
     """Verify thread safety when multiple recall() calls run in parallel."""
 
     def setUp(self):
-        self._tmpdir = tempfile.TemporaryDirectory()
+        self._tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         content = _generate_blocks(50)
         self.ws = _setup_workspace(self._tmpdir.name, decisions_content=content)
 
@@ -294,7 +294,7 @@ class TestDeadlockStress(unittest.TestCase):
     """Run 20 concurrent recall queries and verify no deadlock or corruption."""
 
     def setUp(self):
-        self._tmpdir = tempfile.TemporaryDirectory()
+        self._tmpdir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         content = _generate_blocks(100)
         self.ws = _setup_workspace(self._tmpdir.name, decisions_content=content)
 
