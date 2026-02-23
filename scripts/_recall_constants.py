@@ -213,4 +213,5 @@ _VALID_RECALL_KEYS = frozenset({
     "retrieve_wide_k", "rerank", "active_only", "temporal_hard_filter",
     "llm_rerank", "llm_rerank_url", "llm_rerank_model", "llm_rerank_weight",
     "chunk_overlap", "max_chunk_tokens",
+    "knee_cutoff", "min_score",
 })

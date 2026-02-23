@@ -31,6 +31,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from block_parser import parse_file
+from extractor import extract_facts
 from observability import get_logger, metrics
 from recall import (
     _BLOCK_ID_RE,
@@ -99,6 +100,7 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             speaker     TEXT NOT NULL DEFAULT '',
             tags        TEXT NOT NULL DEFAULT '',
             dia_id      TEXT NOT NULL DEFAULT '',
+            parent_id   TEXT NOT NULL DEFAULT '',
             json_blob   TEXT NOT NULL DEFAULT '{}'
         );
 
@@ -150,6 +152,12 @@ def _init_schema(conn: sqlite3.Connection) -> None:
         CREATE VIRTUAL TABLE IF NOT EXISTS blocks_fts
         USING fts5(block_id, {cols}, tokenize='porter unicode61')
     """)
+
+    # Migration: add parent_id column if missing (existing databases)
+    try:
+        conn.execute("ALTER TABLE blocks ADD COLUMN parent_id TEXT NOT NULL DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
 
     conn.commit()
 
@@ -402,14 +410,18 @@ def _insert_block(
     rel_path: str,
     all_block_ids: set,
 ) -> None:
-    """Insert a single block into blocks, blocks_fts, and xref_edges."""
+    """Insert a single block into blocks, blocks_fts, and xref_edges.
+
+    Also extracts atomic fact cards from the block's Statement field and indexes
+    them as sub-blocks (parent_id = bid) for small-to-big retrieval.
+    """
     tags_str = block.get("Tags", "")
     speaker = _parse_speaker_from_tags(tags_str)
 
     conn.execute(
         """INSERT OR REPLACE INTO blocks
-           (id, type, file, line, status, date, speaker, tags, dia_id, json_blob)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           (id, type, file, line, status, date, speaker, tags, dia_id, parent_id, json_blob)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             bid,
             get_block_type(bid),
@@ -420,6 +432,7 @@ def _insert_block(
             speaker,
             tags_str,
             block.get("DiaID", ""),
+            "",  # parent_id — empty for top-level blocks
             json.dumps(block, default=str),
         ),
     )
@@ -444,21 +457,84 @@ def _insert_block(
             (ref, bid),
         )
 
+    # --- Feature 2: Extract and index atomic fact cards as sub-blocks ---
+    statement = block.get("Statement", "")
+    if statement and len(statement) > 15:
+        block_date = block.get("Date", "")
+        try:
+            facts = extract_facts(statement, speaker=speaker, date=block_date, source_id=bid)
+        except Exception:
+            facts = []
+        for i, card in enumerate(facts):
+            fact_id = f"{bid}::F{i + 1}"
+            fact_tags = card.get("type", "FACT")
+            if card.get("speaker"):
+                fact_tags += f", {card['speaker']}"
+            fact_block = {
+                "Statement": card["content"],
+                "Tags": fact_tags,
+                "Date": card.get("date", block_date),
+                "Status": block.get("Status", "active"),
+                "_id": fact_id,
+                "_parent_id": bid,
+            }
+            conn.execute(
+                """INSERT OR REPLACE INTO blocks
+                   (id, type, file, line, status, date, speaker, tags, dia_id, parent_id, json_blob)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    fact_id,
+                    card.get("type", "FACT"),
+                    rel_path,
+                    block.get("_line", 0),
+                    block.get("Status", "active"),
+                    card.get("date", block_date),
+                    card.get("speaker", ""),
+                    fact_tags,
+                    block.get("DiaID", ""),
+                    bid,
+                    json.dumps(fact_block, default=str),
+                ),
+            )
+            fact_fts = _extract_fts_fields(fact_block)
+            conn.execute(
+                """INSERT INTO blocks_fts (block_id, statement, title, name,
+                   description, tags, context, all_text)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (fact_id, fact_fts["statement"], fact_fts["title"], fact_fts["name"],
+                 fact_fts["description"], fact_fts["tags"], fact_fts["context"],
+                 fact_fts["all_text"]),
+            )
+
 
 def _delete_blocks(
     conn: sqlite3.Connection,
     block_ids: list,
     rel_path: str,
 ) -> None:
-    """Delete blocks from blocks, blocks_fts, and xref_edges."""
+    """Delete blocks from blocks, blocks_fts, and xref_edges.
+
+    Also deletes child fact sub-blocks (parent_id matching any deleted block).
+    """
     if not block_ids:
         return
     placeholders = ",".join("?" for _ in block_ids)
-    conn.execute(f"DELETE FROM blocks WHERE id IN ({placeholders})", block_ids)
-    conn.execute(f"DELETE FROM blocks_fts WHERE block_id IN ({placeholders})", block_ids)
+
+    # Find child fact sub-blocks before deleting parents
+    child_rows = conn.execute(
+        f"SELECT id FROM blocks WHERE parent_id IN ({placeholders})",
+        block_ids,
+    ).fetchall()
+    child_ids = [r["id"] for r in child_rows]
+
+    all_ids = block_ids + child_ids
+    all_ph = ",".join("?" for _ in all_ids)
+
+    conn.execute(f"DELETE FROM blocks WHERE id IN ({all_ph})", all_ids)
+    conn.execute(f"DELETE FROM blocks_fts WHERE block_id IN ({all_ph})", all_ids)
     conn.execute(
-        f"DELETE FROM xref_edges WHERE src IN ({placeholders}) OR dst IN ({placeholders})",
-        block_ids + block_ids,
+        f"DELETE FROM xref_edges WHERE src IN ({all_ph}) OR dst IN ({all_ph})",
+        all_ids + all_ids,
     )
 
 
@@ -550,6 +626,85 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
     metrics.inc("index_builds")
     metrics.inc("index_blocks_indexed", total_blocks)
     return summary
+
+
+# ---------------------------------------------------------------------------
+# Fact aggregation — small-to-big retrieval
+# ---------------------------------------------------------------------------
+
+def _aggregate_facts_to_parents(
+    conn: sqlite3.Connection,
+    results: list[dict],
+) -> list[dict]:
+    """Merge fact sub-block scores into their parent blocks.
+
+    Fact sub-blocks have IDs like "D-20230507-001::F1". This function:
+    1. Groups fact sub-blocks by parent ID (everything before "::F")
+    2. Boosts parent score by the best fact sub-block score
+    3. Removes fact sub-blocks from results (folded into parent)
+    4. If a parent is not already in results, fetches it from the DB
+
+    Returns results with fact sub-blocks replaced by boosted parents.
+    """
+    if not results:
+        return results
+
+    # Separate fact sub-blocks and regular blocks
+    fact_scores: dict[str, float] = {}  # parent_id -> max fact score
+    regular = []
+    result_ids = set()
+
+    for r in results:
+        rid = r.get("_id", "")
+        if "::F" in rid:
+            parent_id = rid.split("::F")[0]
+            score = r.get("score", 0)
+            if score > fact_scores.get(parent_id, 0):
+                fact_scores[parent_id] = score
+        else:
+            regular.append(r)
+            result_ids.add(rid)
+
+    if not fact_scores:
+        return results
+
+    # Boost parents already in results
+    boosted = set()
+    for r in regular:
+        rid = r.get("_id", "")
+        if rid in fact_scores:
+            fact_sc = fact_scores[rid]
+            parent_sc = r.get("score", 0)
+            r["score"] = round(max(parent_sc, fact_sc * 0.8 + parent_sc * 0.2), 4)
+            r["_fact_boost"] = True
+            boosted.add(rid)
+
+    # Inject parents not in results (fact card matched but parent didn't)
+    missing = set(fact_scores.keys()) - result_ids
+    if missing:
+        placeholders = ",".join("?" for _ in missing)
+        rows = conn.execute(
+            f"SELECT * FROM blocks WHERE id IN ({placeholders}) AND parent_id = ''",
+            list(missing),
+        ).fetchall()
+        for row in rows:
+            block_data = json.loads(row["json_blob"]) if row["json_blob"] else {}
+            regular.append({
+                "_id": row["id"],
+                "type": row["type"],
+                "score": round(fact_scores[row["id"]] * 0.8, 4),
+                "excerpt": get_excerpt(block_data),
+                "speaker": row["speaker"],
+                "tags": row["tags"],
+                "file": row["file"],
+                "line": row["line"],
+                "status": row["status"],
+                "_fact_boost": True,
+            })
+
+    _log.debug("fact_aggregation", facts_found=sum(1 for r in results if "::F" in r.get("_id", "")),
+               parents_boosted=len(boosted), parents_injected=len(missing))
+    return regular
 
 
 # ---------------------------------------------------------------------------
@@ -684,6 +839,9 @@ def query_index(
         if row["date"]:
             result["Date"] = row["date"]
         results.append(result)
+
+    # --- Feature 2: Aggregate fact sub-blocks to parents (small-to-big) ---
+    results = _aggregate_facts_to_parents(conn, results)
 
     # Graph boost
     if graph_boost and results:

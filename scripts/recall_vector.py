@@ -259,6 +259,37 @@ class VectorBackend(RecallBackend):
                 ) from e
         return self._model
 
+    @staticmethod
+    def _augment_for_embedding(block: dict, text: str) -> str:
+        """Prepend metadata context to text for better embedding disambiguation.
+
+        A chunk saying "it cost $50" loses context without knowing what "it"
+        refers to. Prepending category + speaker + date gives the embedding
+        model semantic anchors to disambiguate.
+
+        Args:
+            block: Block metadata dict (with Category, Speaker, Date, tags).
+            text: Raw searchable text.
+
+        Returns:
+            Augmented text with metadata prefix.
+        """
+        parts = []
+        cat = block.get("Category") or block.get("type") or ""
+        if cat:
+            parts.append(f"[{cat}]")
+        speaker = block.get("Speaker") or block.get("speaker") or ""
+        if speaker:
+            parts.append(f"[{speaker}]")
+        date = block.get("Date") or block.get("date") or ""
+        if date:
+            parts.append(f"[{date}]")
+        tags = block.get("Tags") or block.get("tags") or ""
+        if tags:
+            parts.append(f"[{tags[:50]}]")
+        prefix = " ".join(parts)
+        return f"{prefix} {text}" if prefix else text
+
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for a list of texts.
 
@@ -738,6 +769,9 @@ class VectorBackend(RecallBackend):
             _log.info("blocks_loaded", count=len(all_blocks))
 
             # Extract searchable text from each block
+            # Metadata-augmented embeddings: prepend [Category] [Speaker] [Date]
+            # to each text so the embedding captures context that raw text loses
+            # (e.g. "it cost $50" → "[purchase] [Emma] [2023-05] it cost $50")
             texts = []
             block_metadata = []
             for block in all_blocks:
@@ -745,8 +779,7 @@ class VectorBackend(RecallBackend):
                 if not text.strip():
                     continue
 
-                texts.append(text)
-                block_metadata.append({
+                meta = {
                     "_id": block.get("_id", "?"),
                     "type": get_block_type(block.get("_id", "")),
                     "excerpt": get_excerpt(block),
@@ -754,7 +787,9 @@ class VectorBackend(RecallBackend):
                     "line": block.get("_line", 0),
                     "status": block.get("Status", ""),
                     "date": block.get("Date", ""),
-                })
+                }
+                texts.append(self._augment_for_embedding(block, text))
+                block_metadata.append(meta)
 
             if not texts:
                 _log.warning("no_searchable_text", workspace=workspace)
