@@ -12,9 +12,12 @@ Also provides utility functions for listing .mind source files (used by MCP tool
 from __future__ import annotations
 
 import ctypes
+import logging
 import os
 from pathlib import Path
 from typing import Optional
+
+_log = logging.getLogger("mind-mem.ffi")
 
 # --- Library loading ---
 
@@ -22,6 +25,56 @@ _LIB_SEARCH_PATHS = [
     Path(__file__).parent.parent / "lib" / "libmindmem.so",
     Path(__file__).parent.parent / "lib" / "libmindmem.dylib",
 ]
+
+
+def _get_python_version() -> str:
+    """Get the Python package __version__ string."""
+    try:
+        # When running as installed package or scripts/ is on sys.path
+        from __init__ import __version__
+        return __version__
+    except ImportError:
+        pass
+    # Fallback: read from __init__.py next to this file
+    init_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "__init__.py")
+    try:
+        with open(init_path) as f:
+            for line in f:
+                if line.startswith("__version__"):
+                    return line.split("=", 1)[1].strip().strip("\"'")
+    except OSError:
+        pass
+    return "0.0.0"
+
+
+def _check_version_compat(so_version: str) -> bool:
+    """Compare .so version against Python __version__. Warn on major.minor mismatch.
+
+    Returns True if compatible, False otherwise.
+    """
+    py_version = _get_python_version()
+
+    try:
+        so_parts = so_version.split(".")
+        py_parts = py_version.split(".")
+        so_major_minor = (int(so_parts[0]), int(so_parts[1]))
+        py_major_minor = (int(py_parts[0]), int(py_parts[1]))
+    except (IndexError, ValueError):
+        _log.warning(
+            "FFI version parse error: .so=%r, python=%r — cannot compare",
+            so_version, py_version,
+        )
+        return False
+
+    if so_major_minor != py_major_minor:
+        _log.warning(
+            "FFI version mismatch: .so=%s, python=%s — major.minor differ, "
+            "some features may not work correctly",
+            so_version, py_version,
+        )
+        return False
+
+    return True
 
 
 class MindMemKernel:
@@ -114,9 +167,25 @@ class MindMemKernel:
         except AttributeError:
             pass  # Unprotected build (dev/CI fallback)
 
+        # Version check: compare .so version against Python __version__
+        self._so_version: Optional[str] = None
+        try:
+            self._lib.mindmem_get_version.argtypes = []
+            self._lib.mindmem_get_version.restype = ctypes.c_char_p
+            raw = self._lib.mindmem_get_version()
+            if raw:
+                self._so_version = raw.decode("utf-8", errors="replace")
+                _check_version_compat(self._so_version)
+        except AttributeError:
+            pass  # Build doesn't export version symbol
+
     def is_protected(self) -> bool:
         """Return True if the loaded library includes runtime protection."""
         return self._protected
+
+    def so_version(self) -> Optional[str]:
+        """Return the version string reported by the .so, or None."""
+        return self._so_version
 
     def rrf_fuse_py(self, bm25_ranks: list[float], vector_ranks: list[float],
                     k: float = 60.0, bm25_w: float = 1.0,
@@ -302,6 +371,10 @@ def get_kernel() -> Optional[MindMemKernel]:
         return _kernel
     except (OSError, ImportError):
         _USE_MIND = False
+        _log.info(
+            "MIND kernel .so not found — using pure Python fallback. "
+            "Compile with: mindc mind/*.mind --emit=shared -o lib/libmindmem.so"
+        )
         return None
 
 

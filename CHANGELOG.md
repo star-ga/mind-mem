@@ -2,6 +2,29 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.3.0 (2026-02-22)
+
+**Security hardening + audit fixes — closes #20, #21, #22, #23, #24, #25, #26, #27**
+
+### Security
+- **#20** — MCP per-tool ACL: admin/user scope separation. Write tools (apply_proposal, write_memory, etc.) restricted to admin token. Read tools (recall, search, list) available to user scope.
+- **#21** — Rate limiting (120 calls/min sliding window) and per-query timeouts (30s) added to MCP server
+- **#25** — Optional dependencies pinned with exact versions (fastmcp==2.14.5, onnxruntime==1.24.1, tokenizers==0.22.2, sentence-transformers==5.2.3). Hash-verified install via requirements-optional.txt
+
+### Fixed
+- **#22** — Replaced 11 broad `except Exception` handlers with specific exceptions (OSError, ValueError, KeyError, ImportError). Added stack trace logging to previously silent error handlers.
+- **#23** — Config numeric range validation: BM25 k1/b, rrf_k, limits, weights all validated and clamped on load
+- **#24** — FFI .so version check on startup: compares library version against Python __version__, warns on mismatch
+- **#26** — Malformed config (JSONDecodeError) caught at startup with line/column display, falls back to defaults
+
+### Testing
+- **#27** — 102 new error/edge case tests: DB lock, bad config, corrupted blocks, missing .so, invalid IDs, empty workspace, large limits
+- Total: **1157 tests passing** (up from 1055)
+
+### Changed
+- Version: 1.2.0 → 1.3.0
+- Optional deps now pinned to exact versions in pyproject.toml
+
 ## 1.2.0 (2026-02-22)
 
 **Five enhancement features — closes #10, #11, #12, #13, #14**

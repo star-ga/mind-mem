@@ -68,6 +68,8 @@ import hmac
 import json
 import os
 import sys
+import threading
+import time
 
 # Add scripts/ to path for mind-mem imports
 SCRIPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scripts")
@@ -91,6 +93,102 @@ from sqlite_index import (  # noqa: E402
 )
 
 _log = get_logger("mcp_server")
+
+
+# ---------------------------------------------------------------------------
+# ACL — per-tool scope enforcement (#20)
+# ---------------------------------------------------------------------------
+
+ADMIN_TOOLS = frozenset({
+    "write_memory", "apply_proposal", "approve_apply",
+    "rollback_proposal", "delete_memory_item", "reindex_vectors",
+    "propose_update", "reindex",
+})
+
+USER_TOOLS = frozenset({
+    "recall", "search_memory", "list_memory", "list_contradictions",
+    "scan", "export_memory", "hybrid_search", "find_similar",
+    "intent_classify", "index_stats", "memory_evolution",
+    "category_summary", "prefetch", "list_mind_kernels", "get_mind_kernel",
+})
+
+
+def _resolve_scope(headers: dict | None = None) -> str:
+    """Determine caller scope from token.
+
+    Returns "admin" if the request carries the admin token,
+    "user" for the regular token, or "user" when no auth is configured.
+    """
+    admin_token = os.environ.get("MIND_MEM_ADMIN_TOKEN")
+    if not admin_token:
+        return "user"
+
+    if headers is None:
+        return "user"
+
+    # Extract token from headers
+    auth = headers.get("authorization", headers.get("Authorization", ""))
+    provided = ""
+    if auth.startswith("Bearer "):
+        provided = auth[7:]
+    if not provided:
+        provided = headers.get("x-mindmem-token", headers.get("X-MindMem-Token", ""))
+
+    if provided and hmac.compare_digest(provided, admin_token):
+        return "admin"
+    return "user"
+
+
+def check_tool_acl(tool_name: str, scope: str) -> str | None:
+    """Check whether *scope* is allowed to call *tool_name*.
+
+    Returns None if allowed, or a JSON error string if denied.
+    """
+    if tool_name in ADMIN_TOOLS and scope != "admin":
+        metrics.inc("mcp_acl_denied")
+        _log.warning("acl_denied", tool=tool_name, scope=scope)
+        return json.dumps({
+            "error": f"Permission denied: '{tool_name}' requires admin scope",
+            "scope": scope,
+            "hint": "Set MIND_MEM_ADMIN_TOKEN and pass it via Authorization header.",
+        })
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Rate limiter — sliding window (#21)
+# ---------------------------------------------------------------------------
+
+class SlidingWindowRateLimiter:
+    """In-memory sliding-window rate limiter."""
+
+    def __init__(self, max_calls: int = 120, window_seconds: int = 60):
+        self.max_calls = max_calls
+        self.window = window_seconds
+        self._timestamps: list[float] = []
+        self._lock = threading.Lock()
+
+    def allow(self) -> tuple[bool, float]:
+        """Check if a call is allowed.
+
+        Returns (allowed, retry_after_seconds).  retry_after is 0.0 when allowed.
+        """
+        now = time.monotonic()
+        with self._lock:
+            cutoff = now - self.window
+            self._timestamps = [t for t in self._timestamps if t > cutoff]
+            if len(self._timestamps) >= self.max_calls:
+                retry_after = self._timestamps[0] - cutoff
+                return False, max(retry_after, 0.1)
+            self._timestamps.append(now)
+            return True, 0.0
+
+
+# Global rate limiter instance — 120 calls/min default
+_rate_limiter = SlidingWindowRateLimiter(max_calls=120, window_seconds=60)
+
+# Per-query timeout in seconds
+QUERY_TIMEOUT_SECONDS = 30
 
 # ---------------------------------------------------------------------------
 # Server setup
@@ -161,17 +259,37 @@ def _blocks_to_json(blocks: list[dict]) -> str:
     return json.dumps(blocks, indent=2, default=str)
 
 
+def _load_config(ws: str) -> dict:
+    """Load mind-mem.json config with graceful fallback (#26).
+
+    On JSONDecodeError, logs line/column and returns DEFAULT_CONFIG.
+    """
+    config_path = os.path.join(ws, "mind-mem.json")
+    if not os.path.isfile(config_path):
+        return {}
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError as exc:
+        _log.warning(
+            "config_json_decode_error",
+            path=config_path,
+            line=exc.lineno,
+            column=exc.colno,
+            msg=str(exc),
+        )
+        # Fall back to built-in defaults
+        from init_workspace import DEFAULT_CONFIG
+        return dict(DEFAULT_CONFIG)
+    except (OSError, UnicodeDecodeError) as exc:
+        _log.warning("config_read_error", path=config_path, error=str(exc))
+        return {}
+
+
 def _load_extra_categories(ws: str) -> dict:
     """Load extra_categories from mind-mem.json config."""
-    config_path = os.path.join(ws, "mind-mem.json")
-    if os.path.isfile(config_path):
-        try:
-            with open(config_path) as f:
-                cfg = json.load(f)
-            return cfg.get("categories", {}).get("extra_categories", {})
-        except (OSError, json.JSONDecodeError):
-            pass
-    return {}
+    cfg = _load_config(ws)
+    return cfg.get("categories", {}).get("extra_categories", {})
 
 
 # ---------------------------------------------------------------------------
@@ -428,7 +546,8 @@ def scan() -> str:
             "raw": raw_count,
             "resolvable": len(resolutions),
         }
-    except Exception:
+    except (ImportError, OSError, ValueError) as exc:
+        _log.warning("scan_contradiction_check_failed", error=str(exc))
         result["checks"]["contradictions"] = {"raw": raw_count, "resolvable": 0}
 
     # Check drift
@@ -586,22 +705,15 @@ def hybrid_search(query: str, limit: int = 10, active_only: bool = False) -> str
     limit = max(1, min(limit, 100))
     try:
         from hybrid_recall import HybridBackend
-        config_path = os.path.join(ws, "mind-mem.json")
-        config = {}
-        if os.path.isfile(config_path):
-            try:
-                with open(config_path) as f:
-                    config = json.load(f)
-            except (OSError, json.JSONDecodeError):
-                pass
+        config = _load_config(ws)
         hb = HybridBackend.from_config(config)
         results = hb.search(query, ws, limit=limit, active_only=active_only)
         backend = "hybrid"
     except ImportError:
         results = recall_engine(ws, query, limit=limit, active_only=active_only)
         backend = "scan_fallback"
-    except Exception:
-        _log.warning("hybrid_search_failed", query=query)
+    except (OSError, ValueError, KeyError) as exc:
+        _log.warning("hybrid_search_failed", query=query, error=str(exc))
         results = recall_engine(ws, query, limit=limit, active_only=active_only)
         backend = "scan_fallback"
     metrics.inc("mcp_hybrid_search_queries")
@@ -640,8 +752,8 @@ def find_similar(block_id: str, limit: int = 5) -> str:
             "error": "find_similar requires block_metadata module",
             "block_id": block_id,
         }, indent=2)
-    except Exception:
-        _log.warning("find_similar_failed", block_id=block_id)
+    except (OSError, ValueError, KeyError) as exc:
+        _log.warning("find_similar_failed", block_id=block_id, error=str(exc))
         return json.dumps({
             "error": "Failed to find similar blocks. The co-occurrence index may not be initialized.",
             "block_id": block_id,
@@ -675,8 +787,8 @@ def intent_classify(query: str) -> str:
         }, indent=2)
     except ImportError:
         return json.dumps({"error": "intent_router module not available", "query": query}, indent=2)
-    except Exception:
-        _log.warning("intent_classify_failed", query=query)
+    except (ValueError, KeyError, AttributeError) as exc:
+        _log.warning("intent_classify_failed", query=query, error=str(exc))
         return json.dumps({"error": "Intent classification failed", "query": query}, indent=2)
 
 
@@ -703,7 +815,7 @@ def index_stats() -> str:
             stats["last_build"] = fts_info.get("last_build")
             stats["stale_files"] = fts_info.get("stale_files", 0)
             stats["db_size_bytes"] = fts_info.get("db_size_bytes", 0)
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             _log.debug("fts_status_failed", error=str(e))
             fts_exists = False  # fall through to file scan
 
@@ -718,7 +830,7 @@ def index_stats() -> str:
                         try:
                             blocks = parse_file(os.path.join(d, fn))
                             count += len(blocks)
-                        except Exception as e:
+                        except (OSError, ValueError) as e:
                             _log.debug("index_stats_parse_failed", file=fn, error=str(e))
                 stats[f"{kind}_blocks"] = count
 
@@ -754,7 +866,7 @@ def reindex(include_vectors: bool = False) -> str:
         from sqlite_index import build_index
         build_index(ws)
         results["fts"] = True
-    except Exception as e:
+    except (OSError, ValueError) as e:
         _log.warning("reindex_fts_failed", error=str(e))
         results["fts_error"] = "FTS index rebuild failed. Run: python3 scripts/sqlite_index.py build --workspace ."
 
@@ -765,8 +877,8 @@ def reindex(include_vectors: bool = False) -> str:
             results["vectors"] = True
         except ImportError:
             results["vectors_error"] = "sentence-transformers not installed"
-        except Exception:
-            _log.warning("reindex_vectors_failed")
+        except (OSError, ValueError) as exc:
+            _log.warning("reindex_vectors_failed", error=str(exc))
             results["vectors_error"] = "Vector index rebuild failed"
 
     # Regenerate category summaries
@@ -777,9 +889,9 @@ def reindex(include_vectors: bool = False) -> str:
         written = distiller.distill(ws)
         results["categories"] = len(written)
     except ImportError:
-        pass  # category_distiller not available
-    except Exception:
-        _log.warning("reindex_categories_failed")
+        _log.debug("reindex_category_distiller_unavailable")
+    except (OSError, ValueError) as exc:
+        _log.warning("reindex_categories_failed", error=str(exc))
         results["categories_error"] = "Category distillation failed"
 
     metrics.inc("mcp_reindex")
@@ -828,8 +940,8 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
             "error": "memory_evolution requires block_metadata module",
             "block_id": block_id,
         }, indent=2)
-    except Exception:
-        _log.warning("memory_evolution_failed", block_id=block_id)
+    except (OSError, ValueError, KeyError) as exc:
+        _log.warning("memory_evolution_failed", block_id=block_id, error=str(exc))
         return json.dumps({
             "error": "Memory evolution lookup failed. Access history may not be initialized.",
             "block_id": block_id,
@@ -876,8 +988,8 @@ def category_summary(topic: str, limit: int = 3) -> str:
         }, indent=2)
     except ImportError:
         return json.dumps({"error": "category_distiller module not available"})
-    except Exception:
-        _log.warning("category_summary_failed", topic=topic)
+    except (OSError, ValueError, KeyError) as exc:
+        _log.warning("category_summary_failed", topic=topic, error=str(exc))
         return json.dumps({"error": "Category summary lookup failed", "topic": topic}, indent=2)
 
 
@@ -909,7 +1021,8 @@ def prefetch(signals: str, limit: int = 5) -> str:
         _log.info("mcp_prefetch", signals=signal_list, results=len(results))
         return json.dumps(results, indent=2, default=str)
     except Exception:
-        _log.warning("prefetch_failed", signals=signal_list)
+        import traceback
+        _log.warning("prefetch_failed", signals=signal_list, traceback=traceback.format_exc())
         return json.dumps({"error": "Prefetch failed", "signals": signal_list}, indent=2)
 
 

@@ -1,6 +1,6 @@
 [project]
 name = "mind-mem"
-version = "1.2.0"
+version = "1.3.0"
 description = "Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent."
 readme = "README.md"
 license = "MIT"
@@ -16,12 +16,13 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 
+# For hash-verified installs, use: pip install --require-hashes -r requirements-optional.txt
 [project.optional-dependencies]
 test = ["pytest>=7.0"]
-mcp = ["fastmcp>=0.1"]
-embeddings = ["onnxruntime", "tokenizers"]
-cross-encoder = ["sentence-transformers"]
-all = ["fastmcp>=0.1", "sentence-transformers"]
+mcp = ["fastmcp==2.14.5"]
+embeddings = ["onnxruntime==1.24.1", "tokenizers==0.22.2"]
+cross-encoder = ["sentence-transformers==5.2.3"]
+all = ["fastmcp==2.14.5", "sentence-transformers==5.2.3"]
 
 [project.urls]
 Homepage = "https://github.com/star-ga/mind-mem"
