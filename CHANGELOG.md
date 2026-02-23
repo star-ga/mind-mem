@@ -2,6 +2,32 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.7.0 (2026-02-23)
+
+**Recall quality — retrieval graph, fact indexing, knee cutoff, augmented embeddings, hard negatives**
+
+### Added
+- **Retrieval Logger + Co-retrieval Graph**: `scripts/retrieval_graph.py` — logs every `recall()` invocation to SQLite (`retrieval_log` table), builds co-retrieval edges between co-returned blocks (`co_retrieval` table), and propagates scores across the graph via damped PageRank-like iteration.
+- **Fact Card Indexing (Small-to-Big Retrieval)**: `sqlite_index.py` — extracts atomic fact cards from Statement text at FTS5 index time, indexes as sub-blocks with `parent_id` linkage. Aggregation at query time folds fact scores into parent blocks.
+- **Knee Score Cutoff**: `_recall_core.py` — adaptive top-K truncation at steepest score drop instead of fixed limit. Config: `recall.knee_cutoff` (default: on), `recall.min_score`.
+- **Metadata-Augmented Embeddings**: `recall_vector.py` — prepends `[Category] [Speaker] [Date] [Tags]` to text before embedding for better vector disambiguation.
+- **Abstention Hard Negative Mining**: `retrieval_graph.py` + `evidence_packer.py` — records misleading blocks when abstention fires (high BM25, low cross-encoder), demotes flagged blocks by 30% in future queries.
+- New config keys: `knee_cutoff`, `min_score`.
+- Schema: `parent_id` column on `blocks` table, `retrieval_log`, `co_retrieval`, `hard_negatives` tables in `recall.db`.
+
+### Testing
+- 37 new tests across 2 files:
+  - `test_retrieval_graph.py`: 22 tests (logging, co-retrieval edges, propagation, hard negatives, knee cutoff)
+  - `test_fact_indexing.py`: 15 tests (fact sub-blocks, aggregation, metadata augmentation, deletion cascade)
+- Total: **1352 tests passing** (up from 1315)
+
+### Changed
+- `_recall_core.py`: integrated stages 2.6 (hard negative penalty), 2.8 (co-retrieval propagation), 2.9 (knee cutoff), retrieval logging
+- `sqlite_index.py`: `_insert_block()` extracts + indexes fact sub-blocks, `_delete_blocks()` cascades to children, `query_index()` aggregates facts to parents
+- `evidence_packer.py`: `check_abstention()` records hard negatives when abstention fires
+- `_recall_constants.py`: added `knee_cutoff`, `min_score` to valid recall config keys
+- Zero new dependencies — all features use Python stdlib + SQLite only
+
 ## 1.6.0 (2026-02-22)
 
 **File watcher, LLM reranking, overlapping chunks — completes IMPL-PLAN Phase 1-3**

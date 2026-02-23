@@ -20,7 +20,7 @@
 | Backend         | BM25-only                                |
 | Dataset         | LoCoMo (10 conversations, 1986 QA pairs) |
 | Dataset cache   | `benchmarks/.cache/locomo10.json`        |
-| Tests           | 964 passing                              |
+| Tests           | 1352 passing                             |
 
 ### Reproduction
 
