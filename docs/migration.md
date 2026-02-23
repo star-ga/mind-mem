@@ -1,6 +1,6 @@
 # Migration Guide: mem-os to mind-mem
 
-This guide covers migrating from `mem-os` (archived at `star-ga/mem-os`) to its successor `mind-mem` (`star-ga/mind-mem`, v1.4.0). The workspace data format is compatible -- no data loss occurs during migration.
+This guide covers migrating from `mem-os` (archived at `star-ga/mem-os`) to its successor `mind-mem` (`star-ga/mind-mem`, v1.4.1). The workspace data format is compatible -- no data loss occurs during migration.
 
 **Requirements:** Python 3.10+, FastMCP 2.0+ (for MCP server).
 

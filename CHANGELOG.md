@@ -2,6 +2,21 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.4.1 (2026-02-22)
+
+**Build pipeline hardening — linker version script, source leak elimination**
+
+### Fixed
+- MIND build: added linker version script (exports.map) to control .dynsym — only 21 intended symbols exported
+- MIND build: removed redundant mindc rebuild in Stage 3 that was undoing Stage 2's source stripping
+- MIND build: .comment section now shows MIND toolchain attribution instead of GCC
+- MIND build: runtime .so .comment cleaned during deploy
+
+### Changed
+- Version: 1.4.0 → 1.4.1
+- Binary exports locked to 21 (15 scoring + 6 protection/auth) via version script
+- All MIND internals (get_source, get_ir, protection functions) hidden via `local: *` in exports.map
+
 ## 1.4.0 (2026-02-22)
 
 **Deep audit fixes + MCP completeness — closes #28, #29, #30, #31, #32, #33, #34, #35, #36, #37**
