@@ -262,6 +262,22 @@ Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer w
 | Knowledge update |      72 |     80.6 |     88.9 |     91.7 |     .844 |
 | Single-session   |      56 |     82.1 |     89.3 |     89.3 |     .847 |
 
+### Performance (Latency & Throughput)
+
+Measured on a 65-block workspace (typical personal workspace) with SQLite FTS5 backend:
+
+| Operation | Metric | Value |
+|-----------|--------|-------|
+| **Query** (FTS5 + rerank) | p50 latency | **2.1 ms** |
+| **Query** (FTS5 + rerank) | p95 latency | **4.9 ms** |
+| **Query** (FTS5 + rerank) | mean latency | **2.6 ms** |
+| **Incremental reindex** | elapsed | **32 ms** (13 blocks indexed) |
+| **Full index build** | elapsed | **48 ms** (65 blocks) |
+| **MCP tool overhead** | stdio round-trip | **< 15 ms** |
+| **Memory footprint** | RSS (idle MCP server) | **~28 MB** |
+
+Query latency scales as O(log N) with SQLite FTS5 (vs O(corpus) for scan backend). The co-retrieval graph adds < 1ms per query. Knee cutoff and fact aggregation add negligible overhead (< 0.5ms).
+
 ### Run Benchmarks Yourself
 
 ```bash
