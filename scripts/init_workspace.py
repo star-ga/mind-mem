@@ -12,9 +12,12 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import sys
+
+_log = logging.getLogger("mind-mem.init_workspace")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLUGIN_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -75,7 +78,7 @@ MAINTENANCE_SCRIPTS = [
 ]
 
 DEFAULT_CONFIG = {
-    "version": "1.2.0",
+    "version": "1.3.0",
     "workspace_path": ".",
     "auto_capture": True,
     "auto_recall": True,
@@ -89,7 +92,90 @@ DEFAULT_CONFIG = {
         "backlog_limit": 30,
     },
     "scan_schedule": "daily",
+    "mcp_acl": {
+        "admin_tools": [
+            "write_memory", "apply_proposal", "approve_apply",
+            "rollback_proposal", "delete_memory_item", "reindex_vectors",
+        ],
+        "default_scope": "user",
+    },
+    "mcp_rate_limit": {
+        "max_calls_per_minute": 120,
+        "query_timeout_seconds": 30,
+    },
 }
+
+
+# Numeric range constraints for recall config: (min, max, default)
+_RECALL_RANGES: dict[str, tuple[float, float, float]] = {
+    "bm25_k1": (0.5, 3.0, 1.2),
+    "bm25_b": (0.0, 1.0, 0.75),
+    "limit": (1, 1000, 20),
+    "rrf_k": (1, 200, 60),
+    "bm25_weight": (0.0, 10.0, 1.0),
+    "vector_weight": (0.0, 10.0, 1.0),
+    "recency_weight": (0.0, 1.0, 0.3),
+    "top_k": (1, 200, 18),
+}
+
+
+def _validate_config(cfg: dict) -> dict:
+    """Validate and clamp numeric config values to safe ranges.
+
+    Mutates and returns *cfg* so callers can chain.  Out-of-range values
+    are clamped and a warning is logged for each adjustment.
+    """
+    if not isinstance(cfg, dict):
+        return cfg
+    recall = cfg.get("recall")
+    if not isinstance(recall, dict):
+        return cfg
+
+    for key, (lo, hi, default) in _RECALL_RANGES.items():
+        if key not in recall:
+            continue
+        raw = recall[key]
+        # Coerce to numeric; fall back to default on bad type
+        try:
+            val = float(raw)
+        except (TypeError, ValueError):
+            _log.warning(
+                "config_value_invalid: recall.%s=%r is not numeric, using default %s",
+                key, raw, default,
+            )
+            recall[key] = type(default)(default)
+            continue
+
+        if val < lo or val > hi:
+            clamped = max(lo, min(hi, val))
+            # Preserve int type for integer-range keys
+            clamped = type(default)(clamped)
+            _log.warning(
+                "config_value_clamped: recall.%s=%s out of range [%s, %s], clamped to %s",
+                key, raw, lo, hi, clamped,
+            )
+            recall[key] = clamped
+        else:
+            # Preserve type (int vs float) matching the default
+            recall[key] = type(default)(val)
+
+    return cfg
+
+
+def load_config(ws: str) -> dict:
+    """Load mind-mem.json from *ws*, validate numeric ranges, return config dict.
+
+    Returns DEFAULT_CONFIG (shallow copy) if the file is missing or unreadable.
+    """
+    config_path = os.path.join(os.path.abspath(ws), "mind-mem.json")
+    if os.path.isfile(config_path):
+        try:
+            with open(config_path) as f:
+                cfg = json.load(f)
+            return _validate_config(cfg)
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            _log.warning("config_load_failed: %s (%s)", config_path, exc)
+    return dict(DEFAULT_CONFIG)
 
 
 def init(ws: str) -> tuple[list[str], list[str]]:

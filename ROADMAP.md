@@ -51,7 +51,19 @@
 - [x] **Cross-encoder A/B test** — +0.097 MRR (+24% relative) with ms-marco-MiniLM-L-6-v2
 - [x] 1055 tests passing, CI green on all platforms
 
-## v1.3.0 — Reflective Consolidation
+## v1.3.0 — Security Hardening + Audit Fixes ✅ Released (2026-02-22)
+
+- [x] **MCP per-tool ACL** — admin/user scope separation for all 16 MCP tools
+- [x] **Rate limiting** — 120 calls/min sliding window + 30s per-query timeout
+- [x] **Exception handling** — 11 broad `except Exception` replaced with specific exceptions
+- [x] **Config validation** — numeric range clamping for BM25 k1/b, rrf_k, limits, weights
+- [x] **FFI version check** — .so version validated against Python __version__ on startup
+- [x] **Dependency pinning** — exact versions + hash-verified install path
+- [x] **Malformed config handling** — JSONDecodeError caught with line/column display
+- [x] **Error/edge case tests** — 102 new tests for failure modes
+- [x] 1157 tests passing, CI green on all platforms
+
+## v1.4.0 — Reflective Consolidation
 
 - [ ] Sleep-time memory consolidation (periodic background pass)
 - [ ] Pattern extraction from trajectory clusters

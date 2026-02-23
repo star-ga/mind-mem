@@ -1,0 +1,21 @@
+# mind-mem optional dependencies — pinned with SHA256 integrity hashes.
+# Install with: pip install --require-hashes -r requirements-optional.txt
+#
+# These are OPTIONAL. mind-mem core works without them.
+# Update hashes when upgrading versions: pip download --no-deps --dest /tmp/h <pkg>==<ver> && pip hash /tmp/h/*.whl
+
+# MCP server support
+fastmcp==2.14.5 \
+    --hash=sha256:d81e8ec813f5089d3624bec93944beaefa86c0c3a4ef1111cbef676a761ebccf
+
+# ONNX Runtime for local embedding inference
+onnxruntime==1.24.1 \
+    --hash=sha256:34b6119526eda12613f0d0498e2ae59563c247c370c9cef74c2fc93133dde157
+
+# Fast tokenizer backend (used by recall_vector)
+tokenizers==0.22.2 \
+    --hash=sha256:369cc9fc8cc10cb24143873a0d95438bb8ee257bb80c71989e3ee290e8d72c67
+
+# Cross-encoder reranking models
+sentence-transformers==5.2.3 \
+    --hash=sha256:6437c62d4112b615ddebda362dfc16a4308d604c5b68125ed586e3e95d5b2e30
