@@ -1,6 +1,6 @@
 # Migration Guide: mem-os to mind-mem
 
-This guide covers migrating from `mem-os` (archived at `star-ga/mem-os`) to its successor `mind-mem` (`star-ga/mind-mem`, v1.4.1). The workspace data format is compatible -- no data loss occurs during migration.
+This guide covers migrating from `mem-os` (archived at `star-ga/mem-os`) to its successor `mind-mem` (`star-ga/mind-mem`, v1.5.0). The workspace data format is compatible -- no data loss occurs during migration.
 
 **Requirements:** Python 3.10+, FastMCP 2.0+ (for MCP server).
 
@@ -181,10 +181,10 @@ python3 /path/to/mind-mem/scripts/schema_version.py /path/to/workspace
 
 The migration performs three steps (all idempotent, safe to re-run):
 
-| Step         | Changes                                                                    |
-|--------------|----------------------------------------------------------------------------|
-| 1.0.0 -> 2.0.0 | Creates `intelligence/proposed/` and `shared/` directories; adds `schema_version` to config |
-| 2.0.0 -> 2.1.0 | Renames `self_correcting_mode` to `governance_mode` in both `mind-mem.json` and `memory/intel-state.json` |
+| Step            | Changes                                                                                             |
+|-----------------|-----------------------------------------------------------------------------------------------------|
+| 1.0.0 -> 2.0.0 | Creates `intelligence/proposed/` and `shared/` directories; adds `schema_version` to config          |
+| 2.0.0 -> 2.1.0 | Renames `self_correcting_mode` to `governance_mode` in `mind-mem.json` and `memory/intel-state.json` |
 
 After migration, the workspace also supports new directories used by mind-mem features:
 
@@ -253,18 +253,18 @@ These features are new in mind-mem and were not available in mem-os:
 
 ## 8. Breaking Changes
 
-| Change | Details |
-|--------|---------|
-| Package name | `mem-os` -> `mind-mem` (PyPI, imports) |
-| Config file | `mem-os.json` -> `mind-mem.json` |
-| Console scripts | All 10 scripts renamed (`mem-os-*` -> `mind-mem-*`) |
-| MCP server key | `"mem-os"` -> `"mind-mem"` in MCP config |
-| Environment variable | `MEM_OS_WORKSPACE` -> `MIND_MEM_WORKSPACE` |
-| Resource URIs | `mem-os://` -> `mind-mem://` |
-| Auth header | `X-MemOS-Token` -> `X-MindMem-Token` |
-| Config field | `self_correcting_mode` -> `governance_mode` |
-| Schema version | Now targets `2.1.0` (was `1.0.0` in early mem-os) |
-| MCP tool count | 6 -> 18 (additive, no tools removed) |
+| Change               | Details                                             |
+|----------------------|-----------------------------------------------------|
+| Package name         | `mem-os` -> `mind-mem` (PyPI, imports)              |
+| Config file          | `mem-os.json` -> `mind-mem.json`                    |
+| Console scripts      | All 10 scripts renamed (`mem-os-*` -> `mind-mem-*`) |
+| MCP server key       | `"mem-os"` -> `"mind-mem"` in MCP config            |
+| Environment variable | `MEM_OS_WORKSPACE` -> `MIND_MEM_WORKSPACE`          |
+| Resource URIs        | `mem-os://` -> `mind-mem://`                        |
+| Auth header          | `X-MemOS-Token` -> `X-MindMem-Token`                |
+| Config field         | `self_correcting_mode` -> `governance_mode`         |
+| Schema version       | Now targets `2.1.0` (was `1.0.0` in early mem-os)   |
+| MCP tool count       | 6 -> 18 (additive, no tools removed)                |
 
 No existing workspace data is deleted or reformatted. All memory blocks, decisions, tasks, entities, and signals are preserved as-is.
 

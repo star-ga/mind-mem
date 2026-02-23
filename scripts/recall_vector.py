@@ -36,9 +36,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
+import struct
 import sys
 from typing import Any
 
@@ -115,7 +117,115 @@ class VectorBackend(RecallBackend):
         self.pinecone_index_name = str(config.get("pinecone_index", "mind-mem"))
         self.pinecone_namespace = str(config.get("pinecone_namespace", "default"))
 
+        # Circuit breaker state for embedding fallback chain
+        self._provider_failures: dict[str, tuple[int, float]] = {}
         _log.info("vector_backend_init", provider=self.provider, model=self.model_name)
+
+    # ------------------------------------------------------------------
+    # Embedding Cache (P0) — stdlib only: sqlite3, hashlib, struct
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _content_hash(text: str) -> str:
+        """SHA-256 hash of block text for cache key."""
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _serialize_embedding(emb: list[float]) -> bytes:
+        """Pack float list to binary blob (4 bytes per float)."""
+        return struct.pack(f"{len(emb)}f", *emb)
+
+    @staticmethod
+    def _deserialize_embedding(blob: bytes, dim: int) -> list[float]:
+        """Unpack binary blob to float list."""
+        return list(struct.unpack(f"{dim}f", blob))
+
+    def _ensure_cache_tables(self, conn) -> None:
+        """Create embedding_cache and vec_meta_info tables if missing."""
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS embedding_cache (
+                block_id     TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                model_name   TEXT NOT NULL,
+                dimension    INTEGER NOT NULL,
+                embedding    BLOB NOT NULL,
+                created_at   TEXT DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (block_id, model_name)
+            );
+
+            CREATE TABLE IF NOT EXISTS vec_meta_info (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+        """)
+
+    def _get_cached_embedding(self, conn, block_id: str, content_hash: str) -> list[float] | None:
+        """Look up cached embedding. Returns None on miss."""
+        row = conn.execute(
+            "SELECT embedding, dimension FROM embedding_cache "
+            "WHERE block_id = ? AND content_hash = ? AND model_name = ?",
+            (block_id, content_hash, self.model_name),
+        ).fetchone()
+        if row is None:
+            return None
+        blob, dim = row[0], row[1]
+        try:
+            return self._deserialize_embedding(blob, dim)
+        except struct.error:
+            return None
+
+    def _cache_embedding(self, conn, block_id: str, content_hash: str,
+                         embedding: list[float]) -> None:
+        """Store embedding in cache (upsert)."""
+        dim = len(embedding)
+        blob = self._serialize_embedding(embedding)
+        conn.execute(
+            "INSERT OR REPLACE INTO embedding_cache "
+            "(block_id, content_hash, model_name, dimension, embedding) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (block_id, content_hash, self.model_name, dim, blob),
+        )
+
+    def _invalidate_cache_for_model(self, conn, model_name: str) -> int:
+        """Remove all cached embeddings for a different model. Returns count deleted."""
+        cur = conn.execute(
+            "DELETE FROM embedding_cache WHERE model_name != ?", (model_name,)
+        )
+        return cur.rowcount
+
+    def _get_vec_meta(self, conn, key: str) -> str | None:
+        """Read a vec_meta_info value."""
+        row = conn.execute(
+            "SELECT value FROM vec_meta_info WHERE key = ?", (key,)
+        ).fetchone()
+        return row[0] if row else None
+
+    def _set_vec_meta(self, conn, key: str, value: str) -> None:
+        """Write a vec_meta_info value."""
+        conn.execute(
+            "INSERT OR REPLACE INTO vec_meta_info (key, value) VALUES (?, ?)",
+            (key, value),
+        )
+
+    def _check_dimension_match(self, conn) -> bool:
+        """Check if stored model/dimension match current config.
+
+        Returns True if match (or no prior metadata). Returns False on mismatch.
+        """
+        stored_model = self._get_vec_meta(conn, "model_name")
+        stored_dim = self._get_vec_meta(conn, "dimension")
+        if stored_model is None:
+            return True  # No prior metadata — first build
+        if stored_model != self.model_name:
+            _log.warning("vec_model_mismatch",
+                         stored=stored_model, current=self.model_name)
+            return False
+        if stored_dim is not None and self.dimension is not None:
+            if int(stored_dim) != self.dimension:
+                _log.warning("vec_dimension_mismatch",
+                             stored=stored_dim, current=self.dimension)
+                return False
+        return True
 
     @property
     def model(self):
@@ -266,11 +376,55 @@ class VectorBackend(RecallBackend):
         return all_embeddings
 
     def _embed_for_provider(self, texts: list[str]) -> list[list[float]]:
-        """Route embedding to the configured backend (fastembed or llama_cpp)."""
+        """Route embedding to configured backend with fallback chain + circuit breaker."""
+        import time
+
+        _CB_THRESHOLD = 3
+        _CB_COOLDOWN = 60.0  # seconds
+
+        def _is_tripped(provider: str) -> bool:
+            if provider not in self._provider_failures:
+                return False
+            count, last_fail = self._provider_failures[provider]
+            if count >= _CB_THRESHOLD:
+                if time.time() - last_fail < _CB_COOLDOWN:
+                    return True
+                # Cooldown expired — reset
+                del self._provider_failures[provider]
+            return False
+
+        def _record_failure(provider: str) -> None:
+            count, _ = self._provider_failures.get(provider, (0, 0))
+            self._provider_failures[provider] = (count + 1, time.time())
+
+        def _record_success(provider: str) -> None:
+            self._provider_failures.pop(provider, None)
+
         backend = self.config.get("onnx_backend", True)
+
+        # Try llama_cpp first if configured
         if backend == "llama_cpp" or str(backend).lower() == "llama_cpp":
-            return self.embed_llama_cpp(texts)
-        return self.embed_fastembed(texts)
+            if not _is_tripped("llama_cpp"):
+                try:
+                    result = self.embed_llama_cpp(texts)
+                    _record_success("llama_cpp")
+                    return result
+                except Exception as e:
+                    _record_failure("llama_cpp")
+                    _log.warning("llama_cpp_embed_failed_fallback_fastembed", error=str(e))
+
+        # Try fastembed (default)
+        if not _is_tripped("fastembed"):
+            try:
+                result = self.embed_fastembed(texts)
+                _record_success("fastembed")
+                return result
+            except (ImportError, Exception) as e:
+                _record_failure("fastembed")
+                _log.warning("fastembed_failed_fallback_sentence_transformers", error=str(e))
+
+        # Final fallback: sentence-transformers
+        return self.embed(texts)
 
     def _sqlite_vec_db_path(self, workspace: str) -> str:
         """Return path to the sqlite-vec DB (shares recall.db with BM25 index)."""
@@ -328,7 +482,10 @@ class VectorBackend(RecallBackend):
         conn.commit()
 
     def _index_sqlite_vec(self, workspace: str, blocks: list[dict], texts: list[str]) -> None:
-        """Build sqlite-vec index: embed texts locally, store in recall.db.
+        """Build sqlite-vec index with embedding cache for incremental updates.
+
+        Uses embedding_cache table to skip re-embedding unchanged blocks.
+        Only embeds new or modified blocks, reuses cached embeddings for the rest.
 
         Args:
             workspace: Workspace root path
@@ -339,18 +496,64 @@ class VectorBackend(RecallBackend):
 
         _log.info("sqlite_vec_indexing_start", count=len(texts))
 
-        embeddings = self._embed_for_provider(texts)
-        if not embeddings:
-            _log.error("sqlite_vec_no_embeddings")
-            return
-
-        dim = len(embeddings[0])
-        if self.dimension is None:
-            self.dimension = dim
-
         conn = self._connect_sqlite_vec(workspace)
         try:
-            # Drop and recreate to handle dimension changes (e.g. 384 → 4096)
+            self._ensure_cache_tables(conn)
+
+            # Check for model/dimension mismatch — force full rebuild if changed
+            model_match = self._check_dimension_match(conn)
+            if not model_match:
+                _log.info("vec_model_changed_invalidating_cache",
+                          model=self.model_name)
+                self._invalidate_cache_for_model(conn, self.model_name)
+                conn.execute("DROP TABLE IF EXISTS vec_blocks")
+                conn.commit()
+
+            # Compute content hashes and check cache
+            cache_hits = 0
+            cache_misses = 0
+            to_embed_indices: list[int] = []
+            to_embed_texts: list[str] = []
+            embeddings: list[list[float] | None] = [None] * len(texts)
+
+            for i, (block, text) in enumerate(zip(blocks, texts)):
+                bid = block["_id"]
+                chash = self._content_hash(text)
+                cached = self._get_cached_embedding(conn, bid, chash)
+                if cached is not None:
+                    embeddings[i] = cached
+                    cache_hits += 1
+                else:
+                    to_embed_indices.append(i)
+                    to_embed_texts.append(text)
+                    cache_misses += 1
+
+            _log.info("embedding_cache_stats",
+                      hits=cache_hits, misses=cache_misses, total=len(texts))
+
+            # Embed only the cache misses
+            if to_embed_texts:
+                new_embeddings = self._embed_for_provider(to_embed_texts)
+                if not new_embeddings:
+                    _log.error("sqlite_vec_no_embeddings")
+                    return
+                for idx, emb in zip(to_embed_indices, new_embeddings):
+                    embeddings[idx] = emb
+                    # Store in cache
+                    bid = blocks[idx]["_id"]
+                    chash = self._content_hash(texts[idx])
+                    self._cache_embedding(conn, bid, chash, emb)
+
+            # Verify all embeddings were filled
+            if any(e is None for e in embeddings):
+                _log.error("sqlite_vec_incomplete_embeddings")
+                return
+
+            dim = len(embeddings[0])
+            if self.dimension is None:
+                self.dimension = dim
+
+            # Rebuild vec_blocks table (sqlite-vec doesn't support UPDATE well)
             conn.execute("DROP TABLE IF EXISTS vec_blocks")
             self._init_vec_table(conn, dim)
             for block, emb in zip(blocks, embeddings):
@@ -358,8 +561,17 @@ class VectorBackend(RecallBackend):
                     "INSERT INTO vec_blocks(block_id, embedding) VALUES (?, ?)",
                     (block["_id"], sqlite_vec.serialize_float32(emb)),
                 )
+
+            # Write metadata for dimension mismatch detection
+            from datetime import datetime
+            self._set_vec_meta(conn, "model_name", self.model_name)
+            self._set_vec_meta(conn, "dimension", str(dim))
+            self._set_vec_meta(conn, "built_at", datetime.now().isoformat())
+            self._set_vec_meta(conn, "block_count", str(len(blocks)))
+
             conn.commit()
-            _log.info("sqlite_vec_indexed", blocks=len(blocks), dimension=dim)
+            _log.info("sqlite_vec_indexed", blocks=len(blocks), dimension=dim,
+                      cache_hits=cache_hits, cache_misses=cache_misses)
         finally:
             conn.close()
 
@@ -384,6 +596,17 @@ class VectorBackend(RecallBackend):
             Ranked list of result dicts
         """
         import sqlite_vec
+
+        # Check for dimension mismatch before search
+        try:
+            check_conn = self._connect_sqlite_vec(workspace, readonly=True)
+            self._ensure_cache_tables(check_conn)
+            if not self._check_dimension_match(check_conn):
+                _log.warning("vec_search_dimension_mismatch",
+                             msg="Index was built with different model — results may be inaccurate. Run reindex.")
+            check_conn.close()
+        except Exception:
+            pass  # Don't block search on metadata check failure
 
         # Embed query
         query_emb = self._embed_for_provider([query])[0]

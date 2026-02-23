@@ -1,6 +1,6 @@
 # mind-mem Architecture
 
-Version 1.4.1 | February 2026
+Version 1.5.0 | February 2026
 
 ---
 
@@ -23,7 +23,7 @@ MIND `.so` libraries).
                               |
     +-------------------------v---------------------------+
     |               MCP Server  (mcp_server.py)           |
-    |       16 tools  |  8 resources  |  FastMCP runtime  |
+    |       18 tools  |  8 resources  |  FastMCP runtime  |
     +--------+--------+--------+------+-------------------+
              |                 |
     +--------v---------+  +----v-----------------------+
@@ -577,45 +577,47 @@ can connect.
 
 ### Transport
 
-| Mode  | Use Case                    | Command                                          |
-|-------|-----------------------------|--------------------------------------------------|
-| stdio | Claude Code, Claude Desktop | `python3 mcp_server.py`                          |
-| HTTP  | Remote / multi-client       | `python3 mcp_server.py --transport http --port 8765` |
-| HTTP + auth | Secured remote        | `MIND_MEM_TOKEN=secret python3 mcp_server.py --transport http` |
+| Mode        | Use Case                   | Command                                                          |
+|-------------|----------------------------|------------------------------------------------------------------|
+| stdio       | Claude Code, Claude Desktop | `python3 mcp_server.py`                                         |
+| HTTP        | Remote / multi-client      | `python3 mcp_server.py --transport http --port 8765`             |
+| HTTP + auth | Secured remote             | `MIND_MEM_TOKEN=secret python3 mcp_server.py --transport http`   |
 
-### Tools (16)
+### Tools (18)
 
-| Tool                 | Description                                          |
-|----------------------|------------------------------------------------------|
-| `recall`             | BM25 search across memory blocks                     |
-| `propose_update`     | Propose a new decision/task (writes to SIGNALS.md)   |
-| `approve_apply`      | Apply a staged proposal (dry-run by default)         |
-| `rollback_proposal`  | Rollback an applied proposal by receipt timestamp    |
-| `scan`               | Run integrity scan                                   |
-| `list_contradictions` | List contradictions with resolution status           |
-| `hybrid_search`      | Full hybrid BM25+Vector recall with RRF fusion       |
-| `find_similar`       | Find blocks similar to a given block                 |
-| `intent_classify`    | Show routing strategy for a query                    |
-| `index_stats`        | Block counts, index status, kernel info              |
-| `reindex`            | Trigger FTS index rebuild                            |
-| `memory_evolution`   | A-MEM metadata for a block                           |
-| `list_mind_kernels`  | List available .mind kernel configs                  |
-| `get_mind_kernel`    | Read a specific .mind kernel source                  |
-| `category_summary`   | Category summaries for a topic                       |
-| `prefetch`           | Pre-assemble context from conversation signals       |
+| Tool                  | Description                                        |
+|-----------------------|----------------------------------------------------|
+| `recall`              | BM25 search across memory blocks                   |
+| `propose_update`      | Propose a new decision/task (writes to SIGNALS.md) |
+| `approve_apply`       | Apply a staged proposal (dry-run by default)       |
+| `rollback_proposal`   | Rollback an applied proposal by receipt timestamp  |
+| `scan`                | Run integrity scan                                 |
+| `list_contradictions` | List contradictions with resolution status         |
+| `hybrid_search`       | Full hybrid BM25+Vector recall with RRF fusion     |
+| `find_similar`        | Find blocks similar to a given block               |
+| `intent_classify`     | Show routing strategy for a query                  |
+| `index_stats`         | Block counts, index status, kernel info            |
+| `reindex`             | Trigger FTS index rebuild                          |
+| `memory_evolution`    | A-MEM metadata for a block                         |
+| `list_mind_kernels`   | List available .mind kernel configs                |
+| `get_mind_kernel`     | Read a specific .mind kernel source                |
+| `category_summary`    | Category summaries for a topic                     |
+| `prefetch`            | Pre-assemble context from conversation signals     |
+| `delete_memory_item`  | Delete a memory block by ID (admin-scope)          |
+| `export_memory`       | Export workspace as JSONL (user-scope)             |
 
 ### Resources (8)
 
-| URI                           | Description                     |
-|-------------------------------|---------------------------------|
-| `mind-mem://decisions`        | All active decisions            |
-| `mind-mem://tasks`            | All tasks                       |
-| `mind-mem://entities/{type}`  | Entity files (projects, people, tools, incidents) |
-| `mind-mem://signals`          | Auto-captured signals           |
-| `mind-mem://contradictions`   | Detected contradictions         |
-| `mind-mem://health`           | Workspace health summary        |
-| `mind-mem://recall/{query}`   | BM25 recall search              |
-| `mind-mem://ledger`           | Shared fact ledger (multi-agent)|
+| URI                          | Description                                       |
+|------------------------------|---------------------------------------------------|
+| `mind-mem://decisions`       | All active decisions                              |
+| `mind-mem://tasks`           | All tasks                                         |
+| `mind-mem://entities/{type}` | Entity files (projects, people, tools, incidents) |
+| `mind-mem://signals`         | Auto-captured signals                             |
+| `mind-mem://contradictions`  | Detected contradictions                           |
+| `mind-mem://health`          | Workspace health summary                          |
+| `mind-mem://recall/{query}`  | BM25 recall search                                |
+| `mind-mem://ledger`          | Shared fact ledger (multi-agent)                  |
 
 ### Configuration
 
@@ -660,6 +662,46 @@ CPU inference when `onnx_backend: true` in config.
 
 When vector search is unavailable, `hybrid_recall.py` falls back to
 BM25-only mode transparently.
+
+#### Embedding Cache (v1.5.0+)
+
+All computed embeddings are cached in a sqlite3 table keyed by
+`(block_id, model_name)`. The cache stores a SHA-256 content hash
+alongside each embedding blob. On reindex, only blocks whose content
+hash differs from the cached value are re-embedded.
+
+```
+block_parser.parse_file()
+  |
+  v
+For each block:
+  content_hash = SHA256(block_text)
+  cached = SELECT FROM embedding_cache WHERE block_id=? AND model_name=?
+  |
+  +-- hash match  --> use cached embedding (skip provider)
+  +-- hash miss   --> embed via provider --> INSERT/REPLACE into cache
+  |
+  v
+INSERT INTO vec_blocks (sqlite-vec virtual table)
+```
+
+Tables:
+- `embedding_cache(block_id, content_hash, model_name, dimension, embedding BLOB, created_at)`
+- `vec_meta_info(key, value)` — stores `model_name`, `dimension`, `built_at`
+
+#### Dimension Mismatch Detection (v1.5.0+)
+
+The `vec_meta_info` table records which model and dimension were used to
+build the current index. On search, if the query model differs from the
+indexed model, a warning is logged. On reindex, a model change triggers
+full cache invalidation for the old model.
+
+#### Embedding Provider Fallback Chain (v1.5.0+)
+
+When the primary embedding provider fails, `recall_vector.py` cascades
+through a fallback chain: `llama_cpp` → `fastembed` → `sentence-transformers`.
+A circuit breaker tracks failures per provider (3 failures → 60s cooldown).
+After cooldown, the provider is retried. Zero new dependencies.
 
 ### Cross-Encoder Reranker (cross_encoder_reranker.py)
 
@@ -813,17 +855,17 @@ its `write` list.
 | Module               | Lines  | Purpose                                                       |
 |----------------------|--------|---------------------------------------------------------------|
 | `recall.py`          | ~2,100 | BM25F + RM3 + graph scoring, stemming, query expansion        |
-| `intel_scan.py`      | ~1,250 | Integrity scanning, contradiction detection, drift analysis    |
+| `intel_scan.py`      | ~1,250 | Integrity scanning, contradiction detection, drift analysis   |
 | `apply_engine.py`    | ~1,200 | Proposal application, dry-run, rollback, audit trail          |
 | `sqlite_index.py`    | ~780   | FTS5 index, block vectors, block metadata tables              |
-| `mcp_server.py`      | ~950   | FastMCP server, 16 tools, 8 resources                         |
+| `mcp_server.py`      | ~950   | FastMCP server, 18 tools, 8 resources                         |
 | `block_parser.py`    | ~520   | Markdown block grammar parsing (schema v1/v2)                 |
 
 ### Search and Ranking
 
 | Module                      | Lines | Purpose                                               |
 |-----------------------------|-------|-------------------------------------------------------|
-| `recall_vector.py`          | ~700  | Vector/embedding recall backends                      |
+| `recall_vector.py`          | ~1350 | Vector/embedding recall + cache + fallback chain      |
 | `hybrid_recall.py`          | ~310  | Thread-parallel BM25+Vector+RRF fusion                |
 | `intent_router.py`          | ~160  | 9-type intent classification with parameter mapping   |
 | `evidence_packer.py`        | ~250  | Structured evidence assembly for LLM context          |
@@ -871,7 +913,7 @@ its `write` list.
 
 ```json
 {
-  "version": "1.4.1",
+  "version": "1.5.0",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,

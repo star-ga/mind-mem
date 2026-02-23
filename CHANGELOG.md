@@ -2,6 +2,26 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.5.0 (2026-02-22)
+
+**Embedding cache, incremental indexing, dimension safety, and provider fallback chain — closes #38, #39, #40, #41**
+
+### Added
+- **#38** — Embedding cache: SHA-256 content-hash cache in sqlite3 (`embedding_cache` table) avoids re-embedding unchanged blocks during reindex. Turns O(N) full reindex into O(changed).
+- **#39** — Incremental vector indexing: only embeds cache-miss blocks during `reindex`. Cache hits are loaded directly from sqlite3, skipping the embedding provider entirely.
+- **#40** — Dimension mismatch detection: `vec_meta_info` table tracks model name, embedding dimension, and build timestamp. Warns on search if query model differs from indexed model. Auto-invalidates cache on model change.
+- **#41** — Embedding provider fallback chain with circuit breaker: cascades through llama_cpp → fastembed → sentence-transformers on failure. Circuit breaker (3 failures → 60s cooldown → auto-reset) prevents repeated calls to failed providers.
+
+### Testing
+- 20 new tests: `TestEmbeddingCache` (12), `TestDimensionMismatch` (7), `TestCircuitBreaker` (1)
+- Total: **1261 tests passing** (up from 1241)
+
+### Changed
+- Version: 1.4.1 → 1.5.0
+- `recall_vector.py`: 700 → 1352 lines (embedding cache, dimension tracking, fallback chain)
+- `test_recall_vector.py`: 313 → 543 lines (20 new tests)
+- Zero new dependencies — all features use Python stdlib only (hashlib, struct, time, sqlite3)
+
 ## 1.4.1 (2026-02-22)
 
 **Build pipeline hardening — linker version script, source leak elimination**

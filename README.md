@@ -55,7 +55,7 @@ The installer auto-detects Claude Code, Claude Desktop, Codex CLI, Gemini CLI, C
 | **No vendor lock-in**   | Plain Markdown files. Move to any system, any time.                               |
 | **Zero magic**          | Every check is a grep, every mutation is a file write. Read the source in 30 min. |
 | **No silent mutation**  | Nothing writes to source of truth without explicit `/apply`. Ever.                |
-| **Zero infrastructure** | No Redis, no Postgres, no vector DB, no GPU. Python 3.10+ is all you need. Optional: `sentence-transformers` for vector search, `ollama` for LLM extraction. |
+| **Zero infrastructure** | No Redis, no Postgres, no vector DB, no GPU. Python 3.10+ and stdlib only.        |
 
 ---
 
@@ -172,8 +172,8 @@ Scans Claude Code transcript files for user corrections, convention discoveries,
 ### MCP Server (18 tools, 8 resources)
 Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 18 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
 
-### 74+ Structural Checks + 1241 Unit Tests
-`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 964 pytest unit tests covering all core modules.
+### 74+ Structural Checks + 1261 Unit Tests
+`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 1261 pytest unit tests covering all core modules.
 
 ### Audit Trail
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
@@ -570,7 +570,7 @@ your-workspace/
 | [**Graphlit**](https://www.graphlit.com) | Multimodal ingestion, semantic search, managed platform | Cloud-only, managed service |
 | [**ClawMem**](https://github.com/yoloshii/ClawMem) | Full ML pipeline (cross-encoder + QMD + beam search) | 4.5GB VRAM, 3 GPU processes required |
 | [**MemU**](https://github.com/supermemory/memu) | Hierarchical 3-layer memory, multimodal ingestion, LLM-based retrieval | Requires LLM for extraction and retrieval, no hybrid search |
-| **mind-mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 16 MCP tools | Lexical recall by default (vector/CE optional) |
+| **mind-mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 18 MCP tools | Lexical recall by default (vector/CE optional) |
 
 ### Full Feature Matrix
 
@@ -919,7 +919,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 ```json
 {
-  "version": "1.4.1",
+  "version": "1.5.0",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,
@@ -950,7 +950,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 | Key                             | Default              | Description                                                  |
 | ------------------------------- | -------------------- | ------------------------------------------------------------ |
-| `version`                       | `"1.4.1"`            | Config schema version                                        |
+| `version`                       | `"1.5.0"`            | Config schema version                                        |
 | `auto_capture`                  | `true`               | Run capture engine on session end                            |
 | `auto_recall`                   | `true`               | Show recall context on session start                         |
 | `governance_mode`               | `"detect_only"`      | Governance mode (`detect_only`, `propose`, `enforce`)        |
@@ -1064,7 +1064,7 @@ MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py --transport http --p
 | `mind-mem://recall/{query}`  | BM25 recall search results                    |
 | `mind-mem://ledger`          | Shared fact ledger (multi-agent)              |
 
-### Tools (16)
+### Tools (18)
 
 | Tool                  | Description                                                    |
 | --------------------- | -------------------------------------------------------------- |
@@ -1084,6 +1084,8 @@ MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py --transport http --p
 | `get_mind_kernel`     | Read a specific MIND kernel configuration as JSON              |
 | `category_summary`    | Category summaries relevant to a given topic                   |
 | `prefetch`            | Pre-assemble context from recent conversation signals          |
+| `delete_memory_item`  | Delete a memory block by ID (admin-scope)                      |
+| `export_memory`       | Export workspace as JSONL (user-scope)                         |
 
 ### Token Auth (HTTP)
 
@@ -1112,11 +1114,11 @@ MIND_MEM_TOKEN=your-secret python3 mcp_server.py --transport http --port 8765
 | Symlink attacks       | Symlink detection in restore paths                                   |
 | Path traversal        | All paths resolved via `os.path.realpath()`, workspace-relative only |
 
-| What we do NOT protect against | Why                                                          |
-| ------------------------------ | ------------------------------------------------------------ |
-| Malicious local user           | Single-user CLI tool — filesystem access = data access       |
-| Network attacks                | No network calls, no listening ports, no telemetry           |
-| Encrypted storage              | Files are plaintext Markdown — use disk encryption if needed |
+| What we do NOT protect against | Why                                                            |
+| ------------------------------ | -------------------------------------------------------------- |
+| Malicious local user           | Single-user CLI tool — filesystem access = data access         |
+| Network attacks                | No network calls, no listening ports, no telemetry             |
+| Encrypted storage              | Files are plaintext Markdown — use disk encryption if needed   |
 
 ### No Network Calls
 
@@ -1151,14 +1153,14 @@ mind-mem makes **zero network calls** from its core. No telemetry, no phoning ho
 
 ## Troubleshooting
 
-| Problem                                     | Solution                                                                                                        |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `validate.sh` says "No mind-mem.json found" | Run in a workspace, not the repo root. Run `init_workspace.py` first.                                           |
-| `recall` returns no results                 | Workspace is empty. Add decisions/tasks first.                                                                  |
-| `capture` says "no daily log"               | No `memory/YYYY-MM-DD.md` for today. Write something first.                                                     |
-| `intel_scan` finds 0 contradictions         | Good — no conflicting decisions.                                                                                |
-| Tests fail on Windows                       | Use `validate_py.py` instead of `validate.sh`. Hooks require WSL.                                               |
-| MIND kernel not loading                     | Compile with `mindc mind/*.mind --emit=shared -o lib/libmindmem.so`. Or ignore — pure Python works identically. |
+| Problem                                     | Solution                                                                                                          |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `validate.sh` says "No mind-mem.json found" | Run in a workspace, not the repo root. Run `init_workspace.py` first.                                             |
+| `recall` returns no results                 | Workspace is empty. Add decisions/tasks first.                                                                    |
+| `capture` says "no daily log"               | No `memory/YYYY-MM-DD.md` for today. Write something first.                                                       |
+| `intel_scan` finds 0 contradictions         | Good — no conflicting decisions.                                                                                  |
+| Tests fail on Windows                       | Use `validate_py.py` instead of `validate.sh`. Hooks require WSL.                                                 |
+| MIND kernel not loading                     | Compile with `mindc mind/*.mind --emit=shared -o lib/libmindmem.so`. Or ignore — pure Python works identically.   |
 
 ### FAQ
 
