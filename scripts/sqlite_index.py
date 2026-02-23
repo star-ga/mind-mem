@@ -134,6 +134,14 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             keywords TEXT DEFAULT '',
             connections TEXT DEFAULT ''
         );
+
+        CREATE TABLE IF NOT EXISTS index_meta (
+            file_path    TEXT NOT NULL,
+            block_id     TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            indexed_at   TEXT DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (file_path, block_id)
+        );
     """)
 
     # Create standalone FTS5 virtual table (we manage sync ourselves)
@@ -224,6 +232,22 @@ def _update_file_state(conn: sqlite3.Connection, workspace: str, rel_path: str) 
 
 
 # ---------------------------------------------------------------------------
+# Block-level hashing
+# ---------------------------------------------------------------------------
+
+def _compute_block_hash(block: dict) -> str:
+    """Compute content hash of a parsed block for change detection.
+
+    Hashes a stable JSON representation of all fields except _line
+    (which changes when blocks above shift). Uses SHA-256, stdlib only.
+    """
+    # Copy without volatile fields
+    stable = {k: v for k, v in block.items() if k != "_line"}
+    raw = json.dumps(stable, sort_keys=True, default=str).encode()
+    return hashlib.sha256(raw).hexdigest()
+
+
+# ---------------------------------------------------------------------------
 # Indexing
 # ---------------------------------------------------------------------------
 
@@ -272,89 +296,170 @@ def _index_file(
     label: str,
     rel_path: str,
     all_block_ids: set,
-) -> int:
-    """Index a single corpus file. Returns number of blocks indexed."""
+    force: bool = False,
+) -> dict:
+    """Index a single corpus file with block-level incremental updates.
+
+    Returns dict with counts: new, modified, deleted, unchanged, total.
+    When force=True, skips hash comparison and re-indexes all blocks.
+    """
     ws = os.path.abspath(workspace)
     full_path = os.path.join(ws, rel_path)
 
-    # Remove old blocks from this file
-    old_ids = [
-        row["id"] for row in
-        conn.execute("SELECT id FROM blocks WHERE file = ?", (rel_path,)).fetchall()
-    ]
-    if old_ids:
-        placeholders = ",".join("?" for _ in old_ids)
-        conn.execute(f"DELETE FROM blocks WHERE id IN ({placeholders})", old_ids)
-        conn.execute(f"DELETE FROM blocks_fts WHERE block_id IN ({placeholders})", old_ids)
-        conn.execute(
-            f"DELETE FROM xref_edges WHERE src IN ({placeholders}) OR dst IN ({placeholders})",
-            old_ids + old_ids,
-        )
+    counts = {"new": 0, "modified": 0, "deleted": 0, "unchanged": 0, "total": 0}
 
+    # Load existing block hashes for this file
+    existing_hashes = {}
+    for row in conn.execute(
+        "SELECT block_id, content_hash FROM index_meta WHERE file_path = ?",
+        (rel_path,),
+    ).fetchall():
+        existing_hashes[row["block_id"]] = row["content_hash"]
+
+    # Handle deleted file
     if not os.path.isfile(full_path):
+        if existing_hashes:
+            old_ids = list(existing_hashes.keys())
+            _delete_blocks(conn, old_ids, rel_path)
+            counts["deleted"] = len(old_ids)
         _update_file_state(conn, workspace, rel_path)
-        return 0
+        return counts
 
     try:
         blocks = parse_file(full_path)
     except (OSError, UnicodeDecodeError, ValueError):
         _update_file_state(conn, workspace, rel_path)
-        return 0
+        return counts
 
-    count = 0
+    # Build current block map: {block_id: (block_dict, content_hash)}
+    current_blocks = {}
     for block in blocks:
         bid = block.get("_id", "")
         if not bid:
             continue
+        current_blocks[bid] = (block, _compute_block_hash(block))
 
-        tags_str = block.get("Tags", "")
-        speaker = _parse_speaker_from_tags(tags_str)
+    current_ids = set(current_blocks.keys())
+    existing_ids = set(existing_hashes.keys())
 
-        # Insert into blocks table
+    # Classify blocks
+    new_ids = current_ids - existing_ids
+    deleted_ids = existing_ids - current_ids
+    common_ids = current_ids & existing_ids
+
+    modified_ids = set()
+    unchanged_ids = set()
+    for bid in common_ids:
+        if force or current_blocks[bid][1] != existing_hashes[bid]:
+            modified_ids.add(bid)
+        else:
+            unchanged_ids.add(bid)
+
+    # Delete removed blocks
+    if deleted_ids:
+        _delete_blocks(conn, list(deleted_ids), rel_path)
+
+    # Delete modified blocks (will be re-inserted)
+    if modified_ids:
+        _delete_blocks(conn, list(modified_ids), rel_path)
+
+    # Insert new + modified blocks
+    for bid in new_ids | modified_ids:
+        block, content_hash = current_blocks[bid]
+        _insert_block(conn, block, bid, rel_path, all_block_ids)
         conn.execute(
-            """INSERT OR REPLACE INTO blocks
-               (id, type, file, line, status, date, speaker, tags, dia_id, json_blob)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                bid,
-                get_block_type(bid),
-                rel_path,
-                block.get("_line", 0),
-                block.get("Status", ""),
-                block.get("Date", ""),
-                speaker,
-                tags_str,
-                block.get("DiaID", ""),
-                json.dumps(block, default=str),
-            ),
+            """INSERT OR REPLACE INTO index_meta
+               (file_path, block_id, content_hash)
+               VALUES (?, ?, ?)""",
+            (rel_path, bid, content_hash),
         )
 
-        # Insert into FTS5
-        fts = _extract_fts_fields(block)
+    # Update index_meta for unchanged blocks (keep existing entries)
+    # No-op — they're already correct in index_meta
+
+    # Clean up index_meta for deleted blocks
+    if deleted_ids:
+        placeholders = ",".join("?" for _ in deleted_ids)
         conn.execute(
-            """INSERT INTO blocks_fts (block_id, statement, title, name,
-               description, tags, context, all_text)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (bid, fts["statement"], fts["title"], fts["name"],
-             fts["description"], fts["tags"], fts["context"], fts["all_text"]),
+            f"DELETE FROM index_meta WHERE file_path = ? AND block_id IN ({placeholders})",
+            [rel_path] + list(deleted_ids),
         )
 
-        # Insert xref edges
-        refs = _extract_xrefs(block, all_block_ids)
-        for ref in refs:
-            conn.execute(
-                "INSERT OR IGNORE INTO xref_edges (src, dst) VALUES (?, ?)",
-                (bid, ref),
-            )
-            conn.execute(
-                "INSERT OR IGNORE INTO xref_edges (src, dst) VALUES (?, ?)",
-                (ref, bid),
-            )
-
-        count += 1
+    counts["new"] = len(new_ids)
+    counts["modified"] = len(modified_ids)
+    counts["deleted"] = len(deleted_ids)
+    counts["unchanged"] = len(unchanged_ids)
+    counts["total"] = len(new_ids) + len(modified_ids)
 
     _update_file_state(conn, workspace, rel_path)
-    return count
+    return counts
+
+
+def _insert_block(
+    conn: sqlite3.Connection,
+    block: dict,
+    bid: str,
+    rel_path: str,
+    all_block_ids: set,
+) -> None:
+    """Insert a single block into blocks, blocks_fts, and xref_edges."""
+    tags_str = block.get("Tags", "")
+    speaker = _parse_speaker_from_tags(tags_str)
+
+    conn.execute(
+        """INSERT OR REPLACE INTO blocks
+           (id, type, file, line, status, date, speaker, tags, dia_id, json_blob)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            bid,
+            get_block_type(bid),
+            rel_path,
+            block.get("_line", 0),
+            block.get("Status", ""),
+            block.get("Date", ""),
+            speaker,
+            tags_str,
+            block.get("DiaID", ""),
+            json.dumps(block, default=str),
+        ),
+    )
+
+    fts = _extract_fts_fields(block)
+    conn.execute(
+        """INSERT INTO blocks_fts (block_id, statement, title, name,
+           description, tags, context, all_text)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (bid, fts["statement"], fts["title"], fts["name"],
+         fts["description"], fts["tags"], fts["context"], fts["all_text"]),
+    )
+
+    refs = _extract_xrefs(block, all_block_ids)
+    for ref in refs:
+        conn.execute(
+            "INSERT OR IGNORE INTO xref_edges (src, dst) VALUES (?, ?)",
+            (bid, ref),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO xref_edges (src, dst) VALUES (?, ?)",
+            (ref, bid),
+        )
+
+
+def _delete_blocks(
+    conn: sqlite3.Connection,
+    block_ids: list,
+    rel_path: str,
+) -> None:
+    """Delete blocks from blocks, blocks_fts, and xref_edges."""
+    if not block_ids:
+        return
+    placeholders = ",".join("?" for _ in block_ids)
+    conn.execute(f"DELETE FROM blocks WHERE id IN ({placeholders})", block_ids)
+    conn.execute(f"DELETE FROM blocks_fts WHERE block_id IN ({placeholders})", block_ids)
+    conn.execute(
+        f"DELETE FROM xref_edges WHERE src IN ({placeholders}) OR dst IN ({placeholders})",
+        block_ids + block_ids,
+    )
 
 
 def build_index(workspace: str, incremental: bool = True) -> dict:
@@ -386,21 +491,30 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
             except (OSError, UnicodeDecodeError, ValueError) as e:
                 _log.debug("xref_scan_parse_failed", file=rel_path, error=str(e))
 
+    force = not incremental
     if incremental:
         changed = _get_changed_files(conn, workspace)
     else:
         changed = list(CORPUS_FILES.items())
-        # Clear all data for full rebuild
-        conn.execute("DELETE FROM blocks")
-        conn.execute("DELETE FROM blocks_fts")
-        conn.execute("DELETE FROM xref_edges")
+        # Clear file_state and index_meta for full rebuild
         conn.execute("DELETE FROM file_state")
+        conn.execute("DELETE FROM index_meta")
 
     total_blocks = 0
+    total_new = 0
+    total_modified = 0
+    total_deleted = 0
+    total_unchanged = 0
     for label, rel_path in changed:
-        count = _index_file(conn, workspace, label, rel_path, all_block_ids)
-        total_blocks += count
-        _log.info("indexed_file", file=rel_path, blocks=count)
+        counts = _index_file(conn, workspace, label, rel_path, all_block_ids, force=force)
+        total_blocks += counts["total"]
+        total_new += counts["new"]
+        total_modified += counts["modified"]
+        total_deleted += counts["deleted"]
+        total_unchanged += counts["unchanged"]
+        _log.info("indexed_file", file=rel_path,
+                  new=counts["new"], modified=counts["modified"],
+                  deleted=counts["deleted"], unchanged=counts["unchanged"])
 
     # Update metadata
     conn.execute(
@@ -419,6 +533,10 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
         "files_checked": len(CORPUS_FILES),
         "files_indexed": len(changed),
         "blocks_indexed": total_blocks,
+        "blocks_new": total_new,
+        "blocks_modified": total_modified,
+        "blocks_deleted": total_deleted,
+        "blocks_unchanged": total_unchanged,
         "elapsed_ms": round(elapsed, 1),
     }
 
@@ -773,7 +891,8 @@ def main():
         print("Index build complete:")
         print(f"  Files checked: {result['files_checked']}")
         print(f"  Files indexed: {result['files_indexed']}")
-        print(f"  Blocks indexed: {result['blocks_indexed']}")
+        print(f"  Blocks: {result['blocks_new']} new, {result['blocks_modified']} modified, "
+              f"{result['blocks_deleted']} deleted, {result['blocks_unchanged']} unchanged")
         print(f"  Total blocks: {result['total_blocks']}")
         print(f"  Elapsed: {result['elapsed_ms']:.0f}ms")
 

@@ -9,6 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from sqlite_index import (
+    _compute_block_hash,
     _connect,
     _db_path,
     _file_hash,
@@ -238,6 +239,266 @@ class TestIndexStatus(_WorkspaceMixin, unittest.TestCase):
 
         status = index_status(ws)
         self.assertGreater(status["stale_files"], 0)
+
+
+class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
+    """Tests for block-level incremental FTS indexing (issue #17)."""
+
+    def setUp(self):
+        self.td = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.td, ignore_errors=True)
+
+    def test_initial_build_all_new(self):
+        """First build should report all blocks as new."""
+        ws = self._setup_workspace(self.td, decisions=(
+            "[D-20260101-001]\n"
+            "Statement: Use PostgreSQL\n"
+            "Status: active\n"
+            "\n---\n\n"
+            "[D-20260101-002]\n"
+            "Statement: Use Redis\n"
+            "Status: active\n"
+        ))
+        result = build_index(ws, incremental=False)
+        self.assertEqual(result["blocks_new"], 2)
+        self.assertEqual(result["blocks_modified"], 0)
+        self.assertEqual(result["blocks_deleted"], 0)
+        self.assertEqual(result["blocks_unchanged"], 0)
+
+    def test_unchanged_blocks_skipped(self):
+        """Unchanged blocks should not be re-indexed."""
+        ws = self._setup_workspace(self.td, decisions=(
+            "[D-20260101-001]\n"
+            "Statement: Use PostgreSQL\n"
+            "Status: active\n"
+            "\n---\n\n"
+            "[D-20260101-002]\n"
+            "Statement: Use Redis\n"
+            "Status: active\n"
+        ))
+        build_index(ws, incremental=False)
+
+        # Touch the file (change mtime) but keep same content
+        path = os.path.join(ws, "decisions", "DECISIONS.md")
+        content = open(path).read()
+        import time
+        time.sleep(0.05)
+        with open(path, "w") as f:
+            f.write(content)
+
+        result = build_index(ws, incremental=True)
+        # File changed (mtime), so it's in the changed list
+        self.assertGreater(result["files_indexed"], 0)
+        # But all blocks unchanged at block level
+        self.assertEqual(result["blocks_new"], 0)
+        self.assertEqual(result["blocks_modified"], 0)
+        self.assertEqual(result["blocks_unchanged"], 2)
+
+    def test_modified_block_detected(self):
+        """Modifying a single block should only re-index that block."""
+        ws = self._setup_workspace(self.td, decisions=(
+            "[D-20260101-001]\n"
+            "Statement: Use PostgreSQL\n"
+            "Status: active\n"
+            "\n---\n\n"
+            "[D-20260101-002]\n"
+            "Statement: Use Redis\n"
+            "Status: active\n"
+        ))
+        build_index(ws, incremental=False)
+
+        # Modify only the second block
+        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            f.write(
+                "[D-20260101-001]\n"
+                "Statement: Use PostgreSQL\n"
+                "Status: active\n"
+                "\n---\n\n"
+                "[D-20260101-002]\n"
+                "Statement: Use Memcached instead of Redis\n"
+                "Status: active\n"
+            )
+
+        result = build_index(ws, incremental=True)
+        self.assertEqual(result["blocks_modified"], 1)
+        self.assertEqual(result["blocks_unchanged"], 1)
+        self.assertEqual(result["blocks_new"], 0)
+        self.assertEqual(result["blocks_deleted"], 0)
+
+    def test_new_block_added(self):
+        """Adding a block should be detected as new."""
+        ws = self._setup_workspace(self.td, decisions=(
+            "[D-20260101-001]\n"
+            "Statement: Use PostgreSQL\n"
+            "Status: active\n"
+        ))
+        build_index(ws, incremental=False)
+
+        # Add a second block
+        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "a") as f:
+            f.write(
+                "\n---\n\n"
+                "[D-20260101-002]\n"
+                "Statement: Use Redis\n"
+                "Status: active\n"
+            )
+
+        result = build_index(ws, incremental=True)
+        self.assertEqual(result["blocks_new"], 1)
+        self.assertEqual(result["blocks_unchanged"], 1)
+
+    def test_block_deleted(self):
+        """Removing a block should be detected as deleted."""
+        ws = self._setup_workspace(self.td, decisions=(
+            "[D-20260101-001]\n"
+            "Statement: Use PostgreSQL\n"
+            "Status: active\n"
+            "\n---\n\n"
+            "[D-20260101-002]\n"
+            "Statement: Use Redis\n"
+            "Status: active\n"
+        ))
+        build_index(ws, incremental=False)
+
+        # Remove the second block
+        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            f.write(
+                "[D-20260101-001]\n"
+                "Statement: Use PostgreSQL\n"
+                "Status: active\n"
+            )
+
+        result = build_index(ws, incremental=True)
+        self.assertEqual(result["blocks_deleted"], 1)
+        self.assertEqual(result["blocks_unchanged"], 1)
+
+        # Verify deleted block is gone from FTS
+        results = query_index(ws, "Redis")
+        ids = [r["_id"] for r in results]
+        self.assertNotIn("D-20260101-002", ids)
+
+    def test_mixed_add_modify_delete(self):
+        """All three operations in a single reindex."""
+        ws = self._setup_workspace(self.td, decisions=(
+            "[D-20260101-001]\n"
+            "Statement: Use PostgreSQL\n"
+            "Status: active\n"
+            "\n---\n\n"
+            "[D-20260101-002]\n"
+            "Statement: Use Redis\n"
+            "Status: active\n"
+            "\n---\n\n"
+            "[D-20260101-003]\n"
+            "Statement: Use Docker\n"
+            "Status: active\n"
+        ))
+        build_index(ws, incremental=False)
+
+        # 001: unchanged, 002: modify, 003: delete, 004: new
+        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            f.write(
+                "[D-20260101-001]\n"
+                "Statement: Use PostgreSQL\n"
+                "Status: active\n"
+                "\n---\n\n"
+                "[D-20260101-002]\n"
+                "Statement: Use Memcached\n"
+                "Status: active\n"
+                "\n---\n\n"
+                "[D-20260101-004]\n"
+                "Statement: Use Kubernetes\n"
+                "Status: active\n"
+            )
+
+        result = build_index(ws, incremental=True)
+        self.assertEqual(result["blocks_unchanged"], 1)  # 001
+        self.assertEqual(result["blocks_modified"], 1)    # 002
+        self.assertEqual(result["blocks_deleted"], 1)     # 003
+        self.assertEqual(result["blocks_new"], 1)         # 004
+
+    def test_force_rebuild_reindexes_all(self):
+        """Full rebuild should re-index all blocks even if unchanged."""
+        ws = self._setup_workspace(self.td, decisions=(
+            "[D-20260101-001]\n"
+            "Statement: Use PostgreSQL\n"
+            "Status: active\n"
+        ))
+        build_index(ws, incremental=False)
+
+        # Full rebuild — no file changes, but force=True re-indexes
+        result = build_index(ws, incremental=False)
+        self.assertGreater(result["blocks_indexed"], 0)
+
+    def test_index_meta_populated(self):
+        """index_meta table should contain correct hashes after build."""
+        ws = self._setup_workspace(self.td, decisions=(
+            "[D-20260101-001]\n"
+            "Statement: Use PostgreSQL\n"
+            "Status: active\n"
+        ))
+        build_index(ws, incremental=False)
+
+        conn = _connect(ws, readonly=True)
+        rows = conn.execute("SELECT * FROM index_meta").fetchall()
+        conn.close()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["block_id"], "D-20260101-001")
+        self.assertTrue(len(rows[0]["content_hash"]) == 64)  # SHA-256 hex
+
+    def test_modified_block_queryable(self):
+        """After modifying a block, the new content should be searchable."""
+        ws = self._setup_workspace(self.td, decisions=(
+            "[D-20260101-001]\n"
+            "Statement: Use MySQL for database\n"
+            "Status: active\n"
+        ))
+        build_index(ws, incremental=False)
+
+        # Modify content
+        with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+            f.write(
+                "[D-20260101-001]\n"
+                "Statement: Use PostgreSQL for database\n"
+                "Status: active\n"
+            )
+        build_index(ws, incremental=True)
+
+        # New content should be searchable
+        results = query_index(ws, "PostgreSQL")
+        self.assertGreater(len(results), 0)
+        self.assertEqual(results[0]["_id"], "D-20260101-001")
+
+        # Old content should NOT match
+        results = query_index(ws, "MySQL")
+        mysql_ids = [r["_id"] for r in results]
+        self.assertNotIn("D-20260101-001", mysql_ids)
+
+
+class TestComputeBlockHash(unittest.TestCase):
+    """Tests for _compute_block_hash determinism."""
+
+    def test_same_content_same_hash(self):
+        block = {"_id": "D-001", "Statement": "hello", "Status": "active"}
+        self.assertEqual(_compute_block_hash(block), _compute_block_hash(block))
+
+    def test_different_content_different_hash(self):
+        b1 = {"_id": "D-001", "Statement": "hello"}
+        b2 = {"_id": "D-001", "Statement": "world"}
+        self.assertNotEqual(_compute_block_hash(b1), _compute_block_hash(b2))
+
+    def test_line_number_ignored(self):
+        """_line changes should not change the hash (blocks shift around)."""
+        b1 = {"_id": "D-001", "Statement": "hello", "_line": 5}
+        b2 = {"_id": "D-001", "Statement": "hello", "_line": 100}
+        self.assertEqual(_compute_block_hash(b1), _compute_block_hash(b2))
+
+    def test_hash_is_sha256_hex(self):
+        block = {"_id": "D-001", "Statement": "test"}
+        h = _compute_block_hash(block)
+        self.assertEqual(len(h), 64)
+        int(h, 16)  # Should parse as hex
 
 
 class TestFileHash(unittest.TestCase):
