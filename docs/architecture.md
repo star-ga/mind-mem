@@ -1,6 +1,6 @@
 # mind-mem Architecture
 
-Version 1.6.0 | February 2026
+Version 1.7.0 | February 2026
 
 ---
 
@@ -33,8 +33,9 @@ MIND `.so` libraries).
     |  recall.py (BM25) |  |  transcript_capture.py     |
     |  hybrid_recall.py |  |  apply_engine.py (WAL)     |
     |  recall_vector.py |  |  intel_scan.py             |
-    |  evidence_packer  |  |  conflict_resolver.py      |
-    |  cross_encoder    |  |  compaction.py             |
+    |  retrieval_graph  |  |  conflict_resolver.py      |
+    |  evidence_packer  |  |  compaction.py             |
+    |  cross_encoder    |  |  watcher.py (v1.6+)        |
     +--------+---------+  +----+-----------------------+
              |                 |
     +--------v---------+  +----v-----------------------+
@@ -137,6 +138,32 @@ an LLM (the optional observation compression step is the sole exception).
   |  reranker.py)     |   final = 0.6 * CE + 0.4 * original
   +--------+----------+
            |
+           v                    v1.7.0 stages
+  +-------------------+
+  | Hard Negative     |   Demote blocks flagged as misleading
+  | Penalty (2.6)     |   by prior abstention/CE rejections.
+  | (retrieval_graph) |   Penalty: -30% score. Tracked in SQLite.
+  +--------+----------+
+           |
+           v
+  +-------------------+
+  | Fact Aggregation   |   Small-to-big retrieval: atomic fact
+  | (sqlite_index.py)  |   sub-blocks (::F suffix) scored via FTS5,
+  +--------+----------+   then scores aggregated to parent blocks.
+           |
+           v
+  +-------------------+
+  | Co-Retrieval      |   PageRank-like score propagation across
+  | Graph Boost (2.8) |   co-retrieval edges. Blocks frequently
+  | (retrieval_graph) |   returned together get linked.
+  +--------+----------+   damping=0.3, 3 iterations.
+           |
+           v
+  +-------------------+
+  | Knee Cutoff (2.9) |   Adaptive truncation: finds steepest
+  | (_recall_core.py) |   score drop and cuts there instead of
+  +--------+----------+   fixed top-K. min_score filter applies.
+           |
            v
   +-------------------+
   | A-MEM Importance  |   Boosts frequently-accessed blocks.
@@ -174,7 +201,11 @@ flowchart TD
     BM & VE --> RRF[RRF Fusion<br/>k=60]
     RRF --> RR[Deterministic Rerank<br/>4 signals]
     RR --> CE[Cross-Encoder<br/>optional]
-    CE --> AM[A-MEM Boost]
+    CE --> HN[Hard Negative<br/>Penalty v1.7]
+    HN --> FA[Fact Aggregation<br/>small-to-big v1.7]
+    FA --> CG[Co-Retrieval<br/>Graph Boost v1.7]
+    CG --> KC[Knee Cutoff<br/>adaptive v1.7]
+    KC --> AM[A-MEM Boost]
     AM --> CP[Context Packing]
     CP --> EP[Evidence Packing]
     EP --> R[Results]

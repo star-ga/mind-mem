@@ -1,6 +1,6 @@
 # Mind-Mem MCP API Reference
 
-Complete reference for all 16 MCP tools and 8 MCP resources exposed by `mcp_server.py`.
+Complete reference for all 18 MCP tools and 8 MCP resources exposed by `mcp_server.py`.
 
 **Server name:** `mind-mem`
 
