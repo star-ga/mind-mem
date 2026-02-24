@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 from datetime import datetime
 
 from .capture import append_signals, find_all_logs, scan_log

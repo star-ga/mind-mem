@@ -10,10 +10,8 @@ Covers:
 
 import json
 import os
-import sys
 import tempfile
 import unittest
-
 
 from mind_mem.recall import (
     MAX_BLOCKS_PER_QUERY,

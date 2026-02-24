@@ -1,10 +1,8 @@
 """Tests for IntentRouter integration in recall pipeline."""
 import os
 import shutil
-import sys
 import tempfile
 import unittest
-
 
 
 class TestIntentRouterMapping(unittest.TestCase):

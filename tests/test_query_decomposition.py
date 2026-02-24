@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 """Tests for multi-hop query decomposition (#6)."""
 
-import os
-import sys
 import unittest
-
 
 from mind_mem._recall_detection import decompose_query
 

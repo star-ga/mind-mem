@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import os
 import re
-import sys
 from datetime import datetime
 
 from .capture import append_signals

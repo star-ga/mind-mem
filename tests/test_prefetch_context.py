@@ -2,7 +2,6 @@
 """Tests for prefetch_context() in recall.py."""
 
 import os
-import sys
 
 scripts_dir = os.path.join(os.path.dirname(__file__), "..", "scripts")
 

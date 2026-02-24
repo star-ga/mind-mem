@@ -3,7 +3,6 @@
 
 import json
 import os
-import sys
 
 scripts_dir = os.path.join(os.path.dirname(__file__), "..", "scripts")
 

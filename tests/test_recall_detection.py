@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 """Tests for _recall_detection.py — query type classification and text extraction."""
 
-import os
-import sys
 import unittest
-
 
 from mind_mem._recall_detection import (
     _QUERY_TYPE_PARAMS,

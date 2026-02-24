@@ -3,11 +3,9 @@
 import os
 import shutil
 import sqlite3
-import sys
 import tempfile
 import threading
 import unittest
-
 
 from mind_mem.block_metadata import BlockMetadataManager
 from mind_mem.block_parser import BlockCorruptedError, parse_blocks, parse_file

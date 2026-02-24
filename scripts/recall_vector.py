@@ -44,7 +44,6 @@ import struct
 import sys
 from typing import Any
 
-
 # Import helpers from recall.py
 from .block_parser import parse_file
 from .observability import get_logger, metrics, timed

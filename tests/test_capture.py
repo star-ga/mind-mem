@@ -2,7 +2,6 @@
 """Tests for capture.py — zero external deps (stdlib unittest)."""
 
 import os
-import sys
 import tempfile
 import unittest
 

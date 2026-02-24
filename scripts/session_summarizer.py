@@ -18,7 +18,6 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-import sys
 from collections import Counter
 from datetime import datetime
 

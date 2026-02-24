@@ -4,10 +4,8 @@ import os
 import sqlite3
 
 # Allow imports from scripts/
-import sys
 import tempfile
 import unittest
-
 
 from mind_mem.block_metadata import BlockMetadataManager
 

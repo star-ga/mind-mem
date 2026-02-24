@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Tests for block_parser.py — overlapping chunk splitting + dedup."""
 
-import os
-import sys
 import unittest
 
 from mind_mem.block_parser import chunk_block, deduplicate_chunks

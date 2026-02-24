@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """Tests for apply_engine.py — focus on security, validation, and rollback."""
 
+import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
-
-import json
-import subprocess
 from datetime import datetime, timedelta
 
 from mind_mem.apply_engine import (

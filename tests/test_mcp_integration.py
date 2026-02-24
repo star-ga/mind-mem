@@ -1,8 +1,6 @@
 """Integration tests for MCP server tools."""
 import json
 import os
-import sys
-
 
 
 def _make_workspace(tmp_path):

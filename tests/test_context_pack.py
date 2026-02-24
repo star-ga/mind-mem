@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Tests for context_pack rules: adjacency, diversity, pronoun rescue."""
 
-import os
-import sys
 
 
 from mind_mem.recall import (

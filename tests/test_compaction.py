@@ -2,7 +2,6 @@
 """Tests for compaction.py — GC and archival engine."""
 
 import os
-import sys
 import tempfile
 import unittest
 from datetime import datetime
