@@ -116,7 +116,7 @@ class TestFTSFallback(unittest.TestCase):
 
     def test_fallback_envelope_has_warnings(self):
         """recall returns warnings list mentioning FTS5 when no index exists."""
-        result = _call_tool(self.mod.recall, query="PostgreSQL", limit=5)
+        result = _call_tool(self.mod.recall, query="PostgreSQL", limit=5, backend="bm25")
         envelope = json.loads(result)
         self.assertIn("warnings", envelope)
         self.assertIsInstance(envelope["warnings"], list)
@@ -127,19 +127,19 @@ class TestFTSFallback(unittest.TestCase):
 
     def test_fallback_envelope_schema_version(self):
         """Envelope _schema_version is '1.0'."""
-        result = _call_tool(self.mod.recall, query="PostgreSQL", limit=5)
+        result = _call_tool(self.mod.recall, query="PostgreSQL", limit=5, backend="bm25")
         envelope = json.loads(result)
         self.assertEqual(envelope["_schema_version"], "1.0")
 
     def test_fallback_backend_is_scan(self):
-        """When no FTS5 index exists, backend should be 'scan'."""
-        result = _call_tool(self.mod.recall, query="PostgreSQL", limit=5)
+        """When no FTS5 index exists and backend=bm25, backend should be 'scan'."""
+        result = _call_tool(self.mod.recall, query="PostgreSQL", limit=5, backend="bm25")
         envelope = json.loads(result)
         self.assertEqual(envelope["backend"], "scan")
 
     def test_fallback_results_is_list(self):
         """Results field is always a list, even in fallback mode."""
-        result = _call_tool(self.mod.recall, query="PostgreSQL", limit=5)
+        result = _call_tool(self.mod.recall, query="PostgreSQL", limit=5, backend="bm25")
         envelope = json.loads(result)
         self.assertIsInstance(envelope["results"], list)
 

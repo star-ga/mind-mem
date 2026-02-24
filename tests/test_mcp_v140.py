@@ -120,7 +120,7 @@ class TestSQLiteBusyError(unittest.TestCase):
 
         with patch.object(self.mod, "fts_query",
                           side_effect=sqlite3.OperationalError("database is locked")):
-            result_str = _call_tool(self.mod.recall, "test query")
+            result_str = _call_tool(self.mod.recall, "test query", backend="bm25")
             result = json.loads(result_str)
             self.assertEqual(result["error"], "database_busy")
             self.assertEqual(result["retry_after_seconds"], 1)
