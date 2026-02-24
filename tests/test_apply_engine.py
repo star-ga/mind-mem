@@ -6,12 +6,11 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import json
 import subprocess
 from datetime import datetime, timedelta
 
-from apply_engine import (
+from mind_mem.apply_engine import (
     _op_replace_range,
     _op_supersede_decision,
     _safe_resolve,
@@ -269,7 +268,7 @@ class TestFreshInitValidate(unittest.TestCase):
 
     def test_fresh_init_passes_validate(self):
         with tempfile.TemporaryDirectory() as ws:
-            from init_workspace import init
+            from mind_mem.init_workspace import init
             init(ws)
             result = subprocess.run(
                 ["bash", os.path.join(ws, "maintenance", "validate.sh"), ws],
@@ -349,7 +348,7 @@ class TestModeGate(unittest.TestCase):
 
     def test_detect_only_blocks_apply(self):
         with tempfile.TemporaryDirectory() as ws:
-            from init_workspace import init
+            from mind_mem.init_workspace import init
             init(ws)
             # Default mode is detect_only
             ok, msg = apply_proposal(ws, "P-20260214-001", dry_run=False)
@@ -358,7 +357,7 @@ class TestModeGate(unittest.TestCase):
 
     def test_detect_only_blocks_dry_run(self):
         with tempfile.TemporaryDirectory() as ws:
-            from init_workspace import init
+            from mind_mem.init_workspace import init
             init(ws)
             ok, msg = apply_proposal(ws, "P-20260214-001", dry_run=False)
             self.assertFalse(ok)
@@ -367,7 +366,7 @@ class TestModeGate(unittest.TestCase):
     def test_propose_mode_allows_apply(self):
         """In propose mode, apply should proceed past mode gate (will fail on missing proposal)."""
         with tempfile.TemporaryDirectory() as ws:
-            from init_workspace import init
+            from mind_mem.init_workspace import init
             init(ws)
             # Switch to propose mode
             state_path = os.path.join(ws, "memory/intel-state.json")
@@ -387,9 +386,9 @@ class TestBacklogLimit(unittest.TestCase):
 
     def test_at_exact_limit_is_exceeded(self):
         """count == limit should be exceeded (>= per M6)."""
-        from apply_engine import check_backlog_limit
+        from mind_mem.apply_engine import check_backlog_limit
         with tempfile.TemporaryDirectory() as ws:
-            from init_workspace import init
+            from mind_mem.init_workspace import init
             init(ws)
             # Set limit in mind-mem.json (source of truth for config)
             config_path = os.path.join(ws, "mind-mem.json")
@@ -412,9 +411,9 @@ class TestBacklogLimit(unittest.TestCase):
 
     def test_under_limit_not_exceeded(self):
         """count < limit should NOT be exceeded."""
-        from apply_engine import check_backlog_limit
+        from mind_mem.apply_engine import check_backlog_limit
         with tempfile.TemporaryDirectory() as ws:
-            from init_workspace import init
+            from mind_mem.init_workspace import init
             init(ws)
             config_path = os.path.join(ws, "mind-mem.json")
             with open(config_path) as f:
@@ -439,9 +438,9 @@ class TestFingerprintDedupCollision(unittest.TestCase):
 
     def test_different_proposal_same_fingerprint_detected(self):
         """Two proposals targeting same block with same ops should collide."""
-        from apply_engine import check_fingerprint_dedup, compute_fingerprint
+        from mind_mem.apply_engine import check_fingerprint_dedup, compute_fingerprint
         with tempfile.TemporaryDirectory() as ws:
-            from init_workspace import init
+            from mind_mem.init_workspace import init
             init(ws)
 
             # Create a staged proposal in the proposed file
@@ -477,9 +476,9 @@ class TestFingerprintDedupCollision(unittest.TestCase):
 
     def test_same_proposal_id_not_self_collision(self):
         """A proposal should not collide with itself."""
-        from apply_engine import check_fingerprint_dedup, compute_fingerprint
+        from mind_mem.apply_engine import check_fingerprint_dedup, compute_fingerprint
         with tempfile.TemporaryDirectory() as ws:
-            from init_workspace import init
+            from mind_mem.init_workspace import init
             init(ws)
 
             proposed_dir = os.path.join(ws, "intelligence/proposed")
@@ -511,9 +510,9 @@ class TestSnapshotRecursionPrevention(unittest.TestCase):
 
     def test_snapshot_excludes_applied_dir(self):
         """intelligence/applied/ must NOT be copied into new snapshots."""
-        from apply_engine import create_snapshot
+        from mind_mem.apply_engine import create_snapshot
         with tempfile.TemporaryDirectory() as ws:
-            from init_workspace import init
+            from mind_mem.init_workspace import init
             init(ws)
 
             # Create a fake prior snapshot in intelligence/applied/
@@ -543,9 +542,9 @@ class TestMinimalSnapshot(unittest.TestCase):
 
     def test_minimal_snapshot_only_copies_touched_files(self):
         """When files_touched is provided, only those files + config are snapshotted."""
-        from apply_engine import create_snapshot
+        from mind_mem.apply_engine import create_snapshot
         with tempfile.TemporaryDirectory() as ws:
-            from init_workspace import init
+            from mind_mem.init_workspace import init
             init(ws)
 
             # Write to multiple files
@@ -573,9 +572,9 @@ class TestMinimalSnapshot(unittest.TestCase):
 
     def test_full_snapshot_when_no_files_touched(self):
         """When files_touched is None, full snapshot is created."""
-        from apply_engine import create_snapshot
+        from mind_mem.apply_engine import create_snapshot
         with tempfile.TemporaryDirectory() as ws:
-            from init_workspace import init
+            from mind_mem.init_workspace import init
             init(ws)
             with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
                 f.write("[D-001]\nStatement: Test\nStatus: active\n")
@@ -593,7 +592,7 @@ class TestMinimalSnapshot(unittest.TestCase):
         Hardlinks are unsafe for mutable-file snapshots — open("w") truncates
         the inode in-place, corrupting both files.
         """
-        from apply_engine import _safe_copy
+        from mind_mem.apply_engine import _safe_copy
         with tempfile.TemporaryDirectory() as td:
             src = os.path.join(td, "source.md")
             dst = os.path.join(td, "dest.md")
@@ -609,7 +608,7 @@ class TestMinimalSnapshot(unittest.TestCase):
 
     def test_safe_copy_creates_parent_dirs(self):
         """_safe_copy should create intermediate directories."""
-        from apply_engine import _safe_copy
+        from mind_mem.apply_engine import _safe_copy
         with tempfile.TemporaryDirectory() as td:
             src = os.path.join(td, "source.md")
             dst = os.path.join(td, "deep", "nested", "dest.md")
@@ -620,9 +619,9 @@ class TestMinimalSnapshot(unittest.TestCase):
 
     def test_minimal_snapshot_preserves_content(self):
         """Snapshot content must match original."""
-        from apply_engine import create_snapshot
+        from mind_mem.apply_engine import create_snapshot
         with tempfile.TemporaryDirectory() as ws:
-            from init_workspace import init
+            from mind_mem.init_workspace import init
             init(ws)
             original = "[D-001]\nStatement: PostgreSQL\nStatus: active\n"
             with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
@@ -641,9 +640,9 @@ class TestDeferredCooldown(unittest.TestCase):
 
     def test_recent_rejected_blocks_new_proposal(self):
         """A rejected proposal within cooldown period should block new proposals for same target."""
-        from apply_engine import check_deferred_cooldown
+        from mind_mem.apply_engine import check_deferred_cooldown
         with tempfile.TemporaryDirectory() as ws:
-            from init_workspace import init
+            from mind_mem.init_workspace import init
             init(ws)
 
             # Set cooldown to 7 days
@@ -671,9 +670,9 @@ class TestDeferredCooldown(unittest.TestCase):
 
     def test_old_rejected_allows_new_proposal(self):
         """A rejected proposal outside cooldown period should allow re-proposal."""
-        from apply_engine import check_deferred_cooldown
+        from mind_mem.apply_engine import check_deferred_cooldown
         with tempfile.TemporaryDirectory() as ws:
-            from init_workspace import init
+            from mind_mem.init_workspace import init
             init(ws)
 
             state_path = os.path.join(ws, "memory/intel-state.json")

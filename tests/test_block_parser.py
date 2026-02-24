@@ -5,8 +5,7 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from block_parser import extract_refs, get_active, get_by_id, parse_blocks
+from mind_mem.block_parser import extract_refs, get_active, get_by_id, parse_blocks
 
 
 class TestParseBlocks(unittest.TestCase):

@@ -8,8 +8,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from schema_version import (
+from mind_mem.schema_version import (
     CURRENT_SCHEMA_VERSION,
     check_migration_needed,
     get_workspace_version,

@@ -7,8 +7,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from transcript_capture import (
+from mind_mem.transcript_capture import (
     TRANSCRIPT_PATTERNS,
     XREF_PATTERN,
     parse_transcript,

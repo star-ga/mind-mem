@@ -9,9 +9,8 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from block_parser import parse_blocks
-from recall import extract_text, recall, tokenize
+from mind_mem.block_parser import parse_blocks
+from mind_mem.recall import extract_text, recall, tokenize
 
 # ---------------------------------------------------------------------------
 # Block parser edge cases

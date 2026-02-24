@@ -7,15 +7,14 @@ import tempfile
 import unittest
 from datetime import datetime
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from compaction import (
+from mind_mem.compaction import (
     _extract_block_text,
     archive_completed_blocks,
     cleanup_daily_logs,
     cleanup_snapshots,
     compact_signals,
 )
-from init_workspace import init
+from mind_mem.init_workspace import init
 
 
 class TestExtractBlockText(unittest.TestCase):

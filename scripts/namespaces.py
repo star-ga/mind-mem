@@ -32,7 +32,7 @@ ACL format (mind-mem-acl.json):
     }
 
 Usage:
-    from namespaces import NamespaceManager
+    from .namespaces import NamespaceManager
     ns = NamespaceManager(workspace, agent_id="coder-1")
     ns.can_write("agents/coder-1/decisions/DECISIONS.md")  # True
     ns.can_write("shared/decisions/DECISIONS.md")            # False (read-only)
@@ -46,9 +46,8 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mind_filelock import FileLock
-from observability import get_logger
+from .mind_filelock import FileLock
+from .observability import get_logger
 
 _log = get_logger("namespaces")
 
@@ -277,7 +276,7 @@ class SharedLedger:
         if not os.path.isfile(self.ledger_path):
             return []
 
-        from block_parser import parse_file
+        from .block_parser import parse_file
         blocks = parse_file(self.ledger_path)
         if status:
             blocks = [b for b in blocks if b.get("Status") == status]

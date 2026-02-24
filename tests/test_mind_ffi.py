@@ -6,9 +6,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from mind_ffi import (
+from mind_mem.mind_ffi import (
     MindMemKernel,
     _check_version_compat,
     _parse_value,
@@ -319,17 +318,17 @@ class TestVersionCompat(unittest.TestCase):
 
     def test_matching_versions_compatible(self):
         """Same major.minor should return True."""
-        with mock.patch("mind_ffi._get_python_version", return_value="1.2.0"):
+        with mock.patch("mind_mem.mind_ffi._get_python_version", return_value="1.2.0"):
             self.assertTrue(_check_version_compat("1.2.0"))
 
     def test_matching_major_minor_different_patch(self):
         """Same major.minor, different patch should be compatible."""
-        with mock.patch("mind_ffi._get_python_version", return_value="1.2.3"):
+        with mock.patch("mind_mem.mind_ffi._get_python_version", return_value="1.2.3"):
             self.assertTrue(_check_version_compat("1.2.0"))
 
     def test_mismatched_major(self):
         """Different major version should warn and return False."""
-        with mock.patch("mind_ffi._get_python_version", return_value="1.2.0"):
+        with mock.patch("mind_mem.mind_ffi._get_python_version", return_value="1.2.0"):
             with self.assertLogs("mind-mem.ffi", level="WARNING") as cm:
                 result = _check_version_compat("2.0.0")
             self.assertFalse(result)
@@ -337,7 +336,7 @@ class TestVersionCompat(unittest.TestCase):
 
     def test_mismatched_minor(self):
         """Different minor version should warn and return False."""
-        with mock.patch("mind_ffi._get_python_version", return_value="1.2.0"):
+        with mock.patch("mind_mem.mind_ffi._get_python_version", return_value="1.2.0"):
             with self.assertLogs("mind-mem.ffi", level="WARNING") as cm:
                 result = _check_version_compat("1.3.0")
             self.assertFalse(result)
@@ -345,7 +344,7 @@ class TestVersionCompat(unittest.TestCase):
 
     def test_malformed_so_version(self):
         """Unparseable .so version should warn and return False."""
-        with mock.patch("mind_ffi._get_python_version", return_value="1.2.0"):
+        with mock.patch("mind_mem.mind_ffi._get_python_version", return_value="1.2.0"):
             with self.assertLogs("mind-mem.ffi", level="WARNING") as cm:
                 result = _check_version_compat("bad")
             self.assertFalse(result)
@@ -353,14 +352,14 @@ class TestVersionCompat(unittest.TestCase):
 
     def test_empty_so_version(self):
         """Empty .so version string should warn and return False."""
-        with mock.patch("mind_ffi._get_python_version", return_value="1.2.0"):
+        with mock.patch("mind_mem.mind_ffi._get_python_version", return_value="1.2.0"):
             with self.assertLogs("mind-mem.ffi", level="WARNING"):
                 result = _check_version_compat("")
             self.assertFalse(result)
 
     def test_get_kernel_logs_info_when_no_so(self):
         """get_kernel() should log info when .so is missing."""
-        import mind_ffi
+        from mind_mem import mind_ffi
         # Reset singleton state
         mind_ffi._kernel = None
         mind_ffi._USE_MIND = False

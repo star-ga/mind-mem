@@ -7,8 +7,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from sqlite_index import (
+from mind_mem.sqlite_index import (
     _compute_block_hash,
     _connect,
     _db_path,

@@ -8,8 +8,7 @@ import tempfile
 import time
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from watcher import FileWatcher
+from mind_mem.watcher import FileWatcher
 
 
 class TestFileWatcher(unittest.TestCase):

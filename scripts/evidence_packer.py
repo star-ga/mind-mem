@@ -206,13 +206,13 @@ def check_abstention(
     When abstention fires, records hard negatives for future score demotion.
     Returns (should_abstain, forced_answer, confidence).
     """
-    from abstention_classifier import classify_abstention
+    from .abstention_classifier import classify_abstention
     result = classify_abstention(question, hits, threshold=threshold)
 
     # Feature 5: Record hard negatives when abstention fires
     if result.should_abstain and workspace and hits:
         try:
-            from retrieval_graph import record_hard_negatives
+            from .retrieval_graph import record_hard_negatives
             record_hard_negatives(workspace, question, hits)
         except Exception:
             pass  # Best-effort — never break the recall path

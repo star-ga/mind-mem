@@ -8,8 +8,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from sqlite_index import (
+from mind_mem.sqlite_index import (
     _aggregate_facts_to_parents,
     _connect,
     _init_schema,
@@ -246,7 +245,7 @@ class TestMetadataAugmentedEmbeddings(unittest.TestCase):
     """Test Feature 4 — metadata-augmented embeddings in VectorBackend."""
 
     def test_augment_prepends_metadata(self):
-        from recall_vector import VectorBackend
+        from mind_mem.recall_vector import VectorBackend
         block = {
             "Category": "FACT",
             "Speaker": "Caroline",
@@ -261,13 +260,13 @@ class TestMetadataAugmentedEmbeddings(unittest.TestCase):
         self.assertIn("She is a nurse", augmented)
 
     def test_augment_handles_missing_metadata(self):
-        from recall_vector import VectorBackend
+        from mind_mem.recall_vector import VectorBackend
         block = {}
         augmented = VectorBackend._augment_for_embedding(block, "raw text")
         self.assertEqual(augmented, "raw text")
 
     def test_augment_uses_fallback_keys(self):
-        from recall_vector import VectorBackend
+        from mind_mem.recall_vector import VectorBackend
         block = {"type": "EVENT", "speaker": "Alice", "date": "2023-01"}
         augmented = VectorBackend._augment_for_embedding(block, "went to gym")
         self.assertIn("[EVENT]", augmented)
@@ -275,7 +274,7 @@ class TestMetadataAugmentedEmbeddings(unittest.TestCase):
         self.assertIn("[2023-01]", augmented)
 
     def test_augment_truncates_long_tags(self):
-        from recall_vector import VectorBackend
+        from mind_mem.recall_vector import VectorBackend
         block = {"Tags": "a" * 100}
         augmented = VectorBackend._augment_for_embedding(block, "text")
         # Tags should be truncated to 50 chars
@@ -288,11 +287,11 @@ class TestValidRecallKeys(unittest.TestCase):
     """Test that new config keys are registered."""
 
     def test_knee_cutoff_key_valid(self):
-        from _recall_constants import _VALID_RECALL_KEYS
+        from mind_mem._recall_constants import _VALID_RECALL_KEYS
         self.assertIn("knee_cutoff", _VALID_RECALL_KEYS)
 
     def test_min_score_key_valid(self):
-        from _recall_constants import _VALID_RECALL_KEYS
+        from mind_mem._recall_constants import _VALID_RECALL_KEYS
         self.assertIn("min_score", _VALID_RECALL_KEYS)
 
 
@@ -307,7 +306,7 @@ class TestFactDeletion(_WorkspaceMixin, unittest.TestCase):
         shutil.rmtree(self.tmpdir)
 
     def test_delete_parent_removes_fact_children(self):
-        from sqlite_index import _delete_blocks
+        from mind_mem.sqlite_index import _delete_blocks
 
         conn = _connect(self.tmpdir)
         _init_schema(conn)

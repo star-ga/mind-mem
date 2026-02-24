@@ -77,13 +77,10 @@ import tempfile
 import threading
 import time
 
-# Add scripts/ to path for mind-mem imports
-SCRIPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scripts")
-sys.path.insert(0, SCRIPT_DIR)
-
-from block_parser import BlockCorruptedError, get_active, parse_file  # noqa: E402, F401
+# mind-mem imports (package mapped to scripts/ via pyproject.toml)
+from mind_mem.block_parser import BlockCorruptedError, get_active, parse_file  # noqa: E402, F401
 from fastmcp import FastMCP  # noqa: E402
-from mind_ffi import (  # noqa: E402
+from mind_mem.mind_ffi import (  # noqa: E402
     get_mind_dir,
     is_available as mind_kernel_available,
     is_protected as mind_kernel_protected,
@@ -91,9 +88,9 @@ from mind_ffi import (  # noqa: E402
     load_all_kernel_configs,
     load_kernel_config,
 )
-from observability import get_logger, metrics  # noqa: E402
-from recall import recall as recall_engine  # noqa: E402
-from sqlite_index import (  # noqa: E402
+from mind_mem.observability import get_logger, metrics  # noqa: E402
+from mind_mem.recall import recall as recall_engine  # noqa: E402
+from mind_mem.sqlite_index import (  # noqa: E402
     _db_path as fts_db_path,
     query_index as fts_query,
 )
@@ -586,7 +583,7 @@ def propose_update(
 
     from datetime import datetime
 
-    from capture import CONFIDENCE_TO_PRIORITY, append_signals
+    from mind_mem.capture import CONFIDENCE_TO_PRIORITY, append_signals
 
     today = datetime.now().strftime("%Y-%m-%d")
     priority = CONFIDENCE_TO_PRIORITY.get(confidence, "P2")
@@ -654,7 +651,7 @@ def scan() -> str:
     if os.path.isfile(contra_path):
         raw_count = len(parse_file(contra_path))
     try:
-        from conflict_resolver import resolve_contradictions
+        from mind_mem.conflict_resolver import resolve_contradictions
         resolutions = resolve_contradictions(ws)
         result["checks"]["contradictions"] = {
             "raw": raw_count,
@@ -696,7 +693,7 @@ def list_contradictions() -> str:
     """
     ws = _workspace()
 
-    from conflict_resolver import resolve_contradictions
+    from mind_mem.conflict_resolver import resolve_contradictions
 
     resolutions = resolve_contradictions(ws)
     if not resolutions:
@@ -739,7 +736,7 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
     import contextlib
     import io
 
-    from apply_engine import apply_proposal
+    from mind_mem.apply_engine import apply_proposal
 
     # Capture stdout from apply_engine (it prints progress)
     capture = io.StringIO()
@@ -785,7 +782,7 @@ def rollback_proposal(receipt_ts: str) -> str:
     import contextlib
     import io
 
-    from apply_engine import rollback as engine_rollback
+    from mind_mem.apply_engine import rollback as engine_rollback
 
     capture = io.StringIO()
     with contextlib.redirect_stdout(capture):
@@ -832,7 +829,7 @@ def hybrid_search(query: str, limit: int = 10, active_only: bool = False) -> str
     limit = max(1, min(limit, limits["max_recall_results"]))
     config_warnings: list[str] = []
     try:
-        from hybrid_recall import HybridBackend, validate_recall_config
+        from mind_mem.hybrid_recall import HybridBackend, validate_recall_config
         config = _load_config(ws)
         # Pre-validate recall config before constructing backend (#28)
         recall_cfg = config.get("recall", {})
@@ -882,7 +879,7 @@ def find_similar(block_id: str, limit: int = 5) -> str:
     limits = _get_limits(ws)
     limit = max(1, min(limit, limits["max_similar_results"]))
     try:
-        from block_metadata import BlockMetadataManager
+        from mind_mem.block_metadata import BlockMetadataManager
         db_path = os.path.join(ws, "memory", "block_meta.db")
         mgr = BlockMetadataManager(db_path)
         co_blocks = mgr.get_co_occurring_blocks(block_id, limit=limit)
@@ -927,7 +924,7 @@ def intent_classify(query: str) -> str:
         JSON with intent type, confidence, sub-intents, and parameters.
     """
     try:
-        from intent_router import IntentRouter
+        from mind_mem.intent_router import IntentRouter
         router = IntentRouter()
         result = router.classify(query)
         metrics.inc("mcp_intent_classify")
@@ -972,7 +969,7 @@ def index_stats() -> str:
 
     if fts_exists:
         try:
-            from sqlite_index import index_status as fts_status
+            from mind_mem.sqlite_index import index_status as fts_status
             fts_info = fts_status(ws)
             stats["total_blocks"] = fts_info.get("blocks", 0)
             stats["last_build"] = fts_info.get("last_build")
@@ -1031,7 +1028,7 @@ def reindex(include_vectors: bool = False) -> str:
     results: dict = {"_schema_version": "1.0", "fts": False, "vectors": False}
 
     try:
-        from sqlite_index import build_index
+        from mind_mem.sqlite_index import build_index
         build_index(ws)
         results["fts"] = True
     except sqlite3.OperationalError as exc:
@@ -1044,7 +1041,7 @@ def reindex(include_vectors: bool = False) -> str:
 
     if include_vectors:
         try:
-            from recall_vector import rebuild_index
+            from mind_mem.recall_vector import rebuild_index
             rebuild_index(ws)
             results["vectors"] = True
         except ImportError:
@@ -1087,7 +1084,7 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
     db_path = os.path.join(ws, "memory", "block_meta.db")
 
     try:
-        from block_metadata import BlockMetadataManager
+        from mind_mem.block_metadata import BlockMetadataManager
         mgr = BlockMetadataManager(db_path)
 
         if action == "update":
@@ -1212,7 +1209,7 @@ def prefetch(signals: str, limit: int = 5) -> str:
     limits = _get_limits(ws)
     limit = max(1, min(limit, limits["max_prefetch_results"]))
     try:
-        from recall import prefetch_context
+        from mind_mem.recall import prefetch_context
         results = prefetch_context(ws, signal_list, limit=limit)
         metrics.inc("mcp_prefetch_queries")
         _log.info("mcp_prefetch", signals=signal_list, results=len(results))

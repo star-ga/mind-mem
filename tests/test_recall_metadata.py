@@ -5,7 +5,6 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 
 class TestBlockMetadataIntegration(unittest.TestCase):
@@ -35,7 +34,7 @@ class TestBlockMetadataIntegration(unittest.TestCase):
 
     def test_importance_boost_applied(self):
         """Verify that A-MEM importance modifies recall scores."""
-        from block_metadata import BlockMetadataManager
+        from mind_mem.block_metadata import BlockMetadataManager
         db_path = os.path.join(self.td, ".mind-mem", "block_meta.db")
         mgr = BlockMetadataManager(db_path)
 
@@ -57,7 +56,7 @@ class TestBlockMetadataIntegration(unittest.TestCase):
 
     def test_record_access_updates_count(self):
         """Verify record_access increments access counts."""
-        from block_metadata import BlockMetadataManager
+        from mind_mem.block_metadata import BlockMetadataManager
         db_path = os.path.join(self.td, ".mind-mem", "block_meta.db")
         mgr = BlockMetadataManager(db_path)
 
@@ -74,7 +73,7 @@ class TestBlockMetadataIntegration(unittest.TestCase):
 
     def test_evolve_keywords(self):
         """Verify evolve_keywords adds query tokens to block keywords."""
-        from block_metadata import BlockMetadataManager
+        from mind_mem.block_metadata import BlockMetadataManager
         db_path = os.path.join(self.td, ".mind-mem", "block_meta.db")
         mgr = BlockMetadataManager(db_path)
 
@@ -94,7 +93,7 @@ class TestBlockMetadataIntegration(unittest.TestCase):
 
     def test_graceful_degradation_missing_dir(self):
         """Verify recall works when .mind-mem directory is missing."""
-        from recall import recall as r
+        from mind_mem.recall import recall as r
         # Remove the .mind-mem dir
         shutil.rmtree(os.path.join(self.td, ".mind-mem"))
         results = r(self.td, "PostgreSQL", limit=5)
@@ -102,7 +101,7 @@ class TestBlockMetadataIntegration(unittest.TestCase):
 
     def test_importance_affects_ranking(self):
         """Block with higher importance should rank higher (all else equal)."""
-        from block_metadata import BlockMetadataManager
+        from mind_mem.block_metadata import BlockMetadataManager
         db_path = os.path.join(self.td, ".mind-mem", "block_meta.db")
         BlockMetadataManager(db_path)  # ensure table exists
 
@@ -120,7 +119,7 @@ class TestBlockMetadataIntegration(unittest.TestCase):
         conn.commit()
         conn.close()
 
-        from recall import recall as r
+        from mind_mem.recall import recall as r
         # Both blocks should match "active" — importance should reorder them
         results = r(self.td, "active status", limit=10)
         if len(results) >= 2:
@@ -133,7 +132,7 @@ class TestBlockMetadataIntegration(unittest.TestCase):
 
     def test_co_occurrence_tracking(self):
         """Verify co-occurrence is recorded between co-returned blocks."""
-        from block_metadata import BlockMetadataManager
+        from mind_mem.block_metadata import BlockMetadataManager
         db_path = os.path.join(self.td, ".mind-mem", "block_meta.db")
         mgr = BlockMetadataManager(db_path)
 

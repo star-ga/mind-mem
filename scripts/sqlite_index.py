@@ -29,11 +29,10 @@ import sqlite3
 import sys
 from datetime import datetime
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from block_parser import parse_file
-from extractor import extract_facts
-from observability import get_logger, metrics
-from recall import (
+from .block_parser import parse_file
+from .extractor import extract_facts
+from .observability import get_logger, metrics
+from .recall import (
     _BLOCK_ID_RE,
     _QUERY_TYPE_PARAMS,
     CORPUS_FILES,
@@ -728,7 +727,7 @@ def query_index(
     db_path = _db_path(workspace)
     if not os.path.isfile(db_path):
         _log.info("index_missing_fallback", db=db_path)
-        from recall import recall
+        from .recall import recall
         return recall(
             workspace, query, limit=limit, active_only=active_only,
             graph_boost=graph_boost, retrieve_wide_k=retrieve_wide_k,
@@ -783,7 +782,7 @@ def query_index(
                       msg="FTS5 query failed, falling back to in-memory BM25 scan")
         conn.close()
         # Fallback to filesystem scan — results are still valid but may be slower
-        from recall import recall
+        from .recall import recall
         fallback_results = recall(
             workspace, query, limit=limit, active_only=active_only,
             graph_boost=graph_boost, retrieve_wide_k=retrieve_wide_k,
@@ -891,7 +890,7 @@ def _apply_graph_boost(
     query_type: str,
 ) -> None:
     """Apply cross-reference graph boost to results using xref_edges table."""
-    from recall import GRAPH_BOOST_FACTOR
+    from .recall import GRAPH_BOOST_FACTOR
 
     score_by_id = {r["_id"]: r["score"] for r in results}
     result_ids = set(score_by_id.keys())

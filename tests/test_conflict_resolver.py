@@ -6,8 +6,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from conflict_resolver import (
+from mind_mem.conflict_resolver import (
     ResolutionStrategy,
     _block_hash,
     _extract_date,

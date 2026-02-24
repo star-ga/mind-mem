@@ -14,7 +14,7 @@ BM25 keyword matching is precise — a 15-word fact card scores much
 higher than a 200-word conversation block for single-hop queries.
 
 Usage:
-    from extractor import extract_facts
+    from .extractor import extract_facts
 
     cards = extract_facts(
         text="[Caroline] I went to a LGBTQ support group yesterday",

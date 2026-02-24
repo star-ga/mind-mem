@@ -22,9 +22,8 @@ import re
 import sys
 from datetime import datetime, timedelta
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from capture import CONFIDENCE_TO_PRIORITY, append_signals, extract_structure
-from observability import get_logger, metrics
+from .capture import CONFIDENCE_TO_PRIORITY, append_signals, extract_structure
+from .observability import get_logger, metrics
 
 _log = get_logger("transcript_capture")
 

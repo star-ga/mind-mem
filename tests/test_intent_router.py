@@ -3,9 +3,8 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from intent_router import INTENT_CONFIG, IntentResult, IntentRouter
+from mind_mem.intent_router import INTENT_CONFIG, IntentResult, IntentRouter
 
 
 class TestIntentClassification(unittest.TestCase):

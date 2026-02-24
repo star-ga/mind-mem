@@ -8,11 +8,10 @@ import unittest
 from datetime import datetime
 
 # Ensure scripts are importable
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from capture import append_signals, scan_log
-from init_workspace import init
-from recall import recall
+from mind_mem.capture import append_signals, scan_log
+from mind_mem.init_workspace import init
+from mind_mem.recall import recall
 
 
 class TestFullLifecycle(unittest.TestCase):

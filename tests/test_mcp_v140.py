@@ -20,7 +20,6 @@ from unittest.mock import MagicMock, patch
 # Load the mcp_server module
 _SERVER_PATH = os.path.join(os.path.dirname(__file__), "..", "mcp_server.py")
 _SCRIPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "scripts")
-sys.path.insert(0, _SCRIPTS_DIR)
 
 _HAS_FASTMCP = importlib.util.find_spec("fastmcp") is not None
 
@@ -128,8 +127,8 @@ class TestSQLiteBusyError(unittest.TestCase):
 
     def test_hybrid_search_catches_locked_db(self):
         """hybrid_search should catch sqlite3.OperationalError for locked DB."""
-        with patch.dict("sys.modules", {"hybrid_recall": MagicMock()}):
-            mock_hybrid = sys.modules["hybrid_recall"]
+        with patch.dict("sys.modules", {"mind_mem.hybrid_recall": MagicMock()}):
+            mock_hybrid = sys.modules["mind_mem.hybrid_recall"]
             mock_hybrid.validate_recall_config.return_value = []
             mock_backend = MagicMock()
             mock_backend.search.side_effect = sqlite3.OperationalError("database is locked")

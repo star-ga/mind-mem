@@ -21,7 +21,7 @@ External consumers should import from 'recall', never from '_recall_*' directly.
 from __future__ import annotations
 
 # --- Constants (_recall_constants) ---
-from _recall_constants import (
+from ._recall_constants import (
     _BLOCK_ID_RE,
     _IRREGULAR_LEMMA,
     _STOPWORDS,
@@ -39,10 +39,10 @@ from _recall_constants import (
 )
 
 # --- Context Packing (_recall_context) ---
-from _recall_context import _block_to_result, _parse_dia_id, context_pack
+from ._recall_context import _block_to_result, _parse_dia_id, context_pack
 
 # --- Core Engine (_recall_core) ---
-from _recall_core import (
+from ._recall_core import (
     RecallBackend,
     _load_backend,
     main,
@@ -51,7 +51,7 @@ from _recall_core import (
 )
 
 # --- Detection & Utilities (_recall_detection) ---
-from _recall_detection import (
+from ._recall_detection import (
     _INTENT_TO_QUERY_TYPE,
     _QUERY_TYPE_PARAMS,
     _parse_speaker_from_tags,
@@ -66,7 +66,7 @@ from _recall_detection import (
 )
 
 # --- Query Expansion (_recall_expansion) ---
-from _recall_expansion import (
+from ._recall_expansion import (
     _QUERY_EXPANSIONS,
     _rm3_language_model,
     expand_months,
@@ -75,10 +75,10 @@ from _recall_expansion import (
 )
 
 # --- Reranking (_recall_reranking) ---
-from _recall_reranking import rerank_hits
+from ._recall_reranking import rerank_hits
 
 # --- Scoring (_recall_scoring) ---
-from _recall_scoring import (
+from ._recall_scoring import (
     _category_match_boost,
     _classify_categories,
     _date_proximity_score,
@@ -93,10 +93,10 @@ from _recall_scoring import (
 )
 
 # --- Temporal Filtering (_recall_temporal) ---
-from _recall_temporal import apply_temporal_filter, resolve_time_reference
+from ._recall_temporal import apply_temporal_filter, resolve_time_reference
 
 # --- Tokenization (_recall_tokenization) ---
-from _recall_tokenization import _stem, tokenize
+from ._recall_tokenization import _stem, tokenize
 
 __all__ = [
     # Constants

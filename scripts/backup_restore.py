@@ -24,9 +24,8 @@ import sys
 import tarfile
 from datetime import datetime
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from block_parser import parse_file
-from observability import get_logger, metrics
+from .block_parser import parse_file
+from .observability import get_logger, metrics
 
 _log = get_logger("backup_restore")
 

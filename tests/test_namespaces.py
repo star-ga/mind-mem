@@ -7,8 +7,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from namespaces import (
+from mind_mem.namespaces import (
     NAMESPACE_DIRS,
     NamespaceManager,
     SharedLedger,

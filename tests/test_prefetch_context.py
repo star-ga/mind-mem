@@ -5,9 +5,8 @@ import os
 import sys
 
 scripts_dir = os.path.join(os.path.dirname(__file__), "..", "scripts")
-sys.path.insert(0, scripts_dir)
 
-from recall import prefetch_context  # noqa: E402
+from mind_mem.recall import prefetch_context  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

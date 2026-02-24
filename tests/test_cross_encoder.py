@@ -4,9 +4,8 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from cross_encoder_reranker import CrossEncoderReranker
+from mind_mem.cross_encoder_reranker import CrossEncoderReranker
 
 
 class TestCrossEncoderFallback(unittest.TestCase):
@@ -20,7 +19,7 @@ class TestCrossEncoderFallback(unittest.TestCase):
         """Should raise ImportError when sentence-transformers missing."""
         with patch.dict('sys.modules', {'sentence_transformers': None}):
             # Reset the cached availability
-            import cross_encoder_reranker
+            from mind_mem import cross_encoder_reranker
             cross_encoder_reranker._CE_AVAILABLE = None
             self.assertFalse(cross_encoder_reranker._check_available())
 
@@ -89,18 +88,18 @@ class TestDeterministicReranking(unittest.TestCase):
 
     def test_negation_detection(self):
         """Should detect negation patterns."""
-        from recall import _detect_negation
+        from mind_mem.recall import _detect_negation
         has_neg, terms = _detect_negation("Did Sarah NOT visit Paris?")
         self.assertTrue(has_neg)
         self.assertTrue(len(terms) > 0)
 
     def test_no_negation(self):
-        from recall import _detect_negation
+        from mind_mem.recall import _detect_negation
         has_neg, _ = _detect_negation("Where does Sarah live?")
         self.assertFalse(has_neg)
 
     def test_negation_penalty(self):
-        from recall import _negation_penalty
+        from mind_mem.recall import _negation_penalty
         # Block affirming negated terms should be penalized
         penalty = _negation_penalty("Sarah visited Paris last summer", ["visit", "paris"])
         self.assertLess(penalty, 1.0)
@@ -109,7 +108,7 @@ class TestDeterministicReranking(unittest.TestCase):
         self.assertEqual(no_penalty, 1.0)
 
     def test_date_proximity(self):
-        from recall import _date_proximity_score
+        from mind_mem.recall import _date_proximity_score
         # Close dates should score high
         score_close = _date_proximity_score("What happened on 2025-06-15?", "Event on 2025-06-14")
         # Far dates should score lower
@@ -117,19 +116,19 @@ class TestDeterministicReranking(unittest.TestCase):
         self.assertGreater(score_close, score_far)
 
     def test_date_proximity_no_dates(self):
-        from recall import _date_proximity_score
+        from mind_mem.recall import _date_proximity_score
         # No dates in query returns 1.0
         score = _date_proximity_score("What is Sarah's hobby?", "She plays tennis")
         self.assertEqual(score, 1.0)
 
     def test_category_match(self):
-        from recall import _category_match_boost
+        from mind_mem.recall import _category_match_boost
         # Query and block in same category should boost
         boost = _category_match_boost("What food does she like?", "She enjoys Italian cuisine")
         self.assertGreater(boost, 1.0)
 
     def test_category_no_match(self):
-        from recall import _category_match_boost
+        from mind_mem.recall import _category_match_boost
         # No category overlap
         boost = _category_match_boost("random text 12345", "other random 67890")
         self.assertEqual(boost, 1.0)

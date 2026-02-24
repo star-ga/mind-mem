@@ -8,9 +8,8 @@ import tempfile
 import unittest
 import unittest.mock
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from init_workspace import (  # noqa: E402
+from mind_mem.init_workspace import (  # noqa: E402
     _RECALL_RANGES,
     DEFAULT_CONFIG,
     _validate_config,

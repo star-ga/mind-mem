@@ -5,8 +5,7 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from observability import Metrics, get_logger, timed
+from mind_mem.observability import Metrics, get_logger, timed
 
 
 class TestStructuredLogger(unittest.TestCase):
@@ -84,7 +83,7 @@ class TestTimed(unittest.TestCase):
     def test_timed_records_metric(self):
         m = Metrics()
         # Replace global metrics temporarily
-        import observability
+        from mind_mem import observability
         original = observability.metrics
         observability.metrics = m
         try:

@@ -7,9 +7,8 @@ import sys
 import tempfile
 
 # Add scripts/ to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from llm_extractor import (
+from mind_mem.llm_extractor import (
     _parse_json_from_response,
     enrich_block,
     enrich_results,

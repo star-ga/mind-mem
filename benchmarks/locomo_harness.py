@@ -29,7 +29,7 @@ import urllib.request
 _SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
 sys.path.insert(0, _SCRIPTS_DIR)
 
-from recall import recall  # noqa: E402
+from mind_mem.recall import recall  # noqa: E402
 
 # LoCoMo QA category mapping (from ACL 2024 paper)
 CATEGORY_NAMES = {

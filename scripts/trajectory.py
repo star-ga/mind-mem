@@ -31,7 +31,6 @@ from configparser import ConfigParser
 from datetime import date, datetime
 from typing import Any
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Trajectory block ID pattern: TRAJ-YYYYMMDD-NNN
 _TRAJ_ID_RE = re.compile(r"^TRAJ-(\d{8})-(\d{3,})$")

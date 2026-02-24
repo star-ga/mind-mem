@@ -6,8 +6,7 @@ import sys
 import threading
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from hybrid_recall import HybridBackend, _get_block_id, rrf_fuse
+from mind_mem.hybrid_recall import HybridBackend, _get_block_id, rrf_fuse
 
 # ---------------------------------------------------------------------------
 # RRF fusion unit tests

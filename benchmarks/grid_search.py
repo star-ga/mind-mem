@@ -29,7 +29,7 @@ _SCRIPTS_DIR = os.path.join(_BENCHMARKS_DIR, "..", "scripts")
 sys.path.insert(0, _SCRIPTS_DIR)
 sys.path.insert(0, _BENCHMARKS_DIR)
 
-import _recall_constants  # noqa: E402
+from mind_mem import _recall_constants  # noqa: E402
 from locomo_harness import (  # noqa: E402
     aggregate_metrics,
     build_workspace,

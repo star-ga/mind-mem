@@ -4,9 +4,8 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from recall import (
+from mind_mem.recall import (
     context_pack,
 )
 

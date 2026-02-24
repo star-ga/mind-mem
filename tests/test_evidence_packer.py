@@ -7,10 +7,9 @@ import sys
 
 # Ensure scripts/ is on path
 _HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
 
-from abstention_classifier import ABSTENTION_ANSWER  # noqa: E402
-from evidence_packer import (  # noqa: E402
+from mind_mem.abstention_classifier import ABSTENTION_ANSWER  # noqa: E402
+from mind_mem.evidence_packer import (  # noqa: E402
     _compute_relevance_note,
     _extract_key_facts,
     check_abstention,

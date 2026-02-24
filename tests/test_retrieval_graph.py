@@ -7,8 +7,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from retrieval_graph import (
+from mind_mem.retrieval_graph import (
     _connect,
     ensure_graph_tables,
     get_hard_negative_ids,
@@ -198,7 +197,7 @@ class TestKneeCutoff(unittest.TestCase):
     """Test knee score cutoff (adaptive top-K truncation)."""
 
     def test_basic_knee_detection(self):
-        from _recall_core import knee_cutoff
+        from mind_mem._recall_core import knee_cutoff
         # Clear knee at position 2: 0.9, 0.8, 0.1, 0.05
         results = [
             {"score": 0.9, "_id": "A"},
@@ -210,7 +209,7 @@ class TestKneeCutoff(unittest.TestCase):
         self.assertEqual(len(cut), 2)  # Cuts at the 0.8→0.1 drop
 
     def test_no_knee_returns_all(self):
-        from _recall_core import knee_cutoff
+        from mind_mem._recall_core import knee_cutoff
         # Gradual decline — no sharp drop
         results = [
             {"score": 0.9, "_id": "A"},
@@ -222,7 +221,7 @@ class TestKneeCutoff(unittest.TestCase):
         self.assertEqual(len(cut), 4)
 
     def test_min_results_respected(self):
-        from _recall_core import knee_cutoff
+        from mind_mem._recall_core import knee_cutoff
         results = [
             {"score": 0.9, "_id": "A"},
             {"score": 0.01, "_id": "B"},
@@ -231,7 +230,7 @@ class TestKneeCutoff(unittest.TestCase):
         self.assertEqual(len(cut), 2)
 
     def test_min_score_filter(self):
-        from _recall_core import knee_cutoff
+        from mind_mem._recall_core import knee_cutoff
         results = [
             {"score": 0.9, "_id": "A"},
             {"score": 0.8, "_id": "B"},
@@ -241,16 +240,16 @@ class TestKneeCutoff(unittest.TestCase):
         self.assertTrue(all(r["score"] >= 0.75 for r in cut))
 
     def test_empty_input(self):
-        from _recall_core import knee_cutoff
+        from mind_mem._recall_core import knee_cutoff
         self.assertEqual(knee_cutoff([]), [])
 
     def test_single_result(self):
-        from _recall_core import knee_cutoff
+        from mind_mem._recall_core import knee_cutoff
         results = [{"score": 0.5, "_id": "A"}]
         self.assertEqual(knee_cutoff(results), results)
 
     def test_zero_scores(self):
-        from _recall_core import knee_cutoff
+        from mind_mem._recall_core import knee_cutoff
         results = [{"score": 0, "_id": "A"}, {"score": 0, "_id": "B"}]
         cut = knee_cutoff(results)
         self.assertEqual(len(cut), 2)

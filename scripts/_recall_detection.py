@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import re
 
-from _recall_constants import SEARCH_FIELDS, SIG_FIELDS
-from _recall_tokenization import tokenize
+from ._recall_constants import SEARCH_FIELDS, SIG_FIELDS
+from ._recall_tokenization import tokenize
 
 __all__ = [
     "extract_text", "extract_field_tokens", "get_bigrams",

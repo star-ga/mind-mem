@@ -14,9 +14,8 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from recall import (
+from mind_mem.recall import (
     MAX_BLOCKS_PER_QUERY,
     _load_backend,
     build_xref_graph,
