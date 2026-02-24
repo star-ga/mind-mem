@@ -7,18 +7,17 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from block_parser import parse_blocks, parse_file  # noqa: E402
-from init_workspace import _validate_config, load_config  # noqa: E402
-from mind_ffi import (  # noqa: E402
+from mind_mem.block_parser import parse_blocks, parse_file  # noqa: E402
+from mind_mem.init_workspace import _validate_config, load_config  # noqa: E402
+from mind_mem.mind_ffi import (  # noqa: E402
     MindMemKernel,
     get_mind_dir,
     list_kernels,
     load_kernel,
     load_kernel_config,
 )
-from recall import recall, tokenize  # noqa: E402
+from mind_mem.recall import recall, tokenize  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # 1. Malformed config (mind-mem.json)

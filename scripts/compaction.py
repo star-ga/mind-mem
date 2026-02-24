@@ -25,10 +25,9 @@ import shutil
 import sys
 from datetime import datetime, timedelta
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from block_parser import parse_file
-from mind_filelock import FileLock
-from observability import get_logger, metrics
+from .block_parser import parse_file
+from .mind_filelock import FileLock
+from .observability import get_logger, metrics
 
 _log = get_logger("compaction")
 

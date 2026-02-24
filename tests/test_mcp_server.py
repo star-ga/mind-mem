@@ -16,7 +16,6 @@ import unittest
 # Load the mcp_server module
 _SERVER_PATH = os.path.join(os.path.dirname(__file__), "..", "mcp_server.py")
 _SCRIPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "scripts")
-sys.path.insert(0, _SCRIPTS_DIR)
 
 _HAS_FASTMCP = importlib.util.find_spec("fastmcp") is not None
 
@@ -207,13 +206,13 @@ class TestMCPRecallEngine(unittest.TestCase):
         shutil.rmtree(self.td, ignore_errors=True)
 
     def test_recall_via_engine(self):
-        from recall import recall as r
+        from mind_mem.recall import recall as r
         results = r(self.td, "PostgreSQL", limit=5)
         self.assertGreater(len(results), 0)
         self.assertEqual(results[0]["_id"], "D-20260101-001")
 
     def test_recall_no_results(self):
-        from recall import recall as r
+        from mind_mem.recall import recall as r
         results = r(self.td, "kubernetes", limit=5)
         self.assertEqual(len(results), 0)
 
@@ -499,7 +498,7 @@ class TestConfigurableLimits(unittest.TestCase):
 
     def test_default_config_includes_limits(self):
         """init_workspace DEFAULT_CONFIG should contain the limits section."""
-        from init_workspace import DEFAULT_CONFIG
+        from mind_mem.init_workspace import DEFAULT_CONFIG
         self.assertIn("limits", DEFAULT_CONFIG)
         self.assertEqual(DEFAULT_CONFIG["limits"]["max_recall_results"], 100)
         self.assertEqual(DEFAULT_CONFIG["limits"]["max_similar_results"], 50)

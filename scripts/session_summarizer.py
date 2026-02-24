@@ -22,11 +22,10 @@ import sys
 from collections import Counter
 from datetime import datetime
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from capture import append_signals
-from mind_filelock import FileLock
-from observability import get_logger, metrics
-from transcript_capture import TRANSCRIPT_PATTERNS, find_recent_transcripts, parse_transcript
+from .capture import append_signals
+from .mind_filelock import FileLock
+from .observability import get_logger, metrics
+from .transcript_capture import TRANSCRIPT_PATTERNS, find_recent_transcripts, parse_transcript
 
 _log = get_logger("session_summarizer")
 

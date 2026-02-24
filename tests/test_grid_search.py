@@ -6,7 +6,6 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "benchmarks"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 from grid_search import (
     PRIMARY_FIELDS,

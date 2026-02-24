@@ -15,7 +15,7 @@ Usage (CLI):
     python3 scripts/category_distiller.py /path/to/workspace --query "deploy pipeline"
 
 As library:
-    from category_distiller import CategoryDistiller
+    from .category_distiller import CategoryDistiller
     cd = CategoryDistiller()
     written = cd.distill("/path/to/workspace")
     context = cd.get_category_context("deploy workflow", "/path/to/workspace")
@@ -29,10 +29,9 @@ import sys
 from datetime import datetime
 
 # Same-directory imports (block_parser, observability live alongside this file)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from block_parser import get_active, parse_file
+    from .block_parser import get_active, parse_file
 except ImportError:
     # Minimal fallback when block_parser is unavailable — parse nothing gracefully.
     def parse_file(path: str) -> list[dict]:  # type: ignore[misc]
@@ -43,7 +42,7 @@ except ImportError:
         return [b for b in blocks if b.get(status_field) == active_value]
 
 try:
-    from observability import get_logger
+    from .observability import get_logger
 except ImportError:
     # Lightweight fallback logger — prints to stderr with a component prefix.
     class _FallbackLogger:
@@ -74,7 +73,7 @@ log = get_logger("category_distiller")
 # Optional MIND kernel acceleration
 _mind_ffi = None
 try:
-    from mind_ffi import MindMemKernel
+    from .mind_ffi import MindMemKernel
     _k = MindMemKernel()
     if _k._lib is not None:
         _mind_ffi = _k

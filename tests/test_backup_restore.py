@@ -9,8 +9,7 @@ import tarfile
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from backup_restore import WAL, backup_workspace, export_jsonl, restore_workspace
+from mind_mem.backup_restore import WAL, backup_workspace, export_jsonl, restore_workspace
 
 
 class TestWAL(unittest.TestCase):

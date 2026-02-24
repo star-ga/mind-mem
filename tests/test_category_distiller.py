@@ -6,10 +6,9 @@ import os
 import sys
 
 scripts_dir = os.path.join(os.path.dirname(__file__), "..", "scripts")
-sys.path.insert(0, scripts_dir)
 
-from block_parser import parse_file  # noqa: E402
-from category_distiller import CategoryDistiller  # noqa: E402
+from mind_mem.block_parser import parse_file  # noqa: E402
+from mind_mem.category_distiller import CategoryDistiller  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

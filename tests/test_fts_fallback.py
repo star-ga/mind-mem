@@ -19,9 +19,8 @@ import tempfile
 import unittest
 
 # Add scripts/ to path for direct imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from block_parser import MAX_PARSE_SIZE, parse_file
+from mind_mem.block_parser import MAX_PARSE_SIZE, parse_file
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -381,7 +380,7 @@ class TestConfigKeyValidation(unittest.TestCase):
     def test_unknown_keys_returns_none(self):
         """Unknown recall config keys cause _load_backend to return None
         (default BM25 scan) without raising."""
-        from recall import _load_backend
+        from mind_mem.recall import _load_backend
 
         with tempfile.TemporaryDirectory() as td:
             config = {
@@ -400,7 +399,7 @@ class TestConfigKeyValidation(unittest.TestCase):
 
     def test_valid_keys_only_returns_none_for_scan(self):
         """All valid keys with backend=scan still returns None (built-in BM25)."""
-        from recall import _load_backend
+        from mind_mem.recall import _load_backend
 
         with tempfile.TemporaryDirectory() as td:
             config = {
@@ -418,7 +417,7 @@ class TestConfigKeyValidation(unittest.TestCase):
 
     def test_no_config_file_returns_none(self):
         """Missing mind-mem.json returns None without error."""
-        from recall import _load_backend
+        from mind_mem.recall import _load_backend
 
         with tempfile.TemporaryDirectory() as td:
             result = _load_backend(td)
@@ -426,7 +425,7 @@ class TestConfigKeyValidation(unittest.TestCase):
 
     def test_empty_recall_section_returns_none(self):
         """Empty recall section defaults to scan (None)."""
-        from recall import _load_backend
+        from mind_mem.recall import _load_backend
 
         with tempfile.TemporaryDirectory() as td:
             config = {"recall": {}}
@@ -438,7 +437,7 @@ class TestConfigKeyValidation(unittest.TestCase):
 
     def test_malformed_json_returns_none(self):
         """Malformed JSON in mind-mem.json returns None without crash."""
-        from recall import _load_backend
+        from mind_mem.recall import _load_backend
 
         with tempfile.TemporaryDirectory() as td:
             with open(os.path.join(td, "mind-mem.json"), "w") as f:
@@ -449,7 +448,7 @@ class TestConfigKeyValidation(unittest.TestCase):
 
     def test_sqlite_backend_returns_sqlite(self):
         """backend=sqlite returns the string 'sqlite'."""
-        from recall import _load_backend
+        from mind_mem.recall import _load_backend
 
         with tempfile.TemporaryDirectory() as td:
             config = {"recall": {"backend": "sqlite"}}

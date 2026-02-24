@@ -21,9 +21,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 # Import block parser from same directory
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from block_parser import parse_file
-from mind_filelock import FileLock
+from .block_parser import parse_file
+from .mind_filelock import FileLock
 
 # ═══════════════════════════════════════════════
 # Configuration

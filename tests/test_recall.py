@@ -6,8 +6,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from recall import (
+from mind_mem.recall import (
     _rm3_language_model,
     build_xref_graph,
     extract_text,
@@ -274,7 +273,7 @@ class TestStemmer(unittest.TestCase):
     """Tests for the simplified Porter stemmer."""
 
     def setUp(self):
-        from recall import _stem
+        from mind_mem.recall import _stem
         self.stem = _stem
 
     def test_ing_suffix(self):
@@ -315,7 +314,7 @@ class TestExpandQuery(unittest.TestCase):
     """Tests for domain-aware query expansion."""
 
     def setUp(self):
-        from recall import expand_query
+        from mind_mem.recall import expand_query
         self.expand = expand_query
 
     def test_auth_expands(self):

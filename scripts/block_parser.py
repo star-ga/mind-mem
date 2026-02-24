@@ -10,7 +10,7 @@ Usage:
     python3 maintenance/block_parser.py tasks/TASKS.md --active-only --json
 
 As library:
-    from block_parser import parse_file, parse_blocks
+    from .block_parser import parse_file, parse_blocks
     blocks = parse_file("decisions/DECISIONS.md")
     active = [b for b in blocks if b.get("Status") == "active"]
 """

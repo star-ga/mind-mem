@@ -44,12 +44,11 @@ import struct
 import sys
 from typing import Any
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import helpers from recall.py
-from block_parser import parse_file
-from observability import get_logger, metrics, timed
-from recall import (
+from .block_parser import parse_file
+from .observability import get_logger, metrics, timed
+from .recall import (
     CORPUS_FILES,
     RecallBackend,
     date_score,
@@ -1271,7 +1270,7 @@ def rebuild_index(workspace: str) -> int:
     backend = VectorBackend(config)
 
     # Collect all blocks from workspace
-    from block_parser import parse_file as _parse
+    from .block_parser import parse_file as _parse
     blocks: list[dict] = []
     for subdir in ("decisions", "tasks", "entities", "intelligence"):
         d = os.path.join(workspace, subdir)

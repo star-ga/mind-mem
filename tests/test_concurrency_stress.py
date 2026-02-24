@@ -14,9 +14,8 @@ import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from recall import recall
+from mind_mem.recall import recall
 
 # ---------------------------------------------------------------------------
 # Helpers

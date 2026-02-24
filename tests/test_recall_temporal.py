@@ -6,9 +6,8 @@ import sys
 import unittest
 from datetime import date
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from _recall_temporal import apply_temporal_filter, resolve_time_reference
+from mind_mem._recall_temporal import apply_temporal_filter, resolve_time_reference
 
 
 class TestResolveTimeReference(unittest.TestCase):

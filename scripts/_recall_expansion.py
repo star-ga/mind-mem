@@ -6,7 +6,7 @@ import math
 import re
 from collections import Counter
 
-from _recall_tokenization import _stem
+from ._recall_tokenization import _stem
 
 __all__ = [
     "_QUERY_EXPANSIONS", "expand_months", "expand_query",

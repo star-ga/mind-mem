@@ -5,8 +5,7 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from block_parser import chunk_block, deduplicate_chunks
+from mind_mem.block_parser import chunk_block, deduplicate_chunks
 
 
 class TestChunkBlock(unittest.TestCase):

@@ -8,11 +8,10 @@ import tempfile
 import threading
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from block_metadata import BlockMetadataManager
-from block_parser import BlockCorruptedError, parse_blocks, parse_file
-from hybrid_recall import HybridBackend, validate_recall_config
+from mind_mem.block_metadata import BlockMetadataManager
+from mind_mem.block_parser import BlockCorruptedError, parse_blocks, parse_file
+from mind_mem.hybrid_recall import HybridBackend, validate_recall_config
 
 # ---------------------------------------------------------------------------
 # Issue #28 — Strict schema checks on hybrid fallback chain
@@ -272,16 +271,16 @@ class TestFTS5Staleness(unittest.TestCase):
     """is_stale should detect changed files."""
 
     def test_no_index_is_stale(self):
-        from sqlite_index import is_stale
+        from mind_mem.sqlite_index import is_stale
         # Non-existent workspace has no DB
         self.assertTrue(is_stale("/tmp/nonexistent_workspace_xyz"))
 
     def test_is_stale_function_exists(self):
-        from sqlite_index import is_stale
+        from mind_mem.sqlite_index import is_stale
         self.assertTrue(callable(is_stale))
 
     def test_index_status_includes_stale_files(self):
-        from sqlite_index import index_status
+        from mind_mem.sqlite_index import index_status
         status = index_status("/tmp/nonexistent_workspace_xyz")
         self.assertIn("stale_files", status)
 

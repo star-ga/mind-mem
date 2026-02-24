@@ -7,7 +7,7 @@ import re
 from collections import Counter
 from datetime import datetime as _datetime
 
-from _recall_constants import _BLOCK_ID_RE, BM25_B, BM25_K1, FIELD_WEIGHTS, SEARCH_FIELDS
+from ._recall_constants import _BLOCK_ID_RE, BM25_B, BM25_K1, FIELD_WEIGHTS, SEARCH_FIELDS
 
 __all__ = [
     "bm25f_score_terms", "compute_weighted_tf",

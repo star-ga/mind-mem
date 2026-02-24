@@ -8,9 +8,8 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from block_metadata import BlockMetadataManager
+from mind_mem.block_metadata import BlockMetadataManager
 
 
 class TestBlockMetadataManager(unittest.TestCase):

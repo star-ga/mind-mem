@@ -8,8 +8,7 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from _recall_reranking import llm_rerank, rerank_hits
+from mind_mem._recall_reranking import llm_rerank, rerank_hits
 
 
 def _make_hit(id_, score, excerpt="test excerpt", speaker="", tags="", dia=""):

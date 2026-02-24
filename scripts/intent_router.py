@@ -169,7 +169,7 @@ class IntentRouter:
 
         # Fall back to legacy detection if confidence is low
         try:
-            from recall import detect_query_type
+            from .recall import detect_query_type
             legacy = detect_query_type(query)
             # Map legacy types to our intents
             legacy_map = {

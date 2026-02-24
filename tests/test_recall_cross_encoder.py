@@ -8,7 +8,6 @@ import unittest
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 _HAS_SENTENCE_TRANSFORMERS = importlib.util.find_spec("sentence_transformers") is not None
 
@@ -42,13 +41,13 @@ class TestCrossEncoderAvailability(unittest.TestCase):
     """Test graceful degradation when sentence-transformers is missing."""
 
     def test_is_available_returns_bool(self):
-        from cross_encoder_reranker import CrossEncoderReranker
+        from mind_mem.cross_encoder_reranker import CrossEncoderReranker
         result = CrossEncoderReranker.is_available()
         self.assertIsInstance(result, bool)
 
     def test_import_error_on_missing_dep(self):
         """CrossEncoderReranker should raise ImportError if deps missing."""
-        from cross_encoder_reranker import _check_available
+        from mind_mem.cross_encoder_reranker import _check_available
         # Just verify the check function works
         result = _check_available()
         self.assertIsInstance(result, bool)
@@ -74,7 +73,7 @@ class TestCrossEncoderInRecall(unittest.TestCase):
 
     def test_recall_works_without_cross_encoder(self):
         """Recall should work fine with cross-encoder disabled (default)."""
-        from recall import recall as r
+        from mind_mem.recall import recall as r
         results = r(self.td, "PostgreSQL", limit=5)
         self.assertGreater(len(results), 0)
         self.assertEqual(results[0]["_id"], "D-20260101-001")
@@ -86,7 +85,7 @@ class TestCrossEncoderInRecall(unittest.TestCase):
         with open(os.path.join(self.td, "mind-mem.json"), "w") as f:
             json.dump(config, f)
 
-        from recall import recall as r
+        from mind_mem.recall import recall as r
         results = r(self.td, "PostgreSQL", limit=5)
         self.assertGreater(len(results), 0)
         # No ce_score field when disabled
@@ -120,10 +119,10 @@ class TestCrossEncoderRerankerUnit(unittest.TestCase):
     )
     def test_empty_candidates(self):
         """Reranker should handle empty candidate list."""
-        import cross_encoder_reranker as _ce_mod
+        from mind_mem import cross_encoder_reranker as _ce_mod
         # Reset cached availability (may be stale from earlier test imports)
         _ce_mod._CE_AVAILABLE = None
-        from cross_encoder_reranker import CrossEncoderReranker
+        from mind_mem.cross_encoder_reranker import CrossEncoderReranker
         ce = CrossEncoderReranker()
         result = ce.rerank("test query", [], top_k=5)
         self.assertEqual(result, [])

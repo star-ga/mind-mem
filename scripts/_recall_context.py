@@ -6,10 +6,9 @@ import os
 import re
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _recall_constants import _STOPWORDS
-from _recall_detection import _parse_speaker_from_tags, get_block_type, get_excerpt
-from observability import get_logger, metrics
+from ._recall_constants import _STOPWORDS
+from ._recall_detection import _parse_speaker_from_tags, get_block_type, get_excerpt
+from .observability import get_logger, metrics
 
 __all__ = ["context_pack", "_parse_dia_id", "_block_to_result"]
 

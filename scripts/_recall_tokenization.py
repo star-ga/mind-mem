@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from _recall_constants import _IRREGULAR_LEMMA, _STOPWORDS
+from ._recall_constants import _IRREGULAR_LEMMA, _STOPWORDS
 
 __all__ = ["_stem", "tokenize"]
 

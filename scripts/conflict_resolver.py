@@ -14,7 +14,7 @@ Resolution strategies:
 - MANUAL: Cannot auto-resolve, requires human review
 
 Usage:
-    from conflict_resolver import resolve_contradictions, generate_resolution_proposals
+    from .conflict_resolver import resolve_contradictions, generate_resolution_proposals
     proposals = resolve_contradictions(workspace)
     # → List of resolution proposals with strategy, confidence, and supersede actions
 """
@@ -28,10 +28,9 @@ import re
 import sys
 from datetime import datetime
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from block_parser import get_by_id, parse_file
-from mind_filelock import FileLock
-from observability import get_logger, metrics
+from .block_parser import get_by_id, parse_file
+from .mind_filelock import FileLock
+from .observability import get_logger, metrics
 
 _log = get_logger("conflict_resolver")
 

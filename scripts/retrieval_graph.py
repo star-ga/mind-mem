@@ -20,7 +20,7 @@ import json
 import os
 import sqlite3
 
-from observability import get_logger
+from .observability import get_logger
 
 _log = get_logger("retrieval_graph")
 

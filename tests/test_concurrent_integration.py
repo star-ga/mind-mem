@@ -22,9 +22,8 @@ from datetime import datetime
 from unittest.mock import patch
 
 # Ensure scripts are importable
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from apply_engine import (
+from mind_mem.apply_engine import (
     SNAPSHOT_FILES,
     _list_workspace_files,
     apply_proposal,
@@ -32,11 +31,11 @@ from apply_engine import (
     create_snapshot,
     restore_snapshot,
 )
-from backup_restore import WAL
-from block_parser import parse_file
-from init_workspace import init
-from mind_filelock import FileLock, LockTimeout
-from recall import recall
+from mind_mem.backup_restore import WAL
+from mind_mem.block_parser import parse_file
+from mind_mem.init_workspace import init
+from mind_mem.mind_filelock import FileLock, LockTimeout
+from mind_mem.recall import recall
 
 # ---------------------------------------------------------------------------
 # Helper: Build a minimal workspace with valid blocks and proposals
@@ -216,7 +215,7 @@ class TestConcurrentApply(unittest.TestCase):
         def apply_a():
             try:
                 # Patch check_preconditions to skip external scripts
-                with patch("apply_engine.check_preconditions",
+                with patch("mind_mem.apply_engine.check_preconditions",
                            return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
                     results["a"] = apply_proposal(self.ws, "P-20260201-001")
             except Exception as e:
@@ -224,7 +223,7 @@ class TestConcurrentApply(unittest.TestCase):
 
         def apply_b():
             try:
-                with patch("apply_engine.check_preconditions",
+                with patch("mind_mem.apply_engine.check_preconditions",
                            return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
                     results["b"] = apply_proposal(self.ws, "P-20260201-002")
             except Exception as e:
@@ -304,7 +303,7 @@ class TestPartialFailureRollback(unittest.TestCase):
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
 
         # Apply (mock preconditions to pass)
-        with patch("apply_engine.check_preconditions",
+        with patch("mind_mem.apply_engine.check_preconditions",
                    return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
             ok, msg = apply_proposal(self.ws, "P-20260202-001")
 
@@ -345,7 +344,7 @@ class TestPartialFailureRollback(unittest.TestCase):
         proposal = _build_proposal_block("P-20260202-002", "D-20260101-001", ops)
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
 
-        with patch("apply_engine.check_preconditions",
+        with patch("mind_mem.apply_engine.check_preconditions",
                    return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
             ok, msg = apply_proposal(self.ws, "P-20260202-002")
 
@@ -384,7 +383,7 @@ class TestPartialFailureRollback(unittest.TestCase):
         proposal = _build_proposal_block("P-20260202-003", "D-20260101-001", ops)
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
 
-        with patch("apply_engine.check_preconditions",
+        with patch("mind_mem.apply_engine.check_preconditions",
                    return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
             ok, msg = apply_proposal(self.ws, "P-20260202-003")
 
@@ -860,7 +859,7 @@ class TestApplyDuringRecall(unittest.TestCase):
         def do_apply():
             try:
                 start_barrier.wait()
-                with patch("apply_engine.check_preconditions",
+                with patch("mind_mem.apply_engine.check_preconditions",
                            return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
                     apply_result[0] = apply_proposal(self.ws, "P-20260203-001")
             except Exception as e:
@@ -938,7 +937,7 @@ class TestPostCheckFailureRollback(unittest.TestCase):
                 # Post-check fails
                 return False, ["validate: FAIL (TOTAL 3 issues)"]
 
-        with patch("apply_engine.check_preconditions", side_effect=mock_preconditions):
+        with patch("mind_mem.apply_engine.check_preconditions", side_effect=mock_preconditions):
             ok, msg = apply_proposal(self.ws, "P-20260204-001")
 
         # Should have failed
@@ -970,7 +969,7 @@ class TestPostCheckFailureRollback(unittest.TestCase):
             else:
                 return False, ["validate: FAIL (TOTAL 2 issues)"]
 
-        with patch("apply_engine.check_preconditions", side_effect=mock_preconditions):
+        with patch("mind_mem.apply_engine.check_preconditions", side_effect=mock_preconditions):
             ok, msg = apply_proposal(self.ws, "P-20260204-002")
 
         self.assertFalse(ok)
@@ -1018,7 +1017,7 @@ class TestPostCheckFailureRollback(unittest.TestCase):
             else:
                 return False, ["validate: FAIL (TOTAL 1 issues)"]
 
-        with patch("apply_engine.check_preconditions", side_effect=mock_preconditions):
+        with patch("mind_mem.apply_engine.check_preconditions", side_effect=mock_preconditions):
             ok, msg = apply_proposal(self.ws, "P-20260204-003")
 
         self.assertFalse(ok)
@@ -1048,7 +1047,7 @@ class TestPostCheckFailureRollback(unittest.TestCase):
             else:
                 return False, ["validate: FAIL (TOTAL 1 issues)"]
 
-        with patch("apply_engine.check_preconditions", side_effect=mock_preconditions):
+        with patch("mind_mem.apply_engine.check_preconditions", side_effect=mock_preconditions):
             ok, msg = apply_proposal(self.ws, "P-20260204-004")
 
         self.assertFalse(ok)

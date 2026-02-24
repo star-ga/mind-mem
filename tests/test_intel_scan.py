@@ -7,10 +7,9 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from apply_engine import validate_proposal
-from block_parser import parse_file
-from intel_scan import (
+from mind_mem.apply_engine import validate_proposal
+from mind_mem.block_parser import parse_file
+from mind_mem.intel_scan import (
     IntelReport,
     check_signature_conflict,
     detect_contradictions,
@@ -438,7 +437,7 @@ class TestParserContinuationLines(unittest.TestCase):
         )
         blocks = parse_file.__wrapped__(text) if hasattr(parse_file, '__wrapped__') else None
         # Use parse_blocks directly
-        from block_parser import parse_blocks
+        from mind_mem.block_parser import parse_blocks
         blocks = parse_blocks(text)
         self.assertEqual(len(blocks), 1)
         self.assertIn("\n", blocks[0]["Statement"])
@@ -451,13 +450,13 @@ class TestParserQuotedInlineList(unittest.TestCase):
 
     def test_quoted_comma_in_list(self):
         """Quoted strings preserve commas within values."""
-        from block_parser import _parse_inline_list
+        from mind_mem.block_parser import _parse_inline_list
         result = _parse_inline_list('["React, Redux", "Vue"]')
         self.assertEqual(result, ["React, Redux", "Vue"])
 
     def test_unquoted_list_unchanged(self):
         """Regular lists without quotes work as before."""
-        from block_parser import _parse_inline_list
+        from mind_mem.block_parser import _parse_inline_list
         result = _parse_inline_list('[a, b, c]')
         self.assertEqual(result, ["a", "b", "c"])
 
@@ -467,14 +466,14 @@ class TestParsedInlineDict(unittest.TestCase):
 
     def test_quoted_comma_in_dict_value(self):
         """Quoted strings in dict values preserve commas."""
-        from block_parser import _parse_inline_dict
+        from mind_mem.block_parser import _parse_inline_dict
         result = _parse_inline_dict('{tags: "frontend, ui", name: foo}')
         self.assertEqual(result["tags"], "frontend, ui")
         self.assertEqual(result["name"], "foo")
 
     def test_unquoted_dict_unchanged(self):
         """Regular dicts without quotes work as before."""
-        from block_parser import _parse_inline_dict
+        from mind_mem.block_parser import _parse_inline_dict
         result = _parse_inline_dict('{key: val, key2: val2}')
         self.assertEqual(result, {"key": "val", "key2": "val2"})
 

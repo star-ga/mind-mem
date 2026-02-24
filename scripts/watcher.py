@@ -5,7 +5,7 @@ Polls workspace .md files for mtime changes on a background thread.
 When changes are detected, fires the callback (typically incremental reindex).
 
 Usage:
-    from watcher import FileWatcher
+    from .watcher import FileWatcher
     w = FileWatcher("/path/to/workspace", callback=my_reindex_fn, interval=5.0)
     w.start()
     # ... later ...
@@ -21,7 +21,7 @@ import threading
 import time
 from typing import Callable
 
-from observability import get_logger
+from .observability import get_logger
 
 _log = get_logger("watcher")
 

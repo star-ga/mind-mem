@@ -22,7 +22,7 @@ Backends (tried in order when backend="auto"):
     3. (none)   — graceful empty results
 
 Usage:
-    from llm_extractor import is_available, extract_entities, extract_facts, enrich_block
+    from .llm_extractor import is_available, extract_entities, extract_facts, enrich_block
 """
 
 from __future__ import annotations

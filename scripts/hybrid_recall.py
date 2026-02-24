@@ -26,8 +26,7 @@ import sys
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from observability import get_logger, metrics, timed
+from .observability import get_logger, metrics, timed
 
 _log = get_logger("hybrid_recall")
 
@@ -279,7 +278,7 @@ class HybridBackend:
             ce_cfg = self._config.get("cross_encoder", {})
             if ce_cfg.get("enabled", False) and result:
                 try:
-                    from cross_encoder_reranker import CrossEncoderReranker
+                    from .cross_encoder_reranker import CrossEncoderReranker
                     if CrossEncoderReranker.is_available():
                         ce = CrossEncoderReranker()
                         for r in result:
@@ -321,7 +320,7 @@ class HybridBackend:
         (O(corpus)).
         """
         try:
-            from sqlite_index import _db_path, query_index
+            from .sqlite_index import _db_path, query_index
 
             db = _db_path(workspace)
             if os.path.isfile(db):
@@ -332,7 +331,7 @@ class HybridBackend:
             _log.warning("sqlite_index_fallback", error=str(exc))
 
         try:
-            from recall import recall
+            from .recall import recall
 
             return recall(workspace, query, limit=limit, **kwargs)
         except Exception as exc:

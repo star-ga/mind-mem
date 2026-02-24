@@ -9,9 +9,8 @@ import sys
 import pytest
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
 
-from validate_py import Validator  # noqa: E402
+from mind_mem.validate_py import Validator  # noqa: E402
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 

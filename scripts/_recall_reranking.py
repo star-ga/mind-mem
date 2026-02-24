@@ -7,7 +7,7 @@ import re
 import urllib.error
 import urllib.request
 
-from _recall_scoring import (
+from ._recall_scoring import (
     _category_match_boost,
     _date_proximity_score,
     _detect_negation,
@@ -16,7 +16,7 @@ from _recall_scoring import (
     _extract_speaker_names,
     _negation_penalty,
 )
-from observability import get_logger
+from .observability import get_logger
 
 _log = get_logger("reranking")
 

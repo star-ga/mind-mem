@@ -7,7 +7,7 @@ Provides:
 - Timing context manager for latency tracking
 
 Usage:
-    from observability import get_logger, metrics, timed
+    from .observability import get_logger, metrics, timed
 
     log = get_logger("capture")
     log.info("scan_complete", signals=5, duration_ms=120)

@@ -5,9 +5,8 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from _recall_detection import decompose_query
+from mind_mem._recall_detection import decompose_query
 
 
 class TestSimpleConjunctionSplit(unittest.TestCase):

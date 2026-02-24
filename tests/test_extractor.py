@@ -5,9 +5,8 @@ import os
 import sys
 
 # Add scripts/ to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from extractor import extract_facts, extract_from_conversation, format_as_blocks
+from mind_mem.extractor import extract_facts, extract_from_conversation, format_as_blocks
 
 
 class TestExtractFacts:

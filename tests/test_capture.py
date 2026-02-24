@@ -6,8 +6,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from capture import append_signals, scan_log
+from mind_mem.capture import append_signals, scan_log
 
 
 class TestScanLog(unittest.TestCase):
@@ -111,7 +110,7 @@ class TestStructuredExtraction(unittest.TestCase):
     """Tests for the extract_structure() function."""
 
     def setUp(self):
-        from capture import extract_structure
+        from mind_mem.capture import extract_structure
         self.extract = extract_structure
 
     def test_decision_extracts_subject(self):

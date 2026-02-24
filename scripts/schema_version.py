@@ -8,7 +8,7 @@ Usage:
     python3 scripts/schema_version.py [workspace_path]
 
 As library:
-    from schema_version import get_workspace_version, check_migration_needed, migrate_workspace
+    from .schema_version import get_workspace_version, check_migration_needed, migrate_workspace
 """
 
 from __future__ import annotations
@@ -18,9 +18,8 @@ import os
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, SCRIPT_DIR)
 
-from observability import get_logger  # noqa: E402
+from .observability import get_logger  # noqa: E402
 
 _log = get_logger("schema_version")
 

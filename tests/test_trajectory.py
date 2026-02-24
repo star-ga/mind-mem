@@ -7,9 +7,8 @@ import tempfile
 import unittest
 from datetime import date, timedelta
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from trajectory import (
+from mind_mem.trajectory import (
     _TRAJ_ID_RE,
     compute_similarity,
     format_trajectory_md,

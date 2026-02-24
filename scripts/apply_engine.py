@@ -24,11 +24,10 @@ import sys
 from datetime import datetime, timedelta
 
 # Import block parser from same directory
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from backup_restore import WAL
-from block_parser import get_by_id, parse_file
-from mind_filelock import FileLock
-from namespaces import NamespaceManager
+from .backup_restore import WAL
+from .block_parser import get_by_id, parse_file
+from .mind_filelock import FileLock
+from .namespaces import NamespaceManager
 
 # ═══════════════════════════════════════════════
 # Configuration

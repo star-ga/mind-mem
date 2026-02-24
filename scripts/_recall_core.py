@@ -11,8 +11,7 @@ import sys
 from abc import ABC, abstractmethod
 from collections import Counter
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _recall_constants import (
+from ._recall_constants import (
     _STOPWORDS,
     _VALID_RECALL_KEYS,
     ADVERSARIAL_NEGATION_BOOST,
@@ -38,8 +37,8 @@ from _recall_constants import (
     STATUS_BOOST_ACTIVE,
     STATUS_BOOST_WIP,
 )
-from _recall_context import context_pack
-from _recall_detection import (
+from ._recall_context import context_pack
+from ._recall_detection import (
     _INTENT_TO_QUERY_TYPE,
     _QUERY_TYPE_PARAMS,
     _parse_speaker_from_tags,
@@ -52,14 +51,14 @@ from _recall_detection import (
     get_excerpt,
     is_skeptical_query,
 )
-from _recall_expansion import expand_months, expand_query, rm3_expand
-from _recall_reranking import llm_rerank, rerank_hits
-from _recall_scoring import bm25f_score_terms, build_xref_graph, compute_weighted_tf, date_score
-from _recall_temporal import apply_temporal_filter, resolve_time_reference
-from _recall_tokenization import tokenize
-from block_parser import chunk_block, deduplicate_chunks, get_active, parse_file
-from observability import get_logger, metrics
-from retrieval_graph import (
+from ._recall_expansion import expand_months, expand_query, rm3_expand
+from ._recall_reranking import llm_rerank, rerank_hits
+from ._recall_scoring import bm25f_score_terms, build_xref_graph, compute_weighted_tf, date_score
+from ._recall_temporal import apply_temporal_filter, resolve_time_reference
+from ._recall_tokenization import tokenize
+from .block_parser import chunk_block, deduplicate_chunks, get_active, parse_file
+from .observability import get_logger, metrics
+from .retrieval_graph import (
     get_hard_negative_ids,
     log_retrieval,
     propagate_scores,
@@ -67,21 +66,21 @@ from retrieval_graph import (
 
 # A-MEM block metadata (optional — graceful degradation if unavailable)
 try:
-    from block_metadata import BlockMetadataManager
+    from .block_metadata import BlockMetadataManager
     _HAS_BLOCK_META = True
 except ImportError:
     _HAS_BLOCK_META = False
 
 # Intent Router (optional — falls back to detect_query_type)
 try:
-    from intent_router import get_router as _get_intent_router
+    from .intent_router import get_router as _get_intent_router
     _HAS_INTENT_ROUTER = True
 except ImportError:
     _HAS_INTENT_ROUTER = False
 
 # LLM Extractor (optional — config-gated, zero deps by default)
 try:
-    from llm_extractor import enrich_results as _llm_enrich_results
+    from .llm_extractor import enrich_results as _llm_enrich_results
     _HAS_LLM_EXTRACTOR = True
 except ImportError:
     _HAS_LLM_EXTRACTOR = False
@@ -207,7 +206,7 @@ def recall(
     _kernel_bm25_b = BM25_B
     _kernel_field_weights = None
     try:
-        from mind_ffi import get_kernel_param, get_mind_dir, load_kernel_config
+        from .mind_ffi import get_kernel_param, get_mind_dir, load_kernel_config
         mind_dir = get_mind_dir(workspace)
         recall_kernel = load_kernel_config(os.path.join(mind_dir, "recall.mind"))
         if recall_kernel:
@@ -311,7 +310,7 @@ def recall(
     ns_manager = None
     if agent_id:
         try:
-            from namespaces import NamespaceManager
+            from .namespaces import NamespaceManager
             ns_manager = NamespaceManager(workspace, agent_id=agent_id)
         except ImportError:
             _log.debug("namespaces_unavailable", agent_id=agent_id)
@@ -907,7 +906,7 @@ def recall(
     # Stage 2.5: Optional cross-encoder neural reranking — capped (#9)
     if ce_config.get("enabled", False):
         try:
-            from cross_encoder_reranker import CrossEncoderReranker
+            from .cross_encoder_reranker import CrossEncoderReranker
             if CrossEncoderReranker.is_available():
                 ce = CrossEncoderReranker()
                 ce_cap = min(len(deduped), MAX_RERANK_CANDIDATES)
@@ -1032,7 +1031,7 @@ def _load_backend(workspace: str) -> str:
                 return "sqlite"
             if backend == "vector":
                 try:
-                    from recall_vector import VectorBackend
+                    from .recall_vector import VectorBackend
                     return VectorBackend(recall_cfg)
                 except ImportError:
                     _log.warning("vector_backend_unavailable",
@@ -1091,7 +1090,7 @@ def prefetch_context(
     # 2. Category-aware boost: if category distiller is available,
     #    pull in category context blocks that match the signals
     try:
-        from category_distiller import CategoryDistiller
+        from .category_distiller import CategoryDistiller
         distiller = CategoryDistiller()
         combined_query = " ".join(recent_signals)
         relevant_cats = distiller.get_categories_for_query(combined_query)
@@ -1154,7 +1153,7 @@ def main():
             backend = "scan"
 
     if backend == "sqlite":
-        from sqlite_index import query_index
+        from .sqlite_index import query_index
         results = query_index(
             args.workspace, args.query, limit=args.limit,
             active_only=args.active_only, graph_boost=args.graph,

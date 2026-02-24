@@ -30,7 +30,7 @@ import urllib.request
 SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
-from recall import recall  # noqa: E402
+from mind_mem.recall import recall  # noqa: E402
 
 # HuggingFace dataset URLs (cleaned release)
 HF_BASE = "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/main"
