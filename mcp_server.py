@@ -16,13 +16,13 @@ Resources (read-only):
     mind-mem://ledger            — Shared fact ledger (multi-agent)
 
 Tools (18):
-    recall               — Search memory with BM25
+    recall               — Search memory (auto/bm25/hybrid backend)
     propose_update       — Propose a new decision/task (writes to SIGNALS.md, never source of truth)
     approve_apply        — Apply a staged proposal (dry-run by default)
     rollback_proposal    — Rollback an applied proposal by receipt timestamp
     scan                 — Run integrity scan
     list_contradictions  — List detected contradictions with resolution status
-    hybrid_search        — Full hybrid BM25+Vector recall with RRF fusion
+    hybrid_search        — (Deprecated) Alias for recall(backend="hybrid")
     find_similar         — Find blocks similar to a given block
     intent_classify      — Show routing strategy for a query
     index_stats          — Block counts, index status, kernel info
@@ -499,57 +499,108 @@ def get_ledger() -> str:
 # Tools
 # ---------------------------------------------------------------------------
 
-@mcp.tool
-@mcp_tool_observe
-def recall(query: str, limit: int = 10, active_only: bool = False) -> str:
-    """Search across all memory files with ranked retrieval.
-
-    Uses FTS5 index when available (O(log N)), falls back to BM25 scan.
-
-    Args:
-        query: Search query (supports stemming and domain-aware expansion).
-        limit: Maximum number of results (default: 10).
-        active_only: Only return blocks with Status: active.
-
-    Returns:
-        JSON array of ranked results with scores, IDs, and matched content.
-    """
+def _recall_impl(query: str, limit: int = 10, active_only: bool = False,
+                  backend: str = "auto") -> str:
+    """Core recall implementation shared by recall() and hybrid_search()."""
     ws = _workspace()
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
     limits = _get_limits(ws)
     limit = max(1, min(limit, limits["max_recall_results"]))
-    warnings = []
-    try:
-        # Use FTS5 index when it exists, otherwise fall back to scan (#11)
-        if os.path.isfile(fts_db_path(ws)):
-            results = fts_query(ws, query, limit=limit, active_only=active_only)
-            backend = "sqlite"
-        else:
-            results = recall_engine(ws, query, limit=limit, active_only=active_only)
-            backend = "scan"
-            warnings.append("FTS5 index not found — using full scan. "
-                            "Run 'reindex' tool for faster queries.")
-    except sqlite3.OperationalError as exc:
-        if _is_db_locked(exc):
-            return _sqlite_busy_error()
-        raise
+    if backend not in ("auto", "bm25", "hybrid"):
+        backend = "auto"
+    warnings: list[str] = []
+    config_warnings: list[str] = []
+    used_backend = "scan"
+    results: list = []
+
+    # --- Hybrid path (backend="hybrid" or "auto") ---
+    if backend in ("hybrid", "auto"):
+        try:
+            from mind_mem.hybrid_recall import HybridBackend, validate_recall_config
+            config = _load_config(ws)
+            recall_cfg = config.get("recall", {})
+            if not isinstance(recall_cfg, dict):
+                recall_cfg = {}
+            schema_errors = validate_recall_config(recall_cfg)
+            if schema_errors:
+                config_warnings = schema_errors
+                _log.warning("recall_config_errors", errors=schema_errors)
+            hb = HybridBackend.from_config(config)
+            results = hb.search(query, ws, limit=limit, active_only=active_only)
+            used_backend = "hybrid"
+        except ImportError:
+            if backend == "hybrid":
+                warnings.append("Hybrid backend unavailable — falling back to BM25.")
+            # Fall through to BM25 path
+        except sqlite3.OperationalError as exc:
+            if _is_db_locked(exc):
+                return _sqlite_busy_error()
+            raise
+        except (OSError, ValueError, KeyError) as exc:
+            _log.warning("recall_hybrid_failed", query=query, error=str(exc))
+            if backend == "hybrid":
+                warnings.append(f"Hybrid search failed — falling back to BM25: {exc}")
+
+    # --- BM25 path (backend="bm25", or fallback from auto/hybrid) ---
+    if used_backend != "hybrid":
+        try:
+            if os.path.isfile(fts_db_path(ws)):
+                results = fts_query(ws, query, limit=limit, active_only=active_only)
+                used_backend = "sqlite"
+            else:
+                results = recall_engine(ws, query, limit=limit, active_only=active_only)
+                used_backend = "scan"
+                warnings.append("FTS5 index not found — using full scan. "
+                                "Run 'reindex' tool for faster queries.")
+        except sqlite3.OperationalError as exc:
+            if _is_db_locked(exc):
+                return _sqlite_busy_error()
+            raise
+
     metrics.inc("mcp_recall_queries")
-    _log.info("mcp_recall", query=query, backend=backend, results=len(results))
-    # Wrap in envelope with schema version and warnings (#11, recommendation)
-    envelope = {
+    _log.info("mcp_recall", query=query, backend=used_backend, results=len(results))
+    envelope: dict = {
         "_schema_version": "1.0",
-        "backend": backend,
+        "backend": used_backend,
         "query": query,
         "count": len(results),
         "results": results,
     }
     if warnings:
         envelope["warnings"] = warnings
+    if config_warnings:
+        envelope["config_warnings"] = config_warnings
     if not results:
         envelope["message"] = "No matching blocks found. Try broader terms or check workspace."
     return json.dumps(envelope, indent=2, default=str)
+
+
+@mcp.tool
+@mcp_tool_observe
+def recall(
+    query: str,
+    limit: int = 10,
+    active_only: bool = False,
+    backend: str = "auto",
+) -> str:
+    """Search across all memory files with ranked retrieval.
+
+    Supports BM25 (FTS5), hybrid BM25+Vector RRF fusion, or auto mode
+    which tries hybrid first and falls back to BM25.
+
+    Args:
+        query: Search query (supports stemming and domain-aware expansion).
+        limit: Maximum number of results (default: 10).
+        active_only: Only return blocks with Status: active.
+        backend: Retrieval backend — "auto" (default, hybrid→BM25 fallback),
+                 "bm25" (keyword only), or "hybrid" (BM25+Vector RRF fusion).
+
+    Returns:
+        JSON array of ranked results with scores, IDs, and matched content.
+    """
+    return _recall_impl(query, limit=limit, active_only=active_only, backend=backend)
 
 
 @mcp.tool
@@ -809,9 +860,9 @@ def rollback_proposal(receipt_ts: str) -> str:
 @mcp.tool
 @mcp_tool_observe
 def hybrid_search(query: str, limit: int = 10, active_only: bool = False) -> str:
-    """Full hybrid BM25+Vector recall with RRF fusion.
+    """Hybrid BM25+Vector recall with RRF fusion.
 
-    Falls back to BM25-only when vector backend is unavailable.
+    Deprecated: use recall(backend="hybrid") instead. This is a thin wrapper.
 
     Args:
         query: Search query.
@@ -821,44 +872,7 @@ def hybrid_search(query: str, limit: int = 10, active_only: bool = False) -> str
     Returns:
         JSON array of ranked results from fused retrieval.
     """
-    ws = _workspace()
-    ws_err = _check_workspace(ws)
-    if ws_err:
-        return ws_err
-    limits = _get_limits(ws)
-    limit = max(1, min(limit, limits["max_recall_results"]))
-    config_warnings: list[str] = []
-    try:
-        from mind_mem.hybrid_recall import HybridBackend, validate_recall_config
-        config = _load_config(ws)
-        # Pre-validate recall config before constructing backend (#28)
-        recall_cfg = config.get("recall", {})
-        if not isinstance(recall_cfg, dict):
-            recall_cfg = {}
-        schema_errors = validate_recall_config(recall_cfg)
-        if schema_errors:
-            config_warnings = schema_errors
-            _log.warning("hybrid_search_config_errors", errors=schema_errors)
-        hb = HybridBackend.from_config(config)
-        results = hb.search(query, ws, limit=limit, active_only=active_only)
-        backend = "hybrid"
-    except ImportError:
-        results = recall_engine(ws, query, limit=limit, active_only=active_only)
-        backend = "scan_fallback"
-    except sqlite3.OperationalError as exc:
-        if _is_db_locked(exc):
-            return _sqlite_busy_error()
-        raise
-    except (OSError, ValueError, KeyError) as exc:
-        _log.warning("hybrid_search_failed", query=query, error=str(exc))
-        results = recall_engine(ws, query, limit=limit, active_only=active_only)
-        backend = "scan_fallback"
-    metrics.inc("mcp_hybrid_search_queries")
-    _log.info("mcp_hybrid_search", query=query, backend=backend, results=len(results))
-    envelope: dict = {"_schema_version": "1.0", "results": results, "backend": backend}
-    if config_warnings:
-        envelope["config_warnings"] = config_warnings
-    return json.dumps(envelope, indent=2, default=str)
+    return _recall_impl(query, limit=limit, active_only=active_only, backend="hybrid")
 
 
 @mcp.tool
