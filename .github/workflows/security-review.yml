@@ -1,0 +1,31 @@
+name: Security Review
+
+permissions:
+  pull-requests: write
+  contents: read
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: security-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+
+      - uses: anthropics/claude-code-security-review@main
+        with:
+          comment-pr: true
+          upload-results: true
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          claude-model: claude-opus-4-6
+          exclude-directories: node_modules,.venv,__pycache__,dist,build
+          claudecode-timeout: "15"
