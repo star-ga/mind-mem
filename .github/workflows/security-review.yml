@@ -7,9 +7,10 @@ permissions:
 on:
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
-  group: security-${{ github.event.pull_request.number }}
+  group: security-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -18,12 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 2
 
       - uses: anthropics/claude-code-security-review@main
         with:
-          comment-pr: true
+          comment-pr: ${{ github.event_name == 'pull_request' }}
           upload-results: true
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
           claude-model: claude-opus-4-6
