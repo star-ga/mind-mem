@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
     <img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible">
     <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
-    <img src="https://img.shields.io/badge/security-audited-darkgreen?style=flat-square" alt="Security Audited">
+    <a href="https://github.com/star-ga/mind-mem/actions/workflows/security-review.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/security-review.yml?branch=main&style=flat-square&label=Security%20Review&color=darkgreen" alt="Security Review"></a>
   </p>
 </p>
 
