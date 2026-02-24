@@ -44,7 +44,6 @@ from __future__ import annotations
 import fnmatch
 import json
 import os
-import sys
 
 from .mind_filelock import FileLock
 from .observability import get_logger

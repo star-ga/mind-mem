@@ -2,12 +2,10 @@
 import importlib.util
 import os
 import shutil
-import sys
 import tempfile
 import unittest
 
 import pytest
-
 
 _HAS_SENTENCE_TRANSFORMERS = importlib.util.find_spec("sentence_transformers") is not None
 

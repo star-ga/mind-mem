@@ -3,11 +3,9 @@
 import json
 import logging
 import os
-import sys
 import tempfile
 import unittest
 import unittest.mock
-
 
 from mind_mem.init_workspace import (  # noqa: E402
     _RECALL_RANGES,

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import sys
 
 # Ensure scripts/ is on path
 _HERE = os.path.dirname(os.path.abspath(__file__))

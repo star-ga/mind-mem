@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Tests for observability.py — structured logging and metrics."""
 
-import os
-import sys
 import unittest
 
 from mind_mem.observability import Metrics, get_logger, timed

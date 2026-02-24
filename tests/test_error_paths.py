@@ -7,7 +7,6 @@ import sys
 import tempfile
 import unittest
 
-
 from mind_mem.block_parser import parse_blocks, parse_file  # noqa: E402
 from mind_mem.init_workspace import _validate_config, load_config  # noqa: E402
 from mind_mem.mind_ffi import (  # noqa: E402

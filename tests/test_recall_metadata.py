@@ -1,10 +1,8 @@
 """Tests for A-MEM block metadata integration in recall pipeline."""
 import os
 import shutil
-import sys
 import tempfile
 import unittest
-
 
 
 class TestBlockMetadataIntegration(unittest.TestCase):

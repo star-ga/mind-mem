@@ -25,7 +25,6 @@ import hashlib
 import json
 import os
 import re
-import sys
 from datetime import datetime
 
 from .block_parser import get_by_id, parse_file

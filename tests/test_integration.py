@@ -2,13 +2,11 @@
 
 import os
 import shutil
-import sys
 import tempfile
 import unittest
 from datetime import datetime
 
 # Ensure scripts are importable
-
 from mind_mem.capture import append_signals, scan_log
 from mind_mem.init_workspace import init
 from mind_mem.recall import recall

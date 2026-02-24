@@ -2,7 +2,6 @@
 """Tests for conflict_resolver.py — zero external deps (stdlib unittest)."""
 
 import os
-import sys
 import tempfile
 import unittest
 

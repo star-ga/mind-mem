@@ -2,11 +2,9 @@
 """Tests for trajectory.py — trajectory memory block operations."""
 
 import os
-import sys
 import tempfile
 import unittest
 from datetime import date, timedelta
-
 
 from mind_mem.trajectory import (
     _TRAJ_ID_RE,

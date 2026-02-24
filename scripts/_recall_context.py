@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import os
 import re
-import sys
 
 from ._recall_constants import _STOPWORDS
 from ._recall_detection import _parse_speaker_from_tags, get_block_type, get_excerpt

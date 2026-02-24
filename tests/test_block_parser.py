@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Tests for block_parser.py — zero external deps (stdlib unittest)."""
 
-import os
-import sys
 import unittest
 
 from mind_mem.block_parser import extract_refs, get_active, get_by_id, parse_blocks

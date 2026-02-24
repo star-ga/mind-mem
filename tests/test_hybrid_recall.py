@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
 
-import os
-import sys
 import threading
 import unittest
 

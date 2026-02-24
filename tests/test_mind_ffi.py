@@ -1,11 +1,9 @@
 """Tests for MIND FFI bridge — kernel loading, config parsing, and fallback behavior."""
 
 import os
-import sys
 import tempfile
 import unittest
 from unittest import mock
-
 
 from mind_mem.mind_ffi import (
     MindMemKernel,

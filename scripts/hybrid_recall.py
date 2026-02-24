@@ -22,7 +22,6 @@ Configuration (mind-mem.json):
 from __future__ import annotations
 
 import os
-import sys
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
 

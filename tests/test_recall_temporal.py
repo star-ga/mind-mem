@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """Tests for _recall_temporal.py — time-aware hard filters for temporal queries."""
 
-import os
-import sys
 import unittest
 from datetime import date
-
 
 from mind_mem._recall_temporal import apply_temporal_filter, resolve_time_reference
 

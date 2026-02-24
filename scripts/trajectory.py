@@ -26,11 +26,9 @@ from __future__ import annotations
 
 import os
 import re
-import sys
 from configparser import ConfigParser
 from datetime import date, datetime
 from typing import Any
-
 
 # Trajectory block ID pattern: TRAJ-YYYYMMDD-NNN
 _TRAJ_ID_RE = re.compile(r"^TRAJ-(\d{8})-(\d{3,})$")

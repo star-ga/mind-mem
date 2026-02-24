@@ -2,8 +2,6 @@
 """Tests for _recall_reranking.py — deterministic reranker + LLM rerank."""
 
 import json
-import os
-import sys
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer

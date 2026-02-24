@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Tests for the regex NER-lite entity/fact extractor."""
 
-import os
-import sys
 
 # Add scripts/ to path
 

@@ -1,9 +1,6 @@
 """Tests for optional cross-encoder reranker."""
-import os
-import sys
 import unittest
 from unittest.mock import MagicMock, patch
-
 
 from mind_mem.cross_encoder_reranker import CrossEncoderReranker
 

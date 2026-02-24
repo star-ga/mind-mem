@@ -7,13 +7,11 @@ Tests cover:
 """
 
 import os
-import sys
 import tempfile
 import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 
 from mind_mem.recall import recall
 

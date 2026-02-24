@@ -14,12 +14,10 @@ import importlib.util
 import json
 import os
 import shutil
-import sys
 import tempfile
 import unittest
 
 # Add scripts/ to path for direct imports
-
 from mind_mem.block_parser import MAX_PARSE_SIZE, parse_file
 
 # ---------------------------------------------------------------------------
