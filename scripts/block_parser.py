@@ -80,6 +80,9 @@ def parse_blocks(text: str) -> list[dict]:
       - List fields (Sources, History, etc.) as lists of strings
       - ConstraintSignatures as list of dicts (v2.0)
     """
+    # Strip UTF-8 BOM if present so the first block header is not masked.
+    if text.startswith("﻿"):
+        text = text[1:]
     lines = text.split("\n")
     blocks = []
     current = None

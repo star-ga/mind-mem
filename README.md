@@ -8,13 +8,14 @@
   </p>
   <p align="center">
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
+    <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/v/mind-mem?style=flat-square&color=blue" alt="PyPI"></a>
     <a href="https://github.com/star-ga/mind-mem/blob/main/LICENSE"><img src="https://img.shields.io/github/license/star-ga/mind-mem?style=flat-square&color=blue" alt="License"></a>
     <a href="https://github.com/star-ga/mind-mem/releases"><img src="https://img.shields.io/github/v/release/star-ga/mind-mem?style=flat-square&color=green" alt="Release"></a>
     <img src="https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+">
     <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
     <img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible">
     <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
-    <img src="https://img.shields.io/badge/tests-1400%2B-brightgreen?style=flat-square" alt="Tests: 1400+">
+    <img src="https://img.shields.io/badge/tests-1844-brightgreen?style=flat-square" alt="Tests: 1844">
     <img src="https://img.shields.io/badge/MCP_tools-18-blue?style=flat-square" alt="MCP Tools: 18">
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/security-review.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/security-review.yml?branch=main&style=flat-square&label=Security%20Review&color=darkgreen" alt="Security Review"></a>
   </p>
@@ -46,6 +47,26 @@ cd mind-mem
 ```
 
 The installer auto-detects Claude Code, Claude Desktop, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed, and OpenClaw — creates a shared workspace and wires the MCP server into each client's config. SQLite WAL mode ensures safe concurrent access: one writer, many readers, zero corruption.
+
+### 30-Second Demo
+
+```bash
+pip install mind-mem
+mind-mem-init ~/my-workspace        # Create workspace
+mind-mem-recall "API decisions"     # Hybrid BM25F search
+mind-mem-scan ~/my-workspace        # Detect drift & contradictions
+```
+
+Output:
+```
+[D-20260213-001] score=4.82
+  Decision: Use async/await for all API endpoints
+  Status: active | Priority: P1
+
+[D-20260210-003] score=3.91
+  Decision: REST over GraphQL for public API
+  Status: active | Priority: P2
+```
 
 ### Trust Signals
 
@@ -339,6 +360,13 @@ python3 benchmarks/locomo_harness.py --conv-ids 4,7,8
 
 ## Quick Start
 
+### pip install (quickest)
+
+```bash
+pip install mind-mem
+mind-mem-recall "What decisions were made about the API?"
+```
+
 ### Universal Installer (Recommended)
 
 ```bash
@@ -610,6 +638,20 @@ your-workspace/
 ---
 
 ## How It Compares
+
+### Quick Comparison
+
+| Feature | mind-mem | Mem0 | Letta | Zep/Graphiti |
+|---------|----------|------|-------|--------------|
+| Local-only | Yes | No (cloud API) | No (runtime) | No (Neo4j) |
+| Zero infrastructure | Yes | No | No | No |
+| Hybrid retrieval | BM25F + vector + RRF | Vector only | Hybrid | Graph + vector |
+| Governance (propose/review/apply) | Yes | No | No | No |
+| Contradiction detection | Yes | No | No | No |
+| Tests | 1,844 | - | - | - |
+| LoCoMo benchmark | 67.3% | 68.5% | 74.0% | - |
+| MCP tools | 18 | - | - | - |
+| Core dependencies | 0 | Many | Many | Many |
 
 ### At a Glance
 

@@ -174,7 +174,7 @@ def evaluate_question(question: dict, tmpdir: str, max_k: int = 10) -> dict | No
     for r in results:
         bid = r.get("_id", "")
         if bid.startswith("SESSION-"):
-            sid = bid[len("SESSION-"):]
+            sid = bid[len("SESSION-") :]
             retrieved_ids.append(sid)
 
     # Compute Recall@K for each K
@@ -275,9 +275,7 @@ def print_results_table(agg: dict):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="LongMemEval Benchmark Harness for mind-mem recall engine"
-    )
+    parser = argparse.ArgumentParser(description="LongMemEval Benchmark Harness for mind-mem recall engine")
     parser.add_argument(
         "--subset",
         default="longmemeval_s",

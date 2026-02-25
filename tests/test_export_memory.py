@@ -6,7 +6,13 @@ import json
 import os
 import tempfile
 
-from scripts.init_workspace import init
+import pytest
+
+pytest.importorskip("scripts.export_memory")
+
+from scripts.export_memory import export_memory  # noqa: E402
+
+from scripts.init_workspace import init  # noqa: E402
 
 
 def _make_workspace():
@@ -21,27 +27,17 @@ def _make_workspace():
 
 def test_export_produces_output():
     """Export produces non-empty output."""
-    try:
-        from scripts.export_memory import export_memory
-
-        ws = _make_workspace()
-        result = export_memory(ws)
-        assert result is not None
-        assert len(result) > 0
-    except ImportError:
-        pass  # Module may have different name
+    ws = _make_workspace()
+    result = export_memory(ws)
+    assert result is not None
+    assert len(result) > 0
 
 
 def test_export_format_jsonl():
     """Export produces valid JSONL."""
-    try:
-        from scripts.export_memory import export_memory
-
-        ws = _make_workspace()
-        result = export_memory(ws, format="jsonl")
-        if isinstance(result, str):
-            for line in result.strip().split("\n"):
-                if line:
-                    json.loads(line)  # Should not raise
-    except ImportError:
-        pass
+    ws = _make_workspace()
+    result = export_memory(ws, format="jsonl")
+    if isinstance(result, str):
+        for line in result.strip().split("\n"):
+            if line:
+                json.loads(line)  # Should not raise

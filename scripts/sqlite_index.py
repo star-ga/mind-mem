@@ -797,7 +797,7 @@ def query_index(
 
     # Build FTS5 MATCH query from tokens
     # Quote each token to prevent FTS5 operator injection (NOT, AND, NEAR, etc.)
-    fts_query = " OR ".join(f'"{t}"' for t in query_tokens)
+    fts_query = " OR ".join(f'"{t.replace(chr(34), "")}"' for t in query_tokens if t.replace('"', ""))
 
     try:
         # FTS5 bm25() returns negative scores (lower = better)

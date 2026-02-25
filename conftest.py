@@ -1,4 +1,5 @@
 """Shared pytest fixtures for mind-mem test suite."""
+
 import os
 
 import pytest

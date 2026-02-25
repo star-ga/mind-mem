@@ -5,7 +5,13 @@ from __future__ import annotations
 import os
 import tempfile
 
-from scripts.init_workspace import init
+import pytest
+
+pytest.importorskip("scripts.scan_engine")
+
+from scripts.scan_engine import scan  # noqa: E402
+
+from scripts.init_workspace import init  # noqa: E402
 
 
 def _make_workspace_with_blocks():
@@ -20,24 +26,14 @@ def _make_workspace_with_blocks():
 
 def test_scan_workspace_no_crash():
     """Scanning a valid workspace doesn't crash."""
-    try:
-        from scripts.scan_engine import scan
-
-        ws = _make_workspace_with_blocks()
-        result = scan(ws)
-        assert isinstance(result, (dict, list))
-    except ImportError:
-        pass  # scan module may have different name
+    ws = _make_workspace_with_blocks()
+    result = scan(ws)
+    assert isinstance(result, (dict, list))
 
 
 def test_scan_empty_workspace():
     """Scanning empty workspace returns clean result."""
-    try:
-        from scripts.scan_engine import scan
-
-        ws = tempfile.mkdtemp()
-        init(ws)
-        result = scan(ws)
-        assert isinstance(result, (dict, list))
-    except ImportError:
-        pass
+    ws = tempfile.mkdtemp()
+    init(ws)
+    result = scan(ws)
+    assert isinstance(result, (dict, list))

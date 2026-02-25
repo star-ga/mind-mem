@@ -31,34 +31,38 @@ sys.path.insert(0, SCRIPT_DIR)
 
 # ── Pure Python implementations (always available) ────────────────────
 
-def py_rrf_fuse(bm25_ranks: list[float], vec_ranks: list[float],
-                k: float = 60.0, bm25_w: float = 1.0,
-                vec_w: float = 1.0) -> list[float]:
+
+def py_rrf_fuse(
+    bm25_ranks: list[float], vec_ranks: list[float], k: float = 60.0, bm25_w: float = 1.0, vec_w: float = 1.0
+) -> list[float]:
     """RRF fusion: score = bm25_w/(k+rank_bm25) + vec_w/(k+rank_vec)."""
-    return [bm25_w / (k + b) + vec_w / (k + v)
-            for b, v in zip(bm25_ranks, vec_ranks)]
+    return [bm25_w / (k + b) + vec_w / (k + v) for b, v in zip(bm25_ranks, vec_ranks)]
 
 
-def py_bm25f_doc(tf: float, df: float, N: float, dl: float, avgdl: float,
-                 k1: float = 1.2, b: float = 0.75,
-                 field_weight: float = 1.0) -> float:
+def py_bm25f_doc(
+    tf: float, df: float, N: float, dl: float, avgdl: float, k1: float = 1.2, b: float = 0.75, field_weight: float = 1.0
+) -> float:
     """BM25F score for a single term in a single document."""
     idf = math.log((N - df + 0.5) / (df + 0.5) + 1.0)
     tf_norm = (tf * (k1 + 1.0)) / (tf + k1 * (1.0 - b + b * dl / avgdl))
     return idf * tf_norm * field_weight
 
 
-def py_bm25f_batch(tfs: list[float], dfs: list[float], N: float,
-                   dls: list[float], avgdl: float,
-                   k1: float = 1.2, b: float = 0.75,
-                   field_weight: float = 1.0) -> list[float]:
+def py_bm25f_batch(
+    tfs: list[float],
+    dfs: list[float],
+    N: float,
+    dls: list[float],
+    avgdl: float,
+    k1: float = 1.2,
+    b: float = 0.75,
+    field_weight: float = 1.0,
+) -> list[float]:
     """BM25F scores for a batch of documents (one term)."""
-    return [py_bm25f_doc(tf, dfs[0], N, dl, avgdl, k1, b, field_weight)
-            for tf, dl in zip(tfs, dls)]
+    return [py_bm25f_doc(tf, dfs[0], N, dl, avgdl, k1, b, field_weight) for tf, dl in zip(tfs, dls)]
 
 
-def py_negation_penalty(scores: list[float], has_negation: list[bool],
-                        penalty: float = 0.3) -> list[float]:
+def py_negation_penalty(scores: list[float], has_negation: list[bool], penalty: float = 0.3) -> list[float]:
     """Apply negation penalty to scores."""
     return [s * penalty if neg else s for s, neg in zip(scores, has_negation)]
 
@@ -68,30 +72,28 @@ def py_date_proximity(days_diff: list[float], sigma: float = 30.0) -> list[float
     return [math.exp(-0.5 * (d / sigma) ** 2) for d in days_diff]
 
 
-def py_category_boost(scores: list[float], matches: list[bool],
-                      boost: float = 1.15) -> list[float]:
+def py_category_boost(scores: list[float], matches: list[bool], boost: float = 1.15) -> list[float]:
     """Apply category match boost."""
     return [s * boost if m else s for s, m in zip(scores, matches)]
 
 
-def py_importance_score(access_count: int, days_since: float,
-                        base_importance: float = 1.0,
-                        decay: float = 0.01) -> float:
+def py_importance_score(
+    access_count: int, days_since: float, base_importance: float = 1.0, decay: float = 0.01
+) -> float:
     """A-MEM importance: access frequency with exponential recency decay."""
     recency = math.exp(-decay * days_since)
     freq = math.log(1.0 + access_count)
     return max(0.8, min(1.5, base_importance * (0.5 + 0.3 * freq + 0.2 * recency)))
 
 
-def py_importance_batch(access_counts: list[int], days_since: list[float],
-                        base: float = 1.0, decay: float = 0.01) -> list[float]:
+def py_importance_batch(
+    access_counts: list[int], days_since: list[float], base: float = 1.0, decay: float = 0.01
+) -> list[float]:
     """Batch importance scoring."""
-    return [py_importance_score(a, d, base, decay)
-            for a, d in zip(access_counts, days_since)]
+    return [py_importance_score(a, d, base, decay) for a, d in zip(access_counts, days_since)]
 
 
-def py_entity_overlap(query_entities: list[str],
-                      hit_tokens: list[list[str]]) -> list[float]:
+def py_entity_overlap(query_entities: list[str], hit_tokens: list[list[str]]) -> list[float]:
     """Entity overlap ratio per hit."""
     if not query_entities:
         return [0.0] * len(hit_tokens)
@@ -100,13 +102,16 @@ def py_entity_overlap(query_entities: list[str],
     return [len(q_set & set(tokens)) / n for tokens in hit_tokens]
 
 
-def py_confidence_score(entity_overlap: float, bm25_norm: float,
-                        speaker_cov: float, evidence_density: float,
-                        negation_asym: float,
-                        weights: tuple = (0.30, 0.25, 0.15, 0.20, 0.10)) -> float:
+def py_confidence_score(
+    entity_overlap: float,
+    bm25_norm: float,
+    speaker_cov: float,
+    evidence_density: float,
+    negation_asym: float,
+    weights: tuple = (0.30, 0.25, 0.15, 0.20, 0.10),
+) -> float:
     """Weighted confidence from 5 abstention features."""
-    features = [entity_overlap, bm25_norm, speaker_cov,
-                evidence_density, negation_asym]
+    features = [entity_overlap, bm25_norm, speaker_cov, evidence_density, negation_asym]
     return sum(f * w for f, w in zip(features, weights))
 
 
@@ -133,6 +138,7 @@ def py_weighted_rank(scores: list[float], weights: list[float]) -> list[float]:
 
 # ── Data generators ───────────────────────────────────────────────────
 
+
 def gen_ranks(n: int) -> list[float]:
     return [float(i + 1) for i in range(n)]
 
@@ -155,6 +161,7 @@ def gen_token_lists(n: int, vocab_size: int = 200) -> list[list[str]]:
 
 
 # ── Benchmark harness ─────────────────────────────────────────────────
+
 
 def bench(func, args, iterations: int) -> float:
     """Run func(args) `iterations` times, return median seconds."""
@@ -189,6 +196,7 @@ def format_time(seconds: float) -> str:
 
 # ── Pre-allocated ctypes kernel callers ───────────────────────────────
 
+
 def make_native_rrf(lib, ranks_a, ranks_b, k, bm25_w, vec_w):
     n = len(ranks_a)
     fa = (ctypes.c_float * n)(*ranks_a)
@@ -207,9 +215,17 @@ def make_native_bm25f(lib, tfs, df, N, dls, avgdl, k1, b, fw):
     cdls = (ctypes.c_float * n)(*dls)
     out = (ctypes.c_float * n)()
     return lambda: lib.bm25f_batch(
-        ctfs, ctypes.c_float(df), ctypes.c_float(N),
-        cdls, ctypes.c_float(avgdl), ctypes.c_float(k1),
-        ctypes.c_float(b), ctypes.c_float(fw), ctypes.c_int(n), out)
+        ctfs,
+        ctypes.c_float(df),
+        ctypes.c_float(N),
+        cdls,
+        ctypes.c_float(avgdl),
+        ctypes.c_float(k1),
+        ctypes.c_float(b),
+        ctypes.c_float(fw),
+        ctypes.c_int(n),
+        out,
+    )
 
 
 def make_native_negation(lib, scores, bools, penalty):
@@ -217,16 +233,14 @@ def make_native_negation(lib, scores, bools, penalty):
     cs = (ctypes.c_float * n)(*scores)
     cf = (ctypes.c_float * n)(*(1.0 if b else 0.0 for b in bools))
     out = (ctypes.c_float * n)()
-    return lambda: lib.negation_penalty(cs, cf, ctypes.c_float(penalty),
-                                        ctypes.c_int(n), out)
+    return lambda: lib.negation_penalty(cs, cf, ctypes.c_float(penalty), ctypes.c_int(n), out)
 
 
 def make_native_date_prox(lib, days, sigma):
     n = len(days)
     cd = (ctypes.c_float * n)(*days)
     out = (ctypes.c_float * n)()
-    return lambda: lib.date_proximity(cd, ctypes.c_float(sigma),
-                                      ctypes.c_int(n), out)
+    return lambda: lib.date_proximity(cd, ctypes.c_float(sigma), ctypes.c_int(n), out)
 
 
 def make_native_cat_boost(lib, scores, bools, boost):
@@ -234,8 +248,7 @@ def make_native_cat_boost(lib, scores, bools, boost):
     cs = (ctypes.c_float * n)(*scores)
     cf = (ctypes.c_float * n)(*(1.0 if b else 0.0 for b in bools))
     out = (ctypes.c_float * n)()
-    return lambda: lib.category_boost(cs, cf, ctypes.c_float(boost),
-                                      ctypes.c_int(n), out)
+    return lambda: lib.category_boost(cs, cf, ctypes.c_float(boost), ctypes.c_int(n), out)
 
 
 def make_native_importance(lib, access_counts, days, base, decay):
@@ -243,15 +256,12 @@ def make_native_importance(lib, access_counts, days, base, decay):
     ca = (ctypes.c_int * n)(*access_counts)
     cd = (ctypes.c_float * n)(*days)
     out = (ctypes.c_float * n)()
-    return lambda: lib.importance_batch(ca, cd, ctypes.c_float(base),
-                                        ctypes.c_float(decay),
-                                        ctypes.c_int(n), out)
+    return lambda: lib.importance_batch(ca, cd, ctypes.c_float(base), ctypes.c_float(decay), ctypes.c_int(n), out)
 
 
 def make_native_confidence(lib):
     lib.confidence_score.restype = ctypes.c_float
-    args = [ctypes.c_float(v) for v in (0.5, 0.7, 0.3, 0.8, 0.2,
-                                         0.30, 0.25, 0.15, 0.20, 0.10)]
+    args = [ctypes.c_float(v) for v in (0.5, 0.7, 0.3, 0.8, 0.2, 0.30, 0.25, 0.15, 0.20, 0.10)]
     return lambda: lib.confidence_score(*args)
 
 
@@ -323,36 +333,66 @@ def run_benchmarks(sizes: list[int], iterations: int):
 
         # Build test list: (name, py_func, py_args, native_maker_or_None)
         tests = [
-            ("rrf_fuse", py_rrf_fuse,
-             (ranks_a, ranks_b, 60.0, 1.0, 1.0),
-             lambda: make_native_rrf(lib, ranks_a, ranks_b, 60.0, 1.0, 1.0) if lib else None),
-            ("bm25f_batch", py_bm25f_batch,
-             (tfs, [5.0], 10000.0, dls, 200.0),
-             lambda: make_native_bm25f(lib, tfs, 5.0, 10000.0, dls, 200.0, 1.2, 0.75, 1.0) if lib else None),
-            ("negation_penalty", py_negation_penalty,
-             (scores_a, bools_a, 0.3),
-             lambda: make_native_negation(lib, scores_a, bools_a, 0.3) if lib else None),
-            ("date_proximity", py_date_proximity,
-             (days, 30.0),
-             lambda: make_native_date_prox(lib, days, 30.0) if lib else None),
-            ("category_boost", py_category_boost,
-             (scores_a, bools_a, 1.15),
-             lambda: make_native_cat_boost(lib, scores_a, bools_a, 1.15) if lib else None),
-            ("importance_batch", py_importance_batch,
-             (access_counts, days),
-             lambda: make_native_importance(lib, access_counts, days, 1.0, 0.01) if lib else None),
-            ("entity_overlap", py_entity_overlap,
-             (query_ents, token_lists),
-             lambda: None),  # set-based, no direct C equivalent
-            ("confidence_score", py_confidence_score,
-             (0.5, 0.7, 0.3, 0.8, 0.2),
-             lambda: make_native_confidence(lib) if lib else None),
-            ("top_k_mask", py_top_k_mask,
-             (scores_a, min(10, n)),
-             lambda: make_native_topk(lib, scores_a, min(10, n)) if lib else None),
-            ("weighted_rank", py_weighted_rank,
-             (scores_a, weights),
-             lambda: make_native_weighted(lib, scores_a, weights) if lib else None),
+            (
+                "rrf_fuse",
+                py_rrf_fuse,
+                (ranks_a, ranks_b, 60.0, 1.0, 1.0),
+                lambda: make_native_rrf(lib, ranks_a, ranks_b, 60.0, 1.0, 1.0) if lib else None,
+            ),
+            (
+                "bm25f_batch",
+                py_bm25f_batch,
+                (tfs, [5.0], 10000.0, dls, 200.0),
+                lambda: make_native_bm25f(lib, tfs, 5.0, 10000.0, dls, 200.0, 1.2, 0.75, 1.0) if lib else None,
+            ),
+            (
+                "negation_penalty",
+                py_negation_penalty,
+                (scores_a, bools_a, 0.3),
+                lambda: make_native_negation(lib, scores_a, bools_a, 0.3) if lib else None,
+            ),
+            (
+                "date_proximity",
+                py_date_proximity,
+                (days, 30.0),
+                lambda: make_native_date_prox(lib, days, 30.0) if lib else None,
+            ),
+            (
+                "category_boost",
+                py_category_boost,
+                (scores_a, bools_a, 1.15),
+                lambda: make_native_cat_boost(lib, scores_a, bools_a, 1.15) if lib else None,
+            ),
+            (
+                "importance_batch",
+                py_importance_batch,
+                (access_counts, days),
+                lambda: make_native_importance(lib, access_counts, days, 1.0, 0.01) if lib else None,
+            ),
+            (
+                "entity_overlap",
+                py_entity_overlap,
+                (query_ents, token_lists),
+                lambda: None,
+            ),  # set-based, no direct C equivalent
+            (
+                "confidence_score",
+                py_confidence_score,
+                (0.5, 0.7, 0.3, 0.8, 0.2),
+                lambda: make_native_confidence(lib) if lib else None,
+            ),
+            (
+                "top_k_mask",
+                py_top_k_mask,
+                (scores_a, min(10, n)),
+                lambda: make_native_topk(lib, scores_a, min(10, n)) if lib else None,
+            ),
+            (
+                "weighted_rank",
+                py_weighted_rank,
+                (scores_a, weights),
+                lambda: make_native_weighted(lib, scores_a, weights) if lib else None,
+            ),
         ]
 
         for name, py_func, py_args, native_maker in tests:
@@ -369,12 +409,14 @@ def run_benchmarks(sizes: list[int], iterations: int):
             mind_str = format_time(mind_time) if mind_time else "\u2014"
             print(f"  {name:<28} {format_time(py_time):>12}  {mind_str:>18}  {speedup:>8}")
 
-            benchmarks.append({
-                "function": name,
-                "n": n,
-                "python_s": py_time,
-                "mind_s": mind_time,
-            })
+            benchmarks.append(
+                {
+                    "function": name,
+                    "n": n,
+                    "python_s": py_time,
+                    "mind_s": mind_time,
+                }
+            )
 
         print()
 
@@ -396,7 +438,7 @@ def run_benchmarks(sizes: list[int], iterations: int):
     func_names = sorted(set(b["function"] for b in benchmarks))
     print(f"  {'Function':<28}", end="")
     for n in sizes:
-        print(f" {'N='+str(n):>12}", end="")
+        print(f" {'N=' + str(n):>12}", end="")
     print()
     print("  " + sep * 28, end="")
     for _ in sizes:
@@ -406,8 +448,7 @@ def run_benchmarks(sizes: list[int], iterations: int):
     for fname in func_names:
         print(f"  {fname:<28}", end="")
         for n in sizes:
-            entry = next((b for b in benchmarks
-                         if b["function"] == fname and b["n"] == n), None)
+            entry = next((b for b in benchmarks if b["function"] == fname and b["n"] == n), None)
             if entry:
                 print(f" {format_time(entry['python_s']):>12}", end="")
             else:
@@ -425,10 +466,13 @@ def run_benchmarks(sizes: list[int], iterations: int):
 
 def main():
     parser = argparse.ArgumentParser(description="Benchmark MIND kernels vs Python")
-    parser.add_argument("--iterations", type=int, default=200,
-                        help="Iterations per measurement (default: 200)")
-    parser.add_argument("--sizes", type=str, default="100,500,1000,5000",
-                        help="Comma-separated array sizes (default: 100,500,1000,5000)")
+    parser.add_argument("--iterations", type=int, default=200, help="Iterations per measurement (default: 200)")
+    parser.add_argument(
+        "--sizes",
+        type=str,
+        default="100,500,1000,5000",
+        help="Comma-separated array sizes (default: 100,500,1000,5000)",
+    )
     args = parser.parse_args()
 
     sizes = [int(s) for s in args.sizes.split(",")]
