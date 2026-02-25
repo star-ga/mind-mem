@@ -29,13 +29,13 @@ _SCRIPTS_DIR = os.path.join(_BENCHMARKS_DIR, "..", "scripts")
 sys.path.insert(0, _SCRIPTS_DIR)
 sys.path.insert(0, _BENCHMARKS_DIR)
 
-from mind_mem import _recall_constants  # noqa: E402
 from locomo_harness import (  # noqa: E402
     aggregate_metrics,
     build_workspace,
     download_dataset,
     evaluate_sample,
 )
+from mind_mem import _recall_constants  # noqa: E402
 
 # Primary fields to tune (highest-impact on retrieval quality).
 # Each is varied at 3 levels: baseline * 0.5, baseline, baseline * 1.5.
@@ -228,10 +228,7 @@ def print_comparison_table(results: list[dict], baseline_label: str = "baseline"
     print("BM25F Weight Grid Search Results")
     print("=" * 90)
 
-    header = (
-        f"{'Rank':>4} {'Label':<35} {'R@1':>8} {'R@5':>8} "
-        f"{'R@10':>8} {'MRR':>8} {'Time':>7}"
-    )
+    header = f"{'Rank':>4} {'Label':<35} {'R@1':>8} {'R@5':>8} {'R@10':>8} {'MRR':>8} {'Time':>7}"
     print(header)
     print("-" * 90)
 
@@ -266,9 +263,7 @@ def print_comparison_table(results: list[dict], baseline_label: str = "baseline"
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="BM25F Field Weight Grid Search for mind-mem"
-    )
+    parser = argparse.ArgumentParser(description="BM25F Field Weight Grid Search for mind-mem")
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -292,7 +287,8 @@ def main():
         help="Use full cartesian product instead of one-at-a-time",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=str,
         default=None,
         help="Output JSON path (default: benchmarks/grid_search_results.json)",
@@ -341,10 +337,7 @@ def main():
             )
             print(f"[grid] Best weights: {best_result['weights']}")
         else:
-            print(
-                f"[grid] Best improvement is {improvement * 100:.1f}pp "
-                f"(< 1pp threshold). Keeping current defaults."
-            )
+            print(f"[grid] Best improvement is {improvement * 100:.1f}pp (< 1pp threshold). Keeping current defaults.")
 
     # Save results
     output_path = args.output or os.path.join(_BENCHMARKS_DIR, "grid_search_results.json")

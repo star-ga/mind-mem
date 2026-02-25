@@ -3,12 +3,13 @@
 
 Demonstrates workspace initialization, block creation, and recall.
 """
+
 import os
 import tempfile
 
-from scripts.init_workspace import init as init_workspace
-from scripts.block_parser import parse_file
 from scripts._recall_core import recall
+from scripts.block_parser import parse_file
+from scripts.init_workspace import init as init_workspace
 
 
 def main():
@@ -45,7 +46,7 @@ Date: 2026-02-25
 
     # Search with recall
     results = recall("database", blocks, limit=5)
-    print(f"\nRecall results for 'database':")
+    print("\nRecall results for 'database':")
     for r in results:
         block_id = r.get("block_id", r.get("id", "unknown"))
         score = r.get("score", 0)

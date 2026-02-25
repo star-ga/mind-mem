@@ -5,7 +5,13 @@ from __future__ import annotations
 import os
 import tempfile
 
-from scripts.init_workspace import init
+import pytest
+
+pytest.importorskip("scripts.prefetch")
+
+from scripts.prefetch import prefetch  # noqa: E402
+
+from scripts.init_workspace import init  # noqa: E402
 
 
 def _make_workspace():
@@ -19,33 +25,18 @@ def _make_workspace():
 
 def test_prefetch_importable():
     """Prefetch module is importable."""
-    try:
-        from scripts._recall_core import recall
-
-        assert callable(recall)
-    except ImportError:
-        pass
+    assert callable(prefetch)
 
 
 def test_prefetch_with_signals():
     """Prefetch with context signals returns results."""
-    try:
-        from scripts.prefetch import prefetch
-
-        ws = _make_workspace()
-        result = prefetch(ws, signals={"recent_queries": ["test"]})
-        assert isinstance(result, (list, dict))
-    except ImportError:
-        pass
+    ws = _make_workspace()
+    result = prefetch(ws, signals={"recent_queries": ["test"]})
+    assert isinstance(result, (list, dict))
 
 
 def test_prefetch_empty_signals():
     """Prefetch with no signals returns something."""
-    try:
-        from scripts.prefetch import prefetch
-
-        ws = _make_workspace()
-        result = prefetch(ws, signals={})
-        assert isinstance(result, (list, dict, type(None)))
-    except ImportError:
-        pass
+    ws = _make_workspace()
+    result = prefetch(ws, signals={})
+    assert isinstance(result, (list, dict, type(None)))
