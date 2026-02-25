@@ -1,8 +1,10 @@
-name: Release
+name: Release Drafter
 
 on:
   push:
-    tags: ["v*"]
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -11,14 +13,16 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install build
-      - run: python -m build
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: "mind-mem v${{ steps.version.outputs.version }}"
           generate_release_notes: true
-          files: dist/*
+          draft: false
+          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
