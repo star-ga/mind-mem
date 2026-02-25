@@ -51,11 +51,11 @@ jobs:
 
           blocks = parse_file(blocks_md)
 
-          # Benchmark recall
+          # Benchmark recall (signature: recall(workspace, query, limit=...))
           times = []
           for _ in range(10):
               start = time.perf_counter()
-              recall('test decision topic', blocks, limit=10)
+              recall(ws, 'test decision topic', limit=10)
               elapsed = (time.perf_counter() - start) * 1000
               times.append(elapsed)
 
