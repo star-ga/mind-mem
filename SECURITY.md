@@ -1,10 +1,23 @@
 # Security Policy
 
-## Reporting Vulnerabilities
+## Supported Versions
 
-Report security issues to **security@star.ga**. We will respond within 48 hours and aim to release a fix within 7 days for critical issues.
+| Version | Supported |
+|---------|-----------|
+| 1.7.x   | Yes      |
+| 1.6.x   | Security fixes only |
+| < 1.6   | No       |
 
-Do **not** open public GitHub issues for security vulnerabilities.
+## Reporting a Vulnerability
+
+If you discover a security vulnerability, please report it responsibly:
+
+1. **Do not** open a public GitHub issue
+2. Email: security@star.ga
+3. Include: description, reproduction steps, impact assessment
+4. Expected response time: 48 hours
+
+We aim to release a fix within 7 days for critical issues.
 
 ---
 
@@ -25,6 +38,13 @@ mind-mem is a **local-first** library that operates entirely on the user's files
 | Denial of service via large workspaces | Configurable `top_k` limits, knee cutoff truncation, proposal budget caps (`per_run`, `per_day`, `backlog_limit`) | Active |
 | Concurrent SQLite write corruption | WAL journal mode, `busy_timeout=3000`, `timeout=5` on all connections, `try/finally` cleanup | Active |
 
+## Security Measures
+
+### Data Protection
+- All workspace data stored locally (no cloud sync by default)
+- File-level locking prevents concurrent corruption
+- Content hashes verify data integrity
+
 ### Input Validation
 
 All external inputs are validated at system boundaries:
@@ -32,14 +52,17 @@ All external inputs are validated at system boundaries:
 - **File paths**: `_safe_resolve()` in `apply_engine.py` resolves paths within the workspace and rejects any that escape via `..` or symlinks. Used by the governance engine before writing any file.
 - **Tar extraction**: `_is_safe_tar_member()` in `backup_restore.py` validates every tar member before extraction — rejects absolute paths, directory traversal, symlinks, hardlinks, and device files.
 - **Block IDs**: Validated against `[A-Z]+-[A-Za-z0-9-]+` pattern. IDs containing path separators or special characters are rejected.
-- **SQL queries**: All FTS5 and SQLite queries use parameterized bindings. No user input is ever interpolated into SQL strings.
+- **SQL queries**: FTS5 queries use parameterized statements (SQL injection safe). No user input is ever interpolated into SQL strings.
+- **Path traversal prevention**: via `_safe_resolve()`
+- **Configuration values**: clamped to safe ranges
 - **MCP tool inputs**: All tool parameters are validated by the FastMCP schema layer before reaching handler functions.
 
-### Dependency Policy
+### Dependencies
 
-- **Zero core dependencies** — the recall engine, governance pipeline, and all core modules use only Python 3.10+ stdlib (`sqlite3`, `json`, `hashlib`, `os`, `re`, `argparse`, `fcntl`/`msvcrt`).
-- **Optional dependencies** are isolated: `sentence-transformers` (vector search), `onnxruntime` (ONNX embeddings), `fastmcp` (MCP server). None are required for core functionality.
+- **Zero external dependencies in core** — the recall engine, governance pipeline, and all core modules use only Python 3.10+ stdlib (`sqlite3`, `json`, `hashlib`, `os`, `re`, `argparse`, `fcntl`/`msvcrt`).
+- **Optional dependencies** are clearly documented and isolated: `sentence-transformers` (vector search), `onnxruntime` (ONNX embeddings), `fastmcp` (MCP server). None are required for core functionality.
 - No dependency on `eval()`, `exec()`, `pickle`, `subprocess` with `shell=True`, or any code execution primitives in the data path.
+- Dependabot monitors for known vulnerabilities
 
 ### Concurrency Safety
 
@@ -54,16 +77,6 @@ All external inputs are validated at system boundaries:
 - Token auth is enforced when `MIND_MEM_TOKEN` is set; unauthenticated requests are rejected
 - Proposal budget limits prevent runaway automation: 3 proposals per run, 6 per day, 30 backlog max
 - File watcher debounces at 2 seconds to prevent resource exhaustion from rapid file changes
-
----
-
-## Supported Versions
-
-| Version | Supported |
-|---------|-----------|
-| 1.7.x   | Yes      |
-| 1.6.x   | Yes      |
-| < 1.6   | No       |
 
 ---
 
