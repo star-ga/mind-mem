@@ -219,7 +219,7 @@ def check_abstention(
         try:
             from .retrieval_graph import record_hard_negatives
             record_hard_negatives(workspace, question, hits)
-        except Exception:
+        except (ImportError, OSError, ValueError):
             pass  # Best-effort — never break the recall path
 
     return result.should_abstain, result.forced_answer, result.confidence

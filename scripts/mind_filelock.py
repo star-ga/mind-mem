@@ -184,7 +184,7 @@ class FileLock:
                 kernel32.CloseHandle(handle)
                 return True
             return False
-        except Exception:
+        except (OSError, ImportError, AttributeError):
             return False
 
     def _os_lock(self, fd: int) -> None:
