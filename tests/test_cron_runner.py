@@ -148,8 +148,8 @@ class TestPrintCronInstructions(unittest.TestCase):
         ws_input = "/home/user/workspace"
         with mock.patch("builtins.print") as mock_print:
             print_cron_instructions(ws_input)
-        calls = [str(c) for c in mock_print.call_args_list]
-        combined = "\n".join(calls)
+        # Extract actual string args (not repr) to avoid backslash-escaping issues
+        combined = "\n".join(str(a) for c in mock_print.call_args_list for a in c.args)
 
         # Verify workspace appears in output (path may be normalized on Windows)
         ws_normalized = os.path.abspath(ws_input)
@@ -166,8 +166,8 @@ class TestPrintCronInstructions(unittest.TestCase):
         """Output starts with a crontab usage comment."""
         with mock.patch("builtins.print") as mock_print:
             print_cron_instructions("/tmp/ws")
-        first_call = str(mock_print.call_args_list[0])
-        self.assertIn("crontab -e", first_call)
+        first_arg = str(mock_print.call_args_list[0].args[0])
+        self.assertIn("crontab -e", first_arg)
 
 
 class TestMain(unittest.TestCase):
@@ -179,8 +179,8 @@ class TestMain(unittest.TestCase):
         """--install-cron prints instructions and returns 0."""
         ret = main()
         self.assertEqual(ret, 0)
-        calls = "\n".join(str(c) for c in mock_print.call_args_list)
-        self.assertIn("crontab", calls)
+        combined = "\n".join(str(a) for c in mock_print.call_args_list for a in c.args)
+        self.assertIn("crontab", combined)
 
     @mock.patch("sys.argv", ["cron_runner", "/tmp/ws", "--job", "transcript_scan"])
     @mock.patch("mind_mem.cron_runner.run_job")
