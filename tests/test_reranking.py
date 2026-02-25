@@ -1,6 +1,8 @@
 """Tests for reranking module."""
 from __future__ import annotations
+
 from scripts._recall_reranking import rerank_hits
+
 
 def test_rerank_empty():
     result = rerank_hits("test query", [])

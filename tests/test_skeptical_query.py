@@ -1,6 +1,8 @@
 """Tests for skeptical query detection."""
 from __future__ import annotations
+
 from scripts._recall_detection import is_skeptical_query
+
 
 def test_skeptical_returns_bool():
     result = is_skeptical_query("did we really decide that")

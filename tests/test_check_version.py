@@ -1,9 +1,10 @@
 """Tests for version consistency checker."""
-import pytest
+import re
+
 from scripts.check_version import (
-    get_pyproject_version,
-    get_init_version,
     get_changelog_version,
+    get_init_version,
+    get_pyproject_version,
 )
 
 
@@ -27,6 +28,3 @@ class TestVersionReaders:
         changelog = get_changelog_version()
         found = {v for v in [pyproject, init, changelog] if v is not None}
         assert len(found) == 1, f"Version mismatch: pyproject={pyproject}, init={init}, changelog={changelog}"
-
-
-import re

@@ -1,6 +1,8 @@
 """Tests for temporal filtering module."""
 from __future__ import annotations
+
 from scripts._recall_temporal import resolve_time_reference
+
 
 def test_resolve_today():
     result = resolve_time_reference("today")

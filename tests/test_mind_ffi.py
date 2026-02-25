@@ -1,8 +1,11 @@
 """Tests for MIND FFI module."""
 from __future__ import annotations
+
 import os
 import tempfile
-from scripts.mind_ffi import get_mind_dir, load_kernel_config, get_kernel_param
+
+from scripts.mind_ffi import get_kernel_param, get_mind_dir, load_kernel_config
+
 
 def test_get_mind_dir():
     mind_dir = get_mind_dir("/tmp/test")

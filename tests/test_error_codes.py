@@ -5,16 +5,15 @@ from __future__ import annotations
 import pytest
 
 from scripts.error_codes import (
+    _ERROR_METADATA,
     ErrorCategory,
     ErrorCode,
     ErrorSeverity,
-    _ERROR_METADATA,
     error_category,
     error_message,
     error_severity,
     is_critical,
 )
-
 
 # ---------------------------------------------------------------------------
 # Completeness: every ErrorCode has a metadata entry

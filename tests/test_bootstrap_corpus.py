@@ -5,7 +5,7 @@ import os
 import tempfile
 import unittest
 
-from mind_mem.bootstrap_corpus import scan_markdown_file, main
+from mind_mem.bootstrap_corpus import main, scan_markdown_file
 
 
 class TestScanMarkdownFile(unittest.TestCase):
