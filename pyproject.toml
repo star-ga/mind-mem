@@ -20,7 +20,7 @@ classifiers = [
 [project.optional-dependencies]
 test = ["pytest>=7.0", "pytest-cov>=6.0", "mypy>=1.14"]
 mcp = ["fastmcp==2.14.5"]
-embeddings = ["onnxruntime==1.24.1", "tokenizers==0.22.2"]
+embeddings = ["onnxruntime==1.24.2", "tokenizers==0.22.2"]
 cross-encoder = ["sentence-transformers==5.2.3"]
 all = ["fastmcp==2.14.5", "sentence-transformers==5.2.3"]
 
