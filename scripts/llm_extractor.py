@@ -79,7 +79,7 @@ def _ollama_available(model: str = "") -> bool:
         with urllib.request.urlopen(req, timeout=2) as resp:
             if resp.status == 200:
                 return True
-    except Exception:
+    except (OSError, ValueError):
         pass
     return False
 
@@ -158,13 +158,13 @@ def _query_llm(prompt: str, model: str, backend: str = "auto") -> str:
     if backend in ("ollama", "auto"):
         try:
             return _query_ollama(prompt, model)
-        except Exception:
+        except (OSError, ValueError, RuntimeError):
             if backend == "ollama":
                 return ""
     if backend in ("llama-cpp", "llama_cpp", "auto"):
         try:
             return _query_llama_cpp(prompt, model)
-        except Exception:
+        except (OSError, ValueError, RuntimeError, ImportError):
             return ""
     return ""
 
