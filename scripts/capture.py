@@ -234,35 +234,35 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
     if not os.path.isfile(signals_path):
         return 0
 
-    # Check existing signals to avoid duplicates via content hash
-    with open(signals_path, "r", encoding="utf-8") as f:
-        existing = f.read()
-
-    # Build set of existing content hashes for O(1) lookup
-    existing_hashes = set(re.findall(r"ContentHash: ([a-f0-9]+)", existing))
-
-    new_signals = []
-    for sig in signals:
-        sig_hash = content_hash(sig["text"])
-        # Skip if content hash already exists, or fallback substring match
-        if sig_hash in existing_hashes or sig["text"][:100] in existing:
-            continue
-        sig["content_hash"] = sig_hash
-        new_signals.append(sig)
-
-    if not new_signals:
-        return 0
-
-    # Find next signal ID — filter by today's date to avoid cross-date max
-    existing_ids = re.findall(r"\[SIG-(\d{8}-\d{3})\]", existing)
-    today_compact = date_str.replace("-", "")
-    today_ids = [eid for eid in existing_ids if eid.startswith(today_compact)]
-    if today_ids:
-        counter = max(int(eid[9:]) for eid in today_ids) + 1
-    else:
-        counter = 1
-
     with FileLock(signals_path):
+        # Check existing signals to avoid duplicates via content hash
+        with open(signals_path, "r", encoding="utf-8") as f:
+            existing = f.read()
+
+        # Build set of existing content hashes for O(1) lookup
+        existing_hashes = set(re.findall(r"ContentHash: ([a-f0-9]+)", existing))
+
+        new_signals = []
+        for sig in signals:
+            sig_hash = content_hash(sig["text"])
+            # Skip if content hash already exists, or fallback substring match
+            if sig_hash in existing_hashes or sig["text"][:100] in existing:
+                continue
+            sig["content_hash"] = sig_hash
+            new_signals.append(sig)
+
+        if not new_signals:
+            return 0
+
+        # Find next signal ID — filter by today's date to avoid cross-date max
+        existing_ids = re.findall(r"\[SIG-(\d{8}-\d{3})\]", existing)
+        today_compact = date_str.replace("-", "")
+        today_ids = [eid for eid in existing_ids if eid.startswith(today_compact)]
+        if today_ids:
+            counter = max(int(eid[9:]) for eid in today_ids) + 1
+        else:
+            counter = 1
+
         with open(signals_path, "a", encoding="utf-8") as f:
             for sig in new_signals:
                 if counter > 999:
@@ -275,16 +275,16 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
                 f.write(f"Confidence: {sig.get('confidence', 'medium')}\n")
                 f.write(f"Priority: {sig.get('priority', 'P2')}\n")
                 f.write("Status: pending\n")
-                f.write(f"Excerpt: {sig['text']}\n")
+                f.write(f"Excerpt: {sig['text'].replace(chr(10), ' ').replace(chr(13), '')}\n")
                 if sig.get("content_hash"):
                     f.write(f"ContentHash: {sig['content_hash']}\n")
 
                 # Write structured extraction
                 st = sig.get("structure", {})
                 if st.get("subject"):
-                    f.write(f"Subject: {st['subject']}\n")
+                    f.write(f"Subject: {st['subject'].replace(chr(10), ' ').replace(chr(13), '')}\n")
                 if st.get("object"):
-                    f.write(f"Object: {st['object']}\n")
+                    f.write(f"Object: {st['object'].replace(chr(10), ' ').replace(chr(13), '')}\n")
                 if st.get("tags"):
                     f.write(f"Tags: {', '.join(st['tags'])}\n")
 

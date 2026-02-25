@@ -44,9 +44,7 @@ CATEGORY_NAMES = {
 # Dataset management
 # ---------------------------------------------------------------------------
 
-LOCOMO_DATASET_URL = (
-    "https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json"
-)
+LOCOMO_DATASET_URL = "https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json"
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache")
 CACHE_FILE = os.path.join(CACHE_DIR, "locomo10.json")
 
@@ -85,6 +83,7 @@ def download_dataset(force: bool = False) -> list[dict]:
 # Workspace builder — convert LoCoMo conversation to mind-mem format
 # ---------------------------------------------------------------------------
 
+
 def _parse_sessions(conversation: dict) -> list[tuple[int, str, list[dict]]]:
     """Extract sessions from LoCoMo conversation dict.
 
@@ -94,6 +93,7 @@ def _parse_sessions(conversation: dict) -> list[tuple[int, str, list[dict]]]:
     Returns list of (session_num, date_str, turns).
     """
     import re
+
     sessions = []
     for key in sorted(conversation.keys()):
         m = re.match(r"^session_(\d+)$", key)
@@ -162,11 +162,16 @@ def build_workspace(sample: dict, base_dir: str) -> str:
         fact_counter = 1
         for session_num, date_str, turns in sessions:
             cards = extract_from_conversation(
-                turns, speaker_a, speaker_b, date_str,
+                turns,
+                speaker_a,
+                speaker_b,
+                date_str,
             )
             if cards:
                 block_text = format_as_blocks(
-                    cards, id_prefix="FACT", counter_start=fact_counter,
+                    cards,
+                    id_prefix="FACT",
+                    counter_start=fact_counter,
                 )
                 lines.append(block_text)
                 fact_counter += len(cards)
@@ -183,6 +188,7 @@ def build_workspace(sample: dict, base_dir: str) -> str:
 # ---------------------------------------------------------------------------
 # Evaluation
 # ---------------------------------------------------------------------------
+
 
 def evaluate_sample(
     sample: dict,
@@ -223,6 +229,7 @@ def evaluate_sample(
                 raw = bid[4:]  # strip "DIA-"
                 # Find the second part after first digit group: D1-3 -> D1:3
                 import re as _re
+
                 m = _re.match(r"(D\d+)-(\d+)", raw)
                 if m:
                     dia_id = f"{m.group(1)}:{m.group(2)}"
@@ -242,16 +249,18 @@ def evaluate_sample(
 
         reciprocal_rank = (1.0 / hit_rank) if hit_rank else 0.0
 
-        results.append({
-            "question": question,
-            "answer": answer,
-            "category": category,
-            "evidence": list(evidence_ids),
-            "retrieved_ids": retrieved_dialog_ids[:max_k],
-            "hit_rank": hit_rank,
-            "reciprocal_rank": reciprocal_rank,
-            "recall_at": {str(k): v for k, v in hits_at_k.items()},
-        })
+        results.append(
+            {
+                "question": question,
+                "answer": answer,
+                "category": category,
+                "evidence": list(evidence_ids),
+                "retrieved_ids": retrieved_dialog_ids[:max_k],
+                "hit_rank": hit_rank,
+                "reciprocal_rank": reciprocal_rank,
+                "recall_at": {str(k): v for k, v in hits_at_k.items()},
+            }
+        )
 
     return results
 
@@ -301,6 +310,7 @@ def aggregate_metrics(all_results: list[dict]) -> dict:
 # Results display
 # ---------------------------------------------------------------------------
 
+
 def print_results_table(metrics: dict) -> None:
     """Print a formatted results table."""
     print()
@@ -343,10 +353,9 @@ def print_results_table(metrics: dict) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="LoCoMo Benchmark Harness for mind-mem Recall Engine"
-    )
+    parser = argparse.ArgumentParser(description="LoCoMo Benchmark Harness for mind-mem Recall Engine")
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -359,7 +368,8 @@ def main():
         help="Maximum K for Recall@K evaluation (default: 10)",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=str,
         default=None,
         help="Write JSON results to this file",
@@ -419,13 +429,15 @@ def main():
 
             # Per-sample summary
             sample_metrics = aggregate_metrics(sample_results)
-            sample_summaries.append({
-                "sample_id": sample_id,
-                "sessions": n_sessions,
-                "turns": n_turns,
-                "qa_pairs": n_qa,
-                "metrics": sample_metrics,
-            })
+            sample_summaries.append(
+                {
+                    "sample_id": sample_id,
+                    "sessions": n_sessions,
+                    "turns": n_turns,
+                    "qa_pairs": n_qa,
+                    "metrics": sample_metrics,
+                }
+            )
 
             # Mini progress
             sm = sample_metrics.get("overall", {})

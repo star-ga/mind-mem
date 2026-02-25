@@ -215,7 +215,8 @@ def check_preconditions(ws):
     # P2: validate.sh (from installation, not workspace)
     validate_sh = os.path.join(_script_dir, "validate.sh")
     if not os.path.isfile(validate_sh):
-        validate_sh = os.path.join(ws, "maintenance/validate.sh")
+        report.append("validate: SKIP (script not found)")
+        return True, report
     try:
         result = subprocess.run(["bash", validate_sh, ws], capture_output=True, text=True, timeout=60)
         # Find the TOTAL line (contains "issues")
@@ -236,7 +237,8 @@ def check_preconditions(ws):
     # P3: intel_scan.py (from installation, not workspace)
     intel_scan = os.path.join(_script_dir, "intel_scan.py")
     if not os.path.isfile(intel_scan):
-        intel_scan = os.path.join(ws, "maintenance/intel_scan.py")
+        report.append("intel_scan: SKIP (script not found)")
+        return True, report
     try:
         result = subprocess.run(["python3", intel_scan, ws], capture_output=True, text=True, timeout=60)
         # Find the TOTAL line
@@ -290,9 +292,10 @@ def create_snapshot(ws, ts, files_touched=None):
 
     if files_touched:
         # Minimal snapshot: only snapshot files the proposal will modify
+        ws_real = os.path.realpath(ws)
         for rel_path in files_touched:
-            resolved = os.path.normpath(os.path.join(ws, rel_path))
-            if not resolved.startswith(ws + os.sep) and resolved != ws:
+            resolved = os.path.realpath(os.path.join(ws_real, rel_path))
+            if not resolved.startswith(ws_real + os.sep) and resolved != ws_real:
                 continue  # skip paths that escape workspace
             src = resolved
             if os.path.isfile(src):

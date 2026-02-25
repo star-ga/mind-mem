@@ -55,6 +55,7 @@ def _load_heavy_imports():
 
     from recall import detect_query_type as _dqt
     from recall import recall as _recall  # noqa: E402
+
     recall = _recall
 
     detect_query_type = _dqt
@@ -62,6 +63,7 @@ def _load_heavy_imports():
     # Suppress recall structured logging — observability module's handle()
     # bypasses level checks, so we remove handlers from the recall logger.
     import logging as _logging
+
     for _name in list(_logging.Logger.manager.loggerDict):
         if _name.startswith("mind-mem."):
             _logging.getLogger(_name).handlers.clear()
@@ -78,20 +80,27 @@ def _load_heavy_imports():
     from locomo_harness import (  # noqa: E402
         download_dataset as _dd,
     )
+
     download_dataset = _dd
     build_workspace = _bw
     _parse_sessions = _ps
     CATEGORY_NAMES = _cn
 
+
 # ---------------------------------------------------------------------------
 # Load API keys from .env
 # ---------------------------------------------------------------------------
 
+
 def _load_env():
     """Load API keys from environment .env files if not already set."""
     _ALLOWED_ENV_KEYS = {
-        "MISTRAL_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
-        "XAI_API_KEY", "DEEPSEEK_API_KEY", "PERPLEXITY_API_KEY",
+        "MISTRAL_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "XAI_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "PERPLEXITY_API_KEY",
         "PINECONE_API_KEY",
     }
     env_paths = [
@@ -109,7 +118,6 @@ def _load_env():
                     key = key.strip()
                     if key in _ALLOWED_ENV_KEYS and not os.environ.get(key):
                         os.environ[key] = val.strip()[:512]
-
 
 
 # ---------------------------------------------------------------------------
@@ -346,6 +354,7 @@ and wrong_entity_hallucination. Output JSON only."""
 # Adversarial scoring
 # ---------------------------------------------------------------------------
 
+
 def _compute_adversarial_score(components: dict) -> int:
     """Deterministic score from structured adversarial judge components.
 
@@ -365,9 +374,11 @@ def _compute_adversarial_score(components: dict) -> int:
 # Evaluation pipeline
 # ---------------------------------------------------------------------------
 
+
 def _strip_semantic_prefix(text: str) -> str:
     """Remove leading semantic label prefix — delegates to evidence_packer."""
     from evidence_packer import strip_semantic_prefix
+
     return strip_semantic_prefix(text)
 
 
@@ -400,13 +411,9 @@ def answer_question(
 ) -> str:
     """Generate an answer using the LLM given retrieved context."""
     if is_adversarial:
-        user_msg = ADVERSARIAL_ANSWER_PROMPT.format(
-            context=context, question=question
-        )
+        user_msg = ADVERSARIAL_ANSWER_PROMPT.format(context=context, question=question)
     else:
-        user_msg = ANSWER_USER_TEMPLATE.format(
-            context=context, question=question
-        )
+        user_msg = ANSWER_USER_TEMPLATE.format(context=context, question=question)
 
     messages = [
         {"role": "system", "content": ANSWER_SYSTEM_PROMPT},
@@ -465,6 +472,7 @@ def judge_answer(
             }
         except (json.JSONDecodeError, ValueError, TypeError):
             import re
+
             # Fallback: try to extract individual fields
             ec_m = re.search(r'"entity_correct"\s*:\s*(true|false)', raw, re.IGNORECASE)
             rq_m = re.search(r'"rejection_quality"\s*:\s*(\d+)', raw)
@@ -503,6 +511,7 @@ def judge_answer(
             }
         except (json.JSONDecodeError, ValueError, IndexError):
             import re
+
             m = re.search(r'"score"\s*:\s*(\d+)', raw)
             if m:
                 score = max(0, min(100, int(m.group(1))))
@@ -555,7 +564,10 @@ def evaluate_sample_with_judge(
         # Step 1: Retrieve — use hybrid BM25+vector RRF when available
         if hybrid_backend is not None:
             retrieved = hybrid_backend.search(
-                question, workspace, limit=top_k, active_only=False,
+                question,
+                workspace,
+                limit=top_k,
+                active_only=False,
                 graph_boost=True,
             )
         else:
@@ -569,7 +581,9 @@ def evaluate_sample_with_judge(
 
         # All query types now go through structured pack_evidence
         context = pack_evidence(
-            retrieved, question=question, query_type=detected_type,
+            retrieved,
+            question=question,
+            query_type=detected_type,
         )
 
         # Step 2b: Abstention gate — deterministic pre-LLM confidence check
@@ -590,11 +604,13 @@ def evaluate_sample_with_judge(
 
             if not _stats.get("first_adv_qi"):
                 _stats["first_adv_qi"] = qi + 1
-                print(f"[milestone] first adversarial at q{qi+1}/{len(qa_pairs)} "
-                      f"(has_signal={has_signal})", flush=True)
+                print(
+                    f"[milestone] first adversarial at q{qi + 1}/{len(qa_pairs)} (has_signal={has_signal})", flush=True
+                )
 
             # Abstention classifier: runs on ALL adversarial-labeled questions
             from abstention_classifier import classify_abstention
+
             abst = classify_abstention(question, retrieved)
             if abst.should_abstain:
                 abstention_applied = True
@@ -603,11 +619,12 @@ def evaluate_sample_with_judge(
 
         if not is_adversarial and compress and context.strip():
             try:
-                compress_type = category if category in (
-                    "temporal", "multi-hop"
-                ) else None
+                compress_type = category if category in ("temporal", "multi-hop") else None
                 context = compress_context(
-                    context, question, _llm_chat, model=answerer_model,
+                    context,
+                    question,
+                    _llm_chat,
+                    model=answerer_model,
                     query_type=compress_type,
                 )
                 _stats["llm_compress"] += 1
@@ -621,17 +638,13 @@ def evaluate_sample_with_judge(
             _stats["llm_skipped"] += 1
         else:
             try:
-                generated = answer_question(
-                    question, context, use_adversarial_prompt, model=answerer_model
-                )
+                generated = answer_question(question, context, use_adversarial_prompt, model=answerer_model)
             except Exception as e:
                 generated = f"Error: {e}"
 
         # Step 4: Judge
         try:
-            judgment = judge_answer(
-                question, gold_answer, generated, is_adversarial=is_adversarial, model=judge_model
-            )
+            judgment = judge_answer(question, gold_answer, generated, is_adversarial=is_adversarial, model=judge_model)
         except Exception as e:
             judgment = {"score": 0, "reason": f"Judge error: {e}"}
 
@@ -661,9 +674,12 @@ def evaluate_sample_with_judge(
 
         # Progress logging every 10 questions
         if (qi + 1) % 10 == 0 or qi == len(qa_pairs) - 1:
-            print(f"[progress] {qi+1}/{len(qa_pairs)} "
-                  f"packer={_stats['packer']} guard={_stats['guard_filtered']} "
-                  f"compress={_stats['llm_compress']}", flush=True)
+            print(
+                f"[progress] {qi + 1}/{len(qa_pairs)} "
+                f"packer={_stats['packer']} guard={_stats['guard_filtered']} "
+                f"compress={_stats['llm_compress']}",
+                flush=True,
+            )
 
         # Rate limiting
         if rate_limit_delay > 0:
@@ -674,6 +690,7 @@ def evaluate_sample_with_judge(
 
 def _compute_metrics_from_scores(score_agg: dict[str, list[int]]) -> dict:
     """Compute metrics from {category: [scores]} dict. Memory-efficient."""
+
     def _group_stats(scores):
         n = len(scores)
         if not n:
@@ -748,18 +765,10 @@ def aggregate_judge_metrics(all_results: list[dict]) -> dict:
         n_adv = len(adv)
         metrics["adversarial_detail"] = {
             "count": n_adv,
-            "abstention_accuracy": round(
-                sum(1 for r in adv if r.get("abstention")) / n_adv * 100, 2
-            ),
-            "hallucination_rate": round(
-                sum(1 for r in adv if r.get("wrong_entity_hallucination")) / n_adv * 100, 2
-            ),
-            "correct_rejection_rate": round(
-                sum(1 for r in adv if r.get("entity_correct")) / n_adv * 100, 2
-            ),
-            "mean_rejection_quality": round(
-                sum(r.get("rejection_quality", 0) for r in adv) / n_adv, 2
-            ),
+            "abstention_accuracy": round(sum(1 for r in adv if r.get("abstention")) / n_adv * 100, 2),
+            "hallucination_rate": round(sum(1 for r in adv if r.get("wrong_entity_hallucination")) / n_adv * 100, 2),
+            "correct_rejection_rate": round(sum(1 for r in adv if r.get("entity_correct")) / n_adv * 100, 2),
+            "mean_rejection_quality": round(sum(r.get("rejection_quality", 0) for r in adv) / n_adv, 2),
         }
 
     return metrics
@@ -772,10 +781,7 @@ def print_judge_table(metrics: dict) -> None:
     print("LoCoMo LLM-as-Judge Results — Mind-Mem + BM25 Recall")
     print("=" * 80)
 
-    header = (
-        f"{'Category':<20} {'N':>5} {'Mean':>7} "
-        f"{'Acc≥50':>8} {'Acc≥75':>8} {'Min':>5} {'Max':>5}"
-    )
+    header = f"{'Category':<20} {'N':>5} {'Mean':>7} {'Acc≥50':>8} {'Acc≥75':>8} {'Min':>5} {'Max':>5}"
     print(header)
     print("-" * 80)
 
@@ -831,6 +837,7 @@ def print_judge_table(metrics: dict) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def _engine_label(args) -> str:
     """Build engine label string for results metadata."""
     parts = ["mind-mem-recall"]
@@ -885,7 +892,6 @@ def _setup_hybrid_workspace(workspace: str):
     return HybridBackend(config=recall_cfg)
 
 
-
 def _run_single_conv(conv_index: int, args) -> None:
     """Process a single conversation in-process, write results to JSONL.
 
@@ -908,7 +914,7 @@ def _run_single_conv(conv_index: int, args) -> None:
     sample_id = sample.get("sample_id", conv_index)
     qa_count = len(sample.get("qa", []))
     if args.limit:
-        sample["qa"] = sample["qa"][:args.limit]
+        sample["qa"] = sample["qa"][: args.limit]
         qa_count = len(sample["qa"])
 
     print(f"[judge] conv={conv_index} sample={sample_id} qa_pairs={qa_count}")
@@ -929,7 +935,8 @@ def _run_single_conv(conv_index: int, args) -> None:
         # Open JSONL for streaming writes (context manager ensures close on exception)
         with open(jsonl_path, "w") as _jsonl_f:
             results = evaluate_sample_with_judge(
-                sample, workspace,
+                sample,
+                workspace,
                 top_k=args.top_k,
                 answerer_model=args.answerer_model,
                 judge_model=args.judge_model,
@@ -953,47 +960,63 @@ def _run_single_conv(conv_index: int, args) -> None:
 
 def main():
     _load_env()
-    parser = argparse.ArgumentParser(
-        description="LoCoMo LLM-as-Judge Evaluation for Mind-Mem"
-    )
+    parser = argparse.ArgumentParser(description="LoCoMo LLM-as-Judge Evaluation for Mind-Mem")
     parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Test with only the first conversation",
     )
     parser.add_argument(
-        "--top-k", type=int, default=18,
+        "--top-k",
+        type=int,
+        default=18,
         help="Number of blocks to retrieve per question (default: 18)",
     )
     parser.add_argument(
-        "--answerer-model", type=str, default="mistral-small-latest",
+        "--answerer-model",
+        type=str,
+        default="mistral-small-latest",
         help="Model for generating answers (default: mistral-small-latest)",
     )
     parser.add_argument(
-        "--judge-model", type=str, default="mistral-small-latest",
+        "--judge-model",
+        type=str,
+        default="mistral-small-latest",
         help="Model for judging answers (default: mistral-small-latest)",
     )
     parser.add_argument(
-        "--rate-limit", type=float, default=0.05,
+        "--rate-limit",
+        type=float,
+        default=0.05,
         help="Delay between API calls in seconds (default: 0.05)",
     )
     parser.add_argument(
-        "--output", "-o", type=str, default=None,
+        "--output",
+        "-o",
+        type=str,
+        default=None,
         help="Write JSON results to this file",
     )
     parser.add_argument(
-        "--limit", type=int, default=None,
+        "--limit",
+        type=int,
+        default=None,
         help="Limit number of QA pairs per conversation (for testing)",
     )
     parser.add_argument(
-        "--compress", action="store_true",
+        "--compress",
+        action="store_true",
         help="Enable observation compression (Retrieve→Compress→Answer→Judge pipeline)",
     )
     parser.add_argument(
-        "--hybrid", action="store_true",
+        "--hybrid",
+        action="store_true",
         help="Enable hybrid BM25+local vector recall (sentence-transformers, all-MiniLM-L6-v2)",
     )
     parser.add_argument(
-        "--single-conv", type=int, default=None,
+        "--single-conv",
+        type=int,
+        default=None,
         help="Process only this conversation index (used by subprocess orchestration)",
     )
     args = parser.parse_args()
@@ -1011,17 +1034,20 @@ def main():
     # LoCoMo10 has exactly 10 conversations. Ensure cache exists via subprocess.
     cache_file = os.path.join(_HERE, ".cache", "locomo10.json")
     if not os.path.isfile(cache_file):
-        sp.run([sys.executable, "-c",
+        sp.run(
+            [
+                sys.executable,
+                "-c",
                 "import sys; sys.path.insert(0, %r); sys.path.insert(0, %r); "
-                "from locomo_harness import download_dataset; download_dataset()"
-                % (_SCRIPTS_DIR, _HERE)],
-               timeout=120)
+                "from locomo_harness import download_dataset; download_dataset()" % (_SCRIPTS_DIR, _HERE),
+            ],
+            timeout=120,
+        )
     num_convs = 1 if args.dry_run else 10
 
     out_path = args.output or os.path.join(_HERE, "locomo_judge_results.json")
 
-    print(f"[judge] Config: answerer={args.answerer_model}, "
-          f"judge={args.judge_model}, top_k={args.top_k}")
+    print(f"[judge] Config: answerer={args.answerer_model}, judge={args.judge_model}, top_k={args.top_k}")
     print(f"[judge] Orchestrator: {num_convs} conversations (subprocess per conv)")
 
     t0 = time.time()
@@ -1031,13 +1057,20 @@ def main():
     for ci in range(num_convs):
         # Build subprocess command
         cmd = [
-            sys.executable, os.path.abspath(__file__),
-            "--single-conv", str(ci),
-            "--top-k", str(args.top_k),
-            "--answerer-model", args.answerer_model,
-            "--judge-model", args.judge_model,
-            "--rate-limit", str(args.rate_limit),
-            "--output", out_path,
+            sys.executable,
+            os.path.abspath(__file__),
+            "--single-conv",
+            str(ci),
+            "--top-k",
+            str(args.top_k),
+            "--answerer-model",
+            args.answerer_model,
+            "--judge-model",
+            args.judge_model,
+            "--rate-limit",
+            str(args.rate_limit),
+            "--output",
+            out_path,
         ]
         if args.limit:
             cmd.extend(["--limit", str(args.limit)])
@@ -1046,7 +1079,7 @@ def main():
         if args.hybrid:
             cmd.append("--hybrid")
 
-        print(f"\n[judge] [{ci+1}/{num_convs}] Launching subprocess for conv {ci}...")
+        print(f"\n[judge] [{ci + 1}/{num_convs}] Launching subprocess for conv {ci}...")
         result = sp.run(cmd, capture_output=False, timeout=7200)
 
         if result.returncode != 0:
