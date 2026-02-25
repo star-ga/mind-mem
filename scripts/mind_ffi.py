@@ -12,12 +12,13 @@ Also provides utility functions for listing .mind source files (used by MCP tool
 from __future__ import annotations
 
 import ctypes
-import logging
 import os
 from pathlib import Path
 from typing import Optional
 
-_log = logging.getLogger("mind-mem.ffi")
+from .observability import get_logger
+
+_log = get_logger("ffi")
 
 # --- Library loading ---
 
@@ -61,19 +62,11 @@ def _check_version_compat(so_version: str) -> bool:
         so_major_minor = (int(so_parts[0]), int(so_parts[1]))
         py_major_minor = (int(py_parts[0]), int(py_parts[1]))
     except (IndexError, ValueError):
-        _log.warning(
-            "FFI version parse error: .so=%r, python=%r — cannot compare",
-            so_version,
-            py_version,
-        )
+        _log.warning("ffi_version_parse_error", so_version=so_version, py_version=py_version)
         return False
 
     if so_major_minor != py_major_minor:
-        _log.warning(
-            "FFI version mismatch: .so=%s, python=%s — major.minor differ, some features may not work correctly",
-            so_version,
-            py_version,
-        )
+        _log.warning("ffi_version_mismatch", so_version=so_version, py_version=py_version)
         return False
 
     return True

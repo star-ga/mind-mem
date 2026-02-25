@@ -12,12 +12,13 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
 import os
 import shutil
 import sys
 
-_log = logging.getLogger("mind-mem.init_workspace")
+from .observability import get_logger
+
+_log = get_logger("init_workspace")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLUGIN_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -151,12 +152,7 @@ def _validate_config(cfg: dict) -> dict:
         try:
             val = float(raw)
         except (TypeError, ValueError):
-            _log.warning(
-                "config_value_invalid: recall.%s=%r is not numeric, using default %s",
-                key,
-                raw,
-                default,
-            )
+            _log.warning(f"config_value_invalid: {key}", key=key, raw=raw, default=default)
             recall[key] = type(default)(default)
             continue
 
@@ -164,14 +160,7 @@ def _validate_config(cfg: dict) -> dict:
             clamped = max(lo, min(hi, val))
             # Preserve int type for integer-range keys
             clamped = type(default)(clamped)
-            _log.warning(
-                "config_value_clamped: recall.%s=%s out of range [%s, %s], clamped to %s",
-                key,
-                raw,
-                lo,
-                hi,
-                clamped,
-            )
+            _log.warning(f"config_value_clamped: {key}", key=key, raw=raw, lo=lo, hi=hi, clamped=clamped)
             recall[key] = clamped
         else:
             # Preserve type (int vs float) matching the default
@@ -192,7 +181,7 @@ def load_config(ws: str) -> dict:
                 cfg = json.load(f)
             return _validate_config(cfg)
         except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-            _log.warning("config_load_failed: %s (%s)", config_path, exc)
+            _log.warning(f"config_load_failed: {config_path}", path=config_path, error=str(exc))
     return dict(DEFAULT_CONFIG)
 
 

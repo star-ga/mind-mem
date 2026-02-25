@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import os
-import tempfile
+
+import pytest
 
 from scripts._recall_core import recall
 from scripts.init_workspace import init
 
 
-def _make_workspace():
-    ws = tempfile.mkdtemp()
+@pytest.fixture
+def ws(tmp_path):
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws)
     init(ws)
     # Create blocks in multiple directories
     for dir_name, prefix in [("decisions", "DEC"), ("tasks", "TASK"), ("entities", "ENT")]:
@@ -22,22 +25,19 @@ def _make_workspace():
     return ws
 
 
-def test_recall_searches_decisions():
+def test_recall_searches_decisions(ws):
     """Recall finds blocks in decisions directory."""
-    ws = _make_workspace()
     results = recall(ws, "multi-file test decisions", limit=10)
     assert isinstance(results, list)
 
 
-def test_recall_searches_tasks():
+def test_recall_searches_tasks(ws):
     """Recall finds blocks in tasks directory."""
-    ws = _make_workspace()
     results = recall(ws, "multi-file test tasks", limit=10)
     assert isinstance(results, list)
 
 
-def test_recall_cross_directory():
+def test_recall_cross_directory(ws):
     """Recall searches across all directories."""
-    ws = _make_workspace()
     results = recall(ws, "multi-file test", limit=20)
     assert isinstance(results, list)

@@ -34,6 +34,9 @@ __all__ = [
     "PRF_WEIGHT_MULTIHOP",
     "RM3_BLEND_WEIGHT",
     "BRIDGE_SCORE_WEIGHT",
+    # Month name mapping
+    "MONTH_NAMES",
+    "MONTH_TOKEN_SET",
 ]
 
 # Fields to index for search (in priority order)
@@ -398,6 +401,40 @@ RM3_BLEND_WEIGHT = 0.4
 
 # Bridge (chain-of-retrieval) score blend — second-hop is supplementary
 BRIDGE_SCORE_WEIGHT = 0.3
+
+
+# ---------------------------------------------------------------------------
+# Canonical month name -> number mapping (used across recall subsystem)
+# ---------------------------------------------------------------------------
+
+MONTH_NAMES: dict[str, int] = {
+    "january": 1,
+    "jan": 1,
+    "february": 2,
+    "feb": 2,
+    "march": 3,
+    "mar": 3,
+    "april": 4,
+    "apr": 4,
+    "may": 5,
+    "june": 6,
+    "jun": 6,
+    "july": 7,
+    "jul": 7,
+    "august": 8,
+    "aug": 8,
+    "september": 9,
+    "sep": 9,
+    "sept": 9,
+    "october": 10,
+    "oct": 10,
+    "november": 11,
+    "nov": 11,
+    "december": 12,
+    "dec": 12,
+}
+
+MONTH_TOKEN_SET: frozenset[str] = frozenset(MONTH_NAMES.keys())
 
 _VALID_RECALL_KEYS = frozenset(
     {

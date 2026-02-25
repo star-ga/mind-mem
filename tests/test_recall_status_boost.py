@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import os
-import tempfile
+
+import pytest
 
 from scripts._recall_core import recall
 from scripts.init_workspace import init
 
 
-def _make_workspace():
-    ws = tempfile.mkdtemp()
+@pytest.fixture
+def ws(tmp_path):
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws)
     init(ws)
     path = os.path.join(ws, "decisions", "DECISIONS.md")
     with open(path, "a") as f:
@@ -29,19 +32,16 @@ def _make_workspace():
     return ws
 
 
-def test_status_boost_runs():
-    ws = _make_workspace()
+def test_status_boost_runs(ws):
     results = recall(ws, "status test entry verification", limit=10)
     assert isinstance(results, list)
 
 
-def test_active_blocks_found():
-    ws = _make_workspace()
+def test_active_blocks_found(ws):
     results = recall(ws, "status test active entry verification", limit=10)
     assert isinstance(results, list)
 
 
-def test_archived_blocks_found():
-    ws = _make_workspace()
+def test_archived_blocks_found(ws):
     results = recall(ws, "status test archived entry verification", limit=10)
     assert isinstance(results, list)

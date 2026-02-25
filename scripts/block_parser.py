@@ -18,11 +18,12 @@ As library:
 from __future__ import annotations
 
 import json
-import logging
 import re
 import sys
 
-_log = logging.getLogger("block_parser")
+from .observability import get_logger
+
+_log = get_logger("block_parser")
 
 # Maximum input size to parse (100KB). Larger files are truncated with a warning.
 MAX_PARSE_SIZE = 100_000
@@ -68,6 +69,10 @@ _NEGATION_RE = re.compile(
     r"|no\s+\w+|none)\b",
     re.IGNORECASE,
 )
+
+
+# Nested dict fields recognized in ConstraintSignature parsing
+DICT_FIELDS = {"scope", "axis", "lifecycle"}
 
 
 def parse_blocks(text: str) -> list[dict]:
@@ -167,7 +172,6 @@ def parse_blocks(text: str) -> list[dict]:
                     continue
 
                 # Nested dict sub-fields at 4-space indent (scope, axis, lifecycle)
-                DICT_FIELDS = {"scope", "axis", "lifecycle"}
                 nested_kv = re.match(r"^    ([a-z_]+):\s+(.+)$", line)
                 if nested_kv and current_sig_field in DICT_FIELDS:
                     parent = current_sig_field
