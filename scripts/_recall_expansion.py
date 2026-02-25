@@ -6,6 +6,7 @@ import math
 import re
 from collections import Counter
 
+from ._recall_constants import MONTH_NAMES
 from ._recall_tokenization import _stem
 
 __all__ = [
@@ -150,33 +151,11 @@ _QUERY_EXPANSIONS = {
 }
 
 
-_MONTH_NUM = {
-    "january": "01",
-    "february": "02",
-    "march": "03",
-    "april": "04",
-    "may": "05",
-    "june": "06",
-    "july": "07",
-    "august": "08",
-    "september": "09",
-    "october": "10",
-    "november": "11",
-    "december": "12",
-    "jan": "01",
-    "feb": "02",
-    "mar": "03",
-    "apr": "04",
-    "jun": "06",
-    "jul": "07",
-    "aug": "08",
-    "sep": "09",
-    "oct": "10",
-    "nov": "11",
-    "dec": "12",
-}
-
 _YEAR_RE = re.compile(r"\b(20\d{2})\b")
+
+
+# Derive zero-padded month number strings from canonical MONTH_NAMES
+_MONTH_NUM = {name: f"{num:02d}" for name, num in MONTH_NAMES.items()}
 
 
 def expand_months(query: str, tokens: list[str]) -> list[str]:

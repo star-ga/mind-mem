@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import os
-import tempfile
+
+import pytest
 
 from scripts._recall_core import recall
 from scripts.init_workspace import init
 
 
-def _make_workspace():
-    ws = tempfile.mkdtemp()
+@pytest.fixture
+def ws(tmp_path):
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws)
     init(ws)
     path = os.path.join(ws, "decisions", "DECISIONS.md")
     with open(path, "a") as f:
@@ -29,20 +32,17 @@ def _make_workspace():
     return ws
 
 
-def test_priority_boost_runs():
-    ws = _make_workspace()
+def test_priority_boost_runs(ws):
     results = recall(ws, "priority test item importance", limit=10)
     assert isinstance(results, list)
 
 
-def test_high_priority_exists():
-    ws = _make_workspace()
+def test_high_priority_exists(ws):
     results = recall(ws, "priority test item importance", limit=10)
     assert isinstance(results, list)
 
 
-def test_priority_ordering():
-    ws = _make_workspace()
+def test_priority_ordering(ws):
     results = recall(ws, "priority test item importance", limit=10)
     if len(results) >= 2:
         assert results[0].get("score", 0) >= results[-1].get("score", 0)

@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import os
-import tempfile
+
+import pytest
 
 from scripts._recall_core import recall
 from scripts.init_workspace import init
 
 
-def _make_workspace():
-    ws = tempfile.mkdtemp()
+@pytest.fixture
+def ws(tmp_path):
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "graph_test.md")
     with open(blocks_md, "w") as f:
@@ -20,22 +23,19 @@ def _make_workspace():
     return ws
 
 
-def test_graph_boost_enabled():
+def test_graph_boost_enabled(ws):
     """graph_boost=True doesn't crash."""
-    ws = _make_workspace()
     results = recall(ws, "graph boost test", limit=5, graph_boost=True)
     assert isinstance(results, list)
 
 
-def test_graph_boost_disabled():
+def test_graph_boost_disabled(ws):
     """graph_boost=False returns normal results."""
-    ws = _make_workspace()
     results = recall(ws, "graph boost test", limit=5, graph_boost=False)
     assert isinstance(results, list)
 
 
-def test_graph_boost_default():
+def test_graph_boost_default(ws):
     """Default graph_boost works."""
-    ws = _make_workspace()
     results = recall(ws, "graph boost test", limit=5)
     assert isinstance(results, list)

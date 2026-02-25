@@ -29,8 +29,8 @@ Usage:
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional
 
+from ._recall_constants import MONTH_NAMES
 from .observability import get_logger
 
 _log = get_logger("extractor")
@@ -212,6 +212,39 @@ _THIRD_PERSON_RE = re.compile(
     re.IGNORECASE,
 )
 
+# D.3: Relation words for possessive extraction
+_RELATION_WORDS = frozenset(
+    {
+        "brother",
+        "sister",
+        "wife",
+        "husband",
+        "mother",
+        "father",
+        "mom",
+        "dad",
+        "son",
+        "daughter",
+        "friend",
+        "boyfriend",
+        "girlfriend",
+        "partner",
+        "doctor",
+        "boss",
+        "coach",
+        "teacher",
+        "neighbor",
+        "roommate",
+        "uncle",
+        "aunt",
+        "cousin",
+        "grandma",
+        "grandpa",
+        "grandmother",
+        "grandfather",
+    }
+)
+
 # Date extraction from surrounding text
 _DATE_MENTION_RE = re.compile(
     r"\b(\d{1,2}\s+(?:january|february|march|april|may|june|july|august|"
@@ -238,20 +271,8 @@ def _clean_content(text: str) -> str:
     return text
 
 
-_MONTH_MAP = {
-    "january": "01",
-    "february": "02",
-    "march": "03",
-    "april": "04",
-    "may": "05",
-    "june": "06",
-    "july": "07",
-    "august": "08",
-    "september": "09",
-    "october": "10",
-    "november": "11",
-    "december": "12",
-}
+# Derive zero-padded month number strings from canonical MONTH_NAMES
+_MONTH_MAP = {name: f"{num:02d}" for name, num in MONTH_NAMES.items() if len(name) > 3}
 
 # D.3: Temporal normalization — "March 2023" → "2023-03", "October 15, 2023" → "2023-10"
 _MONTH_YEAR_RE = re.compile(
@@ -264,7 +285,7 @@ _YEAR_MONTH_RE = re.compile(
 )
 
 
-def _extract_date_from_text(text: str) -> Optional[str]:
+def _extract_date_from_text(text: str) -> str | None:
     """Try to find a date mention in the text. Normalizes to YYYY-MM when possible."""
     # Try YYYY-MM-DD first
     m = _YEAR_MONTH_RE.search(text)
@@ -289,7 +310,7 @@ def extract_facts(
     speaker: str = "",
     date: str = "",
     source_id: str = "",
-) -> List[Dict]:
+) -> list[dict]:
     """Extract atomic fact cards from a single observation/turn.
 
     Args:
@@ -553,37 +574,8 @@ def extract_facts(
         thing = _clean_content(m.group(2))
         if thing and len(thing) > 1 and owner.lower() not in ("i", "it", "this", "that"):
             # Relation-like: "brother", "sister", "wife", "doctor", "friend"
-            relation_words = {
-                "brother",
-                "sister",
-                "wife",
-                "husband",
-                "mother",
-                "father",
-                "mom",
-                "dad",
-                "son",
-                "daughter",
-                "friend",
-                "boyfriend",
-                "girlfriend",
-                "partner",
-                "doctor",
-                "boss",
-                "coach",
-                "teacher",
-                "neighbor",
-                "roommate",
-                "uncle",
-                "aunt",
-                "cousin",
-                "grandma",
-                "grandpa",
-                "grandmother",
-                "grandfather",
-            }
             first_word = thing.split()[0].lower()
-            if first_word in relation_words:
+            if first_word in _RELATION_WORDS:
                 cards.append(
                     {
                         "type": "RELATION",
@@ -650,7 +642,7 @@ def extract_facts(
 
 
 def format_as_blocks(
-    cards: List[Dict],
+    cards: list[dict],
     id_prefix: str = "FACT",
     counter_start: int = 1,
 ) -> str:
@@ -723,7 +715,7 @@ def extract_from_conversation(
     speaker_a: str = "",
     speaker_b: str = "",
     session_date: str = "",
-) -> List[Dict]:
+) -> list[dict]:
     """Extract facts from a list of LoCoMo conversation turns.
 
     Args:

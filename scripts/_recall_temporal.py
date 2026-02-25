@@ -6,38 +6,12 @@ import calendar
 import re
 from datetime import date, timedelta
 
+from ._recall_constants import MONTH_NAMES
+
 __all__ = [
     "resolve_time_reference",
     "apply_temporal_filter",
 ]
-
-# Month name -> number mapping
-_MONTH_NAMES = {
-    "january": 1,
-    "february": 2,
-    "march": 3,
-    "april": 4,
-    "may": 5,
-    "june": 6,
-    "july": 7,
-    "august": 8,
-    "september": 9,
-    "october": 10,
-    "november": 11,
-    "december": 12,
-    "jan": 1,
-    "feb": 2,
-    "mar": 3,
-    "apr": 4,
-    "jun": 6,
-    "jul": 7,
-    "aug": 8,
-    "sep": 9,
-    "sept": 9,
-    "oct": 10,
-    "nov": 11,
-    "dec": 12,
-}
 
 # Patterns for relative time references, ordered by specificity
 _LAST_N_DAYS_RE = re.compile(
@@ -67,7 +41,7 @@ _TODAY_RE = re.compile(r"\btoday\b", re.IGNORECASE)
 
 # "in January 2025" or "in January"
 _IN_MONTH_YEAR_RE = re.compile(
-    r"\bin\s+(" + "|".join(_MONTH_NAMES.keys()) + r")(?:\s+(\d{4}))?\b",
+    r"\bin\s+(" + "|".join(MONTH_NAMES.keys()) + r")(?:\s+(\d{4}))?\b",
     re.IGNORECASE,
 )
 
@@ -86,7 +60,7 @@ _AFTER_DATE_RE = re.compile(
 
 # "before/after Month DD, YYYY" or "before/after Month YYYY"
 _MONTH_NAMES_PATTERN = "|".join(
-    sorted(_MONTH_NAMES.keys(), key=len, reverse=True),
+    sorted(MONTH_NAMES.keys(), key=len, reverse=True),
 )
 _BEFORE_MONTH_DATE_RE = re.compile(
     r"\bbefore\s+(" + _MONTH_NAMES_PATTERN + r")\s+(\d{1,2}),?\s+(\d{4})\b",
@@ -208,7 +182,7 @@ def resolve_time_reference(
     # "before Month DD, YYYY"
     m = _BEFORE_MONTH_DATE_RE.search(query)
     if m:
-        month_num = _MONTH_NAMES.get(m.group(1).lower())
+        month_num = MONTH_NAMES.get(m.group(1).lower())
         if month_num:
             try:
                 d = date(int(m.group(3)), month_num, int(m.group(2)))
@@ -219,7 +193,7 @@ def resolve_time_reference(
     # "after Month DD, YYYY"
     m = _AFTER_MONTH_DATE_RE.search(query)
     if m:
-        month_num = _MONTH_NAMES.get(m.group(1).lower())
+        month_num = MONTH_NAMES.get(m.group(1).lower())
         if month_num:
             try:
                 d = date(int(m.group(3)), month_num, int(m.group(2)))
@@ -244,7 +218,7 @@ def resolve_time_reference(
     # "in January 2025" or "in January"
     m = _IN_MONTH_YEAR_RE.search(query)
     if m:
-        month_num = _MONTH_NAMES.get(m.group(1).lower())
+        month_num = MONTH_NAMES.get(m.group(1).lower())
         if month_num:
             year = int(m.group(2)) if m.group(2) else ref.year
             return _month_range(year, month_num)
