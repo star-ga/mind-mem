@@ -10,31 +10,42 @@ from scripts.init_workspace import init
 
 
 def _make_workspace():
-    ws = tempfile.mkdtemp()
+    td = tempfile.TemporaryDirectory()
+    ws = os.path.join(td.name, "ws")
+    os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "wide_test.md")
     with open(blocks_md, "w") as f:
         for i in range(20):
             f.write(f"[WD-{i:03d}]\nType: Decision\nStatement: Wide retrieval test {i}\n\n")
-    return ws
+    return ws, td
 
 
 def test_default_wide_k():
     """Default retrieve_wide_k works."""
-    ws = _make_workspace()
-    results = recall(ws, "wide retrieval", limit=5)
-    assert isinstance(results, list)
+    ws, td = _make_workspace()
+    try:
+        results = recall(ws, "wide retrieval", limit=5)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()
 
 
 def test_small_wide_k():
     """Small retrieve_wide_k still returns results."""
-    ws = _make_workspace()
-    results = recall(ws, "wide retrieval", limit=5, retrieve_wide_k=10)
-    assert isinstance(results, list)
+    ws, td = _make_workspace()
+    try:
+        results = recall(ws, "wide retrieval", limit=5, retrieve_wide_k=10)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()
 
 
 def test_large_wide_k():
     """Large retrieve_wide_k doesn't crash."""
-    ws = _make_workspace()
-    results = recall(ws, "wide retrieval", limit=5, retrieve_wide_k=1000)
-    assert isinstance(results, list)
+    ws, td = _make_workspace()
+    try:
+        results = recall(ws, "wide retrieval", limit=5, retrieve_wide_k=1000)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()

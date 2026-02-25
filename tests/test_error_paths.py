@@ -452,14 +452,9 @@ class TestBadQueryTypes(unittest.TestCase):
             self.assertIsInstance(results, list)
 
     def test_tokenize_none_input(self):
-        """tokenize with non-string input should handle gracefully."""
-        # tokenize expects a string; passing None should raise or return empty
-        try:
-            result = tokenize(None)
-            # If it doesn't raise, it should return a list
-            self.assertIsInstance(result, list)
-        except (TypeError, AttributeError):
-            pass  # Expected — tokenize may not guard against None
+        """tokenize with non-string input should raise."""
+        with self.assertRaises((TypeError, AttributeError)):
+            tokenize(None)
 
     def test_tokenize_very_long_input(self):
         """tokenize with very long input should not hang."""

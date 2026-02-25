@@ -69,6 +69,11 @@ class WAL:
 
         Returns the WAL entry ID (used to commit/rollback).
         """
+        resolved = os.path.realpath(target_path)
+        ws_real = os.path.realpath(self.workspace)
+        if not resolved.startswith(ws_real + os.sep) and resolved != ws_real:
+            raise ValueError(f"WAL.begin: target_path escapes workspace: {target_path}")
+
         ts = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         WAL._counter += 1
         entry_id = f"wal-{ts}-{WAL._counter}"

@@ -10,22 +10,30 @@ from scripts.init_workspace import init
 
 
 def _make_workspace():
-    ws = tempfile.mkdtemp()
+    td = tempfile.TemporaryDirectory()
+    ws = os.path.join(td.name, "ws")
+    os.makedirs(ws)
     init(ws)
     path = os.path.join(ws, "decisions", "speaker.md")
     with open(path, "w") as f:
         f.write("[SPK-001]\nType: Decision\nStatement: User said this\nSpeaker: alice\n\n")
         f.write("[SPK-002]\nType: Decision\nStatement: System generated\nSpeaker: system\n\n")
-    return ws
+    return ws, td
 
 
 def test_speaker_search():
-    ws = _make_workspace()
-    results = recall(ws, "alice said", limit=5)
-    assert isinstance(results, list)
+    ws, td = _make_workspace()
+    try:
+        results = recall(ws, "alice said", limit=5)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()
 
 
 def test_system_speaker():
-    ws = _make_workspace()
-    results = recall(ws, "system generated", limit=5)
-    assert isinstance(results, list)
+    ws, td = _make_workspace()
+    try:
+        results = recall(ws, "system generated", limit=5)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()

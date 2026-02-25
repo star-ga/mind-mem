@@ -10,28 +10,39 @@ from scripts.init_workspace import init
 
 
 def _make_workspace():
-    ws = tempfile.mkdtemp()
+    td = tempfile.TemporaryDirectory()
+    ws = os.path.join(td.name, "ws")
+    os.makedirs(ws)
     init(ws)
     path = os.path.join(ws, "decisions", "dated.md")
     with open(path, "w") as f:
         f.write("[DT-001]\nType: Decision\nStatement: Recent decision\nDate: 2026-02-24\n\n")
         f.write("[DT-002]\nType: Decision\nStatement: Old decision\nDate: 2025-01-01\n\n")
-    return ws
+    return ws, td
 
 
 def test_dated_blocks_found():
-    ws = _make_workspace()
-    results = recall(ws, "decision", limit=5)
-    assert isinstance(results, list)
+    ws, td = _make_workspace()
+    try:
+        results = recall(ws, "decision", limit=5)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()
 
 
 def test_recent_date_search():
-    ws = _make_workspace()
-    results = recall(ws, "recent decision", limit=5)
-    assert isinstance(results, list)
+    ws, td = _make_workspace()
+    try:
+        results = recall(ws, "recent decision", limit=5)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()
 
 
 def test_old_date_search():
-    ws = _make_workspace()
-    results = recall(ws, "old decision", limit=5)
-    assert isinstance(results, list)
+    ws, td = _make_workspace()
+    try:
+        results = recall(ws, "old decision", limit=5)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()

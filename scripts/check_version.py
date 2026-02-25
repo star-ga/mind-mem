@@ -28,7 +28,7 @@ def get_pyproject_version() -> str | None:
             return data.get("project", {}).get("version")
         # Regex fallback for Python <3.11 (no tomllib)
         content = Path("pyproject.toml").read_text()
-        m = re.search(r'version\s*=\s*"([^"]+)"', content)
+        m = re.search(r'^\[project\].*?^version\s*=\s*"([^"]+)"', content, re.MULTILINE | re.DOTALL)
         return m.group(1) if m else None
     except FileNotFoundError:
         return None

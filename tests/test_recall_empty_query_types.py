@@ -10,30 +10,48 @@ from scripts.init_workspace import init
 
 
 def _ws():
-    ws = tempfile.mkdtemp()
+    td = tempfile.TemporaryDirectory()
+    ws = os.path.join(td.name, "ws")
+    os.makedirs(ws)
     init(ws)
     p = os.path.join(ws, "decisions", "eq.md")
     with open(p, "w") as f:
         f.write("[EQ-001]\nType: Decision\nStatement: Test block\n\n")
-    return ws
+    return ws, td
 
 
 def test_none_like_query():
-    results = recall(_ws(), "   \t\n  ", limit=5)
-    assert results == []
+    ws, td = _ws()
+    try:
+        results = recall(ws, "   \t\n  ", limit=5)
+        assert results == []
+    finally:
+        td.cleanup()
 
 
 def test_single_stopword():
-    results = recall(_ws(), "the", limit=5)
-    assert isinstance(results, list)
+    ws, td = _ws()
+    try:
+        results = recall(ws, "the", limit=5)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()
 
 
 def test_all_stopwords():
-    results = recall(_ws(), "the a an is was", limit=5)
-    assert isinstance(results, list)
-    assert len(results) == 0
+    ws, td = _ws()
+    try:
+        results = recall(ws, "the a an is was", limit=5)
+        assert isinstance(results, list)
+        assert len(results) == 0
+    finally:
+        td.cleanup()
 
 
 def test_punctuation_only():
-    results = recall(_ws(), "... !!! ???", limit=5)
-    assert isinstance(results, list)
+    ws, td = _ws()
+    try:
+        results = recall(ws, "... !!! ???", limit=5)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()
