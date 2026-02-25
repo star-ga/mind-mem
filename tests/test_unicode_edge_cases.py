@@ -170,11 +170,11 @@ class TestEdgeCaseInputs:
         assert result["message_count"] == 2
 
     def test_parse_blocks_with_bom(self):
-        """UTF-8 BOM at start of text interferes with block ID regex."""
+        """UTF-8 BOM at start of text is stripped so first block parses."""
         text = "\ufeff[DEC-BOM]\nType: Decision\nStatement: BOM test\n\n"
         blocks = parse_blocks(text)
-        # BOM prefix prevents regex match on first block; this is known behavior
-        assert len(blocks) == 0
+        assert len(blocks) == 1
+        assert blocks[0]["_id"] == "DEC-BOM"
 
     def test_parse_blocks_bom_after_first_block(self):
         """BOM only affects the first block; subsequent blocks parse normally."""
