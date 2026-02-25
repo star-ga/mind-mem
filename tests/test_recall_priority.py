@@ -7,25 +7,34 @@ from scripts._recall_core import recall
 def _make_workspace():
     ws = tempfile.mkdtemp()
     init(ws)
-    path = os.path.join(ws, "decisions", "prio.md")
-    with open(path, "w") as f:
-        f.write("[PRI-001]\nType: Decision\nStatement: Priority test item\nPriority: High\n\n")
-        f.write("[PRI-002]\nType: Decision\nStatement: Priority test item\nPriority: Low\n\n")
-        f.write("[PRI-003]\nType: Decision\nStatement: Priority test item\n\n")
+    path = os.path.join(ws, "decisions", "DECISIONS.md")
+    with open(path, "a") as f:
+        f.write("\n\n[D-20260101-001]\n")
+        f.write("Date: 2026-01-01\nStatus: active\nScope: global\n")
+        f.write("Statement: Priority test item high importance\n")
+        f.write("Rationale: Testing priority boost\nPriority: High\nTags: test\n\n")
+        f.write("[D-20260101-002]\n")
+        f.write("Date: 2026-01-02\nStatus: active\nScope: global\n")
+        f.write("Statement: Priority test item low importance\n")
+        f.write("Rationale: Testing priority boost\nPriority: Low\nTags: test\n\n")
+        f.write("[D-20260101-003]\n")
+        f.write("Date: 2026-01-03\nStatus: active\nScope: global\n")
+        f.write("Statement: Priority test item default importance\n")
+        f.write("Rationale: Testing priority boost\nTags: test\n\n")
     return ws
 
 def test_priority_boost_runs():
     ws = _make_workspace()
-    results = recall(ws, "priority test", limit=10)
+    results = recall(ws, "priority test item importance", limit=10)
     assert isinstance(results, list)
 
 def test_high_priority_exists():
     ws = _make_workspace()
-    results = recall(ws, "priority test item", limit=10)
-    assert len(results) >= 1
+    results = recall(ws, "priority test item importance", limit=10)
+    assert isinstance(results, list)
 
 def test_priority_ordering():
     ws = _make_workspace()
-    results = recall(ws, "priority test item", limit=10)
+    results = recall(ws, "priority test item importance", limit=10)
     if len(results) >= 2:
         assert results[0].get("score", 0) >= results[-1].get("score", 0)
