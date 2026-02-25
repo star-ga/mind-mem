@@ -461,7 +461,7 @@ def _insert_block(
         block_date = block.get("Date", "")
         try:
             facts = extract_facts(statement, speaker=speaker, date=block_date, source_id=bid)
-        except Exception:
+        except (ValueError, TypeError):
             facts = []
         for i, card in enumerate(facts):
             fact_id = f"{bid}::F{i + 1}"

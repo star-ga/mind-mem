@@ -215,7 +215,7 @@ class CategoryDistiller:
                         for b in parsed:
                             b["_source_dir"] = subdir
                         blocks.extend(parsed)
-                    except Exception as exc:
+                    except (OSError, ValueError, UnicodeDecodeError) as exc:
                         log.warning("block_parse_failed", path=path, error=str(exc))
 
         # Scan entities directory — every .md file
@@ -229,7 +229,7 @@ class CategoryDistiller:
                         for b in parsed:
                             b["_source_dir"] = "entities"
                         blocks.extend(parsed)
-                    except Exception as exc:
+                    except (OSError, ValueError, UnicodeDecodeError) as exc:
                         log.warning("entity_parse_failed", path=path, error=str(exc))
 
         log.info("scan_complete", total_blocks=len(blocks))
@@ -380,7 +380,7 @@ class CategoryDistiller:
         if _mind_ffi is not None and len(blocks) > 0:
             try:
                 category_map = self._batch_categorize_mind(blocks)
-            except Exception as exc:
+            except (RuntimeError, ValueError, TypeError) as exc:
                 log.warning("mind_batch_fallback", error=str(exc))
                 category_map = {}
                 for block in blocks:
