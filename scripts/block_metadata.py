@@ -12,6 +12,10 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 
+from .observability import get_logger
+
+_log = get_logger("block_metadata")
+
 
 class BlockMetadataManager:
     """Tracks access patterns, evolves keywords, computes importance.
@@ -54,6 +58,7 @@ class BlockMetadataManager:
         Also record co-occurrence for connection tracking."""
         if not block_ids:
             return
+        _log.debug("record_access", block_count=len(block_ids))
         now = datetime.now(timezone.utc).isoformat()
         with self._lock:
             try:
@@ -128,6 +133,7 @@ class BlockMetadataManager:
 
                 # Clamp to [0.8, 1.5]
                 importance = max(0.8, min(1.5, 0.8 + raw * 0.35))
+                _log.debug("update_importance", block_id=block_id, importance=round(importance, 3))
 
                 # Update stored importance
                 conn.execute(
