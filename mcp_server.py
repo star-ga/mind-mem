@@ -287,6 +287,19 @@ def mcp_tool_observe(fn):
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         tool_name = fn.__name__
+
+        # ACL enforcement: when MIND_MEM_ADMIN_TOKEN is configured,
+        # admin tools require MIND_MEM_SCOPE=admin (stdio) or a valid
+        # Authorization header (http).  When no admin token is set the
+        # check is skipped so single-user local setups are unaffected.
+        admin_token = os.environ.get("MIND_MEM_ADMIN_TOKEN")
+        if admin_token and tool_name in ADMIN_TOOLS:
+            scope = os.environ.get("MIND_MEM_SCOPE", "user")
+            acl_error = check_tool_acl(tool_name, scope)
+            if acl_error:
+                _log.warning("acl_blocked", tool=tool_name, scope=scope)
+                return acl_error
+
         start = time.monotonic()
         error_type = None
         success = True
