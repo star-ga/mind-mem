@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import os
-import tempfile
+
+import pytest
 
 from scripts._recall_core import recall
 from scripts.init_workspace import init
 
 
-def _make_workspace():
-    ws = tempfile.mkdtemp()
+@pytest.fixture
+def ws(tmp_path):
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "order_test.md")
     with open(blocks_md, "w") as f:
@@ -23,9 +26,8 @@ def _make_workspace():
     return ws
 
 
-def test_results_sorted_by_score():
+def test_results_sorted_by_score(ws):
     """Results are returned in descending score order."""
-    ws = _make_workspace()
     results = recall(ws, "BM25 scoring algorithm", limit=10)
     if len(results) >= 2:
         scores = [r.get("score", r.get("_score", 0)) for r in results]
@@ -33,18 +35,16 @@ def test_results_sorted_by_score():
             assert scores[i] >= scores[i + 1], f"Score {scores[i]} < {scores[i + 1]}"
 
 
-def test_more_relevant_ranked_higher():
+def test_more_relevant_ranked_higher(ws):
     """More relevant blocks rank higher."""
-    ws = _make_workspace()
     results = recall(ws, "BM25 scoring algorithm text retrieval", limit=10)
     if results:
         first_id = results[0].get("id") or results[0].get("block_id", "")
         assert "ORD-001" in str(first_id) or len(results) == 1
 
 
-def test_scores_are_positive():
+def test_scores_are_positive(ws):
     """All scores are non-negative."""
-    ws = _make_workspace()
     results = recall(ws, "scoring", limit=10)
     for r in results:
         score = r.get("score", r.get("_score", 0))

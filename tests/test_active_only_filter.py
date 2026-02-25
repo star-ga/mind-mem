@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import os
-import tempfile
+
+import pytest
 
 from scripts._recall_core import recall
 from scripts.init_workspace import init
 
 
-def _make_workspace():
-    ws = tempfile.mkdtemp()
+@pytest.fixture
+def ws(tmp_path):
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "active_test.md")
     with open(blocks_md, "w") as f:
@@ -20,22 +23,19 @@ def _make_workspace():
     return ws
 
 
-def test_active_only_filters():
+def test_active_only_filters(ws):
     """active_only=True filters non-active blocks."""
-    ws = _make_workspace()
     results = recall(ws, "decision", limit=10, active_only=True)
     assert isinstance(results, list)
 
 
-def test_without_active_only():
+def test_without_active_only(ws):
     """Without active_only, all blocks returned."""
-    ws = _make_workspace()
     results = recall(ws, "decision", limit=10, active_only=False)
     assert isinstance(results, list)
 
 
-def test_active_only_default_false():
+def test_active_only_default_false(ws):
     """Default active_only is False."""
-    ws = _make_workspace()
     results = recall(ws, "decision", limit=10)
     assert isinstance(results, list)

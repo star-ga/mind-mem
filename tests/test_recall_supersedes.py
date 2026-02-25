@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import os
-import tempfile
+
+import pytest
 
 from scripts._recall_core import recall
 from scripts.init_workspace import init
 
 
-def _ws():
-    ws = tempfile.mkdtemp()
+@pytest.fixture
+def ws(tmp_path):
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws)
     init(ws)
     p = os.path.join(ws, "decisions", "sup.md")
     with open(p, "w") as f:
@@ -19,11 +22,11 @@ def _ws():
     return ws
 
 
-def test_superseded_blocks():
-    results = recall(_ws(), "decision", limit=10)
+def test_superseded_blocks(ws):
+    results = recall(ws, "decision", limit=10)
     assert isinstance(results, list)
 
 
-def test_active_superseding():
-    results = recall(_ws(), "replacement decision", limit=5)
+def test_active_superseding(ws):
+    results = recall(ws, "replacement decision", limit=5)
     assert isinstance(results, list)
