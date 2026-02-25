@@ -7,6 +7,7 @@ import re
 import urllib.error
 import urllib.request
 
+from ._recall_constants import MONTH_TOKEN_SET
 from ._recall_scoring import (
     _category_match_boost,
     _date_proximity_score,
@@ -41,34 +42,6 @@ _TIME_INTENT_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Month and day tokens for time-overlap scoring
-_MONTH_TOKENS = frozenset(
-    {
-        "january",
-        "february",
-        "march",
-        "april",
-        "may",
-        "june",
-        "july",
-        "august",
-        "september",
-        "october",
-        "november",
-        "december",
-        "jan",
-        "feb",
-        "mar",
-        "apr",
-        "jun",
-        "jul",
-        "aug",
-        "sep",
-        "oct",
-        "nov",
-        "dec",
-    }
-)
 _DAY_TOKENS = frozenset(
     {
         "monday",
@@ -88,7 +61,7 @@ _DAY_TOKENS = frozenset(
     }
 )
 _TEMPORAL_CONTENT_TOKENS = (
-    _MONTH_TOKENS
+    MONTH_TOKEN_SET
     | _DAY_TOKENS
     | frozenset(
         {
