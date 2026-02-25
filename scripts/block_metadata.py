@@ -47,7 +47,7 @@ class BlockMetadataManager:
                 conn.execute(self.SCHEMA)
                 conn.commit()
                 conn.close()
-            except Exception:
+            except (sqlite3.Error, ValueError):
                 pass  # Graceful degradation if DB unavailable
 
     def _get_conn(self) -> sqlite3.Connection:
@@ -90,7 +90,7 @@ class BlockMetadataManager:
                         )
                 conn.commit()
                 conn.close()
-            except Exception:
+            except (sqlite3.Error, json.JSONDecodeError):
                 pass  # Graceful degradation
 
     def update_importance(self, block_id: str, decay_days: int = 30) -> float:
@@ -144,7 +144,7 @@ class BlockMetadataManager:
                 conn.close()
 
                 return importance
-            except Exception:
+            except (sqlite3.Error, json.JSONDecodeError, ValueError):
                 return 1.0
 
     def get_importance_boost(self, block_id: str) -> float:
@@ -157,7 +157,7 @@ class BlockMetadataManager:
                 ).fetchone()
                 conn.close()
                 return row[0] if row else 1.0
-            except Exception:
+            except (sqlite3.Error, TypeError):
                 return 1.0
 
     def evolve_keywords(self, block_id: str, query_tokens: list[str],
@@ -195,7 +195,7 @@ class BlockMetadataManager:
                 )
                 conn.commit()
                 conn.close()
-            except Exception:
+            except (sqlite3.Error, json.JSONDecodeError):
                 pass
 
     def get_co_occurring_blocks(self, block_id: str, limit: int = 5) -> list[str]:
@@ -211,5 +211,5 @@ class BlockMetadataManager:
                     connections = json.loads(row[0])
                     return connections[:limit]
                 return []
-            except Exception:
+            except (sqlite3.Error, json.JSONDecodeError):
                 return []
