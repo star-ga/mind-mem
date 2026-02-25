@@ -72,13 +72,13 @@ import json
 import os
 import re as _re_mod
 import sqlite3
-import sys
 import tempfile
 import threading
 import time
 
 # mind-mem imports (package mapped to scripts/ via pyproject.toml)
 from mind_mem.block_parser import BlockCorruptedError, get_active, parse_file  # noqa: E402, F401
+from mind_mem.mind_filelock import FileLock  # noqa: E402
 from fastmcp import FastMCP  # noqa: E402
 from mind_mem.mind_ffi import (  # noqa: E402
     get_mind_dir,
@@ -102,18 +102,38 @@ _log = get_logger("mcp_server")
 # ACL — per-tool scope enforcement (#20)
 # ---------------------------------------------------------------------------
 
-ADMIN_TOOLS = frozenset({
-    "write_memory", "apply_proposal", "approve_apply",
-    "rollback_proposal", "delete_memory_item", "reindex_vectors",
-    "propose_update", "reindex",
-})
+ADMIN_TOOLS = frozenset(
+    {
+        "write_memory",
+        "apply_proposal",
+        "approve_apply",
+        "rollback_proposal",
+        "delete_memory_item",
+        "reindex_vectors",
+        "propose_update",
+        "reindex",
+    }
+)
 
-USER_TOOLS = frozenset({
-    "recall", "search_memory", "list_memory", "list_contradictions",
-    "scan", "export_memory", "hybrid_search", "find_similar",
-    "intent_classify", "index_stats", "memory_evolution",
-    "category_summary", "prefetch", "list_mind_kernels", "get_mind_kernel",
-})
+USER_TOOLS = frozenset(
+    {
+        "recall",
+        "search_memory",
+        "list_memory",
+        "list_contradictions",
+        "scan",
+        "export_memory",
+        "hybrid_search",
+        "find_similar",
+        "intent_classify",
+        "index_stats",
+        "memory_evolution",
+        "category_summary",
+        "prefetch",
+        "list_mind_kernels",
+        "get_mind_kernel",
+    }
+)
 
 
 def _resolve_scope(headers: dict | None = None) -> str:
@@ -150,17 +170,20 @@ def check_tool_acl(tool_name: str, scope: str) -> str | None:
     if tool_name in ADMIN_TOOLS and scope != "admin":
         metrics.inc("mcp_acl_denied")
         _log.warning("acl_denied", tool=tool_name, scope=scope)
-        return json.dumps({
-            "error": f"Permission denied: '{tool_name}' requires admin scope",
-            "scope": scope,
-            "hint": "Set MIND_MEM_ADMIN_TOKEN and pass it via Authorization header.",
-        })
+        return json.dumps(
+            {
+                "error": f"Permission denied: '{tool_name}' requires admin scope",
+                "scope": scope,
+                "hint": "Set MIND_MEM_ADMIN_TOKEN and pass it via Authorization header.",
+            }
+        )
     return None
 
 
 # ---------------------------------------------------------------------------
 # Rate limiter — sliding window (#21)
 # ---------------------------------------------------------------------------
+
 
 class SlidingWindowRateLimiter:
     """In-memory sliding-window rate limiter."""
@@ -239,12 +262,14 @@ QUERY_TIMEOUT_SECONDS = _DEFAULT_LIMITS["query_timeout_seconds"]
 
 def _sqlite_busy_error() -> str:
     """Return structured JSON error for SQLite database locked (#29)."""
-    return json.dumps({
-        "_schema_version": "1.0",
-        "error": "database_busy",
-        "message": "Database is temporarily locked by another process",
-        "retry_after_seconds": 1,
-    })
+    return json.dumps(
+        {
+            "_schema_version": "1.0",
+            "error": "database_busy",
+            "message": "Database is temporarily locked by another process",
+            "retry_after_seconds": 1,
+        }
+    )
 
 
 def _is_db_locked(exc: sqlite3.OperationalError) -> bool:
@@ -258,6 +283,7 @@ def mcp_tool_observe(fn):
     Logs structured JSON for every call: tool_name, duration_ms, success,
     error_type, result_size.  Also increments success/failure counters.
     """
+
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         tool_name = fn.__name__
@@ -288,6 +314,7 @@ def mcp_tool_observe(fn):
                 metrics.inc("mcp_tool_success")
             else:
                 metrics.inc("mcp_tool_failure")
+
     return wrapper
 
 
@@ -317,16 +344,12 @@ def _check_workspace(ws: str) -> str | None:
     Returns None if valid, or an error JSON string if invalid.
     """
     if not os.path.isdir(ws):
-        return json.dumps({
-            "error": "Workspace not found. "
-                     "Run: python3 scripts/init_workspace.py <path>"
-        })
+        return json.dumps({"error": "Workspace not found. Run: python3 scripts/init_workspace.py <path>"})
     decisions_dir = os.path.join(ws, "decisions")
     if not os.path.isdir(decisions_dir):
-        return json.dumps({
-            "error": "Workspace is missing the 'decisions/' directory. "
-                     "Run: python3 scripts/init_workspace.py <path>"
-        })
+        return json.dumps(
+            {"error": "Workspace is missing the 'decisions/' directory. Run: python3 scripts/init_workspace.py <path>"}
+        )
     return None
 
 
@@ -381,6 +404,7 @@ def _load_config(ws: str) -> dict:
         )
         # Fall back to built-in defaults
         from init_workspace import DEFAULT_CONFIG
+
         return dict(DEFAULT_CONFIG)
     except (OSError, UnicodeDecodeError) as exc:
         _log.warning("config_read_error", path=config_path, error=str(exc))
@@ -396,6 +420,7 @@ def _load_extra_categories(ws: str) -> dict:
 # ---------------------------------------------------------------------------
 # Resources (read-only)
 # ---------------------------------------------------------------------------
+
 
 @mcp.resource("mind-mem://decisions")
 def get_decisions() -> str:
@@ -499,8 +524,8 @@ def get_ledger() -> str:
 # Tools
 # ---------------------------------------------------------------------------
 
-def _recall_impl(query: str, limit: int = 10, active_only: bool = False,
-                  backend: str = "auto") -> str:
+
+def _recall_impl(query: str, limit: int = 10, active_only: bool = False, backend: str = "auto") -> str:
     """Core recall implementation shared by recall() and hybrid_search()."""
     ws = _workspace()
     ws_err = _check_workspace(ws)
@@ -519,6 +544,7 @@ def _recall_impl(query: str, limit: int = 10, active_only: bool = False,
     if backend in ("hybrid", "auto"):
         try:
             from mind_mem.hybrid_recall import HybridBackend, validate_recall_config
+
             config = _load_config(ws)
             recall_cfg = config.get("recall", {})
             if not isinstance(recall_cfg, dict):
@@ -552,8 +578,7 @@ def _recall_impl(query: str, limit: int = 10, active_only: bool = False,
             else:
                 results = recall_engine(ws, query, limit=limit, active_only=active_only)
                 used_backend = "scan"
-                warnings.append("FTS5 index not found — using full scan. "
-                                "Run 'reindex' tool for faster queries.")
+                warnings.append("FTS5 index not found — using full scan. Run 'reindex' tool for faster queries.")
         except sqlite3.OperationalError as exc:
             if _is_db_locked(exc):
                 return _sqlite_busy_error()
@@ -659,14 +684,17 @@ def propose_update(
     metrics.inc("mcp_proposals")
     _log.info("mcp_propose", block_type=block_type, confidence=confidence, written=written)
 
-    return json.dumps({
-        "_schema_version": "1.0",
-        "status": "proposed",
-        "written": written,
-        "location": "intelligence/SIGNALS.md",
-        "next_step": "Run /apply or `python3 maintenance/apply_engine.py` to review and promote to source of truth.",
-        "safety": "This signal is in SIGNALS.md only. It has NOT been written to DECISIONS.md or TASKS.md.",
-    }, indent=2)
+    return json.dumps(
+        {
+            "_schema_version": "1.0",
+            "status": "proposed",
+            "written": written,
+            "location": "intelligence/SIGNALS.md",
+            "next_step": "Run /apply or `python3 maintenance/apply_engine.py` to review and promote to source of truth.",
+            "safety": "This signal is in SIGNALS.md only. It has NOT been written to DECISIONS.md or TASKS.md.",
+        },
+        indent=2,
+    )
 
 
 @mcp.tool
@@ -703,6 +731,7 @@ def scan() -> str:
         raw_count = len(parse_file(contra_path))
     try:
         from mind_mem.conflict_resolver import resolve_contradictions
+
         resolutions = resolve_contradictions(ws)
         result["checks"]["contradictions"] = {
             "raw": raw_count,
@@ -748,19 +777,25 @@ def list_contradictions() -> str:
 
     resolutions = resolve_contradictions(ws)
     if not resolutions:
-        return json.dumps({
-            "_schema_version": "1.0",
-            "status": "clean",
-            "contradictions": 0,
-            "message": "No contradictions found.",
-        })
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "status": "clean",
+                "contradictions": 0,
+                "message": "No contradictions found.",
+            }
+        )
 
-    return json.dumps({
-        "_schema_version": "1.0",
-        "status": "contradictions_found",
-        "contradictions": len(resolutions),
-        "resolutions": resolutions,
-    }, indent=2, default=str)
+    return json.dumps(
+        {
+            "_schema_version": "1.0",
+            "status": "contradictions_found",
+            "contradictions": len(resolutions),
+            "resolutions": resolutions,
+        },
+        indent=2,
+        default=str,
+    )
 
 
 @mcp.tool
@@ -781,6 +816,7 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
     ws = _workspace()
 
     import re
+
     if not re.match(r"^P-\d{8}-\d{3}$", proposal_id):
         return json.dumps({"error": f"Invalid proposal ID format: {proposal_id}. Expected P-YYYYMMDD-NNN."})
 
@@ -799,16 +835,19 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
     metrics.inc("mcp_apply_calls")
     _log.info("mcp_approve_apply", proposal_id=proposal_id, dry_run=dry_run, success=success)
 
-    return json.dumps({
-        "_schema_version": "1.0",
-        "status": "applied" if success and not dry_run else "dry_run_passed" if success else "failed",
-        "proposal_id": proposal_id,
-        "dry_run": dry_run,
-        "success": success,
-        "message": message,
-        "log": log_output[-2000:] if len(log_output) > 2000 else log_output,
-        "next_step": "Call again with dry_run=False to apply." if success and dry_run else None,
-    }, indent=2)
+    return json.dumps(
+        {
+            "_schema_version": "1.0",
+            "status": "applied" if success and not dry_run else "dry_run_passed" if success else "failed",
+            "proposal_id": proposal_id,
+            "dry_run": dry_run,
+            "success": success,
+            "message": message,
+            "log": log_output[-2000:] if len(log_output) > 2000 else log_output,
+            "next_step": "Call again with dry_run=False to apply." if success and dry_run else None,
+        },
+        indent=2,
+    )
 
 
 @mcp.tool
@@ -827,6 +866,7 @@ def rollback_proposal(receipt_ts: str) -> str:
     ws = _workspace()
 
     import re
+
     if not re.match(r"^\d{8}-\d{6}$", receipt_ts):
         return json.dumps({"error": f"Invalid receipt timestamp format: {receipt_ts}. Expected YYYYMMDD-HHMMSS."})
 
@@ -844,18 +884,22 @@ def rollback_proposal(receipt_ts: str) -> str:
     metrics.inc("mcp_rollbacks")
     _log.info("mcp_rollback", receipt_ts=receipt_ts, success=success)
 
-    return json.dumps({
-        "_schema_version": "1.0",
-        "status": "rolled_back" if success else "rollback_failed",
-        "receipt_ts": receipt_ts,
-        "success": success,
-        "log": log_output[-2000:] if len(log_output) > 2000 else log_output,
-    }, indent=2)
+    return json.dumps(
+        {
+            "_schema_version": "1.0",
+            "status": "rolled_back" if success else "rollback_failed",
+            "receipt_ts": receipt_ts,
+            "success": success,
+            "log": log_output[-2000:] if len(log_output) > 2000 else log_output,
+        },
+        indent=2,
+    )
 
 
 # ---------------------------------------------------------------------------
 # New Tools (7-12) — Hybrid, similarity, intent, stats, reindex, evolution
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool
 @mcp_tool_observe
@@ -894,33 +938,43 @@ def find_similar(block_id: str, limit: int = 5) -> str:
     limit = max(1, min(limit, limits["max_similar_results"]))
     try:
         from mind_mem.block_metadata import BlockMetadataManager
+
         db_path = os.path.join(ws, "memory", "block_meta.db")
         mgr = BlockMetadataManager(db_path)
         co_blocks = mgr.get_co_occurring_blocks(block_id, limit=limit)
         metrics.inc("mcp_find_similar_queries")
-        return json.dumps({
-            "_schema_version": "1.0",
-            "source": block_id,
-            "similar": co_blocks,
-            "method": "co-occurrence",
-        }, indent=2)
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "source": block_id,
+                "similar": co_blocks,
+                "method": "co-occurrence",
+            },
+            indent=2,
+        )
     except ImportError:
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": "find_similar requires block_metadata module",
-            "block_id": block_id,
-        }, indent=2)
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": "find_similar requires block_metadata module",
+                "block_id": block_id,
+            },
+            indent=2,
+        )
     except sqlite3.OperationalError as exc:
         if _is_db_locked(exc):
             return _sqlite_busy_error()
         raise
     except (OSError, ValueError, KeyError) as exc:
         _log.warning("find_similar_failed", block_id=block_id, error=str(exc))
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": "Failed to find similar blocks. The co-occurrence index may not be initialized.",
-            "block_id": block_id,
-        }, indent=2)
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": "Failed to find similar blocks. The co-occurrence index may not be initialized.",
+                "block_id": block_id,
+            },
+            indent=2,
+        )
 
 
 @mcp.tool
@@ -939,30 +993,40 @@ def intent_classify(query: str) -> str:
     """
     try:
         from mind_mem.intent_router import IntentRouter
+
         router = IntentRouter()
         result = router.classify(query)
         metrics.inc("mcp_intent_classify")
-        return json.dumps({
-            "_schema_version": "1.0",
-            "query": query,
-            "intent": result.intent,
-            "confidence": result.confidence,
-            "sub_intents": result.sub_intents,
-            "params": result.params,
-        }, indent=2)
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "query": query,
+                "intent": result.intent,
+                "confidence": result.confidence,
+                "sub_intents": result.sub_intents,
+                "params": result.params,
+            },
+            indent=2,
+        )
     except ImportError:
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": "intent_router module not available",
-            "query": query,
-        }, indent=2)
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": "intent_router module not available",
+                "query": query,
+            },
+            indent=2,
+        )
     except (ValueError, KeyError, AttributeError) as exc:
         _log.warning("intent_classify_failed", query=query, error=str(exc))
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": "Intent classification failed",
-            "query": query,
-        }, indent=2)
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": "Intent classification failed",
+                "query": query,
+            },
+            indent=2,
+        )
 
 
 @mcp.tool
@@ -984,6 +1048,7 @@ def index_stats() -> str:
     if fts_exists:
         try:
             from mind_mem.sqlite_index import index_status as fts_status
+
             fts_info = fts_status(ws)
             stats["total_blocks"] = fts_info.get("blocks", 0)
             stats["last_build"] = fts_info.get("last_build")
@@ -1043,6 +1108,7 @@ def reindex(include_vectors: bool = False) -> str:
 
     try:
         from mind_mem.sqlite_index import build_index
+
         build_index(ws)
         results["fts"] = True
     except sqlite3.OperationalError as exc:
@@ -1056,6 +1122,7 @@ def reindex(include_vectors: bool = False) -> str:
     if include_vectors:
         try:
             from mind_mem.recall_vector import rebuild_index
+
             rebuild_index(ws)
             results["vectors"] = True
         except ImportError:
@@ -1067,6 +1134,7 @@ def reindex(include_vectors: bool = False) -> str:
     # Regenerate category summaries
     try:
         from category_distiller import CategoryDistiller
+
         extra_cats = _load_extra_categories(ws)
         distiller = CategoryDistiller(extra_categories=extra_cats if extra_cats else None)
         written = distiller.distill(ws)
@@ -1099,50 +1167,64 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
 
     try:
         from mind_mem.block_metadata import BlockMetadataManager
+
         mgr = BlockMetadataManager(db_path)
 
         if action == "update":
             importance = mgr.update_importance(block_id)
             metrics.inc("mcp_evolution_updates")
-            return json.dumps({
-                "_schema_version": "1.0",
-                "block_id": block_id,
-                "action": "updated",
-                "importance": round(importance, 4),
-            }, indent=2)
+            return json.dumps(
+                {
+                    "_schema_version": "1.0",
+                    "block_id": block_id,
+                    "action": "updated",
+                    "importance": round(importance, 4),
+                },
+                indent=2,
+            )
         else:
             importance = mgr.get_importance_boost(block_id)
             co_blocks = mgr.get_co_occurring_blocks(block_id)
             metrics.inc("mcp_evolution_reads")
-            return json.dumps({
-                "_schema_version": "1.0",
-                "block_id": block_id,
-                "importance": round(importance, 4),
-                "co_occurring_blocks": co_blocks,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "_schema_version": "1.0",
+                    "block_id": block_id,
+                    "importance": round(importance, 4),
+                    "co_occurring_blocks": co_blocks,
+                },
+                indent=2,
+            )
 
     except ImportError:
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": "memory_evolution requires block_metadata module",
-            "block_id": block_id,
-        }, indent=2)
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": "memory_evolution requires block_metadata module",
+                "block_id": block_id,
+            },
+            indent=2,
+        )
     except sqlite3.OperationalError as exc:
         if _is_db_locked(exc):
             return _sqlite_busy_error()
         raise
     except (OSError, ValueError, KeyError) as exc:
         _log.warning("memory_evolution_failed", block_id=block_id, error=str(exc))
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": "Memory evolution lookup failed. Access history may not be initialized.",
-            "block_id": block_id,
-        }, indent=2)
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": "Memory evolution lookup failed. Access history may not be initialized.",
+                "block_id": block_id,
+            },
+            indent=2,
+        )
 
 
 # ---------------------------------------------------------------------------
 # Category & Prefetch tools (13-14)
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool
 @mcp_tool_observe
@@ -1163,6 +1245,7 @@ def category_summary(topic: str, limit: int = 3) -> str:
     limits = _get_limits(ws)
     try:
         from category_distiller import CategoryDistiller
+
         extra_cats = _load_extra_categories(ws)
         distiller = CategoryDistiller(extra_categories=extra_cats if extra_cats else None)
         context = distiller.get_category_context(topic, ws, limit=max(1, min(limit, limits["max_category_results"])))
@@ -1170,30 +1253,41 @@ def category_summary(topic: str, limit: int = 3) -> str:
         metrics.inc("mcp_category_summary")
         _log.info("mcp_category_summary", topic=topic, matched_categories=cats[:limit])
         if not context:
-            return json.dumps({
+            return json.dumps(
+                {
+                    "_schema_version": "1.0",
+                    "topic": topic,
+                    "status": "no_categories",
+                    "hint": "Run reindex to generate category files, or add blocks with matching tags.",
+                },
+                indent=2,
+            )
+        return json.dumps(
+            {
                 "_schema_version": "1.0",
                 "topic": topic,
-                "status": "no_categories",
-                "hint": "Run reindex to generate category files, or add blocks with matching tags.",
-            }, indent=2)
-        return json.dumps({
-            "_schema_version": "1.0",
-            "topic": topic,
-            "matched_categories": cats[:limit],
-            "content": context,
-        }, indent=2)
+                "matched_categories": cats[:limit],
+                "content": context,
+            },
+            indent=2,
+        )
     except ImportError:
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": "category_distiller module not available",
-        })
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": "category_distiller module not available",
+            }
+        )
     except (OSError, ValueError, KeyError) as exc:
         _log.warning("category_summary_failed", topic=topic, error=str(exc))
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": "Category summary lookup failed",
-            "topic": topic,
-        }, indent=2)
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": "Category summary lookup failed",
+                "topic": topic,
+            },
+            indent=2,
+        )
 
 
 @mcp.tool
@@ -1215,37 +1309,49 @@ def prefetch(signals: str, limit: int = 5) -> str:
     ws = _workspace()
     signal_list = [s.strip() for s in signals.split(",") if s.strip()]
     if not signal_list:
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": "No signals provided. Pass comma-separated keywords.",
-        })
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": "No signals provided. Pass comma-separated keywords.",
+            }
+        )
 
     limits = _get_limits(ws)
     limit = max(1, min(limit, limits["max_prefetch_results"]))
     try:
         from mind_mem.recall import prefetch_context
+
         results = prefetch_context(ws, signal_list, limit=limit)
         metrics.inc("mcp_prefetch_queries")
         _log.info("mcp_prefetch", signals=signal_list, results=len(results))
-        return json.dumps({
-            "_schema_version": "1.0",
-            "signals": signal_list,
-            "count": len(results),
-            "results": results,
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "signals": signal_list,
+                "count": len(results),
+                "results": results,
+            },
+            indent=2,
+            default=str,
+        )
     except Exception:
         import traceback
+
         _log.warning("prefetch_failed", signals=signal_list, traceback=traceback.format_exc())
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": "Prefetch failed",
-            "signals": signal_list,
-        }, indent=2)
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": "Prefetch failed",
+                "signals": signal_list,
+            },
+            indent=2,
+        )
 
 
 # ---------------------------------------------------------------------------
 # Kernel config tools
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool
 @mcp_tool_observe
@@ -1264,17 +1370,22 @@ def list_mind_kernels() -> str:
 
     result = []
     for name, cfg in sorted(all_cfgs.items()):
-        result.append({
-            "name": name,
-            "sections": list(cfg.keys()),
-        })
+        result.append(
+            {
+                "name": name,
+                "sections": list(cfg.keys()),
+            }
+        )
 
     metrics.inc("mcp_kernel_list")
     _log.info("mcp_list_kernels", count=len(result))
-    return json.dumps({
-        "_schema_version": "1.0",
-        "kernels": result,
-    }, indent=2)
+    return json.dumps(
+        {
+            "_schema_version": "1.0",
+            "kernels": result,
+        },
+        indent=2,
+    )
 
 
 @mcp.tool
@@ -1291,11 +1402,13 @@ def get_mind_kernel(name: str) -> str:
     Returns:
         JSON with the full kernel configuration, or error if not found.
     """
-    if not _re_mod.match(r'^[a-zA-Z0-9_-]{1,64}$', name):
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": f"Invalid kernel name: {name}",
-        })
+    if not _re_mod.match(r"^[a-zA-Z0-9_-]{1,64}$", name):
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": f"Invalid kernel name: {name}",
+            }
+        )
 
     ws = _workspace()
     mind_dir = get_mind_dir(ws)
@@ -1303,18 +1416,23 @@ def get_mind_kernel(name: str) -> str:
 
     cfg = load_kernel_config(path)
     if not cfg:
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": f"Kernel '{name}' not found",
-        })
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": f"Kernel '{name}' not found",
+            }
+        )
 
     metrics.inc("mcp_kernel_reads")
     _log.info("mcp_get_kernel", name=name, sections=list(cfg.keys()))
-    return json.dumps({
-        "_schema_version": "1.0",
-        "name": name,
-        "config": cfg,
-    }, indent=2)
+    return json.dumps(
+        {
+            "_schema_version": "1.0",
+            "name": name,
+            "config": cfg,
+        },
+        indent=2,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1363,85 +1481,97 @@ def delete_memory_item(block_id: str) -> str:
         return ws_err
 
     # Validate block_id format
-    if not _re_mod.match(r'^[A-Z]+-[a-zA-Z0-9-]+$', block_id):
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": f"Invalid block ID format: {block_id}",
-        })
+    if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9-]+$", block_id):
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": f"Invalid block ID format: {block_id}",
+            }
+        )
 
     filepath = _find_block_file(ws, block_id)
     if filepath is None:
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": f"Unrecognized block ID prefix: {block_id}",
-            "hint": "Supported prefixes: " + ", ".join(sorted(_BLOCK_PREFIX_MAP.keys())),
-        })
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": f"Unrecognized block ID prefix: {block_id}",
+                "hint": "Supported prefixes: " + ", ".join(sorted(_BLOCK_PREFIX_MAP.keys())),
+            }
+        )
 
     if not os.path.isfile(filepath):
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": f"Source file not found: {filepath}",
-            "block_id": block_id,
-        })
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": f"Source file not found: {filepath}",
+                "block_id": block_id,
+            }
+        )
 
-    # Read file, find and remove the block
-    with open(filepath, "r", encoding="utf-8") as f:
-        content = f.read()
+    # Read file, find and remove the block (under lock to prevent races)
+    with FileLock(filepath):
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
 
-    lines = content.split("\n")
-    block_start = None
-    block_end = None
-    block_header = f"[{block_id}]"
+        lines = content.split("\n")
+        block_start = None
+        block_end = None
+        block_header = f"[{block_id}]"
 
-    for i, line in enumerate(lines):
-        if line.strip() == block_header:
-            block_start = i
-        elif block_start is not None and block_end is None:
-            # Block ends at next block header, separator, or EOF
-            if line.startswith("[") and line.strip().endswith("]") and _re_mod.match(r'^\[[A-Z]+-', line.strip()):
-                block_end = i
-            elif line.strip() == "---":
-                block_end = i + 1  # include the separator
+        for i, line in enumerate(lines):
+            if line.strip() == block_header:
+                block_start = i
+            elif block_start is not None and block_end is None:
+                # Block ends at next block header, separator, or EOF
+                if line.startswith("[") and line.strip().endswith("]") and _re_mod.match(r"^\[[A-Z]+-", line.strip()):
+                    block_end = i
+                elif line.strip() == "---":
+                    block_end = i + 1  # include the separator
 
-    if block_start is None:
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": f"Block {block_id} not found in {os.path.basename(filepath)}",
-            "block_id": block_id,
-        })
+        if block_start is None:
+            return json.dumps(
+                {
+                    "_schema_version": "1.0",
+                    "error": f"Block {block_id} not found in {os.path.basename(filepath)}",
+                    "block_id": block_id,
+                }
+            )
 
-    if block_end is None:
-        block_end = len(lines)
+        if block_end is None:
+            block_end = len(lines)
 
-    # Remove the block lines
-    new_lines = lines[:block_start] + lines[block_end:]
-    new_content = "\n".join(new_lines)
+        # Remove the block lines
+        new_lines = lines[:block_start] + lines[block_end:]
+        new_content = "\n".join(new_lines)
 
-    # Atomic write: temp file + rename
-    dir_name = os.path.dirname(filepath)
-    fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".md.tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as tmp_f:
-            tmp_f.write(new_content)
-        os.replace(tmp_path, filepath)
-    except Exception:
-        # Clean up temp file on failure
+        # Atomic write: temp file + rename
+        dir_name = os.path.dirname(filepath)
+        fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".md.tmp")
         try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+            with os.fdopen(fd, "w", encoding="utf-8") as tmp_f:
+                tmp_f.write(new_content)
+            os.replace(tmp_path, filepath)
+        except Exception:
+            # Clean up temp file on failure
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
     metrics.inc("mcp_delete_memory_item")
     _log.info("mcp_delete_memory_item", block_id=block_id, file=os.path.basename(filepath))
 
-    return json.dumps({
-        "_schema_version": "1.0",
-        "status": "deleted",
-        "block_id": block_id,
-        "file": os.path.basename(filepath),
-        "lines_removed": block_end - block_start,
-    }, indent=2)
+    return json.dumps(
+        {
+            "_schema_version": "1.0",
+            "status": "deleted",
+            "block_id": block_id,
+            "file": os.path.basename(filepath),
+            "lines_removed": block_end - block_start,
+        },
+        indent=2,
+    )
 
 
 @mcp.tool
@@ -1465,10 +1595,12 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False) -> str:
         return ws_err
 
     if format != "jsonl":
-        return json.dumps({
-            "_schema_version": "1.0",
-            "error": f"Unsupported format: {format}. Use 'jsonl'.",
-        })
+        return json.dumps(
+            {
+                "_schema_version": "1.0",
+                "error": f"Unsupported format: {format}. Use 'jsonl'.",
+            }
+        )
 
     all_blocks = []
     scan_dirs = ["decisions", "tasks", "entities", "intelligence"]
@@ -1502,17 +1634,21 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False) -> str:
     metrics.inc("mcp_export_memory")
     _log.info("mcp_export_memory", format=format, blocks=len(all_blocks))
 
-    return json.dumps({
-        "_schema_version": "1.0",
-        "format": format,
-        "block_count": len(all_blocks),
-        "data": jsonl_output,
-    }, indent=2)
+    return json.dumps(
+        {
+            "_schema_version": "1.0",
+            "format": format,
+            "block_count": len(all_blocks),
+            "data": jsonl_output,
+        },
+        indent=2,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def _check_token() -> str | None:
     """Get token from environment. Returns None if no auth configured."""
@@ -1553,16 +1689,15 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Mind-Mem MCP Server")
-    parser.add_argument("--transport", choices=["stdio", "http"], default="stdio",
-                        help="Transport protocol (default: stdio)")
-    parser.add_argument("--port", type=int, default=8765,
-                        help="HTTP port (only used with --transport http)")
-    parser.add_argument("--token", default=None,
-                        help="Bearer token for HTTP auth (or set MIND_MEM_TOKEN env var)")
-    parser.add_argument("--watch", action="store_true",
-                        help="Auto-reindex when workspace .md files change")
-    parser.add_argument("--watch-interval", type=float, default=5.0,
-                        help="File watch polling interval in seconds (default: 5.0)")
+    parser.add_argument(
+        "--transport", choices=["stdio", "http"], default="stdio", help="Transport protocol (default: stdio)"
+    )
+    parser.add_argument("--port", type=int, default=8765, help="HTTP port (only used with --transport http)")
+    parser.add_argument("--token", default=None, help="Bearer token for HTTP auth (or set MIND_MEM_TOKEN env var)")
+    parser.add_argument("--watch", action="store_true", help="Auto-reindex when workspace .md files change")
+    parser.add_argument(
+        "--watch-interval", type=float, default=5.0, help="File watch polling interval in seconds (default: 5.0)"
+    )
     args = parser.parse_args()
 
     # Set token from CLI arg if provided (env var takes precedence if both set)
@@ -1570,8 +1705,7 @@ def main():
         os.environ["MIND_MEM_TOKEN"] = args.token
 
     token = _check_token()
-    _log.info("mcp_server_start", transport=args.transport,
-              workspace=_workspace(), auth="token" if token else "none")
+    _log.info("mcp_server_start", transport=args.transport, workspace=_workspace(), auth="token" if token else "none")
 
     # File watcher: auto-reindex on .md changes
     if args.watch:
@@ -1579,12 +1713,15 @@ def main():
         from scripts.sqlite_index import build_index
 
         ws = _workspace()
+
         def _on_changes(changed_files: set[str]) -> None:
             try:
                 result = build_index(ws, incremental=True)
-                _log.info("watch_reindex_complete",
-                          blocks_new=result.get("blocks_new", 0),
-                          blocks_modified=result.get("blocks_modified", 0))
+                _log.info(
+                    "watch_reindex_complete",
+                    blocks_new=result.get("blocks_new", 0),
+                    blocks_modified=result.get("blocks_modified", 0),
+                )
             except Exception as e:
                 _log.warning("watch_reindex_failed", error=str(e))
 
@@ -1594,13 +1731,16 @@ def main():
 
     if args.transport == "http":
         if not token:
-            _log.warning("mcp_http_no_auth",
-                         hint="HTTP transport running without token auth. "
-                              "Set MIND_MEM_TOKEN env var or use --token for security.")
+            _log.warning(
+                "mcp_http_no_auth",
+                hint="HTTP transport running without token auth. "
+                "Set MIND_MEM_TOKEN env var or use --token for security.",
+            )
         if token:
             # Enforce Bearer token auth on HTTP transport.
             # FastMCP's StaticTokenVerifier gates all requests.
             from fastmcp.server.auth import OAuthProvider, StaticTokenVerifier
+
             verifier = StaticTokenVerifier(
                 tokens={token: {"sub": "mind-mem-client", "scope": "full"}},
             )

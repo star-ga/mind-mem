@@ -31,6 +31,7 @@ _SCRIPTS_DIR = os.path.join(_HERE, "..", "scripts")
 sys.path.insert(0, _SCRIPTS_DIR)
 sys.path.append(_HERE)
 
+
 def _gold_keywords(answer: str) -> list[str]:
     """Extract lowercased keywords from a gold answer for hit matching."""
     import re
@@ -41,12 +42,56 @@ def _gold_keywords(answer: str) -> list[str]:
     tokens = re.findall(r"[a-z]{2,}", text)
     # Remove very common words
     stops = {
-        "the", "is", "was", "are", "were", "and", "or", "but", "for",
-        "not", "this", "that", "with", "from", "has", "had", "have",
-        "she", "he", "they", "her", "his", "its", "it", "an", "of",
-        "in", "to", "on", "at", "by", "as", "be", "no", "yes", "did",
-        "does", "do", "about", "would", "could", "should", "will",
-        "been", "being", "also", "just", "than", "more", "some",
+        "the",
+        "is",
+        "was",
+        "are",
+        "were",
+        "and",
+        "or",
+        "but",
+        "for",
+        "not",
+        "this",
+        "that",
+        "with",
+        "from",
+        "has",
+        "had",
+        "have",
+        "she",
+        "he",
+        "they",
+        "her",
+        "his",
+        "its",
+        "it",
+        "an",
+        "of",
+        "in",
+        "to",
+        "on",
+        "at",
+        "by",
+        "as",
+        "be",
+        "no",
+        "yes",
+        "did",
+        "does",
+        "do",
+        "about",
+        "would",
+        "could",
+        "should",
+        "will",
+        "been",
+        "being",
+        "also",
+        "just",
+        "than",
+        "more",
+        "some",
     }
     return [t for t in tokens if t not in stops]
 
@@ -136,7 +181,10 @@ def run_ab_test(
                 if "content" not in r:
                     r["content"] = r.get("excerpt", "")
             ce_results = ce.rerank(
-                question, wide_pool, top_k=top_k, blend_weight=blend_weight,
+                question,
+                wide_pool,
+                top_k=top_k,
+                blend_weight=blend_weight,
             )
 
             # Measure retrieval quality
@@ -163,7 +211,7 @@ def run_ab_test(
 
             if (qi + 1) % 25 == 0:
                 elapsed = time.time() - t0
-                print(f"[ce-ab] {qi+1}/{len(qa_pairs)} ({elapsed:.1f}s)")
+                print(f"[ce-ab] {qi + 1}/{len(qa_pairs)} ({elapsed:.1f}s)")
 
         elapsed = time.time() - t0
         print(f"[ce-ab] done: {len(results)} questions in {elapsed:.1f}s")
@@ -317,28 +365,36 @@ def _correlate_with_judge(data: dict, judge_path: str) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Cross-Encoder A/B Test for mind-mem retrieval"
-    )
+    parser = argparse.ArgumentParser(description="Cross-Encoder A/B Test for mind-mem retrieval")
     parser.add_argument(
-        "--conv", type=int, default=0,
+        "--conv",
+        type=int,
+        default=0,
         help="Conversation index (default: 0)",
     )
     parser.add_argument(
-        "--top-k", type=int, default=18,
+        "--top-k",
+        type=int,
+        default=18,
         help="Number of results to retrieve (default: 18)",
     )
     parser.add_argument(
-        "--blend-weight", type=float, default=0.6,
+        "--blend-weight",
+        type=float,
+        default=0.6,
         help="CE blend weight: 0=pure BM25, 1=pure CE (default: 0.6)",
     )
     parser.add_argument(
-        "--ce-model", type=str,
+        "--ce-model",
+        type=str,
         default="cross-encoder/ms-marco-MiniLM-L-6-v2",
         help="Cross-encoder model name",
     )
     parser.add_argument(
-        "--output", "-o", type=str, default=None,
+        "--output",
+        "-o",
+        type=str,
+        default=None,
         help="Write JSON results to this file",
     )
     args = parser.parse_args()
@@ -357,9 +413,7 @@ def main():
     _correlate_with_judge(data, judge_path)
 
     # Save results
-    out_path = args.output or os.path.join(
-        _HERE, f"crossencoder_ab_conv{args.conv}.json"
-    )
+    out_path = args.output or os.path.join(_HERE, f"crossencoder_ab_conv{args.conv}.json")
     # Don't include per_question in saved file to keep it compact
     save_data = {k: v for k, v in data.items() if k != "per_question"}
     save_data["per_question_count"] = len(data.get("per_question", []))
