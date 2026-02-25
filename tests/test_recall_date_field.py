@@ -1,4 +1,5 @@
 """Tests for date field in recall results."""
+
 from __future__ import annotations
 
 import os
@@ -17,15 +18,18 @@ def _make_workspace():
         f.write("[DT-002]\nType: Decision\nStatement: Old decision\nDate: 2025-01-01\n\n")
     return ws
 
+
 def test_dated_blocks_found():
     ws = _make_workspace()
     results = recall(ws, "decision", limit=5)
     assert isinstance(results, list)
 
+
 def test_recent_date_search():
     ws = _make_workspace()
     results = recall(ws, "recent decision", limit=5)
     assert isinstance(results, list)
+
 
 def test_old_date_search():
     ws = _make_workspace()

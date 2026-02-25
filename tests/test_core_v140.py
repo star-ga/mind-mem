@@ -109,10 +109,7 @@ class TestBlockCorruptedError(unittest.TestCase):
 
     def test_error_attributes(self):
         err = BlockCorruptedError(
-            "test error",
-            block_line_number=10,
-            file_path="/tmp/test.md",
-            context="[BAD-BLOCK]\nStatus: ?"
+            "test error", block_line_number=10, file_path="/tmp/test.md", context="[BAD-BLOCK]\nStatus: ?"
         )
         self.assertEqual(err.block_line_number, 10)
         self.assertEqual(err.file_path, "/tmp/test.md")
@@ -199,9 +196,7 @@ class TestBlockMetadataManagerLock(unittest.TestCase):
         # Verify each block was accessed 20 times
         conn = sqlite3.connect(self.db_path)
         for i in range(10):
-            row = conn.execute(
-                "SELECT access_count FROM block_meta WHERE id = ?", (f"B-{i}",)
-            ).fetchone()
+            row = conn.execute("SELECT access_count FROM block_meta WHERE id = ?", (f"B-{i}",)).fetchone()
             self.assertIsNotNone(row, f"B-{i} not found")
             self.assertEqual(row[0], 20, f"B-{i} has {row[0]} accesses, expected 20")
         conn.close()
@@ -270,15 +265,18 @@ class TestFTS5Staleness(unittest.TestCase):
 
     def test_no_index_is_stale(self):
         from mind_mem.sqlite_index import is_stale
+
         # Non-existent workspace has no DB
         self.assertTrue(is_stale("/tmp/nonexistent_workspace_xyz"))
 
     def test_is_stale_function_exists(self):
         from mind_mem.sqlite_index import is_stale
+
         self.assertTrue(callable(is_stale))
 
     def test_index_status_includes_stale_files(self):
         from mind_mem.sqlite_index import index_status
+
         status = index_status("/tmp/nonexistent_workspace_xyz")
         self.assertIn("stale_files", status)
 

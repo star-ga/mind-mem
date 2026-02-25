@@ -59,7 +59,6 @@ EVIDENCE:
 - [SPEAKER=<name|UNKNOWN>] "<quote or close paraphrase>"
 DENIAL_EVIDENCE:
 - [SPEAKER=<name|UNKNOWN>] "<denial quote>" (only if present)""",
-
     "temporal": """\
 You are a memory compression expert. The question asks about timing, \
 sequence, or chronological order of events.
@@ -72,7 +71,6 @@ Rules:
 5. If timing is ambiguous, state what is known and what is uncertain.
 6. Preserve exact dates and timestamps from the source material.
 7. Output 3-8 observations.""",
-
     "multi-hop": """\
 You are a memory compression expert. The question requires connecting \
 multiple facts from different parts of the conversation.
@@ -129,8 +127,6 @@ def compress_context(
 
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": COMPRESS_USER_TEMPLATE.format(
-            question=question, context=context
-        )},
+        {"role": "user", "content": COMPRESS_USER_TEMPLATE.format(question=question, context=context)},
     ]
     return llm_fn(messages, model=model, max_tokens=max_tokens)

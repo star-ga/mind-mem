@@ -25,6 +25,7 @@ from mind_mem.recall import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_workspace(tmpdir, decisions="", tasks=""):
     """Create a minimal workspace directory structure for recall tests."""
     for d in ("decisions", "tasks", "entities", "intelligence"):
@@ -115,6 +116,7 @@ def _parsed_dia_block(block_id, dia_id, speaker, text, status="active"):
 # 1. Graph boost via cross-references
 # ---------------------------------------------------------------------------
 
+
 class TestGraphBoostCrossRef(unittest.TestCase):
     """Verify that blocks cross-referencing each other get boosted with
     via_graph=True when recall() is invoked with graph_boost=True."""
@@ -122,8 +124,7 @@ class TestGraphBoostCrossRef(unittest.TestCase):
     def test_xref_field_creates_graph_edge(self):
         """XRefs field should cause build_xref_graph to create edges."""
         blocks = [
-            {"_id": "D-20260101-001", "Statement": "Main decision about auth",
-             "Context": "Related to D-20260101-002"},
+            {"_id": "D-20260101-001", "Statement": "Main decision about auth", "Context": "Related to D-20260101-002"},
             {"_id": "D-20260101-002", "Statement": "Secondary decision"},
         ]
         graph = build_xref_graph(blocks)
@@ -133,10 +134,8 @@ class TestGraphBoostCrossRef(unittest.TestCase):
     def test_explicit_xref_text_creates_edge(self):
         """A block referencing another in its Statement field yields an edge."""
         blocks = [
-            {"_id": "D-20260101-001",
-             "Statement": "Implements the requirement from D-20260101-002"},
-            {"_id": "D-20260101-002",
-             "Statement": "Original requirement for authentication"},
+            {"_id": "D-20260101-001", "Statement": "Implements the requirement from D-20260101-002"},
+            {"_id": "D-20260101-002", "Statement": "Original requirement for authentication"},
         ]
         graph = build_xref_graph(blocks)
         self.assertIn("D-20260101-002", graph["D-20260101-001"])
@@ -146,13 +145,16 @@ class TestGraphBoostCrossRef(unittest.TestCase):
         """recall(graph_boost=True) should surface a block that is referenced
         by a matching block but does not itself match the query."""
         with tempfile.TemporaryDirectory() as td:
-            decisions = "\n\n---\n\n".join([
-                _block("D-20260101-001",
-                       "Use PostgreSQL for the database layer",
-                       Context="See D-20260101-002 for migration plan"),
-                _block("D-20260101-002",
-                       "Migration plan for schema upgrades"),
-            ])
+            decisions = "\n\n---\n\n".join(
+                [
+                    _block(
+                        "D-20260101-001",
+                        "Use PostgreSQL for the database layer",
+                        Context="See D-20260101-002 for migration plan",
+                    ),
+                    _block("D-20260101-002", "Migration plan for schema upgrades"),
+                ]
+            )
             ws = _make_workspace(td, decisions=decisions)
 
             # Without graph: only the keyword-matching block appears
@@ -169,19 +171,17 @@ class TestGraphBoostCrossRef(unittest.TestCase):
     def test_graph_boost_sets_via_graph_flag(self):
         """Blocks discovered via graph traversal should have via_graph=True."""
         with tempfile.TemporaryDirectory() as td:
-            decisions = "\n\n---\n\n".join([
-                _block("D-20260101-001",
-                       "Deploy Redis caching layer",
-                       Context="Related to D-20260101-002"),
-                _block("D-20260101-002",
-                       "Cache invalidation strategy"),
-            ])
+            decisions = "\n\n---\n\n".join(
+                [
+                    _block("D-20260101-001", "Deploy Redis caching layer", Context="Related to D-20260101-002"),
+                    _block("D-20260101-002", "Cache invalidation strategy"),
+                ]
+            )
             ws = _make_workspace(td, decisions=decisions)
 
             results = recall(ws, "Redis caching", graph_boost=True)
             graph_hits = [r for r in results if r.get("via_graph")]
-            self.assertGreater(len(graph_hits), 0,
-                               "At least one result should be flagged via_graph")
+            self.assertGreater(len(graph_hits), 0, "At least one result should be flagged via_graph")
 
     def test_graph_boost_increases_score(self):
         """A block that both matches the query AND is referenced by another
@@ -189,14 +189,16 @@ class TestGraphBoostCrossRef(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             # Both blocks mention "encryption" so both get BM25 scores,
             # and they cross-reference each other so graph boost adds more.
-            decisions = "\n\n---\n\n".join([
-                _block("D-20260101-001",
-                       "Enable encryption at rest for all databases",
-                       Context="Depends on D-20260101-002"),
-                _block("D-20260101-002",
-                       "Encryption key management policy",
-                       Context="Required by D-20260101-001"),
-            ])
+            decisions = "\n\n---\n\n".join(
+                [
+                    _block(
+                        "D-20260101-001",
+                        "Enable encryption at rest for all databases",
+                        Context="Depends on D-20260101-002",
+                    ),
+                    _block("D-20260101-002", "Encryption key management policy", Context="Required by D-20260101-001"),
+                ]
+            )
             ws = _make_workspace(td, decisions=decisions)
 
             results_plain = recall(ws, "encryption", graph_boost=False)
@@ -213,8 +215,7 @@ class TestGraphBoostCrossRef(unittest.TestCase):
     def test_graph_boost_no_self_edges(self):
         """A block mentioning its own ID should not create a self-edge."""
         blocks = [
-            {"_id": "D-20260101-001",
-             "Statement": "This is D-20260101-001, a self-referential block"},
+            {"_id": "D-20260101-001", "Statement": "This is D-20260101-001, a self-referential block"},
         ]
         graph = build_xref_graph(blocks)
         self.assertNotIn("D-20260101-001", graph.get("D-20260101-001", set()))
@@ -222,8 +223,7 @@ class TestGraphBoostCrossRef(unittest.TestCase):
     def test_graph_boost_unknown_refs_ignored(self):
         """References to non-existent block IDs should not appear in graph."""
         blocks = [
-            {"_id": "D-20260101-001",
-             "Statement": "References D-20260101-999 which does not exist"},
+            {"_id": "D-20260101-001", "Statement": "References D-20260101-999 which does not exist"},
         ]
         graph = build_xref_graph(blocks)
         self.assertEqual(len(graph.get("D-20260101-001", set())), 0)
@@ -231,16 +231,17 @@ class TestGraphBoostCrossRef(unittest.TestCase):
     def test_graph_boost_chain_traversal(self):
         """Graph traversal should follow chains: A->B->C discovers C from A."""
         with tempfile.TemporaryDirectory() as td:
-            decisions = "\n\n---\n\n".join([
-                _block("D-20260101-001",
-                       "Adopt Kubernetes for container orchestration",
-                       Context="See D-20260101-002"),
-                _block("D-20260101-002",
-                       "Helm charts for deployment automation",
-                       Context="Feeds into D-20260101-003"),
-                _block("D-20260101-003",
-                       "Monitoring dashboard for cluster health"),
-            ])
+            decisions = "\n\n---\n\n".join(
+                [
+                    _block(
+                        "D-20260101-001", "Adopt Kubernetes for container orchestration", Context="See D-20260101-002"
+                    ),
+                    _block(
+                        "D-20260101-002", "Helm charts for deployment automation", Context="Feeds into D-20260101-003"
+                    ),
+                    _block("D-20260101-003", "Monitoring dashboard for cluster health"),
+                ]
+            )
             ws = _make_workspace(td, decisions=decisions)
 
             results = recall(ws, "Kubernetes orchestration", graph_boost=True)
@@ -265,25 +266,22 @@ class TestGraphBoostCrossRef(unittest.TestCase):
 # 2. context_pack() tests
 # ---------------------------------------------------------------------------
 
+
 class TestContextPackDialogAdjacency(unittest.TestCase):
     """Test dialog adjacency expansion in context_pack()."""
 
     def _three_turn_dialog(self):
         """3-turn dialog: question -> answer -> followup."""
         return [
-            _parsed_dia_block("DIA-D1-1", "D1:1", "Alice",
-                              "What's the deployment process?"),
-            _parsed_dia_block("DIA-D1-2", "D1:2", "Bob",
-                              "We use a blue-green deployment strategy."),
-            _parsed_dia_block("DIA-D1-3", "D1:3", "Alice",
-                              "That makes sense, thanks for explaining."),
+            _parsed_dia_block("DIA-D1-1", "D1:1", "Alice", "What's the deployment process?"),
+            _parsed_dia_block("DIA-D1-2", "D1:2", "Bob", "We use a blue-green deployment strategy."),
+            _parsed_dia_block("DIA-D1-3", "D1:3", "Alice", "That makes sense, thanks for explaining."),
         ]
 
     def test_question_pulls_adjacent_answers(self):
         """A question turn in top_results should pull next 1-2 turns."""
         blocks = self._three_turn_dialog()
-        top = [_dia_result("DIA-D1-1", "D1:1", "Alice",
-                           "What's the deployment process?", score=20.0)]
+        top = [_dia_result("DIA-D1-1", "D1:1", "Alice", "What's the deployment process?", score=20.0)]
         result = context_pack("deployment process", top, blocks, top, limit=10)
         dias = {r["DiaID"] for r in result}
         self.assertIn("D1:2", dias, "Answer turn should be pulled via adjacency")
@@ -291,8 +289,7 @@ class TestContextPackDialogAdjacency(unittest.TestCase):
     def test_adjacency_pulls_up_to_two_turns(self):
         """Adjacency expansion should pull up to 2 subsequent turns."""
         blocks = self._three_turn_dialog()
-        top = [_dia_result("DIA-D1-1", "D1:1", "Alice",
-                           "What's the deployment process?", score=20.0)]
+        top = [_dia_result("DIA-D1-1", "D1:1", "Alice", "What's the deployment process?", score=20.0)]
         result = context_pack("deployment process", top, blocks, top, limit=10)
         dias = {r["DiaID"] for r in result}
         self.assertIn("D1:2", dias)
@@ -301,8 +298,7 @@ class TestContextPackDialogAdjacency(unittest.TestCase):
     def test_adjacency_marks_via_adjacency(self):
         """Adjacency-added results should have via_adjacency=True."""
         blocks = self._three_turn_dialog()
-        top = [_dia_result("DIA-D1-1", "D1:1", "Alice",
-                           "What's the deployment process?", score=20.0)]
+        top = [_dia_result("DIA-D1-1", "D1:1", "Alice", "What's the deployment process?", score=20.0)]
         result = context_pack("deployment process", top, blocks, top, limit=10)
         adj_hits = [r for r in result if r.get("via_adjacency")]
         self.assertGreater(len(adj_hits), 0)
@@ -310,8 +306,7 @@ class TestContextPackDialogAdjacency(unittest.TestCase):
     def test_non_question_no_adjacency(self):
         """A statement (not a question) should NOT trigger adjacency."""
         blocks = self._three_turn_dialog()
-        top = [_dia_result("DIA-D1-2", "D1:2", "Bob",
-                           "We use a blue-green deployment strategy.", score=20.0)]
+        top = [_dia_result("DIA-D1-2", "D1:2", "Bob", "We use a blue-green deployment strategy.", score=20.0)]
         result = context_pack("deployment", top, blocks, top, limit=10)
         # Only the original result should be present
         self.assertEqual(len(result), 1)
@@ -319,11 +314,9 @@ class TestContextPackDialogAdjacency(unittest.TestCase):
     def test_fact_card_not_expanded(self):
         """Fact cards (non-DIA- prefix) should not trigger adjacency."""
         blocks = self._three_turn_dialog()
-        fact = _dia_result("FACT-001", "D1:1", "Alice",
-                           "What's the process?", score=20.0)
+        fact = _dia_result("FACT-001", "D1:1", "Alice", "What's the process?", score=20.0)
         result = context_pack("process", [fact], blocks, [fact], limit=10)
-        self.assertEqual(len(result), 1,
-                         "Fact cards must not trigger dialog adjacency")
+        self.assertEqual(len(result), 1, "Fact cards must not trigger dialog adjacency")
 
 
 class TestContextPackEmptyInputs(unittest.TestCase):
@@ -373,8 +366,7 @@ class TestContextPackNoAugmentation(unittest.TestCase):
             "status": "active",
             "DiaID": "",
         }
-        result = context_pack("PostgreSQL", [result_dict], [block],
-                              [result_dict], limit=10)
+        result = context_pack("PostgreSQL", [result_dict], [block], [result_dict], limit=10)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["_id"], "D-20260101-001")
         # No augmentation flags should be set
@@ -385,12 +377,9 @@ class TestContextPackNoAugmentation(unittest.TestCase):
     def test_statement_turn_returns_unchanged(self):
         """A dialog statement (not question) with no pronouns returns as-is."""
         blocks = [
-            _parsed_dia_block("DIA-D1-1", "D1:1", "Alice",
-                              "The database migration completed successfully."),
+            _parsed_dia_block("DIA-D1-1", "D1:1", "Alice", "The database migration completed successfully."),
         ]
-        top = [_dia_result("DIA-D1-1", "D1:1", "Alice",
-                           "The database migration completed successfully.",
-                           score=18.0)]
+        top = [_dia_result("DIA-D1-1", "D1:1", "Alice", "The database migration completed successfully.", score=18.0)]
         result = context_pack("database migration", top, blocks, top, limit=10)
         self.assertEqual(len(result), 1)
 
@@ -398,6 +387,7 @@ class TestContextPackNoAugmentation(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # 3. Config validation: _load_backend warns on unknown keys
 # ---------------------------------------------------------------------------
+
 
 class TestLoadBackendConfigValidation(unittest.TestCase):
     """Test that _load_backend() handles unknown config keys gracefully."""
@@ -417,8 +407,7 @@ class TestLoadBackendConfigValidation(unittest.TestCase):
                 json.dump(config, f)
 
             result = _load_backend(td)
-            self.assertIsNone(result,
-                              "_load_backend should return None for 'scan' backend")
+            self.assertIsNone(result, "_load_backend should return None for 'scan' backend")
 
     def test_valid_config_returns_none_for_scan(self):
         """_load_backend with valid keys and backend=scan returns None."""
@@ -465,6 +454,7 @@ class TestLoadBackendConfigValidation(unittest.TestCase):
 # 4. MAX_BLOCKS_PER_QUERY cap enforcement
 # ---------------------------------------------------------------------------
 
+
 class TestBlockCap(unittest.TestCase):
     """Verify that recall() caps the number of blocks it processes."""
 
@@ -504,18 +494,14 @@ class TestBlockCap(unittest.TestCase):
             parts = []
             for i in range(1, 101):
                 parts.append(
-                    f"[D-20260101-{i:03d}]\n"
-                    f"Statement: Database migration step {i}\n"
-                    f"Status: active\nDate: 2026-01-01\n"
+                    f"[D-20260101-{i:03d}]\nStatement: Database migration step {i}\nStatus: active\nDate: 2026-01-01\n"
                 )
             decisions = "\n---\n\n".join(parts)
             ws = _make_workspace(td, decisions=decisions)
 
             for limit in (1, 3, 5):
                 results = recall(ws, "database migration", limit=limit)
-                self.assertLessEqual(
-                    len(results), limit,
-                    f"Expected at most {limit} results, got {len(results)}")
+                self.assertLessEqual(len(results), limit, f"Expected at most {limit} results, got {len(results)}")
 
     def test_cap_value_is_documented(self):
         """MAX_BLOCKS_PER_QUERY should be 50000 as documented."""
@@ -526,20 +512,21 @@ class TestBlockCap(unittest.TestCase):
 # Integration: graph boost + context_pack combined
 # ---------------------------------------------------------------------------
 
+
 class TestGraphBoostIntegration(unittest.TestCase):
     """End-to-end integration of graph boost with real recall()."""
 
     def test_bidirectional_xref_both_blocks_found(self):
         """Two blocks that reference each other should both appear."""
         with tempfile.TemporaryDirectory() as td:
-            decisions = "\n\n---\n\n".join([
-                _block("D-20260101-001",
-                       "Adopt GraphQL for the API gateway",
-                       Context="Complementary to D-20260101-002"),
-                _block("D-20260101-002",
-                       "REST fallback for legacy clients",
-                       Context="Fallback for D-20260101-001"),
-            ])
+            decisions = "\n\n---\n\n".join(
+                [
+                    _block(
+                        "D-20260101-001", "Adopt GraphQL for the API gateway", Context="Complementary to D-20260101-002"
+                    ),
+                    _block("D-20260101-002", "REST fallback for legacy clients", Context="Fallback for D-20260101-001"),
+                ]
+            )
             ws = _make_workspace(td, decisions=decisions)
 
             results = recall(ws, "GraphQL API gateway", graph_boost=True)
@@ -555,13 +542,15 @@ class TestGraphBoostIntegration(unittest.TestCase):
                 "Implement rate limiting on all endpoints",
                 Context="Tracked in T-20260101-001",
             )
-            tasks = "\n\n---\n\n".join([
-                "[T-20260101-001]\n"
-                "Title: Rate limiter implementation\n"
-                "Status: active\n"
-                "AlignsWith: D-20260101-001\n",
-                "[T-20260101-099]\nTitle: Placeholder\nStatus: active\n",
-            ])
+            tasks = "\n\n---\n\n".join(
+                [
+                    "[T-20260101-001]\n"
+                    "Title: Rate limiter implementation\n"
+                    "Status: active\n"
+                    "AlignsWith: D-20260101-001\n",
+                    "[T-20260101-099]\nTitle: Placeholder\nStatus: active\n",
+                ]
+            )
             ws = _make_workspace(td, decisions=decisions, tasks=tasks)
 
             results = recall(ws, "rate limiting endpoints", graph_boost=True)

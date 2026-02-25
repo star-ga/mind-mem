@@ -10,28 +10,20 @@ class TestSimpleConjunctionSplit(unittest.TestCase):
     """Conjunction-based splitting: "X and Y" decomposes into 2 sub-queries."""
 
     def test_and_split(self):
-        parts = decompose_query(
-            "When did the team deploy v1.0.6 and what issues were found?"
-        )
+        parts = decompose_query("When did the team deploy v1.0.6 and what issues were found?")
         self.assertGreater(len(parts), 1)
         self.assertLessEqual(len(parts), 4)
 
     def test_as_well_as_split(self):
-        parts = decompose_query(
-            "What tools did we use for the auth migration as well as how long did it take?"
-        )
+        parts = decompose_query("What tools did we use for the auth migration as well as how long did it take?")
         self.assertGreater(len(parts), 1)
 
     def test_plus_split(self):
-        parts = decompose_query(
-            "Describe the incident response process plus the follow-up actions taken"
-        )
+        parts = decompose_query("Describe the incident response process plus the follow-up actions taken")
         self.assertGreater(len(parts), 1)
 
     def test_but_split(self):
-        parts = decompose_query(
-            "What did the frontend team deliver this sprint but what blockers remained?"
-        )
+        parts = decompose_query("What did the frontend team deliver this sprint but what blockers remained?")
         self.assertGreater(len(parts), 1)
 
 
@@ -65,15 +57,11 @@ class TestMultipleQuestions(unittest.TestCase):
     """Multiple question marks should trigger decomposition."""
 
     def test_two_questions(self):
-        parts = decompose_query(
-            "When did the team deploy v1.0.6? What issues were found after deployment?"
-        )
+        parts = decompose_query("When did the team deploy v1.0.6? What issues were found after deployment?")
         self.assertGreater(len(parts), 1)
 
     def test_three_questions(self):
-        parts = decompose_query(
-            "Who approved the change? When was it deployed? What broke afterwards?"
-        )
+        parts = decompose_query("Who approved the change? When was it deployed? What broke afterwards?")
         self.assertGreater(len(parts), 1)
         self.assertLessEqual(len(parts), 4)
 
@@ -104,40 +92,34 @@ class TestContextPreservation(unittest.TestCase):
     """Shared entity/topic from first clause should carry into later sub-queries."""
 
     def test_entity_carries_forward(self):
-        parts = decompose_query(
-            "What tools did we use for the auth migration and how long did it take?"
-        )
+        parts = decompose_query("What tools did we use for the auth migration and how long did it take?")
         self.assertGreater(len(parts), 1)
         # The second part should contain some context from the first
         # (e.g., "auth" or "migration" should appear in the second sub-query)
         second_lower = parts[-1].lower()
         has_context = "auth" in second_lower or "migration" in second_lower
-        self.assertTrue(has_context,
-                        f"Second sub-query lacks shared context: {parts[-1]}")
+        self.assertTrue(has_context, f"Second sub-query lacks shared context: {parts[-1]}")
 
     def test_version_carries_forward(self):
-        parts = decompose_query(
-            "When did we release v2.3.1 and what bugs were reported?"
-        )
+        parts = decompose_query("When did we release v2.3.1 and what bugs were reported?")
         self.assertGreater(len(parts), 1)
         second_lower = parts[-1].lower()
         # Version or "release" should carry forward
         has_context = "v2.3.1" in parts[-1] or "release" in second_lower
-        self.assertTrue(has_context,
-                        f"Version context missing in: {parts[-1]}")
+        self.assertTrue(has_context, f"Version context missing in: {parts[-1]}")
 
     def test_no_duplicate_context(self):
         """If second clause already has the entity, do not duplicate it."""
         parts = decompose_query(
-            "What tools did we use for the auth migration "
-            "and how long did the auth migration take?"
+            "What tools did we use for the auth migration and how long did the auth migration take?"
         )
         if len(parts) > 1:
             # "auth" is already in the second part, no need to prepend
             second = parts[-1]
             # Count occurrences — should not have double context injection
             self.assertLessEqual(
-                second.lower().count("auth migration"), 2,
+                second.lower().count("auth migration"),
+                2,
                 f"Context duplicated unnecessarily: {second}",
             )
 
@@ -168,15 +150,11 @@ class TestWhWordSplit(unittest.TestCase):
     """Queries with multiple wh-words should split at wh-boundaries."""
 
     def test_when_how(self):
-        parts = decompose_query(
-            "When did the team deploy the service and how long did the rollout take?"
-        )
+        parts = decompose_query("When did the team deploy the service and how long did the rollout take?")
         self.assertGreater(len(parts), 1)
 
     def test_what_who(self):
-        parts = decompose_query(
-            "What was the root cause of the outage and who was responsible for the fix?"
-        )
+        parts = decompose_query("What was the root cause of the outage and who was responsible for the fix?")
         self.assertGreater(len(parts), 1)
 
 

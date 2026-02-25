@@ -1,4 +1,5 @@
 """Tests for query decomposition."""
+
 from __future__ import annotations
 
 from scripts._recall_detection import decompose_query

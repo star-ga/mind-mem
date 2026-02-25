@@ -1,4 +1,5 @@
 """Tests for speaker-based recall."""
+
 from __future__ import annotations
 
 import os
@@ -17,10 +18,12 @@ def _make_workspace():
         f.write("[SPK-002]\nType: Decision\nStatement: System generated\nSpeaker: system\n\n")
     return ws
 
+
 def test_speaker_search():
     ws = _make_workspace()
     results = recall(ws, "alice said", limit=5)
     assert isinstance(results, list)
+
 
 def test_system_speaker():
     ws = _make_workspace()

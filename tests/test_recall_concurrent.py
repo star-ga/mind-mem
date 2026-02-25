@@ -1,4 +1,5 @@
 """Tests for concurrent recall queries."""
+
 from __future__ import annotations
 
 import os
@@ -18,22 +19,26 @@ def _ws():
             f.write(f"[CC-{i:03d}]\nType: Decision\nStatement: Concurrent test {i}\n\n")
     return ws
 
+
 def test_sequential_recalls():
     ws = _ws()
     for _ in range(5):
         r = recall(ws, "concurrent test", limit=5)
         assert isinstance(r, list)
 
+
 def test_threaded_recalls():
     ws = _ws()
     results = []
     errors = []
+
     def worker():
         try:
             r = recall(ws, "concurrent test", limit=3)
             results.append(r)
         except Exception as e:
             errors.append(e)
+
     threads = [threading.Thread(target=worker) for _ in range(4)]
     for t in threads:
         t.start()

@@ -110,6 +110,7 @@ class TestStructuredExtraction(unittest.TestCase):
 
     def setUp(self):
         from mind_mem.capture import extract_structure
+
         self.extract = extract_structure
 
     def test_decision_extracts_subject(self):
@@ -164,11 +165,17 @@ class TestCaptureConfidence(unittest.TestCase):
         """Appended signals should include Confidence field in output."""
         with tempfile.TemporaryDirectory() as td:
             ws = self._setup_workspace(td)
-            signals = [{
-                "line": 1, "type": "decision", "text": "We chose Vue.js",
-                "pattern": ".*", "confidence": "high", "priority": "P1",
-                "structure": {"subject": "we", "object": "Vue.js", "tags": ["frontend"]}
-            }]
+            signals = [
+                {
+                    "line": 1,
+                    "type": "decision",
+                    "text": "We chose Vue.js",
+                    "pattern": ".*",
+                    "confidence": "high",
+                    "priority": "P1",
+                    "structure": {"subject": "we", "object": "Vue.js", "tags": ["frontend"]},
+                }
+            ]
             count = append_signals(ws, signals, "2026-02-15")
             self.assertEqual(count, 1)
             with open(os.path.join(ws, "intelligence", "SIGNALS.md")) as f:

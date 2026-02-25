@@ -3,6 +3,7 @@
 Uses cross-encoder/ms-marco-MiniLM-L-6-v2 (80MB, CPU-friendly).
 Entirely optional — disabled by default. Requires sentence-transformers.
 """
+
 from __future__ import annotations
 
 _CE_MODEL = None
@@ -15,6 +16,7 @@ def _check_available() -> bool:
         return _CE_AVAILABLE
     try:
         from sentence_transformers import CrossEncoder  # noqa: F401
+
         _CE_AVAILABLE = True
     except ImportError:
         _CE_AVAILABLE = False
@@ -28,13 +30,13 @@ class CrossEncoderReranker:
         if not _check_available():
             raise ImportError("sentence-transformers required for cross-encoder")
         from sentence_transformers import CrossEncoder
+
         global _CE_MODEL
         if _CE_MODEL is None:
             _CE_MODEL = CrossEncoder(model)
         self._model = _CE_MODEL
 
-    def rerank(self, query: str, candidates: list[dict], top_k: int = 10,
-               blend_weight: float = 0.6) -> list[dict]:
+    def rerank(self, query: str, candidates: list[dict], top_k: int = 10, blend_weight: float = 0.6) -> list[dict]:
         """Score with cross-encoder, blend with original scores.
 
         Final score = blend_weight * CE_score + (1 - blend_weight) * original_score

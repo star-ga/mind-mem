@@ -88,6 +88,7 @@ def _call_tool(fn, *args, **kwargs):
 # 1. FTS fallback behavior
 # ---------------------------------------------------------------------------
 
+
 @unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestFTSFallback(unittest.TestCase):
     """When no FTS5 index exists, recall should return an envelope with a
@@ -146,6 +147,7 @@ class TestFTSFallback(unittest.TestCase):
 # 2. Empty results message
 # ---------------------------------------------------------------------------
 
+
 @unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestEmptyResultsMessage(unittest.TestCase):
     """When recall returns zero matches, the envelope should contain a helpful
@@ -153,11 +155,7 @@ class TestEmptyResultsMessage(unittest.TestCase):
 
     def setUp(self):
         self.td = tempfile.mkdtemp()
-        decisions = (
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL for primary database\n"
-            "Status: active\n"
-        )
+        decisions = "[D-20260101-001]\nStatement: Use PostgreSQL for primary database\nStatus: active\n"
         _make_workspace(self.td, decisions_content=decisions)
         self.mod = _load_server(self.td)
 
@@ -192,6 +190,7 @@ class TestEmptyResultsMessage(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # 3. Recall envelope structure
 # ---------------------------------------------------------------------------
+
 
 @unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestRecallEnvelopeStructure(unittest.TestCase):
@@ -262,22 +261,16 @@ class TestRecallEnvelopeStructure(unittest.TestCase):
 # 4. Block size cap in parser
 # ---------------------------------------------------------------------------
 
+
 class TestBlockSizeCap(unittest.TestCase):
     """parse_file should handle files larger than MAX_PARSE_SIZE (100KB)
     by truncating without crashing."""
 
     def test_oversized_file_truncated_without_crash(self):
         """A file >100KB is truncated and still returns blocks where possible."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False, encoding="utf-8"
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
             # Write a valid block at the start
-            f.write(
-                "[D-20260101-001]\n"
-                "Statement: First block before the overflow\n"
-                "Status: active\n"
-                "\n---\n\n"
-            )
+            f.write("[D-20260101-001]\nStatement: First block before the overflow\nStatus: active\n\n---\n\n")
             # Pad with enough content to exceed 100KB
             # Each line is ~80 chars; need >100_000 bytes total
             padding_lines = (MAX_PARSE_SIZE // 40) + 100
@@ -298,9 +291,7 @@ class TestBlockSizeCap(unittest.TestCase):
 
     def test_exactly_at_limit_file(self):
         """A file of exactly MAX_PARSE_SIZE bytes is parsed without truncation."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False, encoding="utf-8"
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
             header = "[D-20260101-001]\nStatement: Exact limit test\nStatus: active\n"
             f.write(header)
             remaining = MAX_PARSE_SIZE - len(header.encode("utf-8"))
@@ -317,9 +308,7 @@ class TestBlockSizeCap(unittest.TestCase):
 
     def test_small_file_unaffected(self):
         """Files well under the limit are parsed normally."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False, encoding="utf-8"
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
             f.write(
                 "[D-20260101-001]\n"
                 "Statement: Small file test\n"
@@ -340,9 +329,7 @@ class TestBlockSizeCap(unittest.TestCase):
     def test_oversized_file_with_block_at_boundary(self):
         """A block that starts just before the 100KB boundary may be
         partially parsed, but the parser must not crash."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False, encoding="utf-8"
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
             # Fill past the boundary with filler, then add a block
             filler_line = "# Filler line padding content here\n"  # 36 bytes
             repeats = (MAX_PARSE_SIZE // len(filler_line)) + 10
@@ -370,6 +357,7 @@ class TestBlockSizeCap(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # 5. Config key validation warning
 # ---------------------------------------------------------------------------
+
 
 class TestConfigKeyValidation(unittest.TestCase):
     """_load_backend should return None and not crash when mind-mem.json

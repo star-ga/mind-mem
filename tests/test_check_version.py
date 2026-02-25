@@ -1,4 +1,5 @@
 """Tests for version consistency checker."""
+
 import re
 
 from scripts.check_version import (

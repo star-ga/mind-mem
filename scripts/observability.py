@@ -35,6 +35,7 @@ from datetime import datetime, timezone
 # Structured JSON Formatter
 # ---------------------------------------------------------------------------
 
+
 class JSONFormatter(logging.Formatter):
     """Emit log records as single-line JSON."""
 
@@ -61,9 +62,7 @@ class StructuredLogger:
             handler = logging.StreamHandler(sys.stderr)
             handler.setFormatter(JSONFormatter())
             self._logger.addHandler(handler)
-            self._logger.setLevel(
-                getattr(logging, os.environ.get("MIND_MEM_LOG_LEVEL", "INFO").upper(), logging.INFO)
-            )
+            self._logger.setLevel(getattr(logging, os.environ.get("MIND_MEM_LOG_LEVEL", "INFO").upper(), logging.INFO))
             self._logger.propagate = False
 
     def _log(self, level, event, **kwargs):
@@ -101,6 +100,7 @@ def get_logger(component: str) -> StructuredLogger:
 # ---------------------------------------------------------------------------
 # Metrics
 # ---------------------------------------------------------------------------
+
 
 class Metrics:
     """Simple in-process metrics collector.
@@ -156,6 +156,7 @@ metrics = Metrics()
 # ---------------------------------------------------------------------------
 # Timing
 # ---------------------------------------------------------------------------
+
 
 @contextmanager
 def timed(operation: str, logger: StructuredLogger | None = None) -> Generator[None, None, None]:

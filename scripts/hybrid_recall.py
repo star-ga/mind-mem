@@ -55,6 +55,7 @@ def validate_recall_config(cfg: dict[str, Any]) -> list[str]:
             errors.append(f"{key} must be positive, got {numeric}")
     return errors
 
+
 # ---------------------------------------------------------------------------
 # RRF Fusion
 # ---------------------------------------------------------------------------
@@ -224,7 +225,8 @@ class HybridBackend:
             if not self._vector_available:
                 _log.info("hybrid_bm25_only", query=query)
                 results = self._bm25_search(
-                    query, workspace,
+                    query,
+                    workspace,
                     limit=limit,
                     active_only=active_only,
                     graph_boost=graph_boost,
@@ -242,7 +244,9 @@ class HybridBackend:
 
             with ThreadPoolExecutor(max_workers=2) as pool:
                 bm25_future: Future = pool.submit(
-                    self._bm25_search, query, workspace,
+                    self._bm25_search,
+                    query,
+                    workspace,
                     limit=retrieve_wide_k,
                     active_only=active_only,
                     graph_boost=graph_boost,
@@ -251,7 +255,9 @@ class HybridBackend:
                     **kwargs,
                 )
                 vec_future: Future = pool.submit(
-                    self._vector_search, query, workspace,
+                    self._vector_search,
+                    query,
+                    workspace,
                     limit=retrieve_wide_k,
                     active_only=active_only,
                 )
@@ -278,19 +284,23 @@ class HybridBackend:
             if ce_cfg.get("enabled", False) and result:
                 try:
                     from .cross_encoder_reranker import CrossEncoderReranker
+
                     if CrossEncoderReranker.is_available():
                         ce = CrossEncoderReranker()
                         for r in result:
                             if "content" not in r:
                                 r["content"] = r.get("excerpt", "")
                         result = ce.rerank(
-                            query, result,
+                            query,
+                            result,
                             top_k=ce_cfg.get("top_k", limit),
                             blend_weight=ce_cfg.get("blend_weight", 0.6),
                         )
-                        _log.info("cross_encoder_rerank",
-                                  candidates=len(fused[:limit]),
-                                  blend_weight=ce_cfg.get("blend_weight", 0.6))
+                        _log.info(
+                            "cross_encoder_rerank",
+                            candidates=len(fused[:limit]),
+                            blend_weight=ce_cfg.get("blend_weight", 0.6),
+                        )
                 except ImportError as ie:
                     _log.warning("cross_encoder_import_failed", error=str(ie))
                 except Exception as e:
@@ -351,7 +361,10 @@ class HybridBackend:
             # Prefer search_batch (returns all results for RRF)
             if hasattr(recall_vector, "search_batch"):
                 return recall_vector.search_batch(
-                    workspace, query, limit=limit, active_only=active_only,
+                    workspace,
+                    query,
+                    limit=limit,
+                    active_only=active_only,
                 )
 
             # Fallback: VectorBackend.search

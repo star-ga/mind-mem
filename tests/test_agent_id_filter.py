@@ -1,4 +1,5 @@
 """Tests for agent_id namespace filtering."""
+
 from __future__ import annotations
 
 import os

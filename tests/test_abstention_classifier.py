@@ -20,6 +20,7 @@ from mind_mem.abstention_classifier import (  # noqa: E402
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 
+
 def _make_hit(excerpt: str, score: float = 5.0, speaker: str = "Emma") -> dict:
     """Build a minimal recall hit for testing."""
     return {
@@ -58,6 +59,7 @@ MIXED_HITS = [
 
 
 # ── Unit tests: entity extraction ────────────────────────────────────
+
 
 class TestExtractQueryEntities:
     def test_basic_extraction(self):
@@ -130,6 +132,7 @@ class TestSpeakerInHit:
 
 # ── Integration tests: classify_abstention ───────────────────────────
 
+
 class TestClassifyAbstention:
     def test_no_hits_abstains(self):
         result = classify_abstention("Did Emma ever adopt a dog?", [])
@@ -199,9 +202,7 @@ class TestClassifyAbstention:
         """'never' should trigger the same negation penalty as 'ever'."""
         r = classify_abstention("Did Emma never mention dogs?", IRRELEVANT_HITS)
         assert r.features["has_ever_pattern"] is True
-        assert r.confidence <= classify_abstention(
-            "What did Emma say about dogs?", IRRELEVANT_HITS
-        ).confidence
+        assert r.confidence <= classify_abstention("What did Emma say about dogs?", IRRELEVANT_HITS).confidence
 
     def test_result_is_dataclass(self):
         result = classify_abstention("test?", [])
@@ -222,6 +223,7 @@ class TestClassifyAbstention:
 
 
 # ── Edge cases ───────────────────────────────────────────────────────
+
 
 class TestEdgeCases:
     def test_single_hit(self):
@@ -281,6 +283,7 @@ class TestEdgeCases:
 
 # ── Exact numerical verification of confidence formula ───────────────
 
+
 class TestConfidenceFormula:
     def test_weighted_confidence_exact_all_match(self):
         """Manual reconstruction: all features maximal, no ever pattern."""
@@ -338,6 +341,7 @@ class TestConfidenceFormula:
 
 
 # ── Term overlap substring behavior ─────────────────────────────────
+
 
 class TestTermOverlapSubstring:
     def test_empty_excerpt(self):

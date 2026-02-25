@@ -27,9 +27,12 @@ class _WorkspaceMixin:
 
         for fname in [
             "tasks/TASKS.md",
-            "entities/people.md", "entities/tools.md", "entities/incidents.md",
+            "entities/people.md",
+            "entities/tools.md",
+            "entities/incidents.md",
             "entities/projects.md",
-            "intelligence/CONTRADICTIONS.md", "intelligence/DRIFT.md",
+            "intelligence/CONTRADICTIONS.md",
+            "intelligence/DRIFT.md",
             "intelligence/SIGNALS.md",
         ]:
             path = os.path.join(tmpdir, fname)
@@ -65,9 +68,7 @@ class TestFactSubBlockIndexing(_WorkspaceMixin, unittest.TestCase):
         conn.commit()
 
         # Check that fact sub-blocks were created
-        fact_rows = conn.execute(
-            "SELECT * FROM blocks WHERE parent_id = 'DIA-D1-3'"
-        ).fetchall()
+        fact_rows = conn.execute("SELECT * FROM blocks WHERE parent_id = 'DIA-D1-3'").fetchall()
         self.assertGreater(len(fact_rows), 0, "No fact sub-blocks created")
 
         # Verify fact IDs follow the ::F pattern
@@ -78,9 +79,7 @@ class TestFactSubBlockIndexing(_WorkspaceMixin, unittest.TestCase):
         # Verify FTS entries exist for fact sub-blocks
         fact_ids = [r["id"] for r in fact_rows]
         for fid in fact_ids:
-            fts_row = conn.execute(
-                "SELECT * FROM blocks_fts WHERE block_id = ?", (fid,)
-            ).fetchone()
+            fts_row = conn.execute("SELECT * FROM blocks_fts WHERE block_id = ?", (fid,)).fetchone()
             self.assertIsNotNone(fts_row, f"No FTS entry for {fid}")
 
         conn.close()
@@ -99,9 +98,7 @@ class TestFactSubBlockIndexing(_WorkspaceMixin, unittest.TestCase):
         _insert_block(conn, block, "D-001", "decisions/DECISIONS.md", set())
         conn.commit()
 
-        fact_rows = conn.execute(
-            "SELECT * FROM blocks WHERE parent_id = 'D-001'"
-        ).fetchall()
+        fact_rows = conn.execute("SELECT * FROM blocks WHERE parent_id = 'D-001'").fetchall()
         self.assertEqual(len(fact_rows), 0)
         conn.close()
 
@@ -119,9 +116,7 @@ class TestFactSubBlockIndexing(_WorkspaceMixin, unittest.TestCase):
         _insert_block(conn, block, "D-002", "decisions/DECISIONS.md", set())
         conn.commit()
 
-        parent = conn.execute(
-            "SELECT parent_id FROM blocks WHERE id = 'D-002'"
-        ).fetchone()
+        parent = conn.execute("SELECT parent_id FROM blocks WHERE id = 'D-002'").fetchone()
         self.assertEqual(parent["parent_id"], "")
         conn.close()
 
@@ -141,9 +136,7 @@ class TestFactSubBlockIndexing(_WorkspaceMixin, unittest.TestCase):
         _insert_block(conn, block, "DIA-D1-5", "decisions/DECISIONS.md", set())
         conn.commit()
 
-        facts = conn.execute(
-            "SELECT * FROM blocks WHERE parent_id = 'DIA-D1-5'"
-        ).fetchall()
+        facts = conn.execute("SELECT * FROM blocks WHERE parent_id = 'DIA-D1-5'").fetchall()
         for fact in facts:
             self.assertEqual(fact["parent_id"], "DIA-D1-5")
             self.assertEqual(fact["dia_id"], "D1:5")
@@ -169,16 +162,41 @@ class TestFactAggregation(unittest.TestCase):
         conn.execute(
             """INSERT INTO blocks (id, type, file, line, status, parent_id, json_blob)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            ("P-001", "D", "decisions/DECISIONS.md", 1, "active", "",
-             json.dumps({"Statement": "Parent content", "_id": "P-001"})),
+            (
+                "P-001",
+                "D",
+                "decisions/DECISIONS.md",
+                1,
+                "active",
+                "",
+                json.dumps({"Statement": "Parent content", "_id": "P-001"}),
+            ),
         )
         conn.commit()
 
         results = [
-            {"_id": "P-001", "score": 0.5, "file": "f", "line": 1, "status": "active",
-             "type": "D", "tags": "", "speaker": "", "excerpt": "Parent"},
-            {"_id": "P-001::F1", "score": 0.9, "file": "f", "line": 1, "status": "active",
-             "type": "FACT", "tags": "", "speaker": "", "excerpt": "Fact card"},
+            {
+                "_id": "P-001",
+                "score": 0.5,
+                "file": "f",
+                "line": 1,
+                "status": "active",
+                "type": "D",
+                "tags": "",
+                "speaker": "",
+                "excerpt": "Parent",
+            },
+            {
+                "_id": "P-001::F1",
+                "score": 0.9,
+                "file": "f",
+                "line": 1,
+                "status": "active",
+                "type": "FACT",
+                "tags": "",
+                "speaker": "",
+                "excerpt": "Fact card",
+            },
         ]
         aggregated = _aggregate_facts_to_parents(conn, results)
         conn.close()
@@ -214,15 +232,30 @@ class TestFactAggregation(unittest.TestCase):
         conn.execute(
             """INSERT INTO blocks (id, type, file, line, status, parent_id, json_blob)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            ("MISS-001", "D", "decisions/DECISIONS.md", 1, "active", "",
-             json.dumps({"Statement": "Missing parent", "_id": "MISS-001"})),
+            (
+                "MISS-001",
+                "D",
+                "decisions/DECISIONS.md",
+                1,
+                "active",
+                "",
+                json.dumps({"Statement": "Missing parent", "_id": "MISS-001"}),
+            ),
         )
         conn.commit()
 
         # Only the fact card is in results, parent is not
         results = [
-            {"_id": "MISS-001::F1", "score": 0.8, "file": "f", "line": 1,
-             "status": "active", "type": "FACT", "tags": "", "speaker": ""},
+            {
+                "_id": "MISS-001::F1",
+                "score": 0.8,
+                "file": "f",
+                "line": 1,
+                "status": "active",
+                "type": "FACT",
+                "tags": "",
+                "speaker": "",
+            },
         ]
         aggregated = _aggregate_facts_to_parents(conn, results)
         conn.close()
@@ -245,6 +278,7 @@ class TestMetadataAugmentedEmbeddings(unittest.TestCase):
 
     def test_augment_prepends_metadata(self):
         from mind_mem.recall_vector import VectorBackend
+
         block = {
             "Category": "FACT",
             "Speaker": "Caroline",
@@ -260,12 +294,14 @@ class TestMetadataAugmentedEmbeddings(unittest.TestCase):
 
     def test_augment_handles_missing_metadata(self):
         from mind_mem.recall_vector import VectorBackend
+
         block = {}
         augmented = VectorBackend._augment_for_embedding(block, "raw text")
         self.assertEqual(augmented, "raw text")
 
     def test_augment_uses_fallback_keys(self):
         from mind_mem.recall_vector import VectorBackend
+
         block = {"type": "EVENT", "speaker": "Alice", "date": "2023-01"}
         augmented = VectorBackend._augment_for_embedding(block, "went to gym")
         self.assertIn("[EVENT]", augmented)
@@ -274,6 +310,7 @@ class TestMetadataAugmentedEmbeddings(unittest.TestCase):
 
     def test_augment_truncates_long_tags(self):
         from mind_mem.recall_vector import VectorBackend
+
         block = {"Tags": "a" * 100}
         augmented = VectorBackend._augment_for_embedding(block, "text")
         # Tags should be truncated to 50 chars
@@ -287,10 +324,12 @@ class TestValidRecallKeys(unittest.TestCase):
 
     def test_knee_cutoff_key_valid(self):
         from mind_mem._recall_constants import _VALID_RECALL_KEYS
+
         self.assertIn("knee_cutoff", _VALID_RECALL_KEYS)
 
     def test_min_score_key_valid(self):
         from mind_mem._recall_constants import _VALID_RECALL_KEYS
+
         self.assertIn("min_score", _VALID_RECALL_KEYS)
 
 
@@ -322,9 +361,7 @@ class TestFactDeletion(_WorkspaceMixin, unittest.TestCase):
         conn.commit()
 
         # Verify fact children exist
-        children = conn.execute(
-            "SELECT id FROM blocks WHERE parent_id = 'DEL-001'"
-        ).fetchall()
+        children = conn.execute("SELECT id FROM blocks WHERE parent_id = 'DEL-001'").fetchall()
         self.assertGreater(len(children), 0)
 
         # Delete parent
@@ -332,15 +369,11 @@ class TestFactDeletion(_WorkspaceMixin, unittest.TestCase):
         conn.commit()
 
         # Verify all children gone
-        remaining = conn.execute(
-            "SELECT id FROM blocks WHERE parent_id = 'DEL-001'"
-        ).fetchall()
+        remaining = conn.execute("SELECT id FROM blocks WHERE parent_id = 'DEL-001'").fetchall()
         self.assertEqual(len(remaining), 0)
 
         # Verify parent gone
-        parent = conn.execute(
-            "SELECT id FROM blocks WHERE id = 'DEL-001'"
-        ).fetchone()
+        parent = conn.execute("SELECT id FROM blocks WHERE id = 'DEL-001'").fetchone()
         self.assertIsNone(parent)
         conn.close()
 

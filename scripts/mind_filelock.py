@@ -33,6 +33,7 @@ from types import TracebackType
 
 class LockTimeout(Exception):
     """Raised when lock acquisition times out."""
+
     pass
 
 
@@ -79,9 +80,7 @@ class FileLock:
             tlock.acquire()
         else:
             if not tlock.acquire(timeout=remaining):
-                raise LockTimeout(
-                    f"Lock timeout ({self.timeout}s) for: {self.lock_path}"
-                )
+                raise LockTimeout(f"Lock timeout ({self.timeout}s) for: {self.lock_path}")
         self._owns_thread_lock = True
 
         # Layer 2: Acquire cross-process file lock
@@ -110,9 +109,7 @@ class FileLock:
                     raise LockTimeout(f"Could not acquire lock: {self.lock_path}")
                 elapsed = time.monotonic() - start
                 if self.timeout > 0 and elapsed >= self.timeout:
-                    raise LockTimeout(
-                        f"Lock timeout ({self.timeout}s) for: {self.lock_path}"
-                    )
+                    raise LockTimeout(f"Lock timeout ({self.timeout}s) for: {self.lock_path}")
                 time.sleep(self.poll_interval)
 
     def release(self) -> None:
@@ -178,6 +175,7 @@ class FileLock:
         """Check if a PID exists on Windows."""
         try:
             import ctypes
+
             kernel32 = ctypes.windll.kernel32
             handle = kernel32.OpenProcess(0x100000, False, pid)  # SYNCHRONIZE
             if handle:
@@ -191,10 +189,12 @@ class FileLock:
         """Apply OS-level exclusive lock if available."""
         try:
             import fcntl
+
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except ImportError:
             try:
                 import msvcrt
+
                 msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
             except ImportError:
                 pass
@@ -203,10 +203,12 @@ class FileLock:
         """Release OS-level lock."""
         try:
             import fcntl
+
             fcntl.flock(fd, fcntl.LOCK_UN)
         except ImportError:
             try:
                 import msvcrt
+
                 msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
             except ImportError:
                 pass
@@ -216,8 +218,10 @@ class FileLock:
         return self
 
     def __exit__(
-        self, exc_type: type[BaseException] | None,
-        exc_val: BaseException | None, exc_tb: TracebackType | None,
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> bool:
         self.release()
         return False

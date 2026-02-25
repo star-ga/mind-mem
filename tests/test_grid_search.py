@@ -20,9 +20,13 @@ class TestGenerateGrid(unittest.TestCase):
 
     def setUp(self):
         self.baseline = {
-            "Statement": 3.0, "Title": 2.5, "Name": 2.0,
-            "Summary": 1.5, "Context": 0.5,
-            "Description": 1.2, "Tags": 0.8,
+            "Statement": 3.0,
+            "Title": 2.5,
+            "Name": 2.0,
+            "Summary": 1.5,
+            "Context": 0.5,
+            "Description": 1.2,
+            "Tags": 0.8,
         }
 
     def test_grid_includes_baseline(self):
@@ -38,19 +42,13 @@ class TestGenerateGrid(unittest.TestCase):
         """Each non-baseline combo should differ from baseline in exactly one primary field."""
         combos = generate_grid(self.baseline)
         for combo in combos[1:]:  # skip baseline
-            diffs = [
-                f for f in PRIMARY_FIELDS
-                if f in combo and f in self.baseline and combo[f] != self.baseline[f]
-            ]
+            diffs = [f for f in PRIMARY_FIELDS if f in combo and f in self.baseline and combo[f] != self.baseline[f]]
             self.assertEqual(len(diffs), 1, f"Expected 1 diff, got {diffs}")
 
     def test_grid_multiplier_values(self):
         """Check that varied values are 50% and 150% of baseline."""
         combos = generate_grid(self.baseline)
-        statement_combos = [
-            c for c in combos
-            if c.get("Statement") != self.baseline["Statement"]
-        ]
+        statement_combos = [c for c in combos if c.get("Statement") != self.baseline["Statement"]]
         statement_vals = sorted([c["Statement"] for c in statement_combos])
         self.assertEqual(statement_vals, [1.5, 4.5])
 
@@ -82,8 +80,11 @@ class TestGenerateFullGrid(unittest.TestCase):
 
     def setUp(self):
         self.baseline = {
-            "Statement": 3.0, "Title": 2.5, "Name": 2.0,
-            "Summary": 1.5, "Context": 0.5,
+            "Statement": 3.0,
+            "Title": 2.5,
+            "Name": 2.0,
+            "Summary": 1.5,
+            "Context": 0.5,
         }
 
     def test_full_grid_count(self):
@@ -93,18 +94,13 @@ class TestGenerateFullGrid(unittest.TestCase):
 
     def test_full_grid_subset(self):
         """Full grid with 2 fields: 3^2 = 9."""
-        combos = generate_full_grid(
-            self.baseline, fields=["Statement", "Title"]
-        )
+        combos = generate_full_grid(self.baseline, fields=["Statement", "Title"])
         self.assertEqual(len(combos), 9)
 
     def test_full_grid_includes_baseline(self):
         """Baseline weights should appear in the full grid."""
         combos = generate_full_grid(self.baseline)
-        baseline_found = any(
-            all(c.get(f) == self.baseline[f] for f in PRIMARY_FIELDS)
-            for c in combos
-        )
+        baseline_found = any(all(c.get(f) == self.baseline[f] for f in PRIMARY_FIELDS) for c in combos)
         self.assertTrue(baseline_found)
 
 
@@ -113,8 +109,11 @@ class TestWeightsLabel(unittest.TestCase):
 
     def setUp(self):
         self.baseline = {
-            "Statement": 3.0, "Title": 2.5, "Name": 2.0,
-            "Summary": 1.5, "Context": 0.5,
+            "Statement": 3.0,
+            "Title": 2.5,
+            "Name": 2.0,
+            "Summary": 1.5,
+            "Context": 0.5,
         }
 
     def test_baseline_label(self):

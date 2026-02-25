@@ -105,23 +105,17 @@ class TestValidateProposal(unittest.TestCase):
         self.assertTrue(any("staged" in e for e in errors))
 
     def test_rejects_path_traversal_in_ops(self):
-        p = self._valid_proposal(
-            Ops=[{"op": "append_block", "file": "../../../etc/shadow"}]
-        )
+        p = self._valid_proposal(Ops=[{"op": "append_block", "file": "../../../etc/shadow"}])
         errors = validate_proposal(p)
         self.assertTrue(any("traversal" in e for e in errors))
 
     def test_rejects_absolute_path_in_ops(self):
-        p = self._valid_proposal(
-            Ops=[{"op": "append_block", "file": "/etc/passwd"}]
-        )
+        p = self._valid_proposal(Ops=[{"op": "append_block", "file": "/etc/passwd"}])
         errors = validate_proposal(p)
         self.assertTrue(any("traversal" in e.lower() or "absolute" in e.lower() for e in errors))
 
     def test_invalid_op_type(self):
-        p = self._valid_proposal(
-            Ops=[{"op": "delete_everything", "file": "decisions/DECISIONS.md"}]
-        )
+        p = self._valid_proposal(Ops=[{"op": "delete_everything", "file": "decisions/DECISIONS.md"}])
         errors = validate_proposal(p)
         self.assertTrue(any("op" in e.lower() for e in errors))
 
@@ -239,8 +233,10 @@ class TestFingerprintDedup(unittest.TestCase):
         with tempfile.TemporaryDirectory() as ws:
             os.makedirs(os.path.join(ws, "intelligence", "proposed"), exist_ok=True)
             proposal = {
-                "ProposalId": "P-20260214-001", "_id": "P-20260214-001",
-                "Type": "decision", "TargetBlock": "D-20260214-001",
+                "ProposalId": "P-20260214-001",
+                "_id": "P-20260214-001",
+                "Type": "decision",
+                "TargetBlock": "D-20260214-001",
                 "Ops": [{"op": "append_block", "file": "decisions/DECISIONS.md"}],
                 "Status": "staged",
             }
@@ -268,10 +264,13 @@ class TestFreshInitValidate(unittest.TestCase):
     def test_fresh_init_passes_validate(self):
         with tempfile.TemporaryDirectory() as ws:
             from mind_mem.init_workspace import init
+
             init(ws)
             result = subprocess.run(
                 ["bash", os.path.join(ws, "maintenance", "validate.sh"), ws],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             self.assertEqual(result.returncode, 0, f"validate.sh failed:\n{result.stdout}")
             self.assertIn("0 issues", result.stdout)
@@ -302,22 +301,31 @@ class TestFingerprintPayload(unittest.TestCase):
 
     def test_different_values_different_fingerprints(self):
         p1 = {
-            "Type": "edit", "TargetBlock": "D-20260214-001",
-            "Ops": [{"op": "update_field", "file": "decisions/DECISIONS.md",
-                      "target": "D-20260214-001", "value": "active"}],
+            "Type": "edit",
+            "TargetBlock": "D-20260214-001",
+            "Ops": [
+                {"op": "update_field", "file": "decisions/DECISIONS.md", "target": "D-20260214-001", "value": "active"}
+            ],
         }
         p2 = {
-            "Type": "edit", "TargetBlock": "D-20260214-001",
-            "Ops": [{"op": "update_field", "file": "decisions/DECISIONS.md",
-                      "target": "D-20260214-001", "value": "superseded"}],
+            "Type": "edit",
+            "TargetBlock": "D-20260214-001",
+            "Ops": [
+                {
+                    "op": "update_field",
+                    "file": "decisions/DECISIONS.md",
+                    "target": "D-20260214-001",
+                    "value": "superseded",
+                }
+            ],
         }
         self.assertNotEqual(compute_fingerprint(p1), compute_fingerprint(p2))
 
     def test_same_proposal_same_fingerprint(self):
         p1 = {
-            "Type": "edit", "TargetBlock": "D-20260214-001",
-            "Ops": [{"op": "set_status", "file": "tasks/TASKS.md",
-                      "target": "T-20260214-001", "status": "done"}],
+            "Type": "edit",
+            "TargetBlock": "D-20260214-001",
+            "Ops": [{"op": "set_status", "file": "tasks/TASKS.md", "target": "T-20260214-001", "status": "done"}],
         }
         self.assertEqual(compute_fingerprint(p1), compute_fingerprint(p1))
 
@@ -329,12 +337,12 @@ class TestValidateUninitWorkspace(unittest.TestCase):
     def test_rejects_uninitialized_workspace(self):
         """Running on a dir with no mind-mem.json should exit with clear error."""
         with tempfile.TemporaryDirectory() as ws:
-            validate_sh = os.path.join(
-                os.path.dirname(__file__), "..", "scripts", "validate.sh"
-            )
+            validate_sh = os.path.join(os.path.dirname(__file__), "..", "scripts", "validate.sh")
             result = subprocess.run(
                 ["bash", validate_sh, ws],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             # Should exit with error and helpful message
             self.assertEqual(result.returncode, 1)
@@ -348,6 +356,7 @@ class TestModeGate(unittest.TestCase):
     def test_detect_only_blocks_apply(self):
         with tempfile.TemporaryDirectory() as ws:
             from mind_mem.init_workspace import init
+
             init(ws)
             # Default mode is detect_only
             ok, msg = apply_proposal(ws, "P-20260214-001", dry_run=False)
@@ -357,6 +366,7 @@ class TestModeGate(unittest.TestCase):
     def test_detect_only_blocks_dry_run(self):
         with tempfile.TemporaryDirectory() as ws:
             from mind_mem.init_workspace import init
+
             init(ws)
             ok, msg = apply_proposal(ws, "P-20260214-001", dry_run=False)
             self.assertFalse(ok)
@@ -366,6 +376,7 @@ class TestModeGate(unittest.TestCase):
         """In propose mode, apply should proceed past mode gate (will fail on missing proposal)."""
         with tempfile.TemporaryDirectory() as ws:
             from mind_mem.init_workspace import init
+
             init(ws)
             # Switch to propose mode
             state_path = os.path.join(ws, "memory/intel-state.json")
@@ -386,8 +397,10 @@ class TestBacklogLimit(unittest.TestCase):
     def test_at_exact_limit_is_exceeded(self):
         """count == limit should be exceeded (>= per M6)."""
         from mind_mem.apply_engine import check_backlog_limit
+
         with tempfile.TemporaryDirectory() as ws:
             from mind_mem.init_workspace import init
+
             init(ws)
             # Set limit in mind-mem.json (source of truth for config)
             config_path = os.path.join(ws, "mind-mem.json")
@@ -411,8 +424,10 @@ class TestBacklogLimit(unittest.TestCase):
     def test_under_limit_not_exceeded(self):
         """count < limit should NOT be exceeded."""
         from mind_mem.apply_engine import check_backlog_limit
+
         with tempfile.TemporaryDirectory() as ws:
             from mind_mem.init_workspace import init
+
             init(ws)
             config_path = os.path.join(ws, "mind-mem.json")
             with open(config_path) as f:
@@ -438,8 +453,10 @@ class TestFingerprintDedupCollision(unittest.TestCase):
     def test_different_proposal_same_fingerprint_detected(self):
         """Two proposals targeting same block with same ops should collide."""
         from mind_mem.apply_engine import check_fingerprint_dedup, compute_fingerprint
+
         with tempfile.TemporaryDirectory() as ws:
             from mind_mem.init_workspace import init
+
             init(ws)
 
             # Create a staged proposal in the proposed file
@@ -449,25 +466,39 @@ class TestFingerprintDedupCollision(unittest.TestCase):
             existing_proposal = {
                 "Type": "edit",
                 "TargetBlock": "D-20260214-001",
-                "Ops": [{"op": "set_status", "file": "decisions/DECISIONS.md",
-                         "target": "D-20260214-001", "status": "superseded"}],
+                "Ops": [
+                    {
+                        "op": "set_status",
+                        "file": "decisions/DECISIONS.md",
+                        "target": "D-20260214-001",
+                        "status": "superseded",
+                    }
+                ],
             }
             fp = compute_fingerprint(existing_proposal)
 
             with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w") as f:
-                f.write(f"\n[P-20260214-001]\nProposalId: P-20260214-001\n"
-                        f"Type: edit\nTargetBlock: D-20260214-001\n"
-                        f"Status: staged\nFingerprint: {fp}\n"
-                        f"Ops:\n- op: set_status\n  file: decisions/DECISIONS.md\n"
-                        f"  target: D-20260214-001\n  status: superseded\n")
+                f.write(
+                    f"\n[P-20260214-001]\nProposalId: P-20260214-001\n"
+                    f"Type: edit\nTargetBlock: D-20260214-001\n"
+                    f"Status: staged\nFingerprint: {fp}\n"
+                    f"Ops:\n- op: set_status\n  file: decisions/DECISIONS.md\n"
+                    f"  target: D-20260214-001\n  status: superseded\n"
+                )
 
             # A NEW proposal with same ops/target but different ID should be detected as dup
             new_proposal = {
                 "ProposalId": "P-20260214-099",
                 "Type": "edit",
                 "TargetBlock": "D-20260214-001",
-                "Ops": [{"op": "set_status", "file": "decisions/DECISIONS.md",
-                         "target": "D-20260214-001", "status": "superseded"}],
+                "Ops": [
+                    {
+                        "op": "set_status",
+                        "file": "decisions/DECISIONS.md",
+                        "target": "D-20260214-001",
+                        "status": "superseded",
+                    }
+                ],
             }
             is_dup, dup_id = check_fingerprint_dedup(ws, new_proposal)
             self.assertTrue(is_dup, "Should detect fingerprint collision")
@@ -476,8 +507,10 @@ class TestFingerprintDedupCollision(unittest.TestCase):
     def test_same_proposal_id_not_self_collision(self):
         """A proposal should not collide with itself."""
         from mind_mem.apply_engine import check_fingerprint_dedup, compute_fingerprint
+
         with tempfile.TemporaryDirectory() as ws:
             from mind_mem.init_workspace import init
+
             init(ws)
 
             proposed_dir = os.path.join(ws, "intelligence/proposed")
@@ -487,17 +520,25 @@ class TestFingerprintDedupCollision(unittest.TestCase):
                 "ProposalId": "P-20260214-001",
                 "Type": "edit",
                 "TargetBlock": "D-20260214-001",
-                "Ops": [{"op": "set_status", "file": "decisions/DECISIONS.md",
-                         "target": "D-20260214-001", "status": "superseded"}],
+                "Ops": [
+                    {
+                        "op": "set_status",
+                        "file": "decisions/DECISIONS.md",
+                        "target": "D-20260214-001",
+                        "status": "superseded",
+                    }
+                ],
             }
             fp = compute_fingerprint(proposal)
 
             with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w") as f:
-                f.write(f"\n[P-20260214-001]\nProposalId: P-20260214-001\n"
-                        f"Type: edit\nTargetBlock: D-20260214-001\n"
-                        f"Status: staged\nFingerprint: {fp}\n"
-                        f"Ops:\n- op: set_status\n  file: decisions/DECISIONS.md\n"
-                        f"  target: D-20260214-001\n  status: superseded\n")
+                f.write(
+                    f"\n[P-20260214-001]\nProposalId: P-20260214-001\n"
+                    f"Type: edit\nTargetBlock: D-20260214-001\n"
+                    f"Status: staged\nFingerprint: {fp}\n"
+                    f"Ops:\n- op: set_status\n  file: decisions/DECISIONS.md\n"
+                    f"  target: D-20260214-001\n  status: superseded\n"
+                )
 
             # Same ID = self, not a collision
             is_dup, dup_id = check_fingerprint_dedup(ws, proposal)
@@ -510,8 +551,10 @@ class TestSnapshotRecursionPrevention(unittest.TestCase):
     def test_snapshot_excludes_applied_dir(self):
         """intelligence/applied/ must NOT be copied into new snapshots."""
         from mind_mem.apply_engine import create_snapshot
+
         with tempfile.TemporaryDirectory() as ws:
             from mind_mem.init_workspace import init
+
             init(ws)
 
             # Create a fake prior snapshot in intelligence/applied/
@@ -526,14 +569,12 @@ class TestSnapshotRecursionPrevention(unittest.TestCase):
             # The new snapshot's intelligence/ should NOT contain applied/
             nested_applied = os.path.join(snap_dir, "intelligence/applied")
             self.assertFalse(
-                os.path.exists(nested_applied),
-                "Snapshot must not recursively include intelligence/applied/"
+                os.path.exists(nested_applied), "Snapshot must not recursively include intelligence/applied/"
             )
 
             # But intelligence files (like CONTRADICTIONS.md) SHOULD be copied
             intel_dir = os.path.join(snap_dir, "intelligence")
-            self.assertTrue(os.path.isdir(intel_dir),
-                            "intelligence/ dir should exist in snapshot")
+            self.assertTrue(os.path.isdir(intel_dir), "intelligence/ dir should exist in snapshot")
 
 
 class TestMinimalSnapshot(unittest.TestCase):
@@ -542,8 +583,10 @@ class TestMinimalSnapshot(unittest.TestCase):
     def test_minimal_snapshot_only_copies_touched_files(self):
         """When files_touched is provided, only those files + config are snapshotted."""
         from mind_mem.apply_engine import create_snapshot
+
         with tempfile.TemporaryDirectory() as ws:
             from mind_mem.init_workspace import init
+
             init(ws)
 
             # Write to multiple files
@@ -553,27 +596,22 @@ class TestMinimalSnapshot(unittest.TestCase):
                 f.write("[T-001]\nTitle: Task\nStatus: open\n")
 
             # Minimal snapshot: only touch decisions
-            snap_dir = create_snapshot(ws, "20260217-120000",
-                                       files_touched=["decisions/DECISIONS.md"])
+            snap_dir = create_snapshot(ws, "20260217-120000", files_touched=["decisions/DECISIONS.md"])
 
             # Decisions file should exist in snapshot
-            self.assertTrue(os.path.isfile(
-                os.path.join(snap_dir, "decisions", "DECISIONS.md")
-            ))
+            self.assertTrue(os.path.isfile(os.path.join(snap_dir, "decisions", "DECISIONS.md")))
             # Tasks should NOT be in snapshot (wasn't in files_touched)
-            self.assertFalse(os.path.exists(
-                os.path.join(snap_dir, "tasks", "TASKS.md")
-            ))
+            self.assertFalse(os.path.exists(os.path.join(snap_dir, "tasks", "TASKS.md")))
             # Config files always snapshotted
-            self.assertTrue(os.path.isfile(
-                os.path.join(snap_dir, "mind-mem.json")
-            ))
+            self.assertTrue(os.path.isfile(os.path.join(snap_dir, "mind-mem.json")))
 
     def test_full_snapshot_when_no_files_touched(self):
         """When files_touched is None, full snapshot is created."""
         from mind_mem.apply_engine import create_snapshot
+
         with tempfile.TemporaryDirectory() as ws:
             from mind_mem.init_workspace import init
+
             init(ws)
             with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
                 f.write("[D-001]\nStatement: Test\nStatus: active\n")
@@ -581,9 +619,7 @@ class TestMinimalSnapshot(unittest.TestCase):
             snap_dir = create_snapshot(ws, "20260217-120001", files_touched=None)
 
             # Full snapshot should include entire decisions directory
-            self.assertTrue(os.path.isfile(
-                os.path.join(snap_dir, "decisions", "DECISIONS.md")
-            ))
+            self.assertTrue(os.path.isfile(os.path.join(snap_dir, "decisions", "DECISIONS.md")))
 
     def test_safe_copy_makes_independent_copy(self):
         """_safe_copy must create an independent copy (not hardlink).
@@ -592,6 +628,7 @@ class TestMinimalSnapshot(unittest.TestCase):
         the inode in-place, corrupting both files.
         """
         from mind_mem.apply_engine import _safe_copy
+
         with tempfile.TemporaryDirectory() as td:
             src = os.path.join(td, "source.md")
             dst = os.path.join(td, "dest.md")
@@ -608,6 +645,7 @@ class TestMinimalSnapshot(unittest.TestCase):
     def test_safe_copy_creates_parent_dirs(self):
         """_safe_copy should create intermediate directories."""
         from mind_mem.apply_engine import _safe_copy
+
         with tempfile.TemporaryDirectory() as td:
             src = os.path.join(td, "source.md")
             dst = os.path.join(td, "deep", "nested", "dest.md")
@@ -619,15 +657,16 @@ class TestMinimalSnapshot(unittest.TestCase):
     def test_minimal_snapshot_preserves_content(self):
         """Snapshot content must match original."""
         from mind_mem.apply_engine import create_snapshot
+
         with tempfile.TemporaryDirectory() as ws:
             from mind_mem.init_workspace import init
+
             init(ws)
             original = "[D-001]\nStatement: PostgreSQL\nStatus: active\n"
             with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
                 f.write(original)
 
-            snap_dir = create_snapshot(ws, "20260217-120002",
-                                       files_touched=["decisions/DECISIONS.md"])
+            snap_dir = create_snapshot(ws, "20260217-120002", files_touched=["decisions/DECISIONS.md"])
 
             with open(os.path.join(snap_dir, "decisions", "DECISIONS.md")) as f:
                 snapped = f.read()
@@ -640,8 +679,10 @@ class TestDeferredCooldown(unittest.TestCase):
     def test_recent_rejected_blocks_new_proposal(self):
         """A rejected proposal within cooldown period should block new proposals for same target."""
         from mind_mem.apply_engine import check_deferred_cooldown
+
         with tempfile.TemporaryDirectory() as ws:
             from mind_mem.init_workspace import init
+
             init(ws)
 
             # Set cooldown to 7 days
@@ -657,9 +698,11 @@ class TestDeferredCooldown(unittest.TestCase):
             os.makedirs(proposed_dir, exist_ok=True)
             today = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
             with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w") as f:
-                f.write(f"\n[P-20260214-001]\nProposalId: P-20260214-001\n"
-                        f"Type: edit\nTargetBlock: D-20260214-001\n"
-                        f"Status: rejected\nCreated: {today}\n")
+                f.write(
+                    f"\n[P-20260214-001]\nProposalId: P-20260214-001\n"
+                    f"Type: edit\nTargetBlock: D-20260214-001\n"
+                    f"Status: rejected\nCreated: {today}\n"
+                )
 
             # New proposal for same target should be blocked
             new_proposal = {"TargetBlock": "D-20260214-001"}
@@ -670,8 +713,10 @@ class TestDeferredCooldown(unittest.TestCase):
     def test_old_rejected_allows_new_proposal(self):
         """A rejected proposal outside cooldown period should allow re-proposal."""
         from mind_mem.apply_engine import check_deferred_cooldown
+
         with tempfile.TemporaryDirectory() as ws:
             from mind_mem.init_workspace import init
+
             init(ws)
 
             state_path = os.path.join(ws, "memory/intel-state.json")
@@ -686,9 +731,11 @@ class TestDeferredCooldown(unittest.TestCase):
             os.makedirs(proposed_dir, exist_ok=True)
             old_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
             with open(os.path.join(proposed_dir, "DECISIONS_PROPOSED.md"), "w") as f:
-                f.write(f"\n[P-20260115-001]\nProposalId: P-20260115-001\n"
-                        f"Type: edit\nTargetBlock: D-20260214-001\n"
-                        f"Status: rejected\nCreated: {old_date}\n")
+                f.write(
+                    f"\n[P-20260115-001]\nProposalId: P-20260115-001\n"
+                    f"Type: edit\nTargetBlock: D-20260214-001\n"
+                    f"Status: rejected\nCreated: {old_date}\n"
+                )
 
             new_proposal = {"TargetBlock": "D-20260214-001"}
             ok, reason = check_deferred_cooldown(ws, new_proposal)
@@ -704,10 +751,13 @@ class TestOpSupersedeDecision(unittest.TestCase):
             with open(dec_file, "w") as f:
                 f.write("[D-20260213-001]\nStatus: active\nStatement: Old decision\n")
             new_block = "[D-20260213-002]\nStatus: active\nStatement: New decision\nSupersedes: D-20260213-001\n"
-            ok, msg = _op_supersede_decision(dec_file, {
-                "target": "D-20260213-001",
-                "new_block": new_block,
-            })
+            ok, msg = _op_supersede_decision(
+                dec_file,
+                {
+                    "target": "D-20260213-001",
+                    "new_block": new_block,
+                },
+            )
             self.assertTrue(ok, msg)
             with open(dec_file) as f:
                 content = f.read()
@@ -719,10 +769,13 @@ class TestOpSupersedeDecision(unittest.TestCase):
             dec_file = os.path.join(td, "DECISIONS.md")
             with open(dec_file, "w") as f:
                 f.write("[D-20260213-001]\nStatus: active\n")
-            ok, msg = _op_supersede_decision(dec_file, {
-                "target": "D-20260213-999",
-                "new_block": "[D-20260213-002]\nStatus: active\n",
-            })
+            ok, msg = _op_supersede_decision(
+                dec_file,
+                {
+                    "target": "D-20260213-999",
+                    "new_block": "[D-20260213-002]\nStatus: active\n",
+                },
+            )
             self.assertFalse(ok)
             self.assertIn("not found", msg)
 
@@ -730,12 +783,17 @@ class TestOpSupersedeDecision(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             dec_file = os.path.join(td, "DECISIONS.md")
             with open(dec_file, "w") as f:
-                f.write("[D-20260213-001]\nStatus: active\nStatement: Invariant\n"
-                        "ConstraintSignatures:\n- id: CS-001\n  enforcement: invariant\n")
-            ok, msg = _op_supersede_decision(dec_file, {
-                "target": "D-20260213-001",
-                "new_block": "[D-20260213-002]\nStatus: active\n",
-            })
+                f.write(
+                    "[D-20260213-001]\nStatus: active\nStatement: Invariant\n"
+                    "ConstraintSignatures:\n- id: CS-001\n  enforcement: invariant\n"
+                )
+            ok, msg = _op_supersede_decision(
+                dec_file,
+                {
+                    "target": "D-20260213-001",
+                    "new_block": "[D-20260213-002]\nStatus: active\n",
+                },
+            )
             self.assertFalse(ok)
             self.assertIn("invariant", msg)
 
@@ -748,11 +806,14 @@ class TestOpReplaceRange(unittest.TestCase):
             filepath = os.path.join(td, "DECISIONS.md")
             with open(filepath, "w") as f:
                 f.write("[D-20260213-001]\nStatus: active\n<!-- START -->\nold content\n<!-- END -->\nTags: test\n")
-            ok, msg = _op_replace_range(filepath, {
-                "target": "D-20260213-001",
-                "range": {"start": "<!-- START -->", "end": "<!-- END -->"},
-                "patch": "<!-- START -->\nnew content",
-            })
+            ok, msg = _op_replace_range(
+                filepath,
+                {
+                    "target": "D-20260213-001",
+                    "range": {"start": "<!-- START -->", "end": "<!-- END -->"},
+                    "patch": "<!-- START -->\nnew content",
+                },
+            )
             self.assertTrue(ok, msg)
             with open(filepath) as f:
                 content = f.read()
@@ -765,11 +826,14 @@ class TestOpReplaceRange(unittest.TestCase):
             filepath = os.path.join(td, "DECISIONS.md")
             with open(filepath, "w") as f:
                 f.write("[D-20260213-001]\nStatus: active\n")
-            ok, msg = _op_replace_range(filepath, {
-                "target": "D-20260213-001",
-                "range": {"start": "<!-- NONEXISTENT -->", "end": "<!-- END -->"},
-                "patch": "new",
-            })
+            ok, msg = _op_replace_range(
+                filepath,
+                {
+                    "target": "D-20260213-001",
+                    "range": {"start": "<!-- NONEXISTENT -->", "end": "<!-- END -->"},
+                    "patch": "new",
+                },
+            )
             self.assertFalse(ok)
             self.assertIn("markers not found", msg)
 

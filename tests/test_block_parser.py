@@ -26,10 +26,7 @@ class TestParseBlocks(unittest.TestCase):
         self.assertEqual(blocks[1]["_id"], "D-20260213-002")
 
     def test_block_with_list_field(self):
-        text = (
-            "[T-20260213-001]\nTitle: Fix bug\nStatus: active\n"
-            "Sources:\n- source1\n- source2\n"
-        )
+        text = "[T-20260213-001]\nTitle: Fix bug\nStatus: active\nSources:\n- source1\n- source2\n"
         blocks = parse_blocks(text)
         self.assertEqual(len(blocks), 1)
         self.assertIsInstance(blocks[0]["Sources"], list)
@@ -222,11 +219,7 @@ class TestFactKeyEnrichment(unittest.TestCase):
     """Tests for _entities, _dates, _has_negation fact key fields."""
 
     def test_entities_extracted(self):
-        text = (
-            "[D-20260213-001]\n"
-            "Statement: See T-20260213-002 and PRJ-abc for details\n"
-            "Status: active\n"
-        )
+        text = "[D-20260213-001]\nStatement: See T-20260213-002 and PRJ-abc for details\nStatus: active\n"
         blocks = parse_blocks(text)
         self.assertEqual(len(blocks), 1)
         self.assertIn("_entities", blocks[0])
@@ -239,20 +232,14 @@ class TestFactKeyEnrichment(unittest.TestCase):
         self.assertEqual(blocks[0]["_entities"], [])
 
     def test_entities_deduplicated_and_sorted(self):
-        text = (
-            "[D-20260213-001]\n"
-            "Statement: Ref T-20260213-001 and T-20260213-001 again, also PER-xyz\n"
-        )
+        text = "[D-20260213-001]\nStatement: Ref T-20260213-001 and T-20260213-001 again, also PER-xyz\n"
         blocks = parse_blocks(text)
         entities = blocks[0]["_entities"]
         self.assertEqual(entities, sorted(set(entities)))
         self.assertEqual(entities.count("T-20260213-001"), 1)
 
     def test_dates_extracted(self):
-        text = (
-            "[D-20260213-001]\n"
-            "Statement: Decided on 2026-02-13 and reviewed 2026-03-01\n"
-        )
+        text = "[D-20260213-001]\nStatement: Decided on 2026-02-13 and reviewed 2026-03-01\n"
         blocks = parse_blocks(text)
         self.assertIn("_dates", blocks[0])
         self.assertIn("2026-02-13", blocks[0]["_dates"])
@@ -264,10 +251,7 @@ class TestFactKeyEnrichment(unittest.TestCase):
         self.assertEqual(blocks[0]["_dates"], [])
 
     def test_dates_deduplicated_and_sorted(self):
-        text = (
-            "[D-20260213-001]\n"
-            "Statement: On 2026-02-13 we decided. Confirmed 2026-02-13.\n"
-        )
+        text = "[D-20260213-001]\nStatement: On 2026-02-13 we decided. Confirmed 2026-02-13.\n"
         blocks = parse_blocks(text)
         self.assertEqual(blocks[0]["_dates"].count("2026-02-13"), 1)
 
@@ -318,10 +302,7 @@ class TestFactKeyEnrichment(unittest.TestCase):
 
     def test_fact_keys_from_list_fields(self):
         """Entity IDs in list fields should also be extracted."""
-        text = (
-            "[D-20260213-001]\nTitle: Test\n"
-            "Sources:\n- D-20260213-002\n- PER-admin\n"
-        )
+        text = "[D-20260213-001]\nTitle: Test\nSources:\n- D-20260213-002\n- PER-admin\n"
         blocks = parse_blocks(text)
         self.assertIn("D-20260213-002", blocks[0]["_entities"])
         self.assertIn("PER-admin", blocks[0]["_entities"])

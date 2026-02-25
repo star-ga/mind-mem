@@ -1,4 +1,5 @@
 """Tests for parsing multiple files."""
+
 from __future__ import annotations
 
 import os
@@ -17,6 +18,7 @@ def test_parse_multiple_files():
         blocks = parse_file(os.path.join(d, f"file{i}.md"))
         assert len(blocks) >= 1
 
+
 def test_large_file_parse():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
         for i in range(50):
@@ -25,6 +27,7 @@ def test_large_file_parse():
     blocks = parse_file(path)
     assert len(blocks) == 50
     os.unlink(path)
+
 
 def test_mixed_content():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:

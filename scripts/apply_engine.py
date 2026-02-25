@@ -34,9 +34,13 @@ from .namespaces import NamespaceManager
 # ═══════════════════════════════════════════════
 
 VALID_OPS = {
-    "append_block", "insert_after_block", "update_field",
-    "append_list_item", "replace_range", "set_status",
-    "supersede_decision"
+    "append_block",
+    "insert_after_block",
+    "update_field",
+    "append_list_item",
+    "replace_range",
+    "set_status",
+    "supersede_decision",
 }
 
 VALID_RISKS = {"low", "medium", "high"}
@@ -50,9 +54,7 @@ PROPOSED_FILES = [
 ]
 
 # Files to snapshot for rollback (intelligence/applied excluded to prevent recursive nesting)
-SNAPSHOT_DIRS = [
-    "decisions", "tasks", "entities", "summaries", "memory"
-]
+SNAPSHOT_DIRS = ["decisions", "tasks", "entities", "summaries", "memory"]
 SNAPSHOT_FILES = ["AGENTS.md", "MEMORY.md", "IDENTITY.md", "mind-mem.json"]
 
 
@@ -94,6 +96,7 @@ def _cleanup_orphan_files(ws, pre_apply_files):
 # Path Safety
 # ═══════════════════════════════════════════════
 
+
 def _safe_resolve(ws, rel_path):
     """Resolve rel_path within ws, rejecting traversal and symlink escapes.
 
@@ -111,6 +114,7 @@ def _safe_resolve(ws, rel_path):
 # ═══════════════════════════════════════════════
 # Proposal Discovery & Validation
 # ═══════════════════════════════════════════════
+
 
 def find_proposal(ws, proposal_id):
     """Find a proposal block by ProposalId across all proposed files."""
@@ -163,8 +167,14 @@ def validate_proposal(proposal):
             errors.append(f"Ops[{i}]: invalid op type '{op_type}'")
         if not op.get("file"):
             errors.append(f"Ops[{i}]: missing 'file'")
-        if op_type in ("update_field", "append_list_item", "set_status", "replace_range",
-                        "insert_after_block", "supersede_decision") and not op.get("target"):
+        if op_type in (
+            "update_field",
+            "append_list_item",
+            "set_status",
+            "replace_range",
+            "insert_after_block",
+            "supersede_decision",
+        ) and not op.get("target"):
             errors.append(f"Ops[{i}]: op '{op_type}' requires 'target'")
 
     # Reject paths with traversal components
@@ -185,8 +195,7 @@ def validate_proposal(proposal):
         computed_fp = compute_fingerprint(proposal)
         if computed_fp != stored_fp:
             errors.append(
-                f"Fingerprint mismatch: stored={stored_fp}, computed={computed_fp}"
-                " (proposal may have been tampered)"
+                f"Fingerprint mismatch: stored={stored_fp}, computed={computed_fp} (proposal may have been tampered)"
             )
 
     return errors
@@ -195,6 +204,7 @@ def validate_proposal(proposal):
 # ═══════════════════════════════════════════════
 # Precondition Checks
 # ═══════════════════════════════════════════════
+
 
 def check_preconditions(ws):
     """Run validate.sh and intel_scan.py. Returns (ok, report)."""
@@ -207,10 +217,7 @@ def check_preconditions(ws):
     if not os.path.isfile(validate_sh):
         validate_sh = os.path.join(ws, "maintenance/validate.sh")
     try:
-        result = subprocess.run(
-            ["bash", validate_sh, ws],
-            capture_output=True, text=True, timeout=60
-        )
+        result = subprocess.run(["bash", validate_sh, ws], capture_output=True, text=True, timeout=60)
         # Find the TOTAL line (contains "issues")
         total_line = ""
         for line in result.stdout.strip().split("\n"):
@@ -231,10 +238,7 @@ def check_preconditions(ws):
     if not os.path.isfile(intel_scan):
         intel_scan = os.path.join(ws, "maintenance/intel_scan.py")
     try:
-        result = subprocess.run(
-            ["python3", intel_scan, ws],
-            capture_output=True, text=True, timeout=60
-        )
+        result = subprocess.run(["python3", intel_scan, ws], capture_output=True, text=True, timeout=60)
         # Find the TOTAL line
         total_line = ""
         for line in result.stdout.strip().split("\n"):
@@ -256,6 +260,7 @@ def check_preconditions(ws):
 # ═══════════════════════════════════════════════
 # Snapshot & Rollback
 # ═══════════════════════════════════════════════
+
 
 def _safe_copy(src, dst):
     """Copy a file for snapshot purposes. Always uses copy2 (not hardlinks).
@@ -388,6 +393,7 @@ def restore_snapshot(ws, snap_dir):
 # Apply Receipt
 # ═══════════════════════════════════════════════
 
+
 def write_receipt(snap_dir, proposal, ts, pre_checks, status="in_progress"):
     """Write APPLY_RECEIPT.md."""
     receipt_path = os.path.join(snap_dir, "APPLY_RECEIPT.md")
@@ -411,7 +417,7 @@ def write_receipt(snap_dir, proposal, ts, pre_checks, status="in_progress"):
     lines.append("PreChecks:")
     for c in pre_checks:
         lines.append(f"- {c}")
-    rb = proposal.get('Rollback', '?')
+    rb = proposal.get("Rollback", "?")
     rb_val = rb[0] if isinstance(rb, list) else rb
     lines.append(f"RollbackPlan: {rb_val}")
     lines.append(f"Status: {status}")
@@ -457,6 +463,7 @@ def _get_mode(ws="."):
 # ═══════════════════════════════════════════════
 # Op Executors
 # ═══════════════════════════════════════════════
+
 
 def execute_op(ws, op):
     """Execute a single op. Returns (success, message)."""
@@ -645,9 +652,7 @@ def _op_set_status(filepath, op):
 
     # Then append History entry if provided
     if history:
-        ok2, msg2 = _op_append_list_item(filepath, {
-            "target": target, "list": "History", "item": history
-        })
+        ok2, msg2 = _op_append_list_item(filepath, {"target": target, "list": "History", "item": history})
         if not ok2:
             return False, f"set_status: history append failed: {msg2}"
 
@@ -737,27 +742,31 @@ def _op_supersede_decision(filepath, op):
 # v2.1.2 Operational Hardening
 # ═══════════════════════════════════════════════
 
+
 def compute_fingerprint(proposal):
     """Deterministic fingerprint from proposal content. Prevents duplicates.
 
     Includes op payload fields (value, patch, status) to distinguish proposals
     targeting the same block with different mutations.
     """
-    canon = json.dumps({
-        "type": proposal.get("Type", ""),
-        "target": proposal.get("TargetBlock", ""),
-        "ops": [
-            {
-                "op": op.get("op"),
-                "file": op.get("file"),
-                "target": op.get("target"),
-                "value": op.get("value", ""),
-                "patch": op.get("patch", ""),
-                "status": op.get("status", ""),
-            }
-            for op in proposal.get("Ops", [])
-        ]
-    }, sort_keys=True)
+    canon = json.dumps(
+        {
+            "type": proposal.get("Type", ""),
+            "target": proposal.get("TargetBlock", ""),
+            "ops": [
+                {
+                    "op": op.get("op"),
+                    "file": op.get("file"),
+                    "target": op.get("target"),
+                    "value": op.get("value", ""),
+                    "patch": op.get("patch", ""),
+                    "status": op.get("status", ""),
+                }
+                for op in proposal.get("Ops", [])
+            ],
+        },
+        sort_keys=True,
+    )
     return hashlib.sha256(canon.encode()).hexdigest()[:16]
 
 
@@ -842,10 +851,9 @@ def check_deferred_cooldown(ws, proposal):
                 try:
                     created_dt = datetime.fromisoformat(created)
                     if created_dt > cutoff:
-                        pid = b.get('ProposalId')
+                        pid = b.get("ProposalId")
                         return False, (
-                            f"Target {target} has {b.get('Status')} proposal"
-                            f" {pid} within {cooldown_days}d cooldown"
+                            f"Target {target} has {b.get('Status')} proposal {pid} within {cooldown_days}d cooldown"
                         )
                 except (ValueError, TypeError):
                     pass
@@ -875,11 +883,7 @@ def generate_diff_text(ws, snap_dir, files_touched):
             with open(new_path, "r", errors="replace") as f:
                 new_lines = f.readlines()
 
-        diff = difflib.unified_diff(
-            old_lines, new_lines,
-            fromfile=f"a/{rel_path}", tofile=f"b/{rel_path}",
-            lineterm=""
-        )
+        diff = difflib.unified_diff(old_lines, new_lines, fromfile=f"a/{rel_path}", tofile=f"b/{rel_path}", lineterm="")
         diff_text = "\n".join(diff)
         if diff_text:
             diff_lines.append(diff_text)
@@ -912,6 +916,7 @@ def _save_intel_state(ws, state):
 # ═══════════════════════════════════════════════
 # Main Apply Pipeline
 # ═══════════════════════════════════════════════
+
 
 def _get_workspace_lock_path(ws):
     """Return the path for the workspace-wide apply lock."""

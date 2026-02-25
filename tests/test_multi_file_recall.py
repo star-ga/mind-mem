@@ -1,4 +1,5 @@
 """Tests for recall across multiple files."""
+
 from __future__ import annotations
 
 import os

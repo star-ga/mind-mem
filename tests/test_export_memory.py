@@ -1,4 +1,5 @@
 """Tests for memory export functionality."""
+
 from __future__ import annotations
 
 import json
@@ -22,6 +23,7 @@ def test_export_produces_output():
     """Export produces non-empty output."""
     try:
         from scripts.export_memory import export_memory
+
         ws = _make_workspace()
         result = export_memory(ws)
         assert result is not None
@@ -34,6 +36,7 @@ def test_export_format_jsonl():
     """Export produces valid JSONL."""
     try:
         from scripts.export_memory import export_memory
+
         ws = _make_workspace()
         result = export_memory(ws, format="jsonl")
         if isinstance(result, str):

@@ -13,6 +13,7 @@ __all__ = ["_stem", "tokenize"]
 # Porter Stemmer (simplified, zero-dependency)
 # ---------------------------------------------------------------------------
 
+
 def _stem(word: str) -> str:
     """Simplified Porter stemmer — handles common English suffixes.
 
@@ -90,5 +91,4 @@ def _stem(word: str) -> str:
 
 def tokenize(text: str) -> list[str]:
     """Split text into lowercase stemmed tokens, filtering stopwords."""
-    return [_stem(t) for t in re.findall(r"[a-z0-9_]+", text.lower())
-            if t not in _STOPWORDS and len(t) > 1]
+    return [_stem(t) for t in re.findall(r"[a-z0-9_]+", text.lower()) if t not in _STOPWORDS and len(t) > 1]

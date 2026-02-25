@@ -1,4 +1,5 @@
 """Stress tests for mind-mem file locking under contention."""
+
 import os
 import threading
 import time
@@ -108,10 +109,9 @@ class TestFileLockContention:
             except Exception as e:
                 errors.append(str(e))
 
-        threads = (
-            [threading.Thread(target=reader, args=(10,)) for _ in range(3)] +
-            [threading.Thread(target=writer, args=(10,)) for _ in range(2)]
-        )
+        threads = [threading.Thread(target=reader, args=(10,)) for _ in range(3)] + [
+            threading.Thread(target=writer, args=(10,)) for _ in range(2)
+        ]
         for t in threads:
             t.start()
         for t in threads:

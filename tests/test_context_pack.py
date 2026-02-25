@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Tests for context_pack rules: adjacency, diversity, pronoun rescue."""
 
-
-
 from mind_mem.recall import (
     context_pack,
 )
@@ -89,8 +87,7 @@ class TestRule1DialogAdjacency:
             _make_block("D1:2", "Bob", "I love painting"),
         ]
         # Fact card result (not DIA- prefix)
-        fact_result = _make_result("D1:1", "Alice", "What's your hobby?",
-                                   score=20.0, block_id="FACT-001")
+        fact_result = _make_result("D1:1", "Alice", "What's your hobby?", score=20.0, block_id="FACT-001")
         result = context_pack("hobby", [fact_result], blocks, [fact_result], limit=10)
         assert len(result) == 1, "Fact cards should not trigger adjacency"
 
@@ -124,7 +121,10 @@ class TestRule2MultiEntityDiversity:
         ]
         result = context_pack(
             "What health scares did Alice and Bob experience?",
-            top, blocks, wider, limit=10,
+            top,
+            blocks,
+            wider,
+            limit=10,
         )
         speakers = {r.get("speaker", "").lower() for r in result}
         assert "bob" in speakers, "Diversity should pull Bob's block"
@@ -138,7 +138,10 @@ class TestRule2MultiEntityDiversity:
         ]
         result = context_pack(
             "What health scares happened?",
-            top, blocks, wider, limit=10,
+            top,
+            blocks,
+            wider,
+            limit=10,
         )
         # "scares" is a plural cue, should try to diversify
         assert len(result) >= 2
@@ -151,7 +154,10 @@ class TestRule2MultiEntityDiversity:
         ]
         result = context_pack(
             "What health scares did Alice and Bob experience?",
-            top, blocks, top, limit=10,
+            top,
+            blocks,
+            top,
+            limit=10,
         )
         # Already have both speakers, no extra blocks needed
         diversity_hits = [r for r in result if r.get("via_diversity")]
@@ -166,7 +172,10 @@ class TestRule2MultiEntityDiversity:
         ]
         result = context_pack(
             "What health scares did Alice and Bob experience?",
-            top, blocks, wider, limit=10,
+            top,
+            blocks,
+            wider,
+            limit=10,
         )
         diversity_hits = [r for r in result if r.get("via_diversity")]
         assert len(diversity_hits) >= 1
@@ -189,7 +198,10 @@ class TestRule3PronounRescue:
         top = [_make_result("D2:24", "Alice", "I bought it a year ago in Paris.", score=20.0)]
         result = context_pack(
             "When did Alice buy her pet snake?",
-            top, blocks, top, limit=10,
+            top,
+            blocks,
+            top,
+            limit=10,
         )
         # Should rescue D2:22 which has "snake"
         dias = {r["DiaID"] for r in result}
@@ -201,7 +213,10 @@ class TestRule3PronounRescue:
         top = [_make_result("D2:22", "Alice", "I have a pet snake named Seraphim.", score=20.0)]
         result = context_pack(
             "When did Alice buy her pet snake?",
-            top, blocks, top, limit=10,
+            top,
+            blocks,
+            top,
+            limit=10,
         )
         rescue_hits = [r for r in result if r.get("via_pronoun_rescue")]
         assert len(rescue_hits) == 0, "No rescue needed when noun is already in hit"
@@ -211,7 +226,10 @@ class TestRule3PronounRescue:
         top = [_make_result("D2:24", "Alice", "I bought it a year ago in Paris.", score=20.0)]
         result = context_pack(
             "When did Alice buy her pet snake?",
-            top, blocks, top, limit=10,
+            top,
+            blocks,
+            top,
+            limit=10,
         )
         rescue_hits = [r for r in result if r.get("via_pronoun_rescue")]
         assert len(rescue_hits) >= 1
@@ -244,7 +262,10 @@ class TestContextPackEdgeCases:
         ]
         result = context_pack(
             "What snakes do Alice and Bob have?",
-            top, blocks, wider, limit=10,
+            top,
+            blocks,
+            wider,
+            limit=10,
         )
         # Should have adjacency (D1:2, D1:3) + diversity attempts
         assert len(result) >= 3

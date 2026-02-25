@@ -1,4 +1,5 @@
 """Tests for recall result scoring order."""
+
 from __future__ import annotations
 
 import os
@@ -29,7 +30,7 @@ def test_results_sorted_by_score():
     if len(results) >= 2:
         scores = [r.get("score", r.get("_score", 0)) for r in results]
         for i in range(len(scores) - 1):
-            assert scores[i] >= scores[i + 1], f"Score {scores[i]} < {scores[i+1]}"
+            assert scores[i] >= scores[i + 1], f"Score {scores[i]} < {scores[i + 1]}"
 
 
 def test_more_relevant_ranked_higher():
