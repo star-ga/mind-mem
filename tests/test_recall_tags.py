@@ -10,28 +10,39 @@ from scripts.init_workspace import init
 
 
 def _make_workspace():
-    ws = tempfile.mkdtemp()
+    td = tempfile.TemporaryDirectory()
+    ws = os.path.join(td.name, "ws")
+    os.makedirs(ws)
     init(ws)
     path = os.path.join(ws, "decisions", "tags.md")
     with open(path, "w") as f:
         f.write("[TAG-001]\nType: Decision\nStatement: Tagged decision\nTags: api, design\n\n")
         f.write("[TAG-002]\nType: Decision\nStatement: Another tagged\nTags: performance, optimization\n\n")
-    return ws
+    return ws, td
 
 
 def test_tag_search():
-    ws = _make_workspace()
-    results = recall(ws, "api design", limit=5)
-    assert isinstance(results, list)
+    ws, td = _make_workspace()
+    try:
+        results = recall(ws, "api design", limit=5)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()
 
 
 def test_tag_content_search():
-    ws = _make_workspace()
-    results = recall(ws, "performance optimization", limit=5)
-    assert isinstance(results, list)
+    ws, td = _make_workspace()
+    try:
+        results = recall(ws, "performance optimization", limit=5)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()
 
 
 def test_mixed_tag_statement():
-    ws = _make_workspace()
-    results = recall(ws, "tagged decision api", limit=5)
-    assert isinstance(results, list)
+    ws, td = _make_workspace()
+    try:
+        results = recall(ws, "tagged decision api", limit=5)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()

@@ -213,6 +213,15 @@ _THIRD_PERSON_RE = re.compile(
 )
 
 # D.3: Relation words for possessive extraction
+_SEM_LABELS = {
+    "FACT": "identity description who is",
+    "EVENT": "activity event did went action",
+    "PREFERENCE": "preference interest hobby likes enjoys",
+    "RELATION": "relationship connection knows",
+    "NEGATION": "never not does not",
+    "PLAN": "goal intention plan wants future",
+}
+
 _RELATION_WORDS = frozenset(
     {
         "brother",
@@ -670,14 +679,6 @@ def format_as_blocks(
         # Semantic labels: BM25 vocabulary bridge for generic queries.
         # Embedded in Statement (3.0x weight) instead of Context (0.5x)
         # so "What is Caroline's identity?" strongly matches fact cards.
-        _SEM_LABELS = {
-            "FACT": "identity description who is",
-            "EVENT": "activity event did went action",
-            "PREFERENCE": "preference interest hobby likes enjoys",
-            "RELATION": "relationship connection knows",
-            "NEGATION": "never not does not",
-            "PLAN": "goal intention plan wants future",
-        }
         sem = _SEM_LABELS.get(card_type, "")
         prefix = f"({sem}) " if sem else ""
 

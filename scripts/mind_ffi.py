@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import ctypes
 import os
+import re as _re
 from pathlib import Path
-from typing import Optional
 
 from .observability import get_logger
 
@@ -83,7 +83,7 @@ class MindMemKernel:
             pass  # Fallback to pure Python
     """
 
-    def __init__(self, lib_path: Optional[str] = None):
+    def __init__(self, lib_path: str | None = None):
         """Load the compiled MIND shared library.
 
         Raises:
@@ -161,7 +161,7 @@ class MindMemKernel:
             pass  # Unprotected build (dev/CI fallback)
 
         # Version check: compare .so version against Python __version__
-        self._so_version: Optional[str] = None
+        self._so_version: str | None = None
         try:
             self._lib.mindmem_get_version.argtypes = []
             self._lib.mindmem_get_version.restype = ctypes.c_char_p
@@ -176,7 +176,7 @@ class MindMemKernel:
         """Return True if the loaded library includes runtime protection."""
         return self._protected
 
-    def so_version(self) -> Optional[str]:
+    def so_version(self) -> str | None:
         """Return the version string reported by the .so, or None."""
         return self._so_version
 
@@ -416,11 +416,11 @@ class MindMemKernel:
 
 # --- Module-level singleton ---
 
-_kernel: Optional[MindMemKernel] = None
+_kernel: MindMemKernel | None = None
 _USE_MIND: bool = False
 
 
-def get_kernel() -> Optional[MindMemKernel]:
+def get_kernel() -> MindMemKernel | None:
     """Get or create singleton kernel. Returns None if unavailable."""
     global _kernel, _USE_MIND
     if _kernel is not None:
@@ -532,8 +532,6 @@ def get_kernel_param(config: dict, section: str, key: str, default=None):
 
 # --- INI-style .mind config parsing ---
 # .mind files use a simple [section] / key = value format for tuning params.
-
-import re as _re  # noqa: E402
 
 
 def _parse_value(raw: str):

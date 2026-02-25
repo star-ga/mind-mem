@@ -97,6 +97,8 @@ from mind_mem.sqlite_index import (  # noqa: E402
 
 _log = get_logger("mcp_server")
 
+MCP_SCHEMA_VERSION = "1.0"
+
 
 # ---------------------------------------------------------------------------
 # ACL — per-tool scope enforcement (#20)
@@ -136,32 +138,6 @@ USER_TOOLS = frozenset(
 )
 
 
-def _resolve_scope(headers: dict | None = None) -> str:
-    """Determine caller scope from token.
-
-    Returns "admin" if the request carries the admin token,
-    "user" for the regular token, or "user" when no auth is configured.
-    """
-    admin_token = os.environ.get("MIND_MEM_ADMIN_TOKEN")
-    if not admin_token:
-        return "user"
-
-    if headers is None:
-        return "user"
-
-    # Extract token from headers
-    auth = headers.get("authorization", headers.get("Authorization", ""))
-    provided = ""
-    if auth.startswith("Bearer "):
-        provided = auth[7:]
-    if not provided:
-        provided = headers.get("x-mindmem-token", headers.get("X-MindMem-Token", ""))
-
-    if provided and hmac.compare_digest(provided, admin_token):
-        return "admin"
-    return "user"
-
-
 def check_tool_acl(tool_name: str, scope: str) -> str | None:
     """Check whether *scope* is allowed to call *tool_name*.
 
@@ -174,7 +150,7 @@ def check_tool_acl(tool_name: str, scope: str) -> str | None:
             {
                 "error": f"Permission denied: '{tool_name}' requires admin scope",
                 "scope": scope,
-                "hint": "Set MIND_MEM_ADMIN_TOKEN and pass it via Authorization header.",
+                "hint": "Admin scope is controlled via MIND_MEM_SCOPE=admin env var.",
             }
         )
     return None
@@ -264,7 +240,7 @@ def _sqlite_busy_error() -> str:
     """Return structured JSON error for SQLite database locked (#29)."""
     return json.dumps(
         {
-            "_schema_version": "1.0",
+            "_schema_version": MCP_SCHEMA_VERSION,
             "error": "database_busy",
             "message": "Database is temporarily locked by another process",
             "retry_after_seconds": 1,
@@ -299,6 +275,9 @@ def mcp_tool_observe(fn):
             if acl_error:
                 _log.warning("acl_blocked", tool=tool_name, scope=scope)
                 return acl_error
+        elif admin_token and tool_name not in USER_TOOLS:
+            _log.warning("acl_unknown_tool", tool=tool_name)
+            return json.dumps({"error": f"Tool '{tool_name}' is not in ACL policy", "_schema_version": "1.0"})
 
         start = time.monotonic()
         error_type = None
@@ -416,7 +395,7 @@ def _load_config(ws: str) -> dict:
             msg=str(exc),
         )
         # Fall back to built-in defaults
-        from init_workspace import DEFAULT_CONFIG
+        from mind_mem.init_workspace import DEFAULT_CONFIG
 
         return dict(DEFAULT_CONFIG)
     except (OSError, UnicodeDecodeError) as exc:
@@ -600,7 +579,7 @@ def _recall_impl(query: str, limit: int = 10, active_only: bool = False, backend
     metrics.inc("mcp_recall_queries")
     _log.info("mcp_recall", query=query, backend=used_backend, results=len(results))
     envelope: dict = {
-        "_schema_version": "1.0",
+        "_schema_version": MCP_SCHEMA_VERSION,
         "backend": used_backend,
         "query": query,
         "count": len(results),
@@ -699,7 +678,7 @@ def propose_update(
 
     return json.dumps(
         {
-            "_schema_version": "1.0",
+            "_schema_version": MCP_SCHEMA_VERSION,
             "status": "proposed",
             "written": written,
             "location": "intelligence/SIGNALS.md",
@@ -723,7 +702,7 @@ def scan() -> str:
     if ws_err:
         return ws_err
 
-    result = {"_schema_version": "1.0", "checks": {}}
+    result = {"_schema_version": MCP_SCHEMA_VERSION, "checks": {}}
 
     # Parse decisions
     decisions_path = os.path.join(ws, "decisions", "DECISIONS.md")
@@ -792,7 +771,7 @@ def list_contradictions() -> str:
     if not resolutions:
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "status": "clean",
                 "contradictions": 0,
                 "message": "No contradictions found.",
@@ -801,7 +780,7 @@ def list_contradictions() -> str:
 
     return json.dumps(
         {
-            "_schema_version": "1.0",
+            "_schema_version": MCP_SCHEMA_VERSION,
             "status": "contradictions_found",
             "contradictions": len(resolutions),
             "resolutions": resolutions,
@@ -850,7 +829,7 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
 
     return json.dumps(
         {
-            "_schema_version": "1.0",
+            "_schema_version": MCP_SCHEMA_VERSION,
             "status": "applied" if success and not dry_run else "dry_run_passed" if success else "failed",
             "proposal_id": proposal_id,
             "dry_run": dry_run,
@@ -899,7 +878,7 @@ def rollback_proposal(receipt_ts: str) -> str:
 
     return json.dumps(
         {
-            "_schema_version": "1.0",
+            "_schema_version": MCP_SCHEMA_VERSION,
             "status": "rolled_back" if success else "rollback_failed",
             "receipt_ts": receipt_ts,
             "success": success,
@@ -958,7 +937,7 @@ def find_similar(block_id: str, limit: int = 5) -> str:
         metrics.inc("mcp_find_similar_queries")
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "source": block_id,
                 "similar": co_blocks,
                 "method": "co-occurrence",
@@ -968,7 +947,7 @@ def find_similar(block_id: str, limit: int = 5) -> str:
     except ImportError:
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": "find_similar requires block_metadata module",
                 "block_id": block_id,
             },
@@ -982,7 +961,7 @@ def find_similar(block_id: str, limit: int = 5) -> str:
         _log.warning("find_similar_failed", block_id=block_id, error=str(exc))
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": "Failed to find similar blocks. The co-occurrence index may not be initialized.",
                 "block_id": block_id,
             },
@@ -1012,7 +991,7 @@ def intent_classify(query: str) -> str:
         metrics.inc("mcp_intent_classify")
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "query": query,
                 "intent": result.intent,
                 "confidence": result.confidence,
@@ -1024,7 +1003,7 @@ def intent_classify(query: str) -> str:
     except ImportError:
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": "intent_router module not available",
                 "query": query,
             },
@@ -1034,7 +1013,7 @@ def intent_classify(query: str) -> str:
         _log.warning("intent_classify_failed", query=query, error=str(exc))
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": "Intent classification failed",
                 "query": query,
             },
@@ -1051,7 +1030,7 @@ def index_stats() -> str:
         JSON with workspace statistics.
     """
     ws = _workspace()
-    stats: dict = {"_schema_version": "1.0"}
+    stats: dict = {"_schema_version": MCP_SCHEMA_VERSION}
 
     # Use FTS index for block counts when available (O(1) vs O(N) file parsing)
     db = fts_db_path(ws)
@@ -1117,7 +1096,7 @@ def reindex(include_vectors: bool = False) -> str:
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
-    results: dict = {"_schema_version": "1.0", "fts": False, "vectors": False}
+    results: dict = {"_schema_version": MCP_SCHEMA_VERSION, "fts": False, "vectors": False}
 
     try:
         from mind_mem.sqlite_index import build_index
@@ -1146,7 +1125,7 @@ def reindex(include_vectors: bool = False) -> str:
 
     # Regenerate category summaries
     try:
-        from category_distiller import CategoryDistiller
+        from mind_mem.category_distiller import CategoryDistiller
 
         extra_cats = _load_extra_categories(ws)
         distiller = CategoryDistiller(extra_categories=extra_cats if extra_cats else None)
@@ -1188,7 +1167,7 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
             metrics.inc("mcp_evolution_updates")
             return json.dumps(
                 {
-                    "_schema_version": "1.0",
+                    "_schema_version": MCP_SCHEMA_VERSION,
                     "block_id": block_id,
                     "action": "updated",
                     "importance": round(importance, 4),
@@ -1201,7 +1180,7 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
             metrics.inc("mcp_evolution_reads")
             return json.dumps(
                 {
-                    "_schema_version": "1.0",
+                    "_schema_version": MCP_SCHEMA_VERSION,
                     "block_id": block_id,
                     "importance": round(importance, 4),
                     "co_occurring_blocks": co_blocks,
@@ -1212,7 +1191,7 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
     except ImportError:
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": "memory_evolution requires block_metadata module",
                 "block_id": block_id,
             },
@@ -1226,7 +1205,7 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
         _log.warning("memory_evolution_failed", block_id=block_id, error=str(exc))
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": "Memory evolution lookup failed. Access history may not be initialized.",
                 "block_id": block_id,
             },
@@ -1257,7 +1236,7 @@ def category_summary(topic: str, limit: int = 3) -> str:
     ws = _workspace()
     limits = _get_limits(ws)
     try:
-        from category_distiller import CategoryDistiller
+        from mind_mem.category_distiller import CategoryDistiller
 
         extra_cats = _load_extra_categories(ws)
         distiller = CategoryDistiller(extra_categories=extra_cats if extra_cats else None)
@@ -1268,7 +1247,7 @@ def category_summary(topic: str, limit: int = 3) -> str:
         if not context:
             return json.dumps(
                 {
-                    "_schema_version": "1.0",
+                    "_schema_version": MCP_SCHEMA_VERSION,
                     "topic": topic,
                     "status": "no_categories",
                     "hint": "Run reindex to generate category files, or add blocks with matching tags.",
@@ -1277,7 +1256,7 @@ def category_summary(topic: str, limit: int = 3) -> str:
             )
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "topic": topic,
                 "matched_categories": cats[:limit],
                 "content": context,
@@ -1287,7 +1266,7 @@ def category_summary(topic: str, limit: int = 3) -> str:
     except ImportError:
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": "category_distiller module not available",
             }
         )
@@ -1295,7 +1274,7 @@ def category_summary(topic: str, limit: int = 3) -> str:
         _log.warning("category_summary_failed", topic=topic, error=str(exc))
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": "Category summary lookup failed",
                 "topic": topic,
             },
@@ -1324,7 +1303,7 @@ def prefetch(signals: str, limit: int = 5) -> str:
     if not signal_list:
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": "No signals provided. Pass comma-separated keywords.",
             }
         )
@@ -1339,7 +1318,7 @@ def prefetch(signals: str, limit: int = 5) -> str:
         _log.info("mcp_prefetch", signals=signal_list, results=len(results))
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "signals": signal_list,
                 "count": len(results),
                 "results": results,
@@ -1353,7 +1332,7 @@ def prefetch(signals: str, limit: int = 5) -> str:
         _log.warning("prefetch_failed", signals=signal_list, traceback=traceback.format_exc())
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": "Prefetch failed",
                 "signals": signal_list,
             },
@@ -1394,7 +1373,7 @@ def list_mind_kernels() -> str:
     _log.info("mcp_list_kernels", count=len(result))
     return json.dumps(
         {
-            "_schema_version": "1.0",
+            "_schema_version": MCP_SCHEMA_VERSION,
             "kernels": result,
         },
         indent=2,
@@ -1418,7 +1397,7 @@ def get_mind_kernel(name: str) -> str:
     if not _re_mod.match(r"^[a-zA-Z0-9_-]{1,64}$", name):
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": f"Invalid kernel name: {name}",
             }
         )
@@ -1431,7 +1410,7 @@ def get_mind_kernel(name: str) -> str:
     if not cfg:
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": f"Kernel '{name}' not found",
             }
         )
@@ -1440,7 +1419,7 @@ def get_mind_kernel(name: str) -> str:
     _log.info("mcp_get_kernel", name=name, sections=list(cfg.keys()))
     return json.dumps(
         {
-            "_schema_version": "1.0",
+            "_schema_version": MCP_SCHEMA_VERSION,
             "name": name,
             "config": cfg,
         },
@@ -1497,7 +1476,7 @@ def delete_memory_item(block_id: str) -> str:
     if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9-]+$", block_id):
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": f"Invalid block ID format: {block_id}",
             }
         )
@@ -1506,7 +1485,7 @@ def delete_memory_item(block_id: str) -> str:
     if filepath is None:
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": f"Unrecognized block ID prefix: {block_id}",
                 "hint": "Supported prefixes: " + ", ".join(sorted(_BLOCK_PREFIX_MAP.keys())),
             }
@@ -1515,7 +1494,7 @@ def delete_memory_item(block_id: str) -> str:
     if not os.path.isfile(filepath):
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": f"Source file not found: {filepath}",
                 "block_id": block_id,
             }
@@ -1544,7 +1523,7 @@ def delete_memory_item(block_id: str) -> str:
         if block_start is None:
             return json.dumps(
                 {
-                    "_schema_version": "1.0",
+                    "_schema_version": MCP_SCHEMA_VERSION,
                     "error": f"Block {block_id} not found in {os.path.basename(filepath)}",
                     "block_id": block_id,
                 }
@@ -1577,7 +1556,7 @@ def delete_memory_item(block_id: str) -> str:
 
     return json.dumps(
         {
-            "_schema_version": "1.0",
+            "_schema_version": MCP_SCHEMA_VERSION,
             "status": "deleted",
             "block_id": block_id,
             "file": os.path.basename(filepath),
@@ -1610,7 +1589,7 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False) -> str:
     if format != "jsonl":
         return json.dumps(
             {
-                "_schema_version": "1.0",
+                "_schema_version": MCP_SCHEMA_VERSION,
                 "error": f"Unsupported format: {format}. Use 'jsonl'.",
             }
         )
@@ -1649,7 +1628,7 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False) -> str:
 
     return json.dumps(
         {
-            "_schema_version": "1.0",
+            "_schema_version": MCP_SCHEMA_VERSION,
             "format": format,
             "block_count": len(all_blocks),
             "data": jsonl_output,
@@ -1722,8 +1701,8 @@ def main():
 
     # File watcher: auto-reindex on .md changes
     if args.watch:
-        from scripts.watcher import FileWatcher
-        from scripts.sqlite_index import build_index
+        from mind_mem.watcher import FileWatcher
+        from mind_mem.sqlite_index import build_index
 
         ws = _workspace()
 

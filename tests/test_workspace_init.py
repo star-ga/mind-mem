@@ -10,43 +10,52 @@ from scripts.init_workspace import init
 
 def test_init_creates_directories():
     """init() creates the expected directory structure."""
-    ws = tempfile.mkdtemp()
-    init(ws)
-    for d in ["decisions", "tasks", "entities", "memory", "intelligence", "summaries"]:
-        assert os.path.isdir(os.path.join(ws, d)), f"Missing directory: {d}"
+    with tempfile.TemporaryDirectory() as td:
+        ws = os.path.join(td, "ws")
+        os.makedirs(ws)
+        init(ws)
+        for d in ["decisions", "tasks", "entities", "memory", "intelligence", "summaries"]:
+            assert os.path.isdir(os.path.join(ws, d)), f"Missing directory: {d}"
 
 
 def test_init_creates_memory_md():
     """init() creates MEMORY.md."""
-    ws = tempfile.mkdtemp()
-    init(ws)
-    assert os.path.isfile(os.path.join(ws, "MEMORY.md"))
+    with tempfile.TemporaryDirectory() as td:
+        ws = os.path.join(td, "ws")
+        os.makedirs(ws)
+        init(ws)
+        assert os.path.isfile(os.path.join(ws, "MEMORY.md"))
 
 
 def test_init_idempotent():
     """Calling init() twice doesn't error."""
-    ws = tempfile.mkdtemp()
-    init(ws)
-    init(ws)  # Should not raise
-    assert os.path.isdir(os.path.join(ws, "decisions"))
+    with tempfile.TemporaryDirectory() as td:
+        ws = os.path.join(td, "ws")
+        os.makedirs(ws)
+        init(ws)
+        init(ws)  # Should not raise
+        assert os.path.isdir(os.path.join(ws, "decisions"))
 
 
 def test_init_preserves_existing_files():
     """init() doesn't overwrite existing files."""
-    ws = tempfile.mkdtemp()
-    init(ws)
-    marker = os.path.join(ws, "decisions", "existing.md")
-    with open(marker, "w") as f:
-        f.write("keep me")
-    init(ws)
-    assert os.path.isfile(marker)
-    with open(marker) as f:
-        assert f.read() == "keep me"
+    with tempfile.TemporaryDirectory() as td:
+        ws = os.path.join(td, "ws")
+        os.makedirs(ws)
+        init(ws)
+        marker = os.path.join(ws, "decisions", "existing.md")
+        with open(marker, "w") as f:
+            f.write("keep me")
+        init(ws)
+        assert os.path.isfile(marker)
+        with open(marker) as f:
+            assert f.read() == "keep me"
 
 
 def test_init_nested_path():
     """init() works with deeply nested paths."""
-    ws = os.path.join(tempfile.mkdtemp(), "a", "b", "c")
-    os.makedirs(ws)
-    init(ws)
-    assert os.path.isdir(os.path.join(ws, "decisions"))
+    with tempfile.TemporaryDirectory() as td:
+        ws = os.path.join(td, "a", "b", "c")
+        os.makedirs(ws)
+        init(ws)
+        assert os.path.isdir(os.path.join(ws, "decisions"))

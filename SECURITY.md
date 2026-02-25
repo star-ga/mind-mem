@@ -34,7 +34,7 @@ mind-mem is a **local-first** library that operates entirely on the user's files
 | SQL injection via FTS5 queries | All SQLite queries use parameterized bindings (`?` placeholders); zero string interpolation in SQL | Active |
 | Arbitrary code execution via LLM extraction | Extraction output is treated as plain text; never evaluated as code | Active |
 | File lock starvation / race conditions | Cross-platform advisory locking via `fcntl`/`msvcrt`/atomic create with stale PID cleanup (`mind_filelock.py`) | Active |
-| MCP token auth bypass (HTTP mode) | Bearer token validation on every request; constant-time comparison; token required when `MIND_MEM_TOKEN` is set | Active |
+| MCP token auth bypass (HTTP mode) | Bearer token validation on every request; constant-time comparison; token required when `MIND_MEM_TOKEN` is set. Admin scope for privileged tools is controlled via `MIND_MEM_SCOPE=admin` env var (not Bearer token) | Active |
 | Denial of service via large workspaces | Configurable `top_k` limits, knee cutoff truncation, proposal budget caps (`per_run`, `per_day`, `backlog_limit`) | Active |
 | Concurrent SQLite write corruption | WAL journal mode, `busy_timeout=3000`, `timeout=5` on all connections, `try/finally` cleanup | Active |
 

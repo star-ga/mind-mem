@@ -196,14 +196,15 @@ def cleanup_daily_logs(ws: str, days: int = 180, dry_run: bool = False) -> list[
             cleaned.append(f"[dry-run] Would archive {fname} -> archive-{year}.md")
             continue
 
-        # Append to yearly archive
-        with open(log_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        # Append to yearly archive (under lock to prevent races)
+        with FileLock(log_path):
+            with open(log_path, "r", encoding="utf-8") as f:
+                content = f.read()
 
-        with open(archive_path, "a", encoding="utf-8") as f:
-            f.write(f"\n# {date_str}\n\n{content}\n---\n")
+            with open(archive_path, "a", encoding="utf-8") as f:
+                f.write(f"\n# {date_str}\n\n{content}\n---\n")
 
-        os.remove(log_path)
+            os.remove(log_path)
         cleaned.append(f"Archived {fname} -> archive-{year}.md")
 
     return cleaned

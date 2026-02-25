@@ -179,7 +179,8 @@ def propagate_scores(
     try:
         conn = _connect(workspace)
         conn.executescript(_SCHEMA_SQL)
-    except Exception:
+    except Exception as exc:
+        _log.debug("propagate_scores_failed", error=str(exc))
         if conn:
             conn.close()
         return dict(initial_scores)
@@ -193,7 +194,8 @@ def propagate_scores(
             m1, m2, w = row["mem1_id"], row["mem2_id"], row["weight"]
             adj.setdefault(m1, []).append((m2, w))
             adj.setdefault(m2, []).append((m1, w))
-    except Exception:
+    except Exception as exc:
+        _log.debug("propagate_scores_failed", error=str(exc))
         return dict(initial_scores)
     finally:
         if conn:
