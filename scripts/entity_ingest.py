@@ -46,8 +46,7 @@ TOOL_PATTERNS = [
     # MCP server references
     (re.compile(r"\bmcp[_-](?:server[_-])?([\w-]+)\b", re.I), "mcp_server"),
     # Known CLI tool invocations
-    (re.compile(r"\b(codex|gemini|claude|docker|kubectl|npm|pip|cargo|rustc|gcc|make)\b",
-                re.I), "cli_tool"),
+    (re.compile(r"\b(codex|gemini|claude|docker|kubectl|npm|pip|cargo|rustc|gcc|make)\b", re.I), "cli_tool"),
     # Explicit TOOL- references
     (re.compile(r"\bTOOL-([\w-]+)\b"), "tool_ref"),
 ]
@@ -59,18 +58,45 @@ PEOPLE_PATTERNS = [
 ]
 
 # Directories that are likely projects (not system dirs)
-IGNORE_DIRS = frozenset({
-    "bin", "lib", "etc", "var", "tmp", "usr", "opt", "dev", "proc", "sys",
-    "snap", "cache", "config", "local", "share", "node_modules", ".git",
-    ".cache", ".local", ".config", ".openclaw", ".claude", ".ssh", ".gnupg",
-    ".npm", ".cargo", ".rustup",
-    "documents", "downloads", "desktop",
-})
+IGNORE_DIRS = frozenset(
+    {
+        "bin",
+        "lib",
+        "etc",
+        "var",
+        "tmp",
+        "usr",
+        "opt",
+        "dev",
+        "proc",
+        "sys",
+        "snap",
+        "cache",
+        "config",
+        "local",
+        "share",
+        "node_modules",
+        ".git",
+        ".cache",
+        ".local",
+        ".config",
+        ".openclaw",
+        ".claude",
+        ".ssh",
+        ".gnupg",
+        ".npm",
+        ".cargo",
+        ".rustup",
+        "documents",
+        "downloads",
+        "desktop",
+    }
+)
 
 # Known tool slug aliases — maps detected slug to canonical registry slug
 TOOL_ALIASES: dict[str, str] = {
     "claude": "codex-cli",  # claude CLI is tracked as TOOL-codex-cli
-    "codex": "codex-cli",   # same tool, different name
+    "codex": "codex-cli",  # same tool, different name
     "gemini": "gemini-cli",
     "docker": "docker",
     "kubectl": "kubectl",
@@ -79,16 +105,21 @@ TOOL_ALIASES: dict[str, str] = {
 }
 
 # Tool slugs to ignore (false positives from pattern matching)
-TOOL_IGNORE = frozenset({
-    "server",  # mcp_server without suffix matches as "server"
-    "make",    # build tool, too generic
-    "cargo", "rustc", "gcc",  # low-signal system tools
-})
+TOOL_IGNORE = frozenset(
+    {
+        "server",  # mcp_server without suffix matches as "server"
+        "make",  # build tool, too generic
+        "cargo",
+        "rustc",
+        "gcc",  # low-signal system tools
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # Registry loading
 # ---------------------------------------------------------------------------
+
 
 def load_existing_entities(workspace: str) -> dict[str, set[str]]:
     """Load existing entity IDs from entities/*.md.
@@ -140,6 +171,7 @@ def load_existing_entities(workspace: str) -> dict[str, set[str]]:
 # Extraction
 # ---------------------------------------------------------------------------
 
+
 def extract_entities(text: str) -> list[dict]:
     """Extract entity references from text.
 
@@ -165,12 +197,14 @@ def extract_entities(text: str) -> list[dict]:
                 # Get surrounding context
                 start = max(0, m.start() - 30)
                 end = min(len(text), m.end() + 50)
-                found.append({
-                    "entity_type": "project",
-                    "slug": slug,
-                    "source_pattern": source,
-                    "excerpt": text[start:end].strip(),
-                })
+                found.append(
+                    {
+                        "entity_type": "project",
+                        "slug": slug,
+                        "source_pattern": source,
+                        "excerpt": text[start:end].strip(),
+                    }
+                )
 
     # Tools
     for pattern, source in TOOL_PATTERNS:
@@ -182,31 +216,46 @@ def extract_entities(text: str) -> list[dict]:
                 seen_slugs.add(slug)
                 start = max(0, m.start() - 30)
                 end = min(len(text), m.end() + 50)
-                found.append({
-                    "entity_type": "tool",
-                    "slug": slug,
-                    "source_pattern": source,
-                    "excerpt": text[start:end].strip(),
-                })
+                found.append(
+                    {
+                        "entity_type": "tool",
+                        "slug": slug,
+                        "source_pattern": source,
+                        "excerpt": text[start:end].strip(),
+                    }
+                )
 
     # People
     for pattern, source in PEOPLE_PATTERNS:
         for m in pattern.finditer(text):
             slug = m.group(1).lower()
             # Filter out common non-person mentions
-            if slug in {"mention", "handle", "user", "admin", "bot", "system",
-                         "star", "here", "everyone", "channel", "all"}:
+            if slug in {
+                "mention",
+                "handle",
+                "user",
+                "admin",
+                "bot",
+                "system",
+                "star",
+                "here",
+                "everyone",
+                "channel",
+                "all",
+            }:
                 continue
             if slug not in seen_slugs and len(slug) > 1:
                 seen_slugs.add(slug)
                 start = max(0, m.start() - 30)
                 end = min(len(text), m.end() + 50)
-                found.append({
-                    "entity_type": "person",
-                    "slug": slug,
-                    "source_pattern": source,
-                    "excerpt": text[start:end].strip(),
-                })
+                found.append(
+                    {
+                        "entity_type": "person",
+                        "slug": slug,
+                        "source_pattern": source,
+                        "excerpt": text[start:end].strip(),
+                    }
+                )
 
     return found
 
@@ -220,9 +269,7 @@ def filter_new_entities(
     for ent in entities:
         slug = ent["slug"]
         etype = ent["entity_type"]
-        registry_key = "projects" if etype == "project" else (
-            "tools" if etype == "tool" else "people"
-        )
+        registry_key = "projects" if etype == "project" else ("tools" if etype == "tool" else "people")
         registry = existing.get(registry_key, set())
         # Check both the raw slug and any known alias
         canonical = TOOL_ALIASES.get(slug, slug) if etype == "tool" else slug
@@ -235,25 +282,28 @@ def filter_new_entities(
 # Signal generation
 # ---------------------------------------------------------------------------
 
+
 def entities_to_signals(entities: list[dict], source_file: str) -> list[dict]:
     """Convert extracted entities to signal dicts for append_signals."""
     signals = []
     for ent in entities:
         prefix = {"project": "PRJ", "tool": "TOOL", "person": "PER"}[ent["entity_type"]]
-        signals.append({
-            "line": 0,
-            "type": "entity",
-            "text": f"New {ent['entity_type']} detected: {prefix}-{ent['slug']} "
-                    f"(via {ent['source_pattern']}) — {ent['excerpt'][:100]}",
-            "pattern": "auto-capture-entity",
-            "confidence": "medium",
-            "priority": "P2",
-            "structure": {
-                "subject": f"{prefix}-{ent['slug']}",
-                "object": ent["entity_type"],
-                "tags": [f"entity-{ent['entity_type']}", "auto-ingest"],
-            },
-        })
+        signals.append(
+            {
+                "line": 0,
+                "type": "entity",
+                "text": f"New {ent['entity_type']} detected: {prefix}-{ent['slug']} "
+                f"(via {ent['source_pattern']}) — {ent['excerpt'][:100]}",
+                "pattern": "auto-capture-entity",
+                "confidence": "medium",
+                "priority": "P2",
+                "structure": {
+                    "subject": f"{prefix}-{ent['slug']}",
+                    "object": ent["entity_type"],
+                    "tags": [f"entity-{ent['entity_type']}", "auto-ingest"],
+                },
+            }
+        )
     return signals
 
 
@@ -261,8 +311,10 @@ def entities_to_signals(entities: list[dict], source_file: str) -> list[dict]:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     import argparse
+
     parser = argparse.ArgumentParser(description="mind-mem Entity Ingestion")
     parser.add_argument("workspace", nargs="?", default=".")
     parser.add_argument("--source", help="Scan a specific file instead of workspace")
@@ -271,10 +323,12 @@ def main() -> None:
 
     ws = os.path.abspath(args.workspace)
     existing = load_existing_entities(ws)
-    _log.info("registry_loaded",
-              projects=len(existing["projects"]),
-              tools=len(existing["tools"]),
-              people=len(existing["people"]))
+    _log.info(
+        "registry_loaded",
+        projects=len(existing["projects"]),
+        tools=len(existing["tools"]),
+        people=len(existing["people"]),
+    )
 
     # Collect text to scan
     texts: list[tuple[str, str]] = []  # (source_name, content)

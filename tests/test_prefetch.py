@@ -1,4 +1,5 @@
 """Tests for prefetch functionality."""
+
 from __future__ import annotations
 
 import os
@@ -20,6 +21,7 @@ def test_prefetch_importable():
     """Prefetch module is importable."""
     try:
         from scripts._recall_core import recall
+
         assert callable(recall)
     except ImportError:
         pass
@@ -29,6 +31,7 @@ def test_prefetch_with_signals():
     """Prefetch with context signals returns results."""
     try:
         from scripts.prefetch import prefetch
+
         ws = _make_workspace()
         result = prefetch(ws, signals={"recent_queries": ["test"]})
         assert isinstance(result, (list, dict))
@@ -40,6 +43,7 @@ def test_prefetch_empty_signals():
     """Prefetch with no signals returns something."""
     try:
         from scripts.prefetch import prefetch
+
         ws = _make_workspace()
         result = prefetch(ws, signals={})
         assert isinstance(result, (list, dict, type(None)))

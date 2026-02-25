@@ -50,6 +50,7 @@ class BlockCorruptedError(ValueError):
         self.file_path = file_path
         self.context = context
 
+
 # Entity ID patterns recognized in block content
 _ENTITY_ID_RE = re.compile(
     r"\b(D-\d{8}-\d{3}|T-\d{8}-\d{3}|INC-\d{8}-[a-z0-9-]+"
@@ -438,13 +439,13 @@ def _parse_inline_list(s):
         for ch in inner:
             if ch == '"':
                 in_quotes = not in_quotes
-            elif ch == ',' and not in_quotes:
-                items.append(''.join(current).strip().strip('"'))
+            elif ch == "," and not in_quotes:
+                items.append("".join(current).strip().strip('"'))
                 current = []
             else:
                 current.append(ch)
         if current:
-            items.append(''.join(current).strip().strip('"'))
+            items.append("".join(current).strip().strip('"'))
         return [_coerce_value(x) for x in items if x]
     return [_coerce_value(x.strip()) for x in inner.split(",") if x.strip()]
 
@@ -462,13 +463,13 @@ def _parse_inline_dict(s):
         for ch in inner:
             if ch == '"':
                 in_quotes = not in_quotes
-            elif ch == ',' and not in_quotes:
-                pairs.append(''.join(current).strip())
+            elif ch == "," and not in_quotes:
+                pairs.append("".join(current).strip())
                 current = []
             else:
                 current.append(ch)
         if current:
-            pairs.append(''.join(current).strip())
+            pairs.append("".join(current).strip())
     else:
         pairs = [p.strip() for p in inner.split(",")]
     result = {}

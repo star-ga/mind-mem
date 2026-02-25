@@ -94,8 +94,12 @@ DEFAULT_CONFIG = {
     "scan_schedule": "daily",
     "mcp_acl": {
         "admin_tools": [
-            "write_memory", "apply_proposal", "approve_apply",
-            "rollback_proposal", "delete_memory_item", "reindex_vectors",
+            "write_memory",
+            "apply_proposal",
+            "approve_apply",
+            "rollback_proposal",
+            "delete_memory_item",
+            "reindex_vectors",
         ],
         "default_scope": "user",
     },
@@ -149,7 +153,9 @@ def _validate_config(cfg: dict) -> dict:
         except (TypeError, ValueError):
             _log.warning(
                 "config_value_invalid: recall.%s=%r is not numeric, using default %s",
-                key, raw, default,
+                key,
+                raw,
+                default,
             )
             recall[key] = type(default)(default)
             continue
@@ -160,7 +166,11 @@ def _validate_config(cfg: dict) -> dict:
             clamped = type(default)(clamped)
             _log.warning(
                 "config_value_clamped: recall.%s=%s out of range [%s, %s], clamped to %s",
-                key, raw, lo, hi, clamped,
+                key,
+                raw,
+                lo,
+                hi,
+                clamped,
             )
             recall[key] = clamped
         else:

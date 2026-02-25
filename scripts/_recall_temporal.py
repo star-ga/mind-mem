@@ -13,26 +13,48 @@ __all__ = [
 
 # Month name -> number mapping
 _MONTH_NAMES = {
-    "january": 1, "february": 2, "march": 3, "april": 4,
-    "may": 5, "june": 6, "july": 7, "august": 8,
-    "september": 9, "october": 10, "november": 11, "december": 12,
-    "jan": 1, "feb": 2, "mar": 3, "apr": 4,
-    "jun": 6, "jul": 7, "aug": 8, "sep": 9, "sept": 9,
-    "oct": 10, "nov": 11, "dec": 12,
+    "january": 1,
+    "february": 2,
+    "march": 3,
+    "april": 4,
+    "may": 5,
+    "june": 6,
+    "july": 7,
+    "august": 8,
+    "september": 9,
+    "october": 10,
+    "november": 11,
+    "december": 12,
+    "jan": 1,
+    "feb": 2,
+    "mar": 3,
+    "apr": 4,
+    "jun": 6,
+    "jul": 7,
+    "aug": 8,
+    "sep": 9,
+    "sept": 9,
+    "oct": 10,
+    "nov": 11,
+    "dec": 12,
 }
 
 # Patterns for relative time references, ordered by specificity
 _LAST_N_DAYS_RE = re.compile(
-    r"\blast\s+(\d+)\s+days?\b", re.IGNORECASE,
+    r"\blast\s+(\d+)\s+days?\b",
+    re.IGNORECASE,
 )
 _N_DAYS_AGO_RE = re.compile(
-    r"\b(\d+)\s+days?\s+ago\b", re.IGNORECASE,
+    r"\b(\d+)\s+days?\s+ago\b",
+    re.IGNORECASE,
 )
 _N_WEEKS_AGO_RE = re.compile(
-    r"\b(\d+)\s+weeks?\s+ago\b", re.IGNORECASE,
+    r"\b(\d+)\s+weeks?\s+ago\b",
+    re.IGNORECASE,
 )
 _N_MONTHS_AGO_RE = re.compile(
-    r"\b(\d+)\s+months?\s+ago\b", re.IGNORECASE,
+    r"\b(\d+)\s+months?\s+ago\b",
+    re.IGNORECASE,
 )
 _LAST_WEEK_RE = re.compile(r"\blast\s+week\b", re.IGNORECASE)
 _LAST_MONTH_RE = re.compile(r"\blast\s+month\b", re.IGNORECASE)
@@ -54,10 +76,12 @@ _IN_YEAR_RE = re.compile(r"\bin\s+(\d{4})\b", re.IGNORECASE)
 
 # "before/after DATE" where DATE is YYYY-MM-DD or "Month DD, YYYY" or "DD Month YYYY"
 _BEFORE_DATE_RE = re.compile(
-    r"\bbefore\s+(\d{4}-\d{2}-\d{2})\b", re.IGNORECASE,
+    r"\bbefore\s+(\d{4}-\d{2}-\d{2})\b",
+    re.IGNORECASE,
 )
 _AFTER_DATE_RE = re.compile(
-    r"\bafter\s+(\d{4}-\d{2}-\d{2})\b", re.IGNORECASE,
+    r"\bafter\s+(\d{4}-\d{2}-\d{2})\b",
+    re.IGNORECASE,
 )
 
 # "before/after Month DD, YYYY" or "before/after Month YYYY"

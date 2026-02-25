@@ -1,4 +1,5 @@
 """Tests for _allow_decompose recall parameter."""
+
 from __future__ import annotations
 
 import os

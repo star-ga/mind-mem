@@ -1,4 +1,5 @@
 """Tests for recall with large workspaces."""
+
 from __future__ import annotations
 
 import os
@@ -19,11 +20,13 @@ def _ws(n=100):
             f.write(f"Statement: Large workspace block {i} about topic {chr(65 + i % 26)}\n\n")
     return ws
 
+
 def test_100_blocks():
     ws = _ws(100)
     results = recall(ws, "large workspace block", limit=10)
     assert isinstance(results, list)
     assert len(results) <= 10
+
 
 def test_recall_completes_in_time():
     ws = _ws(100)
@@ -31,6 +34,7 @@ def test_recall_completes_in_time():
     recall(ws, "workspace block topic", limit=10)
     elapsed = (time.perf_counter() - start) * 1000
     assert elapsed < 5000, f"Recall took {elapsed:.0f}ms"
+
 
 def test_limit_respected_large():
     ws = _ws(100)

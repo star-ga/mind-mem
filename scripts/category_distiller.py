@@ -37,9 +37,13 @@ except ImportError:
     def parse_file(path: str) -> list[dict]:  # type: ignore[misc]
         return []
 
-    def get_active(blocks: list[dict], status_field: str = "Status",  # type: ignore[misc]
-                   active_value: str = "active") -> list[dict]:
+    def get_active(
+        blocks: list[dict],
+        status_field: str = "Status",  # type: ignore[misc]
+        active_value: str = "active",
+    ) -> list[dict]:
         return [b for b in blocks if b.get(status_field) == active_value]
+
 
 try:
     from .observability import get_logger
@@ -68,12 +72,14 @@ except ImportError:
     def get_logger(component: str) -> _FallbackLogger:  # type: ignore[misc]
         return _FallbackLogger(component)
 
+
 log = get_logger("category_distiller")
 
 # Optional MIND kernel acceleration
 _mind_ffi = None
 try:
     from .mind_ffi import MindMemKernel
+
     _k = MindMemKernel()
     if _k._lib is not None:
         _mind_ffi = _k
@@ -85,6 +91,7 @@ except (ImportError, OSError):
 # CategoryDistiller
 # ---------------------------------------------------------------------------
 
+
 class CategoryDistiller:
     """Periodically scans memory blocks and produces category summary files.
 
@@ -94,9 +101,18 @@ class CategoryDistiller:
     """
 
     DEFAULT_CATEGORIES = [
-        "architecture", "decisions", "people", "preferences",
-        "workflows", "bugs", "credentials", "integrations",
-        "goals", "constraints", "configuration", "memory",
+        "architecture",
+        "decisions",
+        "people",
+        "preferences",
+        "workflows",
+        "bugs",
+        "credentials",
+        "integrations",
+        "goals",
+        "constraints",
+        "configuration",
+        "memory",
         "governance",
     ]
 
@@ -104,67 +120,193 @@ class CategoryDistiller:
     # Each keyword list is checked against block text (case-insensitive).
     CATEGORY_KEYWORDS: dict[str, list[str]] = {
         "architecture": [
-            "architecture", "design", "pattern", "schema", "layer",
-            "api", "endpoint", "microservice", "database", "infra", "deploy",
-            "module", "component", "service", "backend", "frontend",
-            "protocol", "interface", "abstraction", "runtime",
+            "architecture",
+            "design",
+            "pattern",
+            "schema",
+            "layer",
+            "api",
+            "endpoint",
+            "microservice",
+            "database",
+            "infra",
+            "deploy",
+            "module",
+            "component",
+            "service",
+            "backend",
+            "frontend",
+            "protocol",
+            "interface",
+            "abstraction",
+            "runtime",
         ],
         "decisions": [
-            "decision", "decided", "chose", "adopted", "rejected",
-            "migrated", "switched", "approved", "deprecated",
-            "rationale", "trade-off", "tradeoff",
+            "decision",
+            "decided",
+            "chose",
+            "adopted",
+            "rejected",
+            "migrated",
+            "switched",
+            "approved",
+            "deprecated",
+            "rationale",
+            "trade-off",
+            "tradeoff",
         ],
         "people": [
-            "team", "person", "member", "hire", "onboard",
-            "contact", "stakeholder", "@", "contributor", "maintainer",
+            "team",
+            "person",
+            "member",
+            "hire",
+            "onboard",
+            "contact",
+            "stakeholder",
+            "@",
+            "contributor",
+            "maintainer",
         ],
         "preferences": [
-            "prefer", "always", "never", "convention", "style",
-            "format", "standard", "rule", "policy", "guideline",
-            "practice", "enforce", "require",
+            "prefer",
+            "always",
+            "never",
+            "convention",
+            "style",
+            "format",
+            "standard",
+            "rule",
+            "policy",
+            "guideline",
+            "practice",
+            "enforce",
+            "require",
         ],
         "workflows": [
-            "workflow", "process", "pipeline", "ci", "cd",
-            "deploy", "release", "review", "merge", "build",
-            "test", "lint", "automation", "script", "hook",
+            "workflow",
+            "process",
+            "pipeline",
+            "ci",
+            "cd",
+            "deploy",
+            "release",
+            "review",
+            "merge",
+            "build",
+            "test",
+            "lint",
+            "automation",
+            "script",
+            "hook",
         ],
         "bugs": [
-            "bug", "fix", "error", "crash", "regression",
-            "issue", "debug", "patch", "hotfix", "failure",
-            "broken", "corrupt", "invalid", "unexpected",
+            "bug",
+            "fix",
+            "error",
+            "crash",
+            "regression",
+            "issue",
+            "debug",
+            "patch",
+            "hotfix",
+            "failure",
+            "broken",
+            "corrupt",
+            "invalid",
+            "unexpected",
         ],
         "credentials": [
-            "key", "token", "secret", "password", "auth",
-            "oauth", "credential", "api-key", "certificate",
-            "permission", "access", "role",
+            "key",
+            "token",
+            "secret",
+            "password",
+            "auth",
+            "oauth",
+            "credential",
+            "api-key",
+            "certificate",
+            "permission",
+            "access",
+            "role",
         ],
         "integrations": [
-            "integration", "webhook", "plugin", "extension",
-            "connector", "sdk", "library", "package", "mcp",
-            "hook", "provider", "client", "server",
+            "integration",
+            "webhook",
+            "plugin",
+            "extension",
+            "connector",
+            "sdk",
+            "library",
+            "package",
+            "mcp",
+            "hook",
+            "provider",
+            "client",
+            "server",
         ],
         "goals": [
-            "goal", "objective", "milestone", "target", "roadmap",
-            "plan", "deadline", "priority", "kpi", "metric",
-            "benchmark", "performance",
+            "goal",
+            "objective",
+            "milestone",
+            "target",
+            "roadmap",
+            "plan",
+            "deadline",
+            "priority",
+            "kpi",
+            "metric",
+            "benchmark",
+            "performance",
         ],
         "constraints": [
-            "constraint", "limitation", "requirement", "must",
-            "cannot", "blocker", "dependency", "safety",
-            "security", "compliance", "boundary", "restriction",
+            "constraint",
+            "limitation",
+            "requirement",
+            "must",
+            "cannot",
+            "blocker",
+            "dependency",
+            "safety",
+            "security",
+            "compliance",
+            "boundary",
+            "restriction",
         ],
         "configuration": [
-            "config", "configuration", "setting", "parameter",
-            "environment", "env", "variable", "flag", "option",
+            "config",
+            "configuration",
+            "setting",
+            "parameter",
+            "environment",
+            "env",
+            "variable",
+            "flag",
+            "option",
         ],
         "memory": [
-            "memory", "recall", "retrieval", "index", "search",
-            "context", "knowledge", "history", "signal", "capture",
+            "memory",
+            "recall",
+            "retrieval",
+            "index",
+            "search",
+            "context",
+            "knowledge",
+            "history",
+            "signal",
+            "capture",
         ],
         "governance": [
-            "governance", "audit", "contradiction", "drift",
-            "integrity", "scan", "compliance", "approval",
-            "proposal", "review", "oversight",
+            "governance",
+            "audit",
+            "contradiction",
+            "drift",
+            "integrity",
+            "scan",
+            "compliance",
+            "approval",
+            "proposal",
+            "review",
+            "oversight",
         ],
     }
 
@@ -181,9 +323,7 @@ class CategoryDistiller:
             already exists in ``CATEGORY_KEYWORDS`` the keywords are appended;
             otherwise a new category is created.
         """
-        self.categories: dict[str, list[str]] = {
-            k: list(v) for k, v in self.CATEGORY_KEYWORDS.items()
-        }
+        self.categories: dict[str, list[str]] = {k: list(v) for k, v in self.CATEGORY_KEYWORDS.items()}
         if extra_categories:
             for cat, keywords in extra_categories.items():
                 if cat in self.categories:
@@ -262,10 +402,7 @@ class CategoryDistiller:
 
         # Parse tags into a list for exact matching
         tags_str = block.get("Tags", "")
-        tags_list: list[str] = (
-            [t.strip().lower() for t in tags_str.split(",") if t.strip()]
-            if tags_str else []
-        )
+        tags_list: list[str] = [t.strip().lower() for t in tags_str.split(",") if t.strip()] if tags_str else []
 
         for category, keywords in self.categories.items():
             score = 0
@@ -311,10 +448,7 @@ class CategoryDistiller:
                     parts.append(str(val).lower())
             block_texts.append(" ".join(parts))
             tags_str = block.get("Tags", "")
-            block_tags.append(
-                [t.strip().lower() for t in tags_str.split(",") if t.strip()]
-                if tags_str else []
-            )
+            block_tags.append([t.strip().lower() for t in tags_str.split(",") if t.strip()] if tags_str else [])
 
         # Build overlap matrices [N*C] flat
         kw_overlap = [0.0] * (n_blocks * n_cats)
@@ -340,15 +474,23 @@ class CategoryDistiller:
 
         # Call C kernels: affinity = kw_w * kw + tag_w * tag + ent_w * ent
         affinity = _mind_ffi.category_affinity_py(
-            kw_overlap, tag_match, ent_match,
-            n_blocks=n_blocks, n_cats=n_cats,
-            kw_w=1.0, tag_w=3.0, ent_w=0.0,
+            kw_overlap,
+            tag_match,
+            ent_match,
+            n_blocks=n_blocks,
+            n_cats=n_cats,
+            kw_w=1.0,
+            tag_w=3.0,
+            ent_w=0.0,
         )
 
         # Assign categories with threshold
         threshold = float(self._SCORE_THRESHOLD)
         assignments = _mind_ffi.category_assign_py(
-            affinity, threshold, n_blocks=n_blocks, n_cats=n_cats,
+            affinity,
+            threshold,
+            n_blocks=n_blocks,
+            n_cats=n_cats,
         )
 
         # Build category map from assignment matrix
@@ -363,8 +505,7 @@ class CategoryDistiller:
             if not assigned_any:
                 category_map.setdefault("uncategorized", []).append(blocks[bi])
 
-        log.info("batch_categorize_mind", n_blocks=n_blocks, n_cats=n_cats,
-                 categories_found=len(category_map))
+        log.info("batch_categorize_mind", n_blocks=n_blocks, n_cats=n_cats, categories_found=len(category_map))
         return category_map
 
     def distill(self, workspace: str) -> list[str]:
@@ -409,9 +550,7 @@ class CategoryDistiller:
         manifest = {
             "generated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "total_blocks": len(blocks),
-            "categories": {
-                cat: len(blks) for cat, blks in sorted(category_map.items())
-            },
+            "categories": {cat: len(blks) for cat, blks in sorted(category_map.items())},
         }
         manifest_path = os.path.join(cat_dir, "_manifest.json")
         with open(manifest_path, "w", encoding="utf-8") as f:
@@ -426,9 +565,7 @@ class CategoryDistiller:
         )
         return written
 
-    def _write_category_file(
-        self, category: str, blocks: list[dict], workspace: str
-    ) -> str:
+    def _write_category_file(self, category: str, blocks: list[dict], workspace: str) -> str:
         """Write ``categories/{category}.md`` with block summaries and source refs."""
         cat_dir = os.path.join(workspace, "categories")
         os.makedirs(cat_dir, exist_ok=True)
@@ -485,9 +622,7 @@ class CategoryDistiller:
     # Query-time helpers (anticipatory context)
     # ------------------------------------------------------------------
 
-    def get_category_context(
-        self, query: str, workspace: str, limit: int = 3
-    ) -> str:
+    def get_category_context(self, query: str, workspace: str, limit: int = 3) -> str:
         """Return relevant category summaries for a query.
 
         Scores each known category by keyword overlap with the query,
@@ -543,6 +678,7 @@ class CategoryDistiller:
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     """Run the category distiller from the command line.
 
@@ -551,9 +687,7 @@ def main() -> None:
     """
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="mind-mem Category Distiller — deterministic thematic summaries"
-    )
+    parser = argparse.ArgumentParser(description="mind-mem Category Distiller — deterministic thematic summaries")
     parser.add_argument(
         "workspace",
         help="Path to the mind-mem workspace root",

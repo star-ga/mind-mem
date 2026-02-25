@@ -1,4 +1,5 @@
 """Tests for workspace directory structure."""
+
 from __future__ import annotations
 
 import os

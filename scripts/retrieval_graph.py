@@ -98,6 +98,7 @@ def ensure_graph_tables(workspace: str) -> None:
 # Retrieval logging
 # ---------------------------------------------------------------------------
 
+
 def log_retrieval(
     workspace: str,
     query: str,
@@ -119,15 +120,14 @@ def log_retrieval(
         qhash = hashlib.sha256(query.encode()).hexdigest()[:16]
 
         conn.execute(
-            "INSERT INTO retrieval_log (query_text, query_hash, mem_ids, scores, top_k) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO retrieval_log (query_text, query_hash, mem_ids, scores, top_k) VALUES (?, ?, ?, ?, ?)",
             (query, qhash, json.dumps(mem_ids), json.dumps(scores), len(results)),
         )
 
         # Update co-retrieval edges (undirected: always store lo < hi)
         edge_weight = 1.0 / max(len(mem_ids), 1)
         for i, a in enumerate(mem_ids):
-            for b in mem_ids[i + 1:]:
+            for b in mem_ids[i + 1 :]:
                 lo, hi = (a, b) if a < b else (b, a)
                 conn.execute(
                     "INSERT INTO co_retrieval (mem1_id, mem2_id, weight, hit_count, updated_at) "
@@ -153,6 +153,7 @@ def log_retrieval(
 # ---------------------------------------------------------------------------
 # Score propagation (PageRank-like)
 # ---------------------------------------------------------------------------
+
 
 def propagate_scores(
     workspace: str,
@@ -219,6 +220,7 @@ def propagate_scores(
 # Hard negative recording (Feature 5: abstention-guided)
 # ---------------------------------------------------------------------------
 
+
 def record_hard_negatives(
     workspace: str,
     query: str,
@@ -283,8 +285,7 @@ def get_hard_negative_ids(workspace: str, *, max_age_days: int = 30) -> set[str]
         conn = _connect(workspace)
         conn.executescript(_SCHEMA_SQL)
         rows = conn.execute(
-            "SELECT DISTINCT mem_id FROM hard_negatives "
-            "WHERE timestamp > datetime('now', ?)",
+            "SELECT DISTINCT mem_id FROM hard_negatives WHERE timestamp > datetime('now', ?)",
             (f"-{max_age_days} days",),
         ).fetchall()
         return {row["mem_id"] for row in rows}

@@ -43,7 +43,6 @@ DECISION_PATTERNS = [
     (r"\bfrom now on\b", "decision", "high"),
     (r"\bgoing forward\b", "decision", "high"),
     (r"\bno longer\b", "decision", "high"),
-
     # Medium confidence decision patterns
     (r"\blet'?s go with\b", "decision", "medium"),
     (r"\bswitching to\b", "decision", "medium"),
@@ -51,18 +50,15 @@ DECISION_PATTERNS = [
     (r"\bwe('re| are) (moving|switching|changing)\b", "decision", "medium"),
     (r"\bapproved\b", "decision", "medium"),
     (r"\bfinalized\b", "decision", "medium"),
-
     # Low confidence decision patterns (contextual)
     (r"\bprefer\b.*\bover\b", "decision", "low"),
     (r"\bdefault\b.*\bwill be\b", "decision", "low"),
-
     # High confidence task patterns
     (r"\baction item\b", "task", "high"),
     (r"\bdeadline\b", "task", "high"),
     (r"\bby end of\b", "task", "high"),
     (r"\bmust\b.*\bbefore\b", "task", "high"),
     (r"\bblocked on\b", "task", "high"),
-
     # Medium confidence task patterns
     (r"\bneed to\b", "task", "medium"),
     (r"\btodo\b", "task", "medium"),
@@ -70,7 +66,6 @@ DECISION_PATTERNS = [
     (r"\bshould\b.*\bbefore\b", "task", "medium"),
     (r"\bnext step\b", "task", "medium"),
     (r"\brequires\b", "task", "medium"),
-
     # Low confidence task patterns
     (r"\bwould be nice\b", "task", "low"),
     (r"\bsomeday\b", "task", "low"),
@@ -96,6 +91,7 @@ def content_hash(text: str) -> str:
 # ---------------------------------------------------------------------------
 # Structured extraction
 # ---------------------------------------------------------------------------
+
 
 def extract_structure(text: str, sig_type: str, pattern: str) -> dict:
     """Extract structured fields from captured text.
@@ -135,14 +131,29 @@ def extract_structure(text: str, sig_type: str, pattern: str) -> dict:
 
     # Extract tags from common keywords
     tag_keywords = {
-        "database": "database", "db": "database", "postgres": "database",
-        "auth": "security", "security": "security", "token": "security",
-        "api": "api", "endpoint": "api", "rest": "api",
-        "deploy": "deployment", "ci": "deployment", "cd": "deployment",
-        "test": "testing", "spec": "testing", "coverage": "testing",
-        "bug": "bugfix", "fix": "bugfix", "error": "bugfix",
-        "infra": "infrastructure", "server": "infrastructure",
-        "perf": "performance", "latency": "performance", "slow": "performance",
+        "database": "database",
+        "db": "database",
+        "postgres": "database",
+        "auth": "security",
+        "security": "security",
+        "token": "security",
+        "api": "api",
+        "endpoint": "api",
+        "rest": "api",
+        "deploy": "deployment",
+        "ci": "deployment",
+        "cd": "deployment",
+        "test": "testing",
+        "spec": "testing",
+        "coverage": "testing",
+        "bug": "bugfix",
+        "fix": "bugfix",
+        "error": "bugfix",
+        "infra": "infrastructure",
+        "server": "infrastructure",
+        "perf": "performance",
+        "latency": "performance",
+        "slow": "performance",
     }
     for keyword, tag in tag_keywords.items():
         if keyword in text_lower and tag not in structure["tags"]:
@@ -154,6 +165,7 @@ def extract_structure(text: str, sig_type: str, pattern: str) -> dict:
 # ---------------------------------------------------------------------------
 # Log scanning
 # ---------------------------------------------------------------------------
+
 
 def find_today_log(workspace: str) -> tuple[str | None, str]:
     """Find today's daily log file."""
@@ -200,15 +212,17 @@ def scan_log(log_path: str) -> list[dict]:
         for pattern, sig_type, confidence in DECISION_PATTERNS:
             if re.search(pattern, stripped, re.IGNORECASE):
                 structure = extract_structure(stripped, sig_type, pattern)
-                signals.append({
-                    "line": i,
-                    "type": sig_type,
-                    "text": stripped[:150],
-                    "pattern": pattern,
-                    "confidence": confidence,
-                    "priority": CONFIDENCE_TO_PRIORITY[confidence],
-                    "structure": structure,
-                })
+                signals.append(
+                    {
+                        "line": i,
+                        "type": sig_type,
+                        "text": stripped[:150],
+                        "pattern": pattern,
+                        "confidence": confidence,
+                        "priority": CONFIDENCE_TO_PRIORITY[confidence],
+                        "structure": structure,
+                    }
+                )
                 break  # one match per line is enough
 
     return signals
@@ -274,7 +288,7 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
                 if st.get("tags"):
                     f.write(f"Tags: {', '.join(st['tags'])}\n")
 
-                prefix = 'D-' if sig['type'] == 'decision' else 'T-'
+                prefix = "D-" if sig["type"] == "decision" else "T-"
                 f.write(f"Action: Review and formalize as {prefix} block if warranted\n")
                 f.write("\n---\n")
                 counter += 1

@@ -94,8 +94,13 @@ def migrate_workspace(workspace: str) -> dict:
             fn(workspace)
             applied.append(f"{from_v} -> {to_v}: {desc}")
 
-    _log.info("migrate_done", workspace=workspace, from_version=from_version,
-              to_version=CURRENT_SCHEMA_VERSION, steps=len(applied))
+    _log.info(
+        "migrate_done",
+        workspace=workspace,
+        from_version=from_version,
+        to_version=CURRENT_SCHEMA_VERSION,
+        steps=len(applied),
+    )
 
     return {
         "migrated": True,
@@ -108,6 +113,7 @@ def migrate_workspace(workspace: str) -> dict:
 # ---------------------------------------------------------------------------
 # Migration steps (each must be idempotent)
 # ---------------------------------------------------------------------------
+
 
 def _migrate_v1_to_v2(workspace: str) -> None:
     """v1.0 -> v2.0: add intelligence/proposed/, shared/, and schema_version field."""
@@ -184,6 +190,7 @@ _MIGRATIONS.append(("2.0.0", "2.1.0", "Rename self_correcting_mode to governance
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     ws = sys.argv[1] if len(sys.argv) > 1 else "."

@@ -1,4 +1,5 @@
 """Tests for integrity scan engine."""
+
 from __future__ import annotations
 
 import os
@@ -21,6 +22,7 @@ def test_scan_workspace_no_crash():
     """Scanning a valid workspace doesn't crash."""
     try:
         from scripts.scan_engine import scan
+
         ws = _make_workspace_with_blocks()
         result = scan(ws)
         assert isinstance(result, (dict, list))
@@ -32,6 +34,7 @@ def test_scan_empty_workspace():
     """Scanning empty workspace returns clean result."""
     try:
         from scripts.scan_engine import scan
+
         ws = tempfile.mkdtemp()
         init(ws)
         result = scan(ws)

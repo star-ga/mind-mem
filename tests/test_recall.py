@@ -54,9 +54,7 @@ class TestExtractText(unittest.TestCase):
 
     def test_extracts_constraint_sigs(self):
         block = {
-            "ConstraintSignatures": [
-                {"subject": "we", "predicate": "must_use", "object": "JWT", "domain": "auth"}
-            ]
+            "ConstraintSignatures": [{"subject": "we", "predicate": "must_use", "object": "JWT", "domain": "auth"}]
         }
         text = extract_text(block)
         self.assertIn("we", text)
@@ -106,10 +104,15 @@ class TestRecall(unittest.TestCase):
         # Create a dummy task block so TF-IDF has >1 document (IDF needs document diversity)
         with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w") as f:
             f.write("[T-20260213-099]\nTitle: Unrelated placeholder task\nStatus: active\n")
-        for fname in ["entities/projects.md", "entities/people.md",
-                       "entities/tools.md", "entities/incidents.md",
-                       "intelligence/CONTRADICTIONS.md", "intelligence/DRIFT.md",
-                       "intelligence/SIGNALS.md"]:
+        for fname in [
+            "entities/projects.md",
+            "entities/people.md",
+            "entities/tools.md",
+            "entities/incidents.md",
+            "intelligence/CONTRADICTIONS.md",
+            "intelligence/DRIFT.md",
+            "intelligence/SIGNALS.md",
+        ]:
             path = os.path.join(tmpdir, fname)
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w") as f:
@@ -130,10 +133,7 @@ class TestRecall(unittest.TestCase):
 
     def test_finds_matching_block(self):
         with tempfile.TemporaryDirectory() as td:
-            content = (
-                "[D-20260213-001]\nStatement: Use JWT for authentication\n"
-                "Status: active\nDate: 2026-02-13\n"
-            )
+            content = "[D-20260213-001]\nStatement: Use JWT for authentication\nStatus: active\nDate: 2026-02-13\n"
             ws = self._setup_workspace(td, content)
             results = recall(ws, "JWT authentication")
             self.assertGreater(len(results), 0)
@@ -211,10 +211,15 @@ class TestGraphRecall(unittest.TestCase):
             f.write(decisions_content)
         with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w") as f:
             f.write(tasks_content or "[T-20260213-099]\nTitle: Unrelated placeholder\nStatus: active\n")
-        for fname in ["entities/projects.md", "entities/people.md",
-                       "entities/tools.md", "entities/incidents.md",
-                       "intelligence/CONTRADICTIONS.md", "intelligence/DRIFT.md",
-                       "intelligence/SIGNALS.md"]:
+        for fname in [
+            "entities/projects.md",
+            "entities/people.md",
+            "entities/tools.md",
+            "entities/incidents.md",
+            "intelligence/CONTRADICTIONS.md",
+            "intelligence/DRIFT.md",
+            "intelligence/SIGNALS.md",
+        ]:
             path = os.path.join(tmpdir, fname)
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w") as f:
@@ -224,10 +229,7 @@ class TestGraphRecall(unittest.TestCase):
     def test_graph_discovers_neighbor(self):
         """Graph recall should surface blocks connected to keyword matches."""
         with tempfile.TemporaryDirectory() as td:
-            decisions = (
-                "[D-20260213-001]\nStatement: Use PostgreSQL database\n"
-                "Status: active\nDate: 2026-02-13\n"
-            )
+            decisions = "[D-20260213-001]\nStatement: Use PostgreSQL database\nStatus: active\nDate: 2026-02-13\n"
             tasks = (
                 "[T-20260213-001]\nTitle: Set up database migration\n"
                 "Status: active\nDate: 2026-02-13\n"
@@ -252,10 +254,7 @@ class TestGraphRecall(unittest.TestCase):
     def test_graph_boost_marks_results(self):
         """Graph-discovered results should have via_graph flag."""
         with tempfile.TemporaryDirectory() as td:
-            decisions = (
-                "[D-20260213-001]\nStatement: Use PostgreSQL database\n"
-                "Status: active\nDate: 2026-02-13\n"
-            )
+            decisions = "[D-20260213-001]\nStatement: Use PostgreSQL database\nStatus: active\nDate: 2026-02-13\n"
             tasks = (
                 "[T-20260213-001]\nTitle: Setup migration\n"
                 "Status: active\nAlignsWith: D-20260213-001\n"
@@ -273,6 +272,7 @@ class TestStemmer(unittest.TestCase):
 
     def setUp(self):
         from mind_mem.recall import _stem
+
         self.stem = _stem
 
     def test_ing_suffix(self):
@@ -314,6 +314,7 @@ class TestExpandQuery(unittest.TestCase):
 
     def setUp(self):
         from mind_mem.recall import expand_query
+
         self.expand = expand_query
 
     def test_auth_expands(self):

@@ -68,10 +68,12 @@ def load_config(workspace: str = ".") -> dict[str, Any]:
 # Backend detection
 # ---------------------------------------------------------------------------
 
+
 def _ollama_available(model: str = "") -> bool:
     """Check if ollama is running and reachable at localhost:11434."""
     try:
         import urllib.request
+
         req = urllib.request.Request(
             "http://localhost:11434/api/tags",
             method="GET",
@@ -88,6 +90,7 @@ def _llama_cpp_available() -> bool:
     """Check if llama-cpp-python is importable."""
     try:
         import llama_cpp  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -117,15 +120,19 @@ def is_available(backend: str = "auto") -> bool:
 # LLM query helpers
 # ---------------------------------------------------------------------------
 
+
 def _query_ollama(prompt: str, model: str) -> str:
     """Send a prompt to ollama and return the response text."""
     import urllib.request
-    payload = json.dumps({
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": 0.1, "num_predict": 512},
-    }).encode()
+
+    payload = json.dumps(
+        {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"temperature": 0.1, "num_predict": 512},
+        }
+    ).encode()
     req = urllib.request.Request(
         "http://localhost:11434/api/generate",
         data=payload,
@@ -140,6 +147,7 @@ def _query_ollama(prompt: str, model: str) -> str:
 def _query_llama_cpp(prompt: str, model: str) -> str:
     """Send a prompt via llama-cpp-python and return the response text."""
     import llama_cpp
+
     # Use a cached model instance per model name
     if not hasattr(_query_llama_cpp, "_models"):
         _query_llama_cpp._models = {}
@@ -172,6 +180,7 @@ def _query_llm(prompt: str, model: str, backend: str = "auto") -> str:
 # ---------------------------------------------------------------------------
 # JSON extraction from LLM output
 # ---------------------------------------------------------------------------
+
 
 def _parse_json_from_response(text: str) -> list[dict]:
     """Extract a JSON array from LLM output, tolerating markdown fences."""
@@ -233,11 +242,13 @@ def extract_entities(text: str, model: str = "phi3:mini", backend: str = "auto")
     validated = []
     for ent in entities:
         if "name" in ent and "type" in ent:
-            validated.append({
-                "name": str(ent["name"]),
-                "type": str(ent["type"]),
-                "context": str(ent.get("context", "")),
-            })
+            validated.append(
+                {
+                    "name": str(ent["name"]),
+                    "type": str(ent["type"]),
+                    "context": str(ent.get("context", "")),
+                }
+            )
     return validated
 
 
@@ -289,17 +300,20 @@ def extract_facts(text: str, model: str = "phi3:mini", backend: str = "auto") ->
             except (ValueError, TypeError):
                 conf = 0.5
             conf = max(0.0, min(1.0, conf))
-            validated.append({
-                "claim": str(fact["claim"]),
-                "confidence": conf,
-                "category": str(fact.get("category", "state")),
-            })
+            validated.append(
+                {
+                    "claim": str(fact["claim"]),
+                    "confidence": conf,
+                    "category": str(fact.get("category", "state")),
+                }
+            )
     return validated
 
 
 # ---------------------------------------------------------------------------
 # Block enrichment
 # ---------------------------------------------------------------------------
+
 
 def enrich_block(
     block: dict,

@@ -92,8 +92,9 @@ class TestScanMarkdownFile(unittest.TestCase):
             path = self._write_md(td, "We decided to deprecate the old API endpoint.\n")
             result = scan_markdown_file(path)
             self.assertEqual(len(result), 1)
-            self.assertTrue(required_keys.issubset(result[0].keys()),
-                            f"Missing keys: {required_keys - result[0].keys()}")
+            self.assertTrue(
+                required_keys.issubset(result[0].keys()), f"Missing keys: {required_keys - result[0].keys()}"
+            )
 
     def test_line_number_tracking(self):
         """Signal line number matches the actual line in the file."""
@@ -130,6 +131,7 @@ class TestModuleStructure(unittest.TestCase):
     def test_imports_resolve(self):
         """The bootstrap_corpus module can be imported without error."""
         import mind_mem.bootstrap_corpus as mod
+
         self.assertTrue(hasattr(mod, "scan_markdown_file"))
         self.assertTrue(hasattr(mod, "main"))
 
@@ -140,6 +142,7 @@ class TestModuleStructure(unittest.TestCase):
     def test_argparser_creation(self):
         """The argparse parser can be constructed (we just invoke its creation path)."""
         import argparse
+
         # Re-create the parser as main() does — validates the arg spec is valid
         parser = argparse.ArgumentParser(description="mind-mem Bootstrap Corpus Backfill")
         parser.add_argument("workspace", help="Path to mind-mem workspace")

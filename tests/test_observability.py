@@ -82,6 +82,7 @@ class TestTimed(unittest.TestCase):
         m = Metrics()
         # Replace global metrics temporarily
         from mind_mem import observability
+
         original = observability.metrics
         observability.metrics = m
         try:

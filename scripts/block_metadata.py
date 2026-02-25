@@ -76,9 +76,7 @@ class BlockMetadataManager:
                 if len(block_ids) > 1:
                     for i, bid in enumerate(block_ids):
                         others = [b for j, b in enumerate(block_ids) if j != i]
-                        row = conn.execute(
-                            "SELECT connections FROM block_meta WHERE id = ?", (bid,)
-                        ).fetchone()
+                        row = conn.execute("SELECT connections FROM block_meta WHERE id = ?", (bid,)).fetchone()
                         if row and row[0]:
                             existing = set(json.loads(row[0])) if row[0] else set()
                         else:
@@ -152,25 +150,22 @@ class BlockMetadataManager:
         with self._lock:
             try:
                 conn = self._get_conn()
-                row = conn.execute(
-                    "SELECT importance FROM block_meta WHERE id = ?", (block_id,)
-                ).fetchone()
+                row = conn.execute("SELECT importance FROM block_meta WHERE id = ?", (block_id,)).fetchone()
                 conn.close()
                 return row[0] if row else 1.0
             except (sqlite3.Error, TypeError):
                 return 1.0
 
-    def evolve_keywords(self, block_id: str, query_tokens: list[str],
-                        block_content: str = "", max_keywords: int = 20) -> None:
+    def evolve_keywords(
+        self, block_id: str, query_tokens: list[str], block_content: str = "", max_keywords: int = 20
+    ) -> None:
         """Add query tokens found in block content to block's keyword set."""
         if not query_tokens:
             return
         with self._lock:
             try:
                 conn = self._get_conn()
-                row = conn.execute(
-                    "SELECT keywords FROM block_meta WHERE id = ?", (block_id,)
-                ).fetchone()
+                row = conn.execute("SELECT keywords FROM block_meta WHERE id = ?", (block_id,)).fetchone()
 
                 existing_kw = set()
                 if row and row[0]:
@@ -203,9 +198,7 @@ class BlockMetadataManager:
         with self._lock:
             try:
                 conn = self._get_conn()
-                row = conn.execute(
-                    "SELECT connections FROM block_meta WHERE id = ?", (block_id,)
-                ).fetchone()
+                row = conn.execute("SELECT connections FROM block_meta WHERE id = ?", (block_id,)).fetchone()
                 conn.close()
                 if row and row[0]:
                     connections = json.loads(row[0])

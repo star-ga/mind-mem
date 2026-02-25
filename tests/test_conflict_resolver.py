@@ -153,6 +153,7 @@ class TestResolveContradictions(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.td, ignore_errors=True)
 
     def test_no_contradictions_file(self):
@@ -205,6 +206,7 @@ class TestGenerateResolutionProposals(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.td, ignore_errors=True)
 
     def test_no_auto_resolvable(self):

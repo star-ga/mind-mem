@@ -33,29 +33,144 @@ _log = get_logger("session_summarizer")
 # File path extraction
 # ---------------------------------------------------------------------------
 
-FILE_PATH_RE = re.compile(
-    r"(?:/home/\w+/[\w./-]+|(?:\./|\.\./)[\w./-]+|[\w-]+/[\w./-]+\.\w{1,6})"
-)
+FILE_PATH_RE = re.compile(r"(?:/home/\w+/[\w./-]+|(?:\./|\.\./)[\w./-]+|[\w-]+/[\w./-]+\.\w{1,6})")
 
 # Proper noun / topic extraction (capitalized words, 2+ chars, not common words)
-COMMON_WORDS = frozenset({
-    "the", "and", "for", "are", "but", "not", "you", "all", "can", "has",
-    "her", "was", "one", "our", "out", "its", "his", "how", "man", "new",
-    "now", "old", "see", "way", "may", "day", "too", "any", "who", "boy",
-    "did", "get", "let", "say", "she", "use", "been", "call", "each",
-    "from", "have", "just", "make", "than", "that", "them", "then", "this",
-    "very", "when", "with", "also", "back", "been", "come", "could",
-    "first", "into", "like", "long", "look", "only", "over", "such",
-    "take", "will", "about", "could", "every", "found", "great", "here",
-    "still", "their", "these", "think", "those", "under", "where", "which",
-    "while", "would", "after", "before", "should", "right", "through",
-    "true", "false", "none", "null", "error", "warning", "info", "debug",
-    "import", "export", "return", "function", "class", "const", "file",
-    "line", "type", "name", "path", "data", "code", "test", "added",
-    "instead", "using", "here", "need", "want", "sure", "okay", "done",
-    "note", "update", "change", "check", "create", "delete", "read",
-    "write", "run", "start", "stop", "open", "close",
-})
+COMMON_WORDS = frozenset(
+    {
+        "the",
+        "and",
+        "for",
+        "are",
+        "but",
+        "not",
+        "you",
+        "all",
+        "can",
+        "has",
+        "her",
+        "was",
+        "one",
+        "our",
+        "out",
+        "its",
+        "his",
+        "how",
+        "man",
+        "new",
+        "now",
+        "old",
+        "see",
+        "way",
+        "may",
+        "day",
+        "too",
+        "any",
+        "who",
+        "boy",
+        "did",
+        "get",
+        "let",
+        "say",
+        "she",
+        "use",
+        "been",
+        "call",
+        "each",
+        "from",
+        "have",
+        "just",
+        "make",
+        "than",
+        "that",
+        "them",
+        "then",
+        "this",
+        "very",
+        "when",
+        "with",
+        "also",
+        "back",
+        "been",
+        "come",
+        "could",
+        "first",
+        "into",
+        "like",
+        "long",
+        "look",
+        "only",
+        "over",
+        "such",
+        "take",
+        "will",
+        "about",
+        "could",
+        "every",
+        "found",
+        "great",
+        "here",
+        "still",
+        "their",
+        "these",
+        "think",
+        "those",
+        "under",
+        "where",
+        "which",
+        "while",
+        "would",
+        "after",
+        "before",
+        "should",
+        "right",
+        "through",
+        "true",
+        "false",
+        "none",
+        "null",
+        "error",
+        "warning",
+        "info",
+        "debug",
+        "import",
+        "export",
+        "return",
+        "function",
+        "class",
+        "const",
+        "file",
+        "line",
+        "type",
+        "name",
+        "path",
+        "data",
+        "code",
+        "test",
+        "added",
+        "instead",
+        "using",
+        "here",
+        "need",
+        "want",
+        "sure",
+        "okay",
+        "done",
+        "note",
+        "update",
+        "change",
+        "check",
+        "create",
+        "delete",
+        "read",
+        "write",
+        "run",
+        "start",
+        "stop",
+        "open",
+        "close",
+    }
+)
 
 TOPIC_RE = re.compile(r"\b([A-Z][a-zA-Z0-9_-]{2,})\b")
 
@@ -74,6 +189,7 @@ def file_hash(path: str) -> str:
 # ---------------------------------------------------------------------------
 # Summary extraction
 # ---------------------------------------------------------------------------
+
 
 def extract_summary(messages: list[dict]) -> dict:
     """Extract structured summary from parsed transcript messages.
@@ -109,12 +225,14 @@ def extract_summary(messages: list[dict]) -> dict:
             if pattern.search(text):
                 excerpt = text[:150].strip()
                 if excerpt and len(excerpt) > 15:
-                    decisions.append({
-                        "type": sig_type,
-                        "confidence": confidence,
-                        "excerpt": excerpt,
-                        "role": role,
-                    })
+                    decisions.append(
+                        {
+                            "type": sig_type,
+                            "confidence": confidence,
+                            "excerpt": excerpt,
+                            "role": role,
+                        }
+                    )
                 break
 
     return {
@@ -162,6 +280,7 @@ def format_summary_block(
 # ---------------------------------------------------------------------------
 # Write summary
 # ---------------------------------------------------------------------------
+
 
 def write_summary(
     workspace: str,
@@ -219,26 +338,33 @@ def write_summary(
             f.write("\n---\n\n")
 
     # Write linking signal to SIGNALS.md
-    linking_signal = [{
-        "line": 0,
-        "type": "summary",
-        "text": f"Session summary {sess_id} from {os.path.basename(transcript_path)} "
-                f"({summary['message_count']} msgs, "
-                f"{len(summary['topics'])} topics, "
-                f"{len(summary['decisions'])} decisions)",
-        "pattern": "auto-capture-summary",
-        "confidence": "medium",
-        "priority": "P2",
-        "structure": {
-            "subject": sess_id,
-            "object": os.path.basename(transcript_path),
-            "tags": ["session-summary"],
-        },
-    }]
+    linking_signal = [
+        {
+            "line": 0,
+            "type": "summary",
+            "text": f"Session summary {sess_id} from {os.path.basename(transcript_path)} "
+            f"({summary['message_count']} msgs, "
+            f"{len(summary['topics'])} topics, "
+            f"{len(summary['decisions'])} decisions)",
+            "pattern": "auto-capture-summary",
+            "confidence": "medium",
+            "priority": "P2",
+            "structure": {
+                "subject": sess_id,
+                "object": os.path.basename(transcript_path),
+                "tags": ["session-summary"],
+            },
+        }
+    ]
     append_signals(workspace, linking_signal, today)
 
-    _log.info("summary_written", sess_id=sess_id, messages=summary["message_count"],
-              topics=len(summary["topics"]), decisions=len(summary["decisions"]))
+    _log.info(
+        "summary_written",
+        sess_id=sess_id,
+        messages=summary["message_count"],
+        topics=len(summary["topics"]),
+        decisions=len(summary["decisions"]),
+    )
     metrics.inc("summaries_written")
     return sess_id
 
@@ -247,13 +373,14 @@ def write_summary(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     import argparse
+
     parser = argparse.ArgumentParser(description="mind-mem Session Summarizer")
     parser.add_argument("workspace", nargs="?", default=".")
     parser.add_argument("--transcript", "-t", help="Path to specific .jsonl transcript")
-    parser.add_argument("--scan-recent", action="store_true",
-                        help="Scan recent transcripts from ~/.claude/projects/")
+    parser.add_argument("--scan-recent", action="store_true", help="Scan recent transcripts from ~/.claude/projects/")
     parser.add_argument("--days", type=int, default=3, help="Days to look back (default: 3)")
     parser.add_argument("--dry-run", action="store_true", help="Show summaries without writing")
     args = parser.parse_args()

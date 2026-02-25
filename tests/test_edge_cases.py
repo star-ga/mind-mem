@@ -15,8 +15,8 @@ from mind_mem.recall import extract_text, recall, tokenize
 # Block parser edge cases
 # ---------------------------------------------------------------------------
 
-class TestBlockParserEdgeCases(unittest.TestCase):
 
+class TestBlockParserEdgeCases(unittest.TestCase):
     def test_empty_file(self):
         """Empty string produces zero blocks."""
         self.assertEqual(parse_blocks(""), [])
@@ -46,7 +46,7 @@ class TestBlockParserEdgeCases(unittest.TestCase):
             "Status: active\n"
             "\n---\n\n"
             "[D-20260215-003]\n"
-            "Statement: \u0418\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c JWT \u0434\u043b\u044f \u0430\u0443\u0442\u0435\u043d\u0442\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438\n" # noqa: E501
+            "Statement: \u0418\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c JWT \u0434\u043b\u044f \u0430\u0443\u0442\u0435\u043d\u0442\u0438\u0444\u0438\u043a\u0430\u0446\u0438\u0438\n"  # noqa: E501
             "Status: active\n"
         )
         blocks = parse_blocks(text)
@@ -89,12 +89,7 @@ class TestBlockParserEdgeCases(unittest.TestCase):
 
     def test_duplicate_field_names(self):
         """When a field name appears twice, the last value wins."""
-        text = (
-            "[D-20260215-001]\n"
-            "Statement: First statement\n"
-            "Status: active\n"
-            "Statement: Second statement\n"
-        )
+        text = "[D-20260215-001]\nStatement: First statement\nStatus: active\nStatement: Second statement\n"
         blocks = parse_blocks(text)
         self.assertEqual(len(blocks), 1)
         # The parser overwrites, so we should get the second value
@@ -124,8 +119,8 @@ class TestBlockParserEdgeCases(unittest.TestCase):
 # Recall edge cases
 # ---------------------------------------------------------------------------
 
-class TestRecallEdgeCases(unittest.TestCase):
 
+class TestRecallEdgeCases(unittest.TestCase):
     def _setup_workspace(self, tmpdir, decisions_content=""):
         """Create a minimal workspace for recall testing."""
         for d in ["decisions", "tasks", "entities", "intelligence"]:
@@ -134,10 +129,15 @@ class TestRecallEdgeCases(unittest.TestCase):
             f.write(decisions_content)
         with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w") as f:
             f.write("[T-20260213-099]\nTitle: Unrelated placeholder task\nStatus: active\n")
-        for fname in ["entities/projects.md", "entities/people.md",
-                       "entities/tools.md", "entities/incidents.md",
-                       "intelligence/CONTRADICTIONS.md", "intelligence/DRIFT.md",
-                       "intelligence/SIGNALS.md"]:
+        for fname in [
+            "entities/projects.md",
+            "entities/people.md",
+            "entities/tools.md",
+            "entities/incidents.md",
+            "intelligence/CONTRADICTIONS.md",
+            "intelligence/DRIFT.md",
+            "intelligence/SIGNALS.md",
+        ]:
             path = os.path.join(tmpdir, fname)
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w") as f:
@@ -182,11 +182,17 @@ class TestRecallEdgeCases(unittest.TestCase):
             for d in ["decisions", "tasks", "entities", "intelligence"]:
                 os.makedirs(os.path.join(td, d), exist_ok=True)
             # Create empty files
-            for fname in ["decisions/DECISIONS.md", "tasks/TASKS.md",
-                           "entities/projects.md", "entities/people.md",
-                           "entities/tools.md", "entities/incidents.md",
-                           "intelligence/CONTRADICTIONS.md", "intelligence/DRIFT.md",
-                           "intelligence/SIGNALS.md"]:
+            for fname in [
+                "decisions/DECISIONS.md",
+                "tasks/TASKS.md",
+                "entities/projects.md",
+                "entities/people.md",
+                "entities/tools.md",
+                "entities/incidents.md",
+                "intelligence/CONTRADICTIONS.md",
+                "intelligence/DRIFT.md",
+                "intelligence/SIGNALS.md",
+            ]:
                 with open(os.path.join(td, fname), "w") as f:
                     f.write("")
             results = recall(td, "database")
@@ -241,12 +247,8 @@ def _load_server(workspace: str):
     return mod
 
 
-@unittest.skipUnless(
-    importlib.util.find_spec("fastmcp") is not None,
-    "fastmcp not installed"
-)
+@unittest.skipUnless(importlib.util.find_spec("fastmcp") is not None, "fastmcp not installed")
 class TestMCPEdgeCases(unittest.TestCase):
-
     def setUp(self):
         self.td = tempfile.mkdtemp()
         os.makedirs(os.path.join(self.td, "decisions"))
@@ -259,10 +261,15 @@ class TestMCPEdgeCases(unittest.TestCase):
             f.write("[D-20260101-001]\nStatement: Use PostgreSQL\nStatus: active\n")
         with open(os.path.join(self.td, "tasks", "TASKS.md"), "w") as f:
             f.write("[T-20260101-001]\nDescription: Setup DB\nStatus: open\n")
-        for fname in ["entities/projects.md", "entities/people.md",
-                       "entities/tools.md", "entities/incidents.md",
-                       "intelligence/CONTRADICTIONS.md", "intelligence/DRIFT.md",
-                       "intelligence/SIGNALS.md"]:
+        for fname in [
+            "entities/projects.md",
+            "entities/people.md",
+            "entities/tools.md",
+            "entities/incidents.md",
+            "intelligence/CONTRADICTIONS.md",
+            "intelligence/DRIFT.md",
+            "intelligence/SIGNALS.md",
+        ]:
             path = os.path.join(self.td, fname)
             with open(path, "w") as f:
                 f.write(f"# {os.path.basename(fname)}\n")

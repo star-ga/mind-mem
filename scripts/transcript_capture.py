@@ -36,17 +36,14 @@ TRANSCRIPT_PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"\bthat'?s\s+(wrong|incorrect|not right)\b", re.I), "correction", "high"),
     (re.compile(r"\bno,?\s+(use|do|try|make)\b", re.I), "correction", "medium"),
     (re.compile(r"\binstead\s+(of|use|do)\b", re.I), "correction", "medium"),
-
     # Convention discoveries
     (re.compile(r"\bthe (pattern|convention|standard|rule) is\b", re.I), "convention", "high"),
     (re.compile(r"\bwe (follow|use|prefer|adopt)\b", re.I), "convention", "medium"),
     (re.compile(r"\bour (convention|pattern|standard|approach) is\b", re.I), "convention", "high"),
-
     # Bug fix insights
     (re.compile(r"\bthe (fix|solution|answer) (is|was)\b", re.I), "insight", "medium"),
     (re.compile(r"\broot cause (is|was)\b", re.I), "insight", "high"),
     (re.compile(r"\bthe (issue|problem|bug) (is|was)\b", re.I), "insight", "medium"),
-
     # Architectural decisions in conversation
     (re.compile(r"\blet'?s (go with|use|switch to|adopt)\b", re.I), "decision", "medium"),
     (re.compile(r"\bwe should (use|switch|migrate|adopt)\b", re.I), "decision", "medium"),
@@ -92,11 +89,13 @@ def parse_transcript(jsonl_path: str) -> list[dict]:
                 content = msg["message"]
 
             if content.strip():
-                messages.append({
-                    "line": i,
-                    "role": msg.get("role", msg.get("type", "unknown")),
-                    "content": content.strip(),
-                })
+                messages.append(
+                    {
+                        "line": i,
+                        "role": msg.get("role", msg.get("type", "unknown")),
+                        "content": content.strip(),
+                    }
+                )
 
     return messages
 
@@ -133,20 +132,21 @@ def scan_transcript(jsonl_path: str, role_filter: str | None = None) -> list[dic
             for pattern, sig_type, confidence in TRANSCRIPT_PATTERNS:
                 if pattern.search(text):
                     structure = extract_structure(text, sig_type, pattern.pattern)
-                    signals.append({
-                        "line": msg["line"],
-                        "type": sig_type,
-                        "text": text[:200],
-                        "pattern": pattern.pattern,
-                        "confidence": confidence,
-                        "priority": CONFIDENCE_TO_PRIORITY.get(confidence, "P2"),
-                        "structure": structure,
-                        "source_role": role,
-                    })
+                    signals.append(
+                        {
+                            "line": msg["line"],
+                            "type": sig_type,
+                            "text": text[:200],
+                            "pattern": pattern.pattern,
+                            "confidence": confidence,
+                            "priority": CONFIDENCE_TO_PRIORITY.get(confidence, "P2"),
+                            "structure": structure,
+                            "source_role": role,
+                        }
+                    )
                     break  # First match wins
 
-    _log.info("transcript_scan_complete", path=jsonl_path,
-              messages=len(messages), signals=len(signals))
+    _log.info("transcript_scan_complete", path=jsonl_path, messages=len(messages), signals=len(signals))
     metrics.inc("transcript_signals", len(signals))
     return signals
 
@@ -184,14 +184,13 @@ def find_recent_transcripts(days: int = 3) -> list[str]:
 
 def main() -> None:
     import argparse
+
     parser = argparse.ArgumentParser(description="mind-mem Transcript Capture")
     parser.add_argument("workspace", nargs="?", default=".")
     parser.add_argument("--transcript", "-t", help="Path to specific .jsonl transcript")
-    parser.add_argument("--scan-recent", action="store_true",
-                        help="Scan recent transcripts from ~/.claude/projects/")
+    parser.add_argument("--scan-recent", action="store_true", help="Scan recent transcripts from ~/.claude/projects/")
     parser.add_argument("--days", type=int, default=3, help="Days to look back (default: 3)")
-    parser.add_argument("--role", choices=["user", "assistant"], default=None,
-                        help="Only scan messages from this role")
+    parser.add_argument("--role", choices=["user", "assistant"], default=None, help="Only scan messages from this role")
     parser.add_argument("--dry-run", action="store_true", help="Show signals without writing")
     args = parser.parse_args()
 

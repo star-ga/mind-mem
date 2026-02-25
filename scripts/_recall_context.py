@@ -36,11 +36,32 @@ _PLURAL_CUE_RE = re.compile(
 )
 
 # Words unlikely to be speaker names (filter for multi-entity detection)
-_NOT_NAMES = frozenset({
-    "what", "which", "when", "where", "who", "how", "the", "did", "does",
-    "will", "has", "had", "was", "were", "are", "can", "could", "would",
-    "should", "may", "might", "shall",
-})
+_NOT_NAMES = frozenset(
+    {
+        "what",
+        "which",
+        "when",
+        "where",
+        "who",
+        "how",
+        "the",
+        "did",
+        "does",
+        "will",
+        "has",
+        "had",
+        "was",
+        "were",
+        "are",
+        "can",
+        "could",
+        "would",
+        "should",
+        "may",
+        "might",
+        "shall",
+    }
+)
 
 # Pronouns that signal coreference (Rule 3 trigger)
 _PRONOUN_RE = re.compile(r"\b(it|this|that|these|those)\b", re.IGNORECASE)
@@ -164,10 +185,7 @@ def context_pack(
                 query_names.add(name.lower())
 
         # Current speaker coverage
-        current_speakers = {
-            r.get("speaker", "").lower()
-            for r in augmented if r.get("speaker")
-        }
+        current_speakers = {r.get("speaker", "").lower() for r in augmented if r.get("speaker")}
         # Current session coverage
         current_sessions = set()
         for r in augmented:
@@ -265,10 +283,12 @@ def context_pack(
                 break
 
     if adjacency_added or diversity_forced or pronoun_rescue:
-        _log.info("context_pack",
-                  adjacency_added=adjacency_added,
-                  diversity_forced=diversity_forced,
-                  pronoun_rescue=pronoun_rescue)
+        _log.info(
+            "context_pack",
+            adjacency_added=adjacency_added,
+            diversity_forced=diversity_forced,
+            pronoun_rescue=pronoun_rescue,
+        )
         metrics.inc("pack_adjacency", adjacency_added)
         metrics.inc("pack_diversity", diversity_forced)
         metrics.inc("pack_pronoun_rescue", pronoun_rescue)

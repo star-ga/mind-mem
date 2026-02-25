@@ -164,6 +164,7 @@ def _init_schema(conn: sqlite3.Connection) -> None:
 # File State Tracking
 # ---------------------------------------------------------------------------
 
+
 def _file_hash(path: str) -> str:
     """Compute fast hash of file content (first 64KB + size)."""
     h = hashlib.sha256()
@@ -191,18 +192,13 @@ def _get_changed_files(conn: sqlite3.Connection, workspace: str) -> list[tuple[s
         full_path = os.path.join(ws, rel_path)
         if not os.path.isfile(full_path):
             # File doesn't exist — check if it was previously indexed
-            row = conn.execute(
-                "SELECT path FROM file_state WHERE path = ?", (rel_path,)
-            ).fetchone()
+            row = conn.execute("SELECT path FROM file_state WHERE path = ?", (rel_path,)).fetchone()
             if row:
                 changed.append((label, rel_path))  # file was deleted
             continue
 
         stat = os.stat(full_path)
-        row = conn.execute(
-            "SELECT mtime, size, hash FROM file_state WHERE path = ?",
-            (rel_path,)
-        ).fetchone()
+        row = conn.execute("SELECT mtime, size, hash FROM file_state WHERE path = ?", (rel_path,)).fetchone()
 
         if row is None:
             changed.append((label, rel_path))
@@ -241,6 +237,7 @@ def _update_file_state(conn: sqlite3.Connection, workspace: str, rel_path: str) 
 # Block-level hashing
 # ---------------------------------------------------------------------------
 
+
 def _compute_block_hash(block: dict) -> str:
     """Compute content hash of a parsed block for change detection.
 
@@ -257,6 +254,7 @@ def _compute_block_hash(block: dict) -> str:
 # Indexing
 # ---------------------------------------------------------------------------
 
+
 def _extract_fts_fields(block: dict) -> dict:
     """Extract FTS5 column values from a block."""
     return {
@@ -266,9 +264,7 @@ def _extract_fts_fields(block: dict) -> dict:
         "description": block.get("Description", "") or block.get("Summary", ""),
         "tags": block.get("Tags", "") or block.get("Keywords", ""),
         "context": block.get("Context", "") or block.get("Rationale", ""),
-        "all_text": " ".join(
-            str(block.get(f, "")) for f in SEARCH_FIELDS if block.get(f)
-        ),
+        "all_text": " ".join(str(block.get(f, "")) for f in SEARCH_FIELDS if block.get(f)),
     }
 
 
@@ -276,8 +272,15 @@ def _extract_xrefs(block: dict, all_block_ids: set) -> list[str]:
     """Extract cross-reference IDs from a block."""
     texts = []
     xref_fields = SEARCH_FIELDS + [
-        "Supersedes", "SupersededBy", "AlignsWith", "Dependencies",
-        "Next", "Sources", "Evidence", "Rollback", "History",
+        "Supersedes",
+        "SupersededBy",
+        "AlignsWith",
+        "Dependencies",
+        "Next",
+        "Sources",
+        "Evidence",
+        "Rollback",
+        "History",
     ]
     for field in xref_fields:
         val = block.get(field, "")
@@ -440,8 +443,16 @@ def _insert_block(
         """INSERT INTO blocks_fts (block_id, statement, title, name,
            description, tags, context, all_text)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (bid, fts["statement"], fts["title"], fts["name"],
-         fts["description"], fts["tags"], fts["context"], fts["all_text"]),
+        (
+            bid,
+            fts["statement"],
+            fts["title"],
+            fts["name"],
+            fts["description"],
+            fts["tags"],
+            fts["context"],
+            fts["all_text"],
+        ),
     )
 
     refs = _extract_xrefs(block, all_block_ids)
@@ -499,9 +510,16 @@ def _insert_block(
                 """INSERT INTO blocks_fts (block_id, statement, title, name,
                    description, tags, context, all_text)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (fact_id, fact_fts["statement"], fact_fts["title"], fact_fts["name"],
-                 fact_fts["description"], fact_fts["tags"], fact_fts["context"],
-                 fact_fts["all_text"]),
+                (
+                    fact_id,
+                    fact_fts["statement"],
+                    fact_fts["title"],
+                    fact_fts["name"],
+                    fact_fts["description"],
+                    fact_fts["tags"],
+                    fact_fts["context"],
+                    fact_fts["all_text"],
+                ),
             )
 
 
@@ -586,9 +604,14 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
         total_modified += counts["modified"]
         total_deleted += counts["deleted"]
         total_unchanged += counts["unchanged"]
-        _log.info("indexed_file", file=rel_path,
-                  new=counts["new"], modified=counts["modified"],
-                  deleted=counts["deleted"], unchanged=counts["unchanged"])
+        _log.info(
+            "indexed_file",
+            file=rel_path,
+            new=counts["new"],
+            modified=counts["modified"],
+            deleted=counts["deleted"],
+            unchanged=counts["unchanged"],
+        )
 
     # Update metadata
     conn.execute(
@@ -629,6 +652,7 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
 # ---------------------------------------------------------------------------
 # Fact aggregation — small-to-big retrieval
 # ---------------------------------------------------------------------------
+
 
 def _aggregate_facts_to_parents(
     conn: sqlite3.Connection,
@@ -687,27 +711,34 @@ def _aggregate_facts_to_parents(
         ).fetchall()
         for row in rows:
             block_data = json.loads(row["json_blob"]) if row["json_blob"] else {}
-            regular.append({
-                "_id": row["id"],
-                "type": row["type"],
-                "score": round(fact_scores[row["id"]] * 0.8, 4),
-                "excerpt": get_excerpt(block_data),
-                "speaker": row["speaker"],
-                "tags": row["tags"],
-                "file": row["file"],
-                "line": row["line"],
-                "status": row["status"],
-                "_fact_boost": True,
-            })
+            regular.append(
+                {
+                    "_id": row["id"],
+                    "type": row["type"],
+                    "score": round(fact_scores[row["id"]] * 0.8, 4),
+                    "excerpt": get_excerpt(block_data),
+                    "speaker": row["speaker"],
+                    "tags": row["tags"],
+                    "file": row["file"],
+                    "line": row["line"],
+                    "status": row["status"],
+                    "_fact_boost": True,
+                }
+            )
 
-    _log.debug("fact_aggregation", facts_found=sum(1 for r in results if "::F" in r.get("_id", "")),
-               parents_boosted=len(boosted), parents_injected=len(missing))
+    _log.debug(
+        "fact_aggregation",
+        facts_found=sum(1 for r in results if "::F" in r.get("_id", "")),
+        parents_boosted=len(boosted),
+        parents_injected=len(missing),
+    )
     return regular
 
 
 # ---------------------------------------------------------------------------
 # Query
 # ---------------------------------------------------------------------------
+
 
 def query_index(
     workspace: str,
@@ -727,10 +758,16 @@ def query_index(
     if not os.path.isfile(db_path):
         _log.info("index_missing_fallback", db=db_path)
         from .recall import recall
+
         return recall(
-            workspace, query, limit=limit, active_only=active_only,
-            graph_boost=graph_boost, retrieve_wide_k=retrieve_wide_k,
-            rerank=rerank, rerank_debug=rerank_debug,
+            workspace,
+            query,
+            limit=limit,
+            active_only=active_only,
+            graph_boost=graph_boost,
+            retrieve_wide_k=retrieve_wide_k,
+            rerank=rerank,
+            rerank_debug=rerank_debug,
         )
 
     # Staleness check: warn but don't auto-rebuild (#34)
@@ -777,15 +814,25 @@ def query_index(
             (fts_query, max(retrieve_wide_k, limit)),
         ).fetchall()
     except sqlite3.OperationalError as e:
-        _log.warning("fts_query_error_fallback", error=str(e), query=fts_query,
-                      msg="FTS5 query failed, falling back to in-memory BM25 scan")
+        _log.warning(
+            "fts_query_error_fallback",
+            error=str(e),
+            query=fts_query,
+            msg="FTS5 query failed, falling back to in-memory BM25 scan",
+        )
         conn.close()
         # Fallback to filesystem scan — results are still valid but may be slower
         from .recall import recall
+
         fallback_results = recall(
-            workspace, query, limit=limit, active_only=active_only,
-            graph_boost=graph_boost, retrieve_wide_k=retrieve_wide_k,
-            rerank=rerank, rerank_debug=rerank_debug,
+            workspace,
+            query,
+            limit=limit,
+            active_only=active_only,
+            graph_boost=graph_boost,
+            retrieve_wide_k=retrieve_wide_k,
+            rerank=rerank,
+            rerank_debug=rerank_debug,
         )
         for r in fallback_results:
             r["_fallback"] = "bm25_scan"
@@ -803,7 +850,7 @@ def query_index(
         block_data = json.loads(row["json_blob"]) if row["json_blob"] else {}
         recency = date_score(block_data)
         rw = qparams.get("recency_weight", 0.3)
-        score *= (1.0 - rw + rw * recency)
+        score *= 1.0 - rw + rw * recency
 
         # Temporal date boost
         date_boost = qparams.get("date_boost", 1.0)
@@ -876,9 +923,14 @@ def query_index(
 
     top = deduped[:limit]
 
-    _log.info("query_complete", query=query, query_type=query_type,
-              fts_hits=len(rows), results=len(top),
-              top_score=top[0]["score"] if top else 0)
+    _log.info(
+        "query_complete",
+        query=query,
+        query_type=query_type,
+        fts_hits=len(rows),
+        results=len(top),
+        top_score=top[0]["score"] if top else 0,
+    )
     metrics.inc("index_queries")
     return top
 
@@ -901,9 +953,7 @@ def _apply_graph_boost(
     neighbor_scores = {}
 
     for hop, decay in enumerate(hop_decays):
-        seed_ids = list(result_ids) if hop == 0 else [
-            nid for nid in neighbor_scores if nid not in result_ids
-        ]
+        seed_ids = list(result_ids) if hop == 0 else [nid for nid in neighbor_scores if nid not in result_ids]
         if not seed_ids:
             break
 
@@ -948,23 +998,26 @@ def _apply_graph_boost(
             ).fetchall()
             for row in rows:
                 block_data = json.loads(row["json_blob"]) if row["json_blob"] else {}
-                results.append({
-                    "_id": row["id"],
-                    "type": row["type"],
-                    "score": round(neighbor_scores[row["id"]], 4),
-                    "excerpt": get_excerpt(block_data),
-                    "speaker": row["speaker"],
-                    "tags": row["tags"],
-                    "file": row["file"],
-                    "line": row["line"],
-                    "status": row["status"],
-                    "via_graph": True,
-                })
+                results.append(
+                    {
+                        "_id": row["id"],
+                        "type": row["type"],
+                        "score": round(neighbor_scores[row["id"]], 4),
+                        "excerpt": get_excerpt(block_data),
+                        "speaker": row["speaker"],
+                        "tags": row["tags"],
+                        "file": row["file"],
+                        "line": row["line"],
+                        "status": row["status"],
+                        "via_graph": True,
+                    }
+                )
 
 
 # ---------------------------------------------------------------------------
 # Status
 # ---------------------------------------------------------------------------
+
 
 def is_stale(workspace: str) -> bool:
     """Check whether any corpus .md files have changed since last index build.
@@ -997,9 +1050,7 @@ def index_status(workspace: str) -> dict:
         row = conn.execute("SELECT COUNT(*) as cnt FROM blocks").fetchone()
         block_count = row["cnt"]
 
-        last_build = conn.execute(
-            "SELECT value FROM meta WHERE key = 'last_build'"
-        ).fetchone()
+        last_build = conn.execute("SELECT value FROM meta WHERE key = 'last_build'").fetchone()
 
         changed = _get_changed_files(conn, workspace)
 
@@ -1017,6 +1068,7 @@ def index_status(workspace: str) -> dict:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def main():
     parser = argparse.ArgumentParser(description="Mind Mem SQLite FTS5 Index")
@@ -1047,17 +1099,23 @@ def main():
         print("Index build complete:")
         print(f"  Files checked: {result['files_checked']}")
         print(f"  Files indexed: {result['files_indexed']}")
-        print(f"  Blocks: {result['blocks_new']} new, {result['blocks_modified']} modified, "
-              f"{result['blocks_deleted']} deleted, {result['blocks_unchanged']} unchanged")
+        print(
+            f"  Blocks: {result['blocks_new']} new, {result['blocks_modified']} modified, "
+            f"{result['blocks_deleted']} deleted, {result['blocks_unchanged']} unchanged"
+        )
         print(f"  Total blocks: {result['total_blocks']}")
         print(f"  Elapsed: {result['elapsed_ms']:.0f}ms")
 
     elif args.command == "query":
         ws = os.path.abspath(args.workspace)
         results = query_index(
-            ws, args.query, limit=args.limit,
-            active_only=args.active_only, graph_boost=args.graph,
-            rerank=not args.no_rerank, rerank_debug=args.rerank_debug,
+            ws,
+            args.query,
+            limit=args.limit,
+            active_only=args.active_only,
+            graph_boost=args.graph,
+            rerank=not args.no_rerank,
+            rerank_debug=args.rerank_debug,
         )
         if args.json:
             print(json.dumps(results, indent=2))

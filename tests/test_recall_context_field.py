@@ -1,4 +1,5 @@
 """Tests for context field in blocks."""
+
 from __future__ import annotations
 
 import os
@@ -17,9 +18,11 @@ def _ws():
         f.write("[CTX-002]\nType: Decision\nStatement: Other content\nContext: During code review\n\n")
     return ws
 
+
 def test_context_field_search():
     results = recall(_ws(), "sprint planning", limit=5)
     assert isinstance(results, list)
+
 
 def test_context_field_code_review():
     results = recall(_ws(), "code review", limit=5)

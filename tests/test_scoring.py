@@ -1,4 +1,5 @@
 """Tests for BM25 scoring functions."""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -17,6 +18,7 @@ def test_bm25f_score_terms_basic():
     assert isinstance(score, (int, float))
     assert score >= 0
 
+
 def test_bm25f_score_terms_no_match():
     score = bm25f_score_terms(
         query_terms=["nonexistent"],
@@ -27,6 +29,7 @@ def test_bm25f_score_terms_no_match():
     )
     assert score >= 0
 
+
 def test_bm25f_score_terms_multiple_terms():
     idf = {"test": 1.5, "query": 1.5}
     tf = Counter({"test": 1.0, "query": 1.0})
@@ -34,10 +37,12 @@ def test_bm25f_score_terms_multiple_terms():
     score_multi = bm25f_score_terms(["test", "query"], tf, 10.0, idf, 10.0)
     assert score_multi >= score_single
 
+
 def test_compute_weighted_tf():
     result = compute_weighted_tf({"statement": ["word", "word", "test"]})
     assert isinstance(result, tuple)
     assert len(result) == 2
+
 
 def test_bm25f_empty_query():
     score = bm25f_score_terms([], Counter({"test": 1.0}), 5.0, {}, 10.0)

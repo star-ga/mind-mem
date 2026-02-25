@@ -27,8 +27,16 @@ def minimal_workspace(tmp_path):
     (tmp_path / "mind-mem.json").write_text(json.dumps({"version": "1.1.0"}))
 
     # Create directories
-    for d in ["decisions", "tasks", "entities", "intelligence",
-              "intelligence/proposed", "summaries/weekly", "memory", "maintenance"]:
+    for d in [
+        "decisions",
+        "tasks",
+        "entities",
+        "intelligence",
+        "intelligence/proposed",
+        "summaries/weekly",
+        "memory",
+        "maintenance",
+    ]:
         (tmp_path / d).mkdir(parents=True, exist_ok=True)
 
     # File structure requirements
@@ -60,15 +68,9 @@ def minimal_workspace(tmp_path):
         "Sources: manual\n"
         "History: created\n"
     )
-    (tmp_path / "entities" / "projects.md").write_text(
-        "[PRJ-test]\nName: Test Project\n"
-    )
-    (tmp_path / "entities" / "people.md").write_text(
-        "[PER-alice]\nName: Alice\n"
-    )
-    (tmp_path / "entities" / "tools.md").write_text(
-        "[TOOL-pytest]\nName: pytest\n"
-    )
+    (tmp_path / "entities" / "projects.md").write_text("[PRJ-test]\nName: Test Project\n")
+    (tmp_path / "entities" / "people.md").write_text("[PER-alice]\nName: Alice\n")
+    (tmp_path / "entities" / "tools.md").write_text("[TOOL-pytest]\nName: pytest\n")
     (tmp_path / "entities" / "incidents.md").write_text(
         "[INC-20260101-test]\n"
         "Date: 2026-01-01\n"
@@ -88,8 +90,7 @@ def minimal_workspace(tmp_path):
     (tmp_path / "MEMORY.md").write_text("# Memory Protocol v1.0\n\nTest memory.\n")
 
     # Intelligence files
-    for f in ["SIGNALS.md", "CONTRADICTIONS.md", "DRIFT.md",
-              "IMPACT.md", "BRIEFINGS.md", "AUDIT.md"]:
+    for f in ["SIGNALS.md", "CONTRADICTIONS.md", "DRIFT.md", "IMPACT.md", "BRIEFINGS.md", "AUDIT.md"]:
         (tmp_path / "intelligence" / f).write_text(f"# {f}\n")
 
     return str(tmp_path)

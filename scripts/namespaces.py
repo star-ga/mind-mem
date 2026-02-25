@@ -150,7 +150,7 @@ class NamespaceManager:
                 parts = normalized.split("/")
                 ns_parts = ns_normalized.split("/")
                 if len(parts) >= len(ns_parts):
-                    prefix = "/".join(parts[:len(ns_parts)])
+                    prefix = "/".join(parts[: len(ns_parts)])
                     if fnmatch.fnmatch(prefix, ns_normalized):
                         return True
         return False
@@ -206,8 +206,7 @@ class NamespaceManager:
         if not os.path.isdir(agents_dir):
             return []
         return sorted(
-            d for d in os.listdir(agents_dir)
-            if os.path.isdir(os.path.join(agents_dir, d)) and not d.startswith(".")
+            d for d in os.listdir(agents_dir) if os.path.isdir(os.path.join(agents_dir, d)) and not d.startswith(".")
         )
 
     def get_agent_namespace(self) -> str | None:
@@ -252,6 +251,7 @@ class SharedLedger:
                 return False
 
         from datetime import datetime
+
         ts = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
         with FileLock(self.ledger_path):
@@ -276,6 +276,7 @@ class SharedLedger:
             return []
 
         from .block_parser import parse_file
+
         blocks = parse_file(self.ledger_path)
         if status:
             blocks = [b for b in blocks if b.get("Status") == status]
@@ -333,13 +334,14 @@ def init_multi_agent_workspace(workspace: str, agents: list[str] | None = None) 
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="mind-mem Namespace Manager")
     parser.add_argument("workspace", nargs="?", default=".")
-    parser.add_argument("--init", nargs="*", metavar="AGENT_ID",
-                        help="Initialize multi-agent workspace with given agent IDs")
+    parser.add_argument(
+        "--init", nargs="*", metavar="AGENT_ID", help="Initialize multi-agent workspace with given agent IDs"
+    )
     parser.add_argument("--list-agents", action="store_true", help="List registered agents")
-    parser.add_argument("--check", nargs=2, metavar=("AGENT_ID", "PATH"),
-                        help="Check if agent can access path")
+    parser.add_argument("--check", nargs=2, metavar=("AGENT_ID", "PATH"), help="Check if agent can access path")
     args = parser.parse_args()
 
     ws = os.path.abspath(args.workspace)

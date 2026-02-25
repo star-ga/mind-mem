@@ -13,6 +13,7 @@ from mind_mem.category_distiller import CategoryDistiller  # noqa: E402
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _write_decisions(ws, blocks_md):
     """Write a DECISIONS.md file and return its path."""
     dec_dir = os.path.join(ws, "decisions")
@@ -68,11 +69,14 @@ def _setup_workspace(tmp_path, blocks_md):
 
 def test_categorize_block_architecture(tmp_path):
     """Block with architecture keywords gets the 'architecture' category."""
-    ws = _setup_workspace(tmp_path, _make_block_md(
-        "D-20260218-001",
-        "Use PostgreSQL for the main database",
-        tags="database, architecture",
-    ))
+    ws = _setup_workspace(
+        tmp_path,
+        _make_block_md(
+            "D-20260218-001",
+            "Use PostgreSQL for the main database",
+            tags="database, architecture",
+        ),
+    )
     distiller = CategoryDistiller()
     blocks = parse_file(os.path.join(ws, "decisions", "DECISIONS.md"))
     cats = distiller.categorize_block(blocks[0])
@@ -81,11 +85,14 @@ def test_categorize_block_architecture(tmp_path):
 
 def test_categorize_block_bugs(tmp_path):
     """Block describing a bug gets the 'bugs' category."""
-    ws = _setup_workspace(tmp_path, _make_block_md(
-        "D-20260218-002",
-        "Fix null pointer bug in auth handler",
-        tags="bug, critical",
-    ))
+    ws = _setup_workspace(
+        tmp_path,
+        _make_block_md(
+            "D-20260218-002",
+            "Fix null pointer bug in auth handler",
+            tags="bug, critical",
+        ),
+    )
     distiller = CategoryDistiller()
     blocks = parse_file(os.path.join(ws, "decisions", "DECISIONS.md"))
     cats = distiller.categorize_block(blocks[0])
@@ -94,11 +101,14 @@ def test_categorize_block_bugs(tmp_path):
 
 def test_categorize_block_multiple_categories(tmp_path):
     """Block matching keywords from 2+ categories returns all of them."""
-    ws = _setup_workspace(tmp_path, _make_block_md(
-        "D-20260218-003",
-        "Fix deployment architecture bug in CI pipeline",
-        tags="deployment, bug, architecture",
-    ))
+    ws = _setup_workspace(
+        tmp_path,
+        _make_block_md(
+            "D-20260218-003",
+            "Fix deployment architecture bug in CI pipeline",
+            tags="deployment, bug, architecture",
+        ),
+    )
     distiller = CategoryDistiller()
     blocks = parse_file(os.path.join(ws, "decisions", "DECISIONS.md"))
     cats = distiller.categorize_block(blocks[0])
@@ -107,11 +117,14 @@ def test_categorize_block_multiple_categories(tmp_path):
 
 def test_categorize_block_uncategorized(tmp_path):
     """Block with no keyword matches gets 'uncategorized'."""
-    ws = _setup_workspace(tmp_path, _make_block_md(
-        "D-20260218-004",
-        "Miscellaneous note about something unrelated",
-        tags="",
-    ))
+    ws = _setup_workspace(
+        tmp_path,
+        _make_block_md(
+            "D-20260218-004",
+            "Miscellaneous note about something unrelated",
+            tags="",
+        ),
+    )
     distiller = CategoryDistiller()
     blocks = parse_file(os.path.join(ws, "decisions", "DECISIONS.md"))
     cats = distiller.categorize_block(blocks[0])
@@ -120,11 +133,14 @@ def test_categorize_block_uncategorized(tmp_path):
 
 def test_categorize_block_from_tags(tmp_path):
     """Category detected from Tags field (higher weight than statement)."""
-    ws = _setup_workspace(tmp_path, _make_block_md(
-        "D-20260218-005",
-        "We decided to proceed with this option",
-        tags="auth, oauth, credential",
-    ))
+    ws = _setup_workspace(
+        tmp_path,
+        _make_block_md(
+            "D-20260218-005",
+            "We decided to proceed with this option",
+            tags="auth, oauth, credential",
+        ),
+    )
     distiller = CategoryDistiller()
     blocks = parse_file(os.path.join(ws, "decisions", "DECISIONS.md"))
     cats = distiller.categorize_block(blocks[0])
@@ -133,10 +149,12 @@ def test_categorize_block_from_tags(tmp_path):
 
 def test_distill_creates_category_files(tmp_path):
     """Full distill() writes files into categories/ directory."""
-    md = "\n---\n\n".join([
-        _make_block_md("D-20260218-010", "Use JWT for auth token", tags="credential"),
-        _make_block_md("D-20260218-011", "Deploy via Docker containers", tags="deployment"),
-    ])
+    md = "\n---\n\n".join(
+        [
+            _make_block_md("D-20260218-010", "Use JWT for auth token", tags="credential"),
+            _make_block_md("D-20260218-011", "Deploy via Docker containers", tags="deployment"),
+        ]
+    )
     ws = _setup_workspace(tmp_path, md)
     distiller = CategoryDistiller()
     distiller.distill(ws)
@@ -150,10 +168,12 @@ def test_distill_creates_category_files(tmp_path):
 
 def test_distill_creates_manifest(tmp_path):
     """distill() writes _manifest.json with correct counts."""
-    md = "\n---\n\n".join([
-        _make_block_md("D-20260218-020", "Use PostgreSQL", tags="database, architecture"),
-        _make_block_md("D-20260218-021", "Fix auth bug", tags="bug"),
-    ])
+    md = "\n---\n\n".join(
+        [
+            _make_block_md("D-20260218-020", "Use PostgreSQL", tags="database, architecture"),
+            _make_block_md("D-20260218-021", "Fix auth bug", tags="bug"),
+        ]
+    )
     ws = _setup_workspace(tmp_path, md)
     distiller = CategoryDistiller()
     distiller.distill(ws)
@@ -194,10 +214,12 @@ def test_write_category_file(tmp_path):
 
 def test_get_category_context(tmp_path):
     """Returns relevant category content for a query."""
-    md = "\n---\n\n".join([
-        _make_block_md("D-20260218-040", "Use PostgreSQL for storage", tags="database, architecture"),
-        _make_block_md("D-20260218-041", "Fix login page bug", tags="bug"),
-    ])
+    md = "\n---\n\n".join(
+        [
+            _make_block_md("D-20260218-040", "Use PostgreSQL for storage", tags="database, architecture"),
+            _make_block_md("D-20260218-041", "Fix login page bug", tags="bug"),
+        ]
+    )
     ws = _setup_workspace(tmp_path, md)
     distiller = CategoryDistiller()
     distiller.distill(ws)
@@ -218,11 +240,13 @@ def test_get_category_context_empty(tmp_path):
 
 def test_get_categories_for_query(tmp_path):
     """Returns ordered category names matching a query."""
-    md = "\n---\n\n".join([
-        _make_block_md("D-20260218-050", "Use JWT for authentication", tags="auth"),
-        _make_block_md("D-20260218-051", "Deploy with Kubernetes", tags="deployment"),
-        _make_block_md("D-20260218-052", "Fix auth regression", tags="bug"),
-    ])
+    md = "\n---\n\n".join(
+        [
+            _make_block_md("D-20260218-050", "Use JWT for authentication", tags="auth"),
+            _make_block_md("D-20260218-051", "Deploy with Kubernetes", tags="deployment"),
+            _make_block_md("D-20260218-052", "Fix auth regression", tags="bug"),
+        ]
+    )
     _setup_workspace(tmp_path, md)
     distiller = CategoryDistiller()
 

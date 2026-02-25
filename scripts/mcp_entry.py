@@ -17,6 +17,7 @@ def main():
         # Add repo root to path so mcp_server.py can be imported
         sys.path.insert(0, repo_root)
         from mcp_server import main as server_main
+
         server_main()
     else:
         # Fallback: run directly via exec (installed via pip)

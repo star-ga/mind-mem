@@ -52,15 +52,59 @@ _IDENTITY_AS_RE = re.compile(
 )
 
 # First-word filter for identity matches (emotional states, auxiliaries, generics)
-_IDENTITY_FILTER_WORDS = frozenset({
-    "so", "too", "also", "just", "here", "there", "ok", "okay", "really",
-    "happy", "thankful", "grateful", "excited", "proud", "glad", "thrilled",
-    "sad", "sorry", "worried", "nervous", "anxious", "scared",
-    "lucky", "fortunate", "blessed", "ready", "stoked", "sure", "certain",
-    "going", "about", "trying", "hoping", "having", "getting", "giving",
-    "putting", "looking", "thinking", "still", "definitely", "totally",
-    "not", "off", "to", "doing", "feeling", "being", "working",
-})
+_IDENTITY_FILTER_WORDS = frozenset(
+    {
+        "so",
+        "too",
+        "also",
+        "just",
+        "here",
+        "there",
+        "ok",
+        "okay",
+        "really",
+        "happy",
+        "thankful",
+        "grateful",
+        "excited",
+        "proud",
+        "glad",
+        "thrilled",
+        "sad",
+        "sorry",
+        "worried",
+        "nervous",
+        "anxious",
+        "scared",
+        "lucky",
+        "fortunate",
+        "blessed",
+        "ready",
+        "stoked",
+        "sure",
+        "certain",
+        "going",
+        "about",
+        "trying",
+        "hoping",
+        "having",
+        "getting",
+        "giving",
+        "putting",
+        "looking",
+        "thinking",
+        "still",
+        "definitely",
+        "totally",
+        "not",
+        "off",
+        "to",
+        "doing",
+        "feeling",
+        "being",
+        "working",
+    }
+)
 
 # Possession/attribute: "my X is Y", "I have X"
 _ATTRIBUTE_RE = re.compile(
@@ -195,9 +239,18 @@ def _clean_content(text: str) -> str:
 
 
 _MONTH_MAP = {
-    "january": "01", "february": "02", "march": "03", "april": "04",
-    "may": "05", "june": "06", "july": "07", "august": "08",
-    "september": "09", "october": "10", "november": "11", "december": "12",
+    "january": "01",
+    "february": "02",
+    "march": "03",
+    "april": "04",
+    "may": "05",
+    "june": "06",
+    "july": "07",
+    "august": "08",
+    "september": "09",
+    "october": "10",
+    "november": "11",
+    "december": "12",
 }
 
 # D.3: Temporal normalization — "March 2023" → "2023-03", "October 15, 2023" → "2023-10"
@@ -254,7 +307,7 @@ def extract_facts(
     if speaker_match:
         if not speaker:
             speaker = speaker_match.group(1)
-        text = text[speaker_match.end():]
+        text = text[speaker_match.end() :]
 
     cards = []
     prefix = f"{speaker} " if speaker else ""
@@ -269,80 +322,92 @@ def extract_facts(
             # Filter out emotional states, auxiliaries, and generics
             first_word = content.lower().split()[0] if content else ""
             if first_word not in _IDENTITY_FILTER_WORDS and len(content.split()) >= 2:
-                cards.append({
-                    "type": "FACT",
-                    "content": f"{prefix}is {content}",
-                    "speaker": speaker,
-                    "date": date,
-                    "source_id": source_id,
-                    "confidence": 0.85,
-                })
+                cards.append(
+                    {
+                        "type": "FACT",
+                        "content": f"{prefix}is {content}",
+                        "speaker": speaker,
+                        "date": date,
+                        "source_id": source_id,
+                        "confidence": 0.85,
+                    }
+                )
 
     # Secondary identity: "as a transgender woman", "as a counselor"
     for m in _IDENTITY_AS_RE.finditer(text):
         content = _clean_content(m.group(1))
         if content and len(content) > 2:
-            cards.append({
-                "type": "FACT",
-                "content": f"{prefix}is a {content}",
-                "speaker": speaker,
-                "date": date,
-                "source_id": source_id,
-                "confidence": 0.9,
-            })
+            cards.append(
+                {
+                    "type": "FACT",
+                    "content": f"{prefix}is a {content}",
+                    "speaker": speaker,
+                    "date": date,
+                    "source_id": source_id,
+                    "confidence": 0.9,
+                }
+            )
 
     # --- Attribute facts ---
     for m in _ATTRIBUTE_RE.finditer(text):
         attr = _clean_content(m.group(1))
         val = _clean_content(m.group(2))
         if attr and val and len(val) > 1:
-            cards.append({
-                "type": "FACT",
-                "content": f"{prefix}{attr} is {val}",
-                "speaker": speaker,
-                "date": date,
-                "source_id": source_id,
-                "confidence": 0.8,
-            })
+            cards.append(
+                {
+                    "type": "FACT",
+                    "content": f"{prefix}{attr} is {val}",
+                    "speaker": speaker,
+                    "date": date,
+                    "source_id": source_id,
+                    "confidence": 0.8,
+                }
+            )
 
     # --- Preferences ---
     for m in _PREFERENCE_RE.finditer(text):
         content = _clean_content(m.group(1))
         if content and len(content) > 2:
-            cards.append({
-                "type": "PREFERENCE",
-                "content": f"{prefix}likes {content}",
-                "speaker": speaker,
-                "date": date,
-                "source_id": source_id,
-                "confidence": 0.8,
-            })
+            cards.append(
+                {
+                    "type": "PREFERENCE",
+                    "content": f"{prefix}likes {content}",
+                    "speaker": speaker,
+                    "date": date,
+                    "source_id": source_id,
+                    "confidence": 0.8,
+                }
+            )
 
     for m in _FAVORITE_RE.finditer(text):
         category = _clean_content(m.group(1))
         value = _clean_content(m.group(2))
         if category and value:
-            cards.append({
-                "type": "PREFERENCE",
-                "content": f"{prefix}favorite {category} is {value}",
-                "speaker": speaker,
-                "date": date,
-                "source_id": source_id,
-                "confidence": 0.9,
-            })
+            cards.append(
+                {
+                    "type": "PREFERENCE",
+                    "content": f"{prefix}favorite {category} is {value}",
+                    "speaker": speaker,
+                    "date": date,
+                    "source_id": source_id,
+                    "confidence": 0.9,
+                }
+            )
 
     # --- Dislikes ---
     for m in _DISLIKE_RE.finditer(text):
         content = _clean_content(m.group(1))
         if content and len(content) > 2:
-            cards.append({
-                "type": "PREFERENCE",
-                "content": f"{prefix}dislikes {content}",
-                "speaker": speaker,
-                "date": date,
-                "source_id": source_id,
-                "confidence": 0.8,
-            })
+            cards.append(
+                {
+                    "type": "PREFERENCE",
+                    "content": f"{prefix}dislikes {content}",
+                    "speaker": speaker,
+                    "date": date,
+                    "source_id": source_id,
+                    "confidence": 0.8,
+                }
+            )
 
     # --- Events ---
     for m in _EVENT_RE.finditer(text):
@@ -352,14 +417,16 @@ def extract_facts(
             # Truncate at first conjunction/dash for cleaner cards
             obj = re.split(r"\s+[-–—]\s+|\s+and\s+(?:it|I|he|she|they|we)\b", obj, maxsplit=1)[0].strip()
             event_date = mentioned_date or date
-            cards.append({
-                "type": "EVENT",
-                "content": f"{prefix}{verb} {obj}",
-                "speaker": speaker,
-                "date": event_date,
-                "source_id": source_id,
-                "confidence": 0.8,
-            })
+            cards.append(
+                {
+                    "type": "EVENT",
+                    "content": f"{prefix}{verb} {obj}",
+                    "speaker": speaker,
+                    "date": event_date,
+                    "source_id": source_id,
+                    "confidence": 0.8,
+                }
+            )
 
     # --- Gerund events: "Researching adoption agencies" ---
     for m in _GERUND_RE.finditer(text):
@@ -367,66 +434,76 @@ def extract_facts(
         obj = _clean_content(m.group(2))
         if obj and len(obj) > 2:
             obj = re.split(r"\s+[-–—]\s+|\s+and\s+(?:it|I|he|she|they|we)\b", obj, maxsplit=1)[0].strip()
-            cards.append({
-                "type": "EVENT",
-                "content": f"{prefix}{verb} {obj}",
-                "speaker": speaker,
-                "date": date,
-                "source_id": source_id,
-                "confidence": 0.75,
-            })
+            cards.append(
+                {
+                    "type": "EVENT",
+                    "content": f"{prefix}{verb} {obj}",
+                    "speaker": speaker,
+                    "date": date,
+                    "source_id": source_id,
+                    "confidence": 0.75,
+                }
+            )
 
     # --- Relations ---
     for m in _RELATION_RE.finditer(text):
         person = m.group(1).strip()
         relation = _clean_content(m.group(2))
         if person and relation and person.lower() not in ("it", "this", "that", "there"):
-            cards.append({
-                "type": "RELATION",
-                "content": f"{person} is {prefix}{relation}",
-                "speaker": speaker,
-                "date": date,
-                "source_id": source_id,
-                "confidence": 0.75,
-            })
+            cards.append(
+                {
+                    "type": "RELATION",
+                    "content": f"{person} is {prefix}{relation}",
+                    "speaker": speaker,
+                    "date": date,
+                    "source_id": source_id,
+                    "confidence": 0.75,
+                }
+            )
 
     for m in _MET_RE.finditer(text):
         content = _clean_content(m.group(1))
         if content and len(content) > 1:
-            cards.append({
-                "type": "RELATION",
-                "content": f"{prefix}met {content}",
-                "speaker": speaker,
-                "date": date,
-                "source_id": source_id,
-                "confidence": 0.7,
-            })
+            cards.append(
+                {
+                    "type": "RELATION",
+                    "content": f"{prefix}met {content}",
+                    "speaker": speaker,
+                    "date": date,
+                    "source_id": source_id,
+                    "confidence": 0.7,
+                }
+            )
 
     # --- Negations ---
     for m in _NEGATION_RE.finditer(text):
         content = _clean_content(m.group(1))
         if content and len(content) > 2:
-            cards.append({
-                "type": "NEGATION",
-                "content": f"{prefix}never {content}",
-                "speaker": speaker,
-                "date": date,
-                "source_id": source_id,
-                "confidence": 0.85,
-            })
+            cards.append(
+                {
+                    "type": "NEGATION",
+                    "content": f"{prefix}never {content}",
+                    "speaker": speaker,
+                    "date": date,
+                    "source_id": source_id,
+                    "confidence": 0.85,
+                }
+            )
 
     # --- Plans/intentions ---
     for m in _PLAN_RE.finditer(text):
         content = _clean_content(m.group(1))
         if content and len(content) > 2:
-            cards.append({
-                "type": "PLAN",
-                "content": f"{prefix}plans to {content}",
-                "speaker": speaker,
-                "date": date,
-                "source_id": source_id,
-                "confidence": 0.7,
-            })
+            cards.append(
+                {
+                    "type": "PLAN",
+                    "content": f"{prefix}plans to {content}",
+                    "speaker": speaker,
+                    "date": date,
+                    "source_id": source_id,
+                    "confidence": 0.7,
+                }
+            )
 
     # --- Update/change events ---
     for m in _UPDATE_RE.finditer(text):
@@ -435,20 +512,23 @@ def extract_facts(
         if obj and len(obj) > 2:
             obj = re.split(r"\s+[-–—]\s+|\s+and\s+(?:it|I|he|she|they|we)\b", obj, maxsplit=1)[0].strip()
             event_date = mentioned_date or date
-            cards.append({
-                "type": "EVENT",
-                "content": f"{prefix}{verb} {obj}",
-                "speaker": speaker,
-                "date": event_date,
-                "source_id": source_id,
-                "confidence": 0.8,
-            })
+            cards.append(
+                {
+                    "type": "EVENT",
+                    "content": f"{prefix}{verb} {obj}",
+                    "speaker": speaker,
+                    "date": event_date,
+                    "source_id": source_id,
+                    "confidence": 0.8,
+                }
+            )
 
     # --- Activity lists: "running, reading, or playing my violin" ---
     # Match comma/or/and-separated gerund phrases (handles ", or" and ", and")
     list_match = re.search(
         r"((?:\w+ing(?:\s+\w+){0,3}(?:,\s*(?:(?:and|or)\s+)?|\s+(?:and|or)\s+)){2,}\w+ing(?:\s+\w+){0,3})",
-        text, re.IGNORECASE,
+        text,
+        re.IGNORECASE,
     )
     if list_match:
         raw = list_match.group(1)
@@ -456,14 +536,16 @@ def extract_facts(
         for activity in activities:
             activity = activity.strip().rstrip(".")
             if activity and len(activity) > 2 and re.match(r"\w+ing", activity):
-                cards.append({
-                    "type": "PREFERENCE",
-                    "content": f"{prefix}enjoys {activity}",
-                    "speaker": speaker,
-                    "date": date,
-                    "source_id": source_id,
-                    "confidence": 0.7,
-                })
+                cards.append(
+                    {
+                        "type": "PREFERENCE",
+                        "content": f"{prefix}enjoys {activity}",
+                        "speaker": speaker,
+                        "date": date,
+                        "source_id": source_id,
+                        "confidence": 0.7,
+                    }
+                )
 
     # --- D.3: Possessive relations ("Tim's brother", "John's doctor") ---
     for m in _POSSESSIVE_RE.finditer(text):
@@ -471,44 +553,74 @@ def extract_facts(
         thing = _clean_content(m.group(2))
         if thing and len(thing) > 1 and owner.lower() not in ("i", "it", "this", "that"):
             # Relation-like: "brother", "sister", "wife", "doctor", "friend"
-            relation_words = {"brother", "sister", "wife", "husband", "mother", "father",
-                              "mom", "dad", "son", "daughter", "friend", "boyfriend",
-                              "girlfriend", "partner", "doctor", "boss", "coach",
-                              "teacher", "neighbor", "roommate", "uncle", "aunt",
-                              "cousin", "grandma", "grandpa", "grandmother", "grandfather"}
+            relation_words = {
+                "brother",
+                "sister",
+                "wife",
+                "husband",
+                "mother",
+                "father",
+                "mom",
+                "dad",
+                "son",
+                "daughter",
+                "friend",
+                "boyfriend",
+                "girlfriend",
+                "partner",
+                "doctor",
+                "boss",
+                "coach",
+                "teacher",
+                "neighbor",
+                "roommate",
+                "uncle",
+                "aunt",
+                "cousin",
+                "grandma",
+                "grandpa",
+                "grandmother",
+                "grandfather",
+            }
             first_word = thing.split()[0].lower()
             if first_word in relation_words:
-                cards.append({
-                    "type": "RELATION",
-                    "content": f"{prefix}{owner}'s {thing}",
-                    "speaker": speaker,
-                    "date": date,
-                    "source_id": source_id,
-                    "confidence": 0.75,
-                })
+                cards.append(
+                    {
+                        "type": "RELATION",
+                        "content": f"{prefix}{owner}'s {thing}",
+                        "speaker": speaker,
+                        "date": date,
+                        "source_id": source_id,
+                        "confidence": 0.75,
+                    }
+                )
             else:
                 # Possessive fact: "Tim's car", "John's injury"
-                cards.append({
-                    "type": "FACT",
-                    "content": f"{prefix}{owner}'s {thing}",
-                    "speaker": speaker,
-                    "date": date,
-                    "source_id": source_id,
-                    "confidence": 0.7,
-                })
+                cards.append(
+                    {
+                        "type": "FACT",
+                        "content": f"{prefix}{owner}'s {thing}",
+                        "speaker": speaker,
+                        "date": date,
+                        "source_id": source_id,
+                        "confidence": 0.7,
+                    }
+                )
 
     # --- D.3: Habitual preferences ("I usually...", "I often...", "I prefer to...") ---
     for m in _HABITUAL_RE.finditer(text):
         content = _clean_content(m.group(1))
         if content and len(content) > 2:
-            cards.append({
-                "type": "PREFERENCE",
-                "content": f"{prefix}usually {content}",
-                "speaker": speaker,
-                "date": date,
-                "source_id": source_id,
-                "confidence": 0.75,
-            })
+            cards.append(
+                {
+                    "type": "PREFERENCE",
+                    "content": f"{prefix}usually {content}",
+                    "speaker": speaker,
+                    "date": date,
+                    "source_id": source_id,
+                    "confidence": 0.75,
+                }
+            )
 
     # --- D.3: Third-person references ("He is a doctor", "She works at Google") ---
     # Only extract if we have a speaker context (from previous turn)
@@ -516,14 +628,16 @@ def extract_facts(
         content = _clean_content(m.group(1))
         if content and len(content) > 2:
             # These get speaker from context (coreference resolved in extract_from_conversation)
-            cards.append({
-                "type": "FACT",
-                "content": f"{prefix}{content}",
-                "speaker": speaker,
-                "date": date,
-                "source_id": source_id,
-                "confidence": 0.65,
-            })
+            cards.append(
+                {
+                    "type": "FACT",
+                    "content": f"{prefix}{content}",
+                    "speaker": speaker,
+                    "date": date,
+                    "source_id": source_id,
+                    "confidence": 0.65,
+                }
+            )
 
     # Deduplicate by content (keep highest confidence)
     seen = {}
@@ -655,7 +769,7 @@ def extract_from_conversation(
                 # Only swap if card content starts with current speaker prefix
                 # and the original text had a third-person reference
                 if content.startswith(sp_prefix) and card.get("confidence", 1) <= 0.65:
-                    card["content"] = coref_prefix + content[len(sp_prefix):]
+                    card["content"] = coref_prefix + content[len(sp_prefix) :]
 
         # Carry original dia_id so evaluator can map fact cards to evidence
         for card in cards:

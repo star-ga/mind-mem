@@ -41,10 +41,10 @@ def scan_markdown_file(file_path: str) -> list[dict]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="mind-mem Bootstrap Corpus Backfill")
     parser.add_argument("workspace", help="Path to mind-mem workspace")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Show what would be written without writing")
-    parser.add_argument("--max-transcripts", type=int, default=0,
-                        help="Limit number of transcripts to process (0 = unlimited)")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be written without writing")
+    parser.add_argument(
+        "--max-transcripts", type=int, default=0, help="Limit number of transcripts to process (0 = unlimited)"
+    )
     args = parser.parse_args()
 
     ws = os.path.abspath(args.workspace)
@@ -69,7 +69,7 @@ def main() -> None:
     print("Phase 1: Scanning JSONL transcripts...")
     transcripts = find_recent_transcripts(days=3650)  # 10 years = effectively all time
     if args.max_transcripts > 0:
-        transcripts = transcripts[:args.max_transcripts]
+        transcripts = transcripts[: args.max_transcripts]
     print(f"  Found {len(transcripts)} transcript(s)")
 
     for i, t_path in enumerate(transcripts, 1):
@@ -92,8 +92,10 @@ def main() -> None:
             if sess_id:
                 total_summaries_created += 1
 
-    print(f"  Transcripts done: {total_signals_detected} signals detected, "
-          f"{total_signals_written} written, {total_summaries_created} summaries")
+    print(
+        f"  Transcripts done: {total_signals_detected} signals detected, "
+        f"{total_signals_written} written, {total_summaries_created} summaries"
+    )
     print()
 
     # ------------------------------------------------------------------
@@ -213,14 +215,16 @@ def main() -> None:
         print("  (DRY RUN — nothing was written)")
     print()
 
-    _log.info("bootstrap_complete",
-              transcripts=len(transcripts),
-              logs=len(logs),
-              signals_detected=total_signals_detected,
-              signals_written=total_signals_written,
-              entities_proposed=total_entities_proposed,
-              summaries_created=total_summaries_created,
-              dry_run=dry_run)
+    _log.info(
+        "bootstrap_complete",
+        transcripts=len(transcripts),
+        logs=len(logs),
+        signals_detected=total_signals_detected,
+        signals_written=total_signals_written,
+        entities_proposed=total_entities_proposed,
+        summaries_created=total_summaries_created,
+        dry_run=dry_run,
+    )
 
 
 if __name__ == "__main__":

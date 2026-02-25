@@ -32,6 +32,7 @@ def _get_python_version() -> str:
     try:
         # When running as installed package or scripts/ is on sys.path
         from __init__ import __version__
+
         return __version__
     except ImportError:
         pass
@@ -62,15 +63,16 @@ def _check_version_compat(so_version: str) -> bool:
     except (IndexError, ValueError):
         _log.warning(
             "FFI version parse error: .so=%r, python=%r — cannot compare",
-            so_version, py_version,
+            so_version,
+            py_version,
         )
         return False
 
     if so_major_minor != py_major_minor:
         _log.warning(
-            "FFI version mismatch: .so=%s, python=%s — major.minor differ, "
-            "some features may not work correctly",
-            so_version, py_version,
+            "FFI version mismatch: .so=%s, python=%s — major.minor differ, some features may not work correctly",
+            so_version,
+            py_version,
         )
         return False
 
@@ -107,8 +109,7 @@ class MindMemKernel:
                 resolved = Path(env_path).resolve()
                 allowed = [Path(__file__).parent.parent / "lib"]
                 in_allowed = any(
-                    resolved == d.resolve() or str(resolved).startswith(str(d.resolve()) + os.sep)
-                    for d in allowed
+                    resolved == d.resolve() or str(resolved).startswith(str(d.resolve()) + os.sep) for d in allowed
                 )
                 if in_allowed and resolved.exists():
                     self._lib = ctypes.CDLL(str(resolved), mode=_LAZY)
@@ -121,8 +122,7 @@ class MindMemKernel:
 
         if self._lib is None:
             raise OSError(
-                "MIND kernel library not found. "
-                "Compile with: mindc mind/*.mind --emit=shared -o lib/libmindmem.so"
+                "MIND kernel library not found. Compile with: mindc mind/*.mind --emit=shared -o lib/libmindmem.so"
             )
 
         # Declare argtypes for all kernel functions (prevents silent memory corruption)
@@ -187,96 +187,140 @@ class MindMemKernel:
         """Return the version string reported by the .so, or None."""
         return self._so_version
 
-    def rrf_fuse_py(self, bm25_ranks: list[float], vector_ranks: list[float],
-                    k: float = 60.0, bm25_w: float = 1.0,
-                    vector_w: float = 1.0) -> list[float]:
+    def rrf_fuse_py(
+        self,
+        bm25_ranks: list[float],
+        vector_ranks: list[float],
+        k: float = 60.0,
+        bm25_w: float = 1.0,
+        vector_w: float = 1.0,
+    ) -> list[float]:
         """RRF fusion via compiled MIND kernel."""
         N = len(bm25_ranks)
         arr_t = ctypes.c_float * N
         out = arr_t()
         self._lib.rrf_fuse(
-            arr_t(*bm25_ranks), arr_t(*vector_ranks), ctypes.c_int(N),
-            ctypes.c_float(k), ctypes.c_float(bm25_w), ctypes.c_float(vector_w),
+            arr_t(*bm25_ranks),
+            arr_t(*vector_ranks),
+            ctypes.c_int(N),
+            ctypes.c_float(k),
+            ctypes.c_float(bm25_w),
+            ctypes.c_float(vector_w),
             out,
         )
         return list(out)
 
-    def bm25f_batch_py(self, tfs: list[float], dfs: list[float], N_docs: float,
-                       dls: list[float], avgdl: float,
-                       k1: float = 1.2, b: float = 0.75,
-                       field_weight: float = 1.0) -> list[float]:
+    def bm25f_batch_py(
+        self,
+        tfs: list[float],
+        dfs: list[float],
+        N_docs: float,
+        dls: list[float],
+        avgdl: float,
+        k1: float = 1.2,
+        b: float = 0.75,
+        field_weight: float = 1.0,
+    ) -> list[float]:
         """BM25F batch scoring via compiled MIND kernel."""
         n = len(tfs)
         arr_t = ctypes.c_float * n
         out = arr_t()
         self._lib.bm25f_batch(
-            arr_t(*tfs), ctypes.c_float(dfs[0]), ctypes.c_float(N_docs),
-            arr_t(*dls), ctypes.c_float(avgdl),
-            ctypes.c_float(k1), ctypes.c_float(b), ctypes.c_float(field_weight),
-            ctypes.c_int(n), out,
+            arr_t(*tfs),
+            ctypes.c_float(dfs[0]),
+            ctypes.c_float(N_docs),
+            arr_t(*dls),
+            ctypes.c_float(avgdl),
+            ctypes.c_float(k1),
+            ctypes.c_float(b),
+            ctypes.c_float(field_weight),
+            ctypes.c_int(n),
+            out,
         )
         return list(out)
 
-    def negation_penalty_py(self, scores: list[float], has_negation: list[bool],
-                            penalty: float = 0.3) -> list[float]:
+    def negation_penalty_py(self, scores: list[float], has_negation: list[bool], penalty: float = 0.3) -> list[float]:
         """Negation penalty via compiled MIND kernel."""
         n = len(scores)
         arr_t = ctypes.c_float * n
         out = arr_t()
         flags = arr_t(*(1.0 if b else 0.0 for b in has_negation))
         self._lib.negation_penalty(
-            arr_t(*scores), flags, ctypes.c_float(penalty), ctypes.c_int(n), out,
+            arr_t(*scores),
+            flags,
+            ctypes.c_float(penalty),
+            ctypes.c_int(n),
+            out,
         )
         return list(out)
 
-    def date_proximity_py(self, days_diff: list[float],
-                          sigma: float = 30.0) -> list[float]:
+    def date_proximity_py(self, days_diff: list[float], sigma: float = 30.0) -> list[float]:
         """Gaussian date proximity via compiled MIND kernel."""
         n = len(days_diff)
         arr_t = ctypes.c_float * n
         out = arr_t()
         self._lib.date_proximity(
-            arr_t(*days_diff), ctypes.c_float(sigma), ctypes.c_int(n), out,
+            arr_t(*days_diff),
+            ctypes.c_float(sigma),
+            ctypes.c_int(n),
+            out,
         )
         return list(out)
 
-    def category_boost_py(self, scores: list[float], matches: list[bool],
-                          boost: float = 1.15) -> list[float]:
+    def category_boost_py(self, scores: list[float], matches: list[bool], boost: float = 1.15) -> list[float]:
         """Category boost via compiled MIND kernel."""
         n = len(scores)
         arr_t = ctypes.c_float * n
         out = arr_t()
         flags = arr_t(*(1.0 if b else 0.0 for b in matches))
         self._lib.category_boost(
-            arr_t(*scores), flags, ctypes.c_float(boost), ctypes.c_int(n), out,
+            arr_t(*scores),
+            flags,
+            ctypes.c_float(boost),
+            ctypes.c_int(n),
+            out,
         )
         return list(out)
 
-    def importance_batch_py(self, access_counts: list[int], days_since: list[float],
-                            base: float = 1.0, decay: float = 0.01) -> list[float]:
+    def importance_batch_py(
+        self, access_counts: list[int], days_since: list[float], base: float = 1.0, decay: float = 0.01
+    ) -> list[float]:
         """Importance batch scoring via compiled MIND kernel."""
         n = len(access_counts)
         float_arr = ctypes.c_float * n
         int_arr = ctypes.c_int * n
         out = float_arr()
         self._lib.importance_batch(
-            int_arr(*access_counts), float_arr(*days_since),
-            ctypes.c_float(base), ctypes.c_float(decay), ctypes.c_int(n), out,
+            int_arr(*access_counts),
+            float_arr(*days_since),
+            ctypes.c_float(base),
+            ctypes.c_float(decay),
+            ctypes.c_int(n),
+            out,
         )
         return list(out)
 
-    def confidence_score_py(self, entity_overlap: float, bm25_norm: float,
-                            speaker_cov: float, evidence_density: float,
-                            negation_asym: float,
-                            weights: tuple = (0.30, 0.25, 0.15, 0.20, 0.10)) -> float:
+    def confidence_score_py(
+        self,
+        entity_overlap: float,
+        bm25_norm: float,
+        speaker_cov: float,
+        evidence_density: float,
+        negation_asym: float,
+        weights: tuple = (0.30, 0.25, 0.15, 0.20, 0.10),
+    ) -> float:
         """Confidence score via compiled MIND kernel."""
         self._lib.confidence_score.restype = ctypes.c_float
         return self._lib.confidence_score(
-            ctypes.c_float(entity_overlap), ctypes.c_float(bm25_norm),
-            ctypes.c_float(speaker_cov), ctypes.c_float(evidence_density),
+            ctypes.c_float(entity_overlap),
+            ctypes.c_float(bm25_norm),
+            ctypes.c_float(speaker_cov),
+            ctypes.c_float(evidence_density),
             ctypes.c_float(negation_asym),
-            ctypes.c_float(weights[0]), ctypes.c_float(weights[1]),
-            ctypes.c_float(weights[2]), ctypes.c_float(weights[3]),
+            ctypes.c_float(weights[0]),
+            ctypes.c_float(weights[1]),
+            ctypes.c_float(weights[2]),
+            ctypes.c_float(weights[3]),
             ctypes.c_float(weights[4]),
         )
 
@@ -286,25 +330,37 @@ class MindMemKernel:
         arr_t = ctypes.c_float * n
         out = arr_t()
         self._lib.top_k_mask(
-            arr_t(*scores), ctypes.c_int(n), ctypes.c_int(k), out,
+            arr_t(*scores),
+            ctypes.c_int(n),
+            ctypes.c_int(k),
+            out,
         )
         return [v > 0.5 for v in out]
 
-    def weighted_rank_py(self, scores: list[float],
-                         weights: list[float]) -> list[float]:
+    def weighted_rank_py(self, scores: list[float], weights: list[float]) -> list[float]:
         """Weighted rank via compiled MIND kernel."""
         n = len(scores)
         arr_t = ctypes.c_float * n
         out = arr_t()
         self._lib.weighted_rank(
-            arr_t(*scores), arr_t(*weights), ctypes.c_int(n), out,
+            arr_t(*scores),
+            arr_t(*weights),
+            ctypes.c_int(n),
+            out,
         )
         return list(out)
 
-    def category_affinity_py(self, kw_overlap: list[float], tag_match: list[float],
-                              ent_match: list[float], n_blocks: int, n_cats: int,
-                              kw_w: float = 0.5, tag_w: float = 0.3,
-                              ent_w: float = 0.2) -> list[float]:
+    def category_affinity_py(
+        self,
+        kw_overlap: list[float],
+        tag_match: list[float],
+        ent_match: list[float],
+        n_blocks: int,
+        n_cats: int,
+        kw_w: float = 0.5,
+        tag_w: float = 0.3,
+        ent_w: float = 0.2,
+    ) -> list[float]:
         """Category affinity scoring via compiled MIND kernel.
 
         All inputs are flat row-major [N*C]. Returns flat [N*C] affinity scores.
@@ -313,15 +369,21 @@ class MindMemKernel:
         arr_t = ctypes.c_float * total
         out = arr_t()
         self._lib.category_affinity(
-            arr_t(*kw_overlap), arr_t(*tag_match), arr_t(*ent_match),
-            ctypes.c_float(kw_w), ctypes.c_float(tag_w), ctypes.c_float(ent_w),
-            ctypes.c_int(n_blocks), ctypes.c_int(n_cats), out,
+            arr_t(*kw_overlap),
+            arr_t(*tag_match),
+            arr_t(*ent_match),
+            ctypes.c_float(kw_w),
+            ctypes.c_float(tag_w),
+            ctypes.c_float(ent_w),
+            ctypes.c_int(n_blocks),
+            ctypes.c_int(n_cats),
+            out,
         )
         return list(out)
 
-    def query_category_relevance_py(self, query_kw: list[float],
-                                     cat_kw: list[float], n_cats: int,
-                                     n_keywords: int) -> list[float]:
+    def query_category_relevance_py(
+        self, query_kw: list[float], cat_kw: list[float], n_cats: int, n_keywords: int
+    ) -> list[float]:
         """Query-category relevance via compiled MIND kernel.
 
         query_kw: flat [K] keyword weights.
@@ -333,13 +395,15 @@ class MindMemKernel:
         out_t = ctypes.c_float * n_cats
         out = out_t()
         self._lib.query_category_relevance(
-            qk_t(*query_kw), ck_t(*cat_kw),
-            ctypes.c_int(n_cats), ctypes.c_int(n_keywords), out,
+            qk_t(*query_kw),
+            ck_t(*cat_kw),
+            ctypes.c_int(n_cats),
+            ctypes.c_int(n_keywords),
+            out,
         )
         return list(out)
 
-    def category_assign_py(self, affinity: list[float], threshold: float,
-                            n_blocks: int, n_cats: int) -> list[float]:
+    def category_assign_py(self, affinity: list[float], threshold: float, n_blocks: int, n_cats: int) -> list[float]:
         """Soft category assignment via compiled MIND kernel.
 
         Returns [N*C] sigmoid-thresholded assignment weights.
@@ -348,8 +412,11 @@ class MindMemKernel:
         arr_t = ctypes.c_float * total
         out = arr_t()
         self._lib.category_assign(
-            arr_t(*affinity), ctypes.c_float(threshold),
-            ctypes.c_int(n_blocks), ctypes.c_int(n_cats), out,
+            arr_t(*affinity),
+            ctypes.c_float(threshold),
+            ctypes.c_int(n_blocks),
+            ctypes.c_int(n_cats),
+            out,
         )
         return list(out)
 
@@ -395,6 +462,7 @@ def is_protected() -> bool:
 # --- Utility functions for .mind source file listing ---
 # Used by MCP tools to expose kernel metadata
 
+
 def list_kernels(directory: str) -> list[str]:
     """List available .mind kernel source names in a directory.
 
@@ -408,9 +476,7 @@ def list_kernels(directory: str) -> list[str]:
         return []
     try:
         return sorted(
-            fname[:-5]
-            for fname in os.listdir(directory)
-            if fname.endswith(".mind") and not fname.startswith(".")
+            fname[:-5] for fname in os.listdir(directory) if fname.endswith(".mind") and not fname.startswith(".")
         )
     except OSError:
         return []

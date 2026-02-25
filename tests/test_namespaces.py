@@ -20,6 +20,7 @@ class TestNamespaceManager(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.td, ignore_errors=True)
 
     def _write_acl(self, acl):
@@ -148,6 +149,7 @@ class TestSharedLedger(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.td, ignore_errors=True)
 
     def test_append_fact(self):
@@ -211,6 +213,7 @@ class TestInitMultiAgentWorkspace(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.td, ignore_errors=True)
 
     def test_creates_shared_and_agents(self):

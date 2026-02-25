@@ -19,6 +19,7 @@ from scripts.error_codes import (
 # Completeness: every ErrorCode has a metadata entry
 # ---------------------------------------------------------------------------
 
+
 class TestMetadataCompleteness:
     """Every ErrorCode member must have metadata."""
 
@@ -63,17 +64,14 @@ class TestNumericRanges:
     def test_code_in_expected_range(self, code: ErrorCode):
         prefix = code.name.split("_")[0]
         lo, hi, expected_cat = _RANGE_MAP[prefix]
-        assert lo <= code.value <= hi, (
-            f"{code.name} value {code.value} outside [{lo}, {hi}]"
-        )
-        assert error_category(code) == expected_cat, (
-            f"{code.name} category {error_category(code)} != {expected_cat}"
-        )
+        assert lo <= code.value <= hi, f"{code.name} value {code.value} outside [{lo}, {hi}]"
+        assert error_category(code) == expected_cat, f"{code.name} category {error_category(code)} != {expected_cat}"
 
 
 # ---------------------------------------------------------------------------
 # error_message()
 # ---------------------------------------------------------------------------
+
 
 class TestErrorMessage:
     """error_message() returns formatted strings."""
@@ -81,9 +79,7 @@ class TestErrorMessage:
     @pytest.mark.parametrize("code", list(ErrorCode))
     def test_format_prefix(self, code: ErrorCode):
         msg = error_message(code)
-        assert msg.startswith(f"[MM-{code.value}]"), (
-            f"Message for {code.name} missing prefix: {msg}"
-        )
+        assert msg.startswith(f"[MM-{code.value}]"), f"Message for {code.name} missing prefix: {msg}"
 
     def test_workspace_not_found_message(self):
         msg = error_message(ErrorCode.WORKSPACE_NOT_FOUND)
@@ -103,6 +99,7 @@ class TestErrorMessage:
 # ---------------------------------------------------------------------------
 # error_category()
 # ---------------------------------------------------------------------------
+
 
 class TestErrorCategory:
     """error_category() returns the correct ErrorCategory."""
@@ -181,6 +178,7 @@ class TestErrorCategory:
 # error_severity()
 # ---------------------------------------------------------------------------
 
+
 class TestErrorSeverity:
     """error_severity() returns the correct ErrorSeverity."""
 
@@ -190,9 +188,7 @@ class TestErrorSeverity:
             ErrorCode.STORAGE_DISK_FULL,
         ]
         for code in critical_codes:
-            assert error_severity(code) == ErrorSeverity.CRITICAL, (
-                f"{code.name} should be CRITICAL"
-            )
+            assert error_severity(code) == ErrorSeverity.CRITICAL, f"{code.name} should be CRITICAL"
 
     def test_high_codes(self):
         high_codes = [
@@ -207,9 +203,7 @@ class TestErrorSeverity:
             ErrorCode.PERMISSION_DENIED,
         ]
         for code in high_codes:
-            assert error_severity(code) == ErrorSeverity.HIGH, (
-                f"{code.name} should be HIGH"
-            )
+            assert error_severity(code) == ErrorSeverity.HIGH, f"{code.name} should be HIGH"
 
     def test_low_codes(self):
         low_codes = [
@@ -220,14 +214,13 @@ class TestErrorSeverity:
             ErrorCode.VALIDATE_DUPLICATE_ID,
         ]
         for code in low_codes:
-            assert error_severity(code) == ErrorSeverity.LOW, (
-                f"{code.name} should be LOW"
-            )
+            assert error_severity(code) == ErrorSeverity.LOW, f"{code.name} should be LOW"
 
 
 # ---------------------------------------------------------------------------
 # is_critical()
 # ---------------------------------------------------------------------------
+
 
 class TestIsCritical:
     """is_critical() returns True only for CRITICAL severity codes."""
@@ -251,6 +244,7 @@ class TestIsCritical:
 # ---------------------------------------------------------------------------
 # Enum value uniqueness
 # ---------------------------------------------------------------------------
+
 
 class TestEnumIntegrity:
     """ErrorCode enum values must be unique integers."""

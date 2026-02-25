@@ -29,8 +29,16 @@ from .mind_filelock import FileLock
 # ═══════════════════════════════════════════════
 
 VALID_DOMAINS = {
-    "integrity", "memory", "retrieval", "security", "llm_strategy",
-    "workflow", "project", "comms", "finance", "other"
+    "integrity",
+    "memory",
+    "retrieval",
+    "security",
+    "llm_strategy",
+    "workflow",
+    "project",
+    "comms",
+    "finance",
+    "other",
 }
 
 VALID_MODALITIES = {"must", "must_not", "should", "should_not", "may"}
@@ -147,6 +155,7 @@ def save_intel_state(ws, state):
 # 1. Contradiction Detection Engine
 # ═══════════════════════════════════════════════
 
+
 def detect_contradictions(decisions, report):
     """Detect contradictions between active decisions using ConstraintSignatures."""
     report.section("1. CONTRADICTION DETECTION")
@@ -168,6 +177,7 @@ def detect_contradictions(decisions, report):
     # Only signatures sharing an axis key can conflict, so we compare
     # within each bucket: O(Σ n_k²) instead of O(N²).
     from collections import defaultdict
+
     axis_groups = defaultdict(list)
     for s in sigs:
         axis_groups[get_axis_key(s["sig"])].append(s)
@@ -182,22 +192,28 @@ def detect_contradictions(decisions, report):
                 if s1["decision"] == s2["decision"]:
                     continue
 
-                pair_key = tuple(sorted([
-                    f"{s1['decision']}:{s1['sig']['id']}",
-                    f"{s2['decision']}:{s2['sig']['id']}",
-                ]))
+                pair_key = tuple(
+                    sorted(
+                        [
+                            f"{s1['decision']}:{s1['sig']['id']}",
+                            f"{s2['decision']}:{s2['sig']['id']}",
+                        ]
+                    )
+                )
                 if pair_key in checked:
                     continue
                 checked.add(pair_key)
 
                 conflict = check_signature_conflict(s1["sig"], s2["sig"])
                 if conflict:
-                    contradictions.append({
-                        "sig1": s1,
-                        "sig2": s2,
-                        "severity": conflict["severity"],
-                        "reason": conflict["reason"],
-                    })
+                    contradictions.append(
+                        {
+                            "sig1": s1,
+                            "sig2": s2,
+                            "severity": conflict["severity"],
+                            "reason": conflict["reason"],
+                        }
+                    )
 
     if contradictions:
         for c in contradictions:
@@ -356,6 +372,7 @@ def scopes_overlap(scope1, scope2):
 # 2. Drift Analysis Engine
 # ═══════════════════════════════════════════════
 
+
 def detect_drift(data, report):
     """Detect strategic drift signals."""
     report.section("2. DRIFT ANALYSIS")
@@ -429,12 +446,14 @@ def detect_drift(data, report):
         dead_decisions.append(d["_id"])
 
     if dead_decisions:
-        signals.append({
-            "signal": "dead_decisions",
-            "severity": "medium",
-            "summary": f"{len(dead_decisions)} active decision(s) not referenced by any active task",
-            "evidence": dead_decisions,
-        })
+        signals.append(
+            {
+                "signal": "dead_decisions",
+                "severity": "medium",
+                "summary": f"{len(dead_decisions)} active decision(s) not referenced by any active task",
+                "evidence": dead_decisions,
+            }
+        )
         report.warn(f"Dead decisions (not referenced by active tasks): {', '.join(dead_decisions)}")
     else:
         report.ok("All active decisions referenced or exempt.")
@@ -452,12 +471,14 @@ def detect_drift(data, report):
     # 2b. Stalled tasks: blocked tasks without resolution path
     blocked = [t for t in tasks if t.get("Status") == "blocked"]
     if blocked:
-        signals.append({
-            "signal": "stalled_tasks",
-            "severity": "medium",
-            "summary": f"{len(blocked)} blocked task(s)",
-            "evidence": [t["_id"] for t in blocked],
-        })
+        signals.append(
+            {
+                "signal": "stalled_tasks",
+                "severity": "medium",
+                "summary": f"{len(blocked)} blocked task(s)",
+                "evidence": [t["_id"] for t in blocked],
+            }
+        )
         for t in blocked:
             report.warn(f"Blocked task: {t['_id']} — {t.get('Title', '?')}")
     else:
@@ -471,12 +492,14 @@ def detect_drift(data, report):
     repeated = {k: v for k, v in inc_types.items() if len(v) > 1}
     if repeated:
         for rc, ids in repeated.items():
-            signals.append({
-                "signal": "repeated_incidents",
-                "severity": "high",
-                "summary": f"Repeated incident pattern ({len(ids)}x): {rc[:60]}",
-                "evidence": ids,
-            })
+            signals.append(
+                {
+                    "signal": "repeated_incidents",
+                    "severity": "high",
+                    "summary": f"Repeated incident pattern ({len(ids)}x): {rc[:60]}",
+                    "evidence": ids,
+                }
+            )
             report.warn(f"Repeated incidents ({len(ids)}x): {', '.join(ids)} — {rc[:60]}")
     else:
         report.ok("No repeated incident patterns.")
@@ -490,12 +513,14 @@ def detect_drift(data, report):
             unaligned.append(t["_id"])
 
     if unaligned:
-        signals.append({
-            "signal": "tasks_not_aligned",
-            "severity": "low",
-            "summary": f"{len(unaligned)} active task(s) without AlignsWith or Justification",
-            "evidence": unaligned,
-        })
+        signals.append(
+            {
+                "signal": "tasks_not_aligned",
+                "severity": "low",
+                "summary": f"{len(unaligned)} active task(s) without AlignsWith or Justification",
+                "evidence": unaligned,
+            }
+        )
         report.warn(f"Unaligned tasks: {', '.join(unaligned)}")
     else:
         report.ok("All active tasks have AlignsWith or Justification.")
@@ -521,6 +546,7 @@ def detect_drift(data, report):
 # ═══════════════════════════════════════════════
 # 3. Decision Impact Graph
 # ═══════════════════════════════════════════════
+
 
 def build_impact_graph(data, report):
     """Build decision impact graph by tracing references."""
@@ -582,10 +608,7 @@ def build_impact_graph(data, report):
             }
             impacts.append(impact)
             report.info_msg(
-                f"{did} -> "
-                f"PRJ:{len(affected_projects)} "
-                f"T:{len(affected_tasks)} "
-                f"INC:{len(affected_incidents)}"
+                f"{did} -> PRJ:{len(affected_projects)} T:{len(affected_tasks)} INC:{len(affected_incidents)}"
             )
 
     if not impacts:
@@ -599,6 +622,7 @@ def build_impact_graph(data, report):
 # ═══════════════════════════════════════════════
 # 4. State Snapshot
 # ═══════════════════════════════════════════════
+
 
 def generate_snapshot(data, ws, report):
     """Generate state snapshot as JSON."""
@@ -627,10 +651,8 @@ def generate_snapshot(data, ws, report):
             "active": [p["_id"] for p in data["projects"] if p.get("Status") == "active"],
         },
         "metrics": {
-            "contradictions_open": len([c for c in data.get("contradictions", [])
-                                        if c.get("Status") == "open"]),
-            "drift_signals_open": len([d for d in data.get("drift", [])
-                                       if d.get("Status") == "open"]),
+            "contradictions_open": len([c for c in data.get("contradictions", []) if c.get("Status") == "open"]),
+            "drift_signals_open": len([d for d in data.get("drift", []) if d.get("Status") == "open"]),
             "total_decisions": len(decisions),
             "total_tasks": len(tasks),
             "total_incidents": len(data.get("incidents", [])),
@@ -657,6 +679,7 @@ def generate_snapshot(data, ws, report):
 # 5. Weekly Briefing
 # ═══════════════════════════════════════════════
 
+
 def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
     """Generate weekly strategic briefing."""
     report.section("5. WEEKLY BRIEFING")
@@ -679,18 +702,14 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
     # Decisions this week (compare full date range, not just month prefix)
     monday_str = monday.strftime("%Y-%m-%d")
     sunday_str = sunday.strftime("%Y-%m-%d")
-    week_decisions = [d for d in decisions
-                      if monday_str <= d.get("Date", "") <= sunday_str]
+    week_decisions = [d for d in decisions if monday_str <= d.get("Date", "") <= sunday_str]
 
     # Done tasks
     done_tasks = [t for t in tasks if t.get("Status") == "done"]
 
     # Top 5 tasks by priority for next week focus
     priority_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
-    focus_tasks = sorted(
-        active_tasks,
-        key=lambda t: priority_order.get(t.get("Priority", "P3"), 9)
-    )[:5]
+    focus_tasks = sorted(active_tasks, key=lambda t: priority_order.get(t.get("Priority", "P3"), 9))[:5]
 
     briefing_lines = [
         f"[{week_id}]",
@@ -700,23 +719,18 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
     ]
 
     if contradictions:
-        briefing_lines.append(
-            f"- {len(contradictions)} contradiction(s) detected — requires attention."
-        )
+        briefing_lines.append(f"- {len(contradictions)} contradiction(s) detected — requires attention.")
     if drift_signals:
         high_drift = [s for s in drift_signals if s["severity"] in ("high", "critical")]
         if high_drift:
-            briefing_lines.append(
-                f"- {len(high_drift)} high-severity drift signal(s) detected."
-            )
+            briefing_lines.append(f"- {len(high_drift)} high-severity drift signal(s) detected.")
 
     briefing_lines.append("Wins:")
-    recent_done = [t for t in done_tasks
-                   if any(
-                       monday_str <= h[:10] <= sunday_str
-                       for h in t.get("History", [])
-                       if isinstance(h, str) and len(h) >= 10
-                   )]
+    recent_done = [
+        t
+        for t in done_tasks
+        if any(monday_str <= h[:10] <= sunday_str for h in t.get("History", []) if isinstance(h, str) and len(h) >= 10)
+    ]
     if recent_done:
         for t in recent_done[:5]:
             briefing_lines.append(f"- {t['_id']}: {t.get('Title', '?')}")
@@ -745,9 +759,7 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
 
     briefing_lines.append("TaskFocusNextWeek:")
     for t in focus_tasks:
-        briefing_lines.append(
-            f"- {t['_id']}: {t.get('Title', '?')[:60]} [{t.get('Priority', '?')}]"
-        )
+        briefing_lines.append(f"- {t['_id']}: {t.get('Title', '?')[:60]} [{t.get('Priority', '?')}]")
 
     briefing_lines.append("DriftSignals:")
     if drift_signals:
@@ -759,9 +771,7 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
     briefing_lines.append("Contradictions:")
     if contradictions:
         for c in contradictions:
-            briefing_lines.append(
-                f"- {c['sig1']['sig']['id']} vs {c['sig2']['sig']['id']} ({c['severity']})"
-            )
+            briefing_lines.append(f"- {c['sig1']['sig']['id']} vs {c['sig2']['sig']['id']} ({c['severity']})")
     else:
         briefing_lines.append("- none")
 
@@ -810,6 +820,7 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
 # 6. Write CONTRADICTIONS / DRIFT / IMPACT files
 # ═══════════════════════════════════════════════
 
+
 def write_contradictions(contradictions, ws, report):
     """Append new contradictions to CONTRADICTIONS.md."""
     if not contradictions:
@@ -838,16 +849,16 @@ def write_contradictions(contradictions, ws, report):
 
         block = f"""
 [{cid}]
-Date: {datetime.now().strftime('%Y-%m-%d')}
-Severity: {c['severity']}
+Date: {datetime.now().strftime("%Y-%m-%d")}
+Severity: {c["severity"]}
 Type: decision_vs_decision
-Statement: {c['reason']}
+Statement: {c["reason"]}
 Objects:
-- {c['sig1']['decision']}
-- {c['sig2']['decision']}
+- {c["sig1"]["decision"]}
+- {c["sig2"]["decision"]}
 Evidence:
-- {c['sig1']['sig']['id']}: {c['sig1']['sig'].get('domain')}/{c['sig1']['sig'].get('modality')}
-- {c['sig2']['sig']['id']}: {c['sig2']['sig'].get('domain')}/{c['sig2']['sig'].get('modality')}
+- {c["sig1"]["sig"]["id"]}: {c["sig1"]["sig"].get("domain")}/{c["sig1"]["sig"].get("modality")}
+- {c["sig2"]["sig"]["id"]}: {c["sig2"]["sig"].get("domain")}/{c["sig2"]["sig"].get("modality")}
 ProposedFix: manual_review
 Status: open
 Resolution: none
@@ -891,10 +902,10 @@ def write_drift(drift_signals, ws, report):
 
         block = f"""
 [{dref_id}]
-Date: {datetime.now().strftime('%Y-%m-%d')}
-Severity: {s['severity']}
-Signal: {s['signal']}
-Summary: {s['summary']}
+Date: {datetime.now().strftime("%Y-%m-%d")}
+Severity: {s["severity"]}
+Signal: {s["signal"]}
+Summary: {s["summary"]}
 Metrics:
 - see snapshot
 Evidence:
@@ -959,6 +970,7 @@ def write_impact(impacts, ws, report):
 # ═══════════════════════════════════════════════
 # 7. Proposal Generation (propose/enforce modes)
 # ═══════════════════════════════════════════════
+
 
 def _load_config(ws):
     """Load mind-mem.json config."""
@@ -1060,17 +1072,20 @@ def generate_proposals(contradictions, drift_signals, ws, intel_state, report):
         else:
             continue  # Both candidates are invariants
 
-        pid = f"P-{proposal_date}-{existing_max_idx+len(proposals)+1:03d}"
-        proposals.append({
-            "id": pid,
-            "type": "edit",
-            "target": target_dec,
-            "risk": "high",
-            "evidence": c["reason"],
-            "ops": [{"op": "set_status", "file": "decisions/DECISIONS.md",
-                      "target": target_dec, "status": "revoked"}],
-            "rollback": "restore_snapshot",
-        })
+        pid = f"P-{proposal_date}-{existing_max_idx + len(proposals) + 1:03d}"
+        proposals.append(
+            {
+                "id": pid,
+                "type": "edit",
+                "target": target_dec,
+                "risk": "high",
+                "evidence": c["reason"],
+                "ops": [
+                    {"op": "set_status", "file": "decisions/DECISIONS.md", "target": target_dec, "status": "revoked"}
+                ],
+                "rollback": "restore_snapshot",
+            }
+        )
 
     # Generate proposals from drift signals (dead decisions)
     for s in drift_signals:
@@ -1080,17 +1095,20 @@ def generate_proposals(contradictions, drift_signals, ws, intel_state, report):
             for did in s.get("evidence", [])[:2]:
                 if len(proposals) >= remaining:
                     break
-                pid = f"P-{proposal_date}-{existing_max_idx+len(proposals)+1:03d}"
-                proposals.append({
-                    "id": pid,
-                    "type": "edit",
-                    "target": did,
-                    "risk": "medium",
-                    "evidence": "Decision not referenced by any active task",
-                    "ops": [{"op": "set_status", "file": "decisions/DECISIONS.md",
-                              "target": did, "status": "revoked"}],
-                    "rollback": "restore_snapshot",
-                })
+                pid = f"P-{proposal_date}-{existing_max_idx + len(proposals) + 1:03d}"
+                proposals.append(
+                    {
+                        "id": pid,
+                        "type": "edit",
+                        "target": did,
+                        "risk": "medium",
+                        "evidence": "Decision not referenced by any active task",
+                        "ops": [
+                            {"op": "set_status", "file": "decisions/DECISIONS.md", "target": did, "status": "revoked"}
+                        ],
+                        "rollback": "restore_snapshot",
+                    }
+                )
 
     # Route proposals to correct file based on Type
     TYPE_TO_FILE = {
@@ -1122,20 +1140,28 @@ def generate_proposals(contradictions, drift_signals, ws, intel_state, report):
             for p in file_proposals:
                 ops_lines = "\n".join(
                     f"- op: {op['op']}\n  file: {op['file']}\n  target: {op.get('target', '')}"
-                    + (f"\n  status: {op['status']}" if 'status' in op else "")
+                    + (f"\n  status: {op['status']}" if "status" in op else "")
                     for op in p.get("ops", [])
                 )
                 # Compute fingerprint (compatible with apply_engine.compute_fingerprint)
-                fp_canon = json.dumps({
-                    "type": p.get("type", ""),
-                    "target": p.get("target", ""),
-                    "ops": [
-                        {"op": op.get("op"), "file": op.get("file"),
-                         "target": op.get("target"), "value": op.get("value", ""),
-                         "patch": op.get("patch", ""), "status": op.get("status", "")}
-                        for op in p.get("ops", [])
-                    ]
-                }, sort_keys=True)
+                fp_canon = json.dumps(
+                    {
+                        "type": p.get("type", ""),
+                        "target": p.get("target", ""),
+                        "ops": [
+                            {
+                                "op": op.get("op"),
+                                "file": op.get("file"),
+                                "target": op.get("target"),
+                                "value": op.get("value", ""),
+                                "patch": op.get("patch", ""),
+                                "status": op.get("status", ""),
+                            }
+                            for op in p.get("ops", [])
+                        ],
+                    },
+                    sort_keys=True,
+                )
                 fp = hashlib.sha256(fp_canon.encode()).hexdigest()[:16]
                 block = (
                     f"\n[{p['id']}]\n"
@@ -1179,8 +1205,10 @@ def generate_proposals(contradictions, drift_signals, ws, intel_state, report):
 # Main
 # ═══════════════════════════════════════════════
 
+
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="Mind Mem Intelligence Scanner v2.0")
     parser.add_argument("workspace", nargs="?", default=".")
     parser.add_argument("--snapshot-only", action="store_true")
@@ -1218,14 +1246,11 @@ def main():
 
         # Mode-aware proposal generation
         if mode in ("propose", "enforce") and (contradictions or drift_signals):
-            generate_proposals(
-                contradictions, drift_signals, ws, intel_state, report
-            )
+            generate_proposals(contradictions, drift_signals, ws, intel_state, report)
         else:
             if mode == "detect_only" and (contradictions or drift_signals):
                 report.info_msg(
-                    "Mode is detect_only — skipping proposal generation. "
-                    "Switch to 'propose' to generate fix proposals."
+                    "Mode is detect_only — skipping proposal generation. Switch to 'propose' to generate fix proposals."
                 )
 
         # Generate briefing
@@ -1245,9 +1270,7 @@ def main():
     # Summary
     report.lines.append("")
     report.lines.append("=" * 50)
-    report.lines.append(
-        f"TOTAL: {report.critical} critical | {report.warnings} warnings | {report.info} info"
-    )
+    report.lines.append(f"TOTAL: {report.critical} critical | {report.warnings} warnings | {report.info} info")
     report.lines.append("=" * 50)
 
     # Write report

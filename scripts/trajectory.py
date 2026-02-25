@@ -39,9 +39,7 @@ _VALID_OUTCOMES = {"SUCCESS", "FAILURE", "PARTIAL", "ABORTED"}
 
 def _load_config() -> dict:
     """Load trajectory.mind config with defaults."""
-    config_path = os.path.join(
-        os.path.dirname(__file__), "..", "mind", "trajectory.mind"
-    )
+    config_path = os.path.join(os.path.dirname(__file__), "..", "mind", "trajectory.mind")
     defaults = {
         "recall_limit": 5,
         "recency_halflife": 30,
@@ -107,9 +105,7 @@ def validate_block(block: dict) -> list[str]:
     # Validate outcome
     outcome = block.get("Outcome", "").upper()
     if outcome and outcome not in _VALID_OUTCOMES:
-        errors.append(
-            f"Invalid outcome '{outcome}', must be one of: {', '.join(sorted(_VALID_OUTCOMES))}"
-        )
+        errors.append(f"Invalid outcome '{outcome}', must be one of: {', '.join(sorted(_VALID_OUTCOMES))}")
 
     # Validate reward range
     reward = block.get("Reward")
@@ -213,9 +209,7 @@ def format_trajectory_md(block: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def compute_similarity(
-    traj_a: dict, traj_b: dict, reference_date: date | None = None
-) -> float:
+def compute_similarity(traj_a: dict, traj_b: dict, reference_date: date | None = None) -> float:
     """Compute similarity between two trajectory blocks.
 
     Uses task text overlap + tool overlap + outcome matching, then applies

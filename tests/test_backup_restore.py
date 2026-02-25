@@ -218,9 +218,7 @@ class TestRestoreWorkspace(unittest.TestCase):
         backup = self._create_backup()
         result = restore_workspace(self.restore_td, backup)
         self.assertGreater(result["restored"], 0)
-        self.assertTrue(os.path.isfile(
-            os.path.join(self.restore_td, "decisions", "DECISIONS.md")
-        ))
+        self.assertTrue(os.path.isfile(os.path.join(self.restore_td, "decisions", "DECISIONS.md")))
 
     def test_restore_detects_conflicts(self):
         backup = self._create_backup()
@@ -258,6 +256,7 @@ class TestRestoreSecurity(unittest.TestCase):
         with tarfile.open(tar_path, "w:gz") as tar:
             for name, content in members:
                 import io
+
                 data = content.encode()
                 info = tarfile.TarInfo(name=name)
                 info.size = len(data)
@@ -265,10 +264,12 @@ class TestRestoreSecurity(unittest.TestCase):
         return tar_path
 
     def test_blocks_dotdot_traversal(self):
-        tar_path = self._make_malicious_tar([
-            ("../escape.txt", "escaped!"),
-            ("good.txt", "safe content"),
-        ])
+        tar_path = self._make_malicious_tar(
+            [
+                ("../escape.txt", "escaped!"),
+                ("good.txt", "safe content"),
+            ]
+        )
         result = restore_workspace(self.restore_td, tar_path, force=True)
         self.assertEqual(result["blocked"], 1)
         self.assertEqual(result["restored"], 1)
@@ -279,9 +280,11 @@ class TestRestoreSecurity(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(self.restore_td, "good.txt")))
 
     def test_blocks_absolute_path(self):
-        tar_path = self._make_malicious_tar([
-            ("/tmp/evil_abs.txt", "absolute path attack"),
-        ])
+        tar_path = self._make_malicious_tar(
+            [
+                ("/tmp/evil_abs.txt", "absolute path attack"),
+            ]
+        )
         result = restore_workspace(self.restore_td, tar_path, force=True)
         self.assertEqual(result["blocked"], 1)
         self.assertEqual(result["restored"], 0)
@@ -304,18 +307,22 @@ class TestRestoreSecurity(unittest.TestCase):
         """Member whose resolved path escapes via prefix match."""
         # If workspace is /tmp/ws, a member named "../ws_evil/x" resolves
         # to /tmp/ws_evil/x which starts with /tmp/ws but is NOT inside it.
-        tar_path = self._make_malicious_tar([
-            ("../ws_evil/payload.txt", "prefix trick!"),
-        ])
+        tar_path = self._make_malicious_tar(
+            [
+                ("../ws_evil/payload.txt", "prefix trick!"),
+            ]
+        )
         result = restore_workspace(self.restore_td, tar_path, force=True)
         self.assertEqual(result["blocked"], 1)
 
     def test_normal_restore_still_works(self):
         """Ensure security checks don't break legitimate restores."""
-        tar_path = self._make_malicious_tar([
-            ("decisions/DECISIONS.md", "[D-001]\nStatement: Test\n"),
-            ("mind-mem.json", '{"version": "1.0"}'),
-        ])
+        tar_path = self._make_malicious_tar(
+            [
+                ("decisions/DECISIONS.md", "[D-001]\nStatement: Test\n"),
+                ("mind-mem.json", '{"version": "1.0"}'),
+            ]
+        )
         result = restore_workspace(self.restore_td, tar_path, force=True)
         self.assertEqual(result["blocked"], 0)
         self.assertEqual(result["restored"], 2)

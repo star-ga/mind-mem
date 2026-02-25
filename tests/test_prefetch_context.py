@@ -11,6 +11,7 @@ from mind_mem.recall import prefetch_context  # noqa: E402
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _setup_workspace(tmp_path, decisions_md=""):
     """Create a minimal workspace with all required corpus files."""
     ws = str(tmp_path)
@@ -74,12 +75,12 @@ def test_prefetch_empty_signals(tmp_path):
 
 def test_prefetch_with_entity_signals(tmp_path):
     """Signals containing entity names find relevant blocks."""
-    decisions = "\n---\n\n".join([
-        _block_md("D-20260218-001", "Use PostgreSQL for the main database",
-                   tags="database, architecture"),
-        _block_md("D-20260218-002", "Deploy frontend with Vercel",
-                   tags="deployment, frontend"),
-    ])
+    decisions = "\n---\n\n".join(
+        [
+            _block_md("D-20260218-001", "Use PostgreSQL for the main database", tags="database, architecture"),
+            _block_md("D-20260218-002", "Deploy frontend with Vercel", tags="deployment, frontend"),
+        ]
+    )
     ws = _setup_workspace(tmp_path, decisions)
     result = prefetch_context(ws, ["PostgreSQL"])
     assert len(result) >= 1
@@ -89,12 +90,12 @@ def test_prefetch_with_entity_signals(tmp_path):
 
 def test_prefetch_with_topic_signals(tmp_path):
     """Topic keywords find blocks via recall."""
-    decisions = "\n---\n\n".join([
-        _block_md("D-20260218-010", "Use JWT tokens for API authentication",
-                   tags="security, auth"),
-        _block_md("D-20260218-011", "Store logs in Elasticsearch",
-                   tags="logging, infrastructure"),
-    ])
+    decisions = "\n---\n\n".join(
+        [
+            _block_md("D-20260218-010", "Use JWT tokens for API authentication", tags="security, auth"),
+            _block_md("D-20260218-011", "Store logs in Elasticsearch", tags="logging, infrastructure"),
+        ]
+    )
     ws = _setup_workspace(tmp_path, decisions)
     result = prefetch_context(ws, ["authentication security"])
     assert len(result) >= 1
@@ -106,11 +107,13 @@ def test_prefetch_limit_respected(tmp_path):
     """Result count does not exceed limit."""
     blocks = []
     for i in range(1, 11):
-        blocks.append(_block_md(
-            f"D-20260218-{i:03d}",
-            f"Database decision number {i} about storage",
-            tags="database",
-        ))
+        blocks.append(
+            _block_md(
+                f"D-20260218-{i:03d}",
+                f"Database decision number {i} about storage",
+                tags="database",
+            )
+        )
     decisions = "\n---\n\n".join(blocks)
     ws = _setup_workspace(tmp_path, decisions)
     result = prefetch_context(ws, ["database storage"], limit=3)
@@ -133,12 +136,12 @@ def test_prefetch_deduplicates(tmp_path):
 
 def test_prefetch_category_aware(tmp_path):
     """When categories/ exists, prefetch uses category context."""
-    decisions = "\n---\n\n".join([
-        _block_md("D-20260218-030", "Use Redis for caching layer",
-                   tags="architecture, caching"),
-        _block_md("D-20260218-031", "Fix login page timeout bug",
-                   tags="bug, frontend"),
-    ])
+    decisions = "\n---\n\n".join(
+        [
+            _block_md("D-20260218-030", "Use Redis for caching layer", tags="architecture, caching"),
+            _block_md("D-20260218-031", "Fix login page timeout bug", tags="bug, frontend"),
+        ]
+    )
     ws = _setup_workspace(tmp_path, decisions)
 
     # Create a categories/ directory with a category file to simulate
