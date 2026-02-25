@@ -1,36 +1,38 @@
 """Tests for RM3 query expansion."""
 from __future__ import annotations
-
+from collections import Counter
 from scripts._recall_expansion import rm3_expand
 
-
 def test_rm3_expand_basic():
-    """RM3 expansion returns list."""
-    result = rm3_expand(["test", "query"], [{"statement": "test document about queries"}])
-    assert isinstance(result, list)
-
+    result = rm3_expand(
+        ["test", "query"],
+        [(["test", "document", "about", "queries"], 1.0)],
+        Counter({"test": 5, "query": 3, "document": 2, "about": 1, "queries": 1}),
+        100,
+    )
+    assert isinstance(result, dict)
 
 def test_rm3_expand_empty_tokens():
-    """Empty tokens return empty."""
-    result = rm3_expand([], [{"statement": "test"}])
-    assert isinstance(result, list)
-
+    result = rm3_expand([], [(["test"], 1.0)], Counter({"test": 1}), 100)
+    assert isinstance(result, dict)
 
 def test_rm3_expand_empty_docs():
-    """Empty docs return original tokens."""
-    result = rm3_expand(["test"], [])
-    assert isinstance(result, list)
-
+    result = rm3_expand(["test"], [], Counter({"test": 1}), 100)
+    assert isinstance(result, dict)
 
 def test_rm3_expand_preserves_original():
-    """Original tokens are preserved in expansion."""
     tokens = ["important", "query"]
-    result = rm3_expand(tokens, [{"statement": "related document content"}])
+    result = rm3_expand(
+        tokens,
+        [(["related", "content", "important"], 1.0)],
+        Counter({"important": 2, "query": 3, "related": 1, "content": 1}),
+        100,
+    )
+    assert isinstance(result, dict)
+    # Original terms should still have weight
     for t in tokens:
-        assert t in result or any(t in r for r in result)
-
+        assert t in result
 
 def test_rm3_expand_no_crash_on_short_docs():
-    """Short document content doesn't crash."""
-    result = rm3_expand(["x"], [{"statement": "y"}])
-    assert isinstance(result, list)
+    result = rm3_expand(["x"], [(["y"], 1.0)], Counter({"x": 1, "y": 1}), 10)
+    assert isinstance(result, dict)
