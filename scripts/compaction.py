@@ -258,7 +258,7 @@ def compact_signals(ws: str, days: int = 60, dry_run: bool = False) -> list[str]
     return cleaned
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="mind-mem Compaction & GC Engine")
     parser.add_argument("workspace", nargs="?", default=".")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done")
