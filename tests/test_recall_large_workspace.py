@@ -1,8 +1,13 @@
 """Tests for recall with large workspaces."""
 from __future__ import annotations
-import os, tempfile, time
-from scripts.init_workspace import init
+
+import os
+import tempfile
+import time
+
 from scripts._recall_core import recall
+from scripts.init_workspace import init
+
 
 def _ws(n=100):
     ws = tempfile.mkdtemp()

@@ -1,6 +1,8 @@
 """Tests for bigram extraction."""
 from __future__ import annotations
+
 from scripts._recall_detection import get_bigrams
+
 
 def test_bigrams_basic():
     bigrams = get_bigrams(["hello", "world", "test"])

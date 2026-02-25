@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 from scripts._recall_constants import (
+    _STOPWORDS,
+    _VALID_RECALL_KEYS,
     BM25_B,
     BM25_K1,
     FIELD_WEIGHTS,
     MAX_BLOCKS_PER_QUERY,
-    _STOPWORDS,
-    _VALID_RECALL_KEYS,
 )
 
 

@@ -1,7 +1,11 @@
 """Tests for parsing multiple files."""
 from __future__ import annotations
-import os, tempfile
+
+import os
+import tempfile
+
 from scripts.block_parser import parse_file
+
 
 def test_parse_multiple_files():
     d = tempfile.mkdtemp()

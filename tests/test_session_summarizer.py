@@ -8,14 +8,10 @@ from __future__ import annotations
 
 import hashlib
 import os
-import re
-import tempfile
 import threading
 from contextlib import contextmanager
 from datetime import datetime
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from scripts.session_summarizer import (
     FILE_PATH_RE,
@@ -24,7 +20,6 @@ from scripts.session_summarizer import (
     format_summary_block,
     write_summary,
 )
-
 
 # ── helpers ──────────────────────────────────────────────────────────────
 

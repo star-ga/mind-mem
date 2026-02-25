@@ -1,6 +1,8 @@
 """Tests for text chunking."""
 from __future__ import annotations
+
 from scripts._recall_detection import chunk_text
+
 
 def test_chunk_short_text():
     chunks = chunk_text("hello world", chunk_size=100)

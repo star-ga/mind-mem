@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
 """Tests for the entity_ingest module — extraction, filtering, signal generation."""
 
-import os
-import tempfile
 
 from mind_mem.entity_ingest import (
-    IGNORE_DIRS,
-    TOOL_ALIASES,
-    TOOL_IGNORE,
-    extract_entities,
     entities_to_signals,
+    extract_entities,
     filter_new_entities,
     load_existing_entities,
 )
-
 
 # ---------------------------------------------------------------------------
 # load_existing_entities
