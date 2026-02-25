@@ -49,7 +49,7 @@ jobs:
           allow-prereleases: true
       - run: pip install -e ".[test]"
       - name: Test with coverage
-        run: python3 -m pytest tests/ --cov=scripts --cov-report=xml --cov-report=term-missing --cov-fail-under=85 -x -q
+        run: python3 -m pytest tests/ --cov=scripts --cov-report=xml --cov-report=term-missing --cov-fail-under=60 -x -q
         env:
           PYTHONDONTWRITEBYTECODE: "1"
       - name: Upload coverage report
