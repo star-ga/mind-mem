@@ -65,7 +65,7 @@ except ImportError:
         def error(self, event: str, **kwargs: object) -> None:
             self._emit("ERROR", event, **kwargs)
 
-    def get_logger(component: str):  # type: ignore[misc]
+    def get_logger(component: str) -> _FallbackLogger:  # type: ignore[misc]
         return _FallbackLogger(component)
 
 log = get_logger("category_distiller")
