@@ -1,4 +1,5 @@
 """Tests for reference-based recall."""
+
 from __future__ import annotations
 
 import os
@@ -17,10 +18,12 @@ def _make_workspace():
         f.write("[REF-002]\nType: Decision\nStatement: Referenced decision\nReferences: REF-001\n\n")
     return ws
 
+
 def test_reference_search():
     ws = _make_workspace()
     results = recall(ws, "primary decision", limit=5)
     assert isinstance(results, list)
+
 
 def test_referenced_block():
     ws = _make_workspace()

@@ -24,43 +24,172 @@ from dataclasses import dataclass, field
 
 # ── Stop words excluded from entity/noun extraction ──────────────────
 
-_STOP_WORDS = frozenset({
-    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "shall",
-    "should", "may", "might", "can", "could", "must", "need",
-    "i", "you", "he", "she", "it", "we", "they", "me", "him", "her",
-    "us", "them", "my", "your", "his", "its", "our", "their",
-    "this", "that", "these", "those", "what", "which", "who", "whom",
-    "where", "when", "why", "how", "if", "then", "than", "but", "and",
-    "or", "not", "no", "nor", "so", "at", "by", "for", "from", "in",
-    "into", "of", "on", "to", "with", "about", "as", "up", "out",
-    "any", "all", "each", "every", "both", "few", "more", "most",
-    "other", "some", "such", "only", "own", "same", "too", "very",
-    "just", "because", "also", "over", "after", "before", "between",
-    "through", "during", "above", "below", "again", "further",
-    "ever", "never", "always", "sometimes", "often", "still",
-    "already", "even", "really", "quite", "rather",
-    "don", "doesn", "didn", "won", "wouldn", "shouldn",
-    "couldn", "hasn", "haven", "hadn", "isn", "aren", "wasn", "weren",
-    "mention", "say", "said", "tell", "told", "talk", "discuss",
-    "point", "time", "conversation", "actually", "true",
-})
+_STOP_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "shall",
+        "should",
+        "may",
+        "might",
+        "can",
+        "could",
+        "must",
+        "need",
+        "i",
+        "you",
+        "he",
+        "she",
+        "it",
+        "we",
+        "they",
+        "me",
+        "him",
+        "her",
+        "us",
+        "them",
+        "my",
+        "your",
+        "his",
+        "its",
+        "our",
+        "their",
+        "this",
+        "that",
+        "these",
+        "those",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "where",
+        "when",
+        "why",
+        "how",
+        "if",
+        "then",
+        "than",
+        "but",
+        "and",
+        "or",
+        "not",
+        "no",
+        "nor",
+        "so",
+        "at",
+        "by",
+        "for",
+        "from",
+        "in",
+        "into",
+        "of",
+        "on",
+        "to",
+        "with",
+        "about",
+        "as",
+        "up",
+        "out",
+        "any",
+        "all",
+        "each",
+        "every",
+        "both",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "only",
+        "own",
+        "same",
+        "too",
+        "very",
+        "just",
+        "because",
+        "also",
+        "over",
+        "after",
+        "before",
+        "between",
+        "through",
+        "during",
+        "above",
+        "below",
+        "again",
+        "further",
+        "ever",
+        "never",
+        "always",
+        "sometimes",
+        "often",
+        "still",
+        "already",
+        "even",
+        "really",
+        "quite",
+        "rather",
+        "don",
+        "doesn",
+        "didn",
+        "won",
+        "wouldn",
+        "shouldn",
+        "couldn",
+        "hasn",
+        "haven",
+        "hadn",
+        "isn",
+        "aren",
+        "wasn",
+        "weren",
+        "mention",
+        "say",
+        "said",
+        "tell",
+        "told",
+        "talk",
+        "discuss",
+        "point",
+        "time",
+        "conversation",
+        "actually",
+        "true",
+    }
+)
 
 # ── Regex for extracting content words ───────────────────────────────
 
 _WORD_RE = re.compile(r"[a-z]{2,}")
 
 # Speaker patterns in queries like "Did Emma ever mention..."
-_SPEAKER_RE = re.compile(
-    r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b"
-)
+_SPEAKER_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b")
 
 
 # ── Result dataclass ─────────────────────────────────────────────────
 
+
 @dataclass
 class AbstentionResult:
     """Result of the abstention classifier."""
+
     should_abstain: bool
     confidence: float
     features: dict = field(default_factory=dict)
@@ -68,6 +197,7 @@ class AbstentionResult:
 
 
 # ── Feature extractors ───────────────────────────────────────────────
+
 
 def _extract_query_entities(question: str) -> set[str]:
     """Extract key entities/nouns from a question (lowercased).
@@ -87,17 +217,75 @@ def _extract_speaker_from_query(question: str) -> str | None:
     """
     matches = _SPEAKER_RE.findall(question)
     # Filter out common non-name capitalized words
-    skip = {"Did", "Does", "Was", "Were", "Has", "Have", "Had",
-            "Can", "Could", "Would", "Should", "Will", "May",
-            "Is", "Are", "Do", "Not", "The", "This", "That",
-            "What", "Which", "Who", "Where", "When", "Why", "How",
-            "Yes", "No", "Any", "All", "Some", "Many", "Much",
-            "Never", "Ever", "Also", "Just", "Only", "Very",
-            "Question", "Answer", "Evidence", "During",
-            "If", "But", "And", "Or", "So", "Then", "Than",
-            "About", "After", "Before", "Between", "Both",
-            "Each", "Every", "For", "From", "Into", "Over",
-            "Such", "Through", "Under", "Until", "With"}
+    skip = {
+        "Did",
+        "Does",
+        "Was",
+        "Were",
+        "Has",
+        "Have",
+        "Had",
+        "Can",
+        "Could",
+        "Would",
+        "Should",
+        "Will",
+        "May",
+        "Is",
+        "Are",
+        "Do",
+        "Not",
+        "The",
+        "This",
+        "That",
+        "What",
+        "Which",
+        "Who",
+        "Where",
+        "When",
+        "Why",
+        "How",
+        "Yes",
+        "No",
+        "Any",
+        "All",
+        "Some",
+        "Many",
+        "Much",
+        "Never",
+        "Ever",
+        "Also",
+        "Just",
+        "Only",
+        "Very",
+        "Question",
+        "Answer",
+        "Evidence",
+        "During",
+        "If",
+        "But",
+        "And",
+        "Or",
+        "So",
+        "Then",
+        "Than",
+        "About",
+        "After",
+        "Before",
+        "Between",
+        "Both",
+        "Each",
+        "Every",
+        "For",
+        "From",
+        "Into",
+        "Over",
+        "Such",
+        "Through",
+        "Under",
+        "Until",
+        "With",
+    }
     cleaned = []
     for m in matches:
         # For multi-word matches like "Did Emma", strip leading skip words
@@ -138,9 +326,7 @@ _MAX_QUESTION_LEN = 4096
 _MAX_TOP_K = 200
 
 # Abstention answer used when classifier fires
-ABSTENTION_ANSWER = (
-    "Not enough direct evidence in memory to answer this question."
-)
+ABSTENTION_ANSWER = "Not enough direct evidence in memory to answer this question."
 
 
 def classify_abstention(
@@ -215,9 +401,7 @@ def classify_abstention(
     # For "did X ever..." questions: if all top hits are tangential
     # (low overlap) and none contain positive evidence, that's a signal
     # the question is unanswerable.
-    has_ever_pattern = bool(re.search(
-        r"\b(ever|never|at any point|at some point)\b", question, re.IGNORECASE
-    ))
+    has_ever_pattern = bool(re.search(r"\b(ever|never|at any point|at some point)\b", question, re.IGNORECASE))
     if has_ever_pattern:
         # Penalize: if asking "did X ever" and no strong evidence
         negation_penalty = 1.0 - mean_overlap  # higher when overlap is low

@@ -1,4 +1,5 @@
 """Tests for status boost in recall."""
+
 from __future__ import annotations
 
 import os
@@ -27,15 +28,18 @@ def _make_workspace():
         f.write("Rationale: Testing status boost\nTags: test\n\n")
     return ws
 
+
 def test_status_boost_runs():
     ws = _make_workspace()
     results = recall(ws, "status test entry verification", limit=10)
     assert isinstance(results, list)
 
+
 def test_active_blocks_found():
     ws = _make_workspace()
     results = recall(ws, "status test active entry verification", limit=10)
     assert isinstance(results, list)
+
 
 def test_archived_blocks_found():
     ws = _make_workspace()

@@ -85,26 +85,34 @@ class TestCheckSignatureConflict(unittest.TestCase):
         self.assertIsNone(check_signature_conflict(s1, s2))
 
     def test_modality_conflict(self):
-        s1 = {"id": "CS-001", "axis": {"key": "auth.jwt"}, "modality": "must",
-               "scope": {}, "predicate": "use", "object": "JWT"}
-        s2 = {"id": "CS-002", "axis": {"key": "auth.jwt"}, "modality": "must_not",
-               "scope": {}, "predicate": "use", "object": "JWT"}
+        s1 = {
+            "id": "CS-001",
+            "axis": {"key": "auth.jwt"},
+            "modality": "must",
+            "scope": {},
+            "predicate": "use",
+            "object": "JWT",
+        }
+        s2 = {
+            "id": "CS-002",
+            "axis": {"key": "auth.jwt"},
+            "modality": "must_not",
+            "scope": {},
+            "predicate": "use",
+            "object": "JWT",
+        }
         result = check_signature_conflict(s1, s2)
         self.assertIsNotNone(result)
         self.assertEqual(result["severity"], "critical")
 
     def test_composes_with_suppresses(self):
-        s1 = {"id": "CS-001", "axis": {"key": "auth.jwt"}, "modality": "must",
-               "scope": {}, "composes_with": ["CS-002"]}
-        s2 = {"id": "CS-002", "axis": {"key": "auth.jwt"}, "modality": "must_not",
-               "scope": {}}
+        s1 = {"id": "CS-001", "axis": {"key": "auth.jwt"}, "modality": "must", "scope": {}, "composes_with": ["CS-002"]}
+        s2 = {"id": "CS-002", "axis": {"key": "auth.jwt"}, "modality": "must_not", "scope": {}}
         self.assertIsNone(check_signature_conflict(s1, s2))
 
     def test_disjoint_scope_no_conflict(self):
-        s1 = {"id": "CS-001", "axis": {"key": "auth"}, "modality": "must",
-               "scope": {"projects": ["proj-a"]}}
-        s2 = {"id": "CS-002", "axis": {"key": "auth"}, "modality": "must_not",
-               "scope": {"projects": ["proj-b"]}}
+        s1 = {"id": "CS-001", "axis": {"key": "auth"}, "modality": "must", "scope": {"projects": ["proj-a"]}}
+        s2 = {"id": "CS-002", "axis": {"key": "auth"}, "modality": "must_not", "scope": {"projects": ["proj-b"]}}
         self.assertIsNone(check_signature_conflict(s1, s2))
 
 
@@ -113,10 +121,22 @@ class TestCheckSignatureConflictCompeting(unittest.TestCase):
 
     def test_competing_must_different_objects_is_critical(self):
         """Two 'must use X' vs 'must use Y' on same axis = critical."""
-        s1 = {"id": "CS-001", "axis": {"key": "db.primary"}, "modality": "must",
-               "scope": {}, "predicate": "use", "object": "PostgreSQL"}
-        s2 = {"id": "CS-002", "axis": {"key": "db.primary"}, "modality": "must",
-               "scope": {}, "predicate": "use", "object": "MySQL"}
+        s1 = {
+            "id": "CS-001",
+            "axis": {"key": "db.primary"},
+            "modality": "must",
+            "scope": {},
+            "predicate": "use",
+            "object": "PostgreSQL",
+        }
+        s2 = {
+            "id": "CS-002",
+            "axis": {"key": "db.primary"},
+            "modality": "must",
+            "scope": {},
+            "predicate": "use",
+            "object": "MySQL",
+        }
         result = check_signature_conflict(s1, s2)
         self.assertIsNotNone(result)
         self.assertEqual(result["severity"], "critical")
@@ -124,38 +144,86 @@ class TestCheckSignatureConflictCompeting(unittest.TestCase):
 
     def test_competing_must_not_different_objects_is_compatible(self):
         """Two 'must_not allow X' vs 'must_not allow Y' = compatible (avoid both)."""
-        s1 = {"id": "CS-001", "axis": {"key": "auth.session"}, "modality": "must_not",
-               "scope": {}, "predicate": "allow", "object": "plaintext_cookies"}
-        s2 = {"id": "CS-002", "axis": {"key": "auth.session"}, "modality": "must_not",
-               "scope": {}, "predicate": "allow", "object": "insecure_tokens"}
+        s1 = {
+            "id": "CS-001",
+            "axis": {"key": "auth.session"},
+            "modality": "must_not",
+            "scope": {},
+            "predicate": "allow",
+            "object": "plaintext_cookies",
+        }
+        s2 = {
+            "id": "CS-002",
+            "axis": {"key": "auth.session"},
+            "modality": "must_not",
+            "scope": {},
+            "predicate": "allow",
+            "object": "insecure_tokens",
+        }
         result = check_signature_conflict(s1, s2)
         self.assertIsNone(result, "must_not + must_not with different objects are compatible")
 
     def test_competing_should_different_objects_is_low(self):
         """Two soft requirements with different objects = low severity."""
-        s1 = {"id": "CS-001", "axis": {"key": "style.format"}, "modality": "should",
-               "scope": {}, "predicate": "use", "object": "tabs"}
-        s2 = {"id": "CS-002", "axis": {"key": "style.format"}, "modality": "should",
-               "scope": {}, "predicate": "use", "object": "spaces"}
+        s1 = {
+            "id": "CS-001",
+            "axis": {"key": "style.format"},
+            "modality": "should",
+            "scope": {},
+            "predicate": "use",
+            "object": "tabs",
+        }
+        s2 = {
+            "id": "CS-002",
+            "axis": {"key": "style.format"},
+            "modality": "should",
+            "scope": {},
+            "predicate": "use",
+            "object": "spaces",
+        }
         result = check_signature_conflict(s1, s2)
         self.assertIsNotNone(result)
         self.assertEqual(result["severity"], "low")
 
     def test_same_predicate_same_object_no_conflict(self):
         """Same modality, same predicate, same object = agreement, not conflict."""
-        s1 = {"id": "CS-001", "axis": {"key": "db.primary"}, "modality": "must",
-               "scope": {}, "predicate": "use", "object": "PostgreSQL"}
-        s2 = {"id": "CS-002", "axis": {"key": "db.primary"}, "modality": "must",
-               "scope": {}, "predicate": "use", "object": "PostgreSQL"}
+        s1 = {
+            "id": "CS-001",
+            "axis": {"key": "db.primary"},
+            "modality": "must",
+            "scope": {},
+            "predicate": "use",
+            "object": "PostgreSQL",
+        }
+        s2 = {
+            "id": "CS-002",
+            "axis": {"key": "db.primary"},
+            "modality": "must",
+            "scope": {},
+            "predicate": "use",
+            "object": "PostgreSQL",
+        }
         result = check_signature_conflict(s1, s2)
         self.assertIsNone(result)
 
     def test_non_exclusive_axis_allows_additive_must(self):
         """axis.exclusive=false: two must+must with different objects = no conflict."""
-        s1 = {"id": "CS-001", "axis": {"key": "team.hire", "exclusive": False},
-               "modality": "must", "scope": {}, "predicate": "hire", "object": "Alice"}
-        s2 = {"id": "CS-002", "axis": {"key": "team.hire", "exclusive": False},
-               "modality": "must", "scope": {}, "predicate": "hire", "object": "Bob"}
+        s1 = {
+            "id": "CS-001",
+            "axis": {"key": "team.hire", "exclusive": False},
+            "modality": "must",
+            "scope": {},
+            "predicate": "hire",
+            "object": "Alice",
+        }
+        s2 = {
+            "id": "CS-002",
+            "axis": {"key": "team.hire", "exclusive": False},
+            "modality": "must",
+            "scope": {},
+            "predicate": "hire",
+            "object": "Bob",
+        }
         result = check_signature_conflict(s1, s2)
         self.assertIsNone(result, "Non-exclusive axis should allow additive must constraints")
 
@@ -169,18 +237,32 @@ class TestDetectContradictions(unittest.TestCase):
     def test_detects_contradiction(self):
         decisions = [
             {
-                "_id": "D-20260213-001", "Status": "active",
+                "_id": "D-20260213-001",
+                "Status": "active",
                 "ConstraintSignatures": [
-                    {"id": "CS-001", "axis": {"key": "auth"}, "modality": "must",
-                     "scope": {}, "predicate": "use", "object": "JWT"}
-                ]
+                    {
+                        "id": "CS-001",
+                        "axis": {"key": "auth"},
+                        "modality": "must",
+                        "scope": {},
+                        "predicate": "use",
+                        "object": "JWT",
+                    }
+                ],
             },
             {
-                "_id": "D-20260213-002", "Status": "active",
+                "_id": "D-20260213-002",
+                "Status": "active",
                 "ConstraintSignatures": [
-                    {"id": "CS-002", "axis": {"key": "auth"}, "modality": "must_not",
-                     "scope": {}, "predicate": "use", "object": "JWT"}
-                ]
+                    {
+                        "id": "CS-002",
+                        "axis": {"key": "auth"},
+                        "modality": "must_not",
+                        "scope": {},
+                        "predicate": "use",
+                        "object": "JWT",
+                    }
+                ],
             },
         ]
         report = IntelReport()
@@ -192,18 +274,34 @@ class TestDetectContradictions(unittest.TestCase):
         """Two active decisions with must+must same predicate, different objects."""
         decisions = [
             {
-                "_id": "D-20260214-001", "Status": "active",
+                "_id": "D-20260214-001",
+                "Status": "active",
                 "ConstraintSignatures": [
-                    {"id": "CS-010", "axis": {"key": "db.primary"}, "modality": "must",
-                     "scope": {}, "predicate": "use", "object": "PostgreSQL", "priority": 5}
-                ]
+                    {
+                        "id": "CS-010",
+                        "axis": {"key": "db.primary"},
+                        "modality": "must",
+                        "scope": {},
+                        "predicate": "use",
+                        "object": "PostgreSQL",
+                        "priority": 5,
+                    }
+                ],
             },
             {
-                "_id": "D-20260214-002", "Status": "active",
+                "_id": "D-20260214-002",
+                "Status": "active",
                 "ConstraintSignatures": [
-                    {"id": "CS-011", "axis": {"key": "db.primary"}, "modality": "must",
-                     "scope": {}, "predicate": "use", "object": "MySQL", "priority": 3}
-                ]
+                    {
+                        "id": "CS-011",
+                        "axis": {"key": "db.primary"},
+                        "modality": "must",
+                        "scope": {},
+                        "predicate": "use",
+                        "object": "MySQL",
+                        "priority": 3,
+                    }
+                ],
             },
         ]
         report = IntelReport()
@@ -256,10 +354,7 @@ class TestE2EProposalToApply(unittest.TestCase):
 
         # Config with proposal mode enabled
         with open(os.path.join(td, "mind-mem.json"), "w") as f:
-            json.dump({
-                "mode": "propose",
-                "proposal_budget": {"per_run": 3, "per_day": 6, "backlog_limit": 30}
-            }, f)
+            json.dump({"mode": "propose", "proposal_budget": {"per_run": 3, "per_day": 6, "backlog_limit": 30}}, f)
 
         # Intel state
         with open(os.path.join(td, "intelligence/intel-state.json"), "w") as f:
@@ -273,20 +368,34 @@ class TestE2EProposalToApply(unittest.TestCase):
             self._scaffold_workspace(td)
 
             # Create contradictions that generate_proposals will act on
-            contradictions = [{
-                "sig1": {
-                    "decision": "D-20260214-001",
-                    "sig": {"id": "CS-010", "axis": {"key": "db"}, "modality": "must",
-                            "predicate": "use", "object": "PostgreSQL", "priority": 5}
-                },
-                "sig2": {
-                    "decision": "D-20260214-002",
-                    "sig": {"id": "CS-011", "axis": {"key": "db"}, "modality": "must",
-                            "predicate": "use", "object": "MySQL", "priority": 3}
-                },
-                "severity": "critical",
-                "reason": "competing hard requirements on axis=db",
-            }]
+            contradictions = [
+                {
+                    "sig1": {
+                        "decision": "D-20260214-001",
+                        "sig": {
+                            "id": "CS-010",
+                            "axis": {"key": "db"},
+                            "modality": "must",
+                            "predicate": "use",
+                            "object": "PostgreSQL",
+                            "priority": 5,
+                        },
+                    },
+                    "sig2": {
+                        "decision": "D-20260214-002",
+                        "sig": {
+                            "id": "CS-011",
+                            "axis": {"key": "db"},
+                            "modality": "must",
+                            "predicate": "use",
+                            "object": "MySQL",
+                            "priority": 3,
+                        },
+                    },
+                    "severity": "critical",
+                    "reason": "competing hard requirements on axis=db",
+                }
+            ]
 
             report = IntelReport()
             intel_state = {"mode": "propose", "counters": {}}
@@ -305,10 +414,8 @@ class TestE2EProposalToApply(unittest.TestCase):
             # Each proposal must pass validate_proposal and have a Fingerprint
             for p in proposals:
                 errors = validate_proposal(p)
-                self.assertEqual(errors, [],
-                                 f"Proposal {p.get('ProposalId')} failed validation: {errors}")
-                self.assertTrue(p.get("Fingerprint"),
-                                f"Proposal {p.get('ProposalId')} missing Fingerprint field")
+                self.assertEqual(errors, [], f"Proposal {p.get('ProposalId')} failed validation: {errors}")
+                self.assertTrue(p.get("Fingerprint"), f"Proposal {p.get('ProposalId')} missing Fingerprint field")
 
     def test_proposal_budget_limits_output(self):
         """per_run budget limits the number of proposals generated."""
@@ -317,10 +424,7 @@ class TestE2EProposalToApply(unittest.TestCase):
 
             # Override per_run=1
             with open(os.path.join(td, "mind-mem.json"), "w") as f:
-                json.dump({
-                    "mode": "propose",
-                    "proposal_budget": {"per_run": 1, "per_day": 10, "backlog_limit": 30}
-                }, f)
+                json.dump({"mode": "propose", "proposal_budget": {"per_run": 1, "per_day": 10, "backlog_limit": 30}}, f)
 
             contradictions = [
                 {
@@ -363,20 +467,26 @@ class TestProposalIdCollision(unittest.TestCase):
         """Second run should start IDs after existing proposals."""
         with tempfile.TemporaryDirectory() as td:
             self._scaffold(td)
-            c1 = [{
-                "sig1": {"decision": "D-001", "sig": {"id": "CS-1", "priority": 5}},
-                "sig2": {"decision": "D-002", "sig": {"id": "CS-2", "priority": 3}},
-                "severity": "critical", "reason": "test contradiction 1",
-            }]
+            c1 = [
+                {
+                    "sig1": {"decision": "D-001", "sig": {"id": "CS-1", "priority": 5}},
+                    "sig2": {"decision": "D-002", "sig": {"id": "CS-2", "priority": 3}},
+                    "severity": "critical",
+                    "reason": "test contradiction 1",
+                }
+            ]
             report = IntelReport()
             generate_proposals(c1, [], td, {"mode": "propose", "counters": {}}, report)
 
             # Second run with different contradiction
-            c2 = [{
-                "sig1": {"decision": "D-003", "sig": {"id": "CS-3", "priority": 5}},
-                "sig2": {"decision": "D-004", "sig": {"id": "CS-4", "priority": 3}},
-                "severity": "critical", "reason": "test contradiction 2",
-            }]
+            c2 = [
+                {
+                    "sig1": {"decision": "D-003", "sig": {"id": "CS-3", "priority": 5}},
+                    "sig2": {"decision": "D-004", "sig": {"id": "CS-4", "priority": 3}},
+                    "severity": "critical",
+                    "reason": "test contradiction 2",
+                }
+            ]
             report2 = IntelReport()
             generate_proposals(c2, [], td, {"mode": "propose", "counters": {}}, report2)
 
@@ -405,11 +515,14 @@ class TestProposalRouting(unittest.TestCase):
         """Type=edit proposals route to EDITS_PROPOSED.md."""
         with tempfile.TemporaryDirectory() as td:
             self._scaffold(td)
-            contradictions = [{
-                "sig1": {"decision": "D-001", "sig": {"id": "CS-1", "priority": 5}},
-                "sig2": {"decision": "D-002", "sig": {"id": "CS-2", "priority": 3}},
-                "severity": "critical", "reason": "test",
-            }]
+            contradictions = [
+                {
+                    "sig1": {"decision": "D-001", "sig": {"id": "CS-1", "priority": 5}},
+                    "sig2": {"decision": "D-002", "sig": {"id": "CS-2", "priority": 3}},
+                    "severity": "critical",
+                    "reason": "test",
+                }
+            ]
             report = IntelReport()
             generate_proposals(contradictions, [], td, {"mode": "propose", "counters": {}}, report)
 
@@ -434,9 +547,10 @@ class TestParserContinuationLines(unittest.TestCase):
             "  and even a third line\n"
             "Tags: test\n"
         )
-        blocks = parse_file.__wrapped__(text) if hasattr(parse_file, '__wrapped__') else None
+        blocks = parse_file.__wrapped__(text) if hasattr(parse_file, "__wrapped__") else None
         # Use parse_blocks directly
         from mind_mem.block_parser import parse_blocks
+
         blocks = parse_blocks(text)
         self.assertEqual(len(blocks), 1)
         self.assertIn("\n", blocks[0]["Statement"])
@@ -450,13 +564,15 @@ class TestParserQuotedInlineList(unittest.TestCase):
     def test_quoted_comma_in_list(self):
         """Quoted strings preserve commas within values."""
         from mind_mem.block_parser import _parse_inline_list
+
         result = _parse_inline_list('["React, Redux", "Vue"]')
         self.assertEqual(result, ["React, Redux", "Vue"])
 
     def test_unquoted_list_unchanged(self):
         """Regular lists without quotes work as before."""
         from mind_mem.block_parser import _parse_inline_list
-        result = _parse_inline_list('[a, b, c]')
+
+        result = _parse_inline_list("[a, b, c]")
         self.assertEqual(result, ["a", "b", "c"])
 
 
@@ -466,6 +582,7 @@ class TestParsedInlineDict(unittest.TestCase):
     def test_quoted_comma_in_dict_value(self):
         """Quoted strings in dict values preserve commas."""
         from mind_mem.block_parser import _parse_inline_dict
+
         result = _parse_inline_dict('{tags: "frontend, ui", name: foo}')
         self.assertEqual(result["tags"], "frontend, ui")
         self.assertEqual(result["name"], "foo")
@@ -473,7 +590,8 @@ class TestParsedInlineDict(unittest.TestCase):
     def test_unquoted_dict_unchanged(self):
         """Regular dicts without quotes work as before."""
         from mind_mem.block_parser import _parse_inline_dict
-        result = _parse_inline_dict('{key: val, key2: val2}')
+
+        result = _parse_inline_dict("{key: val, key2: val2}")
         self.assertEqual(result, {"key": "val", "key2": "val2"})
 
 

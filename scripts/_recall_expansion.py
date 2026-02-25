@@ -9,8 +9,11 @@ from collections import Counter
 from ._recall_tokenization import _stem
 
 __all__ = [
-    "_QUERY_EXPANSIONS", "expand_months", "expand_query",
-    "_rm3_language_model", "rm3_expand",
+    "_QUERY_EXPANSIONS",
+    "expand_months",
+    "expand_query",
+    "_rm3_language_model",
+    "rm3_expand",
 ]
 
 
@@ -24,52 +27,43 @@ _QUERY_EXPANSIONS = {
     "authentication": ["auth", "login", "oauth", "jwt"],
     "login": ["auth", "signin", "authentication", "password"],
     "password": ["credential", "login", "secret", "auth"],
-
     # Data layer
     "db": ["database", "postgresql", "mysql", "sqlite", "sql"],
     "database": ["db", "postgresql", "mysql", "sqlite", "sql"],
     "sql": ["database", "query", "postgresql", "mysql"],
     "cache": ["redis", "memcached", "caching", "ttl"],
-
     # API & networking
     "api": ["endpoint", "rest", "graphql", "route", "handler"],
     "endpoint": ["api", "route", "url", "path", "handler"],
     "request": ["http", "api", "call", "fetch"],
-
     # DevOps & deployment
     "deploy": ["deployment", "ci", "cd", "pipeline", "release"],
     "deployment": ["deploy", "ci", "cd", "pipeline", "release"],
     "docker": ["container", "image", "kubernetes", "pod"],
     "kubernetes": ["k8s", "pod", "container", "docker", "cluster"],
-
     # Quality & issues
     "bug": ["error", "issue", "defect", "fix", "regression"],
     "error": ["bug", "exception", "failure", "crash"],
     "fix": ["bug", "patch", "repair", "resolve"],
     "test": ["testing", "pytest", "unittest", "spec", "coverage"],
     "testing": ["test", "pytest", "assertion", "mock"],
-
     # Security
     "security": ["vulnerability", "auth", "encryption", "xss", "injection"],
     "vulnerability": ["security", "cve", "exploit", "risk"],
-
     # Performance
     "perf": ["performance", "latency", "throughput", "optimization"],
     "performance": ["perf", "latency", "throughput", "optimization", "speed"],
     "slow": ["performance", "latency", "bottleneck", "optimization"],
     "fast": ["performance", "speed", "quick", "optimization"],
-
     # Configuration & infrastructure
     "config": ["configuration", "settings", "env", "environment"],
     "infra": ["infrastructure", "server", "cloud", "devops"],
     "server": ["backend", "service", "host", "instance"],
-
     # Frontend & UI
     "ui": ["interface", "frontend", "component", "view", "page"],
     "frontend": ["ui", "client", "browser", "react", "component"],
     "css": ["style", "stylesheet", "tailwind", "design"],
     "component": ["widget", "element", "ui", "module"],
-
     # Common conversational terms (helps bridge LoCoMo's casual language)
     "talk": ["discuss", "mention", "conversation", "chat", "say"],
     "discuss": ["talk", "mention", "conversation", "said"],
@@ -91,7 +85,6 @@ _QUERY_EXPANSIONS = {
     "eat": ["food", "restaurant", "meal", "dinner", "lunch"],
     "travel": ["trip", "visit", "vacation", "journey"],
     "trip": ["travel", "visit", "vacation", "journey"],
-
     # Personal life & relationships
     "hobby": ["enjoy", "interest", "activity", "pastime", "practice"],
     "hobbi": ["enjoy", "interest", "activity", "pastime"],  # stemmed form
@@ -109,7 +102,6 @@ _QUERY_EXPANSIONS = {
     "family": ["mother", "father", "brother", "sister", "parent"],
     "child": ["son", "daughter", "kid", "baby"],
     "children": ["son", "daughter", "kid", "baby"],
-
     # Food & cooking
     "meal": ["food", "cook", "dinner", "lunch", "breakfast", "recipe"],
     "snack": ["food", "candy", "chips", "munch", "junk"],
@@ -119,7 +111,6 @@ _QUERY_EXPANSIONS = {
     "restaurant": ["food", "dine", "dining"],
     "diet": ["food", "healthy", "meal", "nutrition"],
     "healthy": ["diet", "nutrition", "exercise", "wellness"],
-
     # Travel & places
     "country": ["nation", "abroad", "overseas", "visit"],
     "abroad": ["overseas", "country", "foreign", "international"],
@@ -128,7 +119,6 @@ _QUERY_EXPANSIONS = {
     "roadtrip": ["drive", "trip", "travel", "car"],
     "city": ["town", "place", "location", "area"],
     "state": ["region", "province", "area"],
-
     # Health & body
     "injury": ["hurt", "pain", "twist", "broken", "sprain"],
     "injuri": ["hurt", "pain", "twist", "broken", "sprain"],  # stemmed
@@ -138,22 +128,18 @@ _QUERY_EXPANSIONS = {
     "health": ["medical", "doctor", "wellness", "condition"],
     "digestive": ["stomach", "gastric", "gut", "intestinal"],
     "digest": ["stomach", "gastric", "gut", "intestinal"],  # stemmed
-
     # Objects & gifts
     "gift": ["present", "receive", "gave", "surprise"],
     "present": ["gift", "receive", "gave"],
-
     # Actions & suggestions
     "suggest": ["recommend", "propose", "advise", "idea"],
     "recommend": ["suggest", "propose", "advise", "try"],
     "resume": ["restart", "continue", "begin", "start"],
-
     # Entertainment
     "game": ["play", "gaming", "video"],
     "novel": ["book", "read", "story", "fiction"],
     "outdoor": ["outside", "nature", "hiking", "camping"],
     "exercise": ["workout", "fitness", "gym", "training", "sport"],
-
     # Work & education
     "internship": ["intern", "company", "firm"],
     "intern": ["internship", "company", "firm"],
@@ -165,12 +151,29 @@ _QUERY_EXPANSIONS = {
 
 
 _MONTH_NUM = {
-    "january": "01", "february": "02", "march": "03", "april": "04",
-    "may": "05", "june": "06", "july": "07", "august": "08",
-    "september": "09", "october": "10", "november": "11", "december": "12",
-    "jan": "01", "feb": "02", "mar": "03", "apr": "04",
-    "jun": "06", "jul": "07", "aug": "08", "sep": "09",
-    "oct": "10", "nov": "11", "dec": "12",
+    "january": "01",
+    "february": "02",
+    "march": "03",
+    "april": "04",
+    "may": "05",
+    "june": "06",
+    "july": "07",
+    "august": "08",
+    "september": "09",
+    "october": "10",
+    "november": "11",
+    "december": "12",
+    "jan": "01",
+    "feb": "02",
+    "mar": "03",
+    "apr": "04",
+    "jun": "06",
+    "jul": "07",
+    "aug": "08",
+    "sep": "09",
+    "oct": "10",
+    "nov": "11",
+    "dec": "12",
 }
 
 _YEAR_RE = re.compile(r"\b(20\d{2})\b")
@@ -219,8 +222,7 @@ for _key, _syns in _QUERY_EXPANSIONS.items():
         _EXPANSION_BY_STEM[_key] = list(_syns)
 
 
-def expand_query(tokens: list[str], max_expansions: int = 8,
-                  mode: str = "full") -> list[str]:
+def expand_query(tokens: list[str], max_expansions: int = 8, mode: str = "full") -> list[str]:
     """Expand query tokens with domain synonyms. Returns expanded token list.
 
     mode="full": apply all semantic synonyms (default).
@@ -259,9 +261,18 @@ def _rm3_language_model(doc_tokens, collection_freq, total_tokens, mu=2000.0):
     return probs
 
 
-def rm3_expand(query_tokens, top_docs, collection_freq, total_tokens,
-               alpha=0.6, fb_terms=10, fb_docs=5, min_idf=1.0,
-               doc_freq=None, N=1):
+def rm3_expand(
+    query_tokens,
+    top_docs,
+    collection_freq,
+    total_tokens,
+    alpha=0.6,
+    fb_terms=10,
+    fb_docs=5,
+    min_idf=1.0,
+    doc_freq=None,
+    N=1,
+):
     """RM3 pseudo-relevance feedback query expansion.
 
     Estimates P(w|R) from top-K docs using JM-smoothed language models.

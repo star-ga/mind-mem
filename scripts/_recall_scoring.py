@@ -10,18 +10,26 @@ from datetime import datetime as _datetime
 from ._recall_constants import _BLOCK_ID_RE, BM25_B, BM25_K1, FIELD_WEIGHTS, SEARCH_FIELDS
 
 __all__ = [
-    "bm25f_score_terms", "compute_weighted_tf",
-    "date_score", "build_xref_graph",
-    "_detect_negation", "_negation_penalty",
-    "_extract_dates", "_date_proximity_score",
-    "_classify_categories", "_category_match_boost",
-    "_extract_entities", "_extract_bigram_phrases", "_extract_speaker_names",
+    "bm25f_score_terms",
+    "compute_weighted_tf",
+    "date_score",
+    "build_xref_graph",
+    "_detect_negation",
+    "_negation_penalty",
+    "_extract_dates",
+    "_date_proximity_score",
+    "_classify_categories",
+    "_category_match_boost",
+    "_extract_entities",
+    "_extract_bigram_phrases",
+    "_extract_speaker_names",
 ]
 
 
 # ---------------------------------------------------------------------------
 # BM25F scoring helper — single source of truth for all BM25 computations
 # ---------------------------------------------------------------------------
+
 
 def compute_weighted_tf(
     field_tokens: dict[str, list[str]],
@@ -107,6 +115,7 @@ def date_score(block: dict) -> float:
 # Graph-based recall — cross-reference neighbor boosting
 # ---------------------------------------------------------------------------
 
+
 def build_xref_graph(all_blocks: list[dict]) -> dict[str, set[str]]:
     """Build bidirectional adjacency graph from cross-references.
 
@@ -118,8 +127,15 @@ def build_xref_graph(all_blocks: list[dict]) -> dict[str, set[str]]:
 
     # Fields to scan for cross-references
     xref_fields = SEARCH_FIELDS + [
-        "Supersedes", "SupersededBy", "AlignsWith", "Dependencies",
-        "Next", "Sources", "Evidence", "Rollback", "History",
+        "Supersedes",
+        "SupersededBy",
+        "AlignsWith",
+        "Dependencies",
+        "Next",
+        "Sources",
+        "Evidence",
+        "Rollback",
+        "History",
     ]
 
     for block in all_blocks:
@@ -162,9 +178,20 @@ def build_xref_graph(all_blocks: list[dict]) -> dict[str, set[str]]:
 # ---------------------------------------------------------------------------
 
 _NEGATION_PATTERNS = [
-    r'\bnot\b', r'\bnever\b', r"\bdidn't\b", r"\bdoesn't\b", r"\bwasn't\b",
-    r"\bisn't\b", r"\bwon't\b", r"\bcan't\b", r"\bcannot\b", r'\bno\b',
-    r"\bdon't\b", r"\bhasn't\b", r"\bhaven't\b", r"\bwouldn't\b",
+    r"\bnot\b",
+    r"\bnever\b",
+    r"\bdidn't\b",
+    r"\bdoesn't\b",
+    r"\bwasn't\b",
+    r"\bisn't\b",
+    r"\bwon't\b",
+    r"\bcan't\b",
+    r"\bcannot\b",
+    r"\bno\b",
+    r"\bdon't\b",
+    r"\bhasn't\b",
+    r"\bhaven't\b",
+    r"\bwouldn't\b",
 ]
 
 
@@ -179,7 +206,7 @@ def _detect_negation(query: str) -> tuple[bool, list[str]]:
     for pat in _NEGATION_PATTERNS:
         for m in re.finditer(pat, query_lower):
             # Get the next 1-3 words after negation
-            rest = query_lower[m.end():].strip().split()[:3]
+            rest = query_lower[m.end() :].strip().split()[:3]
             negated.extend(rest)
     return True, negated
 
@@ -201,7 +228,7 @@ def _negation_penalty(block_text: str, negated_terms: list[str], penalty: float 
 # Date proximity scoring
 # ---------------------------------------------------------------------------
 
-_DATE_PATTERN = re.compile(r'(\d{4})-(\d{2})-(\d{2})')
+_DATE_PATTERN = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 
 
 def _extract_dates(text: str) -> list:
@@ -225,14 +252,14 @@ def _date_proximity_score(query: str, block_text: str, sigma: float = 30.0) -> f
         return 0.8  # Mild penalty for no date when query has date
 
     # Use closest date pair
-    min_delta = float('inf')
+    min_delta = float("inf")
     for qd in query_dates:
         for bd in block_dates:
             delta = abs((qd - bd).days)
             min_delta = min(min_delta, delta)
 
     # Gaussian decay
-    score = math.exp(-(min_delta ** 2) / (2 * sigma ** 2))
+    score = math.exp(-(min_delta**2) / (2 * sigma**2))
     # Map to [0.5, 1.5] range
     return 0.5 + score * 1.0
 

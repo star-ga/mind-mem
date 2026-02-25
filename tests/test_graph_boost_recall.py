@@ -1,4 +1,5 @@
 """Tests for graph_boost recall parameter."""
+
 from __future__ import annotations
 
 import os

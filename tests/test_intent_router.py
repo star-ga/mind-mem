@@ -1,4 +1,5 @@
 """Tests for 9-type intent router."""
+
 import unittest
 
 from mind_mem.intent_router import INTENT_CONFIG, IntentResult, IntentRouter

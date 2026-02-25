@@ -24,6 +24,7 @@ _CON = {"evidence_packing": "chain_of_note"}
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 
+
 def _hit(excerpt="text", score=5.0, speaker="Emma", dia_id="D1:1", date="2024-01-01"):
     return {
         "excerpt": excerpt,
@@ -35,6 +36,7 @@ def _hit(excerpt="text", score=5.0, speaker="Emma", dia_id="D1:1", date="2024-01
 
 
 # ── strip_semantic_prefix ────────────────────────────────────────────
+
 
 class TestStripSemanticPrefix:
     def test_removes_prefix(self):
@@ -58,6 +60,7 @@ class TestStripSemanticPrefix:
 
 
 # ── is_true_adversarial ──────────────────────────────────────────────
+
 
 class TestIsTrueAdversarial:
     def test_ever_pattern(self):
@@ -87,6 +90,7 @@ class TestIsTrueAdversarial:
 
 # ── check_abstention (production MCP path) ───────────────────────────
 
+
 class TestCheckAbstention:
     def test_returns_tuple(self):
         should_abstain, answer, confidence = check_abstention("test?", [])
@@ -113,6 +117,7 @@ class TestCheckAbstention:
 
 
 # ── _extract_key_facts ───────────────────────────────────────────────
+
 
 class TestExtractKeyFacts:
     def test_extracts_statement_field(self):
@@ -149,6 +154,7 @@ class TestExtractKeyFacts:
 
 # ── _compute_relevance_note ──────────────────────────────────────────
 
+
 class TestComputeRelevanceNote:
     def test_matching_terms(self):
         r = _hit("Emma mentioned her dog at the park")
@@ -169,6 +175,7 @@ class TestComputeRelevanceNote:
 
 
 # ── format_chain_of_note ─────────────────────────────────────────────
+
 
 class TestFormatChainOfNote:
     def test_basic_format_has_note_header(self):
@@ -254,6 +261,7 @@ class TestFormatChainOfNote:
 
 # ── pack_evidence dispatch routing ───────────────────────────────────
 
+
 class TestPackEvidenceRouting:
     def test_empty_hits(self):
         assert pack_evidence([]) == ""
@@ -334,6 +342,7 @@ class TestPackEvidenceRouting:
 
 # ── _pack_structured (raw mode) ─────────────────────────────────────
 
+
 class TestPackStructured:
     def test_includes_metadata_tags(self):
         hits = [_hit("Hello world", speaker="Alice", dia_id="D3:7", date="2024-06-15")]
@@ -371,6 +380,7 @@ class TestPackStructured:
 
 # ── _pack_temporal (raw mode) ───────────────────────────────────────
 
+
 class TestPackTemporal:
     def test_sorts_by_dia_id(self):
         hits = [
@@ -406,6 +416,7 @@ class TestPackTemporal:
 
 
 # ── _pack_multihop (raw mode) ──────────────────────────────────────
+
 
 class TestPackMultihop:
     def test_interleaves_speakers(self):
@@ -444,6 +455,7 @@ class TestPackMultihop:
 
 # ── _pack_adversarial ────────────────────────────────────────────────
 
+
 class TestPackAdversarial:
     def test_separates_denial_evidence(self):
         hits = [
@@ -481,9 +493,7 @@ class TestPackAdversarial:
             _hit("Unrelated budget review", score=9.0),
             _hit("Emma mentioned adopting dogs from shelter", score=3.0),
         ]
-        result = pack_evidence(
-            hits, question="Did Emma ever mention adopting dogs?", query_type="adversarial"
-        )
+        result = pack_evidence(hits, question="Did Emma ever mention adopting dogs?", query_type="adversarial")
         lines = [ln for ln in result.split("\n") if ln.startswith("- ")]
         # The more relevant hit should appear first
         if len(lines) >= 2:
@@ -491,6 +501,7 @@ class TestPackAdversarial:
 
 
 # ── chain_of_note with multi-hop interleaving ───────────────────────
+
 
 class TestChainOfNoteMultihop:
     def test_interleaves_speakers_in_chain_of_note(self):
@@ -514,6 +525,7 @@ class TestChainOfNoteMultihop:
 
 
 # ── chain_of_note temporal ordering ─────────────────────────────────
+
 
 class TestChainOfNoteTemporal:
     def test_chronological_ordering(self):

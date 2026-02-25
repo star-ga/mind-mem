@@ -23,6 +23,7 @@ from scripts.session_summarizer import (
 
 # ── helpers ──────────────────────────────────────────────────────────────
 
+
 def _msg(role: str, content: str) -> dict:
     """Build a minimal message dict."""
     return {"role": role, "content": content}
@@ -48,6 +49,7 @@ def _fake_file_lock(path):
 
 
 # ── file_hash ────────────────────────────────────────────────────────────
+
 
 class TestFileHash:
     def test_existing_file(self, tmp_path):
@@ -86,6 +88,7 @@ class TestFileHash:
 
 
 # ── extract_summary ──────────────────────────────────────────────────────
+
 
 class TestExtractSummary:
     def test_message_count(self):
@@ -157,6 +160,7 @@ class TestExtractSummary:
 
 # ── format_summary_block ─────────────────────────────────────────────────
 
+
 class TestFormatSummaryBlock:
     def test_basic_format(self):
         summary = {
@@ -193,8 +197,7 @@ class TestFormatSummaryBlock:
             "topics": [],
             "files": [],
             "decisions": [
-                {"type": "correction", "confidence": "high",
-                 "excerpt": "Never use raw SQL", "role": "user"},
+                {"type": "correction", "confidence": "high", "excerpt": "Never use raw SQL", "role": "user"},
             ],
         }
         block = format_summary_block("SESS-20260224-003", "t.jsonl", summary, "gh789")
@@ -216,6 +219,7 @@ class TestFormatSummaryBlock:
 
 
 # ── write_summary ────────────────────────────────────────────────────────
+
 
 class TestWriteSummary:
     @patch("scripts.session_summarizer.append_signals")
@@ -340,6 +344,7 @@ class TestWriteSummary:
 
 # ── edge cases ───────────────────────────────────────────────────────────
 
+
 class TestEdgeCases:
     def test_unicode_content(self):
         msgs = [
@@ -405,8 +410,6 @@ class TestEdgeCases:
 
     def test_decisions_capped_at_10(self):
         """extract_summary should return at most 10 decisions."""
-        msgs = [
-            _msg("user", f"Don't ever use pattern{i} in production") for i in range(20)
-        ]
+        msgs = [_msg("user", f"Don't ever use pattern{i} in production") for i in range(20)]
         s = extract_summary(msgs)
         assert len(s["decisions"]) <= 10

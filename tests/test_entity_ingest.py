@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Tests for the entity_ingest module — extraction, filtering, signal generation."""
 
-
 from mind_mem.entity_ingest import (
     entities_to_signals,
     extract_entities,
@@ -56,11 +55,7 @@ class TestLoadExistingEntities:
         """Multiple entity types in a single file are all extracted."""
         edir = tmp_path / "entities"
         edir.mkdir()
-        content = (
-            "[PRJ-foo] Foo project\n"
-            "[TOOL-bar] Bar tool\n"
-            "[PER-baz] Baz person\n"
-        )
+        content = "[PRJ-foo] Foo project\n[TOOL-bar] Bar tool\n[PER-baz] Baz person\n"
         (edir / "mixed.md").write_text(content)
         result = load_existing_entities(str(tmp_path))
         assert "foo" in result["projects"]
@@ -88,8 +83,7 @@ class TestLoadExistingEntities:
         edir = tmp_path / "entities"
         edir.mkdir()
         (edir / "broken.md").write_text(
-            "This file has no [brackets or valid entity refs.\n"
-            "Random text, PRJ without brackets, [BADPREFIX-foo]\n"
+            "This file has no [brackets or valid entity refs.\nRandom text, PRJ without brackets, [BADPREFIX-foo]\n"
         )
         result = load_existing_entities(str(tmp_path))
         assert result == {"projects": set(), "tools": set(), "people": set()}
@@ -203,10 +197,7 @@ class TestExtractEntities:
 
     def test_dedup_across_patterns(self):
         """Same slug appearing multiple times is only returned once."""
-        text = (
-            "Check https://github.com/star-ga/mind-mem and also "
-            "the /home/user/mind-mem directory."
-        )
+        text = "Check https://github.com/star-ga/mind-mem and also the /home/user/mind-mem directory."
         entities = extract_entities(text)
         slugs = [e["slug"] for e in entities]
         assert slugs.count("mind-mem") == 1
@@ -316,8 +307,12 @@ class TestEntitiesToSignals:
     def test_project_signal_format(self):
         """Project entity produces correct signal structure."""
         entities = [
-            {"entity_type": "project", "slug": "mind-mem",
-             "source_pattern": "github_repo", "excerpt": "star-ga/mind-mem repo"},
+            {
+                "entity_type": "project",
+                "slug": "mind-mem",
+                "source_pattern": "github_repo",
+                "excerpt": "star-ga/mind-mem repo",
+            },
         ]
         signals = entities_to_signals(entities, "test.md")
         assert len(signals) == 1
@@ -335,8 +330,7 @@ class TestEntitiesToSignals:
     def test_tool_signal_format(self):
         """Tool entity uses TOOL- prefix."""
         entities = [
-            {"entity_type": "tool", "slug": "docker",
-             "source_pattern": "cli_tool", "excerpt": "docker build"},
+            {"entity_type": "tool", "slug": "docker", "source_pattern": "cli_tool", "excerpt": "docker build"},
         ]
         signals = entities_to_signals(entities, "test.md")
         assert signals[0]["structure"]["subject"] == "TOOL-docker"
@@ -344,8 +338,7 @@ class TestEntitiesToSignals:
     def test_person_signal_format(self):
         """Person entity uses PER- prefix."""
         entities = [
-            {"entity_type": "person", "slug": "alice",
-             "source_pattern": "at_mention", "excerpt": "@alice review"},
+            {"entity_type": "person", "slug": "alice", "source_pattern": "at_mention", "excerpt": "@alice review"},
         ]
         signals = entities_to_signals(entities, "test.md")
         assert signals[0]["structure"]["subject"] == "PER-alice"
@@ -354,8 +347,7 @@ class TestEntitiesToSignals:
         """Excerpt in signal text is truncated to 100 chars."""
         long_excerpt = "x" * 200
         entities = [
-            {"entity_type": "project", "slug": "foo",
-             "source_pattern": "prj_ref", "excerpt": long_excerpt},
+            {"entity_type": "project", "slug": "foo", "source_pattern": "prj_ref", "excerpt": long_excerpt},
         ]
         signals = entities_to_signals(entities, "test.md")
         # The text field should contain at most 100 chars of excerpt

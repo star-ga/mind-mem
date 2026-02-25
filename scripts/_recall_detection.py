@@ -8,10 +8,18 @@ from ._recall_constants import SEARCH_FIELDS, SIG_FIELDS
 from ._recall_tokenization import tokenize
 
 __all__ = [
-    "extract_text", "extract_field_tokens", "get_bigrams",
-    "is_skeptical_query", "detect_query_type", "decompose_query",
-    "_QUERY_TYPE_PARAMS", "_INTENT_TO_QUERY_TYPE",
-    "chunk_text", "get_excerpt", "_parse_speaker_from_tags", "get_block_type",
+    "extract_text",
+    "extract_field_tokens",
+    "get_bigrams",
+    "is_skeptical_query",
+    "detect_query_type",
+    "decompose_query",
+    "_QUERY_TYPE_PARAMS",
+    "_INTENT_TO_QUERY_TYPE",
+    "chunk_text",
+    "get_excerpt",
+    "_parse_speaker_from_tags",
+    "get_block_type",
 ]
 
 
@@ -42,6 +50,7 @@ def extract_text(block: dict) -> str:
 # ---------------------------------------------------------------------------
 # BM25F — Field-weighted term extraction
 # ---------------------------------------------------------------------------
+
 
 def extract_field_tokens(block: dict) -> dict[str, list[str]]:
     """Extract and tokenize per-field for BM25F scoring.
@@ -86,6 +95,7 @@ def extract_field_tokens(block: dict) -> dict[str, list[str]]:
 # Bigram phrase matching
 # ---------------------------------------------------------------------------
 
+
 def get_bigrams(tokens: list[str]) -> set[tuple[str, str]]:
     """Generate set of adjacent token pairs (bigrams)."""
     return set(zip(tokens, tokens[1:]))
@@ -113,8 +123,11 @@ def is_skeptical_query(query: str) -> bool:
     # Very short query with broad terms = low specificity
     words = query.split()
     if len(words) <= 5:
-        specific = [w for w in words if len(w) > 4 and w.lower() not in
-                     {"what", "which", "where", "about", "their", "there", "these", "those"}]
+        specific = [
+            w
+            for w in words
+            if len(w) > 4 and w.lower() not in {"what", "which", "where", "about", "their", "there", "these", "those"}
+        ]
         if len(specific) <= 1:
             return True
     return False
@@ -152,11 +165,11 @@ _ADVERSARIAL_PATTERNS = re.compile(
 # These need precision over recall, so semantic synonym expansion is suppressed.
 _VERIFICATION_INTENT_RE = re.compile(
     r"(?:"
-    r"^(?:did|was|were|is|has|have|does|do)\s+"   # Yes/no question openers
-    r"|(?:ever|actually|really)\b"                  # Certainty qualifiers
-    r"|(?:is it true|is that true|is this true)"    # Truth verification
-    r"|(?:no mention|not mention|never mention)"    # Absence checks
-    r"|(?:deny|denied|denial)\b"                    # Denial patterns
+    r"^(?:did|was|were|is|has|have|does|do)\s+"  # Yes/no question openers
+    r"|(?:ever|actually|really)\b"  # Certainty qualifiers
+    r"|(?:is it true|is that true|is this true)"  # Truth verification
+    r"|(?:no mention|not mention|never mention)"  # Absence checks
+    r"|(?:deny|denied|denial)\b"  # Denial patterns
     r")",
     re.IGNORECASE,
 )
@@ -242,35 +255,35 @@ def detect_query_type(query: str) -> str:
 # Category-specific retrieval parameters
 _QUERY_TYPE_PARAMS = {
     "temporal": {
-        "recency_weight": 0.6,     # Higher recency matters more
-        "date_boost": 2.0,         # Boost blocks with dates
-        "expand_query": True,      # Keep expansions
-        "extra_limit_factor": 2.0, # Retrieve more — date-bearing blocks are scattered
+        "recency_weight": 0.6,  # Higher recency matters more
+        "date_boost": 2.0,  # Boost blocks with dates
+        "expand_query": True,  # Keep expansions
+        "extra_limit_factor": 2.0,  # Retrieve more — date-bearing blocks are scattered
     },
     "adversarial": {
-        "recency_weight": 0.3,     # Standard — adversarial needs same broad recall
-        "date_boost": 1.0,         # No date boost
+        "recency_weight": 0.3,  # Standard — adversarial needs same broad recall
+        "date_boost": 1.0,  # No date boost
         "expand_query": "morph_only",  # Lemma + months only, no semantic synonyms
-        "extra_limit_factor": 1.0, # Standard — handled at answerer level, not retrieval
+        "extra_limit_factor": 1.0,  # Standard — handled at answerer level, not retrieval
     },
     "multi-hop": {
-        "recency_weight": 0.3,     # Standard
+        "recency_weight": 0.3,  # Standard
         "date_boost": 1.0,
         "expand_query": True,
-        "extra_limit_factor": 3.0, # Need more blocks to find all hops
+        "extra_limit_factor": 3.0,  # Need more blocks to find all hops
         "graph_boost_override": True,  # Force graph traversal
     },
     "single-hop": {
-        "recency_weight": 0.3,     # Standard
+        "recency_weight": 0.3,  # Standard
         "date_boost": 1.0,
         "expand_query": True,
         "extra_limit_factor": 1.0,
     },
     "open-domain": {
-        "recency_weight": 0.2,     # Less recency bias for broad questions
+        "recency_weight": 0.2,  # Less recency bias for broad questions
         "date_boost": 1.0,
         "expand_query": True,
-        "extra_limit_factor": 2.0, # Retrieve more for diversity
+        "extra_limit_factor": 2.0,  # Retrieve more for diversity
     },
 }
 
@@ -411,23 +424,106 @@ def _preserve_context(parts: list[str], original_query: str) -> list[str]:
     # Also extract key noun-like tokens from the first part (lowercased, len > 4,
     # not wh-words or common verbs)
     _skip = {
-        "what", "when", "where", "which", "who", "how", "why", "that", "this",
-        "there", "their", "these", "those", "about", "were", "have", "does",
-        "been", "being", "would", "could", "should", "will", "with", "from",
-        "they", "them", "than", "into", "also", "just", "some", "each",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "how",
+        "why",
+        "that",
+        "this",
+        "there",
+        "their",
+        "these",
+        "those",
+        "about",
+        "were",
+        "have",
+        "does",
+        "been",
+        "being",
+        "would",
+        "could",
+        "should",
+        "will",
+        "with",
+        "from",
+        "they",
+        "them",
+        "than",
+        "into",
+        "also",
+        "just",
+        "some",
+        "each",
         # Common short function words (2-3 chars)
-        "the", "and", "for", "are", "but", "not", "you", "all", "can",
-        "had", "her", "was", "one", "our", "out", "did", "get", "has",
-        "him", "his", "she", "too", "use", "may", "its", "let", "say",
-        "any", "new", "now", "old", "see", "way", "own", "boy", "did",
-        "man", "run", "set", "try", "ask", "men", "ran", "few",
-        "it", "is", "in", "on", "at", "to", "up", "so", "we", "an",
-        "do", "if", "my", "no", "he", "by", "or", "as", "be", "go",
+        "the",
+        "and",
+        "for",
+        "are",
+        "but",
+        "not",
+        "you",
+        "all",
+        "can",
+        "had",
+        "her",
+        "was",
+        "one",
+        "our",
+        "out",
+        "did",
+        "get",
+        "has",
+        "him",
+        "his",
+        "she",
+        "too",
+        "use",
+        "may",
+        "its",
+        "let",
+        "say",
+        "any",
+        "new",
+        "now",
+        "old",
+        "see",
+        "way",
+        "own",
+        "boy",
+        "did",
+        "man",
+        "run",
+        "set",
+        "try",
+        "ask",
+        "men",
+        "ran",
+        "few",
+        "it",
+        "is",
+        "in",
+        "on",
+        "at",
+        "to",
+        "up",
+        "so",
+        "we",
+        "an",
+        "do",
+        "if",
+        "my",
+        "no",
+        "he",
+        "by",
+        "or",
+        "as",
+        "be",
+        "go",
     }
-    first_keywords = [
-        w for w in re.findall(r"[a-zA-Z0-9_./-]+", parts[0])
-        if len(w) >= 2 and w.lower() not in _skip
-    ]
+    first_keywords = [w for w in re.findall(r"[a-zA-Z0-9_./-]+", parts[0]) if len(w) >= 2 and w.lower() not in _skip]
 
     # Combine entities and keywords for context candidates
     context_tokens = first_entities + first_keywords
@@ -469,7 +565,7 @@ def chunk_text(text: str, chunk_size: int = 3, overlap: int = 1) -> list[str]:
     Returns list of chunk strings. Returns [text] if <=chunk_size sentences.
     """
     # Simple sentence splitting on .!? followed by space or end
-    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     sentences = [s for s in sentences if s.strip()]
 
     if len(sentences) <= chunk_size:
@@ -478,7 +574,7 @@ def chunk_text(text: str, chunk_size: int = 3, overlap: int = 1) -> list[str]:
     chunks = []
     step = max(1, chunk_size - overlap)
     for start in range(0, len(sentences), step):
-        chunk = " ".join(sentences[start:start + chunk_size])
+        chunk = " ".join(sentences[start : start + chunk_size])
         if chunk.strip():
             chunks.append(chunk)
         if start + chunk_size >= len(sentences):
@@ -502,8 +598,18 @@ def _parse_speaker_from_tags(tags_str: str) -> str:
     parts = [t.strip() for t in tags_str.split(",")]
     # First tag is the card type (FACT/EVENT/etc), rest are speaker/metadata
     for p in parts[1:]:
-        if p and p[0].isupper() and p not in (
-            "FACT", "EVENT", "PREFERENCE", "RELATION", "NEGATION", "PLAN",
+        if (
+            p
+            and p[0].isupper()
+            and p
+            not in (
+                "FACT",
+                "EVENT",
+                "PREFERENCE",
+                "RELATION",
+                "NEGATION",
+                "PLAN",
+            )
         ):
             return p
     return ""
@@ -512,10 +618,17 @@ def _parse_speaker_from_tags(tags_str: str) -> str:
 def get_block_type(block_id: str) -> str:
     """Infer block type from ID prefix."""
     prefixes = {
-        "D-": "decision", "T-": "task", "PRJ-": "project",
-        "PER-": "person", "TOOL-": "tool", "INC-": "incident",
-        "C-": "contradiction", "DREF-": "drift", "SIG-": "signal",
-        "P-": "proposal", "I-": "impact",
+        "D-": "decision",
+        "T-": "task",
+        "PRJ-": "project",
+        "PER-": "person",
+        "TOOL-": "tool",
+        "INC-": "incident",
+        "C-": "contradiction",
+        "DREF-": "drift",
+        "SIG-": "signal",
+        "P-": "proposal",
+        "I-": "impact",
     }
     for prefix, btype in prefixes.items():
         if block_id.startswith(prefix):

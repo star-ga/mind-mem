@@ -52,11 +52,7 @@ class TestMCPServerHelpers(unittest.TestCase):
             )
 
         with open(os.path.join(self.td, "tasks", "TASKS.md"), "w") as f:
-            f.write(
-                "[T-20260101-001]\n"
-                "Description: Set up PostgreSQL in staging\n"
-                "Status: open\n"
-            )
+            f.write("[T-20260101-001]\nDescription: Set up PostgreSQL in staging\nStatus: open\n")
 
         with open(os.path.join(self.td, "entities", "projects.md"), "w") as f:
             f.write("[PRJ-001]\nName: mind-mem\nStatus: active\n")
@@ -206,12 +202,14 @@ class TestMCPRecallEngine(unittest.TestCase):
 
     def test_recall_via_engine(self):
         from mind_mem.recall import recall as r
+
         results = r(self.td, "PostgreSQL", limit=5)
         self.assertGreater(len(results), 0)
         self.assertEqual(results[0]["_id"], "D-20260101-001")
 
     def test_recall_no_results(self):
         from mind_mem.recall import recall as r
+
         results = r(self.td, "kubernetes", limit=5)
         self.assertEqual(len(results), 0)
 
@@ -420,12 +418,7 @@ class TestConfigurableLimits(unittest.TestCase):
         os.makedirs(os.path.join(self.td, "memory"))
 
         with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
-            f.write(
-                "[D-20260101-001]\n"
-                "Statement: Use PostgreSQL for user database\n"
-                "Status: active\n"
-                "Date: 2026-01-01\n"
-            )
+            f.write("[D-20260101-001]\nStatement: Use PostgreSQL for user database\nStatus: active\nDate: 2026-01-01\n")
 
     def tearDown(self):
         shutil.rmtree(self.td, ignore_errors=True)
@@ -445,16 +438,18 @@ class TestConfigurableLimits(unittest.TestCase):
         self.assertEqual(limits["rate_limit_calls_per_minute"], 120)
 
     def test_custom_limits_from_config(self):
-        self._write_config({
-            "limits": {
-                "max_recall_results": 200,
-                "max_similar_results": 75,
-                "max_prefetch_results": 30,
-                "max_category_results": 15,
-                "query_timeout_seconds": 60,
-                "rate_limit_calls_per_minute": 240,
+        self._write_config(
+            {
+                "limits": {
+                    "max_recall_results": 200,
+                    "max_similar_results": 75,
+                    "max_prefetch_results": 30,
+                    "max_category_results": 15,
+                    "query_timeout_seconds": 60,
+                    "rate_limit_calls_per_minute": 240,
+                }
             }
-        })
+        )
         mod = _load_server(self.td)
         limits = mod._get_limits(self.td)
         self.assertEqual(limits["max_recall_results"], 200)
@@ -465,11 +460,13 @@ class TestConfigurableLimits(unittest.TestCase):
         self.assertEqual(limits["rate_limit_calls_per_minute"], 240)
 
     def test_partial_limits_merges_with_defaults(self):
-        self._write_config({
-            "limits": {
-                "max_recall_results": 50,
+        self._write_config(
+            {
+                "limits": {
+                    "max_recall_results": 50,
+                }
             }
-        })
+        )
         mod = _load_server(self.td)
         limits = mod._get_limits(self.td)
         self.assertEqual(limits["max_recall_results"], 50)
@@ -478,12 +475,14 @@ class TestConfigurableLimits(unittest.TestCase):
         self.assertEqual(limits["max_prefetch_results"], 20)
 
     def test_invalid_limit_value_keeps_default(self):
-        self._write_config({
-            "limits": {
-                "max_recall_results": "not_a_number",
-                "max_similar_results": 75,
+        self._write_config(
+            {
+                "limits": {
+                    "max_recall_results": "not_a_number",
+                    "max_similar_results": 75,
+                }
             }
-        })
+        )
         mod = _load_server(self.td)
         limits = mod._get_limits(self.td)
         self.assertEqual(limits["max_recall_results"], 100)  # fallback to default
@@ -498,6 +497,7 @@ class TestConfigurableLimits(unittest.TestCase):
     def test_default_config_includes_limits(self):
         """init_workspace DEFAULT_CONFIG should contain the limits section."""
         from mind_mem.init_workspace import DEFAULT_CONFIG
+
         self.assertIn("limits", DEFAULT_CONFIG)
         self.assertEqual(DEFAULT_CONFIG["limits"]["max_recall_results"], 100)
         self.assertEqual(DEFAULT_CONFIG["limits"]["max_similar_results"], 50)
@@ -508,9 +508,7 @@ class TestConfigurableLimits(unittest.TestCase):
 
     def test_recall_tool_respects_custom_limit(self):
         """recall() clamps limit to configured max_recall_results."""
-        self._write_config({
-            "limits": {"max_recall_results": 25}
-        })
+        self._write_config({"limits": {"max_recall_results": 25}})
         mod = _load_server(self.td)
         # Call recall with limit > configured max
         fn = mod.recall

@@ -19,15 +19,11 @@ from mind_mem.recall import recall
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_block(prefix, num, statement, status="active"):
     """Generate a single memory block in standard markdown format."""
     date = "2026-02-19"
-    return (
-        f"[{prefix}-{date.replace('-', '')}-{num:03d}]\n"
-        f"Statement: {statement}\n"
-        f"Status: {status}\n"
-        f"Date: {date}\n"
-    )
+    return f"[{prefix}-{date.replace('-', '')}-{num:03d}]\nStatement: {statement}\nStatus: {status}\nDate: {date}\n"
 
 
 def _setup_workspace(tmpdir, decisions_content="", tasks_content=""):
@@ -38,9 +34,7 @@ def _setup_workspace(tmpdir, decisions_content="", tasks_content=""):
     with open(os.path.join(tmpdir, "decisions", "DECISIONS.md"), "w") as f:
         f.write(decisions_content)
 
-    default_task = (
-        "[T-20260219-099]\nTitle: Unrelated placeholder task\nStatus: active\n"
-    )
+    default_task = "[T-20260219-099]\nTitle: Unrelated placeholder task\nStatus: active\n"
     with open(os.path.join(tmpdir, "tasks", "TASKS.md"), "w") as f:
         f.write(tasks_content or default_task)
 
@@ -94,6 +88,7 @@ def _generate_blocks(n, topic_fn=None):
 # ===========================================================================
 # 1. Concurrent Recall
 # ===========================================================================
+
 
 class TestConcurrentRecall(unittest.TestCase):
     """Verify thread safety when multiple recall() calls run in parallel."""
@@ -175,7 +170,8 @@ class TestConcurrentRecall(unittest.TestCase):
         for query, res in results_map.items():
             self.assertIsInstance(res, list, f"Query '{query}' returned non-list")
             self.assertGreater(
-                len(res), 0,
+                len(res),
+                0,
                 f"Query '{query}' returned zero results",
             )
 
@@ -203,7 +199,8 @@ class TestConcurrentRecall(unittest.TestCase):
         id_sets = [frozenset(r["_id"] for r in res) for res in results]
         for ids in id_sets[1:]:
             self.assertEqual(
-                ids, id_sets[0],
+                ids,
+                id_sets[0],
                 "Graph-boost results diverged across threads — possible state corruption",
             )
 
@@ -211,6 +208,7 @@ class TestConcurrentRecall(unittest.TestCase):
 # ===========================================================================
 # 2. Performance Stress
 # ===========================================================================
+
 
 class TestPerformanceStress(unittest.TestCase):
     """Performance and stress tests with large synthetic workspaces."""
@@ -228,7 +226,8 @@ class TestPerformanceStress(unittest.TestCase):
             self.assertIsInstance(results, list)
             self.assertGreater(len(results), 0)
             self.assertLess(
-                elapsed, 5.0,
+                elapsed,
+                5.0,
                 f"Recall over 1000 blocks took {elapsed:.2f}s (limit: 5s)",
             )
 
@@ -249,10 +248,7 @@ class TestPerformanceStress(unittest.TestCase):
             # Create blocks with cross-references to exercise graph traversal
             def topic_with_xref(i):
                 ref_id = f"D-20260219-{((i % 50) + 1):03d}"
-                return (
-                    f"Decision about service {i} architecture "
-                    f"(see {ref_id} for related context)"
-                )
+                return f"Decision about service {i} architecture (see {ref_id} for related context)"
 
             content = _generate_blocks(1000, topic_fn=topic_with_xref)
             ws = _setup_workspace(tmpdir, decisions_content=content)
@@ -265,7 +261,8 @@ class TestPerformanceStress(unittest.TestCase):
             self.assertGreater(len(results), 0)
             # Graph boost on 1000 blocks with xrefs should still be reasonable
             self.assertLess(
-                elapsed, 10.0,
+                elapsed,
+                10.0,
                 f"Graph-boost recall on 1000 xref blocks took {elapsed:.2f}s (limit: 10s)",
             )
 
@@ -278,7 +275,8 @@ class TestPerformanceStress(unittest.TestCase):
             for limit in (1, 3, 5, 10):
                 results = recall(ws, "authentication", limit=limit)
                 self.assertLessEqual(
-                    len(results), limit,
+                    len(results),
+                    limit,
                     f"limit={limit} but got {len(results)} results",
                 )
 
@@ -286,6 +284,7 @@ class TestPerformanceStress(unittest.TestCase):
 # ===========================================================================
 # 3. Deadlock / Data-Corruption Stress
 # ===========================================================================
+
 
 class TestDeadlockStress(unittest.TestCase):
     """Run 20 concurrent recall queries and verify no deadlock or corruption."""
@@ -356,13 +355,15 @@ class TestDeadlockStress(unittest.TestCase):
 
         # Total wall time should be under 30s
         self.assertLess(
-            elapsed, 30.0,
+            elapsed,
+            30.0,
             f"20 concurrent queries took {elapsed:.2f}s (limit: 30s)",
         )
 
         # No errors
         self.assertEqual(
-            errors, [],
+            errors,
+            [],
             f"Concurrent queries raised errors: {errors}",
         )
 
@@ -430,14 +431,15 @@ class TestDeadlockStress(unittest.TestCase):
         for q in queries:
             id_sets = concurrent_ids[q]
             self.assertEqual(
-                len(id_sets), 4,
+                len(id_sets),
+                4,
                 f"Expected 4 concurrent results for '{q}', got {len(id_sets)}",
             )
             for ids in id_sets:
                 self.assertEqual(
-                    ids, serial_ids[q],
-                    f"Concurrent result for '{q}' differs from serial baseline — "
-                    f"possible data corruption",
+                    ids,
+                    serial_ids[q],
+                    f"Concurrent result for '{q}' differs from serial baseline — possible data corruption",
                 )
 
 

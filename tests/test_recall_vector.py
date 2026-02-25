@@ -46,12 +46,14 @@ class TestVectorBackendInit:
         assert vb._model_loaded is False
 
     def test_custom_config(self):
-        vb = VectorBackend({
-            "provider": "qdrant",
-            "model": "bge-small-en-v1.5",
-            "index_path": "custom-idx",
-            "dimension": 384,
-        })
+        vb = VectorBackend(
+            {
+                "provider": "qdrant",
+                "model": "bge-small-en-v1.5",
+                "index_path": "custom-idx",
+                "dimension": 384,
+            }
+        )
         assert vb.provider == "qdrant"
         assert vb.model_name == "bge-small-en-v1.5"
         assert vb.index_path == "custom-idx"
@@ -82,10 +84,12 @@ class TestVectorBackendInit:
         assert vb.pinecone_namespace == "default"
 
     def test_pinecone_custom(self):
-        vb = VectorBackend({
-            "pinecone_index": "my-index",
-            "pinecone_namespace": "prod",
-        })
+        vb = VectorBackend(
+            {
+                "pinecone_index": "my-index",
+                "pinecone_namespace": "prod",
+            }
+        )
         assert vb.pinecone_index_name == "my-index"
         assert vb.pinecone_namespace == "prod"
 
@@ -274,9 +278,7 @@ class TestSearchBatch:
 
     def test_with_explicit_config(self, tmp_path):
         """Passing explicit config should skip file loading."""
-        result = search_batch(
-            str(tmp_path), "test", config={"provider": "local"}
-        )
+        result = search_batch(str(tmp_path), "test", config={"provider": "local"})
         assert result == []
 
 
@@ -319,6 +321,7 @@ class TestEmbeddingCache:
     def _make_db(self, tmp_path):
         """Create an in-memory-like cache DB for testing."""
         import sqlite3
+
         db_path = str(tmp_path / "test_cache.db")
         conn = sqlite3.connect(db_path)
         conn.execute("PRAGMA journal_mode=WAL")
@@ -452,6 +455,7 @@ class TestDimensionMismatch:
 
     def _make_db(self, tmp_path):
         import sqlite3
+
         db_path = str(tmp_path / "test_meta.db")
         conn = sqlite3.connect(db_path)
         vb = _make_backend()
@@ -535,6 +539,7 @@ class TestCircuitBreaker:
         """Circuit breaker state persists on the backend instance."""
         vb = _make_backend()
         import time
+
         vb._provider_failures["test"] = (3, time.time())
         assert "test" in vb._provider_failures
         count, _ = vb._provider_failures["test"]

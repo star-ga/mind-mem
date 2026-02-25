@@ -38,6 +38,7 @@ _log = get_logger("conflict_resolver")
 # Resolution strategies
 # ---------------------------------------------------------------------------
 
+
 class ResolutionStrategy:
     TIMESTAMP = "timestamp_priority"
     CONFIDENCE = "confidence_priority"
@@ -88,16 +89,14 @@ def _get_scope_specificity(block: dict) -> int:
 
 def _block_hash(block: dict) -> str:
     """Compute a stable hash of a block's content fields."""
-    content = json.dumps(
-        {k: v for k, v in sorted(block.items()) if not k.startswith("_")},
-        default=str, sort_keys=True
-    )
+    content = json.dumps({k: v for k, v in sorted(block.items()) if not k.startswith("_")}, default=str, sort_keys=True)
     return hashlib.sha256(content.encode()).hexdigest()[:12]
 
 
 # ---------------------------------------------------------------------------
 # Core resolution logic
 # ---------------------------------------------------------------------------
+
 
 def analyze_contradiction(block_a: dict, block_b: dict) -> dict:
     """Analyze a contradiction pair and recommend a resolution strategy.
@@ -188,9 +187,7 @@ def resolve_contradictions(workspace: str) -> list[dict]:
 
     for contra in contra_blocks:
         # Extract the two conflicting block IDs from the contradiction entry
-        text = " ".join(
-            str(v) for v in contra.values() if isinstance(v, str) and not v.startswith("_")
-        )
+        text = " ".join(str(v) for v in contra.values() if isinstance(v, str) and not v.startswith("_"))
         ids = _ID_RE.findall(text)
         if len(ids) < 2:
             continue
@@ -210,8 +207,11 @@ def resolve_contradictions(workspace: str) -> list[dict]:
         resolution["hash_b"] = _block_hash(block_b)
         resolutions.append(resolution)
 
-    _log.info("contradictions_analyzed", count=len(resolutions),
-              auto_resolvable=sum(1 for r in resolutions if r["strategy"] != ResolutionStrategy.MANUAL))
+    _log.info(
+        "contradictions_analyzed",
+        count=len(resolutions),
+        auto_resolvable=sum(1 for r in resolutions if r["strategy"] != ResolutionStrategy.MANUAL),
+    )
     metrics.inc("contradictions_analyzed", len(resolutions))
     return resolutions
 
@@ -267,6 +267,7 @@ def generate_resolution_proposals(workspace: str, resolutions: list[dict] | None
 
 def main() -> None:
     import argparse
+
     parser = argparse.ArgumentParser(description="mind-mem Conflict Resolution Pipeline")
     parser.add_argument("workspace", nargs="?", default=".")
     parser.add_argument("--analyze", action="store_true", help="Analyze contradictions and show resolutions")

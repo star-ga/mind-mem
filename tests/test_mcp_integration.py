@@ -1,4 +1,5 @@
 """Integration tests for MCP server tools."""
+
 import json
 import os
 
@@ -7,9 +8,20 @@ def _make_workspace(tmp_path):
     """Create a minimal workspace for testing."""
     ws = tmp_path / "workspace"
     ws.mkdir()
-    for d in ["decisions", "tasks", "entities", "intelligence", "intelligence/proposed",
-              "intelligence/applied", "intelligence/state/snapshots", "memory", "summaries/weekly",
-              "summaries/daily", "maintenance/weeklog", "categories"]:
+    for d in [
+        "decisions",
+        "tasks",
+        "entities",
+        "intelligence",
+        "intelligence/proposed",
+        "intelligence/applied",
+        "intelligence/state/snapshots",
+        "memory",
+        "summaries/weekly",
+        "summaries/daily",
+        "maintenance/weeklog",
+        "categories",
+    ]:
         (ws / d).mkdir(parents=True, exist_ok=True)
 
     cfg = {
@@ -43,8 +55,7 @@ Rationale: Better JSON support than MySQL
     (ws / "intelligence" / "SCAN_LOG.md").write_text("")
 
     # Add empty corpus files expected by recall engine
-    for fname in ["entities/projects.md", "entities/people.md",
-                  "entities/tools.md", "entities/incidents.md"]:
+    for fname in ["entities/projects.md", "entities/people.md", "entities/tools.md", "entities/incidents.md"]:
         path = ws / fname
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(f"# {os.path.basename(fname)}\n")
@@ -61,6 +72,7 @@ class TestRecallTool:
     def test_recall_finds_decision(self, tmp_path):
         ws = _make_workspace(tmp_path)
         from mind_mem.recall import recall
+
         results = recall(str(ws), "PostgreSQL database", limit=5)
         assert len(results) > 0
         assert any("PostgreSQL" in str(r) for r in results)
@@ -68,6 +80,7 @@ class TestRecallTool:
     def test_recall_empty_query(self, tmp_path):
         ws = _make_workspace(tmp_path)
         from mind_mem.recall import recall
+
         results = recall(str(ws), "", limit=5)
         # Empty query returns empty (no tokens after tokenization)
         assert isinstance(results, list)
@@ -75,6 +88,7 @@ class TestRecallTool:
     def test_recall_no_match(self, tmp_path):
         ws = _make_workspace(tmp_path)
         from mind_mem.recall import recall
+
         results = recall(str(ws), "quantum computing spaceship", limit=5)
         assert isinstance(results, list)
 
@@ -84,18 +98,21 @@ class TestIntentClassify:
 
     def test_temporal_intent(self):
         from mind_mem.intent_router import IntentRouter
+
         router = IntentRouter()
         result = router.classify("When did we decide on PostgreSQL?")
         assert result.intent == "WHEN"
 
     def test_entity_intent(self):
         from mind_mem.intent_router import IntentRouter
+
         router = IntentRouter()
         result = router.classify("What is PostgreSQL used for?")
         assert result.intent is not None
 
     def test_verify_intent(self):
         from mind_mem.intent_router import IntentRouter
+
         router = IntentRouter()
         result = router.classify("Did we ever use MySQL?")
         assert result.intent is not None
@@ -107,6 +124,7 @@ class TestIndexStats:
     def test_status_on_empty_workspace(self, tmp_path):
         ws = _make_workspace(tmp_path)
         from mind_mem.sqlite_index import index_status
+
         stats = index_status(str(ws))
         # Should not crash on fresh workspace (no index built yet)
         assert stats is not None
@@ -116,6 +134,7 @@ class TestIndexStats:
     def test_build_and_query_index(self, tmp_path):
         ws = _make_workspace(tmp_path)
         from mind_mem.sqlite_index import build_index, query_index
+
         build_index(str(ws), incremental=False)
         results = query_index(str(ws), "PostgreSQL", limit=5)
         assert isinstance(results, list)

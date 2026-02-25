@@ -1,4 +1,5 @@
 """Tests for source field in recall results."""
+
 from __future__ import annotations
 
 import os
@@ -16,12 +17,14 @@ def _ws():
         f.write("[SRC-001]\nType: Decision\nStatement: Source field test\n\n")
     return ws
 
+
 def test_results_have_source():
     ws = _ws()
     results = recall(ws, "source field test", limit=5)
     if results:
         r = results[0]
         assert "source" in r or "file" in r or "_source" in r or "raw" in r
+
 
 def test_source_is_string():
     ws = _ws()

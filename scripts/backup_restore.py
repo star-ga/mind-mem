@@ -30,8 +30,14 @@ _log = get_logger("backup_restore")
 
 # Directories included in backup
 BACKUP_DIRS = [
-    "decisions", "tasks", "entities", "memory",
-    "intelligence", "summaries", "shared", "agents",
+    "decisions",
+    "tasks",
+    "entities",
+    "memory",
+    "intelligence",
+    "summaries",
+    "shared",
+    "agents",
 ]
 
 BACKUP_FILES = ["mind-mem.json", "mind-mem-acl.json"]
@@ -40,6 +46,7 @@ BACKUP_FILES = ["mind-mem.json", "mind-mem-acl.json"]
 # ---------------------------------------------------------------------------
 # WAL (Write-Ahead Log)
 # ---------------------------------------------------------------------------
+
 
 class WAL:
     """Write-ahead log for crash-safe Markdown mutations.
@@ -189,6 +196,7 @@ class WAL:
 # Backup
 # ---------------------------------------------------------------------------
 
+
 def backup_workspace(workspace: str, output: str) -> str:
     """Create a tar.gz backup of the workspace.
 
@@ -313,8 +321,7 @@ def restore_workspace(workspace: str, backup_path: str, force: bool = False) -> 
         for member in tar.getmembers():
             # Security: validate every member before extraction
             if not _is_safe_tar_member(member, ws):
-                _log.warning("tar_member_blocked", member=member.name,
-                             reason="path traversal or unsafe member type")
+                _log.warning("tar_member_blocked", member=member.name, reason="path traversal or unsafe member type")
                 metrics.inc("restore_workspace_blocked_members")
                 result["blocked"] += 1
                 continue
@@ -338,15 +345,20 @@ def restore_workspace(workspace: str, backup_path: str, force: bool = False) -> 
                     continue
                 result["restored"] += 1
 
-    _log.info("restore_complete", restored=result["restored"],
-              skipped=result["skipped"], blocked=result["blocked"],
-              conflicts=len(result["conflicts"]))
+    _log.info(
+        "restore_complete",
+        restored=result["restored"],
+        skipped=result["skipped"],
+        blocked=result["blocked"],
+        conflicts=len(result["conflicts"]),
+    )
     return result
 
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="mind-mem Backup & Restore")

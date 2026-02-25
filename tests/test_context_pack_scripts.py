@@ -1,4 +1,5 @@
 """Tests for context packing via scripts._recall_context."""
+
 from __future__ import annotations
 
 from scripts._recall_context import context_pack

@@ -60,6 +60,7 @@ ALL_JOBS = list(JOB_DEFS.keys())
 # Config
 # ---------------------------------------------------------------------------
 
+
 def load_config(workspace: str) -> dict:
     """Load mind-mem.json from workspace. Returns defaults if missing/unreadable."""
     config_path = os.path.join(workspace, "mind-mem.json")
@@ -84,6 +85,7 @@ def is_job_enabled(config: dict, job_name: str) -> bool:
 # ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
+
 
 def run_job(job_name: str, workspace: str) -> dict:
     """Run a single job. Returns result dict with status and details."""
@@ -139,6 +141,7 @@ def run_job(job_name: str, workspace: str) -> dict:
 # Crontab installer
 # ---------------------------------------------------------------------------
 
+
 def print_cron_instructions(workspace: str) -> None:
     """Print crontab entries for all jobs."""
     script_path = os.path.abspath(__file__)
@@ -152,6 +155,7 @@ def print_cron_instructions(workspace: str) -> None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="mind-mem periodic job runner")

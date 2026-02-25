@@ -1,4 +1,5 @@
 """Tests for different block types in recall."""
+
 from __future__ import annotations
 
 import os

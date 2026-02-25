@@ -30,6 +30,7 @@ from observation_compress import (
 
 # ── helpers ───────────────────────────────────────────────────────────
 
+
 def _make_llm_fn(return_value: str = "compressed") -> MagicMock:
     """Return a MagicMock mimicking llm_fn(messages, model=..., max_tokens=...)."""
     fn = MagicMock(return_value=return_value)
@@ -39,6 +40,7 @@ def _make_llm_fn(return_value: str = "compressed") -> MagicMock:
 # ══════════════════════════════════════════════════════════════════════
 # 1.  Basic compression call
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestBasicCompression:
     def test_returns_llm_output(self):
@@ -56,6 +58,7 @@ class TestBasicCompression:
 # ══════════════════════════════════════════════════════════════════════
 # 2.  Category-specific prompts
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestCategoryPrompts:
     @pytest.mark.parametrize("category", ["adversarial", "temporal", "multi-hop"])
@@ -79,6 +82,7 @@ class TestCategoryPrompts:
 # 3.  Empty / whitespace context passthrough
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestEmptyContext:
     @pytest.mark.parametrize("ctx", ["", "   ", "\n", "\t\n  "])
     def test_empty_or_whitespace_returns_unchanged(self, ctx):
@@ -91,6 +95,7 @@ class TestEmptyContext:
 # ══════════════════════════════════════════════════════════════════════
 # 4.  Default query_type → default system prompt
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestDefaultQueryType:
     def test_none_query_type_uses_default_prompt(self):
@@ -110,6 +115,7 @@ class TestDefaultQueryType:
 # 5.  Unknown query_type → default system prompt
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestUnknownQueryType:
     @pytest.mark.parametrize("qtype", ["unknown", "factoid", "ADVERSARIAL", ""])
     def test_unknown_types_fall_back_to_default(self, qtype):
@@ -122,6 +128,7 @@ class TestUnknownQueryType:
 # ══════════════════════════════════════════════════════════════════════
 # 6.  Message format correctness
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestMessageFormat:
     def test_messages_are_list_of_two_dicts(self):
@@ -153,6 +160,7 @@ class TestMessageFormat:
 # 7.  max_tokens forwarded to llm_fn
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestMaxTokens:
     def test_default_max_tokens_is_400(self):
         fn = _make_llm_fn()
@@ -168,6 +176,7 @@ class TestMaxTokens:
 # ══════════════════════════════════════════════════════════════════════
 # 8.  Model parameter forwarding
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestModelParam:
     def test_default_model(self):
@@ -185,6 +194,7 @@ class TestModelParam:
 # 9.  Template rendering
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestTemplateRendering:
     def test_template_has_placeholders(self):
         assert "{question}" in COMPRESS_USER_TEMPLATE
@@ -201,6 +211,7 @@ class TestTemplateRendering:
 # ══════════════════════════════════════════════════════════════════════
 # 10. Constants integrity
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestConstants:
     def test_category_prompts_has_exactly_three_keys(self):

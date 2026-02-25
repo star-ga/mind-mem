@@ -1,4 +1,5 @@
 """Tests for cross-encoder reranker integration in recall pipeline."""
+
 import importlib.util
 import os
 import shutil
@@ -40,12 +41,14 @@ class TestCrossEncoderAvailability(unittest.TestCase):
 
     def test_is_available_returns_bool(self):
         from mind_mem.cross_encoder_reranker import CrossEncoderReranker
+
         result = CrossEncoderReranker.is_available()
         self.assertIsInstance(result, bool)
 
     def test_import_error_on_missing_dep(self):
         """CrossEncoderReranker should raise ImportError if deps missing."""
         from mind_mem.cross_encoder_reranker import _check_available
+
         # Just verify the check function works
         result = _check_available()
         self.assertIsInstance(result, bool)
@@ -72,6 +75,7 @@ class TestCrossEncoderInRecall(unittest.TestCase):
     def test_recall_works_without_cross_encoder(self):
         """Recall should work fine with cross-encoder disabled (default)."""
         from mind_mem.recall import recall as r
+
         results = r(self.td, "PostgreSQL", limit=5)
         self.assertGreater(len(results), 0)
         self.assertEqual(results[0]["_id"], "D-20260101-001")
@@ -79,11 +83,13 @@ class TestCrossEncoderInRecall(unittest.TestCase):
     def test_recall_with_ce_config_disabled(self):
         """Recall should skip cross-encoder when config disabled."""
         import json
+
         config = {"recall": {"cross_encoder": {"enabled": False}}}
         with open(os.path.join(self.td, "mind-mem.json"), "w") as f:
             json.dump(config, f)
 
         from mind_mem.recall import recall as r
+
         results = r(self.td, "PostgreSQL", limit=5)
         self.assertGreater(len(results), 0)
         # No ce_score field when disabled
@@ -118,9 +124,11 @@ class TestCrossEncoderRerankerUnit(unittest.TestCase):
     def test_empty_candidates(self):
         """Reranker should handle empty candidate list."""
         from mind_mem import cross_encoder_reranker as _ce_mod
+
         # Reset cached availability (may be stale from earlier test imports)
         _ce_mod._CE_AVAILABLE = None
         from mind_mem.cross_encoder_reranker import CrossEncoderReranker
+
         ce = CrossEncoderReranker()
         result = ce.rerank("test query", [], top_k=5)
         self.assertEqual(result, [])
@@ -130,15 +138,11 @@ class TestCrossEncoderMindKernel(unittest.TestCase):
     """Test that the cross_encoder.mind config file exists."""
 
     def test_kernel_file_exists(self):
-        kernel_path = os.path.join(
-            os.path.dirname(__file__), "..", "mind", "cross_encoder.mind"
-        )
+        kernel_path = os.path.join(os.path.dirname(__file__), "..", "mind", "cross_encoder.mind")
         self.assertTrue(os.path.isfile(kernel_path))
 
     def test_kernel_has_blending_section(self):
-        kernel_path = os.path.join(
-            os.path.dirname(__file__), "..", "mind", "cross_encoder.mind"
-        )
+        kernel_path = os.path.join(os.path.dirname(__file__), "..", "mind", "cross_encoder.mind")
         with open(kernel_path) as f:
             content = f.read()
         self.assertIn("[blending]", content)

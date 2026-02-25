@@ -5,27 +5,53 @@ from __future__ import annotations
 import re
 
 __all__ = [
-    "SEARCH_FIELDS", "SIG_FIELDS", "CORPUS_FILES",
-    "BM25_K1", "BM25_B",
+    "SEARCH_FIELDS",
+    "SIG_FIELDS",
+    "CORPUS_FILES",
+    "BM25_K1",
+    "BM25_B",
     "FIELD_WEIGHTS",
-    "_STOPWORDS", "_IRREGULAR_LEMMA",
-    "GRAPH_BOOST_FACTOR", "_BLOCK_ID_RE",
-    "MAX_BLOCKS_PER_QUERY", "MAX_GRAPH_NEIGHBORS_PER_HOP", "MAX_RERANK_CANDIDATES",
+    "_STOPWORDS",
+    "_IRREGULAR_LEMMA",
+    "GRAPH_BOOST_FACTOR",
+    "_BLOCK_ID_RE",
+    "MAX_BLOCKS_PER_QUERY",
+    "MAX_GRAPH_NEIGHBORS_PER_HOP",
+    "MAX_RERANK_CANDIDATES",
     "_VALID_RECALL_KEYS",
     # Scoring boost/penalty factors
-    "STATUS_BOOST_ACTIVE", "STATUS_BOOST_WIP", "PRIORITY_BOOST",
-    "ENTITY_BOOST_PER_HIT", "MAX_ENTITY_HITS",
-    "ADVERSARIAL_NEGATION_BOOST", "BIGRAM_BOOST_PER_MATCH",
-    "CHUNK_BLEND_BEST", "CHUNK_BLEND_FULL",
-    "HARD_NEGATIVE_PENALTY", "PRF_WEIGHT_DEFAULT", "PRF_WEIGHT_MULTIHOP",
-    "RM3_BLEND_WEIGHT", "BRIDGE_SCORE_WEIGHT",
+    "STATUS_BOOST_ACTIVE",
+    "STATUS_BOOST_WIP",
+    "PRIORITY_BOOST",
+    "ENTITY_BOOST_PER_HIT",
+    "MAX_ENTITY_HITS",
+    "ADVERSARIAL_NEGATION_BOOST",
+    "BIGRAM_BOOST_PER_MATCH",
+    "CHUNK_BLEND_BEST",
+    "CHUNK_BLEND_FULL",
+    "HARD_NEGATIVE_PENALTY",
+    "PRF_WEIGHT_DEFAULT",
+    "PRF_WEIGHT_MULTIHOP",
+    "RM3_BLEND_WEIGHT",
+    "BRIDGE_SCORE_WEIGHT",
 ]
 
 # Fields to index for search (in priority order)
 SEARCH_FIELDS = [
-    "Statement", "Title", "Summary", "Description", "Context",
-    "Rationale", "Tags", "Keywords", "Name", "Purpose",
-    "RootCause", "Fix", "Prevention", "ProposedFix",
+    "Statement",
+    "Title",
+    "Summary",
+    "Description",
+    "Context",
+    "Rationale",
+    "Tags",
+    "Keywords",
+    "Name",
+    "Purpose",
+    "RootCause",
+    "Fix",
+    "Prevention",
+    "ProposedFix",
     "Sources",  # Provenance links emitted by fact extractor (e.g. "DIA-D1-3")
 ]
 
@@ -46,34 +72,134 @@ CORPUS_FILES = {
 }
 
 # BM25 parameters
-BM25_K1 = 1.2   # Term frequency saturation
-BM25_B = 0.75   # Document length normalization
+BM25_K1 = 1.2  # Term frequency saturation
+BM25_B = 0.75  # Document length normalization
 
 # Weight multipliers per field for BM25F scoring.
 # Higher weight = terms in this field contribute more to the score.
 FIELD_WEIGHTS = {
-    "Statement": 3.0, "Title": 2.5, "Name": 2.0,
-    "Summary": 1.5, "Description": 1.2, "Purpose": 1.2,
-    "RootCause": 1.2, "Fix": 1.2, "Prevention": 1.0,
-    "Tags": 0.8, "Keywords": 0.8,
-    "Context": 0.5, "Rationale": 0.5, "ProposedFix": 0.5,
+    "Statement": 3.0,
+    "Title": 2.5,
+    "Name": 2.0,
+    "Summary": 1.5,
+    "Description": 1.2,
+    "Purpose": 1.2,
+    "RootCause": 1.2,
+    "Fix": 1.2,
+    "Prevention": 1.0,
+    "Tags": 0.8,
+    "Keywords": 0.8,
+    "Context": 0.5,
+    "Rationale": 0.5,
+    "ProposedFix": 0.5,
     "History": 0.3,
 }
 
 
-_STOPWORDS = frozenset({
-    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "shall",
-    "should", "may", "might", "can", "could", "must", "and", "but", "or",
-    "nor", "not", "so", "yet", "for", "of", "to", "in", "on", "at", "by",
-    "with", "from", "as", "into", "about", "between", "through", "during",
-    "before", "after", "above", "below", "up", "down", "out", "off", "over",
-    "under", "again", "further", "then", "once", "here", "there", "when",
-    "where", "why", "how", "all", "each", "every", "both", "few", "more",
-    "most", "other", "some", "such", "no", "only", "own", "same", "than",
-    "too", "very", "just", "because", "if", "while", "that", "this",
-    "it", "its", "we", "they", "them", "their", "he", "she", "his", "her",
-})
+_STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "shall",
+        "should",
+        "may",
+        "might",
+        "can",
+        "could",
+        "must",
+        "and",
+        "but",
+        "or",
+        "nor",
+        "not",
+        "so",
+        "yet",
+        "for",
+        "of",
+        "to",
+        "in",
+        "on",
+        "at",
+        "by",
+        "with",
+        "from",
+        "as",
+        "into",
+        "about",
+        "between",
+        "through",
+        "during",
+        "before",
+        "after",
+        "above",
+        "below",
+        "up",
+        "down",
+        "out",
+        "off",
+        "over",
+        "under",
+        "again",
+        "further",
+        "then",
+        "once",
+        "here",
+        "there",
+        "when",
+        "where",
+        "why",
+        "how",
+        "all",
+        "each",
+        "every",
+        "both",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "no",
+        "only",
+        "own",
+        "same",
+        "than",
+        "too",
+        "very",
+        "just",
+        "because",
+        "if",
+        "while",
+        "that",
+        "this",
+        "it",
+        "its",
+        "we",
+        "they",
+        "them",
+        "their",
+        "he",
+        "she",
+        "his",
+        "her",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -82,23 +208,30 @@ _STOPWORDS = frozenset({
 
 _IRREGULAR_LEMMA = {
     # go
-    "went": "go", "gone": "go",
+    "went": "go",
+    "gone": "go",
     # get
-    "got": "get", "gotten": "get",
+    "got": "get",
+    "gotten": "get",
     # meet
     "met": "meet",
     # eat
-    "ate": "eat", "eaten": "eat",
+    "ate": "eat",
+    "eaten": "eat",
     # give
-    "gave": "give", "given": "give",
+    "gave": "give",
+    "given": "give",
     # take
-    "took": "take", "taken": "take",
+    "took": "take",
+    "taken": "take",
     # come
     "came": "come",
     # see
-    "saw": "see", "seen": "see",
+    "saw": "see",
+    "seen": "see",
     # know
-    "knew": "know", "known": "know",
+    "knew": "know",
+    "known": "know",
     # think
     "thought": "think",
     # buy
@@ -106,21 +239,28 @@ _IRREGULAR_LEMMA = {
     # bring
     "brought": "bring",
     # drive
-    "drove": "drive", "driven": "drive",
+    "drove": "drive",
+    "driven": "drive",
     # write
-    "wrote": "write", "written": "write",
+    "wrote": "write",
+    "written": "write",
     # break
-    "broke": "break", "broken": "break",
+    "broke": "break",
+    "broken": "break",
     # speak
-    "spoke": "speak", "spoken": "speak",
+    "spoke": "speak",
+    "spoken": "speak",
     # sing
-    "sang": "sing", "sung": "sing",
+    "sang": "sing",
+    "sung": "sing",
     # run
     "ran": "run",
     # begin
-    "began": "begin", "begun": "begin",
+    "began": "begin",
+    "begun": "begin",
     # fall
-    "fell": "fall", "fallen": "fall",
+    "fell": "fall",
+    "fallen": "fall",
     # tell
     "told": "tell",
     # find
@@ -160,21 +300,29 @@ _IRREGULAR_LEMMA = {
     # lend
     "lent": "lend",
     # choose
-    "chose": "choose", "chosen": "choose",
+    "chose": "choose",
+    "chosen": "choose",
     # grow
-    "grew": "grow", "grown": "grow",
+    "grew": "grow",
+    "grown": "grow",
     # throw
-    "threw": "throw", "thrown": "throw",
+    "threw": "throw",
+    "thrown": "throw",
     # fly
-    "flew": "fly", "flown": "fly",
+    "flew": "fly",
+    "flown": "fly",
     # draw
-    "drew": "draw", "drawn": "draw",
+    "drew": "draw",
+    "drawn": "draw",
     # wear
-    "wore": "wear", "worn": "wear",
+    "wore": "wear",
+    "worn": "wear",
     # ride
-    "rode": "ride", "ridden": "ride",
+    "rode": "ride",
+    "ridden": "ride",
     # hide
-    "hid": "hide", "hidden": "hide",
+    "hid": "hide",
+    "hidden": "hide",
     # hang
     "hung": "hang",
     # hold
@@ -186,9 +334,11 @@ _IRREGULAR_LEMMA = {
     # sell
     "sold": "sell",
     # swim
-    "swam": "swim", "swum": "swim",
+    "swam": "swim",
+    "swum": "swim",
     # drink
-    "drank": "drink", "drunk": "drink",
+    "drank": "drink",
+    "drunk": "drink",
 }
 
 
@@ -196,8 +346,8 @@ _IRREGULAR_LEMMA = {
 _BLOCK_ID_RE = re.compile(
     r"\b(D-\d{8}-\d{3}|T-\d{8}-\d{3}|PRJ-\d{3}|PER-\d{3}|TOOL-\d{3}"
     r"|INC-\d{3}|C-\d{8}-\d{3}|SIG-\d{8}-\d{3}|P-\d{8}-\d{3}"
-    r"|DIA-[A-Za-z0-9]+-\d+"       # LoCoMo dialog turns: DIA-D1-3
-    r"|FACT-\d{3,}"                 # Extracted fact cards: FACT-001
+    r"|DIA-[A-Za-z0-9]+-\d+"  # LoCoMo dialog turns: DIA-D1-3
+    r"|FACT-\d{3,}"  # Extracted fact cards: FACT-001
     r")\b"
 )
 
@@ -217,7 +367,7 @@ MAX_BLOCKS_PER_QUERY = 50000
 
 # Status boosts: active blocks are more relevant than archived ones
 STATUS_BOOST_ACTIVE = 1.2
-STATUS_BOOST_WIP = 1.1        # todo, doing
+STATUS_BOOST_WIP = 1.1  # todo, doing
 
 # Priority boost for high-urgency blocks (P0/P1)
 PRIORITY_BOOST = 1.1
@@ -233,15 +383,15 @@ ADVERSARIAL_NEGATION_BOOST = 1.2
 BIGRAM_BOOST_PER_MATCH = 0.25
 
 # Chunk blending: when a sub-chunk outscores the full block, blend
-CHUNK_BLEND_BEST = 0.6        # weight for best chunk
-CHUNK_BLEND_FULL = 0.4        # weight for full-block score
+CHUNK_BLEND_BEST = 0.6  # weight for best chunk
+CHUNK_BLEND_FULL = 0.4  # weight for full-block score
 
 # Hard negative penalty: demote blocks flagged as misleading
 HARD_NEGATIVE_PENALTY = 0.7
 
 # Pseudo-relevance feedback (PRF) blending weight
 PRF_WEIGHT_DEFAULT = 0.4
-PRF_WEIGHT_MULTIHOP = 0.25    # lower for multi-hop to avoid query drift
+PRF_WEIGHT_MULTIHOP = 0.25  # lower for multi-hop to avoid query drift
 
 # RM3 expansion blending weight
 RM3_BLEND_WEIGHT = 0.4
@@ -249,12 +399,30 @@ RM3_BLEND_WEIGHT = 0.4
 # Bridge (chain-of-retrieval) score blend — second-hop is supplementary
 BRIDGE_SCORE_WEIGHT = 0.3
 
-_VALID_RECALL_KEYS = frozenset({
-    "backend", "limit", "rm3", "cross_encoder", "graph_boost",
-    "pinecone_api_key", "pinecone_index", "pinecone_namespace",
-    "qdrant_url", "qdrant_collection", "embedding_model",
-    "retrieve_wide_k", "rerank", "active_only", "temporal_hard_filter",
-    "llm_rerank", "llm_rerank_url", "llm_rerank_model", "llm_rerank_weight",
-    "chunk_overlap", "max_chunk_tokens",
-    "knee_cutoff", "min_score",
-})
+_VALID_RECALL_KEYS = frozenset(
+    {
+        "backend",
+        "limit",
+        "rm3",
+        "cross_encoder",
+        "graph_boost",
+        "pinecone_api_key",
+        "pinecone_index",
+        "pinecone_namespace",
+        "qdrant_url",
+        "qdrant_collection",
+        "embedding_model",
+        "retrieve_wide_k",
+        "rerank",
+        "active_only",
+        "temporal_hard_filter",
+        "llm_rerank",
+        "llm_rerank_url",
+        "llm_rerank_model",
+        "llm_rerank_weight",
+        "chunk_overlap",
+        "max_chunk_tokens",
+        "knee_cutoff",
+        "min_score",
+    }
+)

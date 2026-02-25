@@ -79,8 +79,7 @@ class Validator:
         self.log("")
         self.log("=" * 43)
         self.log(
-            f"TOTAL: {self.checks} checks | {self.passed} passed"
-            f" | {self.issues} issues | {self.warnings} warnings"
+            f"TOTAL: {self.checks} checks | {self.passed} passed | {self.issues} issues | {self.warnings} warnings"
         )
         self.log("=" * 43)
 
@@ -98,9 +97,12 @@ class Validator:
     def _check_file_structure(self):
         self.section("0. FILE STRUCTURE")
         for f in [
-            "decisions/DECISIONS.md", "tasks/TASKS.md",
-            "entities/projects.md", "entities/people.md",
-            "entities/tools.md", "entities/incidents.md",
+            "decisions/DECISIONS.md",
+            "tasks/TASKS.md",
+            "entities/projects.md",
+            "entities/people.md",
+            "entities/tools.md",
+            "entities/incidents.md",
         ]:
             self.file_exists(f)
 
@@ -128,8 +130,7 @@ class Validator:
         else:
             self.fail("MEMORY.md MISSING")
 
-    def _check_blocks(self, rel_path, id_pattern, label, required_fields,
-                      status_values=None, extra_checks=None):
+    def _check_blocks(self, rel_path, id_pattern, label, required_fields, status_values=None, extra_checks=None):
         path = os.path.join(self.ws, rel_path)
         if not os.path.isfile(path):
             return []
@@ -158,8 +159,7 @@ class Validator:
 
         # Status values
         if status_values:
-            bad = [b["_id"] for b in blocks
-                   if b.get("Status") and b["Status"] not in status_values]
+            bad = [b["_id"] for b in blocks if b.get("Status") and b["Status"] not in status_values]
             if not bad:
                 self.pass_(f"{label}: all Status values valid ({len(blocks)})")
             else:
@@ -172,21 +172,21 @@ class Validator:
 
     def _check_decisions(self):
         self.section("1. DECISIONS - IDs, fields, values")
-        required = ["Date", "Status", "Scope", "Statement", "Rationale",
-                     "Supersedes", "Tags", "Sources"]
+        required = ["Date", "Status", "Scope", "Statement", "Rationale", "Supersedes", "Tags", "Sources"]
         valid_status = {"active", "superseded", "revoked"}
 
         blocks = self._check_blocks(
             "decisions/DECISIONS.md",
-            r"^D-\d{8}-\d{3}$", "Decisions", required,
+            r"^D-\d{8}-\d{3}$",
+            "Decisions",
+            required,
             status_values=valid_status,
         )
 
         if blocks:
             # Scope validation
             scope_re = re.compile(r"^(global|project:\S+|channel:\S+)$")
-            bad_scope = [b["_id"] for b in blocks
-                         if b.get("Scope") and not scope_re.match(b["Scope"])]
+            bad_scope = [b["_id"] for b in blocks if b.get("Scope") and not scope_re.match(b["Scope"])]
             if not bad_scope:
                 self.pass_(f"Decisions: all Scope values valid ({len(blocks)})")
             else:
@@ -194,8 +194,7 @@ class Validator:
 
             # Supersedes validation
             sup_re = re.compile(r"^(none|D-\d{8}-\d{3})$")
-            bad_sup = [b["_id"] for b in blocks
-                       if b.get("Supersedes") and not sup_re.match(b["Supersedes"])]
+            bad_sup = [b["_id"] for b in blocks if b.get("Supersedes") and not sup_re.match(b["Supersedes"])]
             if not bad_sup:
                 self.pass_(f"Decisions: all Supersedes values valid ({len(blocks)})")
             else:
@@ -203,24 +202,32 @@ class Validator:
 
     def _check_tasks(self):
         self.section("2. TASKS - IDs, fields, values")
-        required = ["Date", "Title", "Status", "Priority", "Project",
-                     "Due", "Owner", "Context", "Next", "Dependencies",
-                     "Sources", "History"]
+        required = [
+            "Date",
+            "Title",
+            "Status",
+            "Priority",
+            "Project",
+            "Due",
+            "Owner",
+            "Context",
+            "Next",
+            "Dependencies",
+            "Sources",
+            "History",
+        ]
         valid_status = {"todo", "doing", "blocked", "done", "canceled"}
 
         def extra(blocks):
             # Priority
-            bad_pri = [b["_id"] for b in blocks
-                       if b.get("Priority") and b["Priority"] not in
-                       {"P0", "P1", "P2", "P3"}]
+            bad_pri = [b["_id"] for b in blocks if b.get("Priority") and b["Priority"] not in {"P0", "P1", "P2", "P3"}]
             if not bad_pri:
                 self.pass_(f"Tasks: all Priority values valid ({len(blocks)})")
             else:
                 self.fail(f"Tasks: invalid Priority in {bad_pri}")
 
             # Owner
-            bad_own = [b["_id"] for b in blocks
-                       if b.get("Owner") and b["Owner"] not in {"user", "bot"}]
+            bad_own = [b["_id"] for b in blocks if b.get("Owner") and b["Owner"] not in {"user", "bot"}]
             if not bad_own:
                 self.pass_(f"Tasks: all Owner values valid ({len(blocks)})")
             else:
@@ -228,7 +235,9 @@ class Validator:
 
         self._check_blocks(
             "tasks/TASKS.md",
-            r"^T-\d{8}-\d{3}$", "Tasks", required,
+            r"^T-\d{8}-\d{3}$",
+            "Tasks",
+            required,
             status_values=valid_status,
             extra_checks=extra,
         )
@@ -243,17 +252,17 @@ class Validator:
             self._check_blocks(rel, pat, label, [])
 
         # Incidents with extra fields
-        inc_required = ["Date", "Title", "Impact", "Summary",
-                        "RootCause", "Fix", "Prevention", "Sources"]
+        inc_required = ["Date", "Title", "Impact", "Summary", "RootCause", "Fix", "Prevention", "Sources"]
         self._check_blocks(
             "entities/incidents.md",
-            r"^INC-\d{8}-[a-z0-9-]+$", "Incidents", inc_required,
+            r"^INC-\d{8}-[a-z0-9-]+$",
+            "Incidents",
+            inc_required,
         )
 
     def _check_provenance(self):
         self.section("4. PROVENANCE - Sources not empty")
-        for rel in ["decisions/DECISIONS.md", "tasks/TASKS.md",
-                     "entities/incidents.md"]:
+        for rel in ["decisions/DECISIONS.md", "tasks/TASKS.md", "entities/incidents.md"]:
             path = os.path.join(self.ws, rel)
             if not os.path.isfile(path):
                 continue
@@ -268,8 +277,7 @@ class Validator:
             else:
                 self.fail(f"{fname}: blocks without Sources: ({with_sources}/{len(blocks)})")
 
-            empty = sum(1 for b in blocks
-                        if b.get("Sources") is not None and b["Sources"] in ("", []))
+            empty = sum(1 for b in blocks if b.get("Sources") is not None and b["Sources"] in ("", []))
             if empty == 0:
                 self.pass_(f"{fname}: no empty Sources: blocks")
             else:
@@ -335,8 +343,7 @@ class Validator:
 
     def _check_intelligence(self):
         self.section("6. INTELLIGENCE FILES")
-        for f in ["SIGNALS.md", "CONTRADICTIONS.md", "DRIFT.md",
-                   "IMPACT.md", "BRIEFINGS.md", "AUDIT.md"]:
+        for f in ["SIGNALS.md", "CONTRADICTIONS.md", "DRIFT.md", "IMPACT.md", "BRIEFINGS.md", "AUDIT.md"]:
             path = os.path.join(self.ws, "intelligence", f)
             if os.path.isfile(path):
                 self.pass_(f"intelligence/{f} exists")

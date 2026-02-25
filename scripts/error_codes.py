@@ -16,6 +16,7 @@ from enum import Enum
 
 class ErrorSeverity(Enum):
     """Error severity levels."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -24,6 +25,7 @@ class ErrorSeverity(Enum):
 
 class ErrorCategory(Enum):
     """Error categories for classification."""
+
     WORKSPACE = "workspace"
     CONFIG = "config"
     STORAGE = "storage"
@@ -85,93 +87,87 @@ class ErrorCode(Enum):
 
 # Error metadata registry
 _ERROR_METADATA: dict[ErrorCode, tuple[ErrorCategory, ErrorSeverity, str]] = {
-    ErrorCode.WORKSPACE_NOT_FOUND: (
-        ErrorCategory.WORKSPACE, ErrorSeverity.HIGH,
-        "Workspace directory does not exist"),
+    ErrorCode.WORKSPACE_NOT_FOUND: (ErrorCategory.WORKSPACE, ErrorSeverity.HIGH, "Workspace directory does not exist"),
     ErrorCode.WORKSPACE_NOT_INITIALIZED: (
-        ErrorCategory.WORKSPACE, ErrorSeverity.HIGH,
-        "Workspace has not been initialized (missing MEMORY.md)"),
+        ErrorCategory.WORKSPACE,
+        ErrorSeverity.HIGH,
+        "Workspace has not been initialized (missing MEMORY.md)",
+    ),
     ErrorCode.WORKSPACE_CORRUPTED: (
-        ErrorCategory.WORKSPACE, ErrorSeverity.CRITICAL,
-        "Workspace structure is corrupted or incomplete"),
+        ErrorCategory.WORKSPACE,
+        ErrorSeverity.CRITICAL,
+        "Workspace structure is corrupted or incomplete",
+    ),
     ErrorCode.CONFIG_INVALID_JSON: (
-        ErrorCategory.CONFIG, ErrorSeverity.MEDIUM,
-        "Configuration file contains invalid JSON"),
-    ErrorCode.CONFIG_MISSING_KEY: (
-        ErrorCategory.CONFIG, ErrorSeverity.LOW,
-        "Required configuration key is missing"),
+        ErrorCategory.CONFIG,
+        ErrorSeverity.MEDIUM,
+        "Configuration file contains invalid JSON",
+    ),
+    ErrorCode.CONFIG_MISSING_KEY: (ErrorCategory.CONFIG, ErrorSeverity.LOW, "Required configuration key is missing"),
     ErrorCode.CONFIG_VALUE_OUT_OF_RANGE: (
-        ErrorCategory.CONFIG, ErrorSeverity.LOW,
-        "Configuration value is outside acceptable range"),
-    ErrorCode.CONFIG_FILE_UNREADABLE: (
-        ErrorCategory.CONFIG, ErrorSeverity.MEDIUM,
-        "Configuration file cannot be read"),
-    ErrorCode.STORAGE_WRITE_FAILED: (
-        ErrorCategory.STORAGE, ErrorSeverity.HIGH,
-        "Failed to write data to storage"),
-    ErrorCode.STORAGE_READ_FAILED: (
-        ErrorCategory.STORAGE, ErrorSeverity.HIGH,
-        "Failed to read data from storage"),
-    ErrorCode.STORAGE_LOCK_TIMEOUT: (
-        ErrorCategory.STORAGE, ErrorSeverity.MEDIUM,
-        "File lock acquisition timed out"),
+        ErrorCategory.CONFIG,
+        ErrorSeverity.LOW,
+        "Configuration value is outside acceptable range",
+    ),
+    ErrorCode.CONFIG_FILE_UNREADABLE: (ErrorCategory.CONFIG, ErrorSeverity.MEDIUM, "Configuration file cannot be read"),
+    ErrorCode.STORAGE_WRITE_FAILED: (ErrorCategory.STORAGE, ErrorSeverity.HIGH, "Failed to write data to storage"),
+    ErrorCode.STORAGE_READ_FAILED: (ErrorCategory.STORAGE, ErrorSeverity.HIGH, "Failed to read data from storage"),
+    ErrorCode.STORAGE_LOCK_TIMEOUT: (ErrorCategory.STORAGE, ErrorSeverity.MEDIUM, "File lock acquisition timed out"),
     ErrorCode.STORAGE_DISK_FULL: (
-        ErrorCategory.STORAGE, ErrorSeverity.CRITICAL,
-        "Insufficient disk space for write operation"),
-    ErrorCode.STORAGE_BLOCK_CORRUPTED: (
-        ErrorCategory.STORAGE, ErrorSeverity.HIGH,
-        "Memory block data is corrupted"),
-    ErrorCode.RECALL_NO_RESULTS: (
-        ErrorCategory.RETRIEVAL, ErrorSeverity.LOW,
-        "No results found for recall query"),
+        ErrorCategory.STORAGE,
+        ErrorSeverity.CRITICAL,
+        "Insufficient disk space for write operation",
+    ),
+    ErrorCode.STORAGE_BLOCK_CORRUPTED: (ErrorCategory.STORAGE, ErrorSeverity.HIGH, "Memory block data is corrupted"),
+    ErrorCode.RECALL_NO_RESULTS: (ErrorCategory.RETRIEVAL, ErrorSeverity.LOW, "No results found for recall query"),
     ErrorCode.RECALL_INDEX_STALE: (
-        ErrorCategory.RETRIEVAL, ErrorSeverity.MEDIUM,
-        "Search index is stale and may return incomplete results"),
-    ErrorCode.RECALL_QUERY_TOO_LONG: (
-        ErrorCategory.RETRIEVAL, ErrorSeverity.LOW,
-        "Query exceeds maximum length"),
-    ErrorCode.RECALL_TIMEOUT: (
-        ErrorCategory.RETRIEVAL, ErrorSeverity.MEDIUM,
-        "Recall operation timed out"),
-    ErrorCode.INDEX_BUILD_FAILED: (
-        ErrorCategory.INDEX, ErrorSeverity.HIGH,
-        "Failed to build search index"),
-    ErrorCode.INDEX_CORRUPTED: (
-        ErrorCategory.INDEX, ErrorSeverity.HIGH,
-        "Search index is corrupted"),
+        ErrorCategory.RETRIEVAL,
+        ErrorSeverity.MEDIUM,
+        "Search index is stale and may return incomplete results",
+    ),
+    ErrorCode.RECALL_QUERY_TOO_LONG: (ErrorCategory.RETRIEVAL, ErrorSeverity.LOW, "Query exceeds maximum length"),
+    ErrorCode.RECALL_TIMEOUT: (ErrorCategory.RETRIEVAL, ErrorSeverity.MEDIUM, "Recall operation timed out"),
+    ErrorCode.INDEX_BUILD_FAILED: (ErrorCategory.INDEX, ErrorSeverity.HIGH, "Failed to build search index"),
+    ErrorCode.INDEX_CORRUPTED: (ErrorCategory.INDEX, ErrorSeverity.HIGH, "Search index is corrupted"),
     ErrorCode.INDEX_VERSION_MISMATCH: (
-        ErrorCategory.INDEX, ErrorSeverity.MEDIUM,
-        "Index version does not match expected schema"),
+        ErrorCategory.INDEX,
+        ErrorSeverity.MEDIUM,
+        "Index version does not match expected schema",
+    ),
     ErrorCode.INDEX_REINDEX_REQUIRED: (
-        ErrorCategory.INDEX, ErrorSeverity.MEDIUM,
-        "Full reindex required after schema change"),
+        ErrorCategory.INDEX,
+        ErrorSeverity.MEDIUM,
+        "Full reindex required after schema change",
+    ),
     ErrorCode.VALIDATE_BLOCK_MALFORMED: (
-        ErrorCategory.VALIDATION, ErrorSeverity.MEDIUM,
-        "Memory block structure is malformed"),
+        ErrorCategory.VALIDATION,
+        ErrorSeverity.MEDIUM,
+        "Memory block structure is malformed",
+    ),
     ErrorCode.VALIDATE_SCHEMA_MISMATCH: (
-        ErrorCategory.VALIDATION, ErrorSeverity.MEDIUM,
-        "Data does not match expected schema"),
-    ErrorCode.VALIDATE_DUPLICATE_ID: (
-        ErrorCategory.VALIDATION, ErrorSeverity.LOW,
-        "Duplicate block ID detected"),
+        ErrorCategory.VALIDATION,
+        ErrorSeverity.MEDIUM,
+        "Data does not match expected schema",
+    ),
+    ErrorCode.VALIDATE_DUPLICATE_ID: (ErrorCategory.VALIDATION, ErrorSeverity.LOW, "Duplicate block ID detected"),
     ErrorCode.VALIDATE_CONTENT_HASH_MISMATCH: (
-        ErrorCategory.VALIDATION, ErrorSeverity.HIGH,
-        "Content hash does not match stored value"),
-    ErrorCode.NETWORK_LLM_UNAVAILABLE: (
-        ErrorCategory.NETWORK, ErrorSeverity.MEDIUM,
-        "LLM provider is unavailable"),
-    ErrorCode.NETWORK_EMBEDDING_FAILED: (
-        ErrorCategory.NETWORK, ErrorSeverity.MEDIUM,
-        "Embedding generation failed"),
-    ErrorCode.NETWORK_TIMEOUT: (
-        ErrorCategory.NETWORK, ErrorSeverity.MEDIUM,
-        "Network request timed out"),
+        ErrorCategory.VALIDATION,
+        ErrorSeverity.HIGH,
+        "Content hash does not match stored value",
+    ),
+    ErrorCode.NETWORK_LLM_UNAVAILABLE: (ErrorCategory.NETWORK, ErrorSeverity.MEDIUM, "LLM provider is unavailable"),
+    ErrorCode.NETWORK_EMBEDDING_FAILED: (ErrorCategory.NETWORK, ErrorSeverity.MEDIUM, "Embedding generation failed"),
+    ErrorCode.NETWORK_TIMEOUT: (ErrorCategory.NETWORK, ErrorSeverity.MEDIUM, "Network request timed out"),
     ErrorCode.PERMISSION_DENIED: (
-        ErrorCategory.PERMISSION, ErrorSeverity.HIGH,
-        "Permission denied for requested operation"),
+        ErrorCategory.PERMISSION,
+        ErrorSeverity.HIGH,
+        "Permission denied for requested operation",
+    ),
     ErrorCode.PERMISSION_READONLY_WORKSPACE: (
-        ErrorCategory.PERMISSION, ErrorSeverity.MEDIUM,
-        "Workspace is in read-only mode"),
+        ErrorCategory.PERMISSION,
+        ErrorSeverity.MEDIUM,
+        "Workspace is in read-only mode",
+    ),
 }
 
 

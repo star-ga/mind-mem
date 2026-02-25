@@ -39,6 +39,7 @@ from mind_mem.recall import recall
 # Helper: Build a minimal workspace with valid blocks and proposals
 # ---------------------------------------------------------------------------
 
+
 def _write_decisions(ws, blocks_text):
     """Write content to decisions/DECISIONS.md."""
     path = os.path.join(ws, "decisions", "DECISIONS.md")
@@ -63,8 +64,7 @@ def _write_proposal(ws, proposal_text, filename="DECISIONS_PROPOSED.md"):
         f.write(proposal_text)
 
 
-def _build_proposal_block(proposal_id, target_block, ops, risk="low",
-                          ptype="edit", evidence=None):
+def _build_proposal_block(proposal_id, target_block, ops, risk="low", ptype="edit", evidence=None):
     """Build a valid proposal dict for testing."""
     if evidence is None:
         evidence = ["Test evidence for integration test"]
@@ -130,8 +130,7 @@ def _scaffold_workspace(ws):
     Sets up the directory structure, config, and intel-state needed by
     the apply pipeline, without depending on init_workspace templates.
     """
-    for d in ["decisions", "tasks", "entities", "memory", "summaries",
-              "intelligence/proposed", "intelligence/applied"]:
+    for d in ["decisions", "tasks", "entities", "memory", "summaries", "intelligence/proposed", "intelligence/applied"]:
         os.makedirs(os.path.join(ws, d), exist_ok=True)
 
     # mind-mem.json
@@ -160,6 +159,7 @@ def _scaffold_workspace(ws):
 # 1. Concurrent Apply
 # ===========================================================================
 
+
 class TestConcurrentApply(unittest.TestCase):
     """Two threads trying to apply different proposals simultaneously."""
 
@@ -168,21 +168,24 @@ class TestConcurrentApply(unittest.TestCase):
         _scaffold_workspace(self.ws)
 
         # Write a decisions file with a target block
-        _write_decisions(self.ws, (
-            "# Decisions\n\n"
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL for primary database\n"
-            "Status: active\n"
-            "Date: 2026-01-01\n"
-            "Context: Needed reliable RDBMS\n"
-            "\n---\n\n"
-            "[D-20260101-002]\n"
-            "Statement: Deploy to AWS us-east-1\n"
-            "Status: active\n"
-            "Date: 2026-01-01\n"
-            "Context: Regional proximity to users\n"
-            "\n---\n"
-        ))
+        _write_decisions(
+            self.ws,
+            (
+                "# Decisions\n\n"
+                "[D-20260101-001]\n"
+                "Statement: Use PostgreSQL for primary database\n"
+                "Status: active\n"
+                "Date: 2026-01-01\n"
+                "Context: Needed reliable RDBMS\n"
+                "\n---\n\n"
+                "[D-20260101-002]\n"
+                "Statement: Deploy to AWS us-east-1\n"
+                "Status: active\n"
+                "Date: 2026-01-01\n"
+                "Context: Regional proximity to users\n"
+                "\n---\n"
+            ),
+        )
 
     def tearDown(self):
         shutil.rmtree(self.ws, ignore_errors=True)
@@ -192,20 +195,30 @@ class TestConcurrentApply(unittest.TestCase):
         and the workspace must be left in a consistent state."""
 
         # Build two proposals targeting different blocks
-        ops_a = [{"op": "update_field", "file": "decisions/DECISIONS.md",
-                  "target": "D-20260101-001", "field": "Context",
-                  "value": "Updated by thread A"}]
+        ops_a = [
+            {
+                "op": "update_field",
+                "file": "decisions/DECISIONS.md",
+                "target": "D-20260101-001",
+                "field": "Context",
+                "value": "Updated by thread A",
+            }
+        ]
         proposal_a = _build_proposal_block("P-20260201-001", "D-20260101-001", ops_a)
 
-        ops_b = [{"op": "update_field", "file": "decisions/DECISIONS.md",
-                  "target": "D-20260101-002", "field": "Context",
-                  "value": "Updated by thread B"}]
+        ops_b = [
+            {
+                "op": "update_field",
+                "file": "decisions/DECISIONS.md",
+                "target": "D-20260101-002",
+                "field": "Context",
+                "value": "Updated by thread B",
+            }
+        ]
         proposal_b = _build_proposal_block("P-20260201-002", "D-20260101-002", ops_b)
 
         # Write both proposals
-        _write_proposal(self.ws,
-                        _proposal_to_markdown(proposal_a) + "\n---\n\n" +
-                        _proposal_to_markdown(proposal_b))
+        _write_proposal(self.ws, _proposal_to_markdown(proposal_a) + "\n---\n\n" + _proposal_to_markdown(proposal_b))
 
         results = {"a": None, "b": None}
         errors = {"a": None, "b": None}
@@ -213,16 +226,20 @@ class TestConcurrentApply(unittest.TestCase):
         def apply_a():
             try:
                 # Patch check_preconditions to skip external scripts
-                with patch("mind_mem.apply_engine.check_preconditions",
-                           return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
+                with patch(
+                    "mind_mem.apply_engine.check_preconditions",
+                    return_value=(True, ["validate: PASS (TOTAL 0 issues)"]),
+                ):
                     results["a"] = apply_proposal(self.ws, "P-20260201-001")
             except Exception as e:
                 errors["a"] = e
 
         def apply_b():
             try:
-                with patch("mind_mem.apply_engine.check_preconditions",
-                           return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
+                with patch(
+                    "mind_mem.apply_engine.check_preconditions",
+                    return_value=(True, ["validate: PASS (TOTAL 0 issues)"]),
+                ):
                     results["b"] = apply_proposal(self.ws, "P-20260201-002")
             except Exception as e:
                 errors["b"] = e
@@ -237,15 +254,15 @@ class TestConcurrentApply(unittest.TestCase):
         # At least one should succeed (no crash)
         a_ok = results["a"] is not None and results["a"][0]
         b_ok = results["b"] is not None and results["b"][0]
-        self.assertTrue(a_ok or b_ok,
-                        f"Neither thread succeeded. A={results['a']}, B={results['b']}, "
-                        f"Errors: A={errors['a']}, B={errors['b']}")
+        self.assertTrue(
+            a_ok or b_ok,
+            f"Neither thread succeeded. A={results['a']}, B={results['b']}, Errors: A={errors['a']}, B={errors['b']}",
+        )
 
         # Workspace must be parseable (not corrupted)
         dec_path = os.path.join(self.ws, "decisions", "DECISIONS.md")
         blocks = parse_file(dec_path)
-        self.assertGreaterEqual(len(blocks), 2,
-                                "Workspace corrupted: fewer than 2 blocks remain")
+        self.assertGreaterEqual(len(blocks), 2, "Workspace corrupted: fewer than 2 blocks remain")
 
         # Both original blocks should still exist
         ids = {b.get("_id") for b in blocks}
@@ -257,6 +274,7 @@ class TestConcurrentApply(unittest.TestCase):
 # 2. Partial Failure Rollback
 # ===========================================================================
 
+
 class TestPartialFailureRollback(unittest.TestCase):
     """Multi-op proposal where one op fails mid-way. Verify rollback."""
 
@@ -265,15 +283,18 @@ class TestPartialFailureRollback(unittest.TestCase):
         _scaffold_workspace(self.ws)
 
         # Write decisions file with one block
-        _write_decisions(self.ws, (
-            "# Decisions\n\n"
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL for primary database\n"
-            "Status: active\n"
-            "Date: 2026-01-01\n"
-            "Context: Needed reliable RDBMS\n"
-            "\n---\n"
-        ))
+        _write_decisions(
+            self.ws,
+            (
+                "# Decisions\n\n"
+                "[D-20260101-001]\n"
+                "Statement: Use PostgreSQL for primary database\n"
+                "Status: active\n"
+                "Date: 2026-01-01\n"
+                "Context: Needed reliable RDBMS\n"
+                "\n---\n"
+            ),
+        )
 
     def tearDown(self):
         shutil.rmtree(self.ws, ignore_errors=True)
@@ -290,19 +311,28 @@ class TestPartialFailureRollback(unittest.TestCase):
         # Op 1: valid update (will succeed)
         # Op 2: targets a non-existent block (will fail)
         ops = [
-            {"op": "update_field", "file": "decisions/DECISIONS.md",
-             "target": "D-20260101-001", "field": "Context",
-             "value": "Modified by partial-fail test"},
-            {"op": "update_field", "file": "decisions/DECISIONS.md",
-             "target": "D-NONEXISTENT-999", "field": "Status",
-             "value": "should-not-exist"},
+            {
+                "op": "update_field",
+                "file": "decisions/DECISIONS.md",
+                "target": "D-20260101-001",
+                "field": "Context",
+                "value": "Modified by partial-fail test",
+            },
+            {
+                "op": "update_field",
+                "file": "decisions/DECISIONS.md",
+                "target": "D-NONEXISTENT-999",
+                "field": "Status",
+                "value": "should-not-exist",
+            },
         ]
         proposal = _build_proposal_block("P-20260202-001", "D-20260101-001", ops)
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
 
         # Apply (mock preconditions to pass)
-        with patch("mind_mem.apply_engine.check_preconditions",
-                   return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
+        with patch(
+            "mind_mem.apply_engine.check_preconditions", return_value=(True, ["validate: PASS (TOTAL 0 issues)"])
+        ):
             ok, msg = apply_proposal(self.ws, "P-20260202-001")
 
         # Apply should have failed
@@ -311,14 +341,14 @@ class TestPartialFailureRollback(unittest.TestCase):
         # Workspace should be rolled back to original state
         with open(dec_path) as f:
             restored_content = f.read()
-        self.assertEqual(original_content, restored_content,
-                         "Workspace was not restored to pre-apply state after partial failure")
+        self.assertEqual(
+            original_content, restored_content, "Workspace was not restored to pre-apply state after partial failure"
+        )
 
         # Receipt should exist with rolled_back status
         applied_dir = os.path.join(self.ws, "intelligence", "applied")
         if os.path.isdir(applied_dir):
-            receipt_dirs = [d for d in os.listdir(applied_dir)
-                           if os.path.isdir(os.path.join(applied_dir, d))]
+            receipt_dirs = [d for d in os.listdir(applied_dir) if os.path.isdir(os.path.join(applied_dir, d))]
             found_receipt = False
             for rd in receipt_dirs:
                 receipt_path = os.path.join(applied_dir, rd, "APPLY_RECEIPT.md")
@@ -328,22 +358,26 @@ class TestPartialFailureRollback(unittest.TestCase):
                     if "rolled_back" in receipt_text:
                         found_receipt = True
                         break
-            self.assertTrue(found_receipt,
-                            "No receipt with 'rolled_back' status found after partial failure")
+            self.assertTrue(found_receipt, "No receipt with 'rolled_back' status found after partial failure")
 
     def test_snapshot_created_before_ops(self):
         """Verify that a snapshot directory is created before ops execute."""
 
         ops = [
-            {"op": "update_field", "file": "decisions/DECISIONS.md",
-             "target": "D-NONEXISTENT-999", "field": "Status",
-             "value": "fail-immediately"},
+            {
+                "op": "update_field",
+                "file": "decisions/DECISIONS.md",
+                "target": "D-NONEXISTENT-999",
+                "field": "Status",
+                "value": "fail-immediately",
+            },
         ]
         proposal = _build_proposal_block("P-20260202-002", "D-20260101-001", ops)
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
 
-        with patch("mind_mem.apply_engine.check_preconditions",
-                   return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
+        with patch(
+            "mind_mem.apply_engine.check_preconditions", return_value=(True, ["validate: PASS (TOTAL 0 issues)"])
+        ):
             ok, msg = apply_proposal(self.ws, "P-20260202-002")
 
         self.assertFalse(ok)
@@ -351,10 +385,8 @@ class TestPartialFailureRollback(unittest.TestCase):
         # A snapshot directory should exist under intelligence/applied/
         applied_dir = os.path.join(self.ws, "intelligence", "applied")
         self.assertTrue(os.path.isdir(applied_dir))
-        snapshot_dirs = [d for d in os.listdir(applied_dir)
-                         if os.path.isdir(os.path.join(applied_dir, d))]
-        self.assertGreaterEqual(len(snapshot_dirs), 1,
-                                "No snapshot directory created before ops executed")
+        snapshot_dirs = [d for d in os.listdir(applied_dir) if os.path.isdir(os.path.join(applied_dir, d))]
+        self.assertGreaterEqual(len(snapshot_dirs), 1, "No snapshot directory created before ops executed")
 
     def test_no_orphan_files_after_rollback(self):
         """If an op creates a file (append_block), rollback should remove it."""
@@ -366,23 +398,24 @@ class TestPartialFailureRollback(unittest.TestCase):
         # Op 1: append a block (creates new content -- succeeds)
         # Op 2: fail on non-existent target
         new_block_text = (
-            "[D-20260202-099]\n"
-            "Statement: Orphan block that should be removed\n"
-            "Status: active\n"
-            "Date: 2026-02-02\n"
+            "[D-20260202-099]\nStatement: Orphan block that should be removed\nStatus: active\nDate: 2026-02-02\n"
         )
         ops = [
-            {"op": "append_block", "file": "decisions/DECISIONS.md",
-             "patch": new_block_text},
-            {"op": "update_field", "file": "decisions/DECISIONS.md",
-             "target": "D-NONEXISTENT-999", "field": "Status",
-             "value": "fail"},
+            {"op": "append_block", "file": "decisions/DECISIONS.md", "patch": new_block_text},
+            {
+                "op": "update_field",
+                "file": "decisions/DECISIONS.md",
+                "target": "D-NONEXISTENT-999",
+                "field": "Status",
+                "value": "fail",
+            },
         ]
         proposal = _build_proposal_block("P-20260202-003", "D-20260101-001", ops)
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
 
-        with patch("mind_mem.apply_engine.check_preconditions",
-                   return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
+        with patch(
+            "mind_mem.apply_engine.check_preconditions", return_value=(True, ["validate: PASS (TOTAL 0 issues)"])
+        ):
             ok, msg = apply_proposal(self.ws, "P-20260202-003")
 
         self.assertFalse(ok)
@@ -390,13 +423,15 @@ class TestPartialFailureRollback(unittest.TestCase):
         # The appended block text should not remain in the file
         with open(dec_path) as f:
             content = f.read()
-        self.assertNotIn("Orphan block that should be removed", content,
-                         "Orphan content from failed op remains after rollback")
+        self.assertNotIn(
+            "Orphan block that should be removed", content, "Orphan content from failed op remains after rollback"
+        )
 
 
 # ===========================================================================
 # 3. WAL Crash Recovery
 # ===========================================================================
+
 
 class TestWALCrashRecovery(unittest.TestCase):
     """Simulate a crash during write: begin WAL, modify file, don't commit."""
@@ -413,12 +448,7 @@ class TestWALCrashRecovery(unittest.TestCase):
         A new WAL instance calling replay() should restore original state."""
 
         target_path = os.path.join(self.ws, "decisions", "DECISIONS.md")
-        original_content = (
-            "# Decisions\n\n"
-            "[D-20260101-001]\n"
-            "Statement: Original content before crash\n"
-            "Status: active\n"
-        )
+        original_content = "# Decisions\n\n[D-20260101-001]\nStatement: Original content before crash\nStatus: active\n"
         with open(target_path, "w") as f:
             f.write(original_content)
 
@@ -442,12 +472,10 @@ class TestWALCrashRecovery(unittest.TestCase):
         # File should be restored to original content
         with open(target_path) as f:
             restored = f.read()
-        self.assertEqual(restored, original_content,
-                         "WAL replay did not restore file to pre-write state")
+        self.assertEqual(restored, original_content, "WAL replay did not restore file to pre-write state")
 
         # No pending entries should remain
-        self.assertEqual(wal2.pending_count(), 0,
-                         "Pending WAL entries remain after replay")
+        self.assertEqual(wal2.pending_count(), 0, "Pending WAL entries remain after replay")
 
     def test_wal_committed_entries_are_not_replayed(self):
         """Committed WAL entries should be cleaned up and not replayed."""
@@ -498,8 +526,7 @@ class TestWALCrashRecovery(unittest.TestCase):
         self.assertEqual(replayed, 1)
 
         # The new file should have been removed
-        self.assertFalse(os.path.exists(target_path),
-                         "New file should be removed on WAL rollback")
+        self.assertFalse(os.path.exists(target_path), "New file should be removed on WAL rollback")
 
     def test_multiple_pending_entries_all_replayed(self):
         """Multiple pending WAL entries should all be rolled back on replay."""
@@ -538,6 +565,7 @@ class TestWALCrashRecovery(unittest.TestCase):
 # 4. Concurrent Recall
 # ===========================================================================
 
+
 class TestConcurrentRecall(unittest.TestCase):
     """Multiple threads running recall queries on the same workspace."""
 
@@ -547,27 +575,30 @@ class TestConcurrentRecall(unittest.TestCase):
 
         # Write a decisions file with several distinct blocks
         today = datetime.now().strftime("%Y%m%d")
-        _write_decisions(self.ws, (
-            "# Decisions\n\n"
-            f"[D-{today}-001]\n"
-            "Statement: Use PostgreSQL for the primary database\n"
-            "Status: active\n"
-            "Date: 2026-01-15\n"
-            "Context: Evaluated MySQL, PostgreSQL, and SQLite\n"
-            "\n---\n\n"
-            f"[D-{today}-002]\n"
-            "Statement: Deploy authentication service to Kubernetes\n"
-            "Status: active\n"
-            "Date: 2026-01-15\n"
-            "Context: Container orchestration for microservices\n"
-            "\n---\n\n"
-            f"[D-{today}-003]\n"
-            "Statement: Implement rate limiting on public API endpoints\n"
-            "Status: active\n"
-            "Date: 2026-01-15\n"
-            "Context: Protect against abuse and DDoS\n"
-            "\n---\n"
-        ))
+        _write_decisions(
+            self.ws,
+            (
+                "# Decisions\n\n"
+                f"[D-{today}-001]\n"
+                "Statement: Use PostgreSQL for the primary database\n"
+                "Status: active\n"
+                "Date: 2026-01-15\n"
+                "Context: Evaluated MySQL, PostgreSQL, and SQLite\n"
+                "\n---\n\n"
+                f"[D-{today}-002]\n"
+                "Statement: Deploy authentication service to Kubernetes\n"
+                "Status: active\n"
+                "Date: 2026-01-15\n"
+                "Context: Container orchestration for microservices\n"
+                "\n---\n\n"
+                f"[D-{today}-003]\n"
+                "Statement: Implement rate limiting on public API endpoints\n"
+                "Status: active\n"
+                "Date: 2026-01-15\n"
+                "Context: Protect against abuse and DDoS\n"
+                "\n---\n"
+            ),
+        )
 
     def tearDown(self):
         shutil.rmtree(self.ws, ignore_errors=True)
@@ -602,18 +633,17 @@ class TestConcurrentRecall(unittest.TestCase):
             t.join(timeout=30)
 
         # No thread should have errored
-        self.assertEqual(len(errors), 0,
-                         f"Recall threads raised errors: {errors}")
+        self.assertEqual(len(errors), 0, f"Recall threads raised errors: {errors}")
 
         # Each thread should return at least one result containing its keyword
         for idx, (r, keyword) in results.items():
-            self.assertGreater(len(r), 0,
-                               f"Thread {idx} returned no results for its query")
-            found = any(keyword.lower() in item.get("excerpt", "").lower()
-                        for item in r)
-            self.assertTrue(found,
-                            f"Thread {idx}: expected keyword '{keyword}' "
-                            f"not found in results: {[item.get('excerpt', '')[:50] for item in r]}")
+            self.assertGreater(len(r), 0, f"Thread {idx} returned no results for its query")
+            found = any(keyword.lower() in item.get("excerpt", "").lower() for item in r)
+            self.assertTrue(
+                found,
+                f"Thread {idx}: expected keyword '{keyword}' "
+                f"not found in results: {[item.get('excerpt', '')[:50] for item in r]}",
+            )
 
     def test_many_concurrent_recalls_no_corruption(self):
         """10 threads performing recall concurrently should not corrupt state."""
@@ -633,8 +663,7 @@ class TestConcurrentRecall(unittest.TestCase):
 
         threads = []
         for i in range(10):
-            query = ["PostgreSQL", "authentication", "rate limiting",
-                     "database", "Kubernetes"][i % 5]
+            query = ["PostgreSQL", "authentication", "rate limiting", "database", "Kubernetes"][i % 5]
             t = threading.Thread(target=run_query, args=(query,))
             threads.append(t)
 
@@ -643,15 +672,14 @@ class TestConcurrentRecall(unittest.TestCase):
         for t in threads:
             t.join(timeout=30)
 
-        self.assertEqual(error_count[0], 0,
-                         f"{error_count[0]} recall threads raised exceptions")
-        self.assertGreater(result_count[0], 0,
-                           "No results returned across all 10 threads")
+        self.assertEqual(error_count[0], 0, f"{error_count[0]} recall threads raised exceptions")
+        self.assertGreater(result_count[0], 0, "No results returned across all 10 threads")
 
 
 # ===========================================================================
 # 5. File Lock Contention
 # ===========================================================================
+
 
 class TestFileLockContention(unittest.TestCase):
     """FileLock mutual exclusion, timeout, and stale lock detection."""
@@ -702,8 +730,9 @@ class TestFileLockContention(unittest.TestCase):
             t.join(timeout=30)
 
         self.assertEqual(counter[0], 5, "Not all threads completed")
-        self.assertEqual(max_concurrent[0], 1,
-                         f"Multiple threads held lock simultaneously: max_concurrent={max_concurrent[0]}")
+        self.assertEqual(
+            max_concurrent[0], 1, f"Multiple threads held lock simultaneously: max_concurrent={max_concurrent[0]}"
+        )
 
     def test_timeout_raises_lock_timeout(self):
         """A thread waiting longer than timeout should get LockTimeout."""
@@ -754,8 +783,7 @@ class TestFileLockContention(unittest.TestCase):
         finally:
             fl.release()
 
-        self.assertTrue(acquired,
-                        "FileLock should detect dead PID and break stale lock")
+        self.assertTrue(acquired, "FileLock should detect dead PID and break stale lock")
 
     def test_context_manager_releases_on_exit(self):
         """Lock released when exiting context manager, even on exception."""
@@ -764,15 +792,13 @@ class TestFileLockContention(unittest.TestCase):
 
         try:
             with FileLock(self.target, timeout=2.0):
-                self.assertTrue(os.path.exists(lock_path),
-                                "Lock file should exist while lock is held")
+                self.assertTrue(os.path.exists(lock_path), "Lock file should exist while lock is held")
                 raise ValueError("Intentional exception")
         except ValueError:
             pass
 
         # Lock file should be cleaned up
-        self.assertFalse(os.path.exists(lock_path),
-                         "Lock file should be removed after context exit")
+        self.assertFalse(os.path.exists(lock_path), "Lock file should be removed after context exit")
 
     def test_reentrant_after_release(self):
         """After releasing, another acquire should succeed immediately."""
@@ -790,13 +816,13 @@ class TestFileLockContention(unittest.TestCase):
         finally:
             fl2.release()
 
-        self.assertTrue(acquired,
-                        "Should be able to acquire lock after previous holder released")
+        self.assertTrue(acquired, "Should be able to acquire lock after previous holder released")
 
 
 # ===========================================================================
 # 6. Apply During Active Recall
 # ===========================================================================
+
 
 class TestApplyDuringRecall(unittest.TestCase):
     """Recall reads consistent data while apply modifies the workspace."""
@@ -806,21 +832,24 @@ class TestApplyDuringRecall(unittest.TestCase):
         _scaffold_workspace(self.ws)
 
         today = datetime.now().strftime("%Y%m%d")
-        _write_decisions(self.ws, (
-            "# Decisions\n\n"
-            f"[D-{today}-001]\n"
-            "Statement: Use Redis for session caching layer\n"
-            "Status: active\n"
-            f"Date: {datetime.now().strftime('%Y-%m-%d')}\n"
-            "Context: High-performance in-memory cache for sessions\n"
-            "\n---\n\n"
-            f"[D-{today}-002]\n"
-            "Statement: Use RabbitMQ for message queue infrastructure\n"
-            "Status: active\n"
-            f"Date: {datetime.now().strftime('%Y-%m-%d')}\n"
-            "Context: Reliable message broker for async processing\n"
-            "\n---\n"
-        ))
+        _write_decisions(
+            self.ws,
+            (
+                "# Decisions\n\n"
+                f"[D-{today}-001]\n"
+                "Statement: Use Redis for session caching layer\n"
+                "Status: active\n"
+                f"Date: {datetime.now().strftime('%Y-%m-%d')}\n"
+                "Context: High-performance in-memory cache for sessions\n"
+                "\n---\n\n"
+                f"[D-{today}-002]\n"
+                "Statement: Use RabbitMQ for message queue infrastructure\n"
+                "Status: active\n"
+                f"Date: {datetime.now().strftime('%Y-%m-%d')}\n"
+                "Context: Reliable message broker for async processing\n"
+                "\n---\n"
+            ),
+        )
         self.today = today
 
     def tearDown(self):
@@ -829,11 +858,16 @@ class TestApplyDuringRecall(unittest.TestCase):
     def test_recall_returns_consistent_results_during_apply(self):
         """Recall should return results (not crash) while apply is running."""
 
-        ops = [{"op": "update_field", "file": "decisions/DECISIONS.md",
-                "target": f"D-{self.today}-001", "field": "Context",
-                "value": "Updated: now using Redis Cluster with Sentinel"}]
-        proposal = _build_proposal_block(
-            "P-20260203-001", f"D-{self.today}-001", ops)
+        ops = [
+            {
+                "op": "update_field",
+                "file": "decisions/DECISIONS.md",
+                "target": f"D-{self.today}-001",
+                "field": "Context",
+                "value": "Updated: now using Redis Cluster with Sentinel",
+            }
+        ]
+        proposal = _build_proposal_block("P-20260203-001", f"D-{self.today}-001", ops)
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
 
         recall_results = []
@@ -857,8 +891,10 @@ class TestApplyDuringRecall(unittest.TestCase):
         def do_apply():
             try:
                 start_barrier.wait()
-                with patch("mind_mem.apply_engine.check_preconditions",
-                           return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
+                with patch(
+                    "mind_mem.apply_engine.check_preconditions",
+                    return_value=(True, ["validate: PASS (TOTAL 0 issues)"]),
+                ):
                     apply_result[0] = apply_proposal(self.ws, "P-20260203-001")
             except Exception as e:
                 apply_error[0] = e
@@ -871,13 +907,11 @@ class TestApplyDuringRecall(unittest.TestCase):
         t_apply.join(timeout=30)
 
         # Recall should not have crashed
-        self.assertEqual(len(recall_errors), 0,
-                         f"Recall raised errors during concurrent apply: {recall_errors}")
+        self.assertEqual(len(recall_errors), 0, f"Recall raised errors during concurrent apply: {recall_errors}")
 
         # At least some recall invocations should return results
         non_empty = [r for r in recall_results if len(r) > 0]
-        self.assertGreater(len(non_empty), 0,
-                           "No recall invocation returned results during apply")
+        self.assertGreater(len(non_empty), 0, "No recall invocation returned results during apply")
 
         # Every non-empty recall result should have valid structure
         for result_set in non_empty:
@@ -891,6 +925,7 @@ class TestApplyDuringRecall(unittest.TestCase):
 # 7. Post-check Failure Rollback
 # ===========================================================================
 
+
 class TestPostCheckFailureRollback(unittest.TestCase):
     """Ops succeed but post-checks fail. Verify full rollback."""
 
@@ -898,15 +933,18 @@ class TestPostCheckFailureRollback(unittest.TestCase):
         self.ws = tempfile.mkdtemp(prefix="memos_postcheck_fail_")
         _scaffold_workspace(self.ws)
 
-        _write_decisions(self.ws, (
-            "# Decisions\n\n"
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL for primary database\n"
-            "Status: active\n"
-            "Date: 2026-01-01\n"
-            "Context: Needed reliable RDBMS\n"
-            "\n---\n"
-        ))
+        _write_decisions(
+            self.ws,
+            (
+                "# Decisions\n\n"
+                "[D-20260101-001]\n"
+                "Statement: Use PostgreSQL for primary database\n"
+                "Status: active\n"
+                "Date: 2026-01-01\n"
+                "Context: Needed reliable RDBMS\n"
+                "\n---\n"
+            ),
+        )
 
     def tearDown(self):
         shutil.rmtree(self.ws, ignore_errors=True)
@@ -918,9 +956,15 @@ class TestPostCheckFailureRollback(unittest.TestCase):
         with open(dec_path) as f:
             original_content = f.read()
 
-        ops = [{"op": "update_field", "file": "decisions/DECISIONS.md",
-                "target": "D-20260101-001", "field": "Context",
-                "value": "Updated successfully but post-check will fail"}]
+        ops = [
+            {
+                "op": "update_field",
+                "file": "decisions/DECISIONS.md",
+                "target": "D-20260101-001",
+                "field": "Context",
+                "value": "Updated successfully but post-check will fail",
+            }
+        ]
         proposal = _build_proposal_block("P-20260204-001", "D-20260101-001", ops)
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
 
@@ -940,21 +984,25 @@ class TestPostCheckFailureRollback(unittest.TestCase):
 
         # Should have failed
         self.assertFalse(ok, f"Expected failure from post-check but got success: {msg}")
-        self.assertIn("rolled back", msg.lower(),
-                       f"Expected 'rolled back' in message but got: {msg}")
+        self.assertIn("rolled back", msg.lower(), f"Expected 'rolled back' in message but got: {msg}")
 
         # Workspace should be restored
         with open(dec_path) as f:
             restored_content = f.read()
-        self.assertEqual(original_content, restored_content,
-                         "Workspace not restored after post-check failure")
+        self.assertEqual(original_content, restored_content, "Workspace not restored after post-check failure")
 
     def test_postcheck_failure_receipt_shows_rolled_back(self):
         """Receipt should contain rolled_back status after post-check failure."""
 
-        ops = [{"op": "update_field", "file": "decisions/DECISIONS.md",
-                "target": "D-20260101-001", "field": "Context",
-                "value": "Updated but will be rolled back"}]
+        ops = [
+            {
+                "op": "update_field",
+                "file": "decisions/DECISIONS.md",
+                "target": "D-20260101-001",
+                "field": "Context",
+                "value": "Updated but will be rolled back",
+            }
+        ]
         proposal = _build_proposal_block("P-20260204-002", "D-20260101-001", ops)
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
 
@@ -984,8 +1032,7 @@ class TestPostCheckFailureRollback(unittest.TestCase):
                     receipt_found = True
                     break
 
-        self.assertTrue(receipt_found,
-                        "Receipt with rolled_back status not found for P-20260204-002")
+        self.assertTrue(receipt_found, "Receipt with rolled_back status not found for P-20260204-002")
 
     def test_postcheck_failure_cleans_orphan_files(self):
         """After post-check failure rollback, orphan files from ops are removed."""
@@ -996,13 +1043,9 @@ class TestPostCheckFailureRollback(unittest.TestCase):
         # Create a proposal that appends a block (creating new content),
         # and then the post-check fails
         new_block = (
-            "[D-20260204-099]\n"
-            "Statement: Orphan decision created by append_block\n"
-            "Status: active\n"
-            "Date: 2026-02-04\n"
+            "[D-20260204-099]\nStatement: Orphan decision created by append_block\nStatus: active\nDate: 2026-02-04\n"
         )
-        ops = [{"op": "append_block", "file": "decisions/DECISIONS.md",
-                "patch": new_block}]
+        ops = [{"op": "append_block", "file": "decisions/DECISIONS.md", "patch": new_block}]
         proposal = _build_proposal_block("P-20260204-003", "D-20260101-001", ops)
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
 
@@ -1024,15 +1067,24 @@ class TestPostCheckFailureRollback(unittest.TestCase):
         dec_path = os.path.join(self.ws, "decisions", "DECISIONS.md")
         with open(dec_path) as f:
             content = f.read()
-        self.assertNotIn("Orphan decision created by append_block", content,
-                         "Orphan content from append_block remains after post-check rollback")
+        self.assertNotIn(
+            "Orphan decision created by append_block",
+            content,
+            "Orphan content from append_block remains after post-check rollback",
+        )
 
     def test_proposal_marked_rolled_back_after_postcheck_failure(self):
         """The proposal's Status field in the source file should be set to rolled_back."""
 
-        ops = [{"op": "update_field", "file": "decisions/DECISIONS.md",
-                "target": "D-20260101-001", "field": "Context",
-                "value": "This will be rolled back"}]
+        ops = [
+            {
+                "op": "update_field",
+                "file": "decisions/DECISIONS.md",
+                "target": "D-20260101-001",
+                "field": "Context",
+                "value": "This will be rolled back",
+            }
+        ]
         proposal = _build_proposal_block("P-20260204-004", "D-20260101-001", ops)
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
 
@@ -1051,20 +1103,19 @@ class TestPostCheckFailureRollback(unittest.TestCase):
         self.assertFalse(ok)
 
         # Read the proposal source file and check status
-        proposal_path = os.path.join(
-            self.ws, "intelligence", "proposed", "DECISIONS_PROPOSED.md")
+        proposal_path = os.path.join(self.ws, "intelligence", "proposed", "DECISIONS_PROPOSED.md")
         with open(proposal_path) as f:
             content = f.read()
 
         # The proposal's status should have been changed to rolled_back
         # (apply_engine._mark_proposal_status is called on post-check failure)
-        self.assertIn("Status: rolled_back", content,
-                       "Proposal status not updated to rolled_back in source file")
+        self.assertIn("Status: rolled_back", content, "Proposal status not updated to rolled_back in source file")
 
 
 # ===========================================================================
 # Additional Edge Case: Snapshot/Restore Fidelity
 # ===========================================================================
+
 
 class TestSnapshotRestoreFidelity(unittest.TestCase):
     """Verify that create_snapshot + restore_snapshot is bit-for-bit faithful."""
@@ -1073,22 +1124,20 @@ class TestSnapshotRestoreFidelity(unittest.TestCase):
         self.ws = tempfile.mkdtemp(prefix="memos_snapshot_")
         _scaffold_workspace(self.ws)
 
-        _write_decisions(self.ws, (
-            "# Decisions\n\n"
-            "[D-20260101-001]\n"
-            "Statement: Snapshot fidelity test\n"
-            "Status: active\n"
-            "Date: 2026-01-01\n"
-            "\n---\n"
-        ))
-        _write_tasks(self.ws, (
-            "# Tasks\n\n"
-            "[T-20260101-001]\n"
-            "Title: Test task for snapshot\n"
-            "Status: todo\n"
-            "Priority: P1\n"
-            "\n---\n"
-        ))
+        _write_decisions(
+            self.ws,
+            (
+                "# Decisions\n\n"
+                "[D-20260101-001]\n"
+                "Statement: Snapshot fidelity test\n"
+                "Status: active\n"
+                "Date: 2026-01-01\n"
+                "\n---\n"
+            ),
+        )
+        _write_tasks(
+            self.ws, ("# Tasks\n\n[T-20260101-001]\nTitle: Test task for snapshot\nStatus: todo\nPriority: P1\n\n---\n")
+        )
 
     def tearDown(self):
         shutil.rmtree(self.ws, ignore_errors=True)
@@ -1121,10 +1170,8 @@ class TestSnapshotRestoreFidelity(unittest.TestCase):
         with open(task_path) as f:
             restored_tasks = f.read()
 
-        self.assertEqual(orig_decisions, restored_decisions,
-                         "Decisions file not restored faithfully")
-        self.assertEqual(orig_tasks, restored_tasks,
-                         "Tasks file not restored faithfully")
+        self.assertEqual(orig_decisions, restored_decisions, "Decisions file not restored faithfully")
+        self.assertEqual(orig_tasks, restored_tasks, "Tasks file not restored faithfully")
 
 
 if __name__ == "__main__":
