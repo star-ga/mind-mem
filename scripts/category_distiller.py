@@ -73,7 +73,7 @@ except ImportError:
         return _FallbackLogger(component)
 
 
-log = get_logger("category_distiller")
+_log = get_logger("category_distiller")
 
 # Optional MIND kernel acceleration
 _mind_ffi = None
@@ -356,7 +356,7 @@ class CategoryDistiller:
                             b["_source_dir"] = subdir
                         blocks.extend(parsed)
                     except (OSError, ValueError, UnicodeDecodeError) as exc:
-                        log.warning("block_parse_failed", path=path, error=str(exc))
+                        _log.warning("block_parse_failed", path=path, error=str(exc))
 
         # Scan entities directory — every .md file
         entities_dir = os.path.join(workspace, "entities")
@@ -370,9 +370,9 @@ class CategoryDistiller:
                             b["_source_dir"] = "entities"
                         blocks.extend(parsed)
                     except (OSError, ValueError, UnicodeDecodeError) as exc:
-                        log.warning("entity_parse_failed", path=path, error=str(exc))
+                        _log.warning("entity_parse_failed", path=path, error=str(exc))
 
-        log.info("scan_complete", total_blocks=len(blocks))
+        _log.info("scan_complete", total_blocks=len(blocks))
         return blocks
 
     # ------------------------------------------------------------------
@@ -505,7 +505,7 @@ class CategoryDistiller:
             if not assigned_any:
                 category_map.setdefault("uncategorized", []).append(blocks[bi])
 
-        log.info("batch_categorize_mind", n_blocks=n_blocks, n_cats=n_cats, categories_found=len(category_map))
+        _log.info("batch_categorize_mind", n_blocks=n_blocks, n_cats=n_cats, categories_found=len(category_map))
         return category_map
 
     def distill(self, workspace: str) -> list[str]:
@@ -522,7 +522,7 @@ class CategoryDistiller:
             try:
                 category_map = self._batch_categorize_mind(blocks)
             except (RuntimeError, ValueError, TypeError) as exc:
-                log.warning("mind_batch_fallback", error=str(exc))
+                _log.warning("mind_batch_fallback", error=str(exc))
                 category_map = {}
                 for block in blocks:
                     cats = self.categorize_block(block)
@@ -557,7 +557,7 @@ class CategoryDistiller:
             json.dump(manifest, f, indent=2)
         written.append(manifest_path)
 
-        log.info(
+        _log.info(
             "distill_complete",
             categories=len(category_map),
             files_written=len(written),
