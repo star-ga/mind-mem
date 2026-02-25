@@ -2,6 +2,27 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.7.1 (2026-02-25)
+
+**Quality, testing, documentation, and developer tooling improvements**
+
+### Added
+- Structured `ErrorCode` enum with 29 codes across 8 categories for consistent error handling
+- Test suites for `entity_ingest`, `session_summarizer`, `cron_runner`, `observation_compress`, `bootstrap_corpus`
+- Unicode/i18n and stress tests for improved internationalization coverage
+- MCP tool examples and API reference documentation
+- Troubleshooting FAQ and performance tuning guide
+- Pre-commit hooks, CODEOWNERS, issue/PR templates
+- Dependabot configuration, `.editorconfig`, `.gitattributes`
+- Benchmark CI workflow for automated performance regression tracking
+- Shared pytest fixtures (`conftest.py`) for workspace setup
+- `.python-version` file for pyenv/asdf compatibility
+
+### Changed
+- Replaced broad exception handlers with specific exception types across codebase
+- Added structured logging to 4 additional modules
+- Added return type hints to core modules
+
 ## 1.7.0 (2026-02-23)
 
 **Recall quality — retrieval graph, fact indexing, knee cutoff, augmented embeddings, hard negatives**
