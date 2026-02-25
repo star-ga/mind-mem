@@ -10,17 +10,26 @@ from __future__ import annotations
 
 import re
 import sys
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    tomllib = None  # type: ignore[assignment]
 
 
 def get_pyproject_version() -> str | None:
     """Read version from pyproject.toml."""
     try:
-        with open("pyproject.toml", "rb") as f:
-            data = tomllib.load(f)
-        return data.get("project", {}).get("version")
-    except (FileNotFoundError, tomllib.TOMLDecodeError):
+        if tomllib is not None:
+            with open("pyproject.toml", "rb") as f:
+                data = tomllib.load(f)
+            return data.get("project", {}).get("version")
+        # Regex fallback for Python <3.11 (no tomllib)
+        content = Path("pyproject.toml").read_text()
+        m = re.search(r'version\s*=\s*"([^"]+)"', content)
+        return m.group(1) if m else None
+    except FileNotFoundError:
         return None
 
 
