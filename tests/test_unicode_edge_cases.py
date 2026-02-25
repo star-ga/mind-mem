@@ -2,14 +2,11 @@
 """Tests for Unicode and edge case handling across mind-mem modules."""
 
 import os
-import tempfile
-
-import pytest
 
 from mind_mem.block_parser import parse_blocks
+from mind_mem.entity_ingest import extract_entities
 from mind_mem.init_workspace import init
 from mind_mem.recall import recall, tokenize
-from mind_mem.entity_ingest import extract_entities
 from mind_mem.session_summarizer import extract_summary
 
 
