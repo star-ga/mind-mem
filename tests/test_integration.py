@@ -100,9 +100,14 @@ class TestFullLifecycle(unittest.TestCase):
         init(self.ws)
         today = datetime.now().strftime("%Y-%m-%d")
 
-        signals = [{"line": 1, "type": "decision",
-                     "text": "We decided to use Redis for caching layer",
-                     "pattern": r"\bdecided to\b"}]
+        signals = [
+            {
+                "line": 1,
+                "type": "decision",
+                "text": "We decided to use Redis for caching layer",
+                "pattern": r"\bdecided to\b",
+            }
+        ]
 
         written1 = append_signals(self.ws, signals, today)
         self.assertEqual(written1, 1)

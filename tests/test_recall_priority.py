@@ -1,4 +1,5 @@
 """Tests for priority boost in recall."""
+
 from __future__ import annotations
 
 import os
@@ -27,15 +28,18 @@ def _make_workspace():
         f.write("Rationale: Testing priority boost\nTags: test\n\n")
     return ws
 
+
 def test_priority_boost_runs():
     ws = _make_workspace()
     results = recall(ws, "priority test item importance", limit=10)
     assert isinstance(results, list)
 
+
 def test_high_priority_exists():
     ws = _make_workspace()
     results = recall(ws, "priority test item importance", limit=10)
     assert isinstance(results, list)
+
 
 def test_priority_ordering():
     ws = _make_workspace()

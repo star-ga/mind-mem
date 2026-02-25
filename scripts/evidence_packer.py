@@ -211,6 +211,7 @@ def check_abstention(
     Returns (should_abstain, forced_answer, confidence).
     """
     from .abstention_classifier import classify_abstention
+
     result = classify_abstention(question, hits, threshold=threshold)
     _log.debug("check_abstention", threshold=threshold, hits=len(hits))
 
@@ -218,6 +219,7 @@ def check_abstention(
     if result.should_abstain and workspace and hits:
         try:
             from .retrieval_graph import record_hard_negatives
+
             record_hard_negatives(workspace, question, hits)
         except (ImportError, OSError, ValueError):
             pass  # Best-effort — never break the recall path

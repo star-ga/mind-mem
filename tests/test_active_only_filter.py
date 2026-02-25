@@ -1,4 +1,5 @@
 """Tests for active_only recall filter."""
+
 from __future__ import annotations
 
 import os

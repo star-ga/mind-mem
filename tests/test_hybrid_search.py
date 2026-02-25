@@ -1,4 +1,5 @@
 """Tests for hybrid search functionality."""
+
 from __future__ import annotations
 
 import os

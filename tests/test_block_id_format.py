@@ -1,4 +1,5 @@
 """Tests for block ID format validation."""
+
 from __future__ import annotations
 
 import os
@@ -15,6 +16,7 @@ def test_standard_id():
     assert len(blocks) >= 1
     os.unlink(path)
 
+
 def test_numeric_id():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
         f.write("[12345]\nType: Decision\nStatement: Numeric ID\n")
@@ -23,6 +25,7 @@ def test_numeric_id():
     os.unlink(path)
     assert isinstance(blocks, list)
 
+
 def test_long_id():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
         f.write("[VERY-LONG-IDENTIFIER-NAME-001]\nType: Decision\nStatement: Long ID\n")
@@ -30,6 +33,7 @@ def test_long_id():
     blocks = parse_file(path)
     os.unlink(path)
     assert isinstance(blocks, list)
+
 
 def test_lowercase_id():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:

@@ -1,4 +1,5 @@
 """Tests for intent classification."""
+
 from __future__ import annotations
 
 from scripts._recall_detection import detect_query_type

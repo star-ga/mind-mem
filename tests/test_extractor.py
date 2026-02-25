@@ -120,15 +120,21 @@ class TestFormatAsBlocks:
     """Test block formatting for DECISIONS.md output."""
 
     def test_basic_format(self):
-        cards = [{"type": "FACT", "content": "Caroline is a counselor",
-                  "speaker": "Caroline", "date": "2023-05-07",
-                  "source_id": "DIA-D1-3", "confidence": 0.85,
-                  "dia_id": "D1:3"}]
+        cards = [
+            {
+                "type": "FACT",
+                "content": "Caroline is a counselor",
+                "speaker": "Caroline",
+                "date": "2023-05-07",
+                "source_id": "DIA-D1-3",
+                "confidence": 0.85,
+                "dia_id": "D1:3",
+            }
+        ]
         text = format_as_blocks(cards)
         assert "[FACT-001]" in text
         # Find the Statement line containing our content (not just first one)
-        stmt_lines = [ln for ln in text.splitlines()
-                      if ln.startswith("Statement:") and "Caroline is a counselor" in ln]
+        stmt_lines = [ln for ln in text.splitlines() if ln.startswith("Statement:") and "Caroline is a counselor" in ln]
         assert len(stmt_lines) == 1, f"Expected 1 match, got {len(stmt_lines)}"
         stmt = stmt_lines[0]
         # Semantic prefix: starts with "(" and content follows after ") "
@@ -145,32 +151,26 @@ class TestFormatAsBlocks:
         assert "Sources: DIA-D1-3" in text
 
     def test_custom_prefix(self):
-        cards = [{"type": "EVENT", "content": "X visited Y",
-                  "speaker": "", "date": "", "source_id": "",
-                  "confidence": 0.8}]
+        cards = [
+            {"type": "EVENT", "content": "X visited Y", "speaker": "", "date": "", "source_id": "", "confidence": 0.8}
+        ]
         text = format_as_blocks(cards, id_prefix="EVT")
         assert "[EVT-001]" in text
 
     def test_counter_start(self):
-        cards = [{"type": "FACT", "content": "test",
-                  "speaker": "", "date": "", "source_id": "",
-                  "confidence": 0.8}]
+        cards = [{"type": "FACT", "content": "test", "speaker": "", "date": "", "source_id": "", "confidence": 0.8}]
         text = format_as_blocks(cards, counter_start=42)
         assert "[FACT-042]" in text
 
     def test_no_dia_id(self):
-        cards = [{"type": "FACT", "content": "test",
-                  "speaker": "", "date": "", "source_id": "",
-                  "confidence": 0.8}]
+        cards = [{"type": "FACT", "content": "test", "speaker": "", "date": "", "source_id": "", "confidence": 0.8}]
         text = format_as_blocks(cards)
         assert "DiaID:" not in text
 
     def test_semantic_prefix_all_types(self):
         """Each card type gets a distinct semantic prefix."""
         for card_type in ("FACT", "EVENT", "PREFERENCE", "RELATION"):
-            cards = [{"type": card_type, "content": "X",
-                      "speaker": "", "date": "", "source_id": "",
-                      "confidence": 0.8}]
+            cards = [{"type": card_type, "content": "X", "speaker": "", "date": "", "source_id": "", "confidence": 0.8}]
             text = format_as_blocks(cards)
             stmt = [ln for ln in text.splitlines() if ln.startswith("Statement:")][0]
             assert stmt.startswith("Statement: ("), f"{card_type} missing prefix"
@@ -178,14 +178,19 @@ class TestFormatAsBlocks:
 
     def test_semantic_prefix_idempotent(self):
         """Re-formatting already-prefixed content must not double-prepend."""
-        cards = [{"type": "FACT",
-                  "content": "(identity description who is) Already prefixed",
-                  "speaker": "", "date": "", "source_id": "",
-                  "confidence": 0.8}]
+        cards = [
+            {
+                "type": "FACT",
+                "content": "(identity description who is) Already prefixed",
+                "speaker": "",
+                "date": "",
+                "source_id": "",
+                "confidence": 0.8,
+            }
+        ]
         text = format_as_blocks(cards)
         # Select by content match, not index
-        stmt_lines = [ln for ln in text.splitlines()
-                      if ln.startswith("Statement:") and "Already prefixed" in ln]
+        stmt_lines = [ln for ln in text.splitlines() if ln.startswith("Statement:") and "Already prefixed" in ln]
         assert len(stmt_lines) == 1
         after_key = stmt_lines[0].split("Statement: ", 1)[1]
         # Structural check: exactly one leading prefix, not label-specific
@@ -193,26 +198,37 @@ class TestFormatAsBlocks:
         prefix_end = after_key.index(") ") + 2
         remainder = after_key[prefix_end:]
         # After the first prefix closes, content must NOT start with another prefix
-        assert not remainder.startswith("("), \
-            f"Double-prepend detected: {stmt_lines[0]}"
+        assert not remainder.startswith("("), f"Double-prepend detected: {stmt_lines[0]}"
 
     def test_double_format_stability(self):
         """Formatting output twice should produce identical statements."""
-        cards = [{"type": "EVENT", "content": "John visited the park",
-                  "speaker": "John", "date": "2023-06-01",
-                  "source_id": "DIA-D2-5", "confidence": 0.9}]
+        cards = [
+            {
+                "type": "EVENT",
+                "content": "John visited the park",
+                "speaker": "John",
+                "date": "2023-06-01",
+                "source_id": "DIA-D2-5",
+                "confidence": 0.9,
+            }
+        ]
         text1 = format_as_blocks(cards)
         # Select by content match
-        stmt1 = [ln for ln in text1.splitlines()
-                 if ln.startswith("Statement:") and "visited the park" in ln][0]
+        stmt1 = [ln for ln in text1.splitlines() if ln.startswith("Statement:") and "visited the park" in ln][0]
         content_with_prefix = stmt1.split("Statement: ", 1)[1]
         # Feed it back through as content
-        cards2 = [{"type": "EVENT", "content": content_with_prefix,
-                   "speaker": "John", "date": "2023-06-01",
-                   "source_id": "DIA-D2-5", "confidence": 0.9}]
+        cards2 = [
+            {
+                "type": "EVENT",
+                "content": content_with_prefix,
+                "speaker": "John",
+                "date": "2023-06-01",
+                "source_id": "DIA-D2-5",
+                "confidence": 0.9,
+            }
+        ]
         text2 = format_as_blocks(cards2)
-        stmt2 = [ln for ln in text2.splitlines()
-                 if ln.startswith("Statement:") and "visited the park" in ln][0]
+        stmt2 = [ln for ln in text2.splitlines() if ln.startswith("Statement:") and "visited the park" in ln][0]
         assert stmt1 == stmt2, f"Not idempotent:\n  pass1: {stmt1}\n  pass2: {stmt2}"
 
 

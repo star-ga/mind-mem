@@ -4,6 +4,7 @@ Classifies queries into intent types with confidence scoring.
 Each intent maps to retrieval parameters (expansion mode, rerank weights, graph depth).
 Deterministic, regex-based — no model required.
 """
+
 from __future__ import annotations
 
 import re
@@ -17,6 +18,7 @@ _log = get_logger("intent_router")
 @dataclass
 class IntentResult:
     """Result of intent classification."""
+
     intent: str
     confidence: float
     sub_intents: list[str] = field(default_factory=list)
@@ -30,8 +32,12 @@ INTENT_CONFIG = {
         "graph_depth": 2,
         "rerank": "causal",
         "patterns": [
-            r'\bwhy\b', r'\breason\b', r'\bcause\b', r'\bexplain\b',
-            r'\bhow come\b', r'\bwhat made\b',
+            r"\bwhy\b",
+            r"\breason\b",
+            r"\bcause\b",
+            r"\bexplain\b",
+            r"\bhow come\b",
+            r"\bwhat made\b",
         ],
     },
     "WHEN": {
@@ -39,9 +45,14 @@ INTENT_CONFIG = {
         "graph_depth": 1,
         "rerank": "temporal",
         "patterns": [
-            r'\bwhen\b', r'\bdate\b', r'\btime\b', r'\byear\b',
-            r'\bmonth\b', r'\blast\b.*\b(week|month|year)\b',
-            r'\d{4}-\d{2}-\d{2}', r'\bin \d{4}\b',
+            r"\bwhen\b",
+            r"\bdate\b",
+            r"\btime\b",
+            r"\byear\b",
+            r"\bmonth\b",
+            r"\blast\b.*\b(week|month|year)\b",
+            r"\d{4}-\d{2}-\d{2}",
+            r"\bin \d{4}\b",
         ],
     },
     "ENTITY": {
@@ -49,8 +60,12 @@ INTENT_CONFIG = {
         "graph_depth": 1,
         "rerank": "exact",
         "patterns": [
-            r'\bwho is\b', r'\bwho was\b', r'\bwhat is\b', r'\bwhich\b',
-            r'\bname of\b', r'\btell me about\b',
+            r"\bwho is\b",
+            r"\bwho was\b",
+            r"\bwhat is\b",
+            r"\bwhich\b",
+            r"\bname of\b",
+            r"\btell me about\b",
         ],
     },
     "WHAT": {
@@ -58,7 +73,9 @@ INTENT_CONFIG = {
         "graph_depth": 1,
         "rerank": "default",
         "patterns": [
-            r'\bwhat\b', r'\bdescribe\b', r'\bdefine\b',
+            r"\bwhat\b",
+            r"\bdescribe\b",
+            r"\bdefine\b",
         ],
     },
     "HOW": {
@@ -66,8 +83,12 @@ INTENT_CONFIG = {
         "graph_depth": 2,
         "rerank": "procedural",
         "patterns": [
-            r'\bhow\b(?!\s+come)', r'\bsteps?\b', r'\bprocess\b',
-            r'\bprocedure\b', r'\bmethod\b', r'\binstructions?\b',
+            r"\bhow\b(?!\s+come)",
+            r"\bsteps?\b",
+            r"\bprocess\b",
+            r"\bprocedure\b",
+            r"\bmethod\b",
+            r"\binstructions?\b",
         ],
     },
     "LIST": {
@@ -75,8 +96,12 @@ INTENT_CONFIG = {
         "graph_depth": 0,
         "rerank": "diversity",
         "patterns": [
-            r'\blist\b', r'\ball\b.*\b(of|the)\b', r'\bwhich\b.*\ball\b',
-            r'\bevery\b', r'\benumerate\b', r'\bshow me all\b',
+            r"\blist\b",
+            r"\ball\b.*\b(of|the)\b",
+            r"\bwhich\b.*\ball\b",
+            r"\bevery\b",
+            r"\benumerate\b",
+            r"\bshow me all\b",
         ],
     },
     "VERIFY": {
@@ -84,9 +109,13 @@ INTENT_CONFIG = {
         "graph_depth": 1,
         "rerank": "evidence",
         "patterns": [
-            r'\bis it true\b', r'\bdid\b.*\b(ever|really)\b',
-            r'\bconfirm\b', r'\bverify\b', r'\btrue that\b',
-            r'\bcorrect that\b', r'\bis that right\b',
+            r"\bis it true\b",
+            r"\bdid\b.*\b(ever|really)\b",
+            r"\bconfirm\b",
+            r"\bverify\b",
+            r"\btrue that\b",
+            r"\bcorrect that\b",
+            r"\bis that right\b",
         ],
     },
     "COMPARE": {
@@ -94,9 +123,14 @@ INTENT_CONFIG = {
         "graph_depth": 2,
         "rerank": "balanced",
         "patterns": [
-            r'\bcompare\b', r'\bdifference\b', r'\bvs\.?\b',
-            r'\bversus\b', r'\bbetter\b.*\bor\b', r'\bwhich\b.*\bor\b',
-            r'\bcontrast\b', r'\bsimilar\b',
+            r"\bcompare\b",
+            r"\bdifference\b",
+            r"\bvs\.?\b",
+            r"\bversus\b",
+            r"\bbetter\b.*\bor\b",
+            r"\bwhich\b.*\bor\b",
+            r"\bcontrast\b",
+            r"\bsimilar\b",
         ],
     },
     "TRACE": {
@@ -104,9 +138,14 @@ INTENT_CONFIG = {
         "graph_depth": 3,
         "rerank": "temporal",
         "patterns": [
-            r'\btrace\b', r'\bsequence\b', r'\bhistory of\b',
-            r'\bevolution\b', r'\bprogress\b', r'\btimeline\b',
-            r'\bover time\b', r'\bchanged?\b.*\bover\b',
+            r"\btrace\b",
+            r"\bsequence\b",
+            r"\bhistory of\b",
+            r"\bevolution\b",
+            r"\bprogress\b",
+            r"\btimeline\b",
+            r"\bover time\b",
+            r"\bchanged?\b.*\bover\b",
         ],
     },
 }
@@ -175,6 +214,7 @@ class IntentRouter:
         # Fall back to legacy detection if confidence is low
         try:
             from .recall import detect_query_type
+
             legacy = detect_query_type(query)
             # Map legacy types to our intents
             legacy_map = {
@@ -206,6 +246,7 @@ def _get_params(intent: str) -> dict:
 
 # Singleton for convenience
 _router = None
+
 
 def get_router() -> IntentRouter:
     """Get or create singleton IntentRouter."""

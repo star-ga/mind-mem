@@ -25,13 +25,13 @@ class TestEnsureGraphTables(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmpdir)
 
     def test_creates_tables(self):
         ensure_graph_tables(self.tmpdir)
         conn = _connect(self.tmpdir)
-        tables = {r[0] for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         self.assertIn("retrieval_log", tables)
         self.assertIn("co_retrieval", tables)
         self.assertIn("hard_negatives", tables)
@@ -51,6 +51,7 @@ class TestLogRetrieval(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmpdir)
 
     def test_log_empty_results_noop(self):
@@ -92,8 +93,8 @@ class TestLogRetrieval(unittest.TestCase):
         log_retrieval(self.tmpdir, "q2", results)
         conn = _connect(self.tmpdir)
         row = conn.execute(
-            "SELECT weight, hit_count FROM co_retrieval WHERE mem1_id=? AND mem2_id=?",
-            ("X", "Y")).fetchone()
+            "SELECT weight, hit_count FROM co_retrieval WHERE mem1_id=? AND mem2_id=?", ("X", "Y")
+        ).fetchone()
         self.assertEqual(row["hit_count"], 2)
         self.assertGreater(row["weight"], 0.5)  # 0.5 + 0.5 = 1.0
         conn.close()
@@ -112,6 +113,7 @@ class TestPropagateScores(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmpdir)
 
     def test_no_graph_returns_initial(self):
@@ -153,6 +155,7 @@ class TestRecordHardNegatives(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmpdir)
 
     def test_records_hard_negative(self):
@@ -197,6 +200,7 @@ class TestKneeCutoff(unittest.TestCase):
 
     def test_basic_knee_detection(self):
         from mind_mem._recall_core import knee_cutoff
+
         # Clear knee at position 2: 0.9, 0.8, 0.1, 0.05
         results = [
             {"score": 0.9, "_id": "A"},
@@ -209,6 +213,7 @@ class TestKneeCutoff(unittest.TestCase):
 
     def test_no_knee_returns_all(self):
         from mind_mem._recall_core import knee_cutoff
+
         # Gradual decline — no sharp drop
         results = [
             {"score": 0.9, "_id": "A"},
@@ -221,6 +226,7 @@ class TestKneeCutoff(unittest.TestCase):
 
     def test_min_results_respected(self):
         from mind_mem._recall_core import knee_cutoff
+
         results = [
             {"score": 0.9, "_id": "A"},
             {"score": 0.01, "_id": "B"},
@@ -230,6 +236,7 @@ class TestKneeCutoff(unittest.TestCase):
 
     def test_min_score_filter(self):
         from mind_mem._recall_core import knee_cutoff
+
         results = [
             {"score": 0.9, "_id": "A"},
             {"score": 0.8, "_id": "B"},
@@ -240,15 +247,18 @@ class TestKneeCutoff(unittest.TestCase):
 
     def test_empty_input(self):
         from mind_mem._recall_core import knee_cutoff
+
         self.assertEqual(knee_cutoff([]), [])
 
     def test_single_result(self):
         from mind_mem._recall_core import knee_cutoff
+
         results = [{"score": 0.5, "_id": "A"}]
         self.assertEqual(knee_cutoff(results), results)
 
     def test_zero_scores(self):
         from mind_mem._recall_core import knee_cutoff
+
         results = [{"score": 0, "_id": "A"}, {"score": 0, "_id": "B"}]
         cut = knee_cutoff(results)
         self.assertEqual(len(cut), 2)

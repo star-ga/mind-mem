@@ -99,7 +99,8 @@ class TestLLMRerank(unittest.TestCase):
         original_scores = [h["score"] for h in hits]
         # Use an unreachable URL — should fall back silently
         result = llm_rerank(
-            "test query", hits,
+            "test query",
+            hits,
             url="http://127.0.0.1:19999/nonexistent",
             timeout=0.5,
         )
@@ -119,9 +120,11 @@ class TestLLMRerank(unittest.TestCase):
             def do_POST(self):
                 length = int(self.headers.get("Content-Length", 0))
                 self.rfile.read(length)
-                response = json.dumps({
-                    "response": "[0.9, 0.1, 0.5]",
-                })
+                response = json.dumps(
+                    {
+                        "response": "[0.9, 0.1, 0.5]",
+                    }
+                )
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
@@ -137,7 +140,8 @@ class TestLLMRerank(unittest.TestCase):
 
         try:
             result = llm_rerank(
-                "find relevant docs", hits,
+                "find relevant docs",
+                hits,
                 url=f"http://127.0.0.1:{port}/api/generate",
                 weight=0.3,
                 timeout=5.0,
@@ -177,7 +181,8 @@ class TestLLMRerank(unittest.TestCase):
 
         try:
             result = llm_rerank(
-                "test", hits,
+                "test",
+                hits,
                 url=f"http://127.0.0.1:{port}/api/generate",
                 timeout=5.0,
             )
@@ -210,7 +215,8 @@ class TestLLMRerank(unittest.TestCase):
 
         try:
             result = llm_rerank(
-                "test", hits,
+                "test",
+                hits,
                 url=f"http://127.0.0.1:{port}/api/generate",
                 timeout=5.0,
             )
@@ -246,7 +252,8 @@ class TestLLMRerank(unittest.TestCase):
 
         try:
             result = llm_rerank(
-                "test", hits,
+                "test",
+                hits,
                 url=f"http://127.0.0.1:{port}/api/generate",
                 weight=0.3,
                 timeout=5.0,
@@ -284,7 +291,8 @@ class TestLLMRerank(unittest.TestCase):
 
         try:
             result = llm_rerank(
-                "test", hits,
+                "test",
+                hits,
                 url=f"http://127.0.0.1:{port}/api/generate",
                 weight=0.0,
                 timeout=5.0,

@@ -83,8 +83,11 @@ class FileWatcher:
                 try:
                     changes = self._scan()
                     if changes:
-                        _log.info("changes_detected", count=len(changes),
-                                  files=[os.path.basename(f) for f in list(changes)[:5]])
+                        _log.info(
+                            "changes_detected",
+                            count=len(changes),
+                            files=[os.path.basename(f) for f in list(changes)[:5]],
+                        )
                         self.callback(changes)
                 except Exception as e:
                     _log.warning("watcher_callback_error", error=str(e))

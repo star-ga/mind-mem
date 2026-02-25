@@ -1,4 +1,5 @@
 """Extended block parser tests."""
+
 from __future__ import annotations
 
 import os

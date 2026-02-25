@@ -1,4 +1,5 @@
 """Tests for tokenization module."""
+
 from __future__ import annotations
 
 from scripts._recall_tokenization import tokenize

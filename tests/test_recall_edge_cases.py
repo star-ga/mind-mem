@@ -1,4 +1,5 @@
 """Edge case tests for recall engine."""
+
 from __future__ import annotations
 
 import os

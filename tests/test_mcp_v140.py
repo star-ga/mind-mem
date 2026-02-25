@@ -67,11 +67,7 @@ def _setup_workspace(td):
         )
 
     with open(os.path.join(td, "tasks", "TASKS.md"), "w") as f:
-        f.write(
-            "[T-20260101-001]\n"
-            "Description: Set up PostgreSQL in staging\n"
-            "Status: open\n"
-        )
+        f.write("[T-20260101-001]\nDescription: Set up PostgreSQL in staging\nStatus: open\n")
 
     with open(os.path.join(td, "entities", "projects.md"), "w") as f:
         f.write("[PRJ-mind-mem]\nName: mind-mem\nStatus: active\n")
@@ -83,6 +79,7 @@ def _setup_workspace(td):
 # ---------------------------------------------------------------------------
 # #29: SQLite locked database returns structured "busy" error
 # ---------------------------------------------------------------------------
+
 
 @unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestSQLiteBusyError(unittest.TestCase):
@@ -118,8 +115,7 @@ class TestSQLiteBusyError(unittest.TestCase):
         with open(db_path, "w") as f:
             f.write("")  # dummy file
 
-        with patch.object(self.mod, "fts_query",
-                          side_effect=sqlite3.OperationalError("database is locked")):
+        with patch.object(self.mod, "fts_query", side_effect=sqlite3.OperationalError("database is locked")):
             result_str = _call_tool(self.mod.recall, "test query", backend="bm25")
             result = json.loads(result_str)
             self.assertEqual(result["error"], "database_busy")
@@ -142,6 +138,7 @@ class TestSQLiteBusyError(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # #31: Query-level observability decorator
 # ---------------------------------------------------------------------------
+
 
 @unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestObservabilityDecorator(unittest.TestCase):
@@ -190,6 +187,7 @@ class TestObservabilityDecorator(unittest.TestCase):
 
     def test_failure_increments_failure_counter(self):
         """Failed tool call should increment mcp_tool_failure."""
+
         @self.mod.mcp_tool_observe
         def failing_tool():
             raise ValueError("test error")
@@ -202,6 +200,7 @@ class TestObservabilityDecorator(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # #35: New tools — delete_memory_item, export_memory
 # ---------------------------------------------------------------------------
+
 
 @unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestDeleteMemoryItem(unittest.TestCase):
@@ -353,6 +352,7 @@ class TestExportMemory(unittest.TestCase):
 # #36: _schema_version field in ALL MCP JSON responses
 # ---------------------------------------------------------------------------
 
+
 @unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestSchemaVersionInAllResponses(unittest.TestCase):
     """Issue #36: Every tool response should have _schema_version: 1.0."""
@@ -375,10 +375,8 @@ class TestSchemaVersionInAllResponses(unittest.TestCase):
         except json.JSONDecodeError:
             self.fail(f"{tool_name} did not return valid JSON: {result_str[:200]}")
         if isinstance(result, dict):
-            self.assertIn("_schema_version", result,
-                          f"{tool_name} response missing _schema_version")
-            self.assertEqual(result["_schema_version"], "1.0",
-                             f"{tool_name} _schema_version is not '1.0'")
+            self.assertIn("_schema_version", result, f"{tool_name} response missing _schema_version")
+            self.assertEqual(result["_schema_version"], "1.0", f"{tool_name} _schema_version is not '1.0'")
 
     def test_recall_has_schema_version(self):
         result = _call_tool(self.mod.recall, "PostgreSQL")
@@ -464,6 +462,7 @@ class TestSchemaVersionInAllResponses(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Integration: observability + schema version combined
 # ---------------------------------------------------------------------------
+
 
 @unittest.skipUnless(_HAS_FASTMCP, "fastmcp not installed")
 class TestObservabilityIntegration(unittest.TestCase):

@@ -63,6 +63,7 @@ _log = get_logger("recall_vector")
 # Vector Backend Implementation
 # ---------------------------------------------------------------------------
 
+
 class VectorBackend(RecallBackend):
     """Semantic search backend using sentence-transformers embeddings.
 
@@ -87,12 +88,28 @@ class VectorBackend(RecallBackend):
         if not isinstance(config, dict):
             _log.warning("vector_config_invalid", reason="config is not a dict")
             config = {}
-        _VALID_KEYS = {"backend", "provider", "model", "index_path", "dimension", "top_k",
-                       "pinecone_api_key", "pinecone_index", "pinecone_namespace",
-                       "qdrant_url", "qdrant_collection", "pinecone_environment",
-                       "rrf_k", "bm25_weight", "vector_weight", "vector_model",
-                       "vector_enabled", "onnx_backend", "sqlite_vec_db",
-                       "llama_cpp_url"}
+        _VALID_KEYS = {
+            "backend",
+            "provider",
+            "model",
+            "index_path",
+            "dimension",
+            "top_k",
+            "pinecone_api_key",
+            "pinecone_index",
+            "pinecone_namespace",
+            "qdrant_url",
+            "qdrant_collection",
+            "pinecone_environment",
+            "rrf_k",
+            "bm25_weight",
+            "vector_weight",
+            "vector_model",
+            "vector_enabled",
+            "onnx_backend",
+            "sqlite_vec_db",
+            "llama_cpp_url",
+        }
         unknown = set(config.keys()) - _VALID_KEYS
         if unknown:
             _log.warning("vector_config_unknown_keys", keys=list(unknown))
@@ -172,8 +189,7 @@ class VectorBackend(RecallBackend):
         except struct.error:
             return None
 
-    def _cache_embedding(self, conn, block_id: str, content_hash: str,
-                         embedding: list[float]) -> None:
+    def _cache_embedding(self, conn, block_id: str, content_hash: str, embedding: list[float]) -> None:
         """Store embedding in cache (upsert)."""
         dim = len(embedding)
         blob = self._serialize_embedding(embedding)
@@ -186,16 +202,12 @@ class VectorBackend(RecallBackend):
 
     def _invalidate_cache_for_model(self, conn, model_name: str) -> int:
         """Remove all cached embeddings for a different model. Returns count deleted."""
-        cur = conn.execute(
-            "DELETE FROM embedding_cache WHERE model_name != ?", (model_name,)
-        )
+        cur = conn.execute("DELETE FROM embedding_cache WHERE model_name != ?", (model_name,))
         return cur.rowcount
 
     def _get_vec_meta(self, conn, key: str) -> str | None:
         """Read a vec_meta_info value."""
-        row = conn.execute(
-            "SELECT value FROM vec_meta_info WHERE key = ?", (key,)
-        ).fetchone()
+        row = conn.execute("SELECT value FROM vec_meta_info WHERE key = ?", (key,)).fetchone()
         return row[0] if row else None
 
     def _set_vec_meta(self, conn, key: str, value: str) -> None:
@@ -215,13 +227,11 @@ class VectorBackend(RecallBackend):
         if stored_model is None:
             return True  # No prior metadata — first build
         if stored_model != self.model_name:
-            _log.warning("vec_model_mismatch",
-                         stored=stored_model, current=self.model_name)
+            _log.warning("vec_model_mismatch", stored=stored_model, current=self.model_name)
             return False
         if stored_dim is not None and self.dimension is not None:
             if int(stored_dim) != self.dimension:
-                _log.warning("vec_dimension_mismatch",
-                             stored=stored_dim, current=self.dimension)
+                _log.warning("vec_dimension_mismatch", stored=stored_dim, current=self.dimension)
                 return False
         return True
 
@@ -236,8 +246,7 @@ class VectorBackend(RecallBackend):
                 # to catch both relative and absolute path variants.
                 _scripts_real = os.path.realpath(os.path.dirname(os.path.abspath(__file__)))
                 _saved = list(sys.path)
-                sys.path[:] = [p for p in sys.path
-                               if os.path.realpath(p) != _scripts_real]
+                sys.path[:] = [p for p in sys.path if os.path.realpath(p) != _scripts_real]
                 try:
                     from sentence_transformers import SentenceTransformer
                 finally:
@@ -252,8 +261,7 @@ class VectorBackend(RecallBackend):
             except ImportError as e:
                 _log.error("sentence_transformers_not_installed", error=str(e))
                 raise ImportError(
-                    "sentence-transformers not installed. "
-                    "Install with: pip install 'mind-mem[embeddings]'"
+                    "sentence-transformers not installed. Install with: pip install 'mind-mem[embeddings]'"
                 ) from e
         return self._model
 
@@ -346,15 +354,14 @@ class VectorBackend(RecallBackend):
         # Temporarily remove scripts/ from sys.path so fastembed's huggingface_hub
         # import finds the real 'filelock' system package, not mind-mem's local stub.
         import sys as _sys
+
         _scripts_paths = [p for p in _sys.path if "mind-mem/scripts" in p or p.endswith("/scripts")]
         for _p in _scripts_paths:
             _sys.path.remove(_p)
         try:
             from fastembed import TextEmbedding
         except ImportError as e:
-            raise ImportError(
-                "fastembed not installed. Install with: pip install fastembed"
-            ) from e
+            raise ImportError("fastembed not installed. Install with: pip install fastembed") from e
         finally:
             for _p in _scripts_paths:
                 _sys.path.insert(0, _p)
@@ -384,7 +391,7 @@ class VectorBackend(RecallBackend):
         BATCH = 32
         all_embeddings = []
         for i in range(0, len(texts), BATCH):
-            batch = texts[i:i + BATCH]
+            batch = texts[i : i + BATCH]
             payload = json.dumps({"input": batch}).encode("utf-8")
             req = _req.Request(url, data=payload, headers={"Content-Type": "application/json"})
             with _req.urlopen(req, timeout=120) as resp:
@@ -473,12 +480,11 @@ class VectorBackend(RecallBackend):
             sqlite3 connection with vec0 support enabled
         """
         import sqlite3 as _sqlite3
+
         try:
             import sqlite_vec
         except ImportError as e:
-            raise ImportError(
-                "sqlite-vec not installed. Install with: pip install sqlite-vec"
-            ) from e
+            raise ImportError("sqlite-vec not installed. Install with: pip install sqlite-vec") from e
 
         db_path = self._sqlite_vec_db_path(workspace)
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -532,8 +538,7 @@ class VectorBackend(RecallBackend):
             # Check for model/dimension mismatch — force full rebuild if changed
             model_match = self._check_dimension_match(conn)
             if not model_match:
-                _log.info("vec_model_changed_invalidating_cache",
-                          model=self.model_name)
+                _log.info("vec_model_changed_invalidating_cache", model=self.model_name)
                 self._invalidate_cache_for_model(conn, self.model_name)
                 conn.execute("DROP TABLE IF EXISTS vec_blocks")
                 conn.commit()
@@ -557,8 +562,7 @@ class VectorBackend(RecallBackend):
                     to_embed_texts.append(text)
                     cache_misses += 1
 
-            _log.info("embedding_cache_stats",
-                      hits=cache_hits, misses=cache_misses, total=len(texts))
+            _log.info("embedding_cache_stats", hits=cache_hits, misses=cache_misses, total=len(texts))
 
             # Embed only the cache misses
             if to_embed_texts:
@@ -593,14 +597,20 @@ class VectorBackend(RecallBackend):
 
             # Write metadata for dimension mismatch detection
             from datetime import datetime
+
             self._set_vec_meta(conn, "model_name", self.model_name)
             self._set_vec_meta(conn, "dimension", str(dim))
             self._set_vec_meta(conn, "built_at", datetime.now().isoformat())
             self._set_vec_meta(conn, "block_count", str(len(blocks)))
 
             conn.commit()
-            _log.info("sqlite_vec_indexed", blocks=len(blocks), dimension=dim,
-                      cache_hits=cache_hits, cache_misses=cache_misses)
+            _log.info(
+                "sqlite_vec_indexed",
+                blocks=len(blocks),
+                dimension=dim,
+                cache_hits=cache_hits,
+                cache_misses=cache_misses,
+            )
         finally:
             conn.close()
 
@@ -610,9 +620,7 @@ class VectorBackend(RecallBackend):
         with open(meta_path, "w") as f:
             json.dump(meta, f)
 
-    def _search_sqlite_vec(
-        self, workspace: str, query: str, limit: int, active_only: bool
-    ) -> list[dict]:
+    def _search_sqlite_vec(self, workspace: str, query: str, limit: int, active_only: bool) -> list[dict]:
         """ANN search via sqlite-vec vec0 table.
 
         Args:
@@ -631,8 +639,10 @@ class VectorBackend(RecallBackend):
             check_conn = self._connect_sqlite_vec(workspace, readonly=True)
             self._ensure_cache_tables(check_conn)
             if not self._check_dimension_match(check_conn):
-                _log.warning("vec_search_dimension_mismatch",
-                             msg="Index was built with different model — results may be inaccurate. Run reindex.")
+                _log.warning(
+                    "vec_search_dimension_mismatch",
+                    msg="Index was built with different model — results may be inaccurate. Run reindex.",
+                )
             check_conn.close()
         except Exception:
             pass  # Don't block search on metadata check failure
@@ -675,15 +685,17 @@ class VectorBackend(RecallBackend):
                 continue
             # Convert cosine distance (0=identical, 2=opposite) to similarity score
             score = round(1.0 - distance / 2.0, 4)
-            results.append({
-                "_id": block_id,
-                "type": block.get("type", "unknown"),
-                "score": score,
-                "excerpt": block.get("excerpt", ""),
-                "file": block.get("file", "?"),
-                "line": block.get("line", 0),
-                "status": status,
-            })
+            results.append(
+                {
+                    "_id": block_id,
+                    "type": block.get("type", "unknown"),
+                    "score": score,
+                    "excerpt": block.get("excerpt", ""),
+                    "file": block.get("file", "?"),
+                    "line": block.get("line", 0),
+                    "status": status,
+                }
+            )
 
         return results[:limit]
 
@@ -866,9 +878,7 @@ class VectorBackend(RecallBackend):
             from qdrant_client.models import Distance, PointStruct, VectorParams
         except ImportError as e:
             _log.error("qdrant_client_not_installed", error=str(e))
-            raise ImportError(
-                "qdrant-client not installed. Install with: pip install qdrant-client"
-            ) from e
+            raise ImportError("qdrant-client not installed. Install with: pip install qdrant-client") from e
 
         url = self.config.get("qdrant_url", "http://localhost:6333")
         collection = self.config.get("qdrant_collection", "mind-mem")
@@ -915,9 +925,7 @@ class VectorBackend(RecallBackend):
             from pinecone import Pinecone
         except ImportError as e:
             _log.error("pinecone_not_installed", error=str(e))
-            raise ImportError(
-                "pinecone not installed. Install with: pip install pinecone"
-            ) from e
+            raise ImportError("pinecone not installed. Install with: pip install pinecone") from e
 
         api_key = os.environ.get("PINECONE_API_KEY") or self.config.get("pinecone_api_key")
         if not api_key:
@@ -931,8 +939,8 @@ class VectorBackend(RecallBackend):
         BATCH_SIZE = 96
         total = 0
         for i in range(0, len(blocks), BATCH_SIZE):
-            batch_blocks = blocks[i:i + BATCH_SIZE]
-            batch_texts = texts[i:i + BATCH_SIZE]
+            batch_blocks = blocks[i : i + BATCH_SIZE]
+            batch_texts = texts[i : i + BATCH_SIZE]
             records = []
             for block, text in zip(batch_blocks, batch_texts):
                 record = {
@@ -983,8 +991,12 @@ class VectorBackend(RecallBackend):
 
             metrics.inc("vector_searches")
             metrics.inc("vector_results", len(results))
-            _log.info("vector_search_complete", query=query, results=len(results),
-                     top_score=results[0]["score"] if results else 0)
+            _log.info(
+                "vector_search_complete",
+                query=query,
+                results=len(results),
+                top_score=results[0]["score"] if results else 0,
+            )
             return results
 
     def _search_local(self, workspace: str, query: str, limit: int, active_only: bool) -> list[dict]:
@@ -1038,7 +1050,7 @@ class VectorBackend(RecallBackend):
             date_str = block.get("date", "")
             if date_str:
                 recency = date_score({"Date": date_str})
-                score *= (0.7 + 0.3 * recency)
+                score *= 0.7 + 0.3 * recency
 
             # Status boost
             status = block.get("status", "")
@@ -1097,9 +1109,7 @@ class VectorBackend(RecallBackend):
         # Build filter
         query_filter = None
         if active_only:
-            query_filter = Filter(
-                must=[FieldCondition(key="status", match=MatchValue(value="active"))]
-            )
+            query_filter = Filter(must=[FieldCondition(key="status", match=MatchValue(value="active"))])
 
         # Search
         search_results = client.search(
@@ -1113,15 +1123,17 @@ class VectorBackend(RecallBackend):
         results = []
         for hit in search_results:
             payload = hit.payload
-            results.append({
-                "_id": payload.get("_id", "?"),
-                "type": payload.get("type", "unknown"),
-                "score": round(hit.score, 4),
-                "excerpt": payload.get("excerpt", ""),
-                "file": payload.get("file", "?"),
-                "line": payload.get("line", 0),
-                "status": payload.get("status", ""),
-            })
+            results.append(
+                {
+                    "_id": payload.get("_id", "?"),
+                    "type": payload.get("type", "unknown"),
+                    "score": round(hit.score, 4),
+                    "excerpt": payload.get("excerpt", ""),
+                    "file": payload.get("file", "?"),
+                    "line": payload.get("line", 0),
+                    "status": payload.get("status", ""),
+                }
+            )
 
         return results
 
@@ -1167,15 +1179,17 @@ class VectorBackend(RecallBackend):
         results = []
         for hit in search_results.get("result", {}).get("hits", []):
             fields = hit.get("fields", {})
-            results.append({
-                "_id": hit.get("_id", "?"),
-                "type": fields.get("block_type", "unknown"),
-                "score": round(hit.get("_score", 0.0), 4),
-                "excerpt": fields.get("excerpt", ""),
-                "file": fields.get("file", "?"),
-                "line": fields.get("line", 0),
-                "status": fields.get("status", ""),
-            })
+            results.append(
+                {
+                    "_id": hit.get("_id", "?"),
+                    "type": fields.get("block_type", "unknown"),
+                    "score": round(hit.get("_score", 0.0), 4),
+                    "excerpt": fields.get("excerpt", ""),
+                    "file": fields.get("file", "?"),
+                    "line": fields.get("line", 0),
+                    "status": fields.get("status", ""),
+                }
+            )
 
         return results
 
@@ -1270,6 +1284,7 @@ def rebuild_index(workspace: str) -> int:
 
     # Collect all blocks from workspace
     from .block_parser import parse_file as _parse
+
     blocks: list[dict] = []
     for subdir in ("decisions", "tasks", "entities", "intelligence"):
         d = os.path.join(workspace, subdir)
@@ -1299,11 +1314,13 @@ def rebuild_index(workspace: str) -> int:
     os.makedirs(index_dir, exist_ok=True)
     index_data = []
     for i, b in enumerate(blocks):
-        index_data.append({
-            "_id": b.get("_id", f"block_{i}"),
-            "embedding": embeddings[i].tolist(),
-            "text": texts[i],
-        })
+        index_data.append(
+            {
+                "_id": b.get("_id", f"block_{i}"),
+                "embedding": embeddings[i].tolist(),
+                "text": texts[i],
+            }
+        )
 
     index_file = os.path.join(index_dir, "index.json")
     with open(index_file, "w", encoding="utf-8") as f:
@@ -1317,10 +1334,9 @@ def rebuild_index(workspace: str) -> int:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="mind-mem Vector Recall Backend (Semantic Search)"
-    )
+    parser = argparse.ArgumentParser(description="mind-mem Vector Recall Backend (Semantic Search)")
     parser.add_argument("--workspace", "-w", default=".", help="Workspace path")
     parser.add_argument("--index", action="store_true", help="Build/rebuild index")
     parser.add_argument("--query", "-q", help="Search query")

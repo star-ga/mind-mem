@@ -67,6 +67,7 @@ from .retrieval_graph import (
 # A-MEM block metadata (optional — graceful degradation if unavailable)
 try:
     from .block_metadata import BlockMetadataManager
+
     _HAS_BLOCK_META = True
 except ImportError:
     _HAS_BLOCK_META = False
@@ -74,6 +75,7 @@ except ImportError:
 # Intent Router (optional — falls back to detect_query_type)
 try:
     from .intent_router import get_router as _get_intent_router
+
     _HAS_INTENT_ROUTER = True
 except ImportError:
     _HAS_INTENT_ROUTER = False
@@ -81,6 +83,7 @@ except ImportError:
 # LLM Extractor (optional — config-gated, zero deps by default)
 try:
     from .llm_extractor import enrich_results as _llm_enrich_results
+
     _HAS_LLM_EXTRACTOR = True
 except ImportError:
     _HAS_LLM_EXTRACTOR = False
@@ -89,25 +92,27 @@ _log = get_logger("recall")
 
 # Log optional subsystem availability at import time (#5: hidden coupling)
 if not _HAS_BLOCK_META:
-    _log.info("optional_subsystem_unavailable", subsystem="block_metadata",
-              impact="A-MEM importance boost disabled")
+    _log.info("optional_subsystem_unavailable", subsystem="block_metadata", impact="A-MEM importance boost disabled")
 if not _HAS_INTENT_ROUTER:
-    _log.info("optional_subsystem_unavailable", subsystem="intent_router",
-              impact="falling back to detect_query_type()")
+    _log.info("optional_subsystem_unavailable", subsystem="intent_router", impact="falling back to detect_query_type()")
 if not _HAS_LLM_EXTRACTOR:
-    _log.info("optional_subsystem_unavailable", subsystem="llm_extractor",
-              impact="LLM enrichment disabled")
+    _log.info("optional_subsystem_unavailable", subsystem="llm_extractor", impact="LLM enrichment disabled")
 
 
 __all__ = [
     "RecallBackend",
-    "recall", "_load_backend", "prefetch_context", "knee_cutoff", "main",
+    "recall",
+    "_load_backend",
+    "prefetch_context",
+    "knee_cutoff",
+    "main",
 ]
 
 
 # ---------------------------------------------------------------------------
 # Knee score cutoff — adaptive top-K truncation
 # ---------------------------------------------------------------------------
+
 
 def knee_cutoff(
     results: list[dict],
@@ -157,6 +162,7 @@ def knee_cutoff(
 # RecallBackend interface — plug in vector/semantic backends here
 # ---------------------------------------------------------------------------
 
+
 class RecallBackend(ABC):
     """Interface for recall backends. Default: BM25Backend (below).
 
@@ -178,9 +184,14 @@ class RecallBackend(ABC):
 
 
 def recall(
-    workspace: str, query: str, limit: int = 10, active_only: bool = False,
-    graph_boost: bool = False, agent_id: str | None = None,
-    retrieve_wide_k: int = 200, rerank: bool = True,
+    workspace: str,
+    query: str,
+    limit: int = 10,
+    active_only: bool = False,
+    graph_boost: bool = False,
+    agent_id: str | None = None,
+    retrieve_wide_k: int = 200,
+    rerank: bool = True,
     rerank_debug: bool = False,
     _allow_decompose: bool = True,
 ) -> list[dict]:
@@ -207,6 +218,7 @@ def recall(
     _kernel_field_weights = None
     try:
         from .mind_ffi import get_kernel_param, get_mind_dir, load_kernel_config
+
         mind_dir = get_mind_dir(workspace)
         recall_kernel = load_kernel_config(os.path.join(mind_dir, "recall.mind"))
         if recall_kernel:
@@ -238,8 +250,12 @@ def recall(
             intent_result = _get_intent_router().classify(query)
             query_type = _INTENT_TO_QUERY_TYPE.get(intent_result.intent, "single-hop")
             intent_params = intent_result.params
-            _log.info("intent_classified", intent=intent_result.intent,
-                      confidence=intent_result.confidence, query_type=query_type)
+            _log.info(
+                "intent_classified",
+                intent=intent_result.intent,
+                confidence=intent_result.confidence,
+                query_type=query_type,
+            )
         except Exception as e:
             _log.warning("intent_classification_failed", error=str(e))
             query_type = detect_query_type(query)
@@ -254,17 +270,21 @@ def recall(
     if query_type == "multi-hop" and _allow_decompose:
         sub_queries = decompose_query(query)
         if len(sub_queries) > 1:
-            _log.info("multihop_decomposition", sub_queries=sub_queries,
-                      count=len(sub_queries))
+            _log.info("multihop_decomposition", sub_queries=sub_queries, count=len(sub_queries))
             merged: dict[str, dict] = {}  # _id -> best result
             sub_limit = max(5, limit // len(sub_queries))
             for sq in sub_queries:
                 try:
                     sub_results = recall(
-                        workspace, sq, limit=sub_limit,
-                        active_only=active_only, graph_boost=graph_boost,
-                        agent_id=agent_id, retrieve_wide_k=retrieve_wide_k,
-                        rerank=rerank, rerank_debug=rerank_debug,
+                        workspace,
+                        sq,
+                        limit=sub_limit,
+                        active_only=active_only,
+                        graph_boost=graph_boost,
+                        agent_id=agent_id,
+                        retrieve_wide_k=retrieve_wide_k,
+                        rerank=rerank,
+                        rerank_debug=rerank_debug,
                         _allow_decompose=False,
                     )
                 except Exception as e:
@@ -275,11 +295,8 @@ def recall(
                     if rid not in merged or r["score"] > merged[rid]["score"]:
                         merged[rid] = r
             # Sort merged results by score descending, return up to limit
-            all_merged = sorted(merged.values(),
-                                key=lambda r: (r["score"], r.get("_id", "")),
-                                reverse=True)
-            _log.info("multihop_merged", total=len(all_merged),
-                      limit=limit, sub_queries=len(sub_queries))
+            all_merged = sorted(merged.values(), key=lambda r: (r["score"], r.get("_id", "")), reverse=True)
+            _log.info("multihop_merged", total=len(all_merged), limit=limit, sub_queries=len(sub_queries))
             return all_merged[:limit]
 
     # Month normalization: inject numeric month tokens for date matching
@@ -311,6 +328,7 @@ def recall(
     if agent_id:
         try:
             from .namespaces import NamespaceManager
+
             ns_manager = NamespaceManager(workspace, agent_id=agent_id)
         except ImportError:
             _log.debug("namespaces_unavailable", agent_id=agent_id)
@@ -382,9 +400,12 @@ def recall(
 
     # Cap blocks to prevent memory/latency blowup on huge workspaces (#15)
     if len(all_blocks) > MAX_BLOCKS_PER_QUERY:
-        _log.warning("blocks_capped", total=len(all_blocks),
-                     cap=MAX_BLOCKS_PER_QUERY,
-                     hint="consider using FTS5 index for large workspaces")
+        _log.warning(
+            "blocks_capped",
+            total=len(all_blocks),
+            cap=MAX_BLOCKS_PER_QUERY,
+            hint="consider using FTS5 index for large workspaces",
+        )
         all_blocks = all_blocks[:MAX_BLOCKS_PER_QUERY]
 
     # --- Kernel overrides: local aliases for BM25 params ---
@@ -393,8 +414,8 @@ def recall(
     _b = float(_kernel_bm25_b)
 
     # --- BM25F: per-field tokenization + flat token list for IDF ---
-    doc_field_tokens = []   # [{field: [tokens]}] per block
-    doc_flat_tokens = []    # [[all_tokens]] per block (for IDF + bigrams)
+    doc_field_tokens = []  # [{field: [tokens]}] per block
+    doc_flat_tokens = []  # [[all_tokens]] per block (for IDF + bigrams)
     for block in all_blocks:
         ft = extract_field_tokens(block)
         doc_field_tokens.append(ft)
@@ -450,7 +471,7 @@ def recall(
             doc_bigrams = get_bigrams(flat)
             phrase_matches = len(query_bigrams & doc_bigrams)
             if phrase_matches > 0:
-                score *= (1.0 + BIGRAM_BOOST_PER_MATCH * phrase_matches)
+                score *= 1.0 + BIGRAM_BOOST_PER_MATCH * phrase_matches
 
         # --- Chunking boost: score best chunk separately, blend ---
         # For long blocks, check if a sub-chunk scores higher than the whole
@@ -464,8 +485,13 @@ def recall(
                     ctf = Counter(ctokens)
                     cdl = len(ctokens)
                     cs = bm25f_score_terms(
-                        query_tokens, ctf, cdl, _idf_cache,
-                        max(avg_wdl, 1), k1=_k1, b=_b,
+                        query_tokens,
+                        ctf,
+                        cdl,
+                        _idf_cache,
+                        max(avg_wdl, 1),
+                        k1=_k1,
+                        b=_b,
                     )
                     best_chunk_score = max(best_chunk_score, cs)
                 if best_chunk_score > score:
@@ -474,7 +500,7 @@ def recall(
         # --- Boost factors (query-type-aware) ---
         recency = date_score(block)
         rw = qparams.get("recency_weight", 0.3)
-        score *= (1.0 - rw + rw * recency)
+        score *= 1.0 - rw + rw * recency
 
         # Temporal queries: boost blocks that contain dates
         date_boost_val = qparams.get("date_boost", 1.0)
@@ -496,7 +522,7 @@ def recall(
         if block_entities:
             entity_hits = sum(1 for eid in block_entities if eid.lower() in query.lower())
             if entity_hits > 0:
-                score *= (1.0 + ENTITY_BOOST_PER_HIT * min(entity_hits, MAX_ENTITY_HITS))
+                score *= 1.0 + ENTITY_BOOST_PER_HIT * min(entity_hits, MAX_ENTITY_HITS)
 
         if query_type == "adversarial" and block.get("_has_negation", False):
             score *= ADVERSARIAL_NEGATION_BOOST
@@ -549,11 +575,11 @@ def recall(
         for hop, decay in enumerate(hop_decays):
             # On first hop, seed from BM25 results; on later hops, seed from
             # newly discovered neighbors
-            seeds = results if hop == 0 else [
-                {"_id": nid, "score": ns}
-                for nid, ns in neighbor_scores.items()
-                if nid not in score_by_id
-            ]
+            seeds = (
+                results
+                if hop == 0
+                else [{"_id": nid, "score": ns} for nid, ns in neighbor_scores.items() if nid not in score_by_id]
+            )
             hop_added = 0
             for r in seeds:
                 rid = r["_id"]
@@ -563,14 +589,10 @@ def recall(
                         break
                     boost = r["score"] * decay
                     if neighbor_id not in score_by_id:
-                        neighbor_scores[neighbor_id] = (
-                            neighbor_scores.get(neighbor_id, 0) + boost
-                        )
+                        neighbor_scores[neighbor_id] = neighbor_scores.get(neighbor_id, 0) + boost
                         hop_added += 1
                     else:
-                        neighbor_scores[neighbor_id] = (
-                            neighbor_scores.get(neighbor_id, 0) + boost * 0.5
-                        )
+                        neighbor_scores[neighbor_id] = neighbor_scores.get(neighbor_id, 0) + boost * 0.5
 
         # Apply boosts to existing results
         for r in results:
@@ -583,18 +605,20 @@ def recall(
             if nid not in score_by_id and nid in block_by_id:
                 nb = block_by_id[nid]
                 nb_tags = nb.get("Tags", "")
-                results.append({
-                    "_id": nid,
-                    "type": get_block_type(nid),
-                    "score": round(nscore, 4),
-                    "excerpt": get_excerpt(nb),
-                    "speaker": _parse_speaker_from_tags(nb_tags),
-                    "tags": nb_tags,
-                    "file": nb.get("_source_file", "?"),
-                    "line": nb.get("_line", 0),
-                    "status": nb.get("Status", ""),
-                    "via_graph": True,
-                })
+                results.append(
+                    {
+                        "_id": nid,
+                        "type": get_block_type(nid),
+                        "score": round(nscore, 4),
+                        "excerpt": get_excerpt(nb),
+                        "speaker": _parse_speaker_from_tags(nb_tags),
+                        "tags": nb_tags,
+                        "file": nb.get("_source_file", "?"),
+                        "line": nb.get("_line", 0),
+                        "status": nb.get("Status", ""),
+                        "via_graph": True,
+                    }
+                )
 
     # --- RM3 Dynamic Query Expansion ---
     # When enabled via config, use RM3 (Relevance Model 3) instead of the
@@ -615,7 +639,8 @@ def recall(
             rm3_config = _cfg.get("recall", {}).get("rm3", {})
             ce_config = _cfg.get("recall", {}).get("cross_encoder", {})
             temporal_hard_filter_enabled = _cfg.get("recall", {}).get(
-                "temporal_hard_filter", True,
+                "temporal_hard_filter",
+                True,
             )
         except (OSError, json.JSONDecodeError, KeyError) as e:
             _log.warning("rm3_config_load_failed", path=config_path, error=str(e))
@@ -637,14 +662,16 @@ def recall(
             result_id_to_idx[block.get("_id", "")] = i
 
         top_doc_tokens = []
-        for r in results[:rm3_config.get("fb_docs", 5)]:
+        for r in results[: rm3_config.get("fb_docs", 5)]:
             idx = result_id_to_idx.get(r["_id"])
             if idx is not None:
                 top_doc_tokens.append((doc_flat_tokens[idx], r["score"]))
 
         expanded_weights = rm3_expand(
-            query_tokens, top_doc_tokens,
-            collection_freq, total_collection_tokens,
+            query_tokens,
+            top_doc_tokens,
+            collection_freq,
+            total_collection_tokens,
             alpha=rm3_config.get("alpha", 0.6),
             fb_terms=rm3_config.get("fb_terms", 10),
             fb_docs=rm3_config.get("fb_docs", 5),
@@ -702,8 +729,7 @@ def recall(
                         results.append(result)
                         result_by_id[bid] = result
 
-            _log.info("rm3_expansion", expansion_terms=expansion_terms_rm3[:5],
-                      alpha=rm3_config.get("alpha", 0.6))
+            _log.info("rm3_expansion", expansion_terms=expansion_terms_rm3[:5], alpha=rm3_config.get("alpha", 0.6))
 
     # --- Pseudo-Relevance Feedback (PRF) ---
     # For single-hop, open-domain, and multi-hop queries, bridge the lexical
@@ -750,7 +776,11 @@ def recall(
 
                 weighted_tf_prf, wdl = compute_weighted_tf(ft)
                 prf_score = bm25f_score_terms(
-                    expansion_terms, weighted_tf_prf, wdl, _prf_idf, avg_wdl,
+                    expansion_terms,
+                    weighted_tf_prf,
+                    wdl,
+                    _prf_idf,
+                    avg_wdl,
                 )
 
                 if prf_score > 0:
@@ -823,7 +853,11 @@ def recall(
 
                 weighted_tf_br, wdl = compute_weighted_tf(ft)
                 bridge_score = bm25f_score_terms(
-                    bridge_tokens, weighted_tf_br, wdl, _bridge_idf, avg_wdl,
+                    bridge_tokens,
+                    weighted_tf_br,
+                    wdl,
+                    _bridge_idf,
+                    avg_wdl,
                 )
 
                 if bridge_score > 0:
@@ -848,8 +882,11 @@ def recall(
                             result["DiaID"] = block["DiaID"]
                         results.append(result)
 
-            _log.info("chain_of_retrieval", bridge_terms=bridge_tokens[:5],
-                      new_hits=sum(1 for r in results if r.get("via_chain")))
+            _log.info(
+                "chain_of_retrieval",
+                bridge_terms=bridge_tokens[:5],
+                new_hits=sum(1 for r in results if r.get("via_chain")),
+            )
 
     # --- Temporal hard filter (#13) ---
     # For temporal queries, resolve date range from the query and exclude
@@ -859,8 +896,7 @@ def recall(
         if t_start is not None or t_end is not None:
             pre_count = len(results)
             results = apply_temporal_filter(results, t_start, t_end)
-            _log.info("temporal_hard_filter", start=str(t_start), end=str(t_end),
-                      pre=pre_count, post=len(results))
+            _log.info("temporal_hard_filter", start=str(t_start), end=str(t_end), pre=pre_count, post=len(results))
 
     # Sort by score descending
     results.sort(key=lambda r: (r["score"], r.get("_id", "")), reverse=True)
@@ -907,6 +943,7 @@ def recall(
     if ce_config.get("enabled", False):
         try:
             from .cross_encoder_reranker import CrossEncoderReranker
+
             if CrossEncoderReranker.is_available():
                 ce = CrossEncoderReranker()
                 ce_cap = min(len(deduped), MAX_RERANK_CANDIDATES)
@@ -915,15 +952,16 @@ def recall(
                     if "content" not in r:
                         r["content"] = r.get("excerpt", "")
                 deduped = ce.rerank(
-                    query, ce_input,
+                    query,
+                    ce_input,
                     top_k=ce_config.get("top_k", limit),
                     blend_weight=ce_config.get("blend_weight", 0.6),
                 )
-                _log.info("cross_encoder_rerank", candidates=len(ce_input),
-                          blend_weight=ce_config.get("blend_weight", 0.6))
+                _log.info(
+                    "cross_encoder_rerank", candidates=len(ce_input), blend_weight=ce_config.get("blend_weight", 0.6)
+                )
         except ImportError:
-            _log.debug("cross_encoder_import_failed",
-                       hint="cross_encoder_reranker not installed")
+            _log.debug("cross_encoder_import_failed", hint="cross_encoder_reranker not installed")
         except Exception as e:
             _log.warning("cross_encoder_unavailable", error=str(e))
 
@@ -949,8 +987,11 @@ def recall(
         llm_weight = float(recall_cfg.get("llm_rerank_weight", 0.3))
         llm_cap = min(len(deduped), limit * 2)
         deduped[:llm_cap] = llm_rerank(
-            query, deduped[:llm_cap],
-            url=llm_url, model=llm_model, weight=llm_weight,
+            query,
+            deduped[:llm_cap],
+            url=llm_url,
+            model=llm_model,
+            weight=llm_weight,
         )
 
     # Stage 2.8: Co-retrieval graph propagation — boost co-occurring blocks
@@ -993,10 +1034,16 @@ def recall(
         except Exception as e:
             _log.warning("llm_enrichment_failed", error=str(e))
 
-    _log.info("query_complete", query=query, query_type=query_type,
-              blocks_searched=N, wide_k=wide_k, reranked=rerank,
-              results=len(top),
-              top_score=top[0]["score"] if top else 0)
+    _log.info(
+        "query_complete",
+        query=query,
+        query_type=query_type,
+        blocks_searched=N,
+        wide_k=wide_k,
+        reranked=rerank,
+        results=len(top),
+        top_score=top[0]["score"] if top else 0,
+    )
     metrics.inc("recall_queries")
     metrics.inc("recall_results", len(top))
 
@@ -1032,10 +1079,12 @@ def _load_backend(workspace: str) -> str:
             if backend == "vector":
                 try:
                     from .recall_vector import VectorBackend
+
                     return VectorBackend(recall_cfg)
                 except ImportError:
-                    _log.warning("vector_backend_unavailable",
-                                 hint="recall_vector not installed, falling back to BM25 scan")
+                    _log.warning(
+                        "vector_backend_unavailable", hint="recall_vector not installed, falling back to BM25 scan"
+                    )
         except (OSError, json.JSONDecodeError, KeyError) as e:
             _log.warning("config_load_failed", path=config_path, error=str(e))
     return None  # use built-in BM25 scan
@@ -1044,6 +1093,7 @@ def _load_backend(workspace: str) -> str:
 # ---------------------------------------------------------------------------
 # Prefetch Context — anticipatory pre-assembly for proactive memory
 # ---------------------------------------------------------------------------
+
 
 def prefetch_context(
     workspace: str,
@@ -1091,6 +1141,7 @@ def prefetch_context(
     #    pull in category context blocks that match the signals
     try:
         from .category_distiller import CategoryDistiller
+
         distiller = CategoryDistiller()
         combined_query = " ".join(recent_signals)
         relevant_cats = distiller.get_categories_for_query(combined_query)
@@ -1121,15 +1172,17 @@ def main():
     parser.add_argument("--active-only", action="store_true", help="Only search active blocks")
     parser.add_argument("--graph", action="store_true", help="Enable graph-based neighbor boosting")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
-    parser.add_argument("--retrieve-wide-k", type=int, default=200,
-                        help="Candidates to retrieve before reranking (default 200)")
-    parser.add_argument("--no-rerank", action="store_true",
-                        help="Disable v7 deterministic reranking (use pure BM25)")
-    parser.add_argument("--rerank-debug", action="store_true",
-                        help="Show reranker feature breakdowns in JSON output")
-    parser.add_argument("--backend", choices=["scan", "sqlite", "auto"],
-                        default="auto",
-                        help="Recall backend: scan (O(corpus)), sqlite (O(log N)), auto (config)")
+    parser.add_argument(
+        "--retrieve-wide-k", type=int, default=200, help="Candidates to retrieve before reranking (default 200)"
+    )
+    parser.add_argument("--no-rerank", action="store_true", help="Disable v7 deterministic reranking (use pure BM25)")
+    parser.add_argument("--rerank-debug", action="store_true", help="Show reranker feature breakdowns in JSON output")
+    parser.add_argument(
+        "--backend",
+        choices=["scan", "sqlite", "auto"],
+        default="auto",
+        help="Recall backend: scan (O(corpus)), sqlite (O(log N)), auto (config)",
+    )
     args = parser.parse_args()
 
     # Resolve backend: CLI flag > config > default scan
@@ -1141,9 +1194,7 @@ def main():
         elif cfg_backend is not None:
             # Vector or other custom backend
             try:
-                results = cfg_backend.search(
-                    args.workspace, args.query, args.limit, args.active_only
-                )
+                results = cfg_backend.search(args.workspace, args.query, args.limit, args.active_only)
             except (OSError, ValueError, TypeError) as e:
                 print(f"recall: backend error ({e}), falling back to scan", file=sys.stderr)
                 backend = "scan"
@@ -1154,16 +1205,28 @@ def main():
 
     if backend == "sqlite":
         from .sqlite_index import query_index
+
         results = query_index(
-            args.workspace, args.query, limit=args.limit,
-            active_only=args.active_only, graph_boost=args.graph,
+            args.workspace,
+            args.query,
+            limit=args.limit,
+            active_only=args.active_only,
+            graph_boost=args.graph,
             retrieve_wide_k=args.retrieve_wide_k,
-            rerank=not args.no_rerank, rerank_debug=args.rerank_debug,
+            rerank=not args.no_rerank,
+            rerank_debug=args.rerank_debug,
         )
     elif backend == "scan":
-        results = recall(args.workspace, args.query, args.limit, args.active_only,
-                         args.graph, retrieve_wide_k=args.retrieve_wide_k,
-                         rerank=not args.no_rerank, rerank_debug=args.rerank_debug)
+        results = recall(
+            args.workspace,
+            args.query,
+            args.limit,
+            args.active_only,
+            args.graph,
+            retrieve_wide_k=args.retrieve_wide_k,
+            rerank=not args.no_rerank,
+            rerank_debug=args.rerank_debug,
+        )
 
     if args.json:
         print(json.dumps(results, indent=2))

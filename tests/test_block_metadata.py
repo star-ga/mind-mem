@@ -11,7 +11,6 @@ from mind_mem.block_metadata import BlockMetadataManager
 
 
 class TestBlockMetadataManager(unittest.TestCase):
-
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.db_path = os.path.join(self.tmpdir, "index.db")
@@ -19,6 +18,7 @@ class TestBlockMetadataManager(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_record_access_creates_entry(self):

@@ -42,21 +42,79 @@ _TIME_INTENT_RE = re.compile(
 )
 
 # Month and day tokens for time-overlap scoring
-_MONTH_TOKENS = frozenset({
-    "january", "february", "march", "april", "may", "june",
-    "july", "august", "september", "october", "november", "december",
-    "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
-})
-_DAY_TOKENS = frozenset({
-    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
-    "mon", "tue", "wed", "thu", "fri", "sat", "sun",
-})
-_TEMPORAL_CONTENT_TOKENS = _MONTH_TOKENS | _DAY_TOKENS | frozenset({
-    "yesterday", "tomorrow", "tonight", "weekend",
-    "spring", "summer", "fall", "winter", "autumn",
-    "holiday", "birthday", "anniversary", "christmas",
-    "planned", "planning", "going", "trip", "visit", "travel", "vacation",
-})
+_MONTH_TOKENS = frozenset(
+    {
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+        "jan",
+        "feb",
+        "mar",
+        "apr",
+        "jun",
+        "jul",
+        "aug",
+        "sep",
+        "oct",
+        "nov",
+        "dec",
+    }
+)
+_DAY_TOKENS = frozenset(
+    {
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri",
+        "sat",
+        "sun",
+    }
+)
+_TEMPORAL_CONTENT_TOKENS = (
+    _MONTH_TOKENS
+    | _DAY_TOKENS
+    | frozenset(
+        {
+            "yesterday",
+            "tomorrow",
+            "tonight",
+            "weekend",
+            "spring",
+            "summer",
+            "fall",
+            "winter",
+            "autumn",
+            "holiday",
+            "birthday",
+            "anniversary",
+            "christmas",
+            "planned",
+            "planning",
+            "going",
+            "trip",
+            "visit",
+            "travel",
+            "vacation",
+        }
+    )
+)
 
 # Reranker feature weights (tuned for LoCoMo coverage)
 # Reduced speaker dominance (was 0.40), increased entity/phrase overlap
@@ -241,6 +299,7 @@ def rerank_hits(
 # v8: Optional LLM Reranking — config-gated, uses urllib.request (stdlib)
 # ---------------------------------------------------------------------------
 
+
 def llm_rerank(
     query: str,
     hits: list[dict],
@@ -287,12 +346,14 @@ def llm_rerank(
         f"No explanation, just the JSON array."
     )
 
-    payload = json.dumps({
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": 0.0, "num_predict": 256},
-    }).encode()
+    payload = json.dumps(
+        {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"temperature": 0.0, "num_predict": 256},
+        }
+    ).encode()
 
     try:
         req = urllib.request.Request(
@@ -313,8 +374,7 @@ def llm_rerank(
 
         scores = json.loads(match.group())
         if len(scores) != len(hits):
-            _log.warning("llm_rerank_length_mismatch",
-                         expected=len(hits), got=len(scores))
+            _log.warning("llm_rerank_length_mismatch", expected=len(hits), got=len(scores))
             return hits
 
         # Validate and clamp scores
@@ -331,8 +391,7 @@ def llm_rerank(
             h["score"] = round(blended, 4)
 
         hits.sort(key=lambda r: (r["score"], r.get("_id", "")), reverse=True)
-        _log.info("llm_rerank_applied", model=model, candidates=len(hits),
-                  weight=weight)
+        _log.info("llm_rerank_applied", model=model, candidates=len(hits), weight=weight)
 
     except (urllib.error.URLError, urllib.error.HTTPError) as e:
         _log.warning("llm_rerank_network_failed", error=str(e))

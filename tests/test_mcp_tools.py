@@ -1,4 +1,5 @@
 """Tests for MCP server tool definitions."""
+
 from __future__ import annotations
 
 import importlib

@@ -98,9 +98,7 @@ class TestRunJob(unittest.TestCase):
     @mock.patch("mind_mem.cron_runner.os.path.isfile", return_value=True)
     def test_success(self, _mock_isfile, mock_run):
         """Successful job returns status='ok' with duration."""
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="done", stderr=""
-        )
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="done", stderr="")
         result = run_job("transcript_scan", "/tmp/ws")
         self.assertEqual(result["job"], "transcript_scan")
         self.assertEqual(result["status"], "ok")
@@ -147,16 +145,18 @@ class TestPrintCronInstructions(unittest.TestCase):
 
     def test_output_contains_paths_and_schedule(self):
         """Output includes workspace path, script path, and cron schedules."""
+        ws_input = "/home/user/workspace"
         with mock.patch("builtins.print") as mock_print:
-            print_cron_instructions("/home/user/workspace")
+            print_cron_instructions(ws_input)
         calls = [str(c) for c in mock_print.call_args_list]
         combined = "\n".join(calls)
 
-        # Verify workspace appears in output
-        self.assertIn("/home/user/workspace", combined)
+        # Verify workspace appears in output (path may be normalized on Windows)
+        ws_normalized = os.path.abspath(ws_input)
+        self.assertIn(ws_normalized, combined)
         # Verify cron schedule patterns
         self.assertIn("0 */6 * * *", combined)  # transcript_scan: every 6h
-        self.assertIn("0 3 * * *", combined)     # entity_ingest + intel_scan: 3AM daily
+        self.assertIn("0 3 * * *", combined)  # entity_ingest + intel_scan: 3AM daily
         # Verify script reference
         self.assertIn("cron_runner.py", combined)
         # Verify logger pipe

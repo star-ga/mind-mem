@@ -1,4 +1,5 @@
 """Tests for recall constants module."""
+
 from __future__ import annotations
 
 from scripts._recall_constants import (

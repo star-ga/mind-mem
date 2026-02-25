@@ -41,8 +41,11 @@ class _WorkspaceMixin:
 
         # Create empty files for other corpus entries
         for fname in [
-            "entities/people.md", "entities/tools.md", "entities/incidents.md",
-            "intelligence/CONTRADICTIONS.md", "intelligence/DRIFT.md",
+            "entities/people.md",
+            "entities/tools.md",
+            "entities/incidents.md",
+            "intelligence/CONTRADICTIONS.md",
+            "intelligence/DRIFT.md",
             "intelligence/SIGNALS.md",
         ]:
             path = os.path.join(tmpdir, fname)
@@ -61,23 +64,19 @@ class TestBuildIndex(_WorkspaceMixin, unittest.TestCase):
         shutil.rmtree(self.td, ignore_errors=True)
 
     def test_full_build_creates_db(self):
-        ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL for the database\n"
-            "Status: active\n"
-            "Date: 2026-01-01\n"
-        ))
+        ws = self._setup_workspace(
+            self.td,
+            decisions=(
+                "[D-20260101-001]\nStatement: Use PostgreSQL for the database\nStatus: active\nDate: 2026-01-01\n"
+            ),
+        )
         result = build_index(ws, incremental=False)
         self.assertTrue(os.path.isfile(_db_path(ws)))
         self.assertGreater(result["blocks_indexed"], 0)
         self.assertIn("elapsed_ms", result)
 
     def test_incremental_skips_unchanged(self):
-        ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL\n"
-            "Status: active\n"
-        ))
+        ws = self._setup_workspace(self.td, decisions=("[D-20260101-001]\nStatement: Use PostgreSQL\nStatus: active\n"))
         # First build
         build_index(ws, incremental=False)
         # Second build (no changes)
@@ -86,11 +85,7 @@ class TestBuildIndex(_WorkspaceMixin, unittest.TestCase):
         self.assertEqual(r2["blocks_indexed"], 0)
 
     def test_incremental_detects_change(self):
-        ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL\n"
-            "Status: active\n"
-        ))
+        ws = self._setup_workspace(self.td, decisions=("[D-20260101-001]\nStatement: Use PostgreSQL\nStatus: active\n"))
         build_index(ws, incremental=False)
 
         # Modify the decisions file
@@ -110,12 +105,8 @@ class TestBuildIndex(_WorkspaceMixin, unittest.TestCase):
     def test_xref_edges_populated(self):
         ws = self._setup_workspace(
             self.td,
-            decisions=(
-                "[D-20260101-001]\nStatement: Use JWT\nContext: See T-20260101-001\nStatus: active\n"
-            ),
-            tasks=(
-                "[T-20260101-001]\nTitle: Implement auth\nStatus: open\n"
-            ),
+            decisions=("[D-20260101-001]\nStatement: Use JWT\nContext: See T-20260101-001\nStatus: active\n"),
+            tasks=("[T-20260101-001]\nTitle: Implement auth\nStatus: open\n"),
         )
         build_index(ws, incremental=False)
         conn = _connect(ws, readonly=True)
@@ -130,19 +121,22 @@ class TestBuildIndex(_WorkspaceMixin, unittest.TestCase):
 class TestQueryIndex(_WorkspaceMixin, unittest.TestCase):
     def setUp(self):
         self.td = tempfile.mkdtemp()
-        self.ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL for the primary database\n"
-            "Status: active\n"
-            "Date: 2026-01-01\n"
-            "Tags: database, infrastructure\n"
-            "\n---\n\n"
-            "[D-20260101-002]\n"
-            "Statement: Use Redis for caching layer\n"
-            "Status: active\n"
-            "Date: 2026-01-02\n"
-            "Tags: cache, infrastructure\n"
-        ))
+        self.ws = self._setup_workspace(
+            self.td,
+            decisions=(
+                "[D-20260101-001]\n"
+                "Statement: Use PostgreSQL for the primary database\n"
+                "Status: active\n"
+                "Date: 2026-01-01\n"
+                "Tags: database, infrastructure\n"
+                "\n---\n\n"
+                "[D-20260101-002]\n"
+                "Statement: Use Redis for caching layer\n"
+                "Status: active\n"
+                "Date: 2026-01-02\n"
+                "Tags: cache, infrastructure\n"
+            ),
+        )
         build_index(self.ws, incremental=False)
 
     def tearDown(self):
@@ -176,11 +170,7 @@ class TestQueryIndex(_WorkspaceMixin, unittest.TestCase):
     def test_active_only_filter(self):
         # Add a superseded block
         with open(os.path.join(self.ws, "decisions", "DECISIONS.md"), "a") as f:
-            f.write(
-                "\n---\n\n[D-20260101-003]\n"
-                "Statement: Use MySQL for database\n"
-                "Status: superseded\n"
-            )
+            f.write("\n---\n\n[D-20260101-003]\nStatement: Use MySQL for database\nStatus: superseded\n")
         build_index(self.ws, incremental=True)
 
         results = query_index(self.ws, "database", active_only=True)
@@ -191,11 +181,9 @@ class TestQueryIndex(_WorkspaceMixin, unittest.TestCase):
         """When index doesn't exist, should fall back to filesystem recall."""
         empty = tempfile.mkdtemp()
         try:
-            ws = self._setup_workspace(empty, decisions=(
-                "[D-20260101-001]\n"
-                "Statement: Use PostgreSQL\n"
-                "Status: active\n"
-            ))
+            ws = self._setup_workspace(
+                empty, decisions=("[D-20260101-001]\nStatement: Use PostgreSQL\nStatus: active\n")
+            )
             # Don't build index — should fallback
             results = query_index(ws, "PostgreSQL")
             self.assertGreater(len(results), 0)
@@ -216,9 +204,7 @@ class TestIndexStatus(_WorkspaceMixin, unittest.TestCase):
         self.assertFalse(status["exists"])
 
     def test_index_exists(self):
-        ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\nStatement: Test\nStatus: active\n"
-        ))
+        ws = self._setup_workspace(self.td, decisions=("[D-20260101-001]\nStatement: Test\nStatus: active\n"))
         build_index(ws, incremental=False)
         status = index_status(ws)
         self.assertTrue(status["exists"])
@@ -226,9 +212,7 @@ class TestIndexStatus(_WorkspaceMixin, unittest.TestCase):
         self.assertIsNotNone(status["last_build"])
 
     def test_stale_detection(self):
-        ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\nStatement: Test\nStatus: active\n"
-        ))
+        ws = self._setup_workspace(self.td, decisions=("[D-20260101-001]\nStatement: Test\nStatus: active\n"))
         build_index(ws, incremental=False)
 
         # Modify file
@@ -250,15 +234,18 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
 
     def test_initial_build_all_new(self):
         """First build should report all blocks as new."""
-        ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL\n"
-            "Status: active\n"
-            "\n---\n\n"
-            "[D-20260101-002]\n"
-            "Statement: Use Redis\n"
-            "Status: active\n"
-        ))
+        ws = self._setup_workspace(
+            self.td,
+            decisions=(
+                "[D-20260101-001]\n"
+                "Statement: Use PostgreSQL\n"
+                "Status: active\n"
+                "\n---\n\n"
+                "[D-20260101-002]\n"
+                "Statement: Use Redis\n"
+                "Status: active\n"
+            ),
+        )
         result = build_index(ws, incremental=False)
         self.assertEqual(result["blocks_new"], 2)
         self.assertEqual(result["blocks_modified"], 0)
@@ -267,21 +254,25 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
 
     def test_unchanged_blocks_skipped(self):
         """Unchanged blocks should not be re-indexed."""
-        ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL\n"
-            "Status: active\n"
-            "\n---\n\n"
-            "[D-20260101-002]\n"
-            "Statement: Use Redis\n"
-            "Status: active\n"
-        ))
+        ws = self._setup_workspace(
+            self.td,
+            decisions=(
+                "[D-20260101-001]\n"
+                "Statement: Use PostgreSQL\n"
+                "Status: active\n"
+                "\n---\n\n"
+                "[D-20260101-002]\n"
+                "Statement: Use Redis\n"
+                "Status: active\n"
+            ),
+        )
         build_index(ws, incremental=False)
 
         # Touch the file (change mtime) but keep same content
         path = os.path.join(ws, "decisions", "DECISIONS.md")
         content = open(path).read()
         import time
+
         time.sleep(0.05)
         with open(path, "w") as f:
             f.write(content)
@@ -296,15 +287,18 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
 
     def test_modified_block_detected(self):
         """Modifying a single block should only re-index that block."""
-        ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL\n"
-            "Status: active\n"
-            "\n---\n\n"
-            "[D-20260101-002]\n"
-            "Statement: Use Redis\n"
-            "Status: active\n"
-        ))
+        ws = self._setup_workspace(
+            self.td,
+            decisions=(
+                "[D-20260101-001]\n"
+                "Statement: Use PostgreSQL\n"
+                "Status: active\n"
+                "\n---\n\n"
+                "[D-20260101-002]\n"
+                "Statement: Use Redis\n"
+                "Status: active\n"
+            ),
+        )
         build_index(ws, incremental=False)
 
         # Modify only the second block
@@ -327,21 +321,12 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
 
     def test_new_block_added(self):
         """Adding a block should be detected as new."""
-        ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL\n"
-            "Status: active\n"
-        ))
+        ws = self._setup_workspace(self.td, decisions=("[D-20260101-001]\nStatement: Use PostgreSQL\nStatus: active\n"))
         build_index(ws, incremental=False)
 
         # Add a second block
         with open(os.path.join(ws, "decisions", "DECISIONS.md"), "a") as f:
-            f.write(
-                "\n---\n\n"
-                "[D-20260101-002]\n"
-                "Statement: Use Redis\n"
-                "Status: active\n"
-            )
+            f.write("\n---\n\n[D-20260101-002]\nStatement: Use Redis\nStatus: active\n")
 
         result = build_index(ws, incremental=True)
         self.assertEqual(result["blocks_new"], 1)
@@ -349,24 +334,23 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
 
     def test_block_deleted(self):
         """Removing a block should be detected as deleted."""
-        ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL\n"
-            "Status: active\n"
-            "\n---\n\n"
-            "[D-20260101-002]\n"
-            "Statement: Use Redis\n"
-            "Status: active\n"
-        ))
+        ws = self._setup_workspace(
+            self.td,
+            decisions=(
+                "[D-20260101-001]\n"
+                "Statement: Use PostgreSQL\n"
+                "Status: active\n"
+                "\n---\n\n"
+                "[D-20260101-002]\n"
+                "Statement: Use Redis\n"
+                "Status: active\n"
+            ),
+        )
         build_index(ws, incremental=False)
 
         # Remove the second block
         with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
-            f.write(
-                "[D-20260101-001]\n"
-                "Statement: Use PostgreSQL\n"
-                "Status: active\n"
-            )
+            f.write("[D-20260101-001]\nStatement: Use PostgreSQL\nStatus: active\n")
 
         result = build_index(ws, incremental=True)
         self.assertEqual(result["blocks_deleted"], 1)
@@ -379,19 +363,22 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
 
     def test_mixed_add_modify_delete(self):
         """All three operations in a single reindex."""
-        ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL\n"
-            "Status: active\n"
-            "\n---\n\n"
-            "[D-20260101-002]\n"
-            "Statement: Use Redis\n"
-            "Status: active\n"
-            "\n---\n\n"
-            "[D-20260101-003]\n"
-            "Statement: Use Docker\n"
-            "Status: active\n"
-        ))
+        ws = self._setup_workspace(
+            self.td,
+            decisions=(
+                "[D-20260101-001]\n"
+                "Statement: Use PostgreSQL\n"
+                "Status: active\n"
+                "\n---\n\n"
+                "[D-20260101-002]\n"
+                "Statement: Use Redis\n"
+                "Status: active\n"
+                "\n---\n\n"
+                "[D-20260101-003]\n"
+                "Statement: Use Docker\n"
+                "Status: active\n"
+            ),
+        )
         build_index(ws, incremental=False)
 
         # 001: unchanged, 002: modify, 003: delete, 004: new
@@ -412,17 +399,13 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
 
         result = build_index(ws, incremental=True)
         self.assertEqual(result["blocks_unchanged"], 1)  # 001
-        self.assertEqual(result["blocks_modified"], 1)    # 002
-        self.assertEqual(result["blocks_deleted"], 1)     # 003
-        self.assertEqual(result["blocks_new"], 1)         # 004
+        self.assertEqual(result["blocks_modified"], 1)  # 002
+        self.assertEqual(result["blocks_deleted"], 1)  # 003
+        self.assertEqual(result["blocks_new"], 1)  # 004
 
     def test_force_rebuild_reindexes_all(self):
         """Full rebuild should re-index all blocks even if unchanged."""
-        ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL\n"
-            "Status: active\n"
-        ))
+        ws = self._setup_workspace(self.td, decisions=("[D-20260101-001]\nStatement: Use PostgreSQL\nStatus: active\n"))
         build_index(ws, incremental=False)
 
         # Full rebuild — no file changes, but force=True re-indexes
@@ -431,11 +414,7 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
 
     def test_index_meta_populated(self):
         """index_meta table should contain correct hashes after build."""
-        ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL\n"
-            "Status: active\n"
-        ))
+        ws = self._setup_workspace(self.td, decisions=("[D-20260101-001]\nStatement: Use PostgreSQL\nStatus: active\n"))
         build_index(ws, incremental=False)
 
         conn = _connect(ws, readonly=True)
@@ -447,20 +426,14 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
 
     def test_modified_block_queryable(self):
         """After modifying a block, the new content should be searchable."""
-        ws = self._setup_workspace(self.td, decisions=(
-            "[D-20260101-001]\n"
-            "Statement: Use MySQL for database\n"
-            "Status: active\n"
-        ))
+        ws = self._setup_workspace(
+            self.td, decisions=("[D-20260101-001]\nStatement: Use MySQL for database\nStatus: active\n")
+        )
         build_index(ws, incremental=False)
 
         # Modify content
         with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
-            f.write(
-                "[D-20260101-001]\n"
-                "Statement: Use PostgreSQL for database\n"
-                "Status: active\n"
-            )
+            f.write("[D-20260101-001]\nStatement: Use PostgreSQL for database\nStatus: active\n")
         build_index(ws, incremental=True)
 
         # New content should be searchable

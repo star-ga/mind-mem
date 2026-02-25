@@ -6,6 +6,7 @@ CHANGELOG.md are all in sync.
 Usage:
     python3 scripts/check_version.py
 """
+
 from __future__ import annotations
 
 import re

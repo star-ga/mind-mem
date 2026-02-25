@@ -1,4 +1,5 @@
 """Tests for workspace initialization."""
+
 from __future__ import annotations
 
 import os
