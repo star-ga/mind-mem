@@ -35,7 +35,7 @@ class BlockMetadataManager:
         self._lock = threading.RLock()
         self._ensure_table()
 
-    def _ensure_table(self):
+    def _ensure_table(self) -> None:
         """Create block_meta table if it doesn't exist."""
         with self._lock:
             try:
@@ -49,7 +49,7 @@ class BlockMetadataManager:
     def _get_conn(self) -> sqlite3.Connection:
         return sqlite3.connect(self.db_path)
 
-    def record_access(self, block_ids: list[str], query: str = ""):
+    def record_access(self, block_ids: list[str], query: str = "") -> None:
         """Update access_count, last_accessed for given blocks.
         Also record co-occurrence for connection tracking."""
         if not block_ids:
@@ -155,7 +155,7 @@ class BlockMetadataManager:
                 return 1.0
 
     def evolve_keywords(self, block_id: str, query_tokens: list[str],
-                        block_content: str = "", max_keywords: int = 20):
+                        block_content: str = "", max_keywords: int = 20) -> None:
         """Add query tokens found in block content to block's keyword set."""
         if not query_tokens:
             return
