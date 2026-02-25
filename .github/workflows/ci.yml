@@ -54,7 +54,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-${{ matrix.os }}-${{ matrix.python-version }}
           path: coverage.xml
