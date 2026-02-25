@@ -1,6 +1,8 @@
 """Tests for field token extraction."""
 from __future__ import annotations
+
 from scripts._recall_detection import extract_field_tokens
+
 
 def test_extract_from_block():
     block = {"Statement": "Use BM25 scoring", "Title": "Decision"}

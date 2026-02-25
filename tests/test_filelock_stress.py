@@ -2,7 +2,9 @@
 import os
 import threading
 import time
+
 import pytest
+
 from scripts.mind_filelock import FileLock
 
 
@@ -41,7 +43,7 @@ class TestFileLockContention:
 
         assert not errors, f"Thread errors: {errors}"
         with open(data_file) as f:
-            lines = [l.strip() for l in f if l.strip()]
+            lines = [line.strip() for line in f if line.strip()]
         assert len(lines) == 50, f"Expected 50 lines, got {len(lines)}"
 
     def test_lock_timeout_behavior(self, tmp_path):

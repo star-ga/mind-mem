@@ -1,8 +1,12 @@
 """Tests for status boost in recall."""
 from __future__ import annotations
-import os, tempfile
-from scripts.init_workspace import init
+
+import os
+import tempfile
+
 from scripts._recall_core import recall
+from scripts.init_workspace import init
+
 
 def _make_workspace():
     ws = tempfile.mkdtemp()

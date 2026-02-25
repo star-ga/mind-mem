@@ -1,6 +1,8 @@
 """Tests for date scoring function."""
 from __future__ import annotations
+
 from scripts._recall_scoring import date_score
+
 
 def test_date_score_no_date():
     assert date_score({}) == 0.5

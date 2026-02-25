@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import importlib
-import sys
+
+import pytest
 
 
 def test_mcp_server_importable():
@@ -11,16 +12,25 @@ def test_mcp_server_importable():
     assert spec is not None
 
 
+@pytest.mark.skipif(
+    importlib.util.find_spec("fastmcp") is None,
+    reason="fastmcp not installed",
+)
 def test_mcp_server_has_tools():
     """MCP server exposes tool definitions."""
     import mcp_server
-    # Check for tool registration
+
     assert hasattr(mcp_server, "app") or hasattr(mcp_server, "server") or hasattr(mcp_server, "mcp")
 
 
+@pytest.mark.skipif(
+    importlib.util.find_spec("fastmcp") is None,
+    reason="fastmcp not installed",
+)
 def test_tool_count():
     """MCP server has expected number of tools (18)."""
     import mcp_server
+
     app = getattr(mcp_server, "app", None) or getattr(mcp_server, "server", None) or getattr(mcp_server, "mcp", None)
     if app is not None and hasattr(app, "_tool_handlers"):
         assert len(app._tool_handlers) >= 10

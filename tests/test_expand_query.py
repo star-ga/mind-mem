@@ -1,6 +1,8 @@
 """Tests for query expansion module."""
 from __future__ import annotations
-from scripts._recall_expansion import expand_query, expand_months
+
+from scripts._recall_expansion import expand_months, expand_query
+
 
 def test_expand_query_basic():
     tokens = expand_query("deployment process")

@@ -1,9 +1,16 @@
 """Tests for query detection module."""
 from __future__ import annotations
+
 from scripts._recall_detection import (
-    chunk_text, decompose_query, detect_query_type,
-    get_bigrams, get_block_type, get_excerpt, is_skeptical_query,
+    chunk_text,
+    decompose_query,
+    detect_query_type,
+    get_bigrams,
+    get_block_type,
+    get_excerpt,
+    is_skeptical_query,
 )
+
 
 def test_chunk_text_basic():
     text = ". ".join(f"Sentence {i}" for i in range(30)) + "."

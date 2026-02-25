@@ -4,8 +4,8 @@ from __future__ import annotations
 import os
 import tempfile
 
-from scripts.init_workspace import init
 from scripts._recall_core import recall
+from scripts.init_workspace import init
 
 
 def _make_workspace(n_blocks=20):
