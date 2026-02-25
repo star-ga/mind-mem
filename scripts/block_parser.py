@@ -72,7 +72,7 @@ _NEGATION_RE = re.compile(
 
 
 # Nested dict fields recognized in ConstraintSignature parsing
-DICT_FIELDS = {"scope", "axis", "lifecycle"}
+_DICT_FIELDS = {"scope", "axis", "lifecycle"}
 
 
 def parse_blocks(text: str) -> list[dict]:
@@ -173,7 +173,7 @@ def parse_blocks(text: str) -> list[dict]:
 
                 # Nested dict sub-fields at 4-space indent (scope, axis, lifecycle)
                 nested_kv = re.match(r"^    ([a-z_]+):\s+(.+)$", line)
-                if nested_kv and current_sig_field in DICT_FIELDS:
+                if nested_kv and current_sig_field in _DICT_FIELDS:
                     parent = current_sig_field
                     if not isinstance(current_sig.get(parent), dict):
                         current_sig[parent] = {}
@@ -188,7 +188,7 @@ def parse_blocks(text: str) -> list[dict]:
 
                 # Nested sub-sub-fields at 6-space indent (e.g. scope.time)
                 time_kv = re.match(r"^      ([a-z_]+):\s+(.+)$", line)
-                if time_kv and current_sig_field in DICT_FIELDS:
+                if time_kv and current_sig_field in _DICT_FIELDS:
                     parent = current_sig_field
                     if not isinstance(current_sig.get(parent), dict):
                         current_sig[parent] = {}
@@ -585,7 +585,7 @@ def chunk_block(
     text_value = ""
     for field in ("Statement", "Description", "Summary", "Title"):
         val = block.get(field, "")
-        if isinstance(val, str) and len(val) > text_value.__len__():
+        if isinstance(val, str) and len(val) > len(text_value):
             text_field = field
             text_value = val
 
@@ -659,21 +659,16 @@ def get_by_id(blocks: list[dict], block_id: str) -> dict | None:
 def extract_refs(blocks: list[dict]) -> set[str]:
     """Extract all cross-reference IDs from block fields."""
     refs = set()
-    pattern = re.compile(
-        r"\b(D-\d{8}-\d{3}|T-\d{8}-\d{3}|INC-\d{8}-[a-z0-9-]+"
-        r"|PRJ-[a-z0-9-]+|PER-[a-z0-9-]+|TOOL-[a-z0-9-]+"
-        r"|C-\d{8}-\d{3}|DREF-\d{8}-\d{3}|I-\d{8}-\d{3})\b"
-    )
     for block in blocks:
         for key, val in block.items():
             if key.startswith("_"):
                 continue
             if isinstance(val, str):
-                refs.update(pattern.findall(val))
+                refs.update(_ENTITY_ID_RE.findall(val))
             elif isinstance(val, list):
                 for item in val:
                     if isinstance(item, str):
-                        refs.update(pattern.findall(item))
+                        refs.update(_ENTITY_ID_RE.findall(item))
     return refs
 
 

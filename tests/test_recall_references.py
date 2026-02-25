@@ -10,22 +10,30 @@ from scripts.init_workspace import init
 
 
 def _make_workspace():
-    ws = tempfile.mkdtemp()
+    td = tempfile.TemporaryDirectory()
+    ws = os.path.join(td.name, "ws")
+    os.makedirs(ws)
     init(ws)
     path = os.path.join(ws, "decisions", "refs.md")
     with open(path, "w") as f:
         f.write("[REF-001]\nType: Decision\nStatement: Primary decision\nReferences: REF-002\n\n")
         f.write("[REF-002]\nType: Decision\nStatement: Referenced decision\nReferences: REF-001\n\n")
-    return ws
+    return ws, td
 
 
 def test_reference_search():
-    ws = _make_workspace()
-    results = recall(ws, "primary decision", limit=5)
-    assert isinstance(results, list)
+    ws, td = _make_workspace()
+    try:
+        results = recall(ws, "primary decision", limit=5)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()
 
 
 def test_referenced_block():
-    ws = _make_workspace()
-    results = recall(ws, "referenced decision", limit=5)
-    assert isinstance(results, list)
+    ws, td = _make_workspace()
+    try:
+        results = recall(ws, "referenced decision", limit=5)
+        assert isinstance(results, list)
+    finally:
+        td.cleanup()

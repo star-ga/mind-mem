@@ -15,13 +15,15 @@ from scripts.init_workspace import init  # noqa: E402
 
 
 def _make_workspace():
-    ws = tempfile.mkdtemp()
+    td = tempfile.TemporaryDirectory()
+    ws = os.path.join(td.name, "ws")
+    os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "delete_test.md")
     with open(blocks_md, "w") as f:
         f.write("[DEL-001]\nType: Decision\nStatement: To be deleted\n\n")
         f.write("[DEL-002]\nType: Decision\nStatement: To keep\n\n")
-    return ws
+    return ws, td
 
 
 def test_delete_importable():
@@ -31,13 +33,19 @@ def test_delete_importable():
 
 def test_delete_existing_block():
     """Deleting an existing block succeeds."""
-    ws = _make_workspace()
-    result = delete_block(ws, "DEL-001")
-    assert result is not None
+    ws, td = _make_workspace()
+    try:
+        result = delete_block(ws, "DEL-001")
+        assert result is not None
+    finally:
+        td.cleanup()
 
 
 def test_delete_nonexistent_block():
     """Deleting non-existent block handles gracefully."""
-    ws = _make_workspace()
-    result = delete_block(ws, "NONEXIST-999")
-    assert isinstance(result, (dict, bool, type(None)))
+    ws, td = _make_workspace()
+    try:
+        result = delete_block(ws, "NONEXIST-999")
+        assert isinstance(result, (dict, bool, type(None)))
+    finally:
+        td.cleanup()
