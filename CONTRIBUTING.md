@@ -1,87 +1,52 @@
 # Contributing to mind-mem
 
-Contributions are welcome. Please follow these guidelines.
-
-## Getting Started
-
-1. Fork the repo
-2. Clone your fork
-3. Create a branch: `git checkout -b feature/your-feature`
-4. Make changes
-5. Run tests: `python -m pytest tests/ -x`
-6. Run lint: `ruff check scripts/ tests/ mcp_server.py`
-7. Commit and push
-8. Open a pull request
+Thank you for your interest in contributing to mind-mem!
 
 ## Development Setup
 
 ```bash
+# Clone the repository
 git clone https://github.com/star-ga/mind-mem.git
 cd mind-mem
-python -m pip install -e ".[dev]"
-python -m pytest tests/ -x
+
+# Install in development mode
+pip install -e ".[dev]"
+
+# Run tests
+pytest tests/ -v
+
+# Run linting
+ruff check scripts/ tests/
+ruff format --check scripts/ tests/
 ```
 
-## Module Map
+## Pull Request Process
 
-The codebase is organized into focused modules under `scripts/`:
+1. Fork the repository and create a feature branch
+2. Write tests for new functionality
+3. Ensure all tests pass: `pytest tests/ -v`
+4. Ensure linting passes: `ruff check scripts/ tests/`
+5. Update documentation if applicable
+6. Submit a pull request with a clear description
 
-| Module | Purpose | Lines |
-|--------|---------|------:|
-| `_recall_core.py` | Main recall pipeline: BM25 scoring loop, graph boost, PRF, RM3, CLI | ~1200 |
-| `_recall_scoring.py` | BM25F helper, date scores, negation, categories, entity extraction | ~260 |
-| `_recall_constants.py` | All named constants: BM25 params, field weights, boost factors | ~240 |
-| `_recall_detection.py` | Query type detection, intent routing, tokenization helpers | ~350 |
-| `_recall_expansion.py` | RM3 expansion, synonym expansion, month normalization | ~200 |
-| `_recall_temporal.py` | Temporal query parsing, date range resolution, filtering | ~180 |
-| `_recall_reranking.py` | Deterministic reranker, optional LLM reranker | ~250 |
-| `_recall_context.py` | Context packing: adjacency, diversity, pronoun rescue | ~200 |
-| `_recall_tokenization.py` | Porter stemming, lemmatization, tokenizer | ~150 |
-| `sqlite_index.py` | FTS5 index: build, incremental update, fact extraction, query | ~1100 |
-| `retrieval_graph.py` | Co-retrieval logging, PageRank propagation, hard negatives | ~300 |
-| `mcp_server.py` | MCP server: 18 tools, 8 resources, stdio + HTTP transports | ~600 |
+## Code Style
 
-## Code Standards
-
-- **Python 3.10+** — use modern syntax (type hints, `|` unions, etc.)
-- **Zero external dependencies** for core modules (scripts/*.py)
-- **ruff** for linting — zero errors required
-- **pytest** for testing — all tests must pass
-- **Named constants** — no magic numbers in scoring logic (use `_recall_constants.py`)
-- **Single source of truth** — BM25 formula lives in `bm25f_score_terms()` only
+- Python 3.10+ with type hints
+- Formatting: `ruff format`
+- Linting: `ruff check`
+- Zero external dependencies in core (stdlib only)
+- Tests use pytest with fixtures
 
 ## Test Guidelines
 
-- Every new module needs a corresponding test file in `tests/`
-- Tests should be self-contained (use temp directories, mock externals)
-- Target: 100% pass rate across Ubuntu/macOS/Windows x Python 3.10/3.12/3.13/3.14
-- CI runs 14 matrix jobs (3 OSes x 4-5 Python versions)
-
-## Pull Request Checklist
-
-- [ ] All tests pass (`python -m pytest tests/ -x`)
-- [ ] `ruff check` reports zero errors
-- [ ] New features have tests
-- [ ] No new external dependencies added to core
-
-## Architecture Decisions
-
-Before proposing significant architectural changes, please open an issue first to discuss the approach. See [docs/architecture.md](docs/architecture.md) for the current system design.
-
-## MIND Kernels
-
-If modifying `.mind` files:
-- Follow MIND syntax (see [mind/README.md](mind/README.md))
-- Ensure pure Python fallback exists for every MIND function
-- Test both with and without compiled `.so`
+- Colocate tests in `tests/test_<module>.py`
+- Use `tmp_path` fixture for filesystem tests
+- Mock external dependencies (LLM calls, network)
+- Aim for >90% coverage on new code
 
 ## Reporting Issues
 
-Please include:
-- Python version
-- OS
-- Minimal reproduction steps
-- Expected vs actual behavior
+Use the GitHub issue templates for bug reports and feature requests.
 
 ## License
 
