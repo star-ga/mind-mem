@@ -1,0 +1,28 @@
+# Auto-detect text files and normalize line endings
+* text=auto
+
+# Python
+*.py text diff=python
+*.pyi text diff=python
+
+# Markdown
+*.md text diff=markdown
+
+# JSON/YAML
+*.json text
+*.yml text
+*.yaml text
+*.toml text
+
+# Shell scripts
+*.sh text eol=lf
+
+# MIND kernels (binary)
+*.mind binary
+
+# Lock files
+*.lock text
+
+# Generated files
+coverage.xml -diff
+benchmark-results.json -diff
