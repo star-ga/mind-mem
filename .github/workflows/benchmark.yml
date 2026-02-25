@@ -35,30 +35,30 @@ jobs:
           # Fallback: run recall timing test
           python -c "
           import time, tempfile, os
-          from scripts.init_workspace import init_workspace
-          from scripts.block_parser import parse_blocks
-          from scripts._recall_core import recall_blocks
-          
+          from scripts.init_workspace import init as init_workspace
+          from scripts.block_parser import parse_file
+          from scripts._recall_core import recall
+
           ws = tempfile.mkdtemp()
           init_workspace(ws)
-          
+
           # Create test blocks
           blocks_md = os.path.join(ws, 'decisions', 'test.md')
           with open(blocks_md, 'w') as f:
               for i in range(50):
                   f.write(f'[TEST-{i:03d}]\nType: Decision\n')
                   f.write(f'Statement: Test decision number {i} about topic {chr(65 + i % 26)}\n\n')
-          
-          blocks = parse_blocks(ws)
-          
+
+          blocks = parse_file(blocks_md)
+
           # Benchmark recall
           times = []
           for _ in range(10):
               start = time.perf_counter()
-              recall_blocks('test decision topic', blocks, limit=10)
+              recall('test decision topic', blocks, limit=10)
               elapsed = (time.perf_counter() - start) * 1000
               times.append(elapsed)
-          
+
           avg = sum(times) / len(times)
           p95 = sorted(times)[int(len(times) * 0.95)]
           print(f'Recall benchmark: avg={avg:.1f}ms p95={p95:.1f}ms (n={len(times)}, blocks={len(blocks)})')
