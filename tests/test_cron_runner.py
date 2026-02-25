@@ -4,7 +4,6 @@
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -12,7 +11,6 @@ from unittest import mock
 from mind_mem.cron_runner import (
     ALL_JOBS,
     JOB_DEFS,
-    SCRIPTS_DIR,
     is_job_enabled,
     load_config,
     main,

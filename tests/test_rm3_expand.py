@@ -1,7 +1,10 @@
 """Tests for RM3 query expansion."""
 from __future__ import annotations
+
 from collections import Counter
+
 from scripts._recall_expansion import rm3_expand
+
 
 def test_rm3_expand_basic():
     result = rm3_expand(

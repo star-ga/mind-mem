@@ -13,20 +13,20 @@ Covers:
 
 from __future__ import annotations
 
-import sys, os, types, importlib, textwrap
-from unittest.mock import MagicMock, ANY
+import os
+import sys
+from unittest.mock import MagicMock
 
 import pytest
 
 # ── import the module under test ──────────────────────────────────────
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from observation_compress import (
+    _CATEGORY_PROMPTS,
     COMPRESS_SYSTEM_PROMPT,
     COMPRESS_USER_TEMPLATE,
-    _CATEGORY_PROMPTS,
     compress_context,
 )
-
 
 # ── helpers ───────────────────────────────────────────────────────────
 

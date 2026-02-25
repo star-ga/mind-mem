@@ -1,6 +1,8 @@
 """Tests for excerpt generation."""
 from __future__ import annotations
+
 from scripts._recall_detection import get_excerpt
+
 
 def test_excerpt_basic():
     block = {"Statement": "This is a test statement about decisions"}

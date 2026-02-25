@@ -1,8 +1,6 @@
 """Tests for tokenization module."""
 from __future__ import annotations
 
-import pytest
-
 from scripts._recall_tokenization import tokenize
 
 

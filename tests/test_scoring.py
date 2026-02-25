@@ -1,7 +1,10 @@
 """Tests for BM25 scoring functions."""
 from __future__ import annotations
+
 from collections import Counter
+
 from scripts._recall_scoring import bm25f_score_terms, compute_weighted_tf
+
 
 def test_bm25f_score_terms_basic():
     score = bm25f_score_terms(
@@ -25,8 +28,10 @@ def test_bm25f_score_terms_no_match():
     assert score >= 0
 
 def test_bm25f_score_terms_multiple_terms():
-    score_single = bm25f_score_terms(["test"], Counter({"test": 1.0, "query": 1.0}), 10.0, {"test": 1.5, "query": 1.5}, 10.0)
-    score_multi = bm25f_score_terms(["test", "query"], Counter({"test": 1.0, "query": 1.0}), 10.0, {"test": 1.5, "query": 1.5}, 10.0)
+    idf = {"test": 1.5, "query": 1.5}
+    tf = Counter({"test": 1.0, "query": 1.0})
+    score_single = bm25f_score_terms(["test"], tf, 10.0, idf, 10.0)
+    score_multi = bm25f_score_terms(["test", "query"], tf, 10.0, idf, 10.0)
     assert score_multi >= score_single
 
 def test_compute_weighted_tf():

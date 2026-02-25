@@ -1,8 +1,13 @@
 """Tests for concurrent recall queries."""
 from __future__ import annotations
-import os, tempfile, threading
-from scripts.init_workspace import init
+
+import os
+import tempfile
+import threading
+
 from scripts._recall_core import recall
+from scripts.init_workspace import init
+
 
 def _ws():
     ws = tempfile.mkdtemp()

@@ -6,8 +6,8 @@ import tempfile
 
 import pytest
 
-from scripts.init_workspace import init
 from scripts._recall_core import recall
+from scripts.init_workspace import init
 
 
 @pytest.fixture

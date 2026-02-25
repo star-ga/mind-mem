@@ -1,7 +1,11 @@
 """Tests for block ID format validation."""
 from __future__ import annotations
-import os, tempfile
+
+import os
+import tempfile
+
 from scripts.block_parser import parse_file
+
 
 def test_standard_id():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:

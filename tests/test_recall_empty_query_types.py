@@ -1,8 +1,12 @@
 """Tests for various empty/minimal query types."""
 from __future__ import annotations
-import os, tempfile
-from scripts.init_workspace import init
+
+import os
+import tempfile
+
 from scripts._recall_core import recall
+from scripts.init_workspace import init
+
 
 def _ws():
     ws = tempfile.mkdtemp()

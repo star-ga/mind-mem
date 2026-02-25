@@ -1,8 +1,11 @@
 """Tests for recall on empty workspaces."""
 from __future__ import annotations
-import os, tempfile
-from scripts.init_workspace import init
+
+import tempfile
+
 from scripts._recall_core import recall
+from scripts.init_workspace import init
+
 
 def test_empty_decisions():
     ws = tempfile.mkdtemp()
