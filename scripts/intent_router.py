@@ -9,6 +9,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from .observability import get_logger
+
+_log = get_logger("intent_router")
+
 
 @dataclass
 class IntentResult:
@@ -122,6 +126,7 @@ class IntentRouter:
         Returns IntentResult with intent type, confidence, sub-intents,
         and retrieval parameter overrides.
         """
+        _log.debug("classify", query=query[:80] if query else "")
         if not query or not query.strip():
             return IntentResult(
                 intent="WHAT",

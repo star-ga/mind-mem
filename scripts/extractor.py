@@ -31,6 +31,10 @@ from __future__ import annotations
 import re
 from typing import Dict, List, Optional
 
+from .observability import get_logger
+
+_log = get_logger("extractor")
+
 # ---------------------------------------------------------------------------
 # Fact extraction patterns
 # ---------------------------------------------------------------------------
@@ -244,6 +248,7 @@ def extract_facts(
     Returns list of fact card dicts with keys:
         type, content, speaker, date, source_id, confidence
     """
+    _log.debug("extract_facts", speaker=speaker, source_id=source_id)
     # Strip speaker prefix if present: "[Caroline] text..." -> text
     speaker_match = re.match(r"^\[([^\]]+)\]\s*", text)
     if speaker_match:
@@ -621,6 +626,7 @@ def extract_from_conversation(
     }
     other_speaker = {"speaker_a": speaker_b, "speaker_b": speaker_a}
     all_cards = []
+    _log.debug("extract_from_conversation", turns=len(turns), speaker_a=speaker_a, speaker_b=speaker_b)
 
     for i, turn in enumerate(turns):
         speaker_key = turn.get("speaker", "")

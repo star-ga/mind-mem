@@ -23,6 +23,10 @@ from __future__ import annotations
 
 import re
 
+from .observability import get_logger
+
+_log = get_logger("evidence_packer")
+
 _DENIAL_RE = re.compile(
     r"\b(didn't|did not|never|not|no|denied|refused|won't|can't|cannot|"
     r"doesn't|does not|hasn't|has not|wasn't|isn't)\b",
@@ -208,6 +212,7 @@ def check_abstention(
     """
     from .abstention_classifier import classify_abstention
     result = classify_abstention(question, hits, threshold=threshold)
+    _log.debug("check_abstention", threshold=threshold, hits=len(hits))
 
     # Feature 5: Record hard negatives when abstention fires
     if result.should_abstain and workspace and hits:
@@ -244,6 +249,7 @@ def pack_evidence(
         Formatted context string ready for LLM consumption.
     """
     packing_mode = (config or {}).get("evidence_packing", "chain_of_note")
+    _log.debug("pack_evidence", hits=len(hits), query_type=query_type, mode=packing_mode)
 
     # Adversarial always uses its own specialized format
     if query_type == "adversarial" and is_true_adversarial(question):
