@@ -100,5 +100,5 @@ Requires `pip install mind-mem[embeddings]`.
 
 - [Architecture](architecture.md) -- how the recall pipeline works
 - [Configuration](configuration.md) -- every setting explained
-- [API Reference](api-reference.md) -- all 16 MCP tools
+- [API Reference](api-reference.md) -- all 19 MCP tools
 - [Migration Guide](migration.md) -- upgrading from mem-os
