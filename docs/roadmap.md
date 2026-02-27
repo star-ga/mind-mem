@@ -10,6 +10,7 @@
 - [x] 19 MCP tools
 - [x] LoCoMo benchmark suite
 - [x] Cross-platform CI (Ubuntu/macOS/Windows)
+- [x] Baseline snapshot with chi-squared drift detection
 
 ## v1.8.0 (Planned)
 
