@@ -384,7 +384,8 @@ def restore_snapshot(ws, snap_dir):
     manifest = _read_manifest(snap_dir)
     if manifest is not None:
         # Manifest-based fast-path: restore only listed files
-        for rel_path in manifest:
+        for rel_posix in manifest:
+            rel_path = rel_posix.replace("/", os.sep)
             src = os.path.join(snap_dir, rel_path)
             dst = os.path.join(ws, rel_path)
             if os.path.exists(src):
@@ -450,12 +451,13 @@ def _cleanup_orphans_from_manifest(ws, snap_dir, manifest):
     This handles the case where ops created new files after the snapshot —
     those files must be removed on rollback for true atomic restore.
     """
-    manifest_set = set(manifest)
+    # Normalize manifest to POSIX for consistent set lookups
+    manifest_set = set(m.replace(os.sep, "/") for m in manifest)
 
     # Collect directories that were snapshotted
     snapshotted_dirs = set()
     for rel in manifest:
-        top_dir = rel.split(os.sep)[0]
+        top_dir = rel.split("/")[0]
         snapshotted_dirs.add(top_dir)
 
     # Walk each snapshotted top-level directory to find orphans
@@ -471,7 +473,7 @@ def _cleanup_orphans_from_manifest(ws, snap_dir, manifest):
                         continue
                     for fname in files:
                         rel = os.path.relpath(os.path.join(root, fname), ws)
-                        if rel not in manifest_set:
+                        if rel.replace(os.sep, "/") not in manifest_set:
                             os.remove(os.path.join(root, fname))
         else:
             dirpath = os.path.join(ws, d)
@@ -479,7 +481,7 @@ def _cleanup_orphans_from_manifest(ws, snap_dir, manifest):
                 for root, _dirs, files in os.walk(dirpath):
                     for fname in files:
                         rel = os.path.relpath(os.path.join(root, fname), ws)
-                        if rel not in manifest_set:
+                        if rel.replace(os.sep, "/") not in manifest_set:
                             os.remove(os.path.join(root, fname))
 
 
@@ -506,7 +508,8 @@ def snapshot_diff(ws, snap_dir):
                     continue
                 files_to_check.append(rel)
 
-    for rel_path in files_to_check:
+    for rel_posix in files_to_check:
+        rel_path = rel_posix.replace("/", os.sep)
         ws_file = os.path.join(ws, rel_path)
         snap_file = os.path.join(snap_dir, rel_path)
 
