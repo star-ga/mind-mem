@@ -30,6 +30,7 @@ __all__ = [
     "propagate_scores",
     "record_hard_negatives",
     "get_hard_negative_ids",
+    "retrieval_diagnostics",
 ]
 
 # ---------------------------------------------------------------------------
@@ -38,17 +39,20 @@ __all__ = [
 
 _SCHEMA_SQL = """\
 CREATE TABLE IF NOT EXISTS retrieval_log (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    query_text TEXT NOT NULL,
-    query_hash TEXT NOT NULL,
-    mem_ids    TEXT NOT NULL,
-    scores     TEXT NOT NULL,
-    top_k      INTEGER,
-    timestamp  TEXT DEFAULT (datetime('now')),
-    feedback   REAL DEFAULT 0.0
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    query_text   TEXT NOT NULL,
+    query_hash   TEXT NOT NULL,
+    mem_ids      TEXT NOT NULL,
+    scores       TEXT NOT NULL,
+    top_k        INTEGER,
+    timestamp    TEXT DEFAULT (datetime('now')),
+    feedback     REAL DEFAULT 0.0,
+    intent_type  TEXT DEFAULT '',
+    stage_counts TEXT DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_rlog_qhash ON retrieval_log(query_hash);
 CREATE INDEX IF NOT EXISTS idx_rlog_ts ON retrieval_log(timestamp);
+CREATE INDEX IF NOT EXISTS idx_rlog_intent ON retrieval_log(intent_type);
 
 CREATE TABLE IF NOT EXISTS co_retrieval (
     mem1_id    TEXT NOT NULL,
@@ -86,10 +90,27 @@ def _connect(workspace: str) -> sqlite3.Connection:
     return conn
 
 
+def _migrate_schema(conn: sqlite3.Connection) -> None:
+    """Add columns from schema v2 (#428/#430) if missing."""
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(retrieval_log)").fetchall()}
+    except Exception:
+        return
+    if "intent_type" not in cols:
+        conn.execute("ALTER TABLE retrieval_log ADD COLUMN intent_type TEXT DEFAULT ''")
+    if "stage_counts" not in cols:
+        conn.execute("ALTER TABLE retrieval_log ADD COLUMN stage_counts TEXT DEFAULT '{}'")
+    try:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_rlog_intent ON retrieval_log(intent_type)")
+    except Exception:
+        pass
+
+
 def ensure_graph_tables(workspace: str) -> None:
     """Create retrieval_log, co_retrieval, hard_negatives tables if missing."""
     conn = _connect(workspace)
     conn.executescript(_SCHEMA_SQL)
+    _migrate_schema(conn)
     conn.commit()
     conn.close()
 
@@ -103,10 +124,20 @@ def log_retrieval(
     workspace: str,
     query: str,
     results: list[dict],
+    *,
+    intent_type: str = "",
+    stage_counts: dict | None = None,
 ) -> None:
     """Log a recall query and its results. Updates co-retrieval edges.
 
     Called after every recall() — best-effort (never raises).
+
+    Args:
+        workspace: Workspace root path.
+        query: Original query text.
+        results: Final result dicts.
+        intent_type: IntentRouter classification (e.g. "WHY", "WHEN").
+        stage_counts: Per-stage candidate counts from the pipeline.
     """
     if not results:
         return
@@ -114,14 +145,25 @@ def log_retrieval(
     try:
         conn = _connect(workspace)
         conn.executescript(_SCHEMA_SQL)
+        _migrate_schema(conn)
 
         mem_ids = [r.get("_id", "") for r in results if r.get("_id")]
         scores = [r.get("score", 0) for r in results]
         qhash = hashlib.sha256(query.encode()).hexdigest()[:16]
 
         conn.execute(
-            "INSERT INTO retrieval_log (query_text, query_hash, mem_ids, scores, top_k) VALUES (?, ?, ?, ?, ?)",
-            (query, qhash, json.dumps(mem_ids), json.dumps(scores), len(results)),
+            "INSERT INTO retrieval_log "
+            "(query_text, query_hash, mem_ids, scores, top_k, intent_type, stage_counts) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                query,
+                qhash,
+                json.dumps(mem_ids),
+                json.dumps(scores),
+                len(results),
+                intent_type,
+                json.dumps(stage_counts or {}),
+            ),
         )
 
         # Update co-retrieval edges (undirected: always store lo < hi)
@@ -293,6 +335,194 @@ def get_hard_negative_ids(workspace: str, *, max_age_days: int = 30) -> set[str]
         return {row["mem_id"] for row in rows}
     except Exception:
         return set()
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
+# Retrieval diagnostics (#428)
+# ---------------------------------------------------------------------------
+
+
+def retrieval_diagnostics(
+    workspace: str,
+    *,
+    last_n: int = 50,
+    max_age_days: int = 7,
+) -> dict:
+    """Aggregate pipeline diagnostics from recent retrieval logs.
+
+    Returns per-stage rejection rates, intent distribution, confidence
+    histogram, and hard negative summary.
+
+    Args:
+        workspace: Workspace root path.
+        last_n: Number of recent queries to analyze.
+        max_age_days: Only consider queries within this age window.
+
+    Returns:
+        Dict with stage_rejection_rates, intent_distribution,
+        score_distribution, hard_negative_summary.
+    """
+    conn = None
+    try:
+        conn = _connect(workspace)
+        conn.executescript(_SCHEMA_SQL)
+        _migrate_schema(conn)
+
+        # --- Stage counts aggregation ---
+        rows = conn.execute(
+            "SELECT query_text, intent_type, stage_counts, scores FROM retrieval_log "
+            "WHERE timestamp > datetime('now', ?) "
+            "ORDER BY id DESC LIMIT ?",
+            (f"-{max_age_days} days", last_n),
+        ).fetchall()
+
+        intent_dist: dict[str, int] = {}
+        intent_quality: dict[str, list[float]] = {}  # #430: per-intent quality
+        intent_confidence: dict[str, list[float]] = {}  # #430: per-intent confidence
+        stage_totals: dict[str, list[int]] = {}
+        all_top_scores: list[float] = []
+        all_final_counts: list[int] = []
+        low_confidence_queries: list[dict] = []
+
+        for row in rows:
+            intent = row["intent_type"] or "unknown"
+            intent_dist[intent] = intent_dist.get(intent, 0) + 1
+
+            try:
+                sc = json.loads(row["stage_counts"]) if row["stage_counts"] else {}
+            except (json.JSONDecodeError, TypeError):
+                sc = {}
+
+            for stage, count in sc.items():
+                if isinstance(count, (int, float)):
+                    stage_totals.setdefault(stage, []).append(int(count))
+
+            # #430: Track intent confidence from stage_counts
+            conf = sc.get("intent_confidence")
+            if conf is not None:
+                intent_confidence.setdefault(intent, []).append(float(conf))
+                if float(conf) < 0.3:
+                    low_confidence_queries.append({
+                        "query": (row["query_text"] or "")[:80],
+                        "intent": intent,
+                        "confidence": float(conf),
+                    })
+
+            try:
+                scores = json.loads(row["scores"]) if row["scores"] else []
+            except (json.JSONDecodeError, TypeError):
+                scores = []
+            if scores:
+                top_score = max(scores)
+                all_top_scores.append(top_score)
+                all_final_counts.append(len(scores))
+                # #430: Per-intent quality signal (top score as proxy)
+                intent_quality.setdefault(intent, []).append(top_score)
+
+        # Compute per-stage averages and rejection rates
+        stage_stats: dict[str, dict] = {}
+        ordered_stages = [
+            "corpus_loaded",
+            "bm25_passed",
+            "graph_boosted",
+            "rm3_expanded",
+            "temporal_filtered",
+            "wide_candidates",
+            "deduped",
+            "reranked",
+            "hard_neg_penalized",
+            "knee_cutoff",
+            "final",
+        ]
+        for stage in ordered_stages:
+            counts = stage_totals.get(stage, [])
+            if counts:
+                stage_stats[stage] = {
+                    "avg": round(sum(counts) / len(counts), 1),
+                    "min": min(counts),
+                    "max": max(counts),
+                    "samples": len(counts),
+                }
+
+        # Rejection rates between consecutive stages
+        rejection_rates: dict[str, float] = {}
+        prev_stage = None
+        for stage in ordered_stages:
+            if stage in stage_stats and prev_stage in stage_stats:
+                prev_avg = stage_stats[prev_stage]["avg"]
+                curr_avg = stage_stats[stage]["avg"]
+                if prev_avg > 0:
+                    rejection_rates[f"{prev_stage}_to_{stage}"] = round(
+                        1.0 - curr_avg / prev_avg, 3
+                    )
+            if stage in stage_stats:
+                prev_stage = stage
+
+        # Score distribution
+        score_dist = {}
+        if all_top_scores:
+            all_top_scores.sort()
+            score_dist = {
+                "p25": round(all_top_scores[len(all_top_scores) // 4], 4),
+                "p50": round(all_top_scores[len(all_top_scores) // 2], 4),
+                "p75": round(all_top_scores[3 * len(all_top_scores) // 4], 4),
+                "avg_final_count": round(sum(all_final_counts) / len(all_final_counts), 1),
+            }
+
+        # --- Hard negatives summary ---
+        hn_rows = conn.execute(
+            "SELECT mem_id, bm25_score, ce_score FROM hard_negatives "
+            "WHERE timestamp > datetime('now', ?)",
+            (f"-{max_age_days} days",),
+        ).fetchall()
+        hn_summary = {
+            "total": len(hn_rows),
+            "unique_blocks": len({r["mem_id"] for r in hn_rows}),
+        }
+        if hn_rows:
+            bm25_scores = [r["bm25_score"] for r in hn_rows if r["bm25_score"] is not None]
+            ce_scores = [r["ce_score"] for r in hn_rows if r["ce_score"] is not None]
+            if bm25_scores:
+                hn_summary["avg_bm25"] = round(sum(bm25_scores) / len(bm25_scores), 4)
+            if ce_scores:
+                hn_summary["avg_ce"] = round(sum(ce_scores) / len(ce_scores), 4)
+
+        # #430: Per-intent quality breakdown
+        intent_quality_summary: dict[str, dict] = {}
+        for intent, scores_list in intent_quality.items():
+            if scores_list:
+                scores_list.sort()
+                intent_quality_summary[intent] = {
+                    "queries": len(scores_list),
+                    "avg_top_score": round(sum(scores_list) / len(scores_list), 4),
+                    "p50_top_score": round(scores_list[len(scores_list) // 2], 4),
+                }
+                confs = intent_confidence.get(intent, [])
+                if confs:
+                    intent_quality_summary[intent]["avg_confidence"] = round(
+                        sum(confs) / len(confs), 3
+                    )
+
+        return {
+            "queries_analyzed": len(rows),
+            "intent_distribution": intent_dist,
+            "intent_quality": intent_quality_summary,
+            "low_confidence_queries": low_confidence_queries[:10],
+            "stage_stats": stage_stats,
+            "rejection_rates": rejection_rates,
+            "score_distribution": score_dist,
+            "hard_negatives": hn_summary,
+        }
+
+    except Exception as exc:
+        _log.debug("retrieval_diagnostics_failed", error=str(exc))
+        return {"error": str(exc), "queries_analyzed": 0}
     finally:
         if conn:
             try:

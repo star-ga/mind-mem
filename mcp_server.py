@@ -15,7 +15,7 @@ Resources (read-only):
     mind-mem://recall/{query}    — BM25 recall search
     mind-mem://ledger            — Shared fact ledger (multi-agent)
 
-Tools (18):
+Tools (19):
     recall               — Search memory (auto/bm25/hybrid backend)
     propose_update       — Propose a new decision/task (writes to SIGNALS.md, never source of truth)
     approve_apply        — Apply a staged proposal (dry-run by default)
@@ -26,6 +26,7 @@ Tools (18):
     find_similar         — Find blocks similar to a given block
     intent_classify      — Show routing strategy for a query
     index_stats          — Block counts, index status, kernel info
+    retrieval_diagnostics — Pipeline rejection rates, intent histogram, hard negatives
     reindex              — Trigger FTS index rebuild
     memory_evolution     — A-MEM metadata for a block
     list_mind_kernels    — List available .mind kernel configs
@@ -90,6 +91,7 @@ from mind_mem.mind_ffi import (  # noqa: E402
 )
 from mind_mem.observability import get_logger, metrics  # noqa: E402
 from mind_mem.recall import recall as recall_engine  # noqa: E402
+from mind_mem.retrieval_graph import retrieval_diagnostics as _retrieval_diag  # noqa: E402
 from mind_mem.sqlite_index import (  # noqa: E402
     _db_path as fts_db_path,
     query_index as fts_query,
@@ -129,6 +131,7 @@ USER_TOOLS = frozenset(
         "find_similar",
         "intent_classify",
         "index_stats",
+        "retrieval_diagnostics",
         "memory_evolution",
         "category_summary",
         "prefetch",
@@ -1079,6 +1082,34 @@ def index_stats() -> str:
     metrics.inc("mcp_index_stats")
     _log.info("mcp_index_stats", stats=stats)
     return json.dumps(stats, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def retrieval_diagnostics(last_n: int = 50, max_age_days: int = 7) -> str:
+    """Pipeline diagnostics: per-stage rejection rates, intent distribution, and hard negative summary.
+
+    Surfaces the internal veto histogram — candidates rejected at each gate
+    (BM25, dedup, rerank, knee cutoff) plus confidence distributions.
+
+    Args:
+        last_n: Number of recent queries to analyze (default 50).
+        max_age_days: Only consider queries within this window (default 7).
+
+    Returns:
+        JSON with stage_stats, rejection_rates, intent_distribution,
+        score_distribution, and hard_negatives summary.
+    """
+    ws = _workspace()
+    try:
+        result = _retrieval_diag(ws, last_n=last_n, max_age_days=max_age_days)
+    except sqlite3.OperationalError as exc:
+        if _is_db_locked(exc):
+            return _sqlite_busy_error()
+        raise
+    result["_schema_version"] = MCP_SCHEMA_VERSION
+    metrics.inc("mcp_retrieval_diagnostics")
+    return json.dumps(result, indent=2)
 
 
 @mcp.tool
