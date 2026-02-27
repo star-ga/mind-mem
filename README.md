@@ -1,7 +1,8 @@
 <p align="center">
   <h1 align="center">mind-mem</h1>
   <p align="center">
-    <strong>Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent.</strong>
+    <strong>Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent.</strong><br>
+    <sub>OpenClaw is an <a href="https://github.com/openclaw/openclaw">open-source AI assistant platform</a> with multi-channel support.</sub>
   </p>
   <p align="center">
     Local-first &bull; Zero-infrastructure &bull; Governance-aware &bull; MIND-accelerated
