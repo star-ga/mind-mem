@@ -408,11 +408,13 @@ def retrieval_diagnostics(
             if conf is not None:
                 intent_confidence.setdefault(intent, []).append(float(conf))
                 if float(conf) < 0.3:
-                    low_confidence_queries.append({
-                        "query": (row["query_text"] or "")[:80],
-                        "intent": intent,
-                        "confidence": float(conf),
-                    })
+                    low_confidence_queries.append(
+                        {
+                            "query": (row["query_text"] or "")[:80],
+                            "intent": intent,
+                            "confidence": float(conf),
+                        }
+                    )
 
             try:
                 scores = json.loads(row["scores"]) if row["scores"] else []
@@ -452,15 +454,13 @@ def retrieval_diagnostics(
 
         # Rejection rates between consecutive stages
         rejection_rates: dict[str, float] = {}
-        prev_stage = None
+        prev_stage: str | None = None
         for stage in ordered_stages:
-            if stage in stage_stats and prev_stage in stage_stats:
+            if stage in stage_stats and prev_stage is not None and prev_stage in stage_stats:
                 prev_avg = stage_stats[prev_stage]["avg"]
                 curr_avg = stage_stats[stage]["avg"]
                 if prev_avg > 0:
-                    rejection_rates[f"{prev_stage}_to_{stage}"] = round(
-                        1.0 - curr_avg / prev_avg, 3
-                    )
+                    rejection_rates[f"{prev_stage}_to_{stage}"] = round(1.0 - curr_avg / prev_avg, 3)
             if stage in stage_stats:
                 prev_stage = stage
 
@@ -477,8 +477,7 @@ def retrieval_diagnostics(
 
         # --- Hard negatives summary ---
         hn_rows = conn.execute(
-            "SELECT mem_id, bm25_score, ce_score FROM hard_negatives "
-            "WHERE timestamp > datetime('now', ?)",
+            "SELECT mem_id, bm25_score, ce_score FROM hard_negatives WHERE timestamp > datetime('now', ?)",
             (f"-{max_age_days} days",),
         ).fetchall()
         hn_summary = {
@@ -505,9 +504,7 @@ def retrieval_diagnostics(
                 }
                 confs = intent_confidence.get(intent, [])
                 if confs:
-                    intent_quality_summary[intent]["avg_confidence"] = round(
-                        sum(confs) / len(confs), 3
-                    )
+                    intent_quality_summary[intent]["avg_confidence"] = round(sum(confs) / len(confs), 3)
 
         return {
             "queries_analyzed": len(rows),

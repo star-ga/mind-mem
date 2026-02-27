@@ -8,15 +8,14 @@
   </p>
   <p align="center">
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
-    <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/v/mind-mem?style=flat-square&color=blue" alt="PyPI"></a>
-    <a href="https://github.com/star-ga/mind-mem/blob/main/LICENSE"><img src="https://img.shields.io/github/license/star-ga/mind-mem?style=flat-square&color=blue" alt="License"></a>
+    <a href="https://github.com/star-ga/mind-mem/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License"></a>
     <a href="https://github.com/star-ga/mind-mem/releases"><img src="https://img.shields.io/github/v/release/star-ga/mind-mem?style=flat-square&color=green" alt="Release"></a>
     <img src="https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+">
     <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
     <img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible">
     <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
-    <img src="https://img.shields.io/badge/tests-1844-brightgreen?style=flat-square" alt="Tests: 1844">
-    <img src="https://img.shields.io/badge/MCP_tools-18-blue?style=flat-square" alt="MCP Tools: 18">
+    <img src="https://img.shields.io/badge/tests-1852-brightgreen?style=flat-square" alt="Tests: 1852">
+    <img src="https://img.shields.io/badge/MCP_tools-19-blue?style=flat-square" alt="MCP Tools: 19">
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/security-review.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/security-review.yml?branch=main&style=flat-square&label=Security%20Review&color=darkgreen" alt="Security Review"></a>
   </p>
 </p>
@@ -206,8 +205,8 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 ### Transcript JSONL Capture
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
-### MCP Server (18 tools, 8 resources)
-Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 18 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
+### MCP Server (19 tools, 8 resources)
+Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 19 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
 
 ### 74+ Structural Checks + 1352 Unit Tests
 `validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 1352 pytest unit tests covering all core modules.
@@ -650,7 +649,7 @@ your-workspace/
 | Contradiction detection | Yes | No | No | No |
 | Tests | 1,844 | - | - | - |
 | LoCoMo benchmark | 67.3% | 68.5% | 74.0% | - |
-| MCP tools | 18 | - | - | - |
+| MCP tools | 19 | - | - | - |
 | Core dependencies | 0 | Many | Many | Many |
 
 ### At a Glance
@@ -667,7 +666,7 @@ your-workspace/
 | [**Graphlit**](https://www.graphlit.com) | Multimodal ingestion, semantic search, managed platform | Cloud-only, managed service |
 | [**ClawMem**](https://github.com/yoloshii/ClawMem) | Full ML pipeline (cross-encoder + QMD + beam search) | 4.5GB VRAM, 3 GPU processes required |
 | [**MemU**](https://github.com/supermemory/memu) | Hierarchical 3-layer memory, multimodal ingestion, LLM-based retrieval | Requires LLM for extraction and retrieval, no hybrid search |
-| **mind-mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 18 MCP tools | Lexical recall by default (vector/CE optional) |
+| **mind-mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 19 MCP tools | Lexical recall by default (vector/CE optional) |
 
 ### Full Feature Matrix
 
@@ -1175,6 +1174,7 @@ MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py --transport http --p
 | `find_similar`        | Find blocks similar to a given block                           |
 | `intent_classify`     | Classify query intent (9 types with parameter recommendations) |
 | `index_stats`         | Index statistics, MIND kernel availability, block counts       |
+| `retrieval_diagnostics` | Pipeline rejection rates, intent histogram, hard negatives     |
 | `reindex`             | Rebuild FTS5 index (optionally including vectors)              |
 | `memory_evolution`    | View/trigger A-MEM metadata evolution for a block              |
 | `list_mind_kernels`   | List available MIND kernel configurations                      |
