@@ -343,9 +343,10 @@ class TestExportMemory(unittest.TestCase):
         self.assertTrue(has_decisions, "Expected blocks from decisions/")
         self.assertTrue(has_tasks, "Expected blocks from tasks/")
 
-    def test_export_is_user_tool(self):
-        """export_memory should be in USER_TOOLS."""
-        self.assertIn("export_memory", self.mod.USER_TOOLS)
+    def test_export_is_admin_tool(self):
+        """export_memory should be in ADMIN_TOOLS (moved from USER_TOOLS, #447)."""
+        self.assertIn("export_memory", self.mod.ADMIN_TOOLS)
+        self.assertNotIn("export_memory", self.mod.USER_TOOLS)
 
 
 # ---------------------------------------------------------------------------

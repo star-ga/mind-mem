@@ -17,10 +17,11 @@ Configuration (mind-mem.json):
         "model": "all-MiniLM-L6-v2",
         "index_path": ".mind-mem-vectors",
         "qdrant_url": "http://localhost:6333",
-        "pinecone_api_key": "...",
         "pinecone_environment": "us-east-1-aws"
       }
     }
+
+    Pinecone API key must be set via PINECONE_API_KEY environment variable.
 
 Usage:
     # Indexing
@@ -95,7 +96,6 @@ class VectorBackend(RecallBackend):
             "index_path",
             "dimension",
             "top_k",
-            "pinecone_api_key",
             "pinecone_index",
             "pinecone_namespace",
             "qdrant_url",
@@ -938,9 +938,9 @@ class VectorBackend(RecallBackend):
             _log.error("pinecone_not_installed", error=str(e))
             raise ImportError("pinecone not installed. Install with: pip install pinecone") from e
 
-        api_key = os.environ.get("PINECONE_API_KEY") or self.config.get("pinecone_api_key")
+        api_key = os.environ.get("PINECONE_API_KEY")
         if not api_key:
-            raise ValueError("pinecone_api_key required (config or PINECONE_API_KEY env var)")
+            raise ValueError("PINECONE_API_KEY environment variable is required for Pinecone backend")
 
         pc = Pinecone(api_key=api_key)
         index = pc.Index(self.pinecone_index_name)
@@ -1168,9 +1168,9 @@ class VectorBackend(RecallBackend):
         except ImportError as e:
             raise ImportError("pinecone not installed") from e
 
-        api_key = os.environ.get("PINECONE_API_KEY") or self.config.get("pinecone_api_key")
+        api_key = os.environ.get("PINECONE_API_KEY")
         if not api_key:
-            raise ValueError("pinecone_api_key required (config or PINECONE_API_KEY env var)")
+            raise ValueError("PINECONE_API_KEY environment variable is required for Pinecone backend")
 
         pc = Pinecone(api_key=api_key)
         index = pc.Index(self.pinecone_index_name)

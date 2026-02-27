@@ -717,7 +717,7 @@ def recall(
                 if not flat:
                     continue
 
-                weighted_tf_rm3, wdl = compute_weighted_tf(ft)
+                weighted_tf_rm3, wdl = compute_weighted_tf(ft, _fw)
 
                 # Score expansion terms with term-level weight from RM3 model
                 rm3_score = 0.0
@@ -797,7 +797,7 @@ def recall(
                 if not flat:
                     continue
 
-                weighted_tf_prf, wdl = compute_weighted_tf(ft)
+                weighted_tf_prf, wdl = compute_weighted_tf(ft, _fw)
                 prf_score = bm25f_score_terms(
                     expansion_terms,
                     weighted_tf_prf,
@@ -872,7 +872,7 @@ def recall(
                 if not flat:
                     continue
 
-                weighted_tf_br, wdl = compute_weighted_tf(ft)
+                weighted_tf_br, wdl = compute_weighted_tf(ft, _fw)
                 bridge_score = bm25f_score_terms(
                     bridge_tokens,
                     weighted_tf_br,

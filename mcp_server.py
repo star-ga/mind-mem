@@ -117,6 +117,7 @@ ADMIN_TOOLS = frozenset(
         "reindex_vectors",
         "propose_update",
         "reindex",
+        "export_memory",
     }
 )
 
@@ -127,7 +128,6 @@ USER_TOOLS = frozenset(
         "list_memory",
         "list_contradictions",
         "scan",
-        "export_memory",
         "hybrid_search",
         "find_similar",
         "intent_classify",
@@ -659,6 +659,9 @@ def propose_update(
 
     today = datetime.now().strftime("%Y-%m-%d")
     priority = CONFIDENCE_TO_PRIORITY.get(confidence, "P2")
+
+    # Cap statement length to prevent oversized signals
+    statement = statement[:500]
 
     signal = {
         "line": 0,
@@ -1608,8 +1611,22 @@ def delete_memory_item(block_id: str) -> str:
             block_end = len(lines)
 
         # Remove the block lines
+        deleted_content = "\n".join(lines[block_start:block_end])
         new_lines = lines[:block_start] + lines[block_end:]
         new_content = "\n".join(new_lines)
+
+        # Log deleted block for recovery
+        from datetime import datetime, timezone
+
+        deleted_log = os.path.join(ws, "memory", "deleted_blocks.jsonl")
+        os.makedirs(os.path.dirname(deleted_log), exist_ok=True)
+        with open(deleted_log, "a", encoding="utf-8") as dl:
+            entry = {
+                "block_id": block_id,
+                "deleted_at": datetime.now(timezone.utc).isoformat(),
+                "content": deleted_content,
+            }
+            dl.write(json.dumps(entry, default=str) + "\n")
 
         # Atomic write: temp file + rename
         dir_name = os.path.dirname(filepath)
@@ -1643,7 +1660,7 @@ def delete_memory_item(block_id: str) -> str:
 
 @mcp.tool
 @mcp_tool_observe
-def export_memory(format: str = "jsonl", include_metadata: bool = False) -> str:
+def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blocks: int = 10000) -> str:
     """Export all workspace blocks as JSONL.
 
     Parses all .md files in decisions/, tasks/, entities/, intelligence/
@@ -1652,6 +1669,8 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False) -> str:
     Args:
         format: Output format — currently only "jsonl" is supported.
         include_metadata: Include A-MEM metadata fields (_entities, _dates, etc.).
+        max_blocks: Maximum number of blocks to export (default 10000). Prevents
+            unbounded memory usage on large workspaces.
 
     Returns:
         JSONL string with all blocks, or JSON error on failure.
@@ -1694,6 +1713,14 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False) -> str:
                             del block[key]
                 all_blocks.append(block)
 
+    # Cap output to prevent unbounded memory usage (#447)
+    truncated = False
+    if len(all_blocks) > max_blocks:
+        total = len(all_blocks)
+        all_blocks = all_blocks[:max_blocks]
+        truncated = True
+        _log.warning("export_memory_truncated", total=total, max_blocks=max_blocks)
+
     # Build JSONL output
     jsonl_lines = [json.dumps(b, default=str) for b in all_blocks]
     jsonl_output = "\n".join(jsonl_lines)
@@ -1701,13 +1728,19 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False) -> str:
     metrics.inc("mcp_export_memory")
     _log.info("mcp_export_memory", format=format, blocks=len(all_blocks))
 
+    envelope = {
+        "_schema_version": MCP_SCHEMA_VERSION,
+        "format": format,
+        "block_count": len(all_blocks),
+        "data": jsonl_output,
+    }
+    if truncated:
+        envelope["warning"] = (
+            f"Output truncated to {max_blocks} blocks (total: {total}). Increase max_blocks to export more."
+        )
+
     return json.dumps(
-        {
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "format": format,
-            "block_count": len(all_blocks),
-            "data": jsonl_output,
-        },
+        envelope,
         indent=2,
     )
 
@@ -1777,6 +1810,16 @@ def main():
             stacklevel=2,
         )
         os.environ["MIND_MEM_TOKEN"] = args.token
+
+    # Warn if HTTP transport is used without admin ACL token (#441)
+    if args.transport == "http" and not os.environ.get("MIND_MEM_ADMIN_TOKEN"):
+        import warnings as _w
+
+        _w.warn(
+            "HTTP transport without MIND_MEM_ADMIN_TOKEN: all admin tools are unguarded. "
+            "Set MIND_MEM_ADMIN_TOKEN to enable access control.",
+            stacklevel=2,
+        )
 
     token = _check_token()
     _log.info("mcp_server_start", transport=args.transport, workspace=_workspace(), auth="token" if token else "none")

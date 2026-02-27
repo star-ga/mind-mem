@@ -269,6 +269,9 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
                 if counter > 999:
                     break  # Cap at 999 signals per day to maintain ID format
                 sig_id = f"SIG-{today_compact}-{counter:03d}"
+                # Sanitize signal text: cap length and prevent block-header injection
+                sanitized = sig["text"][:500]
+                sanitized = sanitized.replace("\n[", "\n ")
                 f.write(f"\n[{sig_id}]\n")
                 f.write(f"Date: {date_str}\n")
                 f.write(f"Type: auto-capture-{sig['type']}\n")
@@ -276,7 +279,7 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
                 f.write(f"Confidence: {sig.get('confidence', 'medium')}\n")
                 f.write(f"Priority: {sig.get('priority', 'P2')}\n")
                 f.write("Status: pending\n")
-                f.write(f"Excerpt: {sig['text'].replace(chr(10), ' ').replace(chr(13), '')}\n")
+                f.write(f"Excerpt: {sanitized.replace(chr(10), ' ').replace(chr(13), '')}\n")
                 if sig.get("content_hash"):
                     f.write(f"ContentHash: {sig['content_hash']}\n")
 
