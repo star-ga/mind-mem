@@ -155,9 +155,11 @@ class IntentRouter:
     """Classifies queries into 9 intent types with confidence scoring."""
 
     def __init__(self):
-        self._compiled = {}
+        self._compiled: dict[str, list[re.Pattern[str]]] = {}
         for intent, cfg in INTENT_CONFIG.items():
-            self._compiled[intent] = [re.compile(p, re.IGNORECASE) for p in cfg["patterns"]]
+            patterns = cfg["patterns"]
+            assert isinstance(patterns, list)
+            self._compiled[intent] = [re.compile(p, re.IGNORECASE) for p in patterns]
 
     def classify(self, query: str) -> IntentResult:
         """Classify query intent with confidence.

@@ -45,13 +45,13 @@ def compute_weighted_tf(
         (weighted_tf Counter, weighted_doc_length float).
     """
     fw = field_weights or FIELD_WEIGHTS
-    weighted_tf: Counter = Counter()
+    weighted_tf: Counter[str] = Counter()
     wdl = 0.0
     for field, tokens in field_tokens.items():
         w = fw.get(field, 1.0)
         wdl += len(tokens) * w
         for t in tokens:
-            weighted_tf[t] += w
+            weighted_tf[t] += w  # type: ignore[assignment]
     return weighted_tf, wdl
 
 
@@ -122,8 +122,8 @@ def build_xref_graph(all_blocks: list[dict]) -> dict[str, set[str]]:
     Scans every block's text fields for mentions of other block IDs.
     Returns {block_id: set(neighbor_ids)} with edges in both directions.
     """
-    block_ids = {b.get("_id") for b in all_blocks if b.get("_id")}
-    graph = {bid: set() for bid in block_ids}
+    block_ids: set[str] = {str(b.get("_id")) for b in all_blocks if b.get("_id")}
+    graph: dict[str, set[str]] = {bid: set() for bid in block_ids}
 
     # Fields to scan for cross-references
     xref_fields = SEARCH_FIELDS + [
@@ -139,9 +139,10 @@ def build_xref_graph(all_blocks: list[dict]) -> dict[str, set[str]]:
     ]
 
     for block in all_blocks:
-        bid = block.get("_id")
-        if not bid:
+        bid_raw = block.get("_id")
+        if not bid_raw:
             continue
+        bid: str = str(bid_raw)
 
         # Collect all text from the block
         texts = []

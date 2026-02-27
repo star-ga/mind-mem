@@ -320,7 +320,7 @@ def _pack_multihop(hits: list[dict], max_chars: int = 6000) -> str:
         by_speaker.setdefault(sp, []).append(r)
 
     # Interleave: round-robin across speakers
-    lines = []
+    lines: list[str] = []
     total = 0
     speakers = list(by_speaker.keys())
     max_per_speaker = max(len(v) for v in by_speaker.values()) if by_speaker else 0

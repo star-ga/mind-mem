@@ -122,8 +122,9 @@ class VectorBackend(RecallBackend):
         self.dimension = int(dim) if dim is not None else None
 
         # Lazy load embedding model (not needed for pinecone/llama_cpp)
-        self._model = None
+        self._model: Any = None
         self._model_loaded = False
+        self._fastembed_model: Any = None
 
         # llama.cpp embedding server URL
         self.llama_cpp_url = str(config.get("llama_cpp_url", "http://localhost:8090"))
@@ -203,7 +204,7 @@ class VectorBackend(RecallBackend):
     def _invalidate_cache_for_model(self, conn, model_name: str) -> int:
         """Remove all cached embeddings for a different model. Returns count deleted."""
         cur = conn.execute("DELETE FROM embedding_cache WHERE model_name != ?", (model_name,))
-        return cur.rowcount
+        return int(cur.rowcount)
 
     def _get_vec_meta(self, conn, key: str) -> str | None:
         """Read a vec_meta_info value."""
@@ -582,14 +583,15 @@ class VectorBackend(RecallBackend):
                 _log.error("sqlite_vec_incomplete_embeddings")
                 return
 
-            dim = len(embeddings[0])
+            filled_embeddings: list[list[float]] = [e for e in embeddings if e is not None]
+            dim = len(filled_embeddings[0])
             if self.dimension is None:
                 self.dimension = dim
 
             # Rebuild vec_blocks table (sqlite-vec doesn't support UPDATE well)
             conn.execute("DROP TABLE IF EXISTS vec_blocks")
             self._init_vec_table(conn, dim)
-            for block, emb in zip(blocks, embeddings):
+            for block, emb in zip(blocks, filled_embeddings):
                 conn.execute(
                     "INSERT INTO vec_blocks(block_id, embedding) VALUES (?, ?)",
                     (block["_id"], sqlite_vec.serialize_float32(emb)),
@@ -717,7 +719,7 @@ class VectorBackend(RecallBackend):
 
         try:
             with open(index_file) as f:
-                index = json.load(f)
+                index: dict[str, Any] = json.load(f)
             _log.info("index_loaded", path=index_file, blocks=len(index.get("blocks", [])))
             return index
         except (OSError, json.JSONDecodeError) as e:
@@ -941,7 +943,7 @@ class VectorBackend(RecallBackend):
         for i in range(0, len(blocks), BATCH_SIZE):
             batch_blocks = blocks[i : i + BATCH_SIZE]
             batch_texts = texts[i : i + BATCH_SIZE]
-            records = []
+            records: list[dict[str, Any]] = []
             for block, text in zip(batch_blocks, batch_texts):
                 record = {
                     "_id": block.get("_id", f"block-{i + len(records)}"),
@@ -1172,7 +1174,7 @@ class VectorBackend(RecallBackend):
         # Search using integrated inference (text query, no local embedding)
         search_results = index.search_records(
             namespace=self.pinecone_namespace,
-            query={"inputs": {"text": query}, "top_k": limit, "filter": filter_dict or {}},
+            query={"inputs": {"text": query}, "top_k": limit, "filter": filter_dict or {}},  # type: ignore[arg-type]
         )
 
         # Convert to standard format

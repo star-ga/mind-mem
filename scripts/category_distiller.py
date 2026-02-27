@@ -473,6 +473,7 @@ class CategoryDistiller:
                 tag_match[idx] = tag_score
 
         # Call C kernels: affinity = kw_w * kw + tag_w * tag + ent_w * ent
+        assert _mind_ffi is not None
         affinity = _mind_ffi.category_affinity_py(
             kw_overlap,
             tag_match,

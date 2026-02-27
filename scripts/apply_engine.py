@@ -1096,7 +1096,7 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
     # 6. Execute ops with WAL protection
 
     print(f"\n--- Executing {len(proposal.get('Ops', []))} Ops (WAL-protected) ---")
-    delta = {"created": [], "modified": []}
+    delta: dict[str, list[str]] = {"created": [], "modified": []}
     wal_entries = []  # Track WAL entries for this apply
     for i, op in enumerate(proposal.get("Ops", [])):
         raw_file = op.get("file", "")

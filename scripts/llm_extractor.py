@@ -141,7 +141,7 @@ def _query_ollama(prompt: str, model: str) -> str:
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
         body = json.loads(resp.read().decode())
-    return body.get("response", "")
+    return str(body.get("response", ""))
 
 
 def _query_llama_cpp(prompt: str, model: str) -> str:
@@ -150,14 +150,14 @@ def _query_llama_cpp(prompt: str, model: str) -> str:
 
     # Use a cached model instance per model name
     if not hasattr(_query_llama_cpp, "_models"):
-        _query_llama_cpp._models = {}
-    if model not in _query_llama_cpp._models:
-        _query_llama_cpp._models[model] = llama_cpp.Llama(model_path=model, n_ctx=2048)
-    llm = _query_llama_cpp._models[model]
+        _query_llama_cpp._models = {}  # type: ignore[attr-defined]
+    if model not in _query_llama_cpp._models:  # type: ignore[attr-defined]
+        _query_llama_cpp._models[model] = llama_cpp.Llama(model_path=model, n_ctx=2048)  # type: ignore[attr-defined]
+    llm = _query_llama_cpp._models[model]  # type: ignore[attr-defined]
     output = llm(prompt, max_tokens=512, temperature=0.1)
     choices = output.get("choices", [])
     if choices:
-        return choices[0].get("text", "")
+        return str(choices[0].get("text", ""))
     return ""
 
 

@@ -76,6 +76,7 @@ import sqlite3
 import tempfile
 import threading
 import time
+from typing import Any
 
 # mind-mem imports (package mapped to scripts/ via pyproject.toml)
 from mind_mem.block_parser import BlockCorruptedError, get_active, parse_file  # noqa: E402, F401
@@ -388,7 +389,7 @@ def _load_config(ws: str) -> dict:
         return {}
     try:
         with open(config_path, encoding="utf-8") as f:
-            return json.load(f)
+            return dict(json.load(f))
     except json.JSONDecodeError as exc:
         _log.warning(
             "config_json_decode_error",
@@ -409,7 +410,7 @@ def _load_config(ws: str) -> dict:
 def _load_extra_categories(ws: str) -> dict:
     """Load extra_categories from mind-mem.json config."""
     cfg = _load_config(ws)
-    return cfg.get("categories", {}).get("extra_categories", {})
+    return dict(cfg.get("categories", {}).get("extra_categories", {}))
 
 
 # ---------------------------------------------------------------------------
@@ -465,7 +466,7 @@ def get_contradictions() -> str:
 def get_health() -> str:
     """Workspace health summary: block counts, coverage, and metrics."""
     ws = _workspace()
-    result = {"files": {}, "metrics": {}}
+    result: dict[str, Any] = {"files": {}, "metrics": {}}
 
     corpus = {
         "decisions": "decisions/DECISIONS.md",
@@ -685,7 +686,10 @@ def propose_update(
             "status": "proposed",
             "written": written,
             "location": "intelligence/SIGNALS.md",
-            "next_step": "Run /apply or `python3 maintenance/apply_engine.py` to review and promote to source of truth.",
+            "next_step": (
+                "Run /apply or `python3 maintenance/apply_engine.py`"
+                " to review and promote to source of truth."
+            ),
             "safety": "This signal is in SIGNALS.md only. It has NOT been written to DECISIONS.md or TASKS.md.",
         },
         indent=2,
@@ -705,19 +709,19 @@ def scan() -> str:
     if ws_err:
         return ws_err
 
-    result = {"_schema_version": MCP_SCHEMA_VERSION, "checks": {}}
+    checks: dict[str, Any] = {}
 
     # Parse decisions
     decisions_path = os.path.join(ws, "decisions", "DECISIONS.md")
     if os.path.isfile(decisions_path):
         blocks = parse_file(decisions_path)
         active = get_active(blocks)
-        result["checks"]["decisions"] = {
+        checks["decisions"] = {
             "total": len(blocks),
             "active": len(active),
         }
     else:
-        result["checks"]["decisions"] = {"total": 0, "active": 0}
+        checks["decisions"] = {"total": 0, "active": 0}
 
     # Check contradictions — report both raw entries and resolvable ones
     contra_path = os.path.join(ws, "intelligence", "CONTRADICTIONS.md")
@@ -728,32 +732,33 @@ def scan() -> str:
         from mind_mem.conflict_resolver import resolve_contradictions
 
         resolutions = resolve_contradictions(ws)
-        result["checks"]["contradictions"] = {
+        checks["contradictions"] = {
             "raw": raw_count,
             "resolvable": len(resolutions),
         }
     except (ImportError, OSError, ValueError) as exc:
         _log.warning("scan_contradiction_check_failed", error=str(exc))
-        result["checks"]["contradictions"] = {"raw": raw_count, "resolvable": 0}
+        checks["contradictions"] = {"raw": raw_count, "resolvable": 0}
 
     # Check drift
     drift_path = os.path.join(ws, "intelligence", "DRIFT.md")
     if os.path.isfile(drift_path):
         drifts = parse_file(drift_path)
-        result["checks"]["drift_items"] = len(drifts)
+        checks["drift_items"] = len(drifts)
     else:
-        result["checks"]["drift_items"] = 0
+        checks["drift_items"] = 0
 
     # Check signals
     signals_path = os.path.join(ws, "intelligence", "SIGNALS.md")
     if os.path.isfile(signals_path):
         signals = parse_file(signals_path)
-        result["checks"]["pending_signals"] = len(signals)
+        checks["pending_signals"] = len(signals)
     else:
-        result["checks"]["pending_signals"] = 0
+        checks["pending_signals"] = 0
 
+    result: dict[str, Any] = {"_schema_version": MCP_SCHEMA_VERSION, "checks": checks}
     metrics.inc("mcp_scans")
-    _log.info("mcp_scan", checks=result["checks"])
+    _log.info("mcp_scan", checks=checks)
 
     return json.dumps(result, indent=2)
 
@@ -1786,8 +1791,8 @@ def main():
             verifier = StaticTokenVerifier(
                 tokens={token: {"sub": "mind-mem-client", "scope": "full"}},
             )
-            auth_provider = OAuthProvider(token_verifier=verifier)
-            mcp._auth = auth_provider
+            auth_provider = OAuthProvider(token_verifier=verifier)  # type: ignore[abstract, call-arg]
+            mcp._auth = auth_provider  # type: ignore[attr-defined]
             _log.info("mcp_auth_enforced", mode="static_token")
         mcp.run(transport="sse", port=args.port)
     else:

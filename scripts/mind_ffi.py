@@ -34,7 +34,7 @@ def _get_python_version() -> str:
         # When running as installed package or scripts/ is on sys.path
         from __init__ import __version__
 
-        return __version__
+        return str(__version__)
     except ImportError:
         pass
     # Fallback: read from __init__.py next to this file
@@ -189,6 +189,7 @@ class MindMemKernel:
         vector_w: float = 1.0,
     ) -> list[float]:
         """RRF fusion via compiled MIND kernel."""
+        assert self._lib is not None
         N = len(bm25_ranks)
         arr_t = ctypes.c_float * N
         out = arr_t()
@@ -215,6 +216,7 @@ class MindMemKernel:
         field_weight: float = 1.0,
     ) -> list[float]:
         """BM25F batch scoring via compiled MIND kernel."""
+        assert self._lib is not None
         n = len(tfs)
         arr_t = ctypes.c_float * n
         out = arr_t()
@@ -234,6 +236,7 @@ class MindMemKernel:
 
     def negation_penalty_py(self, scores: list[float], has_negation: list[bool], penalty: float = 0.3) -> list[float]:
         """Negation penalty via compiled MIND kernel."""
+        assert self._lib is not None
         n = len(scores)
         arr_t = ctypes.c_float * n
         out = arr_t()
@@ -249,6 +252,7 @@ class MindMemKernel:
 
     def date_proximity_py(self, days_diff: list[float], sigma: float = 30.0) -> list[float]:
         """Gaussian date proximity via compiled MIND kernel."""
+        assert self._lib is not None
         n = len(days_diff)
         arr_t = ctypes.c_float * n
         out = arr_t()
@@ -262,6 +266,7 @@ class MindMemKernel:
 
     def category_boost_py(self, scores: list[float], matches: list[bool], boost: float = 1.15) -> list[float]:
         """Category boost via compiled MIND kernel."""
+        assert self._lib is not None
         n = len(scores)
         arr_t = ctypes.c_float * n
         out = arr_t()
@@ -279,6 +284,7 @@ class MindMemKernel:
         self, access_counts: list[int], days_since: list[float], base: float = 1.0, decay: float = 0.01
     ) -> list[float]:
         """Importance batch scoring via compiled MIND kernel."""
+        assert self._lib is not None
         n = len(access_counts)
         float_arr = ctypes.c_float * n
         int_arr = ctypes.c_int * n
@@ -303,22 +309,26 @@ class MindMemKernel:
         weights: tuple = (0.30, 0.25, 0.15, 0.20, 0.10),
     ) -> float:
         """Confidence score via compiled MIND kernel."""
+        assert self._lib is not None
         self._lib.confidence_score.restype = ctypes.c_float
-        return self._lib.confidence_score(
-            ctypes.c_float(entity_overlap),
-            ctypes.c_float(bm25_norm),
-            ctypes.c_float(speaker_cov),
-            ctypes.c_float(evidence_density),
-            ctypes.c_float(negation_asym),
-            ctypes.c_float(weights[0]),
-            ctypes.c_float(weights[1]),
-            ctypes.c_float(weights[2]),
-            ctypes.c_float(weights[3]),
-            ctypes.c_float(weights[4]),
+        return float(
+            self._lib.confidence_score(
+                ctypes.c_float(entity_overlap),
+                ctypes.c_float(bm25_norm),
+                ctypes.c_float(speaker_cov),
+                ctypes.c_float(evidence_density),
+                ctypes.c_float(negation_asym),
+                ctypes.c_float(weights[0]),
+                ctypes.c_float(weights[1]),
+                ctypes.c_float(weights[2]),
+                ctypes.c_float(weights[3]),
+                ctypes.c_float(weights[4]),
+            )
         )
 
     def top_k_mask_py(self, scores: list[float], k: int) -> list[bool]:
         """Top-K mask via compiled MIND kernel."""
+        assert self._lib is not None
         n = len(scores)
         arr_t = ctypes.c_float * n
         out = arr_t()
@@ -332,6 +342,7 @@ class MindMemKernel:
 
     def weighted_rank_py(self, scores: list[float], weights: list[float]) -> list[float]:
         """Weighted rank via compiled MIND kernel."""
+        assert self._lib is not None
         n = len(scores)
         arr_t = ctypes.c_float * n
         out = arr_t()
@@ -358,6 +369,7 @@ class MindMemKernel:
 
         All inputs are flat row-major [N*C]. Returns flat [N*C] affinity scores.
         """
+        assert self._lib is not None
         total = n_blocks * n_cats
         arr_t = ctypes.c_float * total
         out = arr_t()
@@ -383,6 +395,7 @@ class MindMemKernel:
         cat_kw: flat row-major [C*K] category keyword profiles.
         Returns [C] relevance scores.
         """
+        assert self._lib is not None
         qk_t = ctypes.c_float * n_keywords
         ck_t = ctypes.c_float * (n_cats * n_keywords)
         out_t = ctypes.c_float * n_cats
@@ -401,6 +414,7 @@ class MindMemKernel:
 
         Returns [N*C] sigmoid-thresholded assignment weights.
         """
+        assert self._lib is not None
         total = n_blocks * n_cats
         arr_t = ctypes.c_float * total
         out = arr_t()
@@ -559,7 +573,7 @@ def load_kernel_config(path: str) -> dict:
     if not os.path.isfile(path):
         return {}
 
-    result = {}
+    result: dict[str, dict[str, object]] = {}
     current_section = None
 
     try:

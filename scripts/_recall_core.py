@@ -10,6 +10,7 @@ import re
 import sys
 from abc import ABC, abstractmethod
 from collections import Counter
+from typing import Any, cast
 
 from ._recall_constants import (
     _STOPWORDS,
@@ -271,7 +272,7 @@ def recall(
             query_type = detect_query_type(query)
     else:
         query_type = detect_query_type(query)
-    qparams = _QUERY_TYPE_PARAMS.get(query_type, _QUERY_TYPE_PARAMS["single-hop"])
+    qparams: dict[str, Any] = cast(dict[str, Any], _QUERY_TYPE_PARAMS.get(query_type, _QUERY_TYPE_PARAMS["single-hop"]))
 
     # --- Multi-hop query decomposition (#6) ---
     # For multi-hop queries, try decomposing into sub-queries.  If the query
@@ -440,7 +441,7 @@ def recall(
         doc_flat_tokens.append(flat)
 
     # Document frequency + average weighted doc length
-    df = Counter()
+    df: Counter[str] = Counter()
     total_wdl = 0.0
     for i, ft in enumerate(doc_field_tokens):
         seen = set()
@@ -581,7 +582,7 @@ def recall(
         score_by_id = {r["_id"]: r["score"] for r in results}
         block_by_id = {b.get("_id"): b for b in all_blocks if b.get("_id")}
 
-        neighbor_scores = {}
+        neighbor_scores: dict[str, float] = {}
 
         # Multi-hop traversal with progressive decay.
         # For multi-hop queries, extend to 3-hop with stronger propagation.
@@ -668,7 +669,7 @@ def recall(
         results.sort(key=lambda r: (r["score"], r.get("_id", "")), reverse=True)
 
         # Build collection frequency from all flat doc tokens
-        collection_freq = Counter()
+        collection_freq: Counter[str] = Counter()
         total_collection_tokens = 0
         for flat_toks in doc_flat_tokens:
             for t in flat_toks:
@@ -764,7 +765,7 @@ def recall(
 
         # Extract expansion terms: high-TF tokens from top-5 statements,
         # excluding query tokens and very common terms (low IDF).
-        prf_terms = Counter()
+        prf_terms: Counter[str] = Counter()
         for r in prf_top:
             # Tokenize the excerpt (which is the Statement/Description)
             prf_tokens = tokenize(r.get("excerpt", ""))
@@ -839,7 +840,7 @@ def recall(
 
         # Extract bridge terms: capitalized entities from top-10 that aren't in query
         query_lower_set = set(re.findall(r"[a-z]+", query.lower()))
-        bridge_terms = Counter()
+        bridge_terms: Counter[str] = Counter()
         for r in hop1_top:
             excerpt = r.get("excerpt", "")
             # Capitalized entities
@@ -850,7 +851,7 @@ def recall(
             # Rare content tokens (appear in 2+ of top-10)
             for tok in tokenize(excerpt):
                 if tok not in set(query_tokens) and len(tok) > 3:
-                    bridge_terms[tok] += 0.5
+                    bridge_terms[tok] = cast(int, bridge_terms[tok] + 0.5)
 
         # Keep bridge terms that appear in 2+ top-10 results
         bridge_tokens = [t for t, c in bridge_terms.most_common(12) if c >= 2]
@@ -1099,7 +1100,7 @@ def recall(
     return top
 
 
-def _load_backend(workspace: str) -> str:
+def _load_backend(workspace: str) -> str | RecallBackend | None:
     """Load recall backend from config. Falls back to BM25 scan.
 
     Supported backends:
@@ -1234,7 +1235,7 @@ def main():
         cfg_backend = _load_backend(args.workspace)
         if cfg_backend == "sqlite":
             backend = "sqlite"
-        elif cfg_backend is not None:
+        elif cfg_backend is not None and isinstance(cfg_backend, RecallBackend):
             # Vector or other custom backend
             try:
                 results = cfg_backend.search(args.workspace, args.query, args.limit, args.active_only)

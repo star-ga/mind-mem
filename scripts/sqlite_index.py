@@ -780,7 +780,7 @@ def query_index(
         return []
 
     query_type = detect_query_type(query)
-    qparams = _QUERY_TYPE_PARAMS.get(query_type, _QUERY_TYPE_PARAMS["single-hop"])
+    qparams: dict = _QUERY_TYPE_PARAMS.get(query_type, _QUERY_TYPE_PARAMS["single-hop"])  # type: ignore[assignment]
 
     # Month normalization
     query_tokens = expand_months(query, query_tokens)
@@ -950,7 +950,7 @@ def _apply_graph_boost(
     if query_type == "multi-hop":
         hop_decays.append(GRAPH_BOOST_FACTOR * 0.25)
 
-    neighbor_scores = {}
+    neighbor_scores: dict[str, float] = {}
 
     for hop, decay in enumerate(hop_decays):
         seed_ids = list(result_ids) if hop == 0 else [nid for nid in neighbor_scores if nid not in result_ids]
@@ -971,7 +971,7 @@ def _apply_graph_boost(
         hop_added = 0
         for edge in edges:
             src, dst = edge["src"], edge["dst"]
-            src_score = score_by_id.get(src, neighbor_scores.get(src, 0))
+            src_score: float = score_by_id.get(src, neighbor_scores.get(src, 0)) or 0.0
             boost = src_score * decay
             if dst not in result_ids:
                 if hop_added >= 50:  # Cap neighbors per hop

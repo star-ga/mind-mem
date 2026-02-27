@@ -641,10 +641,10 @@ def extract_facts(
             )
 
     # Deduplicate by content (keep highest confidence)
-    seen = {}
+    seen: dict[str, dict[str, object]] = {}
     for card in cards:
-        key = card["content"].lower()
-        if key not in seen or card["confidence"] > seen[key]["confidence"]:
+        key = str(card["content"]).lower()
+        if key not in seen or card["confidence"] > seen[key]["confidence"]:  # type: ignore[operator]
             seen[key] = card
 
     return list(seen.values())

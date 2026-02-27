@@ -280,11 +280,11 @@ def rm3_expand(
     feedback = top_docs[:fb_docs]
 
     # Compute P(w|R) = avg P(w|D) across feedback docs
-    relevance_model = Counter()
+    relevance_model: dict[str, float] = {}
     for doc_tokens, _score in feedback:
         lm = _rm3_language_model(doc_tokens, collection_freq, total_tokens)
         for w, p in lm.items():
-            relevance_model[w] += p
+            relevance_model[w] = relevance_model.get(w, 0.0) + p
 
     # Normalize
     total_p = sum(relevance_model.values())

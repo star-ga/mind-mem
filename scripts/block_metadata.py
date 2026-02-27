@@ -201,7 +201,7 @@ class BlockMetadataManager:
                 row = conn.execute("SELECT connections FROM block_meta WHERE id = ?", (block_id,)).fetchone()
                 conn.close()
                 if row and row[0]:
-                    connections = json.loads(row[0])
+                    connections: list[str] = json.loads(row[0])
                     return connections[:limit]
                 return []
             except (sqlite3.Error, json.JSONDecodeError):

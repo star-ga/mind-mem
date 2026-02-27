@@ -129,4 +129,4 @@ def compress_context(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": COMPRESS_USER_TEMPLATE.format(question=question, context=context)},
     ]
-    return llm_fn(messages, model=model, max_tokens=max_tokens)
+    return str(llm_fn(messages, model=model, max_tokens=max_tokens))
