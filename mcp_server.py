@@ -818,7 +818,17 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
     import contextlib
     import io
 
-    from mind_mem.apply_engine import apply_proposal
+    from mind_mem.apply_engine import apply_proposal, find_proposal
+    from mind_mem.contradiction_detector import check_proposal_contradictions
+
+    # Run contradiction check before apply (surfaces conflicts to reviewer)
+    contra_report = None
+    try:
+        proposal, _source = find_proposal(ws, proposal_id)
+        if proposal:
+            contra_report = check_proposal_contradictions(ws, proposal)
+    except Exception as e:
+        _log.warning("contradiction_check_failed", error=str(e))
 
     # Capture stdout from apply_engine (it prints progress)
     capture = io.StringIO()
@@ -830,19 +840,28 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
     metrics.inc("mcp_apply_calls")
     _log.info("mcp_approve_apply", proposal_id=proposal_id, dry_run=dry_run, success=success)
 
-    return json.dumps(
-        {
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "status": "applied" if success and not dry_run else "dry_run_passed" if success else "failed",
-            "proposal_id": proposal_id,
-            "dry_run": dry_run,
-            "success": success,
-            "message": message,
-            "log": log_output[-2000:] if len(log_output) > 2000 else log_output,
-            "next_step": "Call again with dry_run=False to apply." if success and dry_run else None,
-        },
-        indent=2,
-    )
+    result = {
+        "_schema_version": MCP_SCHEMA_VERSION,
+        "status": "applied" if success and not dry_run else "dry_run_passed" if success else "failed",
+        "proposal_id": proposal_id,
+        "dry_run": dry_run,
+        "success": success,
+        "message": message,
+        "log": log_output[-2000:] if len(log_output) > 2000 else log_output,
+        "next_step": "Call again with dry_run=False to apply." if success and dry_run else None,
+    }
+
+    # Include contradiction report in output
+    if contra_report:
+        result["contradictions"] = {
+            "summary": contra_report["summary"],
+            "has_contradictions": contra_report["has_contradictions"],
+            "contradiction_count": contra_report["contradiction_count"],
+            "total_conflicts": contra_report["total_conflicts"],
+            "conflicts": contra_report["conflicts"],
+        }
+
+    return json.dumps(result, indent=2)
 
 
 @mcp.tool
