@@ -10,7 +10,7 @@ git clone https://github.com/star-ga/mind-mem.git
 cd mind-mem
 
 # Install in development mode
-pip install -e ".[dev]"
+pip install -e ".[test]"
 
 # Run tests
 pytest tests/ -v

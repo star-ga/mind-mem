@@ -28,7 +28,7 @@ Blocks frequently co-retrieved get linked. Querying one surfaces its neighbors v
 See [Getting Started](getting-started.md#mcp-server) for configuration.
 
 ### How many MCP tools are available?
-18 tools including recall, propose_update, scan, hybrid_search, and more.
+19 tools including recall, propose_update, scan, hybrid_search, retrieval_diagnostics, and more.
 
 ## Troubleshooting
 
