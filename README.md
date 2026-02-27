@@ -1301,4 +1301,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-[MIT](LICENSE) — Copyright 2026 STARGA Inc.
+[MIT](LICENSE) — Copyright 2026 STARGA Inc and contributors.
