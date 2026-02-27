@@ -8,9 +8,10 @@
   </p>
   <p align="center">
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
-    <a href="https://github.com/star-ga/mind-mem/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License"></a>
+    <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/v/mind-mem?style=flat-square&color=blue" alt="PyPI"></a>
+    <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/pyversions/mind-mem?style=flat-square" alt="Python Versions"></a>
+    <a href="https://github.com/star-ga/mind-mem/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/mind-mem?style=flat-square" alt="License"></a>
     <a href="https://github.com/star-ga/mind-mem/releases"><img src="https://img.shields.io/github/v/release/star-ga/mind-mem?style=flat-square&color=green" alt="Release"></a>
-    <img src="https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+">
     <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
     <img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible">
     <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
