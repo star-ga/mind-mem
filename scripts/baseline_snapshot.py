@@ -66,7 +66,8 @@ def _load_baseline(workspace: str, version: int) -> dict:
     if not p.exists():
         raise FileNotFoundError(f"Baseline v{version} not found at {p}")
     with open(p, encoding="utf-8") as fh:
-        return json.load(fh)
+        data: dict[str, Any] = json.load(fh)
+        return data
 
 
 def _config_fingerprint(workspace: str) -> dict[str, Any]:
@@ -331,11 +332,7 @@ def detect_drift(
             "false_certainty_warning": false_certainty,
         },
         "config_changed": config_changed,
-        "config_diff": (
-            {"baseline": baseline_config, "current": current_config}
-            if config_changed
-            else None
-        ),
+        "config_diff": ({"baseline": baseline_config, "current": current_config} if config_changed else None),
     }
 
 
@@ -359,10 +356,7 @@ def compare_baselines(workspace: str, v1: int, v2: int) -> dict[str, Any]:
     )
 
     # Config change detection
-    config_changed = (
-        b1.get("config_fingerprint", {}).get("_hash")
-        != b2.get("config_fingerprint", {}).get("_hash")
-    )
+    config_changed = b1.get("config_fingerprint", {}).get("_hash") != b2.get("config_fingerprint", {}).get("_hash")
 
     return {
         "v1": b1.get("version_tag"),
@@ -473,8 +467,8 @@ def _cli() -> None:
         print(json.dumps(result, indent=2))
 
     elif args.command == "list":
-        result = list_baselines(args.workspace)
-        print(json.dumps(result, indent=2))
+        baselines = list_baselines(args.workspace)
+        print(json.dumps(baselines, indent=2))
 
 
 if __name__ == "__main__":

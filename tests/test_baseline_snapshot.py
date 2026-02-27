@@ -133,11 +133,7 @@ class TestFreezeBaseline(unittest.TestCase):
         self.assertEqual(result["intent_distribution"], {})
         self.assertIn("config_fingerprint", result)
         # File written
-        self.assertTrue(
-            os.path.exists(
-                os.path.join(self.tmpdir, "intelligence/baselines/intent-baseline-v1.json")
-            )
-        )
+        self.assertTrue(os.path.exists(os.path.join(self.tmpdir, "intelligence/baselines/intent-baseline-v1.json")))
 
     def test_freeze_with_data(self):
         _populate_queries(self.tmpdir, {"WHAT": 10, "WHEN": 5, "HOW": 3})
@@ -151,11 +147,7 @@ class TestFreezeBaseline(unittest.TestCase):
         freeze_baseline(self.tmpdir)
         result2 = freeze_baseline(self.tmpdir)
         self.assertEqual(result2["version_tag"], "v2")
-        self.assertTrue(
-            os.path.exists(
-                os.path.join(self.tmpdir, "intelligence/baselines/intent-baseline-v2.json")
-            )
-        )
+        self.assertTrue(os.path.exists(os.path.join(self.tmpdir, "intelligence/baselines/intent-baseline-v2.json")))
 
     def test_explicit_tag(self):
         result = freeze_baseline(self.tmpdir, tag=42)
