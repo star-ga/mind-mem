@@ -247,7 +247,7 @@ def recall(
             _log.warning("block_metadata_init_failed", error=str(e))
 
     # --- Pipeline stage counters (#428) ---
-    _stage_counts: dict[str, int] = {}
+    _stage_counts: dict[str, int | float] = {}
     _intent_type = ""
 
     # --- Intent classification ---
