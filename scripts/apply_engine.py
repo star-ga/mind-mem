@@ -1019,8 +1019,7 @@ def apply_proposal(ws, proposal_id, dry_run=False, agent_id=None):
         if contra_report["has_contradictions"]:
             for c in contra_report["conflicts"]:
                 if c["conflict_type"] == "contradiction":
-                    print(f"  ⚠️  {c['block_id']} (sim={c['similarity']:.2f}): "
-                          f"{c['existing_excerpt'][:100]}...")
+                    print(f"  ⚠️  {c['block_id']} (sim={c['similarity']:.2f}): {c['existing_excerpt'][:100]}...")
     except Exception as e:
         contra_report = None
         print(f"  WARNING: Contradiction check failed: {e}")
