@@ -2,6 +2,26 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.7.2 (2026-02-27)
+
+**Baseline snapshot, contradiction detection, and full type safety**
+
+### Added
+- **Baseline Snapshot**: `baseline_snapshot` MCP tool — freeze intent distribution baselines, detect drift via chi-squared test, compare baselines over time. CLI entry point: `mind-mem-baseline`.
+- **Contradiction Detection**: `contradiction_detector` module — TF-IDF cosine similarity + Jaccard fallback, negation pattern detection, status reversal classification. Integrated into `approve_apply` governance gate.
+- Terminal demo GIF (VHS recording) in README
+
+### Fixed
+- All 168 mypy typecheck errors across 32 files (zero errors, full strict pass)
+- Windows CI encoding failure (em-dash in test fixture)
+- Ruff format/lint issues in contributed code
+- CodeQL high-severity findings in test files (URL sanitization, file permissions)
+- Two stale "16 tools" references in README (now 19)
+
+### Changed
+- Copyright updated to "STARGA Inc and contributors"
+- Benchmark example uses `mistral-large-latest` to match published results
+
 ## 1.7.1 (2026-02-25)
 
 **Quality, testing, documentation, and developer tooling improvements**

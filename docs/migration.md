@@ -237,7 +237,7 @@ These features are new in mind-mem and were not available in mem-os:
 - **Category distillation** -- Auto-generated thematic summaries from block tags and keywords, with `_manifest.json` tracking
 - **Prefetch context** -- Anticipatory pre-assembly of likely-needed memory blocks using intent routing and category signals
 - **16 MIND kernels** -- Native C99 computation kernels (BM25, RRF, ranking, reranking, temporal, adversarial, etc.) with FFI bridge and pure Python fallback
-- **18 MCP tools** (was 6 in mem-os) -- Added `hybrid_search`, `find_similar`, `intent_classify`, `index_stats`, `reindex`, `memory_evolution`, `list_mind_kernels`, `get_mind_kernel`, `category_summary`, `prefetch`, `delete_memory_item`, `export_memory`
+- **19 MCP tools** (was 6 in mem-os) -- Added `hybrid_search`, `find_similar`, `intent_classify`, `index_stats`, `reindex`, `memory_evolution`, `list_mind_kernels`, `get_mind_kernel`, `category_summary`, `prefetch`, `delete_memory_item`, `export_memory`, `baseline_snapshot`
 - **Hybrid BM25+Vector search** with Reciprocal Rank Fusion (RRF)
 - **RM3 pseudo-relevance feedback** for query expansion
 - **A-MEM block metadata evolution** -- Tracks block creation, access, and mutation history

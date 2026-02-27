@@ -1,6 +1,6 @@
 [project]
 name = "mind-mem"
-version = "1.7.1"
+version = "1.7.2"
 description = "Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent."
 readme = "README.md"
 license = "MIT"

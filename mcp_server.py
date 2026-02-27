@@ -687,8 +687,7 @@ def propose_update(
             "written": written,
             "location": "intelligence/SIGNALS.md",
             "next_step": (
-                "Run /apply or `python3 maintenance/apply_engine.py`"
-                " to review and promote to source of truth."
+                "Run /apply or `python3 maintenance/apply_engine.py` to review and promote to source of truth."
             ),
             "safety": "This signal is in SIGNALS.md only. It has NOT been written to DECISIONS.md or TASKS.md.",
         },

@@ -79,7 +79,7 @@ All MCP-compatible clients can now use mind-mem tools:
 | `intent_classify` | Show query routing strategy |
 | `prefetch` | Pre-assemble likely context |
 
-Full list: 16 tools, 8 resources. See [API Reference](api-reference.md).
+Full list: 19 tools, 8 resources. See [API Reference](api-reference.md).
 
 ## 8. Enable Hybrid Search (Optional)
 
