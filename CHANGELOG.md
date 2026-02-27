@@ -2,6 +2,24 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.7.3 (2026-02-27)
+
+**Comprehensive security hardening and production reliability**
+
+### Fixed
+- **6 CRITICAL**: chunk_block off-by-one (#435), FTS5 wildcard injection (#436), CLI token exposure (#437), WAL post-check recovery (#438), DDL dimension validation (#439), intel state race condition (#440)
+- **11 HIGH**: read-only pragma crash (#442), connection leaks in block_metadata (#444) and build_index (#446), PRF O(N*M) performance (#448), non-atomic proposal status write (#449), missing DB indexes (#450), block_metadata missing pragmas (#451), ACL startup warning (#441), plaintext API key removal (#443), export_memory caps (#447)
+- **9 MEDIUM**: SSRF localhost validation (#452), block-header injection (#453), mid-block truncation (#454), sys.path restoration (#455), bare exception handlers (#456), index_status crash on fresh workspace (#457), intel_scan TOCTOU race (#458), vec_meta.json atomic write (#459), block_id validation (#460)
+- **4 LOW**: kernel field weight passthrough (#461), delete audit log (#462), workspace permissions (#463), CI SHA pinning (#464)
+
+### Security
+- All CI actions pinned to immutable commit SHAs (supply chain hardening)
+- Pinecone API key now requires env var only (removed config fallback)
+- Workspace directories created with restrictive 0o700 permissions
+- export_memory moved to ADMIN_TOOLS with 10k block cap
+- HTTP transport warns when admin token is not set
+- Deleted blocks now logged to deleted_blocks.jsonl for audit trail
+
 ## 1.7.2 (2026-02-27)
 
 **Baseline snapshot, contradiction detection, and full type safety**
