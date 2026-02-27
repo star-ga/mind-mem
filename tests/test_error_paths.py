@@ -137,7 +137,7 @@ class TestCorruptedBlockFile(unittest.TestCase):
             with self.assertRaises((OSError, PermissionError)):
                 parse_file(fpath)
         finally:
-            os.chmod(fpath, 0o644)
+            os.chmod(fpath, 0o400)
             os.unlink(fpath)
 
 

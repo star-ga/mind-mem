@@ -225,7 +225,7 @@ class TestExtractEntities:
         """Excerpt contains surrounding context around the match."""
         entities = extract_entities("Check out https://github.com/star-ga/mind-mem for details.")
         match = next(e for e in entities if e["slug"] == "mind-mem")
-        assert "github.com" in match["excerpt"]
+        assert "https://github.com/star-ga/mind-mem" in match["excerpt"]
 
 
 # ---------------------------------------------------------------------------
