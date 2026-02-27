@@ -251,11 +251,13 @@ class TestConnectionManager(unittest.TestCase):
 
         connections = {}
         errors = []
+        barrier = threading.Barrier(3, timeout=10)
 
         def get_conn(tid):
             try:
                 conn = self.mgr.get_read_connection()
                 connections[tid] = id(conn)
+                barrier.wait()  # hold connections alive until all threads checked
             except Exception as e:
                 errors.append(e)
 
@@ -266,6 +268,7 @@ class TestConnectionManager(unittest.TestCase):
             t.join(timeout=10)
 
         self.assertEqual(len(errors), 0, f"Errors: {errors}")
+        self.assertEqual(len(connections), 3)
         # All 3 threads should have different connection objects
         unique_ids = set(connections.values())
         self.assertEqual(len(unique_ids), 3)
