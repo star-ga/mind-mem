@@ -279,9 +279,11 @@ def _safe_copy(src, dst):
 
 def _build_manifest(snap_dir, files):
     """Write snapshot manifest for efficient delta-based restore."""
+    # Normalize to POSIX separators for cross-platform portability
+    normalized = [f.replace(os.sep, "/") for f in files]
     manifest_path = os.path.join(snap_dir, "MANIFEST.json")
     with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump({"files": files, "version": 1}, f)
+        json.dump({"files": normalized, "version": 1}, f)
 
 
 def _read_manifest(snap_dir):

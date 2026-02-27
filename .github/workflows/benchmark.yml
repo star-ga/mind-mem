@@ -35,9 +35,9 @@ jobs:
           # Fallback: run recall timing test
           python -c "
           import time, tempfile, os
-          from scripts.init_workspace import init as init_workspace
-          from scripts.block_parser import parse_file
-          from scripts._recall_core import recall
+          from mind_mem.init_workspace import init as init_workspace
+          from mind_mem.block_parser import parse_file
+          from mind_mem._recall_core import recall
 
           ws = tempfile.mkdtemp()
           init_workspace(ws)

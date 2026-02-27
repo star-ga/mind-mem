@@ -4,9 +4,9 @@
 
 | Version | Supported |
 |---------|-----------|
-| 1.7.x   | Yes      |
-| 1.6.x   | Security fixes only |
-| < 1.6   | No       |
+| 1.8.x   | Yes      |
+| 1.7.x   | Security fixes only |
+| < 1.7   | No       |
 
 ## Reporting a Vulnerability
 
@@ -67,7 +67,7 @@ All external inputs are validated at system boundaries:
 ### Concurrency Safety
 
 - **Advisory file locks**: `MindFileLock` (`mind_filelock.py`) provides cross-platform locking using `fcntl.flock()` on Unix and `msvcrt.locking()` on Windows. Stale locks are detected via PID liveness checks.
-- **SQLite WAL mode**: All database connections use `PRAGMA journal_mode=WAL` for concurrent readers, `PRAGMA busy_timeout=3000` for writer contention, and `timeout=5` on `sqlite3.connect()`.
+- **SQLite WAL mode**: All database connections use `PRAGMA journal_mode=WAL` for concurrent readers, `PRAGMA busy_timeout=3000` for writer contention, and `timeout=5` on `sqlite3.connect()`. The `ConnectionManager` (v1.8.0+) provides thread-local read connections with `PRAGMA query_only=ON` and a single serialized writer protected by `threading.Lock`.
 - **Atomic writes**: Apply engine writes to temp files then renames, preventing partial writes on crash.
 
 ### Safe Defaults
