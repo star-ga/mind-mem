@@ -2,6 +2,27 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.8.1 (2026-02-27)
+
+**Polish: cross-platform fixes, docs alignment, project metadata**
+
+### Fixed
+- Windows CI: snapshot manifests now use POSIX separators for cross-platform portability
+- Windows CI: `restore_snapshot()` and `_cleanup_orphans_from_manifest()` normalize paths correctly
+- Windows CI: `snapshot_diff()` returns POSIX paths on all platforms
+- macOS CI: thread-local connection test uses barrier to prevent `id()` collision from GC
+- Mypy: suppressed false positive on nested dict indexed assignment
+
+### Changed
+- All `scripts/` references updated to `src/mind_mem/` or `python3 -m mind_mem.X` across docs, Makefile, hooks, install.sh, CODEOWNERS, source docstrings, and MCP error messages
+- PyPI badge auto-fetches latest version (removed hardcoded `v=` parameter)
+- Test count badge updated to 2027
+- Added PEP 561 `py.typed` marker for type checker support
+- Added classifiers: OS Independent, Python 3.10-3.14, Typing::Typed
+- Added `.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`, `*.log` to .gitignore
+- SECURITY.md: bumped supported versions to 1.8.x, added ConnectionManager note
+- Roadmap updated to v1.8.0 current / v1.9.0 planned
+
 ## 1.8.0 (2026-02-27)
 
 **Architecture overhaul: 5 structural improvements, standard package layout, 74 new tests**
