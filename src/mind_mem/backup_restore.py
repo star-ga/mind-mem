@@ -8,10 +8,10 @@ Provides:
 - WAL (write-ahead log) for crash-safe writes
 
 Usage:
-    python3 scripts/backup_restore.py backup workspace/ --output backup.tar.gz
-    python3 scripts/backup_restore.py export workspace/ --output export.jsonl
-    python3 scripts/backup_restore.py restore workspace/ --input backup.tar.gz
-    python3 scripts/backup_restore.py wal-replay workspace/
+    python3 -m mind_mem.backup_restore backup workspace/ --output backup.tar.gz
+    python3 -m mind_mem.backup_restore export workspace/ --output export.jsonl
+    python3 -m mind_mem.backup_restore restore workspace/ --input backup.tar.gz
+    python3 -m mind_mem.backup_restore wal-replay workspace/
 """
 
 from __future__ import annotations

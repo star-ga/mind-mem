@@ -10,9 +10,9 @@ matching. Each category file is a Markdown summary that references source blocks
 by ID, suitable for anticipatory context assembly.
 
 Usage (CLI):
-    python3 scripts/category_distiller.py /path/to/workspace
-    python3 scripts/category_distiller.py /path/to/workspace --json
-    python3 scripts/category_distiller.py /path/to/workspace --query "deploy pipeline"
+    python3 -m mind_mem.category_distiller /path/to/workspace
+    python3 -m mind_mem.category_distiller /path/to/workspace --json
+    python3 -m mind_mem.category_distiller /path/to/workspace --query "deploy pipeline"
 
 As library:
     from .category_distiller import CategoryDistiller
@@ -688,7 +688,7 @@ def main() -> None:
     """Run the category distiller from the command line.
 
     Usage:
-        python scripts/category_distiller.py /path/to/workspace [--json] [--query "..."]
+        python3 -m mind_mem.category_distiller /path/to/workspace [--json] [--query "..."]
     """
     import argparse
 

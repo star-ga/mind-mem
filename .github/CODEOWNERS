@@ -1,7 +1,7 @@
 # Default owners
 * @star-ga
 
-# Core scripts
-/scripts/ @star-ga
+# Core source
+/src/mind_mem/ @star-ga
 /tests/ @star-ga
 /docs/ @star-ga

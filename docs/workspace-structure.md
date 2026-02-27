@@ -35,7 +35,7 @@ workspace/
 ## Initialization
 
 ```python
-from scripts.init_workspace import init
+from mind_mem.init_workspace import init
 init("/path/to/workspace")
 ```
 

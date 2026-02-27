@@ -5,7 +5,7 @@ Detects workspace schema version from mind-mem.json and performs safe,
 idempotent migrations to bring older workspaces up to date.
 
 Usage:
-    python3 scripts/schema_version.py [workspace_path]
+    python3 -m mind_mem.schema_version [workspace_path]
 
 As library:
     from .schema_version import get_workspace_version, check_migration_needed, migrate_workspace

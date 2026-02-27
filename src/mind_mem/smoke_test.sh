@@ -30,7 +30,7 @@ echo ""
 
 # 1. Init
 echo "--- init ---"
-python3 "$REPO_ROOT/scripts/init_workspace.py" "$TMPWS" > /dev/null 2>&1
+python3 -m mind_mem.init_workspace "$TMPWS" > /dev/null 2>&1
 check "init creates mind-mem.json" "[ -f '$TMPWS/mind-mem.json' ]"
 check "init creates DECISIONS.md" "[ -f '$TMPWS/decisions/DECISIONS.md' ]"
 check "init creates validate.sh" "[ -f '$TMPWS/maintenance/validate.sh' ]"

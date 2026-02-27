@@ -9,8 +9,8 @@ Writes:
   - Linking signal to intelligence/SIGNALS.md
 
 Usage:
-    python3 scripts/session_summarizer.py workspace/ --transcript path/to.jsonl
-    python3 scripts/session_summarizer.py workspace/ --scan-recent
+    python3 -m mind_mem.session_summarizer workspace/ --transcript path/to.jsonl
+    python3 -m mind_mem.session_summarizer workspace/ --scan-recent
 """
 
 from __future__ import annotations

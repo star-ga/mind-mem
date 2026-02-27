@@ -11,9 +11,9 @@ Jobs:
   all              — run all enabled jobs sequentially
 
 Usage:
-    python3 scripts/cron_runner.py /path/to/workspace --job all
-    python3 scripts/cron_runner.py /path/to/workspace --job transcript_scan
-    python3 scripts/cron_runner.py --install-cron
+    python3 -m mind_mem.cron_runner /path/to/workspace --job all
+    python3 -m mind_mem.cron_runner /path/to/workspace --job transcript_scan
+    python3 -m mind_mem.cron_runner --install-cron
 """
 
 from __future__ import annotations

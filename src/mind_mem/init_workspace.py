@@ -5,8 +5,8 @@ Scaffolds directory structure and copies templates for a new mind-mem workspace.
 Never overwrites existing files.
 
 Usage:
-    python3 scripts/init_workspace.py [workspace_path]
-    python3 scripts/init_workspace.py /path/to/workspace
+    python3 -m mind_mem.init_workspace [workspace_path]
+    python3 -m mind_mem.init_workspace /path/to/workspace
 """
 
 from __future__ import annotations

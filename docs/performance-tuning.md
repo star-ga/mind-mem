@@ -26,7 +26,7 @@ The BM25F scoring constants are defined in `src/mind_mem/_recall_constants.py`:
 The FTS5 index is built automatically on first recall. To force rebuild:
 
 ```python
-from scripts.sqlite_index import rebuild_fts_index
+from mind_mem.sqlite_index import rebuild_fts_index
 rebuild_fts_index(workspace_path)
 ```
 
@@ -35,7 +35,7 @@ rebuild_fts_index(workspace_path)
 Optional. Requires `sentence-transformers`:
 
 ```python
-from scripts.recall_vector import build_vector_index
+from mind_mem.recall_vector import build_vector_index
 build_vector_index(workspace_path, model="all-MiniLM-L6-v2")
 ```
 
@@ -55,7 +55,7 @@ build_vector_index(workspace_path, model="all-MiniLM-L6-v2")
 Merge old blocks to reduce workspace size:
 
 ```bash
-python3 -m scripts.compaction /path/to/workspace --older-than 90
+python3 -m mind_mem.compaction /path/to/workspace --older-than 90
 ```
 
 ## Caching

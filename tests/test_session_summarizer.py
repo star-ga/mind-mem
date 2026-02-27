@@ -1,4 +1,4 @@
-"""Comprehensive tests for scripts/session_summarizer.py.
+"""Comprehensive tests for mind_mem/session_summarizer.py.
 
 Covers: file_hash, extract_summary, format_summary_block, write_summary,
         and edge cases (unicode, concurrent access, empty workspace).

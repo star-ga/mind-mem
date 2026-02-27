@@ -4,7 +4,7 @@ Common issues and solutions for mind-mem.
 
 ## Installation Issues
 
-### ImportError: No module named 'scripts'
+### ImportError: No module named 'mind_mem'
 
 **Cause:** mind-mem is not installed in editable mode.
 
@@ -51,7 +51,7 @@ find /path/to/workspace -name "*.lock" -mmin +5 -delete
 **Fix:**
 ```bash
 # Run compaction to merge old blocks
-python3 -m scripts.compaction /path/to/workspace
+python3 -m mind_mem.compaction /path/to/workspace
 ```
 
 ## MCP Server Issues
@@ -90,7 +90,7 @@ python3 mcp_server.py --workspace /path/to/workspace
 **Fix:**
 ```bash
 # Rebuild indexes
-python3 -c "from scripts.sqlite_index import rebuild_index; rebuild_index('/path/to/workspace')"
+python3 -c "from mind_mem.sqlite_index import rebuild_index; rebuild_index('/path/to/workspace')"
 ```
 
 ### High disk usage

@@ -10,8 +10,8 @@ Scans Claude Code transcript JSONL files for:
 Extracts structured signals and writes them to SIGNALS.md for review.
 
 Usage:
-    python3 scripts/transcript_capture.py workspace/ --transcript path/to/session.jsonl
-    python3 scripts/transcript_capture.py workspace/ --scan-recent  # scans ~/.claude/projects/
+    python3 -m mind_mem.transcript_capture workspace/ --transcript path/to/session.jsonl
+    python3 -m mind_mem.transcript_capture workspace/ --scan-recent  # scans ~/.claude/projects/
 """
 
 from __future__ import annotations

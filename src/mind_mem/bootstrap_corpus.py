@@ -10,7 +10,7 @@ Populates the mind-mem corpus by scanning:
 Safe to re-run: content_hash dedup in append_signals() prevents double-writing.
 
 Usage:
-    python3 scripts/bootstrap_corpus.py <workspace> [--dry-run] [--max-transcripts N]
+    python3 -m mind_mem.bootstrap_corpus <workspace> [--dry-run] [--max-transcripts N]
 """
 
 from __future__ import annotations

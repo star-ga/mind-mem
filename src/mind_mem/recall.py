@@ -9,10 +9,10 @@ For semantic recall (embeddings), see RecallBackend interface below.
 Optional vector backends (Qdrant/Pinecone) can be plugged in via config.
 
 Usage:
-    python3 scripts/recall.py --query "authentication" --workspace "."
-    python3 scripts/recall.py --query "auth" --workspace "." --json --limit 5
-    python3 scripts/recall.py --query "deadline" --active-only
-    python3 scripts/recall.py --query "database" --graph --workspace .
+    python3 -m mind_mem.recall --query "authentication" --workspace "."
+    python3 -m mind_mem.recall --query "auth" --workspace "." --json --limit 5
+    python3 -m mind_mem.recall --query "deadline" --active-only
+    python3 -m mind_mem.recall --query "database" --graph --workspace .
 
 This module is a facade — all implementation lives in _recall_*.py submodules.
 External consumers should import from 'recall', never from '_recall_*' directly.

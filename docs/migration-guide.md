@@ -23,7 +23,7 @@ mind-mem is the successor to mem-os. This guide covers the migration path.
 
 2. **Initialize mind-mem workspace:**
    ```bash
-   python3 -c "from scripts.init_workspace import init; init('/path/to/workspace')"
+   python3 -c "from mind_mem.init_workspace import init; init('/path/to/workspace')"
    ```
 
 3. **Import data:**
@@ -34,13 +34,13 @@ mind-mem is the successor to mem-os. This guide covers the migration path.
 
 4. **Rebuild indexes:**
    ```python
-   from scripts.sqlite_index import rebuild_fts_index
+   from mind_mem.sqlite_index import rebuild_fts_index
    rebuild_fts_index('/path/to/workspace')
    ```
 
 5. **Verify:**
    ```python
-   from scripts.block_parser import parse_file
+   from mind_mem.block_parser import parse_file
    blocks = parse_file('/path/to/workspace/decisions/imported.md')
    print(f"Imported {len(blocks)} blocks")
    ```
