@@ -25,6 +25,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sqlite3
 from datetime import datetime
 
@@ -64,6 +65,10 @@ FTS5_COLUMNS = [
     ("all_text", 1.0),  # catch-all for other fields
 ]
 
+# Only allow alphanumeric tokens (plus _ - .) through to FTS5 queries
+# to prevent wildcard injection (e.g. "*" matching entire corpus)
+_FTS5_SAFE = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+
 
 def _db_path(workspace: str) -> str:
     """Return absolute path to the index database."""
@@ -79,8 +84,9 @@ def _connect(workspace: str, readonly: bool = False) -> sqlite3.Connection:
         conn = sqlite3.connect(uri, uri=True)
     else:
         conn = sqlite3.connect(path)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
+    if not readonly:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -156,6 +162,10 @@ def _init_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE blocks ADD COLUMN parent_id TEXT NOT NULL DEFAULT ''")
     except sqlite3.OperationalError:
         pass  # Column already exists
+
+    # Secondary indexes for common query patterns
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_blocks_parent_id ON blocks(parent_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_blocks_file ON blocks(file)")
 
     conn.commit()
 
@@ -568,80 +578,81 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
     start = datetime.now()
 
     conn = _connect(workspace)
-    _init_schema(conn)
+    try:
+        _init_schema(conn)
 
-    # Collect all block IDs for xref resolution
-    all_block_ids = set()
-    for label, rel_path in CORPUS_FILES.items():
-        path = os.path.join(ws, rel_path)
-        if os.path.isfile(path):
-            try:
-                for b in parse_file(path):
-                    bid = b.get("_id", "")
-                    if bid:
-                        all_block_ids.add(bid)
-            except (OSError, UnicodeDecodeError, ValueError) as e:
-                _log.debug("xref_scan_parse_failed", file=rel_path, error=str(e))
+        # Collect all block IDs for xref resolution
+        all_block_ids = set()
+        for label, rel_path in CORPUS_FILES.items():
+            path = os.path.join(ws, rel_path)
+            if os.path.isfile(path):
+                try:
+                    for b in parse_file(path):
+                        bid = b.get("_id", "")
+                        if bid:
+                            all_block_ids.add(bid)
+                except (OSError, UnicodeDecodeError, ValueError) as e:
+                    _log.debug("xref_scan_parse_failed", file=rel_path, error=str(e))
 
-    force = not incremental
-    if incremental:
-        changed = _get_changed_files(conn, workspace)
-    else:
-        changed = list(CORPUS_FILES.items())
-        # Clear file_state and index_meta for full rebuild
-        conn.execute("DELETE FROM file_state")
-        conn.execute("DELETE FROM index_meta")
+        force = not incremental
+        if incremental:
+            changed = _get_changed_files(conn, workspace)
+        else:
+            changed = list(CORPUS_FILES.items())
+            # Clear file_state and index_meta for full rebuild
+            conn.execute("DELETE FROM file_state")
+            conn.execute("DELETE FROM index_meta")
 
-    total_blocks = 0
-    total_new = 0
-    total_modified = 0
-    total_deleted = 0
-    total_unchanged = 0
-    for label, rel_path in changed:
-        counts = _index_file(conn, workspace, label, rel_path, all_block_ids, force=force)
-        total_blocks += counts["total"]
-        total_new += counts["new"]
-        total_modified += counts["modified"]
-        total_deleted += counts["deleted"]
-        total_unchanged += counts["unchanged"]
-        _log.info(
-            "indexed_file",
-            file=rel_path,
-            new=counts["new"],
-            modified=counts["modified"],
-            deleted=counts["deleted"],
-            unchanged=counts["unchanged"],
+        total_blocks = 0
+        total_new = 0
+        total_modified = 0
+        total_deleted = 0
+        total_unchanged = 0
+        for label, rel_path in changed:
+            counts = _index_file(conn, workspace, label, rel_path, all_block_ids, force=force)
+            total_blocks += counts["total"]
+            total_new += counts["new"]
+            total_modified += counts["modified"]
+            total_deleted += counts["deleted"]
+            total_unchanged += counts["unchanged"]
+            _log.info(
+                "indexed_file",
+                file=rel_path,
+                new=counts["new"],
+                modified=counts["modified"],
+                deleted=counts["deleted"],
+                unchanged=counts["unchanged"],
+            )
+
+        # Update metadata
+        conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+            ("last_build", datetime.now().isoformat()),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+            ("build_mode", "incremental" if incremental else "full"),
         )
 
-    # Update metadata
-    conn.execute(
-        "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-        ("last_build", datetime.now().isoformat()),
-    )
-    conn.execute(
-        "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-        ("build_mode", "incremental" if incremental else "full"),
-    )
+        conn.commit()
 
-    conn.commit()
+        elapsed = (datetime.now() - start).total_seconds() * 1000
+        summary = {
+            "files_checked": len(CORPUS_FILES),
+            "files_indexed": len(changed),
+            "blocks_indexed": total_blocks,
+            "blocks_new": total_new,
+            "blocks_modified": total_modified,
+            "blocks_deleted": total_deleted,
+            "blocks_unchanged": total_unchanged,
+            "elapsed_ms": round(elapsed, 1),
+        }
 
-    elapsed = (datetime.now() - start).total_seconds() * 1000
-    summary = {
-        "files_checked": len(CORPUS_FILES),
-        "files_indexed": len(changed),
-        "blocks_indexed": total_blocks,
-        "blocks_new": total_new,
-        "blocks_modified": total_modified,
-        "blocks_deleted": total_deleted,
-        "blocks_unchanged": total_unchanged,
-        "elapsed_ms": round(elapsed, 1),
-    }
-
-    # Count total blocks in index
-    row = conn.execute("SELECT COUNT(*) as cnt FROM blocks").fetchone()
-    summary["total_blocks"] = row["cnt"]
-
-    conn.close()
+        # Count total blocks in index
+        row = conn.execute("SELECT COUNT(*) as cnt FROM blocks").fetchone()
+        summary["total_blocks"] = row["cnt"]
+    finally:
+        conn.close()
 
     _log.info("build_complete", **summary)
     metrics.inc("index_builds")
@@ -797,7 +808,11 @@ def query_index(
 
     # Build FTS5 MATCH query from tokens
     # Quote each token to prevent FTS5 operator injection (NOT, AND, NEAR, etc.)
-    fts_query = " OR ".join(f'"{t.replace(chr(34), "")}"' for t in query_tokens if t.replace('"', ""))
+    # Also reject tokens that aren't alphanumeric to prevent wildcard injection (e.g. "*")
+    fts_query = " OR ".join(f'"{t.replace(chr(34), "")}"' for t in query_tokens if _FTS5_SAFE.match(t))
+    if not fts_query:
+        conn.close()
+        return []
 
     try:
         # FTS5 bm25() returns negative scores (lower = better)
@@ -1044,8 +1059,9 @@ def index_status(workspace: str) -> dict:
     if not os.path.isfile(db_path):
         return {"exists": False, "blocks": 0, "stale_files": len(CORPUS_FILES)}
 
-    conn = _connect(workspace, readonly=True)
+    conn = None
     try:
+        conn = _connect(workspace, readonly=True)
         _init_schema(conn)
         row = conn.execute("SELECT COUNT(*) as cnt FROM blocks").fetchone()
         block_count = row["cnt"]
@@ -1062,7 +1078,8 @@ def index_status(workspace: str) -> dict:
             "db_size_bytes": os.path.getsize(db_path),
         }
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
 
 
 # ---------------------------------------------------------------------------

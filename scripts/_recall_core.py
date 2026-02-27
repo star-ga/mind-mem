@@ -786,6 +786,7 @@ def recall(
             # Re-score all blocks with expanded query (original + PRF terms).
             # Multi-hop uses lower weight to avoid drifting away from the query.
             prf_weight = PRF_WEIGHT_MULTIHOP if query_type == "multi-hop" else PRF_WEIGHT_DEFAULT
+            result_by_id = {r["_id"]: r for r in results}
             # Pre-compute IDF for expansion terms
             _prf_idf = {}
             for et in expansion_terms:
@@ -808,12 +809,9 @@ def recall(
                 if prf_score > 0:
                     bid = block.get("_id", "?")
                     # Find existing result and boost, or add new result
-                    found = False
-                    for r in results:
-                        if r["_id"] == bid:
-                            r["score"] = round(r["score"] + prf_score * prf_weight, 4)
-                            found = True
-                            break
+                    found = bid in result_by_id
+                    if found:
+                        result_by_id[bid]["score"] = round(result_by_id[bid]["score"] + prf_score * prf_weight, 4)
                     if not found:
                         result = {
                             "_id": bid,
@@ -827,6 +825,7 @@ def recall(
                         if block.get("DiaID"):
                             result["DiaID"] = block["DiaID"]
                         results.append(result)
+                        result_by_id[bid] = result
 
     # --- Chain-of-retrieval for multi-hop queries ---
     # Emulates iterative search deterministically:

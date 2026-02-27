@@ -640,10 +640,10 @@ def chunk_block(
         chunk[text_field] = chunk_text
         chunks.append(chunk)
 
+        idx += 1
         if end >= len(words):
             break
         start += step
-        idx += 1
 
     return chunks
 
