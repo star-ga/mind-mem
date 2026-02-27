@@ -46,6 +46,7 @@ mind-mem-migrate = "mind_mem.schema_version:main"
 mind-mem-backup = "mind_mem.backup_restore:main"
 mind-mem-compact = "mind_mem.compaction:main"
 mind-mem-resolve = "mind_mem.conflict_resolver:main"
+mind-mem-baseline = "mind_mem.baseline_snapshot:_cli"
 
 [tool.setuptools]
 packages = ["mind_mem"]
