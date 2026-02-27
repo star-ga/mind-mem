@@ -28,7 +28,7 @@ all = ["fastmcp==2.14.5", "onnxruntime==1.24.2", "tokenizers==0.22.2", "sentence
 [project.urls]
 Homepage = "https://github.com/star-ga/mind-mem"
 Repository = "https://github.com/star-ga/mind-mem"
-Documentation = "https://mindlang.dev"
+Documentation = "https://github.com/star-ga/mind-mem#readme"
 Issues = "https://github.com/star-ga/mind-mem/issues"
 
 [build-system]

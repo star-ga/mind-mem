@@ -15,7 +15,7 @@
     <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
     <img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible">
     <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
-    <img src="https://img.shields.io/badge/tests-1852-brightgreen?style=flat-square" alt="Tests: 1852">
+    <img src="https://img.shields.io/badge/tests-1840-brightgreen?style=flat-square" alt="Tests: 1840">
     <img src="https://img.shields.io/badge/MCP_tools-19-blue?style=flat-square" alt="MCP Tools: 19">
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/security-review.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/security-review.yml?branch=main&style=flat-square&label=Security%20Review&color=darkgreen" alt="Security Review"></a>
   </p>
@@ -209,8 +209,8 @@ Scans Claude Code transcript files for user corrections, convention discoveries,
 ### MCP Server (19 tools, 8 resources)
 Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 19 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
 
-### 74+ Structural Checks + 1352 Unit Tests
-`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 1352 pytest unit tests covering all core modules.
+### 74+ Structural Checks + 1840 Unit Tests
+`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 1840 pytest unit tests covering all core modules.
 
 ### Audit Trail
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
@@ -1016,7 +1016,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 ```json
 {
-  "version": "1.7.0",
+  "version": "1.7.1",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,

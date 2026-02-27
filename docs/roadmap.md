@@ -7,7 +7,7 @@
 - [x] Fact card sub-block indexing
 - [x] Knee score cutoff
 - [x] Hard negative mining
-- [x] 18 MCP tools
+- [x] 19 MCP tools
 - [x] LoCoMo benchmark suite
 - [x] Cross-platform CI (Ubuntu/macOS/Windows)
 
@@ -15,7 +15,6 @@
 
 - [ ] Incremental reindexing
 - [ ] Block versioning with diff tracking
-- [ ] Workspace backup and restore
 - [ ] Enhanced vector search with HNSW
 - [ ] Query result caching
 - [ ] Workspace federation (multi-workspace queries)

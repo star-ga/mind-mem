@@ -15,7 +15,7 @@ Search blocks using BM25 scoring.
 
 ### MCP Server
 
-The MCP server exposes 18 tools via JSON-RPC. See [MCP Tool Examples](mcp-tool-examples.md).
+The MCP server exposes 19 tools via JSON-RPC. See [MCP Tool Examples](mcp-tool-examples.md).
 
 #### Starting the Server
 
