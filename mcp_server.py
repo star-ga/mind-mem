@@ -705,7 +705,7 @@ def propose_update(
         },
     }
     if rationale:
-        signal["structure"]["rationale"] = rationale
+        signal["structure"]["rationale"] = rationale  # type: ignore[index]
 
     written = append_signals(ws, [signal], today)
 
