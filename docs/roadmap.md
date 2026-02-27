@@ -11,6 +11,7 @@
 - [x] LoCoMo benchmark suite
 - [x] Cross-platform CI (Ubuntu/macOS/Windows)
 - [x] Baseline snapshot with chi-squared drift detection
+- [x] Contradiction detection at governance gate
 
 ## v1.8.0 (Planned)
 

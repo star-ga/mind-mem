@@ -52,7 +52,7 @@ python3 mcp_server.py --workspace /path/to/workspace
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
 | `propose_update` | Propose a decision or task (writes to SIGNALS.md) | `block_type`, `statement`, `rationale`, `tags`, `confidence` |
-| `approve_apply` | Apply a staged proposal (dry_run default) | `proposal_id`, `dry_run` |
+| `approve_apply` | Apply a staged proposal with contradiction check (dry_run default) | `proposal_id`, `dry_run` |
 | `rollback_proposal` | Rollback an applied proposal by receipt timestamp | `receipt_ts` |
 | `delete_memory_item` | Delete a block by ID from its source file | `block_id` |
 | `export_memory` | Export all blocks as JSONL | `format`, `include_metadata` |
