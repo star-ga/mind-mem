@@ -62,6 +62,7 @@ from .retrieval_graph import (
     get_hard_negative_ids,
     log_retrieval,
     propagate_scores,
+    record_hard_negatives,
 )
 
 # A-MEM block metadata (optional — graceful degradation if unavailable)
@@ -193,6 +194,7 @@ def recall(
     retrieve_wide_k: int = 200,
     rerank: bool = True,
     rerank_debug: bool = False,
+    include_pending: bool = False,
     _allow_decompose: bool = True,
 ) -> list[dict]:
     """Search across all memory files using BM25 scoring. Returns ranked results.
@@ -207,6 +209,7 @@ def recall(
         retrieve_wide_k: Number of candidates to retrieve before reranking.
         rerank: Enable deterministic reranking (v7).
         rerank_debug: Log reranker feature breakdowns.
+        include_pending: Include unreviewed SIGNALS.md proposals (default False).
     """
     query_tokens = tokenize(query)
     if not query_tokens:
@@ -243,13 +246,20 @@ def recall(
         except Exception as e:
             _log.warning("block_metadata_init_failed", error=str(e))
 
+    # --- Pipeline stage counters (#428) ---
+    _stage_counts: dict[str, int] = {}
+    _intent_type = ""
+
     # --- Intent classification ---
     intent_params = {}
     if _HAS_INTENT_ROUTER:
         try:
             intent_result = _get_intent_router().classify(query)
             query_type = _INTENT_TO_QUERY_TYPE.get(intent_result.intent, "single-hop")
+            _intent_type = intent_result.intent
             intent_params = intent_result.params
+            _stage_counts["intent_confidence"] = round(intent_result.confidence, 3)
+            _stage_counts["sub_intents"] = len(intent_result.sub_intents)
             _log.info(
                 "intent_classified",
                 intent=intent_result.intent,
@@ -350,6 +360,9 @@ def recall(
             continue
         if active_only:
             blocks = get_active(blocks)
+        # #429: Exclude unreviewed signals from default recall corpus
+        if label == "signals" and not include_pending:
+            blocks = [b for b in blocks if b.get("Status", "").lower() != "pending"]
         for b in blocks:
             b["_source_file"] = rel_path
             b["_source_label"] = label
@@ -379,6 +392,8 @@ def recall(
 
     if not all_blocks:
         return []
+
+    _stage_counts["corpus_loaded"] = len(all_blocks)
 
     # --- Overlapping chunk expansion (1.7) — config-gated ---
     _chunk_cfg_path = os.path.join(workspace, "mind-mem.json")
@@ -558,6 +573,8 @@ def recall(
             result["Date"] = block["Date"]
         results.append(result)
 
+    _stage_counts["bm25_passed"] = len(results)
+
     # Graph-based neighbor boosting: 2-hop traversal for multi-hop recall
     if graph_boost and results:
         xref_graph = build_xref_graph(all_blocks)
@@ -619,6 +636,8 @@ def recall(
                         "via_graph": True,
                     }
                 )
+
+    _stage_counts["graph_boosted"] = len(results)
 
     # --- RM3 Dynamic Query Expansion ---
     # When enabled via config, use RM3 (Relevance Model 3) instead of the
@@ -730,6 +749,8 @@ def recall(
                         result_by_id[bid] = result
 
             _log.info("rm3_expansion", expansion_terms=expansion_terms_rm3[:5], alpha=rm3_config.get("alpha", 0.6))
+
+    _stage_counts["rm3_expanded"] = len(results)
 
     # --- Pseudo-Relevance Feedback (PRF) ---
     # For single-hop, open-domain, and multi-hop queries, bridge the lexical
@@ -898,6 +919,8 @@ def recall(
             results = apply_temporal_filter(results, t_start, t_end)
             _log.info("temporal_hard_filter", start=str(t_start), end=str(t_end), pre=pre_count, post=len(results))
 
+    _stage_counts["temporal_filtered"] = len(results)
+
     # Sort by score descending
     results.sort(key=lambda r: (r["score"], r.get("_id", "")), reverse=True)
 
@@ -934,6 +957,9 @@ def recall(
     if _chunk_overlap > 0:
         deduped = deduplicate_chunks(deduped)
 
+    _stage_counts["wide_candidates"] = len(wide_candidates)
+    _stage_counts["deduped"] = len(deduped)
+
     # Stage 2: Deterministic rerank (v7) — cap candidates to prevent latency (#9)
     if rerank and len(deduped) > limit:
         rerank_cap = min(len(deduped), MAX_RERANK_CANDIDATES)
@@ -960,6 +986,11 @@ def recall(
                 _log.info(
                     "cross_encoder_rerank", candidates=len(ce_input), blend_weight=ce_config.get("blend_weight", 0.6)
                 )
+                # #429: Record hard negatives — blocks BM25 liked but CE rejected
+                try:
+                    record_hard_negatives(workspace, query, deduped)
+                except Exception as hn_exc:
+                    _log.debug("hard_negative_recording_failed", error=str(hn_exc))
         except ImportError:
             _log.debug("cross_encoder_import_failed", hint="cross_encoder_reranker not installed")
         except Exception as e:
@@ -972,6 +1003,9 @@ def recall(
             if r.get("_id") in hard_neg_ids:
                 r["score"] = round(r["score"] * HARD_NEGATIVE_PENALTY, 4)
                 r["_hard_negative"] = True
+
+    _stage_counts["reranked"] = len(deduped)
+    _stage_counts["hard_neg_penalized"] = sum(1 for r in deduped if r.get("_hard_negative"))
 
     # Stage 2.7: Optional LLM-based reranking — config-gated, stdlib only
     recall_cfg = {}
@@ -1012,7 +1046,10 @@ def recall(
         min_sc = float(recall_cfg.get("min_score", 0.0))
         deduped = knee_cutoff(deduped, min_results=min(3, limit), min_score=min_sc)
 
+    _stage_counts["knee_cutoff"] = len(deduped)
+
     top = deduped[:limit]
+    _stage_counts["final"] = len(top)
 
     # Stage 3: Context packing — augment top-K with adjacency/diversity/rescue
     top = context_pack(query, top, all_blocks, deduped, limit)
@@ -1049,7 +1086,13 @@ def recall(
 
     # --- Retrieval logging (fire-and-forget) ---
     try:
-        log_retrieval(workspace, query, top)
+        log_retrieval(
+            workspace,
+            query,
+            top,
+            intent_type=_intent_type,
+            stage_counts=_stage_counts,
+        )
     except Exception:
         pass
 
