@@ -547,6 +547,17 @@ def parse_file(filepath: str, *, strict: bool = False) -> list[dict]:
         content = f.read(MAX_PARSE_SIZE + 1)
     if len(content) > MAX_PARSE_SIZE:
         content = content[:MAX_PARSE_SIZE]
+        # Try to truncate at a block boundary to avoid corrupt partial blocks
+        last_boundary = content.rfind("\n[")
+        if last_boundary > 0:
+            # Verify it looks like a block header (e.g. \n[D- or \n[T- etc)
+            after = content[last_boundary + 2 : last_boundary + 4]
+            if after and after[0].isupper():
+                content = content[:last_boundary]
+        else:
+            _log.warning(
+                "MAX_PARSE_SIZE truncation could not find a block boundary; result may contain a partial block"
+            )
 
     blocks = parse_blocks(content)
     valid: list[dict] = []

@@ -201,7 +201,7 @@ def init(ws: str) -> tuple[list[str], list[str]]:
     for d in DIRS:
         path = os.path.join(ws, d)
         if not os.path.isdir(path):
-            os.makedirs(path, exist_ok=True)
+            os.makedirs(path, mode=0o700, exist_ok=True)
             created.append(f"dir:  {d}/")
 
     # Copy templates (never overwrite)
@@ -212,7 +212,7 @@ def init(ws: str) -> tuple[list[str], list[str]]:
             continue
         src = os.path.join(TEMPLATE_DIR, template_name)
         if os.path.exists(src):
-            os.makedirs(os.path.dirname(target), exist_ok=True)
+            os.makedirs(os.path.dirname(target), mode=0o700, exist_ok=True)
             shutil.copy2(src, target)
             created.append(f"file: {target_rel}")
 
@@ -233,6 +233,7 @@ def init(ws: str) -> tuple[list[str], list[str]]:
         with open(config_path, "w") as f:
             json.dump(DEFAULT_CONFIG, f, indent=2)
             f.write("\n")
+        os.chmod(config_path, 0o600)
         created.append("file: mind-mem.json")
     else:
         skipped.append("mind-mem.json")

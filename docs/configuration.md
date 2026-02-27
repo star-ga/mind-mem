@@ -29,7 +29,6 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
     "dimension": null,
     "qdrant_url": "http://localhost:6333",
     "qdrant_collection": "mind-mem",
-    "pinecone_api_key": "",
     "pinecone_environment": "",
     "pinecone_index": "mind-mem",
     "rm3": {
@@ -178,7 +177,7 @@ Requires: `pip install qdrant-client`
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `recall.pinecone_api_key` | string | (none) | Pinecone API key. Required when provider is `"pinecone"`. Can also be set via `PINECONE_API_KEY` environment variable. |
+| `PINECONE_API_KEY` (env var) | string | (none) | **Required.** Pinecone API key. Must be set via environment variable (not config file). |
 | `recall.pinecone_environment` | string | (none) | Pinecone environment (e.g., `"us-east-1-aws"`). Required when provider is `"pinecone"`. |
 | `recall.pinecone_index` | string | `"mind-mem"` | Pinecone index name. |
 
