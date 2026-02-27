@@ -1,6 +1,6 @@
 # Roadmap
 
-## v1.7.x (Current)
+## v1.8.0 (Current)
 
 - [x] BM25F scoring with field weights
 - [x] Co-retrieval graph boost
@@ -13,7 +13,7 @@
 - [x] Baseline snapshot with chi-squared drift detection
 - [x] Contradiction detection at governance gate
 
-## v1.8.0 (Planned)
+## v1.9.0 (Planned)
 
 - [ ] Incremental reindexing
 - [ ] Block versioning with diff tracking

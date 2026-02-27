@@ -28,7 +28,7 @@ fi
 
 # Run capture — log errors to stderr but don't fail the hook
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-python3 "$SCRIPT_DIR/scripts/capture.py" "$WS" || echo "mind-mem: capture failed (non-fatal)" >&2
+python3 -m mind_mem.capture "$WS" || echo "mind-mem: capture failed (non-fatal)" >&2
 
 # Auto-ingest pipeline: transcript scan + session summary (backgrounded, non-blocking)
 if [ "$INGEST" = "true" ]; then
@@ -39,11 +39,11 @@ if [ "$INGEST" = "true" ]; then
       | sort -rn | head -1 | cut -f2-)
     if [ -n "$RECENT_JSONL" ]; then
       # Run transcript capture (backgrounded, non-fatal)
-      (python3 "$SCRIPT_DIR/scripts/transcript_capture.py" "$WS" --transcript "$RECENT_JSONL" 2>&1 \
+      (python3 -m mind_mem.transcript_capture "$WS" --transcript "$RECENT_JSONL" 2>&1 \
         || echo "mind-mem: transcript_capture failed (non-fatal)" >&2) &
 
       # Run session summarizer (backgrounded, non-fatal)
-      (python3 "$SCRIPT_DIR/scripts/session_summarizer.py" "$WS" --transcript "$RECENT_JSONL" 2>&1 \
+      (python3 -m mind_mem.session_summarizer "$WS" --transcript "$RECENT_JSONL" 2>&1 \
         || echo "mind-mem: session_summarizer failed (non-fatal)" >&2) &
     fi
   fi

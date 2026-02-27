@@ -38,7 +38,7 @@ ensure_workspace() {
   local ws="$1"
   if [ ! -d "$ws" ]; then
     info "Creating workspace at $ws"
-    python3 "$MIND_MEM_DIR/scripts/init_workspace.py" "$ws"
+    python3 -m mind_mem.init_workspace "$ws"
   fi
   ok "Workspace: $ws"
 }
@@ -457,7 +457,7 @@ main() {
   echo "  Next steps:"
   echo "    1. Restart your AI coding client to pick up the new MCP server"
   echo "    2. Try: recall \"what do I know about...\""
-  echo "    3. Run 'python3 $MIND_MEM_DIR/scripts/intel_scan.py $workspace' for a health check"
+  echo "    3. Run 'python3 -m mind_mem.intel_scan $workspace' for a health check"
   echo ""
 }
 

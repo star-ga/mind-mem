@@ -25,13 +25,13 @@ Configuration (mind-mem.json):
 
 Usage:
     # Indexing
-    python3 scripts/recall_vector.py --index --workspace .
+    python3 -m mind_mem.recall_vector --index --workspace .
 
     # Search
-    python3 scripts/recall_vector.py --query "authentication" --workspace . --limit 5
+    python3 -m mind_mem.recall_vector --query "authentication" --workspace . --limit 5
 
     # Force reindex
-    python3 scripts/recall_vector.py --index --force --workspace .
+    python3 -m mind_mem.recall_vector --index --force --workspace .
 """
 
 from __future__ import annotations
@@ -244,7 +244,7 @@ class VectorBackend(RecallBackend):
             try:
                 # Temporarily remove scripts/ from sys.path so that
                 # sentence_transformers can find the real `filelock` package
-                # (scripts/filelock.py shadows it). We remove by realpath
+                # (mind_filelock.py shadows it). We remove by realpath
                 # to catch both relative and absolute path variants.
                 _scripts_real = os.path.realpath(os.path.dirname(os.path.abspath(__file__)))
                 _saved = list(sys.path)

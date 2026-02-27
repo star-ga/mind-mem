@@ -354,11 +354,11 @@ def _check_workspace(ws: str) -> str | None:
     Returns None if valid, or an error JSON string if invalid.
     """
     if not os.path.isdir(ws):
-        return json.dumps({"error": "Workspace not found. Run: python3 scripts/init_workspace.py <path>"})
+        return json.dumps({"error": "Workspace not found. Run: mind-mem-init <path>"})
     decisions_dir = os.path.join(ws, "decisions")
     if not os.path.isdir(decisions_dir):
         return json.dumps(
-            {"error": "Workspace is missing the 'decisions/' directory. Run: python3 scripts/init_workspace.py <path>"}
+            {"error": "Workspace is missing the 'decisions/' directory. Run: mind-mem-init <path>"}
         )
     return None
 
@@ -1222,7 +1222,7 @@ def reindex(include_vectors: bool = False) -> str:
         raise
     except (OSError, ValueError) as e:
         _log.warning("reindex_fts_failed", error=str(e))
-        results["fts_error"] = "FTS index rebuild failed. Run: python3 scripts/sqlite_index.py build --workspace ."
+        results["fts_error"] = "FTS index rebuild failed. Run: mind-mem-scan --reindex"
 
     if include_vectors:
         try:

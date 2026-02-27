@@ -6,7 +6,7 @@ WS="${MIND_MEM_WORKSPACE:-.}"
 STATE="$WS/memory/intel-state.json"
 
 if [ ! -f "$STATE" ]; then
-  echo "SessionStart:compact mind-mem not initialized. Run: python3 scripts/init_workspace.py"
+  echo "SessionStart:compact mind-mem not initialized. Run: mind-mem-init"
   exit 0
 fi
 

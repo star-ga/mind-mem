@@ -19,7 +19,7 @@ pip install -e ".[dev]"
 ### Initialize a Workspace
 
 ```python
-from scripts.init_workspace import init
+from mind_mem.init_workspace import init
 
 init("/path/to/workspace")
 ```
@@ -47,7 +47,7 @@ Date: 2026-02-01
 ### Search Memory
 
 ```python
-from scripts._recall_core import recall
+from mind_mem._recall_core import recall
 
 results = recall("/path/to/workspace", "scoring algorithm", limit=10)
 for r in results:

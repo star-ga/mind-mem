@@ -13,10 +13,10 @@ Schema:
     file_state(path, mtime, size, hash) — incremental rebuild tracking
 
 Usage:
-    python3 scripts/sqlite_index.py build --workspace .
-    python3 scripts/sqlite_index.py build --workspace . --incremental
-    python3 scripts/sqlite_index.py query --workspace . --query "PostgreSQL"
-    python3 scripts/sqlite_index.py status --workspace .
+    python3 -m mind_mem.sqlite_index build --workspace .
+    python3 -m mind_mem.sqlite_index build --workspace . --incremental
+    python3 -m mind_mem.sqlite_index query --workspace . --query "PostgreSQL"
+    python3 -m mind_mem.sqlite_index status --workspace .
 """
 
 from __future__ import annotations

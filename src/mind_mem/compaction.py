@@ -9,10 +9,10 @@ archive files, not deleted. Snapshots older than retention period are
 removed (they can be recreated by restoring from git history).
 
 Usage:
-    python3 scripts/compaction.py [workspace_path]
-    python3 scripts/compaction.py . --dry-run
-    python3 scripts/compaction.py . --archive-days 90
-    python3 scripts/compaction.py . --snapshot-days 30
+    python3 -m mind_mem.compaction [workspace_path]
+    python3 -m mind_mem.compaction . --dry-run
+    python3 -m mind_mem.compaction . --archive-days 90
+    python3 -m mind_mem.compaction . --snapshot-days 30
 """
 
 from __future__ import annotations

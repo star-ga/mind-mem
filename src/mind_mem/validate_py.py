@@ -2,7 +2,7 @@
 """Mind Mem Integrity Validator (Python, cross-platform).
 
 Runs the same structural checks as validate.sh but works on any OS.
-Usage: python3 scripts/validate_py.py [workspace_path]
+Usage: python3 -m mind_mem.validate_py [workspace_path]
 """
 
 import os
@@ -61,7 +61,7 @@ class Validator:
             print(f"ERROR: No mind-mem.json found in '{self.ws}'.")
             print("")
             print("This does not appear to be an initialized mind-mem workspace.")
-            print("To initialize: python3 scripts/init_workspace.py /path/to/workspace")
+            print("To initialize: mind-mem-init /path/to/workspace")
             return 1
 
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

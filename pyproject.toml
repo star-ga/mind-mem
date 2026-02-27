@@ -12,8 +12,16 @@ keywords = ["memory", "ai-agent", "mind", "recall", "mcp", "claude-code", "openc
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
 ]
 
 # For hash-verified installs, use: pip install --require-hashes -r requirements-optional.txt
@@ -51,6 +59,9 @@ mind-mem-baseline = "mind_mem.baseline_snapshot:_cli"
 [tool.setuptools]
 packages = ["mind_mem"]
 package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+mind_mem = ["py.typed", "*.mind"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

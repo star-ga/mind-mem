@@ -13,7 +13,7 @@ pytest tests/test_recall_edge_cases.py
 pytest tests/ -k "benchmark"
 
 # With coverage
-pytest tests/ --cov=scripts --cov-report=term-missing
+pytest tests/ --cov=src/mind_mem --cov-report=term-missing
 
 # Verbose
 pytest tests/ -v
@@ -45,7 +45,7 @@ Use `init()` to create temporary workspaces:
 
 ```python
 import tempfile
-from scripts.init_workspace import init
+from mind_mem.init_workspace import init
 
 def test_example():
     ws = tempfile.mkdtemp()
@@ -59,7 +59,7 @@ For modules that may not exist:
 ```python
 def test_optional():
     try:
-        from scripts.some_module import some_func
+        from mind_mem.some_module import some_func
         result = some_func()
         assert result is not None
     except ImportError:

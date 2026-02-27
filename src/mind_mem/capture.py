@@ -14,8 +14,8 @@ Structured extraction pipeline:
 5. Appends to intelligence/SIGNALS.md with full metadata
 
 Usage:
-    python3 scripts/capture.py [workspace_path]
-    python3 scripts/capture.py . --scan-all
+    python3 -m mind_mem.capture [workspace_path]
+    python3 -m mind_mem.capture . --scan-all
 """
 
 from __future__ import annotations

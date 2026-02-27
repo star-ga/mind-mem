@@ -10,9 +10,9 @@ Entity types:
   - People: @handle mentions, PER-* refs
 
 Usage:
-    python3 scripts/entity_ingest.py workspace/
-    python3 scripts/entity_ingest.py workspace/ --dry-run
-    python3 scripts/entity_ingest.py workspace/ --source path/to/file.md
+    python3 -m mind_mem.entity_ingest workspace/
+    python3 -m mind_mem.entity_ingest workspace/ --dry-run
+    python3 -m mind_mem.entity_ingest workspace/ --source path/to/file.md
 """
 
 from __future__ import annotations

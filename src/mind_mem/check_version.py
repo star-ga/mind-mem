@@ -4,7 +4,7 @@ Verifies that version strings in pyproject.toml, __init__.py, and
 CHANGELOG.md are all in sync.
 
 Usage:
-    python3 scripts/check_version.py
+    python3 -m mind_mem.check_version
 """
 
 from __future__ import annotations
