@@ -1009,6 +1009,22 @@ def apply_proposal(ws, proposal_id, dry_run=False, agent_id=None):
     else:
         print("  No-touch window: PASS")
 
+    # --- Contradiction Detection (#432) ---
+    print("\n--- Contradiction Check ---")
+    try:
+        from .contradiction_detector import check_proposal_contradictions
+
+        contra_report = check_proposal_contradictions(ws, proposal)
+        print(f"  {contra_report['summary']}")
+        if contra_report["has_contradictions"]:
+            for c in contra_report["conflicts"]:
+                if c["conflict_type"] == "contradiction":
+                    print(f"  ⚠️  {c['block_id']} (sim={c['similarity']:.2f}): "
+                          f"{c['existing_excerpt'][:100]}...")
+    except Exception as e:
+        contra_report = None
+        print(f"  WARNING: Contradiction check failed: {e}")
+
     if dry_run:
         # Dry run: show ops without mutation (skip preconditions to avoid side effects)
         print("\n--- DRY RUN: would execute these ops ---")
