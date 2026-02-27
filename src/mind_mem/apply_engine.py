@@ -503,33 +503,30 @@ def snapshot_diff(ws, snap_dir):
         for root, _dirs, files in os.walk(snap_dir):
             for fname in files:
                 snap_file = os.path.join(root, fname)
-                rel = os.path.relpath(snap_file, snap_dir)
+                rel = os.path.relpath(snap_file, snap_dir).replace(os.sep, "/")
                 if rel == "MANIFEST.json" or rel == "APPLY_RECEIPT.md":
                     continue
                 files_to_check.append(rel)
 
     for rel_posix in files_to_check:
-        rel_path = rel_posix.replace("/", os.sep)
-        ws_file = os.path.join(ws, rel_path)
-        snap_file = os.path.join(snap_dir, rel_path)
+        rel_native = rel_posix.replace("/", os.sep)
+        ws_file = os.path.join(ws, rel_native)
+        snap_file = os.path.join(snap_dir, rel_native)
 
         ws_exists = os.path.isfile(ws_file)
         snap_exists = os.path.isfile(snap_file)
 
         if snap_exists and not ws_exists:
-            # File was deleted from workspace since snapshot
-            diffs.append(rel_path)
+            diffs.append(rel_posix)
         elif not snap_exists and ws_exists:
-            # File exists in workspace but not in snapshot
-            diffs.append(rel_path)
+            diffs.append(rel_posix)
         elif snap_exists and ws_exists:
-            # Both exist — compare content
             with open(snap_file, "rb") as f:
                 snap_hash = hashlib.sha256(f.read()).hexdigest()
             with open(ws_file, "rb") as f:
                 ws_hash = hashlib.sha256(f.read()).hexdigest()
             if snap_hash != ws_hash:
-                diffs.append(rel_path)
+                diffs.append(rel_posix)
 
     return sorted(diffs)
 
