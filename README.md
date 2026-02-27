@@ -350,8 +350,8 @@ python3 benchmarks/longmemeval_harness.py
 python3 benchmarks/locomo_judge.py --dry-run
 python3 benchmarks/locomo_judge.py --answerer-model gpt-4o-mini --output results.json
 
-# Hybrid retrieval (BM25 + vector + cross-encoder, requires llama.cpp server)
-python3 benchmarks/locomo_judge.py --hybrid --compress --answerer-model claude-sonnet-4-6 --judge-model claude-opus-4-6 --output results.json
+# Hybrid retrieval with any model pair (BM25 + vector + cross-encoder)
+python3 benchmarks/locomo_judge.py --hybrid --compress --answerer-model mistral-large-latest --judge-model mistral-large-latest --output results.json
 
 # Selective conversations
 python3 benchmarks/locomo_harness.py --conv-ids 4,7,8
