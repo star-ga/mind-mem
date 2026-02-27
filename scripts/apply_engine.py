@@ -1020,6 +1020,22 @@ def apply_proposal(ws, proposal_id, dry_run=False, agent_id=None):
             for c in contra_report["conflicts"]:
                 if c["conflict_type"] == "contradiction":
                     print(f"  ⚠️  {c['block_id']} (sim={c['similarity']:.2f}): {c['existing_excerpt'][:100]}...")
+
+            # Check if blocking is enabled (default: true)
+            block_on_detect = True
+            try:
+                config_path = os.path.join(ws, "mind-mem.json")
+                with open(config_path) as f:
+                    cfg = json.load(f)
+                block_on_detect = cfg.get("contradiction", {}).get("block_on_detect", True)
+            except Exception:
+                pass  # default to blocking
+
+            if block_on_detect:
+                print("  Contradiction blocking is ENABLED (contradiction.block_on_detect=true)")
+                return False, "Blocked: contradictions detected"
+            else:
+                print("  Contradiction blocking is DISABLED (contradiction.block_on_detect=false), continuing")
     except Exception as e:
         contra_report = None
         print(f"  WARNING: Contradiction check failed: {e}")

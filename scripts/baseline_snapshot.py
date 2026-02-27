@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ __all__ = [
     "detect_drift",
     "compare_baselines",
     "list_baselines",
+    "_cli",
 ]
 
 # ---------------------------------------------------------------------------
@@ -36,7 +38,7 @@ _BASELINE_PREFIX = "intent-baseline-v"
 
 
 def _baselines_path(workspace: str) -> Path:
-    return Path(workspace) / _BASELINES_DIR
+    return Path(os.path.abspath(workspace)) / _BASELINES_DIR
 
 
 def _list_versions(workspace: str) -> list[int]:
@@ -62,6 +64,7 @@ def _next_version(workspace: str) -> int:
 
 
 def _load_baseline(workspace: str, version: int) -> dict:
+    version = int(version)
     p = _baselines_path(workspace) / f"{_BASELINE_PREFIX}{version}.json"
     if not p.exists():
         raise FileNotFoundError(f"Baseline v{version} not found at {p}")
@@ -195,6 +198,9 @@ def freeze_baseline(
     Returns:
         The baseline artifact dict (also written to disk).
     """
+    if tag is not None and tag < 1:
+        raise ValueError("tag must be a positive integer")
+
     # Get current diagnostics
     from mind_mem.retrieval_graph import retrieval_diagnostics
 
@@ -265,7 +271,7 @@ def detect_drift(
     if not versions:
         return {"error": "No baselines found. Run freeze first."}
 
-    version = baseline_tag if baseline_tag is not None else versions[-1]
+    version = int(baseline_tag) if baseline_tag is not None else versions[-1]
     baseline = _load_baseline(workspace, version)
 
     # Get current diagnostics
@@ -347,6 +353,7 @@ def compare_baselines(workspace: str, v1: int, v2: int) -> dict[str, Any]:
     Returns:
         Comparison report dict.
     """
+    v1, v2 = int(v1), int(v2)
     b1 = _load_baseline(workspace, v1)
     b2 = _load_baseline(workspace, v2)
 
