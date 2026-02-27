@@ -34,6 +34,9 @@ _log = get_logger("contradiction_detector")
 # Configuration
 # ---------------------------------------------------------------------------
 
+# Maximum characters for extracted text (guards against unbounded input).
+_MAX_TEXT_LENGTH = 10_000
+
 # Default similarity threshold for flagging potential conflicts.
 # Lower = more flags (false positives cheap), higher = fewer (may miss real ones).
 DEFAULT_SIMILARITY_THRESHOLD = 0.7
@@ -91,7 +94,7 @@ def _extract_proposal_text(proposal: dict) -> str:
         if isinstance(value, str) and value.strip():
             parts.append(value.strip())
 
-    return " ".join(parts)
+    return " ".join(parts)[:_MAX_TEXT_LENGTH]
 
 
 def _extract_block_text(block: dict) -> str:
@@ -110,7 +113,7 @@ def _extract_block_text(block: dict) -> str:
                 if isinstance(item, str) and item.strip():
                     parts.append(item.strip())
 
-    return " ".join(parts)
+    return " ".join(parts)[:_MAX_TEXT_LENGTH]
 
 
 # ---------------------------------------------------------------------------
@@ -191,7 +194,6 @@ def _classify_conflict(proposal_text: str, existing_text: str, similarity: float
     negation_patterns = [
         r"\bnot\b",
         r"\bnever\b",
-        r"\bno\b",
         r"\bdon't\b",
         r"\bdoesn't\b",
         r"\bshouldn't\b",
@@ -206,7 +208,6 @@ def _classify_conflict(proposal_text: str, existing_text: str, similarity: float
         r"\bundo\b",
         r"\broll\s*back\b",
         r"\binstead\b",
-        r"\brather\b",
         r"\breplace\b",
     ]
 
@@ -220,7 +221,7 @@ def _classify_conflict(proposal_text: str, existing_text: str, similarity: float
     # If one has significantly more negation language than the other,
     # and they're discussing the same topic (high similarity), likely a contradiction
     negation_diff = abs(proposal_negations - existing_negations)
-    if negation_diff >= 2 and similarity > 0.5:
+    if negation_diff >= 3 and similarity > 0.5:
         return "contradiction"
 
     # Check for status change patterns (e.g., "active" → "deprecated")
@@ -492,8 +493,14 @@ def _get_config_threshold(workspace: str) -> float:
     try:
         with open(config_path) as f:
             config = json.load(f)
-        return float(config.get("contradiction", {}).get("threshold", DEFAULT_SIMILARITY_THRESHOLD))
-    except Exception:
+        threshold = float(config.get("contradiction", {}).get("threshold", DEFAULT_SIMILARITY_THRESHOLD))
+        if not (0.0 <= threshold <= 1.0):
+            return DEFAULT_SIMILARITY_THRESHOLD
+        return threshold
+    except (FileNotFoundError, OSError):
+        return DEFAULT_SIMILARITY_THRESHOLD
+    except (json.JSONDecodeError, ValueError, TypeError) as exc:
+        _log.warning("config_threshold_parse_error", error=str(exc))
         return DEFAULT_SIMILARITY_THRESHOLD
 
 

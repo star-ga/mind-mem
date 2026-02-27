@@ -844,15 +844,32 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
     metrics.inc("mcp_apply_calls")
     _log.info("mcp_approve_apply", proposal_id=proposal_id, dry_run=dry_run, success=success)
 
+    # If apply_engine returned False due to contradictions, reflect that
+    blocked_by_contradictions = not success and message == "Blocked: contradictions detected"
+
     result = {
         "_schema_version": MCP_SCHEMA_VERSION,
-        "status": "applied" if success and not dry_run else "dry_run_passed" if success else "failed",
+        "status": (
+            "blocked_contradictions"
+            if blocked_by_contradictions
+            else "applied"
+            if success and not dry_run
+            else "dry_run_passed"
+            if success
+            else "failed"
+        ),
         "proposal_id": proposal_id,
         "dry_run": dry_run,
         "success": success,
         "message": message,
         "log": log_output[-2000:] if len(log_output) > 2000 else log_output,
-        "next_step": "Call again with dry_run=False to apply." if success and dry_run else None,
+        "next_step": (
+            "Resolve contradictions or set contradiction.block_on_detect=false in mind-mem.json."
+            if blocked_by_contradictions
+            else "Call again with dry_run=False to apply."
+            if success and dry_run
+            else None
+        ),
     }
 
     # Include contradiction report in output

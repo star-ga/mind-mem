@@ -341,7 +341,7 @@ class TestConflictClassification:
 
     def test_contradiction_negation(self):
         result = _classify_conflict(
-            "Do not use SQLite. Replace with PostgreSQL.",
+            "Do not use SQLite. Cannot use it. Replace with PostgreSQL. Never use file-based storage.",
             "Use SQLite for all local storage.",
             0.6,
         )
