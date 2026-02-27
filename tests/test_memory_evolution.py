@@ -7,11 +7,11 @@ import tempfile
 
 import pytest
 
-pytest.importorskip("scripts.memory_evolution")
+pytest.importorskip("mind_mem.memory_evolution")
 
-from scripts.memory_evolution import track_evolution  # noqa: E402
+from mind_mem.memory_evolution import track_evolution  # noqa: E402
 
-from scripts.init_workspace import init  # noqa: E402
+from mind_mem.init_workspace import init  # noqa: E402
 
 
 def _make_workspace():

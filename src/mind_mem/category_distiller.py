@@ -554,8 +554,10 @@ class CategoryDistiller:
             "categories": {cat: len(blks) for cat, blks in sorted(category_map.items())},
         }
         manifest_path = os.path.join(cat_dir, "_manifest.json")
-        with open(manifest_path, "w", encoding="utf-8") as f:
+        tmp_manifest = manifest_path + ".tmp"
+        with open(tmp_manifest, "w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=2)
+        os.replace(tmp_manifest, manifest_path)
         written.append(manifest_path)
 
         _log.info(
@@ -614,8 +616,10 @@ class CategoryDistiller:
                 lines.append(f"- **Tags:** {tags}")
             lines.append("")
 
-        with open(path, "w", encoding="utf-8") as f:
+        tmp_path = path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
+        os.replace(tmp_path, path)
 
         return path
 

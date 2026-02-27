@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from unittest.mock import patch
 
-from scripts.session_summarizer import (
+from mind_mem.session_summarizer import (
     FILE_PATH_RE,
     extract_summary,
     file_hash,
@@ -222,8 +222,8 @@ class TestFormatSummaryBlock:
 
 
 class TestWriteSummary:
-    @patch("scripts.session_summarizer.append_signals")
-    @patch("scripts.session_summarizer.FileLock", side_effect=_fake_file_lock)
+    @patch("mind_mem.session_summarizer.append_signals")
+    @patch("mind_mem.session_summarizer.FileLock", side_effect=_fake_file_lock)
     def test_creates_summary_file(self, mock_lock, mock_signals, tmp_path):
         ws = str(tmp_path / "ws")
         os.makedirs(ws)
@@ -240,8 +240,8 @@ class TestWriteSummary:
         summary_file = os.path.join(ws, "summaries", "daily", f"{today}.md")
         assert os.path.isfile(summary_file)
 
-    @patch("scripts.session_summarizer.append_signals")
-    @patch("scripts.session_summarizer.FileLock", side_effect=_fake_file_lock)
+    @patch("mind_mem.session_summarizer.append_signals")
+    @patch("mind_mem.session_summarizer.FileLock", side_effect=_fake_file_lock)
     def test_dedup_prevents_rewrite(self, mock_lock, mock_signals, tmp_path):
         ws = str(tmp_path / "ws")
         os.makedirs(ws)
@@ -256,8 +256,8 @@ class TestWriteSummary:
         second = write_summary(ws, t_path, msgs)
         assert second is None  # dedup
 
-    @patch("scripts.session_summarizer.append_signals")
-    @patch("scripts.session_summarizer.FileLock", side_effect=_fake_file_lock)
+    @patch("mind_mem.session_summarizer.append_signals")
+    @patch("mind_mem.session_summarizer.FileLock", side_effect=_fake_file_lock)
     def test_dry_run_does_not_write(self, mock_lock, mock_signals, tmp_path, capsys):
         ws = str(tmp_path / "ws")
         os.makedirs(ws)
@@ -276,8 +276,8 @@ class TestWriteSummary:
         captured = capsys.readouterr()
         assert "[DRY RUN]" in captured.out
 
-    @patch("scripts.session_summarizer.append_signals")
-    @patch("scripts.session_summarizer.FileLock", side_effect=_fake_file_lock)
+    @patch("mind_mem.session_summarizer.append_signals")
+    @patch("mind_mem.session_summarizer.FileLock", side_effect=_fake_file_lock)
     def test_too_short_session_skipped(self, mock_lock, mock_signals, tmp_path):
         ws = str(tmp_path / "ws")
         os.makedirs(ws)
@@ -289,8 +289,8 @@ class TestWriteSummary:
         sess_id = write_summary(ws, t_path, msgs)
         assert sess_id is None
 
-    @patch("scripts.session_summarizer.append_signals")
-    @patch("scripts.session_summarizer.FileLock", side_effect=_fake_file_lock)
+    @patch("mind_mem.session_summarizer.append_signals")
+    @patch("mind_mem.session_summarizer.FileLock", side_effect=_fake_file_lock)
     def test_counter_increments(self, mock_lock, mock_signals, tmp_path):
         ws = str(tmp_path / "ws")
         os.makedirs(ws)
@@ -309,8 +309,8 @@ class TestWriteSummary:
         numbers = [int(sid.split("-")[-1]) for sid in ids]
         assert numbers == [1, 2, 3]
 
-    @patch("scripts.session_summarizer.append_signals")
-    @patch("scripts.session_summarizer.FileLock", side_effect=_fake_file_lock)
+    @patch("mind_mem.session_summarizer.append_signals")
+    @patch("mind_mem.session_summarizer.FileLock", side_effect=_fake_file_lock)
     def test_append_signals_called(self, mock_lock, mock_signals, tmp_path):
         """Verify that a linking signal is appended after writing."""
         ws = str(tmp_path / "ws")
@@ -325,8 +325,8 @@ class TestWriteSummary:
         signals_list = args[0][1]
         assert signals_list[0]["type"] == "summary"
 
-    @patch("scripts.session_summarizer.append_signals")
-    @patch("scripts.session_summarizer.FileLock", side_effect=_fake_file_lock)
+    @patch("mind_mem.session_summarizer.append_signals")
+    @patch("mind_mem.session_summarizer.FileLock", side_effect=_fake_file_lock)
     def test_header_written_on_new_file(self, mock_lock, mock_signals, tmp_path):
         ws = str(tmp_path / "ws")
         os.makedirs(ws)
@@ -367,8 +367,8 @@ class TestEdgeCases:
         assert any("main.rs" in m for m in matches)
         assert any("utils.go" in m for m in matches)
 
-    @patch("scripts.session_summarizer.append_signals")
-    @patch("scripts.session_summarizer.FileLock", side_effect=_fake_file_lock)
+    @patch("mind_mem.session_summarizer.append_signals")
+    @patch("mind_mem.session_summarizer.FileLock", side_effect=_fake_file_lock)
     def test_concurrent_writes(self, mock_lock, mock_signals, tmp_path):
         """Multiple threads writing summaries should not corrupt data."""
         ws = str(tmp_path / "ws")
@@ -396,8 +396,8 @@ class TestEdgeCases:
         written = [r for r in results if r is not None]
         assert len(written) >= 1  # at least some succeed
 
-    @patch("scripts.session_summarizer.append_signals")
-    @patch("scripts.session_summarizer.FileLock", side_effect=_fake_file_lock)
+    @patch("mind_mem.session_summarizer.append_signals")
+    @patch("mind_mem.session_summarizer.FileLock", side_effect=_fake_file_lock)
     def test_empty_workspace_creates_dirs(self, mock_lock, mock_signals, tmp_path):
         ws = str(tmp_path / "brand_new_workspace")
         t_path = str(tmp_path / "t.jsonl")

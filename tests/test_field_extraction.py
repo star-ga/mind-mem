@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_detection import extract_field_tokens
+from mind_mem._recall_detection import extract_field_tokens
 
 
 def test_extract_from_block():

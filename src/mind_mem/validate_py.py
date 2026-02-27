@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 # Allow importing block_parser from same directory
 from .block_parser import parse_file
+from .corpus_registry import VALIDATE_DIRS
 
 
 class Validator:
@@ -313,8 +314,7 @@ class Validator:
             r"|PRJ-[a-z0-9-]+|PER-[a-z0-9-]+|TOOL-[a-z0-9-]+)\b"
         )
         referenced = set()
-        scan_dirs = ["decisions", "tasks", "entities", "summaries"]
-        for d in scan_dirs:
+        for d in VALIDATE_DIRS:
             dirpath = os.path.join(self.ws, d)
             if not os.path.isdir(dirpath):
                 continue

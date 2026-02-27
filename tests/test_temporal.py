@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_temporal import resolve_time_reference
+from mind_mem._recall_temporal import resolve_time_reference
 
 
 def test_resolve_today():

@@ -7,11 +7,11 @@ import tempfile
 
 import pytest
 
-pytest.importorskip("scripts.index_stats")
+pytest.importorskip("mind_mem.index_stats")
 
-from scripts.index_stats import get_index_stats  # noqa: E402
+from mind_mem.index_stats import get_index_stats  # noqa: E402
 
-from scripts.init_workspace import init  # noqa: E402
+from mind_mem.init_workspace import init  # noqa: E402
 
 
 def test_index_stats_importable():

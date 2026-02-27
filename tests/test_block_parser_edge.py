@@ -7,7 +7,7 @@ import tempfile
 
 import pytest
 
-from scripts.block_parser import parse_file
+from mind_mem.block_parser import parse_file
 
 
 def test_empty_file():

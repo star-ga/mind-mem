@@ -1,6 +1,6 @@
 [project]
 name = "mind-mem"
-version = "1.7.3"
+version = "1.8.0"
 description = "Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent."
 readme = "README.md"
 license = "MIT"
@@ -50,7 +50,7 @@ mind-mem-baseline = "mind_mem.baseline_snapshot:_cli"
 
 [tool.setuptools]
 packages = ["mind_mem"]
-package-dir = {"mind_mem" = "scripts"}
+package-dir = {"" = "src"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

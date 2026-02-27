@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 
-from scripts.mind_ffi import get_kernel_param, get_mind_dir, load_kernel_config
+from mind_mem.mind_ffi import get_kernel_param, get_mind_dir, load_kernel_config
 
 
 def test_get_mind_dir():

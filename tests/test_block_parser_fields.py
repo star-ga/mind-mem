@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 
-from scripts.block_parser import parse_file
+from mind_mem.block_parser import parse_file
 
 
 def _parse_block(content):

@@ -6,8 +6,8 @@ import os
 
 import pytest
 
-from scripts._recall_core import recall
-from scripts.init_workspace import init
+from mind_mem._recall_core import recall
+from mind_mem.init_workspace import init
 
 
 @pytest.fixture

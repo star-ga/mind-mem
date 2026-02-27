@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from scripts.mind_filelock import FileLock
+from mind_mem.mind_filelock import FileLock
 
 
 class TestFileLockContention:

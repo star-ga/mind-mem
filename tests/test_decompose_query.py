@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_detection import decompose_query
+from mind_mem._recall_detection import decompose_query
 
 
 def test_decompose_simple():

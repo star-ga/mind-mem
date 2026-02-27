@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_tokenization import tokenize
+from mind_mem._recall_tokenization import tokenize
 
 
 def test_basic_tokenize():

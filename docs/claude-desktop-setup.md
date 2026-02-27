@@ -12,7 +12,7 @@ Step-by-step guide to connect mind-mem to Claude Desktop as an MCP server.
 
 ```bash
 # Create a workspace in your project directory
-python3 /path/to/mind-mem/scripts/init_workspace.py /path/to/your/workspace
+python3 -m mind_mem.init_workspace /path/to/your/workspace
 ```
 
 This creates the full directory structure with 12 directories and 19 template files.

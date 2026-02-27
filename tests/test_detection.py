@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_detection import (
+from mind_mem._recall_detection import (
     chunk_text,
     decompose_query,
     detect_query_type,

@@ -16,7 +16,7 @@ if [[ ! -f "$WS/mind-mem.json" ]]; then
   echo "This does not appear to be an initialized mind-mem workspace."
   echo "To initialize a workspace, run:"
   echo ""
-  echo "  python3 scripts/init_workspace.py /path/to/your/workspace"
+  echo "  python3 -m mind_mem.init_workspace /path/to/your/workspace"
   echo ""
   echo "Then validate with:"
   echo ""
@@ -437,8 +437,8 @@ section "9. v2.0 CHECKS (warnings only)"
 if [[ -f "$DEC_FILE" ]]; then
   # Get IDs of active decisions with relevant tags
   needs_sig=$(MIND_MEM_WS="$WS" MIND_MEM_DECFILE="$DEC_FILE" python3 -c "
-import os, sys; sys.path.insert(0, os.path.join(os.environ['MIND_MEM_WS'], 'scripts'))
-from block_parser import parse_file
+import os, sys
+from mind_mem.block_parser import parse_file
 blocks = parse_file(os.environ['MIND_MEM_DECFILE'])
 required_tags = {'integrity','security','memory','retrieval'}
 for b in blocks:
@@ -462,8 +462,8 @@ fi
 # V2.2: ConstraintSignatures have required fields
 if [[ -f "$DEC_FILE" ]]; then
   sig_issues=$(MIND_MEM_WS="$WS" MIND_MEM_DECFILE="$DEC_FILE" python3 -c "
-import os, sys; sys.path.insert(0, os.path.join(os.environ['MIND_MEM_WS'], 'scripts'))
-from block_parser import parse_file
+import os, sys
+from mind_mem.block_parser import parse_file
 blocks = parse_file(os.environ['MIND_MEM_DECFILE'])
 required = ['id','domain','subject','predicate','object','modality','priority','scope','evidence']
 for b in blocks:
@@ -485,8 +485,8 @@ fi
 # V2.3: domain and modality in valid enums, priority in 1-10
 if [[ -f "$DEC_FILE" ]]; then
   enum_issues=$(MIND_MEM_WS="$WS" MIND_MEM_DECFILE="$DEC_FILE" python3 -c "
-import os, sys; sys.path.insert(0, os.path.join(os.environ['MIND_MEM_WS'], 'scripts'))
-from block_parser import parse_file
+import os, sys
+from mind_mem.block_parser import parse_file
 blocks = parse_file(os.environ['MIND_MEM_DECFILE'])
 valid_domains = {'integrity','memory','retrieval','security','llm_strategy','workflow','project','comms','finance','other'}
 valid_modalities = {'must','must_not','should','should_not','may'}
@@ -516,8 +516,8 @@ fi
 # V2.4: AlignsWith field present on active tasks
 if [[ -f "$TASK_FILE" ]]; then
   align_issues=$(MIND_MEM_WS="$WS" MIND_MEM_TASKFILE="$TASK_FILE" python3 -c "
-import os, sys; sys.path.insert(0, os.path.join(os.environ['MIND_MEM_WS'], 'scripts'))
-from block_parser import parse_file
+import os, sys
+from mind_mem.block_parser import parse_file
 blocks = parse_file(os.environ['MIND_MEM_TASKFILE'])
 for b in blocks:
     if b.get('Status') in ('todo','doing','blocked'):
@@ -554,8 +554,8 @@ fi
 # V2.6: v1.1 signature fields: axis.key, relation, enforcement present
 if [[ -f "$DEC_FILE" ]]; then
   v11_issues=$(MIND_MEM_WS="$WS" MIND_MEM_DECFILE="$DEC_FILE" python3 -c "
-import os, sys; sys.path.insert(0, os.path.join(os.environ['MIND_MEM_WS'], 'scripts'))
-from block_parser import parse_file
+import os, sys
+from mind_mem.block_parser import parse_file
 blocks = parse_file(os.environ['MIND_MEM_DECFILE'])
 valid_relations = {'standalone','requires','implies','composes_with','overrides','equivalent'}
 valid_enforcement = {'invariant','structural','policy','guideline'}
@@ -585,8 +585,8 @@ fi
 # V2.7: lifecycle.created_by present on all signatures
 if [[ -f "$DEC_FILE" ]]; then
   lc_issues=$(MIND_MEM_WS="$WS" MIND_MEM_DECFILE="$DEC_FILE" python3 -c "
-import os, sys; sys.path.insert(0, os.path.join(os.environ['MIND_MEM_WS'], 'scripts'))
-from block_parser import parse_file
+import os, sys
+from mind_mem.block_parser import parse_file
 blocks = parse_file(os.environ['MIND_MEM_DECFILE'])
 for b in blocks:
     for sig in b.get('ConstraintSignatures', []):

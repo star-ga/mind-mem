@@ -16,8 +16,8 @@ pip install -e ".[test]"
 pytest tests/ -v
 
 # Run linting
-ruff check scripts/ tests/
-ruff format --check scripts/ tests/
+ruff check src/ tests/
+ruff format --check src/ tests/
 ```
 
 ## Pull Request Process
@@ -25,7 +25,7 @@ ruff format --check scripts/ tests/
 1. Fork the repository and create a feature branch
 2. Write tests for new functionality
 3. Ensure all tests pass: `pytest tests/ -v`
-4. Ensure linting passes: `ruff check scripts/ tests/`
+4. Ensure linting passes: `ruff check src/ tests/`
 5. Update documentation if applicable
 6. Submit a pull request with a clear description
 

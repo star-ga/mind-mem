@@ -7,11 +7,11 @@ import tempfile
 
 import pytest
 
-pytest.importorskip("scripts.scan_engine")
+pytest.importorskip("mind_mem.scan_engine")
 
-from scripts.scan_engine import scan  # noqa: E402
+from mind_mem.scan_engine import scan  # noqa: E402
 
-from scripts.init_workspace import init  # noqa: E402
+from mind_mem.init_workspace import init  # noqa: E402
 
 
 def _make_workspace_with_blocks():

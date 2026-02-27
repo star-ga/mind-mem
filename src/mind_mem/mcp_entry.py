@@ -9,8 +9,8 @@ import sys
 
 def main():
     """Launch the Mind-Mem MCP server."""
-    # mcp_server.py lives at repo root (one level up from scripts/)
-    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # mcp_server.py lives at repo root (two levels up from src/mind_mem/)
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     server_py = os.path.join(repo_root, "mcp_server.py")
 
     if os.path.isfile(server_py):

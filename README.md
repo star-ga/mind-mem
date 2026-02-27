@@ -9,7 +9,7 @@
   </p>
   <p align="center">
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
-    <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/v/mind_mem?style=flat-square&color=blue&v=1.7.3" alt="PyPI"></a>
+    <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/v/mind_mem?style=flat-square&color=blue&v=1.8.0" alt="PyPI"></a>
     <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/pyversions/mind_mem?style=flat-square" alt="Python Versions"></a>
     <a href="https://github.com/star-ga/mind-mem/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/mind_mem?style=flat-square" alt="License"></a>
     <a href="https://github.com/star-ga/mind-mem/releases"><img src="https://img.shields.io/github/v/release/star-ga/mind-mem?style=flat-square&color=green" alt="Release"></a>
@@ -418,7 +418,7 @@ git clone https://github.com/star-ga/mind-mem.git .mind-mem
 **2. Initialize workspace**
 
 ```bash
-python3 .mind-mem/scripts/init_workspace.py .
+python3 .mind-mem/src/mind_mem/init_workspace.py .
 ```
 
 Creates 12 directories, 19 template files, and `mind-mem.json` config. **Never overwrites existing files.**
@@ -426,9 +426,9 @@ Creates 12 directories, 19 template files, and `mind-mem.json` config. **Never o
 **3. Validate**
 
 ```bash
-bash .mind-mem/scripts/validate.sh .
+bash .mind-mem/src/mind_mem/validate.sh .
 # or cross-platform:
-python3 .mind-mem/scripts/validate_py.py .
+python3 .mind-mem/src/mind_mem/validate_py.py .
 ```
 
 Expected: `74 checks | 74 passed | 0 issues`.
@@ -436,7 +436,7 @@ Expected: `74 checks | 74 passed | 0 issues`.
 **4. First scan**
 
 ```bash
-python3 .mind-mem/scripts/intel_scan.py .
+python3 .mind-mem/src/mind_mem/intel_scan.py .
 ```
 
 Expected: `0 critical | 0 warnings` on a fresh workspace.
@@ -444,10 +444,10 @@ Expected: `0 critical | 0 warnings` on a fresh workspace.
 **5. Verify recall + capture**
 
 ```bash
-python3 .mind-mem/scripts/recall.py --query "test" --workspace .
+python3 .mind-mem/src/mind_mem/recall.py --query "test" --workspace .
 # → No results found. (empty workspace — correct)
 
-python3 .mind-mem/scripts/capture.py .
+python3 .mind-mem/src/mind_mem/capture.py .
 # → capture: no daily log for YYYY-MM-DD, nothing to scan (correct)
 ```
 
@@ -482,7 +482,7 @@ openclaw hooks enable mind-mem
 **7. Smoke Test (optional)**
 
 ```bash
-bash .mind-mem/scripts/smoke_test.sh
+bash .mind-mem/src/mind_mem/smoke_test.sh
 ```
 
 Creates a temp workspace, runs init → validate → scan → recall → capture → pytest, then cleans up.
@@ -494,7 +494,7 @@ Creates a temp workspace, runs init → validate → scan → recall → capture
 After setup, this is what a healthy workspace looks like:
 
 ```
-$ python3 scripts/intel_scan.py .
+$ python3 -m mind_mem.intel_scan .
 
 mind-mem Intelligence Scan Report v2.0
 Mode: detect_only
@@ -611,19 +611,22 @@ your-workspace/
 ├── mind-mem-acl.json        # Multi-agent access control
 ├── .mind-mem-wal/           # Write-ahead log (crash recovery)
 │
-└── scripts/
+└── src/mind_mem/
     ├── mind_ffi.py          # MIND FFI bridge (ctypes)
     ├── hybrid_recall.py     # Hybrid BM25+Vector+RRF orchestrator
     ├── block_metadata.py    # A-MEM metadata evolution
     ├── cross_encoder_reranker.py  # Optional cross-encoder
-    ├── intent_router.py     # 9-type intent classification
+    ├── intent_router.py     # 9-type intent classification (adaptive)
     ├── recall.py            # BM25F + RM3 + graph scoring engine
     ├── recall_vector.py     # Vector/embedding backends
     ├── sqlite_index.py      # FTS5 + vector + metadata index
+    ├── connection_manager.py # SQLite connection pool (WAL read/write separation)
+    ├── block_store.py       # BlockStore protocol + MarkdownBlockStore
+    ├── corpus_registry.py   # Central corpus path registry
     ├── abstention_classifier.py  # Adversarial abstention
     ├── evidence_packer.py   # Evidence assembly and ranking
     ├── intel_scan.py        # Integrity scanner
-    ├── apply_engine.py      # Proposal apply engine
+    ├── apply_engine.py      # Proposal apply engine (delta-based snapshots)
     ├── block_parser.py      # Markdown block parser (typed)
     ├── capture.py           # Auto-capture (26 patterns)
     ├── compaction.py        # Compaction/GC/archival
@@ -748,9 +751,9 @@ mind-mem's deterministic retrieval pipeline validates these findings: **67.3% on
 ### Default: BM25 Hybrid
 
 ```bash
-python3 scripts/recall.py --query "authentication" --workspace .
-python3 scripts/recall.py --query "auth" --json --limit 5 --workspace .
-python3 scripts/recall.py --query "deadline" --active-only --workspace .
+python3 -m mind_mem.recall --query "authentication" --workspace .
+python3 -m mind_mem.recall --query "auth" --json --limit 5 --workspace .
+python3 -m mind_mem.recall --query "deadline" --active-only --workspace .
 ```
 
 BM25F scoring (k1=1.2, b=0.75) with per-field weighting, bigram phrase matching, overlapping sentence chunking, and query-type-aware parameter tuning. Searches across all structured files.
@@ -782,7 +785,7 @@ Thread-parallel BM25 and vector retrieval fused via RRF: `score(doc) = bm25_w / 
 ### Graph-Based (2-hop cross-reference boost)
 
 ```bash
-python3 scripts/recall.py --query "database" --graph --workspace .
+python3 -m mind_mem.recall --query "database" --graph --workspace .
 ```
 
 2-hop graph traversal: 1-hop neighbors get 0.3x score boost, 2-hop get 0.1x (tagged `[graph]`). Surfaces structurally connected blocks via `AlignsWith`, `Dependencies`, `Supersedes`, `Sources`, and ConstraintSignature scopes. Auto-enabled for multi-hop queries.
@@ -867,7 +870,7 @@ mindc mind/bm25.mind --emit=shared -o lib/libbm25.so
 
 ### FFI Bridge
 
-The compiled `.so` exposes a C99-compatible ABI. Python calls via `ctypes` through `scripts/mind_ffi.py`:
+The compiled `.so` exposes a C99-compatible ABI. Python calls via `ctypes` through `src/mind_mem/mind_ffi.py`:
 
 ```python
 from mind_ffi import get_kernel, is_available, is_protected
@@ -904,7 +907,7 @@ User reviews signals
 /apply promotes to DECISIONS.md or TASKS.md
 ```
 
-**Batch scanning:** `python3 scripts/capture.py . --scan-all` scans the last 7 days of daily logs.
+**Batch scanning:** `python3 -m mind_mem.capture . --scan-all` scans the last 7 days of daily logs.
 
 **Safety guarantee:** `capture.py` never writes to `decisions/` or `tasks/` directly. All signals must go through the apply engine.
 
@@ -915,7 +918,7 @@ User reviews signals
 ### Namespace Setup
 
 ```bash
-python3 scripts/namespaces.py workspace/ --init coder-1 reviewer-1
+python3 -m mind_mem.namespaces workspace/ --init coder-1 reviewer-1
 ```
 
 Creates `shared/` (visible to all) and `agents/coder-1/`, `agents/reviewer-1/` (private) directories with ACL config.
@@ -940,8 +943,8 @@ High-confidence facts proposed to `shared/intelligence/LEDGER.md` become visible
 ### Conflict Resolution
 
 ```bash
-python3 scripts/conflict_resolver.py workspace/ --analyze
-python3 scripts/conflict_resolver.py workspace/ --propose
+python3 -m mind_mem.conflict_resolver workspace/ --analyze
+python3 -m mind_mem.conflict_resolver workspace/ --propose
 ```
 
 Graduated resolution: confidence priority > scope specificity > timestamp priority > manual fallback.
@@ -949,8 +952,8 @@ Graduated resolution: confidence priority > scope specificity > timestamp priori
 ### Transcript Capture
 
 ```bash
-python3 scripts/transcript_capture.py workspace/ --transcript path/to/session.jsonl
-python3 scripts/transcript_capture.py workspace/ --scan-recent --days 3
+python3 -m mind_mem.transcript_capture workspace/ --transcript path/to/session.jsonl
+python3 -m mind_mem.transcript_capture workspace/ --scan-recent --days 3
 ```
 
 Scans Claude Code JSONL transcripts for user corrections, convention discoveries, and architectural decisions. 16 patterns with confidence classification.
@@ -958,10 +961,10 @@ Scans Claude Code JSONL transcripts for user corrections, convention discoveries
 ### Backup & Restore
 
 ```bash
-python3 scripts/backup_restore.py backup workspace/ --output backup.tar.gz
-python3 scripts/backup_restore.py export workspace/ --output export.jsonl
-python3 scripts/backup_restore.py restore workspace/ --input backup.tar.gz
-python3 scripts/backup_restore.py wal-replay workspace/
+python3 -m mind_mem.backup_restore backup workspace/ --output backup.tar.gz
+python3 -m mind_mem.backup_restore export workspace/ --output export.jsonl
+python3 -m mind_mem.backup_restore restore workspace/ --input backup.tar.gz
+python3 -m mind_mem.backup_restore wal-replay workspace/
 ```
 
 ---
@@ -1018,7 +1021,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 ```json
 {
-  "version": "1.7.3",
+  "version": "1.8.0",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,
@@ -1275,13 +1278,13 @@ configuration in your client's MCP config (stdio vs HTTP). Ensure the
 `MIND_MEM_WORKSPACE` environment variable points to a valid workspace directory.
 
 **MIND kernels not loading?**
-Run `bash scripts/build.sh` to compile the MIND source files (requires `mindc`).
+Run `bash src/mind_mem/build.sh` to compile the MIND source files (requires `mindc`).
 If the MIND compiler is not available, mind-mem automatically uses the pure Python
 fallback with identical results.
 
 **Index corrupt?**
 Run the `reindex` MCP tool, or from the command line:
-`python3 scripts/sqlite_index.py --rebuild --workspace /path/to/workspace`.
+`python3 -m mind_mem.sqlite_index --rebuild --workspace /path/to/workspace`.
 This drops and recreates the FTS5 index from all workspace files.
 
 ---

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_detection import chunk_text
+from mind_mem._recall_detection import chunk_text
 
 
 def test_chunk_short_text():

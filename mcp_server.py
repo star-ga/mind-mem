@@ -80,6 +80,7 @@ from typing import Any
 
 # mind-mem imports (package mapped to scripts/ via pyproject.toml)
 from mind_mem.block_parser import BlockCorruptedError, get_active, parse_file  # noqa: E402, F401
+from mind_mem.corpus_registry import CORPUS_DIRS  # noqa: E402
 from mind_mem.mind_filelock import FileLock  # noqa: E402
 from fastmcp import FastMCP  # noqa: E402
 from mind_mem.mind_ffi import (  # noqa: E402
@@ -267,6 +268,19 @@ def mcp_tool_observe(fn):
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         tool_name = fn.__name__
+
+        # Rate limit enforcement (#475): check sliding window before execution
+        if _rate_limiter is not None:
+            allowed, retry_after = _rate_limiter.allow()
+            if not allowed:
+                _log.warning("rate_limit_exceeded", tool=tool_name, retry_after=retry_after)
+                return json.dumps(
+                    {
+                        "error": "Rate limit exceeded. Try again later.",
+                        "retry_after_seconds": round(retry_after, 1),
+                        "_schema_version": MCP_SCHEMA_VERSION,
+                    }
+                )
 
         # ACL enforcement: when MIND_MEM_ADMIN_TOKEN is configured,
         # admin tools require MIND_MEM_SCOPE=admin (stdio) or a valid
@@ -529,6 +543,8 @@ def _recall_impl(query: str, limit: int = 10, active_only: bool = False, backend
         return ws_err
     limits = _get_limits(ws)
     limit = max(1, min(limit, limits["max_recall_results"]))
+    timeout_seconds = limits.get("query_timeout_seconds", QUERY_TIMEOUT_SECONDS)
+    recall_start = time.monotonic()
     if backend not in ("auto", "bm25", "hybrid"):
         backend = "auto"
     warnings: list[str] = []
@@ -579,6 +595,19 @@ def _recall_impl(query: str, limit: int = 10, active_only: bool = False, backend
             if _is_db_locked(exc):
                 return _sqlite_busy_error()
             raise
+
+    # Query timeout enforcement (#476)
+    recall_elapsed = time.monotonic() - recall_start
+    if recall_elapsed > timeout_seconds:
+        _log.warning(
+            "query_timeout_exceeded",
+            elapsed=round(recall_elapsed, 2),
+            limit=timeout_seconds,
+            backend=used_backend,
+        )
+        warnings.append(
+            f"Query exceeded timeout ({round(recall_elapsed, 1)}s > {timeout_seconds}s). Results may be incomplete."
+        )
 
     metrics.inc("mcp_recall_queries")
     _log.info("mcp_recall", query=query, backend=used_backend, results=len(results))
@@ -944,7 +973,9 @@ def rollback_proposal(receipt_ts: str) -> str:
 def hybrid_search(query: str, limit: int = 10, active_only: bool = False) -> str:
     """Hybrid BM25+Vector recall with RRF fusion.
 
-    Deprecated: use recall(backend="hybrid") instead. This is a thin wrapper.
+    .. deprecated::
+        Use ``recall(backend="hybrid")`` instead. This tool will be removed in a
+        future release.
 
     Args:
         query: Search query.
@@ -954,7 +985,13 @@ def hybrid_search(query: str, limit: int = 10, active_only: bool = False) -> str
     Returns:
         JSON array of ranked results from fused retrieval.
     """
-    return _recall_impl(query, limit=limit, active_only=active_only, backend="hybrid")
+    raw = _recall_impl(query, limit=limit, active_only=active_only, backend="hybrid")
+    try:
+        envelope = json.loads(raw)
+        envelope["_deprecation_notice"] = "hybrid_search is deprecated. Use recall with backend='hybrid' instead."
+        return json.dumps(envelope, indent=2)
+    except (json.JSONDecodeError, TypeError):
+        return raw
 
 
 @mcp.tool
@@ -1104,7 +1141,7 @@ def index_stats() -> str:
 
     if not fts_exists:
         # Fallback: count blocks by parsing files (O(N))
-        for kind in ["decisions", "tasks", "entities"]:
+        for kind in CORPUS_DIRS:
             d = os.path.join(ws, kind)
             if os.path.isdir(d):
                 count = 0
@@ -1689,9 +1726,8 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blo
         )
 
     all_blocks = []
-    scan_dirs = ["decisions", "tasks", "entities", "intelligence"]
 
-    for subdir in scan_dirs:
+    for subdir in CORPUS_DIRS:
         dir_path = os.path.join(ws, subdir)
         if not os.path.isdir(dir_path):
             continue

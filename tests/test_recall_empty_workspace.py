@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_core import recall
+from mind_mem._recall_core import recall
 
 
 def test_empty_decisions(workspace):

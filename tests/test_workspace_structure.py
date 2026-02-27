@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 
-from scripts.init_workspace import init
+from mind_mem.init_workspace import init
 
 EXPECTED_DIRS = ["decisions", "tasks", "entities", "memory", "intelligence", "summaries"]
 

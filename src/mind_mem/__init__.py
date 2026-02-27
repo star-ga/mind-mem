@@ -1,5 +1,5 @@
 # Mind Mem — Memory + Immune System for AI agents
-# Package: mind_mem (maps to scripts/ via pyproject.toml package-dir)
+# Package: mind_mem (src/mind_mem/ via pyproject.toml package-dir)
 
 """mind-mem: governance-aware memory layer for AI agents.
 
@@ -18,6 +18,9 @@ Core modules:
     schema_version  — Schema migration tooling
     conflict_resolver — Automated conflict resolution
     transcript_capture — Transcript JSONL signal extraction
+    connection_manager — SQLite connection pooling with read/write separation
+    corpus_registry — Central source of truth for corpus directory paths
+    block_store     — BlockStore protocol and MarkdownBlockStore implementation
 """
 
-__version__ = "1.7.3"
+__version__ = "1.8.0"

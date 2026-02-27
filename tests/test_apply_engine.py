@@ -337,7 +337,7 @@ class TestValidateUninitWorkspace(unittest.TestCase):
     def test_rejects_uninitialized_workspace(self):
         """Running on a dir with no mind-mem.json should exit with clear error."""
         with tempfile.TemporaryDirectory() as ws:
-            validate_sh = os.path.join(os.path.dirname(__file__), "..", "scripts", "validate.sh")
+            validate_sh = os.path.join(os.path.dirname(__file__), "..", "src", "mind_mem", "validate.sh")
             result = subprocess.run(
                 ["bash", validate_sh, ws],
                 capture_output=True,
@@ -347,7 +347,7 @@ class TestValidateUninitWorkspace(unittest.TestCase):
             # Should exit with error and helpful message
             self.assertEqual(result.returncode, 1)
             self.assertIn("No mind-mem.json found", result.stdout)
-            self.assertIn("init_workspace.py", result.stdout)
+            self.assertIn("init_workspace", result.stdout)
 
 
 class TestModeGate(unittest.TestCase):
@@ -836,6 +836,186 @@ class TestOpReplaceRange(unittest.TestCase):
             )
             self.assertFalse(ok)
             self.assertIn("markers not found", msg)
+
+
+class TestManifestFullSnapshot(unittest.TestCase):
+    """Manifest is created during full snapshot (no files_touched)."""
+
+    def test_full_snapshot_creates_manifest(self):
+        """Full snapshot must write MANIFEST.json with file list."""
+        from mind_mem.apply_engine import _read_manifest, create_snapshot
+
+        with tempfile.TemporaryDirectory() as ws:
+            from mind_mem.init_workspace import init
+
+            init(ws)
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+                f.write("[D-001]\nStatement: Test\nStatus: active\n")
+
+            snap_dir = create_snapshot(ws, "20260227-100000", files_touched=None)
+
+            # MANIFEST.json must exist
+            manifest_path = os.path.join(snap_dir, "MANIFEST.json")
+            self.assertTrue(os.path.isfile(manifest_path))
+
+            # Manifest must list the files
+            manifest = _read_manifest(snap_dir)
+            self.assertIsNotNone(manifest)
+            self.assertIn("decisions/DECISIONS.md", manifest)
+
+    def test_minimal_snapshot_creates_manifest(self):
+        """Minimal snapshot (with files_touched) must also write MANIFEST.json."""
+        from mind_mem.apply_engine import _read_manifest, create_snapshot
+
+        with tempfile.TemporaryDirectory() as ws:
+            from mind_mem.init_workspace import init
+
+            init(ws)
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+                f.write("[D-001]\nStatement: Test\nStatus: active\n")
+
+            snap_dir = create_snapshot(ws, "20260227-100001", files_touched=["decisions/DECISIONS.md"])
+
+            manifest = _read_manifest(snap_dir)
+            self.assertIsNotNone(manifest)
+            self.assertIn("decisions/DECISIONS.md", manifest)
+            # Config files always included
+            self.assertIn("mind-mem.json", manifest)
+
+
+class TestManifestRestore(unittest.TestCase):
+    """Manifest-based restore works correctly."""
+
+    def test_manifest_restore_reverts_content(self):
+        """Restore via manifest must revert modified files."""
+        with tempfile.TemporaryDirectory() as ws:
+            from mind_mem.init_workspace import init
+
+            init(ws)
+            original = "[D-001]\nStatement: Test\nStatus: active\n"
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+                f.write(original)
+
+            snap_dir = create_snapshot(ws, "20260227-100002")
+
+            # Corrupt the file
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+                f.write("CORRUPTED")
+
+            restore_snapshot(ws, snap_dir)
+
+            with open(os.path.join(ws, "decisions", "DECISIONS.md")) as f:
+                self.assertEqual(f.read(), original)
+
+    def test_manifest_restore_removes_orphans(self):
+        """Files created after snapshot must be removed on manifest restore."""
+        with tempfile.TemporaryDirectory() as ws:
+            from mind_mem.init_workspace import init
+
+            init(ws)
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+                f.write("original\n")
+
+            snap_dir = create_snapshot(ws, "20260227-100003")
+
+            # Create a rogue file after snapshot
+            rogue = os.path.join(ws, "decisions", "ROGUE.md")
+            with open(rogue, "w") as f:
+                f.write("rogue file\n")
+            self.assertTrue(os.path.exists(rogue))
+
+            restore_snapshot(ws, snap_dir)
+
+            self.assertFalse(os.path.exists(rogue))
+
+
+class TestLegacySnapshotRestore(unittest.TestCase):
+    """Legacy snapshots without MANIFEST.json still work (backward compat)."""
+
+    def test_legacy_snapshot_without_manifest_restores(self):
+        """Snapshots without MANIFEST.json must use copytree fallback."""
+        with tempfile.TemporaryDirectory() as ws:
+            from mind_mem.init_workspace import init
+
+            init(ws)
+            original = "[D-001]\nStatement: Legacy\nStatus: active\n"
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+                f.write(original)
+
+            # Create snapshot normally (will have manifest)
+            snap_dir = create_snapshot(ws, "20260227-100004")
+
+            # Delete the manifest to simulate legacy snapshot
+            manifest_path = os.path.join(snap_dir, "MANIFEST.json")
+            self.assertTrue(os.path.isfile(manifest_path))
+            os.remove(manifest_path)
+
+            # Corrupt workspace
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+                f.write("CORRUPTED")
+
+            # Restore should still work via legacy path
+            restore_snapshot(ws, snap_dir)
+
+            with open(os.path.join(ws, "decisions", "DECISIONS.md")) as f:
+                self.assertEqual(f.read(), original)
+
+
+class TestSnapshotDiff(unittest.TestCase):
+    """snapshot_diff returns list of changed files."""
+
+    def test_diff_detects_modified_file(self):
+        from mind_mem.apply_engine import snapshot_diff
+
+        with tempfile.TemporaryDirectory() as ws:
+            from mind_mem.init_workspace import init
+
+            init(ws)
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+                f.write("original\n")
+
+            snap_dir = create_snapshot(ws, "20260227-100005")
+
+            # Modify file
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+                f.write("modified\n")
+
+            diffs = snapshot_diff(ws, snap_dir)
+            self.assertIn("decisions/DECISIONS.md", diffs)
+
+    def test_diff_empty_when_unchanged(self):
+        from mind_mem.apply_engine import snapshot_diff
+
+        with tempfile.TemporaryDirectory() as ws:
+            from mind_mem.init_workspace import init
+
+            init(ws)
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+                f.write("original\n")
+
+            snap_dir = create_snapshot(ws, "20260227-100006")
+
+            # No changes
+            diffs = snapshot_diff(ws, snap_dir)
+            self.assertEqual(diffs, [])
+
+    def test_diff_detects_deleted_file(self):
+        from mind_mem.apply_engine import snapshot_diff
+
+        with tempfile.TemporaryDirectory() as ws:
+            from mind_mem.init_workspace import init
+
+            init(ws)
+            with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
+                f.write("original\n")
+
+            snap_dir = create_snapshot(ws, "20260227-100007")
+
+            # Delete file
+            os.remove(os.path.join(ws, "decisions", "DECISIONS.md"))
+
+            diffs = snapshot_diff(ws, snap_dir)
+            self.assertIn("decisions/DECISIONS.md", diffs)
 
 
 if __name__ == "__main__":

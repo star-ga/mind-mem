@@ -7,7 +7,7 @@ Brief description of changes.
 ## Testing
 - [ ] Tests pass (`pytest tests/`)
 - [ ] New tests added for new functionality
-- [ ] Linting passes (`ruff check scripts/ tests/`)
+- [ ] Linting passes (`ruff check src/ tests/`)
 
 ## Checklist
 - [ ] Documentation updated (if applicable)

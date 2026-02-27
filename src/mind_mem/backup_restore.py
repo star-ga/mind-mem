@@ -24,21 +24,12 @@ import tarfile
 from datetime import datetime
 
 from .block_parser import parse_file
+from .corpus_registry import BACKUP_DIRS
 from .observability import get_logger, metrics
 
 _log = get_logger("backup_restore")
 
-# Directories included in backup
-BACKUP_DIRS = [
-    "decisions",
-    "tasks",
-    "entities",
-    "memory",
-    "intelligence",
-    "summaries",
-    "shared",
-    "agents",
-]
+# BACKUP_DIRS imported from corpus_registry
 
 BACKUP_FILES = ["mind-mem.json", "mind-mem-acl.json"]
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_expansion import expand_months, expand_query
+from mind_mem._recall_expansion import expand_months, expand_query
 
 
 def test_expand_query_basic():

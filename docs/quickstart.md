@@ -17,14 +17,14 @@ The installer auto-detects Claude Code, Codex CLI, Gemini CLI, Cursor, Windsurf,
 ## 2. Verify
 
 ```bash
-python3 scripts/validate_py.py /path/to/your/workspace
+python3 -m mind_mem.validate_py /path/to/your/workspace
 # Expected: 74 checks | 74 passed | 0 issues
 ```
 
 ## 3. First Recall
 
 ```bash
-python3 scripts/recall.py --query "authentication" --workspace /path/to/your/workspace
+python3 -m mind_mem.recall --query "authentication" --workspace /path/to/your/workspace
 ```
 
 No results yet -- your workspace is empty. Make some decisions first.
@@ -45,14 +45,14 @@ Rationale: Stateless, works across microservices
 Now recall finds it:
 
 ```bash
-python3 scripts/recall.py --query "authentication" --workspace .
+python3 -m mind_mem.recall --query "authentication" --workspace .
 # -> [D-20260218-001] Use JWT tokens for API authentication (score: 12.4)
 ```
 
 ## 5. Run Integrity Scan
 
 ```bash
-python3 scripts/intel_scan.py /path/to/your/workspace
+python3 -m mind_mem.intel_scan /path/to/your/workspace
 # Expected: 0 critical | 0 warnings
 ```
 
@@ -61,7 +61,7 @@ python3 scripts/intel_scan.py /path/to/your/workspace
 After each coding session, mind-mem auto-captures decision-like language from your daily logs:
 
 ```bash
-python3 scripts/capture.py /path/to/your/workspace
+python3 -m mind_mem.capture /path/to/your/workspace
 ```
 
 Signals land in `intelligence/SIGNALS.md`. Review and promote with `/apply`.

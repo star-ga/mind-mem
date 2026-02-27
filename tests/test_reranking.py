@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_reranking import rerank_hits
+from mind_mem._recall_reranking import rerank_hits
 
 
 def test_rerank_empty():
