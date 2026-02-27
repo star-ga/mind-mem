@@ -54,19 +54,20 @@ The installer auto-detects Claude Code, Claude Desktop, Codex CLI, Gemini CLI, C
 ```bash
 pip install mind-mem
 mind-mem-init ~/my-workspace        # Create workspace
-mind-mem-recall "API decisions"     # Hybrid BM25F search
+mind-mem-recall -q "API decisions" --workspace ~/my-workspace  # Hybrid BM25F search
 mind-mem-scan ~/my-workspace        # Detect drift & contradictions
 ```
 
+<p align="center">
+  <img src="demo.gif" alt="mind-mem recall and scan demo" width="720">
+</p>
+
 Output:
 ```
-[D-20260213-001] score=4.82
-  Decision: Use async/await for all API endpoints
-  Status: active | Priority: P1
-
-[D-20260210-003] score=3.91
-  Decision: REST over GraphQL for public API
-  Status: active | Priority: P2
+[1.204] D-20260215-001 (decision) — Use async/await for all API endpoints
+        decisions/DECISIONS.md:11
+[1.094] D-20260210-003 (decision) — REST over GraphQL for public API
+        decisions/DECISIONS.md:20
 ```
 
 ### Trust Signals
