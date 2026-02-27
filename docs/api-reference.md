@@ -58,6 +58,12 @@ python3 mcp_server.py --workspace /path/to/workspace
 | `export_memory` | Export all blocks as JSONL | `format`, `include_metadata` |
 | `memory_evolution` | A-MEM metadata: importance, access patterns, keywords | `block_id`, `action` |
 
+#### Drift Detection
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `baseline_snapshot` | Freeze/detect-drift/compare intent baselines | `action` (`freeze`/`drift`/`compare`/`list`), `tag`, `significance` |
+
 #### Workspace Operations
 
 | Tool | Description | Key Parameters |
