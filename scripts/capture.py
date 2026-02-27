@@ -100,11 +100,12 @@ def extract_structure(text: str, sig_type: str, pattern: str) -> dict:
     Uses simple heuristic extraction — not NLP, but good enough
     for triage purposes.
     """
-    structure = {
+    tags: list[str] = []
+    structure: dict = {
         "subject": "",
         "predicate": "",
         "object": "",
-        "tags": [],
+        "tags": tags,
     }
 
     text_lower = text.lower()
@@ -156,8 +157,8 @@ def extract_structure(text: str, sig_type: str, pattern: str) -> dict:
         "slow": "performance",
     }
     for keyword, tag in tag_keywords.items():
-        if keyword in text_lower and tag not in structure["tags"]:
-            structure["tags"].append(tag)
+        if keyword in text_lower and tag not in tags:
+            tags.append(tag)
 
     return structure
 
@@ -178,7 +179,7 @@ def find_today_log(workspace: str) -> tuple[str | None, str]:
 
 def find_all_logs(workspace: str, days: int = 7) -> list[tuple[str, str]]:
     """Find recent daily log files for batch scanning."""
-    logs = []
+    logs: list[tuple[str, str]] = []
     memory_dir = os.path.join(workspace, "memory")
     if not os.path.isdir(memory_dir):
         return logs
@@ -320,7 +321,7 @@ def main():
         metrics.inc("signals_written", total_written)
         print(f"capture: scanned {len(logs)} log(s) — {total_detected} detected, {total_written} new signals")
     else:
-        log_path, date_str = find_today_log(workspace)
+        log_path, date_str = find_today_log(workspace)  # type: ignore[assignment]
         if not log_path:
             print(f"capture: no daily log for {date_str}, nothing to scan")
             return

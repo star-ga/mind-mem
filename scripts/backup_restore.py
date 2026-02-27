@@ -320,7 +320,10 @@ def restore_workspace(workspace: str, backup_path: str, force: bool = False) -> 
     """
     ws = os.path.abspath(workspace)
     backup_path = os.path.abspath(backup_path)
-    result = {"restored": 0, "skipped": 0, "blocked": 0, "conflicts": []}
+    restored = 0
+    skipped = 0
+    blocked = 0
+    conflicts: list[str] = []
 
     with tarfile.open(backup_path, "r:gz") as tar:
         for member in tar.getmembers():
@@ -328,34 +331,37 @@ def restore_workspace(workspace: str, backup_path: str, force: bool = False) -> 
             if not _is_safe_tar_member(member, ws):
                 _log.warning("tar_member_blocked", member=member.name, reason="path traversal or unsafe member type")
                 metrics.inc("restore_workspace_blocked_members")
-                result["blocked"] += 1
+                blocked += 1
                 continue
 
             member_path = os.path.join(ws, member.name)
             if os.path.exists(member_path) and not force:
-                result["conflicts"].append(member.name)
-                result["skipped"] += 1
+                conflicts.append(member.name)
+                skipped += 1
             else:
                 # Extract by streaming content to a file we open ourselves,
                 # rather than using tar.extract which follows symlinks.
                 if member.isfile():
                     dest = os.path.join(ws, member.name)
                     os.makedirs(os.path.dirname(dest), exist_ok=True)
-                    with tar.extractfile(member) as src, open(dest, "wb") as dst:
-                        shutil.copyfileobj(src, dst)
+                    src = tar.extractfile(member)
+                    if src is not None:
+                        with src, open(dest, "wb") as dst:
+                            shutil.copyfileobj(src, dst)
                 elif member.isdir():
                     os.makedirs(os.path.join(ws, member.name), exist_ok=True)
                 else:
                     # Skip anything else (fifos, etc.)
                     continue
-                result["restored"] += 1
+                restored += 1
 
+    result: dict = {"restored": restored, "skipped": skipped, "blocked": blocked, "conflicts": conflicts}
     _log.info(
         "restore_complete",
-        restored=result["restored"],
-        skipped=result["skipped"],
-        blocked=result["blocked"],
-        conflicts=len(result["conflicts"]),
+        restored=restored,
+        skipped=skipped,
+        blocked=blocked,
+        conflicts=len(conflicts),
     )
     return result
 

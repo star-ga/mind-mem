@@ -204,16 +204,16 @@ def resolve_time_reference(
     # "before YYYY-MM-DD"
     m = _BEFORE_DATE_RE.search(query)
     if m:
-        d = _parse_iso_date(m.group(1))
-        if d:
-            return None, d
+        d_before = _parse_iso_date(m.group(1))
+        if d_before:
+            return None, d_before
 
     # "after YYYY-MM-DD"
     m = _AFTER_DATE_RE.search(query)
     if m:
-        d = _parse_iso_date(m.group(1))
-        if d:
-            return d, None
+        d_after = _parse_iso_date(m.group(1))
+        if d_after:
+            return d_after, None
 
     # "in January 2025" or "in January"
     m = _IN_MONTH_YEAR_RE.search(query)

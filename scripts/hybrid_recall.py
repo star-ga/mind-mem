@@ -360,16 +360,18 @@ class HybridBackend:
 
             # Prefer search_batch (returns all results for RRF)
             if hasattr(recall_vector, "search_batch"):
-                return recall_vector.search_batch(
-                    workspace,
-                    query,
-                    limit=limit,
-                    active_only=active_only,
+                return list(
+                    recall_vector.search_batch(
+                        workspace,
+                        query,
+                        limit=limit,
+                        active_only=active_only,
+                    )
                 )
 
             # Fallback: VectorBackend.search
             backend = recall_vector.VectorBackend(self._config)
-            return backend.search(workspace, query, limit=limit, active_only=active_only)
+            return list(backend.search(workspace, query, limit=limit, active_only=active_only))
         except ImportError:
             _log.warning("vector_search_import_failed")
             return []

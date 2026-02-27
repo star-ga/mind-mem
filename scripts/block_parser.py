@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from typing import Any, cast
 
 from .observability import get_logger
 
@@ -89,15 +90,15 @@ def parse_blocks(text: str) -> list[dict]:
     if text.startswith("﻿"):
         text = text[1:]
     lines = text.split("\n")
-    blocks = []
-    current = None
-    current_field = None
+    blocks: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    current_field: str | None = None
     in_constraint_sigs = False
-    current_sig = None
-    current_sig_field = None
+    current_sig: dict[str, Any] | None = None
+    current_sig_field: str | None = None
     in_ops = False
-    current_op = None
-    current_op_field = None
+    current_op: dict[str, Any] | None = None
+    current_op_field: str | None = None
     in_patch = False
 
     for i, line in enumerate(lines):
@@ -141,7 +142,9 @@ def parse_blocks(text: str) -> list[dict]:
             if sig_start:
                 if current_sig is not None:
                     _finalize_sig(current_sig)
-                    current["ConstraintSignatures"].append(current_sig)
+                    sigs = current["ConstraintSignatures"]
+                    assert isinstance(sigs, list)
+                    sigs.append(current_sig)
                 current_sig = {"id": sig_start.group(1).strip()}
                 current_sig_field = None
                 continue
@@ -175,41 +178,49 @@ def parse_blocks(text: str) -> list[dict]:
                 nested_kv = re.match(r"^    ([a-z_]+):\s+(.+)$", line)
                 if nested_kv and current_sig_field in _DICT_FIELDS:
                     parent = current_sig_field
+                    assert parent is not None
                     if not isinstance(current_sig.get(parent), dict):
                         current_sig[parent] = {}
+                    parent_dict = cast(dict[str, Any], current_sig[parent])
                     key, val = nested_kv.group(1), nested_kv.group(2).strip()
                     if val.startswith("[") and val.endswith("]"):
-                        current_sig[parent][key] = _parse_inline_list(val)
+                        parent_dict[key] = _parse_inline_list(val)
                     elif val.startswith("{") and val.endswith("}"):
-                        current_sig[parent][key] = _parse_inline_dict(val)
+                        parent_dict[key] = _parse_inline_dict(val)
                     else:
-                        current_sig[parent][key] = _coerce_value(val)
+                        parent_dict[key] = _coerce_value(val)
                     continue
 
                 # Nested sub-sub-fields at 6-space indent (e.g. scope.time)
                 time_kv = re.match(r"^      ([a-z_]+):\s+(.+)$", line)
                 if time_kv and current_sig_field in _DICT_FIELDS:
                     parent = current_sig_field
+                    assert parent is not None
                     if not isinstance(current_sig.get(parent), dict):
                         current_sig[parent] = {}
-                    if "time" not in current_sig[parent]:
-                        current_sig[parent]["time"] = {}
+                    parent_dict = cast(dict[str, Any], current_sig[parent])
+                    if "time" not in parent_dict:
+                        parent_dict["time"] = {}
                     key, val = time_kv.group(1), time_kv.group(2).strip()
-                    current_sig[parent]["time"][key] = _coerce_value(val)
+                    time_dict = cast(dict[str, Any], parent_dict["time"])
+                    time_dict[key] = _coerce_value(val)
                     continue
 
                 # List items under sig sub-fields
                 sig_list_item = re.match(r"^  - (.+)$", line)
                 if sig_list_item and current_sig_field:
-                    if isinstance(current_sig.get(current_sig_field), list):
-                        current_sig[current_sig_field].append(sig_list_item.group(1).strip())
+                    sig_field_val = current_sig.get(current_sig_field)
+                    if isinstance(sig_field_val, list):
+                        sig_field_val.append(sig_list_item.group(1).strip())
                     continue
 
                 # End of ConstraintSignatures: blank line or new top-level field
                 if line.strip() == "" or re.match(r"^[A-Z][A-Za-z]+:", line):
                     if current_sig is not None:
                         _finalize_sig(current_sig)
-                        current["ConstraintSignatures"].append(current_sig)
+                        sigs2 = current["ConstraintSignatures"]
+                        assert isinstance(sigs2, list)
+                        sigs2.append(current_sig)
                     in_constraint_sigs = False
                     current_sig = None
                     current_sig_field = None
@@ -237,10 +248,13 @@ def parse_blocks(text: str) -> list[dict]:
         if in_ops:
             # Multiline patch content (4+ space indent while in_patch)
             if in_patch:
+                assert current_op is not None
                 patch_line = re.match(r"^    (.*)$", line)
                 if patch_line:
                     current_op.setdefault("patch", [])
-                    current_op["patch"].append(patch_line.group(1))
+                    patch_val = current_op["patch"]
+                    assert isinstance(patch_val, list)
+                    patch_val.append(patch_line.group(1))
                     continue
                 else:
                     # End of patch block
@@ -254,7 +268,9 @@ def parse_blocks(text: str) -> list[dict]:
             op_start = re.match(r"^\s*-\s*op:\s*(\S+)\s*$", line)
             if op_start:
                 if current_op is not None:
-                    current["Ops"].append(current_op)
+                    ops_list = current["Ops"]
+                    assert isinstance(ops_list, list)
+                    ops_list.append(current_op)
                 current_op = {"op": op_start.group(1)}
                 current_op_field = None
                 in_patch = False
@@ -287,14 +303,17 @@ def parse_blocks(text: str) -> list[dict]:
                 if range_kv and current_op_field == "range":
                     if not isinstance(current_op.get("range"), dict):
                         current_op["range"] = {}
+                    range_dict = cast(dict[str, Any], current_op["range"])
                     key, val = range_kv.group(1), range_kv.group(2).strip()
-                    current_op["range"][key] = val
+                    range_dict[key] = val
                     continue
 
             # End of Ops: blank line or new top-level field
             if line.strip() == "" or re.match(r"^[A-Z][A-Za-z]+:", line):
                 if current_op is not None:
-                    current["Ops"].append(current_op)
+                    ops_list2 = current["Ops"]
+                    assert isinstance(ops_list2, list)
+                    ops_list2.append(current_op)
                 in_ops = False
                 current_op = None
                 current_op_field = None
@@ -322,25 +341,28 @@ def parse_blocks(text: str) -> list[dict]:
         # List item under current field
         list_item = re.match(r"^- (.+)$", line)
         if list_item and current_field:
-            if isinstance(current.get(current_field), list):
-                current[current_field].append(list_item.group(1).strip())
-            elif isinstance(current.get(current_field), str):
+            field_val = current.get(current_field)
+            if isinstance(field_val, list):
+                field_val.append(list_item.group(1).strip())
+            elif isinstance(field_val, str):
                 # Convert scalar to list
-                current[current_field] = [current[current_field], list_item.group(1).strip()]
+                current[current_field] = [field_val, list_item.group(1).strip()]
             continue
 
         # Indented list item (History entries etc.)
         indented_item = re.match(r"^\s+- (.+)$", line)
         if indented_item and current_field:
-            if isinstance(current.get(current_field), list):
-                current[current_field].append(indented_item.group(1).strip())
+            field_val2 = current.get(current_field)
+            if isinstance(field_val2, list):
+                field_val2.append(indented_item.group(1).strip())
             continue
 
         # Continuation line: indented text (2+ spaces, not a list item) appends to previous scalar field
         if current_field and line.startswith("  ") and not line.lstrip().startswith("-"):
             continuation = line.strip()
-            if continuation and isinstance(current.get(current_field), str):
-                current[current_field] += "\n" + continuation
+            cont_val = current.get(current_field)
+            if continuation and isinstance(cont_val, str):
+                current[current_field] = cont_val + "\n" + continuation
                 continue
 
         # Blank line: don't break current block
@@ -393,7 +415,7 @@ def _enrich_fact_keys(block: dict) -> None:
     block["_has_negation"] = bool(_NEGATION_RE.search(full_text))
 
 
-def _finalize_ops(block, in_ops, current_op):
+def _finalize_ops(block: dict[str, Any], in_ops: bool, current_op: dict[str, Any] | None) -> None:
     """Finalize Ops section, closing any open operation."""
     if in_ops and current_op is not None:
         if "Ops" not in block:
@@ -401,19 +423,23 @@ def _finalize_ops(block, in_ops, current_op):
         # Join patch lines if still a list
         if "patch" in current_op and isinstance(current_op["patch"], list):
             current_op["patch"] = "\n".join(current_op["patch"])
-        block["Ops"].append(current_op)
+        ops = block["Ops"]
+        assert isinstance(ops, list)
+        ops.append(current_op)
 
 
-def _finalize_block(block, in_sigs, current_sig):
+def _finalize_block(block: dict[str, Any], in_sigs: bool, current_sig: dict[str, Any] | None) -> None:
     """Finalize a block, closing any open ConstraintSignatures."""
     if in_sigs and current_sig is not None:
         _finalize_sig(current_sig)
         if "ConstraintSignatures" not in block:
             block["ConstraintSignatures"] = []
-        block["ConstraintSignatures"].append(current_sig)
+        sigs = block["ConstraintSignatures"]
+        assert isinstance(sigs, list)
+        sigs.append(current_sig)
 
 
-def _finalize_sig(sig):
+def _finalize_sig(sig: dict[str, Any]) -> None:
     """Ensure sig has all expected fields with defaults."""
     defaults = {
         "domain": "other",
@@ -433,15 +459,15 @@ def _finalize_sig(sig):
             sig[k] = v
 
 
-def _parse_inline_list(s):
+def _parse_inline_list(s: str) -> list[Any]:
     """Parse [a, b, c] -> ['a', 'b', 'c']. Supports quoted strings for values with commas."""
     inner = s[1:-1].strip()
     if not inner:
         return []
     # Quote-aware splitting: "value, with comma", other
     if '"' in inner:
-        items = []
-        current = []
+        items: list[str] = []
+        current: list[str] = []
         in_quotes = False
         for ch in inner:
             if ch == '"':
@@ -457,15 +483,15 @@ def _parse_inline_list(s):
     return [_coerce_value(x.strip()) for x in inner.split(",") if x.strip()]
 
 
-def _parse_inline_dict(s):
+def _parse_inline_dict(s: str) -> dict[str, Any]:
     """Parse { key: val, key2: val2 } -> dict. Quote-aware comma splitting."""
     inner = s[1:-1].strip()
     if not inner:
         return {}
     # Quote-aware split on commas (same pattern as _parse_inline_list)
     if '"' in inner:
-        pairs = []
-        current = []
+        pairs: list[str] = []
+        current: list[str] = []
         in_quotes = False
         for ch in inner:
             if ch == '"':
@@ -487,7 +513,7 @@ def _parse_inline_dict(s):
     return result
 
 
-def _coerce_value(s):
+def _coerce_value(s: str) -> Any:
     """Coerce string to int/float/bool/None if appropriate."""
     if s in ("null", "none", "None"):
         return None

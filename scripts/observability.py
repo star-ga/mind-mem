@@ -132,10 +132,11 @@ class Metrics:
 
     def summary(self) -> dict:
         """Return metrics summary as dict."""
-        result = {"counters": dict(self._counters)}
+        result: dict[str, object] = {"counters": dict(self._counters)}
         for name, values in self._observations.items():
             if values:
-                result.setdefault("observations", {})[name] = {
+                obs: dict[str, object] = result.setdefault("observations", {})  # type: ignore[assignment]
+                obs[name] = {
                     "count": len(values),
                     "min": min(values),
                     "max": max(values),

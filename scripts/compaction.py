@@ -37,7 +37,7 @@ def _load_config(ws: str) -> dict:
     try:
         with open(config_path) as f:
             cfg = json.load(f)
-        return cfg.get("compaction", {})
+        return dict(cfg.get("compaction", {}))
     except (OSError, json.JSONDecodeError):
         return {}
 
@@ -141,7 +141,7 @@ def cleanup_snapshots(ws: str, days: int = 30, dry_run: bool = False) -> list[st
     Snapshots are in intelligence/applied/<timestamp>/. Each contains
     APPLY_RECEIPT.md and a full workspace copy. Old ones can be large.
     """
-    cleaned = []
+    cleaned: list[str] = []
     applied_dir = os.path.join(ws, "intelligence", "applied")
     if not os.path.isdir(applied_dir):
         return cleaned
@@ -171,7 +171,7 @@ def cleanup_snapshots(ws: str, days: int = 30, dry_run: bool = False) -> list[st
 
 def cleanup_daily_logs(ws: str, days: int = 180, dry_run: bool = False) -> list[str]:
     """Archive daily log files older than `days` into yearly archives."""
-    cleaned = []
+    cleaned: list[str] = []
     memory_dir = os.path.join(ws, "memory")
     if not os.path.isdir(memory_dir):
         return cleaned
@@ -216,7 +216,7 @@ def compact_signals(ws: str, days: int = 60, dry_run: bool = False) -> list[str]
     Only removes signals with Status: resolved or Status: rejected.
     Pending signals are never removed.
     """
-    cleaned = []
+    cleaned: list[str] = []
     signals_path = os.path.join(ws, "intelligence", "SIGNALS.md")
     if not os.path.isfile(signals_path):
         return cleaned

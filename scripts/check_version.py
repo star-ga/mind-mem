@@ -25,7 +25,8 @@ def get_pyproject_version() -> str | None:
         if tomllib is not None:
             with open("pyproject.toml", "rb") as f:
                 data = tomllib.load(f)
-            return data.get("project", {}).get("version")
+            version = data.get("project", {}).get("version")
+            return str(version) if version is not None else None
         # Regex fallback for Python <3.11 (no tomllib)
         content = Path("pyproject.toml").read_text()
         m = re.search(r'^\[project\].*?^version\s*=\s*"([^"]+)"', content, re.MULTILINE | re.DOTALL)

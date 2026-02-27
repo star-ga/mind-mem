@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections.abc import Callable
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -27,7 +28,7 @@ CURRENT_SCHEMA_VERSION = "2.1.0"
 
 # Ordered list of migrations. Each entry is (from_version, to_version, description, callable).
 # Migrations are applied in order; each must be idempotent.
-_MIGRATIONS: list[tuple[str, str, str, object]] = []
+_MIGRATIONS: list[tuple[str, str, str, Callable[[str], None]]] = []
 
 
 def _version_tuple(v: str) -> tuple[int, ...]:
@@ -43,7 +44,7 @@ def get_workspace_version(workspace: str) -> str:
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
-        return config.get("schema_version", config.get("version", "1.0.0"))
+        return str(config.get("schema_version", config.get("version", "1.0.0")))
     except (json.JSONDecodeError, OSError):
         return "1.0.0"
 

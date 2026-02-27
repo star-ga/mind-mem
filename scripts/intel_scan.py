@@ -485,7 +485,7 @@ def detect_drift(data, report):
         report.ok("No blocked tasks.")
 
     # 2c. Repeated incidents of same class
-    inc_types = {}
+    inc_types: dict[str, list[str]] = {}
     for inc in incidents:
         rc = inc.get("RootCause", "unknown")
         inc_types.setdefault(rc, []).append(inc["_id"])
@@ -667,9 +667,11 @@ def generate_snapshot(data, ws, report):
         f.write("\n")
 
     report.ok(f"Snapshot saved: {snap_path}")
+    decisions_snap: dict = snapshot["decisions"]  # type: ignore[assignment]
+    tasks_snap: dict = snapshot["tasks"]  # type: ignore[assignment]
     report.info_msg(
-        f"Active: {len(snapshot['decisions']['active'])} decisions, "
-        f"{len(snapshot['tasks']['todo']) + len(snapshot['tasks']['doing'])} active tasks"
+        f"Active: {len(decisions_snap['active'])} decisions, "
+        f"{len(tasks_snap['todo']) + len(tasks_snap['doing'])} active tasks"
     )
 
     return snapshot
@@ -1030,7 +1032,7 @@ def generate_proposals(contradictions, drift_signals, ws, intel_state, report):
         report.warn(f"Budget exhausted (daily: {daily_count}/{per_day}, run: 0/{per_run})")
         return 0
 
-    proposals = []
+    proposals: list[dict] = []
     proposal_date = datetime.now().strftime("%Y%m%d")
 
     # Find highest existing proposal index for today to avoid ID collisions
@@ -1119,7 +1121,7 @@ def generate_proposals(contradictions, drift_signals, ws, intel_state, report):
 
     if proposals:
         # Group proposals by target file
-        by_file = {}
+        by_file: dict[str, list[dict]] = {}
         for p in proposals:
             if p["type"] not in TYPE_TO_FILE:
                 report.warn(f"Skipping proposal {p['id']}: invalid type '{p['type']}'")

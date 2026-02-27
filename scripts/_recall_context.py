@@ -161,11 +161,11 @@ def context_pack(
             next_dia = f"D{session}:{turn_num + offset}"
             if next_dia in existing_dias:
                 continue
-            block = dia_lookup.get(next_dia)
-            if not block:
+            block_found = dia_lookup.get(next_dia)
+            if not block_found:
                 break  # end of session segment
 
-            result = _block_to_result(block, score=r["score"] * 0.8)
+            result = _block_to_result(block_found, score=r["score"] * 0.8)
             result["via_adjacency"] = True
             augmented.append(result)
             existing_dias.add(next_dia)
@@ -265,13 +265,13 @@ def context_pack(
                     neighbor_dia = f"D{session}:{turn_num + offset}"
                     if neighbor_dia in existing_dias:
                         continue
-                    block = dia_lookup.get(neighbor_dia)
-                    if not block:
+                    block_found = dia_lookup.get(neighbor_dia)
+                    if not block_found:
                         continue
-                    block_text = get_excerpt(block).lower()
+                    block_text = get_excerpt(block_found).lower()
                     # Check if this neighbor contains any missing noun
                     if any(n in block_text for n in nouns_missing):
-                        result = _block_to_result(block, score=r["score"] * 0.6)
+                        result = _block_to_result(block_found, score=r["score"] * 0.6)
                         result["via_pronoun_rescue"] = True
                         augmented.append(result)
                         existing_dias.add(neighbor_dia)

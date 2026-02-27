@@ -121,8 +121,8 @@ class Validator:
         mem_path = os.path.join(self.ws, "MEMORY.md")
         if os.path.isfile(mem_path):
             self.pass_("MEMORY.md exists")
-            with open(mem_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            with open(mem_path, "r", encoding="utf-8") as fh:
+                content = fh.read()
             if "Memory Protocol v1.0" in content:
                 self.pass_("MEMORY.md has Protocol v1.0 header")
             else:

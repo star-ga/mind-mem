@@ -235,7 +235,7 @@ def detect_query_type(query: str) -> str:
         scores["multi-hop"] += 2
 
     # Pick the highest-scoring category
-    best = max(scores, key=scores.get)
+    best = max(scores, key=lambda k: scores[k])
 
     # Only override single-hop if signal is strong enough
     if best == "single-hop" or scores[best] < 1.5:
@@ -588,7 +588,7 @@ def get_excerpt(block: dict, max_len: int = 300) -> str:
         val = block.get(field, "")
         if isinstance(val, str) and val:
             return val[:max_len]
-    return block.get("_id", "?")
+    return str(block.get("_id", "?"))
 
 
 def _parse_speaker_from_tags(tags_str: str) -> str:

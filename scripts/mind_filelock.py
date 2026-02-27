@@ -59,7 +59,7 @@ class FileLock:
         self.lock_path = self.path + ".lock"
         self.timeout = timeout
         self.poll_interval = poll_interval
-        self._lock_fd = None
+        self._lock_fd: int | None = None
         self._owns_thread_lock = False
 
     def acquire(self) -> None:
@@ -176,7 +176,7 @@ class FileLock:
         try:
             import ctypes
 
-            kernel32 = ctypes.windll.kernel32
+            kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
             handle = kernel32.OpenProcess(0x100000, False, pid)  # SYNCHRONIZE
             if handle:
                 kernel32.CloseHandle(handle)
@@ -195,7 +195,7 @@ class FileLock:
             try:
                 import msvcrt
 
-                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
             except ImportError:
                 pass
 
@@ -209,7 +209,7 @@ class FileLock:
             try:
                 import msvcrt
 
-                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
             except ImportError:
                 pass
 
@@ -222,9 +222,8 @@ class FileLock:
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
-    ) -> bool:
+    ) -> None:
         self.release()
-        return False
 
     def __repr__(self) -> str:
         return f"FileLock({self.path!r})"

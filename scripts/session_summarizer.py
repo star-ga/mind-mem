@@ -197,10 +197,10 @@ def extract_summary(messages: list[dict]) -> dict:
     Returns dict with: topics, files, decisions, message_count, roles.
     """
     all_text = []
-    files = Counter()
-    topics = Counter()
+    files: Counter[str] = Counter()
+    topics: Counter[str] = Counter()
     decisions = []
-    roles = Counter()
+    roles: Counter[str] = Counter()
 
     for msg in messages:
         text = msg["content"]

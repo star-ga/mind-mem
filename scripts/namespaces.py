@@ -44,6 +44,7 @@ from __future__ import annotations
 import fnmatch
 import json
 import os
+from typing import Any
 
 from .mind_filelock import FileLock
 from .observability import get_logger
@@ -85,18 +86,19 @@ class NamespaceManager:
         self._acl = self._load_acl()
         self._agent_policy = self._resolve_agent_policy()
 
-    def _load_acl(self) -> dict:
+    def _load_acl(self) -> dict[str, Any]:
         """Load ACL from workspace or return defaults."""
         acl_path = os.path.join(self.workspace, "mind-mem-acl.json")
         if os.path.isfile(acl_path):
             try:
                 with open(acl_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    result: dict[str, Any] = json.load(f)
+                    return result
             except (json.JSONDecodeError, OSError) as e:
                 _log.warning("acl_load_failed", error=str(e))
         return DEFAULT_ACL
 
-    def _resolve_agent_policy(self) -> dict:
+    def _resolve_agent_policy(self) -> dict[str, Any]:
         """Find the matching policy for the current agent_id."""
         if self.agent_id is None:
             # No agent_id = full access (workspace-level)
@@ -106,20 +108,23 @@ class NamespaceManager:
                 "read": ["shared", "agents/*"],
             }
 
-        agents = self._acl.get("agents", {})
+        agents: dict[str, Any] = self._acl.get("agents", {})
 
         # Exact match first
         if self.agent_id in agents:
-            return agents[self.agent_id]
+            result: dict[str, Any] = agents[self.agent_id]
+            return result
 
         # Pattern match (e.g., "reviewer-*" matches "reviewer-1")
         for pattern, policy in agents.items():
             if pattern != "*" and fnmatch.fnmatch(self.agent_id, pattern):
-                return policy
+                matched: dict[str, Any] = policy
+                return matched
 
         # Wildcard fallback
         if "*" in agents:
-            return agents["*"]
+            fallback: dict[str, Any] = agents["*"]
+            return fallback
 
         # Ultimate fallback: read-only shared
         return {"namespaces": ["shared"], "write": [], "read": ["shared"]}
@@ -294,7 +299,7 @@ def init_multi_agent_workspace(workspace: str, agents: list[str] | None = None) 
         Summary dict with created paths
     """
     ns = NamespaceManager(workspace)
-    result = {"shared": [], "agents": {}}
+    result: dict[str, Any] = {"shared": [], "agents": {}}
 
     # Init shared namespace
     result["shared"] = ns.init_namespace("shared")
@@ -316,7 +321,7 @@ def init_multi_agent_workspace(workspace: str, agents: list[str] | None = None) 
     # Write default ACL if none exists
     acl_path = os.path.join(workspace, "mind-mem-acl.json")
     if not os.path.isfile(acl_path):
-        acl = dict(DEFAULT_ACL)
+        acl: dict[str, Any] = dict(DEFAULT_ACL)
         if agents:
             for agent_id in agents:
                 acl["agents"][agent_id] = {
