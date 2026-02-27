@@ -7,11 +7,11 @@ import tempfile
 
 import pytest
 
-pytest.importorskip("scripts.delete_memory")
+pytest.importorskip("mind_mem.delete_memory")
 
-from scripts.delete_memory import delete_block  # noqa: E402
+from mind_mem.delete_memory import delete_block  # noqa: E402
 
-from scripts.init_workspace import init  # noqa: E402
+from mind_mem.init_workspace import init  # noqa: E402
 
 
 def _make_workspace():

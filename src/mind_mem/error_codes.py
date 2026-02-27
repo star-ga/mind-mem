@@ -4,7 +4,7 @@ Provides a canonical enum of error codes used across mind-mem modules.
 Each code maps to a category, severity, and human-readable description.
 
 Usage:
-    from scripts.error_codes import ErrorCode, error_message
+    from mind_mem.error_codes import ErrorCode, error_message
 
     raise ValueError(error_message(ErrorCode.WORKSPACE_NOT_FOUND))
 """

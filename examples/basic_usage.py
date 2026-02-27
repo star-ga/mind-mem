@@ -7,9 +7,9 @@ Demonstrates workspace initialization, block creation, and recall.
 import os
 import tempfile
 
-from scripts._recall_core import recall
-from scripts.block_parser import parse_file
-from scripts.init_workspace import init as init_workspace
+from mind_mem._recall_core import recall
+from mind_mem.block_parser import parse_file
+from mind_mem.init_workspace import init as init_workspace
 
 
 def main():

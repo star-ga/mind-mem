@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from scripts.init_workspace import init as init_workspace
+from mind_mem.init_workspace import init as init_workspace
 
 
 @pytest.fixture

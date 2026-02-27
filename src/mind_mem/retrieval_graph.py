@@ -24,6 +24,9 @@ from .observability import get_logger
 
 _log = get_logger("retrieval_graph")
 
+# Retention cleanup counter — prune old entries every 100th log_retrieval call (#472)
+_retention_counter: int = 0
+
 __all__ = [
     "ensure_graph_tables",
     "log_retrieval",
@@ -180,6 +183,17 @@ def log_retrieval(
                     (lo, hi, edge_weight, edge_weight),
                 )
 
+        # Retention policy: prune entries older than 30 days every 100th call (#472)
+        global _retention_counter
+        _retention_counter += 1
+        if _retention_counter % 100 == 0:
+            try:
+                conn.execute("DELETE FROM retrieval_log WHERE timestamp < datetime('now', '-30 days')")
+                conn.execute("DELETE FROM co_retrieval WHERE updated_at < datetime('now', '-30 days')")
+                _log.debug("retention_cleanup", counter=_retention_counter)
+            except Exception as cleanup_exc:
+                _log.debug("retention_cleanup_failed", error=str(cleanup_exc))
+
         conn.commit()
         _log.debug("retrieval_logged", query_hash=qhash, results=len(results))
     except Exception as e:
@@ -204,6 +218,7 @@ def propagate_scores(
     iterations: int = 3,
     damping: float = 0.3,
     min_edge: float = 0.1,
+    max_hops: int = 2,
 ) -> dict[str, float]:
     """PageRank-like score propagation across co-retrieval graph.
 
@@ -213,6 +228,7 @@ def propagate_scores(
         iterations: Number of propagation rounds.
         damping: Fraction of score transferred per edge per iteration.
         min_edge: Minimum edge weight to consider.
+        max_hops: Maximum propagation depth from seed nodes (#472).
 
     Returns:
         Updated {block_id: score} with propagated boosts.
@@ -246,11 +262,29 @@ def propagate_scores(
     if not adj:
         return dict(initial_scores)
 
+    # Bound propagation to max_hops from seed nodes (#472)
+    # Only allow neighbors within max_hops of the original seed set.
+    seed_ids = set(initial_scores.keys())
+    reachable: set[str] = set(seed_ids)
+    frontier: set[str] = set(seed_ids)
+    for _hop in range(max_hops):
+        next_frontier: set[str] = set()
+        for mid in frontier:
+            for neighbor, _w in adj.get(mid, []):
+                if neighbor not in reachable:
+                    reachable.add(neighbor)
+                    next_frontier.add(neighbor)
+        frontier = next_frontier
+        if not frontier:
+            break
+
     scores = dict(initial_scores)
     for _ in range(iterations):
         updates: dict[str, float] = {}
         for mid, score in scores.items():
             for neighbor, w in adj.get(mid, []):
+                if neighbor not in reachable:
+                    continue  # beyond max_hops — skip
                 boost = score * damping * min(w, 1.0)
                 if boost > updates.get(neighbor, 0):
                     updates[neighbor] = boost

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_context import context_pack
+from mind_mem._recall_context import context_pack
 
 
 def _make_block(block_id, statement, dia_id="1:001"):

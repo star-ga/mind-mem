@@ -3,7 +3,7 @@
 
 import os
 
-scripts_dir = os.path.join(os.path.dirname(__file__), "..", "scripts")
+scripts_dir = os.path.join(os.path.dirname(__file__), "..", "src", "mind_mem")
 
 from mind_mem.recall import prefetch_context  # noqa: E402
 

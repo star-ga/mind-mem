@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from scripts._recall_constants import _STOPWORDS
-from scripts._recall_tokenization import tokenize
+from mind_mem._recall_constants import _STOPWORDS
+from mind_mem._recall_tokenization import tokenize
 
 
 def test_stopwords_filtered():

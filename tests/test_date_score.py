@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_scoring import date_score
+from mind_mem._recall_scoring import date_score
 
 
 def test_date_score_no_date():

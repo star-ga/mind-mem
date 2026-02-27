@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_detection import get_bigrams
+from mind_mem._recall_detection import get_bigrams
 
 
 def test_bigrams_basic():

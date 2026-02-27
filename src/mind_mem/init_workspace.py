@@ -21,7 +21,8 @@ from .observability import get_logger
 _log = get_logger("init_workspace")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PLUGIN_ROOT = os.path.dirname(SCRIPT_DIR)
+# PLUGIN_ROOT: go up two levels from src/mind_mem/ to repo root
+PLUGIN_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 TEMPLATE_DIR = os.path.join(PLUGIN_ROOT, "templates")
 
 DIRS = [

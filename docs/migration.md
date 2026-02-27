@@ -176,7 +176,7 @@ mind-mem-migrate /path/to/workspace
 Or if not installed as a package:
 
 ```bash
-python3 /path/to/mind-mem/scripts/schema_version.py /path/to/workspace
+python3 -m mind_mem.schema_version /path/to/workspace
 ```
 
 The migration performs three steps (all idempotent, safe to re-run):

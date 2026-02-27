@@ -2,7 +2,7 @@
 
 import re
 
-from scripts.check_version import (
+from mind_mem.check_version import (
     get_changelog_version,
     get_init_version,
     get_pyproject_version,

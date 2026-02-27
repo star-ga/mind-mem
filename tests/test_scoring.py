@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from scripts._recall_scoring import bm25f_score_terms, compute_weighted_tf
+from mind_mem._recall_scoring import bm25f_score_terms, compute_weighted_tf
 
 
 def test_bm25f_score_terms_basic():

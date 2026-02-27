@@ -36,9 +36,9 @@ def get_pyproject_version() -> str | None:
 
 
 def get_init_version() -> str | None:
-    """Read __version__ from scripts/__init__.py."""
+    """Read __version__ from src/mind_mem/__init__.py."""
     try:
-        content = Path("scripts/__init__.py").read_text()
+        content = Path("src/mind_mem/__init__.py").read_text()
         m = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', content)
         return m.group(1) if m else None
     except FileNotFoundError:
@@ -59,7 +59,7 @@ def main() -> int:
     """Check version consistency across project files."""
     versions: dict[str, str | None] = {
         "pyproject.toml": get_pyproject_version(),
-        "scripts/__init__.py": get_init_version(),
+        "src/mind_mem/__init__.py": get_init_version(),
         "CHANGELOG.md": get_changelog_version(),
     }
 

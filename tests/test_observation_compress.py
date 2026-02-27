@@ -20,7 +20,7 @@ from unittest.mock import MagicMock
 import pytest
 
 # ── import the module under test ──────────────────────────────────────
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "mind_mem"))
 from observation_compress import (
     _CATEGORY_PROMPTS,
     COMPRESS_SYSTEM_PROMPT,

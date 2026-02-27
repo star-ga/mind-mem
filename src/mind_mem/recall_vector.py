@@ -47,6 +47,7 @@ from typing import Any
 
 # Import helpers from recall.py
 from .block_parser import parse_file
+from .corpus_registry import CORPUS_DIRS
 from .observability import get_logger, metrics, timed
 from .recall import (
     CORPUS_FILES,
@@ -1297,7 +1298,7 @@ def rebuild_index(workspace: str) -> int:
     from .block_parser import parse_file as _parse
 
     blocks: list[dict] = []
-    for subdir in ("decisions", "tasks", "entities", "intelligence"):
+    for subdir in CORPUS_DIRS:
         d = os.path.join(workspace, subdir)
         if not os.path.isdir(d):
             continue

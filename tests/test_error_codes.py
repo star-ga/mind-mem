@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.error_codes import (
+from mind_mem.error_codes import (
     _ERROR_METADATA,
     ErrorCategory,
     ErrorCode,

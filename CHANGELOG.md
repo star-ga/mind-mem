@@ -2,6 +2,24 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.8.0 (2026-02-27)
+
+**Architecture overhaul: 5 structural improvements, standard package layout, 74 new tests**
+
+### Architecture
+- **Package layout** (#467): Moved `scripts/` → `src/mind_mem/` — standard Python `src` layout. All imports, CI, docs, and templates updated. Package name and API unchanged.
+- **SQLite connection manager** (#466): New `ConnectionManager` class with thread-local read connections (WAL concurrent readers) and a single serialized write connection. Integrated into `block_metadata.py` and `sqlite_index.py`. 19 new tests.
+- **BlockStore abstraction** (#468): `BlockStore` protocol class and `MarkdownBlockStore` implementation decoupling block access from storage format. Enables future backend swap (SQLite, API). 16 new tests.
+- **Adaptive intent router** (#470): Query performance feedback loop with persistent stats. Intents auto-adjust confidence weights based on result quality over time. Minimum 5 samples before adaptation. 31 new tests.
+- **Delta-based snapshot rollback** (#471): Replaced `shutil.copytree` with file-level manifest-based snapshots. `MANIFEST.json` tracks snapshotted files for O(manifest) restore instead of O(workspace). Backward-compatible with legacy snapshots. 8 new tests.
+
+### Changed
+- CI workflows, CONTRIBUTING.md, docs, and README updated for `src/mind_mem/` layout
+- `build_index()` now uses chunked commits (per-file instead of whole-rebuild lock)
+- `query_index()` reuses connections via `ConnectionManager`
+- Intent router persists adaptation weights to `memory/intent_router_stats.json`
+- Recall pipeline records intent feedback after each query
+
 ## 1.7.3 (2026-02-27)
 
 **Comprehensive security hardening and production reliability**

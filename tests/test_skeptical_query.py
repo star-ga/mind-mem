@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_detection import is_skeptical_query
+from mind_mem._recall_detection import is_skeptical_query
 
 
 def test_skeptical_returns_bool():

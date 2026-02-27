@@ -7,7 +7,7 @@ Accepted
 mind-mem needs to work as a memory system for AI coding agents. These agents run in diverse environments (containers, VMs, CI pipelines, local machines) where installing dependencies may be restricted or fail.
 
 ## Decision
-The core mind-mem package (scripts/) will have zero external dependencies. All functionality must be implementable using Python stdlib only.
+The core mind-mem package (`src/mind_mem/`) will have zero external dependencies. All functionality must be implementable using Python stdlib only.
 
 Optional features (vector search, cross-encoder reranking, LLM integration) may use external packages but must be clearly marked as optional and gracefully degrade when unavailable.
 

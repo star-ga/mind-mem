@@ -4,7 +4,7 @@
 import json
 import os
 
-scripts_dir = os.path.join(os.path.dirname(__file__), "..", "scripts")
+scripts_dir = os.path.join(os.path.dirname(__file__), "..", "src", "mind_mem")
 
 from mind_mem.block_parser import parse_file  # noqa: E402
 from mind_mem.category_distiller import CategoryDistiller  # noqa: E402

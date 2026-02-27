@@ -4,7 +4,7 @@ Guide to optimizing mind-mem for large workspaces and high-throughput usage.
 
 ## BM25 Parameters
 
-The BM25F scoring constants are defined in `scripts/_recall_constants.py`:
+The BM25F scoring constants are defined in `src/mind_mem/_recall_constants.py`:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|

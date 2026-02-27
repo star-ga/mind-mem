@@ -30,6 +30,7 @@ import sqlite3
 from datetime import datetime
 
 from .block_parser import parse_file
+from .connection_manager import ConnectionManager
 from .extractor import extract_facts
 from .observability import get_logger, metrics
 from .recall import (
@@ -76,7 +77,11 @@ def _db_path(workspace: str) -> str:
 
 
 def _connect(workspace: str, readonly: bool = False) -> sqlite3.Connection:
-    """Open (or create) the index database."""
+    """Open (or create) the index database.
+
+    For new code, prefer _get_conn_manager() which provides connection
+    pooling with read/write separation (#466).
+    """
     path = _db_path(workspace)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if readonly:
@@ -89,6 +94,29 @@ def _connect(workspace: str, readonly: bool = False) -> sqlite3.Connection:
         conn.execute("PRAGMA synchronous=NORMAL")
     conn.row_factory = sqlite3.Row
     return conn
+
+
+# ---------------------------------------------------------------------------
+# Connection Manager — pooled read/write separation (#466)
+# ---------------------------------------------------------------------------
+
+_conn_managers: dict[str, ConnectionManager] = {}
+_conn_managers_lock = __import__("threading").Lock()
+
+
+def _get_conn_manager(workspace: str) -> ConnectionManager:
+    """Return a shared ConnectionManager for *workspace*.
+
+    Ensures the index directory exists and caches one manager per db_path.
+    """
+    path = _db_path(workspace)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with _conn_managers_lock:
+        mgr = _conn_managers.get(path)
+        if mgr is None:
+            mgr = ConnectionManager(path)
+            _conn_managers[path] = mgr
+    return mgr
 
 
 def _init_schema(conn: sqlite3.Connection) -> None:
@@ -567,6 +595,9 @@ def _delete_blocks(
 def build_index(workspace: str, incremental: bool = True) -> dict:
     """Build or incrementally update the FTS5 index.
 
+    Uses ConnectionManager (#466) for write connection pooling with
+    chunked commits (one commit per file) to reduce lock hold time.
+
     Args:
         workspace: Workspace root path.
         incremental: If True, only re-index changed files. If False, rebuild all.
@@ -577,82 +608,88 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
     ws = os.path.abspath(workspace)
     start = datetime.now()
 
-    conn = _connect(workspace)
-    try:
-        _init_schema(conn)
+    mgr = _get_conn_manager(workspace)
+    with mgr.write_lock:
+        conn = mgr.get_write_connection()
+        conn.row_factory = sqlite3.Row
+        try:
+            _init_schema(conn)
 
-        # Collect all block IDs for xref resolution
-        all_block_ids = set()
-        for label, rel_path in CORPUS_FILES.items():
-            path = os.path.join(ws, rel_path)
-            if os.path.isfile(path):
-                try:
-                    for b in parse_file(path):
-                        bid = b.get("_id", "")
-                        if bid:
-                            all_block_ids.add(bid)
-                except (OSError, UnicodeDecodeError, ValueError) as e:
-                    _log.debug("xref_scan_parse_failed", file=rel_path, error=str(e))
+            # Collect all block IDs for xref resolution
+            all_block_ids = set()
+            for label, rel_path in CORPUS_FILES.items():
+                path = os.path.join(ws, rel_path)
+                if os.path.isfile(path):
+                    try:
+                        for b in parse_file(path):
+                            bid = b.get("_id", "")
+                            if bid:
+                                all_block_ids.add(bid)
+                    except (OSError, UnicodeDecodeError, ValueError) as e:
+                        _log.debug("xref_scan_parse_failed", file=rel_path, error=str(e))
 
-        force = not incremental
-        if incremental:
-            changed = _get_changed_files(conn, workspace)
-        else:
-            changed = list(CORPUS_FILES.items())
-            # Clear file_state and index_meta for full rebuild
-            conn.execute("DELETE FROM file_state")
-            conn.execute("DELETE FROM index_meta")
+            force = not incremental
+            if incremental:
+                changed = _get_changed_files(conn, workspace)
+            else:
+                changed = list(CORPUS_FILES.items())
+                # Clear file_state and index_meta for full rebuild
+                conn.execute("DELETE FROM file_state")
+                conn.execute("DELETE FROM index_meta")
 
-        total_blocks = 0
-        total_new = 0
-        total_modified = 0
-        total_deleted = 0
-        total_unchanged = 0
-        for label, rel_path in changed:
-            counts = _index_file(conn, workspace, label, rel_path, all_block_ids, force=force)
-            total_blocks += counts["total"]
-            total_new += counts["new"]
-            total_modified += counts["modified"]
-            total_deleted += counts["deleted"]
-            total_unchanged += counts["unchanged"]
-            _log.info(
-                "indexed_file",
-                file=rel_path,
-                new=counts["new"],
-                modified=counts["modified"],
-                deleted=counts["deleted"],
-                unchanged=counts["unchanged"],
+            total_blocks = 0
+            total_new = 0
+            total_modified = 0
+            total_deleted = 0
+            total_unchanged = 0
+            for label, rel_path in changed:
+                counts = _index_file(conn, workspace, label, rel_path, all_block_ids, force=force)
+                total_blocks += counts["total"]
+                total_new += counts["new"]
+                total_modified += counts["modified"]
+                total_deleted += counts["deleted"]
+                total_unchanged += counts["unchanged"]
+                # Chunked commit: commit after each file to reduce lock hold time
+                conn.commit()
+                _log.info(
+                    "indexed_file",
+                    file=rel_path,
+                    new=counts["new"],
+                    modified=counts["modified"],
+                    deleted=counts["deleted"],
+                    unchanged=counts["unchanged"],
+                )
+
+            # Update metadata
+            conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                ("last_build", datetime.now().isoformat()),
+            )
+            conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                ("build_mode", "incremental" if incremental else "full"),
             )
 
-        # Update metadata
-        conn.execute(
-            "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-            ("last_build", datetime.now().isoformat()),
-        )
-        conn.execute(
-            "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-            ("build_mode", "incremental" if incremental else "full"),
-        )
+            conn.commit()
 
-        conn.commit()
+            elapsed = (datetime.now() - start).total_seconds() * 1000
+            summary = {
+                "files_checked": len(CORPUS_FILES),
+                "files_indexed": len(changed),
+                "blocks_indexed": total_blocks,
+                "blocks_new": total_new,
+                "blocks_modified": total_modified,
+                "blocks_deleted": total_deleted,
+                "blocks_unchanged": total_unchanged,
+                "elapsed_ms": round(elapsed, 1),
+            }
 
-        elapsed = (datetime.now() - start).total_seconds() * 1000
-        summary = {
-            "files_checked": len(CORPUS_FILES),
-            "files_indexed": len(changed),
-            "blocks_indexed": total_blocks,
-            "blocks_new": total_new,
-            "blocks_modified": total_modified,
-            "blocks_deleted": total_deleted,
-            "blocks_unchanged": total_unchanged,
-            "elapsed_ms": round(elapsed, 1),
-        }
-
-        # Count total blocks in index
-        row = conn.execute("SELECT COUNT(*) as cnt FROM blocks").fetchone()
-        summary["total_blocks"] = row["cnt"]
-    finally:
-        conn.close()
+            # Count total blocks in index
+            row = conn.execute("SELECT COUNT(*) as cnt FROM blocks").fetchone()
+            summary["total_blocks"] = row["cnt"]
+        finally:
+            # Don't close the manager — it's shared and cached
+            pass
 
     _log.info("build_complete", **summary)
     metrics.inc("index_builds")
@@ -804,14 +841,15 @@ def query_index(
     if qparams.get("graph_boost_override", False):
         graph_boost = True
 
-    conn = _connect(workspace, readonly=True)
+    mgr = _get_conn_manager(workspace)
+    conn = mgr.get_read_connection()
+    conn.row_factory = sqlite3.Row
 
     # Build FTS5 MATCH query from tokens
     # Quote each token to prevent FTS5 operator injection (NOT, AND, NEAR, etc.)
     # Also reject tokens that aren't alphanumeric to prevent wildcard injection (e.g. "*")
     fts_query = " OR ".join(f'"{t.replace(chr(34), "")}"' for t in query_tokens if _FTS5_SAFE.match(t))
     if not fts_query:
-        conn.close()
         return []
 
     try:
@@ -835,7 +873,6 @@ def query_index(
             query=fts_query,
             msg="FTS5 query failed, falling back to in-memory BM25 scan",
         )
-        conn.close()
         # Fallback to filesystem scan — results are still valid but may be slower
         from .recall import recall
 
@@ -907,7 +944,7 @@ def query_index(
     if graph_boost and results:
         _apply_graph_boost(conn, results, query_type)
 
-    conn.close()
+    # Note: read connection is managed by ConnectionManager — not closed here (#466)
 
     # Sort by score, then by block ID for deterministic tiebreaking
     results.sort(key=lambda r: (-r["score"], r.get("_id", "")))

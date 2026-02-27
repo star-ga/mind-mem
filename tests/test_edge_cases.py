@@ -235,7 +235,7 @@ class TestRecallEdgeCases(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 _SERVER_PATH = os.path.join(os.path.dirname(__file__), "..", "mcp_server.py")
-_SCRIPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "scripts")
+_SCRIPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "mind_mem")
 
 
 def _load_server(workspace: str):

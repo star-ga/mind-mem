@@ -92,6 +92,32 @@ except ImportError:
 
 _log = get_logger("recall")
 
+# ---------------------------------------------------------------------------
+# Config cache — mtime-based invalidation avoids re-reading mind-mem.json
+# on every recall() call (#473).
+# ---------------------------------------------------------------------------
+_config_cache: dict[str, Any] = {}
+_config_mtime: float = 0.0
+
+
+def _get_config(workspace: str) -> dict[str, Any]:
+    """Return parsed mind-mem.json contents, cached by file mtime."""
+    global _config_cache, _config_mtime
+    cfg_path = os.path.join(workspace, "mind-mem.json")
+    try:
+        mtime = os.path.getmtime(cfg_path)
+    except OSError:
+        return {}
+    if mtime != _config_mtime:
+        try:
+            with open(cfg_path, encoding="utf-8") as f:
+                _config_cache = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            _config_cache = {}
+        _config_mtime = mtime
+    return _config_cache
+
+
 # Log optional subsystem availability at import time (#5: hidden coupling)
 if not _HAS_BLOCK_META:
     _log.info("optional_subsystem_unavailable", subsystem="block_metadata", impact="A-MEM importance boost disabled")
@@ -255,7 +281,7 @@ def recall(
     intent_params = {}
     if _HAS_INTENT_ROUTER:
         try:
-            intent_result = _get_intent_router().classify(query)
+            intent_result = _get_intent_router(workspace=workspace).classify(query)
             query_type = _INTENT_TO_QUERY_TYPE.get(intent_result.intent, "single-hop")
             _intent_type = intent_result.intent
             intent_params = intent_result.params
@@ -397,17 +423,14 @@ def recall(
     _stage_counts["corpus_loaded"] = len(all_blocks)
 
     # --- Overlapping chunk expansion (1.7) — config-gated ---
-    _chunk_cfg_path = os.path.join(workspace, "mind-mem.json")
+    _chunk_recall_cfg = _get_config(workspace).get("recall", {})
     _chunk_overlap = 0
     _chunk_max_tokens = 400
-    if os.path.isfile(_chunk_cfg_path):
-        try:
-            with open(_chunk_cfg_path) as _cf:
-                _chunk_recall_cfg = json.load(_cf).get("recall", {})
-            _chunk_overlap = int(_chunk_recall_cfg.get("chunk_overlap", 0))
-            _chunk_max_tokens = int(_chunk_recall_cfg.get("max_chunk_tokens", 400))
-        except (OSError, json.JSONDecodeError, ValueError):
-            pass
+    try:
+        _chunk_overlap = int(_chunk_recall_cfg.get("chunk_overlap", 0))
+        _chunk_max_tokens = int(_chunk_recall_cfg.get("max_chunk_tokens", 400))
+    except (ValueError, AttributeError):
+        pass
     if _chunk_overlap > 0:
         expanded = []
         for b in all_blocks:
@@ -648,22 +671,11 @@ def recall(
     is_adversarial = query_type == "adversarial"
     _rm3_used = False
 
-    config_path = os.path.join(workspace, "mind-mem.json")
-    rm3_config = {}
-    ce_config = {}
-    temporal_hard_filter_enabled = True  # default: on
-    if os.path.isfile(config_path):
-        try:
-            with open(config_path) as _f:
-                _cfg = json.load(_f)
-            rm3_config = _cfg.get("recall", {}).get("rm3", {})
-            ce_config = _cfg.get("recall", {}).get("cross_encoder", {})
-            temporal_hard_filter_enabled = _cfg.get("recall", {}).get(
-                "temporal_hard_filter",
-                True,
-            )
-        except (OSError, json.JSONDecodeError, KeyError) as e:
-            _log.warning("rm3_config_load_failed", path=config_path, error=str(e))
+    _cfg = _get_config(workspace)
+    _recall_section = _cfg.get("recall", {})
+    rm3_config = _recall_section.get("rm3", {})
+    ce_config = _recall_section.get("cross_encoder", {})
+    temporal_hard_filter_enabled = _recall_section.get("temporal_hard_filter", True)
 
     if rm3_config.get("enabled", False) and not is_adversarial and results:
         results.sort(key=lambda r: (r["score"], r.get("_id", "")), reverse=True)
@@ -1008,13 +1020,7 @@ def recall(
     _stage_counts["hard_neg_penalized"] = sum(1 for r in deduped if r.get("_hard_negative"))
 
     # Stage 2.7: Optional LLM-based reranking — config-gated, stdlib only
-    recall_cfg = {}
-    if os.path.isfile(config_path):
-        try:
-            with open(config_path) as _llm_f:
-                recall_cfg = json.load(_llm_f).get("recall", {})
-        except (OSError, json.JSONDecodeError):
-            pass
+    recall_cfg = _get_config(workspace).get("recall", {})
     if recall_cfg.get("llm_rerank", False) and deduped:
         llm_url = recall_cfg.get("llm_rerank_url", "http://localhost:11434/api/generate")
         llm_model = recall_cfg.get("llm_rerank_model", "qwen3-coder:30b")
@@ -1096,6 +1102,19 @@ def recall(
     except Exception:
         pass
 
+    # --- Adaptive intent feedback (#470) ---
+    if _HAS_INTENT_ROUTER and _intent_type:
+        try:
+            avg_sc = sum(r["score"] for r in top) / len(top) if top else 0.0
+            _get_intent_router().record_feedback(
+                query=query,
+                intent=_intent_type,
+                result_count=len(top),
+                avg_score=avg_sc,
+            )
+        except Exception:
+            pass
+
     return top
 
 
@@ -1107,29 +1126,24 @@ def _load_backend(workspace: str) -> str | RecallBackend | None:
         "sqlite"          — SQLite FTS5 index (O(log N))
         "vector"          — vector embedding backend (requires recall_vector)
     """
-    config_path = os.path.join(workspace, "mind-mem.json")
-    if os.path.isfile(config_path):
-        try:
-            with open(config_path) as f:
-                cfg = json.load(f)
-            recall_cfg = cfg.get("recall", {})
-            unknown = set(recall_cfg.keys()) - _VALID_RECALL_KEYS
-            if unknown:
-                _log.warning("unknown_recall_config_keys", keys=sorted(unknown))
-            backend = recall_cfg.get("backend", "scan")
-            if backend == "sqlite":
-                return "sqlite"
-            if backend == "vector":
-                try:
-                    from .recall_vector import VectorBackend
+    cfg = _get_config(workspace)
+    if cfg:
+        recall_cfg = cfg.get("recall", {})
+        unknown = set(recall_cfg.keys()) - _VALID_RECALL_KEYS
+        if unknown:
+            _log.warning("unknown_recall_config_keys", keys=sorted(unknown))
+        backend = recall_cfg.get("backend", "scan")
+        if backend == "sqlite":
+            return "sqlite"
+        if backend == "vector":
+            try:
+                from .recall_vector import VectorBackend
 
-                    return VectorBackend(recall_cfg)
-                except ImportError:
-                    _log.warning(
-                        "vector_backend_unavailable", hint="recall_vector not installed, falling back to BM25 scan"
-                    )
-        except (OSError, json.JSONDecodeError, KeyError) as e:
-            _log.warning("config_load_failed", path=config_path, error=str(e))
+                return VectorBackend(recall_cfg)
+            except ImportError:
+                _log.warning(
+                    "vector_backend_unavailable", hint="recall_vector not installed, falling back to BM25 scan"
+                )
     return None  # use built-in BM25 scan
 
 
@@ -1161,19 +1175,33 @@ def prefetch_context(
     if not recent_signals:
         return []
 
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # Strip and filter empty signals upfront
+    signals = [s.strip() for s in recent_signals if s.strip()]
+    if not signals:
+        return []
+
     seen_ids: set[str] = set()
     results: list[dict] = []
 
-    # 1. Direct recall for each signal
-    for signal in recent_signals:
-        signal = signal.strip()
-        if not signal:
-            continue
+    # 1. Parallel recall for each signal (#477 — avoid N+1 serial calls)
+    def _recall_signal(sig: str) -> list[dict]:
         try:
-            hits = recall(workspace, signal, limit=limit, rerank=True)
+            return recall(workspace, sig, limit=limit, rerank=True)
         except Exception as e:
-            _log.warning("prefetch_recall_failed", signal=signal, error=str(e))
-            hits = []
+            _log.warning("prefetch_recall_failed", signal=sig, error=str(e))
+            return []
+
+    # Preserve signal order: collect results by index, then flatten in order
+    ordered_hits: list[list[dict]] = [[] for _ in signals]
+    with ThreadPoolExecutor(max_workers=min(len(signals), 4)) as executor:
+        futures = {executor.submit(_recall_signal, sig): idx for idx, sig in enumerate(signals)}
+        for future in as_completed(futures):
+            idx = futures[future]
+            ordered_hits[idx] = future.result()
+
+    for hits in ordered_hits:
         for block in hits:
             bid = block.get("_id", "")
             if bid and bid not in seen_ids:
@@ -1186,7 +1214,7 @@ def prefetch_context(
         from .category_distiller import CategoryDistiller
 
         distiller = CategoryDistiller()
-        combined_query = " ".join(recent_signals)
+        combined_query = " ".join(signals)
         relevant_cats = distiller.get_categories_for_query(combined_query)
         if relevant_cats:
             # Recall from category keywords as supplemental signal

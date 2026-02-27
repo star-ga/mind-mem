@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_detection import get_excerpt
+from mind_mem._recall_detection import get_excerpt
 
 
 def test_excerpt_basic():

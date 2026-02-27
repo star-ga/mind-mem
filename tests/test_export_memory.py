@@ -8,11 +8,11 @@ import tempfile
 
 import pytest
 
-pytest.importorskip("scripts.export_memory")
+pytest.importorskip("mind_mem.export_memory")
 
-from scripts.export_memory import export_memory  # noqa: E402
+from mind_mem.export_memory import export_memory  # noqa: E402
 
-from scripts.init_workspace import init  # noqa: E402
+from mind_mem.init_workspace import init  # noqa: E402
 
 
 def _make_workspace():

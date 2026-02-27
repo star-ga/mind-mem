@@ -18,7 +18,7 @@ pytest tests/
 pytest tests/test_recall_edge_cases.py
 
 # With coverage
-pytest tests/ --cov=scripts --cov-report=term-missing
+pytest tests/ --cov=src --cov-report=term-missing
 
 # Benchmarks only
 pytest tests/ -k "benchmark or perf" --benchmark-only
@@ -34,7 +34,7 @@ pytest tests/ -k "benchmark or perf" --benchmark-only
 ## Project Structure
 
 ```
-scripts/           # Core library modules
+src/mind_mem/      # Core library modules
 tests/             # Test suite
 mcp_server.py      # MCP server entry point
 docs/              # Documentation

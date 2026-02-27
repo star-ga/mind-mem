@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts._recall_constants import (
+from mind_mem._recall_constants import (
     _STOPWORDS,
     _VALID_RECALL_KEYS,
     BM25_B,
