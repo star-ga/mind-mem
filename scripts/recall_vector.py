@@ -356,6 +356,7 @@ class VectorBackend(RecallBackend):
         # import finds the real 'filelock' system package, not mind-mem's local stub.
         import sys as _sys
 
+        _saved = _sys.path[:]
         _scripts_paths = [p for p in _sys.path if "mind-mem/scripts" in p or p.endswith("/scripts")]
         for _p in _scripts_paths:
             _sys.path.remove(_p)
@@ -364,8 +365,7 @@ class VectorBackend(RecallBackend):
         except ImportError as e:
             raise ImportError("fastembed not installed. Install with: pip install fastembed") from e
         finally:
-            for _p in _scripts_paths:
-                _sys.path.insert(0, _p)
+            _sys.path[:] = _saved
 
         if not hasattr(self, "_fastembed_model") or self._fastembed_model is None:
             _log.info("fastembed_model_loading", model=self.model_name)
@@ -387,6 +387,11 @@ class VectorBackend(RecallBackend):
             List of embedding vectors (each is a list of floats)
         """
         import urllib.request as _req
+        from urllib.parse import urlparse as _urlparse
+
+        _parsed = _urlparse(self.llama_cpp_url)
+        if _parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
+            raise ValueError(f"llama_cpp_url must be localhost, got: {_parsed.hostname}")
 
         url = self.llama_cpp_url.rstrip("/") + "/embeddings"
         BATCH = 32
@@ -509,6 +514,8 @@ class VectorBackend(RecallBackend):
             conn: Connection with sqlite-vec loaded
             dimension: Embedding dimension (e.g. 384 for bge-small)
         """
+        if not isinstance(dimension, int) or not (1 <= dimension <= 65536):
+            raise ValueError(f"Invalid embedding dimension: {dimension}")
         conn.execute(f"""
             CREATE VIRTUAL TABLE IF NOT EXISTS vec_blocks USING vec0(
                 block_id TEXT PRIMARY KEY,
@@ -619,8 +626,10 @@ class VectorBackend(RecallBackend):
         # Cache block metadata to a companion JSON (for search result enrichment)
         meta_path = os.path.join(workspace, ".mind-mem-index", "vec_meta.json")
         meta = {b["_id"]: b for b in blocks}
-        with open(meta_path, "w") as f:
+        tmp_path = meta_path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(meta, f)
+        os.replace(tmp_path, meta_path)
 
     def _search_sqlite_vec(self, workspace: str, query: str, limit: int, active_only: bool) -> list[dict]:
         """ANN search via sqlite-vec vec0 table.

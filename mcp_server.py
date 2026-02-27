@@ -968,6 +968,8 @@ def find_similar(block_id: str, limit: int = 5) -> str:
     Returns:
         JSON array of similar blocks with similarity scores.
     """
+    if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
+        return json.dumps({"error": f"Invalid block_id format: {block_id}"})
     ws = _workspace()
     limits = _get_limits(ws)
     limit = max(1, min(limit, limits["max_similar_results"]))
@@ -1225,6 +1227,8 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
     Returns:
         JSON with block importance, access_count, keywords, connections.
     """
+    if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
+        return json.dumps({"error": f"Invalid block_id format: {block_id}"})
     ws = _workspace()
     db_path = os.path.join(ws, "memory", "block_meta.db")
 
@@ -1765,6 +1769,13 @@ def main():
 
     # Set token from CLI arg if provided (env var takes precedence if both set)
     if args.token and not os.environ.get("MIND_MEM_TOKEN"):
+        import warnings
+
+        warnings.warn(
+            "Passing --token on the command line exposes it in /proc/cmdline. "
+            "Use MIND_MEM_TOKEN environment variable instead.",
+            stacklevel=2,
+        )
         os.environ["MIND_MEM_TOKEN"] = args.token
 
     token = _check_token()

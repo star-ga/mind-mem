@@ -51,7 +51,11 @@ class BlockMetadataManager:
                 pass  # Graceful degradation if DB unavailable
 
     def _get_conn(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=5)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA busy_timeout=3000")
+        return conn
 
     def record_access(self, block_ids: list[str], query: str = "") -> None:
         """Update access_count, last_accessed for given blocks.
@@ -63,31 +67,33 @@ class BlockMetadataManager:
         with self._lock:
             try:
                 conn = self._get_conn()
-                for bid in block_ids:
-                    conn.execute(
-                        """INSERT INTO block_meta (id, access_count, last_accessed)
-                        VALUES (?, 1, ?)
-                        ON CONFLICT(id) DO UPDATE SET
-                            access_count = access_count + 1,
-                            last_accessed = ?""",
-                        (bid, now, now),
-                    )
-                # Record co-occurrence pairs for connection tracking
-                if len(block_ids) > 1:
-                    for i, bid in enumerate(block_ids):
-                        others = [b for j, b in enumerate(block_ids) if j != i]
-                        row = conn.execute("SELECT connections FROM block_meta WHERE id = ?", (bid,)).fetchone()
-                        if row and row[0]:
-                            existing = set(json.loads(row[0])) if row[0] else set()
-                        else:
-                            existing = set()
-                        existing.update(others[:10])  # Cap connections
+                try:
+                    for bid in block_ids:
                         conn.execute(
-                            "UPDATE block_meta SET connections = ? WHERE id = ?",
-                            (json.dumps(list(existing)[:50]), bid),
+                            """INSERT INTO block_meta (id, access_count, last_accessed)
+                            VALUES (?, 1, ?)
+                            ON CONFLICT(id) DO UPDATE SET
+                                access_count = access_count + 1,
+                                last_accessed = ?""",
+                            (bid, now, now),
                         )
-                conn.commit()
-                conn.close()
+                    # Record co-occurrence pairs for connection tracking
+                    if len(block_ids) > 1:
+                        for i, bid in enumerate(block_ids):
+                            others = [b for j, b in enumerate(block_ids) if j != i]
+                            row = conn.execute("SELECT connections FROM block_meta WHERE id = ?", (bid,)).fetchone()
+                            if row and row[0]:
+                                existing = set(json.loads(row[0])) if row[0] else set()
+                            else:
+                                existing = set()
+                            existing.update(others[:10])  # Cap connections
+                            conn.execute(
+                                "UPDATE block_meta SET connections = ? WHERE id = ?",
+                                (json.dumps(list(existing)[:50]), bid),
+                            )
+                    conn.commit()
+                finally:
+                    conn.close()
             except (sqlite3.Error, json.JSONDecodeError):
                 pass  # Graceful degradation
 
@@ -97,51 +103,52 @@ class BlockMetadataManager:
         with self._lock:
             try:
                 conn = self._get_conn()
-                row = conn.execute(
-                    "SELECT access_count, last_accessed, connections FROM block_meta WHERE id = ?",
-                    (block_id,),
-                ).fetchone()
-                if not row:
-                    conn.close()
-                    return 1.0
+                try:
+                    row = conn.execute(
+                        "SELECT access_count, last_accessed, connections FROM block_meta WHERE id = ?",
+                        (block_id,),
+                    ).fetchone()
+                    if not row:
+                        return 1.0
 
-                access_count, last_accessed, connections_json = row
+                    access_count, last_accessed, connections_json = row
 
-                # Log-scaled access frequency
-                freq_score = math.log(max(access_count, 0) + 1)
+                    # Log-scaled access frequency
+                    freq_score = math.log(max(access_count, 0) + 1)
 
-                # Recency: exponential decay
-                if last_accessed:
-                    try:
-                        last_dt = datetime.fromisoformat(last_accessed)
-                        now = datetime.now(timezone.utc)
-                        days_since = max((now - last_dt).total_seconds() / 86400, 0)
-                        recency_score = math.exp(-days_since / max(decay_days, 1))
-                    except (ValueError, TypeError):
+                    # Recency: exponential decay
+                    if last_accessed:
+                        try:
+                            last_dt = datetime.fromisoformat(last_accessed)
+                            now = datetime.now(timezone.utc)
+                            days_since = max((now - last_dt).total_seconds() / 86400, 0)
+                            recency_score = math.exp(-days_since / max(decay_days, 1))
+                        except (ValueError, TypeError):
+                            recency_score = 0.5
+                    else:
                         recency_score = 0.5
-                else:
-                    recency_score = 0.5
 
-                # Connection degree
-                connections = json.loads(connections_json) if connections_json else []
-                conn_score = math.log(len(connections) + 1)
+                    # Connection degree
+                    connections = json.loads(connections_json) if connections_json else []
+                    conn_score = math.log(len(connections) + 1)
 
-                # Weighted combination
-                raw = 0.4 * freq_score + 0.4 * recency_score + 0.2 * conn_score
+                    # Weighted combination
+                    raw = 0.4 * freq_score + 0.4 * recency_score + 0.2 * conn_score
 
-                # Clamp to [0.8, 1.5]
-                importance = max(0.8, min(1.5, 0.8 + raw * 0.35))
-                _log.debug("update_importance", block_id=block_id, importance=round(importance, 3))
+                    # Clamp to [0.8, 1.5]
+                    importance = max(0.8, min(1.5, 0.8 + raw * 0.35))
+                    _log.debug("update_importance", block_id=block_id, importance=round(importance, 3))
 
-                # Update stored importance
-                conn.execute(
-                    "UPDATE block_meta SET importance = ? WHERE id = ?",
-                    (importance, block_id),
-                )
-                conn.commit()
-                conn.close()
+                    # Update stored importance
+                    conn.execute(
+                        "UPDATE block_meta SET importance = ? WHERE id = ?",
+                        (importance, block_id),
+                    )
+                    conn.commit()
 
-                return importance
+                    return importance
+                finally:
+                    conn.close()
             except (sqlite3.Error, json.JSONDecodeError, ValueError):
                 return 1.0
 
@@ -165,31 +172,33 @@ class BlockMetadataManager:
         with self._lock:
             try:
                 conn = self._get_conn()
-                row = conn.execute("SELECT keywords FROM block_meta WHERE id = ?", (block_id,)).fetchone()
+                try:
+                    row = conn.execute("SELECT keywords FROM block_meta WHERE id = ?", (block_id,)).fetchone()
 
-                existing_kw = set()
-                if row and row[0]:
-                    existing_kw = set(row[0].split(",")) if row[0] else set()
+                    existing_kw = set()
+                    if row and row[0]:
+                        existing_kw = set(row[0].split(",")) if row[0] else set()
 
-                content_lower = block_content.lower()
-                new_kw = set()
-                for token in query_tokens:
-                    if token.lower() in content_lower:
-                        new_kw.add(token.lower())
+                    content_lower = block_content.lower()
+                    new_kw = set()
+                    for token in query_tokens:
+                        if token.lower() in content_lower:
+                            new_kw.add(token.lower())
 
-                combined = existing_kw | new_kw
-                # Cap at max_keywords
-                kw_list = sorted(combined)[:max_keywords]
-                kw_str = ",".join(kw_list)
+                    combined = existing_kw | new_kw
+                    # Cap at max_keywords
+                    kw_list = sorted(combined)[:max_keywords]
+                    kw_str = ",".join(kw_list)
 
-                conn.execute(
-                    """INSERT INTO block_meta (id, keywords)
-                    VALUES (?, ?)
-                    ON CONFLICT(id) DO UPDATE SET keywords = ?""",
-                    (block_id, kw_str, kw_str),
-                )
-                conn.commit()
-                conn.close()
+                    conn.execute(
+                        """INSERT INTO block_meta (id, keywords)
+                        VALUES (?, ?)
+                        ON CONFLICT(id) DO UPDATE SET keywords = ?""",
+                        (block_id, kw_str, kw_str),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
             except (sqlite3.Error, json.JSONDecodeError):
                 pass
 

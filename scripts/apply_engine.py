@@ -800,7 +800,7 @@ def check_backlog_limit(ws):
     try:
         with open(config_path) as f:
             config = json.load(f)
-    except Exception:
+    except (OSError, json.JSONDecodeError, ValueError):
         config = {}
     limit = config.get("proposal_budget", {}).get("backlog_limit", 30)
     count = 0
@@ -902,18 +902,23 @@ def _load_intel_state(ws):
     try:
         with open(path) as f:
             return json.load(f)
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return {}
 
 
 def _save_intel_state(ws, state):
-    """Save intel-state.json atomically (write to temp, then rename)."""
+    """Save intel-state.json atomically (write to temp, then rename).
+
+    Uses FileLock to prevent race conditions with intel_scan.py's
+    save_intel_state which locks the same file.
+    """
     path = os.path.join(ws, "memory/intel-state.json")
     tmp_path = path + ".tmp"
-    with open(tmp_path, "w") as f:
-        json.dump(state, f, indent=2)
-        f.write("\n")
-    os.replace(tmp_path, path)
+    with FileLock(path):
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=2)
+            f.write("\n")
+        os.replace(tmp_path, path)
 
 
 # ═══════════════════════════════════════════════
@@ -1114,6 +1119,7 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
     print(f"\n--- Executing {len(proposal.get('Ops', []))} Ops (WAL-protected) ---")
     delta: dict[str, list[str]] = {"created": [], "modified": []}
     wal_entries = []  # Track WAL entries for this apply
+    actually_modified_files: set[str] = set()  # Track all files modified during execution
     for i, op in enumerate(proposal.get("Ops", [])):
         raw_file = op.get("file", "")
         try:
@@ -1144,6 +1150,10 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
         # WAL: commit successful op
         wal.commit(wal_id)
 
+        # Track actually modified files for accurate rollback scope
+        if filepath:
+            actually_modified_files.add(filepath)
+
         # Track delta
         target = op.get("target", "")
         if op.get("op") in ("append_block", "insert_after_block", "supersede_decision"):
@@ -1159,6 +1169,11 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
 
     if not ok:
         print("\nPOST-CHECKS FAILED — rolling back.")
+        print(
+            "  WARNING: WAL entries were already committed. Recovery relies on "
+            "snapshot restore. If files_touched is incomplete, workspace may be "
+            "inconsistent. Actually modified files: %s" % sorted(actually_modified_files)
+        )
         restore_snapshot(ws, snap_dir)
         _cleanup_orphan_files(ws, pre_apply_files)
         update_receipt(receipt_path, post_report, delta, "rolled_back")
@@ -1167,11 +1182,14 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
         return False, "Post-checks failed, rolled back"
 
     # 7. Generate DIFF text
+    # Use actually_modified_files to ensure all touched files are included in diff
     files_touched = proposal.get("FilesTouched", [])
     if not files_touched:
         # Derive from Ops when FilesTouched is absent
         files_touched = list({op.get("file", "") for op in proposal.get("Ops", []) if op.get("file")})
-    diff_text = generate_diff_text(ws, snap_dir, files_touched)
+    # Merge in any files that were actually modified but not listed
+    all_touched = set(files_touched) | actually_modified_files
+    diff_text = generate_diff_text(ws, snap_dir, list(all_touched))
 
     # 8. Commit receipt + mark proposal as applied + update last_apply_ts
     update_receipt(receipt_path, post_report, delta, "applied", diff_text)
@@ -1200,8 +1218,10 @@ def _mark_proposal_status(source_file, proposal_id, new_status):
                 break
             if in_proposal and re.match(r"^\[[A-Z]+-[^\]]+\]", line):
                 break
-        with open(source_file, "w") as f:
+        tmp_path = source_file + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
+        os.replace(tmp_path, source_file)
     except (OSError, IOError, json.JSONDecodeError) as e:
         print(f"WARNING: Could not update proposal status in {source_file}: {e}", file=sys.stderr)
 

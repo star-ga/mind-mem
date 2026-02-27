@@ -829,27 +829,29 @@ def write_contradictions(contradictions, ws, report):
         return
 
     path = f"{ws}/intelligence/CONTRADICTIONS.md"
-    try:
-        with open(path, "r") as f:
-            existing = f.read()
-    except FileNotFoundError:
-        existing = ""
 
-    today = datetime.now().strftime("%Y%m%d")
-    # Find highest existing index for today to avoid ID collisions
-    existing_ids = re.findall(rf"^\[C-{today}-(\d{{3}})\]", existing, re.MULTILINE)
-    existing_max = max((int(x) for x in existing_ids), default=0)
+    with FileLock(path):
+        try:
+            with open(path, "r") as f:
+                existing = f.read()
+        except FileNotFoundError:
+            existing = ""
 
-    new_blocks = []
-    for i, c in enumerate(contradictions):
-        cid = f"C-{today}-{existing_max + i + 1:03d}"
+        today = datetime.now().strftime("%Y%m%d")
+        # Find highest existing index for today to avoid ID collisions
+        existing_ids = re.findall(rf"^\[C-{today}-(\d{{3}})\]", existing, re.MULTILINE)
+        existing_max = max((int(x) for x in existing_ids), default=0)
 
-        # Skip if signatures already recorded
-        sig_pair = f"{c['sig1']['sig']['id']} vs {c['sig2']['sig']['id']}"
-        if sig_pair in existing:
-            continue
+        new_blocks = []
+        for i, c in enumerate(contradictions):
+            cid = f"C-{today}-{existing_max + i + 1:03d}"
 
-        block = f"""
+            # Skip if signatures already recorded
+            sig_pair = f"{c['sig1']['sig']['id']} vs {c['sig2']['sig']['id']}"
+            if sig_pair in existing:
+                continue
+
+            block = f"""
 [{cid}]
 Date: {datetime.now().strftime("%Y-%m-%d")}
 Severity: {c["severity"]}
@@ -866,14 +868,13 @@ Status: open
 Resolution: none
 Sources:
 - decisions/DECISIONS.md"""
-        new_blocks.append(block)
+            new_blocks.append(block)
 
-    if new_blocks:
-        with FileLock(path):
+        if new_blocks:
             with open(path, "a") as f:
                 for block in new_blocks:
                     f.write(block + "\n")
-        report.info_msg(f"Wrote {len(new_blocks)} new contradiction(s) to CONTRADICTIONS.md")
+            report.info_msg(f"Wrote {len(new_blocks)} new contradiction(s) to CONTRADICTIONS.md")
 
 
 def write_drift(drift_signals, ws, report):
@@ -882,27 +883,29 @@ def write_drift(drift_signals, ws, report):
         return
 
     path = f"{ws}/intelligence/DRIFT.md"
-    try:
-        with open(path, "r") as f:
-            existing = f.read()
-    except FileNotFoundError:
-        existing = ""
 
-    today = datetime.now().strftime("%Y%m%d")
-    existing_ids = re.findall(rf"^\[DREF-{today}-(\d{{3}})\]", existing, re.MULTILINE)
-    existing_max = max((int(x) for x in existing_ids), default=0)
+    with FileLock(path):
+        try:
+            with open(path, "r") as f:
+                existing = f.read()
+        except FileNotFoundError:
+            existing = ""
 
-    new_blocks = []
-    for i, s in enumerate(drift_signals):
-        dref_id = f"DREF-{today}-{existing_max + i + 1:03d}"
+        today = datetime.now().strftime("%Y%m%d")
+        existing_ids = re.findall(rf"^\[DREF-{today}-(\d{{3}})\]", existing, re.MULTILINE)
+        existing_max = max((int(x) for x in existing_ids), default=0)
 
-        # Skip if similar signal already recorded today
-        if s["signal"] in existing and today[:8] in existing:
-            continue
+        new_blocks = []
+        for i, s in enumerate(drift_signals):
+            dref_id = f"DREF-{today}-{existing_max + i + 1:03d}"
 
-        evidence_lines = "\n".join(f"- {e}" for e in s.get("evidence", [])[:10])
+            # Skip if similar signal already recorded today
+            if s["signal"] in existing and today[:8] in existing:
+                continue
 
-        block = f"""
+            evidence_lines = "\n".join(f"- {e}" for e in s.get("evidence", [])[:10])
+
+            block = f"""
 [{dref_id}]
 Date: {datetime.now().strftime("%Y-%m-%d")}
 Severity: {s["severity"]}
@@ -916,14 +919,13 @@ ProposedAction: manual_review
 Status: open
 Sources:
 - maintenance/intel-report.txt"""
-        new_blocks.append(block)
+            new_blocks.append(block)
 
-    if new_blocks:
-        with FileLock(path):
+        if new_blocks:
             with open(path, "a") as f:
                 for block in new_blocks:
                     f.write(block + "\n")
-        report.info_msg(f"Wrote {len(new_blocks)} new drift signal(s) to DRIFT.md")
+            report.info_msg(f"Wrote {len(new_blocks)} new drift signal(s) to DRIFT.md")
 
 
 def write_impact(impacts, ws, report):
