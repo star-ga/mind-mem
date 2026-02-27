@@ -1018,7 +1018,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 ```json
 {
-  "version": "1.7.1",
+  "version": "1.7.2",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,
