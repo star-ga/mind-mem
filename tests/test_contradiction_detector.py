@@ -73,7 +73,7 @@ Type: decision
 Status: active
 Decision: New workspaces start in detect_only mode. Proposals are surfaced but never auto-applied.
 Evidence:
-- Safety first — humans review before any mutation
+- Safety first -- humans review before any mutation
 Rationale: Trust must be earned before automation.
 
 [D-20260215-004]
