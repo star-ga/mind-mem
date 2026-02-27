@@ -10,7 +10,7 @@ authors = [
 ]
 keywords = ["memory", "ai-agent", "mind", "recall", "mcp", "claude-code", "openclaw", "hybrid-search", "rrf", "governance"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Libraries",
