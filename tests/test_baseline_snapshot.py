@@ -7,7 +7,6 @@ import shutil
 import tempfile
 import unittest
 
-from mind_mem.retrieval_graph import log_retrieval
 from mind_mem.baseline_snapshot import (
     _chi_squared,
     _config_fingerprint,
@@ -18,6 +17,7 @@ from mind_mem.baseline_snapshot import (
     freeze_baseline,
     list_baselines,
 )
+from mind_mem.retrieval_graph import log_retrieval
 
 
 def _populate_queries(workspace: str, intent_counts: dict[str, int]) -> None:
