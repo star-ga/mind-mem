@@ -22,12 +22,7 @@ import math
 import os
 import random
 import statistics
-import sys
 import time
-
-SCRIPT_DIR = os.path.join(os.path.dirname(__file__), "..", "scripts")
-sys.path.insert(0, SCRIPT_DIR)
-
 
 # ── Pure Python implementations (always available) ────────────────────
 

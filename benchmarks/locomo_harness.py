@@ -25,11 +25,7 @@ import time
 import urllib.error
 import urllib.request
 
-# Add scripts/ to path so we can import recall and block_parser
-_SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
-sys.path.insert(0, _SCRIPTS_DIR)
-
-from mind_mem.recall import recall  # noqa: E402
+from mind_mem.recall import recall
 
 # LoCoMo QA category mapping (from ACL 2024 paper)
 CATEGORY_NAMES = {

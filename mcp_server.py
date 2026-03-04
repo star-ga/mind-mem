@@ -985,6 +985,13 @@ def hybrid_search(query: str, limit: int = 10, active_only: bool = False) -> str
     Returns:
         JSON array of ranked results from fused retrieval.
     """
+    import warnings
+
+    warnings.warn(
+        "hybrid_search is deprecated. Use recall(backend='hybrid') instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     raw = _recall_impl(query, limit=limit, active_only=active_only, backend="hybrid")
     try:
         envelope = json.loads(raw)

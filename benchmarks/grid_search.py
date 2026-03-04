@@ -19,15 +19,10 @@ import itertools
 import json
 import os
 import shutil
-import sys
 import tempfile
 import time
 
-# Add scripts/ and benchmarks/ to path
 _BENCHMARKS_DIR = os.path.dirname(os.path.abspath(__file__))
-_SCRIPTS_DIR = os.path.join(_BENCHMARKS_DIR, "..", "scripts")
-sys.path.insert(0, _SCRIPTS_DIR)
-sys.path.insert(0, _BENCHMARKS_DIR)
 
 from locomo_harness import (  # noqa: E402
     aggregate_metrics,
@@ -35,6 +30,7 @@ from locomo_harness import (  # noqa: E402
     download_dataset,
     evaluate_sample,
 )
+
 from mind_mem import _recall_constants  # noqa: E402
 
 # Primary fields to tune (highest-impact on retrieval quality).

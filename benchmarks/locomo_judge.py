@@ -32,11 +32,7 @@ import time
 import urllib.error
 import urllib.request
 
-# Add scripts/ and benchmarks/ to path
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_SCRIPTS_DIR = os.path.join(_HERE, "..", "scripts")
-sys.path.insert(0, _SCRIPTS_DIR)
-sys.path.append(_HERE)  # append (not insert) — benchmarks/ must not shadow scripts/
 
 # Heavy imports (recall engine, harness) are deferred to avoid loading them
 # in the orchestrator process, which only needs json/subprocess/time.
@@ -53,8 +49,8 @@ def _load_heavy_imports():
     """Load recall engine and harness modules. Called only in subprocess mode."""
     global recall, download_dataset, build_workspace, _parse_sessions, CATEGORY_NAMES, detect_query_type
 
-    from recall import detect_query_type as _dqt
-    from recall import recall as _recall  # noqa: E402
+    from mind_mem.recall import detect_query_type as _dqt
+    from mind_mem.recall import recall as _recall
 
     recall = _recall
 
@@ -377,7 +373,7 @@ def _compute_adversarial_score(components: dict) -> int:
 
 def _strip_semantic_prefix(text: str) -> str:
     """Remove leading semantic label prefix — delegates to evidence_packer."""
-    from evidence_packer import strip_semantic_prefix
+    from mind_mem.evidence_packer import strip_semantic_prefix
 
     return strip_semantic_prefix(text)
 
@@ -539,7 +535,7 @@ def evaluate_sample_with_judge(
     4. Score answer using judge LLM
     """
     if compress:
-        from observation_compress import compress_context
+        from mind_mem.observation_compress import compress_context
 
     qa_pairs = sample.get("qa", [])
     results = []
@@ -574,7 +570,7 @@ def evaluate_sample_with_judge(
             retrieved = recall(workspace, question, limit=top_k, active_only=False)
 
         # Step 2: Build context via mind-mem evidence packer (structured for ALL types)
-        from evidence_packer import is_true_adversarial, pack_evidence
+        from mind_mem.evidence_packer import is_true_adversarial, pack_evidence
 
         # Detect query type for packing strategy
         detected_type = "adversarial" if is_adversarial else detect_query_type(question)
@@ -609,7 +605,7 @@ def evaluate_sample_with_judge(
                 )
 
             # Abstention classifier: runs on ALL adversarial-labeled questions
-            from abstention_classifier import classify_abstention
+            from mind_mem.abstention_classifier import classify_abstention
 
             abst = classify_abstention(question, retrieved)
             if abst.should_abstain:
@@ -881,13 +877,13 @@ def _setup_hybrid_workspace(workspace: str):
         json.dump(config, f)
 
     # Index blocks using llama.cpp embeddings server (Qwen3-Embedding-8B)
-    from recall_vector import VectorBackend
+    from mind_mem.recall_vector import VectorBackend
 
     vec_backend = VectorBackend(recall_cfg)
     vec_backend.index(workspace)
 
     # Create HybridBackend that fuses BM25 + vector via RRF
-    from hybrid_recall import HybridBackend
+    from mind_mem.hybrid_recall import HybridBackend
 
     return HybridBackend(config=recall_cfg)
 
@@ -1038,8 +1034,8 @@ def main():
             [
                 sys.executable,
                 "-c",
-                "import sys; sys.path.insert(0, %r); sys.path.insert(0, %r); "
-                "from locomo_harness import download_dataset; download_dataset()" % (_SCRIPTS_DIR, _HERE),
+                "import sys; sys.path.insert(0, %r); "
+                "from locomo_harness import download_dataset; download_dataset()" % (_HERE,),
             ],
             timeout=120,
         )
