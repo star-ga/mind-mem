@@ -105,7 +105,6 @@ Output:
 - [Security](#security)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
-- [Claude Code Plugin](#claude-code-plugin)
 - [License](#license)
 
 ---
@@ -314,21 +313,6 @@ Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer w
 | Mem0 | 68.5% | -- | Cloud (managed) | graph DB + embeddings |
 
 > mind-mem surpasses Mem0 (68.5%), Letta (74.0%), and Memobase (75.8%) with zero cloud infrastructure. Full 10-conversation benchmark (1986 questions) validates this at scale.
-
-### LoCoMo Retrieval (v1.8.1, 1986 questions)
-
-Pure retrieval metrics — no LLM in the loop. Measures whether the recall engine surfaces the right blocks.
-
-| Category        |        N |   R@1 |   R@5 |  R@10 |   MRR |
-| --------------- | -------: | ----: | ----: | ----: | ----: |
-| **Overall**     | **1986** | 27.9% | 46.3% | 51.7% | .359  |
-| Multi-hop       |      321 | 37.1% | 50.2% | 55.8% | .426  |
-| Open-domain     |      841 | 27.8% | 48.9% | 52.9% | .370  |
-| Adversarial     |      446 | 28.7% | 45.7% | 50.2% | .358  |
-| Single-hop      |      282 | 21.6% | 42.6% | 52.8% | .317  |
-| Temporal         |       96 | 12.5% | 24.0% | 30.2% | .172  |
-
-> Measured 2026-03-04 on v1.8.1 with BM25 recall + Porter stemming + query expansion + reranking. Full 10-conversation benchmark.
 
 ### LongMemEval (ICLR 2025, 470 questions)
 
@@ -1186,13 +1170,13 @@ MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py --transport http --p
 
 | Tool                  | Description                                                    |
 | --------------------- | -------------------------------------------------------------- |
-| `recall`              | Search memory with ranked retrieval (backend: auto/bm25/hybrid)|
+| `recall`              | Search memory with BM25 (query, limit, active_only)            |
 | `propose_update`      | Propose a decision/task — writes to SIGNALS.md only            |
 | `approve_apply`       | Apply a staged proposal (dry_run=True by default)              |
 | `rollback_proposal`   | Rollback an applied proposal by receipt timestamp              |
 | `scan`                | Run integrity scan (contradictions, drift, signals)            |
 | `list_contradictions` | List contradictions with auto-resolution analysis              |
-| `hybrid_search`       | *(deprecated)* Use `recall(backend="hybrid")` instead          |
+| `hybrid_search`       | Hybrid BM25+Vector search with RRF fusion                      |
 | `find_similar`        | Find blocks similar to a given block                           |
 | `intent_classify`     | Classify query intent (9 types with parameter recommendations) |
 | `index_stats`         | Index statistics, MIND kernel availability, block counts       |
@@ -1316,23 +1300,6 @@ For the formal grammar, invariant rules, state machine, and atomicity guarantees
 Contributions welcome. Please open an issue first to discuss what you'd like to change.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
----
-
-## Claude Code Plugin
-
-mind-mem ships as a Claude Code plugin. Install the skills and agent directly from this repo:
-
-```bash
-claude plugin marketplace add star-ga/mind-mem
-claude plugin install mind-mem@star-ga-mind-mem
-```
-
-This gives you:
-- **4 skills** — `/recall` (memory search), `/apply-proposal` (governance), `/integrity-scan` (drift detection), `/mind-mem-tools` (full 19-tool MCP reference)
-- **Agent (`mind-mem-expert`)** — Expert in configuring, debugging, and optimizing mind-mem
-
-Also available: **[MIND Lang plugin](https://github.com/star-ga/mindlang)** — write `.mind` files with full language reference and architecture guidance.
 
 ---
 
