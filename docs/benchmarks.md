@@ -2,7 +2,7 @@
 
 ## LoCoMo Benchmark Results
 
-mind-mem v1.8.0, evaluated with Mistral Large (LoCoMo, 10 conversations):
+mind-mem v1.8.2, evaluated with Mistral Large (LoCoMo, 10 conversations):
 
 | Metric | Score |
 |--------|-------|
