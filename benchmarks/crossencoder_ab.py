@@ -22,14 +22,10 @@ import argparse
 import json
 import os
 import shutil
-import sys
 import tempfile
 import time
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_SCRIPTS_DIR = os.path.join(_HERE, "..", "scripts")
-sys.path.insert(0, _SCRIPTS_DIR)
-sys.path.append(_HERE)
 
 
 def _gold_keywords(answer: str) -> list[str]:
@@ -129,13 +125,14 @@ def run_ab_test(
 
     Returns a dict with per-question and aggregate metrics.
     """
-    from cross_encoder_reranker import CrossEncoderReranker  # noqa: E402
-    from locomo_harness import (  # noqa: E402
+    from locomo_harness import (
         CATEGORY_NAMES,
         build_workspace,
         download_dataset,
     )
-    from recall import recall  # noqa: E402
+
+    from mind_mem.cross_encoder_reranker import CrossEncoderReranker
+    from mind_mem.recall import recall
 
     dataset = download_dataset()
     sample = dataset[conv_index]

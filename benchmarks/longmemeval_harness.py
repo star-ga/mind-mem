@@ -26,11 +26,7 @@ import time
 import urllib.error
 import urllib.request
 
-# Add mind-mem scripts to path for recall imports
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
-sys.path.insert(0, SCRIPTS_DIR)
-
-from mind_mem.recall import recall  # noqa: E402
+from mind_mem.recall import recall
 
 # HuggingFace dataset URLs (cleaned release)
 HF_BASE = "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/main"

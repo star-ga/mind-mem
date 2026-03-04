@@ -36,10 +36,21 @@ class CrossEncoderReranker:
             _CE_MODEL = CrossEncoder(model)
         self._model = _CE_MODEL
 
-    def rerank(self, query: str, candidates: list[dict], top_k: int = 10, blend_weight: float = 0.6) -> list[dict]:
+    def rerank(
+        self,
+        query: str,
+        candidates: list[dict],
+        top_k: int = 10,
+        blend_weight: float = 0.6,
+        batch_size: int = 32,
+    ) -> list[dict]:
         """Score with cross-encoder, blend with original scores.
 
         Final score = blend_weight * CE_score + (1 - blend_weight) * original_score
+
+        Args:
+            batch_size: Number of (query, candidate) pairs per predict() call.
+                        Prevents OOM on large candidate sets (default: 32).
         """
         if not candidates:
             return []
@@ -48,8 +59,8 @@ class CrossEncoderReranker:
         texts = [c.get("content", c.get("text", "")) for c in candidates]
         pairs = [(query, t) for t in texts]
 
-        # Score
-        ce_scores = self._model.predict(pairs)
+        # Score in batches to avoid OOM on large candidate sets
+        ce_scores = self._model.predict(pairs, batch_size=batch_size)
 
         # Normalize CE scores to [0, 1]
         min_s, max_s = min(ce_scores), max(ce_scores)
