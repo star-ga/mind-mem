@@ -2,6 +2,23 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.8.2 (2026-03-04)
+
+**Cleanup: import hygiene, cross-encoder batching, integration tests**
+
+### Fixed
+- Removed dead `sys.path.insert` and `scripts/` references from 7 benchmark/test files
+- Fixed bare imports in `locomo_judge.py` to use `mind_mem.*` prefix (6 modules)
+
+### Added
+- `batch_size` parameter on `CrossEncoderReranker.rerank()` (default: 32) — prevents OOM on large candidate sets
+- `DeprecationWarning` on `hybrid_search` MCP tool (use `recall(backend="hybrid")` instead)
+- 8 integration tests covering full pipeline: init → index → recall → propose
+- CI now runs unit and integration tests as separate steps
+
+### Changed
+- CI dependency bumps: pytest <10.0, pytest-cov <8.0, pytest-benchmark <6.0, actions/setup-python 6.2.0, actions/upload-artifact 7.0.0
+
 ## 1.8.1 (2026-02-27)
 
 **Polish: cross-platform fixes, docs alignment, project metadata**
