@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from mind_mem.encryption import EncryptionManager, _MAGIC, _pbkdf2
+from mind_mem.encryption import _MAGIC, EncryptionManager, _pbkdf2
 
 
 @pytest.fixture
