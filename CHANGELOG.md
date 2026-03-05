@@ -2,6 +2,26 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.9.0 (2026-03-05)
+
+**Governance deep stack: 8 new modules for audit, drift, causality, coding schemas, auto-resolution, benchmarks, and encryption**
+
+### Added
+- **Hash-chain mutation log** (`audit_chain.py`): SHA-256 chained append-only JSONL ledger with genesis block, tamper detection, chain verification, query/export APIs
+- **Per-field mutation audit** (`field_audit.py`): SQLite-backed field-level change tracking with before/after diffs, agent attribution, chain integration
+- **Semantic belief drift detection** (`drift_detector.py`): Character trigram Jaccard similarity (zero external deps), modality conflict detection, belief snapshots and timeline tracking
+- **Temporal causal dependency graph** (`causal_graph.py`): Directed edges with cycle detection (BFS), staleness propagation, causal chain traversal (DFS)
+- **Coding-native memory schemas** (`coding_schemas.py`): 5 block types (ADR, CODE, PERF, ALGO, BUG) with regex auto-classification, template generation, metadata extraction
+- **Auto contradiction resolution** (`auto_resolver.py`): Extends conflict_resolver with preference learning, side-effect analysis via causal graph, confidence scoring
+- **Governance benchmark suite** (`governance_bench.py`): Contradiction detection rate, audit completeness, drift detection performance, scalability metrics harness
+- **Encryption at rest** (`encryption.py`): HMAC-SHA256 keystream (CTR-like), PBKDF2 key derivation (600k iterations), encrypt-then-MAC, file encryption, key rotation
+
+### Testing
+- 145 new tests across 8 test files (audit_chain: 28, field_audit: 12, drift_detector: 17, causal_graph: 22, coding_schemas: 23, auto_resolver: 11, governance_bench: 9, encryption: 23)
+
+### Changed
+- Version: 1.8.2 → 1.9.0
+
 ## 1.8.2 (2026-03-04)
 
 **Cleanup: import hygiene, cross-encoder batching, integration tests**

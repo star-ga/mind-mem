@@ -21,6 +21,14 @@ Core modules:
     connection_manager — SQLite connection pooling with read/write separation
     corpus_registry — Central source of truth for corpus directory paths
     block_store     — BlockStore protocol and MarkdownBlockStore implementation
+    audit_chain     — Hash-chained append-only mutation ledger
+    field_audit     — Per-field mutation tracking with attribution
+    drift_detector  — Semantic belief drift detection
+    causal_graph    — Temporal causal dependency graph
+    coding_schemas  — Coding-native memory schemas (ADR, CODE, PERF, ALGO, BUG)
+    auto_resolver   — Automatic contradiction resolution with preference learning
+    governance_bench — Governance-specific benchmark suite
+    encryption      — Optional AES-256 encryption at rest
 """
 
-__version__ = "1.8.2"
+__version__ = "1.9.0"
