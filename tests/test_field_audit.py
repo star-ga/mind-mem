@@ -1,7 +1,5 @@
 """Tests for mind-mem per-field mutation audit (field_audit.py)."""
 
-import json
-import os
 
 import pytest
 
