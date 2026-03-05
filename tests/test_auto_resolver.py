@@ -5,7 +5,6 @@ import os
 import pytest
 
 from mind_mem.auto_resolver import AutoResolver, ResolutionSuggestion
-from mind_mem.conflict_resolver import ResolutionStrategy
 
 
 @pytest.fixture

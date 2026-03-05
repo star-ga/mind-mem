@@ -1,12 +1,10 @@
 """Tests for mind-mem semantic belief drift detection (drift_detector.py)."""
 
-import json
 import os
 
 import pytest
 
 from mind_mem.drift_detector import (
-    DRIFT_EVOLUTION,
     DRIFT_REVERSAL,
     DRIFT_SEMANTIC,
     DriftDetector,
