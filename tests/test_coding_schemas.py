@@ -18,8 +18,10 @@ from mind_mem.coding_schemas import (
 
 class TestClassify:
     def test_adr_text(self):
-        text = ("Architecture decision: we decided to adopt PostgreSQL over MongoDB."
-               " Trade-off between consistency and flexibility.")
+        text = (
+            "Architecture decision: we decided to adopt PostgreSQL over MongoDB."
+            " Trade-off between consistency and flexibility."
+        )
         assert classify_coding_block(text) == TYPE_ADR
 
     def test_code_text(self):
@@ -151,7 +153,10 @@ class TestFormatADR:
 
     def test_custom_block_id(self):
         result = format_adr_block(
-            "Test", "context", "decision", "consequences",
+            "Test",
+            "context",
+            "decision",
+            "consequences",
             block_id="ADR-20260304-042",
         )
         assert "[ADR-20260304-042]" in result

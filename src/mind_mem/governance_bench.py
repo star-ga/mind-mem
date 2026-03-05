@@ -83,9 +83,7 @@ class GovernanceBench:
             "total_detected": len(contradictions),
             "unique_pairs": len(unique_pairs),
             "detection_time_ms": round(elapsed * 1000, 2),
-            "avg_per_detection_ms": round(
-                (elapsed * 1000 / len(contradictions)) if contradictions else 0, 2
-            ),
+            "avg_per_detection_ms": round((elapsed * 1000 / len(contradictions)) if contradictions else 0, 2),
         }
 
     def bench_audit_completeness(self) -> dict:
@@ -196,9 +194,7 @@ class GovernanceBench:
 
         # Blocks per second
         if results["parse_time_ms"] > 0:
-            results["blocks_per_second"] = round(
-                block_count / (results["parse_time_ms"] / 1000), 0
-            )
+            results["blocks_per_second"] = round(block_count / (results["parse_time_ms"] / 1000), 0)
 
         return results
 

@@ -74,9 +74,16 @@ class ResolutionSuggestion:
     """A suggested resolution for a contradiction."""
 
     __slots__ = (
-        "contradiction_id", "block_a", "block_b",
-        "strategy", "confidence_score", "winner_id", "loser_id",
-        "rationale", "side_effects", "preferred_score",
+        "contradiction_id",
+        "block_a",
+        "block_b",
+        "strategy",
+        "confidence_score",
+        "winner_id",
+        "loser_id",
+        "rationale",
+        "side_effects",
+        "preferred_score",
     )
 
     def __init__(
@@ -162,8 +169,7 @@ class AutoResolver:
 
             # Fallback to global preference
             row = conn.execute(
-                "SELECT SUM(chosen) as c, SUM(rejected) as r "
-                "FROM resolution_preferences WHERE strategy = ?",
+                "SELECT SUM(chosen) as c, SUM(rejected) as r FROM resolution_preferences WHERE strategy = ?",
                 (strategy,),
             ).fetchone()
             if row and row["c"]:
@@ -183,10 +189,7 @@ class AutoResolver:
         effects = []
         dependents = self._graph.dependents(block_id)
         for dep in dependents:
-            effects.append(
-                f"Block {dep.source_id} depends on {block_id} via {dep.edge_type} — "
-                f"may need review"
-            )
+            effects.append(f"Block {dep.source_id} depends on {block_id} via {dep.edge_type} — may need review")
         return effects
 
     def suggest_resolutions(self) -> list[ResolutionSuggestion]:
@@ -214,18 +217,20 @@ class AutoResolver:
             if side_effects:
                 confidence_score = max(confidence_score - 0.1 * len(side_effects), 0.1)
 
-            suggestions.append(ResolutionSuggestion(
-                contradiction_id=res.get("contradiction_id", "?"),
-                block_a=res.get("block_a", ""),
-                block_b=res.get("block_b", ""),
-                strategy=strategy,
-                confidence_score=confidence_score,
-                winner_id=res.get("winner_id"),
-                loser_id=res.get("loser_id"),
-                rationale=res.get("rationale", ""),
-                side_effects=side_effects,
-                preferred_score=pref_boost,
-            ))
+            suggestions.append(
+                ResolutionSuggestion(
+                    contradiction_id=res.get("contradiction_id", "?"),
+                    block_a=res.get("block_a", ""),
+                    block_b=res.get("block_b", ""),
+                    strategy=strategy,
+                    confidence_score=confidence_score,
+                    winner_id=res.get("winner_id"),
+                    loser_id=res.get("loser_id"),
+                    rationale=res.get("rationale", ""),
+                    side_effects=side_effects,
+                    preferred_score=pref_boost,
+                )
+            )
 
         suggestions.sort(key=lambda s: s.confidence_score, reverse=True)
 

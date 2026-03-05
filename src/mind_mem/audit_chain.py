@@ -36,20 +36,22 @@ _log = get_logger("audit_chain")
 # Genesis block seed — fixed, never changes
 _GENESIS_HASH = "0" * 64  # SHA256 of "mind-mem-genesis"
 
-VALID_OPERATIONS = frozenset({
-    "create_block",
-    "update_field",
-    "delete_block",
-    "supersede",
-    "append_block",
-    "set_status",
-    "replace_range",
-    "append_list_item",
-    "insert_after_block",
-    "restore_backup",
-    "apply_proposal",
-    "rollback",
-})
+VALID_OPERATIONS = frozenset(
+    {
+        "create_block",
+        "update_field",
+        "delete_block",
+        "supersede",
+        "append_block",
+        "set_status",
+        "replace_range",
+        "append_list_item",
+        "insert_after_block",
+        "restore_backup",
+        "apply_proposal",
+        "rollback",
+    }
+)
 
 
 def _compute_hash(data: str) -> str:
@@ -70,8 +72,15 @@ class AuditEntry:
     """Single entry in the hash chain."""
 
     __slots__ = (
-        "seq", "timestamp", "operation", "target", "agent",
-        "reason", "payload_hash", "prev_hash", "entry_hash",
+        "seq",
+        "timestamp",
+        "operation",
+        "target",
+        "agent",
+        "reason",
+        "payload_hash",
+        "prev_hash",
+        "entry_hash",
         "fields_changed",
     )
 
@@ -142,10 +151,7 @@ class AuditEntry:
         prev_hash: str,
     ) -> str:
         """Compute the entry hash from all fields (deterministic)."""
-        canonical = (
-            f"{seq}|{timestamp}|{operation}|{target}|"
-            f"{agent}|{reason}|{payload_hash}|{prev_hash}"
-        )
+        canonical = f"{seq}|{timestamp}|{operation}|{target}|{agent}|{reason}|{payload_hash}|{prev_hash}"
         return _compute_hash(canonical)
 
 
@@ -216,9 +222,7 @@ class AuditChain:
             ValueError: If operation is not valid.
         """
         if operation not in VALID_OPERATIONS:
-            raise ValueError(
-                f"Invalid operation '{operation}'. Must be one of: {sorted(VALID_OPERATIONS)}"
-            )
+            raise ValueError(f"Invalid operation '{operation}'. Must be one of: {sorted(VALID_OPERATIONS)}")
 
         # Normalize target to relative path
         if os.path.isabs(target):
@@ -234,9 +238,7 @@ class AuditChain:
             ts = datetime.now(timezone.utc).isoformat()
             p_hash = _payload_hash(payload)
 
-            entry_hash = AuditEntry.compute_entry_hash(
-                seq, ts, operation, target, agent, reason, p_hash, prev_hash
-            )
+            entry_hash = AuditEntry.compute_entry_hash(seq, ts, operation, target, agent, reason, p_hash, prev_hash)
 
             entry = AuditEntry(
                 seq=seq,
@@ -298,9 +300,7 @@ class AuditChain:
 
                     # Check sequence
                     if entry.seq != expected_seq:
-                        errors.append(
-                            f"Line {line_num}: seq {entry.seq}, expected {expected_seq}"
-                        )
+                        errors.append(f"Line {line_num}: seq {entry.seq}, expected {expected_seq}")
 
                     # Check prev_hash linkage
                     if entry.prev_hash != prev_hash:
@@ -417,13 +417,18 @@ class AuditChain:
         """
         entries = self.entries()
         with open(output_path, "w", encoding="utf-8") as f:
-            f.write(json.dumps({
-                "format": "mind-mem-audit-chain",
-                "version": "1.0",
-                "exported_at": datetime.now(timezone.utc).isoformat(),
-                "genesis_hash": _GENESIS_HASH,
-                "entry_count": len(entries),
-            }) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "format": "mind-mem-audit-chain",
+                        "version": "1.0",
+                        "exported_at": datetime.now(timezone.utc).isoformat(),
+                        "genesis_hash": _GENESIS_HASH,
+                        "entry_count": len(entries),
+                    }
+                )
+                + "\n"
+            )
             for entry in entries:
                 f.write(json.dumps(entry.to_dict(), separators=(",", ":")) + "\n")
         _log.info("audit_export", entries=len(entries), output=output_path)

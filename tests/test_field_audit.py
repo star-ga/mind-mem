@@ -1,6 +1,5 @@
 """Tests for mind-mem per-field mutation audit (field_audit.py)."""
 
-
 import pytest
 
 from mind_mem.field_audit import FieldAuditor, FieldChange
@@ -75,8 +74,12 @@ class TestFieldAuditor:
         new = {"Status": "completed", "Priority": 3, "Scope": "global", "Notes": "Done"}
 
         changes = auditor.record_block_diff(
-            "D-001", "d.md", old, new,
-            agent="claude", reason="Bulk update",
+            "D-001",
+            "d.md",
+            old,
+            new,
+            agent="claude",
+            reason="Bulk update",
         )
         # Status changed, Scope changed, Notes added = 3 changes
         # Priority unchanged = not recorded

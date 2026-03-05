@@ -60,6 +60,7 @@ Subject: Use MySQL instead
 
     def test_audit_completeness_with_entries(self, workspace, bench):
         from mind_mem.audit_chain import AuditChain
+
         chain = AuditChain(workspace)
         chain.append("create_block", "test.md", agent="test")
         chain.append("update_field", "test.md", agent="test")

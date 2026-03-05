@@ -36,13 +36,15 @@ EDGE_INFORMS = "informs"
 EDGE_CONTRADICTS = "contradicts"
 EDGE_EXTENDS = "extends"
 
-VALID_EDGE_TYPES = frozenset({
-    EDGE_DEPENDS_ON,
-    EDGE_SUPERSEDES,
-    EDGE_INFORMS,
-    EDGE_CONTRADICTS,
-    EDGE_EXTENDS,
-})
+VALID_EDGE_TYPES = frozenset(
+    {
+        EDGE_DEPENDS_ON,
+        EDGE_SUPERSEDES,
+        EDGE_INFORMS,
+        EDGE_CONTRADICTS,
+        EDGE_EXTENDS,
+    }
+)
 
 
 def _db_path(workspace: str) -> str:
@@ -164,9 +166,7 @@ class CausalGraph:
 
         # Check for cycles before adding
         if self._would_create_cycle(source_id, target_id):
-            raise ValueError(
-                f"Adding edge {source_id} → {target_id} would create a cycle"
-            )
+            raise ValueError(f"Adding edge {source_id} → {target_id} would create a cycle")
 
         conn = _connect(self.workspace)
         try:
@@ -176,9 +176,13 @@ class CausalGraph:
                 "ON CONFLICT(source_id, target_id, edge_type) DO UPDATE SET "
                 "weight = ?, updated_at = datetime('now'), metadata = ?",
                 (
-                    source_id, target_id, edge_type, weight,
+                    source_id,
+                    target_id,
+                    edge_type,
+                    weight,
                     json.dumps(metadata or {}),
-                    weight, json.dumps(metadata or {}),
+                    weight,
+                    json.dumps(metadata or {}),
                 ),
             )
             conn.commit()
@@ -251,8 +255,12 @@ class CausalGraph:
 
         return [
             CausalEdge(
-                row["source_id"], row["target_id"], row["edge_type"],
-                row["weight"], row["created_at"], row["updated_at"],
+                row["source_id"],
+                row["target_id"],
+                row["edge_type"],
+                row["weight"],
+                row["created_at"],
+                row["updated_at"],
             )
             for row in rows
         ]
@@ -270,8 +278,12 @@ class CausalGraph:
 
         return [
             CausalEdge(
-                row["source_id"], row["target_id"], row["edge_type"],
-                row["weight"], row["created_at"], row["updated_at"],
+                row["source_id"],
+                row["target_id"],
+                row["edge_type"],
+                row["weight"],
+                row["created_at"],
+                row["updated_at"],
             )
             for row in rows
         ]
@@ -345,8 +357,7 @@ class CausalGraph:
             # Mark all stale blocks
             for sid in stale_ids:
                 conn.execute(
-                    "INSERT OR REPLACE INTO staleness_flags "
-                    "(block_id, reason, source_id) VALUES (?, ?, ?)",
+                    "INSERT OR REPLACE INTO staleness_flags (block_id, reason, source_id) VALUES (?, ?, ?)",
                     (sid, reason or f"Upstream block {changed_block_id} was modified", changed_block_id),
                 )
             conn.commit()
@@ -371,9 +382,7 @@ class CausalGraph:
         """
         conn = _connect(self.workspace)
         try:
-            rows = conn.execute(
-                "SELECT * FROM staleness_flags ORDER BY stale_since DESC"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM staleness_flags ORDER BY stale_since DESC").fetchall()
         finally:
             conn.close()
 
@@ -405,16 +414,18 @@ class CausalGraph:
                     (edge_type,),
                 ).fetchall()
             else:
-                rows = conn.execute(
-                    "SELECT * FROM causal_edges ORDER BY created_at"
-                ).fetchall()
+                rows = conn.execute("SELECT * FROM causal_edges ORDER BY created_at").fetchall()
         finally:
             conn.close()
 
         return [
             CausalEdge(
-                row["source_id"], row["target_id"], row["edge_type"],
-                row["weight"], row["created_at"], row["updated_at"],
+                row["source_id"],
+                row["target_id"],
+                row["edge_type"],
+                row["weight"],
+                row["created_at"],
+                row["updated_at"],
             )
             for row in rows
         ]
@@ -425,9 +436,7 @@ class CausalGraph:
         try:
             total = conn.execute("SELECT COUNT(*) as cnt FROM causal_edges").fetchone()["cnt"]
             by_type = {}
-            for row in conn.execute(
-                "SELECT edge_type, COUNT(*) as cnt FROM causal_edges GROUP BY edge_type"
-            ):
+            for row in conn.execute("SELECT edge_type, COUNT(*) as cnt FROM causal_edges GROUP BY edge_type"):
                 by_type[row["edge_type"]] = row["cnt"]
 
             nodes = set()

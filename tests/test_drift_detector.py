@@ -88,18 +88,23 @@ class TestDriftDetector:
         assert signals == []
 
     def test_single_block_no_drift(self, workspace, detector):
-        self._write_decisions(workspace, """
+        self._write_decisions(
+            workspace,
+            """
 [D-20260301-001]
 Date: 2026-03-01
 Status: active
 Subject: Use PostgreSQL for data storage
 Priority: 5
-""")
+""",
+        )
         signals = detector.scan()
         assert signals == []
 
     def test_similar_blocks_detected(self, workspace, detector):
-        self._write_decisions(workspace, """
+        self._write_decisions(
+            workspace,
+            """
 [D-20260301-001]
 Date: 2026-03-01
 Status: active
@@ -113,13 +118,16 @@ Date: 2026-03-02
 Status: active
 Subject: Use MongoDB for all persistent data storage in production
 Priority: 5
-""")
+""",
+        )
         signals = detector.scan()
         assert len(signals) >= 1
         assert signals[0].similarity > 0.3
 
     def test_modality_conflict_boosts_confidence(self, workspace):
-        self._write_decisions(workspace, """
+        self._write_decisions(
+            workspace,
+            """
 [D-20260301-001]
 Date: 2026-03-01
 Status: active
@@ -133,7 +141,8 @@ Date: 2026-03-02
 Status: active
 Subject: Internal services must_not use TLS encryption overhead
 ConstraintSignatures: [{"modality": "must_not", "subject": "TLS"}]
-""")
+""",
+        )
         detector = DriftDetector(workspace, similarity_threshold=0.2)
         signals = detector.scan()
         reversals = [s for s in signals if s.drift_type == DRIFT_REVERSAL]
@@ -143,7 +152,9 @@ ConstraintSignatures: [{"modality": "must_not", "subject": "TLS"}]
             assert r.confidence >= 0.5
 
     def test_signals_persisted(self, workspace, detector):
-        self._write_decisions(workspace, """
+        self._write_decisions(
+            workspace,
+            """
 [D-20260301-001]
 Date: 2026-03-01
 Subject: Deploy all microservices to Kubernetes cluster in production
@@ -153,7 +164,8 @@ Subject: Deploy all microservices to Kubernetes cluster in production
 [D-20260302-001]
 Date: 2026-03-02
 Subject: Deploy all microservices to Docker Swarm cluster in production
-""")
+""",
+        )
         signals = detector.scan()
         recent = detector.recent_signals()
         assert len(recent) >= len(signals)
@@ -189,7 +201,9 @@ Subject: Deploy all microservices to Docker Swarm cluster in production
         assert not timeline[1]["changed"]  # Same content hash
 
     def test_recent_signals_filter(self, workspace, detector):
-        self._write_decisions(workspace, """
+        self._write_decisions(
+            workspace,
+            """
 [D-20260301-001]
 Date: 2026-03-01
 Subject: Use PostgreSQL for persistent data storage layer
@@ -199,7 +213,8 @@ Subject: Use PostgreSQL for persistent data storage layer
 [D-20260302-001]
 Date: 2026-03-02
 Subject: Use MySQL for persistent data storage layer
-""")
+""",
+        )
         detector.scan()
 
         # Filter by confidence
@@ -208,7 +223,9 @@ Subject: Use MySQL for persistent data storage layer
         assert len(high_conf) <= len(all_sigs)
 
     def test_custom_threshold(self, workspace):
-        self._write_decisions(workspace, """
+        self._write_decisions(
+            workspace,
+            """
 [D-20260301-001]
 Subject: Use Python Flask
 
@@ -216,7 +233,8 @@ Subject: Use Python Flask
 
 [D-20260302-001]
 Subject: Use Python Django
-""")
+""",
+        )
         strict = DriftDetector(workspace, similarity_threshold=0.9)
         signals = strict.scan()
         # Very strict threshold — unlikely to find drift
