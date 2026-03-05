@@ -74,9 +74,16 @@ class FieldChange:
     """Single field-level change record."""
 
     __slots__ = (
-        "id", "block_id", "target", "field",
-        "old_value", "new_value", "agent", "reason",
-        "chain_seq", "timestamp",
+        "id",
+        "block_id",
+        "target",
+        "field",
+        "old_value",
+        "new_value",
+        "agent",
+        "reason",
+        "chain_seq",
+        "timestamp",
     )
 
     def __init__(
@@ -195,9 +202,7 @@ class FieldAuditor:
             )
             conn.commit()
             row_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-            ts_row = conn.execute(
-                "SELECT timestamp FROM field_changes WHERE id = ?", (row_id,)
-            ).fetchone()
+            ts_row = conn.execute("SELECT timestamp FROM field_changes WHERE id = ?", (row_id,)).fetchone()
         finally:
             conn.close()
 
@@ -263,7 +268,9 @@ class FieldAuditor:
 
             if old_str != new_str:
                 change = self.record_change(
-                    block_id, target, key,
+                    block_id,
+                    target,
+                    key,
                     old_value=old_str,
                     new_value=new_str,
                     agent=agent,
@@ -294,16 +301,12 @@ class FieldAuditor:
         try:
             if field:
                 rows = conn.execute(
-                    "SELECT * FROM field_changes "
-                    "WHERE block_id = ? AND field = ? "
-                    "ORDER BY id DESC LIMIT ?",
+                    "SELECT * FROM field_changes WHERE block_id = ? AND field = ? ORDER BY id DESC LIMIT ?",
                     (block_id, field, last_n),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT * FROM field_changes "
-                    "WHERE block_id = ? "
-                    "ORDER BY id DESC LIMIT ?",
+                    "SELECT * FROM field_changes WHERE block_id = ? ORDER BY id DESC LIMIT ?",
                     (block_id, last_n),
                 ).fetchall()
         finally:
@@ -338,8 +341,7 @@ class FieldAuditor:
         conn = _connect(self.workspace)
         try:
             rows = conn.execute(
-                "SELECT * FROM field_changes "
-                "WHERE agent = ? ORDER BY id DESC LIMIT ?",
+                "SELECT * FROM field_changes WHERE agent = ? ORDER BY id DESC LIMIT ?",
                 (agent, last_n),
             ).fetchall()
         finally:
@@ -369,14 +371,11 @@ class FieldAuditor:
         """
         conn = _connect(self.workspace)
         try:
-            total = conn.execute(
-                "SELECT COUNT(*) as cnt FROM field_changes"
-            ).fetchone()["cnt"]
+            total = conn.execute("SELECT COUNT(*) as cnt FROM field_changes").fetchone()["cnt"]
 
             field_counts = {}
             for row in conn.execute(
-                "SELECT field, COUNT(*) as cnt FROM field_changes "
-                "GROUP BY field ORDER BY cnt DESC LIMIT ?",
+                "SELECT field, COUNT(*) as cnt FROM field_changes GROUP BY field ORDER BY cnt DESC LIMIT ?",
                 (last_n,),
             ):
                 field_counts[row["field"]] = row["cnt"]
@@ -391,8 +390,7 @@ class FieldAuditor:
 
             block_counts = {}
             for row in conn.execute(
-                "SELECT block_id, COUNT(*) as cnt FROM field_changes "
-                "GROUP BY block_id ORDER BY cnt DESC LIMIT 20",
+                "SELECT block_id, COUNT(*) as cnt FROM field_changes GROUP BY block_id ORDER BY cnt DESC LIMIT 20",
             ):
                 block_counts[row["block_id"]] = row["cnt"]
         finally:

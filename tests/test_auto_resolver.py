@@ -131,6 +131,7 @@ class TestSideEffects:
 
     def test_with_dependents(self, resolver):
         from mind_mem.causal_graph import EDGE_DEPENDS_ON
+
         resolver._graph.add_edge("D-002", "D-001", EDGE_DEPENDS_ON)
         resolver._graph.add_edge("D-003", "D-001", EDGE_DEPENDS_ON)
 

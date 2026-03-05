@@ -49,24 +49,48 @@ class TestAuditEntry:
 
     def test_compute_entry_hash_deterministic(self):
         h1 = AuditEntry.compute_entry_hash(
-            1, "2026-01-01", "create_block", "test.md",
-            "agent1", "reason1", "ph1", _GENESIS_HASH,
+            1,
+            "2026-01-01",
+            "create_block",
+            "test.md",
+            "agent1",
+            "reason1",
+            "ph1",
+            _GENESIS_HASH,
         )
         h2 = AuditEntry.compute_entry_hash(
-            1, "2026-01-01", "create_block", "test.md",
-            "agent1", "reason1", "ph1", _GENESIS_HASH,
+            1,
+            "2026-01-01",
+            "create_block",
+            "test.md",
+            "agent1",
+            "reason1",
+            "ph1",
+            _GENESIS_HASH,
         )
         assert h1 == h2
         assert len(h1) == 64  # SHA256 hex
 
     def test_different_inputs_different_hash(self):
         h1 = AuditEntry.compute_entry_hash(
-            1, "2026-01-01", "create_block", "a.md",
-            "", "", "ph1", _GENESIS_HASH,
+            1,
+            "2026-01-01",
+            "create_block",
+            "a.md",
+            "",
+            "",
+            "ph1",
+            _GENESIS_HASH,
         )
         h2 = AuditEntry.compute_entry_hash(
-            1, "2026-01-01", "create_block", "b.md",
-            "", "", "ph1", _GENESIS_HASH,
+            1,
+            "2026-01-01",
+            "create_block",
+            "b.md",
+            "",
+            "",
+            "ph1",
+            _GENESIS_HASH,
         )
         assert h1 != h2
 
@@ -243,7 +267,8 @@ class TestAuditChain:
 
     def test_fields_changed_stored(self, chain):
         chain.append(
-            "update_field", "a.md",
+            "update_field",
+            "a.md",
             fields_changed=["Status", "Priority", "Scope"],
         )
         entries = chain.entries()
@@ -251,7 +276,8 @@ class TestAuditChain:
 
     def test_payload_hashed_not_stored(self, chain):
         chain.append(
-            "create_block", "a.md",
+            "create_block",
+            "a.md",
             payload={"secret": "my-api-key-12345"},
         )
         # Verify raw payload is NOT in the chain file

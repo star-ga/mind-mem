@@ -162,12 +162,12 @@ class EncryptionManager:
         if len(data) < min_len:
             raise ValueError("Encrypted data too short")
 
-        if data[:len(_MAGIC)] != _MAGIC:
+        if data[: len(_MAGIC)] != _MAGIC:
             raise ValueError("Invalid encryption header (not mind-mem encrypted)")
 
-        nonce = data[len(_MAGIC):len(_MAGIC) + _NONCE_SIZE]
+        nonce = data[len(_MAGIC) : len(_MAGIC) + _NONCE_SIZE]
         mac = data[-_MAC_SIZE:]
-        ciphertext = data[len(_MAGIC) + _NONCE_SIZE:-_MAC_SIZE]
+        ciphertext = data[len(_MAGIC) + _NONCE_SIZE : -_MAC_SIZE]
 
         # Verify MAC (constant-time comparison)
         expected_mac = hmac.new(self._mac_key, nonce + ciphertext, hashlib.sha256).digest()
@@ -189,7 +189,7 @@ class EncryptionManager:
                 plaintext = f.read()
 
             # Skip if already encrypted
-            if plaintext[:len(_MAGIC)] == _MAGIC:
+            if plaintext[: len(_MAGIC)] == _MAGIC:
                 return
 
             encrypted = self.encrypt(plaintext)
@@ -211,7 +211,7 @@ class EncryptionManager:
         with open(file_path, "rb") as f:
             data = f.read()
 
-        if data[:len(_MAGIC)] != _MAGIC:
+        if data[: len(_MAGIC)] != _MAGIC:
             return data  # Not encrypted, return as-is
 
         return self.decrypt(data)
@@ -227,7 +227,7 @@ class EncryptionManager:
             with open(resolved, "rb") as f:
                 data = f.read()
 
-            if data[:len(_MAGIC)] != _MAGIC:
+            if data[: len(_MAGIC)] != _MAGIC:
                 return  # Not encrypted
 
             plaintext = self.decrypt(data)

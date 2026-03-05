@@ -125,18 +125,24 @@ CREATE INDEX IF NOT EXISTS idx_bs_block ON belief_snapshots(block_id);
 """
 
 # Drift types
-DRIFT_SEMANTIC = "semantic"     # Meaning changed (high similarity, different content)
-DRIFT_EVOLUTION = "evolution"   # Content updated over time
-DRIFT_REVERSAL = "reversal"     # Decision reversed (contradictory modality)
-DRIFT_SCOPE = "scope_shift"     # Scope narrowed or widened
+DRIFT_SEMANTIC = "semantic"  # Meaning changed (high similarity, different content)
+DRIFT_EVOLUTION = "evolution"  # Content updated over time
+DRIFT_REVERSAL = "reversal"  # Decision reversed (contradictory modality)
+DRIFT_SCOPE = "scope_shift"  # Scope narrowed or widened
 
 
 class DriftSignal:
     """A detected drift between two blocks."""
 
     __slots__ = (
-        "block_a_id", "block_b_id", "similarity", "confidence",
-        "drift_type", "description", "date_a", "date_b",
+        "block_a_id",
+        "block_b_id",
+        "similarity",
+        "confidence",
+        "drift_type",
+        "description",
+        "date_a",
+        "date_b",
     )
 
     def __init__(
@@ -309,7 +315,7 @@ class DriftDetector:
         seen_pairs: set[frozenset[str]] = set()
 
         for i, (block_a, text_a, tris_a, date_a) in enumerate(block_data):
-            for j, (block_b, text_b, tris_b, date_b) in enumerate(block_data[i + 1:], i + 1):
+            for j, (block_b, text_b, tris_b, date_b) in enumerate(block_data[i + 1 :], i + 1):
                 id_a = block_a.get("_id", "")
                 id_b = block_b.get("_id", "")
                 pair = frozenset({id_a, id_b})
@@ -347,16 +353,18 @@ class DriftDetector:
                     drift_type = DRIFT_SEMANTIC
                     desc = f"Semantic drift between {id_a} and {id_b} (similarity: {sim:.2f})"
 
-                signals.append(DriftSignal(
-                    block_a_id=id_a,
-                    block_b_id=id_b,
-                    similarity=sim,
-                    confidence=confidence,
-                    drift_type=drift_type,
-                    description=desc,
-                    date_a=date_a or "",
-                    date_b=date_b or "",
-                ))
+                signals.append(
+                    DriftSignal(
+                        block_a_id=id_a,
+                        block_b_id=id_b,
+                        similarity=sim,
+                        confidence=confidence,
+                        drift_type=drift_type,
+                        description=desc,
+                        date_a=date_a or "",
+                        date_b=date_b or "",
+                    )
+                )
 
         # Sort by confidence descending
         signals.sort(key=lambda s: s.confidence, reverse=True)
@@ -383,9 +391,14 @@ class DriftDetector:
                     "drift_type, description, date_a, date_b) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (
-                        sig.block_a_id, sig.block_b_id, sig.similarity,
-                        sig.confidence, sig.drift_type, sig.description,
-                        sig.date_a, sig.date_b,
+                        sig.block_a_id,
+                        sig.block_b_id,
+                        sig.similarity,
+                        sig.confidence,
+                        sig.drift_type,
+                        sig.description,
+                        sig.date_a,
+                        sig.date_b,
                     ),
                 )
             conn.commit()
@@ -409,9 +422,7 @@ class DriftDetector:
         try:
             conn.executescript(_SCHEMA_SQL)
             conn.execute(
-                "INSERT INTO belief_snapshots "
-                "(block_id, content_hash, text_preview, fields_json) "
-                "VALUES (?, ?, ?, ?)",
+                "INSERT INTO belief_snapshots (block_id, content_hash, text_preview, fields_json) VALUES (?, ?, ?, ?)",
                 (block_id, content_hash, text[:200], json.dumps(fields, default=str)),
             )
             conn.commit()
@@ -428,8 +439,7 @@ class DriftDetector:
         try:
             conn.executescript(_SCHEMA_SQL)
             rows = conn.execute(
-                "SELECT * FROM belief_snapshots "
-                "WHERE block_id = ? ORDER BY timestamp ASC",
+                "SELECT * FROM belief_snapshots WHERE block_id = ? ORDER BY timestamp ASC",
                 (block_id,),
             ).fetchall()
         finally:
