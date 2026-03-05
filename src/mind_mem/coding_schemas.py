@@ -93,7 +93,7 @@ def classify_coding_block(text: str) -> str | None:
         TYPE_BUG: sum(1 for p in _BUG_PATTERNS if p.search(text)),
     }
 
-    best_type = max(scores, key=scores.get)
+    best_type = max(scores, key=lambda k: scores[k])
     if scores[best_type] >= 2:
         return best_type
     return None
@@ -108,7 +108,7 @@ def get_template(block_type: str) -> dict:
     Returns:
         Template dict with field names and empty/default values.
     """
-    templates = {
+    templates: dict[str, dict[str, object]] = {
         TYPE_ADR: {
             "Type": "ADR",
             "Title": "",
@@ -174,7 +174,7 @@ def get_template(block_type: str) -> dict:
     }
     if block_type not in templates:
         raise ValueError(f"Unknown block type '{block_type}'. Must be one of: {sorted(CODING_BLOCK_TYPES)}")
-    return dict(templates[block_type])
+    return {k: v for k, v in templates[block_type].items()}
 
 
 def extract_code_metadata(text: str) -> dict:
@@ -254,7 +254,7 @@ def format_adr_block(
 
     lines = [
         f"[{block_id}]",
-        f"Type: ADR",
+        "Type: ADR",
         f"Date: {datetime.now().strftime('%Y-%m-%d')}",
         f"Status: {status}",
         f"Title: {title}",

@@ -24,7 +24,6 @@ import json
 import os
 import sqlite3
 from collections import deque
-from datetime import datetime, timezone
 
 from .observability import get_logger, metrics
 

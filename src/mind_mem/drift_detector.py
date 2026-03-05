@@ -24,11 +24,9 @@ import json
 import os
 import re
 import sqlite3
-from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime
 
 from .block_parser import parse_file
-from .mind_filelock import FileLock
 from .observability import get_logger, metrics
 
 _log = get_logger("drift_detector")

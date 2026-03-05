@@ -21,11 +21,10 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
 
 from .audit_chain import AuditChain
 from .causal_graph import CausalGraph
-from .conflict_resolver import ResolutionStrategy, analyze_contradiction, resolve_contradictions
+from .conflict_resolver import ResolutionStrategy, resolve_contradictions
 from .observability import get_logger, metrics
 
 _log = get_logger("auto_resolver")
@@ -159,7 +158,7 @@ class AutoResolver:
                 if row and row["c"]:
                     total = (row["c"] or 0) + (row["r"] or 0)
                     if total > 0:
-                        return 0.15 * (row["c"] / total)
+                        return float(0.15 * (row["c"] / total))
 
             # Fallback to global preference
             row = conn.execute(
@@ -170,7 +169,7 @@ class AutoResolver:
             if row and row["c"]:
                 total = (row["c"] or 0) + (row["r"] or 0)
                 if total > 0:
-                    return 0.1 * (row["c"] / total)
+                    return float(0.1 * (row["c"] / total))
         finally:
             conn.close()
 
@@ -258,15 +257,17 @@ class AutoResolver:
 
             if row:
                 if chosen:
-                    conn.execute(
-                        "UPDATE resolution_preferences SET chosen = chosen + 1, timestamp = datetime('now') WHERE id = ?",
-                        (row["id"],),
+                    sql = (
+                        "UPDATE resolution_preferences SET chosen = chosen + 1,"
+                        " timestamp = datetime('now') WHERE id = ?"
                     )
+                    conn.execute(sql, (row["id"],))
                 else:
-                    conn.execute(
-                        "UPDATE resolution_preferences SET rejected = rejected + 1, timestamp = datetime('now') WHERE id = ?",
-                        (row["id"],),
+                    sql = (
+                        "UPDATE resolution_preferences SET rejected = rejected + 1,"
+                        " timestamp = datetime('now') WHERE id = ?"
                     )
+                    conn.execute(sql, (row["id"],))
             else:
                 conn.execute(
                     "INSERT INTO resolution_preferences (strategy, domain, chosen, rejected) VALUES (?, ?, ?, ?)",

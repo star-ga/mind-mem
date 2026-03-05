@@ -28,7 +28,7 @@ from .audit_chain import AuditChain
 from .block_parser import parse_file
 from .conflict_resolver import resolve_contradictions as _resolve
 from .drift_detector import DriftDetector
-from .observability import get_logger, metrics
+from .observability import get_logger
 
 _log = get_logger("governance_bench")
 
@@ -104,8 +104,8 @@ class GovernanceBench:
         verify_time = time.monotonic() - start
 
         entries = chain.entries()
-        operations = {}
-        agents = {}
+        operations: dict[str, int] = {}
+        agents: dict[str, int] = {}
         for entry in entries:
             operations[entry.operation] = operations.get(entry.operation, 0) + 1
             if entry.agent:
@@ -161,7 +161,7 @@ class GovernanceBench:
         - Audit chain verification
         - Full scan cycle
         """
-        results = {}
+        results: dict[str, int | float] = {}
 
         # Count blocks
         block_count = 0

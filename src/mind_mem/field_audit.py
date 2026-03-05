@@ -27,10 +27,8 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
 
 from .audit_chain import AuditChain
-from .mind_filelock import FileLock
 from .observability import get_logger, metrics
 
 _log = get_logger("field_audit")
