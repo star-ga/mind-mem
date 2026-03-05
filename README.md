@@ -16,7 +16,7 @@
     <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
     <img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible">
     <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
-    <img src="https://img.shields.io/badge/tests-2035-brightgreen?style=flat-square" alt="Tests: 2035">
+    <img src="https://img.shields.io/badge/tests-2180-brightgreen?style=flat-square" alt="Tests: 2180">
     <img src="https://img.shields.io/badge/MCP_tools-19-blue?style=flat-square" alt="MCP Tools: 19">
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/security-review.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/security-review.yml?branch=main&style=flat-square&label=Security%20Review&color=darkgreen" alt="Security Review"></a>
   </p>
@@ -1021,7 +1021,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 ```json
 {
-  "version": "1.8.2",
+  "version": "1.9.0",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,

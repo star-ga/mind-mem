@@ -1,6 +1,6 @@
 # Roadmap
 
-## v1.8.2 (Current)
+## v1.9.0 (Current)
 
 - [x] BM25F scoring with field weights
 - [x] Co-retrieval graph boost
@@ -12,8 +12,16 @@
 - [x] Cross-platform CI (Ubuntu/macOS/Windows)
 - [x] Baseline snapshot with chi-squared drift detection
 - [x] Contradiction detection at governance gate
+- [x] Hash-chain mutation audit log
+- [x] Per-field mutation tracking
+- [x] Semantic belief drift detection
+- [x] Temporal causal dependency graph
+- [x] Coding-native memory schemas (ADR/CODE/PERF/ALGO/BUG)
+- [x] Auto contradiction resolution with preference learning
+- [x] Governance benchmark suite
+- [x] AES-256 encryption at rest
 
-## v1.9.0 (Planned)
+## v2.0.0 (Planned)
 
 - [ ] Incremental reindexing
 - [ ] Block versioning with diff tracking
