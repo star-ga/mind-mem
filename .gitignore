@@ -8,6 +8,8 @@ dist/
 .mypy_cache/
 .ruff_cache/
 benchmarks/results/
+benchmarks/.cache/
+CLI_TASKS.md
 benchmarks/*.jsonl
 benchmarks/*results*.json*
 lib/*.so
