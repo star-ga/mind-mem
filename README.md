@@ -27,6 +27,8 @@
 Drop-in memory layer for AI coding agents — Claude Code, Claude Desktop, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed, OpenClaw, or any MCP-compatible client. Upgrades your agent from "chat history + notes" to a governed **Memory OS** with hybrid search, RRF fusion, intent routing, optional MIND kernels, structured persistence, contradiction detection, drift analysis, safe governance, and full audit trail.
 
 > **If your agent runs for weeks, it will drift. mind-mem prevents silent drift.**
+>
+> mind-mem powers the Memory Plane of the [MIND Cognitive Kernel](https://mindlang.dev/docs/cognitive-kernel) — the deterministic AI runtime architecture.
 
 ### Shared Memory Across All Your AI Agents
 
