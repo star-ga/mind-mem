@@ -13,7 +13,6 @@ import os
 import time
 
 import pytest
-from fastmcp.server.auth import AccessToken
 
 # ---------------------------------------------------------------------------
 # Skip everything when fastmcp is not installed
@@ -21,6 +20,9 @@ from fastmcp.server.auth import AccessToken
 
 _HAS_FASTMCP = importlib.util.find_spec("fastmcp") is not None
 pytestmark = pytest.mark.skipif(not _HAS_FASTMCP, reason="fastmcp not installed")
+
+if _HAS_FASTMCP:
+    from fastmcp.server.auth import AccessToken
 
 
 # ---------------------------------------------------------------------------
