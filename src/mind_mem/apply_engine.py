@@ -295,10 +295,10 @@ def _safe_copy(src, dst):
 
 def _build_cleanup_inventory(ws, roots):
     """Capture the pre-snapshot file inventory for touched top-level roots."""
-    inventory = {}
+    inventory: dict[str, list[str]] = {}
     normalized_roots = {root.replace("\\", "/").strip("/") for root in roots if root}
     for root in sorted(normalized_roots):
-        entries = []
+        entries: list[str] = []
         root_path = os.path.join(ws, root)
         if not os.path.isdir(root_path):
             inventory[root] = entries
