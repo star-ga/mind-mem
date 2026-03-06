@@ -18,6 +18,7 @@ All notable changes to mind-mem are documented in this file.
 
 ### Changed
 - Version: 1.9.0 → 1.9.1
+- Public benchmark guidance now refers generically to the protected MIND kernel, and README/docs version badges/examples are aligned with the 1.9.1 release metadata
 
 ## 1.9.0 (2026-03-05)
 
