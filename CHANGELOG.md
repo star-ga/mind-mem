@@ -2,6 +2,23 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 1.9.1 (2026-03-06)
+
+**Stability patch: proposal apply, rollback safety, install bootstrap, and request-scoped MCP auth**
+
+### Fixed
+- `check_preconditions()` now runs the integrity scan via `python -m mind_mem.intel_scan` with an explicit package bootstrap path, so apply prechecks work from source checkouts and clean environments
+- Minimal snapshot rollback now preserves unrelated pre-existing files by recording cleanup inventory before restore
+- Rollback now marks applied proposals as `rolled_back` to keep proposal state aligned with restored workspace contents
+- Source checkout entrypoints (`mcp_server.py`, `mind_mem.mcp_entry`, `install.sh`) now bootstrap `src/` correctly, fixing clean-install and script execution failures
+- HTTP MCP auth now derives admin access from request token scopes instead of process-wide `MIND_MEM_SCOPE`, while preserving env-based fallback for local stdio usage
+
+### Added
+- Regression tests for clean install bootstrap, fresh-workspace prechecks, minimal snapshot orphan cleanup, rollback proposal status sync, and request-scoped MCP authorization
+
+### Changed
+- Version: 1.9.0 → 1.9.1
+
 ## 1.9.0 (2026-03-05)
 
 **Governance deep stack: 8 new modules for audit, drift, causality, coding schemas, auto-resolution, benchmarks, and encryption**

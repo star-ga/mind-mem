@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from mind_mem.apply_engine import (
     _op_replace_range,
@@ -16,6 +17,7 @@ from mind_mem.apply_engine import (
     apply_proposal,
     check_fingerprint_dedup,
     check_no_touch_window,
+    check_preconditions,
     compute_fingerprint,
     create_snapshot,
     restore_snapshot,
@@ -672,6 +674,31 @@ class TestMinimalSnapshot(unittest.TestCase):
                 snapped = f.read()
             self.assertEqual(snapped, original)
 
+    def test_restore_keeps_unrelated_preexisting_files(self):
+        """Minimal snapshot rollback must preserve unrelated existing files in touched dirs."""
+        with tempfile.TemporaryDirectory() as ws:
+            from mind_mem.init_workspace import init
+
+            init(ws)
+            decisions_path = os.path.join(ws, "decisions", "DECISIONS.md")
+            sidecar_path = os.path.join(ws, "decisions", "CUSTOM.md")
+
+            with open(decisions_path, "w") as f:
+                f.write("[D-001]\nStatement: Original\nStatus: active\n")
+            with open(sidecar_path, "w") as f:
+                f.write("preexisting sidecar\n")
+
+            snap_dir = create_snapshot(ws, "20260217-120003", files_touched=["decisions/DECISIONS.md"])
+
+            with open(decisions_path, "w") as f:
+                f.write("[D-001]\nStatement: Mutated\nStatus: active\n")
+
+            restore_snapshot(ws, snap_dir)
+
+            self.assertTrue(os.path.exists(sidecar_path), "Rollback deleted unrelated preexisting file")
+            with open(sidecar_path) as f:
+                self.assertEqual(f.read(), "preexisting sidecar\n")
+
 
 class TestDeferredCooldown(unittest.TestCase):
     """Deferred/rejected proposals have a cooldown period before re-proposal."""
@@ -740,6 +767,20 @@ class TestDeferredCooldown(unittest.TestCase):
             new_proposal = {"TargetBlock": "D-20260214-001"}
             ok, reason = check_deferred_cooldown(ws, new_proposal)
             self.assertTrue(ok, "Old rejected proposal should not block same target")
+
+
+@unittest.skipIf(sys.platform == "win32", "validate.sh requires bash (Unix only)")
+class TestCheckPreconditions(unittest.TestCase):
+    """Apply prechecks should work against an initialized workspace."""
+
+    def test_fresh_workspace_passes(self):
+        with tempfile.TemporaryDirectory() as ws:
+            from mind_mem.init_workspace import init
+
+            init(ws)
+            ok, report = check_preconditions(ws)
+            self.assertTrue(ok, f"Expected preconditions to pass, got: {report}")
+            self.assertTrue(any(line.startswith("intel_scan: PASS") for line in report), report)
 
 
 class TestOpSupersedeDecision(unittest.TestCase):
@@ -838,6 +879,43 @@ class TestOpReplaceRange(unittest.TestCase):
             self.assertIn("markers not found", msg)
 
 
+class TestRollbackStatusSync(unittest.TestCase):
+    """Explicit rollback should keep proposal metadata aligned with the workspace."""
+
+    def test_rollback_marks_proposal_rolled_back(self):
+        with tempfile.TemporaryDirectory() as ws:
+            from mind_mem.init_workspace import init
+
+            init(ws)
+
+            proposal_path = os.path.join(ws, "intelligence", "proposed", "DECISIONS_PROPOSED.md")
+            with open(proposal_path, "w") as f:
+                f.write(
+                    "[P-20260217-001]\n"
+                    "ProposalId: P-20260217-001\n"
+                    "Type: edit\n"
+                    "TargetBlock: D-20260217-001\n"
+                    "Status: applied\n"
+                )
+
+            receipt_ts = "20260217-120010"
+            snap_dir = create_snapshot(ws, receipt_ts, files_touched=["decisions/DECISIONS.md"])
+            receipt_path = os.path.join(snap_dir, "APPLY_RECEIPT.md")
+            with open(receipt_path, "w") as f:
+                f.write(f"[AR-{receipt_ts}]\nProposal: P-20260217-001\nResult: applied\n")
+
+            with patch(
+                "mind_mem.apply_engine.check_preconditions",
+                return_value=(True, ["validate: PASS (TOTAL 0 issues)"]),
+            ):
+                ok = rollback(ws, receipt_ts)
+
+            self.assertTrue(ok)
+            with open(proposal_path) as f:
+                content = f.read()
+            self.assertIn("Status: rolled_back", content)
+
+
 class TestManifestFullSnapshot(unittest.TestCase):
     """Manifest is created during full snapshot (no files_touched)."""
 
@@ -861,7 +939,7 @@ class TestManifestFullSnapshot(unittest.TestCase):
             # Manifest must list the files
             manifest = _read_manifest(snap_dir)
             self.assertIsNotNone(manifest)
-            self.assertIn("decisions/DECISIONS.md", manifest)
+            self.assertIn("decisions/DECISIONS.md", manifest["files"])
 
     def test_minimal_snapshot_creates_manifest(self):
         """Minimal snapshot (with files_touched) must also write MANIFEST.json."""
@@ -878,9 +956,9 @@ class TestManifestFullSnapshot(unittest.TestCase):
 
             manifest = _read_manifest(snap_dir)
             self.assertIsNotNone(manifest)
-            self.assertIn("decisions/DECISIONS.md", manifest)
+            self.assertIn("decisions/DECISIONS.md", manifest["files"])
             # Config files always included
-            self.assertIn("mind-mem.json", manifest)
+            self.assertIn("mind-mem.json", manifest["files"])
 
 
 class TestManifestRestore(unittest.TestCase):

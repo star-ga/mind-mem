@@ -212,6 +212,12 @@ def check_preconditions(ws):
     report = []
     # Use scripts from our own installation directory, not from the workspace
     _script_dir = os.path.dirname(os.path.abspath(__file__))
+    _pkg_root = os.path.dirname(os.path.dirname(_script_dir))
+
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    if _pkg_root:
+        env["PYTHONPATH"] = _pkg_root if not existing_pythonpath else _pkg_root + os.pathsep + existing_pythonpath
 
     # P2: validate.sh (from installation, not workspace)
     validate_sh = os.path.join(_script_dir, "validate.sh")
@@ -219,7 +225,7 @@ def check_preconditions(ws):
         report.append("validate: SKIP (script not found)")
         return True, report
     try:
-        result = subprocess.run(["bash", validate_sh, ws], capture_output=True, text=True, timeout=60)
+        result = subprocess.run(["bash", validate_sh, ws], capture_output=True, text=True, timeout=60, env=env)
         # Find the TOTAL line (contains "issues")
         total_line = ""
         for line in result.stdout.strip().split("\n"):
@@ -241,7 +247,13 @@ def check_preconditions(ws):
         report.append("intel_scan: SKIP (script not found)")
         return True, report
     try:
-        result = subprocess.run(["python3", intel_scan, ws], capture_output=True, text=True, timeout=60)
+        result = subprocess.run(
+            [sys.executable, "-m", "mind_mem.intel_scan", ws],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        )
         # Find the TOTAL line
         total_line = ""
         for line in result.stdout.strip().split("\n"):
@@ -251,7 +263,11 @@ def check_preconditions(ws):
         if "0 critical" in total_line:
             report.append(f"intel_scan: PASS ({total_line})")
         else:
-            report.append(f"intel_scan: FAIL ({total_line or 'no TOTAL line found'})")
+            detail = total_line
+            if not detail:
+                stderr_lines = [line.strip() for line in result.stderr.splitlines() if line.strip()]
+                detail = stderr_lines[-1] if stderr_lines else f"exit code {result.returncode}"
+            report.append(f"intel_scan: FAIL ({detail})")
             return False, report
     except Exception as e:
         report.append(f"intel_scan: ERROR ({e})")
@@ -277,13 +293,39 @@ def _safe_copy(src, dst):
     shutil.copy2(src, dst)
 
 
-def _build_manifest(snap_dir, files):
+def _build_cleanup_inventory(ws, roots):
+    """Capture the pre-snapshot file inventory for touched top-level roots."""
+    inventory = {}
+    normalized_roots = {root.replace("\\", "/").strip("/") for root in roots if root}
+    for root in sorted(normalized_roots):
+        entries = []
+        root_path = os.path.join(ws, root)
+        if not os.path.isdir(root_path):
+            inventory[root] = entries
+            continue
+
+        for walk_root, dirs, files in os.walk(root_path):
+            rel_walk_root = os.path.relpath(walk_root, ws)
+            if root == "intelligence" and "applied" in rel_walk_root.split(os.sep):
+                dirs.clear()
+                continue
+            for fname in files:
+                rel = os.path.relpath(os.path.join(walk_root, fname), ws)
+                entries.append(rel.replace(os.sep, "/"))
+        inventory[root] = sorted(entries)
+    return inventory
+
+
+def _build_manifest(snap_dir, files, cleanup_inventory=None):
     """Write snapshot manifest for efficient delta-based restore."""
     # Normalize to POSIX separators for cross-platform portability
     normalized = [f.replace(os.sep, "/") for f in files]
     manifest_path = os.path.join(snap_dir, "MANIFEST.json")
+    payload = {"files": normalized, "version": 2}
+    if cleanup_inventory:
+        payload["cleanup_inventory"] = cleanup_inventory
     with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump({"files": normalized, "version": 1}, f)
+        json.dump(payload, f)
 
 
 def _read_manifest(snap_dir):
@@ -293,7 +335,13 @@ def _read_manifest(snap_dir):
         return None
     with open(manifest_path, encoding="utf-8") as f:
         data = json.load(f)
-    return data.get("files", [])
+    if isinstance(data, list):
+        return {"files": data, "cleanup_inventory": {}, "version": 1}
+    return {
+        "files": data.get("files", []),
+        "cleanup_inventory": data.get("cleanup_inventory", {}),
+        "version": data.get("version", 1),
+    }
 
 
 def create_snapshot(ws, ts, files_touched=None):
@@ -311,10 +359,15 @@ def create_snapshot(ws, ts, files_touched=None):
     os.makedirs(snap_dir, exist_ok=True)
 
     manifest_files = []
+    cleanup_inventory = None
 
     if files_touched:
         # Minimal snapshot: only snapshot files the proposal will modify
         ws_real = os.path.realpath(ws)
+        cleanup_inventory = _build_cleanup_inventory(
+            ws,
+            {rel_path.replace("\\", "/").split("/", 1)[0] for rel_path in files_touched if rel_path},
+        )
         for rel_path in files_touched:
             resolved = os.path.realpath(os.path.join(ws_real, rel_path))
             if not resolved.startswith(ws_real + os.sep) and resolved != ws_real:
@@ -367,7 +420,7 @@ def create_snapshot(ws, ts, files_touched=None):
                 _safe_copy(src, os.path.join(snap_dir, f))
                 manifest_files.append(f)
 
-    _build_manifest(snap_dir, manifest_files)
+    _build_manifest(snap_dir, manifest_files, cleanup_inventory=cleanup_inventory)
     return snap_dir
 
 
@@ -381,8 +434,10 @@ def restore_snapshot(ws, snap_dir):
     The legacy path uses an atomic temp+rename pattern per directory.
     Intelligence/applied/ is always skipped to prevent deleting active snapshots.
     """
-    manifest = _read_manifest(snap_dir)
-    if manifest is not None:
+    manifest_data = _read_manifest(snap_dir)
+    if manifest_data is not None:
+        manifest = manifest_data.get("files", [])
+        cleanup_inventory = manifest_data.get("cleanup_inventory", {})
         # Manifest-based fast-path: restore only listed files
         for rel_posix in manifest:
             rel_path = rel_posix.replace("/", os.sep)
@@ -394,7 +449,7 @@ def restore_snapshot(ws, snap_dir):
 
         # Clean up orphan files: remove workspace files in snapshotted dirs
         # that aren't in the manifest (files created after snapshot)
-        _cleanup_orphans_from_manifest(ws, snap_dir, manifest)
+        _cleanup_orphans_from_manifest(ws, manifest, cleanup_inventory)
         return
 
     # Legacy fallback: copytree-based restore for pre-manifest snapshots
@@ -445,7 +500,7 @@ def restore_snapshot(ws, snap_dir):
             shutil.copy2(src, os.path.join(ws, f))
 
 
-def _cleanup_orphans_from_manifest(ws, snap_dir, manifest):
+def _cleanup_orphans_from_manifest(ws, manifest, cleanup_inventory=None):
     """Remove files in snapshotted directories that aren't in the manifest.
 
     This handles the case where ops created new files after the snapshot —
@@ -453,15 +508,21 @@ def _cleanup_orphans_from_manifest(ws, snap_dir, manifest):
     """
     # Normalize manifest to POSIX for consistent set lookups
     manifest_set = set(m.replace(os.sep, "/") for m in manifest)
+    inventory_sets = {
+        root.replace("\\", "/").strip("/"): {entry.replace(os.sep, "/") for entry in entries}
+        for root, entries in (cleanup_inventory or {}).items()
+    }
 
     # Collect directories that were snapshotted
     snapshotted_dirs = set()
     for rel in manifest:
         top_dir = rel.split("/")[0]
         snapshotted_dirs.add(top_dir)
+    snapshotted_dirs.update(inventory_sets.keys())
 
     # Walk each snapshotted top-level directory to find orphans
     for d in snapshotted_dirs:
+        allowed = inventory_sets.get(d, manifest_set)
         if d in ("intelligence",):
             # For intelligence, skip applied/ subtree
             intel_dir = os.path.join(ws, "intelligence")
@@ -473,7 +534,7 @@ def _cleanup_orphans_from_manifest(ws, snap_dir, manifest):
                         continue
                     for fname in files:
                         rel = os.path.relpath(os.path.join(root, fname), ws)
-                        if rel.replace(os.sep, "/") not in manifest_set:
+                        if rel.replace(os.sep, "/") not in allowed:
                             os.remove(os.path.join(root, fname))
         else:
             dirpath = os.path.join(ws, d)
@@ -481,7 +542,7 @@ def _cleanup_orphans_from_manifest(ws, snap_dir, manifest):
                 for root, _dirs, files in os.walk(dirpath):
                     for fname in files:
                         rel = os.path.relpath(os.path.join(root, fname), ws)
-                        if rel.replace(os.sep, "/") not in manifest_set:
+                        if rel.replace(os.sep, "/") not in allowed:
                             os.remove(os.path.join(root, fname))
 
 
@@ -493,10 +554,10 @@ def snapshot_diff(ws, snap_dir):
     that are added, removed, or modified.
     """
     diffs = []
-    manifest = _read_manifest(snap_dir)
+    manifest_data = _read_manifest(snap_dir)
 
-    if manifest is not None:
-        files_to_check = manifest
+    if manifest_data is not None:
+        files_to_check = manifest_data.get("files", [])
     else:
         # Legacy: walk the snapshot to discover files
         files_to_check = []
@@ -1398,6 +1459,16 @@ def rollback(ws, receipt_ts):
         with open(receipt_path, "a") as f:
             f.write(f"\nRolledBack: {datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')}\n")
             f.write("Result: rolled_back\n")
+        proposal_id = None
+        with open(receipt_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("Proposal:"):
+                    proposal_id = line.split(":", 1)[1].strip()
+                    break
+        if proposal_id:
+            _proposal, source_file = find_proposal(ws, proposal_id)
+            if source_file:
+                _mark_proposal_status(source_file, proposal_id, "rolled_back")
 
     print(f"\n═══ ROLLED BACK from {receipt_ts} ═══")
     return True

@@ -38,7 +38,7 @@ ensure_workspace() {
   local ws="$1"
   if [ ! -d "$ws" ]; then
     info "Creating workspace at $ws"
-    python3 -m mind_mem.init_workspace "$ws"
+    PYTHONPATH="$MIND_MEM_DIR/src${PYTHONPATH:+:$PYTHONPATH}" python3 -m mind_mem.init_workspace "$ws"
   fi
   ok "Workspace: $ws"
 }
