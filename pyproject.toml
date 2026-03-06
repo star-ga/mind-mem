@@ -3,7 +3,7 @@ name = "mind-mem"
 version = "1.9.1"
 description = "Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent."
 readme = "README.md"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
 authors = [
     { name = "STARGA Inc", email = "noreply@star.ga" }
