@@ -9,14 +9,14 @@
   </p>
   <p align="center">
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
-    <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/v/mind_mem?style=flat-square&color=blue" alt="PyPI"></a>
-    <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/pyversions/mind_mem?style=flat-square" alt="Python Versions"></a>
-    <a href="https://github.com/star-ga/mind-mem/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/mind_mem?style=flat-square" alt="License"></a>
+    <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/v/mind-mem?style=flat-square&color=blue" alt="PyPI"></a>
+    <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/pyversions/mind-mem?style=flat-square" alt="Python Versions"></a>
+    <a href="https://github.com/star-ga/mind-mem/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/mind-mem?style=flat-square" alt="License"></a>
     <a href="https://github.com/star-ga/mind-mem/releases"><img src="https://img.shields.io/github/v/release/star-ga/mind-mem?style=flat-square&color=green" alt="Release"></a>
     <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
     <img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible">
     <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
-    <img src="https://img.shields.io/badge/tests-2180-brightgreen?style=flat-square" alt="Tests: 2180">
+    <img src="https://img.shields.io/badge/tests-2189-brightgreen?style=flat-square" alt="Tests: 2189">
     <img src="https://img.shields.io/badge/MCP_tools-19-blue?style=flat-square" alt="MCP Tools: 19">
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/security-review.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/security-review.yml?branch=main&style=flat-square&label=Security%20Review&color=darkgreen" alt="Security Review"></a>
   </p>
@@ -1052,7 +1052,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 | Key                             | Default              | Description                                                  |
 | ------------------------------- | -------------------- | ------------------------------------------------------------ |
-| `version`                       | `"1.7.0"`            | Config schema version                                        |
+| `version`                       | `"1.9.1"`            | Config file version                                          |
 | `auto_capture`                  | `true`               | Run capture engine on session end                            |
 | `auto_recall`                   | `true`               | Show recall context on session start                         |
 | `governance_mode`               | `"detect_only"`      | Governance mode (`detect_only`, `propose`, `enforce`)        |

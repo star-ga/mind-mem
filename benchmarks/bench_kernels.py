@@ -425,7 +425,7 @@ def run_benchmarks(sizes: list[int], iterations: int):
         print("  MIND kernel not compiled. Showing Python baseline only.")
         print("  To compare, build with mindc and re-run:")
         print()
-        print("    cd /path/to/separate-accelerator-source && ./build.sh")
+        print("    build and deploy the protected MIND kernel")
         print("    python benchmarks/bench_kernels.py")
         print()
 
