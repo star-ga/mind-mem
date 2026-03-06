@@ -4,11 +4,14 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 INSTALL_SH = os.path.join(REPO_ROOT, "install.sh")
 MCP_SERVER = os.path.join(REPO_ROOT, "mcp_server.py")
 
 
+@pytest.mark.skipif(os.name == "nt", reason="install.sh is POSIX-only")
 def test_install_sh_bootstraps_clean_home(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
