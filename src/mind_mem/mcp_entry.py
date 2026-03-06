@@ -1,7 +1,4 @@
-"""Thin entry point for mind-mem-mcp console script.
-
-Routes to the main mcp_server.py at repo root.
-"""
+"""Thin entry point for mind-mem-mcp console script."""
 
 import os
 import sys
@@ -9,21 +6,24 @@ import sys
 
 def main():
     """Launch the Mind-Mem MCP server."""
-    # mcp_server.py lives at repo root (two levels up from src/mind_mem/)
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     server_py = os.path.join(repo_root, "mcp_server.py")
+    src_dir = os.path.join(repo_root, "src")
 
     if os.path.isfile(server_py):
-        # Add repo root to path so mcp_server.py can be imported
-        sys.path.insert(0, repo_root)
-        from mcp_server import main as server_main
+        if os.path.isdir(src_dir) and src_dir not in sys.path:
+            sys.path.insert(0, src_dir)
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
 
-        server_main()
-    else:
-        # Fallback: run directly via exec (installed via pip)
-        print("Error: mcp_server.py not found. Run from the mind-mem repository root,")
-        print("or use: python3 /path/to/mind-mem/mcp_server.py")
+    try:
+        from mind_mem.mcp_server import main as server_main
+    except ImportError:
+        print("Error: mind_mem.mcp_server module not found.")
+        print("Run from the mind-mem repository root or install the package first.")
         sys.exit(1)
+
+    server_main()
 
 
 if __name__ == "__main__":

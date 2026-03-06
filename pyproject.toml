@@ -1,6 +1,6 @@
 [project]
 name = "mind-mem"
-version = "1.9.0"
+version = "1.9.1"
 description = "Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent."
 readme = "README.md"
 license = "MIT"
@@ -58,6 +58,7 @@ mind-mem-baseline = "mind_mem.baseline_snapshot:_cli"
 [tool.setuptools]
 packages = ["mind_mem"]
 package-dir = {"" = "src"}
+py-modules = ["mcp_server"]
 
 [tool.setuptools.package-data]
 mind_mem = ["py.typed", "*.mind"]
@@ -77,6 +78,7 @@ select = ["E", "F", "W", "I"]
 
 [tool.ruff.lint.per-file-ignores]
 "mcp_server.py" = ["I001", "E402"]
+"src/mind_mem/mcp_server.py" = ["I001", "E402"]
 
 [tool.mypy]
 python_version = "3.10"

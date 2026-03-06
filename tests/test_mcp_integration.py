@@ -13,6 +13,7 @@ import os
 import time
 
 import pytest
+from fastmcp.server.auth import AccessToken
 
 # ---------------------------------------------------------------------------
 # Skip everything when fastmcp is not installed
@@ -269,6 +270,47 @@ class TestACLEnforcement:
         parsed = json.loads(result)
         assert "error" in parsed
         assert "not in ACL policy" in parsed["error"]
+
+    def test_request_scope_uses_access_token_scopes(self, server, monkeypatch):
+        monkeypatch.setattr(
+            server,
+            "get_access_token",
+            lambda: AccessToken(token="adm", client_id="client", scopes=["admin"], claims={}),
+        )
+        assert server._get_request_scope() == "admin"
+
+    def test_request_scope_defaults_user_for_non_admin_token(self, server, monkeypatch):
+        monkeypatch.setattr(
+            server,
+            "get_access_token",
+            lambda: AccessToken(token="usr", client_id="client", scopes=["user"], claims={}),
+        )
+        assert server._get_request_scope() == "user"
+
+    def test_http_request_scope_overrides_process_scope(self, server, workspace, monkeypatch):
+        monkeypatch.setenv("MIND_MEM_ADMIN_TOKEN", "admin-tok")
+        monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
+        monkeypatch.setenv("MIND_MEM_WORKSPACE", str(workspace))
+        monkeypatch.setattr(
+            server,
+            "get_access_token",
+            lambda: AccessToken(token="usr", client_id="client", scopes=["user"], claims={}),
+        )
+
+        result = _call_tool(server.reindex)
+        parsed = json.loads(result)
+        assert "error" in parsed
+        assert "Permission denied" in parsed["error"]
+
+    def test_build_http_auth_tokens_includes_user_and_admin_scopes(self, server, monkeypatch):
+        monkeypatch.setenv("MIND_MEM_TOKEN", "user-tok")
+        monkeypatch.setenv("MIND_MEM_ADMIN_TOKEN", "admin-tok")
+
+        tokens = server._build_http_auth_tokens()
+        assert tokens["user-tok"]["client_id"] == "mind-mem-user"
+        assert tokens["user-tok"]["scopes"] == ["user"]
+        assert tokens["admin-tok"]["client_id"] == "mind-mem-admin"
+        assert tokens["admin-tok"]["scopes"] == ["user", "admin"]
 
 
 # ===================================================================

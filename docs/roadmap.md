@@ -1,6 +1,6 @@
 # Roadmap
 
-## v1.9.0 (Current)
+## v1.9.1 (Current)
 
 - [x] BM25F scoring with field weights
 - [x] Co-retrieval graph boost
