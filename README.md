@@ -163,7 +163,7 @@ Four-signal reranking pipeline: negation awareness (penalizes contradicting resu
 Drop-in ms-marco-MiniLM-L-6-v2 cross-encoder (80MB). Blends 0.6 * CE + 0.4 * original score. Falls back gracefully when unavailable. Enabled via config.
 
 ### MIND Kernels (Optional, Native Speed)
-15 compiled MIND scoring kernels (BM25F, RRF fusion, reranking, negation penalty, date proximity, category boost, importance, entity overlap, confidence, top-k, weighted rank, category affinity, query-category relevance, category assignment). Compiles to native `.so` via the [MIND compiler](https://mindlang.dev). Pure Python fallback always available — no functionality is lost without compilation.
+17 compiled MIND scoring kernels (BM25F, RRF fusion, reranking, negation penalty, date proximity, category boost, importance, entity overlap, confidence, top-k, weighted rank, category affinity, query-category relevance, category assignment). Compiles to native `.so` via the [MIND compiler](https://mindlang.dev). Pure Python fallback always available — no functionality is lost without compilation.
 
 ### BM25F Hybrid Recall
 BM25F field-weighted scoring (k1=1.2, b=0.75) with per-field weighting (Statement: 3x, Title: 2.5x, Name: 2x, Summary: 1.5x), Porter stemming, bigram phrase matching (25% boost per hit), overlapping sentence chunking (3-sentence windows with 1-sentence overlap), domain-aware query expansion, and optional 2-hop graph-based cross-reference neighbor boosting. Zero dependencies. Fast and deterministic.
@@ -213,8 +213,8 @@ Scans Claude Code transcript files for user corrections, convention discoveries,
 ### MCP Server (19 tools, 8 resources)
 Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 19 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
 
-### 74+ Structural Checks + 1918 Unit Tests
-`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 1918 pytest unit tests covering all core modules.
+### 74+ Structural Checks + 2189 Unit Tests
+`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 2189 pytest unit tests covering all core modules.
 
 ### Audit Trail
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
@@ -541,7 +541,7 @@ your-workspace/
 ├── mind-mem.json             # Config
 ├── MEMORY.md                # Protocol rules
 │
-├── mind/                    # 16 MIND source files (.mind)
+├── mind/                    # 17 MIND source files (.mind)
 │   ├── bm25.mind           # BM25F scoring kernel
 │   ├── rrf.mind            # Reciprocal Rank Fusion kernel
 │   ├── reranker.mind        # Deterministic reranking
