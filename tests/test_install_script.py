@@ -1,26 +1,31 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
-
-import pytest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(__file__))
 INSTALL_SH = os.path.join(REPO_ROOT, "install.sh")
 MCP_SERVER = os.path.join(REPO_ROOT, "mcp_server.py")
 
 
-@pytest.mark.skipif(os.name == "nt", reason="install.sh is POSIX-only")
 def test_install_sh_bootstraps_clean_home(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
 
     env = os.environ.copy()
-    env["HOME"] = str(home)
+    env["HOME"] = str(home).replace("\\", "/") if os.name == "nt" else str(home)
+
+    if os.name == "nt":
+        bash = shutil.which("bash")
+        assert bash is not None, "bash is required to run install.sh on Windows"
+        cmd = [bash, INSTALL_SH.replace("\\", "/"), "--codex"]
+    else:
+        cmd = [INSTALL_SH, "--codex"]
 
     result = subprocess.run(
-        [INSTALL_SH, "--codex"],
+        cmd,
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
