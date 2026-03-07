@@ -811,7 +811,7 @@ Supports ONNX inference (local, no server) or cloud embeddings. Falls back to BM
 
 ## MIND Kernels
 
-mind-mem includes 16 `.mind` kernel source files — numerical hot paths written in the [MIND programming language](https://mindlang.dev). The MIND kernel is **optional**. mind-mem works identically without it (pure Python fallback). With it, scoring runs at native speed with compile-time tensor shape verification.
+mind-mem includes 17 `.mind` kernel source files — numerical hot paths written in the [MIND programming language](https://mindlang.dev). The MIND kernel is **optional**. mind-mem works identically without it (pure Python fallback). With it, scoring runs at native speed with compile-time tensor shape verification.
 
 ### Compilation
 
