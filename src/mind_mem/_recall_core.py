@@ -246,6 +246,7 @@ def recall(
     _kernel_bm25_k1 = BM25_K1
     _kernel_bm25_b = BM25_B
     _kernel_field_weights = None
+    _cognitive: dict = {}
     try:
         from .mind_ffi import get_kernel_param, get_mind_dir, load_kernel_config
 
@@ -257,10 +258,39 @@ def recall(
             fields_section = recall_kernel.get("fields", {})
             if fields_section:
                 _kernel_field_weights = fields_section
+        # Load cognitive kernel for agent-aware scoring overrides
+        cognitive_kernel = load_kernel_config(os.path.join(mind_dir, "cognitive.mind"))
+        if cognitive_kernel:
+            _cognitive = cognitive_kernel
     except ImportError:
         _log.debug("mind_ffi_unavailable", hint="MIND kernels not installed")
     except Exception as e:
         _log.warning("mind_kernel_load_failed", error=str(e))
+
+    # Apply cognitive kernel overrides to scoring constants
+    _cog_scoring = _cognitive.get("scoring", {})
+    _status_boost_active = float(_cog_scoring.get("status_boost_active", STATUS_BOOST_ACTIVE))
+    _status_boost_wip = float(_cog_scoring.get("status_boost_wip", STATUS_BOOST_WIP))
+    _priority_boost = float(_cog_scoring.get("priority_boost", PRIORITY_BOOST))
+    _entity_boost = float(_cog_scoring.get("entity_boost_per_hit", ENTITY_BOOST_PER_HIT))
+    _max_entity_hits = int(_cog_scoring.get("max_entity_hits", MAX_ENTITY_HITS))
+    _graph_boost = float(_cog_scoring.get("graph_boost_factor", GRAPH_BOOST_FACTOR))
+
+    # Cognitive context: domain keyword boosting
+    _cog_context = _cognitive.get("context", {})
+    _domain_keywords_raw = _cog_context.get("domain_keywords", "")
+    _domain_keywords: set[str] = set()
+    if isinstance(_domain_keywords_raw, list):
+        _domain_keywords = {str(k).strip().lower() for k in _domain_keywords_raw if str(k).strip()}
+    elif isinstance(_domain_keywords_raw, str) and _domain_keywords_raw.strip():
+        _domain_keywords = {k.strip().lower() for k in _domain_keywords_raw.split(",") if k.strip()}
+    _domain_keyword_boost = float(_cog_context.get("domain_keyword_boost", 1.0))
+    _decision_boost = float(_cog_context.get("decision_boost", 1.0))
+
+    # Cognitive proactive: auto-enable graph boost
+    _cog_proactive = _cognitive.get("proactive", {})
+    if _cog_proactive.get("auto_graph_boost", False):
+        graph_boost = True
 
     # --- A-MEM block metadata manager (optional) ---
     meta_mgr = None
@@ -548,20 +578,31 @@ def recall(
 
         status = block.get("Status", "")
         if status == "active":
-            score *= STATUS_BOOST_ACTIVE
+            score *= _status_boost_active
         elif status in ("todo", "doing"):
-            score *= STATUS_BOOST_WIP
+            score *= _status_boost_wip
 
         priority = block.get("Priority", "")
         if priority in ("P0", "P1"):
-            score *= PRIORITY_BOOST
+            score *= _priority_boost
 
         # --- Fact key boosting: entity overlap + adversarial negation ---
         block_entities = block.get("_entities", [])
         if block_entities:
             entity_hits = sum(1 for eid in block_entities if eid.lower() in query.lower())
             if entity_hits > 0:
-                score *= 1.0 + ENTITY_BOOST_PER_HIT * min(entity_hits, MAX_ENTITY_HITS)
+                score *= 1.0 + _entity_boost * min(entity_hits, _max_entity_hits)
+
+        # --- Cognitive kernel: domain keyword boosting ---
+        if _domain_keywords and _domain_keyword_boost > 1.0:
+            block_text = (block.get("Statement", "") or block.get("Title", "") or "").lower()
+            if any(kw in block_text for kw in _domain_keywords):
+                score *= _domain_keyword_boost
+
+        # --- Cognitive kernel: decision block boosting ---
+        block_id = block.get("_id", "")
+        if _decision_boost > 1.0 and block_id.startswith("D-"):
+            score *= _decision_boost
 
         if query_type == "adversarial" and block.get("_has_negation", False):
             score *= ADVERSARIAL_NEGATION_BOOST
@@ -609,9 +650,9 @@ def recall(
 
         # Multi-hop traversal with progressive decay.
         # For multi-hop queries, extend to 3-hop with stronger propagation.
-        hop_decays = [GRAPH_BOOST_FACTOR, GRAPH_BOOST_FACTOR * 0.5]
+        hop_decays = [_graph_boost, _graph_boost * 0.5]
         if query_type == "multi-hop":
-            hop_decays.append(GRAPH_BOOST_FACTOR * 0.25)  # 3rd hop at 0.1
+            hop_decays.append(_graph_boost * 0.25)  # 3rd hop
 
         for hop, decay in enumerate(hop_decays):
             # On first hop, seed from BM25 results; on later hops, seed from
