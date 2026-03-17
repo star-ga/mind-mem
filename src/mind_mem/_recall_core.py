@@ -90,6 +90,14 @@ try:
 except ImportError:
     _HAS_LLM_EXTRACTOR = False
 
+# Calibration feedback loop (optional — graceful degradation if unavailable)
+try:
+    from .calibration import CalibrationManager
+
+    _HAS_CALIBRATION = True
+except ImportError:
+    _HAS_CALIBRATION = False
+
 _log = get_logger("recall")
 
 # ---------------------------------------------------------------------------
@@ -125,6 +133,8 @@ if not _HAS_INTENT_ROUTER:
     _log.info("optional_subsystem_unavailable", subsystem="intent_router", impact="falling back to detect_query_type()")
 if not _HAS_LLM_EXTRACTOR:
     _log.info("optional_subsystem_unavailable", subsystem="llm_extractor", impact="LLM enrichment disabled")
+if not _HAS_CALIBRATION:
+    _log.info("optional_subsystem_unavailable", subsystem="calibration", impact="calibration feedback loop disabled")
 
 
 __all__ = [
@@ -302,6 +312,14 @@ def recall(
                 meta_mgr = BlockMetadataManager(meta_db)
         except Exception as e:
             _log.warning("block_metadata_init_failed", error=str(e))
+
+    # --- Calibration feedback loop (optional) ---
+    cal_mgr = None
+    if _HAS_CALIBRATION:
+        try:
+            cal_mgr = CalibrationManager(workspace)
+        except Exception as e:
+            _log.warning("calibration_init_failed", error=str(e))
 
     # --- Pipeline stage counters (#428) ---
     _stage_counts: dict[str, int | float] = {}
@@ -614,6 +632,14 @@ def recall(
                 score *= importance
             except Exception as e:
                 _log.warning("amem_importance_boost_failed", block_id=block.get("_id", ""), error=str(e))
+
+        # --- Calibration feedback weight ---
+        if cal_mgr:
+            try:
+                cal_weight = cal_mgr.get_block_weight(block.get("_id", ""))
+                score *= cal_weight
+            except Exception as e:
+                _log.warning("calibration_weight_failed", block_id=block.get("_id", ""), error=str(e))
 
         # Build rich result payload with speaker + display text
         raw_excerpt = get_excerpt(block)
