@@ -29,6 +29,7 @@ Core modules:
     auto_resolver   — Automatic contradiction resolution with preference learning
     governance_bench — Governance-specific benchmark suite
     encryption      — Optional AES-256 encryption at rest
+    calibration     — Retrieval quality feedback loop with per-block calibration weights
 """
 
 __version__ = "1.9.1"

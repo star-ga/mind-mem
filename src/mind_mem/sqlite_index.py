@@ -818,6 +818,14 @@ def query_index(
             rerank_debug=rerank_debug,
         )
 
+    # Initialize calibration manager (optional — graceful degradation)
+    _cal_mgr = None
+    try:
+        from .calibration import CalibrationManager
+        _cal_mgr = CalibrationManager(workspace)
+    except (ImportError, Exception) as _cal_err:
+        _log.debug("calibration_unavailable_in_fts", error=str(_cal_err))
+
     # Staleness check: warn but don't auto-rebuild (#34)
     if is_stale(workspace):
         _log.info("index_stale", hint="Run 'reindex' tool to update the FTS5 index")
@@ -919,6 +927,14 @@ def query_index(
         priority = block_data.get("Priority", "")
         if priority in ("P0", "P1"):
             score *= 1.1
+
+        # Calibration feedback weight
+        if _cal_mgr is not None:
+            try:
+                cal_weight = _cal_mgr.get_block_weight(row["id"])
+                score *= cal_weight
+            except Exception:
+                pass  # Graceful degradation — skip calibration for this block
 
         result = {
             "_id": row["id"],
