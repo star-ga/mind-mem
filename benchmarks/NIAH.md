@@ -153,5 +153,11 @@ python -m pytest tests/test_niah.py -v
 
 ---
 
+## Attribution
+
+The Needle In A Haystack test was originally created by [Greg Kamradt](https://github.com/gkamradt/LLMTest_NeedleInAHaystack) (November 2023) for evaluating LLM context window recall. This benchmark adapts the methodology for persistent memory retrieval systems — testing recall from a stored memory corpus rather than a single context window.
+
+---
+
 *Benchmark run: 2026-03-21 | mind-mem v1.9.0 | Test suite: tests/test_niah.py*
 *Copyright © 2026 STARGA, Inc. All rights reserved.*
