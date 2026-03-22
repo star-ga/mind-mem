@@ -267,10 +267,70 @@
 
 ---
 
-## Post-v2.0 — Future Directions
+## v2.1 — Self-Improving Retrieval via OpenClaw-RL
+
+> **Paper:** "Train Any Agent Simply by Talking" (arXiv:2603.10165)
+>
+> Theme: mind-mem learns from every user interaction — corrections, re-queries, and rephrased searches become training signals that improve retrieval quality over time.
+
+### Next-State Signal Recovery for Retrieval
+- [ ] **Evaluative signal capture** — detect user re-queries (same intent, different phrasing) as negative feedback on previous recall
+- [ ] **Directive signal extraction** — when user rephrases a query, extract the delta as a correction hint (OPD-style)
+- [ ] **Signal taxonomy**: re-query = "result was wrong", refinement = "result was incomplete", explicit feedback = "that's not what I meant"
+- [ ] **Signal store** — append-only JSONL log of (query, result, next_state, signal_type, timestamp)
+
+### Local Fine-Tunable Retrieval Model
+- [ ] **Local embedding model** — Qwen3-Embedding fine-tunable via LoRA on user interaction signals
+- [ ] **Local reranker** — ms-marco-MiniLM fine-tunable on (query, passage, user_feedback) triples
+- [ ] **Online training loop** — async: retrieval serves live, trainer updates model weights in background
+- [ ] **Graceful weight swap** — new weights loaded without interrupting active recalls (SGLang-style)
+- [ ] **Fallback** — if fine-tuned model degrades, auto-revert to base weights (governance-gated)
+
+### Calibration Feedback Loop v2 (upgrade existing)
+- [ ] **Per-block quality scores** feed into RL reward signal (existing infra → training signal)
+- [ ] **Intent router adaptation** gains token-level OPD supervision (not just confidence weight adjustment)
+- [ ] **A/B eval** — fine-tuned vs base model on held-out queries, auto-promote if MRR improves
+
+### Metrics
+- [ ] Recall MRR improvement over time (tracked per week)
+- [ ] Signal capture rate (% of interactions that produce a training signal)
+- [ ] Model revert rate (governance safety metric)
+
+---
+
+## v2.2 — Self-Improving Personal Agent (naestro-bot)
+
+> Theme: Add a local fine-tunable model to the naestro-bot fleet as the 11th provider. It handles routine/personal interactions and improves from every conversation.
+
+### Local Personal Model
+- [ ] **Qwen3-8B via Ollama** — fits RTX 3080 (10GB VRAM), serves as personal/routine handler
+- [ ] **Task router** — route routine tasks (greetings, preferences, simple lookups) to local model, hard reasoning to API fleet
+- [ ] **LoRA fine-tuning** from interaction signals:
+  - User corrections → directive signal (OPD)
+  - User re-queries → evaluative signal (binary RL)
+  - Explicit feedback ("that's wrong", "perfect") → labeled signal
+- [ ] **Async training pipeline** — Megatron or simple LoRA trainer, updates weights without interrupting serving
+- [ ] **Personality crystallization** — local model learns communication style, domain preferences, formatting habits
+- [ ] **Governance gate** — 512-style: fine-tuned model proposes, governance layer gates before output reaches user
+
+### Integration with naestro-bot Fleet
+- [ ] New provider: `local_provider.py` (Ollama backend, LoRA-capable)
+- [ ] Multi-provider routing: local model as first-try for routine, API fallback for complex
+- [ ] Quality monitoring: if local model answer quality drops, auto-escalate to API provider
+- [ ] Weekly model checkpoint + rollback capability
+
+### Safety
+- [ ] Fine-tuning bounded by governance constraints (no personality drift beyond approved parameters)
+- [ ] All training signals logged in mind-mem (auditable)
+- [ ] Human approval required for weight promotion (no silent model updates)
+
+---
+
+## Post-v2.2 — Future Directions
 
 - [ ] **Agent-to-agent trust protocol** — agents verify each other's memory integrity via Merkle proofs before sharing context
 - [ ] **Distributed memory mesh** — multiple mind-mem instances with hash-chain synchronization
 - [ ] **Real-time governance dashboard** — web UI showing evidence stream, chain health, spec-hash status
 - [ ] **512 Kernel full integration** — mind-mem as a governed resource within 512-mind production deployments
 - [ ] **Hardware-specific compilation** — `mindc` targets for ARM (Apple Silicon), CUDA, ROCm
+- [ ] **Multi-user OPD** — personal model per user in multi-tenant deployments, isolated fine-tuning per user's signal stream
