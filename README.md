@@ -83,6 +83,7 @@ Output:
 | **Zero magic**          | Every check is a grep, every mutation is a file write. Read the source in 30 min. |
 | **No silent mutation**  | Nothing writes to source of truth without explicit `/apply`. Ever.                |
 | **Zero infrastructure** | No Redis, no Postgres, no vector DB, no GPU. Python 3.10+ and stdlib only.        |
+| **100% NIAH**           | 250/250 Needle In A Haystack retrieval. Every needle, every depth, every size.     |
 
 ---
 
@@ -249,7 +250,23 @@ Per-block quality tracking with Bayesian weight computation. When users provide 
 
 ## Benchmark Results
 
-mind-mem's recall engine evaluated on two standard long-term memory benchmarks using multiple configurations — from pure BM25 to full hybrid retrieval with neural reranking.
+mind-mem's recall engine evaluated on standard long-term memory benchmarks using multiple configurations — from pure BM25 to full hybrid retrieval with neural reranking.
+
+### Needle In A Haystack (NIAH)
+
+**250/250 — 100% retrieval** across all haystack sizes, burial depths, and needle types.
+
+A single fact is planted at a controlled depth within a haystack of semantically diverse filler blocks. The system must retrieve the needle in its top-5 results using only a natural-language query.
+
+| Haystack Size | Depths Tested | Needles | Passed | Rate |
+|---------------|---------------|---------|--------|------|
+| 10 blocks | 0/25/50/75/100% | 10 | 50/50 | 100% |
+| 50 blocks | 0/25/50/75/100% | 10 | 50/50 | 100% |
+| 100 blocks | 0/25/50/75/100% | 10 | 50/50 | 100% |
+| 250 blocks | 0/25/50/75/100% | 10 | 50/50 | 100% |
+| 500 blocks | 0/25/50/75/100% | 10 | 50/50 | 100% |
+
+**Config:** Hybrid BM25 + BAAI/bge-large-en-v1.5 + RRF (k=60) + sqlite-vec. Full details: [benchmarks/NIAH.md](benchmarks/NIAH.md)
 
 ### LoCoMo LLM-as-Judge
 
