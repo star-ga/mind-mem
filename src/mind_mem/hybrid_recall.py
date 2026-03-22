@@ -176,7 +176,7 @@ class HybridBackend:
     def _check_vector(self) -> bool:
         """Return True if recall_vector + sentence-transformers are importable."""
         try:
-            import recall_vector  # noqa: F401
+            from . import recall_vector  # noqa: F401
 
             return True
         except ImportError:
@@ -356,7 +356,7 @@ class HybridBackend:
     ) -> list[dict]:
         """Vector search via recall_vector.search_batch (for RRF) or .search."""
         try:
-            import recall_vector
+            from . import recall_vector
 
             # Prefer search_batch (returns all results for RRF)
             if hasattr(recall_vector, "search_batch"):
@@ -366,6 +366,7 @@ class HybridBackend:
                         query,
                         limit=limit,
                         active_only=active_only,
+                        config=self._config,
                     )
                 )
 
