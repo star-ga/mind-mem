@@ -84,22 +84,65 @@
 - [x] Automatic contradiction detection across trajectories
 - [x] Memory importance scoring with decay
 
-## v1.6.0–v1.9.1 — Current Release
+## v1.5.1 — Patch ✅ Released (2026-02-22)
 
-See [CHANGELOG.md](CHANGELOG.md) for detailed release notes through v1.9.1.
+- [x] Bug fixes and stability improvements
 
-Highlights:
-- [x] A-MEM block metadata evolution (importance, access tracking, keywords)
-- [x] 9-type intent router with adaptive confidence weights
-- [x] Governance engine (contradiction detection, drift analysis, proposal queue)
-- [x] ConnectionManager (thread-safe SQLite pool, WAL read/write separation)
-- [x] BlockStore protocol (decoupled block access from storage format)
-- [x] Delta-based snapshot rollback (MANIFEST.json for O(manifest) restore)
-- [x] Multi-hop query decomposition (capped at 4 sub-queries)
-- [x] Recency decay for trajectory similarity (exponential half-life, default 30d)
-- [x] Security hardening (30 audit findings, SHA pinned CI, 0o700 permissions)
-- [x] Calibration feedback loop (per-block quality tracking + retrieval adjustment)
-- [x] Cognitive scoring kernel for agent-aware recall
+## v1.6.0 — Governance Engine ✅ Released (2026-02-22)
+
+- [x] **Contradiction detection** — automated conflict scanning across memory blocks
+- [x] **Drift analysis** — detect when beliefs/facts shift over time
+- [x] **Proposal queue** — staged governance proposals with approve/reject flow
+- [x] **A-MEM block metadata evolution** — importance scoring, access tracking, keyword extraction
+- [x] **9-type intent router** — classify queries by intent for targeted retrieval
+
+## v1.7.0 — Architecture Foundations ✅ Released (2026-02-23)
+
+- [x] **ConnectionManager** — thread-safe SQLite pool with WAL read/write separation
+- [x] **BlockStore protocol** — decoupled block access from storage format
+- [x] **Delta-based snapshot rollback** — MANIFEST.json for O(manifest) restore
+- [x] **Adaptive intent router** — confidence weights adjust via feedback loop
+
+## v1.7.1–v1.7.3 — Security Hardening ✅ Released (2026-02-25 – 2026-02-27)
+
+- [x] 30 audit findings fixed (6 critical, 11 high, 9 medium, 4 low)
+- [x] All CI actions pinned to immutable commit SHAs
+- [x] Pinecone API key requires env var only
+- [x] Workspace dirs created with 0o700 permissions
+- [x] Cross-platform fixes (Windows paths, macOS thread-local)
+
+## v1.8.0 — Package Layout Overhaul ✅ Released (2026-02-27)
+
+- [x] `scripts/` → `src/mind_mem/` — standard Python src layout
+- [x] Chunked commit indexing (per-file instead of whole-rebuild lock)
+- [x] Intent router persists adaptation weights
+- [x] 74 new tests
+
+## v1.8.1–v1.8.2 — Polish ✅ Released (2026-03-04)
+
+- [x] Cross-encoder batch_size parameter (prevents OOM)
+- [x] 8 integration tests covering full pipeline
+- [x] Import hygiene cleanup
+
+## v1.9.0 — Governance Deep Stack ✅ Released (2026-03-05)
+
+- [x] **Hash-chain mutation log** (`audit_chain.py`) — SHA-256 chained append-only JSONL ledger
+- [x] **Per-field mutation audit** (`field_audit.py`) — SQLite-backed field-level change tracking
+- [x] **Semantic belief drift detection** (`drift_detector.py`) — trigram Jaccard similarity
+- [x] **Temporal causal dependency graph** (`causal_graph.py`) — directed edges with cycle detection
+- [x] **Coding-native memory schemas** (`coding_schemas.py`) — 5 block types (ADR, CODE, PERF, ALGO, BUG)
+- [x] **Auto contradiction resolution** (`auto_resolver.py`) — preference learning + causal side-effect analysis
+- [x] **Governance benchmark suite** (`governance_bench.py`) — detection rate, completeness, scalability
+- [x] **Encryption at rest** (`encryption.py`) — HMAC-SHA256 keystream, PBKDF2, encrypt-then-MAC
+- [x] 145 new tests across 8 modules
+
+## v1.9.1 — Current Release ✅ Released (2026-03-06)
+
+- [x] Proposal apply + rollback safety fixes
+- [x] Request-scoped MCP auth (admin from token scopes)
+- [x] Clean install bootstrap fixes
+- [x] **Calibration feedback loop** — per-block quality tracking + retrieval adjustment
+- [x] **Cognitive scoring kernel** — agent-aware recall
 - [x] 17 MIND kernels, 19 MCP tools, 2180+ tests passing
 
 ---
