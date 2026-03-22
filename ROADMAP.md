@@ -77,9 +77,157 @@
 - [x] **Hybrid fallback validation** — strict schema checks on recall config before HybridBackend init (#28)
 - [x] 1241 tests passing, CI green on all platforms
 
-## v1.5.0 — Reflective Consolidation
+## v1.5.0 — Reflective Consolidation ✅ Released
 
-- [ ] Sleep-time memory consolidation (periodic background pass)
-- [ ] Pattern extraction from trajectory clusters
-- [ ] Automatic contradiction detection across trajectories
-- [ ] Memory importance scoring with decay
+- [x] Sleep-time memory consolidation (periodic background pass)
+- [x] Pattern extraction from trajectory clusters
+- [x] Automatic contradiction detection across trajectories
+- [x] Memory importance scoring with decay
+
+## v1.6.0–v1.9.1 — Current Release
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed release notes through v1.9.1.
+
+Highlights:
+- [x] A-MEM block metadata evolution (importance, access tracking, keywords)
+- [x] 9-type intent router with adaptive confidence weights
+- [x] Governance engine (contradiction detection, drift analysis, proposal queue)
+- [x] ConnectionManager (thread-safe SQLite pool, WAL read/write separation)
+- [x] BlockStore protocol (decoupled block access from storage format)
+- [x] Delta-based snapshot rollback (MANIFEST.json for O(manifest) restore)
+- [x] Multi-hop query decomposition (capped at 4 sub-queries)
+- [x] Recency decay for trajectory similarity (exponential half-life, default 30d)
+- [x] Security hardening (30 audit findings, SHA pinned CI, 0o700 permissions)
+- [x] Calibration feedback loop (per-block quality tracking + retrieval adjustment)
+- [x] Cognitive scoring kernel for agent-aware recall
+- [x] 17 MIND kernels, 19 MCP tools, 2180+ tests passing
+
+---
+
+# v2.0 Roadmap — Verifiable, Accelerated Memory
+
+> Three STARGA projects converge: **512-mind** governance primitives + **mind-inference** acceleration + **mind-mem** retrieval.
+>
+> Theme: The first AI memory system with **cryptographically verifiable governance** and **hardware-accelerated hot paths**.
+
+---
+
+## v2.0-alpha — Cryptographic Governance Layer (from 512-mind)
+
+**Goal:** Every memory write is tamper-evident. Governance config is immutable post-init. Evidence objects prove governance actually ran.
+
+### Hash-Chained Block Writes
+- [ ] SHA3-512 hash chain: each block write includes `prev_hash` linking to previous write
+- [ ] Chain head stored in DB metadata, verifiable from any snapshot
+- [ ] `verify_chain()` MCP tool — walk the chain, report any breaks
+- [ ] Existing `create_snapshot` / `restore_snapshot` tools gain chain-head verification
+
+### Spec-Hash Binding (I-5)
+- [ ] SHA3-512 hash of governance config (`mind-mem.json` governance section) computed at init
+- [ ] `spec_hash` embedded in every Evidence Object
+- [ ] Runtime check: if config file changes post-init, log spec-hash divergence + alert
+- [ ] `governance_spec_hash` exposed via MCP `index_stats` resource
+
+### Structured Evidence Objects
+- [ ] Every governance decision (proposal ALLOW/DENY, contradiction detection, drift alert) outputs a structured Evidence Object:
+  ```json
+  {
+    "evidence_id": "<sha3-512>",
+    "timestamp": "<ISO8601>",
+    "decision": "ALLOW | DENY",
+    "action": "proposal_apply | contradiction_detect | drift_alert",
+    "spec_hash": "<governance config hash>",
+    "state_hash": "<chain head at decision time>",
+    "context": { ... }
+  }
+  ```
+- [ ] Evidence Objects are append-only (separate evidence.jsonl file)
+- [ ] `list_evidence` MCP tool for audit queries
+
+### Single Gateway Enforcement (I-1)
+- [ ] All block writes must pass through `GovernanceGate.admit()` — no direct DB writes
+- [ ] BlockStore protocol enforced as the only write path (remove any bypass paths)
+- [ ] Write attempts outside BlockStore raise `GovernanceBypassError`
+
+**Estimated:** ~600 lines across 4 modules. No breaking changes to existing API.
+
+---
+
+## v2.0-beta — Inference Acceleration (from mind-inference)
+
+**Goal:** Sub-millisecond hot paths. Predictive prefetch. KV cache for LLM-backed operations.
+
+### KV Cache for LLM Operations
+- [ ] Prefix caching for cross-encoder reranking (shared candidate context)
+- [ ] Prefix caching for intent router (system prompt + governance context = cached)
+- [ ] Multi-hop sub-queries share parent query prefix (90%+ overlap)
+- [ ] Cache hit rate metric exposed via `index_stats`
+
+### Speculative Prefetch
+- [ ] Predict next-needed blocks based on query pattern + access history
+- [ ] Automatic prefetch during multi-hop decomposition (warm blocks before sub-query executes)
+- [ ] Existing `prefetch` MCP tool becomes automatic (opt-in via config)
+- [ ] Prefetch hit rate tracked in calibration feedback loop
+
+### MIND-Compiled Hot Paths
+- [ ] BM25F scoring kernel → `.mind` → native ELF via `mindc`
+  - Porter stemming + term frequency + field weights in single compiled pass
+  - Target: 1K blocks scored in <0.5ms (vs ~15ms Python)
+- [ ] SHA3-512 hash chain verification → `.mind` → GPU kernel
+  - Target: 81ns/hash (verified in mind-runtime benchmarks)
+- [ ] Vector similarity (cosine/dot) → `.mind` → GPU kernel
+  - Target: 1K vectors in <0.1ms (vs ~8ms Python)
+- [ ] RRF fusion → `.mind` → native
+  - Target: <0.01ms for 1K candidates
+- [ ] FFI bridge: Python calls compiled `.mind` kernels via existing FFI path
+- [ ] Automatic fallback to Python if compiled kernels unavailable
+
+**Estimated:** ~1200 lines (MIND kernels) + ~400 lines (Python FFI bridge). Performance gains are opt-in — pure Python path remains default.
+
+---
+
+## v2.0-rc — External Verification (from 512-mind)
+
+**Goal:** Third parties can verify memory integrity without full DB access.
+
+### Merkle Tree over Block Store
+- [ ] Merkle tree built over all blocks (leaf = block content hash)
+- [ ] Merkle root anchored in snapshot metadata
+- [ ] `verify_merkle` MCP tool — verify any single block's inclusion via proof
+- [ ] Snapshot export includes Merkle root + proof paths
+
+### Verification Without Operator Cooperation (I-4)
+- [ ] Standalone `mind-mem-verify` CLI tool (reads snapshot + evidence.jsonl only)
+- [ ] Verifies: hash chain integrity, spec-hash consistency, Merkle inclusion, evidence completeness
+- [ ] Exit code 0 = verified, non-zero = specific failure code
+- [ ] No database access required — works from snapshot alone
+
+### Optional Ledger Anchoring
+- [ ] Merkle root periodically anchored to external ledger (Ethereum L2 or similar)
+- [ ] Anchoring is opt-in, not required for local verification
+- [ ] `anchor_history` MCP tool shows all published roots + block heights
+
+**Estimated:** ~800 lines. Fully backward-compatible — verification is additive.
+
+---
+
+## v2.0 Release Criteria
+
+- [ ] All v2.0-alpha, beta, rc features complete
+- [ ] Hash chain + spec-hash + evidence objects passing in CI
+- [ ] MIND-compiled hot paths benchmarked (published in docs/benchmarks.md)
+- [ ] `mind-mem-verify` CLI tool works on v1.x snapshots (backward compat)
+- [ ] 2500+ tests passing
+- [ ] LoCoMo benchmark re-run with acceleration (compare latency vs v1.9.x)
+- [ ] Security audit of governance gate + hash chain implementation
+- [ ] Migration guide from v1.9.x → v2.0 (no breaking changes expected)
+
+---
+
+## Post-v2.0 — Future Directions
+
+- [ ] **Agent-to-agent trust protocol** — agents verify each other's memory integrity via Merkle proofs before sharing context
+- [ ] **Distributed memory mesh** — multiple mind-mem instances with hash-chain synchronization
+- [ ] **Real-time governance dashboard** — web UI showing evidence stream, chain health, spec-hash status
+- [ ] **512 Kernel full integration** — mind-mem as a governed resource within 512-mind production deployments
+- [ ] **Hardware-specific compilation** — `mindc` targets for ARM (Apple Silicon), CUDA, ROCm
