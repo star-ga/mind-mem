@@ -278,7 +278,7 @@ def llm_rerank(
     hits: list[dict],
     *,
     url: str = "http://localhost:11434/api/generate",
-    model: str = "qwen3-coder:30b",
+    model: str = "qwen3.5:9b",
     weight: float = 0.3,
     timeout: float = 10.0,
 ) -> list[dict]:

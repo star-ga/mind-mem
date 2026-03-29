@@ -12,7 +12,7 @@ detected at runtime; neither is required.
 Config (mind-mem.json):
     "extraction": {
         "enabled": false,
-        "model": "phi3:mini",
+        "model": "qwen3.5:9b",
         "backend": "auto"
     }
 
@@ -38,7 +38,7 @@ from typing import Any
 
 _DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": False,
-    "model": "phi3:mini",
+    "model": "qwen3.5:9b",
     "backend": "auto",
 }
 
@@ -217,12 +217,12 @@ Text: {text}
 JSON:"""
 
 
-def extract_entities(text: str, model: str = "phi3:mini", backend: str = "auto") -> list[dict]:
+def extract_entities(text: str, model: str = "qwen3.5:9b", backend: str = "auto") -> list[dict]:
     """Extract entities (people, places, dates, decisions) from text.
 
     Args:
         text: Input text to extract entities from.
-        model: LLM model name (default: phi3:mini).
+        model: LLM model name (default: qwen3.5:9b).
         backend: Backend to use ("auto", "ollama", "llama-cpp").
 
     Returns:
@@ -269,12 +269,12 @@ Text: {text}
 JSON:"""
 
 
-def extract_facts(text: str, model: str = "phi3:mini", backend: str = "auto") -> list[dict]:
+def extract_facts(text: str, model: str = "qwen3.5:9b", backend: str = "auto") -> list[dict]:
     """Extract factual claims from text.
 
     Args:
         text: Input text to extract facts from.
-        model: LLM model name (default: phi3:mini).
+        model: LLM model name (default: qwen3.5:9b).
         backend: Backend to use ("auto", "ollama", "llama-cpp").
 
     Returns:
@@ -317,7 +317,7 @@ def extract_facts(text: str, model: str = "phi3:mini", backend: str = "auto") ->
 
 def enrich_block(
     block: dict,
-    model: str = "phi3:mini",
+    model: str = "qwen3.5:9b",
     backend: str = "auto",
     enabled: bool = False,
 ) -> dict:
@@ -369,7 +369,7 @@ def enrich_results(
     config = load_config(workspace)
     if not config.get("enabled", False):
         return results
-    model = config.get("model", "phi3:mini")
+    model = config.get("model", "qwen3.5:9b")
     backend = config.get("backend", "auto")
     for block in results:
         enrich_block(block, model=model, backend=backend, enabled=True)
