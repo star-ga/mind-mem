@@ -425,3 +425,13 @@
 - [ ] **Multi-user retrieval adaptation** — per-user fine-tuning in multi-tenant deployments, isolated signal streams
 - [ ] **Federated memory** — privacy-preserving retrieval across organizational boundaries (differential privacy + secure aggregation)
 - [ ] **Continuous benchmark regression** — every PR runs LoCoMo subset + latency benchmarks; auto-reject if MRR drops or p99 increases >10%
+
+---
+
+## AGI Integration
+
+This repo is part of the STARGA AGI stack. See `naestro-bot/specs/AGI-ROADMAP.md` for:
+- Gap 1: CAUSAL block type for world model storage
+- Gap 2: SKILL blocks for learned strategy tracking
+- Gap 5: Cross-domain retrieval for transfer learning
+- Gap 6: VISUAL blocks for grounded perception memory
