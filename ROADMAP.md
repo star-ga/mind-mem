@@ -205,6 +205,12 @@
 - [ ] Prefix caching for intent router (system prompt + governance context = cached)
 - [ ] Multi-hop sub-queries share parent query prefix (90%+ overlap)
 - [ ] Cache hit rate metric exposed via `index_stats`
+- [ ] **TurboQuant-compressed prefix cache** — apply 3-bit vector quantization
+  (arXiv:2504.19874) to cached KV embeddings for ~6x memory reduction. Enables
+  caching far more prefix contexts in limited RAM/VRAM. PolarQuant rotation +
+  Lloyd-Max codebook + QJL residual correction — quality-neutral at 3.5 bits/channel.
+  Uses mind-inference's TurboQuant implementation when available (Phase 2), falls
+  back to pure Python codebook lookup otherwise.
 
 ### Speculative Prefetch
 - [ ] Predict next-needed blocks based on query pattern + access history
