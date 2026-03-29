@@ -298,7 +298,118 @@
 
 ---
 
-## Post-v2.1 — Future Directions
+## v2.2 — Knowledge Graph Layer
+
+> Theme: Relationships between facts are as retrievable as facts themselves.
+> Ref: TrustGraph Context Core architecture, André Lindenberg "Memento Nightmare" analysis (2026-03-28)
+
+### Entity-Relationship Graph Store
+- [ ] **Graph backend** — pluggable: SQLite-based adjacency table (default), Neo4j, FalkorDB (optional)
+- [ ] **Triple store** — (subject, predicate, object) with typed predicates: `AUTHORED_BY`, `DEPENDS_ON`, `CONTRADICTS`, `SUPERSEDES`, `PART_OF`, `MENTIONED_IN`
+- [ ] **Entity registry** — canonical entity resolution: aliases, coreference, merge/split
+- [ ] **Auto-extraction during ingestion** — entity pairs + relationships extracted per block (upgrade existing `entity_ingest`)
+- [ ] **Graph-aware retrieval** — query hits block via BM25/vector → expand to N-hop neighbors via graph traversal → pack related entities into context
+- [ ] **Multi-hop graph traversal** — "What are all projects that depend on tools authored by person X?" in <10ms for 100K nodes
+- [ ] **Causal chain queries** — existing `causal_graph.py` promoted from governance-only to general retrieval
+- [ ] **`graph_query` MCP tool** — Cypher-like query interface for direct graph access
+- [ ] **`graph_stats` MCP resource** — node count, edge count, connected components, orphan detection
+
+### Graph Reification (Statements About Statements)
+- [ ] **Relationship-level provenance** — each edge carries: extraction_model, extraction_timestamp, source_block_id, confidence (0.0–1.0), temperature
+- [ ] **Queryable provenance** — "Which model extracted the relationship between X and Y? At what confidence?"
+- [ ] **Provenance-weighted retrieval** — edges from high-confidence sources ranked higher in graph expansion
+- [ ] **Temporal validity windows** — edges can have `valid_from` / `valid_until` timestamps; expired edges excluded from retrieval by default
+
+**Estimated:** ~2000 lines (graph store + extraction) + ~600 lines (reification + provenance). New dependency: none for SQLite backend.
+
+---
+
+## v2.3 — Context Cores: Portable Memory Bundles
+
+> Theme: Docker for agent knowledge. Build once with a powerful model, deploy anywhere.
+> Ref: TrustGraph Context Core concept
+
+### Context Core Format
+- [ ] **Bundle spec** — single archive (.mmcore) containing: blocks, graph edges, vector index, retrieval policies, ontology schema, metadata manifest
+- [ ] **Versioned artifacts** — each core has semver + content hash; cores are immutable once published
+- [ ] **Retrieval policies embedded** — BM25 weights, cross-encoder config, intent router weights, graph traversal depth — all travel with the bundle
+- [ ] **Namespace isolation** — multiple cores loaded simultaneously with namespace prefixes; no cross-contamination in multi-tenant deployments
+- [ ] **`build_core` MCP tool** — snapshot current memory (or filtered subset) into a .mmcore bundle
+- [ ] **`load_core` / `unload_core` MCP tools** — hot-load/unload at runtime; no restart required
+- [ ] **`list_cores` MCP resource** — active cores with stats (block count, graph size, load time)
+
+### Edge Deployment
+- [ ] **Lightweight runtime** — core loads in <2s on 1B-param model environments (no LLM needed for retrieval, only for answering)
+- [ ] **Core diffing** — generate delta between core versions; deploy incremental updates instead of full bundle
+- [ ] **Core rollback** — revert to previous core version when new knowledge proves flawed
+- [ ] **Export to static formats** — .mmcore → JSON-LD, RDF/Turtle, or plain Markdown for interop
+
+**Estimated:** ~1500 lines (bundle format + build/load) + ~400 lines (edge runtime). New file format, backward-compatible (cores are additive).
+
+---
+
+## v2.4 — Cognitive Memory Management
+
+> Theme: Active forgetting, token-aware packing, and multi-modal memory.
+
+### Active Cognitive Forgetting
+- [ ] **Sleep consolidation cycle** — periodic background pass: mark → merge → archive → forget
+  - **Mark**: blocks below importance threshold + no access in N days flagged for review
+  - **Merge**: semantically similar blocks compressed into single summary block (provenance preserved)
+  - **Archive**: merged blocks moved to cold storage (still queryable, not in hot index)
+  - **Forget**: archived blocks past TTL permanently removed (governance-gated, requires explicit opt-in)
+- [ ] **Compression ratio metric** — track block count reduction per consolidation cycle
+- [ ] **Forgetting governance** — every forget decision produces an Evidence Object; reversible within 30-day grace period
+- [ ] **Memory pressure alerts** — when block count exceeds configurable threshold, trigger consolidation cycle
+- [ ] **`consolidate` MCP tool** — manual trigger with dry-run mode
+
+### Token Budget Management
+- [ ] **Context window awareness** — recall accepts `max_tokens` parameter; packer allocates budget across: system prompt, graph context, retrieved blocks, conversation history
+- [ ] **Adaptive packing strategy** — given token budget:
+  1. Reserve 15% for graph context (entity relationships)
+  2. Reserve 10% for provenance metadata
+  3. Pack remaining with blocks by relevance score, truncating lowest-scored
+- [ ] **Packing quality metric** — % of packed tokens that user actually references in response (tracked via calibration loop)
+- [ ] **Model-aware budgets** — auto-detect context window from model name (128K, 200K, 1M) and set defaults
+- [ ] **`recall` gains `max_tokens` param** — backward-compatible, defaults to unlimited (current behavior)
+
+### Multi-Modal Memory
+- [ ] **Image block type** — `[IMAGE]` blocks store: description, embedding (CLIP/SigLIP), source path, dimensions, thumbnail hash
+- [ ] **Audio block type** — `[AUDIO]` blocks store: transcript, embedding, duration, speaker labels, source path
+- [ ] **Cross-modal retrieval** — text query retrieves relevant images/audio; image query retrieves relevant text blocks
+- [ ] **Auto-extraction** — images/audio ingested via pipeline: transcribe/describe → embed → store with text + modal embedding
+- [ ] **Modal-aware packing** — token budget accounts for image tokens (vision models) vs text-only models
+
+**Estimated:** ~1800 lines (forgetting + packing) + ~1200 lines (multi-modal). No breaking changes.
+
+---
+
+## v2.5 — Ontology & Streaming
+
+> Theme: Schema-enforced knowledge and real-time memory.
+
+### Ontology / Schema Typing
+- [ ] **OWL-lite schema support** — define entity types with required/optional properties
+  - Example: `PERSON` must have `role`; `PROJECT` must have `status`, `repo`
+- [ ] **Schema validation on write** — blocks referencing typed entities validated against ontology at ingestion
+- [ ] **Schema evolution** — versioned ontologies; old blocks validated against schema version at write time
+- [ ] **Domain ontology library** — pre-built schemas for: software engineering, legal, medical, financial
+- [ ] **`ontology_load` / `ontology_validate` MCP tools**
+- [ ] **Schema-guided retrieval** — "find all PERSONs with role=engineer" uses schema-aware index, not text search
+
+### Streaming Ingestion
+- [ ] **Event-driven write path** — new blocks written via async event queue (not synchronous DB write)
+- [ ] **Write-ahead log** — blocks committed to WAL first, indexed asynchronously; queryable within <50ms of write
+- [ ] **Webhook ingestion endpoint** — HTTP POST → block creation (for external event sources)
+- [ ] **Change stream** — subscribers notified on new block/edge creation (for downstream consumers: dashboards, agents)
+- [ ] **Backpressure** — configurable queue depth; shed load gracefully under burst writes
+- [ ] **`stream_status` MCP resource** — queue depth, write latency, consumer lag
+
+**Estimated:** ~1000 lines (ontology) + ~800 lines (streaming). Optional dependencies: none for core (aiohttp for webhook endpoint).
+
+---
+
+## Post-v2.5 — Future Directions
 
 - [ ] **Agent-to-agent trust protocol** — agents verify each other's memory integrity via Merkle proofs before sharing context
 - [ ] **Distributed memory mesh** — multiple mind-mem instances with hash-chain synchronization
@@ -306,3 +417,5 @@
 - [ ] **512 Kernel full integration** — mind-mem as a governed resource within 512-mind production deployments
 - [ ] **Hardware-specific compilation** — `mindc` targets for ARM (Apple Silicon), CUDA, ROCm
 - [ ] **Multi-user retrieval adaptation** — per-user fine-tuning in multi-tenant deployments, isolated signal streams
+- [ ] **Federated memory** — privacy-preserving retrieval across organizational boundaries (differential privacy + secure aggregation)
+- [ ] **Continuous benchmark regression** — every PR runs LoCoMo subset + latency benchmarks; auto-reject if MRR drops or p99 increases >10%
