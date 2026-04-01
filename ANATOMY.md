@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 339 | **Est. tokens:** ~636,798
-**Generated:** 2026-04-01 07:27 UTC
+**Files:** 340 | **Est. tokens:** ~637,169
+**Generated:** 2026-04-01 10:51 UTC
 
 ## Token Budget Guide
 
@@ -23,6 +23,7 @@
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
 | `./` | 24 | ~54,937 |
+| `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 27 | ~22,720 |
 | `docs/adr/` | 2 | ~521 |
@@ -72,6 +73,9 @@
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
+### `.agents/skills/mind-mem-development/`
+
+- `SKILL.md` (~371 tok, medium) — mind-mem Development
 ### `benchmarks/`
 
 - `bench_kernels.py` (~4031 tok, huge) — Benchmark: MIND kernels vs pure Python scoring.
