@@ -357,6 +357,13 @@
 ## v2.4 — Cognitive Memory Management
 
 > Theme: Active forgetting, token-aware packing, and multi-modal memory.
+>
+> **Cross-ref:** Naestro's `consolidator.mind` (2026-03-31) implements the idle-time consolidation
+> cycle for belief graphs (merge similar, resolve contradictions, promote repeated observations,
+> decay stale). `write_discipline.mind` enforces the write-then-index invariant so failed writes
+> never pollute the retrieval index. Both modules integrate with mind-mem via FFI. The v2.4
+> features below formalize what those modules already enforce at the cognitive daemon level into
+> mind-mem's own API surface.
 
 ### Active Cognitive Forgetting
 - [ ] **Sleep consolidation cycle** — periodic background pass: mark → merge → archive → forget

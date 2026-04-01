@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 336 | **Est. tokens:** ~633,161
-**Generated:** 2026-03-29 11:51 UTC
+**Files:** 339 | **Est. tokens:** ~636,798
+**Generated:** 2026-04-01 07:27 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 24 | ~54,728 |
+| `./` | 24 | ~54,937 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 27 | ~22,720 |
 | `docs/adr/` | 2 | ~521 |
@@ -34,11 +34,12 @@
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `lib/` | 1 | ~2,176 |
 | `mind/` | 19 | ~5,518 |
+| `scripts/` | 2 | ~2,268 |
 | `skills/apply-proposal/` | 1 | ~345 |
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 66 | ~250,075 |
+| `src/mind_mem/` | 67 | ~251,235 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 135 | ~243,743 |
 | `tests/integration/` | 2 | ~1,436 |
@@ -67,7 +68,7 @@
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~20946 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~6348 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~6557 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
@@ -183,6 +184,10 @@
 - `rrf.mind` (~197 tok, small) — RRF: fuse ranked lists from multiple retrievers
 - `temporal.mind` (~113 tok, small)
 - `trajectory.mind` (~440 tok, medium)
+### `scripts/`
+
+- `anatomy-hook.sh` (~258 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
+- `anatomy.sh` (~2010 tok, huge) — anatomy — Generate ANATOMY.md for any repo
 ### `skills/apply-proposal/`
 
 - `SKILL.md` (~345 tok, medium) — /apply — Apply Proposals
@@ -225,6 +230,7 @@
 - `entity_ingest.py` (~3225 tok, huge) — mind-mem Entity Ingestion — regex-based entity extraction. Zero external deps.
 - `error_codes.py` (~1751 tok, huge) — mind-mem Error Codes — structured error classification.
 - `evidence_packer.py` (~3267 tok, huge) — Deterministic evidence packer for Mind-Mem.
+- `extraction_feedback.py` (~1160 tok, large) — mind-mem Extraction Quality Feedback Tracker.
 - `extractor.py` (~6597 tok, huge) — mind-mem Entity & Fact Extractor (Regex NER-lite). Zero external deps.
 - `field_audit.py` (~3086 tok, huge) — mind-mem Per-Field Mutation Audit — tracks individual field changes.
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
