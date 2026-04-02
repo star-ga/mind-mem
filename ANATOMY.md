@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 340 | **Est. tokens:** ~637,459
-**Generated:** 2026-04-02 04:21 UTC
+**Files:** 341 | **Est. tokens:** ~637,779
+**Generated:** 2026-04-02 04:39 UTC
 
 ## Token Budget Guide
 
@@ -25,7 +25,7 @@
 | `./` | 24 | ~55,227 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
-| `docs/` | 27 | ~22,720 |
+| `docs/` | 28 | ~23,040 |
 | `docs/adr/` | 2 | ~521 |
 | `examples/` | 2 | ~466 |
 | `.github/` | 8 | ~4,222 |
@@ -114,6 +114,7 @@
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
 - `migration.md` (~2746 tok, huge) — Migration Guide: mem-os to mind-mem
 - `mind-kernels.md` (~339 tok, medium) — MIND Kernels
+- `odc-retrieval.md` (~320 tok, medium) — Observer-Dependent Cognition in mind-mem
 - `performance-tuning.md` (~560 tok, large) — Performance Tuning
 - `quickstart.md` (~601 tok, large) — mind-mem Quickstart
 - `roadmap.md` (~369 tok, medium) — Roadmap
