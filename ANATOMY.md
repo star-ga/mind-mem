@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 340 | **Est. tokens:** ~637,169
-**Generated:** 2026-04-01 10:51 UTC
+**Files:** 340 | **Est. tokens:** ~637,459
+**Generated:** 2026-04-02 04:21 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 24 | ~54,937 |
+| `./` | 24 | ~55,227 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 27 | ~22,720 |
@@ -69,7 +69,7 @@
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~20946 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~6557 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~6847 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients

@@ -196,6 +196,29 @@
 
 ---
 
+## v2.0-alpha.2 — Observer-Dependent Cognition (ODC) Retrieval
+
+**Goal:** Make retrieval axis-aware. Every recall declares its observation basis, results include axis metadata, and the system can rotate axes for higher-confidence results.
+
+**Spec:** `specs/observer-dependent-cognition.md`
+
+### Axis-Aware Retrieval
+- [ ] Add `observation_axis` field to RecallRequest (lexical, semantic, temporal, entity-graph, contradiction)
+- [ ] Extend `hybrid_search` to accept explicit axis weights (override default RRF)
+- [ ] Log axis choices in evidence chain (which axes produced each result)
+- [ ] Axis rotation: if initial recall confidence < threshold, automatically rotate to orthogonal axes
+
+### Observation Metadata
+- [ ] Every recall result tagged with producing axes + per-axis confidence scores
+- [ ] New MCP tool: `recall_with_axis` — explicit axis selection for advanced queries
+- [ ] Axis diversity metric: how many independent axes contributed to a result
+
+### Adversarial Axis Injection
+- [ ] Extend adversarial abstention to include deliberate counter-axis queries
+- [ ] Surface contradictions by measuring from opposing observation bases
+
+---
+
 ## v2.0-beta — Inference Acceleration (from mind-inference)
 
 **Goal:** Sub-millisecond hot paths. Predictive prefetch. KV cache for LLM-backed operations.
