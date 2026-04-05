@@ -445,10 +445,100 @@
 
 ---
 
-## Post-v2.5 — Future Directions
+## v2.6 — Competitive Intelligence Integration
+
+> Theme: Features identified from competitive analysis of agentmemory (rohitg00/agentmemory),
+> Brooks Jordan's Daneel (NVIDIA), and Karpathy's llm-wiki pattern. Cherry-picked what we
+> don't have yet; ignored what we already do better.
+>
+> Sources:
+> - [rohitg00/agentmemory](https://github.com/rohitg00/agentmemory) v0.7.1 — 581 tests, Node.js, iii-engine
+> - Brooks Jordan (NVIDIA Enterprise AI Partnerships) — Daneel agent, OpenClaw/FelixCraft-inspired
+> - Andrej Karpathy — llm-wiki gist (raw → wiki → schema pattern)
+> - Farzapedia / "File over app" pattern
+
+### Cascading Staleness Propagation
+_Source: agentmemory — cascading staleness across graph nodes_
+
+- [ ] **Staleness propagation engine** — when a block is superseded or contradicted, automatically flag related blocks (edges, siblings, dependents) as potentially stale
+- [ ] **Staleness confidence decay** — propagation weakens with graph distance: direct relations get `stale=0.9`, 2-hop get `stale=0.5`, 3-hop get `stale=0.2`
+- [ ] **Staleness in retrieval scoring** — stale-flagged blocks penalized in BM25F scoring (configurable weight, default 0.3x)
+- [ ] **`propagate_staleness` MCP tool** — manual trigger with dry-run mode showing affected blocks
+- [ ] **Staleness audit log** — every propagation event recorded with source block, affected blocks, reason
+
+### 4-Tier Memory Consolidation
+_Source: agentmemory — working → episodic → semantic → procedural tiers with Ebbinghaus decay_
+
+mind-mem currently has append-only logs → manual promotion to MEMORY.md. This formalizes the pipeline:
+
+- [ ] **Tier 0 (Working)** — raw daily log entries (`memory/YYYY-MM-DD.md`), TTL 30 days before decay review
+- [ ] **Tier 1 (Episodic)** — compressed session summaries (`summaries/weekly/`), auto-generated from Tier 0
+- [ ] **Tier 2 (Semantic)** — verified facts and entity knowledge (`entities/`, `MEMORY.md`), promoted from Tier 1 after N repetitions or explicit confirmation
+- [ ] **Tier 3 (Procedural)** — learned patterns and strategies (`decisions/`), highest durability, governance-gated
+- [ ] **Ebbinghaus strength decay** — each block has `strength` field (0.0–1.0), decays exponentially with configurable half-life (default 30 days), reset on access
+- [ ] **Auto-promotion triggers** — block repeated 3+ times across sessions → auto-promote to next tier (governance proposal if Tier 2→3)
+- [ ] **Tier-aware retrieval** — higher tiers get retrieval priority boost (Tier 3: 2.0x, Tier 2: 1.5x, Tier 1: 1.0x, Tier 0: 0.7x)
+- [ ] **`consolidate` MCP tool** — trigger consolidation cycle with `--dry-run` and `--tier` filters
+
+### Agent Hook Auto-Capture
+_Source: agentmemory — 12 Claude Code hooks for silent observation capture_
+
+- [ ] **Hook event schema** — standardized event format: `{type, timestamp, tool, input_hash, output_summary, project, session_id}`
+- [ ] **SessionStart hook** — inject recent context from mind-mem at conversation start (token-budgeted)
+- [ ] **PostToolUse hook** — capture tool name + output summary, SHA-256 dedup (5-min window)
+- [ ] **PreCompact hook** — re-inject critical memory context before context compaction
+- [ ] **SessionEnd hook** — trigger end-of-session summary compression
+- [ ] **Privacy filter** — strip API keys, secrets, `<private>` tagged content before storage
+- [ ] **Hook installer** — `mind-mem hooks install` CLI command, writes to `~/.claude/settings.json`
+- [ ] **Observation → block pipeline** — raw hook events compressed into structured blocks via LLM (Zod-validated, quality scored 0-100)
+
+### Token Budget Context Injection
+_Source: agentmemory — configurable token budget (default 2000) with smart packing_
+
+- [ ] **`recall` gains `max_tokens` parameter** — backward-compatible, defaults to unlimited (current behavior)
+- [ ] **Adaptive packing strategy** — given token budget:
+  1. Reserve 15% for graph context (entity relationships)
+  2. Reserve 10% for provenance metadata (source citations)
+  3. Pack remaining with blocks by relevance score, truncating lowest-scored
+- [ ] **Model-aware defaults** — auto-detect context window from model name and set sensible defaults
+- [ ] **Packing quality metric** — track % of packed tokens actually referenced in response (calibration loop)
+
+### Project Intelligence Profiles
+_Source: agentmemory — per-project aggregated intelligence_
+
+- [ ] **Auto-generated project profiles** — aggregate from entity files + observations: top concepts, most-touched files, coding conventions, common errors, session count
+- [ ] **Profile as MCP resource** — `mindmem://project/{name}/profile` exposes structured project intelligence
+- [ ] **Profile injection at session start** — when project context detected, inject profile into system prompt
+- [ ] **Convention extraction** — LLM-powered extraction of implicit conventions from code observations (naming patterns, test patterns, error handling style)
+
+### P2P Memory Mesh
+_Source: agentmemory — cross-agent sync with 7 scopes; Brooks Jordan/Daneel — multi-agent sharing_
+
+- [ ] **Mesh protocol** — mind-mem instances discover peers via mDNS or explicit peer list
+- [ ] **7 sync scopes** — memories, actions, semantic, procedural, relations, graph, governance (each independently toggleable)
+- [ ] **Conflict resolution** — last-write-wins for Tier 0-1, governance-gated merge for Tier 2-3
+- [ ] **Namespace isolation** — shared vs private memory with per-scope access control
+- [ ] **Sync audit log** — every sync event recorded with peer ID, scope, blocks transferred, conflicts resolved
+- [ ] **`mesh_status` MCP resource** — connected peers, sync lag, scope health
+
+### Model Reliability Score (MRS) Framework
+_Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality scoring_
+
+- [ ] **MRS SLI definitions** — latency percentiles (p50/p95/p99), output quality drift, token throughput, error rate, cost per query
+- [ ] **Composite MRS (0-100)** — weighted aggregation of SLIs into single reliability score
+- [ ] **YAML SLO schema** — define per-model SLO thresholds, weights, alert conditions
+- [ ] **Memory retrieval MRS extension** — relevance decay rate, contradiction density, staleness ratio as retrieval-specific SLIs
+- [ ] **MRS dashboard** — real-time MRS per model endpoint + per retrieval backend
+- [ ] **Alert on MRS degradation** — configurable thresholds trigger warnings before quality impacts users
+
+**Estimated:** ~3500 lines total. No breaking changes. All features are additive and config-gated.
+
+---
+
+## Post-v2.6 — Future Directions
 
 - [ ] **Agent-to-agent trust protocol** — agents verify each other's memory integrity via Merkle proofs before sharing context
-- [ ] **Distributed memory mesh** — multiple mind-mem instances with hash-chain synchronization
+- [ ] **Distributed memory mesh** — multiple mind-mem instances with hash-chain synchronization _(see v2.6 P2P Mesh for foundation)_
 - [ ] **Real-time governance dashboard** — web UI showing evidence stream, chain health, spec-hash status
 - [ ] **512 Kernel full integration** — mind-mem as a governed resource within 512-mind production deployments
 - [ ] **Hardware-specific compilation** — `mindc` targets for ARM (Apple Silicon), CUDA, ROCm
