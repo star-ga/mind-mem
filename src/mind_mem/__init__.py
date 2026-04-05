@@ -30,6 +30,7 @@ Core modules:
     governance_bench — Governance-specific benchmark suite
     encryption      — Optional AES-256 encryption at rest
     calibration     — Retrieval quality feedback loop with per-block calibration weights
+    evidence_objects — Structured tamper-evident Evidence Objects for governance decisions
 """
 
 __version__ = "1.9.1"
