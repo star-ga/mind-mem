@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 341 | **Est. tokens:** ~637,779
-**Generated:** 2026-04-02 04:39 UTC
+**Files:** 342 | **Est. tokens:** ~640,057
+**Generated:** 2026-04-05 10:37 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 24 | ~55,227 |
+| `./` | 25 | ~57,505 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 28 | ~23,040 |
@@ -50,6 +50,7 @@
 ### `./`
 
 - `CHANGELOG.md` (~10227 tok, huge) — Changelog
+- `CLAUDE.md` (~611 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
 - `demo-setup.sh` (~323 tok, medium) — Pre-seed a demo workspace for VHS recording
@@ -69,7 +70,7 @@
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~20946 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~6847 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~8514 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
