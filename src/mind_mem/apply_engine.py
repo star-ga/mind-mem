@@ -1103,7 +1103,14 @@ def update_last_apply_ts(ws):
 def generate_diff_text(ws, snap_dir, files_touched):
     """Generate unified diff showing what changed during apply."""
     diff_lines = []
+    ws_real = os.path.realpath(ws)
     for rel_path in files_touched:
+        # Normalise: if rel_path is absolute (e.g. from _safe_resolve), convert to
+        # a workspace-relative path so os.path.join(snap_dir, rel_path) doesn't
+        # discard snap_dir (Python behaviour when the second arg is absolute).
+        abs_candidate = os.path.realpath(rel_path) if os.path.isabs(rel_path) else None
+        if abs_candidate and abs_candidate.startswith(ws_real + os.sep):
+            rel_path = os.path.relpath(abs_candidate, ws_real)
         old_path = os.path.join(snap_dir, rel_path)
         new_path = os.path.join(ws, rel_path)
 
@@ -1344,6 +1351,20 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
     receipt_path = write_receipt(snap_dir, proposal, ts, pre_report)
     print(f"  Receipt: {receipt_path}")
 
+    # Governance gate: verify spec-hash BEFORE any ops execute.
+    # GovernanceBypassError propagates up to abort the apply.
+    from .governance_gate import get_gate
+
+    gate = get_gate(ws)
+    gate.admit(
+        action="APPLY",
+        block_id=proposal_id,
+        content=json.dumps(proposal.get("Ops", []), default=str),
+        actor="apply_engine",
+        target_file=source_file,
+        metadata={"proposal_id": proposal_id, "phase": "pre_apply"},
+    )
+
     # 6. Execute ops with WAL protection
 
     print(f"\n--- Executing {len(proposal.get('Ops', []))} Ops (WAL-protected) ---")
@@ -1425,6 +1446,7 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
     update_receipt(receipt_path, post_report, delta, "applied", diff_text)
     _mark_proposal_status(source_file, proposal_id, "applied")
     update_last_apply_ts(ws)
+
     print(f"\n═══ APPLIED: {proposal_id} ═══")
     print(f"Receipt: {receipt_path}")
     return True, f"Applied successfully. Receipt: {receipt_path}"

@@ -49,7 +49,7 @@ def get_changelog_version() -> str | None:
     """Read latest version header from CHANGELOG.md."""
     try:
         content = Path("CHANGELOG.md").read_text()
-        m = re.search(r"##\s+\[?v?(\d+\.\d+\.\d+)", content)
+        m = re.search(r"##\s+\[?v?(\d+\.\d+\.\d+(?:[a-zA-Z0-9.+_-]*)?)", content)
         return m.group(1) if m else None
     except FileNotFoundError:
         return None

@@ -2,6 +2,21 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.0.0a1 (2026-04-05)
+
+**v2.0-alpha: GovernanceGate, SHA3-512 hash chain wiring, MCP evidence tools, and spec-hash embedding**
+
+### Added
+- `governance_gate.py` — `GovernanceGate` single choke-point for all block writes: spec-hash verification, evidence object creation, hash chain appending, `GovernanceBypassError` on drift
+- `verify_chain` MCP tool (admin) — verifies full SHA3-512 hash chain integrity, returns `{valid, length, broken_at}`
+- `list_evidence` MCP tool (user) — lists governance evidence objects with optional `block_id` / `action` filters
+- `spec_hash` parameter on `EvidenceChain.create()` — embedded in evidence metadata for every governance write
+- Hash chain wiring in `capture.py` — every signal write appends an entry to `HashChainV2`
+- Hash chain wiring in `apply_engine.py` — every applied proposal op is recorded via `GovernanceGate.admit()`
+
+### Changed
+- Version: 1.9.1 → 2.0.0a1
+
 ## 1.9.1 (2026-03-06)
 
 **Stability patch: proposal apply, rollback safety, install bootstrap, and request-scoped MCP auth**
