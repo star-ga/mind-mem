@@ -237,9 +237,11 @@ def _classify_conflict(proposal_text: str, existing_text: str, similarity: float
     ]
 
     for word_a, word_b in status_reversal_pairs:
-        if (word_a in proposal_lower and word_b in existing_lower) or (
-            word_b in proposal_lower and word_a in existing_lower
-        ):
+        a_in_proposal = bool(re.search(r"\b" + re.escape(word_a) + r"\b", proposal_lower))
+        b_in_existing = bool(re.search(r"\b" + re.escape(word_b) + r"\b", existing_lower))
+        b_in_proposal = bool(re.search(r"\b" + re.escape(word_b) + r"\b", proposal_lower))
+        a_in_existing = bool(re.search(r"\b" + re.escape(word_a) + r"\b", existing_lower))
+        if (a_in_proposal and b_in_existing) or (b_in_proposal and a_in_existing):
             if similarity > 0.4:
                 return "contradiction"
 

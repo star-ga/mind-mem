@@ -254,9 +254,11 @@ class VectorBackend(RecallBackend):
                 finally:
                     sys.path[:] = _saved
                 cache_dir = os.environ.get("SENTENCE_TRANSFORMERS_HOME")
+                device = self.config.get("vector_device", "cpu")
                 self._model = SentenceTransformer(
                     self.model_name,
                     cache_folder=cache_dir,
+                    device=device,
                 )
                 self._model_loaded = True
                 _log.info("embedding_model_loaded", model=self.model_name)

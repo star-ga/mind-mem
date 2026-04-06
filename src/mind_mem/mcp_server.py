@@ -276,7 +276,7 @@ def _get_limits(ws: str | None = None) -> dict:
 
 
 def _init_rate_limiter() -> SlidingWindowRateLimiter:
-    """Create rate limiter from config limits."""
+    """Create a rate limiter from config limits (used as per-client factory)."""
     try:
         limits = _get_limits()
         max_calls = limits["rate_limit_calls_per_minute"]
@@ -285,8 +285,29 @@ def _init_rate_limiter() -> SlidingWindowRateLimiter:
     return SlidingWindowRateLimiter(max_calls=max_calls, window_seconds=60)
 
 
-# Global rate limiter instance — initialized from config
-_rate_limiter = _init_rate_limiter()
+# Per-client rate limiters keyed by client_id — prevents one client from
+# exhausting the global budget and blocking all other clients.
+_rate_limiters: dict[str, SlidingWindowRateLimiter] = {}
+_rate_limiters_lock = threading.Lock()
+
+
+def _get_client_rate_limiter(client_id: str) -> SlidingWindowRateLimiter:
+    """Return (creating if needed) the per-client SlidingWindowRateLimiter."""
+    with _rate_limiters_lock:
+        if client_id not in _rate_limiters:
+            _rate_limiters[client_id] = _init_rate_limiter()
+        return _rate_limiters[client_id]
+
+
+def _get_client_id() -> str:
+    """Return a stable client identifier for the current request."""
+    try:
+        token = get_access_token()
+        if token is not None and token.client_id:
+            return token.client_id
+    except Exception:
+        pass
+    return "default"
 
 # Per-query timeout in seconds (read from config at call time via _get_limits)
 QUERY_TIMEOUT_SECONDS = _DEFAULT_LIMITS["query_timeout_seconds"]
@@ -320,18 +341,19 @@ def mcp_tool_observe(fn):
     def wrapper(*args, **kwargs):
         tool_name = fn.__name__
 
-        # Rate limit enforcement (#475): check sliding window before execution
-        if _rate_limiter is not None:
-            allowed, retry_after = _rate_limiter.allow()
-            if not allowed:
-                _log.warning("rate_limit_exceeded", tool=tool_name, retry_after=retry_after)
-                return json.dumps(
-                    {
-                        "error": "Rate limit exceeded. Try again later.",
-                        "retry_after_seconds": round(retry_after, 1),
-                        "_schema_version": MCP_SCHEMA_VERSION,
-                    }
-                )
+        # Rate limit enforcement (#475): per-client sliding window
+        client_id = _get_client_id()
+        limiter = _get_client_rate_limiter(client_id)
+        allowed, retry_after = limiter.allow()
+        if not allowed:
+            _log.warning("rate_limit_exceeded", tool=tool_name, client=client_id, retry_after=retry_after)
+            return json.dumps(
+                {
+                    "error": "Rate limit exceeded. Try again later.",
+                    "retry_after_seconds": round(retry_after, 1),
+                    "_schema_version": MCP_SCHEMA_VERSION,
+                }
+            )
 
         # ACL enforcement: when MIND_MEM_ADMIN_TOKEN is configured,
         # admin tools require MIND_MEM_SCOPE=admin (stdio) or a valid
@@ -1700,7 +1722,12 @@ def delete_memory_item(block_id: str) -> str:
                 if line.startswith("[") and line.strip().endswith("]") and _re_mod.match(r"^\[[A-Z]+-", line.strip()):
                     block_end = i
                 elif line.strip() == "---":
-                    block_end = i + 1  # include the separator
+                    # Only treat "---" as a block boundary when it appears at a
+                    # block boundary position: either at the start of the file or
+                    # preceded by a blank line (not inside block content).
+                    preceding_blank = (i == 0) or (lines[i - 1].strip() == "")
+                    if preceding_blank:
+                        block_end = i + 1  # include the separator
 
         if block_start is None:
             return json.dumps(
