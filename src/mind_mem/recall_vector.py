@@ -420,6 +420,40 @@ class VectorBackend(RecallBackend):
         metrics.inc("embeddings_generated", len(texts))
         return all_embeddings
 
+    def embed_ollama(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings via Ollama's /api/embed endpoint (GPU-accelerated).
+
+        Uses the ``ollama_embed_model`` config key, falling back to ``model``.
+        Much faster than ONNX on CPU for local deployments with a GPU.
+
+        Args:
+            texts: List of text strings to embed
+
+        Returns:
+            List of embedding vectors (each is a list of floats)
+        """
+        import urllib.request as _req
+
+        url = "http://localhost:11434/api/embed"
+        model = self.config.get("ollama_embed_model", self.model_name)
+        MAX_CHARS = 1500  # ~375 tokens, safe for 512-ctx embedding models
+        BATCH = 16  # small batches to stay under total context limit
+        all_embeddings: list[list[float]] = []
+
+        for i in range(0, len(texts), BATCH):
+            batch = [t[:MAX_CHARS] for t in texts[i : i + BATCH]]
+            payload = json.dumps({"model": model, "input": batch}).encode("utf-8")
+            req = _req.Request(url, data=payload, headers={"Content-Type": "application/json"})
+            with timed("embed_ollama"):
+                with _req.urlopen(req, timeout=120) as resp:
+                    result = json.loads(resp.read().decode("utf-8"))
+            embeddings = result.get("embeddings", [])
+            all_embeddings.extend(embeddings)
+            _log.debug("ollama_batch_embedded", batch=i // BATCH + 1, count=len(batch))
+
+        metrics.inc("embeddings_generated", len(texts))
+        return all_embeddings
+
     def _embed_for_provider(self, texts: list[str]) -> list[list[float]]:
         """Route embedding to configured backend with fallback chain + circuit breaker."""
         import time
@@ -447,7 +481,17 @@ class VectorBackend(RecallBackend):
 
         backend = self.config.get("onnx_backend", True)
 
-        # Try llama_cpp first if configured
+        # Try Ollama first (GPU-accelerated, fastest for local)
+        if not _is_tripped("ollama"):
+            try:
+                result = self.embed_ollama(texts)
+                _record_success("ollama")
+                return result
+            except Exception as e:
+                _record_failure("ollama")
+                _log.warning("ollama_embed_failed_fallback", error=str(e))
+
+        # Try llama_cpp if configured
         if backend == "llama_cpp" or str(backend).lower() == "llama_cpp":
             if not _is_tripped("llama_cpp"):
                 try:
@@ -458,7 +502,7 @@ class VectorBackend(RecallBackend):
                     _record_failure("llama_cpp")
                     _log.warning("llama_cpp_embed_failed_fallback_fastembed", error=str(e))
 
-        # Try fastembed (default)
+        # Try fastembed (ONNX on CPU)
         if not _is_tripped("fastembed"):
             try:
                 result = self.embed_fastembed(texts)

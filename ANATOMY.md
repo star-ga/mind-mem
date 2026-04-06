@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 361 | **Est. tokens:** ~709,518
-**Generated:** 2026-04-06 02:54 UTC
+**Files:** 360 | **Est. tokens:** ~703,907
+**Generated:** 2026-04-06 18:35 UTC
 
 ## Token Budget Guide
 
@@ -22,13 +22,13 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~71,571 |
+| `./` | 27 | ~65,216 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
-| `docs/` | 28 | ~23,040 |
+| `docs/` | 28 | ~23,412 |
 | `docs/adr/` | 2 | ~521 |
 | `examples/` | 2 | ~466 |
-| `.github/` | 8 | ~4,222 |
+| `.github/` | 7 | ~4,109 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
 | `.github/workflows/` | 9 | ~3,127 |
 | `hooks/` | 3 | ~801 |
@@ -40,7 +40,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 76 | ~280,869 |
+| `src/mind_mem/` | 76 | ~281,354 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 143 | ~269,504 |
 | `tests/integration/` | 2 | ~1,436 |
@@ -53,14 +53,14 @@
 - `CLAUDE.md` (~611 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
-- `.coverage` (~13312 tok, huge) — SQLite format 3@  	
 - `demo-setup.sh` (~323 tok, medium) — Pre-seed a demo workspace for VHS recording
 - `demo.tape` (~93 tok, small) — # mind-mem demo — terminal recording for README
 - `Dockerfile` (~54 tok, small) — FROM python:3.12-slim
 - `.dockerignore` (~37 tok, tiny) — .git
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
+- `generate_mind7b_training.py` (~5398 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
-- `.gitignore` (~64 tok, small) — *.pyc
+- `.gitignore` (~89 tok, small) — *.pyc
 - `install.sh` (~3337 tok, huge) — mind-mem installer — sets up MCP server + hooks for all supported clients
 - `LICENSE` (~2695 tok, huge)
 - `Makefile` (~532 tok, large) — .PHONY: test lint bench install dev clean smoke help
@@ -69,12 +69,12 @@
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
 - `pyproject.toml` (~768 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~20946 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~21350 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
 - `ROADMAP.md` (~8514 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
-- `test_out.txt` (~522 tok, large) — ........................................................................ [  2%]
+- `train_mind7b_runpod.py` (~1652 tok, huge)
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
 ### `.agents/skills/mind-mem-development/`
 
@@ -100,7 +100,7 @@
 
 - `api-reference.md` (~957 tok, large) — API Reference
 - `architecture.md` (~825 tok, large) — Architecture
-- `benchmarks.md` (~207 tok, medium) — Benchmarks
+- `benchmarks.md` (~579 tok, large) — Benchmarks
 - `block-format.md` (~431 tok, medium) — Block Format
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~254 tok, medium) — CI Workflows
@@ -133,7 +133,6 @@
 ### `.github/`
 
 - `CODEOWNERS` (~25 tok, tiny) — # Default owners
-- `dependabot.yml` (~113 tok, small) — version: 2
 - `FUNDING.yml` (~4 tok, tiny) — github: star-ga
 ### `.github/ISSUE_TEMPLATE/`
 
@@ -273,7 +272,7 @@
 - `_recall_scoring.py` (~3112 tok, huge) — Recall engine scoring — BM25F helper, date scores, graph boosting, negation, date proximity, categories."""
 - `_recall_temporal.py` (~2044 tok, huge) — Recall engine temporal filtering — resolve relative time references and filter blocks."""
 - `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
-- `recall_vector.py` (~13352 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
+- `recall_vector.py` (~13837 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `retrieval_graph.py` (~4996 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
 - `schema_version.py` (~1897 tok, huge) — Mind-Mem Schema Version Migration. Zero external deps.
 - `session_summarizer.py` (~2885 tok, huge) — mind-mem Session Summarizer. Zero external deps.
