@@ -129,6 +129,7 @@ ADMIN_TOOLS = frozenset(
         "propose_update",
         "reindex",
         "export_memory",
+        "verify_chain",
     }
 )
 
@@ -151,6 +152,7 @@ USER_TOOLS = frozenset(
         "get_mind_kernel",
         "calibration_feedback",
         "calibration_stats",
+        "list_evidence",
     }
 )
 
@@ -1872,6 +1874,144 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blo
     return json.dumps(
         envelope,
         indent=2,
+    )
+
+
+# ---------------------------------------------------------------------------
+# v2.0-alpha governance tools — verify_chain, list_evidence
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool
+@mcp_tool_observe
+def verify_chain() -> str:
+    """Verify the integrity of the SHA3-512 governance hash chain.
+
+    Walks every entry in the chain and checks that each entry_hash matches
+    its recomputed value and that chain linkage is unbroken.
+
+    Returns:
+        JSON with valid (bool), length (int), and broken_at (int, -1 if valid).
+    """
+    ws = _workspace()
+    try:
+        from mind_mem.governance_gate import get_gate
+
+        gate = get_gate(ws)
+        chain = gate.chain
+        hc_valid, broken_at = chain.verify_chain()
+        length = chain.length
+
+        evidence = gate.evidence
+        ev_valid, broken_ids = evidence.verify_chain()
+    except Exception as exc:
+        _log.warning("verify_chain_failed", error=str(exc))
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Chain verification failed: {exc}",
+            },
+            indent=2,
+        )
+
+    overall_valid = hc_valid and ev_valid
+    metrics.inc("mcp_verify_chain")
+    _log.info(
+        "mcp_verify_chain",
+        valid=overall_valid,
+        hash_chain_valid=hc_valid,
+        length=length,
+        broken_at=broken_at,
+        evidence_valid=ev_valid,
+        evidence_broken_ids=broken_ids,
+    )
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "valid": overall_valid,
+            "hash_chain": {
+                "valid": hc_valid,
+                "length": length,
+                "broken_at": broken_at,
+            },
+            "evidence_chain": {
+                "valid": ev_valid,
+                "broken_ids": broken_ids,
+            },
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def list_evidence(
+    block_id: str = "",
+    action: str = "",
+    limit: int = 20,
+) -> str:
+    """List governance evidence objects, optionally filtered by block_id or action.
+
+    Args:
+        block_id: Filter to evidence records for this block ID (optional).
+        action: Filter by evidence action type — PROPOSE, APPLY, ROLLBACK,
+                CONTRADICT, DRIFT, RESOLVE, VERIFY (optional).
+        limit: Maximum number of records to return (default 20).
+
+    Returns:
+        JSON array of evidence objects as dicts.
+    """
+    ws = _workspace()
+    try:
+        from mind_mem.evidence_objects import EvidenceAction
+        from mind_mem.governance_gate import get_gate
+
+        gate = get_gate(ws)
+        evidence = gate.evidence
+
+        if block_id:
+            records = evidence.get_evidence_for_block(block_id)
+        elif action:
+            try:
+                ev_action = EvidenceAction(action.upper())
+            except ValueError:
+                return json.dumps(
+                    {
+                        "_schema_version": MCP_SCHEMA_VERSION,
+                        "error": (
+                            f"Unknown action: {action!r}. "
+                            "Valid values: PROPOSE, APPLY, ROLLBACK, CONTRADICT, DRIFT, RESOLVE, VERIFY"
+                        ),
+                    },
+                    indent=2,
+                )
+            records = evidence.get_evidence_by_action(ev_action)
+        else:
+            records = evidence.get_latest(limit)
+
+        # Apply limit
+        records = records[-limit:] if len(records) > limit else records
+
+    except Exception as exc:
+        _log.warning("list_evidence_failed", error=str(exc))
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Evidence listing failed: {exc}",
+            },
+            indent=2,
+        )
+
+    metrics.inc("mcp_list_evidence")
+    _log.info("mcp_list_evidence", block_id=block_id, action=action, count=len(records))
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "count": len(records),
+            "evidence": [r.to_dict() for r in records],
+        },
+        indent=2,
+        default=str,
     )
 
 

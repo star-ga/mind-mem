@@ -223,6 +223,7 @@ class EvidenceChain:
     def __init__(self, store_path: str | None = None) -> None:
         self._store_path: str | None = store_path
         self._entries: list[EvidenceObject] = []
+        self._integrity_compromised: bool = False
 
         if store_path is not None:
             os.makedirs(os.path.dirname(os.path.abspath(store_path)), exist_ok=True)
@@ -243,6 +244,7 @@ class EvidenceChain:
         payload: Union[bytes, str, dict, None] = None,
         metadata: dict | None = None,
         confidence: float = 1.0,
+        spec_hash: str | None = None,
     ) -> EvidenceObject:
         """Create and append a new evidence record.
 
@@ -263,6 +265,12 @@ class EvidenceChain:
         """
         if not 0.0 <= confidence <= 1.0:
             raise ValueError(f"confidence must be in [0.0, 1.0], got {confidence!r}")
+
+        # Merge spec_hash into metadata when provided
+        effective_metadata: dict = dict(metadata or {})
+        if spec_hash is not None:
+            effective_metadata["spec_hash"] = spec_hash
+        metadata = effective_metadata
 
         evidence_id = str(uuid4())
         now = datetime.now(timezone.utc)
@@ -338,14 +346,18 @@ class EvidenceChain:
         """Verify the entire chain's integrity.
 
         Checks:
-        1. Each record's self-hash is valid (via `verify()`).
-        2. Each record's `previous_hash` matches the preceding record's
+        1. Whether any records were silently dropped during load (tamper indicator).
+        2. Each record's self-hash is valid (via `verify()`).
+        3. Each record's `previous_hash` matches the preceding record's
            `evidence_hash` (or the genesis hash for the first record).
 
         Returns:
             (is_valid, broken_evidence_ids) — broken_evidence_ids is empty
             when the chain is fully intact.
         """
+        if self._integrity_compromised:
+            return False, ["load_integrity_compromised"]
+
         broken: list[str] = []
 
         if not self._entries:
@@ -477,12 +489,14 @@ class EvidenceChain:
                 try:
                     ev = EvidenceObject.from_dict(json.loads(stripped))
                 except (json.JSONDecodeError, KeyError, ValueError):
+                    self._integrity_compromised = True
                     continue
                 if not self.verify(ev):
                     _log.warning(
                         "evidence_hash_mismatch",
                         evidence_id=getattr(ev, "evidence_id", "?"),
                     )
+                    self._integrity_compromised = True
                     continue
                 if previous_hash is not None and ev.previous_hash != previous_hash:
                     _log.warning(
@@ -491,6 +505,7 @@ class EvidenceChain:
                         expected=previous_hash,
                         got=ev.previous_hash,
                     )
+                    self._integrity_compromised = True
                     continue
                 previous_hash = ev.evidence_hash
                 self._entries.append(ev)

@@ -32,6 +32,15 @@ from .observability import get_logger, metrics
 _log = get_logger("capture")
 
 
+def _get_gate(workspace: str):
+    """Return the workspace GovernanceGate, or None if unavailable."""
+    try:
+        from .governance_gate import get_gate
+        return get_gate(workspace)
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Pattern definitions with confidence and priority
 # ---------------------------------------------------------------------------
@@ -269,6 +278,7 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
                 if counter > 999:
                     break  # Cap at 999 signals per day to maintain ID format
                 sig_id = f"SIG-{today_compact}-{counter:03d}"
+                sig["_sig_id"] = sig_id  # Store for gate.admit below
                 # Sanitize signal text: cap length and prevent block-header injection
                 sanitized = sig["text"][:500]
                 sanitized = sanitized.replace("\n[", "\n ")
@@ -297,7 +307,27 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
                 f.write("\n---\n")
                 counter += 1
 
-    return len(new_signals)
+    written_count = len(new_signals)
+
+    # Admit each written signal through GovernanceGate (Bug 2 + Bug 3 fix).
+    # Use the actual signal ID (e.g. "SIG-20260405-001") as block_id, not content_hash.
+    if written_count > 0:
+        gate = _get_gate(workspace)
+        if gate is not None:
+            for sig in new_signals:
+                sig_id = sig.get("_sig_id", sig.get("content_hash", sig["text"][:32]))
+                try:
+                    gate.admit(
+                        action="WRITE",
+                        block_id=sig_id,
+                        content=sig["text"],
+                        actor="capture",
+                        target_file=signals_path,
+                    )
+                except Exception as exc:
+                    _log.warning("capture.gate_admit_failed", error=str(exc))
+
+    return written_count
 
 
 def main():
