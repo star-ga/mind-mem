@@ -467,13 +467,30 @@ class EvidenceChain:
             fh.write(json.dumps(ev.to_dict(), separators=(",", ":")) + "\n")
 
     def _load_from_file(self, path: str) -> None:
-        """Load all records from a JSONL file into `_entries` (no verification)."""
+        """Load all records from a JSONL file, verifying each entry's hash."""
+        previous_hash: str | None = None
         with open(path, "r", encoding="utf-8") as fh:
             for line in fh:
                 stripped = line.strip()
                 if not stripped:
                     continue
                 try:
-                    self._entries.append(EvidenceObject.from_dict(json.loads(stripped)))
+                    ev = EvidenceObject.from_dict(json.loads(stripped))
                 except (json.JSONDecodeError, KeyError, ValueError):
                     continue
+                if not self.verify(ev):
+                    _log.warning(
+                        "evidence_hash_mismatch",
+                        evidence_id=getattr(ev, "evidence_id", "?"),
+                    )
+                    continue
+                if previous_hash is not None and ev.previous_hash != previous_hash:
+                    _log.warning(
+                        "evidence_chain_break",
+                        evidence_id=getattr(ev, "evidence_id", "?"),
+                        expected=previous_hash,
+                        got=ev.previous_hash,
+                    )
+                    continue
+                previous_hash = ev.evidence_hash
+                self._entries.append(ev)

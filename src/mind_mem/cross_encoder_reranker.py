@@ -26,14 +26,14 @@ def _check_available() -> bool:
 class CrossEncoderReranker:
     """CPU-friendly cross-encoder reranker."""
 
-    def __init__(self, model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"):
+    def __init__(self, model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2", device: str = "cpu"):
         if not _check_available():
             raise ImportError("sentence-transformers required for cross-encoder")
         from sentence_transformers import CrossEncoder
 
         global _CE_MODEL
         if _CE_MODEL is None:
-            _CE_MODEL = CrossEncoder(model)
+            _CE_MODEL = CrossEncoder(model, device=device)
         self._model = _CE_MODEL
 
     def rerank(

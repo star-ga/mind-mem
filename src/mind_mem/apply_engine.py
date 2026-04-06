@@ -928,15 +928,45 @@ def _op_supersede_decision(filepath, op):
             " (manual edit required — invariants cannot be modified by automation)"
         )
 
-    # Step 1: Mark old decision as superseded
-    ok, msg = _op_update_field(filepath, {"target": target, "field": "Status", "value": "superseded"})
-    if not ok:
-        return False, f"supersede_decision step 1 (mark superseded): {msg}"
+    # Build the complete new file content in memory, then write atomically.
+    # Reading the file once here avoids two separate read-modify-write cycles.
+    with open(filepath, "r") as fh:
+        lines = fh.readlines()
 
-    # Step 2: Append new block
-    ok2, msg2 = _op_append_block(filepath, {"patch": new_block})
-    if not ok2:
-        return False, f"supersede_decision step 2 (append new): {msg2}"
+    # Mark the old block's Status field as superseded
+    target_pattern = re.compile(rf"^\[{re.escape(target)}\]")
+    in_target = False
+    updated = False
+    for i, line in enumerate(lines):
+        if target_pattern.match(line):
+            in_target = True
+            continue
+        if in_target and re.match(r"^\[[A-Z]+-[^\]]+\]\s*$", line):
+            break
+        if in_target:
+            if re.match(r"^Status:\s+", line):
+                lines[i] = "Status: superseded\n"
+                updated = True
+                break
+
+    if not updated:
+        return False, f"supersede_decision step 1: 'Status' field not found in block {target}"
+
+    # Append new block at the end
+    new_content = "".join(lines).rstrip("\n") + f"\n\n{new_block}\n"
+
+    # Atomic write via temp file + rename
+    tmp = filepath + ".supersede_tmp"
+    try:
+        with open(tmp, "w") as fh:
+            fh.write(new_content)
+        os.replace(tmp, filepath)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
     return True, f"supersede_decision: {target} -> superseded, new block appended"
 

@@ -104,26 +104,26 @@ _log = get_logger("recall")
 # Config cache — mtime-based invalidation avoids re-reading mind-mem.json
 # on every recall() call (#473).
 # ---------------------------------------------------------------------------
-_config_cache: dict[str, Any] = {}
-_config_mtime: float = 0.0
+_config_cache: dict[str, dict[str, Any]] = {}
+_config_mtime: dict[str, float] = {}
 
 
 def _get_config(workspace: str) -> dict[str, Any]:
-    """Return parsed mind-mem.json contents, cached by file mtime."""
+    """Return parsed mind-mem.json contents, cached per workspace by file mtime."""
     global _config_cache, _config_mtime
     cfg_path = os.path.join(workspace, "mind-mem.json")
     try:
         mtime = os.path.getmtime(cfg_path)
     except OSError:
         return {}
-    if mtime != _config_mtime:
+    if mtime != _config_mtime.get(workspace):
         try:
             with open(cfg_path, encoding="utf-8") as f:
-                _config_cache = json.load(f)
+                _config_cache[workspace] = json.load(f)
         except (OSError, json.JSONDecodeError):
-            _config_cache = {}
-        _config_mtime = mtime
-    return _config_cache
+            _config_cache[workspace] = {}
+        _config_mtime[workspace] = mtime
+    return _config_cache[workspace]
 
 
 # Log optional subsystem availability at import time (#5: hidden coupling)

@@ -383,7 +383,7 @@ class DriftDetector:
             return
         conn = _connect(self.workspace)
         try:
-            conn.executescript(_SCHEMA_SQL)
+            conn.execute("BEGIN")
             for sig in signals:
                 conn.execute(
                     "INSERT INTO drift_signals "
