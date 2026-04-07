@@ -32,6 +32,8 @@ Drop-in memory layer for AI coding agents — Claude Code, Claude Desktop, Codex
 
 ### Shared Memory Across All Your AI Agents
 
+[![SafeSkill 50/100](https://img.shields.io/badge/SafeSkill-50%2F100_Use%20with%20Caution-orange)](https://safeskill.dev/scan/star-ga-mind-mem)
+
 **This is the killer feature.** When you install mind-mem, all your AI coding agents share the same memory workspace. Claude Code, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed — every MCP-compatible client connects to the same persistent memory through a single workspace.
 
 What this means in practice:
