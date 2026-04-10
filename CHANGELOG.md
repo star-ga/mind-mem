@@ -2,6 +2,25 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.0.0a2 (2026-04-10)
+
+**GBrain-adapted knowledge enrichment: multi-query expansion, compiled truth pages, dream cycle, 4-layer dedup, smart chunker, 13 new MCP tools**
+
+### Added
+- `query_expansion.py` — LLM-free multi-query expansion with synonym swap, specificity shift, temporal rephrasing, negation variant, and RRF fusion across reformulations
+- `compiled_truth.py` — Per-entity compiled truth pages: current-best-understanding on top, timestamped evidence trail on bottom, contradiction detection across entries
+- `dream_cycle.py` — Autonomous nightly memory enrichment: scan for missing cross-references, broken citations, orphan entities; generate repair proposals; compact redundant entries; auto-repair mode
+- `dedup.py` — 4-layer post-retrieval deduplication: best-chunk-per-source, cosine similarity dedup (>0.85 threshold), type diversity capping, per-source chunk limiting
+- `smart_chunker.py` — Content-aware chunking at semantic boundaries (headers, paragraphs, code blocks) instead of fixed character counts; format-specific splitting for markdown, code, and prose
+- 13 new MCP tools: `expand_query`, `smart_chunk`, `deduplicate_results`, `run_dream_cycle`, `dream_cycle_status`, `compile_truth`, `get_compiled_truth`, `compiled_truth_add_evidence`, `compiled_truth_contradictions`, `compiled_truth_load`, `list_compiled_truths`, `chunk_and_index`, `dedup_search`
+
+### Testing
+- 289 new tests across 5 test files (query_expansion: 405 lines, compiled_truth: 428 lines, dream_cycle: 498 lines, dedup: 731 lines, smart_chunker: 966 lines)
+
+### Changed
+- MCP tool count: 19 → 32
+- Version: 2.0.0a1 → 2.0.0a2
+
 ## 2.0.0a1 (2026-04-05)
 
 **v2.0-alpha: GovernanceGate, SHA3-512 hash chain wiring, MCP evidence tools, and spec-hash embedding**
