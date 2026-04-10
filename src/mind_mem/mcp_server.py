@@ -15,7 +15,7 @@ Resources (read-only):
     mind-mem://recall/{query}    — BM25 recall search
     mind-mem://ledger            — Shared fact ledger (multi-agent)
 
-Tools (28):
+Tools (32):
     recall               — Search memory (auto/bm25/hybrid backend)
     propose_update       — Propose a new decision/task (writes to SIGNALS.md, never source of truth)
     approve_apply        — Apply a staged proposal (dry-run by default)
@@ -44,6 +44,10 @@ Tools (28):
     traverse_graph       — Navigate causal graph from a block (deps + dependents)
     compact              — Run compaction: archive old blocks, clean snapshots/signals
     stale_blocks         — List blocks needing review due to upstream changes
+    dream_cycle          — Run autonomous memory enrichment with optional auto-repair
+    compiled_truth_load  — Load a compiled truth page for an entity
+    compiled_truth_add_evidence — Add evidence and auto-recompile truth page
+    compiled_truth_contradictions — Detect contradictions in a truth page
 
 Transport:
     stdio (default, for Claude Code / Claude Desktop)
@@ -165,6 +169,10 @@ USER_TOOLS = frozenset(
         "memory_health",
         "traverse_graph",
         "stale_blocks",
+        "dream_cycle",
+        "compiled_truth_load",
+        "compiled_truth_add_evidence",
+        "compiled_truth_contradictions",
     }
 )
 
@@ -2717,6 +2725,281 @@ def calibration_stats() -> str:
         },
         indent=2,
     )
+
+
+# ---------------------------------------------------------------------------
+# Dream Cycle + Compiled Truth tools
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool
+@mcp_tool_observe
+def dream_cycle(
+    auto_repair: bool = False,
+    lookback_days: int = 7,
+    stale_days: int = 30,
+) -> str:
+    """Run the dream cycle — autonomous memory enrichment.
+
+    Scans workspace for untracked entities, broken citations, stale blocks,
+    and repeated facts. Optionally auto-repairs findings.
+
+    Args:
+        auto_repair: If True, auto-create entity files, suggest citation
+            fixes, and promote repeated facts to compiled truth pages.
+        lookback_days: Days to look back for entity discovery (default: 7).
+        stale_days: Days before a block is considered stale (default: 30).
+
+    Returns:
+        JSON report with findings and any repair actions taken.
+    """
+    ws = _workspace()
+
+    try:
+        from mind_mem.dream_cycle import run_dream_cycle
+
+        report = run_dream_cycle(
+            ws,
+            dry_run=False,
+            auto_repair=auto_repair,
+            lookback_days=lookback_days,
+            stale_days=stale_days,
+        )
+    except Exception as exc:
+        _log.warning("dream_cycle_failed", error=str(exc))
+        return json.dumps({
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "error": f"Dream cycle failed: {exc}",
+        })
+
+    result = {
+        "_schema_version": MCP_SCHEMA_VERSION,
+        "timestamp": report.timestamp,
+        "entity_proposals": len(report.entity_proposals),
+        "broken_citations": len(report.broken_citations),
+        "stale_blocks": len(report.stale_blocks),
+        "consolidation_candidates": len(report.consolidation_candidates),
+        "total_findings": report.total_findings,
+    }
+
+    if report.entity_proposals:
+        result["entities"] = [
+            {"type": e.entity_type, "slug": e.slug, "source": e.source_file}
+            for e in report.entity_proposals[:20]
+        ]
+    if report.broken_citations:
+        result["citations"] = [
+            {"id": c.cited_id, "file": c.source_file, "line": c.line_number}
+            for c in report.broken_citations[:20]
+        ]
+    if report.stale_blocks:
+        result["stale"] = [
+            {"id": s.block_id, "days": s.days_stale}
+            for s in report.stale_blocks[:20]
+        ]
+    if report.consolidation_candidates:
+        result["consolidation"] = [
+            {"fact": c.fact_text[:80], "count": c.occurrences}
+            for c in report.consolidation_candidates[:10]
+        ]
+    if report.repair_actions:
+        result["repairs"] = [
+            {"type": a.action_type, "target": a.target, "detail": a.detail}
+            for a in report.repair_actions
+        ]
+        result["total_repairs"] = len(report.repair_actions)
+    if report.errors:
+        result["errors"] = list(report.errors)
+
+    metrics.inc("mcp_dream_cycle")
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def compiled_truth_load(entity_id: str) -> str:
+    """Load a compiled truth page for an entity.
+
+    Returns the current understanding and evidence trail for the entity.
+
+    Args:
+        entity_id: Entity identifier (e.g. "PRJ-mind-mem", "PER-nikolai").
+
+    Returns:
+        JSON with compiled section, evidence entries, and metadata.
+    """
+    ws = _workspace()
+
+    try:
+        from mind_mem.compiled_truth import load_truth_page
+        page = load_truth_page(ws, entity_id)
+    except Exception as exc:
+        return json.dumps({
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "error": f"Failed to load truth page: {exc}",
+        })
+
+    if page is None:
+        return json.dumps({
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "error": f"No compiled truth page found for '{entity_id}'.",
+            "hint": "Create one with compiled_truth_add_evidence.",
+        })
+
+    result = {
+        "_schema_version": MCP_SCHEMA_VERSION,
+        "entity_id": page.entity_id,
+        "entity_type": page.entity_type,
+        "version": page.version,
+        "last_compiled": page.last_compiled,
+        "compiled_section": page.compiled_section,
+        "evidence_count": len(page.evidence_entries),
+        "evidence": [
+            {
+                "timestamp": e.timestamp,
+                "source": e.source,
+                "observation": e.observation,
+                "confidence": e.confidence,
+                "superseded": e.superseded,
+            }
+            for e in page.evidence_entries
+        ],
+    }
+
+    metrics.inc("mcp_compiled_truth_load")
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def compiled_truth_add_evidence(
+    entity_id: str,
+    observation: str,
+    source: str = "mcp_tool",
+    confidence: str = "medium",
+    entity_type: str = "topic",
+) -> str:
+    """Add evidence to a compiled truth page and auto-recompile.
+
+    Creates the page if it doesn't exist. Automatically recompiles the
+    compiled section after adding evidence.
+
+    Args:
+        entity_id: Entity identifier (e.g. "PRJ-mind-mem").
+        observation: The evidence text to record.
+        source: Where the evidence came from (default: "mcp_tool").
+        confidence: Confidence level — "high", "medium", or "low".
+        entity_type: Entity type if creating new page — "project", "person",
+            "tool", or "topic" (default: "topic").
+
+    Returns:
+        JSON with the updated page metadata.
+    """
+    ws = _workspace()
+
+    try:
+        from mind_mem.compiled_truth import (
+            CompiledTruthPage,
+            EvidenceEntry,
+            add_evidence,
+            load_truth_page,
+            recompile_truth,
+            save_truth_page,
+        )
+        from datetime import datetime, timezone
+
+        page = load_truth_page(ws, entity_id)
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        if page is None:
+            page = CompiledTruthPage(
+                entity_id=entity_id,
+                entity_type=entity_type,
+                compiled_section="",
+                evidence_entries=[],
+                last_compiled=now_iso,
+                version=0,
+            )
+
+        entry = EvidenceEntry(
+            timestamp=now_iso,
+            source=source,
+            observation=observation,
+            confidence=confidence,
+            superseded=False,
+        )
+
+        page = add_evidence(page, entry)
+        page = recompile_truth(page)
+        path = save_truth_page(ws, page)
+
+    except Exception as exc:
+        return json.dumps({
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "error": f"Failed to add evidence: {exc}",
+        })
+
+    result = {
+        "_schema_version": MCP_SCHEMA_VERSION,
+        "entity_id": page.entity_id,
+        "version": page.version,
+        "evidence_count": len(page.evidence_entries),
+        "path": path,
+        "message": f"Evidence added and page recompiled (v{page.version}).",
+    }
+
+    metrics.inc("mcp_compiled_truth_add_evidence")
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def compiled_truth_contradictions(entity_id: str) -> str:
+    """Detect contradictions in a compiled truth page.
+
+    Compares evidence entries for negation asymmetry and antonym pairs.
+
+    Args:
+        entity_id: Entity identifier to analyse.
+
+    Returns:
+        JSON with detected contradictions.
+    """
+    ws = _workspace()
+
+    try:
+        from mind_mem.compiled_truth import detect_contradictions, load_truth_page
+
+        page = load_truth_page(ws, entity_id)
+        if page is None:
+            return json.dumps({
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"No compiled truth page found for '{entity_id}'.",
+            })
+
+        conflicts = detect_contradictions(page)
+    except Exception as exc:
+        return json.dumps({
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "error": f"Failed to detect contradictions: {exc}",
+        })
+
+    result = {
+        "_schema_version": MCP_SCHEMA_VERSION,
+        "entity_id": entity_id,
+        "contradiction_count": len(conflicts),
+        "contradictions": [
+            {
+                "entry_a": {"timestamp": a.timestamp, "observation": a.observation[:100]},
+                "entry_b": {"timestamp": b.timestamp, "observation": b.observation[:100]},
+                "reason": reason,
+            }
+            for a, b, reason in conflicts
+        ],
+    }
+
+    metrics.inc("mcp_compiled_truth_contradictions")
+    return json.dumps(result, indent=2)
 
 
 # ---------------------------------------------------------------------------

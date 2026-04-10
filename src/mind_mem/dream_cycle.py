@@ -80,6 +80,7 @@ class DreamCycleReport:
     broken_citations: tuple[BrokenCitation, ...] = ()
     stale_blocks: tuple[StaleBlock, ...] = ()
     consolidation_candidates: tuple[ConsolidationCandidate, ...] = ()
+    repair_actions: tuple = ()  # tuple[RepairAction, ...]
     errors: tuple[str, ...] = ()
 
     @property
@@ -90,6 +91,10 @@ class DreamCycleReport:
             + len(self.stale_blocks)
             + len(self.consolidation_candidates)
         )
+
+    @property
+    def total_repairs(self) -> int:
+        return len(self.repair_actions)
 
 
 # --- Entity extraction patterns (mirrors entity_ingest.py) ---
@@ -531,6 +536,17 @@ def _format_report_markdown(report: DreamCycleReport) -> str:
         lines.append("No consolidation candidates found.")
     lines.append("")
 
+    # Pass 6: Auto-Repair Actions
+    if report.repair_actions:
+        lines += ["## Pass 6: Auto-Repair Actions", ""]
+        for action in report.repair_actions:
+            lines.append(f"- **[{action.action_type}]** `{action.target}`: {action.detail}")
+        lines.append("")
+    elif hasattr(report, 'repair_actions'):
+        lines += ["## Pass 6: Auto-Repair Actions", ""]
+        lines.append("No auto-repair actions taken.")
+        lines.append("")
+
     if report.errors:
         lines += ["## Errors", ""]
         lines += [f"- {err}" for err in report.errors]
@@ -560,12 +576,236 @@ def pass_integrity_summary(
     return content
 
 
+# --- Auto-Repair (Pass 6) ---
+
+
+@dataclass(frozen=True)
+class RepairAction:
+    """A repair action taken during auto-repair."""
+
+    action_type: str  # "entity_created", "citation_closest_match", "truth_promoted"
+    target: str
+    detail: str
+
+
+_ENTITY_PREFIX_MAP = {"project": "PRJ", "tool": "TOOL", "person": "PER"}
+
+
+def _create_entity_file(workspace: str, proposal: EntityProposal) -> str | None:
+    """Auto-create a stub entity file from a discovery proposal.
+
+    Returns the file path if created, None if skipped.
+    """
+    entities_dir = os.path.join(workspace, "entities")
+    os.makedirs(entities_dir, exist_ok=True)
+
+    prefix = _ENTITY_PREFIX_MAP.get(proposal.entity_type, "UNK")
+    entity_id = f"{prefix}-{proposal.slug}"
+    filename = f"{entity_id}.md"
+    filepath = os.path.join(entities_dir, filename)
+
+    if os.path.exists(filepath):
+        return None
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    content = (
+        f"# [{entity_id}]\n\n"
+        f"**Type:** {proposal.entity_type}\n"
+        f"**Discovered:** {today} (auto-created by dream cycle)\n"
+        f"**Source:** `{proposal.source_file}` ({proposal.source_pattern})\n\n"
+        f"## Context\n\n"
+        f"> {proposal.excerpt}\n\n"
+        f"## Notes\n\n"
+        f"*(Auto-created — review and enrich manually.)*\n"
+    )
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    _log.info("entity_auto_created", entity_id=entity_id, path=filepath)
+    return filepath
+
+
+def _find_closest_block_id(cited_id: str, defined_ids: set[str]) -> str | None:
+    """Find the closest defined block ID to a broken citation.
+
+    Uses prefix matching and date proximity heuristics.
+    """
+    if not defined_ids:
+        return None
+
+    # Try exact prefix match (same type)
+    prefix_match = re.match(r"^([A-Z]+-)", cited_id)
+    if not prefix_match:
+        return None
+    prefix = prefix_match.group(1)
+    same_type = [d for d in defined_ids if d.startswith(prefix)]
+    if not same_type:
+        return None
+
+    # Try date proximity
+    date_match = re.match(r"[A-Z]+-(\d{8})-", cited_id)
+    if date_match:
+        cited_date = date_match.group(1)
+        # Find IDs with closest date
+        scored: list[tuple[int, str]] = []
+        for did in same_type:
+            dm = re.match(r"[A-Z]+-(\d{8})-", did)
+            if dm:
+                diff = abs(int(cited_date) - int(dm.group(1)))
+                scored.append((diff, did))
+        if scored:
+            scored.sort()
+            return scored[0][1]
+
+    # Fall back to alphabetically closest
+    same_type.sort()
+    return same_type[-1]  # most recent by convention
+
+
+def _promote_to_compiled_truth(
+    workspace: str,
+    candidate: ConsolidationCandidate,
+) -> str | None:
+    """Auto-promote a consolidation candidate to a compiled truth page.
+
+    Returns the entity_id if promoted, None if skipped.
+    """
+    try:
+        from .compiled_truth import (
+            CompiledTruthPage,
+            EvidenceEntry,
+            add_evidence,
+            load_truth_page,
+            recompile_truth,
+            save_truth_page,
+        )
+    except ImportError:
+        return None
+
+    # Derive entity_id from the fact text (first 3 significant words)
+    words = re.findall(r"[a-z0-9]+", candidate.fact_text.lower())
+    significant = [w for w in words if len(w) > 2][:3]
+    if not significant:
+        return None
+    entity_id = f"TOPIC-{'-'.join(significant)}"
+
+    existing = load_truth_page(workspace, entity_id)
+    now_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+    if existing is None:
+        page = CompiledTruthPage(
+            entity_id=entity_id,
+            entity_type="topic",
+            compiled_section=candidate.fact_text,
+            evidence_entries=[],
+            last_compiled=now_iso,
+            version=1,
+        )
+    else:
+        page = existing
+
+    entry = EvidenceEntry(
+        timestamp=now_iso,
+        source=", ".join(candidate.source_files[:5]),
+        observation=f"Repeated {candidate.occurrences}x: {candidate.fact_text}",
+        confidence="high" if candidate.occurrences >= 5 else "medium",
+        superseded=False,
+    )
+    page = add_evidence(page, entry)
+    page = recompile_truth(page)
+    save_truth_page(workspace, page)
+
+    _log.info(
+        "fact_promoted_to_truth",
+        entity_id=entity_id,
+        occurrences=candidate.occurrences,
+    )
+    return entity_id
+
+
+def pass_auto_repair(
+    workspace: str,
+    report: DreamCycleReport,
+    max_entity_creates: int = 10,
+    max_promotions: int = 5,
+) -> list[RepairAction]:
+    """Auto-repair pass: create entities, suggest citation fixes, promote facts.
+
+    This is the key GBrain-inspired enhancement: instead of just reporting
+    findings, take action on the safe subset.
+
+    Args:
+        workspace: Root workspace directory.
+        report: Dream cycle report with findings from passes 1-5.
+        max_entity_creates: Max entity files to auto-create per run.
+        max_promotions: Max facts to auto-promote to compiled truth per run.
+
+    Returns:
+        List of repair actions taken.
+    """
+    actions: list[RepairAction] = []
+
+    # Auto-create entity files for discovered entities
+    created = 0
+    for proposal in report.entity_proposals:
+        if created >= max_entity_creates:
+            break
+        path = _create_entity_file(workspace, proposal)
+        if path:
+            prefix = _ENTITY_PREFIX_MAP.get(proposal.entity_type, "UNK")
+            entity_id = f"{prefix}-{proposal.slug}"
+            actions.append(RepairAction(
+                action_type="entity_created",
+                target=entity_id,
+                detail=f"Created {path}",
+            ))
+            created += 1
+
+    # Suggest closest match for broken citations (logged, not auto-fixed)
+    if report.broken_citations:
+        defined_ids = _collect_defined_ids(workspace)
+        for bc in report.broken_citations:
+            closest = _find_closest_block_id(bc.cited_id, defined_ids)
+            if closest:
+                actions.append(RepairAction(
+                    action_type="citation_closest_match",
+                    target=bc.cited_id,
+                    detail=f"In {bc.source_file}:{bc.line_number} — closest match: {closest}",
+                ))
+
+    # Auto-promote consolidated facts to compiled truth pages
+    promoted = 0
+    for candidate in report.consolidation_candidates:
+        if promoted >= max_promotions:
+            break
+        entity_id = _promote_to_compiled_truth(workspace, candidate)
+        if entity_id:
+            actions.append(RepairAction(
+                action_type="truth_promoted",
+                target=entity_id,
+                detail=f"Promoted '{candidate.fact_text[:60]}...' ({candidate.occurrences}x)",
+            ))
+            promoted += 1
+
+    _log.info(
+        "auto_repair_complete",
+        entities_created=created,
+        citation_suggestions=sum(1 for a in actions if a.action_type == "citation_closest_match"),
+        facts_promoted=promoted,
+        total_actions=len(actions),
+    )
+    metrics.inc("dream_auto_repairs", len(actions))
+    return actions
+
+
 # --- Main entry point ---
 
 
 def run_dream_cycle(
     workspace: str,
     dry_run: bool = False,
+    auto_repair: bool = False,
     lookback_days: int = 7,
     stale_days: int = 30,
     consolidation_lookback: int = 30,
@@ -650,12 +890,44 @@ def run_dream_cycle(
                 errors=tuple(errors),
             )
 
+    # Pass 6: Auto-Repair (optional)
+    repair_actions: list[RepairAction] = []
+    if auto_repair and not dry_run:
+        with timed("dream_pass_auto_repair", _log):
+            try:
+                repair_actions = pass_auto_repair(ws, report)
+                report = DreamCycleReport(
+                    timestamp=report.timestamp,
+                    workspace=report.workspace,
+                    entity_proposals=report.entity_proposals,
+                    broken_citations=report.broken_citations,
+                    stale_blocks=report.stale_blocks,
+                    consolidation_candidates=report.consolidation_candidates,
+                    repair_actions=tuple(repair_actions),
+                    errors=report.errors,
+                )
+            except Exception as exc:
+                msg = f"Pass 6 (auto-repair) failed: {exc}"
+                _log.error(msg)
+                errors = list(report.errors) + [msg]
+                report = DreamCycleReport(
+                    timestamp=report.timestamp,
+                    workspace=report.workspace,
+                    entity_proposals=report.entity_proposals,
+                    broken_citations=report.broken_citations,
+                    stale_blocks=report.stale_blocks,
+                    consolidation_candidates=report.consolidation_candidates,
+                    repair_actions=tuple(repair_actions),
+                    errors=tuple(errors),
+                )
+
     _log.info(
         "dream_cycle_complete",
         entities=len(entity_proposals),
         citations=len(broken_citations),
         stale=len(stale_blocks),
         consolidation=len(consolidation_candidates),
+        repairs=len(repair_actions),
         errors=len(report.errors),
         total=report.total_findings,
     )
@@ -674,6 +946,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="mind-mem Dream Cycle")
     parser.add_argument("workspace", nargs="?", default=".")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--auto-repair", action="store_true",
+                        help="Auto-create entity files, suggest citation fixes, promote facts")
     parser.add_argument(
         "--pass", dest="single_pass", default=None,
         choices=["entity_discovery", "citation_repair", "stale_detection", "consolidation"],
@@ -707,7 +981,8 @@ def main() -> None:
         return
 
     report = run_dream_cycle(
-        ws, dry_run=args.dry_run, lookback_days=args.lookback_days,
+        ws, dry_run=args.dry_run, auto_repair=args.auto_repair,
+        lookback_days=args.lookback_days,
         stale_days=args.stale_days, consolidation_lookback=args.consolidation_lookback,
         min_occurrences=args.min_occurrences,
     )
@@ -719,6 +994,10 @@ def main() -> None:
     ]
     for label, count in labels:
         print(f"  {label}: {count}")
+    if report.repair_actions:
+        print(f"  Auto-Repairs: {len(report.repair_actions)}")
+        for action in report.repair_actions:
+            print(f"    [{action.action_type}] {action.target}: {action.detail}")
     print(f"  Summary: {'written' if not args.dry_run else 'dry-run'}")
     print(f"\nTotal findings: {report.total_findings}")
     if report.errors:
