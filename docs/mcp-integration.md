@@ -2,7 +2,7 @@
 
 ## Overview
 
-mind-mem exposes 19 MCP tools for integration with AI coding assistants like Claude Code.
+mind-mem exposes 32 MCP tools for integration with AI coding assistants like Claude Code.
 
 ## Setup
 
@@ -63,6 +63,30 @@ Add to `~/.claude/mcp.json`:
 | `list_mind_kernels` | List MIND scoring kernels |
 | `get_mind_kernel` | Read a MIND kernel |
 | `export_memory` | Export as JSONL |
+| `verify_chain` | Verify mutation audit chain integrity |
+| `list_evidence` | List evidence entries with filters |
+| `get_block` | Retrieve a single block by ID |
+| `memory_health` | Full health summary (stats, drift, contradictions) |
+| `traverse_graph` | Walk cross-reference graph from a block |
+| `compact` | Archive old blocks, clean snapshots |
+| `stale_blocks` | Find blocks with no recent access |
+
+### Quality & Feedback Tools
+
+| Tool | Description |
+|------|-------------|
+| `calibration_feedback` | Submit quality feedback for a block |
+| `calibration_stats` | View per-block quality distributions |
+| `retrieval_diagnostics` | Analyze recent retrieval performance |
+
+### Knowledge Enrichment Tools
+
+| Tool | Description |
+|------|-------------|
+| `dream_cycle` | Run autonomous memory enrichment (scan, repair, consolidate) |
+| `compiled_truth_load` | Load or create a compiled truth page for an entity |
+| `compiled_truth_add_evidence` | Add timestamped evidence to an entity's truth page |
+| `compiled_truth_contradictions` | Detect contradictions in an entity's evidence trail |
 
 ## Best Practices
 
@@ -70,3 +94,6 @@ Add to `~/.claude/mcp.json`:
 2. Use `hybrid_search` when semantic matching matters more than keywords
 3. Always use `propose_update` instead of direct file edits
 4. Run `scan` periodically to check for contradictions
+5. Run `dream_cycle` during idle periods to repair broken references and consolidate memory
+6. Use `compiled_truth_load` to build per-entity knowledge pages that accumulate across sessions
+7. Use `calibration_feedback` to improve retrieval quality over time — the system learns from your corrections

@@ -16,8 +16,8 @@
     <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
     <img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible">
     <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
-    <img src="https://img.shields.io/badge/tests-2189-brightgreen?style=flat-square" alt="Tests: 2189">
-    <img src="https://img.shields.io/badge/MCP_tools-21-blue?style=flat-square" alt="MCP Tools: 21">
+    <img src="https://img.shields.io/badge/tests-3024-brightgreen?style=flat-square" alt="Tests: 3024">
+    <img src="https://img.shields.io/badge/MCP_tools-32-blue?style=flat-square" alt="MCP Tools: 32">
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/security-review.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/security-review.yml?branch=main&style=flat-square&label=Security%20Review&color=darkgreen" alt="Security Review"></a>
   </p>
 </p>
@@ -211,17 +211,32 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 ### Transcript JSONL Capture
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
-### MCP Server (21 tools, 8 resources)
-Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 19 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
+### MCP Server (32 tools, 8 resources)
+Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 32 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
 
-### 74+ Structural Checks + 2189 Unit Tests
-`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 2189 pytest unit tests covering all core modules.
+### 74+ Structural Checks + 3024 Unit Tests
+`validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 3024 pytest unit tests covering all core modules.
 
 ### Audit Trail
 Every applied proposal logged with timestamp, receipt, and DIFF. Full traceability from signal → proposal → decision.
 
 ### Calibration Feedback Loop
 Per-block quality tracking with Bayesian weight computation. When users provide feedback (thumbs up/down) via `calibration_feedback`, the system maintains a rolling quality score per block over a 30-day window. Bayesian smoothing constrains calibration weights to the 0.5-1.5 range, preventing any single block from dominating or being silenced. Calibration weights integrate directly into the BM25 + FTS5 retrieval pipeline — high-quality blocks rank higher, low-quality blocks are naturally demoted. Use `calibration_stats` to inspect per-block quality distributions and global calibration health.
+
+### LLM-Guided Multi-Query Expansion
+Generates semantically diverse query reformulations before search — synonym expansion, specificity shifts, temporal rephrasing, and negation variants. Combines all reformulated queries with Reciprocal Rank Fusion for broader recall without sacrificing precision. Runs locally with zero API calls.
+
+### 4-Layer Search Deduplication
+Post-retrieval dedup pipeline: best-chunk-per-source (keeps highest-scoring chunk from each file), cosine similarity dedup (>0.85 threshold), type diversity capping (max 3 results per block type), and per-source chunk limiting. Eliminates redundant results that waste LLM context.
+
+### LLM-Guided Smart Chunking
+Content-aware chunking that splits at semantic boundaries (headers, paragraph breaks, list items, code blocks) instead of fixed character counts. Produces variable-size chunks with overlap for continuity. Supports markdown, code, and prose with format-specific splitting rules.
+
+### Compiled Truth Pages
+Per-entity knowledge compilation: current-best-understanding on top, timestamped evidence trail below. Contradiction detection across evidence entries with automatic flagging. Entities accumulate knowledge from all sessions — each new evidence entry is checked against existing facts.
+
+### Dream Cycle (Autonomous Memory Enrichment)
+Scheduled background enrichment: scans recent memory for missing cross-references, broken citations, orphan entities, and consolidation opportunities. Generates repair proposals for stale links, detects implicit entities not yet formalized, and compacts redundant entries. Runs during idle periods with configurable depth.
 
 ### Feature Completeness Matrix
 
@@ -245,6 +260,11 @@ Per-block quality tracking with Bayesian weight computation. When users provide 
 | Local-only (no cloud required) | Y | — | — | — | — |
 | Compiled native kernels (MIND) | Y | — | — | — | — |
 | Backup/restore with zip-slip protection | Y | — | — | — | — |
+| Multi-query expansion with RRF | Y | — | — | — | — |
+| 4-layer search deduplication | Y | — | — | — | — |
+| Semantic-aware smart chunking | Y | — | — | — | — |
+| Compiled truth pages (per-entity) | Y | — | — | — | — |
+| Dream cycle (autonomous enrichment) | Y | — | — | — | — |
 
 ---
 

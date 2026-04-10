@@ -7,19 +7,21 @@ mind-mem is a persistent, auditable, contradiction-safe memory system for coding
 ## Components
 
 ```
-┌─────────────────────────────────────────────┐
-│                 MCP Server                   │
-│              (mcp_server.py)                 │
-├──────────┬──────────┬──────────┬────────────┤
-│  recall  │ propose  │  scan    │  hybrid    │
-│  engine  │ update   │  engine  │  search    │
-├──────────┴──────────┴──────────┴────────────┤
-│              Block Parser                    │
-│           (block_parser.py)                  │
-├─────────────────────────────────────────────┤
-│              Workspace FS                    │
-│    decisions/ tasks/ entities/ memory/       │
-└─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│                    MCP Server (32 tools)              │
+│                   (mcp_server.py)                     │
+├────────┬────────┬────────┬────────┬────────┬─────────┤
+│ recall │propose │  scan  │ hybrid │ dream  │compiled │
+│ engine │ update │ engine │ search │ cycle  │ truth   │
+├────────┴────────┴────────┴────────┴────────┴─────────┤
+│  query_expansion │ smart_chunker │ dedup │ calibrate │
+├──────────────────┴───────────────┴───────┴───────────┤
+│                   Block Parser                        │
+│                (block_parser.py)                       │
+├──────────────────────────────────────────────────────┤
+│                   Workspace FS                        │
+│       decisions/ tasks/ entities/ memory/              │
+└──────────────────────────────────────────────────────┘
 ```
 
 ## Core Modules
@@ -64,6 +66,33 @@ Interface to MIND scoring kernels for customizable BM25 parameter overrides.
 6. Reranking refines candidate ordering
 7. Knee cutoff determines final result count
 8. Context packed and returned to caller
+
+### Query Expansion (`query_expansion.py`)
+LLM-free multi-query expansion. Generates semantically diverse reformulations (synonym expansion, specificity shifts, temporal rephrasing, negation variants) and fuses results with RRF.
+
+### Compiled Truth (`compiled_truth.py`)
+Per-entity knowledge compilation. Maintains current-best-understanding with timestamped evidence trail. Detects contradictions across evidence entries and flags conflicts for resolution.
+
+### Dream Cycle (`dream_cycle.py`)
+Autonomous memory enrichment engine. Scans for missing cross-references, broken citations, orphan entities, and consolidation opportunities. Generates repair proposals and compacts redundant entries.
+
+### Search Deduplication (`dedup.py`)
+4-layer post-retrieval dedup: best-chunk-per-source, cosine similarity dedup (>0.85), type diversity capping, and per-source chunk limiting.
+
+### Smart Chunker (`smart_chunker.py`)
+Content-aware chunking at semantic boundaries (headers, paragraphs, code blocks) instead of fixed character counts. Format-specific splitting for markdown, code, and prose.
+
+## Data Flow
+
+1. Query arrives via MCP tool call
+2. Query type detected and expanded (multi-query expansion if enabled)
+3. Blocks loaded from workspace files
+4. BM25F scoring applied with field weights
+5. Graph boost, entity boost, and other boosters applied
+6. Reranking refines candidate ordering
+7. 4-layer deduplication removes redundant results
+8. Knee cutoff determines final result count
+9. Context packed and returned to caller
 
 ## Storage
 

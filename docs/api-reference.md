@@ -24,9 +24,9 @@ Parse all memory blocks from `.md` files in a workspace.
 
 ---
 
-## MCP Server (19 tools, 8 resources)
+## MCP Server (32 tools, 8 resources)
 
-The MCP server exposes 19 tools via JSON-RPC. See [MCP Tool Examples](mcp-tool-examples.md).
+The MCP server exposes 32 tools via JSON-RPC. See [MCP Tool Examples](mcp-tool-examples.md) and [MCP Integration Guide](mcp-integration.md).
 
 ### Starting the Server
 

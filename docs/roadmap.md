@@ -7,7 +7,7 @@
 - [x] Fact card sub-block indexing
 - [x] Knee score cutoff
 - [x] Hard negative mining
-- [x] 19 MCP tools
+- [x] 32 MCP tools (expanded from 19)
 - [x] LoCoMo benchmark suite
 - [x] Cross-platform CI (Ubuntu/macOS/Windows)
 - [x] Baseline snapshot with chi-squared drift detection
@@ -20,6 +20,14 @@
 - [x] Auto contradiction resolution with preference learning
 - [x] Governance benchmark suite
 - [x] AES-256 encryption at rest
+- [x] LLM-free multi-query expansion with RRF fusion
+- [x] 4-layer search deduplication (per-source, cosine, type diversity, chunk cap)
+- [x] Semantic-aware smart chunking (markdown/code/prose boundaries)
+- [x] Compiled truth pages (per-entity knowledge compilation with evidence trails)
+- [x] Dream cycle (autonomous memory enrichment, repair, consolidation)
+- [x] Calibration feedback loop with Bayesian weight computation
+- [x] Graph traversal tool (walk cross-references by depth/direction)
+- [x] Block compaction and stale block detection
 
 ## v2.0.0 (Planned)
 

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 372 | **Est. tokens:** ~745,818
-**Generated:** 2026-04-10 10:12 UTC
+**Files:** 372 | **Est. tokens:** ~747,305
+**Generated:** 2026-04-10 10:20 UTC
 
 ## Token Budget Guide
 
@@ -22,10 +22,10 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~65,216 |
+| `./` | 27 | ~65,707 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
-| `docs/` | 28 | ~23,412 |
+| `docs/` | 28 | ~24,408 |
 | `docs/adr/` | 2 | ~521 |
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
@@ -40,9 +40,9 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 80 | ~294,078 |
+| `src/mind_mem/` | 80 | ~294,077 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 151 | ~298,691 |
+| `tests/` | 151 | ~298,692 |
 | `tests/integration/` | 2 | ~1,436 |
 
 ## Files
@@ -69,7 +69,7 @@
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
 - `pyproject.toml` (~768 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~21350 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~21841 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
 - `ROADMAP.md` (~8514 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
@@ -98,8 +98,8 @@
 - `002-bm25f-scoring.md` (~205 tok, medium) — ADR-002: BM25F as Primary Scoring Algorithm
 ### `docs/`
 
-- `api-reference.md` (~957 tok, large) — API Reference
-- `architecture.md` (~825 tok, large) — Architecture
+- `api-reference.md` (~969 tok, large) — API Reference
+- `architecture.md` (~1320 tok, large) — Architecture
 - `benchmarks.md` (~579 tok, large) — Benchmarks
 - `block-format.md` (~431 tok, medium) — Block Format
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
@@ -112,7 +112,7 @@
 - `faq.md` (~369 tok, medium) — FAQ
 - `getting-started.md` (~405 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
-- `mcp-integration.md` (~474 tok, medium) — MCP Integration Guide
+- `mcp-integration.md` (~823 tok, large) — MCP Integration Guide
 - `mcp-tool-examples.md` (~902 tok, large) — MCP Tool Examples
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
 - `migration.md` (~2746 tok, huge) — Migration Guide: mem-os to mind-mem
@@ -120,7 +120,7 @@
 - `odc-retrieval.md` (~320 tok, medium) — Observer-Dependent Cognition in mind-mem
 - `performance-tuning.md` (~560 tok, large) — Performance Tuning
 - `quickstart.md` (~601 tok, large) — mind-mem Quickstart
-- `roadmap.md` (~369 tok, medium) — Roadmap
+- `roadmap.md` (~509 tok, large) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `security-model.md` (~350 tok, medium) — Security Model
 - `testing-guide.md` (~369 tok, medium) — Testing Guide
@@ -247,7 +247,7 @@
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
 - `governance_gate.py` (~1745 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~4080 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hybrid_recall.py` (~4850 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `hybrid_recall.py` (~4849 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `__init__.py` (~499 tok, medium) — # Mind Mem — Memory + Immune System for AI agents
 - `init_workspace.py` (~2062 tok, huge) — mind-mem workspace initializer. Zero external deps.
 - `intel_scan.py` (~12099 tok, huge) — Mind Mem Intelligence Scanner v2.0 — Self-hosted, zero external dependencies.
@@ -397,7 +397,7 @@
 - `test_intent_router_adaptive.py` (~3613 tok, huge) — Tests for adaptive intent routing (#470).
 - `test_intent_router.py` (~1176 tok, large) — Tests for 9-type intent router."""
 - `test_kalman_belief.py` (~3756 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_llm_extractor.py` (~1773 tok, huge) — Tests for the optional LLM entity/fact extractor module."""
+- `test_llm_extractor.py` (~1774 tok, huge) — Tests for the optional LLM entity/fact extractor module."""
 - `test_llm_noise_profile.py` (~2358 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mcp_integration.py` (~5110 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_server.py` (~4897 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
