@@ -460,5 +460,6 @@ _VALID_RECALL_KEYS = frozenset(
         "max_chunk_tokens",
         "knee_cutoff",
         "min_score",
+        "dedup",
     }
 )

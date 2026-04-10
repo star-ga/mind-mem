@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 360 | **Est. tokens:** ~703,907
-**Generated:** 2026-04-06 18:35 UTC
+**Files:** 373 | **Est. tokens:** ~768,455
+**Generated:** 2026-04-10 09:47 UTC
 
 ## Token Budget Guide
 
@@ -40,9 +40,9 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 76 | ~281,354 |
+| `src/mind_mem/` | 81 | ~316,715 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 143 | ~269,504 |
+| `tests/` | 151 | ~298,691 |
 | `tests/integration/` | 2 | ~1,436 |
 
 ## Files
@@ -226,12 +226,15 @@
 - `check_version.py` (~622 tok, large) — Version consistency checker for mind-mem.
 - `coding_schemas.py` (~2127 tok, huge) — mind-mem Coding-Native Memory Schemas.
 - `compaction.py` (~2889 tok, huge) — mind-mem Compaction & GC Engine. Zero external deps.
+- `compiled_truth.py` (~6277 tok, huge) — mind-mem Compiled Truth — synthesized entity pages with append-only evidence.
 - `conflict_resolver.py` (~2947 tok, huge) — mind-mem Automated Conflict Resolution Pipeline. Zero external deps.
 - `connection_manager.py` (~1059 tok, large) — SQLite connection manager with read/write separation and WAL mode.
 - `contradiction_detector.py` (~4904 tok, huge) — mind-mem Contradiction Detector — Surface conflicts at the governance gate.
 - `corpus_registry.py` (~262 tok, medium) — Central corpus path registry for mind-mem.
 - `cron_runner.py` (~1846 tok, huge) — mind-mem Cron Runner — single entry point for all periodic jobs. Zero external deps.
 - `cross_encoder_reranker.py` (~749 tok, large) — mind-mem Optional Cross-Encoder Reranker.
+- `dedup.py` (~4473 tok, huge) — mind-mem 4-layer deduplication filter for search results.
+- `dream_cycle.py` (~6432 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
 - `drift_detector.py` (~4216 tok, huge) — mind-mem Semantic Belief Drift Detection.
 - `encryption.py` (~2527 tok, huge) — mind-mem Encryption at Rest — optional AES-256 encryption for memory blocks.
 - `entity_ingest.py` (~3225 tok, huge) — mind-mem Entity Ingestion — regex-based entity extraction. Zero external deps.
@@ -244,7 +247,7 @@
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
 - `governance_gate.py` (~1745 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~4080 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hybrid_recall.py` (~3584 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `hybrid_recall.py` (~4850 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `__init__.py` (~499 tok, medium) — # Mind Mem — Memory + Immune System for AI agents
 - `init_workspace.py` (~2062 tok, huge) — mind-mem workspace initializer. Zero external deps.
 - `intel_scan.py` (~12099 tok, huge) — Mind Mem Intelligence Scanner v2.0 — Self-hosted, zero external dependencies.
@@ -253,7 +256,7 @@
 - `llm_extractor.py` (~3009 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
 - `llm_noise_profile.py` (~2382 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mcp_entry.py` (~217 tok, medium) — Thin entry point for mind-mem-mcp console script."""
-- `mcp_server.py` (~19144 tok, huge) — Mind-Mem MCP Server — persistent memory for paranoid/safety-first coding agents.
+- `mcp_server.py` (~24805 tok, huge) — Mind-Mem MCP Server — persistent memory for paranoid/safety-first coding agents.
 - `memory_tiers.py` (~3534 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `merkle_tree.py` (~2953 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mind_ffi.py` (~5127 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
@@ -262,9 +265,10 @@
 - `observability.py` (~1416 tok, large) — mind-mem Observability Module. Zero external deps.
 - `observation_compress.py` (~1353 tok, large) — Observation Compression Layer for Mind-Mem.
 - `py.typed` (~0 tok, tiny)
-- `_recall_constants.py` (~2416 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
+- `query_expansion.py` (~4339 tok, huge) — Multi-query expansion for improved recall.
+- `_recall_constants.py` (~2420 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
 - `_recall_context.py` (~2601 tok, huge) — Recall engine context packing — post-retrieval augmentation rules."""
-- `_recall_core.py` (~14056 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
+- `_recall_core.py` (~14213 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
 - `_recall_detection.py` (~5168 tok, huge) — Recall engine detection — query type classification, text extraction, block utilities."""
 - `_recall_expansion.py` (~3267 tok, huge) — Recall engine query expansion — domain synonyms, month normalization, RM3."""
 - `recall.py` (~1049 tok, large) — mind-mem Recall Engine (BM25 + TF-IDF + Graph + Stemming). Zero external deps.
@@ -276,6 +280,7 @@
 - `retrieval_graph.py` (~4996 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
 - `schema_version.py` (~1897 tok, huge) — Mind-Mem Schema Version Migration. Zero external deps.
 - `session_summarizer.py` (~2885 tok, huge) — mind-mem Session Summarizer. Zero external deps.
+- `smart_chunker.py` (~6752 tok, huge) — mind-mem Smart Chunker — Semantic-boundary document chunking.
 - `smoke_test.sh` (~633 tok, large) — mind-mem Smoke Test — end-to-end verification
 - `spec_binding.py` (~2544 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `sqlite_index.py` (~10531 tok, huge) — Mind Mem SQLite FTS5 Index — incremental lexical indexing. Zero external deps.
@@ -340,6 +345,7 @@
 - `test_chunk_text.py` (~231 tok, medium) — Tests for text chunking."""
 - `test_coding_schemas.py` (~1294 tok, large) — Tests for mind-mem coding-native memory schemas."""
 - `test_compaction.py` (~1796 tok, huge) — Tests for compaction.py — GC and archival engine."""
+- `test_compiled_truth.py` (~3912 tok, huge) — Tests for mind-mem compiled truth pages (compiled_truth.py)."""
 - `test_concurrency_stress.py` (~4065 tok, huge) — Concurrency and performance stress tests for recall engine.
 - `test_concurrent_integration.py` (~10810 tok, huge) — Integration tests for concurrent access and partial failure in mind-mem.
 - `test_conflict_resolver.py` (~2362 tok, huge) — Tests for conflict_resolver.py — zero external deps (stdlib unittest)."""
@@ -353,8 +359,11 @@
 - `test_cross_encoder.py` (~1324 tok, large) — Tests for optional cross-encoder reranker."""
 - `test_date_score.py` (~174 tok, small) — Tests for date scoring function."""
 - `test_decompose_query.py` (~223 tok, medium) — Tests for query decomposition."""
+- `test_dedup.py` (~5632 tok, huge) — Tests for dedup.py -- 4-layer deduplication filter."""
+- `test_dedup_vector.py` (~1129 tok, large) — Tests for vector-enhanced cosine dedup (Layer 2b)."""
 - `test_delete_memory.py` (~329 tok, medium) — Tests for memory deletion functionality."""
 - `test_detection.py` (~326 tok, medium) — Tests for query detection module."""
+- `test_dream_cycle.py` (~4671 tok, huge) — Tests for dream_cycle.py — autonomous memory enrichment passes."""
 - `test_drift_detector.py` (~1613 tok, huge) — Tests for mind-mem semantic belief drift detection (drift_detector.py)."""
 - `test_edge_cases.py` (~3888 tok, huge) — Edge-case and stress tests for mind-mem — block_parser, recall, and MCP server."""
 - `test_encryption.py` (~1701 tok, huge) — Tests for mind-mem encryption at rest."""
@@ -407,6 +416,8 @@
 - `test_prefetch_context.py` (~1482 tok, large) — Tests for prefetch_context() in recall.py."""
 - `test_prefetch.py` (~315 tok, medium) — Tests for prefetch functionality."""
 - `test_query_decomposition.py` (~1609 tok, huge) — Tests for multi-hop query decomposition (#6)."""
+- `test_query_expansion_multi_provider.py` (~1055 tok, large) — Tests for multi-provider LLM query expansion (OpenAI-compatible endpoints)."""
+- `test_query_expansion.py` (~3781 tok, huge) — Tests for query_expansion.py -- multi-query expansion for improved recall."""
 - `test_recall_concurrent.py` (~333 tok, medium) — Tests for concurrent recall queries."""
 - `test_recall_context_field.py` (~252 tok, medium) — Tests for context field in blocks."""
 - `test_recall_cross_encoder.py` (~1372 tok, large) — Tests for cross-encoder reranker integration in recall pipeline."""
@@ -441,6 +452,8 @@
 - `test_scoring.py` (~337 tok, medium) — Tests for BM25 scoring functions."""
 - `test_session_summarizer.py` (~3933 tok, huge) — Comprehensive tests for mind_mem/session_summarizer.py.
 - `test_skeptical_query.py` (~194 tok, small) — Tests for skeptical query detection."""
+- `test_smart_chunker_code.py` (~1240 tok, large) — Tests for code-aware chunking in smart_chunker.py."""
+- `test_smart_chunker.py` (~7767 tok, huge) — Tests for smart_chunker.py — semantic-boundary document chunking."""
 - `test_spec_binding.py` (~3195 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sqlite_index.py` (~4727 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
 - `test_stopwords.py` (~247 tok, medium) — Tests for stopword handling."""

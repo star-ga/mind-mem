@@ -134,6 +134,10 @@ class HybridBackend:
 
     When vector search is unavailable (no sentence-transformers or
     ``vector_enabled`` is False), transparently falls back to BM25-only.
+
+    Supports optional multi-query expansion: when ``query_expansion.enabled``
+    is True in config, generates alternative query phrasings and fuses
+    results across all variants for improved recall.
     """
 
     def __init__(self, config: dict[str, Any] | None = None):
@@ -160,6 +164,13 @@ class HybridBackend:
         self._config = cfg
         self._config_errors: list[str] = errors
 
+        # Query expansion config
+        qe_cfg = cfg.get("query_expansion", {})
+        if not isinstance(qe_cfg, dict):
+            qe_cfg = {}
+        self._query_expansion_enabled: bool = bool(qe_cfg.get("enabled", False))
+        self._query_expansion_config: dict[str, Any] = qe_cfg
+
         # Probe vector availability once at init
         self._vector_available = self._check_vector() if self.vector_enabled else False
 
@@ -169,6 +180,7 @@ class HybridBackend:
             bm25_weight=self.bm25_weight,
             vector_weight=self.vector_weight,
             vector_available=self._vector_available,
+            query_expansion=self._query_expansion_enabled,
         )
 
     # -- capability probing ------------------------------------------------
@@ -220,6 +232,42 @@ class HybridBackend:
         """
         if not query or not query.strip():
             return []
+
+        # --- Multi-query expansion ---
+        # When enabled, expand the query into alternative phrasings and
+        # run a search for each variant.  Results are fused via RRF so
+        # documents matching multiple phrasings rank higher.
+        if self._query_expansion_enabled:
+            try:
+                from .query_expansion import expand_queries
+
+                expanded = expand_queries(
+                    query,
+                    config=self._query_expansion_config,
+                )
+                if len(expanded) > 1:
+                    _log.info(
+                        "multi_query_expansion",
+                        original=query,
+                        variants=len(expanded),
+                    )
+                    metrics.inc("query_expansion_used")
+                    return self._search_expanded(
+                        queries=expanded,
+                        workspace=workspace,
+                        limit=limit,
+                        active_only=active_only,
+                        graph_boost=graph_boost,
+                        retrieve_wide_k=retrieve_wide_k,
+                        rerank=rerank,
+                        **kwargs,
+                    )
+            except Exception as exc:
+                _log.warning(
+                    "query_expansion_failed",
+                    error=str(exc),
+                    fallback="single_query",
+                )
 
         with timed("hybrid_search"):
             if not self._vector_available:
@@ -306,6 +354,17 @@ class HybridBackend:
                 except Exception as e:
                     _log.warning("cross_encoder_unavailable", error=str(e))
 
+            # 4-layer dedup filter (post-fusion, post-rerank)
+            dedup_cfg = self._config.get("dedup")
+            if dedup_cfg is None or (isinstance(dedup_cfg, dict) and dedup_cfg.get("enabled", True)):
+                try:
+                    from .dedup import DedupConfig, deduplicate_results
+
+                    dc = DedupConfig(dedup_cfg if isinstance(dedup_cfg, dict) else None)
+                    result = deduplicate_results(result, config=dc)
+                except Exception as e:
+                    _log.warning("hybrid_dedup_failed", error=str(e))
+
             _log.info(
                 "hybrid_search_complete",
                 query=query,
@@ -313,6 +372,79 @@ class HybridBackend:
                 top_rrf=result[0].get("rrf_score", 0) if result else 0,
             )
             return result
+
+    # -- multi-query expansion search ----------------------------------------
+
+    def _search_expanded(
+        self,
+        queries: list[str],
+        workspace: str,
+        limit: int = 10,
+        active_only: bool = False,
+        graph_boost: bool = False,
+        retrieve_wide_k: int = 200,
+        rerank: bool = True,
+        **kwargs: Any,
+    ) -> list[dict]:
+        """Search with multiple query variants and fuse results via RRF.
+
+        Each query variant is searched independently using the standard
+        single-query pipeline.  Results from all variants are then fused
+        using RRF with equal weights, ensuring documents that match
+        multiple phrasings rank higher.
+
+        Args:
+            queries: List of query variant strings (original + expansions).
+            workspace: Workspace root path.
+            limit: Maximum results to return.
+            active_only: Only return active blocks.
+            graph_boost: Enable cross-reference graph boosting.
+            retrieve_wide_k: Candidate pool size per backend per query.
+            rerank: Enable BM25 reranker.
+            **kwargs: Forwarded to underlying search.
+
+        Returns:
+            RRF-fused ranked list of result dicts.
+        """
+        # Temporarily disable expansion to avoid infinite recursion
+        orig_enabled = self._query_expansion_enabled
+        self._query_expansion_enabled = False
+        try:
+            per_query_results: list[list[dict]] = []
+            for q in queries:
+                results = self.search(
+                    q,
+                    workspace,
+                    limit=retrieve_wide_k,
+                    active_only=active_only,
+                    graph_boost=graph_boost,
+                    retrieve_wide_k=retrieve_wide_k,
+                    rerank=rerank,
+                    **kwargs,
+                )
+                per_query_results.append(results)
+        finally:
+            self._query_expansion_enabled = orig_enabled
+
+        if not per_query_results:
+            return []
+
+        # Fuse all query variant results with equal weights
+        weights = [1.0] * len(per_query_results)
+        fused = rrf_fuse(
+            ranked_lists=per_query_results,
+            weights=weights,
+            k=self.rrf_k,
+        )
+
+        _log.info(
+            "multi_query_fusion_complete",
+            query_variants=len(queries),
+            total_fused=len(fused),
+            limit=limit,
+        )
+
+        return fused[:limit]
 
     # -- backend wrappers ---------------------------------------------------
 

@@ -1121,6 +1121,19 @@ def recall(
 
     _stage_counts["knee_cutoff"] = len(deduped)
 
+    # Stage 2.10: 4-layer dedup filter — configurable post-processing
+    dedup_cfg = recall_cfg.get("dedup")
+    if dedup_cfg is None or (isinstance(dedup_cfg, dict) and dedup_cfg.get("enabled", True)):
+        try:
+            from .dedup import DedupConfig, deduplicate_results
+
+            dc = DedupConfig(dedup_cfg if isinstance(dedup_cfg, dict) else None)
+            pre_dedup = len(deduped)
+            deduped = deduplicate_results(deduped, config=dc)
+            _stage_counts["dedup_filter"] = pre_dedup - len(deduped)
+        except Exception as e:
+            _log.warning("dedup_filter_failed", error=str(e))
+
     top = deduped[:limit]
     _stage_counts["final"] = len(top)
 

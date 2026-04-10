@@ -15,7 +15,7 @@ Resources (read-only):
     mind-mem://recall/{query}    — BM25 recall search
     mind-mem://ledger            — Shared fact ledger (multi-agent)
 
-Tools (21):
+Tools (28):
     recall               — Search memory (auto/bm25/hybrid backend)
     propose_update       — Propose a new decision/task (writes to SIGNALS.md, never source of truth)
     approve_apply        — Apply a staged proposal (dry-run by default)
@@ -37,6 +37,13 @@ Tools (21):
     export_memory        — Export all blocks as JSONL (user)
     calibration_feedback — Record retrieval quality feedback for calibration loop
     calibration_stats    — Per-block calibration scores, per-query-type accuracy
+    verify_chain         — Verify SHA3-512 governance hash chain integrity
+    list_evidence        — List governance evidence objects with filters
+    get_block            — Direct block lookup by ID (returns full block content)
+    memory_health        — Deep health dashboard (stale blocks, orphans, drift, coverage)
+    traverse_graph       — Navigate causal graph from a block (deps + dependents)
+    compact              — Run compaction: archive old blocks, clean snapshots/signals
+    stale_blocks         — List blocks needing review due to upstream changes
 
 Transport:
     stdio (default, for Claude Code / Claude Desktop)
@@ -130,6 +137,7 @@ ADMIN_TOOLS = frozenset(
         "reindex",
         "export_memory",
         "verify_chain",
+        "compact",
     }
 )
 
@@ -153,6 +161,10 @@ USER_TOOLS = frozenset(
         "calibration_feedback",
         "calibration_stats",
         "list_evidence",
+        "get_block",
+        "memory_health",
+        "traverse_graph",
+        "stale_blocks",
     }
 )
 
@@ -2013,6 +2025,577 @@ def list_evidence(
         indent=2,
         default=str,
     )
+
+
+# ---------------------------------------------------------------------------
+# Direct block access, health dashboard, graph, compaction, staleness tools
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool
+@mcp_tool_observe
+def get_block(block_id: str) -> str:
+    """Retrieve a single block by its ID with full content.
+
+    Direct lookup equivalent — returns the complete block including all fields
+    (Statement, Status, Tags, Date, etc.) without requiring a search query.
+    Useful when you already know the block ID from a previous recall or reference.
+
+    Args:
+        block_id: The block ID (e.g., "D-20260213-001", "T-20260215-003").
+
+    Returns:
+        JSON with the full block content, source file, and metadata.
+    """
+    if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
+        return json.dumps({
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "error": f"Invalid block_id format: {block_id}",
+        })
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    # Try known prefix mapping first for O(1) lookup
+    filepath = _find_block_file(ws, block_id)
+    if filepath and os.path.isfile(filepath):
+        try:
+            blocks = parse_file(filepath)
+            for block in blocks:
+                if block.get("_id") == block_id:
+                    rel_path = os.path.relpath(filepath, ws)
+                    block["_source_file"] = rel_path.replace(os.sep, "/")
+                    metrics.inc("mcp_get_block")
+                    return json.dumps({
+                        "_schema_version": MCP_SCHEMA_VERSION,
+                        "block_id": block_id,
+                        "found": True,
+                        "block": block,
+                    }, indent=2, default=str)
+        except (OSError, ValueError, BlockCorruptedError) as exc:
+            _log.debug("get_block_parse_failed", file=filepath, error=str(exc))
+
+    # Fallback: scan all corpus directories
+    for subdir in CORPUS_DIRS:
+        dir_path = os.path.join(ws, subdir)
+        if not os.path.isdir(dir_path):
+            continue
+        for fn in os.listdir(dir_path):
+            if not fn.endswith(".md"):
+                continue
+            fpath = os.path.join(dir_path, fn)
+            if fpath == filepath:
+                continue  # Already checked above
+            try:
+                blocks = parse_file(fpath)
+                for block in blocks:
+                    if block.get("_id") == block_id:
+                        block["_source_file"] = f"{subdir}/{fn}"
+                        metrics.inc("mcp_get_block")
+                        return json.dumps({
+                            "_schema_version": MCP_SCHEMA_VERSION,
+                            "block_id": block_id,
+                            "found": True,
+                            "block": block,
+                        }, indent=2, default=str)
+            except (OSError, ValueError, BlockCorruptedError):
+                continue
+
+    metrics.inc("mcp_get_block_miss")
+    return json.dumps({
+        "_schema_version": MCP_SCHEMA_VERSION,
+        "block_id": block_id,
+        "found": False,
+        "error": f"Block {block_id} not found in any corpus file.",
+        "hint": "Check the block ID and ensure the workspace is initialized.",
+    }, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def memory_health() -> str:
+    """Deep health dashboard for the memory workspace.
+
+    Analyzes workspace quality across multiple dimensions:
+    - Block counts and active/total ratios per corpus directory
+    - Stale blocks needing review (from causal graph staleness flags)
+    - Drift items detected (semantic belief drift)
+    - Embedding/vector coverage (what percentage of blocks are embedded)
+    - Pending signals and unresolved contradictions
+    - Compaction candidates (archivable blocks and expired snapshots)
+    - FTS index freshness
+
+    Returns:
+        JSON health report with per-dimension scores and actionable recommendations.
+    """
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    health: dict[str, Any] = {"_schema_version": MCP_SCHEMA_VERSION}
+    recommendations: list[str] = []
+
+    # 1. Block counts per corpus directory
+    corpus_stats: dict[str, dict[str, int]] = {}
+    total_blocks = 0
+    total_active = 0
+    for subdir in CORPUS_DIRS:
+        dir_path = os.path.join(ws, subdir)
+        if not os.path.isdir(dir_path):
+            corpus_stats[subdir] = {"total": 0, "active": 0}
+            continue
+        sub_total = 0
+        sub_active = 0
+        for fn in os.listdir(dir_path):
+            if not fn.endswith(".md") or fn.endswith("_ARCHIVE.md"):
+                continue
+            try:
+                blocks = parse_file(os.path.join(dir_path, fn))
+                sub_total += len(blocks)
+                sub_active += len(get_active(blocks))
+            except (OSError, ValueError):
+                pass
+        corpus_stats[subdir] = {"total": sub_total, "active": sub_active}
+        total_blocks += sub_total
+        total_active += sub_active
+    health["corpus"] = corpus_stats
+    health["total_blocks"] = total_blocks
+    health["total_active"] = total_active
+
+    # 2. Stale blocks from causal graph
+    stale_count = 0
+    try:
+        from mind_mem.causal_graph import CausalGraph
+        cg = CausalGraph(ws)
+        stale = cg.get_stale_blocks()
+        stale_count = len(stale)
+        health["stale_blocks"] = stale_count
+        if stale_count > 0:
+            health["stale_block_ids"] = [s["block_id"] for s in stale[:10]]
+            recommendations.append(
+                f"{stale_count} stale block(s) need review. "
+                "Use stale_blocks tool for details, then update or clear staleness."
+            )
+    except (ImportError, sqlite3.OperationalError, OSError, ValueError) as exc:
+        health["stale_blocks"] = 0
+        _log.debug("health_stale_check_skipped", error=str(exc))
+
+    # 3. Drift items
+    drift_path = os.path.join(ws, "intelligence", "DRIFT.md")
+    drift_count = 0
+    if os.path.isfile(drift_path):
+        try:
+            drift_count = len(parse_file(drift_path))
+        except (OSError, ValueError):
+            pass
+    health["drift_items"] = drift_count
+    if drift_count > 0:
+        recommendations.append(
+            f"{drift_count} drift item(s) detected. Review intelligence/DRIFT.md for belief shifts."
+        )
+
+    # 4. Embedding/vector coverage
+    import struct as _struct_mod
+    try:
+        from mind_mem.recall_vector import _index_path
+        vec_path = _index_path(ws)
+        if os.path.isfile(vec_path):
+            with open(vec_path, "rb") as f:
+                header = f.read(8)
+                if len(header) >= 4:
+                    embedded_count = _struct_mod.unpack("<I", header[:4])[0]
+                    health["embedded_blocks"] = embedded_count
+                    if total_blocks > 0:
+                        coverage = round(embedded_count / total_blocks * 100, 1)
+                        health["embedding_coverage_pct"] = coverage
+                        if coverage < 80:
+                            recommendations.append(
+                                f"Embedding coverage is {coverage}%. Run reindex(include_vectors=True)."
+                            )
+                else:
+                    health["embedded_blocks"] = 0
+                    health["embedding_coverage_pct"] = 0.0
+        else:
+            health["embedded_blocks"] = 0
+            health["embedding_coverage_pct"] = 0.0
+            if total_blocks > 10:
+                recommendations.append(
+                    "No vector index found. Run reindex(include_vectors=True) for hybrid search."
+                )
+    except (ImportError, OSError, _struct_mod.error):
+        health["embedded_blocks"] = "unknown"
+        health["embedding_coverage_pct"] = "unknown"
+
+    # 5. Pending signals and unresolved contradictions
+    signals_path = os.path.join(ws, "intelligence", "SIGNALS.md")
+    pending_signals = 0
+    if os.path.isfile(signals_path):
+        try:
+            sigs = parse_file(signals_path)
+            pending_signals = len([s for s in sigs if s.get("Status", "pending") == "pending"])
+        except (OSError, ValueError):
+            pass
+    health["pending_signals"] = pending_signals
+    if pending_signals > 5:
+        recommendations.append(
+            f"{pending_signals} pending signals. Review and apply or reject them."
+        )
+
+    contra_path = os.path.join(ws, "intelligence", "CONTRADICTIONS.md")
+    contra_count = 0
+    if os.path.isfile(contra_path):
+        try:
+            contra_count = len(parse_file(contra_path))
+        except (OSError, ValueError):
+            pass
+    health["unresolved_contradictions"] = contra_count
+    if contra_count > 0:
+        recommendations.append(
+            f"{contra_count} unresolved contradiction(s). Use list_contradictions for details."
+        )
+
+    # 6. FTS index freshness
+    db = fts_db_path(ws)
+    if db and os.path.isfile(db):
+        try:
+            from mind_mem.sqlite_index import index_status as fts_status
+            info = fts_status(ws)
+            health["fts_index"] = {
+                "exists": True,
+                "blocks_indexed": info.get("blocks", 0),
+                "stale_files": info.get("stale_files", 0),
+                "last_build": info.get("last_build"),
+                "db_size_bytes": info.get("db_size_bytes", 0),
+            }
+            stale_files = info.get("stale_files", 0)
+            if stale_files > 0:
+                recommendations.append(
+                    f"FTS index has {stale_files} stale file(s). Run reindex tool."
+                )
+        except (sqlite3.OperationalError, OSError, ValueError):
+            health["fts_index"] = {"exists": True, "error": "Could not read index status"}
+    else:
+        health["fts_index"] = {"exists": False}
+        recommendations.append("No FTS index. Run reindex tool for fast keyword search.")
+
+    # 7. Compaction candidates
+    try:
+        from mind_mem.compaction import archive_completed_blocks, compact_signals
+        archivable = archive_completed_blocks(ws, days=90, dry_run=True)
+        compactable_signals = compact_signals(ws, days=60, dry_run=True)
+        health["compaction"] = {
+            "archivable_blocks": len(archivable),
+            "compactable_signals": len(compactable_signals),
+        }
+        total_compactable = len(archivable) + len(compactable_signals)
+        if total_compactable > 0:
+            recommendations.append(
+                f"{total_compactable} item(s) ready for compaction. Run compact tool."
+            )
+    except (ImportError, OSError, ValueError) as exc:
+        health["compaction"] = {"error": str(exc)}
+
+    health["recommendations"] = recommendations
+    health["score"] = "healthy" if not recommendations else "needs_attention"
+
+    metrics.inc("mcp_memory_health")
+    _log.info("mcp_memory_health", total_blocks=total_blocks, recommendations=len(recommendations))
+    return json.dumps(health, indent=2, default=str)
+
+
+@mcp.tool
+@mcp_tool_observe
+def traverse_graph(block_id: str, depth: int = 2, direction: str = "both") -> str:
+    """Navigate the causal dependency graph from a block.
+
+    Traverses the directed graph of block relationships (depends_on, supersedes,
+    informs, contradicts) to show how blocks are connected. Useful for impact
+    analysis before modifying a block, or understanding why a block exists.
+
+    Args:
+        block_id: Starting block ID (e.g., "D-20260213-001").
+        depth: Maximum traversal depth (default: 2, max: 5).
+        direction: "upstream" (what this block depends on), "downstream"
+                   (what depends on this block), or "both" (default).
+
+    Returns:
+        JSON with graph nodes, edges, and causal chains from the starting block.
+    """
+    if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
+        return json.dumps({
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "error": f"Invalid block_id format: {block_id}",
+        })
+
+    depth = max(1, min(depth, 5))
+
+    if direction not in ("upstream", "downstream", "both"):
+        return json.dumps({
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "error": f"Invalid direction: {direction}. Use 'upstream', 'downstream', or 'both'.",
+        })
+
+    ws = _workspace()
+    try:
+        from mind_mem.causal_graph import CausalGraph
+
+        cg = CausalGraph(ws)
+
+        result: dict[str, Any] = {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "block_id": block_id,
+            "direction": direction,
+            "depth": depth,
+        }
+
+        if direction in ("upstream", "both"):
+            chains = cg.causal_chain(block_id, max_depth=depth)
+            deps = cg.dependencies(block_id)
+            result["upstream"] = {
+                "direct_dependencies": [
+                    {
+                        "target": e.target_id,
+                        "edge_type": e.edge_type,
+                        "weight": e.weight,
+                    }
+                    for e in deps
+                ],
+                "causal_chains": chains,
+            }
+
+        if direction in ("downstream", "both"):
+            dependents = cg.dependents(block_id)
+            # BFS for downstream subgraph
+            downstream_nodes: list[dict] = []
+            visited: set[str] = {block_id}
+            current_layer = [block_id]
+            for d in range(depth):
+                next_layer: list[str] = []
+                for node_id in current_layer:
+                    node_deps = cg.dependents(node_id)
+                    for e in node_deps:
+                        if e.source_id not in visited:
+                            visited.add(e.source_id)
+                            next_layer.append(e.source_id)
+                            downstream_nodes.append({
+                                "block_id": e.source_id,
+                                "depends_on": node_id,
+                                "edge_type": e.edge_type,
+                                "depth": d + 1,
+                            })
+                current_layer = next_layer
+                if not current_layer:
+                    break
+
+            result["downstream"] = {
+                "direct_dependents": [
+                    {
+                        "source": e.source_id,
+                        "edge_type": e.edge_type,
+                        "weight": e.weight,
+                    }
+                    for e in dependents
+                ],
+                "reachable_nodes": downstream_nodes,
+            }
+
+        # Graph summary
+        summary = cg.summary()
+        result["graph_summary"] = summary
+
+        metrics.inc("mcp_traverse_graph")
+        _log.info("mcp_traverse_graph", block_id=block_id, direction=direction, depth=depth)
+        return json.dumps(result, indent=2, default=str)
+
+    except ImportError:
+        return json.dumps({
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "error": "causal_graph module not available",
+            "block_id": block_id,
+        }, indent=2)
+    except sqlite3.OperationalError as exc:
+        if _is_db_locked(exc):
+            return _sqlite_busy_error()
+        raise
+    except (OSError, ValueError) as exc:
+        _log.warning("traverse_graph_failed", block_id=block_id, error=str(exc))
+        return json.dumps({
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "error": f"Graph traversal failed: {exc}",
+            "block_id": block_id,
+        }, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def compact(dry_run: bool = True, archive_days: int = 90, signal_days: int = 60, snapshot_days: int = 30) -> str:
+    """Run workspace compaction — archive old blocks, clean snapshots, remove resolved signals.
+
+    Maintenance tool that keeps the workspace lean without losing data:
+    - Archives completed/canceled tasks and superseded/revoked decisions
+    - Removes expired apply snapshots
+    - Compacts resolved/rejected signals from SIGNALS.md
+    - Archives old daily log files
+
+    SAFETY: Defaults to dry_run=True. Set dry_run=False to execute.
+    Archived blocks are moved to *_ARCHIVE.md files, never deleted.
+
+    Args:
+        dry_run: Preview what would be done without changing files (default: True).
+        archive_days: Archive completed blocks older than N days (default: 90).
+        signal_days: Remove resolved signals older than N days (default: 60).
+        snapshot_days: Remove apply snapshots older than N days (default: 30).
+
+    Returns:
+        JSON report with actions taken (or previewed) per category.
+    """
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    from mind_mem.compaction import (
+        archive_completed_blocks,
+        cleanup_daily_logs,
+        cleanup_snapshots,
+        compact_signals,
+    )
+
+    actions: dict[str, list[str]] = {}
+
+    # 1. Archive completed blocks
+    try:
+        block_actions = archive_completed_blocks(ws, days=archive_days, dry_run=dry_run)
+        actions["archived_blocks"] = block_actions
+    except (OSError, ValueError) as exc:
+        actions["archived_blocks_error"] = [str(exc)]
+        _log.warning("compact_archive_failed", error=str(exc))
+
+    # 2. Cleanup snapshots
+    try:
+        snap_actions = cleanup_snapshots(ws, days=snapshot_days, dry_run=dry_run)
+        actions["cleaned_snapshots"] = snap_actions
+    except (OSError, ValueError) as exc:
+        actions["cleaned_snapshots_error"] = [str(exc)]
+        _log.warning("compact_snapshots_failed", error=str(exc))
+
+    # 3. Compact signals
+    try:
+        signal_actions = compact_signals(ws, days=signal_days, dry_run=dry_run)
+        actions["compacted_signals"] = signal_actions
+    except (OSError, ValueError) as exc:
+        actions["compacted_signals_error"] = [str(exc)]
+        _log.warning("compact_signals_failed", error=str(exc))
+
+    # 4. Archive daily logs
+    try:
+        log_actions = cleanup_daily_logs(ws, days=180, dry_run=dry_run)
+        actions["archived_logs"] = log_actions
+    except (OSError, ValueError) as exc:
+        actions["archived_logs_error"] = [str(exc)]
+        _log.warning("compact_logs_failed", error=str(exc))
+
+    total_actions = sum(len(v) for v in actions.values() if isinstance(v, list))
+
+    metrics.inc("mcp_compact")
+    _log.info("mcp_compact", dry_run=dry_run, total_actions=total_actions)
+
+    return json.dumps({
+        "_schema_version": MCP_SCHEMA_VERSION,
+        "status": "dry_run" if dry_run else "executed",
+        "dry_run": dry_run,
+        "total_actions": total_actions,
+        "actions": actions,
+        "next_step": (
+            "Call again with dry_run=False to execute." if dry_run and total_actions > 0
+            else "Workspace is clean — nothing to compact." if total_actions == 0
+            else None
+        ),
+    }, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def stale_blocks(limit: int = 20, clear_block_id: str = "") -> str:
+    """List blocks flagged as stale due to upstream changes, or clear a staleness flag.
+
+    When a block is modified, all downstream dependents in the causal graph are
+    automatically flagged as stale (needing review). This tool surfaces those
+    flags so agents can prioritize which blocks to re-evaluate.
+
+    Args:
+        limit: Maximum number of stale blocks to return (default: 20).
+        clear_block_id: If provided, clear the staleness flag for this block
+                        (after reviewing/updating it). Leave empty to list.
+
+    Returns:
+        JSON with stale block list (with reasons and timestamps), or
+        confirmation of flag clearance.
+    """
+    ws = _workspace()
+
+    try:
+        from mind_mem.causal_graph import CausalGraph
+
+        cg = CausalGraph(ws)
+
+        # Clear mode
+        if clear_block_id:
+            if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", clear_block_id):
+                return json.dumps({
+                    "_schema_version": MCP_SCHEMA_VERSION,
+                    "error": f"Invalid block_id format: {clear_block_id}",
+                })
+            cleared = cg.clear_staleness(clear_block_id)
+            metrics.inc("mcp_stale_cleared")
+            return json.dumps({
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "action": "cleared",
+                "block_id": clear_block_id,
+                "was_stale": cleared,
+            }, indent=2)
+
+        # List mode
+        stale = cg.get_stale_blocks()
+        stale = stale[:max(1, min(limit, 100))]
+
+        metrics.inc("mcp_stale_blocks")
+        _log.info("mcp_stale_blocks", count=len(stale))
+
+        if not stale:
+            return json.dumps({
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "status": "clean",
+                "stale_count": 0,
+                "message": "No stale blocks. All blocks are up to date.",
+            }, indent=2)
+
+        return json.dumps({
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "status": "stale_found",
+            "stale_count": len(stale),
+            "blocks": stale,
+            "hint": "Review each stale block and update or call stale_blocks(clear_block_id='...') to clear.",
+        }, indent=2, default=str)
+
+    except ImportError:
+        return json.dumps({
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "error": "causal_graph module not available",
+        }, indent=2)
+    except sqlite3.OperationalError as exc:
+        if _is_db_locked(exc):
+            return _sqlite_busy_error()
+        raise
+    except (OSError, ValueError) as exc:
+        _log.warning("stale_blocks_failed", error=str(exc))
+        return json.dumps({
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "error": f"Stale block lookup failed: {exc}",
+        }, indent=2)
 
 
 # ---------------------------------------------------------------------------
