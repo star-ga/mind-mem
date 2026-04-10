@@ -56,17 +56,6 @@ Resolves time references ("today", "last week") and applies temporal filters to 
 ### MIND FFI (`mind_ffi.py`)
 Interface to MIND scoring kernels for customizable BM25 parameter overrides.
 
-## Data Flow
-
-1. Query arrives via MCP tool call
-2. Query type detected and expanded
-3. Blocks loaded from workspace files
-4. BM25F scoring applied with field weights
-5. Graph boost, entity boost, and other boosters applied
-6. Reranking refines candidate ordering
-7. Knee cutoff determines final result count
-8. Context packed and returned to caller
-
 ### Query Expansion (`query_expansion.py`)
 LLM-free multi-query expansion. Generates semantically diverse reformulations (synonym expansion, specificity shifts, temporal rephrasing, negation variants) and fuses results with RRF.
 

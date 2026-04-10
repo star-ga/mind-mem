@@ -79,14 +79,28 @@ Add to `~/.claude/mcp.json`:
 | `calibration_stats` | View per-block quality distributions |
 | `retrieval_diagnostics` | Analyze recent retrieval performance |
 
+### Search Enhancement Tools
+
+| Tool | Description |
+|------|-------------|
+| `expand_query` | Generate semantically diverse query reformulations with RRF fusion |
+| `smart_chunk` | Split content at semantic boundaries (headers, paragraphs, code blocks) |
+| `chunk_and_index` | Chunk content and add resulting blocks to the index |
+| `deduplicate_results` | Apply 4-layer dedup to search results (per-source, cosine, type, chunk cap) |
+| `dedup_search` | Run recall + automatic deduplication in one call |
+
 ### Knowledge Enrichment Tools
 
 | Tool | Description |
 |------|-------------|
-| `dream_cycle` | Run autonomous memory enrichment (scan, repair, consolidate) |
+| `run_dream_cycle` | Run autonomous memory enrichment (scan, repair, consolidate) |
+| `dream_cycle_status` | Check last dream cycle run status and results |
+| `compile_truth` | Compile a truth page for an entity from all known evidence |
+| `get_compiled_truth` | Retrieve a compiled truth page by entity name |
 | `compiled_truth_load` | Load or create a compiled truth page for an entity |
 | `compiled_truth_add_evidence` | Add timestamped evidence to an entity's truth page |
 | `compiled_truth_contradictions` | Detect contradictions in an entity's evidence trail |
+| `list_compiled_truths` | List all compiled truth pages in the workspace |
 
 ## Best Practices
 

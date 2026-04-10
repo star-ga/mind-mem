@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 372 | **Est. tokens:** ~747,715
-**Generated:** 2026-04-10 10:22 UTC
+**Files:** 372 | **Est. tokens:** ~747,830
+**Generated:** 2026-04-10 10:25 UTC
 
 ## Token Budget Guide
 
@@ -25,7 +25,7 @@
 | `./` | 27 | ~66,117 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
-| `docs/` | 28 | ~24,408 |
+| `docs/` | 28 | ~24,523 |
 | `docs/adr/` | 2 | ~521 |
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
@@ -99,7 +99,7 @@
 ### `docs/`
 
 - `api-reference.md` (~969 tok, large) — API Reference
-- `architecture.md` (~1320 tok, large) — Architecture
+- `architecture.md` (~1232 tok, large) — Architecture
 - `benchmarks.md` (~579 tok, large) — Benchmarks
 - `block-format.md` (~431 tok, medium) — Block Format
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
@@ -112,7 +112,7 @@
 - `faq.md` (~369 tok, medium) — FAQ
 - `getting-started.md` (~405 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
-- `mcp-integration.md` (~823 tok, large) — MCP Integration Guide
+- `mcp-integration.md` (~1026 tok, large) — MCP Integration Guide
 - `mcp-tool-examples.md` (~902 tok, large) — MCP Tool Examples
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
 - `migration.md` (~2746 tok, huge) — Migration Guide: mem-os to mind-mem
