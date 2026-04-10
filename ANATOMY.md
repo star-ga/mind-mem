@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 372 | **Est. tokens:** ~747,830
-**Generated:** 2026-04-10 10:25 UTC
+**Files:** 372 | **Est. tokens:** ~748,447
+**Generated:** 2026-04-10 10:27 UTC
 
 ## Token Budget Guide
 
@@ -25,7 +25,7 @@
 | `./` | 27 | ~66,117 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
-| `docs/` | 28 | ~24,523 |
+| `docs/` | 28 | ~25,140 |
 | `docs/adr/` | 2 | ~521 |
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
@@ -99,7 +99,7 @@
 ### `docs/`
 
 - `api-reference.md` (~969 tok, large) — API Reference
-- `architecture.md` (~1232 tok, large) — Architecture
+- `architecture.md` (~1849 tok, huge) — Architecture
 - `benchmarks.md` (~579 tok, large) — Benchmarks
 - `block-format.md` (~431 tok, medium) — Block Format
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
