@@ -112,7 +112,7 @@ class TestEnrichResults:
     def test_returns_results_when_config_disabled(self):
         results = [{"_id": "C", "excerpt": "baz", "score": 0.8}]
         with tempfile.TemporaryDirectory() as tmpdir:
-            config = {"extraction": {"enabled": False, "model": "phi3:mini"}}
+            config = {"extraction": {"enabled": False, "model": "qwen3.5:9b"}}
             with open(os.path.join(tmpdir, "mind-mem.json"), "w") as f:
                 json.dump(config, f)
             enriched = enrich_results(results, workspace=tmpdir)
@@ -126,7 +126,7 @@ class TestLoadConfig:
         with tempfile.TemporaryDirectory() as tmpdir:
             config = load_config(tmpdir)
             assert config["enabled"] is False
-            assert config["model"] == "phi3:mini"
+            assert config["model"] == "qwen3.5:9b"
             assert config["backend"] == "auto"
 
     def test_reads_from_file(self):
@@ -152,7 +152,7 @@ class TestLoadConfig:
                 json.dump(cfg, f)
             config = load_config(tmpdir)
             assert config["enabled"] is True
-            assert config["model"] == "phi3:mini"  # default
+            assert config["model"] == "qwen3.5:9b"  # default
             assert config["backend"] == "auto"  # default
 
     def test_invalid_json_returns_defaults(self):
@@ -161,7 +161,7 @@ class TestLoadConfig:
                 f.write("{invalid json!!!")
             config = load_config(tmpdir)
             assert config["enabled"] is False
-            assert config["model"] == "phi3:mini"
+            assert config["model"] == "qwen3.5:9b"
 
     def test_missing_extraction_section_returns_defaults(self):
         with tempfile.TemporaryDirectory() as tmpdir:
