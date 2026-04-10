@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 373 | **Est. tokens:** ~768,455
-**Generated:** 2026-04-10 09:47 UTC
+**Files:** 373 | **Est. tokens:** ~768,191
+**Generated:** 2026-04-10 09:51 UTC
 
 ## Token Budget Guide
 
@@ -40,7 +40,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 81 | ~316,715 |
+| `src/mind_mem/` | 81 | ~316,451 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 151 | ~298,691 |
 | `tests/integration/` | 2 | ~1,436 |
@@ -234,7 +234,7 @@
 - `cron_runner.py` (~1846 tok, huge) — mind-mem Cron Runner — single entry point for all periodic jobs. Zero external deps.
 - `cross_encoder_reranker.py` (~749 tok, large) — mind-mem Optional Cross-Encoder Reranker.
 - `dedup.py` (~4473 tok, huge) — mind-mem 4-layer deduplication filter for search results.
-- `dream_cycle.py` (~6432 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
+- `dream_cycle.py` (~6168 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
 - `drift_detector.py` (~4216 tok, huge) — mind-mem Semantic Belief Drift Detection.
 - `encryption.py` (~2527 tok, huge) — mind-mem Encryption at Rest — optional AES-256 encryption for memory blocks.
 - `entity_ingest.py` (~3225 tok, huge) — mind-mem Entity Ingestion — regex-based entity extraction. Zero external deps.
