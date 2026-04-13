@@ -5,7 +5,7 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 384 | **Est. tokens:** ~792,517
+**Files:** 384 | **Est. tokens:** ~792,921
 **Generated:** 2026-04-13 09:33 UTC
 
 ## Token Budget Guide
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~70,736 |
+| `./` | 27 | ~71,140 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 28 | ~25,747 |
@@ -49,7 +49,7 @@
 
 ### `./`
 
-- `CHANGELOG.md` (~13878 tok, huge) — Changelog
+- `CHANGELOG.md` (~14282 tok, huge) — Changelog
 - `CLAUDE.md` (~611 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem

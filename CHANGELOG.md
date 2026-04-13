@@ -2,6 +2,32 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.0.0 (2026-04-13)
+
+**v2.0.0 — stable. Promotes the entire 2.0 alpha → beta → rc train (a2 → a3 → b1 → rc1) to a production release. No new code since rc1; this entry marks the feature set as final.**
+
+### v2.0.0 feature set (cumulative since 1.9.1)
+- **Cryptographic governance** (a2): `GovernanceGate`, `HashChainV2` SHA3-512 ledger, `EvidenceChain`, `SpecBindingManager`, `MerkleTree` with domain separation.
+- **GBrain enrichment** (a2): query expansion, compiled truth, dream cycle, dedup, smart chunker + 13 MCP tools.
+- **ODC retrieval** (a3): 6-axis `recall_with_axis` with weighted RRF + rotation + adversarial pairs.
+- **Inference acceleration, Python subset** (b1): `PrefixCache` + `PrefetchPredictor` + `index_stats` surfaces.
+- **External verification** (rc1): `mind-mem-verify` CLI + `verify_merkle` + `mind_mem_verify` MCP tools + snapshot-anchored Merkle tree.
+
+### Release criteria met
+- All v2.0.0a*/b*/rc* features complete
+- **3197 tests passing**, 6 skipped, 0 failing on Python 3.12
+- No breaking changes from v1.9.x (v2.0 surfaces are additive)
+- 3-LLM joint audit (Claude + codex + Gemini/Grok) performed on every pre-release; CRITICAL/HIGH findings fixed before upload
+- Migration path: `pip install --upgrade mind-mem` — no config migration required
+
+### Deferred to future releases
+- MIND-compiled hot paths (BM25F / SHA3-512 / vector / RRF kernels) — requires `mindc` toolchain
+- TurboQuant-compressed prefix cache — requires `mind-inference`
+- Optional ledger anchoring (Ethereum L2 / similar) + `anchor_history` MCP tool
+
+### Changed
+- Version: 2.0.0rc1 → 2.0.0
+
 ## 2.0.0rc1 (2026-04-13)
 
 **v2.0.0rc1: external verification — standalone `mind-mem-verify` CLI, `verify_merkle` MCP tool, snapshot-anchored chain-head + Merkle-root validation. Third parties can now verify memory integrity without opening the live retrieval stack or touching the MCP server. Ledger anchoring is deferred as an optional roadmap item.**
