@@ -2,9 +2,40 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.0.0b1 (2026-04-13)
+
+**v2.0.0b1: inference acceleration — Python-only subset, hardened via 3-LLM joint audit (Claude Opus 4.6 + Grok 4.1 Fast + codex/GPT-5.4). LLM prefix cache + speculative prefetch predictor. The MIND-compiled hot paths (BM25F, SHA3-512, vector similarity, RRF fusion) are deferred until the `mindc` toolchain is available.**
+
+### Added
+- `prefix_cache.py` — per-namespace LRU prefix cache with optional TTL. Keys include the namespace so cross-encoder, intent-router, and query-expansion caches never collide. Registry bounded at 64 namespaces to prevent dynamic-namespace DoS; `set_max_namespaces()` exposes the cap. `PrefixCache.stats()` surfaces hit/miss/evictions/expirations counters; `all_stats()` snapshots every registered cache.
+- `speculative_prefetch.py` — access-history predictor. `PrefetchPredictor.observe(query, block_ids)` learns which blocks historically follow a query signature; `predict(query, limit)` returns block ids to warm ahead of the next hop; `evaluate(query, actual_ids)` scores efficacy. Signatures are Unicode-aware stop-word-stripped hashes so different phrasings of the same intent share a bucket.
+- `mind-mem://index_stats` (and the `index_stats` MCP tool) now include `prefix_caches` (list of `CacheStats` dicts) and `speculative_prefetch` (`PrefetchStats` dict) so operators can observe hit rates without attaching a debugger.
+
+### Fixed (audit-driven, pre-release)
+- **[HIGH]** `speculative_prefetch.py` bucket trim no longer resets survivor counts to 1. The earlier policy destroyed frequency history and froze buckets on whatever top-N arrived first. Trim now prunes the tail while preserving each survivor's count.
+- **[MEDIUM]** `speculative_prefetch.py` `signature()` caps input at 4096 chars before tokenising. A hostile MCP caller could otherwise submit a multi-megabyte query and burn CPU on regex matching.
+- **[MEDIUM]** `speculative_prefetch.py` `_TOKEN_RE` switched to `\w+` with `re.UNICODE` so CJK and other non-ASCII queries stop collapsing onto one shared "empty" bucket.
+- **[MEDIUM]** `speculative_prefetch.py` empty-after-filter queries now hash their raw lowered text into an `empty:<digest>` bucket so distinct noise queries no longer pool.
+- **[MEDIUM]** `mcp_server.py` `index_stats` narrows its `except` to `(ImportError, AttributeError)` for the new prefix-cache / prefetch sections so real bugs propagate to the MCP error envelope instead of disappearing at debug level.
+- **[LOW]** `prefix_cache.py` module registry bounded at 64 namespaces (LRU-evicted) so per-tenant dynamic namespaces cannot grow unbounded.
+- **[LOW]** Dead `_Bucket.last_updated` field removed; `PrefetchStats.as_dict` type-annotated `dict[str, Any]`.
+
+### Deferred (requires MIND toolchain)
+- BM25F scoring kernel → `.mind` → native ELF via `mindc`
+- SHA3-512 hash chain verification → `.mind` → GPU kernel
+- Vector similarity (cosine/dot) → `.mind` → GPU kernel
+- RRF fusion → `.mind` → native
+- TurboQuant-compressed prefix cache (3-bit vector quantization)
+
+### Testing
+- 67 new tests: `test_prefix_cache.py` (35 — constructor, hit/miss, LRU, TTL, invalidation, stats, registry cap + LRU, concurrency) + `test_speculative_prefetch.py` (32 — signature normalisation, Unicode, length truncation, observe/predict, trim frequency-preservation, evaluate, stats, singleton, concurrency).
+
+### Changed
+- Version: 2.0.0a3 → 2.0.0b1
+
 ## 2.0.0a3 (2026-04-13)
 
-**v2.0-alpha.2: Observer-Dependent Cognition (ODC) — axis-aware retrieval, hardened via a 3-LLM joint audit (Claude Opus 4.6 + Gemini 3.1 Pro + Grok 4.1 Fast).**
+**v2.0.0a3: Observer-Dependent Cognition (ODC) — axis-aware retrieval, hardened via a 3-LLM joint audit (Claude Opus 4.6 + Gemini 3.1 Pro + Grok 4.1 Fast).**
 
 ### Added
 - `observation_axis.py` — `ObservationAxis` enum (LEXICAL, SEMANTIC, TEMPORAL, ENTITY_GRAPH, CONTRADICTION, ADVERSARIAL), `AxisWeights` vector with non-negative / finite validation, `AxisScore` / `Observation` value objects, `axis_diversity()` metric, `rotate_axes()` / `should_rotate()` helpers, `adversarial_pair()` mapping.
@@ -56,7 +87,7 @@ All notable changes to mind-mem are documented in this file.
 
 ## 2.0.0a1 (2026-04-05)
 
-**v2.0-alpha: GovernanceGate, SHA3-512 hash chain wiring, MCP evidence tools, and spec-hash embedding**
+**v2.0.0a1: GovernanceGate, SHA3-512 hash chain wiring, MCP evidence tools, and spec-hash embedding**
 
 ### Added
 - `governance_gate.py` — `GovernanceGate` single choke-point for all block writes: spec-hash verification, evidence object creation, hash chain appending, `GovernanceBypassError` on drift

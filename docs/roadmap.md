@@ -1,6 +1,24 @@
 # Roadmap
 
-## v1.9.1 (Current)
+> This is the short-form roadmap. The canonical, detailed version lives in
+> [`ROADMAP.md`](../ROADMAP.md) at the repo root and includes the full
+> v2.0 → v2.7 milestone breakdown.
+
+## v2.0.0b1 (Current — released 2026-04-13)
+
+Inference acceleration — Python subset. LLM prefix cache + speculative
+prefetch predictor. MIND-compiled hot paths deferred until the `mindc`
+toolchain is available.
+
+## v2.0.0a3 (Released 2026-04-13)
+
+Observer-Dependent Cognition (ODC) axis-aware retrieval.
+
+## v2.0.0a2 (Released 2026-04-13)
+
+Cryptographic governance layer + GBrain enrichment.
+
+## v1.9.1 (Previous stable)
 
 - [x] BM25F scoring with field weights
 - [x] Co-retrieval graph boost

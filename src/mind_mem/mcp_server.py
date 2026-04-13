@@ -1392,6 +1392,26 @@ def index_stats() -> str:
     stats["mind_kernel_compiled"] = mind_kernel_available()
     stats["mind_kernel_protected"] = mind_kernel_protected()
 
+    # v2.0.0b1 — LLM prefix cache + speculative prefetch stats.
+    # Narrow except: only swallow import failures (module not present) and
+    # attribute failures (symbol renamed). Anything else propagates so
+    # real regressions surface in the MCP error envelope.
+    try:
+        from mind_mem.prefix_cache import all_stats as _prefix_all_stats
+
+        stats["prefix_caches"] = [s.as_dict() for s in _prefix_all_stats()]
+    except (ImportError, AttributeError) as exc:
+        _log.debug("prefix_cache_stats_unavailable", error=str(exc))
+        stats["prefix_caches"] = []
+
+    try:
+        from mind_mem.speculative_prefetch import get_default_predictor
+
+        stats["speculative_prefetch"] = get_default_predictor().stats().as_dict()
+    except (ImportError, AttributeError) as exc:
+        _log.debug("speculative_prefetch_stats_unavailable", error=str(exc))
+        stats["speculative_prefetch"] = {}
+
     metrics.inc("mcp_index_stats")
     _log.info("mcp_index_stats", stats=stats)
     return json.dumps(stats, indent=2)
@@ -2018,7 +2038,7 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blo
 
 
 # ---------------------------------------------------------------------------
-# v2.0-alpha governance tools — verify_chain, list_evidence
+# v2.0.0a1 governance tools — verify_chain, list_evidence
 # ---------------------------------------------------------------------------
 
 

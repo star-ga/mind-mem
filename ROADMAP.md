@@ -152,10 +152,15 @@
 > Three STARGA projects converge: **512-mind** governance primitives + **mind-inference** acceleration + **mind-mem** retrieval.
 >
 > Theme: The first AI memory system with **cryptographically verifiable governance** and **hardware-accelerated hot paths**.
+>
+> Versions follow PEP 440 (what PyPI actually accepts). The alpha → beta →
+> rc → final progression maps to the milestone labels Cryptographic
+> Governance → ODC Retrieval → Inference Acceleration → External
+> Verification → v2.0 Final.
 
 ---
 
-## v2.0-alpha — Cryptographic Governance Layer (from 512-mind)
+## v2.0.0a2 — Cryptographic Governance Layer (from 512-mind) ✅ Released as v2.0.0a2 (2026-04-13)
 
 **Goal:** Every memory write is tamper-evident. Governance config is immutable post-init. Evidence objects prove governance actually ran.
 
@@ -196,7 +201,7 @@
 
 ---
 
-## v2.0-alpha.2 — Observer-Dependent Cognition (ODC) Retrieval ✅ Released as v2.0.0a3 (2026-04-13)
+## v2.0.0a3 — Observer-Dependent Cognition (ODC) Retrieval ✅ Released as v2.0.0a3 (2026-04-13)
 
 **Goal:** Make retrieval axis-aware. Every recall declares its observation basis, results include axis metadata, and the system can rotate axes for higher-confidence results.
 
@@ -205,7 +210,7 @@
 ### Axis-Aware Retrieval
 - [x] `ObservationAxis` enum (lexical, semantic, temporal, entity_graph, contradiction, adversarial) + `AxisWeights` vector
 - [x] `recall_with_axis` orchestrator dispatches per-axis passes with explicit weights, fused via weighted RRF
-- [x] Axis choices recorded per-result in the `observation` metadata (foundation for evidence-chain integration in v2.0-rc)
+- [x] Axis choices recorded per-result in the `observation` metadata (foundation for evidence-chain integration in v2.0.0rc1)
 - [x] Axis rotation: `should_rotate` fires when top-confidence < `DEFAULT_ROTATION_THRESHOLD (0.35)`, `rotate_axes` picks orthogonals
 
 ### Observation Metadata
@@ -219,7 +224,7 @@
 
 ---
 
-## v2.0-beta — Inference Acceleration (from mind-inference)
+## v2.0.0b1 — Inference Acceleration (from mind-inference) — Python subset ✅ Released 2026-04-13; MIND-kernel subset deferred
 
 **Goal:** Sub-millisecond hot paths. Predictive prefetch. KV cache for LLM-backed operations.
 
@@ -258,7 +263,7 @@
 
 ---
 
-## v2.0-rc — External Verification (from 512-mind)
+## v2.0.0rc1 — External Verification (from 512-mind)
 
 **Goal:** Third parties can verify memory integrity without full DB access.
 
@@ -283,20 +288,20 @@
 
 ---
 
-## v2.0 Release Criteria
+## v2.0.0 Release Criteria
 
-- [ ] All v2.0-alpha, beta, rc features complete
+- [ ] All v2.0.0a*, v2.0.0b*, v2.0.0rc* features complete
 - [ ] Hash chain + spec-hash + evidence objects passing in CI
 - [ ] MIND-compiled hot paths benchmarked (published in docs/benchmarks.md)
 - [ ] `mind-mem-verify` CLI tool works on v1.x snapshots (backward compat)
 - [ ] 2500+ tests passing
 - [ ] LoCoMo benchmark re-run with acceleration (compare latency vs v1.9.x)
 - [ ] Security audit of governance gate + hash chain implementation
-- [ ] Migration guide from v1.9.x → v2.0 (no breaking changes expected)
+- [ ] Migration guide from v1.9.x → v2.0.0 (no breaking changes expected)
 
 ---
 
-## v2.1 — Self-Improving Retrieval via OpenClaw-RL
+## v2.1.0 — Self-Improving Retrieval via OpenClaw-RL
 
 > **Paper:** "Train Any Agent Simply by Talking" (arXiv:2603.10165)
 >
@@ -327,7 +332,7 @@
 
 ---
 
-## v2.2 — Knowledge Graph Layer
+## v2.2.0 — Knowledge Graph Layer
 
 > Theme: Relationships between facts are as retrievable as facts themselves.
 > Ref: TrustGraph Context Core architecture, André Lindenberg "Memento Nightmare" analysis (2026-03-28)
@@ -353,7 +358,7 @@
 
 ---
 
-## v2.3 — Context Cores: Portable Memory Bundles
+## v2.3.0 — Context Cores: Portable Memory Bundles
 
 > Theme: Docker for agent knowledge. Build once with a powerful model, deploy anywhere.
 > Ref: TrustGraph Context Core concept
@@ -377,14 +382,14 @@
 
 ---
 
-## v2.4 — Cognitive Memory Management
+## v2.4.0 — Cognitive Memory Management
 
 > Theme: Active forgetting, token-aware packing, and multi-modal memory.
 >
 > **Cross-ref:** Naestro's `consolidator.mind` (2026-03-31) implements the idle-time consolidation
 > cycle for belief graphs (merge similar, resolve contradictions, promote repeated observations,
 > decay stale). `write_discipline.mind` enforces the write-then-index invariant so failed writes
-> never pollute the retrieval index. Both modules integrate with mind-mem via FFI. The v2.4
+> never pollute the retrieval index. Both modules integrate with mind-mem via FFI. The v2.4.0
 > features below formalize what those modules already enforce at the cognitive daemon level into
 > mind-mem's own API surface.
 
@@ -420,7 +425,7 @@
 
 ---
 
-## v2.5 — Ontology & Streaming
+## v2.5.0 — Ontology & Streaming
 
 > Theme: Schema-enforced knowledge and real-time memory.
 
@@ -445,7 +450,7 @@
 
 ---
 
-## v2.6 — Competitive Intelligence Integration
+## v2.6.0 — Competitive Intelligence Integration
 
 > Theme: Features identified from competitive analysis of agentmemory (rohitg00/agentmemory),
 > Brooks Jordan's Daneel (NVIDIA), and Karpathy's llm-wiki pattern. Cherry-picked what we
@@ -535,7 +540,7 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
 
 ---
 
-## v2.7 — Universal Agent Bridge + Vault Sync
+## v2.7.0 — Universal Agent Bridge + Vault Sync
 
 > Theme: mind-mem becomes the shared memory layer for **every** coding agent — not just MCP-capable ones.
 > Any CLI agent (Claude Code, codex, gemini, Cursor, Windsurf, Aider, naestro-bot) reads and writes
@@ -633,10 +638,10 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
 
 ---
 
-## Post-v2.7 — Future Directions
+## Post-v2.7.0 — Future Directions
 
 - [ ] **Agent-to-agent trust protocol** — agents verify each other's memory integrity via Merkle proofs before sharing context
-- [ ] **Distributed memory mesh** — multiple mind-mem instances with hash-chain synchronization _(see v2.6 P2P Mesh for foundation)_
+- [ ] **Distributed memory mesh** — multiple mind-mem instances with hash-chain synchronization _(see v2.6.0 P2P Mesh for foundation)_
 - [ ] **Real-time governance dashboard** — web UI showing evidence stream, chain health, spec-hash status
 - [ ] **512 Kernel full integration** — mind-mem as a governed resource within 512-mind production deployments
 - [ ] **Hardware-specific compilation** — `mindc` targets for ARM (Apple Silicon), CUDA, ROCm

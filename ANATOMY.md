@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 377 | **Est. tokens:** ~770,355
-**Generated:** 2026-04-13 07:42 UTC
+**Files:** 382 | **Est. tokens:** ~784,379
+**Generated:** 2026-04-13 08:48 UTC
 
 ## Token Budget Guide
 
@@ -22,10 +22,10 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~68,791 |
+| `./` | 27 | ~69,743 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
-| `docs/` | 28 | ~25,598 |
+| `docs/` | 28 | ~25,746 |
 | `docs/adr/` | 2 | ~521 |
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
@@ -40,16 +40,16 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 82 | ~304,348 |
+| `src/mind_mem/` | 84 | ~310,530 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 154 | ~307,197 |
+| `tests/` | 157 | ~313,939 |
 | `tests/integration/` | 2 | ~1,436 |
 
 ## Files
 
 ### `./`
 
-- `CHANGELOG.md` (~12053 tok, huge) — Changelog
+- `CHANGELOG.md` (~12906 tok, huge) — Changelog
 - `CLAUDE.md` (~611 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
@@ -69,9 +69,9 @@
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
 - `pyproject.toml` (~768 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~21841 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~21842 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~10004 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~10102 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `train_mind7b_runpod.py` (~1652 tok, huge)
@@ -107,7 +107,7 @@
 - `claude-desktop-setup.md` (~752 tok, large) — Claude Desktop Setup Guide
 - `comparison.md` (~313 tok, medium) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~4599 tok, huge) — Configuration Reference
+- `configuration.md` (~4603 tok, huge) — Configuration Reference
 - `development.md` (~358 tok, medium) — Development Guide
 - `faq.md` (~369 tok, medium) — FAQ
 - `getting-started.md` (~405 tok, medium) — Getting Started
@@ -117,10 +117,10 @@
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
 - `migration.md` (~2746 tok, huge) — Migration Guide: mem-os to mind-mem
 - `mind-kernels.md` (~339 tok, medium) — MIND Kernels
-- `odc-retrieval.md` (~778 tok, large) — Observer-Dependent Cognition in mind-mem
+- `odc-retrieval.md` (~774 tok, large) — Observer-Dependent Cognition in mind-mem
 - `performance-tuning.md` (~560 tok, large) — Performance Tuning
 - `quickstart.md` (~601 tok, large) — mind-mem Quickstart
-- `roadmap.md` (~509 tok, large) — Roadmap
+- `roadmap.md` (~657 tok, large) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `security-model.md` (~350 tok, medium) — Security Model
 - `testing-guide.md` (~369 tok, medium) — Testing Guide
@@ -265,6 +265,7 @@
 - `observability.py` (~1416 tok, large) — mind-mem Observability Module. Zero external deps.
 - `observation_axis.py` (~3959 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `observation_compress.py` (~1353 tok, large) — Observation Compression Layer for Mind-Mem.
+- `prefix_cache.py` (~3047 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `py.typed` (~0 tok, tiny)
 - `query_expansion.py` (~4339 tok, huge) — Multi-query expansion for improved recall.
 - `_recall_constants.py` (~2420 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
@@ -284,6 +285,7 @@
 - `smart_chunker.py` (~6752 tok, huge) — mind-mem Smart Chunker — Semantic-boundary document chunking.
 - `smoke_test.sh` (~633 tok, large) — mind-mem Smoke Test — end-to-end verification
 - `spec_binding.py` (~2896 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `speculative_prefetch.py` (~3135 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `sqlite_index.py` (~10531 tok, huge) — Mind Mem SQLite FTS5 Index — incremental lexical indexing. Zero external deps.
 - `trajectory.py` (~2233 tok, huge) — Trajectory Memory — task execution trace storage and recall.
 - `transcript_capture.py` (~2333 tok, huge) — mind-mem Transcript JSONL Capture. Zero external deps.
@@ -392,6 +394,7 @@
 - `test_hash_chain_v2.py` (~3472 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hybrid_recall.py` (~2855 tok, huge) — Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
 - `test_hybrid_search.py` (~588 tok, large) — Tests for hybrid search functionality."""
+- `test_index_stats_b1.py` (~522 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_index_stats.py` (~298 tok, medium) — Tests for index statistics."""
 - `test_init_workspace.py` (~2243 tok, huge) — Tests for init_workspace — config validation and workspace scaffolding."""
 - `test_install_script.py` (~376 tok, medium)
@@ -419,6 +422,7 @@
 - `test_observation_compress.py` (~2754 tok, huge) — Tests for observation_compress module.
 - `test_prefetch_context.py` (~1482 tok, large) — Tests for prefetch_context() in recall.py."""
 - `test_prefetch.py` (~315 tok, medium) — Tests for prefetch functionality."""
+- `test_prefix_cache.py` (~3144 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_query_decomposition.py` (~1609 tok, huge) — Tests for multi-hop query decomposition (#6)."""
 - `test_query_expansion_multi_provider.py` (~1203 tok, large) — Tests for multi-provider LLM query expansion (OpenAI-compatible endpoints)."""
 - `test_query_expansion.py` (~3781 tok, huge) — Tests for query_expansion.py -- multi-query expansion for improved recall."""
@@ -459,6 +463,7 @@
 - `test_smart_chunker_code.py` (~1240 tok, large) — Tests for code-aware chunking in smart_chunker.py."""
 - `test_smart_chunker.py` (~7767 tok, huge) — Tests for smart_chunker.py — semantic-boundary document chunking."""
 - `test_spec_binding.py` (~3195 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_speculative_prefetch.py` (~3076 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sqlite_index.py` (~4727 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
 - `test_stopwords.py` (~247 tok, medium) — Tests for stopword handling."""
 - `test_temporal.py` (~223 tok, medium) — Tests for temporal filtering module."""

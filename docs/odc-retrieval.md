@@ -1,6 +1,6 @@
 # Observer-Dependent Cognition in mind-mem
 
-**Version:** v2.0-alpha.2 (released 2026-04-13 as v2.0.0a3)
+**Version:** v2.0.0a3 (released 2026-04-13)
 **Modules:** `mind_mem.observation_axis`, `mind_mem.axis_recall`
 **MCP tool:** `recall_with_axis` (user scope)
 
