@@ -149,6 +149,8 @@ USER_TOOLS = frozenset(
     {
         "recall",
         "recall_with_axis",
+        "verify_merkle",
+        "mind_mem_verify",
         "search_memory",
         "list_memory",
         "list_contradictions",
@@ -756,6 +758,128 @@ def recall(
         JSON array of ranked results with scores, IDs, and matched content.
     """
     return _recall_impl(query, limit=limit, active_only=active_only, backend=backend)
+
+
+@mcp.tool
+@mcp_tool_observe
+def verify_merkle(block_id: str, content_hash: str) -> str:
+    """Verify a block's Merkle inclusion against the live tree.
+
+    Builds the Merkle tree from the current block index and returns a
+    JSON envelope with the proof and an ``ok`` flag indicating whether
+    the caller-supplied content hash reproduces the stored root.
+
+    Args:
+        block_id: Identifier of the block to prove.
+        content_hash: Claimed SHA-256 (or SHA3-512) of the block's
+            canonical content. The exact digest algorithm is irrelevant
+            to the tree — the caller must match whatever went in.
+
+    Returns:
+        JSON with ``ok`` (bool), ``root`` (hex), ``proof`` (list of
+        sibling/direction pairs), and ``error`` when verification fails.
+    """
+    from .merkle_tree import MerkleTree
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(block_id, str) or not block_id.strip():
+        return json.dumps({"ok": False, "error": "block_id must be a non-empty string"})
+    if not isinstance(content_hash, str) or not content_hash.strip():
+        return json.dumps({"ok": False, "error": "content_hash must be a non-empty string"})
+
+    # Collect (block_id, content_hash) tuples from the FTS index so the
+    # Merkle tree mirrors the live retrieval set. If FTS isn't built the
+    # tool returns a deterministic "no blocks" failure rather than
+    # silently claiming success.
+    try:
+        from .sqlite_index import merkle_leaves
+
+        leaves = merkle_leaves(ws)
+    except (ImportError, AttributeError):
+        leaves = []
+
+    if not leaves:
+        return json.dumps(
+            {
+                "ok": False,
+                "error": "no block index available — run 'mind-mem-scan' first",
+            }
+        )
+
+    tree = MerkleTree()
+    tree.build(leaves)
+    try:
+        proof = tree.get_proof(block_id)
+    except KeyError:
+        return json.dumps(
+            {
+                "ok": False,
+                "error": f"block_id not in tree: {block_id!r}",
+                "root": tree.root_hash,
+            }
+        )
+
+    ok = tree.verify_proof(block_id, content_hash, proof, tree.root_hash)
+    # Proof format: each item is a [sibling_hash, direction] pair where
+    # direction is "left" or "right" indicating the side of the sibling
+    # relative to the current node. Third-party verifiers should use
+    # proof_format_version=1 to opt into breaking changes later.
+    return json.dumps(
+        {
+            "ok": bool(ok),
+            "root": tree.root_hash,
+            "proof": proof,
+            "proof_format_version": 1,
+            "block_id": block_id,
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def mind_mem_verify(snapshot: str = "") -> str:
+    """Run the standalone `mind-mem-verify` CLI against the current workspace.
+
+    Exposes the external verifier via MCP so agents can run it without
+    shelling out. ``snapshot`` is optional; when set it points to a
+    snapshot directory **relative to the workspace** whose manifest
+    will be checked against the live chain + Merkle tree. Absolute
+    paths or `..` traversal are rejected so an MCP caller cannot ask
+    the verifier to read outside the workspace.
+    """
+    from .verify_cli import verify_workspace
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    snap = snapshot.strip() or None
+    if snap is not None:
+        if len(snap) > 512:
+            return json.dumps({"error": "snapshot path too long"})
+        if os.path.isabs(snap) or snap.startswith(("/", "\\")):
+            return json.dumps(
+                {"error": "snapshot must be a workspace-relative path"}
+            )
+        # Normalise and double-check: after joining with ws, the result
+        # must still live under ws. verify_workspace also enforces this
+        # but failing early in the MCP layer yields a cleaner error.
+        resolved = os.path.realpath(os.path.join(ws, snap))
+        if not resolved.startswith(os.path.realpath(ws) + os.sep):
+            return json.dumps(
+                {"error": f"snapshot path escapes workspace: {snap!r}"}
+            )
+    report = verify_workspace(ws, snapshot=snap)
+    envelope = report.as_dict()
+    envelope["_schema_version"] = "1.0"
+    return json.dumps(envelope, indent=2)
 
 
 @mcp.tool

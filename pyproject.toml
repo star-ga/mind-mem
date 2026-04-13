@@ -1,6 +1,6 @@
 [project]
 name = "mind-mem"
-version = "2.0.0b1"
+version = "2.0.0rc1"
 description = "Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -54,6 +54,7 @@ mind-mem-backup = "mind_mem.backup_restore:main"
 mind-mem-compact = "mind_mem.compaction:main"
 mind-mem-resolve = "mind_mem.conflict_resolver:main"
 mind-mem-baseline = "mind_mem.baseline_snapshot:_cli"
+mind-mem-verify = "mind_mem.verify_cli:main"
 
 [tool.setuptools]
 packages = ["mind_mem"]

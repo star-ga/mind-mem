@@ -2,6 +2,38 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.0.0rc1 (2026-04-13)
+
+**v2.0.0rc1: external verification — standalone `mind-mem-verify` CLI, `verify_merkle` MCP tool, snapshot-anchored chain-head + Merkle-root validation. Third parties can now verify memory integrity without opening the live retrieval stack or touching the MCP server. Ledger anchoring is deferred as an optional roadmap item.**
+
+### Added
+- `verify_cli.py` — standalone verifier that walks the SHA3-512 hash chain, re-checks spec-hash binding consistency, validates the evidence JSONL, and (optionally) verifies a snapshot manifest's `chain_head` + `merkle_root` against the live ledger. Pure stdlib; no network, no writes, no dependency on the recall pipeline.
+- `mind-mem-verify` console script (entry point in `pyproject.toml`). Run `mind-mem-verify <workspace> [--snapshot <dir>] [--json]`. Exit codes: 0 ok, 1 generic, 2 chain, 3 spec, 4 evidence, 5 merkle, 6 snapshot.
+- `sqlite_index.merkle_leaves(workspace)` helper returning sorted `(block_id, content_hash)` tuples so the Merkle tree is deterministic across callers.
+- `verify_merkle` MCP tool (user scope) — builds the tree from the live FTS index, returns `{ok, root, proof, block_id}` for the supplied block.
+- `mind_mem_verify` MCP tool (user scope) — invokes the standalone verifier against the active workspace so agents can trigger verification without shelling out.
+
+### Fixed (audit-driven, pre-release — 3-LLM joint: Claude + codex/GPT-5.4 + Gemini/Grok via API)
+- **[CRITICAL]** `sqlite_index.merkle_leaves()` was querying `blocks.content_hash`, a column that doesn't exist (content hashes live on `index_meta`). Every call would have crashed with `no such column`. Fixed to join `index_meta` with `blocks`.
+- **[CRITICAL]** `HashChainV2` gained `open_readonly(path)` + `readonly=True` constructor flag. The verifier now opens the ledger via `file:...?mode=ro` and skips `_init_db`, so auditing a workspace never mutates schema — not even on DBs that predate the current layout.
+- **[HIGH]** `verify_cli` `--snapshot` now canonicalises the path and requires it to stay under the workspace root. `..` traversal and absolute paths are rejected with a structured failure. `mind_mem_verify` MCP tool enforces the same invariant at the MCP layer so hostile callers can't coax the verifier into reading an external directory.
+- **[HIGH]** Every `check_*` function now catches `(sqlite3.DatabaseError, OSError, UnicodeDecodeError)` and records a structured failure instead of crashing with a traceback.
+- **[HIGH]** `mind_mem_verify` MCP tool rejects overlong snapshot args (>512 chars) and absolute paths before dispatch.
+- **[MEDIUM]** `verify_merkle` response carries `proof_format_version: 1` and documents the `[sibling_hash, direction]` shape so third-party verifiers don't have to guess.
+- **[MEDIUM]** Snapshot manifests with exactly one of `merkle_root` / `merkle_leaves` are now flagged as corruption (was: silently skipped).
+
+### Testing
+- 22 new tests: clean + tampered hash chains, spec-binding mutation + corruption, clean + tampered evidence, snapshot chain-head + Merkle-root match / mismatch, CLI entry point (text + JSON), first-failure-wins exit-code semantics, read-only chain rejects append, path-traversal rejection, bad-encoding manifest, and partial Merkle anchor detection.
+
+### Changed
+- Version: 2.0.0b1 → 2.0.0rc1
+- MCP tool count: 33 → 35 (`verify_merkle`, `mind_mem_verify`)
+
+### Docs refresh (ships with this release)
+- README badges switched to `?include_prereleases` so PyPI shows the current pre-release instead of the stale v1.9.1 stable.
+- Removed the CI and Security-Review badges — GitHub Actions is disabled account-wide; the badges would stay permanently "unknown".
+- Bumped hardcoded counts across README + comparison matrix + FAQ + docs to 3197 tests / 35 MCP tools. Added badges for "3-LLM joint audit" and "release: local (no Actions)".
+
 ## 2.0.0b1 (2026-04-13)
 
 **v2.0.0b1: inference acceleration — Python-only subset, hardened via 3-LLM joint audit (Claude Opus 4.6 + Grok 4.1 Fast + codex/GPT-5.4). LLM prefix cache + speculative prefetch predictor. The MIND-compiled hot paths (BM25F, SHA3-512, vector similarity, RRF fusion) are deferred until the `mindc` toolchain is available.**

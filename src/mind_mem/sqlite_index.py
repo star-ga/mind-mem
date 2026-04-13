@@ -1106,6 +1106,51 @@ def is_stale(workspace: str) -> bool:
         return True
 
 
+def merkle_leaves(workspace: str) -> list[tuple[str, str]]:
+    """Return (block_id, content_hash) tuples for Merkle tree construction.
+
+    Used by :func:`mcp_server.verify_merkle` and the standalone
+    ``mind-mem-verify`` CLI. Leaves are sorted by block_id so two calls
+    against the same index produce the same tree (stable root hash).
+
+    Content hashes live on the ``index_meta`` table (``blocks`` itself
+    doesn't carry one — it has ``json_blob`` and friends). The join
+    below preserves the invariant that a leaf is only emitted when a
+    live ``blocks`` row backs the ``index_meta`` content hash.
+
+    Returns an empty list when the FTS index has not yet been built.
+    """
+    db_path = _db_path(workspace)
+    if not os.path.isfile(db_path):
+        return []
+    conn = None
+    try:
+        conn = _connect(workspace, readonly=True)
+        _init_schema(conn)
+        rows = conn.execute(
+            """
+            SELECT im.block_id AS block_id, im.content_hash AS content_hash
+            FROM index_meta im
+            JOIN blocks b ON b.id = im.block_id
+            WHERE im.content_hash IS NOT NULL AND im.content_hash != ''
+            ORDER BY im.block_id
+            """
+        ).fetchall()
+        # De-dupe when the same block_id appears in multiple files.
+        seen: set[str] = set()
+        leaves: list[tuple[str, str]] = []
+        for r in rows:
+            bid = r["block_id"]
+            if bid in seen:
+                continue
+            seen.add(bid)
+            leaves.append((bid, r["content_hash"]))
+        return leaves
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 def index_status(workspace: str) -> dict:
     """Return index status: exists, block count, last build time, staleness."""
     db_path = _db_path(workspace)

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 382 | **Est. tokens:** ~784,353
-**Generated:** 2026-04-13 08:53 UTC
+**Files:** 384 | **Est. tokens:** ~792,494
+**Generated:** 2026-04-13 09:31 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~69,712 |
+| `./` | 27 | ~70,709 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 28 | ~25,751 |
@@ -40,16 +40,16 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 84 | ~310,530 |
+| `src/mind_mem/` | 85 | ~314,471 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 157 | ~313,939 |
+| `tests/` | 158 | ~317,142 |
 | `tests/integration/` | 2 | ~1,436 |
 
 ## Files
 
 ### `./`
 
-- `CHANGELOG.md` (~12906 tok, huge) — Changelog
+- `CHANGELOG.md` (~13878 tok, huge) — Changelog
 - `CLAUDE.md` (~611 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
@@ -67,11 +67,11 @@
 - `mcp_server.py` (~448 tok, medium) — Source-checkout entrypoint for the packaged Mind-Mem MCP server."""
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
-- `pyproject.toml` (~768 tok, large) — [project]
+- `pyproject.toml` (~780 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~21811 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~10102 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~10115 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `train_mind7b_runpod.py` (~1652 tok, huge)
@@ -247,7 +247,7 @@
 - `field_audit.py` (~3086 tok, huge) — mind-mem Per-Field Mutation Audit — tracks individual field changes.
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
 - `governance_gate.py` (~2042 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hash_chain_v2.py` (~4582 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hash_chain_v2.py` (~4907 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hybrid_recall.py` (~4861 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `__init__.py` (~499 tok, medium) — # Mind Mem — Memory + Immune System for AI agents
 - `init_workspace.py` (~2062 tok, huge) — mind-mem workspace initializer. Zero external deps.
@@ -286,12 +286,13 @@
 - `smoke_test.sh` (~633 tok, large) — mind-mem Smoke Test — end-to-end verification
 - `spec_binding.py` (~2896 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `speculative_prefetch.py` (~3135 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `sqlite_index.py` (~10531 tok, huge) — Mind Mem SQLite FTS5 Index — incremental lexical indexing. Zero external deps.
+- `sqlite_index.py` (~10942 tok, huge) — Mind Mem SQLite FTS5 Index — incremental lexical indexing. Zero external deps.
 - `trajectory.py` (~2233 tok, huge) — Trajectory Memory — task execution trace storage and recall.
 - `transcript_capture.py` (~2333 tok, huge) — mind-mem Transcript JSONL Capture. Zero external deps.
 - `uncertainty_propagation.py` (~1278 tok, large) — # Copyright 2026 STARGA, Inc.
 - `validate_py.py` (~3335 tok, huge) — Mind Mem Integrity Validator (Python, cross-platform).
 - `validate.sh` (~6653 tok, huge) — mind-mem Integrity Validator v1.1
+- `verify_cli.py` (~3205 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `watcher.py` (~886 tok, large) — Mind-Mem File Watcher — auto-reindex on workspace changes. Zero external deps.
 ### `templates/`
 
@@ -473,6 +474,7 @@
 - `test_uncertainty_propagation.py` (~2158 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_unicode_edge_cases.py` (~2440 tok, huge) — Tests for Unicode and edge case handling across mind-mem modules."""
 - `test_validate_py.py` (~3441 tok, huge) — Tests for validate_py.py — workspace integrity validator."""
+- `test_verify_cli.py` (~3203 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_watcher.py` (~1203 tok, large) — Tests for watcher.py — file change detection for auto-reindex."""
 - `test_wide_retrieval.py` (~335 tok, medium) — Tests for wide retrieval parameter."""
 - `test_workspace_init.py` (~461 tok, medium) — Tests for workspace initialization."""

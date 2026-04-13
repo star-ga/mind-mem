@@ -130,14 +130,27 @@ class HashChainV2:
     SQLite WAL mode is enabled for concurrent read performance.
     """
 
-    def __init__(self, db_path: str) -> None:
+    def __init__(self, db_path: str, *, readonly: bool = False) -> None:
         self._db_path = os.path.realpath(db_path)
-        os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
         # Serialize appends across threads: SQLite writer serialization alone
         # is not enough when the same process holds multiple connections and
         # each reads-then-writes the chain head (TOCTOU on previous_hash).
         self._lock = threading.RLock()
-        self._init_db()
+        self._readonly = bool(readonly)
+        if not self._readonly:
+            os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
+            self._init_db()
+
+    @classmethod
+    def open_readonly(cls, db_path: str) -> "HashChainV2":
+        """Open an existing chain database without writing to it.
+
+        The standalone verifier (:mod:`mind_mem.verify_cli`) uses this so
+        auditing a workspace never mutates the ledger — not even via the
+        otherwise-idempotent ``CREATE TABLE IF NOT EXISTS`` schema
+        touch. Append / import paths raise on a read-only instance.
+        """
+        return cls(db_path, readonly=True)
 
     # ------------------------------------------------------------------
     # Setup
@@ -147,10 +160,22 @@ class HashChainV2:
         # isolation_level="DEFERRED" keeps explicit transaction control
         # (autocommit via None silently defeats BEGIN EXCLUSIVE / BEGIN IMMEDIATE).
         # timeout=30s avoids immediate OperationalError on transient locks.
-        conn = sqlite3.connect(self._db_path, timeout=30.0, isolation_level="DEFERRED")
+        if self._readonly:
+            # URI form with mode=ro opens the DB read-only without
+            # creating it and without acquiring a write lock. We do
+            # NOT use immutable=1 because that flag tells SQLite to
+            # skip the -wal file, which would hide recent committed
+            # writes from the verifier on WAL-mode databases.
+            uri = f"file:{self._db_path}?mode=ro"
+            conn = sqlite3.connect(uri, uri=True, timeout=30.0)
+        else:
+            conn = sqlite3.connect(
+                self._db_path, timeout=30.0, isolation_level="DEFERRED"
+            )
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout=30000")
+        if not self._readonly:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=30000")
         return conn
 
     def _init_db(self) -> None:
@@ -188,6 +213,10 @@ class HashChainV2:
         Returns:
             The newly created, immutable HashEntry.
         """
+        if self._readonly:
+            raise PermissionError(
+                "HashChainV2 opened read-only; append() is not permitted"
+            )
         entry_id = str(uuid.uuid4())
         if timestamp is None:
             timestamp = datetime.now(timezone.utc).isoformat()

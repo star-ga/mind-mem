@@ -263,7 +263,7 @@
 
 ---
 
-## v2.0.0rc1 — External Verification (from 512-mind)
+## v2.0.0rc1 — External Verification (from 512-mind) ✅ Released 2026-04-13; ledger anchoring deferred
 
 **Goal:** Third parties can verify memory integrity without full DB access.
 
