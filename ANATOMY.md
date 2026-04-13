@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 395 | **Est. tokens:** ~831,309
-**Generated:** 2026-04-13 12:26 UTC
+**Files:** 398 | **Est. tokens:** ~836,594
+**Generated:** 2026-04-13 12:51 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~74,141 |
+| `./` | 27 | ~74,725 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 28 | ~25,747 |
@@ -40,16 +40,16 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 91 | ~335,560 |
+| `src/mind_mem/` | 93 | ~338,379 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 163 | ~331,440 |
+| `tests/` | 164 | ~333,322 |
 | `tests/integration/` | 2 | ~1,436 |
 
 ## Files
 
 ### `./`
 
-- `CHANGELOG.md` (~17201 tok, huge) — Changelog
+- `CHANGELOG.md` (~17766 tok, huge) — Changelog
 - `CLAUDE.md` (~611 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
@@ -71,7 +71,7 @@
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~21810 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~10226 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~10245 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `train_mind7b_runpod.py` (~1652 tok, huge)
@@ -272,6 +272,7 @@
 - `observation_compress.py` (~1353 tok, large) — Observation Compression Layer for Mind-Mem.
 - `ontology.py` (~2898 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `prefix_cache.py` (~3047 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `project_profile.py` (~1635 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `py.typed` (~0 tok, tiny)
 - `query_expansion.py` (~4339 tok, huge) — Multi-query expansion for improved recall.
 - `_recall_constants.py` (~2420 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
@@ -293,6 +294,7 @@
 - `spec_binding.py` (~2896 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `speculative_prefetch.py` (~3135 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `sqlite_index.py` (~10942 tok, huge) — Mind Mem SQLite FTS5 Index — incremental lexical indexing. Zero external deps.
+- `staleness.py` (~1184 tok, large) — # Copyright 2026 STARGA, Inc.
 - `trajectory.py` (~2233 tok, huge) — Trajectory Memory — task execution trace storage and recall.
 - `transcript_capture.py` (~2333 tok, huge) — mind-mem Transcript JSONL Capture. Zero external deps.
 - `uncertainty_propagation.py` (~1278 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -358,6 +360,7 @@
 - `test_coding_schemas.py` (~1294 tok, large) — Tests for mind-mem coding-native memory schemas."""
 - `test_cognitive_forget.py` (~2316 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compaction.py` (~1796 tok, huge) — Tests for compaction.py — GC and archival engine."""
+- `test_competitive_intel.py` (~1882 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compiled_truth.py` (~3912 tok, huge) — Tests for mind-mem compiled truth pages (compiled_truth.py)."""
 - `test_concurrency_stress.py` (~4065 tok, huge) — Concurrency and performance stress tests for recall engine.
 - `test_concurrent_integration.py` (~10810 tok, huge) — Integration tests for concurrent access and partial failure in mind-mem.

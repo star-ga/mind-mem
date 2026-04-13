@@ -79,7 +79,7 @@ All MCP-compatible clients can now use mind-mem tools:
 | `intent_classify` | Show query routing strategy |
 | `prefetch` | Pre-assemble likely context |
 
-Full list: 49 tools, 8 resources. See [API Reference](api-reference.md).
+Full list: 51 tools, 8 resources. See [API Reference](api-reference.md).
 
 ## 8. Enable Hybrid Search (Optional)
 
@@ -100,5 +100,5 @@ Requires `pip install mind-mem[embeddings]`.
 
 - [Architecture](architecture.md) -- how the recall pipeline works
 - [Configuration](configuration.md) -- every setting explained
-- [API Reference](api-reference.md) -- all 49 MCP tools
+- [API Reference](api-reference.md) -- all 51 MCP tools
 - [Migration Guide](migration.md) -- upgrading from mem-os

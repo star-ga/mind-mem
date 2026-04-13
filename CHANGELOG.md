@@ -2,6 +2,29 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.6.0 (2026-04-13)
+
+**v2.6.0: Competitive Intelligence — cascading staleness propagation + auto-generated project profiles. P2P memory mesh, Claude Code auto-capture hooks, and the Model Reliability Score (MRS) framework stay deferred (they need networking / external SLI collection).**
+
+### Added
+- `staleness.py` — `propagate_staleness(seed_blocks, adjacency)` diffuses staleness outward from a seed set with a configurable per-hop decay (default `[1.0, 0.9, 0.5, 0.2]`). The result is a :class:`StalenessPlan` mapping block ids to max-received scores. Closer seeds always beat farther ones; cycles terminate correctly; unreachable blocks stay unflagged.
+- `project_profile.py` — `build_profile(blocks)` aggregates block-type histogram, top-k files, top-k concepts (stopword + length filtered), top-k entities (via `entities` or `mentions` fields), and a sliding recency counter. Safe on malformed input and deterministic when ``now`` is pinned.
+- MCP tools `propagate_staleness`, `project_profile` (user scope). MCP tool count: 49 → 51.
+
+### Deferred
+- Cascading staleness write-back to block_meta + scoring penalty wiring (the current tool returns a plan; applying it is the caller's call).
+- 4-tier memory consolidation (working → episodic → semantic → procedural) — interacts with the v2.4 forgetting plan and needs a unified migration path; holding until we can land both together.
+- Agent-hook auto-capture — installer + 12-hook schema are configuration + shell, not Python-testable primitives.
+- P2P memory mesh — needs networking + conflict-resolution protocol.
+- Model Reliability Score (MRS) framework — needs external SLI collection pipelines.
+
+### Testing
+- 24 new tests: staleness seed-score, multi-hop decay exhaustion, closer-seed-wins, cycle termination, empty seeds, disconnected blocks, custom decay, invalid decay rejection, `max_hops` cap, `flagged(threshold)` filter; project-profile block-type histogram, file frequency, entity aggregation via both supported field names, stopword + short-token filters, recency window, invalid top_k / window rejection, `top_k=0` returns everything, malformed-block graceful skip, `as_dict` surface shape.
+
+### Changed
+- Version: 2.5.0 → 2.6.0
+- MCP tool count: 49 → 51
+
 ## 2.5.0 (2026-04-13)
 
 **v2.5.0: Ontology + Streaming — OWL-lite schema typing with property validation, parent-type inheritance, and versioned ontology registry. Plus an in-process change stream for block / edge lifecycle events. HTTP webhook ingestion endpoint + cross-process bus remain deferred (require aiohttp or similar).**

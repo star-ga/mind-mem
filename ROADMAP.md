@@ -451,7 +451,7 @@ Release criteria:
 
 ---
 
-## v2.6.0 — Competitive Intelligence Integration
+## v2.6.0 — Competitive Intelligence Integration ✅ Released 2026-04-13; P2P mesh, auto-capture hooks, MRS framework deferred
 
 > Theme: Features identified from competitive analysis of agentmemory (rohitg00/agentmemory),
 > Brooks Jordan's Daneel (NVIDIA), and Karpathy's llm-wiki pattern. Cherry-picked what we

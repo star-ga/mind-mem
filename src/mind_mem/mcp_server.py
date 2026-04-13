@@ -165,6 +165,8 @@ USER_TOOLS = frozenset(
         "ontology_load",
         "ontology_validate",
         "stream_status",
+        "propagate_staleness",
+        "project_profile",
         "search_memory",
         "list_memory",
         "list_contradictions",
@@ -1251,6 +1253,122 @@ def ontology_validate(block: str, type_name: str, strict: bool = True) -> str:
         },
         indent=2,
     )
+
+
+@mcp.tool
+@mcp_tool_observe
+def propagate_staleness(seed_block_ids: str, max_hops: int = 3) -> str:
+    """Diffuse staleness outward from seed blocks over the xref graph.
+
+    Args:
+        seed_block_ids: Comma-separated block ids that are known to be
+            stale (just superseded / contradicted).
+        max_hops: Cap on traversal depth. Default 3 matches the
+            roadmap's ``0.9 → 0.5 → 0.2`` decay schedule.
+
+    Returns:
+        JSON map of block_id → staleness score in [0, 1].
+    """
+    import sqlite3 as _sqlite3
+
+    from .staleness import propagate_staleness as _propagate
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(seed_block_ids, str) or not seed_block_ids.strip():
+        return json.dumps({"error": "seed_block_ids must be a non-empty string"})
+    seeds = [
+        bid.strip() for bid in seed_block_ids.split(",") if bid.strip()
+    ][:64]
+    if not seeds:
+        return json.dumps({"error": "no seed block ids supplied"})
+    if not (0 <= max_hops <= 8):
+        return json.dumps({"error": "max_hops must be in [0, 8]"})
+
+    # Pull xref graph from the FTS index when available.
+    adjacency: dict[str, list[str]] = {}
+    db_path = os.path.join(ws, ".sqlite_index", "index.db")
+    if os.path.isfile(db_path):
+        conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
+        conn.row_factory = _sqlite3.Row
+        try:
+            rows = conn.execute("SELECT src, dst FROM xref_edges").fetchall()
+            for r in rows:
+                adjacency.setdefault(r["src"], []).append(r["dst"])
+                adjacency.setdefault(r["dst"], []).append(r["src"])
+        finally:
+            conn.close()
+
+    plan = _propagate(seeds, adjacency, max_hops=max_hops)
+    return json.dumps(
+        {
+            "seed": list(plan.seed),
+            "max_hops": plan.max_hops,
+            "scores": plan.scores,
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def project_profile(name: str = "", top_k: int = 10) -> str:
+    """Auto-generate a structured project intelligence profile.
+
+    Aggregates block types, top concepts, top files, entities, and
+    recent-activity counts from the active workspace. Intended for
+    session-start injection so an agent begins with project context.
+    """
+    import sqlite3 as _sqlite3
+
+    from .project_profile import build_profile
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not (0 <= top_k <= 100):
+        return json.dumps({"error": "top_k must be in [0, 100]"})
+    project_name = name.strip() or os.path.basename(os.path.realpath(ws))
+
+    blocks: list[dict] = []
+    db_path = os.path.join(ws, ".sqlite_index", "index.db")
+    if os.path.isfile(db_path):
+        conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
+        conn.row_factory = _sqlite3.Row
+        try:
+            rows = conn.execute(
+                "SELECT id, type, file, date, json_blob FROM blocks LIMIT 50000"
+            ).fetchall()
+            for r in rows:
+                entry: dict[str, Any] = {
+                    "_id": r["id"],
+                    "type": r["type"],
+                    "file": r["file"],
+                    "date": r["date"],
+                }
+                try:
+                    raw = json.loads(r["json_blob"] or "{}")
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    raw = {}
+                if isinstance(raw, dict):
+                    for key in ("text", "statement", "excerpt", "content"):
+                        if key in raw:
+                            entry[key] = raw[key]
+                    for key in ("entities", "mentions"):
+                        if key in raw:
+                            entry[key] = raw[key]
+                blocks.append(entry)
+        finally:
+            conn.close()
+
+    profile = build_profile(blocks, name=project_name, top_k=top_k)
+    return json.dumps({**profile.as_dict(), "_schema_version": "1.0"}, indent=2)
 
 
 @mcp.tool

@@ -33,4 +33,4 @@ Core modules:
     evidence_objects — Structured tamper-evident Evidence Objects for governance decisions
 """
 
-__version__ = "2.5.0"
+__version__ = "2.6.0"
