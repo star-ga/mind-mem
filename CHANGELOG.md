@@ -2,6 +2,31 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.7.0 (2026-04-13)
+
+**v2.7.0: Universal Agent Bridge + Vault Sync — `mm` unified CLI, agent-specific formatters for the 7 named coding CLIs, and bidirectional Obsidian-style vault sync. Filesystem watcher (needs ``watchdog``) and the per-agent hook installer remain deferred. This release closes the v2.x roadmap.**
+
+### Added
+- `agent_bridge.py` — `AgentFormatter` renders a recall result list into the convention each target CLI expects (Claude Code CLAUDE.md, codex AGENTS.md, gemini system block, Cursor `.cursorrules`, Windsurf `.windsurfrules`, Aider repo-map YAML, generic stdout). `KNOWN_AGENTS` lists every supported target. Plus `VaultBridge` with `scan()` (forward sync from an Obsidian vault) and `write()` (reverse sync — atomic temp+rename, vault-root path containment, frontmatter round-trip).
+- `mm_cli.py` — `mm recall / context / inject / status / vault scan / vault write` console script. Installed by `pyproject.toml` as the `mm` entry point so non-MCP agents can share the same workspace through plain shell invocation.
+- MCP tools `agent_inject`, `vault_scan`, `vault_sync` (user scope). MCP tool count: 51 → 54.
+
+### Deferred
+- Filesystem watcher (`mm vault watch`) — needs `watchdog`.
+- `mm hook install --agent <name>` — per-agent setup scripts that aren't unit-testable in this codebase.
+- Native Obsidian plugin.
+
+### Testing
+- 28 new tests covering: every known agent renders without error (parametrized), unknown-agent rejection, max-blocks cap, per-agent format markers (Claude headings, codex bullets, Gemini system tag, Cursor workspace-memory header, Aider YAML repo_map), missing-text fallback, alternate id fields, vault scan happy path + excluded-directory skip + frontmatter-less files + `sync_dirs` filter + `..` traversal rejection + missing-vault rejection, vault write happy path + frontmatter round-trip + overwrite refusal + overwrite flag + path-escape rejection + empty-relative-path rejection.
+
+### Changed
+- Version: 2.6.0 → 2.7.0
+- MCP tool count: 51 → 54
+- Console scripts: added `mm`
+
+### Roadmap status
+- v2.0.0a2 → v2.7.0 — **all twelve roadmap milestones shipped**.
+
 ## 2.6.0 (2026-04-13)
 
 **v2.6.0: Competitive Intelligence — cascading staleness propagation + auto-generated project profiles. P2P memory mesh, Claude Code auto-capture hooks, and the Model Reliability Score (MRS) framework stay deferred (they need networking / external SLI collection).**

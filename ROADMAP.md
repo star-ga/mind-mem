@@ -541,7 +541,7 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
 
 ---
 
-## v2.7.0 — Universal Agent Bridge + Vault Sync
+## v2.7.0 — Universal Agent Bridge + Vault Sync ✅ Released 2026-04-13; filesystem watcher + hook installer deferred
 
 > Theme: mind-mem becomes the shared memory layer for **every** coding agent — not just MCP-capable ones.
 > Any CLI agent (Claude Code, codex, gemini, Cursor, Windsurf, Aider, naestro-bot) reads and writes

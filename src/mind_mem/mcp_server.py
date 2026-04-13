@@ -167,6 +167,9 @@ USER_TOOLS = frozenset(
         "stream_status",
         "propagate_staleness",
         "project_profile",
+        "vault_sync",
+        "vault_scan",
+        "agent_inject",
         "search_memory",
         "list_memory",
         "list_contradictions",
@@ -1369,6 +1372,133 @@ def project_profile(name: str = "", top_k: int = 10) -> str:
 
     profile = build_profile(blocks, name=project_name, top_k=top_k)
     return json.dumps({**profile.as_dict(), "_schema_version": "1.0"}, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def agent_inject(query: str, agent: str = "generic", limit: int = 10) -> str:
+    """Render a context snippet in the target agent's expected format.
+
+    Wraps :func:`recall` and :class:`AgentFormatter` so MCP-capable
+    callers can pre-render context for non-MCP siblings (codex, gemini
+    CLI, Cursor, Windsurf, Aider).
+
+    Args:
+        query: Search query.
+        agent: One of claude-code / codex / gemini / cursor / windsurf
+            / aider / generic.
+        limit: Maximum result count fed into the formatter.
+    """
+    from .agent_bridge import AgentFormatter, KNOWN_AGENTS, UnknownAgentError
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(query, str) or not query.strip():
+        return json.dumps({"error": "query must be a non-empty string"})
+    if agent not in KNOWN_AGENTS:
+        return json.dumps(
+            {
+                "error": f"unknown agent: {agent!r}",
+                "valid": list(KNOWN_AGENTS),
+            }
+        )
+    if not (1 <= limit <= 100):
+        return json.dumps({"error": "limit must be in [1, 100]"})
+
+    raw = json.loads(_recall_impl(query, limit=limit))
+    if isinstance(raw, dict):
+        results = raw.get("results", []) or []
+    elif isinstance(raw, list):
+        results = raw
+    else:
+        results = []
+
+    fmt = AgentFormatter(max_blocks=limit)
+    try:
+        text = fmt.inject(agent, query, results)
+    except UnknownAgentError as exc:
+        return json.dumps({"error": str(exc)})
+    return json.dumps(
+        {"agent": agent, "query": query, "snippet": text, "_schema_version": "1.0"},
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def vault_scan(vault_root: str, sync_dirs: str = "") -> str:
+    """Walk an Obsidian-style vault and return parsed VaultBlocks (JSON).
+
+    Args:
+        vault_root: Absolute path to the vault root.
+        sync_dirs: Optional comma-separated list of subdirectories to
+            scan. Empty = full vault (minus default excludes).
+    """
+    from .agent_bridge import VaultBridge
+
+    if not isinstance(vault_root, str) or not vault_root.strip():
+        return json.dumps({"error": "vault_root must be a non-empty string"})
+    dirs = [d.strip() for d in sync_dirs.split(",") if d.strip()] or None
+    try:
+        bridge = VaultBridge(vault_root=vault_root.strip())
+        blocks = bridge.scan(sync_dirs=dirs)
+    except (FileNotFoundError, ValueError) as exc:
+        return json.dumps({"error": str(exc)})
+    return json.dumps(
+        {
+            "vault_root": vault_root,
+            "blocks": [b.as_dict() for b in blocks],
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def vault_sync(
+    vault_root: str,
+    block_id: str,
+    relative_path: str,
+    body: str,
+    block_type: str = "note",
+    title: str = "",
+    overwrite: bool = False,
+) -> str:
+    """Write a single block back into a vault at a relative path.
+
+    Refuses to write outside the vault root or to overwrite existing
+    files unless ``overwrite`` is true.
+    """
+    from .agent_bridge import VaultBlock, VaultBridge
+
+    for arg, label in (
+        (vault_root, "vault_root"),
+        (block_id, "block_id"),
+        (relative_path, "relative_path"),
+    ):
+        if not isinstance(arg, str) or not arg.strip():
+            return json.dumps({"error": f"{label} must be a non-empty string"})
+    try:
+        bridge = VaultBridge(vault_root=vault_root.strip())
+        target = bridge.write(
+            VaultBlock(
+                relative_path=relative_path.strip(),
+                block_id=block_id.strip(),
+                block_type=block_type.strip() or "note",
+                title=title.strip() or block_id.strip(),
+                body=body,
+            ),
+            overwrite=bool(overwrite),
+        )
+    except (FileNotFoundError, FileExistsError, ValueError) as exc:
+        return json.dumps({"error": str(exc)})
+    return json.dumps(
+        {"written": target, "_schema_version": "1.0"}, indent=2
+    )
 
 
 @mcp.tool

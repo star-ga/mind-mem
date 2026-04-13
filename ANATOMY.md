@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 398 | **Est. tokens:** ~836,594
-**Generated:** 2026-04-13 12:51 UTC
+**Files:** 401 | **Est. tokens:** ~844,736
+**Generated:** 2026-04-13 13:16 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~74,725 |
+| `./` | 27 | ~75,286 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 28 | ~25,747 |
@@ -40,16 +40,16 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 93 | ~338,379 |
+| `src/mind_mem/` | 95 | ~343,632 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 164 | ~333,322 |
+| `tests/` | 165 | ~335,650 |
 | `tests/integration/` | 2 | ~1,436 |
 
 ## Files
 
 ### `./`
 
-- `CHANGELOG.md` (~17766 tok, huge) — Changelog
+- `CHANGELOG.md` (~18302 tok, huge) — Changelog
 - `CLAUDE.md` (~611 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
@@ -67,11 +67,11 @@
 - `mcp_server.py` (~448 tok, medium) — Source-checkout entrypoint for the packaged Mind-Mem MCP server."""
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
-- `pyproject.toml` (~779 tok, large) — [project]
+- `pyproject.toml` (~786 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~21810 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~10245 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~10263 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `train_mind7b_runpod.py` (~1652 tok, huge)
@@ -210,6 +210,7 @@
 ### `src/mind_mem/`
 
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
+- `agent_bridge.py` (~3574 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `apply_engine.py` (~15091 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~3633 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
 - `auto_resolver.py` (~3256 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
@@ -266,6 +267,7 @@
 - `merkle_tree.py` (~3385 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mind_ffi.py` (~5127 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
+- `mm_cli.py` (~1679 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `namespaces.py` (~3569 tok, huge) — mind-mem Multi-Agent Namespace & ACL Engine. Zero external deps.
 - `observability.py` (~1416 tok, large) — mind-mem Observability Module. Zero external deps.
 - `observation_axis.py` (~3959 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -331,6 +333,7 @@
 
 - `test_abstention_classifier.py` (~3963 tok, huge) — Tests for the adversarial abstention classifier."""
 - `test_active_only_filter.py` (~307 tok, medium) — Tests for active_only recall filter."""
+- `test_agent_bridge.py` (~2328 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_agent_id_filter.py` (~324 tok, medium) — Tests for agent_id namespace filtering."""
 - `test_allow_decompose.py` (~300 tok, medium) — Tests for _allow_decompose recall parameter."""
 - `test_apply_engine.py` (~11084 tok, huge) — Tests for apply_engine.py — focus on security, validation, and rollback."""
