@@ -164,12 +164,17 @@ class CausalGraph:
         if source_id == target_id:
             raise ValueError("Self-loops are not allowed")
 
-        # Check for cycles before adding
-        if self._would_create_cycle(source_id, target_id):
-            raise ValueError(f"Adding edge {source_id} → {target_id} would create a cycle")
-
+        # Cycle-check and insert share a single BEGIN IMMEDIATE
+        # transaction so concurrent callers cannot both pass the
+        # cycle check and then race to insert complementary edges.
         conn = _connect(self.workspace)
         try:
+            conn.execute("BEGIN IMMEDIATE")
+            if self._would_create_cycle_on_conn(conn, source_id, target_id):
+                conn.rollback()
+                raise ValueError(
+                    f"Adding edge {source_id} → {target_id} would create a cycle"
+                )
             conn.execute(
                 "INSERT INTO causal_edges (source_id, target_id, edge_type, weight, metadata) "
                 "VALUES (?, ?, ?, ?, ?) "
@@ -215,30 +220,41 @@ class CausalGraph:
 
         A cycle exists if target can already reach source via existing edges.
         """
-        # BFS from target to see if we can reach source
         conn = _connect(self.workspace)
         try:
-            visited: set[str] = set()
-            queue: deque[str] = deque([target_id])
-
-            while queue:
-                current = queue.popleft()
-                if current == source_id:
-                    return True
-                if current in visited:
-                    continue
-                visited.add(current)
-
-                # Follow outgoing edges from current
-                rows = conn.execute(
-                    "SELECT target_id FROM causal_edges WHERE source_id = ?",
-                    (current,),
-                ).fetchall()
-                for row in rows:
-                    if row["target_id"] not in visited:
-                        queue.append(row["target_id"])
+            return self._would_create_cycle_on_conn(conn, source_id, target_id)
         finally:
             conn.close()
+
+    def _would_create_cycle_on_conn(
+        self,
+        conn: sqlite3.Connection,
+        source_id: str,
+        target_id: str,
+    ) -> bool:
+        """BFS cycle check sharing *conn* with the caller.
+
+        Used by ``add_edge`` so the check and the subsequent insert run
+        in the same BEGIN IMMEDIATE transaction.
+        """
+        visited: set[str] = set()
+        queue: deque[str] = deque([target_id])
+
+        while queue:
+            current = queue.popleft()
+            if current == source_id:
+                return True
+            if current in visited:
+                continue
+            visited.add(current)
+
+            rows = conn.execute(
+                "SELECT target_id FROM causal_edges WHERE source_id = ?",
+                (current,),
+            ).fetchall()
+            for row in rows:
+                if row["target_id"] not in visited:
+                    queue.append(row["target_id"])
 
         return False
 
@@ -293,28 +309,41 @@ class CausalGraph:
 
         Returns a list of paths, each path being a list of block IDs
         from the given block back to a root (block with no dependencies).
+
+        Opens a single SQLite connection for the whole traversal
+        rather than one per recursion step; deep graphs would
+        otherwise exhaust connection limits and produce inconsistent
+        snapshot reads across calls.
         """
         chains: list[list[str]] = []
+        conn = _connect(self.workspace)
+        try:
+            def _adj(current: str) -> list[str]:
+                rows = conn.execute(
+                    "SELECT target_id FROM causal_edges WHERE source_id = ?",
+                    (current,),
+                ).fetchall()
+                return [row["target_id"] for row in rows]
 
-        def _dfs(current: str, path: list[str], depth: int) -> None:
-            if depth > max_depth:
-                chains.append(list(path))
-                return
-
-            deps = self.dependencies(current)
-            if not deps:
-                chains.append(list(path))
-                return
-
-            for edge in deps:
-                if edge.target_id not in path:  # Prevent revisiting
-                    path.append(edge.target_id)
-                    _dfs(edge.target_id, path, depth + 1)
-                    path.pop()
-                else:
+            def _dfs(current: str, path: list[str], depth: int) -> None:
+                if depth > max_depth:
                     chains.append(list(path))
+                    return
+                deps = _adj(current)
+                if not deps:
+                    chains.append(list(path))
+                    return
+                for nxt in deps:
+                    if nxt not in path:
+                        path.append(nxt)
+                        _dfs(nxt, path, depth + 1)
+                        path.pop()
+                    else:
+                        chains.append(list(path))
 
-        _dfs(block_id, [block_id], 0)
+            _dfs(block_id, [block_id], 0)
+        finally:
+            conn.close()
         return chains
 
     def propagate_staleness(self, changed_block_id: str, *, reason: str = "") -> list[str]:

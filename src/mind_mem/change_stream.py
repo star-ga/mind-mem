@@ -58,6 +58,7 @@ class _Subscription:
     queue: deque
     received: int = 0
     dropped: int = 0
+    listener_errors: int = 0
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,7 @@ class StreamStats:
     published: int
     delivered: int
     dropped: int
+    listener_errors: int
     queue_depth: int  # sum across all subscriber queues
 
     def as_dict(self) -> dict[str, int]:
@@ -76,6 +78,7 @@ class StreamStats:
             "published": self.published,
             "delivered": self.delivered,
             "dropped": self.dropped,
+            "listener_errors": self.listener_errors,
             "queue_depth": self.queue_depth,
         }
 
@@ -103,6 +106,7 @@ class ChangeStream:
         self._published = 0
         self._delivered = 0
         self._dropped = 0
+        self._listener_errors = 0
 
     # ------------------------------------------------------------------
     # Subscribers
@@ -140,7 +144,8 @@ class ChangeStream:
             for sub in self._subs:
                 if sub is None:
                     continue
-                # deque maxlen auto-sheds; count the drop explicitly.
+                # deque maxlen auto-sheds; count the drop exactly once
+                # per shed (before the append performs the actual shed).
                 if len(sub.queue) == sub.queue.maxlen:
                     sub.dropped += 1
                     self._dropped += 1
@@ -150,11 +155,12 @@ class ChangeStream:
                 try:
                     sub.listener(ev)
                 except Exception:  # pragma: no cover — listener isolation
-                    # Swallow listener errors so a bad subscriber can't
-                    # take down the bus. The drop counter already
-                    # reflects lost delivery confidence.
-                    sub.dropped += 1
-                    self._dropped += 1
+                    # A listener raising isn't a queue drop (the event
+                    # was queued and delivered). Track separately so
+                    # operators can distinguish backpressure from buggy
+                    # subscribers.
+                    sub.listener_errors += 1
+                    self._listener_errors += 1
         return ev
 
     # ------------------------------------------------------------------
@@ -169,6 +175,7 @@ class ChangeStream:
                 published=self._published,
                 delivered=self._delivered,
                 dropped=self._dropped,
+                listener_errors=self._listener_errors,
                 queue_depth=sum(len(s.queue) for s in active),
             )
 
