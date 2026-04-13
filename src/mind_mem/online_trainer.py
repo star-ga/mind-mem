@@ -26,8 +26,12 @@ from __future__ import annotations
 
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Mapping, Optional
+
+_REVERT_LOG_CAP: int = 10_000
+_DEFAULT_BUFFER_CAP: int = 100_000
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +130,7 @@ class WeightRegistry:
         self._active: dict[str, WeightRef] = {}
         self._candidate: dict[str, WeightRef] = {}
         self._rollback: dict[str, WeightRef] = {}
-        self._revert_events: list[dict] = []
+        self._revert_events: "deque[dict]" = deque(maxlen=_REVERT_LOG_CAP)
 
     def set_active(self, ref: WeightRef) -> None:
         with self._lock:
@@ -249,21 +253,34 @@ class TrainingLoop:
     layer can surface through ``index_stats``.
     """
 
-    def __init__(self, train_step: TrainStepFn, *, batch_size: int = 32) -> None:
+    def __init__(
+        self,
+        train_step: TrainStepFn,
+        *,
+        batch_size: int = 32,
+        buffer_cap: int = _DEFAULT_BUFFER_CAP,
+    ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be >= 1")
+        if buffer_cap < batch_size:
+            raise ValueError("buffer_cap must be >= batch_size")
         self._fn = train_step
         self._batch_size = int(batch_size)
-        self._buffer: list[TrainingTuple] = []
+        self._buffer_cap = int(buffer_cap)
+        self._buffer: "deque[TrainingTuple]" = deque(maxlen=self._buffer_cap)
         self._lock = threading.RLock()
         self._steps_run = 0
         self._errors = 0
+        self._overflow_dropped = 0
 
     def submit(self, tuples: Iterable[TrainingTuple]) -> int:
         with self._lock:
             for t in tuples:
-                if isinstance(t, TrainingTuple):
-                    self._buffer.append(t)
+                if not isinstance(t, TrainingTuple):
+                    continue
+                if len(self._buffer) == self._buffer_cap:
+                    self._overflow_dropped += 1
+                self._buffer.append(t)
         return self.try_flush()
 
     def try_flush(self) -> int:
@@ -273,8 +290,7 @@ class TrainingLoop:
             with self._lock:
                 if len(self._buffer) < self._batch_size:
                     break
-                batch = self._buffer[: self._batch_size]
-                self._buffer = self._buffer[self._batch_size :]
+                batch = [self._buffer.popleft() for _ in range(self._batch_size)]
             try:
                 self._fn(batch)
                 with self._lock:
@@ -289,6 +305,8 @@ class TrainingLoop:
         with self._lock:
             return {
                 "buffered": len(self._buffer),
+                "buffer_cap": self._buffer_cap,
+                "overflow_dropped": self._overflow_dropped,
                 "steps_run": self._steps_run,
                 "errors": self._errors,
                 "batch_size": self._batch_size,

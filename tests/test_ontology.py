@@ -251,5 +251,10 @@ class TestChangeStream:
         stats = stream.stats()
         d = stats.as_dict()
         assert set(d.keys()) == {
-            "subscribers", "published", "delivered", "dropped", "queue_depth"
+            "subscribers",
+            "published",
+            "delivered",
+            "dropped",
+            "listener_errors",
+            "queue_depth",
         }

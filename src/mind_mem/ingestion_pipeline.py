@@ -145,7 +145,8 @@ class WriteAheadLog:
 
     def truncate(self) -> None:
         with self._lock:
-            open(self._path, "w", encoding="utf-8").close()
+            with open(self._path, "w", encoding="utf-8"):
+                pass
 
 
 # ---------------------------------------------------------------------------

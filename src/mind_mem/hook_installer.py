@@ -99,6 +99,8 @@ def validate_event(event: Mapping[str, Any]) -> list[str]:
 
 
 _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"sk-ant-[A-Za-z0-9_\-]{20,}"),         # Anthropic API keys
+    re.compile(r"xai-[A-Za-z0-9]{20,}"),               # xAI API keys
     re.compile(r"sk-[A-Za-z0-9]{20,}"),                # generic secret-key prefix
     re.compile(r"pypi-[A-Za-z0-9_\-]{20,}"),           # PyPI macaroons
     re.compile(r"AKIA[0-9A-Z]{16}"),                   # AWS access key id
@@ -165,58 +167,216 @@ def observation_to_block(
 # ---------------------------------------------------------------------------
 
 
-def install_config(agent: str, workspace: str, *, dry_run: bool = False) -> dict:
+_MM_MARKER = "# mind-mem"
+
+
+def _merge_claude_hooks(existing: dict, workspace: str) -> tuple[dict, bool]:
+    """Merge mind-mem hook entries into a Claude Code settings dict.
+
+    Returns (new_dict, changed). Idempotent: re-running doesn't
+    duplicate command entries.
+    """
+    out = json.loads(json.dumps(existing))  # deep copy
+    hooks = out.setdefault("hooks", {})
+    wanted: list[tuple[str, str]] = [
+        ("SessionStart", f"mm inject --agent claude-code --workspace {workspace}"),
+        ("PostToolUse", "mm capture --stdin"),
+        ("Stop", "mm vault status"),
+    ]
+    changed = False
+    for event, command in wanted:
+        entries = hooks.setdefault(event, [])
+        if not isinstance(entries, list):
+            continue
+        if not any(
+            isinstance(e, dict) and e.get("command") == command for e in entries
+        ):
+            entries.append({"command": command})
+            changed = True
+    return out, changed
+
+
+def install_config(
+    agent: str,
+    workspace: str,
+    *,
+    dry_run: bool = False,
+    force: bool = False,
+) -> dict:
     """Generate (and optionally write) the config file each agent expects.
+
+    Non-destructive by default. If the target file already exists:
+
+    - For JSON configs (claude-code, gemini) the file is parsed and
+      the mind-mem keys are merged in. Existing user keys are kept.
+    - For text configs (codex AGENTS.md, cursor, windsurf, aider)
+      the mind-mem block is appended once. Idempotent — re-running
+      does not duplicate blocks.
+    - ``force=True`` restores the legacy destructive behaviour
+      (overwrite the file). Use sparingly.
 
     The returned dict has::
 
-        {"agent": ..., "path": ..., "written": bool, "content": ...}
+        {"agent": ..., "path": ..., "written": bool,
+         "content": ..., "merged": bool, "skipped": bool}
 
     and is safe to pretty-print for CLI use.
     """
+    merged = False
+    skipped = False
+
     if agent == "claude-code":
         path = os.path.expanduser("~/.claude/settings.json")
-        content = {
+        base_content: dict = {
             "hooks": {
                 "SessionStart": [
                     {"command": f"mm inject --agent claude-code --workspace {workspace}"}
                 ],
-                "PostToolUse": [
-                    {"command": "mm capture --stdin"}
-                ],
-                "Stop": [
-                    {"command": "mm vault status"}
-                ],
+                "PostToolUse": [{"command": "mm capture --stdin"}],
+                "Stop": [{"command": "mm vault status"}],
             }
         }
+        content: Any = base_content
+        if os.path.isfile(path) and not force:
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    existing = json.load(fh)
+            except (OSError, json.JSONDecodeError):
+                existing = None
+            if isinstance(existing, dict):
+                content, changed = _merge_claude_hooks(existing, workspace)
+                merged = True
+                skipped = not changed
     elif agent == "codex":
         path = os.path.join(workspace, "AGENTS.md")
-        content = (
-            "# Agent instructions (auto-written by mind-mem)\n\n"
+        block = (
+            f"{_MM_MARKER}: agent instructions (auto-written)\n\n"
             "Before every response, run `mm context \"$QUERY\"` and prepend the output.\n"
         )
+        content = block
+        if os.path.isfile(path) and not force:
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    existing_text = fh.read()
+            except OSError:
+                existing_text = ""
+            if _MM_MARKER in existing_text:
+                content = existing_text
+                skipped = True
+            else:
+                content = existing_text.rstrip() + "\n\n" + block
+                merged = True
     elif agent == "gemini":
         path = os.path.join(workspace, ".gemini", "settings.json")
-        content = {"system_instruction": f"mind-mem workspace: {workspace}; run `mm inject --agent gemini` for context."}
+        mind_mem_instruction = (
+            f"mind-mem workspace: {workspace}; "
+            "run `mm inject --agent gemini` for context."
+        )
+        content = {"system_instruction": mind_mem_instruction}
+        if os.path.isfile(path) and not force:
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    existing = json.load(fh)
+            except (OSError, json.JSONDecodeError):
+                existing = None
+            if isinstance(existing, dict):
+                out = dict(existing)
+                if out.get("system_instruction") != mind_mem_instruction:
+                    out["system_instruction"] = mind_mem_instruction
+                    merged = True
+                else:
+                    skipped = True
+                content = out
     elif agent == "cursor":
         path = os.path.join(workspace, ".cursorrules")
-        content = f"# mind-mem\nmind-mem workspace: {workspace}\nUse `mm inject --agent cursor` before answering.\n"
+        block = (
+            f"{_MM_MARKER}\nmind-mem workspace: {workspace}\n"
+            "Use `mm inject --agent cursor` before answering.\n"
+        )
+        content = block
+        if os.path.isfile(path) and not force:
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    existing_text = fh.read()
+            except OSError:
+                existing_text = ""
+            if _MM_MARKER in existing_text:
+                content = existing_text
+                skipped = True
+            else:
+                content = existing_text.rstrip() + "\n\n" + block
+                merged = True
     elif agent == "windsurf":
         path = os.path.join(workspace, ".windsurfrules")
-        content = f"# mind-mem\nworkspace: {workspace}\nprefer `mm inject --agent windsurf`.\n"
+        block = (
+            f"{_MM_MARKER}\nworkspace: {workspace}\n"
+            "prefer `mm inject --agent windsurf`.\n"
+        )
+        content = block
+        if os.path.isfile(path) and not force:
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    existing_text = fh.read()
+            except OSError:
+                existing_text = ""
+            if _MM_MARKER in existing_text:
+                content = existing_text
+                skipped = True
+            else:
+                content = existing_text.rstrip() + "\n\n" + block
+                merged = True
     elif agent == "aider":
         path = os.path.join(workspace, ".aider.conf.yml")
-        content = f"# mind-mem auto-config\nread: [\"{workspace}/CLAUDE.md\"]\n"
+        block = (
+            f"{_MM_MARKER} auto-config\n"
+            f"read: [\"{workspace}/CLAUDE.md\"]\n"
+        )
+        content = block
+        if os.path.isfile(path) and not force:
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    existing_text = fh.read()
+            except OSError:
+                existing_text = ""
+            if _MM_MARKER in existing_text:
+                content = existing_text
+                skipped = True
+            else:
+                content = existing_text.rstrip() + "\n\n" + block
+                merged = True
     else:
         raise ValueError(f"unknown agent: {agent!r}")
 
     serialised = json.dumps(content, indent=2) if isinstance(content, dict) else content
     if dry_run:
-        return {"agent": agent, "path": path, "written": False, "content": serialised}
+        return {
+            "agent": agent,
+            "path": path,
+            "written": False,
+            "content": serialised,
+            "merged": merged,
+            "skipped": skipped,
+        }
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    if skipped:
+        return {
+            "agent": agent,
+            "path": path,
+            "written": False,
+            "content": serialised,
+            "merged": False,
+            "skipped": True,
+        }
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(serialised if serialised.endswith("\n") else serialised + "\n")
-    return {"agent": agent, "path": path, "written": True, "content": serialised}
+    return {
+        "agent": agent,
+        "path": path,
+        "written": True,
+        "content": serialised,
+        "merged": merged,
+        "skipped": False,
+    }
 
 
 __all__ = [
