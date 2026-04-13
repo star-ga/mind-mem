@@ -159,14 +159,30 @@ _ERROR_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 
+_CONVENTION_MAX_SAMPLES: int = 100_000
+_CONVENTION_MAX_BYTES_PER_SAMPLE: int = 2_097_152  # 2 MiB
+
+
 def extract_conventions(samples: Iterable[str]) -> dict[str, Any]:
-    """Roll up naming / testing / error-handling signals from raw code."""
+    """Roll up naming / testing / error-handling signals from raw code.
+
+    Enforces per-sample and total-sample caps to keep regex scanning
+    bounded on pathological inputs.
+    """
     naming: Counter[str] = Counter()
     test_hits = 0
     error_hits = 0
+    scanned = 0
+    truncated_samples = 0
     for sample in samples:
+        if scanned >= _CONVENTION_MAX_SAMPLES:
+            break
         if not isinstance(sample, str) or not sample:
             continue
+        scanned += 1
+        if len(sample) > _CONVENTION_MAX_BYTES_PER_SAMPLE:
+            sample = sample[:_CONVENTION_MAX_BYTES_PER_SAMPLE]
+            truncated_samples += 1
         for label, pat in _NAMING_PATTERNS:
             naming[label] += len(pat.findall(sample))
         for pat in _TEST_PATTERNS:
@@ -179,6 +195,8 @@ def extract_conventions(samples: Iterable[str]) -> dict[str, Any]:
         "naming_histogram": dict(naming),
         "test_pattern_hits": test_hits,
         "error_handling_hits": error_hits,
+        "samples_scanned": scanned,
+        "samples_truncated": truncated_samples,
     }
 
 
@@ -210,8 +228,7 @@ def model_context_window(model: str) -> int:
     """Best-effort lookup of a model's context-window size in tokens."""
     if not model:
         return _DEFAULT_CONTEXT_WINDOW
-    key = model.strip().lower()
-    return _CONTEXT_WINDOWS.get(key, _CONTEXT_WINDOWS.get(model.strip(), _DEFAULT_CONTEXT_WINDOW))
+    return _CONTEXT_WINDOWS.get(model.strip().lower(), _DEFAULT_CONTEXT_WINDOW)
 
 
 __all__ = [

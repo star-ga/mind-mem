@@ -90,6 +90,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections import OrderedDict
 from typing import Any
 
 # Allow running `python3 mcp_server.py` directly from a source checkout.
@@ -142,6 +143,8 @@ ADMIN_TOOLS = frozenset(
         "export_memory",
         "verify_chain",
         "compact",
+        "encrypt_file",
+        "decrypt_file",
     }
 )
 
@@ -195,6 +198,7 @@ USER_TOOLS = frozenset(
         "compiled_truth_load",
         "compiled_truth_add_evidence",
         "compiled_truth_contradictions",
+        "governance_health_bench",
     }
 )
 
@@ -330,17 +334,27 @@ def _init_rate_limiter() -> SlidingWindowRateLimiter:
 
 
 # Per-client rate limiters keyed by client_id — prevents one client from
-# exhausting the global budget and blocking all other clients.
-_rate_limiters: dict[str, SlidingWindowRateLimiter] = {}
+# exhausting the global budget and blocking all other clients. An
+# attacker rotating Authorization tokens on every request would
+# otherwise grow this dict unbounded, so we LRU-evict the least-
+# recently-used entry when the cap is reached.
+_RATE_LIMITER_MAX: int = 1024
+_rate_limiters: "OrderedDict[str, SlidingWindowRateLimiter]" = OrderedDict()
 _rate_limiters_lock = threading.Lock()
 
 
 def _get_client_rate_limiter(client_id: str) -> SlidingWindowRateLimiter:
     """Return (creating if needed) the per-client SlidingWindowRateLimiter."""
     with _rate_limiters_lock:
-        if client_id not in _rate_limiters:
-            _rate_limiters[client_id] = _init_rate_limiter()
-        return _rate_limiters[client_id]
+        existing = _rate_limiters.get(client_id)
+        if existing is not None:
+            _rate_limiters.move_to_end(client_id, last=True)
+            return existing
+        limiter = _init_rate_limiter()
+        _rate_limiters[client_id] = limiter
+        while len(_rate_limiters) > _RATE_LIMITER_MAX:
+            _rate_limiters.popitem(last=False)
+        return limiter
 
 
 def _get_client_id() -> str:
@@ -1427,6 +1441,43 @@ def agent_inject(query: str, agent: str = "generic", limit: int = 10) -> str:
     )
 
 
+def _vault_allowlist() -> list[str]:
+    """Return the configured vault-root allowlist.
+
+    Set ``MIND_MEM_VAULT_ALLOWLIST`` to a ``:``-separated list of
+    absolute directories. When set, every vault MCP tool refuses
+    requests targeting paths outside the list. Empty/unset = allow
+    any path (legacy behaviour; recommended only for local dev).
+    """
+    raw = os.environ.get("MIND_MEM_VAULT_ALLOWLIST", "").strip()
+    if not raw:
+        return []
+    sep = ";" if ";" in raw else ":"
+    return [
+        os.path.realpath(p.strip())
+        for p in raw.split(sep)
+        if p.strip()
+    ]
+
+
+def _vault_root_allowed(vault_root: str) -> tuple[bool, str]:
+    """Check vault_root against the allowlist. (ok, reason)."""
+    allow = _vault_allowlist()
+    if not allow:
+        return True, ""
+    target = os.path.realpath(vault_root.strip())
+    for root in allow:
+        try:
+            common = os.path.commonpath([target, root])
+        except ValueError:
+            continue
+        if common == root:
+            return True, ""
+    return False, (
+        f"vault_root {vault_root!r} is outside MIND_MEM_VAULT_ALLOWLIST"
+    )
+
+
 @mcp.tool
 @mcp_tool_observe
 def vault_scan(vault_root: str, sync_dirs: str = "") -> str:
@@ -1441,6 +1492,9 @@ def vault_scan(vault_root: str, sync_dirs: str = "") -> str:
 
     if not isinstance(vault_root, str) or not vault_root.strip():
         return json.dumps({"error": "vault_root must be a non-empty string"})
+    ok, reason = _vault_root_allowed(vault_root)
+    if not ok:
+        return json.dumps({"error": reason})
     dirs = [d.strip() for d in sync_dirs.split(",") if d.strip()] or None
     try:
         bridge = VaultBridge(vault_root=vault_root.strip())
@@ -1482,6 +1536,9 @@ def vault_sync(
     ):
         if not isinstance(arg, str) or not arg.strip():
             return json.dumps({"error": f"{label} must be a non-empty string"})
+    ok, reason = _vault_root_allowed(vault_root)
+    if not ok:
+        return json.dumps({"error": reason})
     try:
         bridge = VaultBridge(vault_root=vault_root.strip())
         target = bridge.write(
@@ -2119,6 +2176,11 @@ def scan() -> str:
 def list_contradictions() -> str:
     """List detected contradictions with resolution analysis.
 
+    Enriches the raw contradiction list with AutoResolver's
+    preference-boosted + side-effect-aware suggestions when the
+    workspace has an existing resolver state; falls back to the
+    plain list otherwise.
+
     Returns:
         JSON array of contradictions with strategy recommendations.
     """
@@ -2137,16 +2199,175 @@ def list_contradictions() -> str:
             }
         )
 
+    # Best-effort AutoResolver enrichment — side effects + preference
+    # learning. Never masks the raw resolutions on failure.
+    enriched: list[dict] = []
+    try:
+        from mind_mem.auto_resolver import AutoResolver
+
+        suggestions = AutoResolver(ws).suggest_resolutions()
+        by_id = {s.contradiction_id: s for s in suggestions}
+        for res in resolutions:
+            sug = by_id.get(res.get("contradiction_id"))
+            merged = dict(res)
+            if sug is not None:
+                merged["confidence_score"] = sug.confidence_score
+                merged["side_effects"] = list(sug.side_effects)
+                merged["preference_boost_applied"] = True
+            enriched.append(merged)
+    except Exception as exc:  # pragma: no cover — best-effort
+        _log.warning("auto_resolver_enrich_failed", error=str(exc))
+        enriched = list(resolutions)
+
     return json.dumps(
         {
             "_schema_version": MCP_SCHEMA_VERSION,
             "status": "contradictions_found",
-            "contradictions": len(resolutions),
-            "resolutions": resolutions,
+            "contradictions": len(enriched),
+            "resolutions": enriched,
         },
         indent=2,
         default=str,
     )
+
+
+def _encryption_passphrase() -> str | None:
+    """Fetch the at-rest encryption passphrase from env. None = disabled."""
+    raw = os.environ.get("MIND_MEM_ENCRYPTION_PASSPHRASE", "").strip()
+    return raw or None
+
+
+@mcp.tool
+@mcp_tool_observe
+def encrypt_file(file_path: str) -> str:
+    """Encrypt a single workspace file at rest.
+
+    Requires ``MIND_MEM_ENCRYPTION_PASSPHRASE`` to be set in the
+    server environment. Files already encrypted are no-ops.
+    Admin-scope tool — never exposed to user tokens.
+
+    Args:
+        file_path: Absolute path to the plaintext file.
+
+    Returns:
+        JSON status envelope.
+    """
+    passphrase = _encryption_passphrase()
+    if not passphrase:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "MIND_MEM_ENCRYPTION_PASSPHRASE is not set",
+            }
+        )
+    if not isinstance(file_path, str) or not file_path.strip():
+        return json.dumps({"error": "file_path must be a non-empty string"})
+    ws = _workspace()
+    try:
+        safe_path = _safe_vault_path(ws, file_path)
+    except Exception as exc:
+        return json.dumps({"error": f"path rejected: {exc}"})
+    try:
+        from mind_mem.encryption import EncryptionManager
+
+        EncryptionManager(ws, passphrase).encrypt_file(safe_path)
+    except Exception as exc:
+        return json.dumps({"error": f"encrypt failed: {exc}"})
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "encrypted": True,
+            "path": safe_path,
+        }
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def decrypt_file(file_path: str) -> str:
+    """Return plaintext bytes (base64-encoded) for an encrypted file.
+
+    Does not modify the on-disk ciphertext. Admin-scope tool.
+
+    Args:
+        file_path: Absolute path to the encrypted file.
+
+    Returns:
+        JSON with ``plaintext_b64`` field on success.
+    """
+    import base64
+
+    passphrase = _encryption_passphrase()
+    if not passphrase:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "MIND_MEM_ENCRYPTION_PASSPHRASE is not set",
+            }
+        )
+    if not isinstance(file_path, str) or not file_path.strip():
+        return json.dumps({"error": "file_path must be a non-empty string"})
+    ws = _workspace()
+    try:
+        safe_path = _safe_vault_path(ws, file_path)
+    except Exception as exc:
+        return json.dumps({"error": f"path rejected: {exc}"})
+    try:
+        from mind_mem.encryption import EncryptionManager
+
+        plaintext = EncryptionManager(ws, passphrase).decrypt_file(safe_path)
+    except Exception as exc:
+        return json.dumps({"error": f"decrypt failed: {exc}"})
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "path": safe_path,
+            "plaintext_b64": base64.b64encode(plaintext).decode("ascii"),
+        }
+    )
+
+
+def _safe_vault_path(ws: str, candidate: str) -> str:
+    """Resolve *candidate* against *ws* and reject path-escapes."""
+    resolved = os.path.realpath(candidate)
+    ws_abs = os.path.realpath(ws)
+    try:
+        common = os.path.commonpath([resolved, ws_abs])
+    except ValueError as exc:
+        raise ValueError(f"path escapes workspace: {candidate}") from exc
+    if common != ws_abs:
+        raise ValueError(f"path escapes workspace: {candidate}")
+    if not os.path.isfile(resolved):
+        raise FileNotFoundError(resolved)
+    return resolved
+
+
+@mcp.tool
+@mcp_tool_observe
+def governance_health_bench() -> str:
+    """Run the governance health benchmark suite.
+
+    Exercises contradiction detection, audit completeness, drift
+    detection, and scalability probes against the current workspace.
+
+    Returns:
+        JSON report covering all bench sub-suites and aggregated
+        pass/fail counts.
+    """
+    ws = _workspace()
+    try:
+        from mind_mem.governance_bench import GovernanceBench
+
+        report = GovernanceBench(ws).run_all()
+    except Exception as exc:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"bench run failed: {exc}",
+            }
+        )
+    out = {"_schema_version": MCP_SCHEMA_VERSION, **report}
+    return json.dumps(out, indent=2, default=str)
 
 
 @mcp.tool
