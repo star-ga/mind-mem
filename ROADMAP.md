@@ -302,7 +302,7 @@ Release criteria:
 
 ---
 
-## v2.1.0 — Self-Improving Retrieval via OpenClaw-RL
+## v2.1.0 — Self-Improving Retrieval via OpenClaw-RL ✅ Released 2026-04-13; signal substrate shipped, training loops deferred
 
 > **Paper:** "Train Any Agent Simply by Talking" (arXiv:2603.10165)
 >

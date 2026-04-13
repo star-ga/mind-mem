@@ -2,6 +2,35 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.1.0 (2026-04-13)
+
+**v2.1.0: self-improving retrieval foundations — interaction signal capture, classifier, append-only signal store, and A/B evaluation harness. Local fine-tuning loops and online weight swaps stay deferred; this release lands the signal substrate they require.**
+
+### Added
+- `interaction_signals.py` — `SignalType` enum (RE_QUERY / REFINEMENT / CORRECTION), `Signal` / `SignalStats` value objects, `SignalStore` (append-only JSONL with dedup + fsync + thread-safe writes), `classify()` (Jaccard-based same-intent detector with correction-marker heuristics), `jaccard_similarity()`, and `evaluate_ab()` (MRR-based A/B harness that replays signals against baseline vs candidate retrieval fns).
+- `observe_signal` MCP tool — classify + persist a `(previous_query, new_query)` pair; returns `{captured: bool, signal_id, signal_type, similarity}`.
+- `signal_stats` MCP tool — aggregated signal counts (total / per-type / unique sessions) for the active workspace.
+- `index_stats` surfaces `interaction_signals` stats alongside existing prefix cache / prefetch telemetry.
+- MCP tool count: 35 → 37.
+
+### Deferred (needs external training infra)
+- LoRA fine-tuning on local Qwen3-Embedding / ms-marco-MiniLM
+- Async online-training loop with graceful weight swap
+- Governance-gated auto-revert on regression
+
+These remain on the roadmap under v2.1.0 and ship when the training infrastructure is available. The signal store is the durable foundation they need.
+
+### Fixed (audit-driven, pre-release — 3-LLM joint: Claude + codex + Gemini/Grok)
+- **[HIGH]** `SignalStore._load_ids` / `all_signals` now open the JSONL with `encoding="utf-8", errors="replace"` so binary corruption at the tail of the file (e.g. a partial write during a crash) can no longer block the store from loading. Both LLMs flagged this.
+- **[MEDIUM]** Correction markers are now word-boundary regexes (`\bwrong\b`, `\bno[, ]*i\s+(?:mean|meant)\b`, …). Previously `"wrong"` as a substring flipped queries containing `wrongdoing` / `wrongful` into `CORRECTION`, poisoning A/B eval.
+- **[MEDIUM]** `_tokens()` caps input at 8192 chars before regex matching to defuse CPU DoS from hostile multi-MB queries.
+
+### Testing
+- 25 new tests: Jaccard edge cases, classifier across identical/disjoint/refinement/correction inputs + word-boundary regression, SignalStore persistence + dedup + reload + thread-safety, stats aggregation, malformed-line recovery, **non-UTF-8 byte tolerance** (audit regression), A/B eval winner / tie / correction exclusion.
+
+### Changed
+- Version: 2.0.0 → 2.1.0
+
 ## 2.0.0 (2026-04-13)
 
 **v2.0.0 — stable. Promotes the entire 2.0 alpha → beta → rc train (a2 → a3 → b1 → rc1) to a production release. No new code since rc1; this entry marks the feature set as final.**
