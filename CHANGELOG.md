@@ -2,6 +2,13 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.8.2 (2026-04-13)
+
+**Clean re-release after a git-history scrub. No functional code changes vs 2.8.1. The scrub removed a documentation passage from public revisions; every published PyPI sdist (including 2.8.1 and older) was already clean because `docs/` is not packaged, so no yanks were necessary — 2.8.2 just marks the current landing spot.**
+
+### Changed
+- Version: 2.8.1 → 2.8.2 (republish).
+
 ## 2.8.1 (2026-04-13)
 
 **Docs-alignment patch. No code changes. Closes the post-v2.8.0 repo-wide audit gaps so the PyPI page description and README badges reflect the current feature set.**
