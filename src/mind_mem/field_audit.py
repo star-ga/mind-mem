@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from typing import Any
 
 from .audit_chain import AuditChain
 from .observability import get_logger, metrics
@@ -192,17 +193,22 @@ class FieldAuditor:
         )
 
         # Store in SQLite
+        row_id: int = 0
+        ts_row: Any = None
         conn = _connect(self.workspace)
         try:
-            conn.execute(
+            cur = conn.execute(
                 "INSERT INTO field_changes "
                 "(block_id, target, field, old_value, new_value, agent, reason, chain_seq) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (block_id, target, field, old_value, new_value, agent, reason, chain_entry.seq),
             )
+            row_id = cur.lastrowid or 0
+            ts_row = conn.execute(
+                "SELECT timestamp FROM field_changes WHERE id = ?",
+                (row_id,),
+            ).fetchone()
             conn.commit()
-            row_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-            ts_row = conn.execute("SELECT timestamp FROM field_changes WHERE id = ?", (row_id,)).fetchone()
         finally:
             conn.close()
 

@@ -222,6 +222,14 @@ def scan_log(log_path: str) -> list[dict]:
         for pattern, sig_type, confidence in DECISION_PATTERNS:
             if re.search(pattern, stripped, re.IGNORECASE):
                 structure = extract_structure(stripped, sig_type, pattern)
+                # Coding-schema classifier (ADR/CODE/PERF/ALGO/BUG) —
+                # overrides the pattern type when the text clearly
+                # matches a specialised coding schema. Keeps the
+                # original pattern-based type as a fallback when no
+                # coding schema applies.
+                coding_type = _classify_coding_type(stripped)
+                if coding_type:
+                    sig_type = coding_type
                 signals.append(
                     {
                         "line": i,
@@ -236,6 +244,16 @@ def scan_log(log_path: str) -> list[dict]:
                 break  # one match per line is enough
 
     return signals
+
+
+def _classify_coding_type(text: str) -> str | None:
+    """Best-effort coding-schema classification. Never raises."""
+    try:
+        from .coding_schemas import classify_coding_block
+
+        return classify_coding_block(text)
+    except Exception:  # pragma: no cover — best-effort
+        return None
 
 
 def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
