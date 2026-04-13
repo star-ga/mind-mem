@@ -2,6 +2,60 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.9.0 (2026-04-13)
+
+**Two-pass full-repo audit release. Fixes 9 correctness/security bugs flagged by pass #2 and wires 10 previously dead modules into production call paths. Every prior release (v2.0.0a2..v2.8.2) will receive a `.postN` backport with the applicable subset of fixes.**
+
+### Fixed (audit pass #2 — critical/high/medium)
+- `hash_chain_v2.import_jsonl`: TOCTOU between head-read and insert closed by wrapping validate + insert in a single `BEGIN IMMEDIATE` transaction under the class lock. Chain divergence on concurrent imports is no longer possible.
+- `hash_chain_v2.verify_chain`: streamed via `fetchmany(1024)` instead of `fetchall` so multi-million-entry chains no longer OOM.
+- `mcp_server._rate_limiters`: bounded LRU cache (OrderedDict, cap 1024) replaces the unbounded dict — the per-client rate-limit map can no longer leak memory.
+- `memory_mesh`: peer registry capped at 10k, sync log becomes `deque(maxlen=10_000)`, LWW conflict resolution now parses timestamps via `datetime.fromisoformat` instead of lexicographic string compare (UTC tz-aware).
+- `hook_installer.privacy_filter`: regex set extended with Anthropic (`sk-ant-…`) and xAI (`xai-…`) key patterns before observation persistence.
+- `hook_installer.install_config`: non-destructive by default. JSON configs are parsed + merged; text configs append a marker block once; re-running is idempotent. `force=True` restores legacy overwrite behaviour.
+- `encryption.rotate_key`: 4-phase crash-safe rotation (decrypt-all → stage temp files → atomic swap → commit new salt). A mid-rotation crash can no longer leave the workspace split between old-salt and new-ciphertext.
+- `encryption.encrypt_file`: skips empty input so a zero-byte plaintext can't get stuck behind a permanent magic-byte header.
+- `causal_graph.add_edge`: cycle check and INSERT share one `BEGIN IMMEDIATE` transaction — concurrent complementary edge additions can no longer both pass the cycle check.
+- `causal_graph.causal_chain`: opens a single SQLite connection for the whole DFS instead of one per recursion step.
+- `drift_detector.drift_signals`: `UNIQUE(block_a_id, block_b_id, drift_type)` + `ON CONFLICT UPDATE` stops duplicate rows on re-scans.
+- `drift_detector`: removed 3 redundant `executescript` calls whose implicit COMMIT silently committed outer transactions.
+- `ingestion_pipeline.WriteAheadLog.truncate`: uses `with open(...):` so the file handle closes deterministically on non-CPython runtimes.
+- `field_audit.record_change`: initialised `row_id`/`ts_row` before the try-block and switched to `cursor.lastrowid`, eliminating the NameError on error paths.
+- `evidence_objects.EvidenceChain`: added `__len__`, plus 1M-entry / 1 MiB-per-line caps in `_load_from_file` to bound pathological JSONL chains.
+- `online_trainer.WeightRegistry._revert_events`: bounded to 10k entries (`deque`); `TrainingLoop._buffer` becomes `deque(maxlen=buffer_cap)` with explicit `overflow_dropped` counter; `try_flush` uses `popleft` instead of list slicing.
+- `tracking.extract_conventions`: added per-sample + total-sample caps; cleaned up dead case-folding fallback in `model_context_window`.
+- `conflict_resolver.generate_resolution_proposals`: proposal-ID counter reads the max existing `R-{date}-NNN` for the day and continues from there, preventing collisions when the function is called multiple times per day.
+- `verify_cli.check_evidence`: uses `len(chain)` instead of the private `chain._entries`.
+- `change_stream`: listener errors now tracked separately (`listener_errors`) instead of being counted as queue drops; stats envelope gains the new field.
+- `axis_recall._axis_confidence`: removed the dead `total` parameter.
+
+### Added (audit pass #2 — integration wiring for 10 dead modules)
+- `drift_detector.DriftDetector` now fires from `intel_scan.scan()` alongside the lexical drift pass so belief-timeline + recent-signals queries have live data.
+- `auto_resolver.AutoResolver` now enriches `list_contradictions` MCP output with preference-boosted confidence scores and side-effect analysis.
+- `field_audit.FieldAuditor` is called from `apply_engine._op_update_field` and `_op_set_status`, persisting before/after field diffs with attribution into the audit SQLite + chain.
+- `kalman_belief.BeliefStore.update_belief` fires at every apply success (`observation=1.0`) and rollback (`observation=0.0`) with `source="approve_apply"` / `"rollback"`.
+- `coding_schemas.classify_coding_block` overrides capture signal types with the coding schema (ADR / CODE / PERF / ALGO / BUG) when applicable.
+- `memory_tiers.TierManager.run_promotion_cycle` runs as step 5 of compaction, moving blocks through WORKING → SHARED → LONG_TERM → VERIFIED.
+- `extraction_feedback.ExtractionFeedback.record` captures model / operation / latency / output-count after every `llm_extractor.extract_entities` and `extract_facts` call.
+- `governance_bench.GovernanceBench.run_all` is now exposed as the `governance_health_bench` MCP tool.
+- Admin MCP tools `encrypt_file` / `decrypt_file` gated on `MIND_MEM_ENCRYPTION_PASSPHRASE` env var expose `EncryptionManager` to operators. (Transparent read/write-path encryption remains a v3.0.0 roadmap item.)
+- `audit_chain.AuditChain` is transitively live through the field_audit + auto_resolver wiring.
+
+### Added (other)
+- `MIND_MEM_VAULT_ALLOWLIST` environment variable (colon/semicolon-separated paths) restricts the `vault_scan` / `vault_sync` MCP tools to a whitelist. Unset = legacy permissive behaviour.
+
+### Changed
+- MCP tool count: 54 → 57 (`governance_health_bench`, `encrypt_file`, `decrypt_file`).
+- Documentation swept for stale 32-tools references across `docs/api-reference.md`, `docs/architecture.md`, `docs/roadmap.md`, and `README.md`.
+- `docs/roadmap.md` Future Directions rewritten: the duplicated `v2.0.0` sections consolidated into `v2.0.0 → v2.9.0 (Shipped)`, with a fresh `v3.0.0 (Future)` section for honest remaining work.
+
+## 2.8.2 (2026-04-13)
+
+**Clean re-release after a git-history scrub. No functional code changes vs 2.8.1. The scrub removed a documentation passage from public revisions; every published PyPI sdist (including 2.8.1 and older) was already clean because `docs/` is not packaged, so no yanks were necessary — 2.8.2 just marks the current landing spot.**
+
+### Changed
+- Version: 2.8.1 → 2.8.2 (republish).
+
 ## 2.8.1 (2026-04-13)
 
 **Docs-alignment patch. No code changes. Closes the post-v2.8.0 repo-wide audit gaps so the PyPI page description and README badges reflect the current feature set.**

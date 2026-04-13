@@ -188,6 +188,14 @@ class EncryptionManager:
             with open(resolved, "rb") as f:
                 plaintext = f.read()
 
+            # Nothing to do for empty files. Encrypting an empty
+            # plaintext would write a header-only ciphertext whose
+            # magic bytes mask the file as "already encrypted" on
+            # the next call — permanently losing the ability to
+            # reach the original zero-byte state.
+            if not plaintext:
+                return
+
             # Skip if already encrypted
             if plaintext[: len(_MAGIC)] == _MAGIC:
                 return
@@ -266,43 +274,84 @@ class EncryptionManager:
         if len(new_passphrase) < 8:
             raise ValueError("New passphrase must be at least 8 characters")
 
-        # Decrypt with current key, re-encrypt with new key
+        # Derive the new key/material BEFORE touching any files so a
+        # key-rotation crash can't leave the workspace split between
+        # old-salt and new-ciphertext states.
         new_salt = os.urandom(_SALT_SIZE)
         new_key = _pbkdf2(new_passphrase, new_salt)
         new_enc_key = hmac.new(new_key, b"encrypt", hashlib.sha256).digest()
         new_mac_key = hmac.new(new_key, b"authenticate", hashlib.sha256).digest()
 
-        count = 0
+        # Phase 1 — decrypt everything with the current key. Abort the
+        # entire rotation on the first failure; a partial rotation is
+        # worse than no rotation (we don't know which key decrypts which
+        # file anymore).
+        plaintexts: list[tuple[str, bytes]] = []
         for path in file_paths:
             try:
-                plaintext = self.decrypt_file(path)
+                plaintexts.append((path, self.decrypt_file(path)))
+            except (OSError, ValueError) as e:
+                _log.error("key_rotation_decrypt_failed", path=path, error=str(e))
+                raise RuntimeError(
+                    f"key rotation aborted: decrypt failed for {path!r}"
+                ) from e
 
-                # Encrypt with new key
+        # Phase 2 — write all re-encrypted payloads to temp files
+        # alongside the originals. No original is overwritten yet, so a
+        # crash after this phase still leaves every file intact.
+        staged: list[tuple[str, str]] = []  # (final_path, tmp_path)
+        try:
+            for path, plaintext in plaintexts:
                 nonce = os.urandom(_NONCE_SIZE)
                 ks = _keystream(new_enc_key, nonce, len(plaintext))
                 ciphertext = _xor_bytes(plaintext, ks)
-                mac = hmac.new(new_mac_key, nonce + ciphertext, hashlib.sha256).digest()
+                mac = hmac.new(
+                    new_mac_key, nonce + ciphertext, hashlib.sha256
+                ).digest()
                 encrypted = _MAGIC + nonce + ciphertext + mac
 
                 resolved = os.path.realpath(path)
-                with FileLock(resolved):
-                    with open(resolved, "wb") as f:
-                        f.write(encrypted)
-                count += 1
-            except (OSError, ValueError) as e:
-                _log.warning("key_rotation_failed", path=path, error=str(e))
+                tmp_path = resolved + ".rotate.tmp"
+                with open(tmp_path, "wb") as fh:
+                    fh.write(encrypted)
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                staged.append((resolved, tmp_path))
 
-        # Update salt
-        salt_path = os.path.join(self._keys_dir, "salt")
-        with open(salt_path, "wb") as f:
-            f.write(new_salt)
+            # Phase 3 — atomically swap each file in. os.replace is
+            # atomic on POSIX and Windows.
+            for final_path, tmp_path in staged:
+                with FileLock(final_path):
+                    os.replace(tmp_path, final_path)
 
-        # Update internal state
+            # Phase 4 — persist the new salt once every file has been
+            # swapped. A crash before this step and the old salt is
+            # still valid (no files have the new ciphertext yet);
+            # a crash after and the new salt matches the new files.
+            salt_path = os.path.join(self._keys_dir, "salt")
+            tmp_salt = salt_path + ".rotate.tmp"
+            with open(tmp_salt, "wb") as fh:
+                fh.write(new_salt)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp_salt, salt_path)
+        except Exception:
+            # Best-effort cleanup of any temp files we staged.
+            for _, tmp_path in staged:
+                try:
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+                except OSError:
+                    pass
+            raise
+
+        # Only flip in-memory state once every on-disk artifact has
+        # been committed.
         self._salt = new_salt
         self._key = new_key
         self._enc_key = new_enc_key
         self._mac_key = new_mac_key
 
-        _log.info("key_rotation_complete", files=count)
+        _log.info("key_rotation_complete", files=len(staged))
         metrics.inc("key_rotations")
-        return count
+        return len(staged)
