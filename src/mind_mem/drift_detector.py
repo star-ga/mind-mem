@@ -107,7 +107,8 @@ CREATE TABLE IF NOT EXISTS drift_signals (
     description  TEXT DEFAULT '',
     date_a       TEXT DEFAULT '',
     date_b       TEXT DEFAULT '',
-    timestamp    TEXT DEFAULT (datetime('now'))
+    timestamp    TEXT DEFAULT (datetime('now')),
+    UNIQUE(block_a_id, block_b_id, drift_type)
 );
 CREATE INDEX IF NOT EXISTS idx_drift_blocks ON drift_signals(block_a_id, block_b_id);
 CREATE INDEX IF NOT EXISTS idx_drift_conf ON drift_signals(confidence);
@@ -385,11 +386,22 @@ class DriftDetector:
         try:
             conn.execute("BEGIN")
             for sig in signals:
+                # INSERT OR REPLACE via the UNIQUE(block_a, block_b, drift_type)
+                # constraint keeps the most recent similarity/confidence
+                # observation per drift pair instead of accumulating
+                # duplicate rows on every scan.
                 conn.execute(
                     "INSERT INTO drift_signals "
                     "(block_a_id, block_b_id, similarity, confidence, "
                     "drift_type, description, date_a, date_b) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                    "ON CONFLICT(block_a_id, block_b_id, drift_type) DO UPDATE SET "
+                    "similarity = excluded.similarity, "
+                    "confidence = excluded.confidence, "
+                    "description = excluded.description, "
+                    "date_a = excluded.date_a, "
+                    "date_b = excluded.date_b, "
+                    "timestamp = datetime('now')",
                     (
                         sig.block_a_id,
                         sig.block_b_id,
@@ -420,7 +432,6 @@ class DriftDetector:
 
         conn = _connect(self.workspace)
         try:
-            conn.executescript(_SCHEMA_SQL)
             conn.execute(
                 "INSERT INTO belief_snapshots (block_id, content_hash, text_preview, fields_json) VALUES (?, ?, ?, ?)",
                 (block_id, content_hash, text[:200], json.dumps(fields, default=str)),
@@ -437,7 +448,6 @@ class DriftDetector:
         """
         conn = _connect(self.workspace)
         try:
-            conn.executescript(_SCHEMA_SQL)
             rows = conn.execute(
                 "SELECT * FROM belief_snapshots WHERE block_id = ? ORDER BY timestamp ASC",
                 (block_id,),
@@ -483,7 +493,6 @@ class DriftDetector:
         """
         conn = _connect(self.workspace)
         try:
-            conn.executescript(_SCHEMA_SQL)
             query = "SELECT * FROM drift_signals WHERE confidence >= ?"
             params: list = [min_confidence]
 
