@@ -2,6 +2,22 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.8.1 (2026-04-13)
+
+**Docs-alignment patch. No code changes. Closes the post-v2.8.0 repo-wide audit gaps so the PyPI page description and README badges reflect the current feature set.**
+
+### Fixed
+- README badge alt text `MCP Tools: 35` corrected to `54` (badge value was already 54; alt text was stale).
+- Tests badge bumped from `3390` to `3444` to match the actual collected count.
+- Comparison matrix `MCP tools | 33` in README + `docs/comparison.md` corrected to `54`.
+- Config example `"version": "2.0.0"` in README + every docs/configuration.md example bumped to `"2.8.0"`.
+- `docs/migration.md` "19 MCP tools" annotated as "19 at v1.x, current v2.8.0 ships 54" so mem-os-to-mind-mem upgraders aren't misled.
+- `docs/odc-retrieval.md` "ODC Specification v1.0 → specs/…" broken link replaced with live pointers to the actual source + test files.
+- README Table of Contents gains a "Deep-dive docs" section linking `docs/setup.md`, `docs/usage.md`, `ROADMAP.md`, `CHANGELOG.md`.
+
+### Changed
+- Version: 2.8.0 → 2.8.1
+
 ## 2.8.0 (2026-04-13)
 
 **v2.8.0: roadmap completion release. Every roadmap checkbox v2.0.0a2 → v2.7.0 is now backed by actual code — previous releases shipped only partial implementations. Renames `mind_kernels_py.py` → `mind_kernels.py` and adds comprehensive setup + usage docs.**
