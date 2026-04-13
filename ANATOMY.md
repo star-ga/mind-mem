@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 416 | **Est. tokens:** ~873,691
-**Generated:** 2026-04-13 17:09 UTC
+**Files:** 416 | **Est. tokens:** ~873,649
+**Generated:** 2026-04-13 17:13 UTC
 
 ## Token Budget Guide
 
@@ -25,7 +25,7 @@
 | `./` | 27 | ~76,370 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
-| `docs/` | 30 | ~29,207 |
+| `docs/` | 30 | ~29,165 |
 | `docs/adr/` | 2 | ~521 |
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
@@ -126,7 +126,7 @@
 - `setup.md` (~1354 tok, large) — Setup
 - `testing-guide.md` (~369 tok, medium) — Testing Guide
 - `troubleshooting.md` (~681 tok, large) — Troubleshooting
-- `usage.md` (~2038 tok, huge) — Usage
+- `usage.md` (~1996 tok, huge) — Usage
 - `workspace-structure.md` (~352 tok, medium) — Workspace Structure
 ### `examples/`
 

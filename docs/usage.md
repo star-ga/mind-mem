@@ -212,19 +212,16 @@ store.observe_pair(
 ## Proprietary code protection
 
 mind-mem is a **public Apache-2.0 package**. It has **no proprietary
-code**. Modules that CAN use proprietary accelerators (the
-MIND-compiled `.so` for hot paths) do so via the
-`MIND_MEM_KERNELS_SO` env var — when the library is present it's
-loaded via `ctypes`; when absent the pure-Python fallback in
-`mind_mem.mind_kernels` is used.
+code**. Modules that can use a proprietary native accelerator load
+it via the `MIND_MEM_KERNELS_SO` env var — when the library is
+present it's loaded via `ctypes`; when absent the pure-Python
+fallback in `mind_mem.mind_kernels` is used. Install, use, and
+test the package without ever setting that variable and everything
+still works.
 
 See `mind_mem.mind_kernels.load_kernels()` for the exact contract.
-STARGA's proprietary `libmindmem_kernels.so` (built from
-the separately-distributed accelerator source) implements the same symbol set with all
-mind-runtime protections (optional native accelerator; opt-in
-with pure-Python fallback when
-the accelerator library is distributed separately and is not part
-of this public repo.
+The accelerator library itself is distributed separately and is
+not part of this repository.
 
 ## Worked example
 
