@@ -28,7 +28,7 @@
 | Retrieval | BM25F + hybrid | Vector-based |
 | LoCoMo benchmark | 77.9 mean | 58.10 mean |
 | MIND kernels | Yes | No |
-| MCP tools | 19 | N/A |
+| MCP tools | 33 | N/A |
 
 ## mind-mem vs Full Context
 
