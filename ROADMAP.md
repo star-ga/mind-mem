@@ -196,26 +196,26 @@
 
 ---
 
-## v2.0-alpha.2 — Observer-Dependent Cognition (ODC) Retrieval
+## v2.0-alpha.2 — Observer-Dependent Cognition (ODC) Retrieval ✅ Released as v2.0.0a3 (2026-04-13)
 
 **Goal:** Make retrieval axis-aware. Every recall declares its observation basis, results include axis metadata, and the system can rotate axes for higher-confidence results.
 
 **Spec:** `specs/observer-dependent-cognition.md`
 
 ### Axis-Aware Retrieval
-- [ ] Add `observation_axis` field to RecallRequest (lexical, semantic, temporal, entity-graph, contradiction)
-- [ ] Extend `hybrid_search` to accept explicit axis weights (override default RRF)
-- [ ] Log axis choices in evidence chain (which axes produced each result)
-- [ ] Axis rotation: if initial recall confidence < threshold, automatically rotate to orthogonal axes
+- [x] `ObservationAxis` enum (lexical, semantic, temporal, entity_graph, contradiction, adversarial) + `AxisWeights` vector
+- [x] `recall_with_axis` orchestrator dispatches per-axis passes with explicit weights, fused via weighted RRF
+- [x] Axis choices recorded per-result in the `observation` metadata (foundation for evidence-chain integration in v2.0-rc)
+- [x] Axis rotation: `should_rotate` fires when top-confidence < `DEFAULT_ROTATION_THRESHOLD (0.35)`, `rotate_axes` picks orthogonals
 
 ### Observation Metadata
-- [ ] Every recall result tagged with producing axes + per-axis confidence scores
-- [ ] New MCP tool: `recall_with_axis` — explicit axis selection for advanced queries
-- [ ] Axis diversity metric: how many independent axes contributed to a result
+- [x] Every recall result tagged with producing axes + per-axis confidence scores + rank
+- [x] New MCP tool `recall_with_axis` with user-scope ACL, hardened arg parsing (length + count bounds, limit cap)
+- [x] Axis diversity metric (`axis_diversity(results)`) returns count of distinct axes that contributed
 
 ### Adversarial Axis Injection
-- [ ] Extend adversarial abstention to include deliberate counter-axis queries
-- [ ] Surface contradictions by measuring from opposing observation bases
+- [x] `adversarial=True` runs each active axis's adversarial pair (LEXICAL/SEMANTIC/TEMPORAL/ENTITY_GRAPH → CONTRADICTION; CONTRADICTION → ADVERSARIAL)
+- [x] ADVERSARIAL axis wraps the query as `NOT "..."` (FTS5-safe phrase form) to surface dissent from the opposing basis
 
 ---
 

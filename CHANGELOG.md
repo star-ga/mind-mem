@@ -2,6 +2,28 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.0.0a3 (2026-04-13)
+
+**v2.0-alpha.2: Observer-Dependent Cognition (ODC) — axis-aware retrieval, hardened via a 3-LLM joint audit (Claude Opus 4.6 + Gemini 3.1 Pro + Grok 4.1 Fast).**
+
+### Added
+- `observation_axis.py` — `ObservationAxis` enum (LEXICAL, SEMANTIC, TEMPORAL, ENTITY_GRAPH, CONTRADICTION, ADVERSARIAL), `AxisWeights` vector with non-negative / finite validation, `AxisScore` / `Observation` value objects, `axis_diversity()` metric, `rotate_axes()` / `should_rotate()` helpers, `adversarial_pair()` mapping.
+- `axis_recall.py` — `recall_with_axis()` orchestrator. Dispatches one retrieval pass per active axis, tags every result with an `Observation` (which axes produced it + per-axis confidence + rank), fuses via weighted RRF, rotates to orthogonal axes when top-1 confidence falls below `DEFAULT_ROTATION_THRESHOLD = 0.35`, and can run an adversarial pair pass to surface contradictions.
+- MCP tool `recall_with_axis` — exposes the orchestrator with comma-separated `axes` arg, optional `axis=weight,axis=weight` override, `adversarial` flag, and `allow_rotation` flag. Returns a JSON envelope with `results`, `weights`, `rotated`, `diversity`, and `attempts`.
+- Tool count: 33 (up from 32). ACL: user scope.
+
+### Fixed (audit-driven, pre-release)
+- **[HIGH]** ADVERSARIAL axis now wraps the query as `NOT "<phrase>"` (FTS5-safe double-quoted form) instead of raw `NOT {query}`. Prevents FTS5 from parsing `NOT foo AND bar` as `(NOT foo) AND bar` and blocks metacharacter injection from crafted queries. Empty queries now skip the axis.
+- **[HIGH]** Rotation no longer stamps `observation.rotated=True` on primary-only results. `_merge_rotation` is the only path that sets the flag, and only on blocks the rotation pass actually touched.
+- **[MEDIUM]** `_recall_for_axis` now logs a warning on the `TypeError` signature fallback instead of silently swallowing it; real kwarg-mismatch bugs are no longer masked.
+- **[MEDIUM]** `recall_with_axis` MCP tool caps arg length (`axes`/`weights` ≤1024 chars, ≤16 entries) and `limit ∈ [1, 500]` to bound retrieval cost under adversarial input.
+
+### Testing
+- 81 new tests: `test_observation_axis.py` (primitives, 51) + `test_axis_recall.py` (orchestrator + hardening, 22) + `test_axis_recall_mcp.py` (MCP surface + bounds, 8).
+
+### Changed
+- Version: 2.0.0a2 → 2.0.0a3
+
 ## 2.0.0a2 (2026-04-13)
 
 **GBrain-adapted knowledge enrichment: multi-query expansion, compiled truth pages, dream cycle, 4-layer dedup, smart chunker, 13 new MCP tools. Plus pre-release hardening from a 3-LLM joint audit (Claude Opus 4.6 + Gemini 3.1 Pro + Grok 4.1 Fast).**

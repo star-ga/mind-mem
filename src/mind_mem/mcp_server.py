@@ -148,6 +148,7 @@ ADMIN_TOOLS = frozenset(
 USER_TOOLS = frozenset(
     {
         "recall",
+        "recall_with_axis",
         "search_memory",
         "list_memory",
         "list_contradictions",
@@ -755,6 +756,125 @@ def recall(
         JSON array of ranked results with scores, IDs, and matched content.
     """
     return _recall_impl(query, limit=limit, active_only=active_only, backend=backend)
+
+
+@mcp.tool
+@mcp_tool_observe
+def recall_with_axis(
+    query: str,
+    axes: str = "lexical,semantic",
+    weights: str = "",
+    limit: int = 10,
+    active_only: bool = False,
+    adversarial: bool = False,
+    allow_rotation: bool = True,
+) -> str:
+    """Axis-aware recall under the Observer-Dependent Cognition model.
+
+    Declares the observation basis explicitly. Each result carries per-axis
+    confidence scores, and the system rotates to orthogonal axes when
+    initial confidence is low.
+
+    Args:
+        query: Search query.
+        axes: Comma-separated axes (``lexical,semantic,temporal,entity_graph,
+              contradiction,adversarial``). Defaults to ``lexical,semantic``
+              (matches the v1.x behaviour).
+        weights: Optional ``axis=weight,axis=weight`` override. Non-zero
+              weights implicitly activate their axis; ``axes`` acts as a
+              safety allowlist when both are supplied.
+        limit: Maximum results (default 10).
+        active_only: Exclude superseded blocks (contradiction / adversarial
+              axes ignore this flag so dissent stays visible).
+        adversarial: When true, run each active axis's adversarial pair in
+              parallel and fuse the results.
+        allow_rotation: When true (default), rotate to orthogonal axes if
+              top-confidence falls below the rotation threshold.
+
+    Returns:
+        JSON envelope with ``results`` (each tagged with per-axis metadata),
+        ``weights``, ``rotated``, ``diversity``, and ``attempts``.
+    """
+    from .axis_recall import recall_with_axis as _axis_recall
+    from .observation_axis import AxisWeights, ObservationAxis
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    # Bound the inputs up front so a misbehaving caller can't burn
+    # unbounded CPU on enum lookups or a huge result fetch.
+    _MAX_ARG_LEN = 1024  # axes / weights string length
+    _MAX_TOKENS = 16     # per enum, number of axes / weight pairs
+    _MAX_LIMIT = 500
+
+    if len(axes) > _MAX_ARG_LEN or len(weights) > _MAX_ARG_LEN:
+        return json.dumps({"error": f"axes/weights args must be ≤{_MAX_ARG_LEN} chars"})
+    if limit < 1 or limit > _MAX_LIMIT:
+        return json.dumps({"error": f"limit must be in [1, {_MAX_LIMIT}]"})
+
+    # Parse axis list
+    axis_tokens = [tok.strip() for tok in axes.split(",") if tok.strip()]
+    if not axis_tokens:
+        return json.dumps({"error": "axes must include at least one axis name"})
+    if len(axis_tokens) > _MAX_TOKENS:
+        return json.dumps({"error": f"axes list must contain ≤{_MAX_TOKENS} entries"})
+    try:
+        allowed = {ObservationAxis.from_str(tok) for tok in axis_tokens}
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+
+    # Parse optional explicit weights
+    if weights.strip():
+        weight_entries = [kv for kv in weights.split(",") if kv.strip()]
+        if len(weight_entries) > _MAX_TOKENS:
+            return json.dumps({"error": f"weights list must contain ≤{_MAX_TOKENS} entries"})
+        weight_map: dict[str, float] = {}
+        for kv in weight_entries:
+            kv = kv.strip()
+            if "=" not in kv:
+                return json.dumps({"error": f"weight entry must be axis=value, got {kv!r}"})
+            axis_name, value = kv.split("=", 1)
+            try:
+                weight_map[axis_name.strip()] = float(value.strip())
+            except ValueError:
+                return json.dumps({"error": f"weight for {axis_name!r} is not numeric: {value!r}"})
+        try:
+            parsed_weights = AxisWeights.from_mapping(weight_map)
+        except ValueError as exc:
+            return json.dumps({"error": str(exc)})
+        # Zero out any axis not in the allowlist so the ``axes`` arg wins.
+        effective: dict[str, float] = {}
+        for axis in allowed:
+            effective[axis.value] = parsed_weights.as_dict().get(axis.value, 0.0)
+        weight_obj = AxisWeights.from_mapping(effective)
+    else:
+        weight_obj = AxisWeights.uniform(allowed)
+
+    try:
+        result = _axis_recall(
+            ws,
+            query,
+            weights=weight_obj,
+            limit=limit,
+            active_only=active_only,
+            adversarial=adversarial,
+            allow_rotation=allow_rotation,
+        )
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+
+    envelope = {
+        "query": query,
+        "results": result["results"],
+        "weights": result["weights"],
+        "rotated": result["rotated"],
+        "diversity": result["diversity"],
+        "attempts": result["attempts"],
+        "_schema_version": "1.0",
+    }
+    return json.dumps(envelope, indent=2, default=str)
 
 
 @mcp.tool

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 372 | **Est. tokens:** ~752,604
-**Generated:** 2026-04-13 06:15 UTC
+**Files:** 377 | **Est. tokens:** ~770,355
+**Generated:** 2026-04-13 07:42 UTC
 
 ## Token Budget Guide
 
@@ -22,10 +22,10 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~68,119 |
+| `./` | 27 | ~68,791 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
-| `docs/` | 28 | ~25,140 |
+| `docs/` | 28 | ~25,598 |
 | `docs/adr/` | 2 | ~521 |
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
@@ -40,16 +40,16 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 80 | ~296,139 |
+| `src/mind_mem/` | 82 | ~304,348 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 151 | ~298,785 |
+| `tests/` | 154 | ~307,197 |
 | `tests/integration/` | 2 | ~1,436 |
 
 ## Files
 
 ### `./`
 
-- `CHANGELOG.md` (~11466 tok, huge) — Changelog
+- `CHANGELOG.md` (~12053 tok, huge) — Changelog
 - `CLAUDE.md` (~611 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
@@ -71,7 +71,7 @@
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~21841 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~9919 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~10004 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `train_mind7b_runpod.py` (~1652 tok, huge)
@@ -117,7 +117,7 @@
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
 - `migration.md` (~2746 tok, huge) — Migration Guide: mem-os to mind-mem
 - `mind-kernels.md` (~339 tok, medium) — MIND Kernels
-- `odc-retrieval.md` (~320 tok, medium) — Observer-Dependent Cognition in mind-mem
+- `odc-retrieval.md` (~778 tok, large) — Observer-Dependent Cognition in mind-mem
 - `performance-tuning.md` (~560 tok, large) — Performance Tuning
 - `quickstart.md` (~601 tok, large) — mind-mem Quickstart
 - `roadmap.md` (~509 tok, large) — Roadmap
@@ -213,6 +213,7 @@
 - `apply_engine.py` (~15091 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~3633 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
 - `auto_resolver.py` (~3256 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
+- `axis_recall.py` (~4250 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `backup_restore.py` (~3821 tok, huge) — mind-mem Backup & Restore CLI. Zero external deps.
 - `baseline_snapshot.py` (~4176 tok, huge) — Baseline snapshot for intent drift detection.
 - `block_metadata.py` (~2226 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
@@ -262,6 +263,7 @@
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `namespaces.py` (~3569 tok, huge) — mind-mem Multi-Agent Namespace & ACL Engine. Zero external deps.
 - `observability.py` (~1416 tok, large) — mind-mem Observability Module. Zero external deps.
+- `observation_axis.py` (~3959 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `observation_compress.py` (~1353 tok, large) — Observation Compression Layer for Mind-Mem.
 - `py.typed` (~0 tok, tiny)
 - `query_expansion.py` (~4339 tok, huge) — Multi-query expansion for improved recall.
@@ -323,6 +325,8 @@
 - `test_apply_engine.py` (~11084 tok, huge) — Tests for apply_engine.py — focus on security, validation, and rollback."""
 - `test_audit_chain.py` (~2371 tok, huge) — Tests for mind-mem hash-chain mutation log (audit_chain.py)."""
 - `test_auto_resolver.py` (~1185 tok, large) — Tests for mind-mem auto contradiction resolution (auto_resolver.py)."""
+- `test_axis_recall_mcp.py` (~1397 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_axis_recall.py` (~3684 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_backup_restore.py` (~3237 tok, huge) — Tests for backup_restore.py — zero external deps (stdlib unittest)."""
 - `test_baseline_snapshot.py` (~2997 tok, huge) — Tests for baseline snapshot and drift detection (#431)."""
 - `test_bigrams.py` (~168 tok, small) — Tests for bigram extraction."""
@@ -411,6 +415,7 @@
 - `test_namespaces.py` (~2393 tok, huge) — Tests for namespaces.py — zero external deps (stdlib unittest)."""
 - `test_niah.py` (~4894 tok, huge) — Needle In A Haystack (NIAH) benchmark for mind-mem recall.
 - `test_observability.py` (~791 tok, large) — Tests for observability.py — structured logging and metrics."""
+- `test_observation_axis.py` (~3331 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_observation_compress.py` (~2754 tok, huge) — Tests for observation_compress module.
 - `test_prefetch_context.py` (~1482 tok, large) — Tests for prefetch_context() in recall.py."""
 - `test_prefetch.py` (~315 tok, medium) — Tests for prefetch functionality."""
