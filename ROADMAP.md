@@ -535,7 +535,105 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
 
 ---
 
-## Post-v2.6 — Future Directions
+## v2.7 — Universal Agent Bridge + Vault Sync
+
+> Theme: mind-mem becomes the shared memory layer for **every** coding agent — not just MCP-capable ones.
+> Any CLI agent (Claude Code, codex, gemini, Cursor, Windsurf, Aider, naestro-bot) reads and writes
+> to the same memory through a unified interface. Plus bidirectional vault sync for Obsidian/file-based
+> knowledge management.
+>
+> Ref: "Second Brain" pattern (Obsidian + 5-brain MCP), agentmemory hook system, OpenClaw skills architecture
+
+### Component 1: Universal Agent Bridge (`mm` CLI)
+
+**Problem:** MCP-capable agents (Claude Code, naestro-bot) already have mind-mem access. Non-MCP agents (codex, gemini CLI, Cursor, Windsurf, Aider) have zero memory — every session starts blank. The `mm` CLI bridges this gap.
+
+- [ ] **`mm` unified CLI** — single binary (`~/.local/bin/mm`) wrapping all mind-mem operations:
+  ```
+  mm recall "query"                    # search memory (BM25F+vector hybrid)
+  mm capture "text" --type decision    # store new block
+  mm context "topic"                   # generate token-budgeted context blob for prompt injection
+  mm scan                              # reindex workspace
+  mm status                            # index stats, last scan, health
+  mm inject --agent codex              # output context formatted for specific agent's system prompt
+  mm hook install --agent <name>       # install agent-specific hooks/config
+  ```
+- [ ] **Agent-specific formatters** — `mm inject` outputs context in the format each agent expects:
+  - Claude Code: `CLAUDE.md` snippet injection
+  - codex: `AGENTS.md` / `codex.md` injection
+  - gemini: `GEMINI.md` / system instruction injection
+  - Cursor: `.cursorrules` injection
+  - Windsurf: `.windsurfrules` injection
+  - Aider: `.aider.conf.yml` repo-map injection
+  - Generic: stdout (pipe into any prompt)
+- [ ] **Pre-session context injection** — `mm context` generates a token-budgeted memory blob:
+  1. Recall recent decisions (highest priority)
+  2. Recall relevant entity context (by project detection)
+  3. Recall open tasks
+  4. Pack within configurable token budget (default 2000 tokens)
+  5. Output as structured markdown ready for system prompt
+- [ ] **Post-session capture** — `mm capture --stdin` reads session transcript from stdin, extracts:
+  - New decisions, corrections, preferences
+  - Entity mentions (projects, people, tools)
+  - Task state changes
+  - Runs entity extraction + dedup before storage
+- [ ] **Shell integration** — optional shell hooks for automatic context injection:
+  ```bash
+  # .bashrc / .zshrc
+  export MIND_MEM_WORKSPACE=/home/n/.openclaw/workspace
+  alias codex='mm inject --agent codex --quiet && codex'
+  alias gemini='mm inject --agent gemini --quiet && gemini'
+  ```
+- [ ] **Agent config installer** — `mm hook install --agent claude-code` writes:
+  - Claude Code: `~/.claude/settings.json` hooks (SessionStart + PostToolUse + Stop)
+  - codex: `AGENTS.md` with memory recall instructions
+  - gemini: `.gemini/settings.json` system instruction with recall context
+  - Cursor: `.cursorrules` with memory-aware preamble
+- [ ] **Shared workspace env var** — `MIND_MEM_WORKSPACE` (default: `~/.openclaw/workspace`) ensures all agents write to the same index
+- [ ] **Conflict-free concurrent access** — WAL mode SQLite (already implemented) + advisory file locking for multi-agent concurrent reads/writes
+
+### Component 2: Vault Bidirectional Sync
+
+**Problem:** Obsidian (and similar PKM tools) provide visual graph navigation, backlinks, and manual curation that mind-mem doesn't. mind-mem provides hybrid retrieval, governance, and agent-accessible MCP that Obsidian doesn't. Users shouldn't have to choose.
+
+- [ ] **Vault scanner** — `mm vault sync /path/to/obsidian/vault`:
+  - Reads all `.md` files in vault
+  - Detects block types from frontmatter/headers (decisions, entities, tasks, notes)
+  - Indexes into mind-mem with `source: vault` provenance tag
+  - Respects `.obsidian/` and `.trash/` exclusions
+  - Incremental: only re-indexes files modified since last sync (mtime-based)
+- [ ] **Reverse sync** — mind-mem → vault:
+  - New decisions/entities created via `mm capture` or MCP get written back to vault as `.md` files
+  - Maintains Obsidian-compatible frontmatter (tags, aliases, created, modified)
+  - Creates `[[wikilinks]]` for entity cross-references
+  - Respects vault folder structure (configurable mapping: decisions/ → vault/decisions/, etc.)
+- [ ] **Conflict resolution** — when both sides modify the same block:
+  - Vault wins for manual edits (human curation > agent writes)
+  - mind-mem wins for governance decisions (contradictions, drift alerts)
+  - Conflicts logged with both versions preserved
+- [ ] **Vault config** — in `mind-mem.json`:
+  ```json
+  {
+    "vault": {
+      "path": "/path/to/obsidian/vault",
+      "sync_dirs": ["decisions", "entities", "projects", "daily"],
+      "exclude": [".obsidian", ".trash", "templates"],
+      "reverse_sync": true,
+      "conflict_policy": "vault_wins",
+      "sync_interval_minutes": 5
+    }
+  }
+  ```
+- [ ] **`mm vault status`** — last sync time, files indexed, pending reverse writes, conflicts
+- [ ] **`mm vault watch`** — filesystem watcher (inotify/fsevents) for real-time sync
+- [ ] **`vault_sync` MCP tool** — trigger sync from any MCP-connected agent
+- [ ] **Obsidian plugin (future)** — native Obsidian plugin that calls `mm` directly for in-editor recall
+
+**Estimated:** ~1200 lines (mm CLI + formatters) + ~800 lines (vault sync). New dependency: `watchdog` (optional, for `vault watch`). No breaking changes.
+
+---
+
+## Post-v2.7 — Future Directions
 
 - [ ] **Agent-to-agent trust protocol** — agents verify each other's memory integrity via Merkle proofs before sharing context
 - [ ] **Distributed memory mesh** — multiple mind-mem instances with hash-chain synchronization _(see v2.6 P2P Mesh for foundation)_
