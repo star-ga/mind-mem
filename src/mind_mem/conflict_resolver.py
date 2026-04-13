@@ -244,8 +244,22 @@ def generate_resolution_proposals(workspace: str, resolutions: list[dict] | None
     date_compact = now.strftime("%Y%m%d")
 
     with FileLock(proposed_path):
+        # Start the counter at max(existing IDs for today) + 1 so
+        # repeated calls on the same day do not collide with earlier
+        # batches. New file → regex finds zero matches → counter starts at 1.
+        start_idx = 1
+        if os.path.isfile(proposed_path):
+            try:
+                with open(proposed_path, "r", encoding="utf-8") as fh:
+                    existing = fh.read()
+                pat = re.compile(rf"R-{re.escape(date_compact)}-(\d{{3,}})")
+                nums = [int(m.group(1)) for m in pat.finditer(existing)]
+                if nums:
+                    start_idx = max(nums) + 1
+            except OSError:
+                pass
         with open(proposed_path, "a", encoding="utf-8") as f:
-            for i, res in enumerate(auto, 1):
+            for i, res in enumerate(auto, start_idx):
                 proposal_id = f"R-{date_compact}-{i:03d}"
                 f.write(f"\n[{proposal_id}]\n")
                 f.write(f"Date: {ts}\n")

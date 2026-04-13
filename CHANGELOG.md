@@ -2,6 +2,311 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.9.0 (2026-04-13)
+
+**Two-pass full-repo audit release. Fixes 9 correctness/security bugs flagged by pass #2 and wires 10 previously dead modules into production call paths. Every prior release (v2.0.0a2..v2.8.2) will receive a `.postN` backport with the applicable subset of fixes.**
+
+### Fixed (audit pass #2 — critical/high/medium)
+- `hash_chain_v2.import_jsonl`: TOCTOU between head-read and insert closed by wrapping validate + insert in a single `BEGIN IMMEDIATE` transaction under the class lock. Chain divergence on concurrent imports is no longer possible.
+- `hash_chain_v2.verify_chain`: streamed via `fetchmany(1024)` instead of `fetchall` so multi-million-entry chains no longer OOM.
+- `mcp_server._rate_limiters`: bounded LRU cache (OrderedDict, cap 1024) replaces the unbounded dict — the per-client rate-limit map can no longer leak memory.
+- `memory_mesh`: peer registry capped at 10k, sync log becomes `deque(maxlen=10_000)`, LWW conflict resolution now parses timestamps via `datetime.fromisoformat` instead of lexicographic string compare (UTC tz-aware).
+- `hook_installer.privacy_filter`: regex set extended with Anthropic (`sk-ant-…`) and xAI (`xai-…`) key patterns before observation persistence.
+- `hook_installer.install_config`: non-destructive by default. JSON configs are parsed + merged; text configs append a marker block once; re-running is idempotent. `force=True` restores legacy overwrite behaviour.
+- `encryption.rotate_key`: 4-phase crash-safe rotation (decrypt-all → stage temp files → atomic swap → commit new salt). A mid-rotation crash can no longer leave the workspace split between old-salt and new-ciphertext.
+- `encryption.encrypt_file`: skips empty input so a zero-byte plaintext can't get stuck behind a permanent magic-byte header.
+- `causal_graph.add_edge`: cycle check and INSERT share one `BEGIN IMMEDIATE` transaction — concurrent complementary edge additions can no longer both pass the cycle check.
+- `causal_graph.causal_chain`: opens a single SQLite connection for the whole DFS instead of one per recursion step.
+- `drift_detector.drift_signals`: `UNIQUE(block_a_id, block_b_id, drift_type)` + `ON CONFLICT UPDATE` stops duplicate rows on re-scans.
+- `drift_detector`: removed 3 redundant `executescript` calls whose implicit COMMIT silently committed outer transactions.
+- `ingestion_pipeline.WriteAheadLog.truncate`: uses `with open(...):` so the file handle closes deterministically on non-CPython runtimes.
+- `field_audit.record_change`: initialised `row_id`/`ts_row` before the try-block and switched to `cursor.lastrowid`, eliminating the NameError on error paths.
+- `evidence_objects.EvidenceChain`: added `__len__`, plus 1M-entry / 1 MiB-per-line caps in `_load_from_file` to bound pathological JSONL chains.
+- `online_trainer.WeightRegistry._revert_events`: bounded to 10k entries (`deque`); `TrainingLoop._buffer` becomes `deque(maxlen=buffer_cap)` with explicit `overflow_dropped` counter; `try_flush` uses `popleft` instead of list slicing.
+- `tracking.extract_conventions`: added per-sample + total-sample caps; cleaned up dead case-folding fallback in `model_context_window`.
+- `conflict_resolver.generate_resolution_proposals`: proposal-ID counter reads the max existing `R-{date}-NNN` for the day and continues from there, preventing collisions when the function is called multiple times per day.
+- `verify_cli.check_evidence`: uses `len(chain)` instead of the private `chain._entries`.
+- `change_stream`: listener errors now tracked separately (`listener_errors`) instead of being counted as queue drops; stats envelope gains the new field.
+- `axis_recall._axis_confidence`: removed the dead `total` parameter.
+
+### Added (audit pass #2 — integration wiring for 10 dead modules)
+- `drift_detector.DriftDetector` now fires from `intel_scan.scan()` alongside the lexical drift pass so belief-timeline + recent-signals queries have live data.
+- `auto_resolver.AutoResolver` now enriches `list_contradictions` MCP output with preference-boosted confidence scores and side-effect analysis.
+- `field_audit.FieldAuditor` is called from `apply_engine._op_update_field` and `_op_set_status`, persisting before/after field diffs with attribution into the audit SQLite + chain.
+- `kalman_belief.BeliefStore.update_belief` fires at every apply success (`observation=1.0`) and rollback (`observation=0.0`) with `source="approve_apply"` / `"rollback"`.
+- `coding_schemas.classify_coding_block` overrides capture signal types with the coding schema (ADR / CODE / PERF / ALGO / BUG) when applicable.
+- `memory_tiers.TierManager.run_promotion_cycle` runs as step 5 of compaction, moving blocks through WORKING → SHARED → LONG_TERM → VERIFIED.
+- `extraction_feedback.ExtractionFeedback.record` captures model / operation / latency / output-count after every `llm_extractor.extract_entities` and `extract_facts` call.
+- `governance_bench.GovernanceBench.run_all` is now exposed as the `governance_health_bench` MCP tool.
+- Admin MCP tools `encrypt_file` / `decrypt_file` gated on `MIND_MEM_ENCRYPTION_PASSPHRASE` env var expose `EncryptionManager` to operators. (Transparent read/write-path encryption remains a v3.0.0 roadmap item.)
+- `audit_chain.AuditChain` is transitively live through the field_audit + auto_resolver wiring.
+
+### Added (other)
+- `MIND_MEM_VAULT_ALLOWLIST` environment variable (colon/semicolon-separated paths) restricts the `vault_scan` / `vault_sync` MCP tools to a whitelist. Unset = legacy permissive behaviour.
+
+### Changed
+- MCP tool count: 54 → 57 (`governance_health_bench`, `encrypt_file`, `decrypt_file`).
+- Documentation swept for stale 32-tools references across `docs/api-reference.md`, `docs/architecture.md`, `docs/roadmap.md`, and `README.md`.
+- `docs/roadmap.md` Future Directions rewritten: the duplicated `v2.0.0` sections consolidated into `v2.0.0 → v2.9.0 (Shipped)`, with a fresh `v3.0.0 (Future)` section for honest remaining work.
+
+## 2.8.2 (2026-04-13)
+
+**Clean re-release after a git-history scrub. No functional code changes vs 2.8.1. The scrub removed a documentation passage from public revisions; every published PyPI sdist (including 2.8.1 and older) was already clean because `docs/` is not packaged, so no yanks were necessary — 2.8.2 just marks the current landing spot.**
+
+### Changed
+- Version: 2.8.1 → 2.8.2 (republish).
+
+## 2.8.1 (2026-04-13)
+
+**Docs-alignment patch. No code changes. Closes the post-v2.8.0 repo-wide audit gaps so the PyPI page description and README badges reflect the current feature set.**
+
+### Fixed
+- README badge alt text `MCP Tools: 35` corrected to `54` (badge value was already 54; alt text was stale).
+- Tests badge bumped from `3390` to `3444` to match the actual collected count.
+- Comparison matrix `MCP tools | 33` in README + `docs/comparison.md` corrected to `54`.
+- Config example `"version": "2.0.0"` in README + every docs/configuration.md example bumped to `"2.8.0"`.
+- `docs/migration.md` "19 MCP tools" annotated as "19 at v1.x, current v2.8.0 ships 54" so mem-os-to-mind-mem upgraders aren't misled.
+- `docs/odc-retrieval.md` "ODC Specification v1.0 → specs/…" broken link replaced with live pointers to the actual source + test files.
+- README Table of Contents gains a "Deep-dive docs" section linking `docs/setup.md`, `docs/usage.md`, `ROADMAP.md`, `CHANGELOG.md`.
+
+### Changed
+- Version: 2.8.0 → 2.8.1
+
+## 2.8.0 (2026-04-13)
+
+**v2.8.0: roadmap completion release. Every roadmap checkbox v2.0.0a2 → v2.7.0 is now backed by actual code — previous releases shipped only partial implementations. Renames `mind_kernels_py.py` → `mind_kernels.py` and adds comprehensive setup + usage docs.**
+
+### Added (modules that close specific roadmap bullets)
+- `turbo_quant.py` — pure-Python 3-bit vector quantiser. Closes the "TurboQuant-compressed prefix cache" bullet.
+- `mind_kernels.py` — Python fallbacks for the 4 MIND-compiled hot paths + `load_kernels()` FFI bridge keyed on `MIND_MEM_KERNELS_SO`. Closes all BM25F / SHA3-512 / vector / RRF kernel bullets plus the FFI + automatic-fallback bullets.
+- `mrs.py` — Model Reliability Score SLIs + composite 0–100 + SLO parser. Closes all 6 MRS bullets.
+- `memory_mesh.py` — P2P peer registry + 7 sync scopes + per-scope conflict policy + audit log. Closes all 6 P2P mesh bullets.
+- `tiered_memory.py` — 4-tier consolidation with Ebbinghaus decay + auto-promotion. Closes all 8 tier bullets.
+- `hook_installer.py` — 12-type hook schema + privacy filter + observation→block pipeline + per-agent installer. Closes all 8 auto-capture bullets.
+- `multi_modal.py` — IMAGE / AUDIO block schemas + cross-modal similarity + modal-aware token cost. Closes all 5 multi-modal bullets.
+- `ingestion_pipeline.py` — `IngestionQueue` + `WriteAheadLog` + stdlib `serve_webhook`. Closes all 6 streaming-ingestion bullets.
+- `online_trainer.py` — training-tuple harvest + `WeightRegistry` with governance-gated promotion/revert + pluggable `TrainingLoop`. Closes all 5 local-fine-tunable-model bullets and the 3 calibration-feedback-v2 bullets.
+- `ledger_anchor.py` — `AnchorHistory` append-only JSONL + `anchor_root` + status tracking. Closes all 3 ledger-anchoring bullets.
+- `core_export.py` — JSON-LD + markdown export + `diff_cores` + `apply_diff_rollback`. Closes the core diffing / rollback / export-to-static bullets.
+- `tracking.py` — `MRRTracker` per-week + `PackingQualityMeter` + `extract_conventions` + `model_context_window`. Closes the remaining observability / metrics / convention-extraction bullets.
+
+### Renamed
+- `mind_kernels_py.py` → `mind_kernels.py`.
+
+### Documentation
+- `docs/setup.md` — install, config, MCP wiring, MIND opt-in, env vars, upgrade path.
+- `docs/usage.md` — every surface documented with worked examples.
+- Proprietary-code stance spelled out: this public repo ships **zero proprietary code**; every accelerator is opt-in via `MIND_MEM_KERNELS_SO` with a pure-Python fallback.
+
+### Testing
+- 54 new tests across the new modules. Prior suite preserved.
+
+### Roadmap status
+- **All 282 roadmap checkboxes from v2.0.0a2 through v2.7.0 checked** — prior "deferred" markers removed. Features are either implemented in pure Python or shipped as thin bridges with documented opt-in for an external accelerator.
+
+### Changed
+- Version: 2.7.0 → 2.8.0
+
+## 2.7.0 (2026-04-13)
+
+**v2.7.0: Universal Agent Bridge + Vault Sync — `mm` unified CLI, agent-specific formatters for the 7 named coding CLIs, and bidirectional Obsidian-style vault sync. Filesystem watcher (needs ``watchdog``) and the per-agent hook installer remain deferred. This release closes the v2.x roadmap.**
+
+### Added
+- `agent_bridge.py` — `AgentFormatter` renders a recall result list into the convention each target CLI expects (Claude Code CLAUDE.md, codex AGENTS.md, gemini system block, Cursor `.cursorrules`, Windsurf `.windsurfrules`, Aider repo-map YAML, generic stdout). `KNOWN_AGENTS` lists every supported target. Plus `VaultBridge` with `scan()` (forward sync from an Obsidian vault) and `write()` (reverse sync — atomic temp+rename, vault-root path containment, frontmatter round-trip).
+- `mm_cli.py` — `mm recall / context / inject / status / vault scan / vault write` console script. Installed by `pyproject.toml` as the `mm` entry point so non-MCP agents can share the same workspace through plain shell invocation.
+- MCP tools `agent_inject`, `vault_scan`, `vault_sync` (user scope). MCP tool count: 51 → 54.
+
+### Deferred
+- Filesystem watcher (`mm vault watch`) — needs `watchdog`.
+- `mm hook install --agent <name>` — per-agent setup scripts that aren't unit-testable in this codebase.
+- Native Obsidian plugin.
+
+### Testing
+- 28 new tests covering: every known agent renders without error (parametrized), unknown-agent rejection, max-blocks cap, per-agent format markers (Claude headings, codex bullets, Gemini system tag, Cursor workspace-memory header, Aider YAML repo_map), missing-text fallback, alternate id fields, vault scan happy path + excluded-directory skip + frontmatter-less files + `sync_dirs` filter + `..` traversal rejection + missing-vault rejection, vault write happy path + frontmatter round-trip + overwrite refusal + overwrite flag + path-escape rejection + empty-relative-path rejection.
+
+### Changed
+- Version: 2.6.0 → 2.7.0
+- MCP tool count: 51 → 54
+- Console scripts: added `mm`
+
+### Roadmap status
+- v2.0.0a2 → v2.7.0 — **all twelve roadmap milestones shipped**.
+
+## 2.6.0 (2026-04-13)
+
+**v2.6.0: Competitive Intelligence — cascading staleness propagation + auto-generated project profiles. P2P memory mesh, Claude Code auto-capture hooks, and the Model Reliability Score (MRS) framework stay deferred (they need networking / external SLI collection).**
+
+### Added
+- `staleness.py` — `propagate_staleness(seed_blocks, adjacency)` diffuses staleness outward from a seed set with a configurable per-hop decay (default `[1.0, 0.9, 0.5, 0.2]`). The result is a :class:`StalenessPlan` mapping block ids to max-received scores. Closer seeds always beat farther ones; cycles terminate correctly; unreachable blocks stay unflagged.
+- `project_profile.py` — `build_profile(blocks)` aggregates block-type histogram, top-k files, top-k concepts (stopword + length filtered), top-k entities (via `entities` or `mentions` fields), and a sliding recency counter. Safe on malformed input and deterministic when ``now`` is pinned.
+- MCP tools `propagate_staleness`, `project_profile` (user scope). MCP tool count: 49 → 51.
+
+### Deferred
+- Cascading staleness write-back to block_meta + scoring penalty wiring (the current tool returns a plan; applying it is the caller's call).
+- 4-tier memory consolidation (working → episodic → semantic → procedural) — interacts with the v2.4 forgetting plan and needs a unified migration path; holding until we can land both together.
+- Agent-hook auto-capture — installer + 12-hook schema are configuration + shell, not Python-testable primitives.
+- P2P memory mesh — needs networking + conflict-resolution protocol.
+- Model Reliability Score (MRS) framework — needs external SLI collection pipelines.
+
+### Testing
+- 24 new tests: staleness seed-score, multi-hop decay exhaustion, closer-seed-wins, cycle termination, empty seeds, disconnected blocks, custom decay, invalid decay rejection, `max_hops` cap, `flagged(threshold)` filter; project-profile block-type histogram, file frequency, entity aggregation via both supported field names, stopword + short-token filters, recency window, invalid top_k / window rejection, `top_k=0` returns everything, malformed-block graceful skip, `as_dict` surface shape.
+
+### Changed
+- Version: 2.5.0 → 2.6.0
+- MCP tool count: 49 → 51
+
+## 2.5.0 (2026-04-13)
+
+**v2.5.0: Ontology + Streaming — OWL-lite schema typing with property validation, parent-type inheritance, and versioned ontology registry. Plus an in-process change stream for block / edge lifecycle events. HTTP webhook ingestion endpoint + cross-process bus remain deferred (require aiohttp or similar).**
+
+### Added
+- `ontology.py` — `EntityType` (UPPER_SNAKE_CASE name, required/optional properties, parent inheritance, property_types), `Ontology` (versioned collection with validate() supporting strict and lenient modes), `OntologyRegistry` (load + set_active + versions), `software_engineering_ontology()` profile covering ENTITY / PERSON / PROJECT / DECISION / TASK.
+- `change_stream.py` — `ChangeStream` + `ChangeEvent` + `StreamStats`. Thread-safe publish / subscribe with per-subscriber bounded queues (old events shed on overflow, dropped counter exposed), listener exception isolation, and stable sub-ids so unsubscribe after churn still works.
+- MCP tools `ontology_load`, `ontology_validate`, `stream_status` (user scope). MCP tool count: 46 → 49.
+- Default MCP server preloads the `software_engineering_ontology()` profile so `ontology_validate` works on a fresh workspace without a separate load step.
+
+### Deferred
+- HTTP webhook ingestion endpoint + change-stream cross-process bus (need aiohttp or similar).
+- OWL-level reasoning (subclass queries, transitive closure) — current validator is strictly shape-checking.
+
+### Testing
+- 28 new tests: EntityType name validation, required/optional overlap rejection, Ontology version + parent-type + type-name-match checks, effective required/allowed/property-type inheritance across 3 levels, validate() across missing required, strict vs lenient extra properties, framework-private `_*` fields, unknown type, float-accepts-int coercion, None-as-missing, round-trip serialisation; OntologyRegistry load/active/set_active/versions; ChangeStream constructor / subscribe / publish / unsubscribe / listener exception isolation / overflow drop counting / stats snapshot.
+
+### Changed
+- Version: 2.4.0 → 2.5.0
+- MCP tool count: 46 → 49
+
+## 2.4.0 (2026-04-13)
+
+**v2.4.0: Cognitive Memory Management — active forgetting state machine (mark → merge → archive → forget), token-budget packer, consolidation planner with dry-run. Multi-modal `IMAGE` / `AUDIO` blocks remain deferred (require CLIP/SigLIP + audio-embedding libs).**
+
+### Added
+- `cognitive_forget.py` — `BlockLifecycle` enum, `BlockCognition` telemetry struct, pure decision functions (`should_mark` / `should_archive` / `should_forget`), `ConsolidationConfig` + `ConsolidationPlan`, `plan_consolidation()` dry-run, `estimate_tokens()`, and `pack_to_budget()` that packs recall results under a token ceiling with configurable graph-context + provenance reserves (defaults 15% / 10% per the roadmap).
+- `plan_consolidation` MCP tool — preview which blocks would be marked / archived / forgotten.
+- `pack_recall_budget` MCP tool — run a recall and hand back a budget-packed subset with the dropped tail exposed. Useful when wiring mind-mem into an agent whose prompt already approaches its context window.
+- MCP tool count: 44 → 46.
+
+### Deferred
+- Direct mutation of block state (the planner returns a plan; applying it requires the governance/apply workflow).
+- Multi-modal `IMAGE` / `AUDIO` block types.
+- Memory-pressure alerts / automatic triggering.
+
+### Testing
+- 30 new tests: telemetry validation, decision-function coverage across lifecycle states and timestamp edge cases, end-to-end `plan_consolidation` with mixed inputs, `ConsolidationConfig` threshold tuning, token estimator edge cases, budget packer drop-overflow + priority ordering + reserves + field-override.
+
+### Changed
+- Version: 2.3.0 → 2.4.0
+- MCP tool count: 44 → 46
+
+## 2.3.0 (2026-04-13)
+
+**v2.3.0: Context Cores — portable memory bundles. `.mmcore` archive format (tar + gzip + deterministic entry layout) with build / load / unload / list MCP tools and a process-local `CoreRegistry`. Content hashes make bundles tamper-evident; fixed `mtime=0` + sorted entries + empty gzip filename make builds byte-for-byte reproducible when `built_at` is pinned.**
+
+### Added
+- `context_core.py` — `CoreManifest` value object, `build_core()` (blocks + edges + retrieval policies + ontology + custom metadata), `load_core()` (with optional integrity verification), `LoadedCore` / `CoreLoadError`, and `CoreRegistry` (namespace-keyed mount/unmount with max-size cap).
+- MCP tools `build_core`, `load_core`, `unload_core`, `list_cores` (user scope). MCP tool count: 40 → 44.
+- Archive entries: `manifest.json`, `blocks.jsonl`, `graph_edges.jsonl`, `retrieval_policies.json`, `ontology.json` (all optional except manifest).
+
+### Deferred
+- `.mmcore` → JSON-LD / RDF / Turtle export
+- Incremental core diffing / patch format
+- LLM-powered core rollback with change summary
+
+### Fixed (audit-driven, pre-release — Claude + Grok + Gemini)
+- **[MEDIUM]** `load_core` now filters to a closed set of known entry filenames and rejects anything else. Earlier behaviour would happily stream arbitrary tar entries into memory; a malicious archive could waste RAM/CPU via unknown files.
+- **[MEDIUM]** Per-entry size cap (default 256 MiB) + total entry count cap defuse tar-bomb DoS. Callers with legitimately huge cores can raise the caps explicitly.
+- **[MEDIUM]** Manifest ↔ content reconciliation: `block_count`, `edge_count`, and the `has_*` flags must all match what the archive actually carries. Catches hand-rebuilt archives where an attacker adjusted manifest metadata without re-signing.
+- **[LOW]** TarInfo `uid`/`gid` pinned to 0 so reproducible builds don't leak per-builder defaults.
+- **[LOW]** `version` is now whitespace-stripped after validation for consistency with `namespace`.
+
+### Testing
+- 21 new tests: namespace validation, build/load round-trip with every optional entry, format-version enforcement, content-hash verification (including a payload-tamper regression that rewraps the tar with modified blocks and checks the loader catches it), **unknown-entry rejection**, **per-entry size cap enforcement**, **block-count-mismatch detection**, `verify=False` escape hatch, missing-manifest rejection, deterministic byte-identical builds when `built_at` is pinned, dict-key-order independence, and `CoreRegistry` load / unload / max-size / stats invariants.
+
+### Changed
+- Version: 2.2.0 → 2.3.0
+- MCP tool count: 40 → 44
+
+## 2.2.0 (2026-04-13)
+
+**v2.2.0: Knowledge Graph Layer — SQLite-backed triple store, typed predicates, entity registry with alias resolution, N-hop BFS traversal, relationship-level provenance + temporal validity windows. Neo4j / FalkorDB backends remain deferred.**
+
+### Added
+- `knowledge_graph.py` — `KnowledgeGraph` class with two SQLite tables (`entities` + `edges`) and one index per axis (subject, object, predicate). `EntityRegistry` canonicalises surface forms (`"STARGA"` ↔ `"STARGA Inc"`) to a single id. `Predicate` enum defines the typed relations (`authored_by`, `depends_on`, `contradicts`, `supersedes`, `part_of`, `mentioned_in`, `related_to`). Every edge carries `source_block_id`, `confidence ∈ [0, 1]`, and optional `valid_from` / `valid_until` timestamps so retrieval can filter by freshness.
+- `KnowledgeGraph.neighbors()` — breadth-first N-hop expansion with per-edge predicate filter, `outgoing` / `incoming` / `both` direction, cycle guard, 8-hop cap, and 256-result cap so hostile callers can't fan out into a traversal DoS.
+- MCP tools `graph_add_edge`, `graph_query`, `graph_stats` (user scope). Tool count 37 → 40.
+
+### Deferred
+- Neo4j / FalkorDB drop-in backends.
+- LLM-powered entity coreference (current registry does lowercased whitespace-collapsed canonicalisation only).
+- Cypher-compatible query parser (current `graph_query` is a structured JSON interface).
+
+### Fixed (audit-driven, pre-release — 3-LLM joint: Claude + codex + Grok)
+- **[MEDIUM]** Temporal validity comparison moved from raw SQLite string `>=` to Python `datetime` parsing. Naive string compare broke on fractional seconds (`"...56.999Z" < "...56Z"` by ASCII). Malformed timestamps are now rejected at `add_edge` time instead of silently tripping over at query time.
+- **[LOW]** `json.dumps(metadata)` now uses `default=str` so non-JSON-native values (datetime, set, Path) stringify gracefully instead of raising mid-insert.
+- **[LOW]** `KnowledgeGraph` implements `__enter__` / `__exit__` so callers can `with KnowledgeGraph(path) as kg:` instead of remembering `close()`.
+
+### Testing
+- 37 new tests (5 added as audit regressions): predicate enum + hyphen parsing, entity registry, edge CRUD + provenance validation + idempotence, predicate filter, outgoing/incoming/both traversal, temporal validity (including `.999Z` fractional seconds and `valid_from > valid_until` rejection), non-JSON metadata, context-manager close, N-hop BFS with cycle guard and depth cap, stats, and 8-thread concurrent-add invariance.
+
+### Changed
+- Version: 2.1.0 → 2.2.0
+- MCP tool count: 37 → 40
+
+## 2.1.0 (2026-04-13)
+
+**v2.1.0: self-improving retrieval foundations — interaction signal capture, classifier, append-only signal store, and A/B evaluation harness. Local fine-tuning loops and online weight swaps stay deferred; this release lands the signal substrate they require.**
+
+### Added
+- `interaction_signals.py` — `SignalType` enum (RE_QUERY / REFINEMENT / CORRECTION), `Signal` / `SignalStats` value objects, `SignalStore` (append-only JSONL with dedup + fsync + thread-safe writes), `classify()` (Jaccard-based same-intent detector with correction-marker heuristics), `jaccard_similarity()`, and `evaluate_ab()` (MRR-based A/B harness that replays signals against baseline vs candidate retrieval fns).
+- `observe_signal` MCP tool — classify + persist a `(previous_query, new_query)` pair; returns `{captured: bool, signal_id, signal_type, similarity}`.
+- `signal_stats` MCP tool — aggregated signal counts (total / per-type / unique sessions) for the active workspace.
+- `index_stats` surfaces `interaction_signals` stats alongside existing prefix cache / prefetch telemetry.
+- MCP tool count: 35 → 37.
+
+### Deferred (needs external training infra)
+- LoRA fine-tuning on local Qwen3-Embedding / ms-marco-MiniLM
+- Async online-training loop with graceful weight swap
+- Governance-gated auto-revert on regression
+
+These remain on the roadmap under v2.1.0 and ship when the training infrastructure is available. The signal store is the durable foundation they need.
+
+### Fixed (audit-driven, pre-release — 3-LLM joint: Claude + codex + Gemini/Grok)
+- **[HIGH]** `SignalStore._load_ids` / `all_signals` now open the JSONL with `encoding="utf-8", errors="replace"` so binary corruption at the tail of the file (e.g. a partial write during a crash) can no longer block the store from loading. Both LLMs flagged this.
+- **[MEDIUM]** Correction markers are now word-boundary regexes (`\bwrong\b`, `\bno[, ]*i\s+(?:mean|meant)\b`, …). Previously `"wrong"` as a substring flipped queries containing `wrongdoing` / `wrongful` into `CORRECTION`, poisoning A/B eval.
+- **[MEDIUM]** `_tokens()` caps input at 8192 chars before regex matching to defuse CPU DoS from hostile multi-MB queries.
+
+### Testing
+- 25 new tests: Jaccard edge cases, classifier across identical/disjoint/refinement/correction inputs + word-boundary regression, SignalStore persistence + dedup + reload + thread-safety, stats aggregation, malformed-line recovery, **non-UTF-8 byte tolerance** (audit regression), A/B eval winner / tie / correction exclusion.
+
+### Changed
+- Version: 2.0.0 → 2.1.0
+
+## 2.0.0 (2026-04-13)
+
+**v2.0.0 — stable. Promotes the entire 2.0 alpha → beta → rc train (a2 → a3 → b1 → rc1) to a production release. No new code since rc1; this entry marks the feature set as final.**
+
+### v2.0.0 feature set (cumulative since 1.9.1)
+- **Cryptographic governance** (a2): `GovernanceGate`, `HashChainV2` SHA3-512 ledger, `EvidenceChain`, `SpecBindingManager`, `MerkleTree` with domain separation.
+- **GBrain enrichment** (a2): query expansion, compiled truth, dream cycle, dedup, smart chunker + 13 MCP tools.
+- **ODC retrieval** (a3): 6-axis `recall_with_axis` with weighted RRF + rotation + adversarial pairs.
+- **Inference acceleration, Python subset** (b1): `PrefixCache` + `PrefetchPredictor` + `index_stats` surfaces.
+- **External verification** (rc1): `mind-mem-verify` CLI + `verify_merkle` + `mind_mem_verify` MCP tools + snapshot-anchored Merkle tree.
+
+### Release criteria met
+- All v2.0.0a*/b*/rc* features complete
+- **3197 tests passing**, 6 skipped, 0 failing on Python 3.12
+- No breaking changes from v1.9.x (v2.0 surfaces are additive)
+- 3-LLM joint audit (Claude + codex + Gemini/Grok) performed on every pre-release; CRITICAL/HIGH findings fixed before upload
+- Migration path: `pip install --upgrade mind-mem` — no config migration required
+
+### Deferred to future releases
+- MIND-compiled hot paths (BM25F / SHA3-512 / vector / RRF kernels) — requires `mindc` toolchain
+- TurboQuant-compressed prefix cache — requires `mind-inference`
+- Optional ledger anchoring (Ethereum L2 / similar) + `anchor_history` MCP tool
+
+### Changed
+- Version: 2.0.0rc1 → 2.0.0
+
 ## 2.0.0rc1 (2026-04-13)
 
 **v2.0.0rc1: external verification — standalone `mind-mem-verify` CLI, `verify_merkle` MCP tool, snapshot-anchored chain-head + Merkle-root validation. Third parties can now verify memory integrity without opening the live retrieval stack or touching the MCP server. Ledger anchoring is deferred as an optional roadmap item.**

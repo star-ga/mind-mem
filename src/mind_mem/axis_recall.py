@@ -130,17 +130,15 @@ def _recall_for_axis(
 # ---------------------------------------------------------------------------
 
 
-def _axis_confidence(rank: int, total: int) -> float:
+def _axis_confidence(rank: int) -> float:
     """Map a 1-based rank within an axis's result list to a [0, 1] score.
 
     Uses ``1 / (1 + rank)`` normalised so the top result scores near 1.0
-    and the tail scores approach 0. Total is unused but kept for future
-    use (length-aware scaling).
+    and the tail scores approach 0.
     """
     if rank < 1:
         rank = 1
     score = 1.0 / (1.0 + (rank - 1))
-    # Clamp for safety.
     return max(0.0, min(1.0, score))
 
 
@@ -182,7 +180,7 @@ def _fuse_axis_results(
             if not bid:
                 continue
             contribution = axis_weight * _rrf_score(rank)
-            confidence = _axis_confidence(rank, len(results))
+            confidence = _axis_confidence(rank)
             axis_score = AxisScore(axis=axis, confidence=confidence, rank=rank)
 
             if bid not in block_accum:
