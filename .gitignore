@@ -18,3 +18,13 @@ lib/*.o
 eval-results*.json
 PDR-*.md
 *.log
+
+# Local model files (download from HuggingFace)
+models/
+mind7b_train.jsonl
+.coverage
+test_out.txt
+
+# Training artifacts (large weights, never commit)
+train/output/
+mm-train-output/

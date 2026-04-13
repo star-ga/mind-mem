@@ -4,7 +4,117 @@
 
 mind-mem is a persistent, auditable, contradiction-safe memory system for coding agents. It provides BM25F-based retrieval with graph boost, fact indexing, and adaptive cutoff.
 
-## Components
+## System Architecture
+
+```mermaid
+graph TB
+    subgraph MCP["MCP Server (57 tools)"]
+        direction LR
+        recall[recall]
+        propose[propose_update]
+        scan[scan]
+        hybrid[hybrid_search]
+        dream[dream_cycle]
+        truth[compiled_truth]
+        expand[expand_query]
+        chunk[smart_chunk]
+        dedup_tool[deduplicate]
+        snapshot[snapshots]
+        reindex[reindex]
+        briefing[briefing]
+    end
+
+    subgraph Engine["Core Engines"]
+        direction TB
+        RE["Recall Engine<br/>BM25F + graph boost + knee cutoff"]
+        HE["Hybrid Engine<br/>BM25 + vector + RRF fusion"]
+        QE["Query Expansion<br/>synonym + specificity + temporal"]
+        DD["4-Layer Dedup<br/>best-per-source → cosine → type cap → chunk cap"]
+        SC["Smart Chunker<br/>semantic boundary splitting"]
+        DC["Dream Cycle<br/>enrichment + repair + consolidation"]
+        CT["Compiled Truth<br/>per-entity knowledge compilation"]
+    end
+
+    subgraph Scoring["Scoring & Reranking"]
+        BM["BM25F Scoring<br/>field weights + stemming"]
+        GR["Graph Boost<br/>cross-reference scoring"]
+        RR["Reranker<br/>feature-based reranking"]
+        XR["Cross-Encoder<br/>opt-in neural reranking"]
+        MIND["MIND FFI Kernels<br/>compiled .mind scoring"]
+    end
+
+    subgraph Storage["Storage Layer"]
+        BP["Block Parser<br/>markdown → structured blocks"]
+        CM["ConnectionManager<br/>thread-safe SQLite pool"]
+        BS["BlockStore<br/>decoupled block access"]
+        VEC["sqlite-vec<br/>vector embeddings"]
+    end
+
+    subgraph FS["Workspace Filesystem"]
+        decisions["decisions/"]
+        tasks["tasks/"]
+        entities["entities/"]
+        memory["memory/"]
+        intelligence["intelligence/"]
+    end
+
+    MCP --> Engine
+    Engine --> Scoring
+    Scoring --> Storage
+    Storage --> FS
+```
+
+## Query Pipeline
+
+```mermaid
+flowchart LR
+    Q["Query"] --> ID["Intent Detection<br/>WHAT/WHEN/WHO/HOW/WHY"]
+    ID --> QX["Query Expansion<br/>multi-query + RM3"]
+    QX --> BM["BM25F Scoring<br/>field weights"]
+    BM --> GB["Graph Boost<br/>+ entity boost"]
+    GB --> RR["Reranking"]
+    RR --> DD["4-Layer Dedup"]
+    DD --> KC["Knee Cutoff"]
+    KC --> CP["Context Pack"]
+    CP --> R["Results"]
+
+    style Q fill:#2d5a27,stroke:#4a8c3f,color:#fff
+    style R fill:#2d5a27,stroke:#4a8c3f,color:#fff
+```
+
+## Dream Cycle (Nightly Enrichment)
+
+```mermaid
+flowchart TB
+    trigger["Heartbeat Trigger<br/>(after 23:00)"] --> scan_phase["Scan Phase"]
+
+    subgraph scan_phase["Phase 1: Scan"]
+        orphans["Find orphan entities"]
+        broken["Detect broken citations"]
+        stale["Flag stale blocks"]
+        missing["Discover missing cross-refs"]
+    end
+
+    scan_phase --> repair["Phase 2: Repair"]
+
+    subgraph repair["Phase 2: Repair"]
+        fix_cite["Fix citations"]
+        link_entities["Link entities"]
+        merge_dupes["Merge duplicates"]
+    end
+
+    repair --> consolidate["Phase 3: Consolidate"]
+
+    subgraph consolidate["Phase 3: Consolidate"]
+        promote["Promote to compiled truth"]
+        compact["Compact redundant entries"]
+        report["Generate dream report"]
+    end
+
+    consolidate --> log["memory/dream-cycle-*.md"]
+```
+
+## Compiled Truth Pipeline
 
 ```
 ┌─────────────────────────────────────────────┐

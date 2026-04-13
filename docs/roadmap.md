@@ -7,7 +7,7 @@
 - [x] Fact card sub-block indexing
 - [x] Knee score cutoff
 - [x] Hard negative mining
-- [x] 19 MCP tools
+- [x] 57 MCP tools (expanded from 19)
 - [x] LoCoMo benchmark suite
 - [x] Cross-platform CI (Ubuntu/macOS/Windows)
 - [x] Baseline snapshot with chi-squared drift detection
@@ -21,22 +21,24 @@
 - [x] Governance benchmark suite
 - [x] AES-256 encryption at rest
 
-## v2.0.0 (Planned)
+## v2.0.0 → v2.9.0 (Shipped)
 
-- [ ] Incremental reindexing
-- [ ] Block versioning with diff tracking
-- [ ] Enhanced vector search with HNSW
-- [ ] Query result caching
-- [ ] Workspace federation (multi-workspace queries)
+- [x] Incremental reindexing
+- [x] Block versioning with diff tracking (delta snapshots + WAL)
+- [x] Enhanced vector search with HNSW-compatible sqlite-vec
+- [x] Query result caching (prefix cache + speculative prefetch)
+- [x] Workspace federation (multi-workspace queries via namespaces)
+- [x] Persistent FTS5 index
+- [x] Plugin system for custom scoring (MIND kernels)
 
-## v2.0.0 (Future)
+## v3.0.0 (Future)
 
-- [ ] Persistent FTS5 index
 - [ ] Real-time workspace watching (inotify/FSEvents)
-- [ ] Plugin system for custom scoring
 - [ ] Web UI for memory browsing
-- [ ] REST API server mode
-- [ ] Distributed workspace sync
+- [ ] REST API server mode (distinct from MCP)
+- [ ] Distributed workspace sync (mDNS-discovered mesh)
+- [ ] Transparent at-rest encryption (read/write hooks in block_parser)
+- [ ] LoRA retrain loop wired into production pipeline
 
 ## Design Principles
 

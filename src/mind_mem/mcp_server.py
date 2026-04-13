@@ -79,6 +79,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections import OrderedDict
 from typing import Any
 
 # Allow running `python3 mcp_server.py` directly from a source checkout.
@@ -130,6 +131,9 @@ ADMIN_TOOLS = frozenset(
         "reindex",
         "export_memory",
         "verify_chain",
+        "compact",
+        "encrypt_file",
+        "decrypt_file",
     }
 )
 
@@ -153,6 +157,15 @@ USER_TOOLS = frozenset(
         "calibration_feedback",
         "calibration_stats",
         "list_evidence",
+        "get_block",
+        "memory_health",
+        "traverse_graph",
+        "stale_blocks",
+        "dream_cycle",
+        "compiled_truth_load",
+        "compiled_truth_add_evidence",
+        "compiled_truth_contradictions",
+        "governance_health_bench",
     }
 )
 
@@ -288,17 +301,27 @@ def _init_rate_limiter() -> SlidingWindowRateLimiter:
 
 
 # Per-client rate limiters keyed by client_id — prevents one client from
-# exhausting the global budget and blocking all other clients.
-_rate_limiters: dict[str, SlidingWindowRateLimiter] = {}
+# exhausting the global budget and blocking all other clients. An
+# attacker rotating Authorization tokens on every request would
+# otherwise grow this dict unbounded, so we LRU-evict the least-
+# recently-used entry when the cap is reached.
+_RATE_LIMITER_MAX: int = 1024
+_rate_limiters: "OrderedDict[str, SlidingWindowRateLimiter]" = OrderedDict()
 _rate_limiters_lock = threading.Lock()
 
 
 def _get_client_rate_limiter(client_id: str) -> SlidingWindowRateLimiter:
     """Return (creating if needed) the per-client SlidingWindowRateLimiter."""
     with _rate_limiters_lock:
-        if client_id not in _rate_limiters:
-            _rate_limiters[client_id] = _init_rate_limiter()
-        return _rate_limiters[client_id]
+        existing = _rate_limiters.get(client_id)
+        if existing is not None:
+            _rate_limiters.move_to_end(client_id, last=True)
+            return existing
+        limiter = _init_rate_limiter()
+        _rate_limiters[client_id] = limiter
+        while len(_rate_limiters) > _RATE_LIMITER_MAX:
+            _rate_limiters.popitem(last=False)
+        return limiter
 
 
 def _get_client_id() -> str:
@@ -1030,6 +1053,856 @@ def rollback_proposal(receipt_ts: str) -> str:
     with contextlib.redirect_stdout(capture):
         success = engine_rollback(ws, receipt_ts)
 
+def _vault_allowlist() -> list[str]:
+    """Return the configured vault-root allowlist.
+
+    Set ``MIND_MEM_VAULT_ALLOWLIST`` to a ``:``-separated list of
+    absolute directories. When set, every vault MCP tool refuses
+    requests targeting paths outside the list. Empty/unset = allow
+    any path (legacy behaviour; recommended only for local dev).
+    """
+    raw = os.environ.get("MIND_MEM_VAULT_ALLOWLIST", "").strip()
+    if not raw:
+        return []
+    sep = ";" if ";" in raw else ":"
+    return [
+        os.path.realpath(p.strip())
+        for p in raw.split(sep)
+        if p.strip()
+    ]
+
+
+def _vault_root_allowed(vault_root: str) -> tuple[bool, str]:
+    """Check vault_root against the allowlist. (ok, reason)."""
+    allow = _vault_allowlist()
+    if not allow:
+        return True, ""
+    target = os.path.realpath(vault_root.strip())
+    for root in allow:
+        try:
+            common = os.path.commonpath([target, root])
+        except ValueError:
+            continue
+        if common == root:
+            return True, ""
+    return False, (
+        f"vault_root {vault_root!r} is outside MIND_MEM_VAULT_ALLOWLIST"
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def vault_scan(vault_root: str, sync_dirs: str = "") -> str:
+    """Walk an Obsidian-style vault and return parsed VaultBlocks (JSON).
+
+    metrics.inc("mcp_rollbacks")
+    _log.info("mcp_rollback", receipt_ts=receipt_ts, success=success)
+
+    if not isinstance(vault_root, str) or not vault_root.strip():
+        return json.dumps({"error": "vault_root must be a non-empty string"})
+    ok, reason = _vault_root_allowed(vault_root)
+    if not ok:
+        return json.dumps({"error": reason})
+    dirs = [d.strip() for d in sync_dirs.split(",") if d.strip()] or None
+    try:
+        bridge = VaultBridge(vault_root=vault_root.strip())
+        blocks = bridge.scan(sync_dirs=dirs)
+    except (FileNotFoundError, ValueError) as exc:
+        return json.dumps({"error": str(exc)})
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "status": "rolled_back" if success else "rollback_failed",
+            "receipt_ts": receipt_ts,
+            "success": success,
+            "log": log_output[-2000:] if len(log_output) > 2000 else log_output,
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def vault_sync(
+    vault_root: str,
+    block_id: str,
+    relative_path: str,
+    body: str,
+    block_type: str = "note",
+    title: str = "",
+    overwrite: bool = False,
+) -> str:
+    """Write a single block back into a vault at a relative path.
+
+    Refuses to write outside the vault root or to overwrite existing
+    files unless ``overwrite`` is true.
+    """
+    from .agent_bridge import VaultBlock, VaultBridge
+
+    for arg, label in (
+        (vault_root, "vault_root"),
+        (block_id, "block_id"),
+        (relative_path, "relative_path"),
+    ):
+        if not isinstance(arg, str) or not arg.strip():
+            return json.dumps({"error": f"{label} must be a non-empty string"})
+    ok, reason = _vault_root_allowed(vault_root)
+    if not ok:
+        return json.dumps({"error": reason})
+    try:
+        bridge = VaultBridge(vault_root=vault_root.strip())
+        target = bridge.write(
+            VaultBlock(
+                relative_path=relative_path.strip(),
+                block_id=block_id.strip(),
+                block_type=block_type.strip() or "note",
+                title=title.strip() or block_id.strip(),
+                body=body,
+            ),
+            overwrite=bool(overwrite),
+        )
+    except (FileNotFoundError, FileExistsError, ValueError) as exc:
+        return json.dumps({"error": str(exc)})
+    return json.dumps(
+        {"written": target, "_schema_version": "1.0"}, indent=2
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def hybrid_search(query: str, limit: int = 10, active_only: bool = False) -> str:
+    """Hybrid BM25+Vector recall with RRF fusion.
+
+    .. deprecated::
+        Use ``recall(backend="hybrid")`` instead. This tool will be removed in a
+        future release.
+
+    Args:
+        query: Search query.
+        limit: Maximum results (default: 10).
+        active_only: Only return active blocks.
+
+    Returns:
+        JSON array of ranked results from fused retrieval.
+    """
+    import warnings
+
+    warnings.warn(
+        "hybrid_search is deprecated. Use recall(backend='hybrid') instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    raw = _recall_impl(query, limit=limit, active_only=active_only, backend="hybrid")
+    try:
+        envelope = json.loads(raw)
+        envelope["_deprecation_notice"] = "hybrid_search is deprecated. Use recall with backend='hybrid' instead."
+        return json.dumps(envelope, indent=2)
+    except (json.JSONDecodeError, TypeError):
+        return raw
+
+
+@mcp.tool
+@mcp_tool_observe
+def find_similar(block_id: str, limit: int = 5) -> str:
+    """Find blocks similar to a given block using vector similarity.
+
+    Requires vector backend (sentence-transformers). Falls back gracefully.
+
+    Args:
+        block_id: Source block ID to find similar blocks for.
+        limit: Maximum similar blocks to return (default: 5).
+
+    Returns:
+        JSON array of similar blocks with similarity scores.
+    """
+    if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
+        return json.dumps({"error": f"Invalid block_id format: {block_id}"})
+    ws = _workspace()
+    limits = _get_limits(ws)
+    limit = max(1, min(limit, limits["max_similar_results"]))
+    try:
+        from mind_mem.block_metadata import BlockMetadataManager
+
+        db_path = os.path.join(ws, "memory", "block_meta.db")
+        mgr = BlockMetadataManager(db_path)
+        co_blocks = mgr.get_co_occurring_blocks(block_id, limit=limit)
+        metrics.inc("mcp_find_similar_queries")
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "source": block_id,
+                "similar": co_blocks,
+                "method": "co-occurrence",
+            },
+            indent=2,
+        )
+    except ImportError:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "find_similar requires block_metadata module",
+                "block_id": block_id,
+            },
+            indent=2,
+        )
+    except sqlite3.OperationalError as exc:
+        if _is_db_locked(exc):
+            return _sqlite_busy_error()
+        raise
+    except (OSError, ValueError, KeyError) as exc:
+        _log.warning("find_similar_failed", block_id=block_id, error=str(exc))
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "Failed to find similar blocks. The co-occurrence index may not be initialized.",
+                "block_id": block_id,
+            },
+            indent=2,
+        )
+
+
+@mcp.tool
+@mcp_tool_observe
+def intent_classify(query: str) -> str:
+    """Show the routing strategy for a query.
+
+    Classifies query intent into one of 9 types (WHY, WHEN, ENTITY, WHAT,
+    HOW, LIST, VERIFY, COMPARE, TRACE) and returns retrieval parameters.
+
+    Args:
+        query: The query to classify.
+
+    Returns:
+        JSON with intent type, confidence, sub-intents, and parameters.
+    """
+    try:
+        from mind_mem.intent_router import IntentRouter
+
+        router = IntentRouter()
+        result = router.classify(query)
+        metrics.inc("mcp_intent_classify")
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "query": query,
+                "intent": result.intent,
+                "confidence": result.confidence,
+                "sub_intents": result.sub_intents,
+                "params": result.params,
+            },
+            indent=2,
+        )
+    except ImportError:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "intent_router module not available",
+                "query": query,
+            },
+            indent=2,
+        )
+    except (ValueError, KeyError, AttributeError) as exc:
+        _log.warning("intent_classify_failed", query=query, error=str(exc))
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "Intent classification failed",
+                "query": query,
+            },
+            indent=2,
+        )
+
+
+@mcp.tool
+@mcp_tool_observe
+def index_stats() -> str:
+    """Block counts, index staleness, vector coverage, and MIND kernel status.
+
+    Returns:
+        JSON with workspace statistics.
+    """
+    ws = _workspace()
+    stats: dict = {"_schema_version": MCP_SCHEMA_VERSION}
+
+    # Use FTS index for block counts when available (O(1) vs O(N) file parsing)
+    db = fts_db_path(ws)
+    fts_exists = os.path.isfile(db) if db else False
+    stats["fts_index_exists"] = fts_exists
+
+    if fts_exists:
+        try:
+            from mind_mem.sqlite_index import index_status as fts_status
+
+            fts_info = fts_status(ws)
+            stats["total_blocks"] = fts_info.get("blocks", 0)
+            stats["last_build"] = fts_info.get("last_build")
+            stats["stale_files"] = fts_info.get("stale_files", 0)
+            stats["db_size_bytes"] = fts_info.get("db_size_bytes", 0)
+        except sqlite3.OperationalError as exc:
+            if _is_db_locked(exc):
+                return _sqlite_busy_error()
+            raise
+        except (OSError, ValueError, KeyError) as e:
+            _log.debug("fts_status_failed", error=str(e))
+            fts_exists = False  # fall through to file scan
+
+    if not fts_exists:
+        # Fallback: count blocks by parsing files (O(N))
+        for kind in CORPUS_DIRS:
+            d = os.path.join(ws, kind)
+            if os.path.isdir(d):
+                count = 0
+                for fn in os.listdir(d):
+                    if fn.endswith(".md"):
+                        try:
+                            blocks = parse_file(os.path.join(d, fn))
+                            count += len(blocks)
+                        except (OSError, ValueError) as e:
+                            _log.debug("index_stats_parse_failed", file=fn, error=str(e))
+                stats[f"{kind}_blocks"] = count
+
+    # MIND kernel status
+    mind_dir = get_mind_dir(ws)
+    kernels = ffi_list_kernels(mind_dir)
+    stats["mind_kernels"] = kernels
+    stats["mind_kernel_compiled"] = mind_kernel_available()
+    stats["mind_kernel_protected"] = mind_kernel_protected()
+
+    metrics.inc("mcp_index_stats")
+    _log.info("mcp_index_stats", stats=stats)
+    return json.dumps(stats, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def retrieval_diagnostics(last_n: int = 50, max_age_days: int = 7) -> str:
+    """Pipeline diagnostics: per-stage rejection rates, intent distribution, and hard negative summary.
+
+    Surfaces the internal veto histogram — candidates rejected at each gate
+    (BM25, dedup, rerank, knee cutoff) plus confidence distributions.
+
+    Args:
+        last_n: Number of recent queries to analyze (default 50).
+        max_age_days: Only consider queries within this window (default 7).
+
+    Returns:
+        JSON with stage_stats, rejection_rates, intent_distribution,
+        score_distribution, and hard_negatives summary.
+    """
+    ws = _workspace()
+    try:
+        result = _retrieval_diag(ws, last_n=last_n, max_age_days=max_age_days)
+    except sqlite3.OperationalError as exc:
+        if _is_db_locked(exc):
+            return _sqlite_busy_error()
+        raise
+    result["_schema_version"] = MCP_SCHEMA_VERSION
+    metrics.inc("mcp_retrieval_diagnostics")
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def reindex(include_vectors: bool = False) -> str:
+    """Trigger FTS index rebuild, optionally with vector indexing.
+
+    Args:
+        include_vectors: Also rebuild vector index (requires sentence-transformers).
+
+    Returns:
+        JSON with reindex results.
+    """
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+    results: dict = {"_schema_version": MCP_SCHEMA_VERSION, "fts": False, "vectors": False}
+
+    try:
+        from mind_mem.sqlite_index import build_index
+
+        build_index(ws)
+        results["fts"] = True
+    except sqlite3.OperationalError as exc:
+        if _is_db_locked(exc):
+            return _sqlite_busy_error()
+        raise
+    except (OSError, ValueError) as e:
+        _log.warning("reindex_fts_failed", error=str(e))
+        results["fts_error"] = "FTS index rebuild failed. Run: mind-mem-scan --reindex"
+
+    if include_vectors:
+        try:
+            from mind_mem.recall_vector import rebuild_index
+
+            rebuild_index(ws)
+            results["vectors"] = True
+        except ImportError:
+            results["vectors_error"] = "sentence-transformers not installed"
+        except (OSError, ValueError) as exc:
+            _log.warning("reindex_vectors_failed", error=str(exc))
+            results["vectors_error"] = "Vector index rebuild failed"
+
+    # Regenerate category summaries
+    try:
+        from mind_mem.category_distiller import CategoryDistiller
+
+        extra_cats = _load_extra_categories(ws)
+        distiller = CategoryDistiller(extra_categories=extra_cats if extra_cats else None)
+        written = distiller.distill(ws)
+        results["categories"] = len(written)
+    except ImportError:
+        _log.debug("reindex_category_distiller_unavailable")
+    except (OSError, ValueError) as exc:
+        _log.warning("reindex_categories_failed", error=str(exc))
+        results["categories_error"] = "Category distillation failed"
+
+    metrics.inc("mcp_reindex")
+    _log.info("mcp_reindex", results=results)
+    return json.dumps(results, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def memory_evolution(block_id: str, action: str = "get") -> str:
+    """A-MEM metadata for a block — importance, access patterns, keywords.
+
+    Args:
+        block_id: The block ID (e.g., "D-20260213-001").
+        action: "get" to read metadata, "update" to recompute importance.
+
+    Returns:
+        JSON with block importance, access_count, keywords, connections.
+    """
+    if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
+        return json.dumps({"error": f"Invalid block_id format: {block_id}"})
+    ws = _workspace()
+    db_path = os.path.join(ws, "memory", "block_meta.db")
+
+    try:
+        from mind_mem.block_metadata import BlockMetadataManager
+
+    # Cap statement length to prevent oversized signals
+    statement = statement[:500]
+
+    signal = {
+        "line": 0,
+        "type": block_type,
+        "text": statement,
+        "pattern": "mcp_propose_update",
+        "confidence": confidence,
+        "priority": priority,
+        "structure": {
+            "subject": " ".join(statement.split()[:3]) if statement else "",
+            "tags": [t.strip() for t in tags.split(",") if t.strip()],
+        },
+    }
+    if rationale:
+        signal["structure"]["rationale"] = rationale  # type: ignore[index]
+
+    written = append_signals(ws, [signal], today)
+
+    metrics.inc("mcp_proposals")
+    _log.info("mcp_propose", block_type=block_type, confidence=confidence, written=written)
+
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "status": "proposed",
+            "written": written,
+            "location": "intelligence/SIGNALS.md",
+            "next_step": (
+                "Run /apply or `python3 maintenance/apply_engine.py` to review and promote to source of truth."
+            ),
+            "safety": "This signal is in SIGNALS.md only. It has NOT been written to DECISIONS.md or TASKS.md.",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def scan() -> str:
+    """Run integrity scan — contradictions, drift, dead decisions, impact graph.
+
+    Returns:
+        JSON summary of scan results.
+    """
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    checks: dict[str, Any] = {}
+
+    # Parse decisions
+    decisions_path = os.path.join(ws, "decisions", "DECISIONS.md")
+    if os.path.isfile(decisions_path):
+        blocks = parse_file(decisions_path)
+        active = get_active(blocks)
+        checks["decisions"] = {
+            "total": len(blocks),
+            "active": len(active),
+        }
+    else:
+        checks["decisions"] = {"total": 0, "active": 0}
+
+    # Check contradictions — report both raw entries and resolvable ones
+    contra_path = os.path.join(ws, "intelligence", "CONTRADICTIONS.md")
+    raw_count = 0
+    if os.path.isfile(contra_path):
+        raw_count = len(parse_file(contra_path))
+    try:
+        from mind_mem.conflict_resolver import resolve_contradictions
+
+        resolutions = resolve_contradictions(ws)
+        checks["contradictions"] = {
+            "raw": raw_count,
+            "resolvable": len(resolutions),
+        }
+    except (ImportError, OSError, ValueError) as exc:
+        _log.warning("scan_contradiction_check_failed", error=str(exc))
+        checks["contradictions"] = {"raw": raw_count, "resolvable": 0}
+
+    # Check drift
+    drift_path = os.path.join(ws, "intelligence", "DRIFT.md")
+    if os.path.isfile(drift_path):
+        drifts = parse_file(drift_path)
+        checks["drift_items"] = len(drifts)
+    else:
+        checks["drift_items"] = 0
+
+    # Check signals
+    signals_path = os.path.join(ws, "intelligence", "SIGNALS.md")
+    if os.path.isfile(signals_path):
+        signals = parse_file(signals_path)
+        checks["pending_signals"] = len(signals)
+    else:
+        checks["pending_signals"] = 0
+
+    result: dict[str, Any] = {"_schema_version": MCP_SCHEMA_VERSION, "checks": checks}
+    metrics.inc("mcp_scans")
+    _log.info("mcp_scan", checks=checks)
+
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def list_contradictions() -> str:
+    """List detected contradictions with resolution analysis.
+
+    Enriches the raw contradiction list with AutoResolver's
+    preference-boosted + side-effect-aware suggestions when the
+    workspace has an existing resolver state; falls back to the
+    plain list otherwise.
+
+    Returns:
+        JSON array of contradictions with strategy recommendations.
+    """
+    ws = _workspace()
+
+    from mind_mem.conflict_resolver import resolve_contradictions
+
+    resolutions = resolve_contradictions(ws)
+    if not resolutions:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "status": "clean",
+                "contradictions": 0,
+                "message": "No contradictions found.",
+            }
+        )
+
+    # Best-effort AutoResolver enrichment — side effects + preference
+    # learning. Never masks the raw resolutions on failure.
+    enriched: list[dict] = []
+    try:
+        from mind_mem.auto_resolver import AutoResolver
+
+        suggestions = AutoResolver(ws).suggest_resolutions()
+        by_id = {s.contradiction_id: s for s in suggestions}
+        for res in resolutions:
+            sug = by_id.get(res.get("contradiction_id"))
+            merged = dict(res)
+            if sug is not None:
+                merged["confidence_score"] = sug.confidence_score
+                merged["side_effects"] = list(sug.side_effects)
+                merged["preference_boost_applied"] = True
+            enriched.append(merged)
+    except Exception as exc:  # pragma: no cover — best-effort
+        _log.warning("auto_resolver_enrich_failed", error=str(exc))
+        enriched = list(resolutions)
+
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "status": "contradictions_found",
+            "contradictions": len(enriched),
+            "resolutions": enriched,
+        },
+        indent=2,
+        default=str,
+    )
+
+
+def _encryption_passphrase() -> str | None:
+    """Fetch the at-rest encryption passphrase from env. None = disabled."""
+    raw = os.environ.get("MIND_MEM_ENCRYPTION_PASSPHRASE", "").strip()
+    return raw or None
+
+
+@mcp.tool
+@mcp_tool_observe
+def encrypt_file(file_path: str) -> str:
+    """Encrypt a single workspace file at rest.
+
+    Requires ``MIND_MEM_ENCRYPTION_PASSPHRASE`` to be set in the
+    server environment. Files already encrypted are no-ops.
+    Admin-scope tool — never exposed to user tokens.
+
+    Args:
+        file_path: Absolute path to the plaintext file.
+
+    Returns:
+        JSON status envelope.
+    """
+    passphrase = _encryption_passphrase()
+    if not passphrase:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "MIND_MEM_ENCRYPTION_PASSPHRASE is not set",
+            }
+        )
+    if not isinstance(file_path, str) or not file_path.strip():
+        return json.dumps({"error": "file_path must be a non-empty string"})
+    ws = _workspace()
+    try:
+        safe_path = _safe_vault_path(ws, file_path)
+    except Exception as exc:
+        return json.dumps({"error": f"path rejected: {exc}"})
+    try:
+        from mind_mem.encryption import EncryptionManager
+
+        EncryptionManager(ws, passphrase).encrypt_file(safe_path)
+    except Exception as exc:
+        return json.dumps({"error": f"encrypt failed: {exc}"})
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "encrypted": True,
+            "path": safe_path,
+        }
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def decrypt_file(file_path: str) -> str:
+    """Return plaintext bytes (base64-encoded) for an encrypted file.
+
+    Does not modify the on-disk ciphertext. Admin-scope tool.
+
+    Args:
+        file_path: Absolute path to the encrypted file.
+
+    Returns:
+        JSON with ``plaintext_b64`` field on success.
+    """
+    import base64
+
+    passphrase = _encryption_passphrase()
+    if not passphrase:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "MIND_MEM_ENCRYPTION_PASSPHRASE is not set",
+            }
+        )
+    if not isinstance(file_path, str) or not file_path.strip():
+        return json.dumps({"error": "file_path must be a non-empty string"})
+    ws = _workspace()
+    try:
+        safe_path = _safe_vault_path(ws, file_path)
+    except Exception as exc:
+        return json.dumps({"error": f"path rejected: {exc}"})
+    try:
+        from mind_mem.encryption import EncryptionManager
+
+        plaintext = EncryptionManager(ws, passphrase).decrypt_file(safe_path)
+    except Exception as exc:
+        return json.dumps({"error": f"decrypt failed: {exc}"})
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "path": safe_path,
+            "plaintext_b64": base64.b64encode(plaintext).decode("ascii"),
+        }
+    )
+
+
+def _safe_vault_path(ws: str, candidate: str) -> str:
+    """Resolve *candidate* against *ws* and reject path-escapes."""
+    resolved = os.path.realpath(candidate)
+    ws_abs = os.path.realpath(ws)
+    try:
+        common = os.path.commonpath([resolved, ws_abs])
+    except ValueError as exc:
+        raise ValueError(f"path escapes workspace: {candidate}") from exc
+    if common != ws_abs:
+        raise ValueError(f"path escapes workspace: {candidate}")
+    if not os.path.isfile(resolved):
+        raise FileNotFoundError(resolved)
+    return resolved
+
+
+@mcp.tool
+@mcp_tool_observe
+def governance_health_bench() -> str:
+    """Run the governance health benchmark suite.
+
+    Exercises contradiction detection, audit completeness, drift
+    detection, and scalability probes against the current workspace.
+
+    Returns:
+        JSON report covering all bench sub-suites and aggregated
+        pass/fail counts.
+    """
+    ws = _workspace()
+    try:
+        from mind_mem.governance_bench import GovernanceBench
+
+        report = GovernanceBench(ws).run_all()
+    except Exception as exc:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"bench run failed: {exc}",
+            }
+        )
+    out = {"_schema_version": MCP_SCHEMA_VERSION, **report}
+    return json.dumps(out, indent=2, default=str)
+
+
+@mcp.tool
+@mcp_tool_observe
+def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
+    """Apply a staged proposal from intelligence/proposed/.
+
+    SAFETY: Defaults to dry_run=True. Set dry_run=False to actually apply.
+    Creates a snapshot before applying for rollback support.
+
+    Args:
+        proposal_id: The proposal ID (e.g., "P-20260213-002").
+        dry_run: If True (default), validate without executing. Set False to apply.
+
+    Returns:
+        JSON with apply result, receipt timestamp (for rollback), and status.
+    """
+    ws = _workspace()
+
+    import re
+
+    if not re.match(r"^P-\d{8}-\d{3}$", proposal_id):
+        return json.dumps({"error": f"Invalid proposal ID format: {proposal_id}. Expected P-YYYYMMDD-NNN."})
+
+    import contextlib
+    import io
+
+    from mind_mem.apply_engine import apply_proposal, find_proposal
+    from mind_mem.contradiction_detector import check_proposal_contradictions
+
+    # Run contradiction check before apply (surfaces conflicts to reviewer)
+    contra_report = None
+    try:
+        proposal, _source = find_proposal(ws, proposal_id)
+        if proposal:
+            contra_report = check_proposal_contradictions(ws, proposal)
+    except Exception as e:
+        _log.warning("contradiction_check_failed", error=str(e))
+
+    # Capture stdout from apply_engine (it prints progress)
+    capture = io.StringIO()
+    with contextlib.redirect_stdout(capture):
+        success, message = apply_proposal(ws, proposal_id, dry_run=dry_run)
+
+    log_output = capture.getvalue()
+
+    metrics.inc("mcp_apply_calls")
+    _log.info("mcp_approve_apply", proposal_id=proposal_id, dry_run=dry_run, success=success)
+
+    # If apply_engine returned False due to contradictions, reflect that
+    blocked_by_contradictions = not success and message == "Blocked: contradictions detected"
+
+    result = {
+        "_schema_version": MCP_SCHEMA_VERSION,
+        "status": (
+            "blocked_contradictions"
+            if blocked_by_contradictions
+            else "applied"
+            if success and not dry_run
+            else "dry_run_passed"
+            if success
+            else "failed"
+        ),
+        "proposal_id": proposal_id,
+        "dry_run": dry_run,
+        "success": success,
+        "message": message,
+        "log": log_output[-2000:] if len(log_output) > 2000 else log_output,
+        "next_step": (
+            "Resolve contradictions or set contradiction.block_on_detect=false in mind-mem.json."
+            if blocked_by_contradictions
+            else "Call again with dry_run=False to apply."
+            if success and dry_run
+            else None
+        ),
+    }
+
+    # Include contradiction report in output
+    if contra_report:
+        result["contradictions"] = {
+            "summary": contra_report["summary"],
+            "has_contradictions": contra_report["has_contradictions"],
+            "contradiction_count": contra_report["contradiction_count"],
+            "total_conflicts": contra_report["total_conflicts"],
+            "conflicts": contra_report["conflicts"],
+        }
+
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def rollback_proposal(receipt_ts: str) -> str:
+    """Rollback an applied proposal using its receipt timestamp.
+
+    Restores workspace from the pre-apply snapshot.
+
+    Args:
+        receipt_ts: Receipt timestamp from apply (format: YYYYMMDD-HHMMSS).
+
+    Returns:
+        JSON with rollback result and post-rollback check status.
+    """
+    ws = _workspace()
+
+    import re
+
+    if not re.match(r"^\d{8}-\d{6}$", receipt_ts):
+        return json.dumps({"error": f"Invalid receipt timestamp format: {receipt_ts}. Expected YYYYMMDD-HHMMSS."})
+
+    import contextlib
+    import io
+
+    from mind_mem.apply_engine import rollback as engine_rollback
+
+    capture = io.StringIO()
+    with contextlib.redirect_stdout(capture):
+        success = engine_rollback(ws, receipt_ts)
+
     log_output = capture.getvalue()
 
     metrics.inc("mcp_rollbacks")
@@ -1251,6 +2124,36 @@ def index_stats() -> str:
     stats["mind_kernels"] = kernels
     stats["mind_kernel_compiled"] = mind_kernel_available()
     stats["mind_kernel_protected"] = mind_kernel_protected()
+
+    # v2.0.0b1 — LLM prefix cache + speculative prefetch stats.
+    # Narrow except: only swallow import failures (module not present) and
+    # attribute failures (symbol renamed). Anything else propagates so
+    # real regressions surface in the MCP error envelope.
+    try:
+        from mind_mem.prefix_cache import all_stats as _prefix_all_stats
+
+        stats["prefix_caches"] = [s.as_dict() for s in _prefix_all_stats()]
+    except (ImportError, AttributeError) as exc:
+        _log.debug("prefix_cache_stats_unavailable", error=str(exc))
+        stats["prefix_caches"] = []
+
+    try:
+        from mind_mem.speculative_prefetch import get_default_predictor
+
+        stats["speculative_prefetch"] = get_default_predictor().stats().as_dict()
+    except (ImportError, AttributeError) as exc:
+        _log.debug("speculative_prefetch_stats_unavailable", error=str(exc))
+        stats["speculative_prefetch"] = {}
+
+    # v2.1.0 — interaction signal store stats
+    try:
+        from mind_mem.interaction_signals import SignalStore
+
+        sig_store = SignalStore(_signal_store_path(ws))
+        stats["interaction_signals"] = sig_store.stats().as_dict()
+    except (ImportError, AttributeError, OSError) as exc:
+        _log.debug("interaction_signal_stats_unavailable", error=str(exc))
+        stats["interaction_signals"] = {}
 
     metrics.inc("mcp_index_stats")
     _log.info("mcp_index_stats", stats=stats)
