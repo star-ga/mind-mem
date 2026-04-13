@@ -2,6 +2,34 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.3.0 (2026-04-13)
+
+**v2.3.0: Context Cores — portable memory bundles. `.mmcore` archive format (tar + gzip + deterministic entry layout) with build / load / unload / list MCP tools and a process-local `CoreRegistry`. Content hashes make bundles tamper-evident; fixed `mtime=0` + sorted entries + empty gzip filename make builds byte-for-byte reproducible when `built_at` is pinned.**
+
+### Added
+- `context_core.py` — `CoreManifest` value object, `build_core()` (blocks + edges + retrieval policies + ontology + custom metadata), `load_core()` (with optional integrity verification), `LoadedCore` / `CoreLoadError`, and `CoreRegistry` (namespace-keyed mount/unmount with max-size cap).
+- MCP tools `build_core`, `load_core`, `unload_core`, `list_cores` (user scope). MCP tool count: 40 → 44.
+- Archive entries: `manifest.json`, `blocks.jsonl`, `graph_edges.jsonl`, `retrieval_policies.json`, `ontology.json` (all optional except manifest).
+
+### Deferred
+- `.mmcore` → JSON-LD / RDF / Turtle export
+- Incremental core diffing / patch format
+- LLM-powered core rollback with change summary
+
+### Fixed (audit-driven, pre-release — Claude + Grok + Gemini)
+- **[MEDIUM]** `load_core` now filters to a closed set of known entry filenames and rejects anything else. Earlier behaviour would happily stream arbitrary tar entries into memory; a malicious archive could waste RAM/CPU via unknown files.
+- **[MEDIUM]** Per-entry size cap (default 256 MiB) + total entry count cap defuse tar-bomb DoS. Callers with legitimately huge cores can raise the caps explicitly.
+- **[MEDIUM]** Manifest ↔ content reconciliation: `block_count`, `edge_count`, and the `has_*` flags must all match what the archive actually carries. Catches hand-rebuilt archives where an attacker adjusted manifest metadata without re-signing.
+- **[LOW]** TarInfo `uid`/`gid` pinned to 0 so reproducible builds don't leak per-builder defaults.
+- **[LOW]** `version` is now whitespace-stripped after validation for consistency with `namespace`.
+
+### Testing
+- 21 new tests: namespace validation, build/load round-trip with every optional entry, format-version enforcement, content-hash verification (including a payload-tamper regression that rewraps the tar with modified blocks and checks the loader catches it), **unknown-entry rejection**, **per-entry size cap enforcement**, **block-count-mismatch detection**, `verify=False` escape hatch, missing-manifest rejection, deterministic byte-identical builds when `built_at` is pinned, dict-key-order independence, and `CoreRegistry` load / unload / max-size / stats invariants.
+
+### Changed
+- Version: 2.2.0 → 2.3.0
+- MCP tool count: 40 → 44
+
 ## 2.2.0 (2026-04-13)
 
 **v2.2.0: Knowledge Graph Layer — SQLite-backed triple store, typed predicates, entity registry with alias resolution, N-hop BFS traversal, relationship-level provenance + temporal validity windows. Neo4j / FalkorDB backends remain deferred.**

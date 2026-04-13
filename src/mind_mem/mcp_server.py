@@ -156,6 +156,10 @@ USER_TOOLS = frozenset(
         "graph_query",
         "graph_stats",
         "graph_add_edge",
+        "build_core",
+        "load_core",
+        "unload_core",
+        "list_cores",
         "search_memory",
         "list_memory",
         "list_contradictions",
@@ -852,6 +856,183 @@ def _signal_store_path(ws: str) -> str:
 
 def _kg_path(ws: str) -> str:
     return os.path.join(ws, "memory", "knowledge_graph.db")
+
+
+_CORE_REGISTRY: Any = None
+
+
+def _core_registry() -> Any:
+    global _CORE_REGISTRY
+    if _CORE_REGISTRY is None:
+        from .context_core import CoreRegistry
+
+        _CORE_REGISTRY = CoreRegistry()
+    return _CORE_REGISTRY
+
+
+def _core_dir(ws: str) -> str:
+    path = os.path.join(ws, "memory", "cores")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+@mcp.tool
+@mcp_tool_observe
+def build_core(namespace: str, version: str, filename: str = "") -> str:
+    """Build a .mmcore bundle from the active workspace's blocks.
+
+    Snapshots the current block index + knowledge graph into a portable
+    `.mmcore` archive. Downstream callers can load it into another
+    mind-mem instance via `load_core`.
+
+    Args:
+        namespace: Identifier used to prefix blocks when loaded.
+        version: Caller-facing semver recorded in the manifest.
+        filename: Optional output filename (defaults to
+            ``<namespace>-<version>.mmcore`` under ``memory/cores/``).
+
+    Returns:
+        JSON envelope with the bundle path and manifest summary.
+    """
+    from .context_core import build_core as _build_core
+    from .knowledge_graph import KnowledgeGraph
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(namespace, str) or not namespace.strip():
+        return json.dumps({"error": "namespace must be a non-empty string"})
+    if not isinstance(version, str) or not version.strip():
+        return json.dumps({"error": "version must be a non-empty string"})
+
+    # Assemble blocks from the FTS index (best-effort — empty on fresh ws).
+    blocks: list[dict] = []
+    try:
+        from .sqlite_index import merkle_leaves as _leaves
+
+        for bid, content_hash in _leaves(ws):
+            blocks.append({"_id": bid, "content_hash": content_hash})
+    except (ImportError, AttributeError):
+        pass
+
+    edges: list[dict] = []
+    kg_file = _kg_path(ws)
+    if os.path.isfile(kg_file):
+        kg = KnowledgeGraph(kg_file)
+        try:
+            for e in kg.edges_from("__all__") if False else []:
+                edges.append(e.as_dict())
+            # Pull all edges regardless of subject: walk the DB directly.
+            rows = kg._conn.execute(
+                "SELECT subject, predicate, object, source_block_id, confidence, "
+                "valid_from, valid_until, metadata FROM edges"
+            ).fetchall()
+            for row in rows:
+                edges.append(
+                    {
+                        "subject": row["subject"],
+                        "predicate": row["predicate"],
+                        "object": row["object"],
+                        "source_block_id": row["source_block_id"],
+                        "confidence": row["confidence"],
+                        "valid_from": row["valid_from"],
+                        "valid_until": row["valid_until"],
+                        "metadata": row["metadata"],
+                    }
+                )
+        finally:
+            kg.close()
+
+    out_name = filename.strip() or f"{namespace.strip()}-{version.strip()}.mmcore"
+    if any(ch in out_name for ch in "/\\"):
+        return json.dumps({"error": "filename must not contain path separators"})
+    out_path = os.path.join(_core_dir(ws), out_name)
+
+    try:
+        manifest = _build_core(
+            out_path,
+            namespace=namespace,
+            version=version,
+            blocks=blocks,
+            edges=edges,
+        )
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+
+    return json.dumps(
+        {"path": out_path, "manifest": manifest.as_dict(), "_schema_version": "1.0"},
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def load_core(filename: str, verify: bool = True) -> str:
+    """Load a .mmcore bundle from the workspace's cores/ directory.
+
+    Args:
+        filename: Core filename relative to ``memory/cores/``.
+        verify: Recompute and compare the content hash (default True).
+    """
+    from .context_core import CoreLoadError
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(filename, str) or not filename.strip():
+        return json.dumps({"error": "filename must be a non-empty string"})
+    if any(ch in filename for ch in "/\\"):
+        return json.dumps({"error": "filename must not contain path separators"})
+
+    path = os.path.join(_core_dir(ws), filename.strip())
+    try:
+        loaded = _core_registry().load(path, verify=verify)
+    except CoreLoadError as exc:
+        return json.dumps({"error": str(exc)})
+    except RuntimeError as exc:
+        return json.dumps({"error": str(exc)})
+    return json.dumps(
+        {
+            "loaded": True,
+            "namespace": loaded.manifest.namespace,
+            "blocks": loaded.block_count(),
+            "edges": loaded.edge_count(),
+            "content_hash": loaded.manifest.content_hash,
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def unload_core(namespace: str) -> str:
+    """Unload a previously-loaded core by namespace."""
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+    if not isinstance(namespace, str) or not namespace.strip():
+        return json.dumps({"error": "namespace must be a non-empty string"})
+    ok = _core_registry().unload(namespace.strip())
+    return json.dumps({"unloaded": bool(ok)})
+
+
+@mcp.tool
+@mcp_tool_observe
+def list_cores() -> str:
+    """List every currently-loaded .mmcore bundle (namespace + stats)."""
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+    return json.dumps(
+        {"cores": _core_registry().stats(), "_schema_version": "1.0"}, indent=2
+    )
 
 
 @mcp.tool

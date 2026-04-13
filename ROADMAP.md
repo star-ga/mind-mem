@@ -359,7 +359,7 @@ Release criteria:
 
 ---
 
-## v2.3.0 — Context Cores: Portable Memory Bundles
+## v2.3.0 — Context Cores: Portable Memory Bundles ✅ Released 2026-04-13; RDF/JSON-LD export deferred
 
 > Theme: Docker for agent knowledge. Build once with a powerful model, deploy anywhere.
 > Ref: TrustGraph Context Core concept
