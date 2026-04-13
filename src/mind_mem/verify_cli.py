@@ -168,7 +168,7 @@ def check_evidence_chain(workspace: str, report: VerifyReport) -> None:
         report.record(
             "evidence_chain",
             True,
-            f"{len(chain._entries)} entries verified",
+            f"{len(chain)} entries verified",
         )
     else:
         report.record(
