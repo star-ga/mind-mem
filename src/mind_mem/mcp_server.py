@@ -162,6 +162,9 @@ USER_TOOLS = frozenset(
         "list_cores",
         "plan_consolidation",
         "pack_recall_budget",
+        "ontology_load",
+        "ontology_validate",
+        "stream_status",
         "search_memory",
         "list_memory",
         "list_contradictions",
@@ -860,6 +863,31 @@ def _kg_path(ws: str) -> str:
     return os.path.join(ws, "memory", "knowledge_graph.db")
 
 
+_ONTOLOGY_REGISTRY: Any = None
+_CHANGE_STREAM: Any = None
+
+
+def _ontology_registry() -> Any:
+    global _ONTOLOGY_REGISTRY
+    if _ONTOLOGY_REGISTRY is None:
+        from .ontology import OntologyRegistry, software_engineering_ontology
+
+        _ONTOLOGY_REGISTRY = OntologyRegistry()
+        # Preload the in-box SE ontology so ontology_validate works on
+        # a fresh workspace without a separate ontology_load step.
+        _ONTOLOGY_REGISTRY.load(software_engineering_ontology(), make_active=True)
+    return _ONTOLOGY_REGISTRY
+
+
+def _change_stream() -> Any:
+    global _CHANGE_STREAM
+    if _CHANGE_STREAM is None:
+        from .change_stream import ChangeStream
+
+        _CHANGE_STREAM = ChangeStream()
+    return _CHANGE_STREAM
+
+
 _CORE_REGISTRY: Any = None
 
 
@@ -1132,6 +1160,109 @@ def plan_consolidation(
             "plan": plan.as_dict(),
             "_schema_version": "1.0",
         },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def ontology_load(spec: str, make_active: bool = False) -> str:
+    """Load an ontology from an inline JSON spec.
+
+    The spec must be a JSON object with ``version`` and ``types``
+    fields (see ``Ontology.from_dict``). Pass ``make_active=True`` to
+    promote the loaded ontology to the default used by
+    ``ontology_validate``.
+    """
+    from .ontology import Ontology
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(spec, str) or not spec.strip():
+        return json.dumps({"error": "spec must be a non-empty JSON string"})
+    if len(spec) > 1_048_576:
+        return json.dumps({"error": "spec must be ≤1 MiB"})
+    try:
+        data = json.loads(spec)
+    except json.JSONDecodeError as exc:
+        return json.dumps({"error": f"spec is not valid JSON: {exc}"})
+    if not isinstance(data, dict):
+        return json.dumps({"error": "spec must decode to a JSON object"})
+    try:
+        ont = Ontology.from_dict(data)
+    except (ValueError, KeyError, TypeError) as exc:
+        return json.dumps({"error": f"invalid ontology: {exc}"})
+
+    _ontology_registry().load(ont, make_active=bool(make_active))
+    return json.dumps(
+        {
+            "loaded": True,
+            "version": ont.version,
+            "types": ont.type_names(),
+            "active": bool(make_active)
+            or _ontology_registry().active().version == ont.version,
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def ontology_validate(block: str, type_name: str, strict: bool = True) -> str:
+    """Validate *block* (JSON object) against the active ontology.
+
+    Returns ``{valid: bool, errors: [str]}`` — an empty ``errors``
+    list means the block satisfies the type's effective schema
+    (including inherited parent properties).
+    """
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(block, str) or not block.strip():
+        return json.dumps({"error": "block must be a non-empty JSON string"})
+    if len(block) > 1_048_576:
+        return json.dumps({"error": "block must be ≤1 MiB"})
+    try:
+        block_obj = json.loads(block)
+    except json.JSONDecodeError as exc:
+        return json.dumps({"error": f"block is not valid JSON: {exc}"})
+    if not isinstance(block_obj, dict):
+        return json.dumps({"error": "block must decode to a JSON object"})
+    if not isinstance(type_name, str) or not type_name.strip():
+        return json.dumps({"error": "type_name must be a non-empty string"})
+
+    ont = _ontology_registry().active()
+    if ont is None:
+        return json.dumps({"error": "no active ontology; call ontology_load first"})
+    errors = ont.validate(type_name, block_obj, strict=bool(strict))
+    return json.dumps(
+        {
+            "valid": len(errors) == 0,
+            "errors": errors,
+            "type": type_name,
+            "ontology_version": ont.version,
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def stream_status() -> str:
+    """Current change-stream publish / delivery / drop counters."""
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+    return json.dumps(
+        {**_change_stream().stats().as_dict(), "_schema_version": "1.0"},
         indent=2,
     )
 

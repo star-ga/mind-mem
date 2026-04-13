@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 392 | **Est. tokens:** ~824,091
-**Generated:** 2026-04-13 12:01 UTC
+**Files:** 395 | **Est. tokens:** ~831,309
+**Generated:** 2026-04-13 12:26 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~73,591 |
+| `./` | 27 | ~74,141 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 28 | ~25,747 |
@@ -40,16 +40,16 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 89 | ~331,184 |
+| `src/mind_mem/` | 91 | ~335,560 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 162 | ~329,148 |
+| `tests/` | 163 | ~331,440 |
 | `tests/integration/` | 2 | ~1,436 |
 
 ## Files
 
 ### `./`
 
-- `CHANGELOG.md` (~16668 tok, huge) — Changelog
+- `CHANGELOG.md` (~17201 tok, huge) — Changelog
 - `CLAUDE.md` (~611 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
@@ -71,7 +71,7 @@
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~21810 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~10209 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~10226 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `train_mind7b_runpod.py` (~1652 tok, huge)
@@ -224,6 +224,7 @@
 - `capture.py` (~3493 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
 - `category_distiller.py` (~6264 tok, huge) — mind-mem Category Distiller — auto-generates thematic summary files from memory blocks.
 - `causal_graph.py` (~3679 tok, huge) — mind-mem Temporal Causal Graph — directed dependency tracking with staleness.
+- `change_stream.py` (~1478 tok, large) — # Copyright 2026 STARGA, Inc.
 - `check_version.py` (~622 tok, large) — Version consistency checker for mind-mem.
 - `coding_schemas.py` (~2127 tok, huge) — mind-mem Coding-Native Memory Schemas.
 - `cognitive_forget.py` (~2697 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -269,6 +270,7 @@
 - `observability.py` (~1416 tok, large) — mind-mem Observability Module. Zero external deps.
 - `observation_axis.py` (~3959 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `observation_compress.py` (~1353 tok, large) — Observation Compression Layer for Mind-Mem.
+- `ontology.py` (~2898 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `prefix_cache.py` (~3047 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `py.typed` (~0 tok, tiny)
 - `query_expansion.py` (~4339 tok, huge) — Multi-query expansion for improved recall.
@@ -429,6 +431,7 @@
 - `test_observability.py` (~791 tok, large) — Tests for observability.py — structured logging and metrics."""
 - `test_observation_axis.py` (~3331 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_observation_compress.py` (~2754 tok, huge) — Tests for observation_compress module.
+- `test_ontology.py` (~2292 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_prefetch_context.py` (~1482 tok, large) — Tests for prefetch_context() in recall.py."""
 - `test_prefetch.py` (~315 tok, medium) — Tests for prefetch functionality."""
 - `test_prefix_cache.py` (~3144 tok, huge) — # Copyright 2026 STARGA, Inc.

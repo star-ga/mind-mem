@@ -426,7 +426,7 @@ Release criteria:
 
 ---
 
-## v2.5.0 — Ontology & Streaming
+## v2.5.0 — Ontology & Streaming ✅ Released 2026-04-13; HTTP webhook / cross-process bus deferred
 
 > Theme: Schema-enforced knowledge and real-time memory.
 

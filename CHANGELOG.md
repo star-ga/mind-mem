@@ -2,6 +2,27 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.5.0 (2026-04-13)
+
+**v2.5.0: Ontology + Streaming — OWL-lite schema typing with property validation, parent-type inheritance, and versioned ontology registry. Plus an in-process change stream for block / edge lifecycle events. HTTP webhook ingestion endpoint + cross-process bus remain deferred (require aiohttp or similar).**
+
+### Added
+- `ontology.py` — `EntityType` (UPPER_SNAKE_CASE name, required/optional properties, parent inheritance, property_types), `Ontology` (versioned collection with validate() supporting strict and lenient modes), `OntologyRegistry` (load + set_active + versions), `software_engineering_ontology()` profile covering ENTITY / PERSON / PROJECT / DECISION / TASK.
+- `change_stream.py` — `ChangeStream` + `ChangeEvent` + `StreamStats`. Thread-safe publish / subscribe with per-subscriber bounded queues (old events shed on overflow, dropped counter exposed), listener exception isolation, and stable sub-ids so unsubscribe after churn still works.
+- MCP tools `ontology_load`, `ontology_validate`, `stream_status` (user scope). MCP tool count: 46 → 49.
+- Default MCP server preloads the `software_engineering_ontology()` profile so `ontology_validate` works on a fresh workspace without a separate load step.
+
+### Deferred
+- HTTP webhook ingestion endpoint + change-stream cross-process bus (need aiohttp or similar).
+- OWL-level reasoning (subclass queries, transitive closure) — current validator is strictly shape-checking.
+
+### Testing
+- 28 new tests: EntityType name validation, required/optional overlap rejection, Ontology version + parent-type + type-name-match checks, effective required/allowed/property-type inheritance across 3 levels, validate() across missing required, strict vs lenient extra properties, framework-private `_*` fields, unknown type, float-accepts-int coercion, None-as-missing, round-trip serialisation; OntologyRegistry load/active/set_active/versions; ChangeStream constructor / subscribe / publish / unsubscribe / listener exception isolation / overflow drop counting / stats snapshot.
+
+### Changed
+- Version: 2.4.0 → 2.5.0
+- MCP tool count: 46 → 49
+
 ## 2.4.0 (2026-04-13)
 
 **v2.4.0: Cognitive Memory Management — active forgetting state machine (mark → merge → archive → forget), token-budget packer, consolidation planner with dry-run. Multi-modal `IMAGE` / `AUDIO` blocks remain deferred (require CLIP/SigLIP + audio-embedding libs).**
