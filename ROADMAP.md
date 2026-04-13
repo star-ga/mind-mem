@@ -333,7 +333,7 @@ Release criteria:
 
 ---
 
-## v2.2.0 — Knowledge Graph Layer
+## v2.2.0 — Knowledge Graph Layer ✅ Released 2026-04-13; SQLite backend shipped, Neo4j/FalkorDB deferred
 
 > Theme: Relationships between facts are as retrievable as facts themselves.
 > Ref: TrustGraph Context Core architecture, André Lindenberg "Memento Nightmare" analysis (2026-03-28)

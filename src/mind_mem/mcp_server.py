@@ -153,6 +153,9 @@ USER_TOOLS = frozenset(
         "mind_mem_verify",
         "observe_signal",
         "signal_stats",
+        "graph_query",
+        "graph_stats",
+        "graph_add_edge",
         "search_memory",
         "list_memory",
         "list_contradictions",
@@ -845,6 +848,161 @@ def verify_merkle(block_id: str, content_hash: str) -> str:
 
 def _signal_store_path(ws: str) -> str:
     return os.path.join(ws, "memory", "interaction_signals.jsonl")
+
+
+def _kg_path(ws: str) -> str:
+    return os.path.join(ws, "memory", "knowledge_graph.db")
+
+
+@mcp.tool
+@mcp_tool_observe
+def graph_add_edge(
+    subject: str,
+    predicate: str,
+    object: str,
+    source_block_id: str,
+    confidence: float = 1.0,
+) -> str:
+    """Record a typed relationship in the knowledge graph.
+
+    Args:
+        subject / object: Entity names (aliases resolved automatically).
+        predicate: One of authored_by, depends_on, contradicts,
+            supersedes, part_of, mentioned_in, related_to.
+        source_block_id: The block this relationship was extracted from.
+        confidence: Extractor confidence in [0, 1].
+
+    Returns:
+        JSON with the canonicalised edge or an error envelope.
+    """
+    from .knowledge_graph import KnowledgeGraph, Predicate
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(subject, str) or not subject.strip():
+        return json.dumps({"error": "subject must be a non-empty string"})
+    if not isinstance(object, str) or not object.strip():
+        return json.dumps({"error": "object must be a non-empty string"})
+    if len(subject) > 512 or len(object) > 512:
+        return json.dumps({"error": "entity names must be ≤512 chars"})
+    try:
+        pred = Predicate.from_str(predicate)
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        edge = kg.add_edge(
+            subject, pred, object,
+            source_block_id=source_block_id,
+            confidence=float(confidence),
+        )
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+    finally:
+        kg.close()
+    return json.dumps({**edge.as_dict(), "_schema_version": "1.0"}, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def graph_query(
+    entity: str,
+    depth: int = 1,
+    predicate: str = "",
+    direction: str = "outgoing",
+    limit: int = 64,
+) -> str:
+    """N-hop traversal from *entity*.
+
+    Args:
+        entity: Starting entity (any alias — resolved automatically).
+        depth: Maximum hops (1-8).
+        predicate: Optional predicate filter (blank = all).
+        direction: ``outgoing`` / ``incoming`` / ``both``.
+        limit: Maximum neighbours returned (1-256).
+
+    Returns:
+        JSON list of neighbours with hop count + predicate path.
+    """
+    from .knowledge_graph import KnowledgeGraph, Predicate
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(entity, str) or not entity.strip():
+        return json.dumps({"error": "entity must be a non-empty string"})
+    if len(entity) > 512:
+        return json.dumps({"error": "entity name must be ≤512 chars"})
+    if not (1 <= depth <= 8):
+        return json.dumps({"error": "depth must be in [1, 8]"})
+    if not (1 <= limit <= 256):
+        return json.dumps({"error": "limit must be in [1, 256]"})
+    pred_obj = None
+    if predicate.strip():
+        try:
+            pred_obj = Predicate.from_str(predicate)
+        except ValueError as exc:
+            return json.dumps({"error": str(exc)})
+    if direction not in {"outgoing", "incoming", "both"}:
+        return json.dumps(
+            {"error": "direction must be 'outgoing' / 'incoming' / 'both'"}
+        )
+
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        neighbours = kg.neighbors(
+            entity,
+            depth=depth,
+            predicate=pred_obj,
+            direction=direction,
+            max_results=limit,
+        )
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+    finally:
+        kg.close()
+    return json.dumps(
+        {
+            "entity": entity,
+            "depth": depth,
+            "direction": direction,
+            "neighbors": neighbours,
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def graph_stats() -> str:
+    """Aggregated knowledge-graph stats for the active workspace."""
+    from .knowledge_graph import KnowledgeGraph
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    kg_file = _kg_path(ws)
+    if not os.path.isfile(kg_file):
+        return json.dumps(
+            {"entities": 0, "edges": 0, "predicates": {}, "orphan_entities": 0,
+             "_schema_version": "1.0"},
+            indent=2,
+        )
+    kg = KnowledgeGraph(kg_file)
+    try:
+        stats = kg.stats().as_dict()
+    finally:
+        kg.close()
+    return json.dumps({**stats, "_schema_version": "1.0"}, indent=2)
 
 
 @mcp.tool

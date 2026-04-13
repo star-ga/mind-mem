@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 386 | **Est. tokens:** ~800,974
-**Generated:** 2026-04-13 10:22 UTC
+**Files:** 388 | **Est. tokens:** ~810,379
+**Generated:** 2026-04-13 11:10 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~71,805 |
+| `./` | 27 | ~72,474 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 28 | ~25,747 |
@@ -40,16 +40,16 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 86 | ~318,702 |
+| `src/mind_mem/` | 87 | ~324,064 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 159 | ~320,299 |
+| `tests/` | 160 | ~323,673 |
 | `tests/integration/` | 2 | ~1,436 |
 
 ## Files
 
 ### `./`
 
-- `CHANGELOG.md` (~14928 tok, huge) — Changelog
+- `CHANGELOG.md` (~15579 tok, huge) — Changelog
 - `CLAUDE.md` (~611 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
@@ -71,7 +71,7 @@
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~21810 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~10163 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~10181 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `train_mind7b_runpod.py` (~1652 tok, huge)
@@ -255,6 +255,7 @@
 - `intent_router.py` (~3106 tok, huge) — mind-mem Intent Router — 9-type adaptive query intent classification.
 - `interaction_signals.py` (~4231 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kalman_belief.py` (~4252 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `knowledge_graph.py` (~5362 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `llm_extractor.py` (~3009 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
 - `llm_noise_profile.py` (~2382 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mcp_entry.py` (~217 tok, medium) — Thin entry point for mind-mem-mcp console script."""
@@ -407,6 +408,7 @@
 - `test_intent_router.py` (~1176 tok, large) — Tests for 9-type intent router."""
 - `test_interaction_signals.py` (~3157 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_kalman_belief.py` (~3756 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_knowledge_graph.py` (~3374 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_llm_extractor.py` (~1774 tok, huge) — Tests for the optional LLM entity/fact extractor module."""
 - `test_llm_noise_profile.py` (~2358 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mcp_integration.py` (~5110 tok, huge) — MCP transport and auth integration tests (#474).

@@ -2,6 +2,32 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.2.0 (2026-04-13)
+
+**v2.2.0: Knowledge Graph Layer — SQLite-backed triple store, typed predicates, entity registry with alias resolution, N-hop BFS traversal, relationship-level provenance + temporal validity windows. Neo4j / FalkorDB backends remain deferred.**
+
+### Added
+- `knowledge_graph.py` — `KnowledgeGraph` class with two SQLite tables (`entities` + `edges`) and one index per axis (subject, object, predicate). `EntityRegistry` canonicalises surface forms (`"STARGA"` ↔ `"STARGA Inc"`) to a single id. `Predicate` enum defines the typed relations (`authored_by`, `depends_on`, `contradicts`, `supersedes`, `part_of`, `mentioned_in`, `related_to`). Every edge carries `source_block_id`, `confidence ∈ [0, 1]`, and optional `valid_from` / `valid_until` timestamps so retrieval can filter by freshness.
+- `KnowledgeGraph.neighbors()` — breadth-first N-hop expansion with per-edge predicate filter, `outgoing` / `incoming` / `both` direction, cycle guard, 8-hop cap, and 256-result cap so hostile callers can't fan out into a traversal DoS.
+- MCP tools `graph_add_edge`, `graph_query`, `graph_stats` (user scope). Tool count 37 → 40.
+
+### Deferred
+- Neo4j / FalkorDB drop-in backends.
+- LLM-powered entity coreference (current registry does lowercased whitespace-collapsed canonicalisation only).
+- Cypher-compatible query parser (current `graph_query` is a structured JSON interface).
+
+### Fixed (audit-driven, pre-release — 3-LLM joint: Claude + codex + Grok)
+- **[MEDIUM]** Temporal validity comparison moved from raw SQLite string `>=` to Python `datetime` parsing. Naive string compare broke on fractional seconds (`"...56.999Z" < "...56Z"` by ASCII). Malformed timestamps are now rejected at `add_edge` time instead of silently tripping over at query time.
+- **[LOW]** `json.dumps(metadata)` now uses `default=str` so non-JSON-native values (datetime, set, Path) stringify gracefully instead of raising mid-insert.
+- **[LOW]** `KnowledgeGraph` implements `__enter__` / `__exit__` so callers can `with KnowledgeGraph(path) as kg:` instead of remembering `close()`.
+
+### Testing
+- 37 new tests (5 added as audit regressions): predicate enum + hyphen parsing, entity registry, edge CRUD + provenance validation + idempotence, predicate filter, outgoing/incoming/both traversal, temporal validity (including `.999Z` fractional seconds and `valid_from > valid_until` rejection), non-JSON metadata, context-manager close, N-hop BFS with cycle guard and depth cap, stats, and 8-thread concurrent-add invariance.
+
+### Changed
+- Version: 2.1.0 → 2.2.0
+- MCP tool count: 37 → 40
+
 ## 2.1.0 (2026-04-13)
 
 **v2.1.0: self-improving retrieval foundations — interaction signal capture, classifier, append-only signal store, and A/B evaluation harness. Local fine-tuning loops and online weight swaps stay deferred; this release lands the signal substrate they require.**
