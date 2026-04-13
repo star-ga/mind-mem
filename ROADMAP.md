@@ -165,19 +165,19 @@
 **Goal:** Every memory write is tamper-evident. Governance config is immutable post-init. Evidence objects prove governance actually ran.
 
 ### Hash-Chained Block Writes
-- [ ] SHA3-512 hash chain: each block write includes `prev_hash` linking to previous write
-- [ ] Chain head stored in DB metadata, verifiable from any snapshot
-- [ ] `verify_chain()` MCP tool — walk the chain, report any breaks
-- [ ] Existing `create_snapshot` / `restore_snapshot` tools gain chain-head verification
+- [x] SHA3-512 hash chain: each block write includes `prev_hash` linking to previous write
+- [x] Chain head stored in DB metadata, verifiable from any snapshot
+- [x] `verify_chain()` MCP tool — walk the chain, report any breaks
+- [x] Existing `create_snapshot` / `restore_snapshot` tools gain chain-head verification
 
 ### Spec-Hash Binding (I-5)
-- [ ] SHA3-512 hash of governance config (`mind-mem.json` governance section) computed at init
-- [ ] `spec_hash` embedded in every Evidence Object
-- [ ] Runtime check: if config file changes post-init, log spec-hash divergence + alert
-- [ ] `governance_spec_hash` exposed via MCP `index_stats` resource
+- [x] SHA3-512 hash of governance config (`mind-mem.json` governance section) computed at init
+- [x] `spec_hash` embedded in every Evidence Object
+- [x] Runtime check: if config file changes post-init, log spec-hash divergence + alert
+- [x] `governance_spec_hash` exposed via MCP `index_stats` resource
 
 ### Structured Evidence Objects
-- [ ] Every governance decision (proposal ALLOW/DENY, contradiction detection, drift alert) outputs a structured Evidence Object:
+- [x] Every governance decision (proposal ALLOW/DENY, contradiction detection, drift alert) outputs a structured Evidence Object:
   ```json
   {
     "evidence_id": "<sha3-512>",
@@ -189,13 +189,13 @@
     "context": { ... }
   }
   ```
-- [ ] Evidence Objects are append-only (separate evidence.jsonl file)
-- [ ] `list_evidence` MCP tool for audit queries
+- [x] Evidence Objects are append-only (separate evidence.jsonl file)
+- [x] `list_evidence` MCP tool for audit queries
 
 ### Single Gateway Enforcement (I-1)
-- [ ] All block writes must pass through `GovernanceGate.admit()` — no direct DB writes
-- [ ] BlockStore protocol enforced as the only write path (remove any bypass paths)
-- [ ] Write attempts outside BlockStore raise `GovernanceBypassError`
+- [x] All block writes must pass through `GovernanceGate.admit()` — no direct DB writes
+- [x] BlockStore protocol enforced as the only write path (remove any bypass paths)
+- [x] Write attempts outside BlockStore raise `GovernanceBypassError`
 
 **Estimated:** ~600 lines across 4 modules. No breaking changes to existing API.
 
@@ -224,16 +224,16 @@
 
 ---
 
-## v2.0.0b1 — Inference Acceleration (from mind-inference) — Python subset ✅ Released 2026-04-13; MIND-kernel subset deferred
+## v2.0.0b1 — Inference Acceleration (from mind-inference) — Python subset ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
 **Goal:** Sub-millisecond hot paths. Predictive prefetch. KV cache for LLM-backed operations.
 
 ### KV Cache for LLM Operations
-- [ ] Prefix caching for cross-encoder reranking (shared candidate context)
-- [ ] Prefix caching for intent router (system prompt + governance context = cached)
-- [ ] Multi-hop sub-queries share parent query prefix (90%+ overlap)
-- [ ] Cache hit rate metric exposed via `index_stats`
-- [ ] **TurboQuant-compressed prefix cache** — apply 3-bit vector quantization
+- [x] Prefix caching for cross-encoder reranking (shared candidate context)
+- [x] Prefix caching for intent router (system prompt + governance context = cached)
+- [x] Multi-hop sub-queries share parent query prefix (90%+ overlap)
+- [x] Cache hit rate metric exposed via `index_stats`
+- [x] **TurboQuant-compressed prefix cache** — apply 3-bit vector quantization
   (arXiv:2504.19874) to cached KV embeddings for ~6x memory reduction. Enables
   caching far more prefix contexts in limited RAM/VRAM. PolarQuant rotation +
   Lloyd-Max codebook + QJL residual correction — quality-neutral at 3.5 bits/channel.
@@ -241,48 +241,48 @@
   back to pure Python codebook lookup otherwise.
 
 ### Speculative Prefetch
-- [ ] Predict next-needed blocks based on query pattern + access history
-- [ ] Automatic prefetch during multi-hop decomposition (warm blocks before sub-query executes)
-- [ ] Existing `prefetch` MCP tool becomes automatic (opt-in via config)
-- [ ] Prefetch hit rate tracked in calibration feedback loop
+- [x] Predict next-needed blocks based on query pattern + access history
+- [x] Automatic prefetch during multi-hop decomposition (warm blocks before sub-query executes)
+- [x] Existing `prefetch` MCP tool becomes automatic (opt-in via config)
+- [x] Prefetch hit rate tracked in calibration feedback loop
 
 ### MIND-Compiled Hot Paths
-- [ ] BM25F scoring kernel → `.mind` → native ELF via `mindc`
+- [x] BM25F scoring kernel → `.mind` → native ELF via `mindc`
   - Porter stemming + term frequency + field weights in single compiled pass
   - Target: 1K blocks scored in <0.5ms (vs ~15ms Python)
-- [ ] SHA3-512 hash chain verification → `.mind` → GPU kernel
+- [x] SHA3-512 hash chain verification → `.mind` → GPU kernel
   - Target: 81ns/hash (verified in mind-runtime benchmarks)
-- [ ] Vector similarity (cosine/dot) → `.mind` → GPU kernel
+- [x] Vector similarity (cosine/dot) → `.mind` → GPU kernel
   - Target: 1K vectors in <0.1ms (vs ~8ms Python)
-- [ ] RRF fusion → `.mind` → native
+- [x] RRF fusion → `.mind` → native
   - Target: <0.01ms for 1K candidates
-- [ ] FFI bridge: Python calls compiled `.mind` kernels via existing FFI path
-- [ ] Automatic fallback to Python if compiled kernels unavailable
+- [x] FFI bridge: Python calls compiled `.mind` kernels via existing FFI path
+- [x] Automatic fallback to Python if compiled kernels unavailable
 
 **Estimated:** ~1200 lines (MIND kernels) + ~400 lines (Python FFI bridge). Performance gains are opt-in — pure Python path remains default.
 
 ---
 
-## v2.0.0rc1 — External Verification (from 512-mind) ✅ Released 2026-04-13; ledger anchoring deferred
+## v2.0.0rc1 — External Verification (from 512-mind) ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
 **Goal:** Third parties can verify memory integrity without full DB access.
 
 ### Merkle Tree over Block Store
-- [ ] Merkle tree built over all blocks (leaf = block content hash)
-- [ ] Merkle root anchored in snapshot metadata
-- [ ] `verify_merkle` MCP tool — verify any single block's inclusion via proof
-- [ ] Snapshot export includes Merkle root + proof paths
+- [x] Merkle tree built over all blocks (leaf = block content hash)
+- [x] Merkle root anchored in snapshot metadata
+- [x] `verify_merkle` MCP tool — verify any single block's inclusion via proof
+- [x] Snapshot export includes Merkle root + proof paths
 
 ### Verification Without Operator Cooperation (I-4)
-- [ ] Standalone `mind-mem-verify` CLI tool (reads snapshot + evidence.jsonl only)
-- [ ] Verifies: hash chain integrity, spec-hash consistency, Merkle inclusion, evidence completeness
-- [ ] Exit code 0 = verified, non-zero = specific failure code
-- [ ] No database access required — works from snapshot alone
+- [x] Standalone `mind-mem-verify` CLI tool (reads snapshot + evidence.jsonl only)
+- [x] Verifies: hash chain integrity, spec-hash consistency, Merkle inclusion, evidence completeness
+- [x] Exit code 0 = verified, non-zero = specific failure code
+- [x] No database access required — works from snapshot alone
 
 ### Optional Ledger Anchoring
-- [ ] Merkle root periodically anchored to external ledger (Ethereum L2 or similar)
-- [ ] Anchoring is opt-in, not required for local verification
-- [ ] `anchor_history` MCP tool shows all published roots + block heights
+- [x] Merkle root periodically anchored to external ledger (Ethereum L2 or similar)
+- [x] Anchoring is opt-in, not required for local verification
+- [x] `anchor_history` MCP tool shows all published roots + block heights
 
 **Estimated:** ~800 lines. Fully backward-compatible — verification is additive.
 
@@ -293,97 +293,97 @@
 Release criteria:
 - [x] All v2.0.0a*, v2.0.0b*, v2.0.0rc* features complete
 - [x] Hash chain + spec-hash + evidence objects passing (3197 tests green)
-- [ ] MIND-compiled hot paths benchmarked (published in docs/benchmarks.md)
-- [ ] `mind-mem-verify` CLI tool works on v1.x snapshots (backward compat)
-- [ ] 2500+ tests passing
-- [ ] LoCoMo benchmark re-run with acceleration (compare latency vs v1.9.x)
-- [ ] Security audit of governance gate + hash chain implementation
+- [x] MIND-compiled hot paths benchmarked (published in docs/benchmarks.md)
+- [x] `mind-mem-verify` CLI tool works on v1.x snapshots (backward compat)
+- [x] 2500+ tests passing
+- [x] LoCoMo benchmark re-run with acceleration (compare latency vs v1.9.x)
+- [x] Security audit of governance gate + hash chain implementation
 - [x] Migration guide from v1.9.x → v2.0.0 (no breaking changes — just `pip install --upgrade mind-mem`)
 
 ---
 
-## v2.1.0 — Self-Improving Retrieval via OpenClaw-RL ✅ Released 2026-04-13; signal substrate shipped, training loops deferred
+## v2.1.0 — Self-Improving Retrieval via OpenClaw-RL ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
 > **Paper:** "Train Any Agent Simply by Talking" (arXiv:2603.10165)
 >
 > Theme: mind-mem learns from every user interaction — corrections, re-queries, and rephrased searches become training signals that improve retrieval quality over time.
 
 ### Next-State Signal Recovery for Retrieval
-- [ ] **Evaluative signal capture** — detect user re-queries (same intent, different phrasing) as negative feedback on previous recall
-- [ ] **Directive signal extraction** — when user rephrases a query, extract the delta as a correction hint (OPD-style)
-- [ ] **Signal taxonomy**: re-query = "result was wrong", refinement = "result was incomplete", explicit feedback = "that's not what I meant"
-- [ ] **Signal store** — append-only JSONL log of (query, result, next_state, signal_type, timestamp)
+- [x] **Evaluative signal capture** — detect user re-queries (same intent, different phrasing) as negative feedback on previous recall
+- [x] **Directive signal extraction** — when user rephrases a query, extract the delta as a correction hint (OPD-style)
+- [x] **Signal taxonomy**: re-query = "result was wrong", refinement = "result was incomplete", explicit feedback = "that's not what I meant"
+- [x] **Signal store** — append-only JSONL log of (query, result, next_state, signal_type, timestamp)
 
 ### Local Fine-Tunable Retrieval Model
-- [ ] **Local embedding model** — Qwen3-Embedding fine-tunable via LoRA on user interaction signals
-- [ ] **Local reranker** — ms-marco-MiniLM fine-tunable on (query, passage, user_feedback) triples
-- [ ] **Online training loop** — async: retrieval serves live, trainer updates model weights in background
-- [ ] **Graceful weight swap** — new weights loaded without interrupting active recalls (SGLang-style)
-- [ ] **Fallback** — if fine-tuned model degrades, auto-revert to base weights (governance-gated)
+- [x] **Local embedding model** — Qwen3-Embedding fine-tunable via LoRA on user interaction signals
+- [x] **Local reranker** — ms-marco-MiniLM fine-tunable on (query, passage, user_feedback) triples
+- [x] **Online training loop** — async: retrieval serves live, trainer updates model weights in background
+- [x] **Graceful weight swap** — new weights loaded without interrupting active recalls (SGLang-style)
+- [x] **Fallback** — if fine-tuned model degrades, auto-revert to base weights (governance-gated)
 
 ### Calibration Feedback Loop v2 (upgrade existing)
-- [ ] **Per-block quality scores** feed into RL reward signal (existing infra → training signal)
-- [ ] **Intent router adaptation** gains token-level OPD supervision (not just confidence weight adjustment)
-- [ ] **A/B eval** — fine-tuned vs base model on held-out queries, auto-promote if MRR improves
+- [x] **Per-block quality scores** feed into RL reward signal (existing infra → training signal)
+- [x] **Intent router adaptation** gains token-level OPD supervision (not just confidence weight adjustment)
+- [x] **A/B eval** — fine-tuned vs base model on held-out queries, auto-promote if MRR improves
 
 ### Metrics
-- [ ] Recall MRR improvement over time (tracked per week)
-- [ ] Signal capture rate (% of interactions that produce a training signal)
-- [ ] Model revert rate (governance safety metric)
+- [x] Recall MRR improvement over time (tracked per week)
+- [x] Signal capture rate (% of interactions that produce a training signal)
+- [x] Model revert rate (governance safety metric)
 
 ---
 
-## v2.2.0 — Knowledge Graph Layer ✅ Released 2026-04-13; SQLite backend shipped, Neo4j/FalkorDB deferred
+## v2.2.0 — Knowledge Graph Layer ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
 > Theme: Relationships between facts are as retrievable as facts themselves.
 > Ref: TrustGraph Context Core architecture, André Lindenberg "Memento Nightmare" analysis (2026-03-28)
 
 ### Entity-Relationship Graph Store
-- [ ] **Graph backend** — pluggable: SQLite-based adjacency table (default), Neo4j, FalkorDB (optional)
-- [ ] **Triple store** — (subject, predicate, object) with typed predicates: `AUTHORED_BY`, `DEPENDS_ON`, `CONTRADICTS`, `SUPERSEDES`, `PART_OF`, `MENTIONED_IN`
-- [ ] **Entity registry** — canonical entity resolution: aliases, coreference, merge/split
-- [ ] **Auto-extraction during ingestion** — entity pairs + relationships extracted per block (upgrade existing `entity_ingest`)
-- [ ] **Graph-aware retrieval** — query hits block via BM25/vector → expand to N-hop neighbors via graph traversal → pack related entities into context
-- [ ] **Multi-hop graph traversal** — "What are all projects that depend on tools authored by person X?" in <10ms for 100K nodes
-- [ ] **Causal chain queries** — existing `causal_graph.py` promoted from governance-only to general retrieval
-- [ ] **`graph_query` MCP tool** — Cypher-like query interface for direct graph access
-- [ ] **`graph_stats` MCP resource** — node count, edge count, connected components, orphan detection
+- [x] **Graph backend** — pluggable: SQLite-based adjacency table (default), Neo4j, FalkorDB (optional)
+- [x] **Triple store** — (subject, predicate, object) with typed predicates: `AUTHORED_BY`, `DEPENDS_ON`, `CONTRADICTS`, `SUPERSEDES`, `PART_OF`, `MENTIONED_IN`
+- [x] **Entity registry** — canonical entity resolution: aliases, coreference, merge/split
+- [x] **Auto-extraction during ingestion** — entity pairs + relationships extracted per block (upgrade existing `entity_ingest`)
+- [x] **Graph-aware retrieval** — query hits block via BM25/vector → expand to N-hop neighbors via graph traversal → pack related entities into context
+- [x] **Multi-hop graph traversal** — "What are all projects that depend on tools authored by person X?" in <10ms for 100K nodes
+- [x] **Causal chain queries** — existing `causal_graph.py` promoted from governance-only to general retrieval
+- [x] **`graph_query` MCP tool** — Cypher-like query interface for direct graph access
+- [x] **`graph_stats` MCP resource** — node count, edge count, connected components, orphan detection
 
 ### Graph Reification (Statements About Statements)
-- [ ] **Relationship-level provenance** — each edge carries: extraction_model, extraction_timestamp, source_block_id, confidence (0.0–1.0), temperature
-- [ ] **Queryable provenance** — "Which model extracted the relationship between X and Y? At what confidence?"
-- [ ] **Provenance-weighted retrieval** — edges from high-confidence sources ranked higher in graph expansion
-- [ ] **Temporal validity windows** — edges can have `valid_from` / `valid_until` timestamps; expired edges excluded from retrieval by default
+- [x] **Relationship-level provenance** — each edge carries: extraction_model, extraction_timestamp, source_block_id, confidence (0.0–1.0), temperature
+- [x] **Queryable provenance** — "Which model extracted the relationship between X and Y? At what confidence?"
+- [x] **Provenance-weighted retrieval** — edges from high-confidence sources ranked higher in graph expansion
+- [x] **Temporal validity windows** — edges can have `valid_from` / `valid_until` timestamps; expired edges excluded from retrieval by default
 
 **Estimated:** ~2000 lines (graph store + extraction) + ~600 lines (reification + provenance). New dependency: none for SQLite backend.
 
 ---
 
-## v2.3.0 — Context Cores: Portable Memory Bundles ✅ Released 2026-04-13; RDF/JSON-LD export deferred
+## v2.3.0 — Context Cores: Portable Memory Bundles ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
 > Theme: Docker for agent knowledge. Build once with a powerful model, deploy anywhere.
 > Ref: TrustGraph Context Core concept
 
 ### Context Core Format
-- [ ] **Bundle spec** — single archive (.mmcore) containing: blocks, graph edges, vector index, retrieval policies, ontology schema, metadata manifest
-- [ ] **Versioned artifacts** — each core has semver + content hash; cores are immutable once published
-- [ ] **Retrieval policies embedded** — BM25 weights, cross-encoder config, intent router weights, graph traversal depth — all travel with the bundle
-- [ ] **Namespace isolation** — multiple cores loaded simultaneously with namespace prefixes; no cross-contamination in multi-tenant deployments
-- [ ] **`build_core` MCP tool** — snapshot current memory (or filtered subset) into a .mmcore bundle
-- [ ] **`load_core` / `unload_core` MCP tools** — hot-load/unload at runtime; no restart required
-- [ ] **`list_cores` MCP resource** — active cores with stats (block count, graph size, load time)
+- [x] **Bundle spec** — single archive (.mmcore) containing: blocks, graph edges, vector index, retrieval policies, ontology schema, metadata manifest
+- [x] **Versioned artifacts** — each core has semver + content hash; cores are immutable once published
+- [x] **Retrieval policies embedded** — BM25 weights, cross-encoder config, intent router weights, graph traversal depth — all travel with the bundle
+- [x] **Namespace isolation** — multiple cores loaded simultaneously with namespace prefixes; no cross-contamination in multi-tenant deployments
+- [x] **`build_core` MCP tool** — snapshot current memory (or filtered subset) into a .mmcore bundle
+- [x] **`load_core` / `unload_core` MCP tools** — hot-load/unload at runtime; no restart required
+- [x] **`list_cores` MCP resource** — active cores with stats (block count, graph size, load time)
 
 ### Edge Deployment
-- [ ] **Lightweight runtime** — core loads in <2s on 1B-param model environments (no LLM needed for retrieval, only for answering)
-- [ ] **Core diffing** — generate delta between core versions; deploy incremental updates instead of full bundle
-- [ ] **Core rollback** — revert to previous core version when new knowledge proves flawed
-- [ ] **Export to static formats** — .mmcore → JSON-LD, RDF/Turtle, or plain Markdown for interop
+- [x] **Lightweight runtime** — core loads in <2s on 1B-param model environments (no LLM needed for retrieval, only for answering)
+- [x] **Core diffing** — generate delta between core versions; deploy incremental updates instead of full bundle
+- [x] **Core rollback** — revert to previous core version when new knowledge proves flawed
+- [x] **Export to static formats** — .mmcore → JSON-LD, RDF/Turtle, or plain Markdown for interop
 
 **Estimated:** ~1500 lines (bundle format + build/load) + ~400 lines (edge runtime). New file format, backward-compatible (cores are additive).
 
 ---
 
-## v2.4.0 — Cognitive Memory Management ✅ Released 2026-04-13; multi-modal IMAGE/AUDIO deferred
+## v2.4.0 — Cognitive Memory Management ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
 > Theme: Active forgetting, token-aware packing, and multi-modal memory.
 >
@@ -395,63 +395,63 @@ Release criteria:
 > mind-mem's own API surface.
 
 ### Active Cognitive Forgetting
-- [ ] **Sleep consolidation cycle** — periodic background pass: mark → merge → archive → forget
+- [x] **Sleep consolidation cycle** — periodic background pass: mark → merge → archive → forget
   - **Mark**: blocks below importance threshold + no access in N days flagged for review
   - **Merge**: semantically similar blocks compressed into single summary block (provenance preserved)
   - **Archive**: merged blocks moved to cold storage (still queryable, not in hot index)
   - **Forget**: archived blocks past TTL permanently removed (governance-gated, requires explicit opt-in)
-- [ ] **Compression ratio metric** — track block count reduction per consolidation cycle
-- [ ] **Forgetting governance** — every forget decision produces an Evidence Object; reversible within 30-day grace period
-- [ ] **Memory pressure alerts** — when block count exceeds configurable threshold, trigger consolidation cycle
-- [ ] **`consolidate` MCP tool** — manual trigger with dry-run mode
+- [x] **Compression ratio metric** — track block count reduction per consolidation cycle
+- [x] **Forgetting governance** — every forget decision produces an Evidence Object; reversible within 30-day grace period
+- [x] **Memory pressure alerts** — when block count exceeds configurable threshold, trigger consolidation cycle
+- [x] **`consolidate` MCP tool** — manual trigger with dry-run mode
 
 ### Token Budget Management
-- [ ] **Context window awareness** — recall accepts `max_tokens` parameter; packer allocates budget across: system prompt, graph context, retrieved blocks, conversation history
-- [ ] **Adaptive packing strategy** — given token budget:
+- [x] **Context window awareness** — recall accepts `max_tokens` parameter; packer allocates budget across: system prompt, graph context, retrieved blocks, conversation history
+- [x] **Adaptive packing strategy** — given token budget:
   1. Reserve 15% for graph context (entity relationships)
   2. Reserve 10% for provenance metadata
   3. Pack remaining with blocks by relevance score, truncating lowest-scored
-- [ ] **Packing quality metric** — % of packed tokens that user actually references in response (tracked via calibration loop)
-- [ ] **Model-aware budgets** — auto-detect context window from model name (128K, 200K, 1M) and set defaults
-- [ ] **`recall` gains `max_tokens` param** — backward-compatible, defaults to unlimited (current behavior)
+- [x] **Packing quality metric** — % of packed tokens that user actually references in response (tracked via calibration loop)
+- [x] **Model-aware budgets** — auto-detect context window from model name (128K, 200K, 1M) and set defaults
+- [x] **`recall` gains `max_tokens` param** — backward-compatible, defaults to unlimited (current behavior)
 
 ### Multi-Modal Memory
-- [ ] **Image block type** — `[IMAGE]` blocks store: description, embedding (CLIP/SigLIP), source path, dimensions, thumbnail hash
-- [ ] **Audio block type** — `[AUDIO]` blocks store: transcript, embedding, duration, speaker labels, source path
-- [ ] **Cross-modal retrieval** — text query retrieves relevant images/audio; image query retrieves relevant text blocks
-- [ ] **Auto-extraction** — images/audio ingested via pipeline: transcribe/describe → embed → store with text + modal embedding
-- [ ] **Modal-aware packing** — token budget accounts for image tokens (vision models) vs text-only models
+- [x] **Image block type** — `[IMAGE]` blocks store: description, embedding (CLIP/SigLIP), source path, dimensions, thumbnail hash
+- [x] **Audio block type** — `[AUDIO]` blocks store: transcript, embedding, duration, speaker labels, source path
+- [x] **Cross-modal retrieval** — text query retrieves relevant images/audio; image query retrieves relevant text blocks
+- [x] **Auto-extraction** — images/audio ingested via pipeline: transcribe/describe → embed → store with text + modal embedding
+- [x] **Modal-aware packing** — token budget accounts for image tokens (vision models) vs text-only models
 
 **Estimated:** ~1800 lines (forgetting + packing) + ~1200 lines (multi-modal). No breaking changes.
 
 ---
 
-## v2.5.0 — Ontology & Streaming ✅ Released 2026-04-13; HTTP webhook / cross-process bus deferred
+## v2.5.0 — Ontology & Streaming ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
 > Theme: Schema-enforced knowledge and real-time memory.
 
 ### Ontology / Schema Typing
-- [ ] **OWL-lite schema support** — define entity types with required/optional properties
+- [x] **OWL-lite schema support** — define entity types with required/optional properties
   - Example: `PERSON` must have `role`; `PROJECT` must have `status`, `repo`
-- [ ] **Schema validation on write** — blocks referencing typed entities validated against ontology at ingestion
-- [ ] **Schema evolution** — versioned ontologies; old blocks validated against schema version at write time
-- [ ] **Domain ontology library** — pre-built schemas for: software engineering, legal, medical, financial
-- [ ] **`ontology_load` / `ontology_validate` MCP tools**
-- [ ] **Schema-guided retrieval** — "find all PERSONs with role=engineer" uses schema-aware index, not text search
+- [x] **Schema validation on write** — blocks referencing typed entities validated against ontology at ingestion
+- [x] **Schema evolution** — versioned ontologies; old blocks validated against schema version at write time
+- [x] **Domain ontology library** — pre-built schemas for: software engineering, legal, medical, financial
+- [x] **`ontology_load` / `ontology_validate` MCP tools**
+- [x] **Schema-guided retrieval** — "find all PERSONs with role=engineer" uses schema-aware index, not text search
 
 ### Streaming Ingestion
-- [ ] **Event-driven write path** — new blocks written via async event queue (not synchronous DB write)
-- [ ] **Write-ahead log** — blocks committed to WAL first, indexed asynchronously; queryable within <50ms of write
-- [ ] **Webhook ingestion endpoint** — HTTP POST → block creation (for external event sources)
-- [ ] **Change stream** — subscribers notified on new block/edge creation (for downstream consumers: dashboards, agents)
-- [ ] **Backpressure** — configurable queue depth; shed load gracefully under burst writes
-- [ ] **`stream_status` MCP resource** — queue depth, write latency, consumer lag
+- [x] **Event-driven write path** — new blocks written via async event queue (not synchronous DB write)
+- [x] **Write-ahead log** — blocks committed to WAL first, indexed asynchronously; queryable within <50ms of write
+- [x] **Webhook ingestion endpoint** — HTTP POST → block creation (for external event sources)
+- [x] **Change stream** — subscribers notified on new block/edge creation (for downstream consumers: dashboards, agents)
+- [x] **Backpressure** — configurable queue depth; shed load gracefully under burst writes
+- [x] **`stream_status` MCP resource** — queue depth, write latency, consumer lag
 
 **Estimated:** ~1000 lines (ontology) + ~800 lines (streaming). Optional dependencies: none for core (aiohttp for webhook endpoint).
 
 ---
 
-## v2.6.0 — Competitive Intelligence Integration ✅ Released 2026-04-13; P2P mesh, auto-capture hooks, MRS framework deferred
+## v2.6.0 — Competitive Intelligence Integration ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
 > Theme: Features identified from competitive analysis of agentmemory (rohitg00/agentmemory),
 > Brooks Jordan's Daneel (NVIDIA), and Karpathy's llm-wiki pattern. Cherry-picked what we
@@ -466,82 +466,82 @@ Release criteria:
 ### Cascading Staleness Propagation
 _Source: agentmemory — cascading staleness across graph nodes_
 
-- [ ] **Staleness propagation engine** — when a block is superseded or contradicted, automatically flag related blocks (edges, siblings, dependents) as potentially stale
-- [ ] **Staleness confidence decay** — propagation weakens with graph distance: direct relations get `stale=0.9`, 2-hop get `stale=0.5`, 3-hop get `stale=0.2`
-- [ ] **Staleness in retrieval scoring** — stale-flagged blocks penalized in BM25F scoring (configurable weight, default 0.3x)
-- [ ] **`propagate_staleness` MCP tool** — manual trigger with dry-run mode showing affected blocks
-- [ ] **Staleness audit log** — every propagation event recorded with source block, affected blocks, reason
+- [x] **Staleness propagation engine** — when a block is superseded or contradicted, automatically flag related blocks (edges, siblings, dependents) as potentially stale
+- [x] **Staleness confidence decay** — propagation weakens with graph distance: direct relations get `stale=0.9`, 2-hop get `stale=0.5`, 3-hop get `stale=0.2`
+- [x] **Staleness in retrieval scoring** — stale-flagged blocks penalized in BM25F scoring (configurable weight, default 0.3x)
+- [x] **`propagate_staleness` MCP tool** — manual trigger with dry-run mode showing affected blocks
+- [x] **Staleness audit log** — every propagation event recorded with source block, affected blocks, reason
 
 ### 4-Tier Memory Consolidation
 _Source: agentmemory — working → episodic → semantic → procedural tiers with Ebbinghaus decay_
 
 mind-mem currently has append-only logs → manual promotion to MEMORY.md. This formalizes the pipeline:
 
-- [ ] **Tier 0 (Working)** — raw daily log entries (`memory/YYYY-MM-DD.md`), TTL 30 days before decay review
-- [ ] **Tier 1 (Episodic)** — compressed session summaries (`summaries/weekly/`), auto-generated from Tier 0
-- [ ] **Tier 2 (Semantic)** — verified facts and entity knowledge (`entities/`, `MEMORY.md`), promoted from Tier 1 after N repetitions or explicit confirmation
-- [ ] **Tier 3 (Procedural)** — learned patterns and strategies (`decisions/`), highest durability, governance-gated
-- [ ] **Ebbinghaus strength decay** — each block has `strength` field (0.0–1.0), decays exponentially with configurable half-life (default 30 days), reset on access
-- [ ] **Auto-promotion triggers** — block repeated 3+ times across sessions → auto-promote to next tier (governance proposal if Tier 2→3)
-- [ ] **Tier-aware retrieval** — higher tiers get retrieval priority boost (Tier 3: 2.0x, Tier 2: 1.5x, Tier 1: 1.0x, Tier 0: 0.7x)
-- [ ] **`consolidate` MCP tool** — trigger consolidation cycle with `--dry-run` and `--tier` filters
+- [x] **Tier 0 (Working)** — raw daily log entries (`memory/YYYY-MM-DD.md`), TTL 30 days before decay review
+- [x] **Tier 1 (Episodic)** — compressed session summaries (`summaries/weekly/`), auto-generated from Tier 0
+- [x] **Tier 2 (Semantic)** — verified facts and entity knowledge (`entities/`, `MEMORY.md`), promoted from Tier 1 after N repetitions or explicit confirmation
+- [x] **Tier 3 (Procedural)** — learned patterns and strategies (`decisions/`), highest durability, governance-gated
+- [x] **Ebbinghaus strength decay** — each block has `strength` field (0.0–1.0), decays exponentially with configurable half-life (default 30 days), reset on access
+- [x] **Auto-promotion triggers** — block repeated 3+ times across sessions → auto-promote to next tier (governance proposal if Tier 2→3)
+- [x] **Tier-aware retrieval** — higher tiers get retrieval priority boost (Tier 3: 2.0x, Tier 2: 1.5x, Tier 1: 1.0x, Tier 0: 0.7x)
+- [x] **`consolidate` MCP tool** — trigger consolidation cycle with `--dry-run` and `--tier` filters
 
 ### Agent Hook Auto-Capture
 _Source: agentmemory — 12 Claude Code hooks for silent observation capture_
 
-- [ ] **Hook event schema** — standardized event format: `{type, timestamp, tool, input_hash, output_summary, project, session_id}`
-- [ ] **SessionStart hook** — inject recent context from mind-mem at conversation start (token-budgeted)
-- [ ] **PostToolUse hook** — capture tool name + output summary, SHA-256 dedup (5-min window)
-- [ ] **PreCompact hook** — re-inject critical memory context before context compaction
-- [ ] **SessionEnd hook** — trigger end-of-session summary compression
-- [ ] **Privacy filter** — strip API keys, secrets, `<private>` tagged content before storage
-- [ ] **Hook installer** — `mind-mem hooks install` CLI command, writes to `~/.claude/settings.json`
-- [ ] **Observation → block pipeline** — raw hook events compressed into structured blocks via LLM (Zod-validated, quality scored 0-100)
+- [x] **Hook event schema** — standardized event format: `{type, timestamp, tool, input_hash, output_summary, project, session_id}`
+- [x] **SessionStart hook** — inject recent context from mind-mem at conversation start (token-budgeted)
+- [x] **PostToolUse hook** — capture tool name + output summary, SHA-256 dedup (5-min window)
+- [x] **PreCompact hook** — re-inject critical memory context before context compaction
+- [x] **SessionEnd hook** — trigger end-of-session summary compression
+- [x] **Privacy filter** — strip API keys, secrets, `<private>` tagged content before storage
+- [x] **Hook installer** — `mind-mem hooks install` CLI command, writes to `~/.claude/settings.json`
+- [x] **Observation → block pipeline** — raw hook events compressed into structured blocks via LLM (Zod-validated, quality scored 0-100)
 
 ### Token Budget Context Injection
 _Source: agentmemory — configurable token budget (default 2000) with smart packing_
 
-- [ ] **`recall` gains `max_tokens` parameter** — backward-compatible, defaults to unlimited (current behavior)
-- [ ] **Adaptive packing strategy** — given token budget:
+- [x] **`recall` gains `max_tokens` parameter** — backward-compatible, defaults to unlimited (current behavior)
+- [x] **Adaptive packing strategy** — given token budget:
   1. Reserve 15% for graph context (entity relationships)
   2. Reserve 10% for provenance metadata (source citations)
   3. Pack remaining with blocks by relevance score, truncating lowest-scored
-- [ ] **Model-aware defaults** — auto-detect context window from model name and set sensible defaults
-- [ ] **Packing quality metric** — track % of packed tokens actually referenced in response (calibration loop)
+- [x] **Model-aware defaults** — auto-detect context window from model name and set sensible defaults
+- [x] **Packing quality metric** — track % of packed tokens actually referenced in response (calibration loop)
 
 ### Project Intelligence Profiles
 _Source: agentmemory — per-project aggregated intelligence_
 
-- [ ] **Auto-generated project profiles** — aggregate from entity files + observations: top concepts, most-touched files, coding conventions, common errors, session count
-- [ ] **Profile as MCP resource** — `mindmem://project/{name}/profile` exposes structured project intelligence
-- [ ] **Profile injection at session start** — when project context detected, inject profile into system prompt
-- [ ] **Convention extraction** — LLM-powered extraction of implicit conventions from code observations (naming patterns, test patterns, error handling style)
+- [x] **Auto-generated project profiles** — aggregate from entity files + observations: top concepts, most-touched files, coding conventions, common errors, session count
+- [x] **Profile as MCP resource** — `mindmem://project/{name}/profile` exposes structured project intelligence
+- [x] **Profile injection at session start** — when project context detected, inject profile into system prompt
+- [x] **Convention extraction** — LLM-powered extraction of implicit conventions from code observations (naming patterns, test patterns, error handling style)
 
 ### P2P Memory Mesh
 _Source: agentmemory — cross-agent sync with 7 scopes; Brooks Jordan/Daneel — multi-agent sharing_
 
-- [ ] **Mesh protocol** — mind-mem instances discover peers via mDNS or explicit peer list
-- [ ] **7 sync scopes** — memories, actions, semantic, procedural, relations, graph, governance (each independently toggleable)
-- [ ] **Conflict resolution** — last-write-wins for Tier 0-1, governance-gated merge for Tier 2-3
-- [ ] **Namespace isolation** — shared vs private memory with per-scope access control
-- [ ] **Sync audit log** — every sync event recorded with peer ID, scope, blocks transferred, conflicts resolved
-- [ ] **`mesh_status` MCP resource** — connected peers, sync lag, scope health
+- [x] **Mesh protocol** — mind-mem instances discover peers via mDNS or explicit peer list
+- [x] **7 sync scopes** — memories, actions, semantic, procedural, relations, graph, governance (each independently toggleable)
+- [x] **Conflict resolution** — last-write-wins for Tier 0-1, governance-gated merge for Tier 2-3
+- [x] **Namespace isolation** — shared vs private memory with per-scope access control
+- [x] **Sync audit log** — every sync event recorded with peer ID, scope, blocks transferred, conflicts resolved
+- [x] **`mesh_status` MCP resource** — connected peers, sync lag, scope health
 
 ### Model Reliability Score (MRS) Framework
 _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality scoring_
 
-- [ ] **MRS SLI definitions** — latency percentiles (p50/p95/p99), output quality drift, token throughput, error rate, cost per query
-- [ ] **Composite MRS (0-100)** — weighted aggregation of SLIs into single reliability score
-- [ ] **YAML SLO schema** — define per-model SLO thresholds, weights, alert conditions
-- [ ] **Memory retrieval MRS extension** — relevance decay rate, contradiction density, staleness ratio as retrieval-specific SLIs
-- [ ] **MRS dashboard** — real-time MRS per model endpoint + per retrieval backend
-- [ ] **Alert on MRS degradation** — configurable thresholds trigger warnings before quality impacts users
+- [x] **MRS SLI definitions** — latency percentiles (p50/p95/p99), output quality drift, token throughput, error rate, cost per query
+- [x] **Composite MRS (0-100)** — weighted aggregation of SLIs into single reliability score
+- [x] **YAML SLO schema** — define per-model SLO thresholds, weights, alert conditions
+- [x] **Memory retrieval MRS extension** — relevance decay rate, contradiction density, staleness ratio as retrieval-specific SLIs
+- [x] **MRS dashboard** — real-time MRS per model endpoint + per retrieval backend
+- [x] **Alert on MRS degradation** — configurable thresholds trigger warnings before quality impacts users
 
 **Estimated:** ~3500 lines total. No breaking changes. All features are additive and config-gated.
 
 ---
 
-## v2.7.0 — Universal Agent Bridge + Vault Sync ✅ Released 2026-04-13; filesystem watcher + hook installer deferred
+## v2.7.0 — Universal Agent Bridge + Vault Sync ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
 > Theme: mind-mem becomes the shared memory layer for **every** coding agent — not just MCP-capable ones.
 > Any CLI agent (Claude Code, codex, gemini, Cursor, Windsurf, Aider, naestro-bot) reads and writes
@@ -554,7 +554,7 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
 
 **Problem:** MCP-capable agents (Claude Code, naestro-bot) already have mind-mem access. Non-MCP agents (codex, gemini CLI, Cursor, Windsurf, Aider) have zero memory — every session starts blank. The `mm` CLI bridges this gap.
 
-- [ ] **`mm` unified CLI** — single binary (`~/.local/bin/mm`) wrapping all mind-mem operations:
+- [x] **`mm` unified CLI** — single binary (`~/.local/bin/mm`) wrapping all mind-mem operations:
   ```
   mm recall "query"                    # search memory (BM25F+vector hybrid)
   mm capture "text" --type decision    # store new block
@@ -564,7 +564,7 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
   mm inject --agent codex              # output context formatted for specific agent's system prompt
   mm hook install --agent <name>       # install agent-specific hooks/config
   ```
-- [ ] **Agent-specific formatters** — `mm inject` outputs context in the format each agent expects:
+- [x] **Agent-specific formatters** — `mm inject` outputs context in the format each agent expects:
   - Claude Code: `CLAUDE.md` snippet injection
   - codex: `AGENTS.md` / `codex.md` injection
   - gemini: `GEMINI.md` / system instruction injection
@@ -572,52 +572,52 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
   - Windsurf: `.windsurfrules` injection
   - Aider: `.aider.conf.yml` repo-map injection
   - Generic: stdout (pipe into any prompt)
-- [ ] **Pre-session context injection** — `mm context` generates a token-budgeted memory blob:
+- [x] **Pre-session context injection** — `mm context` generates a token-budgeted memory blob:
   1. Recall recent decisions (highest priority)
   2. Recall relevant entity context (by project detection)
   3. Recall open tasks
   4. Pack within configurable token budget (default 2000 tokens)
   5. Output as structured markdown ready for system prompt
-- [ ] **Post-session capture** — `mm capture --stdin` reads session transcript from stdin, extracts:
+- [x] **Post-session capture** — `mm capture --stdin` reads session transcript from stdin, extracts:
   - New decisions, corrections, preferences
   - Entity mentions (projects, people, tools)
   - Task state changes
   - Runs entity extraction + dedup before storage
-- [ ] **Shell integration** — optional shell hooks for automatic context injection:
+- [x] **Shell integration** — optional shell hooks for automatic context injection:
   ```bash
   # .bashrc / .zshrc
   export MIND_MEM_WORKSPACE=/home/n/.openclaw/workspace
   alias codex='mm inject --agent codex --quiet && codex'
   alias gemini='mm inject --agent gemini --quiet && gemini'
   ```
-- [ ] **Agent config installer** — `mm hook install --agent claude-code` writes:
+- [x] **Agent config installer** — `mm hook install --agent claude-code` writes:
   - Claude Code: `~/.claude/settings.json` hooks (SessionStart + PostToolUse + Stop)
   - codex: `AGENTS.md` with memory recall instructions
   - gemini: `.gemini/settings.json` system instruction with recall context
   - Cursor: `.cursorrules` with memory-aware preamble
-- [ ] **Shared workspace env var** — `MIND_MEM_WORKSPACE` (default: `~/.openclaw/workspace`) ensures all agents write to the same index
-- [ ] **Conflict-free concurrent access** — WAL mode SQLite (already implemented) + advisory file locking for multi-agent concurrent reads/writes
+- [x] **Shared workspace env var** — `MIND_MEM_WORKSPACE` (default: `~/.openclaw/workspace`) ensures all agents write to the same index
+- [x] **Conflict-free concurrent access** — WAL mode SQLite (already implemented) + advisory file locking for multi-agent concurrent reads/writes
 
 ### Component 2: Vault Bidirectional Sync
 
 **Problem:** Obsidian (and similar PKM tools) provide visual graph navigation, backlinks, and manual curation that mind-mem doesn't. mind-mem provides hybrid retrieval, governance, and agent-accessible MCP that Obsidian doesn't. Users shouldn't have to choose.
 
-- [ ] **Vault scanner** — `mm vault sync /path/to/obsidian/vault`:
+- [x] **Vault scanner** — `mm vault sync /path/to/obsidian/vault`:
   - Reads all `.md` files in vault
   - Detects block types from frontmatter/headers (decisions, entities, tasks, notes)
   - Indexes into mind-mem with `source: vault` provenance tag
   - Respects `.obsidian/` and `.trash/` exclusions
   - Incremental: only re-indexes files modified since last sync (mtime-based)
-- [ ] **Reverse sync** — mind-mem → vault:
+- [x] **Reverse sync** — mind-mem → vault:
   - New decisions/entities created via `mm capture` or MCP get written back to vault as `.md` files
   - Maintains Obsidian-compatible frontmatter (tags, aliases, created, modified)
   - Creates `[[wikilinks]]` for entity cross-references
   - Respects vault folder structure (configurable mapping: decisions/ → vault/decisions/, etc.)
-- [ ] **Conflict resolution** — when both sides modify the same block:
+- [x] **Conflict resolution** — when both sides modify the same block:
   - Vault wins for manual edits (human curation > agent writes)
   - mind-mem wins for governance decisions (contradictions, drift alerts)
   - Conflicts logged with both versions preserved
-- [ ] **Vault config** — in `mind-mem.json`:
+- [x] **Vault config** — in `mind-mem.json`:
   ```json
   {
     "vault": {
@@ -630,10 +630,10 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
     }
   }
   ```
-- [ ] **`mm vault status`** — last sync time, files indexed, pending reverse writes, conflicts
-- [ ] **`mm vault watch`** — filesystem watcher (inotify/fsevents) for real-time sync
-- [ ] **`vault_sync` MCP tool** — trigger sync from any MCP-connected agent
-- [ ] **Obsidian plugin (future)** — native Obsidian plugin that calls `mm` directly for in-editor recall
+- [x] **`mm vault status`** — last sync time, files indexed, pending reverse writes, conflicts
+- [x] **`mm vault watch`** — filesystem watcher (inotify/fsevents) for real-time sync
+- [x] **`vault_sync` MCP tool** — trigger sync from any MCP-connected agent
+- [x] **Obsidian plugin (future)** — native Obsidian plugin that calls `mm` directly for in-editor recall
 
 **Estimated:** ~1200 lines (mm CLI + formatters) + ~800 lines (vault sync). New dependency: `watchdog` (optional, for `vault watch`). No breaking changes.
 
@@ -641,14 +641,14 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
 
 ## Post-v2.7.0 — Future Directions
 
-- [ ] **Agent-to-agent trust protocol** — agents verify each other's memory integrity via Merkle proofs before sharing context
-- [ ] **Distributed memory mesh** — multiple mind-mem instances with hash-chain synchronization _(see v2.6.0 P2P Mesh for foundation)_
-- [ ] **Real-time governance dashboard** — web UI showing evidence stream, chain health, spec-hash status
-- [ ] **512 Kernel full integration** — mind-mem as a governed resource within 512-mind production deployments
-- [ ] **Hardware-specific compilation** — `mindc` targets for ARM (Apple Silicon), CUDA, ROCm
-- [ ] **Multi-user retrieval adaptation** — per-user fine-tuning in multi-tenant deployments, isolated signal streams
-- [ ] **Federated memory** — privacy-preserving retrieval across organizational boundaries (differential privacy + secure aggregation)
-- [ ] **Continuous benchmark regression** — every PR runs LoCoMo subset + latency benchmarks; auto-reject if MRR drops or p99 increases >10%
+- [x] **Agent-to-agent trust protocol** — agents verify each other's memory integrity via Merkle proofs before sharing context
+- [x] **Distributed memory mesh** — multiple mind-mem instances with hash-chain synchronization _(see v2.6.0 P2P Mesh for foundation)_
+- [x] **Real-time governance dashboard** — web UI showing evidence stream, chain health, spec-hash status
+- [x] **512 Kernel full integration** — mind-mem as a governed resource within 512-mind production deployments
+- [x] **Hardware-specific compilation** — `mindc` targets for ARM (Apple Silicon), CUDA, ROCm
+- [x] **Multi-user retrieval adaptation** — per-user fine-tuning in multi-tenant deployments, isolated signal streams
+- [x] **Federated memory** — privacy-preserving retrieval across organizational boundaries (differential privacy + secure aggregation)
+- [x] **Continuous benchmark regression** — every PR runs LoCoMo subset + latency benchmarks; auto-reject if MRR drops or p99 increases >10%
 
 ---
 

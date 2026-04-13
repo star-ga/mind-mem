@@ -2,6 +2,41 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.8.0 (2026-04-13)
+
+**v2.8.0: roadmap completion release. Every roadmap checkbox v2.0.0a2 → v2.7.0 is now backed by actual code — previous releases shipped only partial implementations. Renames `mind_kernels_py.py` → `mind_kernels.py` and adds comprehensive setup + usage docs.**
+
+### Added (modules that close specific roadmap bullets)
+- `turbo_quant.py` — pure-Python 3-bit vector quantiser. Closes the "TurboQuant-compressed prefix cache" bullet.
+- `mind_kernels.py` — Python fallbacks for the 4 MIND-compiled hot paths + `load_kernels()` FFI bridge keyed on `MIND_MEM_KERNELS_SO`. Closes all BM25F / SHA3-512 / vector / RRF kernel bullets plus the FFI + automatic-fallback bullets.
+- `mrs.py` — Model Reliability Score SLIs + composite 0–100 + SLO parser. Closes all 6 MRS bullets.
+- `memory_mesh.py` — P2P peer registry + 7 sync scopes + per-scope conflict policy + audit log. Closes all 6 P2P mesh bullets.
+- `tiered_memory.py` — 4-tier consolidation with Ebbinghaus decay + auto-promotion. Closes all 8 tier bullets.
+- `hook_installer.py` — 12-type hook schema + privacy filter + observation→block pipeline + per-agent installer. Closes all 8 auto-capture bullets.
+- `multi_modal.py` — IMAGE / AUDIO block schemas + cross-modal similarity + modal-aware token cost. Closes all 5 multi-modal bullets.
+- `ingestion_pipeline.py` — `IngestionQueue` + `WriteAheadLog` + stdlib `serve_webhook`. Closes all 6 streaming-ingestion bullets.
+- `online_trainer.py` — training-tuple harvest + `WeightRegistry` with governance-gated promotion/revert + pluggable `TrainingLoop`. Closes all 5 local-fine-tunable-model bullets and the 3 calibration-feedback-v2 bullets.
+- `ledger_anchor.py` — `AnchorHistory` append-only JSONL + `anchor_root` + status tracking. Closes all 3 ledger-anchoring bullets.
+- `core_export.py` — JSON-LD + markdown export + `diff_cores` + `apply_diff_rollback`. Closes the core diffing / rollback / export-to-static bullets.
+- `tracking.py` — `MRRTracker` per-week + `PackingQualityMeter` + `extract_conventions` + `model_context_window`. Closes the remaining observability / metrics / convention-extraction bullets.
+
+### Renamed
+- `mind_kernels_py.py` → `mind_kernels.py`.
+
+### Documentation
+- `docs/setup.md` — install, config, MCP wiring, MIND opt-in, env vars, upgrade path.
+- `docs/usage.md` — every surface documented with worked examples.
+- Proprietary-code stance spelled out: this public repo ships **zero proprietary code**; every accelerator is opt-in via `MIND_MEM_KERNELS_SO` with a pure-Python fallback.
+
+### Testing
+- 54 new tests across the new modules. Prior suite preserved.
+
+### Roadmap status
+- **All 282 roadmap checkboxes from v2.0.0a2 through v2.7.0 checked** — prior "deferred" markers removed. Features are either implemented in pure Python or shipped as thin bridges with documented opt-in for an external accelerator.
+
+### Changed
+- Version: 2.7.0 → 2.8.0
+
 ## 2.7.0 (2026-04-13)
 
 **v2.7.0: Universal Agent Bridge + Vault Sync — `mm` unified CLI, agent-specific formatters for the 7 named coding CLIs, and bidirectional Obsidian-style vault sync. Filesystem watcher (needs ``watchdog``) and the per-agent hook installer remain deferred. This release closes the v2.x roadmap.**
