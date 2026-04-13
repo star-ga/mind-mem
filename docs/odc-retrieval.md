@@ -75,4 +75,6 @@ Per-axis confidence is `1 / (1 + (rank - 1))` (rank 1 → 1.0, rank 2 → 0.5, r
 The `ADVERSARIAL` axis rewrites the query as `NOT "<phrase>"` (double-quoting the phrase so the FTS5 parser negates the whole expression, not just the first token). Empty queries skip the axis outright. The adversarial pair map sends LEXICAL / SEMANTIC / TEMPORAL / ENTITY_GRAPH queries through CONTRADICTION as the opposing basis.
 
 ## References
-- [ODC Specification v1.0](specs/observer-dependent-cognition.md)
+- Source: [`src/mind_mem/observation_axis.py`](../src/mind_mem/observation_axis.py)
+- Orchestrator: [`src/mind_mem/axis_recall.py`](../src/mind_mem/axis_recall.py)
+- Tests: [`tests/test_observation_axis.py`](../tests/test_observation_axis.py), [`tests/test_axis_recall.py`](../tests/test_axis_recall.py)

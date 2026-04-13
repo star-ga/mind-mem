@@ -15,8 +15,8 @@
     <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
     <img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible">
     <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
-    <img src="https://img.shields.io/badge/tests-3390-brightgreen?style=flat-square" alt="Tests: 3390">
-    <img src="https://img.shields.io/badge/MCP_tools-54-blue?style=flat-square" alt="MCP Tools: 35">
+    <img src="https://img.shields.io/badge/tests-3444-brightgreen?style=flat-square" alt="Tests: 3444">
+    <img src="https://img.shields.io/badge/MCP_tools-54-blue?style=flat-square" alt="MCP Tools: 54">
     <img src="https://img.shields.io/badge/audit-3--LLM_joint-darkgreen?style=flat-square" alt="3-LLM joint audit per release">
     <img src="https://img.shields.io/badge/release-local_(no_Actions)-lightgrey?style=flat-square" alt="Released locally; GitHub Actions disabled account-wide">
   </p>
@@ -109,6 +109,13 @@ Output:
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
+
+### Deep-dive docs
+
+- [`docs/setup.md`](docs/setup.md) — install, configure, wire MCP, opt in to MIND native kernels
+- [`docs/usage.md`](docs/usage.md) — every surface (MCP tools by category, `mm` CLI, `mind-mem-verify`, Python library) with worked examples
+- [`ROADMAP.md`](ROADMAP.md) — feature roadmap (all 282 v2.x checkboxes closed in v2.8.0)
+- [`CHANGELOG.md`](CHANGELOG.md) — release notes for every published version
 
 ---
 
@@ -697,7 +704,7 @@ your-workspace/
 | Contradiction detection | Yes | No | No | No |
 | Tests | 3,193 | - | - | - |
 | LoCoMo benchmark | 67.3% | 68.5% | 74.0% | - |
-| MCP tools | 33 | - | - | - |
+| MCP tools | 54 | - | - | - |
 | Core dependencies | 0 | Many | Many | Many |
 
 ### At a Glance
@@ -1063,7 +1070,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 ```json
 {
-  "version": "2.0.0",
+  "version": "2.8.0",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,
@@ -1094,7 +1101,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 | Key                             | Default              | Description                                                  |
 | ------------------------------- | -------------------- | ------------------------------------------------------------ |
-| `version`                       | `"2.0.0"`          | Config file version                                          |
+| `version`                       | `"2.8.0"`          | Config file version                                          |
 | `auto_capture`                  | `true`               | Run capture engine on session end                            |
 | `auto_recall`                   | `true`               | Show recall context on session start                         |
 | `governance_mode`               | `"detect_only"`      | Governance mode (`detect_only`, `propose`, `enforce`)        |

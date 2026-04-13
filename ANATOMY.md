@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 416 | **Est. tokens:** ~873,257
-**Generated:** 2026-04-13 17:01 UTC
+**Files:** 416 | **Est. tokens:** ~873,433
+**Generated:** 2026-04-13 17:08 UTC
 
 ## Token Budget Guide
 
@@ -22,10 +22,10 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~76,004 |
+| `./` | 27 | ~76,112 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
-| `docs/` | 30 | ~29,139 |
+| `docs/` | 30 | ~29,207 |
 | `docs/adr/` | 2 | ~521 |
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
@@ -69,7 +69,7 @@
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
 - `pyproject.toml` (~786 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~21810 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~21918 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
 - `ROADMAP.md` (~10244 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
@@ -115,9 +115,9 @@
 - `mcp-integration.md` (~1026 tok, large) — MCP Integration Guide
 - `mcp-tool-examples.md` (~902 tok, large) — MCP Tool Examples
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
-- `migration.md` (~2746 tok, huge) — Migration Guide: mem-os to mind-mem
+- `migration.md` (~2754 tok, huge) — Migration Guide: mem-os to mind-mem
 - `mind-kernels.md` (~339 tok, medium) — MIND Kernels
-- `odc-retrieval.md` (~774 tok, large) — Observer-Dependent Cognition in mind-mem
+- `odc-retrieval.md` (~834 tok, large) — Observer-Dependent Cognition in mind-mem
 - `performance-tuning.md` (~560 tok, large) — Performance Tuning
 - `quickstart.md` (~601 tok, large) — mind-mem Quickstart
 - `roadmap.md` (~657 tok, large) — Roadmap
