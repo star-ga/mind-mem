@@ -333,6 +333,11 @@ class EvidenceChain:
         metrics.inc("evidence_objects_created")
         return ev
 
+    def __len__(self) -> int:
+        """Return the number of entries currently in the chain."""
+        with self._lock:
+            return len(self._entries)
+
     def verify(self, evidence: EvidenceObject) -> bool:
         """Verify that an evidence object's self-hash matches its fields.
 
@@ -503,6 +508,9 @@ class EvidenceChain:
             fh.flush()
             os.fsync(fh.fileno())
 
+    _MAX_LOAD_ENTRIES: int = 1_000_000
+    _MAX_LOAD_LINE_BYTES: int = 1_048_576  # 1 MiB per JSONL line
+
     def _load_from_file(self, path: str) -> None:
         """Load all records from a JSONL file, verifying each entry's hash.
 
@@ -511,11 +519,30 @@ class EvidenceChain:
         linkage check look broken, hiding the actual failure point and
         letting callers operate on a chain whose prefix is verified but
         whose suffix is untrusted.
+
+        Enforces per-line size cap and total-entry cap to protect against
+        pathologically large chains that would OOM the process.
         """
         previous_hash: str | None = None
         loaded: list[EvidenceObject] = []
         with open(path, "r", encoding="utf-8") as fh:
             for line_num, line in enumerate(fh, 1):
+                if line_num > self._MAX_LOAD_ENTRIES:
+                    _log.warning(
+                        "evidence_load_cap_reached",
+                        cap=self._MAX_LOAD_ENTRIES,
+                        path=path,
+                    )
+                    self._integrity_compromised = True
+                    return
+                if len(line.encode("utf-8")) > self._MAX_LOAD_LINE_BYTES:
+                    _log.warning(
+                        "evidence_load_line_too_large",
+                        line=line_num,
+                        cap=self._MAX_LOAD_LINE_BYTES,
+                    )
+                    self._integrity_compromised = True
+                    return
                 stripped = line.strip()
                 if not stripped:
                     continue

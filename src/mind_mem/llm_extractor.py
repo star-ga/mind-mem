@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -234,8 +235,11 @@ def extract_entities(text: str, model: str = "qwen3.5:9b", backend: str = "auto"
     if not is_available(backend):
         return []
     prompt = _ENTITY_PROMPT.format(text=text[:2000])
+    _start = time.monotonic()
     response = _query_llm(prompt, model, backend)
+    _latency_ms = (time.monotonic() - _start) * 1000.0
     if not response:
+        _record_extraction_feedback(model, "entities", len(text), 0, _latency_ms)
         return []
     entities = _parse_json_from_response(response)
     # Validate required keys
@@ -249,6 +253,7 @@ def extract_entities(text: str, model: str = "qwen3.5:9b", backend: str = "auto"
                     "context": str(ent.get("context", "")),
                 }
             )
+    _record_extraction_feedback(model, "entities", len(text), len(validated), _latency_ms)
     return validated
 
 
@@ -286,8 +291,11 @@ def extract_facts(text: str, model: str = "qwen3.5:9b", backend: str = "auto") -
     if not is_available(backend):
         return []
     prompt = _FACT_PROMPT.format(text=text[:2000])
+    _start = time.monotonic()
     response = _query_llm(prompt, model, backend)
+    _latency_ms = (time.monotonic() - _start) * 1000.0
     if not response:
+        _record_extraction_feedback(model, "facts", len(text), 0, _latency_ms)
         return []
     facts = _parse_json_from_response(response)
     # Validate required keys
@@ -307,7 +315,26 @@ def extract_facts(text: str, model: str = "qwen3.5:9b", backend: str = "auto") -
                     "category": str(fact.get("category", "state")),
                 }
             )
+    _record_extraction_feedback(model, "facts", len(text), len(validated), _latency_ms)
     return validated
+
+
+def _record_extraction_feedback(
+    model: str, operation: str, input_length: int, output_count: int, latency_ms: float
+) -> None:
+    """Best-effort ExtractionFeedback.record wrapper. Never raises."""
+    try:
+        from .extraction_feedback import ExtractionFeedback
+
+        ExtractionFeedback().record(
+            model=model,
+            operation=operation,
+            input_length=input_length,
+            output_count=output_count,
+            latency_ms=latency_ms,
+        )
+    except Exception:  # pragma: no cover — best-effort telemetry
+        pass
 
 
 # ---------------------------------------------------------------------------
