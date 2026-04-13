@@ -383,7 +383,7 @@ Release criteria:
 
 ---
 
-## v2.4.0 — Cognitive Memory Management
+## v2.4.0 — Cognitive Memory Management ✅ Released 2026-04-13; multi-modal IMAGE/AUDIO deferred
 
 > Theme: Active forgetting, token-aware packing, and multi-modal memory.
 >

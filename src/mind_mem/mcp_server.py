@@ -160,6 +160,8 @@ USER_TOOLS = frozenset(
         "load_core",
         "unload_core",
         "list_cores",
+        "plan_consolidation",
+        "pack_recall_budget",
         "search_memory",
         "list_memory",
         "list_contradictions",
@@ -1032,6 +1034,157 @@ def list_cores() -> str:
         return ws_err
     return json.dumps(
         {"cores": _core_registry().stats(), "_schema_version": "1.0"}, indent=2
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def plan_consolidation(
+    importance_threshold: float = 0.25,
+    stale_days: int = 14,
+    archive_after_days: int = 60,
+    grace_days: int = 30,
+) -> str:
+    """Dry-run the cognitive forgetting cycle.
+
+    Reports which blocks would be MARKED, ARCHIVED, or FORGOTTEN based
+    on the current block_meta telemetry. No state is mutated — this is
+    purely a preview so callers can inspect the plan before approving.
+
+    Args:
+        importance_threshold: Blocks below this importance (combined
+            with age) are candidates for marking.
+        stale_days: Days of inactivity before a low-importance block
+            is flagged.
+        archive_after_days: Days after being MERGED before a block
+            moves to cold storage.
+        grace_days: Days in ARCHIVED state before a block is eligible
+            for permanent forget. Reversible until this window closes.
+    """
+    from .cognitive_forget import (
+        BlockCognition,
+        BlockLifecycle,
+        ConsolidationConfig,
+        plan_consolidation as _plan,
+    )
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    try:
+        cfg = ConsolidationConfig(
+            importance_threshold=float(importance_threshold),
+            stale_days=int(stale_days),
+            archive_after_days=int(archive_after_days),
+            grace_days=int(grace_days),
+        )
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+
+    # Pull block telemetry from block_meta if present.
+    import sqlite3 as _sqlite3
+
+    db_path = os.path.join(ws, ".sqlite_index", "index.db")
+    blocks: list[BlockCognition] = []
+    if os.path.isfile(db_path):
+        conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
+        conn.row_factory = _sqlite3.Row
+        try:
+            rows = conn.execute(
+                """
+                SELECT b.id AS block_id,
+                       COALESCE(bm.importance, 0.5) AS importance,
+                       bm.last_accessed AS last_accessed,
+                       COALESCE(bm.access_count, 0) AS access_count
+                FROM blocks b
+                LEFT JOIN block_meta bm ON bm.id = b.id
+                """
+            ).fetchall()
+            for r in rows:
+                try:
+                    blocks.append(
+                        BlockCognition(
+                            block_id=r["block_id"],
+                            importance=float(r["importance"]),
+                            last_accessed=r["last_accessed"],
+                            access_count=int(r["access_count"]),
+                            created_at=None,
+                            size_bytes=0,
+                            lifecycle=BlockLifecycle.ACTIVE,
+                        )
+                    )
+                except ValueError:
+                    continue
+        finally:
+            conn.close()
+
+    plan = _plan(blocks, config=cfg)
+    return json.dumps(
+        {
+            "config": {
+                "importance_threshold": cfg.importance_threshold,
+                "stale_days": cfg.stale_days,
+                "archive_after_days": cfg.archive_after_days,
+                "grace_days": cfg.grace_days,
+            },
+            "plan": plan.as_dict(),
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def pack_recall_budget(query: str, max_tokens: int = 2000, limit: int = 20) -> str:
+    """Run a recall, then pack the result list under a token budget.
+
+    Returns the subset of results that fits and the tail that was
+    dropped, plus the reserved token budget for graph / provenance
+    metadata. Use when wiring mind-mem into an agent whose prompt
+    already approaches its model's context window.
+    """
+    from .cognitive_forget import pack_to_budget
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(query, str) or not query.strip():
+        return json.dumps({"error": "query must be a non-empty string"})
+    if max_tokens <= 0 or max_tokens > 1_000_000:
+        return json.dumps({"error": "max_tokens must be in [1, 1_000_000]"})
+    if limit < 1 or limit > 500:
+        return json.dumps({"error": "limit must be in [1, 500]"})
+
+    raw = json.loads(_recall_impl(query, limit=limit))
+    # _recall_impl returns an envelope or a list depending on configuration;
+    # normalise to a flat list of result dicts.
+    if isinstance(raw, dict):
+        results = raw.get("results", []) or []
+    elif isinstance(raw, list):
+        results = raw
+    else:
+        results = []
+
+    try:
+        packed = pack_to_budget(results, max_tokens=int(max_tokens))
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+
+    return json.dumps(
+        {
+            "query": query,
+            "included": packed.included,
+            "dropped": packed.dropped,
+            **packed.as_dict(),
+            "_schema_version": "1.0",
+        },
+        indent=2,
+        default=str,
     )
 
 

@@ -2,6 +2,28 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.4.0 (2026-04-13)
+
+**v2.4.0: Cognitive Memory Management — active forgetting state machine (mark → merge → archive → forget), token-budget packer, consolidation planner with dry-run. Multi-modal `IMAGE` / `AUDIO` blocks remain deferred (require CLIP/SigLIP + audio-embedding libs).**
+
+### Added
+- `cognitive_forget.py` — `BlockLifecycle` enum, `BlockCognition` telemetry struct, pure decision functions (`should_mark` / `should_archive` / `should_forget`), `ConsolidationConfig` + `ConsolidationPlan`, `plan_consolidation()` dry-run, `estimate_tokens()`, and `pack_to_budget()` that packs recall results under a token ceiling with configurable graph-context + provenance reserves (defaults 15% / 10% per the roadmap).
+- `plan_consolidation` MCP tool — preview which blocks would be marked / archived / forgotten.
+- `pack_recall_budget` MCP tool — run a recall and hand back a budget-packed subset with the dropped tail exposed. Useful when wiring mind-mem into an agent whose prompt already approaches its context window.
+- MCP tool count: 44 → 46.
+
+### Deferred
+- Direct mutation of block state (the planner returns a plan; applying it requires the governance/apply workflow).
+- Multi-modal `IMAGE` / `AUDIO` block types.
+- Memory-pressure alerts / automatic triggering.
+
+### Testing
+- 30 new tests: telemetry validation, decision-function coverage across lifecycle states and timestamp edge cases, end-to-end `plan_consolidation` with mixed inputs, `ConsolidationConfig` threshold tuning, token estimator edge cases, budget packer drop-overflow + priority ordering + reserves + field-override.
+
+### Changed
+- Version: 2.3.0 → 2.4.0
+- MCP tool count: 44 → 46
+
 ## 2.3.0 (2026-04-13)
 
 **v2.3.0: Context Cores — portable memory bundles. `.mmcore` archive format (tar + gzip + deterministic entry layout) with build / load / unload / list MCP tools and a process-local `CoreRegistry`. Content hashes make bundles tamper-evident; fixed `mtime=0` + sorted entries + empty gzip filename make builds byte-for-byte reproducible when `built_at` is pinned.**
