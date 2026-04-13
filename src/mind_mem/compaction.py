@@ -254,6 +254,20 @@ def compact_signals(ws: str, days: int = 60, dry_run: bool = False) -> list[str]
     return cleaned
 
 
+def _run_tier_promotion(ws: str) -> int:
+    """Invoke TierManager.run_promotion_cycle. Returns promoted count."""
+    try:
+        from .memory_tiers import TierManager
+
+        db_path = os.path.join(ws, "intelligence", "tiers.db")
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        promotions = TierManager(db_path).run_promotion_cycle()
+        return len(promotions)
+    except Exception as exc:  # pragma: no cover — best-effort
+        _log.warning("tier_promotion_failed", error=str(exc))
+        return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="mind-mem Compaction & GC Engine")
     parser.add_argument("workspace", nargs="?", default=".")
@@ -325,6 +339,17 @@ def main() -> None:
             print(f"  {a}")
     else:
         print(f"Signal compaction: nothing to remove (threshold: {signal_days}d)")
+
+    # 5. Tier promotion cycle — moves blocks through WORKING → SHARED →
+    # LONG_TERM → VERIFIED based on access frequency + age. Best-effort
+    # so compaction keeps working when the tier DB is unavailable.
+    if not args.dry_run:
+        promoted = _run_tier_promotion(ws)
+        if promoted:
+            all_actions.append(f"Promoted {promoted} block(s) through tiers")
+            print(f"\nTier promotion: {promoted} block(s) moved up a tier")
+        else:
+            print("\nTier promotion: no blocks eligible for promotion")
 
     _log.info("compaction_complete", actions=len(all_actions), dry_run=args.dry_run)
     metrics.inc("compaction_actions", len(all_actions))

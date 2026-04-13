@@ -877,6 +877,26 @@ Sources:
             report.info_msg(f"Wrote {len(new_blocks)} new contradiction(s) to CONTRADICTIONS.md")
 
 
+def _run_semantic_drift_detector(ws, data, report):
+    """Kick off the semantic :class:`DriftDetector` pass.
+
+    Stored drift signals feed ``belief_timeline`` + ``recent_signals``
+    queries exposed by the MCP drift tooling. Best-effort: a missing
+    or schema-mismatched DB never breaks the overall scan.
+    """
+    try:
+        from .drift_detector import DriftDetector
+
+        detector = DriftDetector(ws)
+        signals = detector.scan()
+        if signals:
+            report.info_msg(
+                f"DriftDetector: {len(signals)} semantic drift signal(s) stored"
+            )
+    except Exception as exc:  # pragma: no cover — best-effort
+        report.info_msg(f"DriftDetector skipped: {exc}")
+
+
 def write_drift(drift_signals, ws, report):
     """Append new drift signals to DRIFT.md."""
     if not drift_signals:
@@ -1240,6 +1260,10 @@ def main():
         # Full scan
         contradictions = detect_contradictions(data["decisions"], report)
         drift_signals = detect_drift(data, report)
+        # Run the semantic DriftDetector alongside the lexical pass so
+        # DRIFT_SIGNALS entries accumulate on the SQLite side for
+        # belief-timeline queries and the MCP drift surface.
+        _run_semantic_drift_detector(ws, data, report)
         impacts = build_impact_graph(data, report)
         generate_snapshot(data, ws, report)
 
