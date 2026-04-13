@@ -80,10 +80,22 @@ class TestOpenAICompatibleProvider(unittest.TestCase):
 
     def test_routing_anthropic_vs_openai(self):
         """Provider routing should direct anthropic to _call_anthropic and others to _call_openai_compatible."""
-        expander_anthropic = LLMQueryExpander(config={"provider": "anthropic"})
-        expander_openai = LLMQueryExpander(config={"provider": "openai"})
-        expander_xai = LLMQueryExpander(config={"provider": "xai"})
-        expander_mistral = LLMQueryExpander(config={"provider": "mistral"})
+        # Point each expander at an api_key_env that is guaranteed not to
+        # exist in the process environment, so _call_llm raises the expected
+        # RuntimeError instead of making a real HTTP call with whatever key
+        # happens to be set globally (which would yield a 401 instead).
+        expander_anthropic = LLMQueryExpander(
+            config={"provider": "anthropic", "api_key_env": "MIND_MEM_TEST_NONEXISTENT_ANTHROPIC"}
+        )
+        expander_openai = LLMQueryExpander(
+            config={"provider": "openai", "api_key_env": "MIND_MEM_TEST_NONEXISTENT_OPENAI"}
+        )
+        expander_xai = LLMQueryExpander(
+            config={"provider": "xai", "api_key_env": "MIND_MEM_TEST_NONEXISTENT_XAI"}
+        )
+        expander_mistral = LLMQueryExpander(
+            config={"provider": "mistral", "api_key_env": "MIND_MEM_TEST_NONEXISTENT_MISTRAL"}
+        )
 
         self.assertEqual(expander_anthropic.provider, "anthropic")
         self.assertEqual(expander_openai.provider, "openai")

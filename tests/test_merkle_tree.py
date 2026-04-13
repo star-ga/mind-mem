@@ -3,29 +3,19 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 
 import pytest
 
-from mind_mem.merkle_tree import MerkleNode, MerkleTree
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _sha3(data: str) -> str:
-    return hashlib.sha3_512(data.encode("utf-8")).hexdigest()
-
-
-def _leaf_hash(content_hash: str, block_id: str = "") -> str:
-    return _sha3(block_id + content_hash)
-
-
-def _node_hash(left: str, right: str) -> str:
-    return _sha3(left + right)
+# Import the module's own hash helpers so tests stay in lockstep with the
+# implementation — including the domain-separation tags introduced to
+# prevent Bitcoin-style second-preimage attacks.
+from mind_mem.merkle_tree import (
+    MerkleNode,
+    MerkleTree,
+    _leaf_hash,
+    _node_hash,
+)
 
 
 # ---------------------------------------------------------------------------

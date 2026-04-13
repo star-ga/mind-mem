@@ -164,11 +164,11 @@ class HybridBackend:
         self._config = cfg
         self._config_errors: list[str] = errors
 
-        # Query expansion config
+        # Query expansion config (opt-in: adds ~3x query latency when enabled)
         qe_cfg = cfg.get("query_expansion", {})
         if not isinstance(qe_cfg, dict):
             qe_cfg = {}
-        self._query_expansion_enabled: bool = bool(qe_cfg.get("enabled", True))
+        self._query_expansion_enabled: bool = bool(qe_cfg.get("enabled", False))
         self._query_expansion_config: dict[str, Any] = qe_cfg
 
         # Probe vector availability once at init

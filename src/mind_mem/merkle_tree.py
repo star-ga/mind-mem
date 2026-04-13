@@ -39,18 +39,30 @@ def _sha3(data: str) -> str:
     return hashlib.sha3_512(data.encode("utf-8")).hexdigest()
 
 
+# Domain separation tags prevent second-preimage attacks where a crafted
+# leaf-pair concatenation would hash to the same value as an internal node.
+# This is the well-known Bitcoin Merkle tree CVE pattern.
+_LEAF_TAG = "L:"
+_NODE_TAG = "N:"
+
+
 def _leaf_hash(content_hash: str, block_id: str = "") -> str:
     """Hash a leaf node from its block_id and content hash.
 
     block_id is included so two blocks with identical content produce
-    distinct leaf hashes and cannot verify each other's proofs.
+    distinct leaf hashes and cannot verify each other's proofs. A leaf
+    domain tag ensures leaf hashes cannot be confused with internal nodes.
     """
-    return _sha3(block_id + content_hash)
+    return _sha3(f"{_LEAF_TAG}{block_id}|{content_hash}")
 
 
 def _node_hash(left: str, right: str) -> str:
-    """Hash an internal node from its children's hashes."""
-    return _sha3(left + right)
+    """Hash an internal node from its children's hashes.
+
+    Domain tag distinguishes internal nodes from leaves so the tree is
+    immune to the Bitcoin-style second-preimage attack.
+    """
+    return _sha3(f"{_NODE_TAG}{left}|{right}")
 
 
 # ---------------------------------------------------------------------------
@@ -64,12 +76,15 @@ class MerkleNode:
 
     Leaf nodes have a non-None block_id and no children.
     Internal nodes have children and block_id=None.
+    ``content_hash`` is retained on leaves so ``verify_tree`` can recompute
+    the leaf hash from its inputs instead of blindly trusting it.
     """
 
     hash: str
     left: Optional[MerkleNode]
     right: Optional[MerkleNode]
     block_id: Optional[str]
+    content_hash: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -226,13 +241,24 @@ class MerkleTree:
         return json.dumps(payload, separators=(",", ":"))
 
     def import_json(self, data: str) -> None:
-        """Restore tree state from a JSON string produced by export_json."""
+        """Restore tree state from a JSON string produced by export_json.
+
+        Verifies that the stored root hash matches the hash recomputed from
+        the imported leaves. A mismatch indicates tampering or a corrupted
+        export; callers should treat the import as failed.
+        """
         payload = json.loads(data)
         leaves = [
             (entry["block_id"], entry["content_hash"])
             for entry in payload["leaves"]
         ]
         self.build(leaves)
+        expected_root = payload.get("root_hash", "")
+        if expected_root and expected_root != self.root_hash:
+            raise ValueError(
+                f"Merkle import root mismatch: stored={expected_root[:16]}… "
+                f"recomputed={self.root_hash[:16]}…"
+            )
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -241,7 +267,13 @@ class MerkleTree:
     @staticmethod
     def _build_leaf_nodes(leaves: list[tuple[str, str]]) -> list[MerkleNode]:
         return [
-            MerkleNode(hash=_leaf_hash(ch, bid), left=None, right=None, block_id=bid)
+            MerkleNode(
+                hash=_leaf_hash(ch, bid),
+                left=None,
+                right=None,
+                block_id=bid,
+                content_hash=ch,
+            )
             for bid, ch in leaves
         ]
 
@@ -328,11 +360,20 @@ def _collect_proof(
 
 
 def _verify_node(node: MerkleNode) -> bool:
-    """Recursively verify that every internal node hash matches its children."""
+    """Recursively verify that every node hash matches its inputs.
+
+    Leaf verification recomputes ``_leaf_hash(content_hash, block_id)`` from
+    the stored inputs so a tampered leaf hash is caught. Internal nodes
+    recompute ``_node_hash(left, right)``.
+    """
     if node.left is None and node.right is None:
-        # Leaf — cannot verify without the original content_hash, which we
-        # don't store. Leaf hashes are trusted as constructed.
-        return True
+        if node.content_hash is None:
+            # Phantom padding leaf duplicated from its sibling — hash was
+            # copied from the real leaf and has nothing independent to
+            # verify against. Trust is bootstrapped from the sibling check.
+            return True
+        expected_leaf = _leaf_hash(node.content_hash, node.block_id or "")
+        return node.hash == expected_leaf
 
     if node.left is None or node.right is None:
         # Malformed tree

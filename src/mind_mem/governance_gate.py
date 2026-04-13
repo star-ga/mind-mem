@@ -78,6 +78,11 @@ class GovernanceGate:
             store_path=os.path.join(memory_dir, "evidence_chain.jsonl")
         )
         self._spec_mgr = SpecBindingManager(self._config_path)
+        # Serialize admit() so evidence-then-chain writes cannot interleave
+        # across threads: two interleaved admits could write evidence A,
+        # evidence B, chain B, chain A — the evidence and chain orderings
+        # would diverge, breaking audit-trail-to-chain-head correlation.
+        self._admit_lock = threading.RLock()
 
     # ------------------------------------------------------------------
     # Public API
@@ -124,48 +129,64 @@ class GovernanceGate:
             GovernanceBypassError: When the spec-hash has drifted and the
                 write is blocked.
         """
-        # Step 1 — spec-hash check (only when a binding exists)
-        spec_hash = self._current_spec_hash()
-        if spec_hash is None:
-            _log.debug("governance_gate.no_binding", block_id=block_id, action=action)
-        else:
-            valid, reason = self._spec_mgr.verify()
-            if not valid:
-                _log.warning(
-                    "governance_gate.spec_drifted",
+        with self._admit_lock:
+            # Step 1 — spec-hash check (only when a binding exists)
+            spec_hash = self._current_spec_hash()
+            if spec_hash is None:
+                _log.debug(
+                    "governance_gate.no_binding", block_id=block_id, action=action
+                )
+            else:
+                valid, reason = self._spec_mgr.verify()
+                if not valid:
+                    _log.warning(
+                        "governance_gate.spec_drifted",
+                        block_id=block_id,
+                        action=action,
+                        reason=reason,
+                    )
+                    raise GovernanceBypassError(
+                        f"GovernanceGate blocked write to '{block_id}': "
+                        f"spec-hash drifted. {reason}"
+                    )
+
+            # Step 2 — create evidence object
+            ev_action = _map_action(action)
+            meta = dict(metadata or {})
+            if spec_hash:
+                meta["spec_hash"] = spec_hash
+            self._evidence.create(
+                action=ev_action,
+                actor=actor,
+                target_block_id=block_id,
+                target_file=target_file,
+                payload=content,
+                metadata=meta,
+            )
+
+            # Step 3 — append to hash chain. If this fails after evidence
+            # was persisted, log the inconsistency loudly so operators can
+            # reconcile the two stores. A true two-phase commit is not
+            # possible across JSONL + SQLite; best-effort atomicity via the
+            # lock + ordered write is the strongest guarantee here.
+            try:
+                self._chain.append(block_id, action, content)
+            except Exception:
+                _log.error(
+                    "governance_gate.chain_append_failed_after_evidence",
                     block_id=block_id,
                     action=action,
-                    reason=reason,
+                    actor=actor,
                 )
-                raise GovernanceBypassError(
-                    f"GovernanceGate blocked write to '{block_id}': spec-hash drifted. "
-                    f"{reason}"
-                )
+                raise
 
-        # Step 2 — create evidence object
-        ev_action = _map_action(action)
-        meta = dict(metadata or {})
-        if spec_hash:
-            meta["spec_hash"] = spec_hash
-        self._evidence.create(
-            action=ev_action,
-            actor=actor,
-            target_block_id=block_id,
-            target_file=target_file,
-            payload=content,
-            metadata=meta,
-        )
-
-        # Step 3 — append to hash chain
-        self._chain.append(block_id, action, content)
-
-        _log.debug(
-            "governance_gate.admitted",
-            block_id=block_id,
-            action=action,
-            actor=actor,
-        )
-        return True
+            _log.debug(
+                "governance_gate.admitted",
+                block_id=block_id,
+                action=action,
+                actor=actor,
+            )
+            return True
 
     def current_spec_hash(self) -> Optional[str]:
         """Return the current spec_hash from the binding, or None."""

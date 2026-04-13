@@ -1121,13 +1121,15 @@ def recall(
 
     _stage_counts["knee_cutoff"] = len(deduped)
 
-    # Stage 2.10: 4-layer dedup filter — configurable post-processing
+    # Stage 2.10: 4-layer dedup filter — opt-in (cosine layer can eliminate
+    # status-distinct blocks that share wording; leaving it off by default
+    # preserves backward-compatible recall semantics for alpha callers).
     dedup_cfg = recall_cfg.get("dedup")
-    if dedup_cfg is None or (isinstance(dedup_cfg, dict) and dedup_cfg.get("enabled", True)):
+    if isinstance(dedup_cfg, dict) and dedup_cfg.get("enabled", False):
         try:
             from .dedup import DedupConfig, deduplicate_results
 
-            dc = DedupConfig(dedup_cfg if isinstance(dedup_cfg, dict) else None)
+            dc = DedupConfig(dedup_cfg)
             pre_dedup = len(deduped)
             deduped = deduplicate_results(deduped, config=dc)
             _stage_counts["dedup_filter"] = pre_dedup - len(deduped)

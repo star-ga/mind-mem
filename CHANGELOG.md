@@ -2,9 +2,9 @@
 
 All notable changes to mind-mem are documented in this file.
 
-## 2.0.0a2 (2026-04-10)
+## 2.0.0a2 (2026-04-13)
 
-**GBrain-adapted knowledge enrichment: multi-query expansion, compiled truth pages, dream cycle, 4-layer dedup, smart chunker, 13 new MCP tools**
+**GBrain-adapted knowledge enrichment: multi-query expansion, compiled truth pages, dream cycle, 4-layer dedup, smart chunker, 13 new MCP tools. Plus pre-release hardening from a 3-LLM joint audit (Claude Opus 4.6 + Gemini 3.1 Pro + Grok 4.1 Fast).**
 
 ### Added
 - `query_expansion.py` — LLM-free multi-query expansion with synonym swap, specificity shift, temporal rephrasing, negation variant, and RRF fusion across reformulations
@@ -14,8 +14,19 @@ All notable changes to mind-mem are documented in this file.
 - `smart_chunker.py` — Content-aware chunking at semantic boundaries (headers, paragraphs, code blocks) instead of fixed character counts; format-specific splitting for markdown, code, and prose
 - 13 new MCP tools: `expand_query`, `smart_chunk`, `deduplicate_results`, `run_dream_cycle`, `dream_cycle_status`, `compile_truth`, `get_compiled_truth`, `compiled_truth_add_evidence`, `compiled_truth_contradictions`, `compiled_truth_load`, `list_compiled_truths`, `chunk_and_index`, `dedup_search`
 
+### Fixed (3-LLM audit, pre-release hardening)
+- **[CRITICAL]** `merkle_tree.py`: Added leaf/internal-node domain separation tags (`L:` / `N:`) to close the Bitcoin-style second-preimage attack. `verify_tree()` now recomputes leaf hashes from their `content_hash` + `block_id` instead of trusting them blindly. `import_json()` fails on stored-vs-recomputed root mismatch.
+- **[CRITICAL]** `evidence_objects.py`: Canonical form for `_compute_evidence_hash` switched from colon-delimited string to JSON-canonical (sorted keys) so fields containing `:` cannot shift across field boundaries without changing the digest.
+- **[CRITICAL]** `hash_chain_v2.py`: `_connect` now uses `isolation_level="DEFERRED"` (autocommit=None silently defeated `BEGIN EXCLUSIVE`) with a 30s `timeout` and `busy_timeout=30000`. `append()` serializes reads-then-writes under a per-instance `RLock` on top of `BEGIN IMMEDIATE`. `import_jsonl` anchors linkage to the current chain head instead of GENESIS so imports append rather than creating disjoint segments. `convert_from_v1` preserves original v1 timestamps.
+- **[CRITICAL]** `governance_gate.py`: `admit()` now serializes evidence-then-chain writes under an `RLock` so concurrent admits cannot interleave the two stores' orderings. Chain-append failures after evidence persist are logged loudly before being re-raised.
+- **[HIGH]** `evidence_objects.py`: `EvidenceChain.create()` serializes concurrent creates under an `RLock`; `_append_to_file` flushes and `fsync`s; disk write now happens before the in-memory append so an I/O failure cannot leave memory ahead of disk.
+- **[HIGH]** `evidence_objects.py`: `_load_from_file` stops at the first integrity failure instead of silently skipping entries and cascading linkage errors.
+- **[HIGH]** `spec_binding.py`: Corrupt binding file now raises `SpecBindingCorruptedError` instead of silently returning `None` (which would let an attacker disable governance by damaging the file). `_persist` fsyncs the tmp file before rename.
+- **[MEDIUM]** `hybrid_recall.py`: Query expansion default reverted to opt-in (`False`). The prior default flipped to `True` changed latency characteristics for every `HybridBackend()` caller without an explicit opt-in.
+
 ### Testing
 - 289 new tests across 5 test files (query_expansion: 405 lines, compiled_truth: 428 lines, dream_cycle: 498 lines, dedup: 731 lines, smart_chunker: 966 lines)
+- All 3024 tests green on Python 3.12 after audit fixes
 
 ### Changed
 - MCP tool count: 19 → 32

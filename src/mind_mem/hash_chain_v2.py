@@ -35,6 +35,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -132,6 +133,10 @@ class HashChainV2:
     def __init__(self, db_path: str) -> None:
         self._db_path = os.path.realpath(db_path)
         os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
+        # Serialize appends across threads: SQLite writer serialization alone
+        # is not enough when the same process holds multiple connections and
+        # each reads-then-writes the chain head (TOCTOU on previous_hash).
+        self._lock = threading.RLock()
         self._init_db()
 
     # ------------------------------------------------------------------
@@ -139,9 +144,13 @@ class HashChainV2:
     # ------------------------------------------------------------------
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, isolation_level=None)
+        # isolation_level="DEFERRED" keeps explicit transaction control
+        # (autocommit via None silently defeats BEGIN EXCLUSIVE / BEGIN IMMEDIATE).
+        # timeout=30s avoids immediate OperationalError on transient locks.
+        conn = sqlite3.connect(self._db_path, timeout=30.0, isolation_level="DEFERRED")
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
         return conn
 
     def _init_db(self) -> None:
@@ -159,41 +168,56 @@ class HashChainV2:
             row = conn.execute("SELECT COUNT(*) FROM hash_chain").fetchone()
             return row[0]
 
-    def append(self, block_id: str, action: str, content: str) -> HashEntry:
+    def append(
+        self,
+        block_id: str,
+        action: str,
+        content: str,
+        *,
+        timestamp: Optional[str] = None,
+    ) -> HashEntry:
         """Append a new entry to the global chain.
 
         Args:
             block_id: Logical identifier for the block being mutated.
             action:   Verb describing the mutation (create, update, delete, …).
             content:  Raw content whose SHA3-512 digest is stored.
+            timestamp: Optional ISO8601 timestamp override (private use for
+                migration). Public callers should let the default (now) apply.
 
         Returns:
             The newly created, immutable HashEntry.
         """
         entry_id = str(uuid.uuid4())
-        timestamp = datetime.now(timezone.utc).isoformat()
+        if timestamp is None:
+            timestamp = datetime.now(timezone.utc).isoformat()
         content_hash = _compute_content_hash(content)
 
-        with self._connect() as conn:
-            conn.execute("BEGIN EXCLUSIVE")
-            last_row = conn.execute(
-                "SELECT entry_hash FROM hash_chain ORDER BY rowid DESC LIMIT 1"
-            ).fetchone()
-            previous_hash = last_row["entry_hash"] if last_row else GENESIS_HASH
+        # Serialize reads-then-writes across threads sharing this instance.
+        # SQLite BEGIN IMMEDIATE alone serializes writers at the DB level, but
+        # Python-level lock avoids raising OperationalError on concurrent
+        # intra-process appends that would otherwise collide.
+        with self._lock:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                last_row = conn.execute(
+                    "SELECT entry_hash FROM hash_chain ORDER BY rowid DESC LIMIT 1"
+                ).fetchone()
+                previous_hash = last_row["entry_hash"] if last_row else GENESIS_HASH
 
-            entry_hash = _compute_entry_hash(
-                entry_id, timestamp, block_id, action, content_hash, previous_hash
-            )
+                entry_hash = _compute_entry_hash(
+                    entry_id, timestamp, block_id, action, content_hash, previous_hash
+                )
 
-            conn.execute(
-                """
-                INSERT INTO hash_chain
-                    (entry_id, timestamp, block_id, action, content_hash, previous_hash, entry_hash)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (entry_id, timestamp, block_id, action, content_hash, previous_hash, entry_hash),
-            )
-            conn.commit()
+                conn.execute(
+                    """
+                    INSERT INTO hash_chain
+                        (entry_id, timestamp, block_id, action, content_hash, previous_hash, entry_hash)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (entry_id, timestamp, block_id, action, content_hash, previous_hash, entry_hash),
+                )
+                conn.commit()
 
         return HashEntry(
             entry_id=entry_id,
@@ -354,7 +378,14 @@ class HashChainV2:
         """
         entries = _load_jsonl_entries(input_path)
 
-        prev_hash = GENESIS_HASH
+        # Anchor linkage to the current chain head so imports append instead of
+        # producing disjoint chain segments when the DB is already populated.
+        with self._connect() as conn:
+            head_row = conn.execute(
+                "SELECT entry_hash FROM hash_chain ORDER BY rowid DESC LIMIT 1"
+            ).fetchone()
+        prev_hash = head_row["entry_hash"] if head_row else GENESIS_HASH
+
         for idx, entry in enumerate(entries):
             if not self.verify_entry(entry):
                 raise ValueError(
@@ -368,27 +399,29 @@ class HashChainV2:
                 )
             prev_hash = entry.entry_hash
 
-        with self._connect() as conn:
-            conn.executemany(
-                """
-                INSERT INTO hash_chain
-                    (entry_id, timestamp, block_id, action, content_hash, previous_hash, entry_hash)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                [
-                    (
-                        e.entry_id,
-                        e.timestamp,
-                        e.block_id,
-                        e.action,
-                        e.content_hash,
-                        e.previous_hash,
-                        e.entry_hash,
-                    )
-                    for e in entries
-                ],
-            )
-            conn.commit()
+        with self._lock:
+            with self._connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.executemany(
+                    """
+                    INSERT INTO hash_chain
+                        (entry_id, timestamp, block_id, action, content_hash, previous_hash, entry_hash)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            e.entry_id,
+                            e.timestamp,
+                            e.block_id,
+                            e.action,
+                            e.content_hash,
+                            e.previous_hash,
+                            e.entry_hash,
+                        )
+                        for e in entries
+                    ],
+                )
+                conn.commit()
 
         return len(entries)
 
@@ -477,9 +510,12 @@ def convert_from_v1(old_chain_path: str, new_db_path: str) -> HashChainV2:
             action = v1.get("operation", "unknown")
             # Use the v1 payload_hash as content; preserves the original digest
             content = v1.get("payload_hash", "")
-        except Exception as exc:
+            # Preserve the v1 timestamp so temporal queries still work on
+            # migrated chains. Fall back to now() when absent.
+            original_ts = v1.get("timestamp")
+        except (KeyError, TypeError) as exc:
             raise MigrationError(f"Cannot read v1 entry: {exc}") from exc
 
-        new_chain.append(block_id, action, content)
+        new_chain.append(block_id, action, content, timestamp=original_ts)
 
     return new_chain

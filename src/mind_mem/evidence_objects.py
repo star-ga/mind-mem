@@ -44,6 +44,7 @@ import dataclasses
 import hashlib
 import json
 import os
+import threading
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Union
@@ -110,15 +111,24 @@ def _compute_evidence_hash(
 ) -> str:
     """SHA256 hex digest of the canonical evidence fields.
 
-    Canonical form:
-        "{evidence_id}:{timestamp_iso}:{action}:{actor}:{target_block_id}:{payload_hash}:{previous_hash}:{target_file}:{metadata_json}:{confidence}"
+    Uses a JSON object with sorted keys as the canonical form so that any
+    field containing a colon cannot be confused with a field boundary
+    (e.g. ``actor="alice:admin"`` vs a spoofed ``actor="alice"`` with a
+    shifted ``target_block_id``).
     """
-    metadata_json = json.dumps(metadata or {}, sort_keys=True, separators=(",", ":"))
-    canonical = (
-        f"{evidence_id}:{timestamp_iso}:{action}:{actor}:"
-        f"{target_block_id}:{payload_hash}:{previous_hash}:"
-        f"{target_file}:{metadata_json}:{confidence}"
-    )
+    canonical_obj = {
+        "evidence_id": evidence_id,
+        "timestamp": timestamp_iso,
+        "action": action,
+        "actor": actor,
+        "target_block_id": target_block_id,
+        "payload_hash": payload_hash,
+        "previous_hash": previous_hash,
+        "target_file": target_file,
+        "metadata": metadata or {},
+        "confidence": confidence,
+    }
+    canonical = json.dumps(canonical_obj, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -224,6 +234,9 @@ class EvidenceChain:
         self._store_path: str | None = store_path
         self._entries: list[EvidenceObject] = []
         self._integrity_compromised: bool = False
+        # Serialize concurrent create() calls so the in-memory chain and the
+        # on-disk JSONL cannot interleave entries or diverge from each other.
+        self._lock = threading.RLock()
 
         if store_path is not None:
             os.makedirs(os.path.dirname(os.path.abspath(store_path)), exist_ok=True)
@@ -272,44 +285,49 @@ class EvidenceChain:
             effective_metadata["spec_hash"] = spec_hash
         metadata = effective_metadata
 
-        evidence_id = str(uuid4())
-        now = datetime.now(timezone.utc)
-        timestamp_iso = now.isoformat()
+        with self._lock:
+            evidence_id = str(uuid4())
+            now = datetime.now(timezone.utc)
+            timestamp_iso = now.isoformat()
 
-        payload_hash = _compute_payload_hash(payload)
-        previous_hash = self._entries[-1].evidence_hash if self._entries else _GENESIS_HASH
+            payload_hash = _compute_payload_hash(payload)
+            previous_hash = (
+                self._entries[-1].evidence_hash if self._entries else _GENESIS_HASH
+            )
 
-        evidence_hash = _compute_evidence_hash(
-            evidence_id,
-            timestamp_iso,
-            action.value,
-            actor,
-            target_block_id,
-            payload_hash,
-            previous_hash,
-            target_file=target_file,
-            metadata=metadata or {},
-            confidence=confidence,
-        )
+            evidence_hash = _compute_evidence_hash(
+                evidence_id,
+                timestamp_iso,
+                action.value,
+                actor,
+                target_block_id,
+                payload_hash,
+                previous_hash,
+                target_file=target_file,
+                metadata=metadata or {},
+                confidence=confidence,
+            )
 
-        ev = EvidenceObject(
-            evidence_id=evidence_id,
-            timestamp=now,
-            action=action,
-            actor=actor,
-            target_block_id=target_block_id,
-            target_file=target_file,
-            payload_hash=payload_hash,
-            previous_hash=previous_hash,
-            evidence_hash=evidence_hash,
-            metadata=metadata or {},
-            confidence=confidence,
-        )
+            ev = EvidenceObject(
+                evidence_id=evidence_id,
+                timestamp=now,
+                action=action,
+                actor=actor,
+                target_block_id=target_block_id,
+                target_file=target_file,
+                payload_hash=payload_hash,
+                previous_hash=previous_hash,
+                evidence_hash=evidence_hash,
+                metadata=metadata or {},
+                confidence=confidence,
+            )
 
-        self._entries.append(ev)
-
-        if self._store_path is not None:
-            self._append_to_file(ev)
+            # Persist to disk FIRST so an I/O failure cannot leave in-memory
+            # state ahead of the on-disk chain. Only append to _entries once
+            # the durable write has landed.
+            if self._store_path is not None:
+                self._append_to_file(ev)
+            self._entries.append(ev)
 
         _log.info("evidence_created", action=action.value, actor=actor, target_block_id=target_block_id)
         metrics.inc("evidence_objects_created")
@@ -474,38 +492,59 @@ class EvidenceChain:
     # ------------------------------------------------------------------
 
     def _append_to_file(self, ev: EvidenceObject) -> None:
-        """Append a single evidence record to the JSONL store file."""
+        """Append a single evidence record to the JSONL store file.
+
+        Writes are flushed and fsync'd so that a crash between create() and
+        the next event cannot lose the record. Callers must hold self._lock
+        to prevent interleaved writes from parallel create() calls.
+        """
         with open(self._store_path, "a", encoding="utf-8") as fh:  # type: ignore[arg-type]
             fh.write(json.dumps(ev.to_dict(), separators=(",", ":")) + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
 
     def _load_from_file(self, path: str) -> None:
-        """Load all records from a JSONL file, verifying each entry's hash."""
+        """Load all records from a JSONL file, verifying each entry's hash.
+
+        Stops at the first integrity failure rather than silently skipping
+        entries: continuing past a broken entry makes every downstream
+        linkage check look broken, hiding the actual failure point and
+        letting callers operate on a chain whose prefix is verified but
+        whose suffix is untrusted.
+        """
         previous_hash: str | None = None
+        loaded: list[EvidenceObject] = []
         with open(path, "r", encoding="utf-8") as fh:
-            for line in fh:
+            for line_num, line in enumerate(fh, 1):
                 stripped = line.strip()
                 if not stripped:
                     continue
                 try:
                     ev = EvidenceObject.from_dict(json.loads(stripped))
-                except (json.JSONDecodeError, KeyError, ValueError):
+                except (json.JSONDecodeError, KeyError, ValueError) as exc:
+                    _log.warning(
+                        "evidence_load_parse_error", line=line_num, error=str(exc)
+                    )
                     self._integrity_compromised = True
-                    continue
+                    return
                 if not self.verify(ev):
                     _log.warning(
                         "evidence_hash_mismatch",
+                        line=line_num,
                         evidence_id=getattr(ev, "evidence_id", "?"),
                     )
                     self._integrity_compromised = True
-                    continue
+                    return
                 if previous_hash is not None and ev.previous_hash != previous_hash:
                     _log.warning(
                         "evidence_chain_break",
+                        line=line_num,
                         evidence_id=getattr(ev, "evidence_id", "?"),
                         expected=previous_hash,
                         got=ev.previous_hash,
                     )
                     self._integrity_compromised = True
-                    continue
+                    return
                 previous_hash = ev.evidence_hash
-                self._entries.append(ev)
+                loaded.append(ev)
+        self._entries = loaded

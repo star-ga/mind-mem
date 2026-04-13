@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 372 | **Est. tokens:** ~749,852
-**Generated:** 2026-04-13 03:59 UTC
+**Files:** 372 | **Est. tokens:** ~752,604
+**Generated:** 2026-04-13 06:15 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~67,522 |
+| `./` | 27 | ~68,119 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 28 | ~25,140 |
@@ -40,16 +40,16 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 80 | ~294,077 |
+| `src/mind_mem/` | 80 | ~296,139 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 151 | ~298,692 |
+| `tests/` | 151 | ~298,785 |
 | `tests/integration/` | 2 | ~1,436 |
 
 ## Files
 
 ### `./`
 
-- `CHANGELOG.md` (~10869 tok, huge) — Changelog
+- `CHANGELOG.md` (~11466 tok, huge) — Changelog
 - `CLAUDE.md` (~611 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
@@ -239,15 +239,15 @@
 - `encryption.py` (~2527 tok, huge) — mind-mem Encryption at Rest — optional AES-256 encryption for memory blocks.
 - `entity_ingest.py` (~3225 tok, huge) — mind-mem Entity Ingestion — regex-based entity extraction. Zero external deps.
 - `error_codes.py` (~1751 tok, huge) — mind-mem Error Codes — structured error classification.
-- `evidence_objects.py` (~4607 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `evidence_objects.py` (~5052 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `evidence_packer.py` (~3267 tok, huge) — Deterministic evidence packer for Mind-Mem.
 - `extraction_feedback.py` (~1160 tok, large) — mind-mem Extraction Quality Feedback Tracker.
 - `extractor.py` (~6597 tok, huge) — mind-mem Entity & Fact Extractor (Regex NER-lite). Zero external deps.
 - `field_audit.py` (~3086 tok, huge) — mind-mem Per-Field Mutation Audit — tracks individual field changes.
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
-- `governance_gate.py` (~1745 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hash_chain_v2.py` (~4080 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hybrid_recall.py` (~4849 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `governance_gate.py` (~2042 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hash_chain_v2.py` (~4582 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hybrid_recall.py` (~4861 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `__init__.py` (~499 tok, medium) — # Mind Mem — Memory + Immune System for AI agents
 - `init_workspace.py` (~2062 tok, huge) — mind-mem workspace initializer. Zero external deps.
 - `intel_scan.py` (~12099 tok, huge) — Mind Mem Intelligence Scanner v2.0 — Self-hosted, zero external dependencies.
@@ -257,7 +257,7 @@
 - `llm_noise_profile.py` (~2382 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mcp_entry.py` (~217 tok, medium) — Thin entry point for mind-mem-mcp console script."""
 - `memory_tiers.py` (~3534 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `merkle_tree.py` (~2953 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `merkle_tree.py` (~3385 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mind_ffi.py` (~5127 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `namespaces.py` (~3569 tok, huge) — mind-mem Multi-Agent Namespace & ACL Engine. Zero external deps.
@@ -267,7 +267,7 @@
 - `query_expansion.py` (~4339 tok, huge) — Multi-query expansion for improved recall.
 - `_recall_constants.py` (~2420 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
 - `_recall_context.py` (~2601 tok, huge) — Recall engine context packing — post-retrieval augmentation rules."""
-- `_recall_core.py` (~14213 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
+- `_recall_core.py` (~14235 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
 - `_recall_detection.py` (~5168 tok, huge) — Recall engine detection — query type classification, text extraction, block utilities."""
 - `_recall_expansion.py` (~3267 tok, huge) — Recall engine query expansion — domain synonyms, month normalization, RM3."""
 - `recall.py` (~1049 tok, large) — mind-mem Recall Engine (BM25 + TF-IDF + Graph + Stemming). Zero external deps.
@@ -281,7 +281,7 @@
 - `session_summarizer.py` (~2885 tok, huge) — mind-mem Session Summarizer. Zero external deps.
 - `smart_chunker.py` (~6752 tok, huge) — mind-mem Smart Chunker — Semantic-boundary document chunking.
 - `smoke_test.sh` (~633 tok, large) — mind-mem Smoke Test — end-to-end verification
-- `spec_binding.py` (~2544 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `spec_binding.py` (~2896 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `sqlite_index.py` (~10531 tok, huge) — Mind Mem SQLite FTS5 Index — incremental lexical indexing. Zero external deps.
 - `trajectory.py` (~2233 tok, huge) — Trajectory Memory — task execution trace storage and recall.
 - `transcript_capture.py` (~2333 tok, huge) — mind-mem Transcript JSONL Capture. Zero external deps.
@@ -405,7 +405,7 @@
 - `test_mcp_v140.py` (~5237 tok, huge) — Tests for MCP v1.4.0 features — issues #29, #31, #35, #36.
 - `test_memory_evolution.py` (~329 tok, medium) — Tests for memory evolution tracking."""
 - `test_memory_tiers.py` (~3509 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_merkle_tree.py` (~3328 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_merkle_tree.py` (~3273 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mind_ffi.py` (~291 tok, medium) — Tests for MIND FFI module."""
 - `test_multi_file_recall.py` (~325 tok, medium) — Tests for recall across multiple files."""
 - `test_namespaces.py` (~2393 tok, huge) — Tests for namespaces.py — zero external deps (stdlib unittest)."""
@@ -415,7 +415,7 @@
 - `test_prefetch_context.py` (~1482 tok, large) — Tests for prefetch_context() in recall.py."""
 - `test_prefetch.py` (~315 tok, medium) — Tests for prefetch functionality."""
 - `test_query_decomposition.py` (~1609 tok, huge) — Tests for multi-hop query decomposition (#6)."""
-- `test_query_expansion_multi_provider.py` (~1055 tok, large) — Tests for multi-provider LLM query expansion (OpenAI-compatible endpoints)."""
+- `test_query_expansion_multi_provider.py` (~1203 tok, large) — Tests for multi-provider LLM query expansion (OpenAI-compatible endpoints)."""
 - `test_query_expansion.py` (~3781 tok, huge) — Tests for query_expansion.py -- multi-query expansion for improved recall."""
 - `test_recall_concurrent.py` (~333 tok, medium) — Tests for concurrent recall queries."""
 - `test_recall_context_field.py` (~252 tok, medium) — Tests for context field in blocks."""

@@ -40,6 +40,15 @@ _BINDING_FILENAME = ".spec_binding.json"
 _CURRENT_VERSION = "1.0.0"
 
 
+class SpecBindingCorruptedError(Exception):
+    """Raised when the binding file exists but cannot be parsed.
+
+    Callers must treat this as a security-relevant failure: a corrupted
+    binding must not be silently interpreted as "no binding" because that
+    would allow an attacker to disable governance by damaging the file.
+    """
+
+
 # ---------------------------------------------------------------------------
 # Config normalisation helpers (module-level — testable independently)
 # ---------------------------------------------------------------------------
@@ -189,9 +198,13 @@ class SpecBindingManager:
             A ``(valid, reason)`` tuple.  *valid* is ``True`` iff the config
             has not changed since the last :meth:`bind` or :meth:`rebind`.
             *reason* is an empty string on success or a human-readable
-            description of the failure.
+            description of the failure. A corrupted binding reports as
+            invalid with a specific reason, never as "no binding".
         """
-        binding = self.get_binding()
+        try:
+            binding = self.get_binding()
+        except SpecBindingCorruptedError as exc:
+            return False, f"binding corrupted: {exc}"
         if binding is None:
             return False, "no binding found — call bind() before verify()"
 
@@ -243,8 +256,13 @@ class SpecBindingManager:
     def get_binding(self) -> Optional[SpecBinding]:
         """Return the stored binding, or ``None`` if none exists.
 
-        Loads from disk on first call; subsequent calls return the cached value
-        unless the binding file has been modified externally.
+        Loads from disk on first call; subsequent calls return the cached
+        value unless the binding file has been modified externally.
+
+        Raises:
+            SpecBindingCorruptedError: If the binding file exists but is
+                corrupted. Callers must decide explicitly whether to
+                rebuild the binding or refuse to operate.
         """
         if self._cached is not None:
             return self._cached
@@ -263,15 +281,28 @@ class SpecBindingManager:
     # ------------------------------------------------------------------
 
     def _persist(self, binding: SpecBinding) -> None:
-        """Write *binding* to the binding file atomically via tmp + rename."""
+        """Write *binding* to the binding file atomically via tmp + rename.
+
+        Uses flush + fsync on the tmp file before os.replace so a power loss
+        between write and rename cannot leave the binding file empty.
+        """
         data = json.dumps(binding.to_dict(), indent=2)
         tmp_path = self._binding_path + ".tmp"
         with open(tmp_path, "w", encoding="utf-8") as f:
             f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp_path, self._binding_path)
 
     def _load(self) -> Optional[SpecBinding]:
-        """Load binding from disk; returns ``None`` if the file is absent."""
+        """Load binding from disk.
+
+        Returns ``None`` when no binding file exists. Raises
+        :class:`SpecBindingCorruptedError` when the file exists but cannot
+        be parsed — callers must not silently reinterpret corruption as
+        "no binding", since that would let an attacker disable governance
+        by damaging the binding file.
+        """
         if not os.path.exists(self._binding_path):
             return None
         try:
@@ -282,4 +313,6 @@ class SpecBindingManager:
             return binding
         except (json.JSONDecodeError, KeyError, ValueError) as exc:
             _log.warning("spec_binding.load_failed", error=str(exc))
-            return None
+            raise SpecBindingCorruptedError(
+                f"Binding file at {self._binding_path} exists but is corrupted: {exc}"
+            ) from exc
