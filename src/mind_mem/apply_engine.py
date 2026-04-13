@@ -29,6 +29,9 @@ from .block_parser import get_by_id, parse_file
 from .corpus_registry import SNAPSHOT_DIRS
 from .mind_filelock import FileLock
 from .namespaces import NamespaceManager
+from .observability import get_logger
+
+_log = get_logger("apply_engine")
 
 # ═══════════════════════════════════════════════
 # Configuration
@@ -688,11 +691,11 @@ def execute_op(ws, op):
         elif op_type == "insert_after_block":
             return _op_insert_after_block(filepath, op)
         elif op_type == "update_field":
-            return _op_update_field(filepath, op)
+            return _op_update_field(filepath, op, ws=ws)
         elif op_type == "append_list_item":
             return _op_append_list_item(filepath, op)
         elif op_type == "set_status":
-            return _op_set_status(filepath, op)
+            return _op_set_status(filepath, op, ws=ws)
         elif op_type == "replace_range":
             return _op_replace_range(filepath, op)
         elif op_type == "supersede_decision":
@@ -752,8 +755,13 @@ def _op_insert_after_block(filepath, op):
     return True, f"insert_after_block: inserted after {target}"
 
 
-def _op_update_field(filepath, op):
-    """Update a field value within a specific block."""
+def _op_update_field(filepath, op, ws=None):
+    """Update a field value within a specific block.
+
+    When *ws* is provided the before/after values are piped through
+    :class:`field_audit.FieldAuditor` so every field mutation leaves
+    an audit-chain entry (integration finding #3).
+    """
     target = op.get("target")
     field = op.get("field")
     value = op.get("value")
@@ -764,8 +772,10 @@ def _op_update_field(filepath, op):
         lines = f.readlines()
 
     target_pattern = re.compile(rf"^\[{re.escape(target)}\]")
+    field_value_pattern = re.compile(rf"^{re.escape(field)}:\s+(.*)$")
     in_target = False
     updated = False
+    old_value: str = ""
 
     for i, line in enumerate(lines):
         if target_pattern.match(line):
@@ -774,8 +784,9 @@ def _op_update_field(filepath, op):
         if in_target and re.match(r"^\[[A-Z]+-[^\]]+\]\s*$", line):
             break
         if in_target:
-            field_match = re.match(rf"^{re.escape(field)}:\s+.*$", line)
+            field_match = field_value_pattern.match(line)
             if field_match:
+                old_value = field_match.group(1).rstrip()
                 lines[i] = f"{field}: {value}\n"
                 updated = True
                 break
@@ -785,6 +796,28 @@ def _op_update_field(filepath, op):
 
     with open(filepath, "w") as f:
         f.writelines(lines)
+
+    if ws:
+        try:
+            from .field_audit import FieldAuditor
+
+            FieldAuditor(ws).record_change(
+                block_id=target,
+                target=os.path.relpath(filepath, ws) if ws != "." else filepath,
+                field=field,
+                old_value=old_value,
+                new_value=str(value),
+                agent=op.get("agent", "apply_engine"),
+                reason=op.get("reason", ""),
+            )
+        except Exception as exc:  # pragma: no cover — audit is best-effort
+            _log.warning(
+                "field_audit_record_failed",
+                target=target,
+                field=field,
+                error=str(exc),
+            )
+
     return True, f"update_field: {target}.{field} = {value}"
 
 
@@ -840,7 +873,7 @@ def _op_append_list_item(filepath, op):
     return True, f"append_list_item: added to {target}.{list_field}"
 
 
-def _op_set_status(filepath, op):
+def _op_set_status(filepath, op, ws=None):
     """Update Status field + auto-append History entry."""
     target = op.get("target")
     status = op.get("status")
@@ -849,7 +882,11 @@ def _op_set_status(filepath, op):
         return False, "set_status: missing target or status"
 
     # First update the Status field
-    ok, msg = _op_update_field(filepath, {"target": target, "field": "Status", "value": status})
+    ok, msg = _op_update_field(
+        filepath,
+        {"target": target, "field": "Status", "value": status},
+        ws=ws,
+    )
     if not ok:
         return False, f"set_status: field update failed: {msg}"
 
@@ -1430,6 +1467,7 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
         update_receipt(receipt_path, post_report, delta, "rolled_back")
         # Also mark proposal as rolled back
         _mark_proposal_status(source_file, proposal_id, "rolled_back")
+        _record_belief_update(ws, proposal.get("TargetBlock", ""), 0.0, "rollback")
         return False, "Post-checks failed, rolled back"
 
     # 7. Generate DIFF text
@@ -1446,10 +1484,31 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
     update_receipt(receipt_path, post_report, delta, "applied", diff_text)
     _mark_proposal_status(source_file, proposal_id, "applied")
     update_last_apply_ts(ws)
+    _record_belief_update(ws, proposal.get("TargetBlock", ""), 1.0, "approve_apply")
 
     print(f"\n═══ APPLIED: {proposal_id} ═══")
     print(f"Receipt: {receipt_path}")
     return True, f"Applied successfully. Receipt: {receipt_path}"
+
+
+def _record_belief_update(ws: str, block_id: str, observation: float, source: str) -> None:
+    """Push an observation through BeliefStore. Best-effort; never raises.
+
+    Wires :mod:`kalman_belief` into the apply/rollback paths so the
+    per-block Kalman confidence state accumulates evidence. Callers
+    must not rely on success — a missing or corrupt beliefs DB must
+    never block an apply.
+    """
+    if not block_id:
+        return
+    try:
+        from .kalman_belief import BeliefStore
+
+        db_path = os.path.join(ws, "intelligence", "beliefs.db")
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        BeliefStore(db_path=db_path).update_belief(block_id, observation, source)
+    except Exception as exc:  # pragma: no cover — belief is best-effort
+        _log.warning("belief_update_failed", block_id=block_id, error=str(exc))
 
 
 def _mark_proposal_status(source_file, proposal_id, new_status):
@@ -1521,6 +1580,10 @@ def rollback(ws, receipt_ts):
             _proposal, source_file = find_proposal(ws, proposal_id)
             if source_file:
                 _mark_proposal_status(source_file, proposal_id, "rolled_back")
+            if _proposal:
+                _record_belief_update(
+                    ws, _proposal.get("TargetBlock", ""), 0.0, "rollback"
+                )
 
     print(f"\n═══ ROLLED BACK from {receipt_ts} ═══")
     return True

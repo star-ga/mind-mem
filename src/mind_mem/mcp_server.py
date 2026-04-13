@@ -90,6 +90,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections import OrderedDict
 from typing import Any
 
 # Allow running `python3 mcp_server.py` directly from a source checkout.
@@ -142,6 +143,8 @@ ADMIN_TOOLS = frozenset(
         "export_memory",
         "verify_chain",
         "compact",
+        "encrypt_file",
+        "decrypt_file",
     }
 )
 
@@ -178,6 +181,7 @@ USER_TOOLS = frozenset(
         "compiled_truth_load",
         "compiled_truth_add_evidence",
         "compiled_truth_contradictions",
+        "governance_health_bench",
     }
 )
 
@@ -313,17 +317,27 @@ def _init_rate_limiter() -> SlidingWindowRateLimiter:
 
 
 # Per-client rate limiters keyed by client_id — prevents one client from
-# exhausting the global budget and blocking all other clients.
-_rate_limiters: dict[str, SlidingWindowRateLimiter] = {}
+# exhausting the global budget and blocking all other clients. An
+# attacker rotating Authorization tokens on every request would
+# otherwise grow this dict unbounded, so we LRU-evict the least-
+# recently-used entry when the cap is reached.
+_RATE_LIMITER_MAX: int = 1024
+_rate_limiters: "OrderedDict[str, SlidingWindowRateLimiter]" = OrderedDict()
 _rate_limiters_lock = threading.Lock()
 
 
 def _get_client_rate_limiter(client_id: str) -> SlidingWindowRateLimiter:
     """Return (creating if needed) the per-client SlidingWindowRateLimiter."""
     with _rate_limiters_lock:
-        if client_id not in _rate_limiters:
-            _rate_limiters[client_id] = _init_rate_limiter()
-        return _rate_limiters[client_id]
+        existing = _rate_limiters.get(client_id)
+        if existing is not None:
+            _rate_limiters.move_to_end(client_id, last=True)
+            return existing
+        limiter = _init_rate_limiter()
+        _rate_limiters[client_id] = limiter
+        while len(_rate_limiters) > _RATE_LIMITER_MAX:
+            _rate_limiters.popitem(last=False)
+        return limiter
 
 
 def _get_client_id() -> str:
@@ -847,6 +861,903 @@ def _signal_store_path(ws: str) -> str:
     return os.path.join(ws, "memory", "interaction_signals.jsonl")
 
 
+def _kg_path(ws: str) -> str:
+    return os.path.join(ws, "memory", "knowledge_graph.db")
+
+
+_ONTOLOGY_REGISTRY: Any = None
+_CHANGE_STREAM: Any = None
+
+
+def _ontology_registry() -> Any:
+    global _ONTOLOGY_REGISTRY
+    if _ONTOLOGY_REGISTRY is None:
+        from .ontology import OntologyRegistry, software_engineering_ontology
+
+        _ONTOLOGY_REGISTRY = OntologyRegistry()
+        # Preload the in-box SE ontology so ontology_validate works on
+        # a fresh workspace without a separate ontology_load step.
+        _ONTOLOGY_REGISTRY.load(software_engineering_ontology(), make_active=True)
+    return _ONTOLOGY_REGISTRY
+
+
+def _change_stream() -> Any:
+    global _CHANGE_STREAM
+    if _CHANGE_STREAM is None:
+        from .change_stream import ChangeStream
+
+        _CHANGE_STREAM = ChangeStream()
+    return _CHANGE_STREAM
+
+
+_CORE_REGISTRY: Any = None
+
+
+def _core_registry() -> Any:
+    global _CORE_REGISTRY
+    if _CORE_REGISTRY is None:
+        from .context_core import CoreRegistry
+
+        _CORE_REGISTRY = CoreRegistry()
+    return _CORE_REGISTRY
+
+
+def _core_dir(ws: str) -> str:
+    path = os.path.join(ws, "memory", "cores")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+@mcp.tool
+@mcp_tool_observe
+def build_core(namespace: str, version: str, filename: str = "") -> str:
+    """Build a .mmcore bundle from the active workspace's blocks.
+
+    Snapshots the current block index + knowledge graph into a portable
+    `.mmcore` archive. Downstream callers can load it into another
+    mind-mem instance via `load_core`.
+
+    Args:
+        namespace: Identifier used to prefix blocks when loaded.
+        version: Caller-facing semver recorded in the manifest.
+        filename: Optional output filename (defaults to
+            ``<namespace>-<version>.mmcore`` under ``memory/cores/``).
+
+    Returns:
+        JSON envelope with the bundle path and manifest summary.
+    """
+    from .context_core import build_core as _build_core
+    from .knowledge_graph import KnowledgeGraph
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(namespace, str) or not namespace.strip():
+        return json.dumps({"error": "namespace must be a non-empty string"})
+    if not isinstance(version, str) or not version.strip():
+        return json.dumps({"error": "version must be a non-empty string"})
+
+    # Assemble blocks from the FTS index (best-effort — empty on fresh ws).
+    blocks: list[dict] = []
+    try:
+        from .sqlite_index import merkle_leaves as _leaves
+
+        for bid, content_hash in _leaves(ws):
+            blocks.append({"_id": bid, "content_hash": content_hash})
+    except (ImportError, AttributeError):
+        pass
+
+    edges: list[dict] = []
+    kg_file = _kg_path(ws)
+    if os.path.isfile(kg_file):
+        kg = KnowledgeGraph(kg_file)
+        try:
+            for e in kg.edges_from("__all__") if False else []:
+                edges.append(e.as_dict())
+            # Pull all edges regardless of subject: walk the DB directly.
+            rows = kg._conn.execute(
+                "SELECT subject, predicate, object, source_block_id, confidence, "
+                "valid_from, valid_until, metadata FROM edges"
+            ).fetchall()
+            for row in rows:
+                edges.append(
+                    {
+                        "subject": row["subject"],
+                        "predicate": row["predicate"],
+                        "object": row["object"],
+                        "source_block_id": row["source_block_id"],
+                        "confidence": row["confidence"],
+                        "valid_from": row["valid_from"],
+                        "valid_until": row["valid_until"],
+                        "metadata": row["metadata"],
+                    }
+                )
+        finally:
+            kg.close()
+
+    out_name = filename.strip() or f"{namespace.strip()}-{version.strip()}.mmcore"
+    if any(ch in out_name for ch in "/\\"):
+        return json.dumps({"error": "filename must not contain path separators"})
+    out_path = os.path.join(_core_dir(ws), out_name)
+
+    try:
+        manifest = _build_core(
+            out_path,
+            namespace=namespace,
+            version=version,
+            blocks=blocks,
+            edges=edges,
+        )
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+
+    return json.dumps(
+        {"path": out_path, "manifest": manifest.as_dict(), "_schema_version": "1.0"},
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def load_core(filename: str, verify: bool = True) -> str:
+    """Load a .mmcore bundle from the workspace's cores/ directory.
+
+    Args:
+        filename: Core filename relative to ``memory/cores/``.
+        verify: Recompute and compare the content hash (default True).
+    """
+    from .context_core import CoreLoadError
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(filename, str) or not filename.strip():
+        return json.dumps({"error": "filename must be a non-empty string"})
+    if any(ch in filename for ch in "/\\"):
+        return json.dumps({"error": "filename must not contain path separators"})
+
+    path = os.path.join(_core_dir(ws), filename.strip())
+    try:
+        loaded = _core_registry().load(path, verify=verify)
+    except CoreLoadError as exc:
+        return json.dumps({"error": str(exc)})
+    except RuntimeError as exc:
+        return json.dumps({"error": str(exc)})
+    return json.dumps(
+        {
+            "loaded": True,
+            "namespace": loaded.manifest.namespace,
+            "blocks": loaded.block_count(),
+            "edges": loaded.edge_count(),
+            "content_hash": loaded.manifest.content_hash,
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def unload_core(namespace: str) -> str:
+    """Unload a previously-loaded core by namespace."""
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+    if not isinstance(namespace, str) or not namespace.strip():
+        return json.dumps({"error": "namespace must be a non-empty string"})
+    ok = _core_registry().unload(namespace.strip())
+    return json.dumps({"unloaded": bool(ok)})
+
+
+@mcp.tool
+@mcp_tool_observe
+def list_cores() -> str:
+    """List every currently-loaded .mmcore bundle (namespace + stats)."""
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+    return json.dumps(
+        {"cores": _core_registry().stats(), "_schema_version": "1.0"}, indent=2
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def plan_consolidation(
+    importance_threshold: float = 0.25,
+    stale_days: int = 14,
+    archive_after_days: int = 60,
+    grace_days: int = 30,
+) -> str:
+    """Dry-run the cognitive forgetting cycle.
+
+    Reports which blocks would be MARKED, ARCHIVED, or FORGOTTEN based
+    on the current block_meta telemetry. No state is mutated — this is
+    purely a preview so callers can inspect the plan before approving.
+
+    Args:
+        importance_threshold: Blocks below this importance (combined
+            with age) are candidates for marking.
+        stale_days: Days of inactivity before a low-importance block
+            is flagged.
+        archive_after_days: Days after being MERGED before a block
+            moves to cold storage.
+        grace_days: Days in ARCHIVED state before a block is eligible
+            for permanent forget. Reversible until this window closes.
+    """
+    from .cognitive_forget import (
+        BlockCognition,
+        BlockLifecycle,
+        ConsolidationConfig,
+        plan_consolidation as _plan,
+    )
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    try:
+        cfg = ConsolidationConfig(
+            importance_threshold=float(importance_threshold),
+            stale_days=int(stale_days),
+            archive_after_days=int(archive_after_days),
+            grace_days=int(grace_days),
+        )
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+
+    # Pull block telemetry from block_meta if present.
+    import sqlite3 as _sqlite3
+
+    db_path = os.path.join(ws, ".sqlite_index", "index.db")
+    blocks: list[BlockCognition] = []
+    if os.path.isfile(db_path):
+        conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
+        conn.row_factory = _sqlite3.Row
+        try:
+            rows = conn.execute(
+                """
+                SELECT b.id AS block_id,
+                       COALESCE(bm.importance, 0.5) AS importance,
+                       bm.last_accessed AS last_accessed,
+                       COALESCE(bm.access_count, 0) AS access_count
+                FROM blocks b
+                LEFT JOIN block_meta bm ON bm.id = b.id
+                """
+            ).fetchall()
+            for r in rows:
+                try:
+                    blocks.append(
+                        BlockCognition(
+                            block_id=r["block_id"],
+                            importance=float(r["importance"]),
+                            last_accessed=r["last_accessed"],
+                            access_count=int(r["access_count"]),
+                            created_at=None,
+                            size_bytes=0,
+                            lifecycle=BlockLifecycle.ACTIVE,
+                        )
+                    )
+                except ValueError:
+                    continue
+        finally:
+            conn.close()
+
+    plan = _plan(blocks, config=cfg)
+    return json.dumps(
+        {
+            "config": {
+                "importance_threshold": cfg.importance_threshold,
+                "stale_days": cfg.stale_days,
+                "archive_after_days": cfg.archive_after_days,
+                "grace_days": cfg.grace_days,
+            },
+            "plan": plan.as_dict(),
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def ontology_load(spec: str, make_active: bool = False) -> str:
+    """Load an ontology from an inline JSON spec.
+
+    The spec must be a JSON object with ``version`` and ``types``
+    fields (see ``Ontology.from_dict``). Pass ``make_active=True`` to
+    promote the loaded ontology to the default used by
+    ``ontology_validate``.
+    """
+    from .ontology import Ontology
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(spec, str) or not spec.strip():
+        return json.dumps({"error": "spec must be a non-empty JSON string"})
+    if len(spec) > 1_048_576:
+        return json.dumps({"error": "spec must be ≤1 MiB"})
+    try:
+        data = json.loads(spec)
+    except json.JSONDecodeError as exc:
+        return json.dumps({"error": f"spec is not valid JSON: {exc}"})
+    if not isinstance(data, dict):
+        return json.dumps({"error": "spec must decode to a JSON object"})
+    try:
+        ont = Ontology.from_dict(data)
+    except (ValueError, KeyError, TypeError) as exc:
+        return json.dumps({"error": f"invalid ontology: {exc}"})
+
+    _ontology_registry().load(ont, make_active=bool(make_active))
+    return json.dumps(
+        {
+            "loaded": True,
+            "version": ont.version,
+            "types": ont.type_names(),
+            "active": bool(make_active)
+            or _ontology_registry().active().version == ont.version,
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def ontology_validate(block: str, type_name: str, strict: bool = True) -> str:
+    """Validate *block* (JSON object) against the active ontology.
+
+    Returns ``{valid: bool, errors: [str]}`` — an empty ``errors``
+    list means the block satisfies the type's effective schema
+    (including inherited parent properties).
+    """
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(block, str) or not block.strip():
+        return json.dumps({"error": "block must be a non-empty JSON string"})
+    if len(block) > 1_048_576:
+        return json.dumps({"error": "block must be ≤1 MiB"})
+    try:
+        block_obj = json.loads(block)
+    except json.JSONDecodeError as exc:
+        return json.dumps({"error": f"block is not valid JSON: {exc}"})
+    if not isinstance(block_obj, dict):
+        return json.dumps({"error": "block must decode to a JSON object"})
+    if not isinstance(type_name, str) or not type_name.strip():
+        return json.dumps({"error": "type_name must be a non-empty string"})
+
+    ont = _ontology_registry().active()
+    if ont is None:
+        return json.dumps({"error": "no active ontology; call ontology_load first"})
+    errors = ont.validate(type_name, block_obj, strict=bool(strict))
+    return json.dumps(
+        {
+            "valid": len(errors) == 0,
+            "errors": errors,
+            "type": type_name,
+            "ontology_version": ont.version,
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def propagate_staleness(seed_block_ids: str, max_hops: int = 3) -> str:
+    """Diffuse staleness outward from seed blocks over the xref graph.
+
+    Args:
+        seed_block_ids: Comma-separated block ids that are known to be
+            stale (just superseded / contradicted).
+        max_hops: Cap on traversal depth. Default 3 matches the
+            roadmap's ``0.9 → 0.5 → 0.2`` decay schedule.
+
+    Returns:
+        JSON map of block_id → staleness score in [0, 1].
+    """
+    import sqlite3 as _sqlite3
+
+    from .staleness import propagate_staleness as _propagate
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(seed_block_ids, str) or not seed_block_ids.strip():
+        return json.dumps({"error": "seed_block_ids must be a non-empty string"})
+    seeds = [
+        bid.strip() for bid in seed_block_ids.split(",") if bid.strip()
+    ][:64]
+    if not seeds:
+        return json.dumps({"error": "no seed block ids supplied"})
+    if not (0 <= max_hops <= 8):
+        return json.dumps({"error": "max_hops must be in [0, 8]"})
+
+    # Pull xref graph from the FTS index when available.
+    adjacency: dict[str, list[str]] = {}
+    db_path = os.path.join(ws, ".sqlite_index", "index.db")
+    if os.path.isfile(db_path):
+        conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
+        conn.row_factory = _sqlite3.Row
+        try:
+            rows = conn.execute("SELECT src, dst FROM xref_edges").fetchall()
+            for r in rows:
+                adjacency.setdefault(r["src"], []).append(r["dst"])
+                adjacency.setdefault(r["dst"], []).append(r["src"])
+        finally:
+            conn.close()
+
+    plan = _propagate(seeds, adjacency, max_hops=max_hops)
+    return json.dumps(
+        {
+            "seed": list(plan.seed),
+            "max_hops": plan.max_hops,
+            "scores": plan.scores,
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def project_profile(name: str = "", top_k: int = 10) -> str:
+    """Auto-generate a structured project intelligence profile.
+
+    Aggregates block types, top concepts, top files, entities, and
+    recent-activity counts from the active workspace. Intended for
+    session-start injection so an agent begins with project context.
+    """
+    import sqlite3 as _sqlite3
+
+    from .project_profile import build_profile
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not (0 <= top_k <= 100):
+        return json.dumps({"error": "top_k must be in [0, 100]"})
+    project_name = name.strip() or os.path.basename(os.path.realpath(ws))
+
+    blocks: list[dict] = []
+    db_path = os.path.join(ws, ".sqlite_index", "index.db")
+    if os.path.isfile(db_path):
+        conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
+        conn.row_factory = _sqlite3.Row
+        try:
+            rows = conn.execute(
+                "SELECT id, type, file, date, json_blob FROM blocks LIMIT 50000"
+            ).fetchall()
+            for r in rows:
+                entry: dict[str, Any] = {
+                    "_id": r["id"],
+                    "type": r["type"],
+                    "file": r["file"],
+                    "date": r["date"],
+                }
+                try:
+                    raw = json.loads(r["json_blob"] or "{}")
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    raw = {}
+                if isinstance(raw, dict):
+                    for key in ("text", "statement", "excerpt", "content"):
+                        if key in raw:
+                            entry[key] = raw[key]
+                    for key in ("entities", "mentions"):
+                        if key in raw:
+                            entry[key] = raw[key]
+                blocks.append(entry)
+        finally:
+            conn.close()
+
+    profile = build_profile(blocks, name=project_name, top_k=top_k)
+    return json.dumps({**profile.as_dict(), "_schema_version": "1.0"}, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def agent_inject(query: str, agent: str = "generic", limit: int = 10) -> str:
+    """Render a context snippet in the target agent's expected format.
+
+    Wraps :func:`recall` and :class:`AgentFormatter` so MCP-capable
+    callers can pre-render context for non-MCP siblings (codex, gemini
+    CLI, Cursor, Windsurf, Aider).
+
+    Args:
+        query: Search query.
+        agent: One of claude-code / codex / gemini / cursor / windsurf
+            / aider / generic.
+        limit: Maximum result count fed into the formatter.
+    """
+    from .agent_bridge import AgentFormatter, KNOWN_AGENTS, UnknownAgentError
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(query, str) or not query.strip():
+        return json.dumps({"error": "query must be a non-empty string"})
+    if agent not in KNOWN_AGENTS:
+        return json.dumps(
+            {
+                "error": f"unknown agent: {agent!r}",
+                "valid": list(KNOWN_AGENTS),
+            }
+        )
+    if not (1 <= limit <= 100):
+        return json.dumps({"error": "limit must be in [1, 100]"})
+
+    raw = json.loads(_recall_impl(query, limit=limit))
+    if isinstance(raw, dict):
+        results = raw.get("results", []) or []
+    elif isinstance(raw, list):
+        results = raw
+    else:
+        results = []
+
+    fmt = AgentFormatter(max_blocks=limit)
+    try:
+        text = fmt.inject(agent, query, results)
+    except UnknownAgentError as exc:
+        return json.dumps({"error": str(exc)})
+    return json.dumps(
+        {"agent": agent, "query": query, "snippet": text, "_schema_version": "1.0"},
+        indent=2,
+    )
+
+
+def _vault_allowlist() -> list[str]:
+    """Return the configured vault-root allowlist.
+
+    Set ``MIND_MEM_VAULT_ALLOWLIST`` to a ``:``-separated list of
+    absolute directories. When set, every vault MCP tool refuses
+    requests targeting paths outside the list. Empty/unset = allow
+    any path (legacy behaviour; recommended only for local dev).
+    """
+    raw = os.environ.get("MIND_MEM_VAULT_ALLOWLIST", "").strip()
+    if not raw:
+        return []
+    sep = ";" if ";" in raw else ":"
+    return [
+        os.path.realpath(p.strip())
+        for p in raw.split(sep)
+        if p.strip()
+    ]
+
+
+def _vault_root_allowed(vault_root: str) -> tuple[bool, str]:
+    """Check vault_root against the allowlist. (ok, reason)."""
+    allow = _vault_allowlist()
+    if not allow:
+        return True, ""
+    target = os.path.realpath(vault_root.strip())
+    for root in allow:
+        try:
+            common = os.path.commonpath([target, root])
+        except ValueError:
+            continue
+        if common == root:
+            return True, ""
+    return False, (
+        f"vault_root {vault_root!r} is outside MIND_MEM_VAULT_ALLOWLIST"
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def vault_scan(vault_root: str, sync_dirs: str = "") -> str:
+    """Walk an Obsidian-style vault and return parsed VaultBlocks (JSON).
+
+    Args:
+        vault_root: Absolute path to the vault root.
+        sync_dirs: Optional comma-separated list of subdirectories to
+            scan. Empty = full vault (minus default excludes).
+    """
+    from .agent_bridge import VaultBridge
+
+    if not isinstance(vault_root, str) or not vault_root.strip():
+        return json.dumps({"error": "vault_root must be a non-empty string"})
+    ok, reason = _vault_root_allowed(vault_root)
+    if not ok:
+        return json.dumps({"error": reason})
+    dirs = [d.strip() for d in sync_dirs.split(",") if d.strip()] or None
+    try:
+        bridge = VaultBridge(vault_root=vault_root.strip())
+        blocks = bridge.scan(sync_dirs=dirs)
+    except (FileNotFoundError, ValueError) as exc:
+        return json.dumps({"error": str(exc)})
+    return json.dumps(
+        {
+            "vault_root": vault_root,
+            "blocks": [b.as_dict() for b in blocks],
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def vault_sync(
+    vault_root: str,
+    block_id: str,
+    relative_path: str,
+    body: str,
+    block_type: str = "note",
+    title: str = "",
+    overwrite: bool = False,
+) -> str:
+    """Write a single block back into a vault at a relative path.
+
+    Refuses to write outside the vault root or to overwrite existing
+    files unless ``overwrite`` is true.
+    """
+    from .agent_bridge import VaultBlock, VaultBridge
+
+    for arg, label in (
+        (vault_root, "vault_root"),
+        (block_id, "block_id"),
+        (relative_path, "relative_path"),
+    ):
+        if not isinstance(arg, str) or not arg.strip():
+            return json.dumps({"error": f"{label} must be a non-empty string"})
+    ok, reason = _vault_root_allowed(vault_root)
+    if not ok:
+        return json.dumps({"error": reason})
+    try:
+        bridge = VaultBridge(vault_root=vault_root.strip())
+        target = bridge.write(
+            VaultBlock(
+                relative_path=relative_path.strip(),
+                block_id=block_id.strip(),
+                block_type=block_type.strip() or "note",
+                title=title.strip() or block_id.strip(),
+                body=body,
+            ),
+            overwrite=bool(overwrite),
+        )
+    except (FileNotFoundError, FileExistsError, ValueError) as exc:
+        return json.dumps({"error": str(exc)})
+    return json.dumps(
+        {"written": target, "_schema_version": "1.0"}, indent=2
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def stream_status() -> str:
+    """Current change-stream publish / delivery / drop counters."""
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+    return json.dumps(
+        {**_change_stream().stats().as_dict(), "_schema_version": "1.0"},
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def pack_recall_budget(query: str, max_tokens: int = 2000, limit: int = 20) -> str:
+    """Run a recall, then pack the result list under a token budget.
+
+    Returns the subset of results that fits and the tail that was
+    dropped, plus the reserved token budget for graph / provenance
+    metadata. Use when wiring mind-mem into an agent whose prompt
+    already approaches its model's context window.
+    """
+    from .cognitive_forget import pack_to_budget
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(query, str) or not query.strip():
+        return json.dumps({"error": "query must be a non-empty string"})
+    if max_tokens <= 0 or max_tokens > 1_000_000:
+        return json.dumps({"error": "max_tokens must be in [1, 1_000_000]"})
+    if limit < 1 or limit > 500:
+        return json.dumps({"error": "limit must be in [1, 500]"})
+
+    raw = json.loads(_recall_impl(query, limit=limit))
+    # _recall_impl returns an envelope or a list depending on configuration;
+    # normalise to a flat list of result dicts.
+    if isinstance(raw, dict):
+        results = raw.get("results", []) or []
+    elif isinstance(raw, list):
+        results = raw
+    else:
+        results = []
+
+    try:
+        packed = pack_to_budget(results, max_tokens=int(max_tokens))
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+
+    return json.dumps(
+        {
+            "query": query,
+            "included": packed.included,
+            "dropped": packed.dropped,
+            **packed.as_dict(),
+            "_schema_version": "1.0",
+        },
+        indent=2,
+        default=str,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def graph_add_edge(
+    subject: str,
+    predicate: str,
+    object: str,
+    source_block_id: str,
+    confidence: float = 1.0,
+) -> str:
+    """Record a typed relationship in the knowledge graph.
+
+    Args:
+        subject / object: Entity names (aliases resolved automatically).
+        predicate: One of authored_by, depends_on, contradicts,
+            supersedes, part_of, mentioned_in, related_to.
+        source_block_id: The block this relationship was extracted from.
+        confidence: Extractor confidence in [0, 1].
+
+    Returns:
+        JSON with the canonicalised edge or an error envelope.
+    """
+    from .knowledge_graph import KnowledgeGraph, Predicate
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(subject, str) or not subject.strip():
+        return json.dumps({"error": "subject must be a non-empty string"})
+    if not isinstance(object, str) or not object.strip():
+        return json.dumps({"error": "object must be a non-empty string"})
+    if len(subject) > 512 or len(object) > 512:
+        return json.dumps({"error": "entity names must be ≤512 chars"})
+    try:
+        pred = Predicate.from_str(predicate)
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        edge = kg.add_edge(
+            subject, pred, object,
+            source_block_id=source_block_id,
+            confidence=float(confidence),
+        )
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+    finally:
+        kg.close()
+    return json.dumps({**edge.as_dict(), "_schema_version": "1.0"}, indent=2)
+
+
+@mcp.tool
+@mcp_tool_observe
+def graph_query(
+    entity: str,
+    depth: int = 1,
+    predicate: str = "",
+    direction: str = "outgoing",
+    limit: int = 64,
+) -> str:
+    """N-hop traversal from *entity*.
+
+    Args:
+        entity: Starting entity (any alias — resolved automatically).
+        depth: Maximum hops (1-8).
+        predicate: Optional predicate filter (blank = all).
+        direction: ``outgoing`` / ``incoming`` / ``both``.
+        limit: Maximum neighbours returned (1-256).
+
+    Returns:
+        JSON list of neighbours with hop count + predicate path.
+    """
+    from .knowledge_graph import KnowledgeGraph, Predicate
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(entity, str) or not entity.strip():
+        return json.dumps({"error": "entity must be a non-empty string"})
+    if len(entity) > 512:
+        return json.dumps({"error": "entity name must be ≤512 chars"})
+    if not (1 <= depth <= 8):
+        return json.dumps({"error": "depth must be in [1, 8]"})
+    if not (1 <= limit <= 256):
+        return json.dumps({"error": "limit must be in [1, 256]"})
+    pred_obj = None
+    if predicate.strip():
+        try:
+            pred_obj = Predicate.from_str(predicate)
+        except ValueError as exc:
+            return json.dumps({"error": str(exc)})
+    if direction not in {"outgoing", "incoming", "both"}:
+        return json.dumps(
+            {"error": "direction must be 'outgoing' / 'incoming' / 'both'"}
+        )
+
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        neighbours = kg.neighbors(
+            entity,
+            depth=depth,
+            predicate=pred_obj,
+            direction=direction,
+            max_results=limit,
+        )
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+    finally:
+        kg.close()
+    return json.dumps(
+        {
+            "entity": entity,
+            "depth": depth,
+            "direction": direction,
+            "neighbors": neighbours,
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def graph_stats() -> str:
+    """Aggregated knowledge-graph stats for the active workspace."""
+    from .knowledge_graph import KnowledgeGraph
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    kg_file = _kg_path(ws)
+    if not os.path.isfile(kg_file):
+        return json.dumps(
+            {"entities": 0, "edges": 0, "predicates": {}, "orphan_entities": 0,
+             "_schema_version": "1.0"},
+            indent=2,
+        )
+    kg = KnowledgeGraph(kg_file)
+    try:
+        stats = kg.stats().as_dict()
+    finally:
+        kg.close()
+    return json.dumps({**stats, "_schema_version": "1.0"}, indent=2)
+
+
 @mcp.tool
 @mcp_tool_observe
 def observe_signal(
@@ -1248,6 +2159,11 @@ def scan() -> str:
 def list_contradictions() -> str:
     """List detected contradictions with resolution analysis.
 
+    Enriches the raw contradiction list with AutoResolver's
+    preference-boosted + side-effect-aware suggestions when the
+    workspace has an existing resolver state; falls back to the
+    plain list otherwise.
+
     Returns:
         JSON array of contradictions with strategy recommendations.
     """
@@ -1266,16 +2182,175 @@ def list_contradictions() -> str:
             }
         )
 
+    # Best-effort AutoResolver enrichment — side effects + preference
+    # learning. Never masks the raw resolutions on failure.
+    enriched: list[dict] = []
+    try:
+        from mind_mem.auto_resolver import AutoResolver
+
+        suggestions = AutoResolver(ws).suggest_resolutions()
+        by_id = {s.contradiction_id: s for s in suggestions}
+        for res in resolutions:
+            sug = by_id.get(res.get("contradiction_id"))
+            merged = dict(res)
+            if sug is not None:
+                merged["confidence_score"] = sug.confidence_score
+                merged["side_effects"] = list(sug.side_effects)
+                merged["preference_boost_applied"] = True
+            enriched.append(merged)
+    except Exception as exc:  # pragma: no cover — best-effort
+        _log.warning("auto_resolver_enrich_failed", error=str(exc))
+        enriched = list(resolutions)
+
     return json.dumps(
         {
             "_schema_version": MCP_SCHEMA_VERSION,
             "status": "contradictions_found",
-            "contradictions": len(resolutions),
-            "resolutions": resolutions,
+            "contradictions": len(enriched),
+            "resolutions": enriched,
         },
         indent=2,
         default=str,
     )
+
+
+def _encryption_passphrase() -> str | None:
+    """Fetch the at-rest encryption passphrase from env. None = disabled."""
+    raw = os.environ.get("MIND_MEM_ENCRYPTION_PASSPHRASE", "").strip()
+    return raw or None
+
+
+@mcp.tool
+@mcp_tool_observe
+def encrypt_file(file_path: str) -> str:
+    """Encrypt a single workspace file at rest.
+
+    Requires ``MIND_MEM_ENCRYPTION_PASSPHRASE`` to be set in the
+    server environment. Files already encrypted are no-ops.
+    Admin-scope tool — never exposed to user tokens.
+
+    Args:
+        file_path: Absolute path to the plaintext file.
+
+    Returns:
+        JSON status envelope.
+    """
+    passphrase = _encryption_passphrase()
+    if not passphrase:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "MIND_MEM_ENCRYPTION_PASSPHRASE is not set",
+            }
+        )
+    if not isinstance(file_path, str) or not file_path.strip():
+        return json.dumps({"error": "file_path must be a non-empty string"})
+    ws = _workspace()
+    try:
+        safe_path = _safe_vault_path(ws, file_path)
+    except Exception as exc:
+        return json.dumps({"error": f"path rejected: {exc}"})
+    try:
+        from mind_mem.encryption import EncryptionManager
+
+        EncryptionManager(ws, passphrase).encrypt_file(safe_path)
+    except Exception as exc:
+        return json.dumps({"error": f"encrypt failed: {exc}"})
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "encrypted": True,
+            "path": safe_path,
+        }
+    )
+
+
+@mcp.tool
+@mcp_tool_observe
+def decrypt_file(file_path: str) -> str:
+    """Return plaintext bytes (base64-encoded) for an encrypted file.
+
+    Does not modify the on-disk ciphertext. Admin-scope tool.
+
+    Args:
+        file_path: Absolute path to the encrypted file.
+
+    Returns:
+        JSON with ``plaintext_b64`` field on success.
+    """
+    import base64
+
+    passphrase = _encryption_passphrase()
+    if not passphrase:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "MIND_MEM_ENCRYPTION_PASSPHRASE is not set",
+            }
+        )
+    if not isinstance(file_path, str) or not file_path.strip():
+        return json.dumps({"error": "file_path must be a non-empty string"})
+    ws = _workspace()
+    try:
+        safe_path = _safe_vault_path(ws, file_path)
+    except Exception as exc:
+        return json.dumps({"error": f"path rejected: {exc}"})
+    try:
+        from mind_mem.encryption import EncryptionManager
+
+        plaintext = EncryptionManager(ws, passphrase).decrypt_file(safe_path)
+    except Exception as exc:
+        return json.dumps({"error": f"decrypt failed: {exc}"})
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "path": safe_path,
+            "plaintext_b64": base64.b64encode(plaintext).decode("ascii"),
+        }
+    )
+
+
+def _safe_vault_path(ws: str, candidate: str) -> str:
+    """Resolve *candidate* against *ws* and reject path-escapes."""
+    resolved = os.path.realpath(candidate)
+    ws_abs = os.path.realpath(ws)
+    try:
+        common = os.path.commonpath([resolved, ws_abs])
+    except ValueError as exc:
+        raise ValueError(f"path escapes workspace: {candidate}") from exc
+    if common != ws_abs:
+        raise ValueError(f"path escapes workspace: {candidate}")
+    if not os.path.isfile(resolved):
+        raise FileNotFoundError(resolved)
+    return resolved
+
+
+@mcp.tool
+@mcp_tool_observe
+def governance_health_bench() -> str:
+    """Run the governance health benchmark suite.
+
+    Exercises contradiction detection, audit completeness, drift
+    detection, and scalability probes against the current workspace.
+
+    Returns:
+        JSON report covering all bench sub-suites and aggregated
+        pass/fail counts.
+    """
+    ws = _workspace()
+    try:
+        from mind_mem.governance_bench import GovernanceBench
+
+        report = GovernanceBench(ws).run_all()
+    except Exception as exc:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"bench run failed: {exc}",
+            }
+        )
+    out = {"_schema_version": MCP_SCHEMA_VERSION, **report}
+    return json.dumps(out, indent=2, default=str)
 
 
 @mcp.tool
