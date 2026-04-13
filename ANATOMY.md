@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 384 | **Est. tokens:** ~792,494
-**Generated:** 2026-04-13 09:31 UTC
+**Files:** 384 | **Est. tokens:** ~792,517
+**Generated:** 2026-04-13 09:33 UTC
 
 ## Token Budget Guide
 
@@ -22,10 +22,10 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~70,709 |
+| `./` | 27 | ~70,736 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
-| `docs/` | 28 | ~25,751 |
+| `docs/` | 28 | ~25,747 |
 | `docs/adr/` | 2 | ~521 |
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
@@ -67,11 +67,11 @@
 - `mcp_server.py` (~448 tok, medium) — Source-checkout entrypoint for the packaged Mind-Mem MCP server."""
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
-- `pyproject.toml` (~780 tok, large) — [project]
+- `pyproject.toml` (~779 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~21811 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~21810 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~10115 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~10144 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `train_mind7b_runpod.py` (~1652 tok, huge)
@@ -107,7 +107,7 @@
 - `claude-desktop-setup.md` (~752 tok, large) — Claude Desktop Setup Guide
 - `comparison.md` (~313 tok, medium) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~4603 tok, huge) — Configuration Reference
+- `configuration.md` (~4599 tok, huge) — Configuration Reference
 - `development.md` (~358 tok, medium) — Development Guide
 - `faq.md` (~374 tok, medium) — FAQ
 - `getting-started.md` (~405 tok, medium) — Getting Started

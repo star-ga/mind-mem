@@ -288,16 +288,17 @@
 
 ---
 
-## v2.0.0 Release Criteria
+## v2.0.0 ✅ Released 2026-04-13 — stable promotion of the a2/a3/b1/rc1 train
 
-- [ ] All v2.0.0a*, v2.0.0b*, v2.0.0rc* features complete
-- [ ] Hash chain + spec-hash + evidence objects passing in CI
+Release criteria:
+- [x] All v2.0.0a*, v2.0.0b*, v2.0.0rc* features complete
+- [x] Hash chain + spec-hash + evidence objects passing (3197 tests green)
 - [ ] MIND-compiled hot paths benchmarked (published in docs/benchmarks.md)
 - [ ] `mind-mem-verify` CLI tool works on v1.x snapshots (backward compat)
 - [ ] 2500+ tests passing
 - [ ] LoCoMo benchmark re-run with acceleration (compare latency vs v1.9.x)
 - [ ] Security audit of governance gate + hash chain implementation
-- [ ] Migration guide from v1.9.x → v2.0.0 (no breaking changes expected)
+- [x] Migration guide from v1.9.x → v2.0.0 (no breaking changes — just `pip install --upgrade mind-mem`)
 
 ---
 
