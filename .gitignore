@@ -24,3 +24,7 @@ models/
 mind7b_train.jsonl
 .coverage
 test_out.txt
+
+# Training artifacts (large weights, never commit)
+train/output/
+mm-train-output/

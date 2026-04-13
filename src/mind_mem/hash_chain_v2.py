@@ -289,33 +289,36 @@ class HashChainV2:
             first_broken_index is -1 when the chain is valid, or the
             0-based index of the first broken entry.
         """
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM hash_chain ORDER BY rowid ASC"
-            ).fetchall()
-
-        if not rows:
-            return True, -1
-
+        # Stream rows with fetchmany so a million-entry ledger doesn't
+        # materialise the whole table in-process when an MCP caller
+        # triggers verification.
         prev_hash = GENESIS_HASH
-        for idx, row in enumerate(rows):
-            entry = _row_to_entry(row)
+        idx = -1
+        with self._connect() as conn:
+            cur = conn.execute("SELECT * FROM hash_chain ORDER BY rowid ASC")
+            while True:
+                batch = cur.fetchmany(1024)
+                if not batch:
+                    break
+                for row in batch:
+                    idx += 1
+                    entry = _row_to_entry(row)
 
-            if entry.previous_hash != prev_hash:
-                return False, idx
+                    if entry.previous_hash != prev_hash:
+                        return False, idx
 
-            expected = _compute_entry_hash(
-                entry.entry_id,
-                entry.timestamp,
-                entry.block_id,
-                entry.action,
-                entry.content_hash,
-                entry.previous_hash,
-            )
-            if entry.entry_hash != expected:
-                return False, idx
+                    expected = _compute_entry_hash(
+                        entry.entry_id,
+                        entry.timestamp,
+                        entry.block_id,
+                        entry.action,
+                        entry.content_hash,
+                        entry.previous_hash,
+                    )
+                    if entry.entry_hash != expected:
+                        return False, idx
 
-            prev_hash = entry.entry_hash
+                    prev_hash = entry.entry_hash
 
         return True, -1
 
@@ -405,32 +408,42 @@ class HashChainV2:
             ValueError: If any entry is tampered/invalid/corrupt.
             FileNotFoundError: If input_path does not exist.
         """
+        if self._readonly:
+            raise PermissionError(
+                "HashChainV2 opened read-only; import_jsonl is not permitted"
+            )
         entries = _load_jsonl_entries(input_path)
 
-        # Anchor linkage to the current chain head so imports append instead of
-        # producing disjoint chain segments when the DB is already populated.
-        with self._connect() as conn:
-            head_row = conn.execute(
-                "SELECT entry_hash FROM hash_chain ORDER BY rowid DESC LIMIT 1"
-            ).fetchone()
-        prev_hash = head_row["entry_hash"] if head_row else GENESIS_HASH
-
-        for idx, entry in enumerate(entries):
-            if not self.verify_entry(entry):
-                raise ValueError(
-                    f"Entry at line {idx + 1} (id={entry.entry_id}) is tampered or corrupt"
-                )
-            if entry.previous_hash != prev_hash:
-                raise ValueError(
-                    f"Entry at line {idx + 1} (id={entry.entry_id}) breaks chain linkage: "
-                    f"expected previous_hash={prev_hash[:16]}… "
-                    f"got {entry.previous_hash[:16]}…"
-                )
-            prev_hash = entry.entry_hash
-
+        # Lock for the entire head-read + validate + insert sequence so a
+        # concurrent append() cannot land an entry between our head snapshot
+        # and our bulk insert (which would produce entries whose
+        # previous_hash links to a stale head — verify_chain would then flag
+        # the entire import as tampered).
         with self._lock:
             with self._connect() as conn:
                 conn.execute("BEGIN IMMEDIATE")
+                head_row = conn.execute(
+                    "SELECT entry_hash FROM hash_chain ORDER BY rowid DESC LIMIT 1"
+                ).fetchone()
+                prev_hash = head_row["entry_hash"] if head_row else GENESIS_HASH
+
+                for idx, entry in enumerate(entries):
+                    if not self.verify_entry(entry):
+                        conn.rollback()
+                        raise ValueError(
+                            f"Entry at line {idx + 1} (id={entry.entry_id}) is tampered or corrupt"
+                        )
+                    if entry.previous_hash != prev_hash:
+                        conn.rollback()
+                        raise ValueError(
+                            f"Entry at line {idx + 1} (id={entry.entry_id}) breaks chain linkage: "
+                            f"expected previous_hash={prev_hash[:16]}… "
+                            f"got {entry.previous_hash[:16]}…"
+                        )
+                    prev_hash = entry.entry_hash
+
+                # Transaction already open from the earlier BEGIN IMMEDIATE
+                # above; just commit the batch we validated.
                 conn.executemany(
                     """
                     INSERT INTO hash_chain
