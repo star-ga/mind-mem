@@ -52,8 +52,11 @@ class AnchorHistory:
     """Append-only JSONL history of anchored Merkle roots."""
 
     def __init__(self, path: str) -> None:
+        if not path or not path.strip():
+            raise ValueError("path must be a non-empty string")
         self._path = os.path.abspath(path)
-        os.makedirs(os.path.dirname(self._path), exist_ok=True)
+        parent = os.path.dirname(self._path) or "."
+        os.makedirs(parent, exist_ok=True)
         self._lock = threading.RLock()
 
     @property

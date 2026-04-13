@@ -16,9 +16,36 @@ from __future__ import annotations
 
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Iterable, Mapping, Optional
+
+_MESH_MAX_PEERS: int = 10_000
+_MESH_MAX_LOG: int = 10_000
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def _parse_ts(raw: Any) -> datetime:
+    """Parse an ISO-8601 / numeric timestamp. Falls back to epoch for junk."""
+    if raw is None or raw == "":
+        return _EPOCH
+    if isinstance(raw, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(raw), tz=timezone.utc)
+        except (OSError, OverflowError, ValueError):
+            return _EPOCH
+    text = str(raw).strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return _EPOCH
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 class SyncScope(str, Enum):
@@ -73,7 +100,7 @@ class MemoryMesh:
             SyncScope.GRAPH: ConflictResolution.GOVERNANCE_GATED,
             SyncScope.GOVERNANCE: ConflictResolution.GOVERNANCE_GATED,
         }
-        self._log: list[SyncEvent] = []
+        self._log: "deque[SyncEvent]" = deque(maxlen=_MESH_MAX_LOG)
 
     def add_peer(
         self,
@@ -92,6 +119,11 @@ class MemoryMesh:
             last_seen=None,
         )
         with self._lock:
+            if peer.peer_id not in self._peers and len(self._peers) >= _MESH_MAX_PEERS:
+                raise RuntimeError(
+                    f"memory mesh peer cap reached ({_MESH_MAX_PEERS}); "
+                    "remove idle peers before adding more"
+                )
             self._peers[peer.peer_id] = peer
         return peer
 
@@ -122,8 +154,8 @@ class MemoryMesh:
         """
         policy = self._policy.get(scope, ConflictResolution.GOVERNANCE_GATED)
         if policy is ConflictResolution.LAST_WRITE_WINS:
-            lt = str(local.get("updated_at") or local.get("timestamp") or "")
-            rt = str(remote.get("updated_at") or remote.get("timestamp") or "")
+            lt = _parse_ts(local.get("updated_at") or local.get("timestamp"))
+            rt = _parse_ts(remote.get("updated_at") or remote.get("timestamp"))
             return dict(remote if rt > lt else local)
         # Governance-gated — keep local, surface review marker.
         merged = dict(local)
