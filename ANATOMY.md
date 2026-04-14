@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 423 | **Est. tokens:** ~891,524
-**Generated:** 2026-04-13 19:29 UTC
+**Files:** 424 | **Est. tokens:** ~897,897
+**Generated:** 2026-04-14 02:53 UTC
 
 ## Token Budget Guide
 
@@ -44,7 +44,7 @@
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 166 | ~340,287 |
 | `tests/integration/` | 2 | ~1,436 |
-| `train/` | 7 | ~10,843 |
+| `train/` | 8 | ~17,216 |
 
 ## Files
 
@@ -70,7 +70,7 @@
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
 - `pyproject.toml` (~786 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~21810 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~21918 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
 - `ROADMAP.md` (~10244 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
@@ -116,9 +116,9 @@
 - `mcp-integration.md` (~1026 tok, large) — MCP Integration Guide
 - `mcp-tool-examples.md` (~902 tok, large) — MCP Tool Examples
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
-- `migration.md` (~2746 tok, huge) — Migration Guide: mem-os to mind-mem
+- `migration.md` (~2754 tok, huge) — Migration Guide: mem-os to mind-mem
 - `mind-kernels.md` (~339 tok, medium) — MIND Kernels
-- `odc-retrieval.md` (~774 tok, large) — Observer-Dependent Cognition in mind-mem
+- `odc-retrieval.md` (~834 tok, large) — Observer-Dependent Cognition in mind-mem
 - `performance-tuning.md` (~560 tok, large) — Performance Tuning
 - `quickstart.md` (~601 tok, large) — mind-mem Quickstart
 - `roadmap.md` (~730 tok, large) — Roadmap
@@ -127,7 +127,7 @@
 - `setup.md` (~1354 tok, large) — Setup
 - `testing-guide.md` (~369 tok, medium) — Testing Guide
 - `troubleshooting.md` (~681 tok, large) — Troubleshooting
-- `usage.md` (~2038 tok, huge) — Usage
+- `usage.md` (~1996 tok, huge) — Usage
 - `workspace-structure.md` (~352 tok, medium) — Workspace Structure
 ### `examples/`
 
@@ -514,12 +514,13 @@
 - `test_workspace_structure.py` (~509 tok, large) — Tests for workspace directory structure."""
 ### `train/`
 
-- `build_corpus.py` (~3993 tok, huge) — Harvest a training corpus for the mind-mem-7b model.
-- `build_model_card.py` (~1538 tok, huge) — Generate the HuggingFace model-card README for mind-mem-7b v2.9.0."""
-- `eval_harness.py` (~1965 tok, huge) — Eval harness for mind-mem-7b.
-- `export_gguf.py` (~906 tok, large) — Merge the LoRA adapter into the base weights, then export to GGUF.
+- `backport_sweep.py` (~1589 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
+- `build_corpus.py` (~7993 tok, huge) — Harvest a training corpus for the mind-mem-7b model.
+- `build_model_card.py` (~1854 tok, huge) — Generate the HuggingFace model-card README for mind-mem-7b v2.9.0."""
+- `eval_harness.py` (~2142 tok, huge) — Eval harness for mind-mem-7b.
+- `export_gguf.py` (~1055 tok, large) — Merge the LoRA adapter into the base weights, then export to GGUF.
 - `README.md` (~579 tok, large) — mind-mem-7b training pipeline
-- `train_qlora.py` (~984 tok, large) — QLoRA fine-tune for mind-mem-7b on the harvested corpus.
+- `train_qlora.py` (~1126 tok, large) — QLoRA fine-tune for mind-mem-7b on the harvested corpus.
 - `upload_to_hf.py` (~878 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-7b.
 
 ---
