@@ -2,6 +2,35 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.0.0 (2026-04-13)
+
+**v3.0 architectural release.** Addresses seven of nine v3.0 workstreams flagged in the Gemini arch review (issues #501–#507). Backwards-compatible with v2.x (no data migration required); adds opt-in encryption + alerting + AI-client integrations.
+
+### Added
+
+- **`src/mind_mem/alerting.py`** — pluggable `AlertRouter` + sinks (`LogSink`, `WebhookSink`, `SlackSink`, `NullSink`). Intel-scan now fires alerts on contradiction + drift spikes. Config in `mind-mem.json` `alerts` section. (GH #503, 13 tests)
+- **`src/mind_mem/block_store_encrypted.py`** — `EncryptedBlockStore` transparent-decrypt wrapper + `encrypt_workspace(ws)` one-shot migration. Factory `get_block_store(ws)` dispatches based on `MIND_MEM_ENCRYPTION_PASSPHRASE` env var. (GH #504, 8 tests)
+- **Tier TTL/LRU decay** — `TierManager.run_decay_cycle()` demotes idle blocks + evicts never-accessed WORKING-tier blocks. Wired into compaction alongside promotion. New `max_idle_hours` + `ttl_hours` fields on `TierPolicy`. (GH #502, 10 tests)
+- **Adversarial corpus harness** — `tests/test_adversarial_corpus.py` — 16 tests covering NUL injection, NaN smuggling, forged v1 hashes, SQL-flavour queries, oversized metadata. (GH #507)
+- **Governance concurrency stress harness** — `tests/test_governance_concurrency.py` under the new `pytest -m stress` marker. 5 tests exercise N concurrent writers on audit_chain, hash_chain_v2, memory_tiers, evidence_objects. (GH #506)
+- **16-client AI hook installer** — registry-driven `hook_installer.py`. New agents: `openclaw`, `nanoclaw`, `nemoclaw`, `continue`, `cline`, `roo`, `zed`, `copilot`, `cody`, `qodo` (in addition to existing `claude-code`, `codex`, `gemini`, `cursor`, `windsurf`, `aider`). `detect_installed_agents(ws)` scans PATH + config dirs, `install_all(ws)` auto-configures every detected client. (28 tests)
+- **`mm detect` / `mm install` / `mm install-all`** CLI commands. Auto-detect on your machine with `mm detect`; configure everything with `mm install-all`.
+- **`tests/test_memory_practical_e2e.py`** — 9 end-to-end memory tests: seeded corpus recall, contradiction lifecycle, audit chain round-trip, v3 evidence chain, field audit, tier promotion, snapshot restore, governance bench.
+
+### Design docs (implementation pending sign-off)
+
+- `docs/design/v3-mcp-surface-reduction.md` — map for consolidating 57 tools into ~25 task-oriented compounds. (GH #501; blocked on sign-off because it requires a mind-mem-7b retrain.)
+- `docs/design/v3-multi-tenancy.md` — three-layer tenancy model (Organization → Workspace → Namespace) with RBAC, per-tenant encryption keys, and REST API roadmap for v3.1. (GH #505)
+
+### Fixed
+- `intel_scan.main()` regression from v3.0-rc alerting wire-up: the Summary block got accidentally orphaned inside `_fire_scan_alerts`. Extracted into `_finalize_report(ws, report)` helper so `main()` stays linear.
+
+### Changed
+- `tests/pyproject.toml` — new `stress` pytest marker; default run excludes it via `addopts = "-m 'not stress'"`.
+
+### Tests
+- 3548 passed, 6 skipped on prior v2.10.0 baseline; +51 new v3.0 tests. Full suite running for final confirmation.
+
 ## 2.10.0 (2026-04-13)
 
 **Audit-integrity patch release.** Lands two correctness fixes from the cognitive-kernel design review (GH #498 + #499), plus seven additional hardening fixes caught by the pre-release 3-CLI audit (Gemini 3 Pro identified a downgrade-attack in the v1 fallback that would have shipped). Hash-chain verification is backward-compatible for pure-v1 chains; once any chain contains a v3 entry, no later entry may fall back to v1.

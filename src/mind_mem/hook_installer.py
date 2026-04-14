@@ -163,22 +163,63 @@ def observation_to_block(
 
 
 # ---------------------------------------------------------------------------
-# Installer
+# Installer — registry-driven for all supported AI coding clients
 # ---------------------------------------------------------------------------
 
+
+import shutil as _shutil
+from dataclasses import dataclass, field
 
 _MM_MARKER = "# mind-mem"
 
 
-def _merge_claude_hooks(existing: dict, workspace: str) -> tuple[dict, bool]:
-    """Merge mind-mem hook entries into a Claude Code settings dict.
+@dataclass(frozen=True)
+class AgentSpec:
+    """Declarative registry entry for an AI coding client integration.
 
-    Returns (new_dict, changed). Idempotent: re-running doesn't
-    duplicate command entries.
+    Attributes:
+        name:            Canonical agent key used in CLI + API.
+        description:     One-line human summary.
+        config_fmt:      "json-claude-hooks" | "json-gemini" |
+                         "json-openclaw-hooks" | "json-generic" |
+                         "text-block" | "yaml-block".
+        path_tmpl:       Target config path; ``{ws}`` expands to workspace,
+                         ``{home}`` to ``~``.
+        content_tmpl:    Text body (for text/yaml formats) with ``{ws}``.
+        detect_paths:    Files/dirs whose existence marks "installed".
+        detect_binaries: Executables whose presence on PATH marks "installed".
+        always_offer:    If True, auto-detect includes this agent even without
+                         signals — suitable for near-universal configs like
+                         GitHub Copilot's per-workspace instructions file.
     """
-    out = json.loads(json.dumps(existing))  # deep copy
+
+    name: str
+    description: str
+    config_fmt: str
+    path_tmpl: str
+    content_tmpl: str = ""
+    detect_paths: tuple[str, ...] = field(default_factory=tuple)
+    detect_binaries: tuple[str, ...] = field(default_factory=tuple)
+    always_offer: bool = False
+
+    def expand_path(self, workspace: str) -> str:
+        return self.path_tmpl.format(
+            ws=workspace,
+            home=os.path.expanduser("~"),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Format writers — each (existing_text_or_dict, workspace) → (new, merged,
+# skipped). Workspace is passed so format writers can render workspace paths.
+# ---------------------------------------------------------------------------
+
+
+def _merge_claude_hooks(existing: dict, workspace: str) -> tuple[dict, bool]:
+    """Idempotent hook merge for Claude Code settings.json."""
+    out = json.loads(json.dumps(existing))
     hooks = out.setdefault("hooks", {})
-    wanted: list[tuple[str, str]] = [
+    wanted = [
         ("SessionStart", f"mm inject --agent claude-code --workspace {workspace}"),
         ("PostToolUse", "mm capture --stdin"),
         ("Stop", "mm vault status"),
@@ -196,6 +237,318 @@ def _merge_claude_hooks(existing: dict, workspace: str) -> tuple[dict, bool]:
     return out, changed
 
 
+def _merge_openclaw_hooks(existing: dict, workspace: str) -> tuple[dict, bool]:
+    """OpenClaw / Nanoclaw / Nemoclaw hook registry merge.
+
+    All three share the claw-family hooks JSON shape at
+    ``.hooks.internal.entries.mind-mem`` so we reuse this merger.
+    """
+    out = json.loads(json.dumps(existing))
+    hooks = out.setdefault("hooks", {}).setdefault("internal", {}).setdefault(
+        "entries", {}
+    )
+    target = {
+        "enabled": True,
+        "workspace": workspace,
+        "commands": {
+            "inject": "mm inject --agent openclaw --workspace " + workspace,
+            "capture": "mm capture --stdin",
+            "status": "mm vault status",
+        },
+    }
+    changed = hooks.get("mind-mem") != target
+    if changed:
+        hooks["mind-mem"] = target
+    return out, changed
+
+
+def _merge_gemini(existing: dict, workspace: str) -> tuple[dict, bool]:
+    """Gemini settings.json system_instruction injection."""
+    instr = (
+        f"mind-mem workspace: {workspace}; "
+        "run `mm inject --agent gemini` before answering."
+    )
+    out = dict(existing)
+    changed = out.get("system_instruction") != instr
+    out["system_instruction"] = instr
+    return out, changed
+
+
+def _merge_continue(existing: dict, workspace: str) -> tuple[dict, bool]:
+    """Continue.dev config.json: inject a systemMessage."""
+    out = json.loads(json.dumps(existing))
+    sys_msg = (
+        f"mind-mem workspace: {workspace}. "
+        "Run `mm inject --agent continue` before composing responses."
+    )
+    if out.get("systemMessage") == sys_msg:
+        return out, False
+    out["systemMessage"] = sys_msg
+    return out, True
+
+
+def _merge_zed(existing: dict, workspace: str) -> tuple[dict, bool]:
+    """Zed settings.json: inject assistant default_model_instructions."""
+    out = json.loads(json.dumps(existing))
+    assistant = out.setdefault("assistant", {})
+    sys_msg = (
+        f"mind-mem workspace: {workspace}. "
+        "Use `mm inject --agent zed` for context."
+    )
+    if assistant.get("default_system_message") == sys_msg:
+        return out, False
+    assistant["default_system_message"] = sys_msg
+    return out, True
+
+
+def _merge_generic_json(existing: dict, workspace: str) -> tuple[dict, bool]:
+    """Fallback JSON merge — sets {"mind_mem": {...}} key."""
+    target = {
+        "enabled": True,
+        "workspace": workspace,
+        "inject_cmd": f"mm inject --workspace {workspace}",
+    }
+    out = dict(existing)
+    if out.get("mind_mem") == target:
+        return out, False
+    out["mind_mem"] = target
+    return out, True
+
+
+_JSON_MERGERS: dict[str, Any] = {
+    "json-claude-hooks": _merge_claude_hooks,
+    "json-openclaw-hooks": _merge_openclaw_hooks,
+    "json-gemini": _merge_gemini,
+    "json-continue": _merge_continue,
+    "json-zed": _merge_zed,
+    "json-generic": _merge_generic_json,
+}
+
+
+# ---------------------------------------------------------------------------
+# Registry — every known AI coding client
+# ---------------------------------------------------------------------------
+
+
+AGENT_REGISTRY: dict[str, AgentSpec] = {
+    "claude-code": AgentSpec(
+        name="claude-code",
+        description="Claude Code CLI (Anthropic)",
+        config_fmt="json-claude-hooks",
+        path_tmpl="{home}/.claude/settings.json",
+        detect_paths=("{home}/.claude", "{home}/.config/claude"),
+        detect_binaries=("claude",),
+    ),
+    "codex": AgentSpec(
+        name="codex",
+        description="OpenAI Codex CLI",
+        config_fmt="text-block",
+        path_tmpl="{ws}/AGENTS.md",
+        content_tmpl=(
+            f"{_MM_MARKER}: agent instructions (auto-written)\n\n"
+            "Before every response, run `mm context \"$QUERY\"` and prepend the output.\n"
+        ),
+        detect_binaries=("codex",),
+    ),
+    "gemini": AgentSpec(
+        name="gemini",
+        description="Google Gemini CLI",
+        config_fmt="json-gemini",
+        path_tmpl="{ws}/.gemini/settings.json",
+        detect_paths=("{home}/.gemini",),
+        detect_binaries=("gemini",),
+    ),
+    "cursor": AgentSpec(
+        name="cursor",
+        description="Cursor editor",
+        config_fmt="text-block",
+        path_tmpl="{ws}/.cursorrules",
+        content_tmpl=(
+            f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\n"
+            "Use `mm inject --agent cursor` before answering.\n"
+        ),
+        detect_paths=(
+            "{home}/.cursor",
+            "{home}/Library/Application Support/Cursor",
+            "{home}/AppData/Roaming/Cursor",
+        ),
+        detect_binaries=("cursor",),
+    ),
+    "windsurf": AgentSpec(
+        name="windsurf",
+        description="Windsurf editor (Codeium)",
+        config_fmt="text-block",
+        path_tmpl="{ws}/.windsurfrules",
+        content_tmpl=(
+            f"{_MM_MARKER}\nworkspace: {{ws}}\n"
+            "prefer `mm inject --agent windsurf`.\n"
+        ),
+        detect_paths=(
+            "{home}/.codeium/windsurf",
+            "{home}/.windsurf",
+            "{home}/Library/Application Support/Windsurf",
+        ),
+        detect_binaries=("windsurf",),
+    ),
+    "aider": AgentSpec(
+        name="aider",
+        description="aider CLI (paul-gauthier)",
+        config_fmt="yaml-block",
+        path_tmpl="{ws}/.aider.conf.yml",
+        content_tmpl=(
+            f"{_MM_MARKER} auto-config\n"
+            "read: [\"{ws}/CLAUDE.md\"]\n"
+        ),
+        detect_binaries=("aider",),
+    ),
+    "openclaw": AgentSpec(
+        name="openclaw",
+        description="OpenClaw (STARGA cognitive assistant)",
+        config_fmt="json-openclaw-hooks",
+        path_tmpl="{home}/.openclaw/openclaw.json",
+        detect_paths=("{home}/.openclaw",),
+        detect_binaries=("openclaw",),
+    ),
+    "nanoclaw": AgentSpec(
+        name="nanoclaw",
+        description="NanoClaw (compact claw variant)",
+        config_fmt="json-openclaw-hooks",
+        path_tmpl="{home}/.nanoclaw/nanoclaw.json",
+        detect_paths=("{home}/.nanoclaw",),
+        detect_binaries=("nanoclaw",),
+    ),
+    "nemoclaw": AgentSpec(
+        name="nemoclaw",
+        description="NemoClaw (memory-focused claw variant)",
+        config_fmt="json-openclaw-hooks",
+        path_tmpl="{home}/.nemoclaw/nemoclaw.json",
+        detect_paths=("{home}/.nemoclaw",),
+        detect_binaries=("nemoclaw",),
+    ),
+    "continue": AgentSpec(
+        name="continue",
+        description="Continue.dev (VS Code / JetBrains extension)",
+        config_fmt="json-continue",
+        path_tmpl="{home}/.continue/config.json",
+        detect_paths=("{home}/.continue",),
+    ),
+    "cline": AgentSpec(
+        name="cline",
+        description="Cline (VS Code extension)",
+        config_fmt="text-block",
+        path_tmpl="{ws}/.clinerules",
+        content_tmpl=(
+            f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\n"
+            "Run `mm inject --agent cline` before tool use.\n"
+        ),
+        detect_paths=(
+            "{home}/.vscode/extensions",
+            "{home}/.vscode-server/extensions",
+        ),
+    ),
+    "roo": AgentSpec(
+        name="roo",
+        description="Roo Code (VS Code fork / extension)",
+        config_fmt="text-block",
+        path_tmpl="{ws}/.roo/system-prompt.md",
+        content_tmpl=(
+            f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\n"
+            "Use `mm inject --agent roo` before answering.\n"
+        ),
+        detect_paths=(
+            "{home}/.roo",
+            "{home}/.vscode/extensions",
+        ),
+    ),
+    "zed": AgentSpec(
+        name="zed",
+        description="Zed editor AI assistant",
+        config_fmt="json-zed",
+        path_tmpl="{home}/.config/zed/settings.json",
+        detect_paths=(
+            "{home}/.config/zed",
+            "{home}/Library/Application Support/Zed",
+        ),
+        detect_binaries=("zed", "zeditor"),
+    ),
+    "copilot": AgentSpec(
+        name="copilot",
+        description="GitHub Copilot (workspace instructions)",
+        config_fmt="text-block",
+        path_tmpl="{ws}/.github/copilot-instructions.md",
+        content_tmpl=(
+            f"{_MM_MARKER}: GitHub Copilot workspace instructions\n\n"
+            "This repository uses mind-mem for persistent memory. "
+            "Before answering, consult memory with `mm inject --agent copilot`. "
+            "Respect ADR / DECISION blocks; route new decisions through "
+            "`propose_update` rather than modifying them directly.\n"
+        ),
+        always_offer=True,  # virtually every dev machine has Copilot potential
+    ),
+    "cody": AgentSpec(
+        name="cody",
+        description="Sourcegraph Cody",
+        config_fmt="json-generic",
+        path_tmpl="{ws}/.cody/config.json",
+        detect_paths=("{home}/.config/cody",),
+        detect_binaries=("cody",),
+    ),
+    "qodo": AgentSpec(
+        name="qodo",
+        description="Qodo Gen (formerly CodiumAI)",
+        config_fmt="text-block",
+        path_tmpl="{ws}/.codium/ai-rules.md",
+        content_tmpl=(
+            f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\n"
+            "Consult mind-mem memory before proposing changes.\n"
+        ),
+        detect_paths=("{home}/.codium", "{home}/.qodo"),
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
+# Detection
+# ---------------------------------------------------------------------------
+
+
+def _path_exists(pattern: str, workspace: str) -> bool:
+    expanded = pattern.format(ws=workspace, home=os.path.expanduser("~"))
+    return os.path.exists(expanded)
+
+
+def detect_installed_agents(workspace: str) -> list[str]:
+    """Return the names of agents whose binary is on PATH or whose
+    config dir exists. Always includes agents flagged ``always_offer``
+    (typically GitHub Copilot, which is near-universal).
+
+    Auto-detection is non-invasive: no processes spawned, no network
+    calls. Just :func:`os.path.exists` + :func:`shutil.which`.
+    """
+    out: list[str] = []
+    for spec in AGENT_REGISTRY.values():
+        hit = False
+        for bin_name in spec.detect_binaries:
+            if _shutil.which(bin_name):
+                hit = True
+                break
+        if not hit:
+            for p in spec.detect_paths:
+                if _path_exists(p, workspace):
+                    hit = True
+                    break
+        if not hit and spec.always_offer:
+            hit = True
+        if hit:
+            out.append(spec.name)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Install (single + all)
+# ---------------------------------------------------------------------------
+
+
 def install_config(
     agent: str,
     workspace: str,
@@ -203,57 +556,42 @@ def install_config(
     dry_run: bool = False,
     force: bool = False,
 ) -> dict:
-    """Generate (and optionally write) the config file each agent expects.
+    """Generate (and optionally write) the config file *agent* expects.
 
-    Non-destructive by default. If the target file already exists:
+    Non-destructive by default. Existing files are parsed + merged
+    (JSON formats) or appended once under the ``# mind-mem`` marker
+    (text/yaml formats). Pass ``force=True`` to overwrite.
 
-    - For JSON configs (claude-code, gemini) the file is parsed and
-      the mind-mem keys are merged in. Existing user keys are kept.
-    - For text configs (codex AGENTS.md, cursor, windsurf, aider)
-      the mind-mem block is appended once. Idempotent — re-running
-      does not duplicate blocks.
-    - ``force=True`` restores the legacy destructive behaviour
-      (overwrite the file). Use sparingly.
-
-    The returned dict has::
+    Returns::
 
         {"agent": ..., "path": ..., "written": bool,
          "content": ..., "merged": bool, "skipped": bool}
-
-    and is safe to pretty-print for CLI use.
     """
+    spec = AGENT_REGISTRY.get(agent)
+    if spec is None:
+        raise ValueError(f"unknown agent: {agent!r}")
+
+    path = spec.expand_path(workspace)
     merged = False
     skipped = False
+    fmt = spec.config_fmt
 
-    if agent == "claude-code":
-        path = os.path.expanduser("~/.claude/settings.json")
-        base_content: dict = {
-            "hooks": {
-                "SessionStart": [
-                    {"command": f"mm inject --agent claude-code --workspace {workspace}"}
-                ],
-                "PostToolUse": [{"command": "mm capture --stdin"}],
-                "Stop": [{"command": "mm vault status"}],
-            }
-        }
-        content: Any = base_content
+    if fmt in _JSON_MERGERS:
+        merger = _JSON_MERGERS[fmt]
+        existing: dict = {}
         if os.path.isfile(path) and not force:
             try:
                 with open(path, "r", encoding="utf-8") as fh:
-                    existing = json.load(fh)
+                    loaded = json.load(fh)
+                if isinstance(loaded, dict):
+                    existing = loaded
             except (OSError, json.JSONDecodeError):
-                existing = None
-            if isinstance(existing, dict):
-                content, changed = _merge_claude_hooks(existing, workspace)
-                merged = True
-                skipped = not changed
-    elif agent == "codex":
-        path = os.path.join(workspace, "AGENTS.md")
-        block = (
-            f"{_MM_MARKER}: agent instructions (auto-written)\n\n"
-            "Before every response, run `mm context \"$QUERY\"` and prepend the output.\n"
-        )
-        content = block
+                existing = {}
+        content, changed = merger(existing, workspace)
+        merged = os.path.isfile(path) and not force
+        skipped = merged and not changed
+    elif fmt in ("text-block", "yaml-block"):
+        block = spec.content_tmpl.format(ws=workspace)
         if os.path.isfile(path) and not force:
             try:
                 with open(path, "r", encoding="utf-8") as fh:
@@ -266,86 +604,10 @@ def install_config(
             else:
                 content = existing_text.rstrip() + "\n\n" + block
                 merged = True
-    elif agent == "gemini":
-        path = os.path.join(workspace, ".gemini", "settings.json")
-        mind_mem_instruction = (
-            f"mind-mem workspace: {workspace}; "
-            "run `mm inject --agent gemini` for context."
-        )
-        content = {"system_instruction": mind_mem_instruction}
-        if os.path.isfile(path) and not force:
-            try:
-                with open(path, "r", encoding="utf-8") as fh:
-                    existing = json.load(fh)
-            except (OSError, json.JSONDecodeError):
-                existing = None
-            if isinstance(existing, dict):
-                out = dict(existing)
-                if out.get("system_instruction") != mind_mem_instruction:
-                    out["system_instruction"] = mind_mem_instruction
-                    merged = True
-                else:
-                    skipped = True
-                content = out
-    elif agent == "cursor":
-        path = os.path.join(workspace, ".cursorrules")
-        block = (
-            f"{_MM_MARKER}\nmind-mem workspace: {workspace}\n"
-            "Use `mm inject --agent cursor` before answering.\n"
-        )
-        content = block
-        if os.path.isfile(path) and not force:
-            try:
-                with open(path, "r", encoding="utf-8") as fh:
-                    existing_text = fh.read()
-            except OSError:
-                existing_text = ""
-            if _MM_MARKER in existing_text:
-                content = existing_text
-                skipped = True
-            else:
-                content = existing_text.rstrip() + "\n\n" + block
-                merged = True
-    elif agent == "windsurf":
-        path = os.path.join(workspace, ".windsurfrules")
-        block = (
-            f"{_MM_MARKER}\nworkspace: {workspace}\n"
-            "prefer `mm inject --agent windsurf`.\n"
-        )
-        content = block
-        if os.path.isfile(path) and not force:
-            try:
-                with open(path, "r", encoding="utf-8") as fh:
-                    existing_text = fh.read()
-            except OSError:
-                existing_text = ""
-            if _MM_MARKER in existing_text:
-                content = existing_text
-                skipped = True
-            else:
-                content = existing_text.rstrip() + "\n\n" + block
-                merged = True
-    elif agent == "aider":
-        path = os.path.join(workspace, ".aider.conf.yml")
-        block = (
-            f"{_MM_MARKER} auto-config\n"
-            f"read: [\"{workspace}/CLAUDE.md\"]\n"
-        )
-        content = block
-        if os.path.isfile(path) and not force:
-            try:
-                with open(path, "r", encoding="utf-8") as fh:
-                    existing_text = fh.read()
-            except OSError:
-                existing_text = ""
-            if _MM_MARKER in existing_text:
-                content = existing_text
-                skipped = True
-            else:
-                content = existing_text.rstrip() + "\n\n" + block
-                merged = True
+        else:
+            content = block
     else:
-        raise ValueError(f"unknown agent: {agent!r}")
+        raise ValueError(f"unknown config_fmt: {fmt!r} for agent {agent!r}")
 
     serialised = json.dumps(content, indent=2) if isinstance(content, dict) else content
     if dry_run:
@@ -379,6 +641,36 @@ def install_config(
     }
 
 
+def install_all(
+    workspace: str,
+    *,
+    dry_run: bool = False,
+    force: bool = False,
+    agents: list[str] | None = None,
+) -> list[dict]:
+    """Install mind-mem config for every detected (or specified) agent.
+
+    When ``agents`` is None, auto-detects which clients are installed
+    on the current machine via :func:`detect_installed_agents`.
+    Otherwise uses the explicit list.
+
+    Returns the per-agent result list so callers can surface which
+    files were written, merged, or skipped.
+    """
+    names = agents if agents is not None else detect_installed_agents(workspace)
+    results: list[dict] = []
+    for name in names:
+        try:
+            results.append(
+                install_config(name, workspace, dry_run=dry_run, force=force)
+            )
+        except Exception as exc:  # pragma: no cover — per-agent isolation
+            results.append(
+                {"agent": name, "error": str(exc), "written": False}
+            )
+    return results
+
+
 __all__ = [
     "HOOK_EVENT_SCHEMA",
     "HookEvent",
@@ -386,4 +678,8 @@ __all__ = [
     "privacy_filter",
     "observation_to_block",
     "install_config",
+    "install_all",
+    "detect_installed_agents",
+    "AGENT_REGISTRY",
+    "AgentSpec",
 ]

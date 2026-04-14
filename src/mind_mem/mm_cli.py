@@ -99,6 +99,68 @@ def _cmd_vault_scan(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_install(args: argparse.Namespace) -> int:
+    """Install mind-mem config for a single named agent."""
+    from mind_mem.hook_installer import install_config
+
+    ws = _workspace()
+    try:
+        result = install_config(
+            args.agent, ws, dry_run=args.dry_run, force=args.force
+        )
+    except ValueError as exc:
+        print(json.dumps({"error": str(exc)}, indent=2))
+        return 1
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+def _cmd_install_all(args: argparse.Namespace) -> int:
+    """Auto-detect installed AI clients and configure all of them."""
+    from mind_mem.hook_installer import detect_installed_agents, install_all
+
+    ws = _workspace()
+    agents = args.agent or None  # None → auto-detect
+    results = install_all(
+        ws, dry_run=args.dry_run, force=args.force, agents=agents
+    )
+    summary = {
+        "workspace": ws,
+        "agents": agents if agents is not None else detect_installed_agents(ws),
+        "results": results,
+        "summary": {
+            "written": sum(1 for r in results if r.get("written")),
+            "merged": sum(1 for r in results if r.get("merged")),
+            "skipped": sum(1 for r in results if r.get("skipped")),
+            "errored": sum(1 for r in results if "error" in r),
+            "total": len(results),
+        },
+    }
+    print(json.dumps(summary, indent=2))
+    return 0 if summary["summary"]["errored"] == 0 else 1
+
+
+def _cmd_detect(args: argparse.Namespace) -> int:
+    """List AI clients detected on the current machine."""
+    from mind_mem.hook_installer import AGENT_REGISTRY, detect_installed_agents
+
+    ws = _workspace()
+    detected = detect_installed_agents(ws)
+    out = {
+        "workspace": ws,
+        "detected": detected,
+        "details": {
+            name: {
+                "description": AGENT_REGISTRY[name].description,
+                "config_path": AGENT_REGISTRY[name].expand_path(ws),
+            }
+            for name in detected
+        },
+    }
+    print(json.dumps(out, indent=2))
+    return 0
+
+
 def _cmd_vault_write(args: argparse.Namespace) -> int:
     from mind_mem.agent_bridge import VaultBlock, VaultBridge
 
@@ -161,6 +223,51 @@ def build_parser() -> argparse.ArgumentParser:
     # status
     p_status = sub.add_parser("status", help="Print workspace status as JSON.")
     p_status.set_defaults(func=_cmd_status)
+
+    # detect — list AI coding clients present on the machine
+    p_detect = sub.add_parser(
+        "detect",
+        help="Auto-detect installed AI coding clients for this workspace.",
+    )
+    p_detect.set_defaults(func=_cmd_detect)
+
+    # install — configure a single agent
+    p_install = sub.add_parser(
+        "install",
+        help="Configure mind-mem for one named AI coding client.",
+    )
+    p_install.add_argument(
+        "agent",
+        help=(
+            "Agent key: claude-code, codex, gemini, cursor, windsurf, "
+            "aider, openclaw, nanoclaw, nemoclaw, continue, cline, roo, "
+            "zed, copilot, cody, qodo."
+        ),
+    )
+    p_install.add_argument("--dry-run", action="store_true")
+    p_install.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing config instead of non-destructive merge.",
+    )
+    p_install.set_defaults(func=_cmd_install)
+
+    # install-all — auto-detect + configure everything
+    p_install_all = sub.add_parser(
+        "install-all",
+        help="Auto-detect + configure every installed AI coding client.",
+    )
+    p_install_all.add_argument(
+        "--agent",
+        action="append",
+        help=(
+            "Restrict installation to these named agents. Repeat flag for "
+            "multiple. Default = auto-detect every installed client."
+        ),
+    )
+    p_install_all.add_argument("--dry-run", action="store_true")
+    p_install_all.add_argument("--force", action="store_true")
+    p_install_all.set_defaults(func=_cmd_install_all)
 
     # vault namespace
     p_vault = sub.add_parser("vault", help="Vault sync subcommands.")

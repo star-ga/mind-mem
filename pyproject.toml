@@ -1,6 +1,6 @@
 [project]
 name = "mind-mem"
-version = "2.10.0"
+version = "3.0.0"
 description = "Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -70,6 +70,13 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+# Default run excludes the `stress` marker — it gates heavier
+# concurrency tests that take 30-60s and can flake on shared CI
+# infra. Opt in with `pytest -m stress` when you want them.
+addopts = "-m 'not stress'"
+markers = [
+    "stress: slow concurrency/stress tests; run with `pytest -m stress`",
+]
 
 [tool.ruff]
 target-version = "py310"

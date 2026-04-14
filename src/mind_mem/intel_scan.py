@@ -1295,21 +1295,63 @@ def main():
         intel_state["counters"]["briefings"] = intel_state["counters"].get("briefings", 0) + 1
         save_intel_state(ws, intel_state)
 
-    # Summary
+        # v3.0.0+ (#503): fire governance alerts through the configured
+        # router. Contradictions & severe drift are the two signals that
+        # operators typically want pushed to Slack/webhook immediately.
+        _fire_scan_alerts(ws, contradictions, drift_signals)
+
+    _finalize_report(ws, report)
+
+
+def _fire_scan_alerts(ws, contradictions, drift_signals) -> None:
+    """Route contradiction + drift counts through the alerting router.
+
+    Severity escalation:
+      - contradictions ≥ 1 → warning
+      - contradictions ≥ 5 → critical
+      - drift signals  ≥ 10 → warning
+    """
+    try:
+        from .alerting import get_alert_router
+
+        router = get_alert_router(ws)
+        if contradictions:
+            sev = "critical" if len(contradictions) >= 5 else "warning"
+            router.fire(
+                severity=sev,
+                event="contradictions_detected",
+                payload={"count": len(contradictions)},
+            )
+        if len(drift_signals) >= 10:
+            router.fire(
+                severity="warning",
+                event="drift_spike",
+                payload={"count": len(drift_signals)},
+            )
+    except Exception:  # pragma: no cover — alerting is best-effort
+        pass
+
+
+def _finalize_report(ws, report) -> None:
+    """Emit the Summary block + write + print + exit. Called from main().
+
+    Pulled into its own function so `main()` stays linear and
+    `_fire_scan_alerts` doesn't accidentally swallow the finalisation
+    tail (regression caught by test_fresh_workspace_passes).
+    """
     report.lines.append("")
     report.lines.append("=" * 50)
-    report.lines.append(f"TOTAL: {report.critical} critical | {report.warnings} warnings | {report.info} info")
+    report.lines.append(
+        f"TOTAL: {report.critical} critical | "
+        f"{report.warnings} warnings | {report.info} info"
+    )
     report.lines.append("=" * 50)
 
-    # Write report
     report_path = f"{ws}/maintenance/intel-report.txt"
     with open(report_path, "w") as f:
         f.write(report.text() + "\n")
 
-    # Print to stdout
     print(report.text())
-
-    # Exit code
     sys.exit(1 if report.critical > 0 else 0)
 
 

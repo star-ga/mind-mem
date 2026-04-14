@@ -31,7 +31,27 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from .connection_manager import ConnectionManager
-from .observability import get_logger
+from .observability import get_logger, metrics
+
+
+def _hours_since(iso_timestamp: str | None, now: datetime) -> float:
+    """Hours elapsed between an ISO timestamp and *now*.
+
+    Returns 0 for unparseable or absent inputs so the caller treats the
+    block as "just seen" rather than accidentally demoting/evicting it.
+    """
+    if not iso_timestamp:
+        return 0.0
+    try:
+        text = iso_timestamp
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        dt = datetime.fromisoformat(text)
+    except (ValueError, TypeError):
+        return 0.0
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return max(0.0, (now - dt).total_seconds() / 3600.0)
 
 _log = get_logger("memory_tiers")
 
@@ -68,32 +88,53 @@ class TierPolicy:
         min_age_hours:     Minimum hours since block creation.
         min_confirmations: Minimum explicit confirmations received.
         min_confidence:    Minimum confidence score (0.0–1.0).
+        max_idle_hours:    If >0, a block whose last access is older than
+                           this many hours is demoted back to the previous
+                           tier (TTL/LRU decay — #502, v3.0.0+).
+        ttl_hours:         If >0, a block older than this many hours and
+                           at this tier is evicted outright (returns to
+                           WORKING). Only applies to WORKING tier by
+                           default so top tiers never auto-delete.
     """
 
     min_access_count: int = 0
     min_age_hours: float = 0.0
     min_confirmations: int = 0
     min_confidence: float = 0.0
+    max_idle_hours: float = 0.0
+    ttl_hours: float = 0.0
 
 
 def default_policies() -> dict[MemoryTier, TierPolicy]:
-    """Return the default promotion policies for all tiers.
+    """Return the default promotion + decay policies for all tiers.
 
-    WORKING is the entry tier — its policy defines the minimum floor
-    (always satisfied on insert).  Policies for higher tiers define
-    what a block at the *previous* tier must achieve to move up.
+    WORKING is the entry tier; its ttl_hours caps how long a never-
+    re-accessed block sticks around. Higher tiers have max_idle_hours
+    (demote to previous tier after inactivity) but no ttl (never
+    outright evicted — once trusted, only explicit demotion removes).
     """
     return {
-        MemoryTier.WORKING: TierPolicy(),                                     # no requirements to enter
-        MemoryTier.SHARED: TierPolicy(min_access_count=3, min_age_hours=1.0),
+        MemoryTier.WORKING: TierPolicy(
+            # WORKING is the only tier with outright eviction (ttl). After
+            # a week of no access we assume the block was a one-off
+            # observation that never graduated and can be purged.
+            ttl_hours=24.0 * 7,
+        ),
+        MemoryTier.SHARED: TierPolicy(
+            min_access_count=3,
+            min_age_hours=1.0,
+            max_idle_hours=24.0 * 14,  # 2 weeks idle → demote to WORKING
+        ),
         MemoryTier.LONG_TERM: TierPolicy(
             min_access_count=10,
             min_age_hours=24.0,
             min_confirmations=2,
+            max_idle_hours=24.0 * 60,  # 2 months idle → demote to SHARED
         ),
         MemoryTier.VERIFIED: TierPolicy(
             min_confirmations=5,
             min_confidence=0.9,
+            max_idle_hours=24.0 * 180,  # 6 months idle → demote to LONG_TERM
         ),
     }
 
@@ -269,6 +310,91 @@ class TierManager:
                     promotions.append((block_id, old_tier, new_tier))
         _log.info("promotion_cycle_complete", promotions=len(promotions))
         return promotions
+
+    def run_decay_cycle(
+        self, *, now: datetime | None = None
+    ) -> tuple[list[tuple[str, MemoryTier, MemoryTier]], list[str]]:
+        """Apply TTL + max-idle decay across every tracked block.
+
+        Two outcomes per block:
+
+        1. ``max_idle_hours`` exceeded → demoted one tier (STALE reason).
+        2. ``ttl_hours`` exceeded (WORKING only by default) → evicted
+           from tier tracking entirely (row deleted from block_tiers).
+
+        Returns ``(demotions, evicted_block_ids)``.
+        """
+        current = now or datetime.now(timezone.utc)
+        all_ids = self._all_tracked_ids()
+        demotions: list[tuple[str, MemoryTier, MemoryTier]] = []
+        evicted: list[str] = []
+        for block_id in all_ids:
+            tier = self.get_tier(block_id)
+            policy = self._policies.get(tier)
+            if policy is None:
+                continue
+            meta = self._read_meta(block_id)
+            # When no block_meta row exists (common for blocks registered
+            # directly via _register_block without touching block_meta),
+            # fall back to the tier row's own updated_at timestamp so
+            # decay still applies. Idle time counts from "first tracked".
+            if meta is None:
+                last_access = self._tier_updated_at(block_id)
+            else:
+                last_access = meta.get("last_access_at") or meta.get("created_at")
+            idle_hours = _hours_since(last_access, current)
+            # Eviction (WORKING tier default).
+            if policy.ttl_hours > 0 and idle_hours >= policy.ttl_hours:
+                if self._evict(block_id):
+                    evicted.append(block_id)
+                continue
+            # Demotion to previous tier.
+            if policy.max_idle_hours > 0 and idle_hours >= policy.max_idle_hours:
+                prev = MemoryTier(max(1, int(tier) - 1))
+                if prev != tier and self.demote(block_id, prev, DemotionReason.STALE):
+                    demotions.append((block_id, tier, prev))
+        _log.info(
+            "decay_cycle_complete",
+            demotions=len(demotions),
+            evicted=len(evicted),
+        )
+        metrics.inc("tier_demotions", len(demotions))
+        metrics.inc("tier_evictions", len(evicted))
+        return demotions, evicted
+
+    def _tier_updated_at(self, block_id: str) -> str | None:
+        """Return the block_tiers.updated_at ISO string, or None."""
+        with self._lock:
+            try:
+                conn = self._conn_mgr.get_read_connection()
+                row = conn.execute(
+                    "SELECT updated_at FROM block_tiers WHERE id = ?",
+                    (block_id,),
+                ).fetchone()
+                if row is None:
+                    return None
+                # row may be sqlite3.Row or tuple — pick the single column
+                try:
+                    return row["updated_at"]
+                except (IndexError, KeyError, TypeError):
+                    return row[0]
+            except sqlite3.Error:
+                return None
+
+    def _evict(self, block_id: str) -> bool:
+        """Remove the block from tier tracking (used by run_decay_cycle)."""
+        with self._lock:
+            try:
+                with self._conn_mgr.write_lock:
+                    conn = self._conn_mgr.get_write_connection()
+                    cur = conn.execute(
+                        "DELETE FROM block_tiers WHERE id = ?", (block_id,)
+                    )
+                    conn.commit()
+                    return cur.rowcount > 0
+            except sqlite3.Error as exc:
+                _log.warning("evict_failed", block_id=block_id, error=str(exc))
+                return False
 
     # ------------------------------------------------------------------
     # Semi-private helper used by tests to pre-register blocks

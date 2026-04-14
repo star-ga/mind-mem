@@ -261,7 +261,18 @@ def _run_tier_promotion(ws: str) -> int:
 
         db_path = os.path.join(ws, "intelligence", "tiers.db")
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        promotions = TierManager(db_path).run_promotion_cycle()
+        mgr = TierManager(db_path)
+        promotions = mgr.run_promotion_cycle()
+        # v3.0.0+ (#502): TTL/LRU decay — demote stale blocks, evict
+        # never-used WORKING-tier entries. Runs alongside promotion so
+        # the tier distribution actually stays bounded.
+        demotions, evicted = mgr.run_decay_cycle()
+        if demotions or evicted:
+            _log.info(
+                "tier_decay",
+                demotions=len(demotions),
+                evicted=len(evicted),
+            )
         return len(promotions)
     except Exception as exc:  # pragma: no cover — best-effort
         _log.warning("tier_promotion_failed", error=str(exc))

@@ -1,0 +1,26 @@
+{
+  "date": "2026-04-13",
+  "generated_at": "2026-04-14T06:45:25.456801+00:00",
+  "decisions": {
+    "active": [],
+    "superseded": [],
+    "revoked": []
+  },
+  "tasks": {
+    "todo": [],
+    "doing": [],
+    "blocked": [],
+    "done": [],
+    "canceled": []
+  },
+  "projects": {
+    "active": []
+  },
+  "metrics": {
+    "contradictions_open": 0,
+    "drift_signals_open": 0,
+    "total_decisions": 0,
+    "total_tasks": 0,
+    "total_incidents": 0
+  }
+}
