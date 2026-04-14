@@ -1,6 +1,6 @@
-# mind-mem-7b training pipeline
+# mind-mem-4b training pipeline
 
-Scripts to retrain the [`star-ga/mind-mem-7b`](https://huggingface.co/star-ga/mind-mem-7b) governance-aware memory-assistant model on a fresh checkout of the mind-mem repo.
+Scripts to retrain the [`star-ga/mind-mem-4b`](https://huggingface.co/star-ga/mind-mem-4b) governance-aware memory-assistant model on a fresh checkout of the mind-mem repo.
 
 Training artifacts land in `/home/n/mm-train-output/`, which is gitignored — the repo only carries the scripts, not the weights.
 
@@ -29,7 +29,7 @@ Produces `/home/n/mm-train-output/corpus.jsonl`. Five sources: MCP tool docstrin
 python3 train/train_qlora.py
 ```
 
-QLoRA on Qwen2.5-7B-Instruct. Fits in 10 GB VRAM on a 3080. Wall time ≈ 2-4 hours on a 393-example corpus with 3 epochs. Override base model via `MM_BASE_MODEL`.
+QLoRA on Qwen3.5-4B. Fits in 10 GB VRAM on a 3080. Wall time ≈ 2-4 hours on a 393-example corpus with 3 epochs. Override base model via `MM_BASE_MODEL`.
 
 ### 3. Evaluate
 
@@ -53,7 +53,7 @@ Merges the LoRA back into the base, converts to GGUF, then quantizes to Q4_K_M. 
 HF_TOKEN=hf_... python3 train/upload_to_hf.py
 ```
 
-Pushes adapter + README + GGUF to `star-ga/mind-mem-7b`. **Requires a write-scope token** — the default read-only token cached in `~/.cache/huggingface/token` will be rejected by the upload script before bytes are sent.
+Pushes adapter + README + GGUF to `star-ga/mind-mem-4b`. **Requires a write-scope token** — the default read-only token cached in `~/.cache/huggingface/token` will be rejected by the upload script before bytes are sent.
 
 ## Constraints
 

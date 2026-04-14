@@ -1,4 +1,4 @@
-"""Harvest a training corpus for the mind-mem-7b model.
+"""Harvest a training corpus for the mind-mem-4b model.
 
 Produces /home/n/mm-train-output/corpus.jsonl — one example per line, in
 the chat format expected by the SFTTrainer.  Each example follows::
@@ -31,10 +31,15 @@ from pathlib import Path
 from typing import Iterable, Iterator
 
 REPO = Path("/home/n/mind-mem")
-OUT = Path("/home/n/mm-train-output/corpus.jsonl")
+OUT = Path(
+    os.environ.get(
+        "MM_CORPUS_OUT",
+        "/data/checkpoints/mm-workspace/train-output/corpus.jsonl",
+    )
+)
 
 SYSTEM_PROMPT = (
-    "You are mind-mem-7b, a memory-governance assistant specialised in "
+    "You are mind-mem-4b, a memory-governance assistant specialised in "
     "auditable, contradiction-safe memory for coding agents. You know "
     "the mind-mem Python package, its 57 MCP tools, block schemas, "
     "governance workflows, and CHANGELOG history. You respond "

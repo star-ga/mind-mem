@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 441 | **Est. tokens:** ~929,561
-**Generated:** 2026-04-14 06:58 UTC
+**Files:** 455 | **Est. tokens:** ~952,899
+**Generated:** 2026-04-14 23:53 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~79,677 |
+| `./` | 27 | ~79,683 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 30 | ~29,238 |
@@ -43,11 +43,12 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 111 | ~381,953 |
+| `src/mind_mem/` | 111 | ~384,020 |
+| `src/mind_mem/skill_opt/` | 11 | ~13,539 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 175 | ~354,413 |
+| `tests/` | 176 | ~357,673 |
 | `tests/integration/` | 2 | ~1,436 |
-| `train/` | 8 | ~17,216 |
+| `train/` | 10 | ~21,682 |
 
 ## Files
 
@@ -71,7 +72,7 @@
 - `mcp_server.py` (~448 tok, medium) — Source-checkout entrypoint for the packaged Mind-Mem MCP server."""
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
-- `pyproject.toml` (~862 tok, large) — [project]
+- `pyproject.toml` (~868 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~21918 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
@@ -293,7 +294,7 @@
 - `mind_ffi.py` (~5127 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1728 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~2584 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~4651 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mrs.py` (~1620 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `multi_modal.py` (~1662 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `namespaces.py` (~3569 tok, huge) — mind-mem Multi-Agent Namespace & ACL Engine. Zero external deps.
@@ -322,6 +323,21 @@
 - `retrieval_graph.py` (~4996 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
 - `schema_version.py` (~1897 tok, huge) — Mind-Mem Schema Version Migration. Zero external deps.
 - `session_summarizer.py` (~2885 tok, huge) — mind-mem Session Summarizer. Zero external deps.
+### `src/mind_mem/skill_opt/`
+
+- `adapters.py` (~2224 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `analyzer.py` (~1145 tok, large) — # Copyright 2026 STARGA, Inc.
+- `config.py` (~927 tok, large) — # Copyright 2026 STARGA, Inc.
+- `fleet_bridge.py` (~1384 tok, large) — # Copyright 2026 STARGA, Inc.
+- `history.py` (~1698 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `__init__.py` (~89 tok, small) — # Copyright 2026 STARGA, Inc.
+- `mutator.py` (~907 tok, large) — # Copyright 2026 STARGA, Inc.
+- `scorer.py` (~1415 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_runner.py` (~1384 tok, large) — # Copyright 2026 STARGA, Inc.
+- `_types.py` (~1370 tok, large) — # Copyright 2026 STARGA, Inc.
+- `validator.py` (~996 tok, large) — # Copyright 2026 STARGA, Inc.
+### `src/mind_mem/`
+
 - `smart_chunker.py` (~6752 tok, huge) — mind-mem Smart Chunker — Semantic-boundary document chunking.
 - `smoke_test.sh` (~633 tok, large) — mind-mem Smoke Test — end-to-end verification
 - `spec_binding.py` (~2896 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -520,6 +536,7 @@
 - `test_scoring.py` (~337 tok, medium) — Tests for BM25 scoring functions."""
 - `test_session_summarizer.py` (~3933 tok, huge) — Comprehensive tests for mind_mem/session_summarizer.py.
 - `test_skeptical_query.py` (~194 tok, small) — Tests for skeptical query detection."""
+- `test_skill_opt.py` (~3260 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_smart_chunker_code.py` (~1240 tok, large) — Tests for code-aware chunking in smart_chunker.py."""
 - `test_smart_chunker.py` (~7767 tok, huge) — Tests for smart_chunker.py — semantic-boundary document chunking."""
 - `test_spec_binding.py` (~3195 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -543,13 +560,15 @@
 ### `train/`
 
 - `backport_sweep.py` (~1589 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
-- `build_corpus.py` (~7993 tok, huge) — Harvest a training corpus for the mind-mem-7b model.
-- `build_model_card.py` (~1854 tok, huge) — Generate the HuggingFace model-card README for mind-mem-7b v2.9.0."""
-- `eval_harness.py` (~2142 tok, huge) — Eval harness for mind-mem-7b.
-- `export_gguf.py` (~1055 tok, large) — Merge the LoRA adapter into the base weights, then export to GGUF.
-- `README.md` (~579 tok, large) — mind-mem-7b training pipeline
-- `train_qlora.py` (~1126 tok, large) — QLoRA fine-tune for mind-mem-7b on the harvested corpus.
-- `upload_to_hf.py` (~878 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-7b.
+- `build_corpus.py` (~8014 tok, huge) — Harvest a training corpus for the mind-mem-4b model.
+- `build_model_card.py` (~1881 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b v3.0.0."""
+- `eval_harness.py` (~2159 tok, huge) — Eval harness for mind-mem-4b.
+- `export_gguf.py` (~1057 tok, large) — Merge the LoRA adapter into the base weights, then export to GGUF.
+- `README.md` (~577 tok, large) — mind-mem-4b training pipeline
+- `runpod_deploy.py` (~3073 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
+- `runpod_full_ft.py` (~1252 tok, large) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
+- `train_qlora.py` (~1187 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
+- `upload_to_hf.py` (~893 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-4b.
 
 ---
 *Generated by `anatomy 1.0.0`. Edit descriptions manually — re-run preserves structure.*

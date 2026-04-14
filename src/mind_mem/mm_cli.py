@@ -178,6 +178,179 @@ def _cmd_vault_write(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# skill subcommands
+# ---------------------------------------------------------------------------
+
+
+def _cmd_skill_list(args: argparse.Namespace) -> int:
+    from mind_mem.skill_opt.adapters import discover_all
+    from mind_mem.skill_opt.config import load_config
+
+    cfg = load_config(_workspace())
+    specs = discover_all(cfg.resolve_sources())
+    rows = [s.as_dict() for s in specs]
+    print(json.dumps(rows, indent=2))
+    return 0
+
+
+def _cmd_skill_test(args: argparse.Namespace) -> int:
+    import asyncio
+
+    from mind_mem.skill_opt.adapters import discover_all
+    from mind_mem.skill_opt.config import load_config
+    from mind_mem.skill_opt.fleet_bridge import FleetBridge
+    from mind_mem.skill_opt.test_runner import generate_test_cases, run_tests
+
+    cfg = load_config(_workspace())
+    specs = discover_all(cfg.resolve_sources())
+    spec = next((s for s in specs if s.skill_id == args.skill_id), None)
+    if spec is None:
+        print(json.dumps({"error": f"Skill not found: {args.skill_id}"}))
+        return 1
+    fleet = FleetBridge(models=cfg.fleet_models.get("test_execution"))
+
+    async def _run() -> list[dict[str, Any]]:
+        cases = await generate_test_cases(spec, fleet, count=cfg.test_cases_per_skill)
+        results = await run_tests(spec, cases, fleet)
+        return [r.as_dict() for r in results]
+
+    out = asyncio.run(_run())
+    print(json.dumps(out, indent=2))
+    return 0
+
+
+def _cmd_skill_analyze(args: argparse.Namespace) -> int:
+    import asyncio
+
+    from mind_mem.skill_opt.adapters import discover_all
+    from mind_mem.skill_opt.analyzer import aggregate_analysis, analyze_skill
+    from mind_mem.skill_opt.config import load_config
+    from mind_mem.skill_opt.fleet_bridge import FleetBridge
+    from mind_mem.skill_opt.test_runner import generate_test_cases, run_tests
+
+    cfg = load_config(_workspace())
+    specs = discover_all(cfg.resolve_sources())
+    spec = next((s for s in specs if s.skill_id == args.skill_id), None)
+    if spec is None:
+        print(json.dumps({"error": f"Skill not found: {args.skill_id}"}))
+        return 1
+    fleet = FleetBridge()
+
+    async def _run() -> dict[str, Any]:
+        cases = await generate_test_cases(spec, fleet, count=cfg.test_cases_per_skill)
+        results = await run_tests(spec, cases, fleet)
+        critiques = await analyze_skill(spec, results, fleet, min_critics=cfg.min_critics)
+        return aggregate_analysis(critiques)
+
+    out = asyncio.run(_run())
+    print(json.dumps(out, indent=2))
+    return 0
+
+
+def _cmd_skill_optimize(args: argparse.Namespace) -> int:
+    import asyncio
+    import uuid
+
+    from mind_mem.skill_opt.adapters import discover_all
+    from mind_mem.skill_opt.analyzer import aggregate_analysis, analyze_skill
+    from mind_mem.skill_opt.config import load_config
+    from mind_mem.skill_opt.fleet_bridge import FleetBridge
+    from mind_mem.skill_opt.history import HistoryStore
+    from mind_mem.skill_opt.mutator import propose_mutations
+    from mind_mem.skill_opt.scorer import aggregate_critiques
+    from mind_mem.skill_opt.test_runner import generate_test_cases, run_tests
+    from mind_mem.skill_opt.validator import submit_to_governance, validate_mutation
+
+    cfg = load_config(_workspace())
+    specs = discover_all(cfg.resolve_sources())
+    spec = next((s for s in specs if s.skill_id == args.skill_id), None)
+    if spec is None:
+        print(json.dumps({"error": f"Skill not found: {args.skill_id}"}))
+        return 1
+    fleet = FleetBridge()
+    ws = cfg.governance_workspace or _workspace()
+    db_path = os.path.join(ws, cfg.history_db_path)
+    store = HistoryStore(db_path)
+    run_id = f"R-{uuid.uuid4().hex[:12]}"
+
+    async def _run() -> dict[str, Any]:
+        store.start_run(run_id, spec.skill_id, spec.content_hash, cfg.as_dict())
+        cases = await generate_test_cases(spec, fleet, count=cfg.test_cases_per_skill)
+        results = await run_tests(spec, cases, fleet)
+        critiques = await analyze_skill(spec, results, fleet, min_critics=cfg.min_critics)
+        analysis = aggregate_analysis(critiques)
+        mutations = await propose_mutations(spec, analysis, fleet, max_mutations=cfg.max_mutations_per_run)
+
+        best_mutation = None
+        best_validation = None
+        for m in mutations:
+            v = await validate_mutation(spec, m, cases, fleet, cfg)
+            store.store_mutation(
+                run_id, m.mutation_id, spec.skill_id, m.proposed_content,
+                m.rationale, v.score_before, v.score_after,
+            )
+            if v.accepted and (best_validation is None or v.score_after > best_validation.score_after):
+                best_mutation = m
+                best_validation = v
+
+        result: dict[str, Any] = {
+            "run_id": run_id,
+            "skill_id": spec.skill_id,
+            "score_before": analysis.get("consensus_score", 0.0),
+            "mutations_proposed": len(mutations),
+            "best_accepted": None,
+        }
+
+        if best_mutation and best_validation:
+            signal_id = submit_to_governance(best_mutation, best_validation, ws)
+            store.update_mutation_status(best_mutation.mutation_id, "validated", signal_id)
+            store.complete_run(run_id, "completed", best_validation.score_before, best_validation.score_after, True)
+            result["best_accepted"] = {
+                "mutation_id": best_mutation.mutation_id,
+                "score_after": best_validation.score_after,
+                "governance_signal": signal_id,
+            }
+        else:
+            store.complete_run(run_id, "completed", analysis.get("consensus_score", 0.0), analysis.get("consensus_score", 0.0), False)
+            result["best_accepted"] = None
+
+        return result
+
+    out = asyncio.run(_run())
+    store.close()
+    print(json.dumps(out, indent=2))
+    return 0
+
+
+def _cmd_skill_history(args: argparse.Namespace) -> int:
+    from mind_mem.skill_opt.config import load_config
+    from mind_mem.skill_opt.history import HistoryStore
+
+    cfg = load_config(_workspace())
+    ws = cfg.governance_workspace or _workspace()
+    db_path = os.path.join(ws, cfg.history_db_path)
+    store = HistoryStore(db_path)
+    rows = store.get_run_history(args.skill_id, limit=args.limit)
+    store.close()
+    print(json.dumps(rows, indent=2, default=str))
+    return 0
+
+
+def _cmd_skill_score(args: argparse.Namespace) -> int:
+    from mind_mem.skill_opt.config import load_config
+    from mind_mem.skill_opt.history import HistoryStore
+
+    cfg = load_config(_workspace())
+    ws = cfg.governance_workspace or _workspace()
+    db_path = os.path.join(ws, cfg.history_db_path)
+    store = HistoryStore(db_path)
+    score = store.get_latest_score(args.skill_id)
+    store.close()
+    print(json.dumps({"skill_id": args.skill_id, "latest_score": score}))
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
 
@@ -291,6 +464,34 @@ def build_parser() -> argparse.ArgumentParser:
     v_write.add_argument("--body", default="")
     v_write.add_argument("--overwrite", action="store_true")
     v_write.set_defaults(func=_cmd_vault_write)
+
+    # skill namespace
+    p_skill = sub.add_parser("skill", help="Self-improving skill optimization subcommands.")
+    ssub = p_skill.add_subparsers(dest="skill_cmd", required=True)
+
+    s_list = ssub.add_parser("list", help="List all discovered skills across systems.")
+    s_list.set_defaults(func=_cmd_skill_list)
+
+    s_test = ssub.add_parser("test", help="Generate + run synthetic tests for a skill.")
+    s_test.add_argument("skill_id", help="Skill ID (e.g. openclaw:coding-agent, claude:code-reviewer)")
+    s_test.set_defaults(func=_cmd_skill_test)
+
+    s_analyze = ssub.add_parser("analyze", help="Cross-model critique of a skill.")
+    s_analyze.add_argument("skill_id")
+    s_analyze.set_defaults(func=_cmd_skill_analyze)
+
+    s_optimize = ssub.add_parser("optimize", help="Full optimization loop: test → analyze → mutate → validate.")
+    s_optimize.add_argument("skill_id")
+    s_optimize.set_defaults(func=_cmd_skill_optimize)
+
+    s_history = ssub.add_parser("history", help="Show optimization run history for a skill.")
+    s_history.add_argument("skill_id")
+    s_history.add_argument("--limit", type=int, default=10)
+    s_history.set_defaults(func=_cmd_skill_history)
+
+    s_score = ssub.add_parser("score", help="Show current score for a skill.")
+    s_score.add_argument("skill_id")
+    s_score.set_defaults(func=_cmd_skill_score)
 
     return parser
 

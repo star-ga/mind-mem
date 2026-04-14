@@ -56,7 +56,7 @@ Consolidate granular tools into **task-oriented compounds** with a
 2. **v4.0**: Remove the deprecated granular tools. Hard break.
 
 Between v3.0 and v4.0 every agent integration updates its prompts.
-The mind-mem-7b model needs **one retrain** after v3.0 ships so it
+The mind-mem-4b model needs **one retrain** after v3.0 ships so it
 learns both surfaces (new compounds + deprecated granulars) and is
 biased toward the compounds.
 
@@ -100,7 +100,7 @@ to the existing granular implementations — no logic duplicated.
 | Implement compound tools | mind-mem | 8 new tools, each routing to existing impls |
 | Mark granular tools deprecated | mind-mem | docstring + registry flag |
 | Update docs | mind-mem | MCP reference page |
-| Retrain mind-mem-7b | mind-mem | new adapter on HF |
+| Retrain mind-mem-4b | mind-mem | new adapter on HF |
 | Hard deprecation cycle | mind-mem | 3-month notice before v4.0 removes them |
 
 Estimated effort: **1 week implementation + 4 hrs retrain**.

@@ -15,7 +15,7 @@ Prerequisites:
     ``llama.cpp`` built in release mode:  cmake -B build && cmake --build build.
 
 Output:
-    /home/n/mm-train-output/mind-mem-7b-Q4_K_M.gguf
+    /home/n/mm-train-output/mind-mem-4b-Q4_K_M.gguf
 """
 from __future__ import annotations
 
@@ -29,14 +29,16 @@ import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-BASE = "Qwen/Qwen2.5-7B-Instruct"
-ADAPTER = Path("/home/n/mm-train-output/adapter")
-# /data has 300+ GB free vs / at 23 GB after cleanup. 7B bf16 merged
-# weights (~15 GB) + F16 GGUF (~14 GB) + Q4_K_M GGUF (~4 GB) won't
-# fit on /tmp or / in practice, so stage on /data.
+BASE = "Qwen/Qwen3.5-4B"
+_BASE_DIR = Path(
+    os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output")
+)
+ADAPTER = _BASE_DIR / "adapter"
+# Everything stays on /data — 4B base merged weights (~18 GB) + F16
+# GGUF (~17 GB) + Q4_K_M (~5 GB) would blow out / in a heartbeat.
 MERGED = Path("/data/checkpoints/mm-workspace/mm_merged")
-OUT_GGUF_F16 = Path("/data/checkpoints/mm-workspace/mind-mem-7b-F16.gguf")
-OUT_GGUF_Q4 = Path("/home/n/mm-train-output/mind-mem-7b-Q4_K_M.gguf")
+OUT_GGUF_F16 = Path("/data/checkpoints/mm-workspace/mind-mem-4b-F16.gguf")
+OUT_GGUF_Q4 = _BASE_DIR / "mind-mem-4b-Q4_K_M.gguf"
 LLAMA_CPP = Path(os.environ.get("MM_LLAMA_CPP_DIR", "/home/n/llama.cpp"))
 
 

@@ -1296,16 +1296,16 @@ mind-mem makes **zero network calls** from its core. No telemetry, no phoning ho
 
 ### Mind-Mem:7B — Purpose-Trained LLM
 
-For best LLM extraction quality, use **[Mind-Mem:7B](https://huggingface.co/star-ga/mind-mem-7b)** — a purpose-trained model fine-tuned on mind-mem's 8 extraction tasks (entity extraction, fact extraction, observation compression, contradiction detection, governance analysis, intent classification, axis-aware retrieval, LLM reranking).
+For best LLM extraction quality, use **[Mind-Mem:7B](https://huggingface.co/star-ga/mind-mem-4b)** — a purpose-trained model fine-tuned on mind-mem's 8 extraction tasks (entity extraction, fact extraction, observation compression, contradiction detection, governance analysis, intent classification, axis-aware retrieval, LLM reranking).
 
 **Ollama (recommended):**
 ```bash
 # Download the GGUF from HuggingFace
-wget https://huggingface.co/star-ga/mind-mem-7b/resolve/main/mind-mem-7b-Q4_K_M.gguf
+wget https://huggingface.co/star-ga/mind-mem-4b/resolve/main/mind-mem-4b-Q4_K_M.gguf
 
 # Create Ollama model
 cat > Modelfile << 'EOF'
-FROM ./mind-mem-7b-Q4_K_M.gguf
+FROM ./mind-mem-4b-Q4_K_M.gguf
 SYSTEM "You are Mind7B, a specialized memory extraction model for mind-mem."
 PARAMETER temperature 0.1
 PARAMETER num_predict 512
@@ -1329,16 +1329,16 @@ Then set in `mind-mem.json`:
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 
-base = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3.5-9B", device_map="auto")
-model = PeftModel.from_pretrained(base, "star-ga/mind-mem-7b")
-tokenizer = AutoTokenizer.from_pretrained("star-ga/mind-mem-7b")
+base = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3.5-4B", device_map="auto")
+model = PeftModel.from_pretrained(base, "star-ga/mind-mem-4b")
+tokenizer = AutoTokenizer.from_pretrained("star-ga/mind-mem-4b")
 ```
 
 | Resource | Link |
 |----------|------|
-| Model (LoRA + GGUF) | [star-ga/mind-mem-7b](https://huggingface.co/star-ga/mind-mem-7b) |
+| Model (LoRA + GGUF) | [star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b) |
 | Training data | [star-ga/mind7b-training](https://huggingface.co/datasets/star-ga/mind7b-training) |
-| Base model | Qwen/Qwen3.5-9B |
+| Base model | Qwen/Qwen3.5-4B |
 | Training | QLoRA via Unsloth, 2600 examples, RTX 4090 |
 
 ### Platform Support

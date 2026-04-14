@@ -1,8 +1,8 @@
-"""QLoRA fine-tune for mind-mem-7b on the harvested corpus.
+"""QLoRA fine-tune for mind-mem-4b on the harvested corpus.
 
-Base model:  Qwen/Qwen2.5-7B-Instruct  (fits in 10 GB with INT4 + gradient
-             checkpointing; the existing HF repo is tagged qwen3.5 but
-             we match the most-capable locally-available 7B instruct).
+Base model:  Qwen/Qwen3.5-4B  (fits in 10 GB VRAM with INT4 + gradient
+             checkpointing + max_length=768; tighter than the old 7B
+             config but matches the HF repo's qwen3.5 lineage).
 
 LoRA config: r=16, alpha=32, dropout=0.05, target=all linear.
 Training:    3 epochs, per_device_batch_size=1, grad_accum_steps=16,
@@ -27,10 +27,16 @@ from transformers import (
 )
 from trl import SFTConfig, SFTTrainer
 
-BASE_MODEL = os.environ.get("MM_BASE_MODEL", "Qwen/Qwen2.5-7B-Instruct")
-CORPUS = Path("/home/n/mm-train-output/corpus.jsonl")
-OUT_DIR = Path("/home/n/mm-train-output/adapter")
-LOG_DIR = Path("/home/n/mm-train-output/logs")
+BASE_MODEL = os.environ.get("MM_BASE_MODEL", "Qwen/Qwen3.5-4B")
+# All training artifacts live on /data (916 GB, 303 GB free) —
+# / is a 468 GB partition that hits 100% fast when HF caches land
+# on it (4B base + F16 GGUF + Q4 GGUF + merged = ~35 GB).
+_BASE = Path(
+    os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output")
+)
+CORPUS = _BASE / "corpus.jsonl"
+OUT_DIR = _BASE / "adapter"
+LOG_DIR = _BASE / "logs"
 
 
 def main() -> None:
@@ -80,8 +86,8 @@ def main() -> None:
         model.enable_input_require_grads()
 
     lora_config = LoraConfig(
-        r=32,
-        lora_alpha=64,
+        r=16,
+        lora_alpha=32,
         lora_dropout=0.05,
         bias="none",
         task_type="CAUSAL_LM",
@@ -115,7 +121,7 @@ def main() -> None:
         gradient_checkpointing_kwargs={"use_reentrant": False},
         dataset_text_field=None,  # chat_template handles formatting
         packing=False,
-        max_length=1024,
+        max_length=768,  # Qwen3.5-4B is tighter on 10 GB VRAM than 7B
     )
 
     trainer = SFTTrainer(

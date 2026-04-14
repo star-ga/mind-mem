@@ -60,7 +60,7 @@ Compiled `.so` kernels vs pure Python (N=5000 blocks):
 
 ## Mind-Mem:7B LLM Extraction
 
-Purpose-trained model ([star-ga/mind-mem-7b](https://huggingface.co/star-ga/mind-mem-7b)) on RTX 3080 (Q4_K_M GGUF):
+Purpose-trained model ([star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b)) on RTX 3080 (Q4_K_M GGUF):
 
 | Task | Latency |
 |------|---------|

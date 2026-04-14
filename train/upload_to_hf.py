@@ -1,4 +1,4 @@
-"""Push the retrained adapter + model card to star-ga/mind-mem-7b.
+"""Push the retrained adapter + model card to star-ga/mind-mem-4b.
 
 Requires a HuggingFace token with **write** scope — the default token
 cached in ~/.cache/huggingface/token is typically read-only.  Pass one
@@ -11,7 +11,7 @@ Files uploaded:
     tokenizer.json
     chat_template.jinja     (if present)
     README.md               (the model card)
-    mind-mem-7b-Q4_K_M.gguf (if the GGUF export step succeeded)
+    mind-mem-4b-Q4_K_M.gguf (if the GGUF export step succeeded)
 
 Existing files in the repo are overwritten; the prior v2.8.x adapter
 lives in git history on HF.
@@ -25,8 +25,10 @@ from pathlib import Path
 
 from huggingface_hub import HfApi, create_commit, CommitOperationAdd
 
-REPO_ID = "star-ga/mind-mem-7b"
-OUT_DIR = Path("/home/n/mm-train-output")
+REPO_ID = "star-ga/mind-mem-4b"
+OUT_DIR = Path(
+    os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output")
+)
 ADAPTER_DIR = OUT_DIR / "adapter"
 
 
@@ -53,7 +55,7 @@ def _discover_upload_paths() -> list[tuple[Path, str]]:
         uploads.append((card, "README.md"))
 
     # Optional GGUF build
-    gguf = OUT_DIR / "mind-mem-7b-Q4_K_M.gguf"
+    gguf = OUT_DIR / "mind-mem-4b-Q4_K_M.gguf"
     if gguf.is_file():
         uploads.append((gguf, gguf.name))
 
@@ -64,7 +66,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--token", default=os.environ.get("HF_TOKEN", ""))
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--commit-message", default="Retrain mind-mem-7b on v2.9.0 corpus (393 examples)")
+    parser.add_argument("--commit-message", default="Retrain mind-mem-4b on v2.9.0 corpus (393 examples)")
     args = parser.parse_args()
 
     uploads = _discover_upload_paths()
@@ -80,7 +82,7 @@ def main() -> None:
     if not args.token:
         sys.exit(
             "no HF token provided. Pass --token hf_... or set HF_TOKEN env. "
-            "Token must have 'write' scope for star-ga/mind-mem-7b."
+            "Token must have 'write' scope for star-ga/mind-mem-4b."
         )
 
     api = HfApi(token=args.token)

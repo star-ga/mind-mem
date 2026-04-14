@@ -1,4 +1,4 @@
-"""Eval harness for mind-mem-7b.
+"""Eval harness for mind-mem-4b.
 
 Runs three benchmarks the model-card promises:
     1. Tool-call accuracy      — ≥ 95% target.
@@ -13,6 +13,7 @@ eval.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -21,9 +22,12 @@ import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-BASE = "Qwen/Qwen2.5-7B-Instruct"
-ADAPTER = Path("/home/n/mm-train-output/adapter")
-REPORT = Path("/home/n/mm-train-output/eval_report.json")
+BASE = "Qwen/Qwen3.5-4B"
+_BASE_DIR = Path(
+    os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output")
+)
+ADAPTER = _BASE_DIR / "adapter"
+REPORT = _BASE_DIR / "eval_report.json"
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +128,7 @@ def _load_model():
 
 def _chat(tokenizer, model, prompt: str) -> str:
     messages = [
-        {"role": "system", "content": "You are mind-mem-7b, a memory-governance assistant."},
+        {"role": "system", "content": "You are mind-mem-4b, a memory-governance assistant."},
         {"role": "user", "content": prompt},
     ]
     # New transformers versions return a BatchEncoding (dict-like) from
@@ -201,7 +205,7 @@ def main() -> None:
     REPORT.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     print("=" * 60)
-    print("mind-mem-7b v2.9.0 eval report")
+    print("mind-mem-4b v2.9.0 eval report")
     print("=" * 60)
     for name, bench, target in (
         ("tool_call   ", tool_bench, 0.95),

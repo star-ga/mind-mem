@@ -19,7 +19,7 @@ All notable changes to mind-mem are documented in this file.
 
 ### Design docs (implementation pending sign-off)
 
-- `docs/design/v3-mcp-surface-reduction.md` — map for consolidating 57 tools into ~25 task-oriented compounds. (GH #501; blocked on sign-off because it requires a mind-mem-7b retrain.)
+- `docs/design/v3-mcp-surface-reduction.md` — map for consolidating 57 tools into ~25 task-oriented compounds. (GH #501; blocked on sign-off because it requires a mind-mem-4b retrain.)
 - `docs/design/v3-multi-tenancy.md` — three-layer tenancy model (Organization → Workspace → Namespace) with RBAC, per-tenant encryption keys, and REST API roadmap for v3.1. (GH #505)
 
 ### Fixed

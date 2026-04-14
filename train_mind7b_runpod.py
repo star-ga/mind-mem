@@ -31,7 +31,7 @@ import json, time, torch
 from huggingface_hub import login, hf_hub_download
 
 # === CONFIG ===
-MODEL_NAME = "Qwen/Qwen3.5-9B"
+MODEL_NAME = "Qwen/Qwen3.5-4B"
 DATASET_REPO = "star-ga/mind7b-training"
 DATASET_FILE = "mind7b_train.jsonl"
 OUTPUT_DIR = "/workspace/mind7b"
