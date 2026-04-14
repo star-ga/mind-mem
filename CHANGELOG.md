@@ -2,6 +2,34 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 2.10.0 (2026-04-13)
+
+**Audit-integrity patch release.** Lands two correctness fixes from the cognitive-kernel design review (GH #498 + #499), plus seven additional hardening fixes caught by the pre-release 3-CLI audit (Gemini 3 Pro identified a downgrade-attack in the v1 fallback that would have shipped). Hash-chain verification is backward-compatible for pure-v1 chains; once any chain contains a v3 entry, no later entry may fall back to v1.
+
+### Added
+- `src/mind_mem/q1616.py` — Q16.16 fixed-point helpers (`to_q16_16`, `from_q16_16`, `hex_q16_16`). Gives byte-identical encoding of confidence/importance scores across x86_64, aarch64, and every other CPU architecture; resolves non-determinism in cross-architecture audit-chain replay.
+- `src/mind_mem/preimage.py` — `preimage(tag, *fields)` builds a versioned, NUL-separated hash preimage. Rejects NUL-containing fields so boundaries are unambiguous; the leading `TAG_v1` ascii prefix prevents cross-class collision (e.g. an EV preimage cannot collide with an AUDIT preimage even if their field bodies happen to coincide).
+- `tests/test_q1616_preimage.py` — 22 tests covering round-trip, saturation, NaN, collision resistance, and tag isolation.
+
+### Changed
+- `evidence_objects._compute_evidence_hash` → dispatches to the new v3 scheme (preimage + Q16.16 for `confidence`). `EvidenceChain.verify()` tries v3 then falls back to the v1 JSON scheme so pre-v2.10.0 chains keep verifying.
+- `hash_chain_v2._compute_entry_hash` → new v3 scheme (TAG_v1 NUL-separated, still SHA3-512). `verify_entry` + `verify_chain` try v3 then v1.
+- `audit_chain.AuditEntry.compute_entry_hash` → new v3 scheme (TAG_v1 NUL-separated, SHA-256). `verify()` tries v3 then v1.
+
+### Security (pre-release audit hardening)
+- **Downgrade-attack mitigation.** The v1 fallback previously accepted any entry matching the legacy `|`-joined scheme, which meant an attacker with separator-injection capability could forge v1 entries after v2.10.0's v3 upgrade and bypass the hardening. Fix: once a v3-scheme entry is observed in a chain, any later entry that verifies only under v1 is rejected. Applied to `hash_chain_v2.verify_chain`, `audit_chain.AuditChain.verify`, `evidence_objects.EvidenceChain.verify_chain`, and `mind_kernels.sha3_512_chain_verify`.
+- **`None` rejected from preimages.** Previously `None` and `""` both rendered to empty bytes, producing collision. `preimage()` now raises `ValueError` on `None`; callers must pass explicit `""` if "absent" is the intent.
+- **`NaN` rejected.** NaN coerced to Q16.16 zero, colliding with float `0.0`. `preimage()` now raises `ValueError` on NaN; callers must pass a sentinel float or convert.
+- **`bool`/`int` disambiguated.** `True`/`False` render as `t`/`f` (not `1`/`0`) so a `bool`↔`int` swap invalidates the digest.
+- **`mind_kernels.sha3_512_chain_verify` retrofitted** to use `preimage()` + the v1→v3 fallback rules. Previously this path hardcoded `|`-joined canonical form and ignored v2.10.0 entries entirely.
+
+### Migration
+- **No action required** for existing chains — both hash schemes verify side-by-side for pure-v1 chains.
+- Newly appended entries use the v3 scheme automatically. Once a chain contains a v3 entry, downgrade is blocked.
+
+### Tests
+- 3444 + 22 new = 3466 tests pass, 6 skipped.
+
 ## 2.9.0 (2026-04-13)
 
 **Two-pass full-repo audit release. Fixes 9 correctness/security bugs flagged by pass #2 and wires 10 previously dead modules into production call paths. Every prior release (v2.0.0a2..v2.8.2) will receive a `.postN` backport with the applicable subset of fixes.**

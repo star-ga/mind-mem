@@ -31,8 +31,11 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 BASE = "Qwen/Qwen2.5-7B-Instruct"
 ADAPTER = Path("/home/n/mm-train-output/adapter")
-MERGED = Path("/tmp/mm_merged")
-OUT_GGUF_F16 = Path("/home/n/mm-train-output/mind-mem-7b-F16.gguf")
+# /data has 300+ GB free vs / at 23 GB after cleanup. 7B bf16 merged
+# weights (~15 GB) + F16 GGUF (~14 GB) + Q4_K_M GGUF (~4 GB) won't
+# fit on /tmp or / in practice, so stage on /data.
+MERGED = Path("/data/checkpoints/mm-workspace/mm_merged")
+OUT_GGUF_F16 = Path("/data/checkpoints/mm-workspace/mind-mem-7b-F16.gguf")
 OUT_GGUF_Q4 = Path("/home/n/mm-train-output/mind-mem-7b-Q4_K_M.gguf")
 LLAMA_CPP = Path(os.environ.get("MM_LLAMA_CPP_DIR", "/home/n/llama.cpp"))
 
@@ -42,10 +45,16 @@ def _merge_adapter() -> None:
         shutil.rmtree(MERGED)
     MERGED.mkdir(parents=True)
     tokenizer = AutoTokenizer.from_pretrained(BASE, trust_remote_code=True)
+    # Merge on CPU in bf16 — avoids a peft/accelerate device_map bug
+    # (`get_balanced_memory` TypeError on newer transformers) and side-
+    # steps VRAM pressure since we don't need any forward/backward here.
+    # 7B at bf16 = ~14 GB RAM; the box has 64 GB so this is fine.
+    print("loading base on CPU (bf16) …")
     model = AutoModelForCausalLM.from_pretrained(
-        BASE, torch_dtype=torch.bfloat16, device_map="auto", trust_remote_code=True
+        BASE, torch_dtype=torch.bfloat16, device_map=None, trust_remote_code=True
     )
-    model = PeftModel.from_pretrained(model, str(ADAPTER))
+    print("applying adapter …")
+    model = PeftModel.from_pretrained(model, str(ADAPTER), device_map=None)
     print("merging adapter into base weights …")
     model = model.merge_and_unload()
     print(f"saving merged model → {MERGED}")

@@ -140,6 +140,52 @@ class AuditEntry:
         )
 
     @staticmethod
+    def compute_entry_hash_v1(
+        seq: int,
+        timestamp: str,
+        operation: str,
+        target: str,
+        agent: str,
+        reason: str,
+        payload_hash: str,
+        prev_hash: str,
+    ) -> str:
+        """Legacy v1 audit-entry hash (``|``-joined).
+
+        Preserved so pre-v2.10.0 audit ledgers continue to verify.
+        """
+        canonical = f"{seq}|{timestamp}|{operation}|{target}|{agent}|{reason}|{payload_hash}|{prev_hash}"
+        return _compute_hash(canonical)
+
+    @staticmethod
+    def compute_entry_hash_v3(
+        seq: int,
+        timestamp: str,
+        operation: str,
+        target: str,
+        agent: str,
+        reason: str,
+        payload_hash: str,
+        prev_hash: str,
+    ) -> str:
+        """v3 audit-entry hash (v2.10.0+): TAG_v1 NUL-separated preimage."""
+        from .preimage import preimage
+
+        pre = preimage(
+            "AUDIT_v1",
+            seq,
+            timestamp,
+            operation,
+            target,
+            agent,
+            reason,
+            payload_hash,
+            prev_hash,
+        )
+        return hashlib.sha256(pre).hexdigest()
+
+    # New entries hash via v3 by default; verify tries both.
+    @staticmethod
     def compute_entry_hash(
         seq: int,
         timestamp: str,
@@ -150,9 +196,10 @@ class AuditEntry:
         payload_hash: str,
         prev_hash: str,
     ) -> str:
-        """Compute the entry hash from all fields (deterministic)."""
-        canonical = f"{seq}|{timestamp}|{operation}|{target}|{agent}|{reason}|{payload_hash}|{prev_hash}"
-        return _compute_hash(canonical)
+        """Dispatch to the active (v3) hash scheme."""
+        return AuditEntry.compute_entry_hash_v3(
+            seq, timestamp, operation, target, agent, reason, payload_hash, prev_hash
+        )
 
 
 class AuditChain:
@@ -278,6 +325,7 @@ class AuditChain:
 
         prev_hash = _GENESIS_HASH
         expected_seq = 1
+        seen_v3 = False  # downgrade-attack mitigation
 
         try:
             with open(self._chain_path, "r", encoding="utf-8") as f:
@@ -309,8 +357,13 @@ class AuditChain:
                             f"Expected {prev_hash[:16]}..., got {entry.prev_hash[:16]}..."
                         )
 
-                    # Recompute entry_hash
-                    expected_hash = AuditEntry.compute_entry_hash(
+                    # Recompute entry_hash — try v3 (current) first. Only
+                    # fall back to the v1 legacy scheme if no v3 entry
+                    # has been seen yet; once the chain has a v3 entry,
+                    # all subsequent entries MUST verify v3 (downgrade
+                    # attack mitigation — v1's `|`-separator scheme is
+                    # injection-vulnerable).
+                    args = (
                         entry.seq,
                         entry.timestamp,
                         entry.operation,
@@ -320,6 +373,19 @@ class AuditChain:
                         entry.payload_hash,
                         entry.prev_hash,
                     )
+                    v3_hash = AuditEntry.compute_entry_hash_v3(*args)
+                    expected_hash = v3_hash
+                    if entry.entry_hash == v3_hash:
+                        seen_v3 = True
+                    elif seen_v3:
+                        errors.append(
+                            f"Line {line_num} (seq {entry.seq}): "
+                            "downgrade to v1 scheme after v3 entry — rejected"
+                        )
+                    else:
+                        legacy = AuditEntry.compute_entry_hash_v1(*args)
+                        if entry.entry_hash == legacy:
+                            expected_hash = legacy
                     if entry.entry_hash != expected_hash:
                         errors.append(
                             f"Line {line_num} (seq {entry.seq}): entry_hash tampered. "

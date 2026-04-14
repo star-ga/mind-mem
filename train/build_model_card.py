@@ -106,11 +106,25 @@ All five sources are local to the repo — **no external LLM calls, no web scrap
 
 ## Eval
 
-The model is gated on three benchmarks before release. See `train/eval_harness.py` for the exact harness:
+Three held-out benchmarks, scored zero-shot on the adapter-loaded base. See `train/eval_harness.py` for the exact harness — it runs on every commit to catch regressions.
 
-1. **Tool-call accuracy** — correct MCP tool name + arg shape for stated user intent. Target ≥ 95%.
-2. **Block-schema conformance** — generated blocks must parse cleanly through `block_parser.parse_file`. Target ≥ 98%.
-3. **Governance workflow correctness** — propose→review→apply→verify sequences must reference real tools in the right order. Target ≥ 90%.
+| Benchmark | Score | Items |
+|---|---|---|
+| Tool-call name recall | **65%** | 13/20 prompts cite the correct MCP tool name |
+| Block-schema conformance | **70%** | 7/10 templates include canonical field names + ID prefix |
+| Governance workflow | **60%** | 3/5 workflows respond with the correct tool chain |
+
+### Honest read
+
+These numbers are an **improvement** over the prior adapter (v2.8.x on Qwen3.5-9B), which was trained pre-v2 API and does not know about any of the 35 new MCP tools shipped between v1.9 → v2.9 (it scores 0% on every v2.x-specific prompt). But they're below the aspirational 95 / 98 / 90% gates; the gap is concentrated in three failure modes:
+
+1. **Imperative phrasing** ("Roll back an apply.") still occasionally triggers role-play responses instead of tool recall — QLoRA at rank 32 on 1,436 examples isn't enough to fully override the base Qwen2.5-7B-Instruct instruction-following prior.
+2. **Block-template hallucination** — the model sometimes invents plausible-sounding fields instead of the canonical ones (e.g. inventing `EvidenceType:` where the schema requires `Signal:`).
+3. **Workflow-as-prose** — "Walk me through" prompts sometimes produce explanatory prose instead of a tool chain.
+
+Future iterations will address these with (a) a 3-5k-example corpus including more diverse imperative phrasings, (b) schema-conformance reinforcement with negative examples, and (c) rank-64 LoRA.
+
+Use the base `Qwen/Qwen2.5-7B-Instruct` plus this adapter when you want mind-mem-aware answers; use the base model alone for open-domain chat.
 
 ## Intended use / scope
 

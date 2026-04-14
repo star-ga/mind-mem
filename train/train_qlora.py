@@ -18,7 +18,7 @@ from pathlib import Path
 
 import torch
 from datasets import load_dataset
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from peft import LoraConfig, get_peft_model
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -66,11 +66,22 @@ def main() -> None:
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
     )
-    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+    # Skip peft.prepare_model_for_kbit_training — the default path casts
+    # every frozen parameter to fp32 (~28 GB for a 7B model), which
+    # blows the 10 GB 3080 budget. Instead we keep the base in its
+    # native 4-bit state, manually enable gradient checkpointing, and
+    # disable grad on all frozen params. LoRA adapter weights (the only
+    # trainable tensors) live in bf16 regardless.
+    model.config.use_cache = False
+    for p in model.parameters():
+        p.requires_grad = False
+    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+    if hasattr(model, "enable_input_require_grads"):
+        model.enable_input_require_grads()
 
     lora_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
+        r=32,
+        lora_alpha=64,
         lora_dropout=0.05,
         bias="none",
         task_type="CAUSAL_LM",
@@ -87,7 +98,7 @@ def main() -> None:
     sft_config = SFTConfig(
         output_dir=str(OUT_DIR),
         logging_dir=str(LOG_DIR),
-        num_train_epochs=3,
+        num_train_epochs=6,
         per_device_train_batch_size=1,
         gradient_accumulation_steps=16,
         learning_rate=2e-4,
@@ -97,14 +108,14 @@ def main() -> None:
         logging_steps=5,
         save_strategy="epoch",
         save_total_limit=2,
-        report_to=["tensorboard"],
+        report_to="none",
         optim="paged_adamw_8bit",
         max_grad_norm=1.0,
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
         dataset_text_field=None,  # chat_template handles formatting
         packing=False,
-        max_length=2048,
+        max_length=1024,
     )
 
     trainer = SFTTrainer(

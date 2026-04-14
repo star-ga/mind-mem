@@ -51,6 +51,8 @@ from typing import Union
 from uuid import uuid4
 
 from .observability import get_logger, metrics
+from .preimage import preimage
+from .q1616 import hex_q16_16
 
 _log = get_logger("evidence_objects")
 
@@ -97,7 +99,7 @@ def _compute_payload_hash(payload: Union[bytes, str, dict, None]) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _compute_evidence_hash(
+def _compute_evidence_hash_v1(
     evidence_id: str,
     timestamp_iso: str,
     action: str,
@@ -109,12 +111,11 @@ def _compute_evidence_hash(
     metadata: dict | None = None,
     confidence: float = 1.0,
 ) -> str:
-    """SHA256 hex digest of the canonical evidence fields.
+    """Legacy v1 evidence-hash scheme (schema v2 and earlier).
 
-    Uses a JSON object with sorted keys as the canonical form so that any
-    field containing a colon cannot be confused with a field boundary
-    (e.g. ``actor="alice:admin"`` vs a spoofed ``actor="alice"`` with a
-    shifted ``target_block_id``).
+    Uses JSON sorted-key canonical form. Preserved so that chains written
+    before v2.10.0 still verify without migration. New code should call
+    :func:`_compute_evidence_hash_v3` instead.
     """
     canonical_obj = {
         "evidence_id": evidence_id,
@@ -130,6 +131,49 @@ def _compute_evidence_hash(
     }
     canonical = json.dumps(canonical_obj, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _compute_evidence_hash_v3(
+    evidence_id: str,
+    timestamp_iso: str,
+    action: str,
+    actor: str,
+    target_block_id: str,
+    payload_hash: str,
+    previous_hash: str,
+    target_file: str = "",
+    metadata: dict | None = None,
+    confidence: float = 1.0,
+) -> str:
+    """v3 evidence-hash scheme (v2.10.0+).
+
+    Uses :func:`preimage.preimage` for NUL-separated collision-resistant
+    encoding and Q16.16 fixed-point for the ``confidence`` float so the
+    digest is byte-identical across CPU architectures. The ``metadata``
+    dict is still JSON-sorted into a single string slot — callers that
+    want per-key hashing should expand the metadata before invoking.
+    """
+    metadata_json = json.dumps(metadata or {}, sort_keys=True, separators=(",", ":"))
+    pre = preimage(
+        "EV_v1",
+        evidence_id,
+        timestamp_iso,
+        action,
+        actor,
+        target_block_id,
+        payload_hash,
+        previous_hash,
+        target_file,
+        metadata_json,
+        hex_q16_16(confidence),
+    )
+    return hashlib.sha256(pre).hexdigest()
+
+
+# Public alias — new records hash via v3 by default. Legacy loaders that
+# need to re-verify pre-v2.10.0 chains should explicitly call
+# ``_compute_evidence_hash_v1``.
+_compute_evidence_hash = _compute_evidence_hash_v3
 
 
 # ---------------------------------------------------------------------------
@@ -341,17 +385,22 @@ class EvidenceChain:
     def verify(self, evidence: EvidenceObject) -> bool:
         """Verify that an evidence object's self-hash matches its fields.
 
-        Recomputes `evidence_hash` from the record's canonical fields and
-        compares to the stored `evidence_hash`.  Returns False if any field
-        has been tampered with.
-
-        Args:
-            evidence: The EvidenceObject to verify.
-
-        Returns:
-            True if the evidence is intact, False if tampered.
+        Convenience wrapper around :meth:`_verify_scheme`. Returns
+        ``True`` when either the v3 or v1 scheme matches, so callers
+        that don't care about which scheme passed still get a single-
+        bool answer. Chain-level downgrade detection lives in
+        :meth:`verify_chain`.
         """
-        expected = _compute_evidence_hash(
+        return self._verify_scheme(evidence) is not None
+
+    def _verify_scheme(self, evidence: EvidenceObject) -> str | None:
+        """Return which scheme verified the record, or None.
+
+        ``"v3"`` if the v2.10.0+ scheme matched, ``"v1"`` for the
+        legacy scheme, ``None`` if neither. :meth:`verify_chain` uses
+        this to enforce no-downgrade-after-v3.
+        """
+        args = (
             evidence.evidence_id,
             evidence.timestamp.isoformat(),
             evidence.action.value,
@@ -359,11 +408,17 @@ class EvidenceChain:
             evidence.target_block_id,
             evidence.payload_hash,
             evidence.previous_hash,
-            target_file=evidence.target_file,
-            metadata=evidence.metadata,
-            confidence=evidence.confidence,
         )
-        return evidence.evidence_hash == expected
+        kwargs = {
+            "target_file": evidence.target_file,
+            "metadata": evidence.metadata,
+            "confidence": evidence.confidence,
+        }
+        if evidence.evidence_hash == _compute_evidence_hash_v3(*args, **kwargs):
+            return "v3"
+        if evidence.evidence_hash == _compute_evidence_hash_v1(*args, **kwargs):
+            return "v1"
+        return None
 
     def verify_chain(self) -> tuple[bool, list[str]]:
         """Verify the entire chain's integrity.
@@ -387,11 +442,19 @@ class EvidenceChain:
             return True, []
 
         prev_hash = _GENESIS_HASH
+        seen_v3 = False  # downgrade-attack mitigation: once v3 scheme
+                          # has signed a record in this chain, no later
+                          # record is permitted to verify only under the
+                          # separator-injection-vulnerable v1 scheme.
         for ev in self._entries:
-            if not self.verify(ev):
+            scheme = self._verify_scheme(ev)
+            if scheme is None:
                 broken.append(ev.evidence_id)
-                # Still advance prev_hash to the stored value so subsequent
-                # linkage errors are also caught accurately.
+            elif scheme == "v3":
+                seen_v3 = True
+            elif scheme == "v1" and seen_v3:
+                # downgrade detected
+                broken.append(ev.evidence_id)
             if ev.previous_hash != prev_hash:
                 if ev.evidence_id not in broken:
                     broken.append(ev.evidence_id)

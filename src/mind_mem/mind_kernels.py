@@ -73,26 +73,43 @@ def sha3_512_chain_verify(entries: Sequence[Mapping[str, str]]) -> bool:
     """
     if not entries:
         return True
+
+    # Lazy imports so this fallback module stays standalone if the
+    # main package is partially loaded.
+    from .preimage import preimage as _preimage
+
     prev = entries[0].get("previous_hash")
+    seen_v3 = False  # downgrade-attack mitigation
     for idx, entry in enumerate(entries):
         if entry.get("previous_hash") != prev:
             return False
-        # Integrity check — recompute the canonical entry hash.
-        canonical = "|".join(
-            [
-                str(entry.get("entry_id", "")),
-                str(entry.get("timestamp", "")),
-                str(entry.get("block_id", "")),
-                str(entry.get("action", "")),
-                str(entry.get("content_hash", "")),
-                str(entry.get("previous_hash", "")),
-            ]
+        fields = (
+            str(entry.get("entry_id", "")),
+            str(entry.get("timestamp", "")),
+            str(entry.get("block_id", "")),
+            str(entry.get("action", "")),
+            str(entry.get("content_hash", "")),
+            str(entry.get("previous_hash", "")),
         )
-        expected = hashlib.sha3_512(canonical.encode("utf-8")).hexdigest()
-        if entry.get("entry_hash") != expected:
-            # Integrity failure at this entry.
+        stored = entry.get("entry_hash")
+        # v3 scheme — TAG_v1 NUL-separated preimage.
+        v3_expected = hashlib.sha3_512(
+            _preimage("CHAIN_v1", *fields)
+        ).hexdigest()
+        if stored == v3_expected:
+            seen_v3 = True
+        elif seen_v3:
+            # Downgrade blocked: once chain produces v3 entries, no
+            # later entry may fall back to the v1 scheme.
             return False
-        prev = entry.get("entry_hash")
+        else:
+            # Legacy v1 scheme — ``|``-joined canonical string.
+            v1_expected = hashlib.sha3_512(
+                "|".join(fields).encode("utf-8")
+            ).hexdigest()
+            if stored != v1_expected:
+                return False
+        prev = stored
     return True
 
 

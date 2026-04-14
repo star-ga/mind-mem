@@ -41,6 +41,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
+from .preimage import preimage
+
 # Genesis sentinel — 128 zeros (SHA3-512 produces 128 hex chars)
 GENESIS_HASH: str = "0" * 128
 
@@ -94,7 +96,7 @@ def _compute_content_hash(content: str) -> str:
     return _sha3(content)
 
 
-def _compute_entry_hash(
+def _compute_entry_hash_v1(
     entry_id: str,
     timestamp: str,
     block_id: str,
@@ -102,8 +104,43 @@ def _compute_entry_hash(
     content_hash: str,
     previous_hash: str,
 ) -> str:
+    """Legacy v1 entry-hash scheme.
+
+    Fields joined by ``|`` — kept for backward verification of chains
+    written before v2.10.0. New entries hash via :func:`_compute_entry_hash_v3`.
+    """
     canonical = f"{entry_id}|{timestamp}|{block_id}|{action}|{content_hash}|{previous_hash}"
     return _sha3(canonical)
+
+
+def _compute_entry_hash_v3(
+    entry_id: str,
+    timestamp: str,
+    block_id: str,
+    action: str,
+    content_hash: str,
+    previous_hash: str,
+) -> str:
+    """v3 entry-hash scheme (v2.10.0+): TAG_v1 NUL-separated preimage.
+
+    Uses :mod:`preimage` so field values containing ``|`` (or any other
+    ambiguous boundary character) can't craft collisions. Still SHA3-512.
+    """
+    pre = preimage(
+        "CHAIN_v1",
+        entry_id,
+        timestamp,
+        block_id,
+        action,
+        content_hash,
+        previous_hash,
+    )
+    return hashlib.sha3_512(pre).hexdigest()
+
+
+# Public alias — new entries hash via v3. Verification code must try v3
+# first then fall back to v1 so pre-v2.10.0 chains continue to verify.
+_compute_entry_hash = _compute_entry_hash_v3
 
 
 def _row_to_entry(row: sqlite3.Row) -> HashEntry:
@@ -261,13 +298,11 @@ class HashChainV2:
     def verify_entry(self, entry: HashEntry) -> bool:
         """Verify a single entry's internal consistency.
 
-        Recomputes entry_hash from its fields and checks it matches.
-        Does NOT check linkage to adjacent entries.
-
-        Returns:
-            True if the entry is internally consistent, False otherwise.
+        Tries the v3 scheme (v2.10.0+) first and falls back to the v1
+        legacy scheme so pre-v2.10.0 chains still verify. Does NOT
+        check linkage to adjacent entries.
         """
-        expected_entry_hash = _compute_entry_hash(
+        args = (
             entry.entry_id,
             entry.timestamp,
             entry.block_id,
@@ -275,7 +310,10 @@ class HashChainV2:
             entry.content_hash,
             entry.previous_hash,
         )
-        return entry.entry_hash == expected_entry_hash
+        return (
+            entry.entry_hash == _compute_entry_hash_v3(*args)
+            or entry.entry_hash == _compute_entry_hash_v1(*args)
+        )
 
     def verify_chain(self) -> tuple[bool, int]:
         """Verify the full global chain integrity.
@@ -283,6 +321,10 @@ class HashChainV2:
         Walks every entry in insertion order, checking:
         - entry_hash matches recomputed value
         - previous_hash links to the prior entry's entry_hash
+        - once a v3 entry is seen, NO downgrade to v1 is tolerated
+          (downgrade attack mitigation — without this rule an attacker
+          could forge a v1-hashed entry after a v3 entry since the v1
+          scheme is separator-injection-vulnerable)
 
         Returns:
             (valid: bool, first_broken_index: int)
@@ -294,6 +336,7 @@ class HashChainV2:
         # triggers verification.
         prev_hash = GENESIS_HASH
         idx = -1
+        seen_v3 = False
         with self._connect() as conn:
             cur = conn.execute("SELECT * FROM hash_chain ORDER BY rowid ASC")
             while True:
@@ -307,7 +350,7 @@ class HashChainV2:
                     if entry.previous_hash != prev_hash:
                         return False, idx
 
-                    expected = _compute_entry_hash(
+                    args = (
                         entry.entry_id,
                         entry.timestamp,
                         entry.block_id,
@@ -315,7 +358,15 @@ class HashChainV2:
                         entry.content_hash,
                         entry.previous_hash,
                     )
-                    if entry.entry_hash != expected:
+                    v3_ok = entry.entry_hash == _compute_entry_hash_v3(*args)
+                    if v3_ok:
+                        seen_v3 = True
+                    elif seen_v3:
+                        # Downgrade blocked: chain already produced a v3
+                        # entry, this one is not v3 → reject without
+                        # consulting the legacy v1 scheme.
+                        return False, idx
+                    elif entry.entry_hash != _compute_entry_hash_v1(*args):
                         return False, idx
 
                     prev_hash = entry.entry_hash
