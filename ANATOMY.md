@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 455 | **Est. tokens:** ~952,899
-**Generated:** 2026-04-14 23:53 UTC
+**Files:** 457 | **Est. tokens:** ~957,414
+**Generated:** 2026-04-15 00:12 UTC
 
 ## Token Budget Guide
 
@@ -22,10 +22,10 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~79,683 |
+| `./` | 27 | ~79,794 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
-| `docs/` | 30 | ~29,238 |
+| `docs/` | 32 | ~33,642 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `examples/` | 2 | ~466 |
@@ -74,7 +74,7 @@
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
 - `pyproject.toml` (~868 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~21918 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~22029 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
 - `ROADMAP.md` (~10244 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
@@ -110,6 +110,7 @@
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~254 tok, medium) — CI Workflows
 - `claude-desktop-setup.md` (~752 tok, large) — Claude Desktop Setup Guide
+- `client-integrations.md` (~2066 tok, huge) — Client Integrations
 - `comparison.md` (~313 tok, medium) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
 - `configuration.md` (~4599 tok, huge) — Configuration Reference
@@ -128,6 +129,7 @@
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
 - `migration.md` (~2754 tok, huge) — Migration Guide: mem-os to mind-mem
 - `mind-kernels.md` (~339 tok, medium) — MIND Kernels
+- `mind-mem-4b-setup.md` (~2338 tok, huge) — Setting up the mind-mem-4b model
 - `odc-retrieval.md` (~834 tok, large) — Observer-Dependent Cognition in mind-mem
 - `performance-tuning.md` (~560 tok, large) — Performance Tuning
 - `quickstart.md` (~601 tok, large) — mind-mem Quickstart

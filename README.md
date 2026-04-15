@@ -114,6 +114,8 @@ Output:
 
 - [`docs/setup.md`](docs/setup.md) — install, configure, wire MCP, opt in to MIND native kernels
 - [`docs/usage.md`](docs/usage.md) — every surface (MCP tools by category, `mm` CLI, `mind-mem-verify`, Python library) with worked examples
+- [`docs/client-integrations.md`](docs/client-integrations.md) — **16 AI client integrations** (Claude Code, Codex, Gemini, Cursor, Windsurf, aider, OpenClaw, NanoClaw, NemoClaw, Continue, Cline, Roo, Zed, Copilot, Cody, Qodo) with `mm install-all` auto-detection
+- [`docs/mind-mem-4b-setup.md`](docs/mind-mem-4b-setup.md) — download + run the `star-ga/mind-mem-4b` full-FT model locally (transformers, exllamav2, vLLM, llama.cpp, Ollama)
 - [`ROADMAP.md`](ROADMAP.md) — feature roadmap (all 282 v2.x checkboxes closed in v2.8.0)
 - [`CHANGELOG.md`](CHANGELOG.md) — release notes for every published version
 
