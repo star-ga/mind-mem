@@ -14,6 +14,8 @@ from mind_mem.hook_installer import (
     detect_installed_agents,
     install_all,
     install_config,
+    install_mcp_config,
+    mcp_server_spec,
 )
 
 
@@ -115,6 +117,81 @@ class TestClawFamily:
             assert "commands" in hooks
 
 
+class TestNativeMCPConfig:
+    """v3.1.0 MCP server registration writers."""
+
+    @pytest.mark.parametrize(
+        "agent",
+        ["codex", "gemini", "cursor", "windsurf", "continue", "cline", "roo", "zed"],
+    )
+    def test_mcp_dry_run_for_every_supported_agent(
+        self, agent: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Redirect the real per-client MCP path into tmp so we don't
+        # touch real config files on the developer's machine.
+        spec = AGENT_REGISTRY[agent]
+        # Move the per-client mcp_path into tmp_path
+        relocated = AgentSpec(
+            name=spec.name, description=spec.description,
+            config_fmt=spec.config_fmt, path_tmpl=spec.path_tmpl,
+            content_tmpl=spec.content_tmpl,
+            detect_paths=spec.detect_paths, detect_binaries=spec.detect_binaries,
+            always_offer=spec.always_offer,
+            mcp_fmt=spec.mcp_fmt,
+            mcp_path_tmpl=str(tmp_path / f"{agent}_mcp.json"),
+        )
+        monkeypatch.setitem(AGENT_REGISTRY, agent, relocated)
+        result = install_mcp_config(agent, str(tmp_path), dry_run=True)
+        assert result["agent"] == agent
+        assert result["written"] is False
+        assert "mind-mem" in result["content"]
+
+    def test_mcp_skip_for_unsupported_agent(self, tmp_path: Path) -> None:
+        result = install_mcp_config("aider", str(tmp_path))
+        assert result["skipped"] is True
+        assert "does not support native MCP" in result["reason"]
+
+    def test_mcp_writer_preserves_user_keys(self, tmp_path: Path) -> None:
+        # Pre-populate a Cursor-style mcp.json with user content.
+        path = tmp_path / "mcp.json"
+        path.write_text(json.dumps({
+            "mcpServers": {"my-tool": {"command": "node", "args": ["x.js"]}},
+            "schemaVersion": 1,
+        }))
+
+        # Relocate cursor's mcp_path into tmp.
+        spec = AGENT_REGISTRY["cursor"]
+        relocated = AgentSpec(
+            name=spec.name, description=spec.description,
+            config_fmt=spec.config_fmt, path_tmpl=spec.path_tmpl,
+            content_tmpl=spec.content_tmpl,
+            detect_paths=spec.detect_paths, detect_binaries=spec.detect_binaries,
+            always_offer=spec.always_offer,
+            mcp_fmt=spec.mcp_fmt, mcp_path_tmpl=str(path),
+        )
+        original = AGENT_REGISTRY["cursor"]
+        AGENT_REGISTRY["cursor"] = relocated
+        try:
+            install_mcp_config("cursor", str(tmp_path))
+            loaded = json.loads(path.read_text())
+            # User's existing mcpServer survives.
+            assert loaded["mcpServers"]["my-tool"]["command"] == "node"
+            # mind-mem now alongside it.
+            assert "mind-mem" in loaded["mcpServers"]
+            # User's other top-level keys survive.
+            assert loaded["schemaVersion"] == 1
+        finally:
+            AGENT_REGISTRY["cursor"] = original
+
+
+class TestMcpServerSpecHelper:
+    def test_returns_command_args_env(self) -> None:
+        spec = mcp_server_spec("/tmp/ws")
+        assert "command" in spec
+        assert "args" in spec and len(spec["args"]) == 1
+        assert spec["env"] == {"MIND_MEM_WORKSPACE": "/tmp/ws"}
+
+
 class TestCopilotAlwaysOffer:
     def test_copilot_flagged_always_offer(self) -> None:
         assert AGENT_REGISTRY["copilot"].always_offer is True
@@ -135,15 +212,35 @@ class TestDetectInstalledAgents:
 
 class TestInstallAll:
     def test_install_all_explicit_list_dry_run(self, tmp_path: Path) -> None:
+        # Opt out of MCP writes so we get one result per agent (hook phase only).
         results = install_all(
             str(tmp_path),
             dry_run=True,
             agents=["cursor", "windsurf", "copilot"],
+            include_mcp=False,
         )
         assert len(results) == 3
         assert {r["agent"] for r in results} == {"cursor", "windsurf", "copilot"}
         for r in results:
             assert r["written"] is False
+
+    def test_install_all_with_mcp_emits_hook_plus_mcp_phase(
+        self, tmp_path: Path
+    ) -> None:
+        # Default: include_mcp=True → two results per MCP-aware agent.
+        results = install_all(
+            str(tmp_path),
+            dry_run=True,
+            agents=["gemini", "aider", "copilot"],
+        )
+        # 3 agents × 2 phases = 6 result dicts.
+        assert len(results) == 6
+        phases = sorted({r.get("phase", "?") for r in results})
+        assert phases == ["hook", "mcp"]
+        # aider + copilot have no mcp_fmt → their MCP phase is a skip-result.
+        mcp_results = [r for r in results if r.get("phase") == "mcp"]
+        skipped_no_mcp = [r for r in mcp_results if r.get("reason") == "agent does not support native MCP"]
+        assert {r["agent"] for r in skipped_no_mcp} == {"aider", "copilot"}
 
     def test_install_all_writes_all_requested(self, tmp_path: Path) -> None:
         results = install_all(
@@ -159,10 +256,13 @@ class TestInstallAll:
         assert (tmp_path / ".clinerules").is_file()
 
     def test_install_all_error_isolation(self, tmp_path: Path) -> None:
-        # One bad agent shouldn't stop the others.
+        # One bad agent shouldn't stop the others. include_mcp=False keeps
+        # results count at one per agent so the error count assertion is
+        # unambiguous.
         results = install_all(
             str(tmp_path),
             agents=["cursor", "definitely-not-an-agent", "windsurf"],
+            include_mcp=False,
         )
         errors = [r for r in results if "error" in r]
         successes = [r for r in results if r.get("written")]

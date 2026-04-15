@@ -36,9 +36,9 @@ Latest checked-in benchmark snapshot: mind-mem v1.9.0, evaluated with Mistral La
 **After** (Ollama mxbai-embed-large on GPU): 52-64ms per query — **1000-5000x speedup**
 
 Both models fit on RTX 3080:
-- mind-mem:7b (7.3GB) — LLM extraction
+- mind-mem:4b Q4_K_M (2.6GB) — LLM extraction @ 104 tok/s gen / 1585 tok/s prefill
 - mxbai-embed-large (769MB) — embeddings
-- Total: 8.1GB / 10GB
+- Total: 3.4GB / 10GB (6.6GB headroom for KV cache + concurrent models)
 
 ### CI benchmark (50 blocks)
 

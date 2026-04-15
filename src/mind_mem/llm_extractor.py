@@ -98,23 +98,74 @@ def _llama_cpp_available() -> bool:
 
 
 def is_available(backend: str = "auto") -> bool:
-    """Check if any LLM backend is accessible.
+    """Check if the requested LLM backend is reachable.
 
-    Args:
-        backend: "auto" tries ollama then llama-cpp; "ollama" or "llama-cpp"
-                 checks only that specific backend.
+    Backends:
+        ``ollama``              local ollama daemon at :11434
+        ``llama-cpp``           in-process llama-cpp-python
+        ``vllm``                local vLLM OpenAI-compatible server
+        ``openai-compatible``   any OpenAI-compatible HTTP endpoint
+        ``transformers``        in-process HF transformers (slowest)
+        ``auto``                tries each in order until one answers
 
-    Returns:
-        True if at least one backend is available.
+    Endpoint and base-url defaults read from env vars
+    (``MIND_MEM_LLM_BASE_URL``, ``MIND_MEM_VLLM_URL``).
     """
     if backend == "ollama":
         return _ollama_available()
     if backend in ("llama-cpp", "llama_cpp"):
         return _llama_cpp_available()
+    if backend == "vllm":
+        return _openai_compatible_available(_vllm_url())
+    if backend in ("openai-compatible", "openai_compatible"):
+        return _openai_compatible_available(_oai_url())
+    if backend == "transformers":
+        return _transformers_available()
     if backend == "auto":
-        return _ollama_available() or _llama_cpp_available()
-    # Unknown backend name — not supported
+        return (
+            _ollama_available()
+            or _openai_compatible_available(_vllm_url())
+            or _openai_compatible_available(_oai_url())
+            or _llama_cpp_available()
+            or _transformers_available()
+        )
     return False
+
+
+def _vllm_url() -> str:
+    return os.environ.get(
+        "MIND_MEM_VLLM_URL", "http://localhost:8000/v1"
+    ).rstrip("/")
+
+
+def _oai_url() -> str:
+    return os.environ.get(
+        "MIND_MEM_LLM_BASE_URL", _vllm_url()
+    ).rstrip("/")
+
+
+def _openai_compatible_available(base_url: str) -> bool:
+    """Probe ``GET {base_url}/models`` — works for vLLM, LM Studio,
+    text-generation-inference's OpenAI shim, and llama.cpp's
+    ``llama-server`` exposed with ``--api`` flag."""
+    import urllib.error
+    import urllib.request
+
+    try:
+        req = urllib.request.Request(f"{base_url}/models", method="GET")
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            return resp.status == 200
+    except (OSError, urllib.error.URLError, urllib.error.HTTPError):
+        return False
+
+
+def _transformers_available() -> bool:
+    try:
+        import transformers  # noqa: F401
+        import torch  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -162,19 +213,111 @@ def _query_llama_cpp(prompt: str, model: str) -> str:
     return ""
 
 
+def _query_openai_compatible(prompt: str, model: str, base_url: str) -> str:
+    """POST ``{base_url}/chat/completions`` with a single user turn.
+
+    Works against vLLM, LM Studio, llama.cpp's ``llama-server --api``,
+    text-generation-inference's OpenAI shim, OpenAI itself if
+    ``MIND_MEM_LLM_API_KEY`` is set, etc.
+    """
+    import urllib.request
+
+    payload = json.dumps(
+        {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1,
+            "max_tokens": 512,
+            "stream": False,
+        }
+    ).encode()
+    headers = {"Content-Type": "application/json"}
+    api_key = os.environ.get("MIND_MEM_LLM_API_KEY")
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    req = urllib.request.Request(
+        f"{base_url}/chat/completions",
+        data=payload,
+        headers=headers,
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        body = json.loads(resp.read().decode())
+    choices = body.get("choices") or []
+    if choices:
+        msg = choices[0].get("message") or {}
+        return str(msg.get("content", ""))
+    return ""
+
+
+def _query_transformers(prompt: str, model: str) -> str:
+    """Load the model in-process and run a single generate call.
+
+    Caches the loaded model + tokenizer per *model* path so subsequent
+    calls don't pay the load cost. Use only when no daemon is running;
+    much slower than vLLM/Ollama for sustained workloads.
+    """
+    import torch  # type: ignore[import-not-found]
+    from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-not-found]
+
+    cache = getattr(_query_transformers, "_cache", None)
+    if cache is None:
+        cache = {}
+        _query_transformers._cache = cache  # type: ignore[attr-defined]
+    if model not in cache:
+        tok = AutoTokenizer.from_pretrained(model, trust_remote_code=True)
+        if tok.pad_token is None:
+            tok.pad_token = tok.eos_token
+        m = AutoModelForCausalLM.from_pretrained(
+            model,
+            dtype=torch.bfloat16,
+            device_map="auto",
+            trust_remote_code=True,
+        )
+        m.eval()
+        cache[model] = (tok, m)
+    tok, m = cache[model]
+    msgs = [{"role": "user", "content": prompt}]
+    enc = tok.apply_chat_template(
+        msgs, add_generation_prompt=True, return_tensors="pt", return_dict=True
+    )
+    if hasattr(enc, "to"):
+        enc = enc.to(m.device)
+    with torch.no_grad():
+        out = m.generate(**enc, max_new_tokens=512, do_sample=False)
+    new_tokens = out[0][enc["input_ids"].shape[1]:]
+    return tok.decode(new_tokens, skip_special_tokens=True)
+
+
 def _query_llm(prompt: str, model: str, backend: str = "auto") -> str:
-    """Query the best available LLM backend. Returns empty string on failure."""
-    if backend in ("ollama", "auto"):
+    """Dispatch to the named backend. Returns empty string on failure.
+
+    Order for ``auto`` mode: ollama → vllm → openai-compat → llama-cpp →
+    transformers. Each is tried until one returns a non-empty string.
+    """
+    backends = (
+        [backend]
+        if backend != "auto"
+        else ["ollama", "vllm", "openai-compatible", "llama-cpp", "transformers"]
+    )
+    for b in backends:
         try:
-            return _query_ollama(prompt, model)
-        except (OSError, ValueError, RuntimeError):
-            if backend == "ollama":
-                return ""
-    if backend in ("llama-cpp", "llama_cpp", "auto"):
-        try:
-            return _query_llama_cpp(prompt, model)
+            if b == "ollama":
+                out = _query_ollama(prompt, model)
+            elif b in ("llama-cpp", "llama_cpp"):
+                out = _query_llama_cpp(prompt, model)
+            elif b == "vllm":
+                out = _query_openai_compatible(prompt, model, _vllm_url())
+            elif b in ("openai-compatible", "openai_compatible"):
+                out = _query_openai_compatible(prompt, model, _oai_url())
+            elif b == "transformers":
+                out = _query_transformers(prompt, model)
+            else:
+                continue
+            if out:
+                return out
         except (OSError, ValueError, RuntimeError, ImportError):
-            return ""
+            continue
     return ""
 
 

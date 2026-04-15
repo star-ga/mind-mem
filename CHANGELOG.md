@@ -2,6 +2,33 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.1.0 (2026-04-14)
+
+**Native MCP for all clients + multi-backend LLM extractor.** Every MCP-aware client now gets the full 57-tool surface (not just text-hook fallback). Memory extraction now works against any of 5 local/remote LLM backends with automatic detection.
+
+### Added
+
+- **Native MCP server registration for 8 clients** — `hook_installer.py` gains per-client MCP config writers:
+  - **JSON `mcpServers`** format: Gemini, Continue, Cline, Roo, Cursor
+  - **JSON `context_servers`** (Zed), **JSON `mcp_config.json`** (Windsurf)
+  - **TOML `[mcp_servers.mind-mem]`** (Codex)
+  - New `install_mcp_config(agent, workspace)` public function; `install_all()` now emits BOTH hook (visibility) + MCP (tool surface) phases by default. Opt-out via `--no-mcp` or `include_mcp=False`.
+  - Codex TOML writer uses a section-aware regex that removes stale `[mcp_servers.mind-mem.*]` sub-tables in addition to the main section, preventing duplicate entries on re-install.
+- **Multi-backend LLM extractor** — `llm_extractor.py` extended with `vllm`, `openai-compatible`, and `transformers` backends alongside existing `ollama` and `llama-cpp`:
+  - `_query_openai_compatible(prompt, model, base_url)` — works with vLLM's OpenAI-compat server, LM Studio, llama.cpp's `llama-server --api`, text-generation-inference, OpenAI itself, any compatible endpoint.
+  - `_query_transformers(prompt, model)` — in-process HuggingFace transformers fallback with model cache.
+  - Env-driven URL overrides: `MIND_MEM_VLLM_URL` (default `http://127.0.0.1:8000/v1`), `MIND_MEM_LLM_BASE_URL`.
+  - `auto` mode dispatches in order: ollama → vllm → openai-compatible → llama-cpp → transformers; first non-empty response wins.
+- **mind-mem:4b model available via Ollama** — Qwen3.5-4B full fine-tune on STARGA-curated mind-mem corpus. Quantized Q4_K_M @ 2.6GB. Default `extraction.model` in `mind-mem.json`. Empirical on RTX 3080: 104 tok/s generation, 1585 tok/s prefill.
+
+### Changed
+- `AgentSpec` dataclass gains `mcp_fmt` and `mcp_path_tmpl` fields + `expand_mcp_path(workspace)` helper.
+- `mm install-all` CLI adds `--no-mcp` flag; default behaviour writes both hook and MCP configs.
+- `mind-mem.json` default `extraction.model` updated from `mind-mem:7b` to `mind-mem:4b`, `backend` from `auto` to `ollama` (explicit).
+
+### Fixed
+- Codex TOML re-install no longer leaves orphan `[mcp_servers.mind-mem.env]` sub-table from prior installs.
+
 ## 3.0.0 (2026-04-13)
 
 **v3.0 architectural release.** Addresses seven of nine v3.0 workstreams flagged in the Gemini arch review (issues #501–#507). Backwards-compatible with v2.x (no data migration required); adds opt-in encryption + alerting + AI-client integrations.

@@ -1308,11 +1308,14 @@ wget https://huggingface.co/star-ga/mind-mem-4b/resolve/main/mind-mem-4b-Q4_K_M.
 # Create Ollama model
 cat > Modelfile << 'EOF'
 FROM ./mind-mem-4b-Q4_K_M.gguf
-SYSTEM "You are Mind7B, a specialized memory extraction model for mind-mem."
+SYSTEM "You are mind-mem, a governance-aware memory extraction assistant."
 PARAMETER temperature 0.1
-PARAMETER num_predict 512
+PARAMETER num_ctx 8192
+PARAMETER num_predict 1024
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|endoftext|>"
 EOF
-ollama create mind-mem:7b -f Modelfile
+ollama create mind-mem:4b -f Modelfile
 ```
 
 Then set in `mind-mem.json`:
@@ -1320,11 +1323,13 @@ Then set in `mind-mem.json`:
 {
   "extraction": {
     "enabled": true,
-    "model": "mind-mem:7b",
+    "model": "mind-mem:4b",
     "backend": "ollama"
   }
 }
 ```
+
+Empirical on RTX 3080 (Q4_K_M, 2.6GB VRAM): **104 tok/s generation, 1585 tok/s prefill**.
 
 **LoRA adapter (transformers + PEFT):**
 ```python

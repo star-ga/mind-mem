@@ -168,9 +168,52 @@ def observation_to_block(
 
 
 import shutil as _shutil
+import sys as _sys
 from dataclasses import dataclass, field
 
 _MM_MARKER = "# mind-mem"
+
+
+# ---------------------------------------------------------------------------
+# MCP server command — every client that supports MCP points at this.
+# The mcp_server.py script at the mind-mem package root launches the
+# full 57-tool surface with the right workspace via the env var.
+# ---------------------------------------------------------------------------
+
+
+def _mcp_server_path() -> str:
+    """Locate the mcp_server.py launcher on this machine.
+
+    Preference order:
+    1. ``MIND_MEM_MCP_SERVER`` env var (explicit override)
+    2. ``<package_dir>/../mcp_server.py``  (src-layout checkout)
+    3. ``<package_dir>/mcp_server.py``     (packaged install)
+    """
+    override = os.environ.get("MIND_MEM_MCP_SERVER")
+    if override and os.path.isfile(override):
+        return os.path.abspath(override)
+    pkg_dir = os.path.dirname(os.path.abspath(__file__))
+    for candidate in (
+        os.path.normpath(os.path.join(pkg_dir, "..", "..", "mcp_server.py")),
+        os.path.normpath(os.path.join(pkg_dir, "..", "mcp_server.py")),
+        os.path.join(pkg_dir, "mcp_server.py"),
+    ):
+        if os.path.isfile(candidate):
+            return candidate
+    return "mcp_server.py"  # fallback — caller must ensure PATH
+
+
+def mcp_server_spec(workspace: str) -> dict[str, Any]:
+    """Canonical MCP-server invocation record.
+
+    Every MCP-aware client takes some variant of this dict:
+    ``{command, args, env}``. Individual writers reshape as needed.
+    """
+    return {
+        "command": _sys.executable or "python3",
+        "args": [_mcp_server_path()],
+        "env": {"MIND_MEM_WORKSPACE": workspace},
+    }
 
 
 @dataclass(frozen=True)
@@ -201,9 +244,20 @@ class AgentSpec:
     detect_paths: tuple[str, ...] = field(default_factory=tuple)
     detect_binaries: tuple[str, ...] = field(default_factory=tuple)
     always_offer: bool = False
+    # v3.1.0: native MCP registration. When set, install_mcp_config()
+    # knows how to write the per-client MCP server registration so the
+    # client gets the full 57-tool surface, not just "shell out to mm CLI".
+    mcp_fmt: str = ""          # "" = not MCP-aware
+    mcp_path_tmpl: str = ""    # file path to write into
 
     def expand_path(self, workspace: str) -> str:
         return self.path_tmpl.format(
+            ws=workspace,
+            home=os.path.expanduser("~"),
+        )
+
+    def expand_mcp_path(self, workspace: str) -> str:
+        return self.mcp_path_tmpl.format(
             ws=workspace,
             home=os.path.expanduser("~"),
         )
@@ -326,6 +380,119 @@ _JSON_MERGERS: dict[str, Any] = {
 
 
 # ---------------------------------------------------------------------------
+# MCP config writers — v3.1.0 native MCP registration per client format
+# ---------------------------------------------------------------------------
+#
+# Each writer takes (existing_config_dict_or_text, workspace, mcp_server) and
+# returns (new_config, changed, skipped). mcp_server is the dict from
+# mcp_server_spec(workspace). The writers own their config file format
+# (JSON vs TOML vs per-client JSON dialect).
+
+
+def _merge_mcp_json_servers(existing: dict, ws: str, srv: dict) -> tuple[dict, bool]:
+    """Generic MCP writer for clients that accept the standard shape:
+
+        { "mcpServers": { "mind-mem": {"command": ..., "args": [...], "env": {...}} } }
+
+    Used by Gemini CLI, Continue.dev, Cursor, Cline, Zed (latest schema),
+    and any future MCP-native client that follows the convention.
+    """
+    out = json.loads(json.dumps(existing))
+    servers = out.setdefault("mcpServers", {})
+    if servers.get("mind-mem") == srv:
+        return out, False
+    servers["mind-mem"] = srv
+    return out, True
+
+
+def _merge_mcp_windsurf(existing: dict, ws: str, srv: dict) -> tuple[dict, bool]:
+    """Windsurf uses `mcpServers` at the top level — same as the generic
+    shape, just at `~/.codeium/windsurf/mcp_config.json`."""
+    return _merge_mcp_json_servers(existing, ws, srv)
+
+
+def _merge_mcp_cursor(existing: dict, ws: str, srv: dict) -> tuple[dict, bool]:
+    """Cursor accepts the generic `mcpServers` shape at `~/.cursor/mcp.json`."""
+    return _merge_mcp_json_servers(existing, ws, srv)
+
+
+def _merge_mcp_zed(existing: dict, ws: str, srv: dict) -> tuple[dict, bool]:
+    """Zed calls them `context_servers` inside settings.json."""
+    out = json.loads(json.dumps(existing))
+    ctx = out.setdefault("context_servers", {})
+    target = {
+        "source": "custom",
+        "command": srv["command"],
+        "args": srv["args"],
+        "env": srv["env"],
+    }
+    if ctx.get("mind-mem") == target:
+        return out, False
+    ctx["mind-mem"] = target
+    return out, True
+
+
+def _merge_mcp_codex_toml(existing_text: str, ws: str, srv: dict) -> tuple[str, bool]:
+    """Codex CLI uses TOML at `~/.codex/config.toml`, section-based:
+
+        [mcp_servers.mind-mem]
+        command = "python3"
+        args = ["/path/to/mcp_server.py"]
+        env = { MIND_MEM_WORKSPACE = "/path/to/workspace" }
+
+    Rewrites the whole section atomically. Preserves existing content
+    outside the `[mcp_servers.mind-mem]` block.
+    """
+    # Build the replacement section
+    args_toml = "[" + ", ".join(f'"{a}"' for a in srv["args"]) + "]"
+    env_pairs = ", ".join(f'{k} = "{v}"' for k, v in srv["env"].items())
+    new_section = (
+        "[mcp_servers.mind-mem]\n"
+        f'command = "{srv["command"]}"\n'
+        f"args = {args_toml}\n"
+        f"env = {{ {env_pairs} }}\n"
+    )
+
+    text = existing_text or ""
+    # Quick check — already present with identical body?
+    if new_section.strip() in text:
+        return text, False
+
+    # Remove any existing `[mcp_servers.mind-mem]` section AND any of
+    # its sub-tables (`[mcp_servers.mind-mem.env]`, `.headers`, etc.)
+    # from an earlier write format. `?(?=\n\[...)` anchors at the next
+    # non-mind-mem TOML section header.
+    import re
+
+    pattern = re.compile(
+        r"\[mcp_servers\.mind-mem(?:\.[^\]]+)?\][\s\S]*?"
+        r"(?=\n\[(?!mcp_servers\.mind-mem)[^\]]+\]|\Z)"
+    )
+    had_any = bool(pattern.search(text))
+    text = pattern.sub("", text)
+    # Tidy consecutive blank lines left behind.
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    if text and not text.endswith("\n"):
+        text += "\n"
+    # Append the clean, canonical section.
+    text += ("\n" + new_section) if text.strip() else new_section
+    changed = True
+    return text, changed
+
+
+# Dispatcher for the `mcp_fmt` spec field.
+_MCP_WRITERS_JSON: dict[str, Any] = {
+    "mcp-json-servers": _merge_mcp_json_servers,  # Gemini / Continue / Cursor / Cline / Roo
+    "mcp-json-windsurf": _merge_mcp_windsurf,
+    "mcp-json-cursor": _merge_mcp_cursor,
+    "mcp-json-zed": _merge_mcp_zed,
+}
+_MCP_WRITERS_TEXT: dict[str, Any] = {
+    "mcp-toml-codex": _merge_mcp_codex_toml,
+}
+
+
+# ---------------------------------------------------------------------------
 # Registry — every known AI coding client
 # ---------------------------------------------------------------------------
 
@@ -349,6 +516,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
             "Before every response, run `mm context \"$QUERY\"` and prepend the output.\n"
         ),
         detect_binaries=("codex",),
+        mcp_fmt="mcp-toml-codex",
+        mcp_path_tmpl="{home}/.codex/config.toml",
     ),
     "gemini": AgentSpec(
         name="gemini",
@@ -357,6 +526,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         path_tmpl="{ws}/.gemini/settings.json",
         detect_paths=("{home}/.gemini",),
         detect_binaries=("gemini",),
+        mcp_fmt="mcp-json-servers",
+        mcp_path_tmpl="{home}/.gemini/settings.json",
     ),
     "cursor": AgentSpec(
         name="cursor",
@@ -373,6 +544,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
             "{home}/AppData/Roaming/Cursor",
         ),
         detect_binaries=("cursor",),
+        mcp_fmt="mcp-json-cursor",
+        mcp_path_tmpl="{home}/.cursor/mcp.json",
     ),
     "windsurf": AgentSpec(
         name="windsurf",
@@ -389,6 +562,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
             "{home}/Library/Application Support/Windsurf",
         ),
         detect_binaries=("windsurf",),
+        mcp_fmt="mcp-json-windsurf",
+        mcp_path_tmpl="{home}/.codeium/windsurf/mcp_config.json",
     ),
     "aider": AgentSpec(
         name="aider",
@@ -431,6 +606,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         config_fmt="json-continue",
         path_tmpl="{home}/.continue/config.json",
         detect_paths=("{home}/.continue",),
+        mcp_fmt="mcp-json-servers",
+        mcp_path_tmpl="{home}/.continue/config.json",
     ),
     "cline": AgentSpec(
         name="cline",
@@ -445,6 +622,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
             "{home}/.vscode/extensions",
             "{home}/.vscode-server/extensions",
         ),
+        mcp_fmt="mcp-json-servers",
+        mcp_path_tmpl="{home}/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
     ),
     "roo": AgentSpec(
         name="roo",
@@ -459,6 +638,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
             "{home}/.roo",
             "{home}/.vscode/extensions",
         ),
+        mcp_fmt="mcp-json-servers",
+        mcp_path_tmpl="{home}/.vscode-server/data/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
     ),
     "zed": AgentSpec(
         name="zed",
@@ -470,6 +651,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
             "{home}/Library/Application Support/Zed",
         ),
         detect_binaries=("zed", "zeditor"),
+        mcp_fmt="mcp-json-zed",
+        mcp_path_tmpl="{home}/.config/zed/settings.json",
     ),
     "copilot": AgentSpec(
         name="copilot",
@@ -641,12 +824,108 @@ def install_config(
     }
 
 
+def install_mcp_config(
+    agent: str,
+    workspace: str,
+    *,
+    dry_run: bool = False,
+    force: bool = False,
+) -> dict:
+    """Register mind-mem as an MCP server in *agent*'s native config.
+
+    Unlike :func:`install_config` (which writes text hooks telling the
+    agent to shell out to the ``mm`` CLI), this writes the per-client
+    MCP spec so the agent discovers all 57 mind-mem tools natively.
+
+    Returns ``{"agent", "path", "written", "merged", "skipped",
+    "content"}`` or ``{"agent", "skipped": True, "reason": ...}`` when
+    the agent has no ``mcp_fmt`` configured (e.g. aider, Copilot).
+    """
+    spec = AGENT_REGISTRY.get(agent)
+    if spec is None:
+        raise ValueError(f"unknown agent: {agent!r}")
+    if not spec.mcp_fmt:
+        return {
+            "agent": agent,
+            "skipped": True,
+            "reason": "agent does not support native MCP",
+            "written": False,
+        }
+
+    srv = mcp_server_spec(workspace)
+    path = spec.expand_mcp_path(workspace)
+    merged = False
+    skipped = False
+
+    if spec.mcp_fmt in _MCP_WRITERS_JSON:
+        writer = _MCP_WRITERS_JSON[spec.mcp_fmt]
+        existing: dict = {}
+        if os.path.isfile(path) and not force:
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    loaded = json.load(fh)
+                if isinstance(loaded, dict):
+                    existing = loaded
+            except (OSError, json.JSONDecodeError):
+                existing = {}
+        content, changed = writer(existing, workspace, srv)
+        merged = os.path.isfile(path) and not force
+        skipped = merged and not changed
+        serialised = json.dumps(content, indent=2)
+    elif spec.mcp_fmt in _MCP_WRITERS_TEXT:
+        writer = _MCP_WRITERS_TEXT[spec.mcp_fmt]
+        existing_text = ""
+        if os.path.isfile(path) and not force:
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    existing_text = fh.read()
+            except OSError:
+                existing_text = ""
+        content, changed = writer(existing_text, workspace, srv)
+        merged = os.path.isfile(path) and not force
+        skipped = merged and not changed
+        serialised = content
+    else:
+        raise ValueError(f"unknown mcp_fmt {spec.mcp_fmt!r} for agent {agent!r}")
+
+    if dry_run:
+        return {
+            "agent": agent,
+            "path": path,
+            "written": False,
+            "content": serialised,
+            "merged": merged,
+            "skipped": skipped,
+        }
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    if skipped:
+        return {
+            "agent": agent,
+            "path": path,
+            "written": False,
+            "content": serialised,
+            "merged": False,
+            "skipped": True,
+        }
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(serialised if serialised.endswith("\n") else serialised + "\n")
+    return {
+        "agent": agent,
+        "path": path,
+        "written": True,
+        "content": serialised,
+        "merged": merged,
+        "skipped": False,
+    }
+
+
 def install_all(
     workspace: str,
     *,
     dry_run: bool = False,
     force: bool = False,
     agents: list[str] | None = None,
+    include_mcp: bool = True,
 ) -> list[dict]:
     """Install mind-mem config for every detected (or specified) agent.
 
@@ -654,20 +933,36 @@ def install_all(
     on the current machine via :func:`detect_installed_agents`.
     Otherwise uses the explicit list.
 
-    Returns the per-agent result list so callers can surface which
-    files were written, merged, or skipped.
+    When ``include_mcp`` is True (the default) and the agent's
+    registry entry has an ``mcp_fmt`` set, *also* registers mind-mem
+    as a native MCP server in that client's config. The text-hook
+    install still runs so users see the ``# mind-mem`` block in a
+    human-readable config.
+
+    Returns the per-agent result list. Each agent with MCP support
+    produces two result dicts: one for the hook install, one for
+    the MCP registration (``{"phase": "hook" | "mcp"}``).
     """
     names = agents if agents is not None else detect_installed_agents(workspace)
     results: list[dict] = []
     for name in names:
         try:
-            results.append(
-                install_config(name, workspace, dry_run=dry_run, force=force)
-            )
+            r = install_config(name, workspace, dry_run=dry_run, force=force)
+            r["phase"] = "hook"
+            results.append(r)
         except Exception as exc:  # pragma: no cover — per-agent isolation
             results.append(
-                {"agent": name, "error": str(exc), "written": False}
+                {"agent": name, "phase": "hook", "error": str(exc), "written": False}
             )
+        if include_mcp:
+            try:
+                r = install_mcp_config(name, workspace, dry_run=dry_run, force=force)
+                r["phase"] = "mcp"
+                results.append(r)
+            except Exception as exc:  # pragma: no cover
+                results.append(
+                    {"agent": name, "phase": "mcp", "error": str(exc), "written": False}
+                )
     return results
 
 
@@ -678,8 +973,10 @@ __all__ = [
     "privacy_filter",
     "observation_to_block",
     "install_config",
+    "install_mcp_config",
     "install_all",
     "detect_installed_agents",
+    "mcp_server_spec",
     "AGENT_REGISTRY",
     "AgentSpec",
 ]

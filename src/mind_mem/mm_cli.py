@@ -122,7 +122,11 @@ def _cmd_install_all(args: argparse.Namespace) -> int:
     ws = _workspace()
     agents = args.agent or None  # None → auto-detect
     results = install_all(
-        ws, dry_run=args.dry_run, force=args.force, agents=agents
+        ws,
+        dry_run=args.dry_run,
+        force=args.force,
+        agents=agents,
+        include_mcp=not getattr(args, "no_mcp", False),
     )
     summary = {
         "workspace": ws,
@@ -440,6 +444,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_install_all.add_argument("--dry-run", action="store_true")
     p_install_all.add_argument("--force", action="store_true")
+    p_install_all.add_argument(
+        "--no-mcp",
+        action="store_true",
+        help=(
+            "Skip native MCP server registration. Default: write both "
+            "the text hook AND the MCP registration for every agent "
+            "that supports MCP (Codex, Gemini, Cursor, Windsurf, "
+            "Continue, Cline, Roo, Zed)."
+        ),
+    )
     p_install_all.set_defaults(func=_cmd_install_all)
 
     # vault namespace
