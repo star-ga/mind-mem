@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 457 | **Est. tokens:** ~963,378
-**Generated:** 2026-04-15 01:14 UTC
+**Files:** 457 | **Est. tokens:** ~965,464
+**Generated:** 2026-04-15 02:02 UTC
 
 ## Token Budget Guide
 
@@ -22,10 +22,10 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~80,446 |
+| `./` | 27 | ~80,467 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
-| `docs/` | 32 | ~33,666 |
+| `docs/` | 32 | ~35,731 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `examples/` | 2 | ~466 |
@@ -74,7 +74,7 @@
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
 - `pyproject.toml` (~868 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~22072 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~22093 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
 - `ROADMAP.md` (~10244 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
@@ -103,17 +103,17 @@
 - `002-bm25f-scoring.md` (~205 tok, medium) — ADR-002: BM25F as Primary Scoring Algorithm
 ### `docs/`
 
-- `api-reference.md` (~969 tok, large) — API Reference
+- `api-reference.md` (~1477 tok, large) — API Reference
 - `architecture.md` (~1849 tok, huge) — Architecture
-- `benchmarks.md` (~603 tok, large) — Benchmarks
+- `benchmarks.md` (~743 tok, large) — Benchmarks
 - `block-format.md` (~431 tok, medium) — Block Format
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~254 tok, medium) — CI Workflows
 - `claude-desktop-setup.md` (~752 tok, large) — Claude Desktop Setup Guide
-- `client-integrations.md` (~2066 tok, huge) — Client Integrations
+- `client-integrations.md` (~2438 tok, huge) — Client Integrations
 - `comparison.md` (~313 tok, medium) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~4599 tok, huge) — Configuration Reference
+- `configuration.md` (~5223 tok, huge) — Configuration Reference
 ### `docs/design/`
 
 - `v3-mcp-surface-reduction.md` (~1080 tok, large) — v3.0 Design: MCP Tool Surface Reduction
@@ -124,7 +124,7 @@
 - `faq.md` (~374 tok, medium) — FAQ
 - `getting-started.md` (~405 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
-- `mcp-integration.md` (~1026 tok, large) — MCP Integration Guide
+- `mcp-integration.md` (~1045 tok, large) — MCP Integration Guide
 - `mcp-tool-examples.md` (~902 tok, large) — MCP Tool Examples
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
 - `migration.md` (~2754 tok, huge) — Migration Guide: mem-os to mind-mem
@@ -136,10 +136,10 @@
 - `roadmap.md` (~730 tok, large) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `security-model.md` (~350 tok, medium) — Security Model
-- `setup.md` (~1354 tok, large) — Setup
+- `setup.md` (~1741 tok, huge) — Setup
 - `testing-guide.md` (~369 tok, medium) — Testing Guide
 - `troubleshooting.md` (~681 tok, large) — Troubleshooting
-- `usage.md` (~1996 tok, huge) — Usage
+- `usage.md` (~2011 tok, huge) — Usage
 - `workspace-structure.md` (~352 tok, medium) — Workspace Structure
 ### `examples/`
 

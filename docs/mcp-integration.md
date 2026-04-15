@@ -2,7 +2,7 @@
 
 ## Overview
 
-mind-mem exposes 54 MCP tools for integration with AI coding assistants like Claude Code.
+mind-mem exposes 57 MCP tools for integration with AI coding assistants like Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, and Zed (v3.1.0+).
 
 ## Setup
 

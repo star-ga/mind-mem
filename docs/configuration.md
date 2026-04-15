@@ -48,6 +48,11 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
     "enabled": true,
     "extra_categories": {}
   },
+  "extraction": {
+    "enabled": true,
+    "model": "mind-mem:4b",
+    "backend": "ollama"
+  },
   "prompts": {
     "observation_compress": "",
     "entity_extract": "",
@@ -246,6 +251,33 @@ Reserved prompt override slots for future LLM-powered compression and extraction
 
 ---
 
+## Extraction (LLM Backend)
+
+Controls the LLM used for memory extraction from transcripts and text. Added multi-backend support in v3.1.0.
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `extraction.enabled` | bool | `true` | Enable LLM-based extraction. When `false`, only deterministic rule-based capture runs. |
+| `extraction.model` | string | `"mind-mem:4b"` | Model identifier. For Ollama: the model tag (e.g., `mind-mem:4b`, `qwen3:4b`). For vLLM / OpenAI-compat: the served model name. For llama-cpp: absolute path to the GGUF file. |
+| `extraction.backend` | string | `"ollama"` | LLM backend. See Backend Values below. |
+
+### Backend Values
+
+| Value | Description | Typical setup |
+| --- | --- | --- |
+| `"ollama"` | Local Ollama daemon at `http://localhost:11434` | `ollama serve` + `ollama create mind-mem:4b -f Modelfile` |
+| `"vllm"` | Local vLLM OpenAI-compatible server | `vllm serve <model> --port 8000` → set `MIND_MEM_VLLM_URL` if non-default |
+| `"openai-compatible"` | Any OpenAI-compatible endpoint (LM Studio, llama-server, TGI, OpenAI itself, Anthropic via proxy, etc.) | Set `MIND_MEM_LLM_BASE_URL` and optional `MIND_MEM_LLM_API_KEY` |
+| `"llama-cpp"` | In-process `llama-cpp-python` | `pip install llama-cpp-python`; set `extraction.model` to GGUF path |
+| `"transformers"` | In-process HuggingFace transformers | `pip install transformers torch`; slowest, no daemon required |
+| `"auto"` | Try each in order (ollama → vllm → openai-compat → llama-cpp → transformers) until one returns a non-empty response | Zero-config fallback |
+
+### mind-mem:4b (Recommended)
+
+Full fine-tune of Qwen3.5-4B on STARGA-curated mind-mem corpus. Available as Q4_K_M GGUF (2.6GB) from [star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b). Empirical on RTX 3080: 104 tok/s generation, 1585 tok/s prefill.
+
+---
+
 ## Proposal Budget
 
 Controls how many proposals the intelligence scan generates, preventing overload of the review queue.
@@ -327,6 +359,9 @@ Environment variables take precedence over config file values where applicable.
 | `MIND_MEM_LOG_LEVEL` | Logging level for structured JSON logging. Valid values: `DEBUG`, `INFO`, `WARNING`, `ERROR`. Default: `INFO`. |
 | `MIND_MEM_LIB` | Absolute path to the compiled MIND kernel shared library (`libmindmem.so` / `libmindmem.dylib`). Overrides the default search paths. Must point to a file within the `lib/` directory of the mind-mem installation for security. |
 | `MIND_MEM_HOME` | Path to the mind-mem installation directory. Used by the OpenClaw hook (`handler.js`) to locate scripts when they are not co-located with the workspace. |
+| `MIND_MEM_VLLM_URL` | Base URL for a local vLLM OpenAI-compatible server. Default: `http://127.0.0.1:8000/v1`. Used only when `extraction.backend` is `"vllm"` or `"auto"`. |
+| `MIND_MEM_LLM_BASE_URL` | Base URL for any OpenAI-compatible endpoint (LM Studio, llama-server, TGI, OpenAI, etc.). No default. Used only when `extraction.backend` is `"openai-compatible"` or `"auto"`. |
+| `MIND_MEM_LLM_API_KEY` | Optional API key for the `openai-compatible` backend. Sent as `Authorization: Bearer <key>`. Not required for local endpoints. |
 
 ---
 

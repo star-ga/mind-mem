@@ -58,18 +58,25 @@ Compiled `.so` kernels vs pure Python (N=5000 blocks):
 | date_proximity | 574 us | 20.7 us | **28x** |
 | **Overall** | **10.93 ms** | **249.5 us** | **47.6x** |
 
-## Mind-Mem:7B LLM Extraction
+## mind-mem:4b LLM Extraction
 
-Purpose-trained model ([star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b)) on RTX 3080 (Q4_K_M GGUF):
+Purpose-trained model ([star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b)) — full fine-tune of Qwen3.5-4B on STARGA-curated mind-mem corpus. On RTX 3080 (Q4_K_M GGUF, 2.6 GB VRAM):
 
-| Task | Latency |
-|------|---------|
-| Entity extraction | ~18s |
-| Fact extraction | ~21s |
-| Intent classification | ~21s |
-| Contradiction detection | ~24s |
+**Raw throughput:**
+- Generation: **104 tok/s**
+- Prefill: **1585 tok/s**
 
-The model produces structured JSON output for all 8 trained tasks. Best used as async/background enrichment rather than in the real-time recall path.
+**End-to-end task latency** (prefill + generate, typical inputs):
+
+| Task | Latency | Notes |
+|------|---------|-------|
+| Entity extraction | ~3-4s | short input, ~100 tok output |
+| Fact extraction | ~4-5s | medium input, ~200 tok output |
+| Intent classification | ~2-3s | short input, ~20 tok output |
+| Contradiction detection | ~5-7s | pairwise blocks, ~200 tok output |
+| Observation compression | ~6-9s | 2K-4K transcript input |
+
+The model produces structured JSON output for all 8 trained tasks. Suitable for both interactive `mm capture` workflows and async/background enrichment. Multi-backend dispatch (`extraction.backend` = `ollama` / `vllm` / `openai-compatible`) lets you scale horizontally if needed.
 
 ## How to Run
 

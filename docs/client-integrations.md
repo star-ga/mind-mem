@@ -9,8 +9,16 @@ The fastest path to configure any client is:
 
 ```bash
 mm detect        # list every AI coding client mind-mem recognises on this machine
-mm install-all   # auto-configure each detected client + enable the memory hook
+mm install-all   # auto-configure each detected client: hook + native MCP registration
 ```
+
+**Since v3.1.0, `mm install-all` writes TWO things per MCP-aware client:**
+1. The **text-hook** (SessionStart/PostToolUse/Stop) for visibility and auto-capture.
+2. A **native MCP server entry** so the client gets the full 57-tool surface.
+
+Pass `--no-mcp` to skip the MCP registration phase (hook-only, useful
+when you want to register a custom MCP endpoint yourself or for
+clients behind firewalls).
 
 Use `mm install <agent>` to configure a single client; use
 `mm install-all --agent <A> --agent <B>` to target an explicit subset.
@@ -19,6 +27,26 @@ Every writer is **non-destructive**: existing config files are parsed
 and the mind-mem stanza is merged in under the `# mind-mem` marker.
 Re-running the command is idempotent. Pass `--force` to overwrite a
 hand-rolled config you want replaced.
+
+### Native MCP formats per client
+
+v3.1.0 added format-specific MCP writers for 8 MCP-aware clients:
+
+| Client | Config path | Format | Stanza |
+| --- | --- | --- | --- |
+| Codex | `~/.codex/config.toml` | TOML | `[mcp_servers.mind-mem]` |
+| Gemini | `~/.gemini/settings.json` | JSON | `mcpServers.mind-mem` |
+| Cursor | `~/.cursor/mcp.json` | JSON | `mcpServers.mind-mem` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | JSON | `mcpServers.mind-mem` |
+| Continue | `~/.continue/config.json` | JSON | `mcpServers.mind-mem` |
+| Cline | `<vscode-user>/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | JSON | `mcpServers.mind-mem` |
+| Roo | `<vscode-user>/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json` | JSON | `mcpServers.mind-mem` |
+| Zed | `~/.config/zed/settings.json` | JSON | `context_servers.mind-mem` |
+
+All entries point at `<mind-mem-install>/mcp_server.py` with
+`MIND_MEM_WORKSPACE` set to the shared workspace. Clients not on this
+list still get the text-hook fallback, which routes tool calls
+through the `mm` CLI.
 
 ## Claude Code (Anthropic)
 

@@ -104,9 +104,33 @@ Minimal config:
   "memory_mesh": {
     "enabled": false,
     "peers": []
+  },
+  "extraction": {
+    "enabled": true,
+    "model": "mind-mem:4b",
+    "backend": "ollama"
   }
 }
 ```
+
+### LLM backend selection (v3.1.0)
+
+`extraction.backend` accepts `ollama` (default), `vllm`,
+`openai-compatible`, `llama-cpp`, `transformers`, or `auto`. The
+`auto` mode probes each in order until one responds.
+
+For vLLM or any OpenAI-compatible endpoint, set environment overrides:
+
+```bash
+# vLLM (default is http://127.0.0.1:8000/v1)
+export MIND_MEM_VLLM_URL="http://gpu-host:8000/v1"
+
+# Any OpenAI-compatible endpoint (LM Studio, llama-server, TGI, OpenAI)
+export MIND_MEM_LLM_BASE_URL="http://lmstudio:1234/v1"
+export MIND_MEM_LLM_API_KEY="optional-key"
+```
+
+See [Configuration Reference](configuration.md#extraction-llm-backend) for full details.
 
 ## 4. MCP server (for Claude Code / OpenClaw / any MCP-compatible agent)
 
@@ -125,24 +149,45 @@ Minimal config:
 }
 ```
 
-Restart Claude Code. All 54 MCP tools (recall, recall_with_axis,
+Restart Claude Code. All 57 MCP tools (recall, recall_with_axis,
 verify_merkle, observe_signal, graph_query, build_core,
 agent_inject, etc.) become available.
 
-## 5. Non-MCP agents (codex, gemini CLI, Cursor, Windsurf, Aider)
+## 5. All clients at once (v3.1.0 recommended)
 
-Use the `mm` console script shipped by the package. See
-[usage.md](usage.md#mm-cli).
+Since v3.1.0, the fastest path for any setup is:
 
 ```bash
-mm hook install --agent codex --workspace "$(pwd)"
-mm hook install --agent gemini --workspace "$(pwd)"
-# …
+mm detect        # list every client mind-mem recognises on this machine
+mm install-all   # write hook + native MCP config for every detected client
 ```
 
-`mm hook install` writes the right config file (AGENTS.md,
-.cursorrules, .windsurfrules, .aider.conf.yml, GEMINI.md, …) for
-whichever agent you target.
+This installs **both** the text-hook (visibility + auto-capture) **and**
+the native MCP server entry (full 57-tool surface) for all 8
+MCP-aware clients: Codex, Gemini, Cursor, Windsurf, Continue, Cline,
+Roo, Zed. Clients without MCP support (Claude Code hook-mode, Aider,
+OpenClaw variants) get the hook only.
+
+Pass `--no-mcp` to skip native MCP registration:
+
+```bash
+mm install-all --no-mcp   # hook config only
+```
+
+## 5a. Single-client install
+
+Use `mm install` for a single client, or the legacy `mm hook install`:
+
+```bash
+mm install codex                              # hook + MCP
+mm install gemini                             # hook + MCP
+mm hook install --agent aider --workspace .   # hook only (legacy path)
+```
+
+`mm install` writes the right config file (AGENTS.md, .cursorrules,
+.windsurfrules, .aider.conf.yml, GEMINI.md, …) for whichever agent
+you target. See [Client Integrations](client-integrations.md) for
+per-client MCP config paths and formats.
 
 ## 6. Optional: MIND native kernels
 

@@ -22,6 +22,41 @@ Initialize a new mind-mem workspace with the standard directory structure.
 #### `parse_blocks(workspace: str) -> list[dict]`
 Parse all memory blocks from `.md` files in a workspace.
 
+### Client Installation (`mind_mem.hook_installer`)
+
+v3.1.0 added programmatic access to the hook + MCP installers. Use these when embedding mind-mem into bootstrap scripts, package installers, or custom orchestrators.
+
+#### `install_config(agent: str, workspace: str, *, force: bool = False, dry_run: bool = False) -> dict`
+Write the text-hook configuration for `agent` into its client-specific
+config file (e.g., `~/.cursor/rules/mind-mem.mdc`,
+`~/.codex/AGENTS.md`). Idempotent; re-running updates the `# mind-mem`
+marker block. Returns `{agent, path, written, skipped, reason}`.
+
+#### `install_mcp_config(agent: str, workspace: str, *, force: bool = False, dry_run: bool = False) -> dict`
+**(New in v3.1.0)** Write the native MCP server entry for `agent` into
+its MCP config file. Supports 8 MCP-aware clients: `codex` (TOML),
+`gemini` / `cursor` / `continue` / `cline` / `roo` / `windsurf` (JSON
+`mcpServers`), `zed` (JSON `context_servers`). Returns
+`{agent, path, written, merged, skipped, reason}`. Skipped with
+`reason="no_mcp_format"` for clients that don't speak MCP.
+
+#### `install_all(workspace: str, *, agents: list[str] | None = None, include_mcp: bool = True, force: bool = False, dry_run: bool = False) -> list[dict]`
+**(Updated in v3.1.0)** Install configs for every detected agent. When
+`include_mcp=True` (default), emits BOTH the hook phase AND the MCP
+phase per agent — returning 2 results per MCP-aware agent. Pass
+`include_mcp=False` to write only the hook configs.
+
+#### `detect_installed_agents(workspace: str) -> list[str]`
+Scan `PATH` plus known config directories to determine which AI
+clients are installed on the current machine. Returns a list of
+recognised agent names. Used by the `mm detect` CLI.
+
+#### `mcp_server_spec(workspace: str) -> dict`
+**(New in v3.1.0)** Return the canonical MCP server command+env dict
+used by every `install_mcp_config` writer. Shape:
+`{"command": "python3", "args": [...], "env": {"MIND_MEM_WORKSPACE": ws}}`.
+Useful if you're writing a custom MCP config writer.
+
 ---
 
 ## MCP Server (57 tools, 8 resources)
