@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 457 | **Est. tokens:** ~967,918
-**Generated:** 2026-04-15 11:34 UTC
+**Files:** 457 | **Est. tokens:** ~970,118
+**Generated:** 2026-04-15 11:48 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~81,156 |
+| `./` | 27 | ~83,356 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 32 | ~35,731 |
@@ -76,7 +76,7 @@
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22093 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~10244 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~12444 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `train_mind7b_runpod.py` (~1652 tok, huge)

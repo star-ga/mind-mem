@@ -639,6 +639,82 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
 
 ---
 
+## v3.0.0 — Architectural Release ✅ Released 2026-04-13
+
+- [x] **Alerting layer** — `AlertRouter` + pluggable sinks (`LogSink`, `WebhookSink`, `SlackSink`, `NullSink`); intel-scan fires alerts on contradiction and drift spikes; config in `mind-mem.json` `alerts` section (GH #503, 13 tests)
+- [x] **Transparent encryption at rest** — `EncryptedBlockStore` wrapper + `encrypt_workspace(ws)` one-shot migration; `get_block_store(ws)` factory dispatches on `MIND_MEM_ENCRYPTION_PASSPHRASE` env var (GH #504, 8 tests)
+- [x] **Tier TTL/LRU decay** — `TierManager.run_decay_cycle()` demotes idle blocks and evicts never-accessed WORKING-tier blocks; wired into compaction alongside promotion; `max_idle_hours` + `ttl_hours` on `TierPolicy` (GH #502, 10 tests)
+- [x] **Adversarial corpus harness** — 16 tests covering NUL injection, NaN smuggling, forged v1 hashes, SQL-flavour queries, oversized metadata (GH #507)
+- [x] **Governance concurrency stress harness** — new `pytest -m stress` marker; 5 tests exercising N concurrent writers on audit_chain, hash_chain_v2, memory_tiers, evidence_objects (GH #506)
+- [x] **16-client AI hook installer** — registry-driven `hook_installer.py`; new agent registrations: `openclaw`, `nanoclaw`, `nemoclaw`, `continue`, `cline`, `roo`, `zed`, `copilot`, `cody`, `qodo` in addition to existing `claude-code`, `codex`, `gemini`, `cursor`, `windsurf`, `aider` (28 tests)
+- [x] **`mm detect` / `mm install` / `mm install-all`** CLI commands with auto-detection
+- [x] **End-to-end memory test suite** — 9 tests: seeded corpus recall, contradiction lifecycle, audit chain round-trip, v3 evidence chain, field audit, tier promotion, snapshot restore, governance bench
+
+## v3.1.0 — Native MCP + Multi-Backend LLM Extractor ✅ Released 2026-04-14
+
+- [x] **Native MCP registration for 8 clients** — per-client writers in `hook_installer.py`:
+  - JSON `mcpServers` format: Gemini · Continue · Cline · Roo · Cursor
+  - JSON `context_servers` (Zed) · JSON `mcp_config.json` (Windsurf)
+  - TOML `[mcp_servers.mind-mem]` (Codex) with sub-table-aware regex that removes stale entries on re-install
+  - `install_mcp_config(agent, workspace)` public API
+  - `install_all()` emits BOTH hook (visibility) + MCP (tool surface) phases by default; opt-out via `--no-mcp`
+- [x] **Multi-backend LLM extractor** — `llm_extractor.py` extended with `vllm`, `openai-compatible`, and `transformers` alongside existing `ollama` and `llama-cpp`:
+  - `_query_openai_compatible(prompt, model, base_url)` — vLLM / LM Studio / llama-server / TGI / OpenAI
+  - `_query_transformers(prompt, model)` — in-process HF fallback with model cache
+  - Env-driven URL overrides: `MIND_MEM_VLLM_URL`, `MIND_MEM_LLM_BASE_URL`, `MIND_MEM_LLM_API_KEY`
+  - `auto` mode dispatches ollama → vllm → openai-compat → llama-cpp → transformers
+- [x] **mind-mem:4b model via Ollama** — Qwen3.5-4B full fine-tune on STARGA-curated mind-mem corpus; Q4_K_M @ 2.6 GB; default `extraction.model`; empirical on RTX 3080: 104 tok/s generation, 1585 tok/s prefill
+- [x] **`mind-mem.json` defaults** — `extraction.model` updated from `mind-mem:7b` → `mind-mem:4b`, `backend` from `auto` → `ollama` (explicit)
+- [x] **Docs alignment** — 11 audit issues fixed: tool count 54 → 57 in nine locations, "Mind-Mem:7B" → "mind-mem:4b" heading, new §Extraction (LLM Backend) in `docs/configuration.md`, `--no-mcp` flag documented, `install_mcp_config()` public API documented, env vars section updated
+
+## v3.2.0 — Production Deployment (2–4 weeks)
+
+Close the production-readiness gap. Everything local-first but horizontal-ready. No changes to the retrieval pipeline; all new work is adapters + gateway.
+
+- [ ] **Postgres storage adapter** — `src/mind_mem/storage/postgres_adapter.py` implementing `BlockStore` protocol; reuse the existing `block_store.py` interface so the retrieval engine sees the same API
+- [ ] **Storage factory** — `src/mind_mem/storage/__init__.py` selects adapter from `mind-mem.json` `storage.adapter` key (`"sqlite"` | `"postgres"`); `connection_manager.py` accepts adapter type + pool size
+- [ ] **REST API layer** — `src/mind_mem/api/rest.py` (FastAPI); endpoints mirror the 57 MCP tools; OIDC/JWT auth in `src/mind_mem/api/auth.py`; `mm serve` CLI command to launch it
+- [ ] **JS/TS SDK** — `sdk/js/` — thin fetch wrapper matching the Python SDK surface
+- [ ] **Dockerfile + docker-compose** — `deploy/docker/Dockerfile`, `deploy/docker-compose.yml` with mind-mem + pgvector + Ollama; one-command `make up`
+- [ ] **One-command installer** — `curl -sSL install.mind-mem.sh | bash`
+- [ ] **OpenTelemetry traces** — wrap `observability.py` with OTel spans on `recall`, `propose_update`, `scan`; Prometheus exporter on configurable port
+- [ ] **Hot/cold tier wire-up** — `tier_manager.py` is already scaffolded; connect `TierPolicy` to the recall path so WORKING/ARCHIVAL/COLD tiers affect retrieval latency
+- [ ] **Config schema additions** — `storage.{adapter,url,pool_size}`, `api.{rest,grpc,auth}`, `observability.{otel_endpoint,prom_port}` sections
+
+**Estimated:** ~800 lines storage adapter + ~600 lines REST + ~400 lines JS SDK + deploy artifacts. New optional extras: `mind-mem[postgres]`, `mind-mem[api]`, `mind-mem[otel]`.
+
+## v3.3.0 — Reasoning-Grade Retrieval (1–2 months)
+
+Close the retrieval-quality gap and widen the governance moat. All additive — no breaking changes to existing recall contracts.
+
+- [ ] **Query decomposition** — `src/mind_mem/query_planner.py`; LLM-backed plan that splits complex queries into sub-queries and merges results; config toggle `retrieval.query_decomposition`
+- [ ] **Multi-hop graph traversal** — `src/mind_mem/graph_recall.py`; extend `causal_graph.py` to traverse `relates_to` / `supersedes` / `contradicts` edges up to N hops; `recall(multi_hop=True, max_hops=3)`
+- [ ] **Temporal re-weighting in the hot path** — half-life decay on `Created:` field inside the scorer; config `retrieval.temporal_half_life_days` (default 90); currently available as a filter but not as a ranking signal
+- [ ] **Probabilistic truth score** — `src/mind_mem/truth_score.py`; Bayesian update on block `importance` from contradiction votes; exposed as `block.truth_score` in recall responses
+- [ ] **Streaming ingest** — `src/mind_mem/streaming.py`; websocket/SSE endpoint with back-pressure via `mind_filelock`; drop-in replacement for `capture --stdin` in high-rate pipelines
+- [ ] **Consensus voting** — extend `conflict_resolver.py` with quorum across agents, weighted by `namespace.trust_weight`; resolves contradictions without human review when confidence exceeds threshold
+- [ ] **Graph + timeline visualization** — `web/` Next.js app; D3 / react-flow graph view (nodes = blocks, edges = relationships), timeline view, drift heatmap; reads from REST API shipped in v3.2.0
+
+**Estimated:** ~1500 lines retrieval + ~2000 lines web UI. New optional extras: `mind-mem[reasoning]`, `mind-mem[streaming]`.
+
+## v4.0.0 — Platform Scale (production)
+
+Horizontal scaling, multi-tenant isolation, and edge deployment. This version turns mind-mem from a library into a platform.
+
+- [ ] **Sharded Postgres (Citus)** — `src/mind_mem/storage/sharded_pg.py`; shard by `namespace_id` with consistent hashing; cross-shard recall merging
+- [ ] **Replication + consensus for governance** — Raft log wrapper around `audit_chain.py`; strong consistency for governance writes, eventual consistency for recall reads
+- [ ] **Kubernetes operator** — `operator/` with CRDs for `MindMem`, `Namespace`, `TenantKey`; Helm chart in `deploy/helm/mind-mem/`
+- [ ] **Tenant KMS + row-level encryption** — `src/mind_mem/tenant_crypto.py`; per-tenant data keys, envelope encryption, rotation; extends the v3.0.0 `EncryptedBlockStore`
+- [ ] **Byzantine-safe consensus (opt-in)** — `src/mind_mem/bft.py`; PBFT for high-trust deployments where quorum votes may be adversarial
+- [ ] **Edge deployment mode** — `mind-mem-edge` binary (PyOxidizer); embedded mode for on-device agents; hybrid sync to a central mind-mem cluster
+- [ ] **Managed-service console** — `web/console/`; multi-tenant dashboard, cost metering, usage graphs, per-tenant audit chain viewer
+- [ ] **gRPC wire protocol** — `src/mind_mem/api/grpc_server.py`; low-latency alternative to REST for service-to-service calls
+- [ ] **Kafka/NATS event fan-out** — governance events (`contradiction_detected`, `block_promoted`, `snapshot_created`) published as streams; external systems subscribe without polling
+
+**Estimated:** ~3000 lines storage + ~2000 lines consensus + ~1500 lines operator + ~2500 lines console. Breaking change: `v4` requires explicit storage adapter selection (no implicit SQLite default in cluster deployments).
+
+---
+
 ## Post-v2.7.0 — Future Directions
 
 - [x] **Agent-to-agent trust protocol** — agents verify each other's memory integrity via Merkle proofs before sharing context
