@@ -387,7 +387,7 @@ Release criteria:
 
 > Theme: Active forgetting, token-aware packing, and multi-modal memory.
 >
-> **Cross-ref:** Naestro's `consolidator.mind` (2026-03-31) implements the idle-time consolidation
+> **Cross-ref:** an internal `consolidator.mind` module (2026-03-31) implements the idle-time consolidation
 > cycle for belief graphs (merge similar, resolve contradictions, promote repeated observations,
 > decay stale). `write_discipline.mind` enforces the write-then-index invariant so failed writes
 > never pollute the retrieval index. Both modules integrate with mind-mem via FFI. The v2.4.0
@@ -544,7 +544,7 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
 ## v2.7.0 — Universal Agent Bridge + Vault Sync ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
 > Theme: mind-mem becomes the shared memory layer for **every** coding agent — not just MCP-capable ones.
-> Any CLI agent (Claude Code, codex, gemini, Cursor, Windsurf, Aider, naestro-bot) reads and writes
+> Any CLI agent (Claude Code, codex, gemini, Cursor, Windsurf, Aider) reads and writes
 > to the same memory through a unified interface. Plus bidirectional vault sync for Obsidian/file-based
 > knowledge management.
 >
@@ -552,7 +552,7 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
 
 ### Component 1: Universal Agent Bridge (`mm` CLI)
 
-**Problem:** MCP-capable agents (Claude Code, naestro-bot) already have mind-mem access. Non-MCP agents (codex, gemini CLI, Cursor, Windsurf, Aider) have zero memory — every session starts blank. The `mm` CLI bridges this gap.
+**Problem:** MCP-capable agents (Claude Code, other MCP-native runtimes) already have mind-mem access. Non-MCP agents (codex, gemini CLI, Cursor, Windsurf, Aider) have zero memory — every session starts blank. The `mm` CLI bridges this gap.
 
 - [x] **`mm` unified CLI** — single binary (`~/.local/bin/mm`) wrapping all mind-mem operations:
   ```

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 457 | **Est. tokens:** ~971,006
-**Generated:** 2026-04-15 11:55 UTC
+**Files:** 457 | **Est. tokens:** ~970,995
+**Generated:** 2026-04-15 11:59 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~84,244 |
+| `./` | 27 | ~84,243 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 32 | ~35,731 |
@@ -37,14 +37,14 @@
 | `intelligence/` | 1 | ~113 |
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2,176 |
-| `mind/` | 19 | ~5,518 |
+| `mind/` | 19 | ~5,516 |
 | `scripts/` | 2 | ~2,268 |
 | `skills/apply-proposal/` | 1 | ~345 |
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
 | `src/mind_mem/` | 111 | ~388,901 |
-| `src/mind_mem/skill_opt/` | 11 | ~13,539 |
+| `src/mind_mem/skill_opt/` | 11 | ~13,531 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 176 | ~359,845 |
 | `tests/integration/` | 2 | ~1,436 |
@@ -63,7 +63,7 @@
 - `Dockerfile` (~54 tok, small) — FROM python:3.12-slim
 - `.dockerignore` (~37 tok, tiny) — .git
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
-- `generate_mind7b_training.py` (~5398 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
+- `generate_mind7b_training.py` (~5394 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
 - `.gitignore` (~109 tok, small) — *.pyc
 - `install.sh` (~3337 tok, huge) — mind-mem installer — sets up MCP server + hooks for all supported clients
@@ -76,7 +76,7 @@
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22093 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~13332 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~13335 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `train_mind7b_runpod.py` (~1652 tok, huge)
@@ -197,7 +197,7 @@
 - `adversarial.mind` (~156 tok, small)
 - `bm25.mind` (~477 tok, medium) — BM25F scoring kernel with field boosts and length normalization
 - `category.mind` (~395 tok, medium) — Category distillation scoring kernel
-- `cognitive.mind` (~439 tok, medium)
+- `cognitive.mind` (~437 tok, medium)
 - `cross_encoder.mind` (~174 tok, small)
 - `hybrid.mind` (~169 tok, small)
 - `importance.mind` (~246 tok, medium) — A-MEM: auto-maintained importance scores for memory blocks
@@ -327,9 +327,9 @@
 - `session_summarizer.py` (~2885 tok, huge) — mind-mem Session Summarizer. Zero external deps.
 ### `src/mind_mem/skill_opt/`
 
-- `adapters.py` (~2224 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `adapters.py` (~2217 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `analyzer.py` (~1145 tok, large) — # Copyright 2026 STARGA, Inc.
-- `config.py` (~927 tok, large) — # Copyright 2026 STARGA, Inc.
+- `config.py` (~926 tok, large) — # Copyright 2026 STARGA, Inc.
 - `fleet_bridge.py` (~1384 tok, large) — # Copyright 2026 STARGA, Inc.
 - `history.py` (~1698 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~89 tok, small) — # Copyright 2026 STARGA, Inc.

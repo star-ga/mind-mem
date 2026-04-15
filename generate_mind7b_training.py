@@ -170,7 +170,7 @@ TOOLS = [
 PROJECTS = [
     "Project Atlas", "Phoenix Migration", "DataLake v2", "Auth Refactor",
     "API Gateway", "Dashboard Redesign", "ML Pipeline", "Edge Compute",
-    "Mobile App v3", "Search Rewrite", "mind-mem", "naestro-bot", "512-mind",
+    "Mobile App v3", "Search Rewrite", "mind-mem", "512-mind",
     "CogNet", "NikolaChess", "mindlang.dev"
 ]
 

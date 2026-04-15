@@ -16,7 +16,7 @@ graph_boost_factor = 0.5
 # Company/domain-specific keywords that get a recall boost.
 # Blocks containing these terms score higher (multiplicative boost).
 # Comma-separated list of lowercase terms.
-domain_keywords = starga, mind-mem, naestro, mindlang, nikolachess, clawshake, legalcomb, 512-mind, drd, shannon
+domain_keywords = starga, mind-mem, mindlang, nikolachess, clawshake, legalcomb, 512-mind, drd, shannon
 # Boost factor for blocks matching domain keywords
 domain_keyword_boost = 1.15
 # Boost for blocks from project entity files

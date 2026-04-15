@@ -22,7 +22,7 @@ DEFAULT_FLEET_MODELS: dict[str, list[str]] = {
 
 DEFAULT_SKILL_SOURCES: dict[str, str] = {
     "openclaw": "~/.openclaw/skills",
-    "openclaw_naestro": "~/naestro-bot/skills",
+    "openclaw_agent": "~/.agent-bot/skills",
     "claude_agents": "~/.claude/agents",
     "codex_skills": "~/.codex/skills",
     "codex_memories": "~/.codex/memories",

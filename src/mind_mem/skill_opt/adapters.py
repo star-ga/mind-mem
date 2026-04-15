@@ -76,7 +76,7 @@ class SkillAdapter(Protocol):
 
 
 class OpenClawSkillAdapter:
-    """Adapter for OpenClaw SKILL.md files (naestro-bot, OpenClaw skills)."""
+    """Adapter for OpenClaw-style SKILL.md files."""
 
     format_id = "skill-md"
 
@@ -242,7 +242,7 @@ def discover_all(sources: dict[str, str]) -> list[SkillSpec]:
     specs: list[SkillSpec] = []
     source_to_adapter: dict[str, SkillAdapter] = {
         "openclaw": ADAPTER_REGISTRY["skill-md"],
-        "openclaw_naestro": ADAPTER_REGISTRY["skill-md"],
+        "openclaw_agent": ADAPTER_REGISTRY["skill-md"],
         "claude_agents": ADAPTER_REGISTRY["agent-md"],
         "codex_skills": ADAPTER_REGISTRY["codex-skill-md"],
         "codex_memories": ADAPTER_REGISTRY["codex-skill-md"],
