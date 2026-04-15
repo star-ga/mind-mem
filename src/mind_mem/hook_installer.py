@@ -270,25 +270,79 @@ class AgentSpec:
 
 
 def _merge_claude_hooks(existing: dict, workspace: str) -> tuple[dict, bool]:
-    """Idempotent hook merge for Claude Code settings.json."""
+    """Idempotent hook merge for Claude Code settings.json.
+
+    Claude Code's hook schema requires each event entry to be
+    ``{"matcher": "<pattern>", "hooks": [{"type": "command",
+    "command": "..."}]}`` — NOT the bare ``{"command": "..."}``
+    shape this installer used prior to v1.9.2. Bare entries would
+    silently be accepted into settings.json but Claude Code would
+    report them as "protected file can't be edited directly" style
+    errors at runtime and continuously block Stop / PostToolUse.
+    v1.9.2 writes the nested shape AND detects the legacy flat
+    shape so re-running install does not produce duplicates.
+
+    Commands installed (v1.9.2):
+      SessionStart → ``mm status`` — prints workspace status JSON;
+          Claude Code picks it up at session start as context.
+      Stop        → ``mm status`` — final-state log on session end.
+
+    The prior ``PostToolUse → mm capture --stdin`` hook has been
+    removed: ``mm capture`` is not yet a CLI subcommand (only exists
+    in the design doc). PostToolUse fires after every tool call, so
+    installing a broken command there produced a cascading error
+    loop that blocked further edits. Will be re-added as
+    ``mm capture --stdin`` once that subcommand ships.
+
+    The prior ``SessionStart → mm inject --workspace X`` hook also
+    had a latent bug: ``mm inject`` requires a positional query
+    argument that SessionStart cannot provide. Swapped to
+    ``mm status``. Will be re-added as a future ``mm inject-on-start``
+    subcommand designed for the SessionStart event.
+    """
     out = json.loads(json.dumps(existing))
     hooks = out.setdefault("hooks", {})
     wanted = [
-        ("SessionStart", f"mm inject --agent claude-code --workspace {workspace}"),
-        ("PostToolUse", "mm capture --stdin"),
-        ("Stop", "mm vault status"),
+        ("SessionStart", "mm status"),
+        ("Stop", "mm status"),
     ]
     changed = False
     for event, command in wanted:
         entries = hooks.setdefault(event, [])
         if not isinstance(entries, list):
             continue
-        if not any(
-            isinstance(e, dict) and e.get("command") == command for e in entries
-        ):
-            entries.append({"command": command})
+        # Idempotency: match either the new nested shape OR the legacy
+        # bare-command shape (pre-v1.9.2 installs) so re-running does
+        # not duplicate. Also migrate any legacy entries in-place.
+        already = False
+        for i, e in enumerate(entries):
+            if not isinstance(e, dict):
+                continue
+            # Legacy flat shape — replace in place.
+            if "hooks" not in e and e.get("command") == command:
+                entries[i] = _nested_hook(command)
+                already = True
+                changed = True
+                break
+            # New nested shape — check inner commands.
+            for inner in e.get("hooks", []):
+                if isinstance(inner, dict) and inner.get("command") == command:
+                    already = True
+                    break
+            if already:
+                break
+        if not already:
+            entries.append(_nested_hook(command))
             changed = True
     return out, changed
+
+
+def _nested_hook(command: str, matcher: str = "") -> dict:
+    """Return the Claude-Code-required nested hook entry shape."""
+    return {
+        "matcher": matcher,
+        "hooks": [{"type": "command", "command": command}],
+    }
 
 
 def _merge_openclaw_hooks(existing: dict, workspace: str) -> tuple[dict, bool]:
@@ -301,13 +355,18 @@ def _merge_openclaw_hooks(existing: dict, workspace: str) -> tuple[dict, bool]:
     hooks = out.setdefault("hooks", {}).setdefault("internal", {}).setdefault(
         "entries", {}
     )
+    # v1.9.2: `mm capture` and `mm vault status` are not CLI
+    # subcommands (only exist in the design doc). Use `mm status`
+    # until those ship. `mm inject` still requires a query positional;
+    # openclaw passes one when it fires the hook, so the inject entry
+    # keeps its original shape.
     target = {
         "enabled": True,
         "workspace": workspace,
         "commands": {
             "inject": "mm inject --agent openclaw --workspace " + workspace,
-            "capture": "mm capture --stdin",
-            "status": "mm vault status",
+            "capture": "mm status",
+            "status": "mm status",
         },
     }
     changed = hooks.get("mind-mem") != target

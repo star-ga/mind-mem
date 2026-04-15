@@ -117,6 +117,99 @@ class TestClawFamily:
             assert "commands" in hooks
 
 
+class TestClaudeCodeHookFormat:
+    """v1.9.2: hook entries must use Claude Code's nested shape.
+
+    Regression: pre-v1.9.2 wrote bare ``{"command": "..."}`` entries,
+    which Claude Code accepted silently but blocked at runtime with
+    "Can't edit settings.json directly — it's a protected file" style
+    errors on every Stop / PostToolUse. The fix installs the nested
+    ``{"matcher": "", "hooks": [{"type": "command", ...}]}`` shape
+    and also replaces two commands (``mm capture --stdin``,
+    ``mm vault status``) that aren't real CLI subcommands yet.
+    """
+
+    def test_claude_code_hooks_use_nested_matcher_shape(
+        self, tmp_path: Path
+    ) -> None:
+        result = install_config("claude-code", str(tmp_path), dry_run=True)
+        content = json.loads(result["content"])
+        for event in ("SessionStart", "Stop"):
+            assert event in content["hooks"], f"{event} missing from hooks"
+            entries = content["hooks"][event]
+            assert isinstance(entries, list) and entries, f"{event} empty"
+            for entry in entries:
+                # Reject the legacy flat shape outright.
+                assert "hooks" in entry, (
+                    f"{event} entry uses flat {{command: ...}} shape; "
+                    f"required nested {{matcher, hooks: [...]}} shape. "
+                    f"Got: {entry!r}"
+                )
+                assert entry.get("matcher", None) is not None, (
+                    f"{event} entry missing 'matcher' field"
+                )
+                assert isinstance(entry["hooks"], list), (
+                    f"{event} entry 'hooks' must be a list"
+                )
+                for inner in entry["hooks"]:
+                    assert inner.get("type") == "command"
+                    assert inner.get("command"), "inner command is empty"
+
+    def test_no_broken_mm_subcommands_installed(self, tmp_path: Path) -> None:
+        # ``mm capture --stdin`` and ``mm vault status`` are not real
+        # CLI subcommands in the current ``mm`` release. Installing a
+        # hook that always errors blocks every future Stop/PostToolUse.
+        result = install_config("claude-code", str(tmp_path), dry_run=True)
+        text = result["content"]
+        assert "mm capture" not in text, (
+            "PostToolUse hook points at mm capture which is not a "
+            "real CLI subcommand yet — will block every tool call"
+        )
+        assert "mm vault status" not in text, (
+            "Stop hook points at mm vault status which is not a real "
+            "CLI subcommand — `mm vault` only has {scan, write}"
+        )
+
+    def test_install_is_idempotent_across_both_shapes(
+        self, tmp_path: Path
+    ) -> None:
+        # Pre-populate settings.json with the LEGACY flat shape a
+        # pre-v1.9.2 installer would have written. Running the new
+        # installer must NOT duplicate and MUST migrate to the nested
+        # shape in place.
+        import mind_mem.hook_installer as hi
+
+        legacy = {
+            "hooks": {
+                "SessionStart": [{"command": "mm status"}],
+                "Stop": [{"command": "mm status"}],
+            }
+        }
+        settings_path = AGENT_REGISTRY["claude-code"].expand_path(str(tmp_path))
+        os.makedirs(os.path.dirname(settings_path), exist_ok=True)
+        with open(settings_path, "w", encoding="utf-8") as f:
+            json.dump(legacy, f)
+
+        result = install_config("claude-code", str(tmp_path), dry_run=False)
+        assert result["written"] is True
+        loaded = json.loads(Path(settings_path).read_text())
+        # After migration: exactly ONE entry per event, nested shape.
+        for event in ("SessionStart", "Stop"):
+            assert len(loaded["hooks"][event]) == 1
+            entry = loaded["hooks"][event][0]
+            assert "hooks" in entry
+            assert "command" not in entry  # legacy flat removed
+
+        # Running install again should be a no-op (or at least not
+        # add a duplicate).
+        result2 = install_config("claude-code", str(tmp_path), dry_run=False)
+        loaded2 = json.loads(Path(settings_path).read_text())
+        for event in ("SessionStart", "Stop"):
+            assert len(loaded2["hooks"][event]) == 1, (
+                f"{event} duplicated on re-install"
+            )
+
+
 class TestNativeMCPConfig:
     """v3.1.0 MCP server registration writers."""
 

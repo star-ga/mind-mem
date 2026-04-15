@@ -2,6 +2,65 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.1.1 (2026-04-15)
+
+**Claude Code hook-install fix.** `install claude-code` was writing
+malformed hook entries that Claude Code silently accepted but blocked
+at runtime with "Can't edit settings.json directly — it's a protected
+file" errors on every Stop / PostToolUse. Plus two of the installed
+commands (`mm capture --stdin`, `mm vault status`) pointed at CLI
+subcommands that only exist in the design doc, not in the shipped
+`mm` binary.
+
+### Fixed
+
+- **`hook_installer._merge_claude_hooks`** now writes the required
+  nested shape `{"matcher": "", "hooks": [{"type": "command",
+  "command": "..."}]}` instead of the bare `{"command": "..."}` shape
+  that Claude Code rejected. The installer also detects and migrates
+  pre-3.1.1 legacy flat entries in-place on re-install, so operators
+  who ran earlier versions get automatically upgraded without
+  duplicates.
+- **`SessionStart` hook** command changed from
+  `mm inject --agent claude-code --workspace <X>` (which silently
+  failed — `mm inject` requires a positional query argument the hook
+  cannot provide) to `mm status`. Will be re-added as a future
+  `mm inject-on-start` subcommand designed for the SessionStart event.
+- **`Stop` hook** command changed from `mm vault status` (not a real
+  subcommand — `mm vault` only has `{scan, write}`) to `mm status`.
+- **`PostToolUse` hook removed entirely.** Previous command
+  `mm capture --stdin` was not a shipped CLI subcommand; running it
+  from PostToolUse produced a cascading error loop that blocked
+  every subsequent tool call. Will be re-added once the `mm capture`
+  subcommand ships (design exists in the v2.x spec).
+- **`_merge_openclaw_hooks`** — same two unshipped commands in the
+  openclaw/nanoclaw/nemoclaw claw-family JSON shape were replaced
+  with `mm status`.
+
+### Added
+
+- `tests/test_hook_installer_registry.py::TestClaudeCodeHookFormat`
+  — three regression tests covering the nested-shape invariant,
+  the absent-broken-commands invariant, and legacy-flat migration
+  idempotency.
+- `hook_installer._nested_hook(command, matcher="")` — private
+  helper that returns the Claude-Code-required entry shape. Single
+  source of truth for the format.
+
+### Migration
+
+Operators who ran `mm install claude-code` with any version
+3.0.0–3.1.0 have malformed entries in `~/.claude/settings.json`.
+Fix options:
+
+  1. **Automatic**: re-run `mm install claude-code` with 3.1.1+. The
+     installer migrates legacy flat entries to the nested shape in
+     place.
+  2. **Manual**: delete the three broken entries under
+     `hooks.PostToolUse`, `hooks.SessionStart`, `hooks.Stop` whose
+     `command` value mentions `mm capture`, `mm inject --workspace`,
+     or `mm vault status`. Restart Claude Code, then re-run install.
+
 ## 3.1.0 (2026-04-14)
 
 **Native MCP for all clients + multi-backend LLM extractor.** Every MCP-aware client now gets the full 57-tool surface (not just text-hook fallback). Memory extraction now works against any of 5 local/remote LLM backends with automatic detection.

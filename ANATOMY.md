@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 457 | **Est. tokens:** ~965,464
-**Generated:** 2026-04-15 02:02 UTC
+**Files:** 457 | **Est. tokens:** ~967,918
+**Generated:** 2026-04-15 11:34 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~80,467 |
+| `./` | 27 | ~81,156 |
 | `.agents/skills/mind-mem-development/` | 1 | ~371 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 32 | ~35,731 |
@@ -43,10 +43,10 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~455 |
-| `src/mind_mem/` | 111 | ~388,217 |
+| `src/mind_mem/` | 111 | ~388,901 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,539 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 176 | ~358,764 |
+| `tests/` | 176 | ~359,845 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,682 |
 
@@ -54,7 +54,7 @@
 
 ### `./`
 
-- `CHANGELOG.md` (~23117 tok, huge) — Changelog
+- `CHANGELOG.md` (~23806 tok, huge) — Changelog
 - `CLAUDE.md` (~611 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
@@ -276,7 +276,7 @@
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
 - `governance_gate.py` (~2042 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~5594 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hook_installer.py` (~8590 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hook_installer.py` (~9274 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hybrid_recall.py` (~4861 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `ingestion_pipeline.py` (~1757 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~499 tok, medium) — # Mind Mem — Memory + Immune System for AI agents
@@ -464,7 +464,7 @@
 - `test_graph_boost_recall.py` (~310 tok, medium) — Tests for graph_boost recall parameter."""
 - `test_grid_search.py` (~1199 tok, large) — Tests for benchmarks/grid_search.py — grid generation and utility functions."""
 - `test_hash_chain_v2.py` (~3472 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_hook_installer_registry.py` (~2767 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_hook_installer_registry.py` (~3848 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hybrid_recall.py` (~2855 tok, huge) — Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
 - `test_hybrid_search.py` (~588 tok, large) — Tests for hybrid search functionality."""
 - `test_index_stats_b1.py` (~522 tok, large) — # Copyright 2026 STARGA, Inc.
