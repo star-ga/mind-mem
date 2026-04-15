@@ -674,12 +674,17 @@ Close the production-readiness gap. Everything local-first but horizontal-ready.
 - [ ] **Postgres storage adapter** — `src/mind_mem/storage/postgres_adapter.py` implementing `BlockStore` protocol; reuse the existing `block_store.py` interface so the retrieval engine sees the same API
 - [ ] **Storage factory** — `src/mind_mem/storage/__init__.py` selects adapter from `mind-mem.json` `storage.adapter` key (`"sqlite"` | `"postgres"`); `connection_manager.py` accepts adapter type + pool size
 - [ ] **REST API layer** — `src/mind_mem/api/rest.py` (FastAPI); endpoints mirror the 57 MCP tools; OIDC/JWT auth in `src/mind_mem/api/auth.py`; `mm serve` CLI command to launch it
-- [ ] **JS/TS SDK** — `sdk/js/` — thin fetch wrapper matching the Python SDK surface
+- [ ] **JS/TS SDK + Go SDK** — `sdk/js/` (fetch wrapper) and `sdk/go/` (standard-library client); both match the Python SDK surface
 - [ ] **Dockerfile + docker-compose** — `deploy/docker/Dockerfile`, `deploy/docker-compose.yml` with mind-mem + pgvector + Ollama; one-command `make up`
 - [ ] **One-command installer** — `curl -sSL install.mind-mem.sh | bash`
-- [ ] **OpenTelemetry traces** — wrap `observability.py` with OTel spans on `recall`, `propose_update`, `scan`; Prometheus exporter on configurable port
+- [ ] **Full OIDC / SSO auth** — `src/mind_mem/api/auth.py`; Okta / Auth0 / Google Workspace / Azure AD; token refresh, scope mapping to `namespaces.py` ACL roles
+- [ ] **Per-agent access control** — extend `namespaces.py` with per-agent API keys rotated via the REST admin endpoints; audit every read/write with agent-id attribution in `audit_chain`
+- [ ] **OpenTelemetry traces + SLO dashboards** — wrap `observability.py` with OTel spans on `recall`, `propose_update`, `scan`; Prometheus exporter on configurable port; shipped Grafana dashboard JSON in `deploy/grafana/` (p50/p95/p99 recall latency, proposal-apply lag, contradiction rate, chain-verify success rate)
+- [ ] **Distributed query cache** — Redis adapter for `recall.py` results keyed by `(query_hash, namespace, limit)`; TTL-gated, invalidated on `propose_update` / `apply`; falls back to in-process LRU when Redis not configured
+- [ ] **Postgres read replicas** — `storage.replicas: ["replica-1.db", "replica-2.db"]`; read-heavy MCP tools (`recall`, `find_similar`, `hybrid_search`, `prefetch`) route to replicas; writes always hit primary
 - [ ] **Hot/cold tier wire-up** — `tier_manager.py` is already scaffolded; connect `TierPolicy` to the recall path so WORKING/ARCHIVAL/COLD tiers affect retrieval latency
-- [ ] **Config schema additions** — `storage.{adapter,url,pool_size}`, `api.{rest,grpc,auth}`, `observability.{otel_endpoint,prom_port}` sections
+- [ ] **CLI debug visualization** — `mm inspect <block_id>` (full block + provenance tree), `mm explain <query>` (retrieval trace: BM25 score → vector score → RRF fusion → rerank), `mm trace --live` (stream last N MCP calls with OTel span data)
+- [ ] **Config schema additions** — `storage.{adapter,url,pool_size,replicas}`, `api.{rest,grpc,auth}`, `observability.{otel_endpoint,prom_port}`, `cache.{redis_url,ttl_seconds}` sections
 
 **Estimated:** ~800 lines storage adapter + ~600 lines REST + ~400 lines JS SDK + deploy artifacts. New optional extras: `mind-mem[postgres]`, `mind-mem[api]`, `mind-mem[otel]`.
 
@@ -691,7 +696,7 @@ Close the retrieval-quality gap and widen the governance moat. All additive — 
 - [ ] **Multi-hop graph traversal** — `src/mind_mem/graph_recall.py`; extend `causal_graph.py` to traverse `relates_to` / `supersedes` / `contradicts` edges up to N hops; `recall(multi_hop=True, max_hops=3)`
 - [ ] **Temporal re-weighting in the hot path** — half-life decay on `Created:` field inside the scorer; config `retrieval.temporal_half_life_days` (default 90); currently available as a filter but not as a ranking signal
 - [ ] **Probabilistic truth score** — `src/mind_mem/truth_score.py`; Bayesian update on block `importance` from contradiction votes; exposed as `block.truth_score` in recall responses
-- [ ] **Streaming ingest** — `src/mind_mem/streaming.py`; websocket/SSE endpoint with back-pressure via `mind_filelock`; drop-in replacement for `capture --stdin` in high-rate pipelines
+- [ ] **Streaming ingest + back-pressure queue** — `src/mind_mem/streaming.py`; websocket/SSE endpoint with back-pressure via a bounded mpsc channel (drop-oldest when writer pool saturates); drop-in replacement for `capture --stdin` in high-rate pipelines; per-client token-bucket rate limit
 - [ ] **Consensus voting** — extend `conflict_resolver.py` with quorum across agents, weighted by `namespace.trust_weight`; resolves contradictions without human review when confidence exceeds threshold
 - [ ] **Graph + timeline visualization** — `web/` Next.js app; D3 / react-flow graph view (nodes = blocks, edges = relationships), timeline view, drift heatmap; reads from REST API shipped in v3.2.0
 
@@ -705,6 +710,7 @@ Horizontal scaling, multi-tenant isolation, and edge deployment. This version tu
 - [ ] **Replication + consensus for governance** — Raft log wrapper around `audit_chain.py`; strong consistency for governance writes, eventual consistency for recall reads
 - [ ] **Kubernetes operator** — `operator/` with CRDs for `MindMem`, `Namespace`, `TenantKey`; Helm chart in `deploy/helm/mind-mem/`
 - [ ] **Tenant KMS + row-level encryption** — `src/mind_mem/tenant_crypto.py`; per-tenant data keys, envelope encryption, rotation; extends the v3.0.0 `EncryptedBlockStore`
+- [ ] **Per-tenant audit chains** — fork `audit_chain.py` so each tenant has an isolated hash chain with its own genesis + spec-hash binding; enables per-customer compliance exports without cross-tenant leakage
 - [ ] **Byzantine-safe consensus (opt-in)** — `src/mind_mem/bft.py`; PBFT for high-trust deployments where quorum votes may be adversarial
 - [ ] **Edge deployment mode** — `mind-mem-edge` binary (PyOxidizer); embedded mode for on-device agents; hybrid sync to a central mind-mem cluster
 - [ ] **Managed-service console** — `web/console/`; multi-tenant dashboard, cost metering, usage graphs, per-tenant audit chain viewer
@@ -728,10 +734,22 @@ Horizontal scaling, multi-tenant isolation, and edge deployment. This version tu
 
 ---
 
-## AGI Integration
+## Advanced Agent Memory Primitives
 
-This repo is part of the STARGA AGI stack. See `naestro-bot/specs/AGI-ROADMAP.md` for:
-- Gap 1: CAUSAL block type for world model storage
-- Gap 2: SKILL blocks for learned strategy tracking
-- Gap 5: Cross-domain retrieval for transfer learning
-- Gap 6: VISUAL blocks for grounded perception memory
+mind-mem is designed as a governed-memory substrate for autonomous agents operating in interactive reasoning environments (benchmark agents, game-playing agents, long-horizon task agents). The following block types and retrieval capabilities extend the core schema for those workloads.
+
+### Shipped (already available in mind-mem)
+
+- [x] **`[PATTERN]` blocks** — opening-book / strategy-template storage; recall by environment fingerprint drives initial-action selection
+- [x] **`[TRAJECTORY]` block type** — shipped in v1.1.0; stores per-session execution traces, recallable by session-id or environment-id for historical playthrough retrieval
+- [x] **`[OBSERVATION]` blocks** — multi-model consensus votes stored with their scores and rationales; contradictions between votes surface via the existing contradiction-detection engine
+- [x] **Governance gate** — the invariant kernel (see v2.0.0rc1) validates every action-emission from the host agent; rejected moves are retained with their rejection rationale for post-mortem
+- [x] **Cross-session persistence** — `MIND_MEM_WORKSPACE` is a shared namespace across any set of agents that agree on the path; one recall call retrieves strategy memory across all cooperating agents
+
+### Planned block types and adapters
+
+- [ ] **`[CAUSAL]` block type** — world-model storage for learned state transitions (observation → action → next-observation); consumed by the host agent's planner during multi-step lookahead
+- [ ] **`[SKILL]` block type** — named strategy captures with preconditions, effects, and success-rate metadata; retrievable by skill-name or by applicable-context similarity
+- [ ] **Cross-domain recall adapter** — given a novel environment, surface the most similar `[TRAJECTORY]` / `[SKILL]` blocks from unrelated environments by feature-embedding similarity rather than exact environment-id match
+- [ ] **`[VISUAL]` block type** — grid-state / image-state embeddings for perception-grounded memory; enables "I've seen this state before" recall across environments
+- [ ] **Evidence-chain submission format** — tamper-evident export of an agent's full decision history per episode, ready for third-party scorecard verification
