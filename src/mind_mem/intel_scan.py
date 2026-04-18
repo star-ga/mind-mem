@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 
 # Import block parser from same directory
 from .block_parser import parse_file
+from .enums import TaskStatus
 from .mind_filelock import FileLock
 
 # ═══════════════════════════════════════════════
@@ -381,7 +382,7 @@ def detect_drift(data, report):
 
     # 2a. Dead decisions: active decisions not referenced by any active task
     # v1.1: Only flag if enforcement != invariant AND priority >= 7 AND no impact edges
-    active_tasks = [t for t in tasks if t.get("Status") in ("todo", "doing", "blocked")]
+    active_tasks = [t for t in tasks if t.get("Status") in {s.value for s in TaskStatus.open()}]
     task_refs = set()
     for t in active_tasks:
         for key in ("AlignsWith", "Dependencies", "Context", "Next"):
@@ -465,7 +466,7 @@ def detect_drift(data, report):
         report.info_msg(f"Dead-decision exemptions: {', '.join(exempt_parts)}.")
 
     # 2b. Stalled tasks: blocked tasks without resolution path
-    blocked = [t for t in tasks if t.get("Status") == "blocked"]
+    blocked = [t for t in tasks if t.get("Status") == TaskStatus.BLOCKED.value]
     if blocked:
         signals.append(
             {
@@ -634,13 +635,7 @@ def generate_snapshot(data, ws, report):
             "superseded": [d["_id"] for d in decisions if d.get("Status") == "superseded"],
             "revoked": [d["_id"] for d in decisions if d.get("Status") == "revoked"],
         },
-        "tasks": {
-            "todo": [t["_id"] for t in tasks if t.get("Status") == "todo"],
-            "doing": [t["_id"] for t in tasks if t.get("Status") == "doing"],
-            "blocked": [t["_id"] for t in tasks if t.get("Status") == "blocked"],
-            "done": [t["_id"] for t in tasks if t.get("Status") == "done"],
-            "canceled": [t["_id"] for t in tasks if t.get("Status") == "canceled"],
-        },
+        "tasks": {s.value: [t["_id"] for t in tasks if t.get("Status") == s.value] for s in TaskStatus},
         "projects": {
             "active": [p["_id"] for p in data["projects"] if p.get("Status") == "active"],
         },
@@ -690,7 +685,7 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
     decisions = data["decisions"]
     tasks = data["tasks"]
     active_decisions = [d for d in decisions if d.get("Status") == "active"]
-    active_tasks = [t for t in tasks if t.get("Status") in ("todo", "doing")]
+    active_tasks = [t for t in tasks if t.get("Status") in (TaskStatus.TODO.value, TaskStatus.DOING.value)]
 
     # Decisions this week (compare full date range, not just month prefix)
     monday_str = monday.strftime("%Y-%m-%d")
@@ -698,7 +693,7 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
     week_decisions = [d for d in decisions if monday_str <= d.get("Date", "") <= sunday_str]
 
     # Done tasks
-    done_tasks = [t for t in tasks if t.get("Status") == "done"]
+    done_tasks = [t for t in tasks if t.get("Status") == TaskStatus.DONE.value]
 
     # Top 5 tasks by priority for next week focus
     priority_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}

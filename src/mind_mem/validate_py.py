@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 # Allow importing block_parser from same directory
 from .block_parser import parse_file
 from .corpus_registry import VALIDATE_DIRS
+from .enums import TaskStatus
 
 
 class Validator:
@@ -215,7 +216,7 @@ class Validator:
             "Sources",
             "History",
         ]
-        valid_status = {"todo", "doing", "blocked", "done", "canceled"}
+        valid_status = {s.value for s in TaskStatus}
 
         def extra(blocks):
             # Priority

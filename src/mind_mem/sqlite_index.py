@@ -31,6 +31,7 @@ from datetime import datetime
 
 from .block_parser import parse_file
 from .connection_manager import ConnectionManager
+from .enums import TaskStatus
 from .extractor import extract_facts
 from .observability import get_logger, metrics
 from .recall import (
@@ -901,7 +902,7 @@ def query_index(
 
     results = []
     for row in rows:
-        if active_only and row["status"] not in ("active", "todo", "doing", "open"):
+        if active_only and row["status"] not in ("active", TaskStatus.TODO.value, TaskStatus.DOING.value, "open"):
             continue
 
         score = row["bm25_score"]
@@ -921,7 +922,7 @@ def query_index(
         # Status boost
         if row["status"] == "active":
             score *= 1.2
-        elif row["status"] in ("todo", "doing"):
+        elif row["status"] in (TaskStatus.TODO.value, TaskStatus.DOING.value):
             score *= 1.1
 
         # Priority boost

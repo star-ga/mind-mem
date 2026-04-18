@@ -48,6 +48,7 @@ from typing import Any
 # Import helpers from recall.py
 from .block_parser import parse_file
 from .corpus_registry import CORPUS_DIRS
+from .enums import TaskStatus
 from .observability import get_logger, metrics, timed
 from .recall import (
     CORPUS_FILES,
@@ -1116,7 +1117,7 @@ class VectorBackend(RecallBackend):
             status = block.get("status", "")
             if status == "active":
                 score *= 1.2
-            elif status in ("todo", "doing"):
+            elif status in (TaskStatus.TODO.value, TaskStatus.DOING.value):
                 score *= 1.1
 
             result_item = {

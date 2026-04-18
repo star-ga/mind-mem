@@ -58,6 +58,7 @@ from ._recall_scoring import bm25f_score_terms, build_xref_graph, compute_weight
 from ._recall_temporal import apply_temporal_filter, resolve_time_reference
 from ._recall_tokenization import tokenize
 from .block_parser import chunk_block, deduplicate_chunks, get_active, parse_file
+from .enums import TaskStatus
 from .observability import get_logger, metrics
 from .retrieval_graph import (
     get_hard_negative_ids,
@@ -597,7 +598,7 @@ def recall(
         status = block.get("Status", "")
         if status == "active":
             score *= _status_boost_active
-        elif status in ("todo", "doing"):
+        elif status in (TaskStatus.TODO.value, TaskStatus.DOING.value):
             score *= _status_boost_wip
 
         priority = block.get("Priority", "")
