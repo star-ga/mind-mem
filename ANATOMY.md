@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 456 | **Est. tokens:** ~949,558
-**Generated:** 2026-04-18 08:44 UTC
+**Files:** 456 | **Est. tokens:** ~949,563
+**Generated:** 2026-04-18 08:46 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 26 | ~61,967 |
+| `./` | 26 | ~61,972 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 32 | ~35,992 |
@@ -64,7 +64,7 @@
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
 - `generate_mind7b_training.py` (~5394 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
-- `.gitignore` (~109 tok, small) — *.pyc
+- `.gitignore` (~114 tok, small) — *.pyc
 - `install.sh` (~3337 tok, huge) — mind-mem installer — sets up MCP server + hooks for all supported clients
 - `LICENSE` (~2695 tok, huge)
 - `Makefile` (~532 tok, large) — .PHONY: test lint bench install dev clean smoke help

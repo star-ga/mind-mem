@@ -28,3 +28,4 @@ test_out.txt
 # Training artifacts (large weights, never commit)
 train/output/
 mm-train-output/
+.mind-mem-index/
