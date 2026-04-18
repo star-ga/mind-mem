@@ -15,10 +15,9 @@
     <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
     <img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible">
     <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
-    <img src="https://img.shields.io/badge/tests-3444-brightgreen?style=flat-square" alt="Tests: 3444">
-    <img src="https://img.shields.io/badge/MCP_tools-54-blue?style=flat-square" alt="MCP Tools: 54">
+    <img src="https://img.shields.io/badge/tests-3610-brightgreen?style=flat-square" alt="Tests: 3610">
+    <img src="https://img.shields.io/badge/MCP_tools-57-blue?style=flat-square" alt="MCP Tools: 57">
     <img src="https://img.shields.io/badge/audit-3--LLM_joint-darkgreen?style=flat-square" alt="3-LLM joint audit per release">
-    <img src="https://img.shields.io/badge/release-local_(no_Actions)-lightgrey?style=flat-square" alt="Released locally; GitHub Actions disabled account-wide">
   </p>
 </p>
 

@@ -56,10 +56,19 @@ through the `mm` CLI.
 | Format | JSON `hooks` section |
 | Install | `mm install claude-code` |
 
-Configures three hooks:
-- `SessionStart` → `mm inject --agent claude-code --workspace <ws>` — prepend memory snippet into the system prompt.
-- `PostToolUse` → `mm capture --stdin` — auto-capture observations.
-- `Stop` → `mm vault status` — flush vault state on session exit.
+Configures two hooks (v3.1.1+):
+- `SessionStart` → `mm status` — report workspace + memory status at
+  session start. (Pre-3.1.1 used `mm inject --agent claude-code
+  --workspace <ws>`, which silently failed because `mm inject`
+  requires a positional query the hook cannot supply. Re-running
+  `mm install claude-code` on any pre-3.1.1 install auto-migrates the
+  hook shape in place.)
+- `Stop` → `mm status` — status check on session exit. (Pre-3.1.1
+  used `mm vault status`, which is not a shipped subcommand. Same
+  auto-migration applies.)
+
+A dedicated `mm inject-on-start` subcommand suitable for the
+`SessionStart` event is planned for a future release.
 
 Also add the `Memory Protocol` block to `~/.claude/CLAUDE.md` so the
 model *must* call `mcp__mind-mem__recall` before answering memory-

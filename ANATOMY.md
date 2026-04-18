@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 457 | **Est. tokens:** ~970,995
-**Generated:** 2026-04-15 11:59 UTC
+**Files:** 457 | **Est. tokens:** ~972,112
+**Generated:** 2026-04-18 07:28 UTC
 
 ## Token Budget Guide
 
@@ -22,10 +22,10 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~84,243 |
-| `.agents/skills/mind-mem-development/` | 1 | ~371 |
+| `./` | 27 | ~85,014 |
+| `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,472 |
-| `docs/` | 32 | ~35,731 |
+| `docs/` | 32 | ~35,992 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `examples/` | 2 | ~466 |
@@ -54,8 +54,8 @@
 
 ### `./`
 
-- `CHANGELOG.md` (~23806 tok, huge) — Changelog
-- `CLAUDE.md` (~611 tok, large) — mind-mem — Persistent AI Memory System
+- `CHANGELOG.md` (~24200 tok, huge) — Changelog
+- `CLAUDE.md` (~1028 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
 - `demo-setup.sh` (~323 tok, medium) — Pre-seed a demo workspace for VHS recording
@@ -74,7 +74,7 @@
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
 - `pyproject.toml` (~868 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~22093 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~22053 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
 - `ROADMAP.md` (~13335 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
@@ -83,7 +83,7 @@
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
 ### `.agents/skills/mind-mem-development/`
 
-- `SKILL.md` (~371 tok, medium) — mind-mem Development
+- `SKILL.md` (~456 tok, medium) — mind-mem Development
 ### `benchmarks/`
 
 - `bench_kernels.py` (~4031 tok, huge) — Benchmark: MIND kernels vs pure Python scoring.
@@ -105,12 +105,12 @@
 
 - `api-reference.md` (~1477 tok, large) — API Reference
 - `architecture.md` (~1849 tok, huge) — Architecture
-- `benchmarks.md` (~743 tok, large) — Benchmarks
+- `benchmarks.md` (~759 tok, large) — Benchmarks
 - `block-format.md` (~431 tok, medium) — Block Format
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~254 tok, medium) — CI Workflows
 - `claude-desktop-setup.md` (~752 tok, large) — Claude Desktop Setup Guide
-- `client-integrations.md` (~2438 tok, huge) — Client Integrations
+- `client-integrations.md` (~2533 tok, huge) — Client Integrations
 - `comparison.md` (~313 tok, medium) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
 - `configuration.md` (~5223 tok, huge) — Configuration Reference
@@ -133,7 +133,7 @@
 - `odc-retrieval.md` (~834 tok, large) — Observer-Dependent Cognition in mind-mem
 - `performance-tuning.md` (~560 tok, large) — Performance Tuning
 - `quickstart.md` (~601 tok, large) — mind-mem Quickstart
-- `roadmap.md` (~730 tok, large) — Roadmap
+- `roadmap.md` (~880 tok, large) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `security-model.md` (~350 tok, medium) — Security Model
 - `setup.md` (~1741 tok, huge) — Setup

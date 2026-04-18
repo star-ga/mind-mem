@@ -1,75 +1,91 @@
 # Roadmap
 
-> This is the short-form roadmap. The canonical, detailed version lives in
-> [`ROADMAP.md`](../ROADMAP.md) at the repo root and includes the full
-> v2.0 → v2.7 milestone breakdown.
+> This is the short-form roadmap. The canonical, detailed version lives
+> in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
+> full milestone breakdown.
 
-## v2.0.0b1 (Current — released 2026-04-13)
+## v3.1.1 (Current — released 2026-04-15)
 
-Inference acceleration — Python subset. LLM prefix cache + speculative
-prefetch predictor. MIND-compiled hot paths deferred until the `mindc`
-toolchain is available.
+Patch release. Claude Code hook-installer fix: `install claude-code`
+now writes the required nested hook shape and migrates legacy flat
+entries in-place. `mm inject` / `mm vault status` hooks replaced with
+`mm status` where the old commands pointed at unshipped subcommands.
 
-## v2.0.0a3 (Released 2026-04-13)
+## v3.1.0 (Released 2026-04-15)
 
-Observer-Dependent Cognition (ODC) axis-aware retrieval.
+Native MCP integration for 8 additional AI clients plus a
+multi-backend LLM extractor. `mm install-all` auto-wires 16 clients
+total.
 
-## v2.0.0a2 (Released 2026-04-13)
+## v3.0.0 (Released 2026-04-14)
 
-Cryptographic governance layer + GBrain enrichment.
+Governance alerting hooks (webhook / Slack), transparent at-rest
+encryption (SQLCipher + BlockStore), TTL/LRU tier decay, and
+full-fine-tune local model `star-ga/mind-mem-4b` (Qwen3.5-4B base).
+Adversarial-memory corpus tests and Jepsen-style concurrency stress
+tests merged. MCP tool surface now 57.
 
-## v1.9.1 (Previous stable)
+## v2.10.0 (Released 2026-04-14)
 
-- [x] BM25F scoring with field weights
-- [x] Co-retrieval graph boost
-- [x] Fact card sub-block indexing
-- [x] Knee score cutoff
-- [x] Hard negative mining
-- [x] 57 MCP tools (expanded from 19)
-- [x] LoCoMo benchmark suite
-- [x] Cross-platform CI (Ubuntu/macOS/Windows)
-- [x] Baseline snapshot with chi-squared drift detection
-- [x] Contradiction detection at governance gate
-- [x] Hash-chain mutation audit log
-- [x] Per-field mutation tracking
-- [x] Semantic belief drift detection
-- [x] Temporal causal dependency graph
-- [x] Coding-native memory schemas (ADR/CODE/PERF/ALGO/BUG)
-- [x] Auto contradiction resolution with preference learning
-- [x] Governance benchmark suite
-- [x] AES-256 encryption at rest
-- [x] LLM-free multi-query expansion with RRF fusion
-- [x] 4-layer search deduplication (per-source, cosine, type diversity, chunk cap)
-- [x] Semantic-aware smart chunking (markdown/code/prose boundaries)
-- [x] Compiled truth pages (per-entity knowledge compilation with evidence trails)
-- [x] Dream cycle (autonomous memory enrichment, repair, consolidation)
-- [x] Calibration feedback loop with Bayesian weight computation
-- [x] Graph traversal tool (walk cross-references by depth/direction)
-- [x] Block compaction and stale block detection
+Audit-integrity patch series. TAG_v1 NUL-separated hash preimages for
+collision resistance, Q16.16 fixed-point scores in audit hash
+preimages.
 
-## v2.0.0 → v2.9.0 (Shipped)
+## v2.9.0 and earlier
 
-- [x] Incremental reindexing
-- [x] Block versioning with diff tracking (delta snapshots + WAL)
-- [x] Enhanced vector search with HNSW-compatible sqlite-vec
-- [x] Query result caching (prefix cache + speculative prefetch)
-- [x] Workspace federation (multi-workspace queries via namespaces)
-- [x] Persistent FTS5 index
-- [x] Plugin system for custom scoring (MIND kernels)
+See `CHANGELOG.md` for the full history. Highlights across v2.x:
+incremental reindexing, delta-snapshot block versioning with WAL,
+sqlite-vec HNSW-compatible vector search, prefix cache + speculative
+prefetch, workspace federation via namespaces, FTS5 index,
+MIND-kernel plugin system for custom scoring, ODC axis-aware
+retrieval, cryptographic governance layer, GBrain enrichment,
+inference acceleration for the Python subset.
 
-## v3.0.0 (Future)
+## v1.9.x (Earlier stable line, superseded)
 
-- [ ] Real-time workspace watching (inotify/FSEvents)
-- [ ] Web UI for memory browsing
-- [ ] REST API server mode (distinct from MCP)
-- [ ] Distributed workspace sync (mDNS-discovered mesh)
-- [ ] Transparent at-rest encryption (read/write hooks in block_parser)
-- [ ] LoRA retrain loop wired into production pipeline
+Foundational retrieval and governance work:
+
+- BM25F scoring with field weights
+- Co-retrieval graph boost
+- Fact card sub-block indexing
+- Knee score cutoff, hard negative mining
+- LoCoMo benchmark suite
+- Cross-platform CI (Ubuntu / macOS / Windows)
+- Baseline snapshot with chi-squared drift detection
+- Contradiction detection at governance gate
+- Hash-chain mutation audit log
+- Per-field mutation tracking, semantic belief drift detection
+- Temporal causal dependency graph
+- Coding-native memory schemas (ADR / CODE / PERF / ALGO / BUG)
+- Auto contradiction resolution with preference learning
+- Governance benchmark suite, AES-256 encryption at rest
+- LLM-free multi-query expansion with RRF fusion
+- 4-layer search deduplication
+- Semantic-aware smart chunking
+- Compiled truth pages with evidence trails
+- Dream cycle (autonomous memory enrichment / repair)
+- Calibration feedback loop with Bayesian weight computation
+- Graph traversal tool
+- Block compaction and stale block detection
+
+## Upcoming (v3.2 / v3.3 / v4.0)
+
+Tracked in open GitHub issues and in the root `ROADMAP.md`.
+Direction:
+
+- MCP tool-surface reduction (57 → ~20 as a stable public surface, with
+  the rest moving behind a `*/advanced` namespace)
+- Multi-tenancy foundation (orgs / users / RBAC)
+- Real-time workspace watching (inotify / FSEvents)
+- Web UI for memory browsing
+- REST API server mode (distinct from MCP)
+- Distributed workspace sync (mDNS-discovered mesh)
+- LoRA retrain loop wired into production pipeline
 
 ## Design Principles
 
-1. **Zero dependencies** — No external services required
-2. **Auditable** — Full proposal system with history
+1. **Zero dependencies** — No external services required for the core
+2. **Auditable** — Every mutation goes through the proposal system
 3. **Fast** — Sub-500ms recall on commodity hardware
-4. **Portable** — Plain markdown files, any filesystem
+4. **Portable** — Plain Markdown files, any filesystem
 5. **Extensible** — MIND kernels for custom scoring

@@ -2,6 +2,40 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.1.2 (2026-04-18)
+
+**Documentation + metadata alignment.** No code changes, no behavior
+changes. Publishes a clean v3.1.1 representation to users who read the
+repo, the PyPI page, or the skill files.
+
+### Fixed
+
+- **README badges** — corrected stale counts that carried over from
+  earlier releases: `tests-3444` → `tests-3610` and `MCP_tools-54` →
+  `MCP_tools-57` (confirmed via `pytest --collect-only` and
+  `@mcp.tool` decorator count in `src/mind_mem/mcp_server.py`).
+- **README** — removed the "release local (no Actions)" badge. GitHub
+  Actions is enabled on the repository; the badge misrepresented the
+  release pipeline.
+- **CLAUDE.md** — full refresh. Header now reports v3.1.2, 3610 tests,
+  57 MCP tools. Architecture section documents current subsystems
+  (at-rest encryption, tier decay, governance alerting, audit-integrity
+  patterns, `mind-mem-4b` local model, native-MCP integration for 16
+  AI clients).
+- **docs/roadmap.md** — rewritten. The "current" section now points at
+  v3.1.1 instead of the v2.0.0 beta line that had become stale.
+  Shipped vs upcoming is cleanly separated.
+- **docs/benchmarks.md** — clarifies that the LoCoMo snapshot predates
+  v3.x and is still representative; a fresh benchmark artifact is
+  planned for the next release cycle.
+- **.agents/skills/mind-mem-development/SKILL.md** — updated test
+  count (2180 → 3610) and MCP tool inventory (19 → 57).
+
+### Operations
+
+- Confirmed GitHub Actions re-enabled on the repository; Dependabot
+  runs from March that had been queue-stalled are being cleared.
+
 ## 3.1.1 (2026-04-15)
 
 **Claude Code hook-install fix.** `install claude-code` was writing

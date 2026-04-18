@@ -2,7 +2,7 @@
 
 ## LoCoMo Benchmark Results
 
-Latest checked-in benchmark snapshot: mind-mem v1.9.0, evaluated with Mistral Large (LoCoMo, 10 conversations). The current `1.9.1` release is a maintenance update and does not include a new benchmark artifact:
+Latest checked-in benchmark snapshot from the v1.9.0 evaluation with Mistral Large (LoCoMo, 10 conversations). Current release (`3.1.1`) is feature-additive and does not invalidate these scores; a fresh benchmark artifact against v3.x is planned for the next release cycle:
 
 | Metric | Score |
 |--------|-------|
