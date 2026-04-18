@@ -598,7 +598,7 @@ def recall(
         status = block.get("Status", "")
         if status == "active":
             score *= _status_boost_active
-        elif status in (TaskStatus.TODO.value, TaskStatus.DOING.value):
+        elif status in {TaskStatus.TODO, TaskStatus.DOING}:
             score *= _status_boost_wip
 
         priority = block.get("Priority", "")

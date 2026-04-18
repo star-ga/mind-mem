@@ -22,6 +22,12 @@
 
 set -uo pipefail
 
+# Load task-status literals derived from enums.py (auto-generated; do
+# not edit by hand — run `make regen-bash-literals` to refresh).
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=src/mind_mem/_task_status_literals.sh
+source "${_SCRIPT_DIR}/_task_status_literals.sh"
+
 WS="${1:-.}"
 
 # Workspace detection: warn if running in repo root instead of initialized workspace
@@ -187,8 +193,8 @@ if [[ -f "$TASK_FILE" ]]; then
   done
 
   # Value validation: Status
-  valid_ts=$(grep -cE '^Status:[[:space:]]*(todo|doing|blocked|done|canceled)[[:space:]]*$' "$TASK_FILE" || true)
-  bad_ts=$(grep -E '^Status:' "$TASK_FILE" | grep -vE '^Status:[[:space:]]*(todo|doing|blocked|done|canceled)[[:space:]]*$' || true)
+  valid_ts=$(grep -cE "^Status:[[:space:]]*(${TASK_STATUS_RE})[[:space:]]*$" "$TASK_FILE" || true)
+  bad_ts=$(grep -E '^Status:' "$TASK_FILE" | grep -vE "^Status:[[:space:]]*(${TASK_STATUS_RE})[[:space:]]*$" || true)
   if [[ -z "$bad_ts" ]]; then
     pass "Tasks: all Status values valid ($valid_ts)"
   else
@@ -533,9 +539,11 @@ if [[ -f "$TASK_FILE" ]]; then
   align_issues=$(MIND_MEM_WS="$WS" MIND_MEM_TASKFILE="$TASK_FILE" python3 -c "
 import os, sys
 from mind_mem.block_parser import parse_file
+from mind_mem.enums import TaskStatus
 blocks = parse_file(os.environ['MIND_MEM_TASKFILE'])
+open_statuses = {s.value for s in TaskStatus.open()}
 for b in blocks:
-    if b.get('Status') in ('todo','doing','blocked'):
+    if b.get('Status') in open_statuses:
         aligns = b.get('AlignsWith','')
         justification = b.get('Justification','')
         if (not aligns or aligns == 'none') and not justification:

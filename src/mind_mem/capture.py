@@ -71,7 +71,7 @@ DECISION_PATTERNS = [
     (r"\bblocked on\b", "task", "high"),
     # Medium confidence task patterns
     (r"\bneed to\b", "task", "medium"),
-    (r"\btodo\b", "task", "medium"),
+    (r"\btodo\b", "task", "medium"),  # English prose detector — not a TaskStatus comparison
     (r"\bfollow up\b", "task", "medium"),
     (r"\bshould\b.*\bbefore\b", "task", "medium"),
     (r"\bnext step\b", "task", "medium"),

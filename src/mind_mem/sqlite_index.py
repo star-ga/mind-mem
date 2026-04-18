@@ -902,7 +902,7 @@ def query_index(
 
     results = []
     for row in rows:
-        if active_only and row["status"] not in ("active", TaskStatus.TODO.value, TaskStatus.DOING.value, "open"):
+        if active_only and row["status"] not in {"active", TaskStatus.TODO, TaskStatus.DOING, "open"}:
             continue
 
         score = row["bm25_score"]
@@ -922,7 +922,7 @@ def query_index(
         # Status boost
         if row["status"] == "active":
             score *= 1.2
-        elif row["status"] in (TaskStatus.TODO.value, TaskStatus.DOING.value):
+        elif row["status"] in {TaskStatus.TODO, TaskStatus.DOING}:
             score *= 1.1
 
         # Priority boost

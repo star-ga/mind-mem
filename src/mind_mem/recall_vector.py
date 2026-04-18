@@ -1117,7 +1117,7 @@ class VectorBackend(RecallBackend):
             status = block.get("status", "")
             if status == "active":
                 score *= 1.2
-            elif status in (TaskStatus.TODO.value, TaskStatus.DOING.value):
+            elif status in {TaskStatus.TODO, TaskStatus.DOING}:
                 score *= 1.1
 
             result_item = {

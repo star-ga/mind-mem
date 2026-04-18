@@ -466,7 +466,7 @@ def detect_drift(data, report):
         report.info_msg(f"Dead-decision exemptions: {', '.join(exempt_parts)}.")
 
     # 2b. Stalled tasks: blocked tasks without resolution path
-    blocked = [t for t in tasks if t.get("Status") == TaskStatus.BLOCKED.value]
+    blocked = [t for t in tasks if t.get("Status") == TaskStatus.BLOCKED]
     if blocked:
         signals.append(
             {
@@ -685,7 +685,7 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
     decisions = data["decisions"]
     tasks = data["tasks"]
     active_decisions = [d for d in decisions if d.get("Status") == "active"]
-    active_tasks = [t for t in tasks if t.get("Status") in (TaskStatus.TODO.value, TaskStatus.DOING.value)]
+    active_tasks = [t for t in tasks if t.get("Status") in {TaskStatus.TODO, TaskStatus.DOING}]
 
     # Decisions this week (compare full date range, not just month prefix)
     monday_str = monday.strftime("%Y-%m-%d")
@@ -693,7 +693,7 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
     week_decisions = [d for d in decisions if monday_str <= d.get("Date", "") <= sunday_str]
 
     # Done tasks
-    done_tasks = [t for t in tasks if t.get("Status") == TaskStatus.DONE.value]
+    done_tasks = [t for t in tasks if t.get("Status") == TaskStatus.DONE]
 
     # Top 5 tasks by priority for next week focus
     priority_order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}

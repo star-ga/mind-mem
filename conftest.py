@@ -8,7 +8,6 @@ import sys
 
 import pytest
 
-
 # On Windows, pytest's `tmp_path` / `tmp_path_factory` fixtures use
 # `shutil.rmtree` for teardown. When a test has opened a SQLite
 # connection inside the temp dir (every mind-mem recall / indexing

@@ -1,4 +1,4 @@
-.PHONY: test lint bench install dev clean smoke help
+.PHONY: test lint bench install dev clean smoke help regen-bash-literals
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -57,3 +57,6 @@ format: ## Auto-format code
 
 typecheck: ## Run type checking (if mypy installed)
 	python3 -m mypy src/ --ignore-missing-imports --no-error-summary 2>/dev/null || echo "mypy not installed — skipping"
+
+regen-bash-literals: ## Regenerate src/mind_mem/_task_status_literals.sh from enums.py
+	python3 scripts/regen_bash_literals.py
