@@ -26,6 +26,7 @@ Environment variables:
     HF_TOKEN              hf_...                      for base download + upload
     PYTORCH_ALLOC_CONF    expandable_segments:True    fragment mitigation
 """
+
 from __future__ import annotations
 
 import os
@@ -58,9 +59,7 @@ def main() -> None:
     print(f"corpus        : {CORPUS}")
     print(f"out dir       : {OUT_DIR}")
     print(f"cuda avail    : {torch.cuda.is_available()}")
-    print(
-        f"gpu           : {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu-only'}"
-    )
+    print(f"gpu           : {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu-only'}")
     if torch.cuda.is_available():
         total_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
         print(f"gpu memory    : {total_gb:.1f} GB")
@@ -78,12 +77,10 @@ def main() -> None:
         attn_implementation="sdpa",
     )
     model.config.use_cache = False
-    model.gradient_checkpointing_enable(
-        gradient_checkpointing_kwargs={"use_reentrant": False}
-    )
+    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in model.parameters())
-    print(f"trainable     : {trainable:,} / {total:,} ({trainable/total:.2%})")
+    print(f"trainable     : {trainable:,} / {total:,} ({trainable / total:.2%})")
 
     dataset = load_dataset("json", data_files=str(CORPUS), split="train")
     print(f"examples      : {len(dataset):,}")

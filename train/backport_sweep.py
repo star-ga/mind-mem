@@ -16,23 +16,28 @@ For each tag from v2.0.0a1 → v2.8.2 the script:
 Runs strictly sequentially — PyPI rate-limits new release uploads and
 parallel builds in the same repo fight over `dist/`.
 """
+
 from __future__ import annotations
 
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 REPO = Path("/home/n/mind-mem")
-V29_SHA = subprocess.check_output(
-    ["git", "rev-parse", "v2.9.0"], cwd=REPO, text=True
-).strip()
+V29_SHA = subprocess.check_output(["git", "rev-parse", "v2.9.0"], cwd=REPO, text=True).strip()
 
 # First 7 (v2.0.0a1..v2.1.0) shipped before disk-full hit. Resume
 # from v2.2.0. twine --skip-existing handles any inadvertent repeats.
 TAGS = [
-    "v2.2.0", "v2.3.0", "v2.4.0",
-    "v2.5.0", "v2.6.0", "v2.7.0", "v2.8.0", "v2.8.1", "v2.8.2",
+    "v2.2.0",
+    "v2.3.0",
+    "v2.4.0",
+    "v2.5.0",
+    "v2.6.0",
+    "v2.7.0",
+    "v2.8.0",
+    "v2.8.1",
+    "v2.8.2",
 ]
 
 # Worktrees stage a full tree copy; /data has the headroom, / often doesn't.
@@ -58,13 +63,17 @@ def backport(tag: str) -> None:
     # the conflicting hunks (files that didn't exist at this tag).
     proc = subprocess.run(
         ["git", "cherry-pick", "--strategy=recursive", "-X", "theirs", V29_SHA],
-        cwd=worktree, text=True, capture_output=True,
+        cwd=worktree,
+        text=True,
+        capture_output=True,
     )
     if proc.returncode != 0:
         # Delete any unmerged paths so we can commit the partial fix set.
         unmerged = subprocess.run(
             ["git", "diff", "--name-only", "--diff-filter=U"],
-            cwd=worktree, text=True, capture_output=True,
+            cwd=worktree,
+            text=True,
+            capture_output=True,
         ).stdout.split()
         for p in unmerged:
             subprocess.run(["git", "rm", "-f", p], cwd=worktree, capture_output=True)
@@ -75,13 +84,22 @@ def backport(tag: str) -> None:
     target_version = f"{tag.lstrip('v')}.post1"
     _bump_version(worktree, target_version)
     subprocess.run(
-        ["git", "add", "-A"], cwd=worktree, check=True, text=True, capture_output=True,
+        ["git", "add", "-A"],
+        cwd=worktree,
+        check=True,
+        text=True,
+        capture_output=True,
     )
-    run([
-        "git", "commit",
-        "--author=STARGA Inc <noreply@star.ga>",
-        "-m", f"chore: release {target_version} — backport of v2.9.0 audit fixes",
-    ], worktree)
+    run(
+        [
+            "git",
+            "commit",
+            "--author=STARGA Inc <noreply@star.ga>",
+            "-m",
+            f"chore: release {target_version} — backport of v2.9.0 audit fixes",
+        ],
+        worktree,
+    )
 
     # Build sdist + wheel.
     (worktree / "dist").mkdir(exist_ok=True)
@@ -98,16 +116,25 @@ def backport(tag: str) -> None:
     tag_name = f"v{target_version}"
     run(["git", "tag", "-a", tag_name, "-m", f"{target_version} backport"], worktree)
     run(["git", "push", "origin", tag_name], worktree)
-    run([
-        "gh", "release", "create", tag_name,
-        "--title", f"{target_version} — audit backport of {tag}",
-        "--notes", (
-            f"Backport of v2.9.0's audit-pass-#2 fixes onto the {tag} source tree. "
-            "Applies every fix whose target module existed at the time of the base release; "
-            "modules introduced after that release are skipped. "
-            "See https://github.com/star-ga/mind-mem/releases/tag/v2.9.0 for the full fix list."
-        ),
-    ] + [str(w) for w in wheels], worktree)
+    run(
+        [
+            "gh",
+            "release",
+            "create",
+            tag_name,
+            "--title",
+            f"{target_version} — audit backport of {tag}",
+            "--notes",
+            (
+                f"Backport of v2.9.0's audit-pass-#2 fixes onto the {tag} source tree. "
+                "Applies every fix whose target module existed at the time of the base release; "
+                "modules introduced after that release are skipped. "
+                "See https://github.com/star-ga/mind-mem/releases/tag/v2.9.0 for the full fix list."
+            ),
+        ]
+        + [str(w) for w in wheels],
+        worktree,
+    )
 
     # Teardown.
     subprocess.run(["git", "worktree", "remove", "--force", str(worktree)], cwd=REPO)

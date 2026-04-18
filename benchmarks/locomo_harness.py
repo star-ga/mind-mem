@@ -411,10 +411,7 @@ def main():
             n_turns = sum(len(turns) for _, _, turns in sessions)
             n_qa = len(sample.get("qa", []))
 
-            print(
-                f"[harness] [{i + 1}/{len(dataset)}] sample={sample_id} "
-                f"sessions={n_sessions} turns={n_turns} qa_pairs={n_qa}"
-            )
+            print(f"[harness] [{i + 1}/{len(dataset)}] sample={sample_id} sessions={n_sessions} turns={n_turns} qa_pairs={n_qa}")
 
             # Build workspace
             workspace = build_workspace(sample, tmp_base)

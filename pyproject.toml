@@ -111,6 +111,12 @@ select = ["E", "F", "W", "I"]
 "tests/test_verify_cli.py" = ["E501"]
 "tests/test_smart_chunker.py" = ["E501"]
 "src/mind_mem/skill_opt/history.py" = ["E501"]
+# Dev-only training scripts — long corpus / card strings and late
+# imports gated on torch/accelerate availability. Not shipped in the
+# wheel; not part of the production surface.
+"train/*.py" = ["E501", "E402"]
+"generate_mind7b_training.py" = ["E501", "E402"]
+"train_mind7b_runpod.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.10"

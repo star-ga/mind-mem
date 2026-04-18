@@ -10,6 +10,7 @@ Training:    3 epochs, per_device_batch_size=1, grad_accum_steps=16,
 
 Output:      /home/n/mm-train-output/adapter/   (PEFT adapter files)
 """
+
 from __future__ import annotations
 
 import os
@@ -23,7 +24,6 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     BitsAndBytesConfig,
-    TrainingArguments,
 )
 from trl import SFTConfig, SFTTrainer
 
@@ -31,9 +31,7 @@ BASE_MODEL = os.environ.get("MM_BASE_MODEL", "Qwen/Qwen3.5-4B")
 # All training artifacts live on /data (916 GB, 303 GB free) —
 # / is a 468 GB partition that hits 100% fast when HF caches land
 # on it (4B base + F16 GGUF + Q4 GGUF + merged = ~35 GB).
-_BASE = Path(
-    os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output")
-)
+_BASE = Path(os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output"))
 CORPUS = _BASE / "corpus.jsonl"
 OUT_DIR = _BASE / "adapter"
 LOG_DIR = _BASE / "logs"
@@ -92,8 +90,13 @@ def main() -> None:
         bias="none",
         task_type="CAUSAL_LM",
         target_modules=[
-            "q_proj", "k_proj", "v_proj", "o_proj",
-            "gate_proj", "up_proj", "down_proj",
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
         ],
     )
     model = get_peft_model(model, lora_config)

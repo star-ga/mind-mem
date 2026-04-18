@@ -27,9 +27,7 @@ import time
 # ── Pure Python implementations (always available) ────────────────────
 
 
-def py_rrf_fuse(
-    bm25_ranks: list[float], vec_ranks: list[float], k: float = 60.0, bm25_w: float = 1.0, vec_w: float = 1.0
-) -> list[float]:
+def py_rrf_fuse(bm25_ranks: list[float], vec_ranks: list[float], k: float = 60.0, bm25_w: float = 1.0, vec_w: float = 1.0) -> list[float]:
     """RRF fusion: score = bm25_w/(k+rank_bm25) + vec_w/(k+rank_vec)."""
     return [bm25_w / (k + b) + vec_w / (k + v) for b, v in zip(bm25_ranks, vec_ranks)]
 
@@ -72,18 +70,14 @@ def py_category_boost(scores: list[float], matches: list[bool], boost: float = 1
     return [s * boost if m else s for s, m in zip(scores, matches)]
 
 
-def py_importance_score(
-    access_count: int, days_since: float, base_importance: float = 1.0, decay: float = 0.01
-) -> float:
+def py_importance_score(access_count: int, days_since: float, base_importance: float = 1.0, decay: float = 0.01) -> float:
     """A-MEM importance: access frequency with exponential recency decay."""
     recency = math.exp(-decay * days_since)
     freq = math.log(1.0 + access_count)
     return max(0.8, min(1.5, base_importance * (0.5 + 0.3 * freq + 0.2 * recency)))
 
 
-def py_importance_batch(
-    access_counts: list[int], days_since: list[float], base: float = 1.0, decay: float = 0.01
-) -> list[float]:
+def py_importance_batch(access_counts: list[int], days_since: list[float], base: float = 1.0, decay: float = 0.01) -> list[float]:
     """Batch importance scoring."""
     return [py_importance_score(a, d, base, decay) for a, d in zip(access_counts, days_since)]
 

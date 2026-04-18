@@ -19,16 +19,22 @@ Output: star-ga/mind7b on HuggingFace (PUBLIC)
 
 Run: python3 train_mind7b_runpod.py
 """
+
 import os
+
 os.environ["HF_HOME"] = "/workspace/hf_cache"
 os.environ["TRANSFORMERS_CACHE"] = "/workspace/hf_cache"
 
-import subprocess, sys
-subprocess.run([sys.executable, "-m", "pip", "install", "-q",
-    "unsloth", "trl", "datasets", "huggingface_hub"], check=True)
+import subprocess
+import sys
 
-import json, time, torch
-from huggingface_hub import login, hf_hub_download
+subprocess.run([sys.executable, "-m", "pip", "install", "-q", "unsloth", "trl", "datasets", "huggingface_hub"], check=True)
+
+import json
+import time
+
+import torch
+from huggingface_hub import hf_hub_download, login
 
 # === CONFIG ===
 MODEL_NAME = "Qwen/Qwen3.5-4B"
@@ -76,14 +82,13 @@ model, tokenizer = FastLanguageModel.from_pretrained(
     load_in_4bit=True,
     dtype=torch.bfloat16,
 )
-print(f"Loaded in {time.time()-t0:.0f}s")
+print(f"Loaded in {time.time() - t0:.0f}s")
 
 # === LORA ===
 model = FastLanguageModel.get_peft_model(
     model,
     r=LORA_RANK,
-    target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                     "gate_proj", "up_proj", "down_proj"],
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
     lora_alpha=LORA_RANK,
     lora_dropout=0,
     bias="none",
@@ -92,7 +97,7 @@ model = FastLanguageModel.get_peft_model(
 
 trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
 total = sum(p.numel() for p in model.parameters())
-print(f"LoRA: {trainable:,} trainable / {total:,} total ({trainable/total*100:.2f}%)")
+print(f"LoRA: {trainable:,} trainable / {total:,} total ({trainable / total * 100:.2f}%)")
 
 # === DATASET ===
 from datasets import Dataset
@@ -114,8 +119,8 @@ dataset = Dataset.from_list(examples)
 print(f"Dataset: {len(examples)} examples")
 
 # === TRAIN ===
-from trl import SFTTrainer
 from transformers import TrainingArguments
+from trl import SFTTrainer
 
 tokenizer.model_max_length = MAX_SEQ_LENGTH
 if tokenizer.pad_token is None:
@@ -155,7 +160,7 @@ print(f"  batch={BATCH_SIZE}, grad_accum={GRAD_ACCUM}")
 t0 = time.time()
 trainer.train()
 elapsed = time.time() - t0
-print(f"\nTraining complete! {elapsed/60:.1f} min")
+print(f"\nTraining complete! {elapsed / 60:.1f} min")
 
 # === SAVE LORA ===
 lora_dir = f"{OUTPUT_DIR}/lora"
@@ -187,6 +192,7 @@ except Exception as e:
 # Push merged model
 try:
     from huggingface_hub import HfApi
+
     api = HfApi()
     api.upload_folder(
         folder_path=merged_dir,
@@ -200,6 +206,7 @@ except Exception as e:
 # Push GGUF
 try:
     import glob
+
     gguf_files = glob.glob(f"{gguf_dir}/*.gguf")
     for gf in gguf_files:
         api.upload_file(
@@ -214,7 +221,7 @@ except Exception as e:
 print(f"""
 +==========================================+
 |  Mind7B Training Complete!               |
-|  Time: {elapsed/60:.0f} min                          |
+|  Time: {elapsed / 60:.0f} min                          |
 |  Examples: {len(examples):<30d}|
 |  LoRA: {lora_dir:<34s}|
 |  Merged: {merged_dir:<32s}|

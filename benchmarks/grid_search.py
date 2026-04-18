@@ -327,10 +327,7 @@ def main():
     if baseline_result and best_result and best_result["label"] != "baseline":
         improvement = best_result["r_at_10"] - baseline_result["r_at_10"]
         if improvement >= 0.01:
-            print(
-                f"[grid] Best combo improves R@10 by {improvement * 100:.1f}pp "
-                f"(>= 1pp threshold). Consider updating defaults."
-            )
+            print(f"[grid] Best combo improves R@10 by {improvement * 100:.1f}pp (>= 1pp threshold). Consider updating defaults.")
             print(f"[grid] Best weights: {best_result['weights']}")
         else:
             print(f"[grid] Best improvement is {improvement * 100:.1f}pp (< 1pp threshold). Keeping current defaults.")

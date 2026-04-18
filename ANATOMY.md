@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 457 | **Est. tokens:** ~952,589
-**Generated:** 2026-04-18 09:24 UTC
+**Files:** 457 | **Est. tokens:** ~952,901
+**Generated:** 2026-04-18 09:29 UTC
 
 ## Token Budget Guide
 
@@ -22,9 +22,9 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~63,748 |
+| `./` | 27 | ~63,979 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `benchmarks/` | 11 | ~39,472 |
+| `benchmarks/` | 11 | ~39,429 |
 | `docs/` | 32 | ~35,992 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
@@ -48,7 +48,7 @@
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 176 | ~361,443 |
 | `tests/integration/` | 2 | ~1,436 |
-| `train/` | 10 | ~21,682 |
+| `train/` | 10 | ~21,806 |
 
 ## Files
 
@@ -63,36 +63,36 @@
 - `Dockerfile` (~54 tok, small) — FROM python:3.12-slim
 - `.dockerignore` (~37 tok, tiny) — .git
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
-- `generate_mind7b_training.py` (~5394 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
+- `generate_mind7b_training.py` (~5558 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
 - `.gitignore` (~114 tok, small) — *.pyc
 - `install.sh` (~3337 tok, huge) — mind-mem installer — sets up MCP server + hooks for all supported clients
 - `LICENSE` (~2695 tok, huge)
 - `Makefile` (~532 tok, large) — .PHONY: test lint bench install dev clean smoke help
-- `mcp_server.py` (~448 tok, medium) — Source-checkout entrypoint for the packaged Mind-Mem MCP server."""
+- `mcp_server.py` (~438 tok, medium) — Source-checkout entrypoint for the packaged Mind-Mem MCP server."""
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
-- `pyproject.toml` (~1068 tok, large) — [project]
+- `pyproject.toml` (~1143 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22227 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
 - `ROADMAP.md` (~14114 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
-- `train_mind7b_runpod.py` (~1652 tok, huge)
+- `train_mind7b_runpod.py` (~1654 tok, huge)
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
 ### `.agents/skills/mind-mem-development/`
 
 - `SKILL.md` (~456 tok, medium) — mind-mem Development
 ### `benchmarks/`
 
-- `bench_kernels.py` (~4031 tok, huge) — Benchmark: MIND kernels vs pure Python scoring.
+- `bench_kernels.py` (~4027 tok, huge) — Benchmark: MIND kernels vs pure Python scoring.
 - `compare_runs.py` (~857 tok, large) — Compare two LoCoMo benchmark runs side-by-side.
 - `crossencoder_ab.py` (~3205 tok, huge) — Cross-Encoder A/B Test — retrieval-level comparison.
-- `grid_search.py` (~2862 tok, huge) — BM25F Field Weight Grid Search for mind-mem Recall Engine.
+- `grid_search.py` (~2849 tok, huge) — BM25F Field Weight Grid Search for mind-mem Recall Engine.
 - `__init__.py` (~0 tok, tiny)
-- `locomo_harness.py` (~4159 tok, huge) — LoCoMo Benchmark Harness for mind-mem Recall Engine.
-- `locomo_judge.py` (~10759 tok, huge) — LoCoMo LLM-as-Judge Evaluation for Mind-Mem.
+- `locomo_harness.py` (~4147 tok, huge) — LoCoMo Benchmark Harness for mind-mem Recall Engine.
+- `locomo_judge.py` (~10745 tok, huge) — LoCoMo LLM-as-Judge Evaluation for Mind-Mem.
 - `longmemeval_harness.py` (~2973 tok, huge) — LongMemEval Benchmark Harness for mind-mem recall engine.
 - `niah_full_results.txt` (~5140 tok, huge) — ============================= test session starts ==============================
 - `NIAH.md` (~1513 tok, huge) — Needle In A Haystack (NIAH) Benchmark
@@ -561,16 +561,16 @@
 - `test_workspace_structure.py` (~546 tok, large) — Tests for workspace directory structure."""
 ### `train/`
 
-- `backport_sweep.py` (~1589 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
-- `build_corpus.py` (~8014 tok, huge) — Harvest a training corpus for the mind-mem-4b model.
-- `build_model_card.py` (~1881 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b v3.0.0."""
-- `eval_harness.py` (~2159 tok, huge) — Eval harness for mind-mem-4b.
-- `export_gguf.py` (~1057 tok, large) — Merge the LoRA adapter into the base weights, then export to GGUF.
+- `backport_sweep.py` (~1658 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
+- `build_corpus.py` (~8110 tok, huge) — Harvest a training corpus for the mind-mem-4b model.
+- `build_model_card.py` (~1876 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b v3.0.0."""
+- `eval_harness.py` (~2137 tok, huge) — Eval harness for mind-mem-4b.
+- `export_gguf.py` (~1047 tok, large) — Merge the LoRA adapter into the base weights, then export to GGUF.
 - `README.md` (~577 tok, large) — mind-mem-4b training pipeline
-- `runpod_deploy.py` (~3073 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
-- `runpod_full_ft.py` (~1252 tok, large) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
-- `train_qlora.py` (~1187 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
-- `upload_to_hf.py` (~893 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-4b.
+- `runpod_deploy.py` (~3095 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
+- `runpod_full_ft.py` (~1246 tok, large) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
+- `train_qlora.py` (~1195 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
+- `upload_to_hf.py` (~865 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-4b.
 
 ---
 *Generated by `anatomy 1.0.0`. Edit descriptions manually — re-run preserves structure.*

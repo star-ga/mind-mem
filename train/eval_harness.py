@@ -10,11 +10,11 @@ Prints a report to stdout and writes JSON to
 targets hit, exit 1 otherwise — so CI can gate uploads on a green
 eval.
 """
+
 from __future__ import annotations
 
 import json
 import os
-import re
 import sys
 from pathlib import Path
 
@@ -23,9 +23,7 @@ from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 BASE = "Qwen/Qwen3.5-4B"
-_BASE_DIR = Path(
-    os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output")
-)
+_BASE_DIR = Path(os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output"))
 ADAPTER = _BASE_DIR / "adapter"
 REPORT = _BASE_DIR / "eval_report.json"
 
@@ -213,17 +211,10 @@ def main() -> None:
         ("workflow    ", workflow_bench, 0.90),
     ):
         pass_str = "PASS" if bench["accuracy"] >= target else "FAIL"
-        print(
-            f"  {name}  {bench['hits']:3d}/{bench['total']:<3d}  "
-            f"{bench['accuracy']:.2%}   (target {target:.0%})  [{pass_str}]"
-        )
+        print(f"  {name}  {bench['hits']:3d}/{bench['total']:<3d}  {bench['accuracy']:.2%}   (target {target:.0%})  [{pass_str}]")
     print(f"\nreport → {REPORT}")
 
-    passed = (
-        tool_bench["accuracy"] >= 0.95
-        and schema_bench["accuracy"] >= 0.98
-        and workflow_bench["accuracy"] >= 0.90
-    )
+    passed = tool_bench["accuracy"] >= 0.95 and schema_bench["accuracy"] >= 0.98 and workflow_bench["accuracy"] >= 0.90
     sys.exit(0 if passed else 1)
 
 

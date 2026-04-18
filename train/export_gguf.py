@@ -17,6 +17,7 @@ Prerequisites:
 Output:
     /home/n/mm-train-output/mind-mem-4b-Q4_K_M.gguf
 """
+
 from __future__ import annotations
 
 import os
@@ -30,9 +31,7 @@ from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 BASE = "Qwen/Qwen3.5-4B"
-_BASE_DIR = Path(
-    os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output")
-)
+_BASE_DIR = Path(os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output"))
 ADAPTER = _BASE_DIR / "adapter"
 # Everything stays on /data — 4B base merged weights (~18 GB) + F16
 # GGUF (~17 GB) + Q4_K_M (~5 GB) would blow out / in a heartbeat.
@@ -52,9 +51,7 @@ def _merge_adapter() -> None:
     # steps VRAM pressure since we don't need any forward/backward here.
     # 7B at bf16 = ~14 GB RAM; the box has 64 GB so this is fine.
     print("loading base on CPU (bf16) …")
-    model = AutoModelForCausalLM.from_pretrained(
-        BASE, torch_dtype=torch.bfloat16, device_map=None, trust_remote_code=True
-    )
+    model = AutoModelForCausalLM.from_pretrained(BASE, torch_dtype=torch.bfloat16, device_map=None, trust_remote_code=True)
     print("applying adapter …")
     model = PeftModel.from_pretrained(model, str(ADAPTER), device_map=None)
     print("merging adapter into base weights …")
@@ -76,8 +73,10 @@ def _convert_to_gguf() -> None:
         sys.executable,
         str(convert),
         str(MERGED),
-        "--outfile", str(OUT_GGUF_F16),
-        "--outtype", "f16",
+        "--outfile",
+        str(OUT_GGUF_F16),
+        "--outtype",
+        "f16",
     ]
     print("→", " ".join(cmd))
     subprocess.run(cmd, check=True)
@@ -92,10 +91,7 @@ def _quantize() -> None:
     ]
     binary = next((p for p in candidates if p.is_file()), None)
     if binary is None:
-        sys.exit(
-            f"llama-quantize not found under {LLAMA_CPP}/build. "
-            "Run: cd llama.cpp && cmake -B build && cmake --build build -j"
-        )
+        sys.exit(f"llama-quantize not found under {LLAMA_CPP}/build. Run: cd llama.cpp && cmake -B build && cmake --build build -j")
     cmd = [str(binary), str(OUT_GGUF_F16), str(OUT_GGUF_Q4), "Q4_K_M"]
     print("→", " ".join(cmd))
     subprocess.run(cmd, check=True)

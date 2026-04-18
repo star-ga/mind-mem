@@ -600,9 +600,7 @@ def evaluate_sample_with_judge(
 
             if not _stats.get("first_adv_qi"):
                 _stats["first_adv_qi"] = qi + 1
-                print(
-                    f"[milestone] first adversarial at q{qi + 1}/{len(qa_pairs)} (has_signal={has_signal})", flush=True
-                )
+                print(f"[milestone] first adversarial at q{qi + 1}/{len(qa_pairs)} (has_signal={has_signal})", flush=True)
 
             # Abstention classifier: runs on ALL adversarial-labeled questions
             from mind_mem.abstention_classifier import classify_abstention
@@ -1034,8 +1032,7 @@ def main():
             [
                 sys.executable,
                 "-c",
-                "import sys; sys.path.insert(0, %r); "
-                "from locomo_harness import download_dataset; download_dataset()" % (_HERE,),
+                "import sys; sys.path.insert(0, %r); from locomo_harness import download_dataset; download_dataset()" % (_HERE,),
             ],
             timeout=120,
         )

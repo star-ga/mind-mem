@@ -1,15 +1,12 @@
 """Generate the HuggingFace model-card README for mind-mem-4b v3.0.0."""
+
 from __future__ import annotations
 
 import datetime as dt
 import os
 from pathlib import Path
 
-OUT = Path(
-    os.environ.get(
-        "MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output"
-    )
-) / "README.md"
+OUT = Path(os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output")) / "README.md"
 
 
 MODEL_CARD = """---

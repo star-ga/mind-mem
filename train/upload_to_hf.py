@@ -16,6 +16,7 @@ Files uploaded:
 Existing files in the repo are overwritten; the prior v2.8.x adapter
 lives in git history on HF.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -23,12 +24,10 @@ import os
 import sys
 from pathlib import Path
 
-from huggingface_hub import HfApi, create_commit, CommitOperationAdd
+from huggingface_hub import CommitOperationAdd, HfApi, create_commit
 
 REPO_ID = "star-ga/mind-mem-4b"
-OUT_DIR = Path(
-    os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output")
-)
+OUT_DIR = Path(os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output"))
 ADAPTER_DIR = OUT_DIR / "adapter"
 
 
@@ -80,10 +79,7 @@ def main() -> None:
         return
 
     if not args.token:
-        sys.exit(
-            "no HF token provided. Pass --token hf_... or set HF_TOKEN env. "
-            "Token must have 'write' scope for star-ga/mind-mem-4b."
-        )
+        sys.exit("no HF token provided. Pass --token hf_... or set HF_TOKEN env. Token must have 'write' scope for star-ga/mind-mem-4b.")
 
     api = HfApi(token=args.token)
     # Verify write permission before we start uploading GB of weights
@@ -91,17 +87,11 @@ def main() -> None:
         who = api.whoami()
         role = who.get("auth", {}).get("accessToken", {}).get("role", "?")
         if role != "write":
-            sys.exit(
-                f"token role is {role!r} — need 'write' for {REPO_ID}. "
-                "Generate a new token at https://huggingface.co/settings/tokens"
-            )
+            sys.exit(f"token role is {role!r} — need 'write' for {REPO_ID}. Generate a new token at https://huggingface.co/settings/tokens")
     except Exception as exc:
         sys.exit(f"token check failed: {exc}")
 
-    ops = [
-        CommitOperationAdd(path_in_repo=remote, path_or_fileobj=str(local))
-        for local, remote in uploads
-    ]
+    ops = [CommitOperationAdd(path_in_repo=remote, path_or_fileobj=str(local)) for local, remote in uploads]
     result = create_commit(
         repo_id=REPO_ID,
         operations=ops,

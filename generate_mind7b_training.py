@@ -15,7 +15,6 @@ import json
 import os
 import random
 import re
-import sys
 
 random.seed(42)
 
@@ -23,10 +22,7 @@ random.seed(42)
 # Prompt templates (exact copies from mind-mem source)
 # ---------------------------------------------------------------------------
 
-ENTITY_SYSTEM = (
-    "You are Mind7B, a specialized memory extraction model. "
-    "You extract entities from text and return structured JSON."
-)
+ENTITY_SYSTEM = "You are Mind7B, a specialized memory extraction model. You extract entities from text and return structured JSON."
 
 ENTITY_PROMPT = """\
 Extract entities from the following text. Return a JSON array of objects, \
@@ -39,10 +35,7 @@ Text: {text}
 
 JSON:"""
 
-FACT_SYSTEM = (
-    "You are Mind7B, a specialized memory extraction model. "
-    "You extract factual claims from text and return structured JSON."
-)
+FACT_SYSTEM = "You are Mind7B, a specialized memory extraction model. You extract factual claims from text and return structured JSON."
 
 FACT_PROMPT = """\
 Extract factual claims from the following text. Return a JSON array of \
@@ -123,8 +116,7 @@ facts about EACH entity separately, then note their connections.
 7. Output 4-10 observations (multi-hop needs more detail)."""
 
 RERANK_SYSTEM = (
-    "You are Mind7B, a specialized memory reranking model. "
-    "Given a query and candidate memory blocks, score each for relevance (0.0-1.0)."
+    "You are Mind7B, a specialized memory reranking model. Given a query and candidate memory blocks, score each for relevance (0.0-1.0)."
 )
 
 RERANK_PROMPT = """\
@@ -147,42 +139,118 @@ ENTITY_TYPES = ["person", "place", "date", "organization", "decision", "tool", "
 CATEGORIES = ["identity", "event", "preference", "relation", "negation", "plan", "state"]
 
 PEOPLE = [
-    "Alice Chen", "Bob Martinez", "Carol Singh", "David Park", "Eve Johnson",
-    "Frank Williams", "Grace Liu", "Hank Thompson", "Iris Patel", "Jack Wilson",
-    "Nikolai", "Sarah", "Marcus", "Dr. Yuki Tanaka", "Professor Garcia",
-    "CTO Jamie Lee", "Lisa from marketing", "Ahmed", "Fatima", "Raj"
+    "Alice Chen",
+    "Bob Martinez",
+    "Carol Singh",
+    "David Park",
+    "Eve Johnson",
+    "Frank Williams",
+    "Grace Liu",
+    "Hank Thompson",
+    "Iris Patel",
+    "Jack Wilson",
+    "Nikolai",
+    "Sarah",
+    "Marcus",
+    "Dr. Yuki Tanaka",
+    "Professor Garcia",
+    "CTO Jamie Lee",
+    "Lisa from marketing",
+    "Ahmed",
+    "Fatima",
+    "Raj",
 ]
 
 ORGS = [
-    "Acme Corp", "TechStart Inc", "DataFlow Labs", "CloudNine Systems",
-    "STARGA Inc", "OpenAI", "Google DeepMind", "Meta AI", "Anthropic",
-    "NeuraTech", "InfraScale", "DevOps United", "QualityFirst",
-    "DataDriven Co", "SecureNet", "AgileMinds", "CodeCraft", "AI Dynamics"
+    "Acme Corp",
+    "TechStart Inc",
+    "DataFlow Labs",
+    "CloudNine Systems",
+    "STARGA Inc",
+    "OpenAI",
+    "Google DeepMind",
+    "Meta AI",
+    "Anthropic",
+    "NeuraTech",
+    "InfraScale",
+    "DevOps United",
+    "QualityFirst",
+    "DataDriven Co",
+    "SecureNet",
+    "AgileMinds",
+    "CodeCraft",
+    "AI Dynamics",
 ]
 
 TOOLS = [
-    "PostgreSQL", "Redis", "Docker", "Kubernetes", "Terraform", "Jenkins",
-    "GitHub Actions", "Prometheus", "Grafana", "Elasticsearch", "Kafka",
-    "RabbitMQ", "Nginx", "FastAPI", "Django", "React", "Next.js", "Prisma",
-    "SQLAlchemy", "PyTorch", "TensorFlow", "Ollama", "mind-mem", "Supabase"
+    "PostgreSQL",
+    "Redis",
+    "Docker",
+    "Kubernetes",
+    "Terraform",
+    "Jenkins",
+    "GitHub Actions",
+    "Prometheus",
+    "Grafana",
+    "Elasticsearch",
+    "Kafka",
+    "RabbitMQ",
+    "Nginx",
+    "FastAPI",
+    "Django",
+    "React",
+    "Next.js",
+    "Prisma",
+    "SQLAlchemy",
+    "PyTorch",
+    "TensorFlow",
+    "Ollama",
+    "mind-mem",
+    "Supabase",
 ]
 
 PROJECTS = [
-    "Project Atlas", "Phoenix Migration", "DataLake v2", "Auth Refactor",
-    "API Gateway", "Dashboard Redesign", "ML Pipeline", "Edge Compute",
-    "Mobile App v3", "Search Rewrite", "mind-mem", "512-mind",
-    "CogNet", "NikolaChess", "mindlang.dev"
+    "Project Atlas",
+    "Phoenix Migration",
+    "DataLake v2",
+    "Auth Refactor",
+    "API Gateway",
+    "Dashboard Redesign",
+    "ML Pipeline",
+    "Edge Compute",
+    "Mobile App v3",
+    "Search Rewrite",
+    "mind-mem",
+    "512-mind",
+    "CogNet",
+    "NikolaChess",
+    "mindlang.dev",
 ]
 
 PLACES = [
-    "San Francisco office", "Berlin HQ", "AWS us-east-1", "GCP europe-west4",
-    "Dubai DIFC", "Tokyo data center", "production cluster", "staging environment",
-    "the Slack channel", "meeting room B"
+    "San Francisco office",
+    "Berlin HQ",
+    "AWS us-east-1",
+    "GCP europe-west4",
+    "Dubai DIFC",
+    "Tokyo data center",
+    "production cluster",
+    "staging environment",
+    "the Slack channel",
+    "meeting room B",
 ]
 
 DATES = [
-    "2026-01-15", "2026-02-20", "2025-11-03", "last Tuesday", "Q1 2026",
-    "March 2026", "next sprint", "2026-03-28", "yesterday", "2026-04-01"
+    "2026-01-15",
+    "2026-02-20",
+    "2025-11-03",
+    "last Tuesday",
+    "Q1 2026",
+    "March 2026",
+    "next sprint",
+    "2026-03-28",
+    "yesterday",
+    "2026-04-01",
 ]
 
 
@@ -196,50 +264,65 @@ def make_entity_example():
         etype = random.choice(ENTITY_TYPES)
         if etype == "person":
             name = random.choice(PEOPLE)
-            ctx = random.choice([
-                f"discussed the deployment plan", f"reviewed the PR",
-                f"reported the bug", f"suggested using {random.choice(TOOLS)}",
-                f"leads the backend team", f"joined in Q1 2026",
-                f"approved the migration", f"wrote the initial spec"
-            ])
+            ctx = random.choice(
+                [
+                    "discussed the deployment plan",
+                    "reviewed the PR",
+                    "reported the bug",
+                    f"suggested using {random.choice(TOOLS)}",
+                    "leads the backend team",
+                    "joined in Q1 2026",
+                    "approved the migration",
+                    "wrote the initial spec",
+                ]
+            )
             text_parts.append(f"{name} {ctx}")
         elif etype == "organization":
             name = random.choice(ORGS)
-            ctx = random.choice([
-                "partnered on the integration", "provides the cloud infra",
-                "acquired the startup", "sponsors the open-source project",
-                "hired three engineers", "published the benchmark results"
-            ])
+            ctx = random.choice(
+                [
+                    "partnered on the integration",
+                    "provides the cloud infra",
+                    "acquired the startup",
+                    "sponsors the open-source project",
+                    "hired three engineers",
+                    "published the benchmark results",
+                ]
+            )
             text_parts.append(f"{name} {ctx}")
         elif etype == "tool":
             name = random.choice(TOOLS)
-            ctx = random.choice([
-                "used for caching layer", "handles the message queue",
-                "runs in production", "replaced the old system",
-                "configured for auto-scaling", "version upgraded to latest"
-            ])
+            ctx = random.choice(
+                [
+                    "used for caching layer",
+                    "handles the message queue",
+                    "runs in production",
+                    "replaced the old system",
+                    "configured for auto-scaling",
+                    "version upgraded to latest",
+                ]
+            )
             text_parts.append(f"{name} {ctx}")
         elif etype == "project":
             name = random.choice(PROJECTS)
-            ctx = random.choice([
-                "entering phase 2", "blocked by dependency issue",
-                "launched successfully", "needs code review",
-                "scheduled for next sprint", "behind schedule by 2 weeks"
-            ])
+            ctx = random.choice(
+                [
+                    "entering phase 2",
+                    "blocked by dependency issue",
+                    "launched successfully",
+                    "needs code review",
+                    "scheduled for next sprint",
+                    "behind schedule by 2 weeks",
+                ]
+            )
             text_parts.append(f"{name} {ctx}")
         elif etype == "place":
             name = random.choice(PLACES)
-            ctx = random.choice([
-                "hosted the meeting", "deployed to this region",
-                "experiencing latency", "being decommissioned"
-            ])
+            ctx = random.choice(["hosted the meeting", "deployed to this region", "experiencing latency", "being decommissioned"])
             text_parts.append(f"At {name}, {ctx}")
         elif etype == "date":
             name = random.choice(DATES)
-            ctx = random.choice([
-                "deadline for the release", "when the incident occurred",
-                "scheduled for deployment", "meeting was held"
-            ])
+            ctx = random.choice(["deadline for the release", "when the incident occurred", "scheduled for deployment", "meeting was held"])
             text_parts.append(f"On {name}, {ctx}")
         else:
             name = "API rate limit decision"
@@ -255,7 +338,7 @@ def make_entity_example():
         "messages": [
             {"role": "system", "content": ENTITY_SYSTEM},
             {"role": "user", "content": ENTITY_PROMPT.format(text=text)},
-            {"role": "assistant", "content": output}
+            {"role": "assistant", "content": output},
         ]
     }
 
@@ -268,42 +351,30 @@ def make_fact_example():
 
     templates = {
         "identity": [
-            ("{person} is the {role} at {org}",
-             "{person} holds the {role} position at {org}"),
-            ("{person} specializes in {domain}",
-             "{person} is an expert in {domain}"),
+            ("{person} is the {role} at {org}", "{person} holds the {role} position at {org}"),
+            ("{person} specializes in {domain}", "{person} is an expert in {domain}"),
         ],
         "event": [
-            ("On {date}, {person} deployed {tool} to production",
-             "{person} deployed {tool} to production on {date}"),
-            ("{project} launched on {date}",
-             "{project} went live on {date}"),
+            ("On {date}, {person} deployed {tool} to production", "{person} deployed {tool} to production on {date}"),
+            ("{project} launched on {date}", "{project} went live on {date}"),
         ],
         "preference": [
-            ("{person} prefers {tool} over {tool2} for {task}",
-             "{person} favors using {tool} instead of {tool2} for {task}"),
+            ("{person} prefers {tool} over {tool2} for {task}", "{person} favors using {tool} instead of {tool2} for {task}"),
         ],
         "relation": [
-            ("{person} works with {person2} on {project}",
-             "{person} and {person2} collaborate on {project}"),
-            ("{org} uses {tool} for {task}",
-             "{org} relies on {tool} for {task}"),
+            ("{person} works with {person2} on {project}", "{person} and {person2} collaborate on {project}"),
+            ("{org} uses {tool} for {task}", "{org} relies on {tool} for {task}"),
         ],
         "negation": [
-            ("{person} does not use {tool} anymore",
-             "{person} stopped using {tool}"),
-            ("{org} no longer supports {tool}",
-             "{org} deprecated {tool}"),
+            ("{person} does not use {tool} anymore", "{person} stopped using {tool}"),
+            ("{org} no longer supports {tool}", "{org} deprecated {tool}"),
         ],
         "plan": [
-            ("{person} plans to migrate {project} to {tool} by {date}",
-             "{person} intends to move {project} to {tool} before {date}"),
+            ("{person} plans to migrate {project} to {tool} by {date}", "{person} intends to move {project} to {tool} before {date}"),
         ],
         "state": [
-            ("{project} is currently in {phase}",
-             "{project} is at the {phase} stage"),
-            ("{tool} has {count} daily active users",
-             "{tool} serves {count} users daily"),
+            ("{project} is currently in {phase}", "{project} is at the {phase} stage"),
+            ("{tool} has {count} daily active users", "{tool} serves {count} users daily"),
         ],
     }
 
@@ -315,9 +386,11 @@ def make_fact_example():
         p1, p2 = random.sample(PEOPLE, 2)
         t1, t2 = random.sample(TOOLS, 2)
         vals = {
-            "person": p1, "person2": p2,
+            "person": p1,
+            "person2": p2,
             "org": random.choice(ORGS),
-            "tool": t1, "tool2": t2,
+            "tool": t1,
+            "tool2": t2,
             "project": random.choice(PROJECTS),
             "date": random.choice(DATES),
             "role": random.choice(["CTO", "lead engineer", "architect", "PM", "SRE"]),
@@ -344,7 +417,7 @@ def make_fact_example():
         "messages": [
             {"role": "system", "content": FACT_SYSTEM},
             {"role": "user", "content": FACT_PROMPT.format(text=text)},
-            {"role": "assistant", "content": output}
+            {"role": "assistant", "content": output},
         ]
     }
 
@@ -365,22 +438,26 @@ def make_compression_example():
     for i in range(n_excerpts):
         date = random.choice(DATES)
         if random.random() < 0.7:  # 70% relevant
-            excerpt = random.choice([
-                f"[{date}] {person} mentioned that {project} needs to migrate to {tool} before the deadline.",
-                f"[{date}] Decision: The team will use {tool} for the {project} backend. {person} approved.",
-                f"[{date}] {person} reported that {project} is running {random.randint(10,50)}% slower after the update.",
-                f"[{date}] Sprint review: {person} completed the {tool} integration for {project}.",
-                f"[{date}] {person} prefers {tool} because it handles concurrent writes better.",
-            ])
+            excerpt = random.choice(
+                [
+                    f"[{date}] {person} mentioned that {project} needs to migrate to {tool} before the deadline.",
+                    f"[{date}] Decision: The team will use {tool} for the {project} backend. {person} approved.",
+                    f"[{date}] {person} reported that {project} is running {random.randint(10, 50)}% slower after the update.",
+                    f"[{date}] Sprint review: {person} completed the {tool} integration for {project}.",
+                    f"[{date}] {person} prefers {tool} because it handles concurrent writes better.",
+                ]
+            )
             relevant_facts.append(f"{person} is involved with {project} using {tool} (as of {date})")
         else:  # 30% noise
             other_person = random.choice(PEOPLE)
-            excerpt = random.choice([
-                f"[{date}] {other_person} discussed lunch plans for the team.",
-                f"[{date}] Office WiFi was down for 30 minutes.",
-                f"[{date}] {other_person} shared a meme in the general channel.",
-            ])
-        excerpts.append(f"Excerpt {i+1}: {excerpt}")
+            excerpt = random.choice(
+                [
+                    f"[{date}] {other_person} discussed lunch plans for the team.",
+                    f"[{date}] Office WiFi was down for 30 minutes.",
+                    f"[{date}] {other_person} shared a meme in the general channel.",
+                ]
+            )
+        excerpts.append(f"Excerpt {i + 1}: {excerpt}")
 
     context = "\n".join(excerpts)
 
@@ -415,7 +492,7 @@ def make_compression_example():
 
     # Generate observations
     observations = []
-    for i, fact in enumerate(relevant_facts[:random.randint(3, 6)], 1):
+    for i, fact in enumerate(relevant_facts[: random.randint(3, 6)], 1):
         observations.append(f"{i}. {fact}.")
     output = "\n".join(observations) if observations else "1. No relevant information found in the provided excerpts."
 
@@ -425,19 +502,21 @@ def make_compression_example():
         "messages": [
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": user_msg},
-            {"role": "assistant", "content": output}
+            {"role": "assistant", "content": output},
         ]
     }
 
 
 def make_rerank_example():
     """Generate one reranking training example."""
-    query = random.choice([
-        f"How does {random.choice(PROJECTS)} handle authentication?",
-        f"What did {random.choice(PEOPLE)} decide about {random.choice(TOOLS)}?",
-        f"When was {random.choice(PROJECTS)} last deployed?",
-        f"Who is responsible for {random.choice(TOOLS)} maintenance?",
-    ])
+    query = random.choice(
+        [
+            f"How does {random.choice(PROJECTS)} handle authentication?",
+            f"What did {random.choice(PEOPLE)} decide about {random.choice(TOOLS)}?",
+            f"When was {random.choice(PROJECTS)} last deployed?",
+            f"Who is responsible for {random.choice(TOOLS)} maintenance?",
+        ]
+    )
 
     n_candidates = random.randint(3, 6)
     candidates = []
@@ -446,13 +525,15 @@ def make_rerank_example():
     for i in range(n_candidates):
         cid = f"B-{random.randint(1000, 9999)}"
         relevance = random.random()
-        excerpt = random.choice([
-            f"{random.choice(PEOPLE)} discussed {random.choice(PROJECTS)} deployment using {random.choice(TOOLS)}.",
-            f"Decision: Migrate to {random.choice(TOOLS)} for better performance.",
-            f"{random.choice(PEOPLE)} reported a bug in {random.choice(PROJECTS)}.",
-            f"Meeting notes from {random.choice(DATES)} about infrastructure.",
-            f"{random.choice(ORGS)} partnership update regarding {random.choice(PROJECTS)}.",
-        ])
+        excerpt = random.choice(
+            [
+                f"{random.choice(PEOPLE)} discussed {random.choice(PROJECTS)} deployment using {random.choice(TOOLS)}.",
+                f"Decision: Migrate to {random.choice(TOOLS)} for better performance.",
+                f"{random.choice(PEOPLE)} reported a bug in {random.choice(PROJECTS)}.",
+                f"Meeting notes from {random.choice(DATES)} about infrastructure.",
+                f"{random.choice(ORGS)} partnership update regarding {random.choice(PROJECTS)}.",
+            ]
+        )
         candidates.append(f"[{cid}] {excerpt}")
         scores.append({"id": cid, "score": round(relevance, 2)})
 
@@ -465,7 +546,7 @@ def make_rerank_example():
         "messages": [
             {"role": "system", "content": RERANK_SYSTEM},
             {"role": "user", "content": RERANK_PROMPT.format(query=query, candidates=candidates_text)},
-            {"role": "assistant", "content": output}
+            {"role": "assistant", "content": output},
         ]
     }
 
@@ -473,6 +554,7 @@ def make_rerank_example():
 # ---------------------------------------------------------------------------
 # Load real workspace data for augmentation
 # ---------------------------------------------------------------------------
+
 
 def load_workspace_blocks(workspace_path):
     """Load real blocks from mind-mem workspace for training data."""
@@ -486,7 +568,7 @@ def load_workspace_blocks(workspace_path):
         with open(fpath) as f:
             content = f.read()
         # Extract block text between markers
-        for match in re.finditer(r'\[([A-Z]+-\d{8}-\d+)\](.*?)(?=\n\[|\Z)', content, re.DOTALL):
+        for match in re.finditer(r"\[([A-Z]+-\d{8}-\d+)\](.*?)(?=\n\[|\Z)", content, re.DOTALL):
             bid = match.group(1)
             text = match.group(2).strip()[:500]
             if len(text) > 50:
@@ -510,6 +592,7 @@ def make_real_entity_example(block):
 # ---------------------------------------------------------------------------
 # Main generator
 # ---------------------------------------------------------------------------
+
 
 def main():
     output_path = "mind7b_train.jsonl"
@@ -554,11 +637,8 @@ def main():
     print(f"Output: {output_path}")
 
     # Stats
-    total_tokens_est = sum(
-        sum(len(m["content"].split()) for m in ex["messages"])
-        for ex in examples
-    )
-    print(f"Est. total words: {total_tokens_est:,} (~{total_tokens_est*1.3:.0f} tokens)")
+    total_tokens_est = sum(sum(len(m["content"].split()) for m in ex["messages"]) for ex in examples)
+    print(f"Est. total words: {total_tokens_est:,} (~{total_tokens_est * 1.3:.0f} tokens)")
 
 
 if __name__ == "__main__":

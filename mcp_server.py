@@ -10,22 +10,17 @@ import sys
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Mind-Mem MCP Server")
-    parser.add_argument(
-        "--transport", choices=["stdio", "http"], default="stdio", help="Transport protocol (default: stdio)"
-    )
+    parser.add_argument("--transport", choices=["stdio", "http"], default="stdio", help="Transport protocol (default: stdio)")
     parser.add_argument("--port", type=int, default=8765, help="HTTP port (only used with --transport http)")
     parser.add_argument("--token", default=None, help="Bearer token for HTTP auth (or set MIND_MEM_TOKEN env var)")
     parser.add_argument("--watch", action="store_true", help="Auto-reindex when workspace .md files change")
-    parser.add_argument(
-        "--watch-interval", type=float, default=5.0, help="File watch polling interval in seconds (default: 5.0)"
-    )
+    parser.add_argument("--watch-interval", type=float, default=5.0, help="File watch polling interval in seconds (default: 5.0)")
     return parser
 
 
 def _missing_fastmcp() -> int:
     print(
-        "Error: fastmcp is required to run the Mind-Mem MCP server. "
-        "Install the 'mcp' extra or `pip install fastmcp==2.14.5`.",
+        "Error: fastmcp is required to run the Mind-Mem MCP server. Install the 'mcp' extra or `pip install fastmcp==2.14.5`.",
         file=sys.stderr,
     )
     return 1

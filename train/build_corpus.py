@@ -20,6 +20,7 @@ Sources (deterministic — no LLM calls, no network):
 The file is idempotent: running build_corpus.py twice produces the
 same output bytes.
 """
+
 from __future__ import annotations
 
 import ast
@@ -66,9 +67,7 @@ def _harvest_mcp_tools() -> Iterator[dict]:
         if not isinstance(node, ast.FunctionDef):
             continue
         if not any(
-            (isinstance(d, ast.Attribute) and d.attr == "tool")
-            or (isinstance(d, ast.Name) and d.id == "tool")
-            for d in node.decorator_list
+            (isinstance(d, ast.Attribute) and d.attr == "tool") or (isinstance(d, ast.Name) and d.id == "tool") for d in node.decorator_list
         ):
             continue
         doc = ast.get_docstring(node) or ""
@@ -80,44 +79,54 @@ def _harvest_mcp_tools() -> Iterator[dict]:
         hint = _usage_hint(summary)
 
         # Variant 1 — documentation lookup.
-        yield {"messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"What does the mind-mem MCP tool `{tool_name}` do?"},
-            {"role": "assistant", "content": f"`{tool_name}({args})` — {summary}"},
-        ]}
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"What does the mind-mem MCP tool `{tool_name}` do?"},
+                {"role": "assistant", "content": f"`{tool_name}({args})` — {summary}"},
+            ]
+        }
         # Variant 2 — reverse lookup by intent.
-        yield {"messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Which MCP tool should I call to {hint}?"},
-            {"role": "assistant", "content": f"Call `{tool_name}`. Signature: `{tool_name}({args})`."},
-        ]}
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"Which MCP tool should I call to {hint}?"},
+                {"role": "assistant", "content": f"Call `{tool_name}`. Signature: `{tool_name}({args})`."},
+            ]
+        }
         # Variant 3 — short direct form.
-        yield {"messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Name the mind-mem tool for: {hint}."},
-            {"role": "assistant", "content": f"`{tool_name}`."},
-        ]}
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"Name the mind-mem tool for: {hint}."},
+                {"role": "assistant", "content": f"`{tool_name}`."},
+            ]
+        }
         # Variant 4 — signature question.
-        yield {"messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"What is the signature of `{tool_name}`?"},
-            {"role": "assistant", "content": f"`{tool_name}({args})`"},
-        ]}
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"What is the signature of `{tool_name}`?"},
+                {"role": "assistant", "content": f"`{tool_name}({args})`"},
+            ]
+        }
         # Variant 5 — what returns.
-        yield {"messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"What does `{tool_name}` return?"},
-            {"role": "assistant", "content": (
-                f"`{tool_name}` returns a JSON envelope. From the docstring:\n\n{doc.strip()}"
-            )},
-        ]}
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"What does `{tool_name}` return?"},
+                {"role": "assistant", "content": (f"`{tool_name}` returns a JSON envelope. From the docstring:\n\n{doc.strip()}")},
+            ]
+        }
         # Variant 6 — how phrased differently.
         for alt in _paraphrase_usage(hint):
-            yield {"messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": alt},
-                {"role": "assistant", "content": f"Use the `{tool_name}` MCP tool."},
-            ]}
+            yield {
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": alt},
+                    {"role": "assistant", "content": f"Use the `{tool_name}` MCP tool."},
+                ]
+            }
 
 
 def _paraphrase_usage(hint: str) -> list[str]:
@@ -159,7 +168,7 @@ def _usage_hint(summary: str) -> str:
     text = summary.strip().rstrip(".")
     for lead in ("Return ", "Returns ", "Get ", "List ", "Compute "):
         if text.startswith(lead):
-            text = text[len(lead):]
+            text = text[len(lead) :]
             break
     return text.lower()
 
@@ -203,31 +212,31 @@ def _harvest_block_schemas() -> Iterator[dict]:
     for short, desc, fields in _BLOCK_TYPES:
         # Canonical template (always starts with [SHORT-DATE-NNN] so the
         # model learns the exact ID prefix).
-        example = f"[{short}-20260413-001]\n" + "\n".join(
-            f"{f}: <{f.lower()}>" for f in fields
-        )
+        example = f"[{short}-20260413-001]\n" + "\n".join(f"{f}: <{f.lower()}>" for f in fields)
         for q in prompts_show:
-            yield {"messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": q.format(short=short)},
-                {"role": "assistant", "content": f"{desc}\n\n```\n{example}\n```"},
-            ]}
+            yield {
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": q.format(short=short)},
+                    {"role": "assistant", "content": f"{desc}\n\n```\n{example}\n```"},
+                ]
+            }
         for q in prompts_fields:
-            yield {"messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": q.format(short=short)},
-                {"role": "assistant", "content": (
-                    f"A mind-mem {short} block requires: "
-                    + ", ".join(f"`{f}`" for f in fields)
-                    + "."
-                )},
-            ]}
+            yield {
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": q.format(short=short)},
+                    {"role": "assistant", "content": (f"A mind-mem {short} block requires: " + ", ".join(f"`{f}`" for f in fields) + ".")},
+                ]
+            }
         # What type is this by ID? (ID-prefix → type direction)
-        yield {"messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"A block ID starts with `[{short}-`. What type is it?"},
-            {"role": "assistant", "content": f"`{short}` — {desc}"},
-        ]}
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"A block ID starts with `[{short}-`. What type is it?"},
+                {"role": "assistant", "content": f"`{short}` — {desc}"},
+            ]
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -284,10 +293,7 @@ def _harvest_docs() -> Iterator[dict]:
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {
                         "role": "user",
-                        "content": (
-                            f"Explain the mind-mem documentation section "
-                            f"'{heading}' from {md.name}."
-                        ),
+                        "content": (f"Explain the mind-mem documentation section '{heading}' from {md.name}."),
                     },
                     {
                         "role": "assistant",
@@ -451,14 +457,20 @@ _WORKFLOWS: list[dict] = [
         "scenario": "verify",
         "turns": [
             ("user", "How do I verify the audit chain integrity?"),
-            ("assistant", "Call the `verify_chain` MCP tool. It walks the hash-chained `EvidenceChain` and returns `{ok: true, entries: N}` when the chain is intact or flags the first broken entry otherwise."),
+            (
+                "assistant",
+                "Call the `verify_chain` MCP tool. It walks the hash-chained `EvidenceChain` and returns `{ok: true, entries: N}` when the chain is intact or flags the first broken entry otherwise.",
+            ),
         ],
     },
     {
         "scenario": "governance-bench",
         "turns": [
             ("user", "Run the full governance benchmark suite."),
-            ("assistant", "Call `governance_health_bench`. It exercises contradiction detection, audit completeness, drift detection, and scalability in one pass, returning a JSON report with per-suite pass/fail."),
+            (
+                "assistant",
+                "Call `governance_health_bench`. It exercises contradiction detection, audit completeness, drift detection, and scalability in one pass, returning a JSON report with per-suite pass/fail.",
+            ),
         ],
     },
 ]
@@ -475,11 +487,13 @@ def _harvest_workflow_paraphrases() -> Iterator[dict]:
         if not answer:
             continue
         for q in phrasings:
-            yield {"messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": q},
-                {"role": "assistant", "content": answer},
-            ]}
+            yield {
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": q},
+                    {"role": "assistant", "content": answer},
+                ]
+            }
 
 
 # ---------------------------------------------------------------------------
@@ -639,11 +653,13 @@ def _harvest_tool_citations() -> Iterator[dict]:
     for q, tool in _TOOL_CITATIONS:
         q_lower = q[0].lower() + q[1:] if q else q
         for qp, ap in phrasings:
-            yield {"messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": qp.format(q=q, q_lower=q_lower)},
-                {"role": "assistant", "content": ap.format(tool=tool)},
-            ]}
+            yield {
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": qp.format(q=q, q_lower=q_lower)},
+                    {"role": "assistant", "content": ap.format(tool=tool)},
+                ]
+            }
     # Imperative forms — "Apply a staged proposal." → "`approve_apply`."
     imp_phrasings = [
         ("{q}", "`{tool}`."),
@@ -653,11 +669,13 @@ def _harvest_tool_citations() -> Iterator[dict]:
     ]
     for q, tool in _TOOL_IMPERATIVES:
         for qp, ap in imp_phrasings:
-            yield {"messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": qp.format(q=q)},
-                {"role": "assistant", "content": ap.format(tool=tool)},
-            ]}
+            yield {
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": qp.format(q=q)},
+                    {"role": "assistant", "content": ap.format(tool=tool)},
+                ]
+            }
 
 
 # ---------------------------------------------------------------------------
@@ -694,11 +712,13 @@ def _harvest_workflow_chains() -> Iterator[dict]:
     should BE the sequence of tool names, not an explanation."""
     for q, chain in _WORKFLOW_CHAINS:
         for prefix in ("", "In mind-mem: ", "Mind-mem workflow: "):
-            yield {"messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prefix + q if prefix else q},
-                {"role": "assistant", "content": chain},
-            ]}
+            yield {
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prefix + q if prefix else q},
+                    {"role": "assistant", "content": chain},
+                ]
+            }
 
 
 def _harvest_workflows() -> Iterator[dict]:
@@ -717,9 +737,7 @@ def _harvest_workflows() -> Iterator[dict]:
 def _dedup(entries: Iterable[dict]) -> Iterator[dict]:
     seen: set[str] = set()
     for e in entries:
-        key = hashlib.sha256(
-            json.dumps(e, sort_keys=True, ensure_ascii=False).encode("utf-8")
-        ).hexdigest()
+        key = hashlib.sha256(json.dumps(e, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
         if key in seen:
             continue
         seen.add(key)
