@@ -17,7 +17,7 @@ from mind_mem.knowledge_graph import (
 
 @pytest.fixture()
 def graph():
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         yield KnowledgeGraph(str(Path(td) / "kg.db"))
 
 
@@ -219,7 +219,7 @@ class TestQueries:
         assert "extracted_at" in edges[0].metadata
 
     def test_context_manager_closes_connection(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             path = str(Path(td) / "kg.db")
             with KnowledgeGraph(path) as kg:
                 kg.add_edge("A", Predicate.DEPENDS_ON, "B", source_block_id="D-001")

@@ -10,7 +10,7 @@ from mind_mem.init_workspace import init
 
 def test_init_creates_directories():
     """init() creates the expected directory structure."""
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         ws = os.path.join(td, "ws")
         os.makedirs(ws)
         init(ws)
@@ -20,7 +20,7 @@ def test_init_creates_directories():
 
 def test_init_creates_memory_md():
     """init() creates MEMORY.md."""
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         ws = os.path.join(td, "ws")
         os.makedirs(ws)
         init(ws)
@@ -29,7 +29,7 @@ def test_init_creates_memory_md():
 
 def test_init_idempotent():
     """Calling init() twice doesn't error."""
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         ws = os.path.join(td, "ws")
         os.makedirs(ws)
         init(ws)
@@ -39,7 +39,7 @@ def test_init_idempotent():
 
 def test_init_preserves_existing_files():
     """init() doesn't overwrite existing files."""
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         ws = os.path.join(td, "ws")
         os.makedirs(ws)
         init(ws)
@@ -54,7 +54,7 @@ def test_init_preserves_existing_files():
 
 def test_init_nested_path():
     """init() works with deeply nested paths."""
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         ws = os.path.join(td, "a", "b", "c")
         os.makedirs(ws)
         init(ws)

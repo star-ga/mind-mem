@@ -215,7 +215,7 @@ class TestPerformanceStress(unittest.TestCase):
 
     def test_1000_blocks_recall_under_5_seconds(self):
         """Recall over 1000 blocks completes in under 5 seconds."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             content = _generate_blocks(1000)
             ws = _setup_workspace(tmpdir, decisions_content=content)
 
@@ -233,7 +233,7 @@ class TestPerformanceStress(unittest.TestCase):
 
     def test_2000_blocks_returns_results(self):
         """Recall over 2000 blocks still returns results without error."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             content = _generate_blocks(2000)
             ws = _setup_workspace(tmpdir, decisions_content=content)
 
@@ -244,7 +244,7 @@ class TestPerformanceStress(unittest.TestCase):
 
     def test_many_blocks_graph_boost_no_memory_blowup(self):
         """Graph boost on a large corpus completes without excessive memory use."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             # Create blocks with cross-references to exercise graph traversal
             def topic_with_xref(i):
                 ref_id = f"D-20260219-{((i % 50) + 1):03d}"
@@ -268,7 +268,7 @@ class TestPerformanceStress(unittest.TestCase):
 
     def test_limit_respected_with_many_blocks(self):
         """The limit parameter is respected even when the corpus is large."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             content = _generate_blocks(500)
             ws = _setup_workspace(tmpdir, decisions_content=content)
 

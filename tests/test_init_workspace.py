@@ -197,7 +197,7 @@ class TestLoadConfig(unittest.TestCase):
     """Tests for load_config() which loads + validates mind-mem.json."""
 
     def test_loads_and_validates(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             cfg = {"recall": {"bm25_k1": 99.0, "backend": "bm25"}}
             with open(os.path.join(ws, "mind-mem.json"), "w") as f:
                 json.dump(cfg, f)
@@ -205,12 +205,12 @@ class TestLoadConfig(unittest.TestCase):
             self.assertAlmostEqual(result["recall"]["bm25_k1"], 3.0)
 
     def test_missing_file_returns_default(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             result = load_config(ws)
             self.assertEqual(result["version"], DEFAULT_CONFIG["version"])
 
     def test_malformed_json_returns_default(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             with open(os.path.join(ws, "mind-mem.json"), "w") as f:
                 f.write("{bad json")
             result = load_config(ws)
@@ -221,7 +221,7 @@ class TestInitWorkspace(unittest.TestCase):
     """Test that init() scaffolds a workspace correctly."""
 
     def test_creates_config(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             created, skipped = init(ws)
             config_path = os.path.join(ws, "mind-mem.json")
             self.assertTrue(os.path.exists(config_path))
@@ -230,7 +230,7 @@ class TestInitWorkspace(unittest.TestCase):
             self.assertEqual(cfg["version"], DEFAULT_CONFIG["version"])
 
     def test_does_not_overwrite(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
             with open(config_path, "w") as f:
                 json.dump({"custom": True}, f)

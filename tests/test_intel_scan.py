@@ -332,7 +332,7 @@ class TestDetectDrift(unittest.TestCase):
 
 class TestLoadAll(unittest.TestCase):
     def test_missing_files_return_empty(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             data = load_all(td)
             for key in data:
                 self.assertEqual(data[key], [])
@@ -364,7 +364,7 @@ class TestE2EProposalToApply(unittest.TestCase):
 
     def test_generated_proposals_pass_validation(self):
         """Proposals from generate_proposals() must pass validate_proposal()."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             self._scaffold_workspace(td)
 
             # Create contradictions that generate_proposals will act on
@@ -419,7 +419,7 @@ class TestE2EProposalToApply(unittest.TestCase):
 
     def test_proposal_budget_limits_output(self):
         """per_run budget limits the number of proposals generated."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             self._scaffold_workspace(td)
 
             # Override per_run=1
@@ -465,7 +465,7 @@ class TestProposalIdCollision(unittest.TestCase):
 
     def test_second_run_increments_from_existing(self):
         """Second run should start IDs after existing proposals."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             self._scaffold(td)
             c1 = [
                 {
@@ -513,7 +513,7 @@ class TestProposalRouting(unittest.TestCase):
 
     def test_edit_proposals_go_to_edits_file(self):
         """Type=edit proposals route to EDITS_PROPOSED.md."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             self._scaffold(td)
             contradictions = [
                 {

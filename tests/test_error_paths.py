@@ -28,7 +28,7 @@ class TestMalformedConfig(unittest.TestCase):
 
     def test_json_syntax_error(self):
         """load_config returns defaults when JSON has syntax errors."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
             with open(config_path, "w") as f:
                 f.write("{invalid json,,}")
@@ -37,7 +37,7 @@ class TestMalformedConfig(unittest.TestCase):
 
     def test_empty_file(self):
         """load_config returns defaults when config file is empty."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
             with open(config_path, "w"):
                 pass  # empty file
@@ -46,13 +46,13 @@ class TestMalformedConfig(unittest.TestCase):
 
     def test_missing_config_file(self):
         """load_config returns defaults when mind-mem.json doesn't exist."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             cfg = load_config(ws)
             self.assertIsInstance(cfg, dict)
 
     def test_config_is_array_not_object(self):
         """load_config handles JSON array instead of object."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
             with open(config_path, "w") as f:
                 json.dump([1, 2, 3], f)
@@ -61,7 +61,7 @@ class TestMalformedConfig(unittest.TestCase):
 
     def test_config_is_null(self):
         """load_config handles JSON null without crashing."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
             with open(config_path, "w") as f:
                 f.write("null")
@@ -72,7 +72,7 @@ class TestMalformedConfig(unittest.TestCase):
 
     def test_config_with_binary_garbage(self):
         """load_config returns defaults when config contains binary data."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
             with open(config_path, "wb") as f:
                 f.write(b"\x00\x01\x02\xff\xfe\xfd")
@@ -204,13 +204,13 @@ class TestEmptyWorkspaceRecall(unittest.TestCase):
 
     def test_recall_empty_workspace(self):
         """Recall on empty workspace returns empty list, no crash."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             results = recall(ws, "test query")
             self.assertEqual(results, [])
 
     def test_recall_workspace_with_empty_corpus_files(self):
         """Recall when corpus files exist but are empty returns empty list."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             os.makedirs(os.path.join(ws, "decisions"), exist_ok=True)
             with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
                 f.write("")
@@ -254,7 +254,7 @@ class TestMissingSOFallback(unittest.TestCase):
 
     def test_list_kernels_empty_dir(self):
         """list_kernels returns [] for directory with no .mind files."""
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
             result = list_kernels(d)
             self.assertEqual(result, [])
 
@@ -281,7 +281,7 @@ class TestMissingSOFallback(unittest.TestCase):
 
     def test_get_mind_dir_empty_workspace(self):
         """get_mind_dir with nonexistent workspace falls back."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             result = get_mind_dir(ws)
             self.assertIsInstance(result, str)
 
@@ -379,19 +379,19 @@ class TestLargeLimitValues(unittest.TestCase):
 
     def test_recall_limit_999999(self):
         """Recall with limit=999999 should work without OOM on empty workspace."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             results = recall(ws, "test query", limit=999999)
             self.assertEqual(results, [])
 
     def test_recall_limit_zero(self):
         """Recall with limit=0 returns empty list."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             results = recall(ws, "test query", limit=0)
             self.assertEqual(results, [])
 
     def test_recall_limit_one(self):
         """Recall with limit=1 returns at most one result."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             # Create a corpus file with a block
             os.makedirs(os.path.join(ws, "decisions"), exist_ok=True)
             with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
@@ -410,44 +410,44 @@ class TestBadQueryTypes(unittest.TestCase):
 
     def test_recall_empty_query(self):
         """Recall with empty string query returns empty list."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             results = recall(ws, "")
             self.assertEqual(results, [])
 
     def test_recall_whitespace_query(self):
         """Recall with whitespace-only query returns empty list."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             results = recall(ws, "   \t\n  ")
             self.assertEqual(results, [])
 
     def test_recall_stopwords_only_query(self):
         """Recall with only stopwords returns empty list."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             results = recall(ws, "the a an is are was for")
             self.assertEqual(results, [])
 
     def test_recall_very_long_query(self):
         """Recall with >10KB query should not crash."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             long_query = "database " * 2000  # ~16KB
             results = recall(ws, long_query)
             self.assertIsInstance(results, list)
 
     def test_recall_special_chars_query(self):
         """Recall with special characters in query should not crash."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             results = recall(ws, "!@#$%^&*()[]{}|\\/<>?")
             self.assertIsInstance(results, list)
 
     def test_recall_unicode_query(self):
         """Recall with unicode query should not crash."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             results = recall(ws, "\u4f60\u597d\u4e16\u754c \u3053\u3093\u306b\u3061\u306f \ud83d\ude80")
             self.assertIsInstance(results, list)
 
     def test_recall_numeric_query(self):
         """Recall with purely numeric query works."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             results = recall(ws, "12345678")
             self.assertIsInstance(results, list)
 
@@ -473,7 +473,7 @@ class TestRecallWithBadConfig(unittest.TestCase):
 
     def test_recall_with_corrupt_config(self):
         """Recall falls back gracefully when mind-mem.json is corrupt."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
             with open(config_path, "w") as f:
                 f.write("{broken json")
@@ -483,7 +483,7 @@ class TestRecallWithBadConfig(unittest.TestCase):
 
     def test_recall_with_config_wrong_type(self):
         """Recall handles config where recall section is wrong type."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
             with open(config_path, "w") as f:
                 json.dump({"recall": "not_a_dict"}, f)
@@ -492,7 +492,7 @@ class TestRecallWithBadConfig(unittest.TestCase):
 
     def test_recall_with_config_unknown_backend(self):
         """Recall handles config with unknown backend name."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
             with open(config_path, "w") as f:
                 json.dump({"recall": {"backend": "nonexistent_backend"}}, f)

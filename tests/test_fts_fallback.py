@@ -359,7 +359,7 @@ class TestConfigKeyValidation(unittest.TestCase):
         (default BM25 scan) without raising."""
         from mind_mem.recall import _load_backend
 
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             config = {
                 "recall": {
                     "backend": "scan",
@@ -378,7 +378,7 @@ class TestConfigKeyValidation(unittest.TestCase):
         """All valid keys with backend=scan still returns None (built-in BM25)."""
         from mind_mem.recall import _load_backend
 
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             config = {
                 "recall": {
                     "backend": "scan",
@@ -396,7 +396,7 @@ class TestConfigKeyValidation(unittest.TestCase):
         """Missing mind-mem.json returns None without error."""
         from mind_mem.recall import _load_backend
 
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             result = _load_backend(td)
             self.assertIsNone(result)
 
@@ -404,7 +404,7 @@ class TestConfigKeyValidation(unittest.TestCase):
         """Empty recall section defaults to scan (None)."""
         from mind_mem.recall import _load_backend
 
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             config = {"recall": {}}
             with open(os.path.join(td, "mind-mem.json"), "w") as f:
                 json.dump(config, f)
@@ -416,7 +416,7 @@ class TestConfigKeyValidation(unittest.TestCase):
         """Malformed JSON in mind-mem.json returns None without crash."""
         from mind_mem.recall import _load_backend
 
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             with open(os.path.join(td, "mind-mem.json"), "w") as f:
                 f.write("{invalid json content!!!")
 
@@ -427,7 +427,7 @@ class TestConfigKeyValidation(unittest.TestCase):
         """backend=sqlite returns the string 'sqlite'."""
         from mind_mem.recall import _load_backend
 
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             config = {"recall": {"backend": "sqlite"}}
             with open(os.path.join(td, "mind-mem.json"), "w") as f:
                 json.dump(config, f)

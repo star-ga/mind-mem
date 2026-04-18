@@ -12,7 +12,7 @@ import pytest
 
 @pytest.fixture()
 def minimal_workspace(monkeypatch):
-    tmp = tempfile.TemporaryDirectory()
+    tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
     ws = Path(tmp.name)
     (ws / "decisions").mkdir()
     (ws / "tasks").mkdir()

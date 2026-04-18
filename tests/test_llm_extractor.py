@@ -103,7 +103,7 @@ class TestEnrichResults:
             {"_id": "A", "excerpt": "foo", "score": 1.0},
             {"_id": "B", "excerpt": "bar", "score": 0.5},
         ]
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             # No config file -> disabled by default
             enriched = enrich_results(results, workspace=tmpdir)
             assert enriched is results
@@ -111,7 +111,7 @@ class TestEnrichResults:
 
     def test_returns_results_when_config_disabled(self):
         results = [{"_id": "C", "excerpt": "baz", "score": 0.8}]
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             config = {"extraction": {"enabled": False, "model": "qwen3.5:9b"}}
             with open(os.path.join(tmpdir, "mind-mem.json"), "w") as f:
                 json.dump(config, f)
@@ -123,14 +123,14 @@ class TestLoadConfig:
     """Test configuration loading from mind-mem.json."""
 
     def test_defaults_when_no_file(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             config = load_config(tmpdir)
             assert config["enabled"] is False
             assert config["model"] == "qwen3.5:9b"
             assert config["backend"] == "auto"
 
     def test_reads_from_file(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             cfg = {
                 "extraction": {
                     "enabled": True,
@@ -146,7 +146,7 @@ class TestLoadConfig:
             assert config["backend"] == "ollama"
 
     def test_partial_config_merges_with_defaults(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             cfg = {"extraction": {"enabled": True}}
             with open(os.path.join(tmpdir, "mind-mem.json"), "w") as f:
                 json.dump(cfg, f)
@@ -156,7 +156,7 @@ class TestLoadConfig:
             assert config["backend"] == "auto"  # default
 
     def test_invalid_json_returns_defaults(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             with open(os.path.join(tmpdir, "mind-mem.json"), "w") as f:
                 f.write("{invalid json!!!")
             config = load_config(tmpdir)
@@ -164,7 +164,7 @@ class TestLoadConfig:
             assert config["model"] == "qwen3.5:9b"
 
     def test_missing_extraction_section_returns_defaults(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             cfg = {"recall": {"backend": "scan"}}
             with open(os.path.join(tmpdir, "mind-mem.json"), "w") as f:
                 json.dump(cfg, f)

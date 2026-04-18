@@ -34,7 +34,7 @@ class TestTrajectoryId(unittest.TestCase):
         self.assertIsNotNone(_TRAJ_ID_RE.match(tid))
 
     def test_generate_id_increments(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             traj_dir = os.path.join(td, "trajectories")
             os.makedirs(traj_dir)
             # Create first trajectory

@@ -22,7 +22,7 @@ from mind_mem.context_core import (
 
 @pytest.fixture()
 def tmp_core():
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         yield str(Path(td) / "bundle.mmcore")
 
 

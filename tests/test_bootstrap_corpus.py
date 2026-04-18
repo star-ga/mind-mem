@@ -24,28 +24,28 @@ class TestScanMarkdownFile(unittest.TestCase):
 
     def test_empty_file_returns_empty(self):
         """An empty markdown file produces no signals."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             path = self._write_md(td, "")
             result = scan_markdown_file(path)
             self.assertEqual(result, [])
 
     def test_whitespace_only_file_returns_empty(self):
         """A file with only whitespace/blank lines produces no signals."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             path = self._write_md(td, "\n\n   \n\n")
             result = scan_markdown_file(path)
             self.assertEqual(result, [])
 
     def test_headers_only_returns_empty(self):
         """Markdown headers (# lines) are skipped by scan_log."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             path = self._write_md(td, "# We decided to use Rust\n## We will refactor\n")
             result = scan_markdown_file(path)
             self.assertEqual(result, [])
 
     def test_detects_decision_pattern(self):
         """'We decided to' triggers a decision signal."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             path = self._write_md(td, "We decided to adopt TypeScript for the frontend.\n")
             result = scan_markdown_file(path)
             self.assertEqual(len(result), 1)
@@ -56,7 +56,7 @@ class TestScanMarkdownFile(unittest.TestCase):
 
     def test_detects_task_pattern(self):
         """'need to' triggers a task signal."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             path = self._write_md(td, "We need to migrate the database to PostgreSQL.\n")
             result = scan_markdown_file(path)
             self.assertEqual(len(result), 1)
@@ -71,7 +71,7 @@ class TestScanMarkdownFile(unittest.TestCase):
             "We need to update the CI pipeline.\n"
             "Final line.\n"
         )
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             path = self._write_md(td, content)
             result = scan_markdown_file(path)
             self.assertEqual(len(result), 2)
@@ -80,7 +80,7 @@ class TestScanMarkdownFile(unittest.TestCase):
 
     def test_crossreferenced_lines_skipped(self):
         """Lines with existing cross-reference IDs (D-YYYYMMDD-NNN) are skipped."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             path = self._write_md(td, "We decided to use JWT (D-20260213-001).\n")
             result = scan_markdown_file(path)
             self.assertEqual(result, [])
@@ -88,7 +88,7 @@ class TestScanMarkdownFile(unittest.TestCase):
     def test_signal_has_required_fields(self):
         """Each signal dict contains all required keys."""
         required_keys = {"line", "type", "text", "pattern", "confidence", "priority", "structure"}
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             path = self._write_md(td, "We decided to deprecate the old API endpoint.\n")
             result = scan_markdown_file(path)
             self.assertEqual(len(result), 1)
@@ -97,7 +97,7 @@ class TestScanMarkdownFile(unittest.TestCase):
     def test_line_number_tracking(self):
         """Signal line number matches the actual line in the file."""
         content = "Line one.\nLine two.\nWe will migrate to Kubernetes.\n"
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             path = self._write_md(td, content)
             result = scan_markdown_file(path)
             self.assertEqual(len(result), 1)
@@ -105,7 +105,7 @@ class TestScanMarkdownFile(unittest.TestCase):
 
     def test_medium_confidence_pattern(self):
         """'switching to' triggers a medium-confidence decision."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             path = self._write_md(td, "We are switching to a monorepo layout.\n")
             result = scan_markdown_file(path)
             self.assertTrue(len(result) >= 1)
@@ -116,7 +116,7 @@ class TestScanMarkdownFile(unittest.TestCase):
     def test_text_truncated_to_150_chars(self):
         """Signal text is truncated to 150 characters max."""
         long_line = "We decided to " + "x" * 200 + "\n"
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             path = self._write_md(td, long_line)
             result = scan_markdown_file(path)
             self.assertEqual(len(result), 1)

@@ -144,7 +144,7 @@ class TestGraphBoostCrossRef(unittest.TestCase):
     def test_graph_boost_surfaces_referenced_block(self):
         """recall(graph_boost=True) should surface a block that is referenced
         by a matching block but does not itself match the query."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             decisions = "\n\n---\n\n".join(
                 [
                     _block(
@@ -170,7 +170,7 @@ class TestGraphBoostCrossRef(unittest.TestCase):
 
     def test_graph_boost_sets_via_graph_flag(self):
         """Blocks discovered via graph traversal should have via_graph=True."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             decisions = "\n\n---\n\n".join(
                 [
                     _block("D-20260101-001", "Deploy Redis caching layer", Context="Related to D-20260101-002"),
@@ -186,7 +186,7 @@ class TestGraphBoostCrossRef(unittest.TestCase):
     def test_graph_boost_increases_score(self):
         """A block that both matches the query AND is referenced by another
         matching block should have a higher score with graph boost."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             # Both blocks mention "encryption" so both get BM25 scores,
             # and they cross-reference each other so graph boost adds more.
             decisions = "\n\n---\n\n".join(
@@ -230,7 +230,7 @@ class TestGraphBoostCrossRef(unittest.TestCase):
 
     def test_graph_boost_chain_traversal(self):
         """Graph traversal should follow chains: A->B->C discovers C from A."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             decisions = "\n\n---\n\n".join(
                 [
                     _block("D-20260101-001", "Adopt Kubernetes for container orchestration", Context="See D-20260101-002"),
@@ -391,7 +391,7 @@ class TestLoadBackendConfigValidation(unittest.TestCase):
     def test_unknown_key_returns_none(self):
         """_load_backend with unknown recall config key should return None
         (scan fallback) and not crash."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             config = {
                 "recall": {
                     "backend": "scan",
@@ -407,7 +407,7 @@ class TestLoadBackendConfigValidation(unittest.TestCase):
 
     def test_valid_config_returns_none_for_scan(self):
         """_load_backend with valid keys and backend=scan returns None."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             config = {
                 "recall": {
                     "backend": "scan",
@@ -422,13 +422,13 @@ class TestLoadBackendConfigValidation(unittest.TestCase):
 
     def test_missing_config_returns_none(self):
         """_load_backend with no config file returns None (scan fallback)."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             result = _load_backend(td)
             self.assertIsNone(result)
 
     def test_malformed_json_returns_none(self):
         """_load_backend with malformed JSON returns None without crashing."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             with open(os.path.join(td, "mind-mem.json"), "w") as f:
                 f.write("{invalid json content!!!")
 
@@ -437,7 +437,7 @@ class TestLoadBackendConfigValidation(unittest.TestCase):
 
     def test_empty_recall_section_returns_none(self):
         """_load_backend with empty recall section returns None."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             config = {"recall": {}}
             with open(os.path.join(td, "mind-mem.json"), "w") as f:
                 json.dump(config, f)
@@ -467,7 +467,7 @@ class TestBlockCap(unittest.TestCase):
         50000 cap (that would be too slow for a unit test), but we verify
         the code path handles a moderately large block count gracefully.
         """
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             # Generate 500 blocks -- enough to exercise the iteration path
             # without making the test slow.
             parts = []
@@ -484,7 +484,7 @@ class TestBlockCap(unittest.TestCase):
 
     def test_recall_returns_within_limit(self):
         """Even with many blocks, recall should respect the limit parameter."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             parts = []
             for i in range(1, 101):
                 parts.append(f"[D-20260101-{i:03d}]\nStatement: Database migration step {i}\nStatus: active\nDate: 2026-01-01\n")
@@ -510,7 +510,7 @@ class TestGraphBoostIntegration(unittest.TestCase):
 
     def test_bidirectional_xref_both_blocks_found(self):
         """Two blocks that reference each other should both appear."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             decisions = "\n\n---\n\n".join(
                 [
                     _block("D-20260101-001", "Adopt GraphQL for the API gateway", Context="Complementary to D-20260101-002"),
@@ -526,7 +526,7 @@ class TestGraphBoostIntegration(unittest.TestCase):
 
     def test_graph_boost_with_task_references(self):
         """Cross-references between decisions and tasks should create edges."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             decisions = _block(
                 "D-20260101-001",
                 "Implement rate limiting on all endpoints",

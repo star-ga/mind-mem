@@ -15,7 +15,7 @@ from mind_mem.init_workspace import init  # noqa: E402
 
 
 def _make_workspace_with_blocks():
-    td = tempfile.TemporaryDirectory()
+    td = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
     ws = os.path.join(td.name, "ws")
     os.makedirs(ws)
     init(ws)
@@ -38,7 +38,7 @@ def test_scan_workspace_no_crash():
 
 def test_scan_empty_workspace():
     """Scanning empty workspace returns clean result."""
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         ws = os.path.join(td, "ws")
         os.makedirs(ws)
         init(ws)

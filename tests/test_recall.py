@@ -118,19 +118,19 @@ class TestRecall(unittest.TestCase):
         return tmpdir
 
     def test_empty_query(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             ws = self._setup_workspace(td)
             results = recall(ws, "")
             self.assertEqual(results, [])
 
     def test_no_results(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             ws = self._setup_workspace(td, "# Decisions\n")
             results = recall(ws, "xyznonexistent")
             self.assertEqual(results, [])
 
     def test_finds_matching_block(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             content = "[D-20260213-001]\nStatement: Use JWT for authentication\nStatus: active\nDate: 2026-02-13\n"
             ws = self._setup_workspace(td, content)
             results = recall(ws, "JWT authentication")
@@ -138,7 +138,7 @@ class TestRecall(unittest.TestCase):
             self.assertEqual(results[0]["_id"], "D-20260213-001")
 
     def test_limit(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             content = ""
             for i in range(1, 6):
                 content += f"[D-20260213-{i:03d}]\nStatement: Auth decision {i}\nStatus: active\n\n---\n\n"
@@ -147,7 +147,7 @@ class TestRecall(unittest.TestCase):
             self.assertLessEqual(len(results), 2)
 
     def test_active_only_filter(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             content = (
                 "[D-20260213-001]\nStatement: JWT auth\nStatus: active\n\n---\n\n"
                 "[D-20260213-002]\nStatement: JWT superseded\nStatus: superseded\n"
@@ -160,7 +160,7 @@ class TestRecall(unittest.TestCase):
 
     def test_boosts_active_status(self):
         """Active blocks should score higher than non-active ones."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             content = (
                 "[D-20260213-001]\nStatement: JWT token auth\nStatus: superseded\nDate: 2026-02-13\n\n---\n\n"
                 "[D-20260213-002]\nStatement: JWT token auth\nStatus: active\nDate: 2026-02-13\n"
@@ -226,7 +226,7 @@ class TestGraphRecall(unittest.TestCase):
 
     def test_graph_discovers_neighbor(self):
         """Graph recall should surface blocks connected to keyword matches."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             decisions = "[D-20260213-001]\nStatement: Use PostgreSQL database\nStatus: active\nDate: 2026-02-13\n"
             tasks = (
                 "[T-20260213-001]\nTitle: Set up database migration\n"
@@ -251,7 +251,7 @@ class TestGraphRecall(unittest.TestCase):
 
     def test_graph_boost_marks_results(self):
         """Graph-discovered results should have via_graph flag."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             decisions = "[D-20260213-001]\nStatement: Use PostgreSQL database\nStatus: active\nDate: 2026-02-13\n"
             tasks = (
                 "[T-20260213-001]\nTitle: Setup migration\n"

@@ -98,7 +98,7 @@ class TestAgentFormatterContent:
 
 @pytest.fixture()
 def vault():
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         root = Path(td)
         (root / "decisions").mkdir()
         (root / "tasks").mkdir()

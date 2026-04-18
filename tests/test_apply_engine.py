@@ -28,24 +28,24 @@ from mind_mem.apply_engine import (
 
 class TestSafeResolve(unittest.TestCase):
     def test_normal_path(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             target = os.path.join(td, "decisions")
             os.makedirs(target)
             result = _safe_resolve(td, "decisions")
             self.assertEqual(result, os.path.realpath(target))
 
     def test_rejects_traversal(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             with self.assertRaises(ValueError):
                 _safe_resolve(td, "../../../etc/passwd")
 
     def test_rejects_absolute_path(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             with self.assertRaises(ValueError):
                 _safe_resolve(td, "/etc/passwd")
 
     def test_rejects_symlink_escape(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             # Create symlink that points outside workspace
             link_path = os.path.join(td, "escape_link")
             os.symlink("/tmp", link_path)
@@ -53,7 +53,7 @@ class TestSafeResolve(unittest.TestCase):
                 _safe_resolve(td, "escape_link/should_fail")
 
     def test_allows_internal_symlink(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             real_dir = os.path.join(td, "real")
             os.makedirs(real_dir)
             link_path = os.path.join(td, "link")
@@ -63,7 +63,7 @@ class TestSafeResolve(unittest.TestCase):
             self.assertEqual(result, os.path.realpath(real_dir))
 
     def test_rejects_dotdot_in_middle(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             with self.assertRaises(ValueError):
                 _safe_resolve(td, "decisions/../../../etc/passwd")
 
@@ -127,7 +127,7 @@ class TestSnapshotRollback(unittest.TestCase):
 
     def test_rollback_removes_new_files(self):
         """Files created after snapshot must be deleted on restore."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             # Set up workspace structure
             os.makedirs(os.path.join(ws, "decisions"))
             original = os.path.join(ws, "decisions", "DECISIONS.md")
@@ -153,7 +153,7 @@ class TestSnapshotRollback(unittest.TestCase):
 
     def test_rollback_restores_content(self):
         """Modified files must revert to snapshot content."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             os.makedirs(os.path.join(ws, "decisions"))
             original = os.path.join(ws, "decisions", "DECISIONS.md")
             with open(original, "w") as f:
@@ -176,7 +176,7 @@ class TestSnapshotIntelligenceRestore(unittest.TestCase):
 
     def test_rollback_restores_intelligence_files(self):
         """Intelligence files (e.g., SIGNALS.md) must be restored on rollback."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             os.makedirs(os.path.join(ws, "decisions"))
             os.makedirs(os.path.join(ws, "intelligence"))
             signals = os.path.join(ws, "intelligence", "SIGNALS.md")
@@ -201,7 +201,7 @@ class TestNoTouchWindow(unittest.TestCase):
     """Verify no-touch window cooldown logic."""
 
     def test_no_previous_apply(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             os.makedirs(os.path.join(ws, "memory"))
             with open(os.path.join(ws, "memory", "intel-state.json"), "w") as f:
                 json.dump({}, f)
@@ -209,7 +209,7 @@ class TestNoTouchWindow(unittest.TestCase):
             self.assertTrue(ok)
 
     def test_recent_apply_blocks(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             os.makedirs(os.path.join(ws, "memory"))
             recent = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
             with open(os.path.join(ws, "memory", "intel-state.json"), "w") as f:
@@ -219,7 +219,7 @@ class TestNoTouchWindow(unittest.TestCase):
             self.assertIn("No-touch window", reason)
 
     def test_old_apply_clears(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             os.makedirs(os.path.join(ws, "memory"))
             old = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
             with open(os.path.join(ws, "memory", "intel-state.json"), "w") as f:
@@ -232,7 +232,7 @@ class TestFingerprintDedup(unittest.TestCase):
     """Verify fingerprint dedup skips self-match."""
 
     def test_self_match_not_duplicate(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             os.makedirs(os.path.join(ws, "intelligence", "proposed"), exist_ok=True)
             proposal = {
                 "ProposalId": "P-20260214-001",
@@ -264,7 +264,7 @@ class TestFreshInitValidate(unittest.TestCase):
     """Verify fresh workspace passes validate.sh with 0 issues."""
 
     def test_fresh_init_passes_validate(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -282,18 +282,18 @@ class TestRollbackPathTraversal(unittest.TestCase):
     """Rollback must reject path-traversal receipt_ts values."""
 
     def test_rejects_traversal(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             ok = rollback(ws, "../../../etc")
             self.assertFalse(ok)
 
     def test_rejects_arbitrary_string(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             ok = rollback(ws, "foo; rm -rf /")
             self.assertFalse(ok)
 
     def test_accepts_valid_format(self):
         """Valid format but nonexistent dir should fail gracefully."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             ok = rollback(ws, "20260214-120000")
             self.assertFalse(ok)  # Dir doesn't exist, but format is valid
 
@@ -336,7 +336,7 @@ class TestValidateUninitWorkspace(unittest.TestCase):
 
     def test_rejects_uninitialized_workspace(self):
         """Running on a dir with no mind-mem.json should exit with clear error."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             validate_sh = os.path.join(os.path.dirname(__file__), "..", "src", "mind_mem", "validate.sh")
             result = subprocess.run(
                 ["bash", validate_sh, ws],
@@ -354,7 +354,7 @@ class TestModeGate(unittest.TestCase):
     """apply_proposal must reject in detect_only mode."""
 
     def test_detect_only_blocks_apply(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -364,7 +364,7 @@ class TestModeGate(unittest.TestCase):
             self.assertIn("detect_only", msg)
 
     def test_detect_only_blocks_dry_run(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -374,7 +374,7 @@ class TestModeGate(unittest.TestCase):
 
     def test_propose_mode_allows_apply(self):
         """In propose mode, apply should proceed past mode gate (will fail on missing proposal)."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -398,7 +398,7 @@ class TestBacklogLimit(unittest.TestCase):
         """count == limit should be exceeded (>= per M6)."""
         from mind_mem.apply_engine import check_backlog_limit
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -425,7 +425,7 @@ class TestBacklogLimit(unittest.TestCase):
         """count < limit should NOT be exceeded."""
         from mind_mem.apply_engine import check_backlog_limit
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -454,7 +454,7 @@ class TestFingerprintDedupCollision(unittest.TestCase):
         """Two proposals targeting same block with same ops should collide."""
         from mind_mem.apply_engine import check_fingerprint_dedup, compute_fingerprint
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -508,7 +508,7 @@ class TestFingerprintDedupCollision(unittest.TestCase):
         """A proposal should not collide with itself."""
         from mind_mem.apply_engine import check_fingerprint_dedup, compute_fingerprint
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -552,7 +552,7 @@ class TestSnapshotRecursionPrevention(unittest.TestCase):
         """intelligence/applied/ must NOT be copied into new snapshots."""
         from mind_mem.apply_engine import create_snapshot
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -582,7 +582,7 @@ class TestMinimalSnapshot(unittest.TestCase):
         """When files_touched is provided, only those files + config are snapshotted."""
         from mind_mem.apply_engine import create_snapshot
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -607,7 +607,7 @@ class TestMinimalSnapshot(unittest.TestCase):
         """When files_touched is None, full snapshot is created."""
         from mind_mem.apply_engine import create_snapshot
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -627,7 +627,7 @@ class TestMinimalSnapshot(unittest.TestCase):
         """
         from mind_mem.apply_engine import _safe_copy
 
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             src = os.path.join(td, "source.md")
             dst = os.path.join(td, "dest.md")
             with open(src, "w") as f:
@@ -644,7 +644,7 @@ class TestMinimalSnapshot(unittest.TestCase):
         """_safe_copy should create intermediate directories."""
         from mind_mem.apply_engine import _safe_copy
 
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             src = os.path.join(td, "source.md")
             dst = os.path.join(td, "deep", "nested", "dest.md")
             with open(src, "w") as f:
@@ -656,7 +656,7 @@ class TestMinimalSnapshot(unittest.TestCase):
         """Snapshot content must match original."""
         from mind_mem.apply_engine import create_snapshot
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -672,7 +672,7 @@ class TestMinimalSnapshot(unittest.TestCase):
 
     def test_restore_keeps_unrelated_preexisting_files(self):
         """Minimal snapshot rollback must preserve unrelated existing files in touched dirs."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -703,7 +703,7 @@ class TestDeferredCooldown(unittest.TestCase):
         """A rejected proposal within cooldown period should block new proposals for same target."""
         from mind_mem.apply_engine import check_deferred_cooldown
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -737,7 +737,7 @@ class TestDeferredCooldown(unittest.TestCase):
         """A rejected proposal outside cooldown period should allow re-proposal."""
         from mind_mem.apply_engine import check_deferred_cooldown
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -770,7 +770,7 @@ class TestCheckPreconditions(unittest.TestCase):
     """Apply prechecks should work against an initialized workspace."""
 
     def test_fresh_workspace_passes(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -783,7 +783,7 @@ class TestOpSupersedeDecision(unittest.TestCase):
     """Tests for _op_supersede_decision."""
 
     def test_supersede_marks_old_and_appends_new(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             dec_file = os.path.join(td, "DECISIONS.md")
             with open(dec_file, "w") as f:
                 f.write("[D-20260213-001]\nStatus: active\nStatement: Old decision\n")
@@ -802,7 +802,7 @@ class TestOpSupersedeDecision(unittest.TestCase):
             self.assertIn("[D-20260213-002]", content)
 
     def test_supersede_rejects_missing_target(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             dec_file = os.path.join(td, "DECISIONS.md")
             with open(dec_file, "w") as f:
                 f.write("[D-20260213-001]\nStatus: active\n")
@@ -817,7 +817,7 @@ class TestOpSupersedeDecision(unittest.TestCase):
             self.assertIn("not found", msg)
 
     def test_supersede_rejects_invariant(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             dec_file = os.path.join(td, "DECISIONS.md")
             with open(dec_file, "w") as f:
                 f.write(
@@ -839,7 +839,7 @@ class TestOpReplaceRange(unittest.TestCase):
     """Tests for _op_replace_range."""
 
     def test_replaces_between_markers(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             filepath = os.path.join(td, "DECISIONS.md")
             with open(filepath, "w") as f:
                 f.write("[D-20260213-001]\nStatus: active\n<!-- START -->\nold content\n<!-- END -->\nTags: test\n")
@@ -859,7 +859,7 @@ class TestOpReplaceRange(unittest.TestCase):
             self.assertNotIn("old content", content)
 
     def test_rejects_missing_markers(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             filepath = os.path.join(td, "DECISIONS.md")
             with open(filepath, "w") as f:
                 f.write("[D-20260213-001]\nStatus: active\n")
@@ -879,7 +879,7 @@ class TestRollbackStatusSync(unittest.TestCase):
     """Explicit rollback should keep proposal metadata aligned with the workspace."""
 
     def test_rollback_marks_proposal_rolled_back(self):
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -913,7 +913,7 @@ class TestManifestFullSnapshot(unittest.TestCase):
         """Full snapshot must write MANIFEST.json with file list."""
         from mind_mem.apply_engine import _read_manifest, create_snapshot
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -935,7 +935,7 @@ class TestManifestFullSnapshot(unittest.TestCase):
         """Minimal snapshot (with files_touched) must also write MANIFEST.json."""
         from mind_mem.apply_engine import _read_manifest, create_snapshot
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -956,7 +956,7 @@ class TestManifestRestore(unittest.TestCase):
 
     def test_manifest_restore_reverts_content(self):
         """Restore via manifest must revert modified files."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -977,7 +977,7 @@ class TestManifestRestore(unittest.TestCase):
 
     def test_manifest_restore_removes_orphans(self):
         """Files created after snapshot must be removed on manifest restore."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -1002,7 +1002,7 @@ class TestLegacySnapshotRestore(unittest.TestCase):
 
     def test_legacy_snapshot_without_manifest_restores(self):
         """Snapshots without MANIFEST.json must use copytree fallback."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -1035,7 +1035,7 @@ class TestSnapshotDiff(unittest.TestCase):
     def test_diff_detects_modified_file(self):
         from mind_mem.apply_engine import snapshot_diff
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -1054,7 +1054,7 @@ class TestSnapshotDiff(unittest.TestCase):
     def test_diff_empty_when_unchanged(self):
         from mind_mem.apply_engine import snapshot_diff
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)
@@ -1070,7 +1070,7 @@ class TestSnapshotDiff(unittest.TestCase):
     def test_diff_detects_deleted_file(self):
         from mind_mem.apply_engine import snapshot_diff
 
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
 
             init(ws)

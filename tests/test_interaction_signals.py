@@ -82,7 +82,7 @@ class TestClassify:
 
 @pytest.fixture()
 def store_path():
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         yield os.path.join(td, "signals.jsonl")
 
 

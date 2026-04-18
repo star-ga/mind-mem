@@ -11,7 +11,7 @@ from mind_mem.init_workspace import init
 
 def _make_workspace():
     """Create a test workspace with sample blocks."""
-    td = tempfile.TemporaryDirectory()
+    td = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
     ws = os.path.join(td.name, "ws")
     os.makedirs(ws)
     init(ws)

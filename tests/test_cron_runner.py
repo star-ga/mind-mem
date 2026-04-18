@@ -24,7 +24,7 @@ class TestLoadConfig(unittest.TestCase):
 
     def test_valid_config(self):
         """Valid mind-mem.json is parsed correctly."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             cfg = {"auto_ingest": {"enabled": True, "transcript_scan": False}}
             with open(os.path.join(ws, "mind-mem.json"), "w") as f:
                 json.dump(cfg, f)
@@ -33,13 +33,13 @@ class TestLoadConfig(unittest.TestCase):
 
     def test_missing_file_returns_empty(self):
         """Missing config file returns empty dict (graceful default)."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             result = load_config(ws)
             self.assertEqual(result, {})
 
     def test_malformed_json_returns_empty(self):
         """Malformed JSON returns empty dict without raising."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             with open(os.path.join(ws, "mind-mem.json"), "w") as f:
                 f.write("{not valid json")
             result = load_config(ws)
@@ -47,7 +47,7 @@ class TestLoadConfig(unittest.TestCase):
 
     def test_empty_config_file(self):
         """Empty JSON object in config is returned as-is."""
-        with tempfile.TemporaryDirectory() as ws:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             with open(os.path.join(ws, "mind-mem.json"), "w") as f:
                 json.dump({}, f)
             result = load_config(ws)

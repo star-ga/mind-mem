@@ -9,7 +9,7 @@ from mind_mem.block_parser import parse_file
 
 
 def test_parse_multiple_files():
-    with tempfile.TemporaryDirectory() as d:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
         for i in range(3):
             p = os.path.join(d, f"file{i}.md")
             with open(p, "w") as f:
@@ -20,7 +20,7 @@ def test_parse_multiple_files():
 
 
 def test_large_file_parse():
-    with tempfile.TemporaryDirectory() as d:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
         path = os.path.join(d, "large.md")
         with open(path, "w") as f:
             for i in range(50):
@@ -30,7 +30,7 @@ def test_large_file_parse():
 
 
 def test_mixed_content():
-    with tempfile.TemporaryDirectory() as d:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
         path = os.path.join(d, "mixed.md")
         with open(path, "w") as f:
             f.write("# Header\nSome text\n\n[MX-001]\nType: Decision\nStatement: In mixed file\n\nMore text\n")

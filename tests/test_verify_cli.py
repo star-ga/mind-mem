@@ -31,7 +31,7 @@ from mind_mem.verify_cli import (
 
 @pytest.fixture()
 def empty_ws() -> Path:
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         yield Path(td)
 
 

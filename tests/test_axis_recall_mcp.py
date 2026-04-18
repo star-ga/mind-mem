@@ -13,7 +13,7 @@ import pytest
 @pytest.fixture()
 def axis_workspace(monkeypatch):
     """Point the MCP server at a minimal in-memory workspace."""
-    tmp = tempfile.TemporaryDirectory()
+    tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
     ws = Path(tmp.name)
     (ws / "decisions").mkdir()
     (ws / "memory").mkdir()

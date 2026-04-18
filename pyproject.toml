@@ -1,6 +1,6 @@
 [project]
 name = "mind-mem"
-version = "3.1.5"
+version = "3.1.6"
 description = "Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -33,9 +33,13 @@ test = [
     "sqlite-vec>=0.1.6",
     # Runtime optional deps that several test modules exercise directly;
     # install them in the CI matrix so the full suite runs, not a subset.
-    "onnxruntime==1.24.2",
-    "tokenizers==0.22.2",
-    "sentence-transformers==5.2.3",
+    # Ranges (not pins) because CI resolves across 3 OS x 4 Python
+    # versions and the pinned versions in [all] / [embeddings] are not
+    # published on every wheel combination (e.g. onnxruntime 1.24 is not
+    # on PyPI as of 2026-04; max is 1.23.x).
+    "onnxruntime>=1.20,<2.0",
+    "tokenizers>=0.22,<1.0",
+    "sentence-transformers>=5.0,<6.0",
 ]
 mcp = ["fastmcp>=3.2.0"]
 embeddings = ["onnxruntime==1.24.2", "tokenizers==0.22.2"]

@@ -146,7 +146,7 @@ class TestRecallEdgeCases(unittest.TestCase):
 
     def test_empty_workspace_no_md_files(self):
         """Workspace with no .md files should return empty results."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             # Create empty dirs but no .md files
             for d in ["decisions", "tasks", "entities", "intelligence"]:
                 os.makedirs(os.path.join(td, d), exist_ok=True)
@@ -155,14 +155,14 @@ class TestRecallEdgeCases(unittest.TestCase):
 
     def test_query_with_only_stopwords(self):
         """Query consisting entirely of stopwords should return empty."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             ws = self._setup_workspace(td, "[D-20260215-001]\nStatement: Use JWT\nStatus: active\n")
             results = recall(ws, "the a an is")
             self.assertEqual(results, [])
 
     def test_query_with_special_regex_characters(self):
         """Regex special characters in query should not cause errors."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             ws = self._setup_workspace(td, "[D-20260215-001]\nStatement: Use foo.bar pattern\nStatus: active\n")
             # Should not raise, even though query has regex metacharacters
             results = recall(ws, "foo.*bar")
@@ -170,7 +170,7 @@ class TestRecallEdgeCases(unittest.TestCase):
 
     def test_very_long_query(self):
         """Very long query (500+ words) should not crash."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             ws = self._setup_workspace(td, "[D-20260215-001]\nStatement: Use JWT\nStatus: active\n")
             long_query = " ".join(f"word{i}" for i in range(500))
             results = recall(ws, long_query)
@@ -178,7 +178,7 @@ class TestRecallEdgeCases(unittest.TestCase):
 
     def test_workspace_with_empty_md_files(self):
         """Workspace where all .md files are empty should return empty results."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             for d in ["decisions", "tasks", "entities", "intelligence"]:
                 os.makedirs(os.path.join(td, d), exist_ok=True)
             # Create empty files
@@ -200,7 +200,7 @@ class TestRecallEdgeCases(unittest.TestCase):
 
     def test_search_with_limit_zero(self):
         """limit=0 should return no results."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             content = "[D-20260215-001]\nStatement: Use JWT for authentication\nStatus: active\n"
             ws = self._setup_workspace(td, content)
             results = recall(ws, "JWT", limit=0)
@@ -208,7 +208,7 @@ class TestRecallEdgeCases(unittest.TestCase):
 
     def test_search_with_very_large_limit(self):
         """limit=1000 should not crash even when fewer blocks exist."""
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             content = "[D-20260215-001]\nStatement: Use JWT\nStatus: active\n"
             ws = self._setup_workspace(td, content)
             results = recall(ws, "JWT", limit=1000)

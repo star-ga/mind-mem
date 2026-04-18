@@ -12,7 +12,7 @@ EXPECTED_DIRS = ["decisions", "tasks", "entities", "memory", "intelligence", "su
 
 def test_all_directories_created():
     """All expected directories are created."""
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         ws = os.path.join(td, "ws")
         os.makedirs(ws)
         init(ws)
@@ -23,7 +23,7 @@ def test_all_directories_created():
 
 def test_directories_are_writable():
     """All directories are writable."""
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         ws = os.path.join(td, "ws")
         os.makedirs(ws)
         init(ws)
@@ -36,7 +36,7 @@ def test_directories_are_writable():
 
 def test_memory_md_exists():
     """MEMORY.md is created at workspace root."""
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         ws = os.path.join(td, "ws")
         os.makedirs(ws)
         init(ws)
@@ -45,7 +45,7 @@ def test_memory_md_exists():
 
 def test_memory_md_has_content():
     """MEMORY.md has initial content."""
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         ws = os.path.join(td, "ws")
         os.makedirs(ws)
         init(ws)
@@ -56,7 +56,7 @@ def test_memory_md_has_content():
 
 def test_workspace_is_self_contained():
     """No files created outside workspace directory."""
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         ws = os.path.join(td, "ws")
         os.makedirs(ws)
         parent = os.path.dirname(ws)

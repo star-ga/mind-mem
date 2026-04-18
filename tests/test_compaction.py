@@ -37,7 +37,7 @@ class TestExtractBlockText(unittest.TestCase):
 
 class TestArchiveCompletedBlocks(unittest.TestCase):
     def test_dry_run_doesnt_modify(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             init(td)
             # Add a completed task with an old date
             tasks_path = os.path.join(td, "tasks", "TASKS.md")
@@ -53,7 +53,7 @@ class TestArchiveCompletedBlocks(unittest.TestCase):
             self.assertIn("T-20240101-001", content)
 
     def test_no_archive_for_recent_blocks(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             init(td)
             today = datetime.now().strftime("%Y-%m-%d")
             tasks_path = os.path.join(td, "tasks", "TASKS.md")
@@ -64,7 +64,7 @@ class TestArchiveCompletedBlocks(unittest.TestCase):
             self.assertEqual(len(actions), 0)
 
     def test_no_archive_for_active_blocks(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             init(td)
             tasks_path = os.path.join(td, "tasks", "TASKS.md")
             with open(tasks_path, "a") as f:
@@ -76,7 +76,7 @@ class TestArchiveCompletedBlocks(unittest.TestCase):
 
 class TestCleanupSnapshots(unittest.TestCase):
     def test_removes_old_snapshots(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             init(td)
             old_dir = os.path.join(td, "intelligence", "applied", "20240101-120000")
             os.makedirs(old_dir)
@@ -88,7 +88,7 @@ class TestCleanupSnapshots(unittest.TestCase):
             self.assertFalse(os.path.exists(old_dir))
 
     def test_keeps_recent_snapshots(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             init(td)
             recent = datetime.now().strftime("%Y%m%d-%H%M%S")
             snap_dir = os.path.join(td, "intelligence", "applied", recent)
@@ -101,7 +101,7 @@ class TestCleanupSnapshots(unittest.TestCase):
             self.assertTrue(os.path.exists(snap_dir))
 
     def test_dry_run_snapshots(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             init(td)
             old_dir = os.path.join(td, "intelligence", "applied", "20240101-120000")
             os.makedirs(old_dir)
@@ -113,7 +113,7 @@ class TestCleanupSnapshots(unittest.TestCase):
 
 class TestCleanupDailyLogs(unittest.TestCase):
     def test_archives_old_logs(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             init(td)
             old_log = os.path.join(td, "memory", "2024-01-15.md")
             with open(old_log, "w") as f:
@@ -130,7 +130,7 @@ class TestCleanupDailyLogs(unittest.TestCase):
             self.assertIn("Old daily log content", content)
 
     def test_keeps_recent_logs(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             init(td)
             today = datetime.now().strftime("%Y-%m-%d")
             log = os.path.join(td, "memory", f"{today}.md")
@@ -144,7 +144,7 @@ class TestCleanupDailyLogs(unittest.TestCase):
 
 class TestCompactSignals(unittest.TestCase):
     def test_removes_resolved_old_signals(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             init(td)
             signals_path = os.path.join(td, "intelligence", "SIGNALS.md")
             with open(signals_path, "w") as f:
@@ -160,7 +160,7 @@ class TestCompactSignals(unittest.TestCase):
             self.assertIn("SIG-20260215-001", content)
 
     def test_keeps_pending_signals(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             init(td)
             signals_path = os.path.join(td, "intelligence", "SIGNALS.md")
             with open(signals_path, "w") as f:

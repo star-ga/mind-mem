@@ -21,7 +21,7 @@ def test_index_stats_importable():
 
 def test_index_stats_empty_workspace():
     """Empty workspace returns valid stats."""
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         ws = os.path.join(td, "ws")
         os.makedirs(ws)
         init(ws)
@@ -31,7 +31,7 @@ def test_index_stats_empty_workspace():
 
 def test_index_stats_with_blocks():
     """Workspace with blocks reports counts."""
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
         ws = os.path.join(td, "ws")
         os.makedirs(ws)
         init(ws)

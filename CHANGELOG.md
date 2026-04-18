@@ -2,6 +2,34 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.1.6 (2026-04-18)
+
+**Two fixes uncovered by the v3.1.5 CI run.** Outcomes will be
+visible on the next release run; this changelog only describes the
+actions taken.
+
+### Fixed
+
+- **`onnxruntime==1.24.2` pin was unresolvable.** That specific
+  version is not published on PyPI (max available as of
+  2026-04-18 is `1.23.2`), so every `pip install -e ".[test]"` on
+  macOS / Ubuntu / Windows runners errored out before a single
+  test could run. Moved the `test` extra to version ranges:
+  `onnxruntime>=1.20,<2.0`, `tokenizers>=0.22,<1.0`,
+  `sentence-transformers>=5.0,<6.0`. The `all` and `embeddings`
+  extras still carry the original pins for production users who
+  want an exact build; only the CI-facing `test` extra is loosened.
+- **Windows `PermissionError` on temporary-directory cleanup.**
+  `tempfile.TemporaryDirectory()` without `ignore_cleanup_errors`
+  raised `[WinError 32] The process cannot access the file` on
+  Windows runners whenever the tested code had opened a SQLite
+  database inside the temp dir (Windows does not allow deletion
+  of open files). Every bare `TemporaryDirectory()` call across
+  `tests/` now passes `ignore_cleanup_errors=True`, which is safe
+  on Python 3.10+. The underlying connection-leak is tracked for a
+  future release — this change removes the noisy teardown failure
+  without masking any product bug.
+
 ## 3.1.5 (2026-04-18)
 
 **CI matrix fully green (test jobs × 3 OS × 4 Python all passing).
