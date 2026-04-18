@@ -1,8 +1,19 @@
 #!/usr/bin/env python3
-"""Mind Mem Integrity Validator (Python, cross-platform).
+"""Mind Mem Integrity Validator — canonical engine.
 
-Runs the same structural checks as validate.sh but works on any OS.
-Usage: python3 -m mind_mem.validate_py [workspace_path]
+Single source of truth for SPEC.md-defined invariant enforcement.
+Cross-platform (runs on Linux, macOS, Windows without WSL), covered
+by the full pytest suite, and the designated replacement for the
+bash sibling ``validate.sh`` that ships alongside. ``validate.sh``
+is on a deprecation path starting v3.1.x; v3.2.0 will convert it
+into a thin shim that execs this module.
+
+Usage:
+    python3 -m mind_mem.validate_py [workspace_path]
+
+Exit codes:
+    0 — clean (no issues)
+    1 — at least one invariant failed
 """
 
 import os

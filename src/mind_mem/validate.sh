@@ -4,6 +4,21 @@
 # Run: bash maintenance/validate.sh [workspace_path]
 # Creates: maintenance/validation-report.txt
 # Exit code: 0 = clean, 1 = issues found
+#
+# ─── DEPRECATION NOTICE (v3.1.x) ──────────────────────────────────
+# This bash engine is on track for deprecation in v3.2.0. The
+# canonical enforcer is `src/mind_mem/validate_py.py` — invoke via
+#
+#     python3 -m mind_mem.validate_py [workspace_path]
+#
+# The Python implementation runs cross-platform (including Windows,
+# where this bash script requires WSL), is covered by the pytest
+# suite, and is the single source of truth for SPEC.md-defined
+# invariants going forward. Running both in parallel risks
+# enforcement drift (one accepts what the other rejects). v3.2.0
+# will convert this script into a thin shim that execs the Python
+# entrypoint; until then, prefer `validate_py`.
+# ──────────────────────────────────────────────────────────────────
 
 set -uo pipefail
 

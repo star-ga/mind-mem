@@ -25,6 +25,7 @@ import shutil
 from datetime import datetime, timedelta
 
 from .block_parser import parse_file
+from .enums import TaskStatus
 from .mind_filelock import FileLock
 from .observability import get_logger, metrics
 
@@ -53,7 +54,7 @@ def archive_completed_blocks(ws: str, days: int = 90, dry_run: bool = False) -> 
     cutoff_str = cutoff.strftime("%Y-%m-%d")
 
     files_to_compact = {
-        "tasks/TASKS.md": {"done", "canceled"},
+        "tasks/TASKS.md": {s.value for s in TaskStatus.closed()},
         "decisions/DECISIONS.md": {"superseded", "revoked"},
     }
 

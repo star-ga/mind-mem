@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 459 | **Est. tokens:** ~954,912
-**Generated:** 2026-04-18 09:38 UTC
+**Files:** 459 | **Est. tokens:** ~955,262
+**Generated:** 2026-04-18 09:41 UTC
 
 ## Token Budget Guide
 
@@ -43,7 +43,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~441 |
-| `src/mind_mem/` | 112 | ~389,561 |
+| `src/mind_mem/` | 112 | ~389,911 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 177 | ~361,861 |
@@ -252,7 +252,7 @@
 - `check_version.py` (~622 tok, large) — Version consistency checker for mind-mem.
 - `coding_schemas.py` (~2127 tok, huge) — mind-mem Coding-Native Memory Schemas.
 - `cognitive_forget.py` (~2667 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `compaction.py` (~3258 tok, huge) — mind-mem Compaction & GC Engine. Zero external deps.
+- `compaction.py` (~3270 tok, huge) — mind-mem Compaction & GC Engine. Zero external deps.
 - `compiled_truth.py` (~6414 tok, huge) — mind-mem Compiled Truth — synthesized entity pages with append-only evidence.
 - `conflict_resolver.py` (~3119 tok, huge) — mind-mem Automated Conflict Resolution Pipeline. Zero external deps.
 - `connection_manager.py` (~1059 tok, large) — SQLite connection manager with read/write separation and WAL mode.
@@ -353,8 +353,8 @@
 - `transcript_capture.py` (~2333 tok, huge) — mind-mem Transcript JSONL Capture. Zero external deps.
 - `turbo_quant.py` (~1078 tok, large) — # Copyright 2026 STARGA, Inc.
 - `uncertainty_propagation.py` (~1262 tok, large) — # Copyright 2026 STARGA, Inc.
-- `validate_py.py` (~3332 tok, huge) — Mind Mem Integrity Validator (Python, cross-platform).
-- `validate.sh` (~6653 tok, huge) — mind-mem Integrity Validator v1.1
+- `validate_py.py` (~3428 tok, huge) — Mind Mem Integrity Validator — canonical engine.
+- `validate.sh` (~6895 tok, huge) — mind-mem Integrity Validator v1.1
 - `verify_cli.py` (~3178 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `watcher.py` (~886 tok, large) — Mind-Mem File Watcher — auto-reindex on workspace changes. Zero external deps.
 ### `templates/`
