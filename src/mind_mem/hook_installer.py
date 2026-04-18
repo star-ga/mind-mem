@@ -560,6 +560,21 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         mcp_fmt="mcp-toml-codex",
         mcp_path_tmpl="{home}/.codex/config.toml",
     ),
+    "vibe": AgentSpec(
+        name="vibe",
+        description="Mistral Vibe CLI",
+        config_fmt="text-block",
+        path_tmpl="{ws}/AGENTS.md",
+        content_tmpl=(
+            f'{_MM_MARKER}: agent instructions (auto-written)\n\nBefore every response, run `mm context "$QUERY"` and prepend the output.\n'
+        ),
+        detect_paths=("{home}/.vibe",),
+        detect_binaries=("vibe",),
+        # MCP: Vibe's ~/.vibe/config.toml uses a flat `mcp_servers = []`
+        # array. We don't auto-write the MCP block yet — add it manually
+        # as `mcp_servers = [{ name = "mind-mem", command = "...", args = [...], env = {...} }]`
+        # until a Vibe-specific MCP writer lands.
+    ),
     "gemini": AgentSpec(
         name="gemini",
         description="Google Gemini CLI",

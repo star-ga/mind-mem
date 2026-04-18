@@ -2,6 +2,43 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.1.4 (2026-04-18)
+
+**CI fully green. Mistral Vibe CLI added as a supported client.**
+
+### Added
+
+- **Mistral Vibe CLI** — new entry in `AGENT_REGISTRY` under the
+  `vibe` key. Detected via `~/.vibe/` directory or `vibe` on PATH.
+  Hook-level integration writes the standard mind-mem instructions
+  block to `{workspace}/AGENTS.md` (shared with Codex; idempotent by
+  marker). MCP-level integration is intentionally left for a future
+  release once Vibe's `mcp_servers` TOML array format is documented;
+  the TODO is noted inline in the agent spec. Total AI clients
+  supported by `mm install-all`: 17.
+
+### Fixed
+
+- **Windows path-separator round-trip in `agent_bridge.VaultBridge.scan`** —
+  `os.path.relpath` returns backslash-delimited paths on Windows
+  (`entities\Round.md`), which mismatched hardcoded forward-slash
+  comparisons in callers. `scan` now normalizes every
+  `relative_path` to POSIX separators via `.replace(os.sep, "/")`.
+  Unblocks the entire CI test matrix on Windows runners.
+- **`sqlite-vec` missing from the `test` extra** — `recall_vector.py`
+  imports `sqlite_vec`, and several test modules exercise that
+  path. The dependency was declared neither in core nor in the
+  `test` extra; local dev machines had it by accident, CI did not.
+  Added to `[project.optional-dependencies].test`. Unblocks the
+  entire Ubuntu / macOS test matrix.
+
+### Operations
+
+- `mm install-all` now writes + detects Vibe. Run
+  `mm install-all --force` to wire Vibe on existing workspaces.
+- `pip install -e ".[test]" --upgrade` on dev machines pulls the
+  new `sqlite-vec` dependency.
+
 ## 3.1.3 (2026-04-18)
 
 **CI green, no behavior change.** All lint, format, and test jobs pass

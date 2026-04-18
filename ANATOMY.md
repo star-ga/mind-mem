@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 457 | **Est. tokens:** ~971,991
-**Generated:** 2026-04-18 07:43 UTC
+**Files:** 457 | **Est. tokens:** ~972,616
+**Generated:** 2026-04-18 08:01 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~86,157 |
+| `./` | 27 | ~86,563 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 32 | ~35,992 |
@@ -43,7 +43,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~441 |
-| `src/mind_mem/` | 111 | ~388,277 |
+| `src/mind_mem/` | 111 | ~388,496 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,458 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 176 | ~359,292 |
@@ -54,7 +54,7 @@
 
 ### `./`
 
-- `CHANGELOG.md` (~24500 tok, huge) — Changelog
+- `CHANGELOG.md` (~24901 tok, huge) — Changelog
 - `CLAUDE.md` (~1028 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
@@ -72,7 +72,7 @@
 - `mcp_server.py` (~448 tok, medium) — Source-checkout entrypoint for the packaged Mind-Mem MCP server."""
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
-- `pyproject.toml` (~932 tok, large) — [project]
+- `pyproject.toml` (~937 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22053 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
@@ -231,7 +231,7 @@
 ### `src/mind_mem/`
 
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
-- `agent_bridge.py` (~3524 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `agent_bridge.py` (~3567 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `alerting.py` (~2407 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `apply_engine.py` (~15651 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~4167 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
@@ -276,7 +276,7 @@
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
 - `governance_gate.py` (~2009 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~5511 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hook_installer.py` (~9129 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hook_installer.py` (~9305 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hybrid_recall.py` (~4861 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~499 tok, medium) — # Mind Mem — Memory + Immune System for AI agents

@@ -304,7 +304,9 @@ class VaultBridge:
                     if not fn.endswith(".md"):
                         continue
                     full = os.path.join(dirpath, fn)
-                    rel = os.path.relpath(full, root)
+                    # Normalize to POSIX separators so callers can compare
+                    # against hardcoded "foo/bar.md" regardless of platform.
+                    rel = os.path.relpath(full, root).replace(os.sep, "/")
                     try:
                         text = open(full, "r", encoding="utf-8", errors="replace").read()
                     except OSError:
