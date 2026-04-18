@@ -800,7 +800,15 @@ def install_config(
     if fmt in _JSON_MERGERS:
         merger = _JSON_MERGERS[fmt]
         existing: dict = {}
-        if os.path.isfile(path) and not force:
+        # Always attempt to load the existing JSON even when --force is
+        # set. `force` semantically means "write even if no changes" —
+        # it must not mean "drop every other key in the file". Without
+        # this, `mm install-all --force` against a config that holds
+        # siblings of the mind-mem entry (openclaw.json has Telegram,
+        # Discord, channels, agents, gateway, wizard, etc. all at the
+        # same top level) produces a minimal JSON containing only the
+        # mind-mem entry, silently truncating the other sections.
+        if os.path.isfile(path):
             try:
                 with open(path, "r", encoding="utf-8") as fh:
                     loaded = json.load(fh)

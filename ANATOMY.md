@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 459 | **Est. tokens:** ~955,262
-**Generated:** 2026-04-18 09:41 UTC
+**Files:** 460 | **Est. tokens:** ~956,042
+**Generated:** 2026-04-18 09:59 UTC
 
 ## Token Budget Guide
 
@@ -43,10 +43,10 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~441 |
-| `src/mind_mem/` | 112 | ~389,911 |
+| `src/mind_mem/` | 112 | ~390,048 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 177 | ~361,861 |
+| `tests/` | 178 | ~362,504 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -277,7 +277,7 @@
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
 - `governance_gate.py` (~2009 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hook_installer.py` (~9305 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hook_installer.py` (~9442 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hybrid_recall.py` (~4861 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~499 tok, medium) — # Mind Mem — Memory + Immune System for AI agents
@@ -466,6 +466,7 @@
 - `test_graph_boost_recall.py` (~315 tok, medium) — Tests for graph_boost recall parameter."""
 - `test_grid_search.py` (~1199 tok, large) — Tests for benchmarks/grid_search.py — grid generation and utility functions."""
 - `test_hash_chain_v2.py` (~3462 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_hook_installer_force_preserves_siblings.py` (~643 tok, large) — Regression test for the --force clobber bug in hook_installer."""
 - `test_hook_installer_registry.py` (~3841 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hybrid_recall.py` (~2855 tok, huge) — Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
 - `test_hybrid_search.py` (~599 tok, large) — Tests for hybrid search functionality."""
