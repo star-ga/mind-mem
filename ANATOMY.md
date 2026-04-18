@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 460 | **Est. tokens:** ~956,042
-**Generated:** 2026-04-18 09:59 UTC
+**Files:** 460 | **Est. tokens:** ~956,394
+**Generated:** 2026-04-18 10:29 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~64,688 |
+| `./` | 27 | ~65,040 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,429 |
 | `docs/` | 32 | ~36,406 |
@@ -56,7 +56,7 @@
 
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~1239 tok, large) — Comprehensive Architectural Audit: mind-mem (Clean Git Repo)
 - `CLAUDE.md` (~1028 tok, large) — mind-mem — Persistent AI Memory System
-- `conftest.py` (~658 tok, large) — Shared pytest fixtures for mind-mem test suite."""
+- `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
 - `demo-setup.sh` (~323 tok, medium) — Pre-seed a demo workspace for VHS recording
 - `demo.tape` (~93 tok, small) — # mind-mem demo — terminal recording for README

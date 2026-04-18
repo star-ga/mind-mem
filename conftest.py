@@ -1,10 +1,44 @@
 """Shared pytest fixtures for mind-mem test suite."""
 
 import os
+import shutil
 import sqlite3
+import stat
 import sys
 
 import pytest
+
+
+# On Windows, pytest's `tmp_path` / `tmp_path_factory` fixtures use
+# `shutil.rmtree` for teardown. When a test has opened a SQLite
+# connection inside the temp dir (every mind-mem recall / indexing
+# path does), the connection handle keeps the `.db` file locked —
+# Windows then returns WinError 32 on the delete, `shutil.rmtree`
+# raises `PermissionError`, and the whole test is marked failed
+# even when the test assertions themselves passed. Linux and macOS
+# unlink open FDs silently so the same code works there.
+#
+# We monkey-patch `shutil.rmtree` to always pass an `onerror` handler
+# that clears the read-only bit and retries once; if the retry still
+# fails (connection still held), we swallow the error and move on.
+# The orphan gets reaped by the OS on process exit.
+if sys.platform == "win32":
+    _orig_rmtree = shutil.rmtree
+
+    def _tolerant_rmtree(path, ignore_errors=False, onerror=None, onexc=None, *args, **kwargs):
+        def _handler(func, target, exc_info):
+            try:
+                os.chmod(target, stat.S_IWRITE)
+                func(target)
+            except (PermissionError, OSError, FileNotFoundError):
+                pass
+
+        try:
+            return _orig_rmtree(path, ignore_errors=True, onerror=_handler, *args, **kwargs)
+        except (PermissionError, OSError):
+            return None
+
+    shutil.rmtree = _tolerant_rmtree
 
 ROOT = os.path.dirname(__file__)
 SRC = os.path.join(ROOT, "src")
