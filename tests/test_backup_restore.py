@@ -165,10 +165,7 @@ class TestExportJsonl(unittest.TestCase):
         self.td = tempfile.mkdtemp()
         os.makedirs(os.path.join(self.td, "decisions"))
         with open(os.path.join(self.td, "decisions", "DECISIONS.md"), "w") as f:
-            f.write(
-                "[D-20260101-001]\nStatement: First\nStatus: active\n\n---\n\n"
-                "[D-20260101-002]\nStatement: Second\nStatus: active\n"
-            )
+            f.write("[D-20260101-001]\nStatement: First\nStatus: active\n\n---\n\n[D-20260101-002]\nStatement: Second\nStatus: active\n")
 
     def tearDown(self):
         shutil.rmtree(self.td, ignore_errors=True)

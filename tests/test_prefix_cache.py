@@ -10,13 +10,11 @@ import pytest
 
 from mind_mem import prefix_cache as pc
 from mind_mem.prefix_cache import (
-    CacheStats,
     PrefixCache,
     all_stats,
     get_cache,
     reset_all,
 )
-
 
 # ---------------------------------------------------------------------------
 # Constructor validation

@@ -22,7 +22,6 @@ from mind_mem.smart_chunker import (
     smart_chunk_blocks,
 )
 
-
 # ---------------------------------------------------------------------------
 # SmartChunkerConfig tests
 # ---------------------------------------------------------------------------
@@ -461,10 +460,7 @@ class TestSmartChunk(unittest.TestCase):
         self.assertGreater(len(result), 1)
 
     def test_respects_max_chunk_size(self):
-        text = "\n\n".join(
-            f"## Part {i}\n\n" + ". ".join(f"Sentence {j}" for j in range(50)) + "."
-            for i in range(10)
-        )
+        text = "\n\n".join(f"## Part {i}\n\n" + ". ".join(f"Sentence {j}" for j in range(50)) + "." for i in range(10))
         cfg = SmartChunkerConfig(max_chunk_size=300)
         result = smart_chunk(text, config=cfg)
         for chunk in result:
@@ -598,10 +594,7 @@ class TestSmartChunkBlocks(unittest.TestCase):
         self.assertEqual(result[0]["_id"], "D-20260410-001")
 
     def test_long_block_is_split(self):
-        long_text = "\n\n".join(
-            f"## Section {i}\n\n" + ". ".join(f"Sentence {j}" for j in range(30)) + "."
-            for i in range(10)
-        )
+        long_text = "\n\n".join(f"## Section {i}\n\n" + ". ".join(f"Sentence {j}" for j in range(30)) + "." for i in range(10))
         block = {
             "_id": "D-20260410-002",
             "_line": 1,
@@ -684,9 +677,7 @@ class TestSmartChunkBlocks(unittest.TestCase):
         self.assertEqual(len(result_default), 1)
 
         # Custom text_fields should find it
-        result_custom = smart_chunk_blocks(
-            [block], config=cfg, text_fields=("Body",)
-        )
+        result_custom = smart_chunk_blocks([block], config=cfg, text_fields=("Body",))
         self.assertGreater(len(result_custom), 1)
 
 

@@ -126,7 +126,7 @@ def _inter_rater_agreement(scores_by_key: dict[str, list[float]]) -> float:
             continue
         mean = sum(vals) / len(vals)
         variance = sum((v - mean) ** 2 for v in vals) / len(vals)
-        stds.append(variance ** 0.5)
+        stds.append(variance**0.5)
     if not stds:
         return 1.0
     avg_std = sum(stds) / len(stds)

@@ -24,8 +24,7 @@ import re
 import threading
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping, Optional
-
+from typing import Any, Iterable, Optional
 
 # ---------------------------------------------------------------------------
 # Signature + stop-word handling
@@ -37,11 +36,50 @@ from typing import Any, Iterable, Mapping, Optional
 # predictor is only useful when different phrasings share a signature.
 _STOPWORDS: frozenset[str] = frozenset(
     {
-        "a", "an", "and", "are", "as", "at", "be", "by", "do", "does",
-        "for", "from", "how", "i", "if", "in", "is", "it", "me", "my",
-        "of", "on", "or", "so", "that", "the", "their", "them", "there",
-        "these", "this", "those", "to", "was", "were", "what", "when",
-        "where", "who", "why", "will", "with", "you", "your",
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "do",
+        "does",
+        "for",
+        "from",
+        "how",
+        "i",
+        "if",
+        "in",
+        "is",
+        "it",
+        "me",
+        "my",
+        "of",
+        "on",
+        "or",
+        "so",
+        "that",
+        "the",
+        "their",
+        "them",
+        "there",
+        "these",
+        "this",
+        "those",
+        "to",
+        "was",
+        "were",
+        "what",
+        "when",
+        "where",
+        "who",
+        "why",
+        "will",
+        "with",
+        "you",
+        "your",
     }
 )
 
@@ -137,12 +175,7 @@ class _Bucket:
 
     def top(self, limit: int) -> list[str]:
         # Stable tiebreaker by block_id keeps rankings reproducible.
-        return [
-            bid
-            for bid, _ in sorted(
-                self.counts.items(), key=lambda kv: (-kv[1], kv[0])
-            )[:limit]
-        ]
+        return [bid for bid, _ in sorted(self.counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]]
 
 
 class PrefetchPredictor:

@@ -9,12 +9,10 @@ import pytest
 
 from mind_mem.speculative_prefetch import (
     PrefetchPredictor,
-    PrefetchStats,
     get_default_predictor,
     reset_default_predictor,
     signature,
 )
-
 
 # ---------------------------------------------------------------------------
 # signature()

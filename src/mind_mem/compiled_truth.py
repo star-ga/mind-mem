@@ -50,7 +50,6 @@ from __future__ import annotations
 import dataclasses
 import os
 import re
-from collections import Counter
 from datetime import datetime, timezone
 
 from .observability import get_logger, metrics
@@ -61,12 +60,21 @@ _log = get_logger("compiled_truth")
 # Valid entity types and confidence levels
 # ---------------------------------------------------------------------------
 
-VALID_ENTITY_TYPES: frozenset[str] = frozenset({
-    "project", "person", "tool", "topic",
-})
-VALID_CONFIDENCE_LEVELS: frozenset[str] = frozenset({
-    "high", "medium", "low",
-})
+VALID_ENTITY_TYPES: frozenset[str] = frozenset(
+    {
+        "project",
+        "person",
+        "tool",
+        "topic",
+    }
+)
+VALID_CONFIDENCE_LEVELS: frozenset[str] = frozenset(
+    {
+        "high",
+        "medium",
+        "low",
+    }
+)
 
 # Subdirectory under workspace for compiled truth pages
 _COMPILED_DIR = os.path.join("entities", "compiled")
@@ -215,7 +223,7 @@ def parse_truth_page(markdown: str) -> CompiledTruthPage:
     last_compiled = fm["last_compiled"]
     version = int(fm["version"])
 
-    body = markdown[fm_match.end():]
+    body = markdown[fm_match.end() :]
 
     # --- Compiled section ---
     compiled_section = ""
@@ -257,13 +265,15 @@ def parse_truth_page(markdown: str) -> CompiledTruthPage:
             superseded = "~~SUPERSEDED~~" in first_line
             observation = rest.strip()
 
-            entries.append(EvidenceEntry(
-                timestamp=timestamp,
-                source=source,
-                observation=observation,
-                confidence=confidence,
-                superseded=superseded,
-            ))
+            entries.append(
+                EvidenceEntry(
+                    timestamp=timestamp,
+                    source=source,
+                    observation=observation,
+                    confidence=confidence,
+                    superseded=superseded,
+                )
+            )
 
     return CompiledTruthPage(
         entity_id=entity_id,
@@ -362,10 +372,7 @@ def add_evidence(
         ValueError: If the confidence level is invalid.
     """
     if entry.confidence not in VALID_CONFIDENCE_LEVELS:
-        raise ValueError(
-            f"Invalid confidence '{entry.confidence}'; "
-            f"must be one of {sorted(VALID_CONFIDENCE_LEVELS)}"
-        )
+        raise ValueError(f"Invalid confidence '{entry.confidence}'; must be one of {sorted(VALID_CONFIDENCE_LEVELS)}")
 
     new_entries = list(page.evidence_entries) + [entry]
 
@@ -402,10 +409,7 @@ def supersede_evidence(
         IndexError: If ``entry_index`` is out of range.
     """
     if entry_index < 0 or entry_index >= len(page.evidence_entries):
-        raise IndexError(
-            f"entry_index {entry_index} out of range "
-            f"(page has {len(page.evidence_entries)} entries)"
-        )
+        raise IndexError(f"entry_index {entry_index} out of range (page has {len(page.evidence_entries)} entries)")
 
     old_entry = page.evidence_entries[entry_index]
     if old_entry.superseded:
@@ -495,11 +499,28 @@ def _word_set(text: str) -> set[str]:
     return set(_normalise_text(text).split())
 
 
-_NEGATION_WORDS: frozenset[str] = frozenset({
-    "not", "no", "never", "none", "neither", "nor", "cannot",
-    "without", "lack", "lacks", "remove", "removed", "disable",
-    "disabled", "drop", "dropped", "reject", "rejected",
-})
+_NEGATION_WORDS: frozenset[str] = frozenset(
+    {
+        "not",
+        "no",
+        "never",
+        "none",
+        "neither",
+        "nor",
+        "cannot",
+        "without",
+        "lack",
+        "lacks",
+        "remove",
+        "removed",
+        "disable",
+        "disabled",
+        "drop",
+        "dropped",
+        "reject",
+        "rejected",
+    }
+)
 
 _ANTONYM_PAIRS: list[tuple[str, str]] = [
     ("increase", "decrease"),
@@ -555,38 +576,48 @@ def detect_contradictions(
                 neg_a = words_a & _NEGATION_WORDS
                 neg_b = words_b & _NEGATION_WORDS
                 if neg_a and not neg_b:
-                    contradictions.append((
-                        a, b,
-                        f"Negation asymmetry: entry A contains {sorted(neg_a)} "
-                        f"but entry B does not, while sharing topics: "
-                        f"{sorted(overlap - _NEGATION_WORDS)[:5]}",
-                    ))
+                    contradictions.append(
+                        (
+                            a,
+                            b,
+                            f"Negation asymmetry: entry A contains {sorted(neg_a)} "
+                            f"but entry B does not, while sharing topics: "
+                            f"{sorted(overlap - _NEGATION_WORDS)[:5]}",
+                        )
+                    )
                     continue
                 if neg_b and not neg_a:
-                    contradictions.append((
-                        a, b,
-                        f"Negation asymmetry: entry B contains {sorted(neg_b)} "
-                        f"but entry A does not, while sharing topics: "
-                        f"{sorted(overlap - _NEGATION_WORDS)[:5]}",
-                    ))
+                    contradictions.append(
+                        (
+                            a,
+                            b,
+                            f"Negation asymmetry: entry B contains {sorted(neg_b)} "
+                            f"but entry A does not, while sharing topics: "
+                            f"{sorted(overlap - _NEGATION_WORDS)[:5]}",
+                        )
+                    )
                     continue
 
             # Heuristic 2: antonym pairs in entries with shared context
             if len(overlap) >= 2:
                 for word_x, word_y in _ANTONYM_PAIRS:
                     if word_x in words_a and word_y in words_b:
-                        contradictions.append((
-                            a, b,
-                            f"Antonym pair: A has '{word_x}', B has '{word_y}' "
-                            f"with shared context: {sorted(overlap)[:5]}",
-                        ))
+                        contradictions.append(
+                            (
+                                a,
+                                b,
+                                f"Antonym pair: A has '{word_x}', B has '{word_y}' with shared context: {sorted(overlap)[:5]}",
+                            )
+                        )
                         break
                     if word_y in words_a and word_x in words_b:
-                        contradictions.append((
-                            a, b,
-                            f"Antonym pair: A has '{word_y}', B has '{word_x}' "
-                            f"with shared context: {sorted(overlap)[:5]}",
-                        ))
+                        contradictions.append(
+                            (
+                                a,
+                                b,
+                                f"Antonym pair: A has '{word_y}', B has '{word_x}' with shared context: {sorted(overlap)[:5]}",
+                            )
+                        )
                         break
 
     _log.info(
@@ -665,11 +696,13 @@ def scan_for_promotable_facts(
     promotable: list[dict] = []
     for fact, sources in sentence_sources.items():
         if len(sources) >= min_mentions:
-            promotable.append({
-                "fact": fact,
-                "mentions": len(sources),
-                "sources": sources,
-            })
+            promotable.append(
+                {
+                    "fact": fact,
+                    "mentions": len(sources),
+                    "sources": sources,
+                }
+            )
 
     # Sort by mention count descending
     promotable.sort(key=lambda d: d["mentions"], reverse=True)
@@ -707,13 +740,16 @@ if __name__ == "__main__":
     p_scan = sub.add_parser("scan", help="Scan for promotable facts")
     p_scan.add_argument("workspace", help="Workspace directory")
     p_scan.add_argument(
-        "--min-mentions", type=int, default=3,
+        "--min-mentions",
+        type=int,
+        default=3,
         help="Minimum mentions to qualify (default: 3)",
     )
 
     # contradictions
     p_contra = sub.add_parser(
-        "contradictions", help="Detect contradictions in a truth page",
+        "contradictions",
+        help="Detect contradictions in a truth page",
     )
     p_contra.add_argument("workspace", help="Workspace directory")
     p_contra.add_argument("entity_id", help="Entity ID to analyse")

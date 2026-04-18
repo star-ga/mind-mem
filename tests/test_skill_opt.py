@@ -5,21 +5,16 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 
 import pytest
 
 from mind_mem.skill_opt._types import (
     CritiqueReport,
-    Mutation,
-    SkillScore,
     SkillSpec,
     TestCase,
-    TestResult,
     ValidationResult,
 )
 from mind_mem.skill_opt.adapters import (
-    ADAPTER_REGISTRY,
     ClaudeAgentAdapter,
     OpenClawSkillAdapter,
     _parse_yaml_frontmatter,
@@ -32,9 +27,7 @@ from mind_mem.skill_opt.scorer import (
     aggregate_critiques,
     build_critique_prompt,
     classify_skill,
-    rubric_for_skill,
 )
-
 
 # ── Types ───────────────────────────────────────────────────────
 
@@ -56,8 +49,13 @@ class TestSkillSpec:
 
     def test_content_hash_auto(self):
         s = SkillSpec(
-            skill_id="x", system="x", source_path="/x", format="x",
-            name="x", description="x", content="hello world",
+            skill_id="x",
+            system="x",
+            source_path="/x",
+            format="x",
+            name="x",
+            description="x",
+            content="hello world",
         )
         import hashlib
 
@@ -65,8 +63,13 @@ class TestSkillSpec:
 
     def test_as_dict(self):
         s = SkillSpec(
-            skill_id="test:b", system="test", source_path="/b",
-            format="skill-md", name="b", description="d", content="c",
+            skill_id="test:b",
+            system="test",
+            source_path="/b",
+            format="skill-md",
+            name="b",
+            description="d",
+            content="c",
         )
         d = s.as_dict()
         assert d["skill_id"] == "test:b"
@@ -76,8 +79,11 @@ class TestSkillSpec:
 class TestTestCase:
     def test_frozen_tuple_rubric(self):
         tc = TestCase(
-            test_id="t1", skill_id="s1", category="correctness",
-            prompt="do something", expected_behavior="good output",
+            test_id="t1",
+            skill_id="s1",
+            category="correctness",
+            prompt="do something",
+            expected_behavior="good output",
             rubric=("accuracy", "format"),
         )
         assert tc.rubric == ("accuracy", "format")
@@ -87,24 +93,33 @@ class TestTestCase:
 class TestValidationResult:
     def test_accepted_requires_improvement_and_votes(self):
         v = ValidationResult(
-            mutation_id="m1", skill_id="s1",
-            score_before=0.5, score_after=0.6, improved=True,
+            mutation_id="m1",
+            skill_id="s1",
+            score_before=0.5,
+            score_after=0.6,
+            improved=True,
             critic_votes={"a": True, "b": True, "c": False},
         )
         assert v.accepted is True
 
     def test_rejected_when_not_improved(self):
         v = ValidationResult(
-            mutation_id="m2", skill_id="s2",
-            score_before=0.5, score_after=0.52, improved=False,
+            mutation_id="m2",
+            skill_id="s2",
+            score_before=0.5,
+            score_after=0.52,
+            improved=False,
             critic_votes={"a": True, "b": True},
         )
         assert v.accepted is False
 
     def test_rejected_when_regression(self):
         v = ValidationResult(
-            mutation_id="m3", skill_id="s3",
-            score_before=0.5, score_after=0.6, improved=True,
+            mutation_id="m3",
+            skill_id="s3",
+            score_before=0.5,
+            score_after=0.6,
+            improved=True,
             regression_categories=("safety",),
             critic_votes={"a": True, "b": True},
         )
@@ -112,8 +127,11 @@ class TestValidationResult:
 
     def test_rejected_when_minority_votes(self):
         v = ValidationResult(
-            mutation_id="m4", skill_id="s4",
-            score_before=0.5, score_after=0.6, improved=True,
+            mutation_id="m4",
+            skill_id="s4",
+            score_before=0.5,
+            score_after=0.6,
+            improved=True,
             critic_votes={"a": True, "b": False, "c": False},
         )
         assert v.accepted is False
@@ -186,9 +204,7 @@ class TestOpenClawAdapter:
     def test_discover_and_parse(self, tmp_path):
         skill_dir = tmp_path / "my-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            "---\nname: my-skill\ndescription: test skill\n---\n\n# My Skill"
-        )
+        (skill_dir / "SKILL.md").write_text("---\nname: my-skill\ndescription: test skill\n---\n\n# My Skill")
         adapter = OpenClawSkillAdapter()
         paths = adapter.discover(str(tmp_path))
         assert len(paths) == 1
@@ -233,16 +249,26 @@ class TestDiscoverAll:
 class TestAdapterForSpec:
     def test_known_format(self):
         spec = SkillSpec(
-            skill_id="x", system="x", source_path="/x",
-            format="skill-md", name="x", description="x", content="x",
+            skill_id="x",
+            system="x",
+            source_path="/x",
+            format="skill-md",
+            name="x",
+            description="x",
+            content="x",
         )
         adapter = adapter_for_spec(spec)
         assert adapter.format_id == "skill-md"
 
     def test_unknown_format(self):
         spec = SkillSpec(
-            skill_id="x", system="x", source_path="/x",
-            format="unknown", name="x", description="x", content="x",
+            skill_id="x",
+            system="x",
+            source_path="/x",
+            format="unknown",
+            name="x",
+            description="x",
+            content="x",
         )
         with pytest.raises(ValueError, match="No adapter"):
             adapter_for_spec(spec)
@@ -276,12 +302,14 @@ class TestAggregateCritiques:
     def test_basic_aggregation(self):
         critiques = [
             CritiqueReport(
-                critic_model="m1", test_id="t1",
+                critic_model="m1",
+                test_id="t1",
                 scores={"accuracy": 0.8, "safety": 0.9},
                 overall_score=0.85,
             ),
             CritiqueReport(
-                critic_model="m2", test_id="t1",
+                critic_model="m2",
+                test_id="t1",
                 scores={"accuracy": 0.7, "safety": 0.8},
                 overall_score=0.75,
             ),
@@ -331,8 +359,13 @@ class TestHistoryStore:
 
         store.start_run("R-002", "s2", "hash2")
         store.store_mutation(
-            "R-002", "M-001", "s2", "new content", "because reasons",
-            score_before=0.5, score_after=0.7,
+            "R-002",
+            "M-001",
+            "s2",
+            "new content",
+            "because reasons",
+            score_before=0.5,
+            score_after=0.7,
         )
 
         m = store.get_mutation("M-001")

@@ -33,6 +33,7 @@ Usage:
 
 Zero external deps — stdlib-only urllib for webhook delivery.
 """
+
 from __future__ import annotations
 
 import json
@@ -76,7 +77,7 @@ class Alert:
     """
 
     severity: str  # "debug" | "info" | "warning" | "critical"
-    event: str     # "contradiction_detected" | "rollback_spike" | ...
+    event: str  # "contradiction_detected" | "rollback_spike" | ...
     payload: dict
     workspace: str
     timestamp: str = ""  # ISO 8601 UTC; filled by the router
@@ -192,10 +193,7 @@ class SlackSink(AlertSink):
                     "color": color,
                     "title": alert.event,
                     "text": f"workspace: `{alert.workspace}`",
-                    "fields": [
-                        {"title": k, "value": str(v), "short": len(str(v)) < 40}
-                        for k, v in alert.payload.items()
-                    ],
+                    "fields": [{"title": k, "value": str(v), "short": len(str(v)) < 40} for k, v in alert.payload.items()],
                     "ts": int(time.time()),
                 }
             ],
@@ -255,9 +253,7 @@ class AlertRouter:
             try:
                 ok = sink.send(alert)
             except Exception as exc:  # pragma: no cover — sink isolation
-                _log.warning(
-                    "alert_sink_error", sink=sink.name, error=str(exc)
-                )
+                _log.warning("alert_sink_error", sink=sink.name, error=str(exc))
                 ok = False
             results.append(ok)
         return results

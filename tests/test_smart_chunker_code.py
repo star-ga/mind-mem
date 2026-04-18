@@ -8,8 +8,6 @@ import unittest
 from mind_mem.smart_chunker import (
     _detect_code_boundaries,
     _segment_document,
-    smart_chunk,
-    SmartChunkerConfig,
 )
 
 
@@ -18,18 +16,7 @@ class TestDetectCodeBoundaries(unittest.TestCase):
 
     def test_python_functions(self):
         """Should detect Python def and class boundaries."""
-        code = (
-            "import os\n"
-            "\n"
-            "def foo():\n"
-            "    pass\n"
-            "\n"
-            "def bar(x):\n"
-            "    return x\n"
-            "\n"
-            "class MyClass:\n"
-            "    pass\n"
-        )
+        code = "import os\n\ndef foo():\n    pass\n\ndef bar(x):\n    return x\n\nclass MyClass:\n    pass\n"
         bounds = _detect_code_boundaries(code)
         # Should find boundaries at 'def foo', 'def bar', 'class MyClass'
         # The first def starts at offset > 0 (after import line)
@@ -68,7 +55,7 @@ class TestDetectCodeBoundaries(unittest.TestCase):
             "use std::io;\n"
             "\n"
             "fn main() {\n"
-            "    println!(\"hello\");\n"
+            '    println!("hello");\n'
             "}\n"
             "\n"
             "pub fn helper(x: i32) -> i32 {\n"
@@ -84,17 +71,7 @@ class TestDetectCodeBoundaries(unittest.TestCase):
 
     def test_go_func_boundaries(self):
         """Should detect Go func boundaries including method receivers."""
-        code = (
-            "package main\n"
-            "\n"
-            "func main() {\n"
-            "    fmt.Println(\"hello\")\n"
-            "}\n"
-            "\n"
-            "func (s *Server) Start() error {\n"
-            "    return nil\n"
-            "}\n"
-        )
+        code = 'package main\n\nfunc main() {\n    fmt.Println("hello")\n}\n\nfunc (s *Server) Start() error {\n    return nil\n}\n'
         bounds = _detect_code_boundaries(code)
         self.assertGreaterEqual(len(bounds), 1)
 
@@ -133,19 +110,14 @@ class TestCodeAwareSegmentation(unittest.TestCase):
         # The code block should be split into multiple code segments
         # at function boundaries (at least 2 segments from 3 functions)
         self.assertGreaterEqual(
-            len(code_segments), 2,
-            f"Expected code block to be split at function boundaries, "
-            f"got {len(code_segments)} code segment(s)",
+            len(code_segments),
+            2,
+            f"Expected code block to be split at function boundaries, got {len(code_segments)} code segment(s)",
         )
 
     def test_single_function_code_block_not_split(self):
         """A code block with only one function should remain as a single segment."""
-        doc = (
-            "```python\n"
-            "def only_one():\n"
-            "    return 42\n"
-            "```\n"
-        )
+        doc = "```python\ndef only_one():\n    return 42\n```\n"
         segments = _segment_document(doc)
         code_segments = [s for s in segments if s.kind == "code"]
         # Single function = no internal boundaries = one segment

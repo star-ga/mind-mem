@@ -36,6 +36,7 @@ def _get_gate(workspace: str):
     """Return the workspace GovernanceGate, or None if unavailable."""
     try:
         from .governance_gate import get_gate
+
         return get_gate(workspace)
     except Exception:
         return None

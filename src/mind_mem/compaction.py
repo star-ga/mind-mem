@@ -225,9 +225,7 @@ def compact_signals(ws: str, days: int = 60, dry_run: bool = False) -> list[str]
     cutoff = datetime.now() - timedelta(days=days)
     cutoff_str = cutoff.strftime("%Y-%m-%d")
 
-    removable = [
-        b for b in blocks if b.get("Status") in ("resolved", "rejected") and b.get("Date", "9999-99-99") < cutoff_str
-    ]
+    removable = [b for b in blocks if b.get("Status") in ("resolved", "rejected") and b.get("Date", "9999-99-99") < cutoff_str]
 
     if not removable:
         return cleaned
@@ -283,16 +281,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="mind-mem Compaction & GC Engine")
     parser.add_argument("workspace", nargs="?", default=".")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done")
-    parser.add_argument(
-        "--archive-days", type=int, default=90, help="Archive completed blocks older than N days (default: 90)"
-    )
-    parser.add_argument(
-        "--snapshot-days", type=int, default=30, help="Remove snapshots older than N days (default: 30)"
-    )
+    parser.add_argument("--archive-days", type=int, default=90, help="Archive completed blocks older than N days (default: 90)")
+    parser.add_argument("--snapshot-days", type=int, default=30, help="Remove snapshots older than N days (default: 30)")
     parser.add_argument("--log-days", type=int, default=180, help="Archive daily logs older than N days (default: 180)")
-    parser.add_argument(
-        "--signal-days", type=int, default=60, help="Remove resolved signals older than N days (default: 60)"
-    )
+    parser.add_argument("--signal-days", type=int, default=60, help="Remove resolved signals older than N days (default: 60)")
     args = parser.parse_args()
 
     ws = os.path.abspath(args.workspace)

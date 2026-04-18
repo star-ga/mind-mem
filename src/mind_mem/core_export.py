@@ -16,12 +16,10 @@ covers the same interchange need for most consumers.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import Any, Mapping
 
 from .context_core import LoadedCore
-
 
 # ---------------------------------------------------------------------------
 # JSON-LD export
@@ -45,12 +43,8 @@ def export_to_jsonld(core: LoadedCore) -> dict[str, Any]:
         "@type": "ContextCore",
         "id": f"urn:mindmem:{manifest['namespace']}:{manifest['version']}",
         "manifest": manifest,
-        "blocks": [
-            {"@type": "Block", **b} for b in core.blocks
-        ],
-        "edges": [
-            {"@type": "Edge", **e} for e in core.edges
-        ],
+        "blocks": [{"@type": "Block", **b} for b in core.blocks],
+        "edges": [{"@type": "Edge", **e} for e in core.edges],
     }
 
 
@@ -72,13 +66,7 @@ def export_to_markdown(core: LoadedCore) -> str:
         block_id = block.get("_id") or block.get("id") or "?"
         block_type = block.get("type", "block")
         lines.append(f"### {block_type} — {block_id}")
-        text = (
-            block.get("text")
-            or block.get("excerpt")
-            or block.get("statement")
-            or block.get("content")
-            or ""
-        )
+        text = block.get("text") or block.get("excerpt") or block.get("statement") or block.get("content") or ""
         if text:
             lines.append("")
             lines.append(str(text).strip())
@@ -87,9 +75,7 @@ def export_to_markdown(core: LoadedCore) -> str:
     if core.edges:
         lines.extend(["## Graph edges", ""])
         for edge in core.edges:
-            lines.append(
-                f"- {edge.get('subject')} — **{edge.get('predicate')}** → {edge.get('object')}"
-            )
+            lines.append(f"- {edge.get('subject')} — **{edge.get('predicate')}** → {edge.get('object')}")
     return "\n".join(lines).rstrip() + "\n"
 
 

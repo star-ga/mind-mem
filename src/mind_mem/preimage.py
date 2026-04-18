@@ -32,6 +32,7 @@ Rules:
 Consumers use :func:`preimage` to build the bytes and then hash with
 whatever digest they prefer (SHA-256, SHA3-512, etc.).
 """
+
 from __future__ import annotations
 
 from typing import Union
@@ -52,10 +53,7 @@ def _render(value: Value) -> bytes:
     digest. Callers that want "absent" must pass ``""`` explicitly.
     """
     if value is None:
-        raise ValueError(
-            "preimage(): None is not a valid field value — convert to "
-            '"" or a sentinel string first'
-        )
+        raise ValueError('preimage(): None is not a valid field value — convert to "" or a sentinel string first')
     if isinstance(value, (bytes, bytearray, memoryview)):
         data = bytes(value)
     elif isinstance(value, str):
@@ -71,20 +69,12 @@ def _render(value: Value) -> bytes:
         if value != value:  # NaN — would otherwise Q16.16 → 0, which
             # collides with float 0.0. Reject upfront so callers hand
             # us finite floats (or explicitly coerce NaN to a sentinel).
-            raise ValueError(
-                "preimage(): NaN is not hashable — convert to a sentinel "
-                "float first"
-            )
+            raise ValueError("preimage(): NaN is not hashable — convert to a sentinel float first")
         data = hex_q16_16(value).encode("ascii")
     else:
-        raise TypeError(
-            f"preimage(): unsupported field type {type(value).__name__!r}"
-        )
+        raise TypeError(f"preimage(): unsupported field type {type(value).__name__!r}")
     if _SEP in data:
-        raise ValueError(
-            "preimage(): field value contains NUL byte; cannot build a "
-            "NUL-separated preimage around it"
-        )
+        raise ValueError("preimage(): field value contains NUL byte; cannot build a NUL-separated preimage around it")
     return data
 
 

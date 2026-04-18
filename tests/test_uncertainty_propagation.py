@@ -4,10 +4,10 @@
 from __future__ import annotations
 
 import math
+
 import pytest
 
 from mind_mem.uncertainty_propagation import HopResult, UncertaintyPropagator
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

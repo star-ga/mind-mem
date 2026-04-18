@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 
@@ -11,8 +11,6 @@ from mind_mem.cognitive_forget import (
     BlockCognition,
     BlockLifecycle,
     ConsolidationConfig,
-    ConsolidationPlan,
-    PackedBudget,
     estimate_tokens,
     pack_to_budget,
     plan_consolidation,
@@ -253,6 +251,10 @@ class TestPackToBudget:
         packed = pack_to_budget([{"excerpt": "x"}], max_tokens=1000)
         d = packed.as_dict()
         assert set(d.keys()) == {
-            "included_count", "dropped_count", "budget",
-            "tokens_used", "reserved_graph", "reserved_provenance",
+            "included_count",
+            "dropped_count",
+            "budget",
+            "tokens_used",
+            "reserved_graph",
+            "reserved_provenance",
         }

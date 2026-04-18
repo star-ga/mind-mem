@@ -14,14 +14,12 @@ import pytest
 from mind_mem.interaction_signals import (
     ABResult,
     Signal,
-    SignalStats,
     SignalStore,
     SignalType,
     classify,
     evaluate_ab,
     jaccard_similarity,
 )
-
 
 # ---------------------------------------------------------------------------
 # Tokenisation + similarity
@@ -70,10 +68,7 @@ class TestClassify:
         )
 
     def test_correction_markers_detected(self) -> None:
-        assert (
-            classify("JWT", "no, I meant oauth2 token exchange")
-            is SignalType.CORRECTION
-        )
+        assert classify("JWT", "no, I meant oauth2 token exchange") is SignalType.CORRECTION
 
     def test_empty_inputs_return_none(self) -> None:
         assert classify("", "anything") is None
@@ -175,16 +170,25 @@ class TestSignalStore:
     def test_stats_counts_by_type_and_sessions(self, store_path: str) -> None:
         store = SignalStore(store_path)
         store.observe(
-            session_id="s1", previous_query="JWT", new_query="JWT",
-            signal_type=SignalType.RE_QUERY, similarity=1.0,
+            session_id="s1",
+            previous_query="JWT",
+            new_query="JWT",
+            signal_type=SignalType.RE_QUERY,
+            similarity=1.0,
         )
         store.observe(
-            session_id="s2", previous_query="auth", new_query="auth flow",
-            signal_type=SignalType.REFINEMENT, similarity=0.5,
+            session_id="s2",
+            previous_query="auth",
+            new_query="auth flow",
+            signal_type=SignalType.REFINEMENT,
+            similarity=0.5,
         )
         store.observe(
-            session_id="s2", previous_query="x", new_query="no i meant y",
-            signal_type=SignalType.CORRECTION, similarity=0.1,
+            session_id="s2",
+            previous_query="x",
+            new_query="no i meant y",
+            signal_type=SignalType.CORRECTION,
+            similarity=0.1,
         )
         stats = store.stats()
         assert stats.total == 3

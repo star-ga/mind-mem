@@ -17,11 +17,9 @@ A passing test means the component either rejected the adversarial
 input with a typed error or absorbed it without damaging its chain /
 DB state. A failing test means we found a real attack surface.
 """
+
 from __future__ import annotations
 
-import hashlib
-import json
-import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -73,10 +71,7 @@ class TestPreimageAttackSurface:
         from mind_mem.preimage import preimage
 
         # An attacker can't replay a CHAIN preimage as an EV preimage.
-        assert (
-            preimage("CHAIN_v1", "a", "b") !=
-            preimage("EV_v1", "a", "b")
-        )
+        assert preimage("CHAIN_v1", "a", "b") != preimage("EV_v1", "a", "b")
 
 
 class TestQ1616AttackSurface:
@@ -106,7 +101,6 @@ class TestEvidenceChainDowngradeBlocked:
             EvidenceChain,
             EvidenceObject,
             _compute_evidence_hash_v1,
-            _GENESIS_HASH,
         )
 
         chain = EvidenceChain(store_path=str(tmp_path / "evidence.jsonl"))
@@ -183,9 +177,7 @@ class TestHashChainSeparatorInjection:
 
 
 class TestAuditChainMalformedInput:
-    def test_malformed_jsonl_line_does_not_crash_verify(
-        self, tmp_path: Path
-    ) -> None:
+    def test_malformed_jsonl_line_does_not_crash_verify(self, tmp_path: Path) -> None:
         from mind_mem.audit_chain import AuditChain
 
         ad = tmp_path / ".mind-mem-audit"

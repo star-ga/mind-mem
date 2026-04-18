@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 
 from mind_mem.dedup import (
     DedupConfig,
-    deduplicate_results,
     layer_vector_cosine_dedup,
 )
 
@@ -55,9 +54,7 @@ class TestLayerVectorCosineDedup(unittest.TestCase):
         results = [_make_result("D-001", 1.0, "test"), _make_result("D-002", 0.9, "test")]
 
         with patch.dict("sys.modules", {"mind_mem.recall_vector": None}):
-            kept = layer_vector_cosine_dedup(
-                results, threshold=0.85, workspace="/tmp/test-ws"
-            )
+            layer_vector_cosine_dedup(results, threshold=0.85, workspace="/tmp/test-ws")
 
         # Should have called the fallback
         mock_tf_dedup.assert_called_once()
@@ -92,17 +89,14 @@ class TestLayerVectorCosineDedup(unittest.TestCase):
 
         with patch("mind_mem.dedup.VectorBackend", mock_vector_cls, create=True):
             # We need to patch the import inside the function
-            import mind_mem.dedup as dedup_mod
 
-            original_import = __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
+            __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
 
             mock_module = MagicMock()
             mock_module.VectorBackend = mock_vector_cls
 
             with patch.dict("sys.modules", {"mind_mem.recall_vector": mock_module}):
-                kept = layer_vector_cosine_dedup(
-                    results, threshold=0.85, workspace="/tmp/ws"
-                )
+                kept = layer_vector_cosine_dedup(results, threshold=0.85, workspace="/tmp/ws")
 
         # D-002 should be removed (too similar to D-001)
         self.assertEqual(len(kept), 2)

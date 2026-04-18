@@ -110,9 +110,7 @@ class TestContextPreservation(unittest.TestCase):
 
     def test_no_duplicate_context(self):
         """If second clause already has the entity, do not duplicate it."""
-        parts = decompose_query(
-            "What tools did we use for the auth migration and how long did the auth migration take?"
-        )
+        parts = decompose_query("What tools did we use for the auth migration and how long did the auth migration take?")
         if len(parts) > 1:
             # "auth" is already in the second part, no need to prepend
             second = parts[-1]

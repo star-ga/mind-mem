@@ -18,7 +18,6 @@ from mind_mem.dedup import (
     layer_type_diversity_cap,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -66,16 +65,18 @@ class TestDedupConfig(unittest.TestCase):
         self.assertEqual(cfg.source_cap, 5)
 
     def test_custom_values(self):
-        cfg = DedupConfig({
-            "enabled": False,
-            "best_per_source": False,
-            "cosine_enabled": False,
-            "cosine_threshold": 0.9,
-            "type_cap_enabled": False,
-            "type_cap": 5,
-            "source_cap_enabled": False,
-            "source_cap": 10,
-        })
+        cfg = DedupConfig(
+            {
+                "enabled": False,
+                "best_per_source": False,
+                "cosine_enabled": False,
+                "cosine_threshold": 0.9,
+                "type_cap_enabled": False,
+                "type_cap": 5,
+                "source_cap_enabled": False,
+                "source_cap": 10,
+            }
+        )
         self.assertFalse(cfg.enabled)
         self.assertFalse(cfg.best_per_source)
         self.assertFalse(cfg.cosine_enabled)
@@ -328,10 +329,7 @@ class TestLayerTypeDiversityCap(unittest.TestCase):
     """Test layer 3: type diversity cap."""
 
     def test_caps_per_type(self):
-        results = [
-            _make_result(id_=f"DIA-{i}", score=10.0 - i, type_="dialog")
-            for i in range(10)
-        ]
+        results = [_make_result(id_=f"DIA-{i}", score=10.0 - i, type_="dialog") for i in range(10)]
         filtered = layer_type_diversity_cap(results, cap=3)
         self.assertEqual(len(filtered), 3)
 
@@ -418,10 +416,7 @@ class TestLayerSourceChunkCap(unittest.TestCase):
     """Test layer 4: per-source file chunk cap."""
 
     def test_caps_per_file(self):
-        results = [
-            _make_result(id_=f"D-{i}", score=10.0 - i, file="memory.md")
-            for i in range(10)
-        ]
+        results = [_make_result(id_=f"D-{i}", score=10.0 - i, file="memory.md") for i in range(10)]
         filtered = layer_source_chunk_cap(results, cap=3)
         self.assertEqual(len(filtered), 3)
 
@@ -504,11 +499,13 @@ class TestDeduplicateResults(unittest.TestCase):
             # Different type to test diversity cap
             _make_result(id_="FACT-001", score=6.0, excerpt="completely different content here about testing", file="d.md", type_="fact"),
         ]
-        cfg = DedupConfig({
-            "cosine_threshold": 0.85,
-            "type_cap": 3,
-            "source_cap": 5,
-        })
+        cfg = DedupConfig(
+            {
+                "cosine_threshold": 0.85,
+                "type_cap": 3,
+                "source_cap": 5,
+            }
+        )
         filtered = deduplicate_results(results, config=cfg)
         # Layer 1 removes D-001.1 (chunk dedup)
         # Layer 2 may remove D-003 (cosine sim with D-002)
@@ -527,23 +524,27 @@ class TestDeduplicateResults(unittest.TestCase):
         ]
 
         # Only best_per_source enabled
-        cfg = DedupConfig({
-            "best_per_source": True,
-            "cosine_enabled": False,
-            "type_cap_enabled": False,
-            "source_cap_enabled": False,
-        })
+        cfg = DedupConfig(
+            {
+                "best_per_source": True,
+                "cosine_enabled": False,
+                "type_cap_enabled": False,
+                "source_cap_enabled": False,
+            }
+        )
         filtered = deduplicate_results(results, config=cfg)
         self.assertEqual(len(filtered), 1)
 
         # Only cosine enabled
-        cfg = DedupConfig({
-            "best_per_source": False,
-            "cosine_enabled": True,
-            "cosine_threshold": 0.85,
-            "type_cap_enabled": False,
-            "source_cap_enabled": False,
-        })
+        cfg = DedupConfig(
+            {
+                "best_per_source": False,
+                "cosine_enabled": True,
+                "cosine_threshold": 0.85,
+                "type_cap_enabled": False,
+                "source_cap_enabled": False,
+            }
+        )
         filtered = deduplicate_results(results, config=cfg)
         self.assertEqual(len(filtered), 1)
 
@@ -588,11 +589,13 @@ class TestGetResultText(unittest.TestCase):
         self.assertIn("hello world", text)
 
     def test_multiple_fields(self):
-        text = _get_result_text({
-            "excerpt": "primary",
-            "content": "secondary",
-            "tags": "tag1,tag2",
-        })
+        text = _get_result_text(
+            {
+                "excerpt": "primary",
+                "content": "secondary",
+                "tags": "tag1,tag2",
+            }
+        )
         self.assertIn("primary", text)
         self.assertIn("secondary", text)
         self.assertIn("tag1", text)

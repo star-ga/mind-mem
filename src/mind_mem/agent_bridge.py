@@ -29,7 +29,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Optional
 
-
 # ---------------------------------------------------------------------------
 # AgentFormatter
 # ---------------------------------------------------------------------------
@@ -65,12 +64,7 @@ def _normalise_block(block: Mapping[str, Any]) -> dict:
         if isinstance(value, str) and value.strip():
             text = value.strip()
             break
-    block_id = (
-        block.get("_id")
-        or block.get("id")
-        or block.get("block_id")
-        or "?"
-    )
+    block_id = block.get("_id") or block.get("id") or block.get("block_id") or "?"
     return {
         "id": str(block_id),
         "type": str(block.get("type", "block")),
@@ -93,9 +87,7 @@ class AgentFormatter:
     ) -> str:
         """Return a text snippet ready to paste into *agent*'s prompt."""
         if agent not in KNOWN_AGENTS:
-            raise UnknownAgentError(
-                f"unknown agent {agent!r}. Known: {', '.join(KNOWN_AGENTS)}"
-            )
+            raise UnknownAgentError(f"unknown agent {agent!r}. Known: {', '.join(KNOWN_AGENTS)}")
         normalised = [_normalise_block(b) for b in blocks][: self.max_blocks]
         method = {
             "claude-code": self._claude,
@@ -296,9 +288,7 @@ class VaultBridge:
             for d in sync_dirs:
                 full = os.path.realpath(os.path.join(root, d))
                 if not full.startswith(root + os.sep) and full != root:
-                    raise ValueError(
-                        f"sync_dir {d!r} escapes vault root"
-                    )
+                    raise ValueError(f"sync_dir {d!r} escapes vault root")
                 if os.path.isdir(full):
                     roots.append(full)
         else:
@@ -325,9 +315,7 @@ class VaultBridge:
                     title = fm.get("title") or _id_from_filename(full)
                     try:
                         mtime = os.path.getmtime(full)
-                        modified_at = datetime.fromtimestamp(
-                            mtime, tz=timezone.utc
-                        ).isoformat().replace("+00:00", "Z")
+                        modified_at = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat().replace("+00:00", "Z")
                     except OSError:
                         modified_at = None
                     out.append(
@@ -368,9 +356,7 @@ class VaultBridge:
 
         target = os.path.realpath(os.path.join(root, block.relative_path))
         if not target.startswith(root + os.sep):
-            raise ValueError(
-                f"relative_path escapes vault root: {block.relative_path!r}"
-            )
+            raise ValueError(f"relative_path escapes vault root: {block.relative_path!r}")
         if os.path.exists(target) and not overwrite:
             raise FileExistsError(target)
 

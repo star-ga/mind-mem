@@ -92,9 +92,7 @@ class TestScanMarkdownFile(unittest.TestCase):
             path = self._write_md(td, "We decided to deprecate the old API endpoint.\n")
             result = scan_markdown_file(path)
             self.assertEqual(len(result), 1)
-            self.assertTrue(
-                required_keys.issubset(result[0].keys()), f"Missing keys: {required_keys - result[0].keys()}"
-            )
+            self.assertTrue(required_keys.issubset(result[0].keys()), f"Missing keys: {required_keys - result[0].keys()}")
 
     def test_line_number_tracking(self):
         """Signal line number matches the actual line in the file."""

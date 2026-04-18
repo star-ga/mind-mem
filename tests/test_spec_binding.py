@@ -22,7 +22,6 @@ from mind_mem.spec_binding import (
     _normalize_config,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -74,9 +73,7 @@ class TestNormalizeConfig:
         assert list(parsed["outer"].keys()) == sorted(parsed["outer"].keys())
         assert list(parsed["first"].keys()) == sorted(parsed["first"].keys())
 
-    def test_same_content_different_key_order_produces_same_output(
-        self, tmp_path: Path
-    ) -> None:
+    def test_same_content_different_key_order_produces_same_output(self, tmp_path: Path) -> None:
         cfg_a = {"b": 2, "a": 1}
         cfg_b = {"a": 1, "b": 2}
         pa = tmp_path / "a.json"
@@ -206,9 +203,7 @@ class TestBind:
         binding_file = os.path.join(os.path.dirname(config_path), ".spec_binding.json")
         assert os.path.exists(binding_file)
 
-    def test_binding_file_is_valid_json(
-        self, manager: SpecBindingManager, config_path: str
-    ) -> None:
+    def test_binding_file_is_valid_json(self, manager: SpecBindingManager, config_path: str) -> None:
         manager.bind(config_path)
         binding_file = os.path.join(os.path.dirname(config_path), ".spec_binding.json")
         with open(binding_file, encoding="utf-8") as f:
@@ -228,9 +223,7 @@ class TestGetBinding:
     def test_returns_none_when_no_binding(self, manager: SpecBindingManager) -> None:
         assert manager.get_binding() is None
 
-    def test_returns_binding_after_bind(
-        self, bound_manager: SpecBindingManager, config_path: str
-    ) -> None:
+    def test_returns_binding_after_bind(self, bound_manager: SpecBindingManager, config_path: str) -> None:
         b = bound_manager.get_binding()
         assert b is not None
         assert isinstance(b, SpecBinding)
@@ -242,16 +235,12 @@ class TestGetBinding:
 
 
 class TestVerify:
-    def test_valid_when_config_unchanged(
-        self, bound_manager: SpecBindingManager
-    ) -> None:
+    def test_valid_when_config_unchanged(self, bound_manager: SpecBindingManager) -> None:
         valid, reason = bound_manager.verify()
         assert valid is True
         assert "valid" in reason.lower() or reason == ""
 
-    def test_invalid_when_config_changed(
-        self, bound_manager: SpecBindingManager, config_path: str
-    ) -> None:
+    def test_invalid_when_config_changed(self, bound_manager: SpecBindingManager, config_path: str) -> None:
         # Mutate the config
         with open(config_path, encoding="utf-8") as f:
             cfg = json.load(f)
@@ -263,9 +252,7 @@ class TestVerify:
         assert valid is False
         assert reason  # non-empty explanation
 
-    def test_reason_contains_hash_info_on_failure(
-        self, bound_manager: SpecBindingManager, config_path: str
-    ) -> None:
+    def test_reason_contains_hash_info_on_failure(self, bound_manager: SpecBindingManager, config_path: str) -> None:
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump({"changed": True}, f)
 
@@ -278,9 +265,7 @@ class TestVerify:
         assert valid is False
         assert "no binding" in reason.lower()
 
-    def test_missing_config_file_returns_false(
-        self, bound_manager: SpecBindingManager, config_path: str
-    ) -> None:
+    def test_missing_config_file_returns_false(self, bound_manager: SpecBindingManager, config_path: str) -> None:
         os.remove(config_path)
         valid, reason = bound_manager.verify()
         assert valid is False
@@ -296,9 +281,7 @@ class TestHasDrifted:
     def test_false_when_unchanged(self, bound_manager: SpecBindingManager) -> None:
         assert bound_manager.has_drifted() is False
 
-    def test_true_when_config_changed(
-        self, bound_manager: SpecBindingManager, config_path: str
-    ) -> None:
+    def test_true_when_config_changed(self, bound_manager: SpecBindingManager, config_path: str) -> None:
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump({"tampered": "yes"}, f)
         assert bound_manager.has_drifted() is True
@@ -313,9 +296,7 @@ class TestHasDrifted:
 
 
 class TestRebind:
-    def test_rebind_updates_hash(
-        self, bound_manager: SpecBindingManager, config_path: str
-    ) -> None:
+    def test_rebind_updates_hash(self, bound_manager: SpecBindingManager, config_path: str) -> None:
         original = bound_manager.get_binding()
         assert original is not None
         original_hash = original.spec_hash
@@ -327,9 +308,7 @@ class TestRebind:
 
         assert new_binding.spec_hash != original_hash
 
-    def test_rebind_clears_drift(
-        self, bound_manager: SpecBindingManager, config_path: str
-    ) -> None:
+    def test_rebind_clears_drift(self, bound_manager: SpecBindingManager, config_path: str) -> None:
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump({"new": "config"}, f)
         assert bound_manager.has_drifted() is True
@@ -337,9 +316,7 @@ class TestRebind:
         bound_manager.rebind(config_path)
         assert bound_manager.has_drifted() is False
 
-    def test_rebind_overwrites_binding_file(
-        self, bound_manager: SpecBindingManager, config_path: str
-    ) -> None:
+    def test_rebind_overwrites_binding_file(self, bound_manager: SpecBindingManager, config_path: str) -> None:
         binding_file = os.path.join(os.path.dirname(config_path), ".spec_binding.json")
         mtime_before = os.path.getmtime(binding_file)
         time.sleep(0.05)

@@ -12,7 +12,6 @@ from mind_mem.query_expansion import (
     expand_queries,
 )
 
-
 # ---------------------------------------------------------------------------
 # NLPQueryExpander tests
 # ---------------------------------------------------------------------------
@@ -206,10 +205,12 @@ class TestLLMQueryExpander(unittest.TestCase):
         env_key = "ANTHROPIC_API_KEY_TEST_DUMMY_12345"
         old_val = os.environ.pop(env_key, None)
         try:
-            expander = LLMQueryExpander(config={
-                "api_key_env": env_key,
-                "provider": "anthropic",
-            })
+            expander = LLMQueryExpander(
+                config={
+                    "api_key_env": env_key,
+                    "provider": "anthropic",
+                }
+            )
             result = expander.expand("find errors", max_expansions=3)
             # Should fall back gracefully and return at least the original
             self.assertGreaterEqual(len(result), 1)
@@ -230,10 +231,12 @@ class TestLLMQueryExpander(unittest.TestCase):
 
         os.environ["TEST_DUMMY_KEY_QE_99"] = "test-key"
         try:
-            expander = LLMQueryExpander(config={
-                "provider": "unsupported_provider",
-                "api_key_env": "TEST_DUMMY_KEY_QE_99",
-            })
+            expander = LLMQueryExpander(
+                config={
+                    "provider": "unsupported_provider",
+                    "api_key_env": "TEST_DUMMY_KEY_QE_99",
+                }
+            )
             result = expander.expand("test query", max_expansions=2)
             # Should fall back to NLP
             self.assertGreaterEqual(len(result), 1)
@@ -350,9 +353,11 @@ class TestHybridQueryExpansion(unittest.TestCase):
         """Query expansion should activate when config enables it."""
         from mind_mem.hybrid_recall import HybridBackend
 
-        hb = HybridBackend(config={
-            "query_expansion": {"enabled": True, "max_expansions": 3},
-        })
+        hb = HybridBackend(
+            config={
+                "query_expansion": {"enabled": True, "max_expansions": 3},
+            }
+        )
         self.assertTrue(hb._query_expansion_enabled)
 
     def test_expansion_config_not_dict_fallback(self):

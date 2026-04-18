@@ -292,9 +292,7 @@ class EncryptionManager:
                 plaintexts.append((path, self.decrypt_file(path)))
             except (OSError, ValueError) as e:
                 _log.error("key_rotation_decrypt_failed", path=path, error=str(e))
-                raise RuntimeError(
-                    f"key rotation aborted: decrypt failed for {path!r}"
-                ) from e
+                raise RuntimeError(f"key rotation aborted: decrypt failed for {path!r}") from e
 
         # Phase 2 — write all re-encrypted payloads to temp files
         # alongside the originals. No original is overwritten yet, so a
@@ -305,9 +303,7 @@ class EncryptionManager:
                 nonce = os.urandom(_NONCE_SIZE)
                 ks = _keystream(new_enc_key, nonce, len(plaintext))
                 ciphertext = _xor_bytes(plaintext, ks)
-                mac = hmac.new(
-                    new_mac_key, nonce + ciphertext, hashlib.sha256
-                ).digest()
+                mac = hmac.new(new_mac_key, nonce + ciphertext, hashlib.sha256).digest()
                 encrypted = _MAGIC + nonce + ciphertext + mac
 
                 resolved = os.path.realpath(path)

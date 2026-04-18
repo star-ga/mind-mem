@@ -9,7 +9,6 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-
 _SCHEMA = """\
 CREATE TABLE IF NOT EXISTS optimization_runs (
     run_id TEXT PRIMARY KEY,

@@ -306,9 +306,7 @@ class TestScanTranscript(unittest.TestCase):
                 {
                     "role": "user",
                     "content": (
-                        "Never use eval() in production code.\n"
-                        "Always use parameterized queries.\n"
-                        "The convention is to log all errors."
+                        "Never use eval() in production code.\nAlways use parameterized queries.\nThe convention is to log all errors."
                     ),
                 },
             ]

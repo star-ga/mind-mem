@@ -92,9 +92,7 @@ class TestLogRetrieval(unittest.TestCase):
         log_retrieval(self.tmpdir, "q1", results)
         log_retrieval(self.tmpdir, "q2", results)
         conn = _connect(self.tmpdir)
-        row = conn.execute(
-            "SELECT weight, hit_count FROM co_retrieval WHERE mem1_id=? AND mem2_id=?", ("X", "Y")
-        ).fetchone()
+        row = conn.execute("SELECT weight, hit_count FROM co_retrieval WHERE mem1_id=? AND mem2_id=?", ("X", "Y")).fetchone()
         self.assertEqual(row["hit_count"], 2)
         self.assertGreater(row["weight"], 0.5)  # 0.5 + 0.5 = 1.0
         conn.close()

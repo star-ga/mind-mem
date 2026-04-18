@@ -18,11 +18,13 @@ class TestOpenAICompatibleProvider(unittest.TestCase):
 
     def test_base_url_custom(self):
         """Custom base_url should be used for non-OpenAI providers."""
-        expander = LLMQueryExpander(config={
-            "provider": "xai",
-            "base_url": "https://api.x.ai/v1",
-            "model": "grok-4-1-fast-reasoning",
-        })
+        expander = LLMQueryExpander(
+            config={
+                "provider": "xai",
+                "base_url": "https://api.x.ai/v1",
+                "model": "grok-4-1-fast-reasoning",
+            }
+        )
         self.assertEqual(expander.base_url, "https://api.x.ai/v1")
         self.assertEqual(expander.model, "grok-4-1-fast-reasoning")
 
@@ -30,14 +32,18 @@ class TestOpenAICompatibleProvider(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_call_openai_compatible_parses_response(self, mock_urlopen):
         """Should parse alternatives from an OpenAI-compatible response."""
-        response_body = json.dumps({
-            "choices": [{
-                "message": {
-                    "role": "assistant",
-                    "content": "find database issues\nlocate db errors\nsearch data store failures",
-                }
-            }]
-        }).encode("utf-8")
+        response_body = json.dumps(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "find database issues\nlocate db errors\nsearch data store failures",
+                        }
+                    }
+                ]
+            }
+        ).encode("utf-8")
 
         mock_resp = MagicMock()
         mock_resp.read.return_value = response_body
@@ -45,11 +51,13 @@ class TestOpenAICompatibleProvider(unittest.TestCase):
         mock_resp.__exit__ = MagicMock(return_value=False)
         mock_urlopen.return_value = mock_resp
 
-        expander = LLMQueryExpander(config={
-            "provider": "openai",
-            "model": "gpt-5.4",
-            "api_key_env": "OPENAI_API_KEY",
-        })
+        expander = LLMQueryExpander(
+            config={
+                "provider": "openai",
+                "model": "gpt-5.4",
+                "api_key_env": "OPENAI_API_KEY",
+            }
+        )
         results = expander.expand("find database errors", max_expansions=4)
 
         self.assertEqual(results[0], "find database errors")
@@ -67,12 +75,14 @@ class TestOpenAICompatibleProvider(unittest.TestCase):
         mock_resp.__exit__ = MagicMock(return_value=False)
         mock_urlopen.return_value = mock_resp
 
-        expander = LLMQueryExpander(config={
-            "provider": "xai",
-            "base_url": "https://api.x.ai/v1",
-            "model": "grok-4-1-fast-reasoning",
-            "api_key_env": "XAI_API_KEY",
-        })
+        expander = LLMQueryExpander(
+            config={
+                "provider": "xai",
+                "base_url": "https://api.x.ai/v1",
+                "model": "grok-4-1-fast-reasoning",
+                "api_key_env": "XAI_API_KEY",
+            }
+        )
         results = expander.expand("test query", max_expansions=3)
 
         # Original query should always be present
@@ -84,18 +94,10 @@ class TestOpenAICompatibleProvider(unittest.TestCase):
         # exist in the process environment, so _call_llm raises the expected
         # RuntimeError instead of making a real HTTP call with whatever key
         # happens to be set globally (which would yield a 401 instead).
-        expander_anthropic = LLMQueryExpander(
-            config={"provider": "anthropic", "api_key_env": "MIND_MEM_TEST_NONEXISTENT_ANTHROPIC"}
-        )
-        expander_openai = LLMQueryExpander(
-            config={"provider": "openai", "api_key_env": "MIND_MEM_TEST_NONEXISTENT_OPENAI"}
-        )
-        expander_xai = LLMQueryExpander(
-            config={"provider": "xai", "api_key_env": "MIND_MEM_TEST_NONEXISTENT_XAI"}
-        )
-        expander_mistral = LLMQueryExpander(
-            config={"provider": "mistral", "api_key_env": "MIND_MEM_TEST_NONEXISTENT_MISTRAL"}
-        )
+        expander_anthropic = LLMQueryExpander(config={"provider": "anthropic", "api_key_env": "MIND_MEM_TEST_NONEXISTENT_ANTHROPIC"})
+        expander_openai = LLMQueryExpander(config={"provider": "openai", "api_key_env": "MIND_MEM_TEST_NONEXISTENT_OPENAI"})
+        expander_xai = LLMQueryExpander(config={"provider": "xai", "api_key_env": "MIND_MEM_TEST_NONEXISTENT_XAI"})
+        expander_mistral = LLMQueryExpander(config={"provider": "mistral", "api_key_env": "MIND_MEM_TEST_NONEXISTENT_MISTRAL"})
 
         self.assertEqual(expander_anthropic.provider, "anthropic")
         self.assertEqual(expander_openai.provider, "openai")

@@ -555,9 +555,7 @@ def parse_file(filepath: str, *, strict: bool = False) -> list[dict]:
             if after and after[0].isupper():
                 content = content[:last_boundary]
         else:
-            _log.warning(
-                "MAX_PARSE_SIZE truncation could not find a block boundary; result may contain a partial block"
-            )
+            _log.warning("MAX_PARSE_SIZE truncation could not find a block boundary; result may contain a partial block")
 
     blocks = parse_blocks(content)
     valid: list[dict] = []

@@ -1,5 +1,6 @@
 # Copyright 2026 STARGA, Inc.
 """Tests for EncryptedBlockStore + workspace migration (v3.0.0 — GH #504)."""
+
 from __future__ import annotations
 
 import os
@@ -14,27 +15,18 @@ from mind_mem.block_store_encrypted import (
     get_block_store,
 )
 
-
 _PASS = "test-passphrase-for-unit-tests"
 
 
 def _make_block(bid: str) -> str:
-    return (
-        f"[{bid}]\n"
-        f"Date: 2026-04-13\n"
-        f"Status: active\n"
-        f"Title: Example\n"
-        f"Rationale: seed\n"
-    )
+    return f"[{bid}]\nDate: 2026-04-13\nStatus: active\nTitle: Example\nRationale: seed\n"
 
 
 @pytest.fixture
 def seeded_workspace(tmp_path: Path) -> Path:
     decisions = tmp_path / "decisions"
     decisions.mkdir()
-    (decisions / "DECISIONS.md").write_text(
-        "\n".join(_make_block(f"D-2026041{i}-001") for i in range(3)) + "\n"
-    )
+    (decisions / "DECISIONS.md").write_text("\n".join(_make_block(f"D-2026041{i}-001") for i in range(3)) + "\n")
     return tmp_path
 
 
@@ -59,9 +51,7 @@ class TestTransparentReadOnPlainFiles:
 
 
 class TestTransparentReadOnEncryptedFiles:
-    def test_encrypted_files_decrypt_on_read(
-        self, seeded_workspace: Path
-    ) -> None:
+    def test_encrypted_files_decrypt_on_read(self, seeded_workspace: Path) -> None:
         # Encrypt the corpus in place
         os.environ["MIND_MEM_ENCRYPTION_PASSPHRASE"] = _PASS
         try:
@@ -72,6 +62,7 @@ class TestTransparentReadOnEncryptedFiles:
             decision_file = seeded_workspace / "decisions" / "DECISIONS.md"
             head = decision_file.read_bytes()[:6]
             from mind_mem.encryption import _MAGIC
+
             assert head == _MAGIC
 
             # Plain store would fail to parse; encrypted store

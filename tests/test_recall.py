@@ -53,9 +53,7 @@ class TestExtractText(unittest.TestCase):
         self.assertIn("auth, security", text)
 
     def test_extracts_constraint_sigs(self):
-        block = {
-            "ConstraintSignatures": [{"subject": "we", "predicate": "must_use", "object": "JWT", "domain": "auth"}]
-        }
+        block = {"ConstraintSignatures": [{"subject": "we", "predicate": "must_use", "object": "JWT", "domain": "auth"}]}
         text = extract_text(block)
         self.assertIn("we", text)
         self.assertIn("must_use", text)

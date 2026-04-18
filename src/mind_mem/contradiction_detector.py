@@ -547,9 +547,6 @@ if __name__ == "__main__":
         if report["conflicts"]:
             print(f"\nDetails ({len(report['conflicts'])} conflict(s)):")
             for c in report["conflicts"]:
-                print(
-                    f"  [{c['conflict_type'].upper()}] {c['block_id']} "
-                    f"(similarity: {c['similarity']:.2f}, file: {c['source_file']})"
-                )
+                print(f"  [{c['conflict_type'].upper()}] {c['block_id']} (similarity: {c['similarity']:.2f}, file: {c['source_file']})")
                 print(f"    Existing: {c['existing_excerpt'][:120]}...")
         print()

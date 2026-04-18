@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 from pathlib import Path
 
@@ -104,9 +103,7 @@ class TestRecallWithAxisArgParsing:
     def test_limit_upper_bound(self, axis_workspace):
         from mind_mem import mcp_server
 
-        out = _call_tool(
-            mcp_server.recall_with_axis, query="q", axes="lexical", limit=100000
-        )
+        out = _call_tool(mcp_server.recall_with_axis, query="q", axes="lexical", limit=100000)
         assert "error" in out
         assert "limit" in out["error"].lower()
 
@@ -149,12 +146,8 @@ class TestRecallWithAxisEnvelope:
         per_axis: dict = {
             ObservationAxis.LEXICAL: [],
             ObservationAxis.SEMANTIC: [],
-            ObservationAxis.TEMPORAL: [
-                {"_id": "T", "file": "t.md", "line": 1, "excerpt": "temporal"}
-            ],
-            ObservationAxis.ENTITY_GRAPH: [
-                {"_id": "G", "file": "g.md", "line": 1, "excerpt": "graph"}
-            ],
+            ObservationAxis.TEMPORAL: [{"_id": "T", "file": "t.md", "line": 1, "excerpt": "temporal"}],
+            ObservationAxis.ENTITY_GRAPH: [{"_id": "G", "file": "g.md", "line": 1, "excerpt": "graph"}],
         }
 
         def stub(ws, q, axis, *, limit, active_only, base_recall_kwargs):

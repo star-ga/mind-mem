@@ -1,17 +1,14 @@
 # Copyright 2026 STARGA, Inc.
 """Tests for TTL/LRU tier decay (v3.0.0 — GH #502)."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import pytest
-
 from mind_mem.memory_tiers import (
-    DemotionReason,
     MemoryTier,
     TierManager,
-    TierPolicy,
     _hours_since,
     default_policies,
 )

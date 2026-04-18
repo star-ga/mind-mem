@@ -29,10 +29,7 @@ class TestExtractBlockText(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_extracts_block_up_to_separator(self):
-        content = (
-            "[D-20260101-001]\nStatement: First\nStatus: active\n\n---\n"
-            "[D-20260101-002]\nStatement: Second\nStatus: done\n"
-        )
+        content = "[D-20260101-001]\nStatement: First\nStatus: active\n\n---\n[D-20260101-002]\nStatement: Second\nStatus: done\n"
         text = _extract_block_text(content, "D-20260101-001")
         self.assertIn("First", text)
         self.assertNotIn("Second", text)

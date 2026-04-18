@@ -90,11 +90,7 @@ class UncertaintyPropagator:
             if block_id in adjusted_conf:
                 return adjusted_conf[block_id]
             hop = by_id[block_id]
-            if (
-                hop.parent_hop_id is None
-                or hop.parent_hop_id not in by_id
-                or hop.parent_hop_id in visiting
-            ):
+            if hop.parent_hop_id is None or hop.parent_hop_id not in by_id or hop.parent_hop_id in visiting:
                 # Root, unknown parent, or cycle detected — treat as root.
                 value = max(0.0, min(1.0, hop.confidence))
             else:

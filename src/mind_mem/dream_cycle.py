@@ -30,6 +30,7 @@ _log = get_logger("dream_cycle")
 
 # --- Data classes (immutable results) ---
 
+
 @dataclass(frozen=True)
 class EntityProposal:
     """A proposed new entity discovered during Pass 1."""
@@ -85,12 +86,7 @@ class DreamCycleReport:
 
     @property
     def total_findings(self) -> int:
-        return (
-            len(self.entity_proposals)
-            + len(self.broken_citations)
-            + len(self.stale_blocks)
-            + len(self.consolidation_candidates)
-        )
+        return len(self.entity_proposals) + len(self.broken_citations) + len(self.stale_blocks) + len(self.consolidation_candidates)
 
     @property
     def total_repairs(self) -> int:
@@ -107,10 +103,13 @@ _PROJECT_PATTERNS = [
 
 _TOOL_PATTERNS = [
     (re.compile(r"\bmcp[_-](?:server[_-])?([\w-]+)\b", re.I), "mcp_server"),
-    (re.compile(
-        r"\b(codex|gemini|claude|docker|kubectl|npm|pip|cargo|rustc|gcc|make)\b",
-        re.I,
-    ), "cli_tool"),
+    (
+        re.compile(
+            r"\b(codex|gemini|claude|docker|kubectl|npm|pip|cargo|rustc|gcc|make)\b",
+            re.I,
+        ),
+        "cli_tool",
+    ),
     (re.compile(r"\bTOOL-([\w-]+)\b"), "tool_ref"),
 ]
 
@@ -119,19 +118,58 @@ _PEOPLE_PATTERNS = [
     (re.compile(r"\bPER-([\w-]+)\b"), "per_ref"),
 ]
 
-_IGNORE_DIRS = frozenset({
-    "bin", "lib", "etc", "var", "tmp", "usr", "opt", "dev", "proc", "sys",
-    "snap", "cache", "config", "local", "share", "node_modules", ".git",
-    ".cache", ".local", ".config", ".openclaw", ".claude", ".ssh", ".gnupg",
-    ".npm", ".cargo", ".rustup", "documents", "downloads", "desktop",
-})
+_IGNORE_DIRS = frozenset(
+    {
+        "bin",
+        "lib",
+        "etc",
+        "var",
+        "tmp",
+        "usr",
+        "opt",
+        "dev",
+        "proc",
+        "sys",
+        "snap",
+        "cache",
+        "config",
+        "local",
+        "share",
+        "node_modules",
+        ".git",
+        ".cache",
+        ".local",
+        ".config",
+        ".openclaw",
+        ".claude",
+        ".ssh",
+        ".gnupg",
+        ".npm",
+        ".cargo",
+        ".rustup",
+        "documents",
+        "downloads",
+        "desktop",
+    }
+)
 
 _TOOL_IGNORE = frozenset({"server", "make", "cargo", "rustc", "gcc"})
 
-_PERSON_IGNORE = frozenset({
-    "mention", "handle", "user", "admin", "bot", "system", "star",
-    "here", "everyone", "channel", "all",
-})
+_PERSON_IGNORE = frozenset(
+    {
+        "mention",
+        "handle",
+        "user",
+        "admin",
+        "bot",
+        "system",
+        "star",
+        "here",
+        "everyone",
+        "channel",
+        "all",
+    }
+)
 
 # Block ID patterns for citation checking
 _BLOCK_ID_RE = re.compile(
@@ -180,10 +218,14 @@ def _extract_raw_entities(text: str) -> list[dict[str, str]]:
                 seen.add(slug)
                 start = max(0, m.start() - 30)
                 end = min(len(text), m.end() + 50)
-                found.append({
-                    "entity_type": etype, "slug": slug,
-                    "source_pattern": source, "excerpt": text[start:end].strip(),
-                })
+                found.append(
+                    {
+                        "entity_type": etype,
+                        "slug": slug,
+                        "source_pattern": source,
+                        "excerpt": text[start:end].strip(),
+                    }
+                )
     return found
 
 
@@ -246,13 +288,15 @@ def pass_entity_discovery(
             if slug in tracked or slug in seen_global:
                 continue
             seen_global.add(slug)
-            proposals.append(EntityProposal(
-                entity_type=ent["entity_type"],
-                slug=slug,
-                source_pattern=ent["source_pattern"],
-                excerpt=ent["excerpt"][:120],
-                source_file=fname,
-            ))
+            proposals.append(
+                EntityProposal(
+                    entity_type=ent["entity_type"],
+                    slug=slug,
+                    source_pattern=ent["source_pattern"],
+                    excerpt=ent["excerpt"][:120],
+                    source_file=fname,
+                )
+            )
 
     _log.info("entity_discovery_complete", found=len(proposals))
     metrics.inc("dream_entities_found", len(proposals))
@@ -312,12 +356,14 @@ def pass_citation_repair(workspace: str) -> list[BrokenCitation]:
                 cited_id = m.group(1)
                 if cited_id not in defined_ids:
                     context = line.strip()[:120]
-                    broken.append(BrokenCitation(
-                        source_file=rel_path,
-                        cited_id=cited_id,
-                        line_number=line_num,
-                        context=context,
-                    ))
+                    broken.append(
+                        BrokenCitation(
+                            source_file=rel_path,
+                            cited_id=cited_id,
+                            line_number=line_num,
+                            context=context,
+                        )
+                    )
 
     _log.info("citation_repair_complete", broken=len(broken))
     metrics.inc("dream_broken_citations", len(broken))
@@ -371,25 +417,27 @@ def pass_stale_detection(
             if embedded_date and embedded_date < cutoff_str:
                 # Block date is old — check if file was also not touched recently
                 if file_is_old:
-                    days = (datetime.now() - datetime.strptime(
-                        embedded_date, "%Y-%m-%d"
-                    )).days
-                    stale.append(StaleBlock(
-                        block_id=block_id,
-                        source_file=rel_path,
-                        last_modified_date=embedded_date,
-                        days_stale=days,
-                    ))
+                    days = (datetime.now() - datetime.strptime(embedded_date, "%Y-%m-%d")).days
+                    stale.append(
+                        StaleBlock(
+                            block_id=block_id,
+                            source_file=rel_path,
+                            last_modified_date=embedded_date,
+                            days_stale=days,
+                        )
+                    )
             elif not embedded_date and file_is_old:
                 # No date in ID, but file is old
                 days = int((datetime.now().timestamp() - file_mtime) / 86400)
                 last_mod = datetime.fromtimestamp(file_mtime).strftime("%Y-%m-%d")
-                stale.append(StaleBlock(
-                    block_id=block_id,
-                    source_file=rel_path,
-                    last_modified_date=last_mod,
-                    days_stale=days,
-                ))
+                stale.append(
+                    StaleBlock(
+                        block_id=block_id,
+                        source_file=rel_path,
+                        last_modified_date=last_mod,
+                        days_stale=days,
+                    )
+                )
 
     _log.info("stale_detection_complete", stale=len(stale))
     metrics.inc("dream_stale_blocks", len(stale))
@@ -471,11 +519,13 @@ def pass_consolidation(
     candidates: list[ConsolidationCandidate] = []
     for normalized, sources in line_sources.items():
         if len(sources) >= min_occurrences:
-            candidates.append(ConsolidationCandidate(
-                fact_text=line_originals[normalized],
-                occurrences=len(sources),
-                source_files=tuple(sorted(sources)),
-            ))
+            candidates.append(
+                ConsolidationCandidate(
+                    fact_text=line_originals[normalized],
+                    occurrences=len(sources),
+                    source_files=tuple(sorted(sources)),
+                )
+            )
 
     # Sort by occurrence count descending
     candidates.sort(key=lambda c: c.occurrences, reverse=True)
@@ -492,8 +542,10 @@ def _format_report_markdown(report: DreamCycleReport) -> str:
     """Format a DreamCycleReport as markdown for writing to disk."""
     lines: list[str] = [
         f"# Dream Cycle Report — {report.timestamp}",
-        "", f"Workspace: `{report.workspace}`",
-        f"Total findings: {report.total_findings}", "",
+        "",
+        f"Workspace: `{report.workspace}`",
+        f"Total findings: {report.total_findings}",
+        "",
     ]
 
     _prefix_map = {"project": "PRJ", "tool": "TOOL", "person": "PER"}
@@ -531,7 +583,7 @@ def _format_report_markdown(report: DreamCycleReport) -> str:
     if report.consolidation_candidates:
         for cc in report.consolidation_candidates:
             files = ", ".join(f"`{f}`" for f in cc.source_files[:5])
-            lines.append(f"- \"{cc.fact_text}\" ({cc.occurrences}x in {files})")
+            lines.append(f'- "{cc.fact_text}" ({cc.occurrences}x in {files})')
     else:
         lines.append("No consolidation candidates found.")
     lines.append("")
@@ -542,7 +594,7 @@ def _format_report_markdown(report: DreamCycleReport) -> str:
         for action in report.repair_actions:
             lines.append(f"- **[{action.action_type}]** `{action.target}`: {action.detail}")
         lines.append("")
-    elif hasattr(report, 'repair_actions'):
+    elif hasattr(report, "repair_actions"):
         lines += ["## Pass 6: Auto-Repair Actions", ""]
         lines.append("No auto-repair actions taken.")
         lines.append("")
@@ -755,11 +807,13 @@ def pass_auto_repair(
         if path:
             prefix = _ENTITY_PREFIX_MAP.get(proposal.entity_type, "UNK")
             entity_id = f"{prefix}-{proposal.slug}"
-            actions.append(RepairAction(
-                action_type="entity_created",
-                target=entity_id,
-                detail=f"Created {path}",
-            ))
+            actions.append(
+                RepairAction(
+                    action_type="entity_created",
+                    target=entity_id,
+                    detail=f"Created {path}",
+                )
+            )
             created += 1
 
     # Suggest closest match for broken citations (logged, not auto-fixed)
@@ -768,11 +822,13 @@ def pass_auto_repair(
         for bc in report.broken_citations:
             closest = _find_closest_block_id(bc.cited_id, defined_ids)
             if closest:
-                actions.append(RepairAction(
-                    action_type="citation_closest_match",
-                    target=bc.cited_id,
-                    detail=f"In {bc.source_file}:{bc.line_number} — closest match: {closest}",
-                ))
+                actions.append(
+                    RepairAction(
+                        action_type="citation_closest_match",
+                        target=bc.cited_id,
+                        detail=f"In {bc.source_file}:{bc.line_number} — closest match: {closest}",
+                    )
+                )
 
     # Auto-promote consolidated facts to compiled truth pages
     promoted = 0
@@ -781,11 +837,13 @@ def pass_auto_repair(
             break
         entity_id = _promote_to_compiled_truth(workspace, candidate)
         if entity_id:
-            actions.append(RepairAction(
-                action_type="truth_promoted",
-                target=entity_id,
-                detail=f"Promoted '{candidate.fact_text[:60]}...' ({candidate.occurrences}x)",
-            ))
+            actions.append(
+                RepairAction(
+                    action_type="truth_promoted",
+                    target=entity_id,
+                    detail=f"Promoted '{candidate.fact_text[:60]}...' ({candidate.occurrences}x)",
+                )
+            )
             promoted += 1
 
     _log.info(
@@ -946,10 +1004,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="mind-mem Dream Cycle")
     parser.add_argument("workspace", nargs="?", default=".")
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--auto-repair", action="store_true",
-                        help="Auto-create entity files, suggest citation fixes, promote facts")
+    parser.add_argument("--auto-repair", action="store_true", help="Auto-create entity files, suggest citation fixes, promote facts")
     parser.add_argument(
-        "--pass", dest="single_pass", default=None,
+        "--pass",
+        dest="single_pass",
+        default=None,
         choices=["entity_discovery", "citation_repair", "stale_detection", "consolidation"],
     )
     parser.add_argument("--lookback-days", type=int, default=7)
@@ -970,7 +1029,8 @@ def main() -> None:
             "citation_repair": lambda: pass_citation_repair(ws),
             "stale_detection": lambda: pass_stale_detection(ws, stale_days=args.stale_days),
             "consolidation": lambda: pass_consolidation(
-                ws, lookback_days=args.consolidation_lookback,
+                ws,
+                lookback_days=args.consolidation_lookback,
                 min_occurrences=args.min_occurrences,
             ),
         }
@@ -981,9 +1041,12 @@ def main() -> None:
         return
 
     report = run_dream_cycle(
-        ws, dry_run=args.dry_run, auto_repair=args.auto_repair,
+        ws,
+        dry_run=args.dry_run,
+        auto_repair=args.auto_repair,
         lookback_days=args.lookback_days,
-        stale_days=args.stale_days, consolidation_lookback=args.consolidation_lookback,
+        stale_days=args.stale_days,
+        consolidation_lookback=args.consolidation_lookback,
         min_occurrences=args.min_occurrences,
     )
     labels = [

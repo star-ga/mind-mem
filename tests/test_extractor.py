@@ -151,9 +151,7 @@ class TestFormatAsBlocks:
         assert "Sources: DIA-D1-3" in text
 
     def test_custom_prefix(self):
-        cards = [
-            {"type": "EVENT", "content": "X visited Y", "speaker": "", "date": "", "source_id": "", "confidence": 0.8}
-        ]
+        cards = [{"type": "EVENT", "content": "X visited Y", "speaker": "", "date": "", "source_id": "", "confidence": 0.8}]
         text = format_as_blocks(cards, id_prefix="EVT")
         assert "[EVT-001]" in text
 

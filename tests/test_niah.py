@@ -16,13 +16,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import os
 import shutil
 import sys
 import tempfile
 import time
-from typing import Any
 
 import pytest
 
@@ -146,18 +144,65 @@ _FILLER_TEMPLATES_INCIDENTS = [
     "Network partition between {service} and {alt_tech} backend lasted {throughput} seconds. Auto-healed.",
 ]
 
-_TECHS = ["Kubernetes", "PostgreSQL", "Redis", "Kafka", "Elasticsearch", "gRPC",
-          "GraphQL", "Terraform", "Docker", "Prometheus", "Envoy", "NATS",
-          "RabbitMQ", "Consul", "Vault", "ArgoCD", "Istio", "Linkerd"]
-_DOMAINS = ["infrastructure", "security", "observability", "networking", "storage",
-            "authentication", "billing", "analytics", "data-pipeline", "ML-ops"]
-_SERVICES = ["auth-service", "payment-gateway", "user-api", "notification-hub",
-             "search-indexer", "order-processor", "inventory-sync", "email-relay",
-             "cdn-edge", "rate-limiter", "session-store", "config-server"]
-_COMPANIES = ["Cloudflare", "Datadog", "PagerDuty", "Snowflake", "Confluent",
-              "HashiCorp", "Elastic", "MongoDB", "CockroachDB", "Temporal"]
-_PERSONS = ["Alice Chen", "Bob Martinez", "Carol Wu", "David Park", "Eva Johansson",
-            "Frank Okafor", "Grace Kim", "Hiro Tanaka", "Isla Reeves", "Jamal Washington"]
+_TECHS = [
+    "Kubernetes",
+    "PostgreSQL",
+    "Redis",
+    "Kafka",
+    "Elasticsearch",
+    "gRPC",
+    "GraphQL",
+    "Terraform",
+    "Docker",
+    "Prometheus",
+    "Envoy",
+    "NATS",
+    "RabbitMQ",
+    "Consul",
+    "Vault",
+    "ArgoCD",
+    "Istio",
+    "Linkerd",
+]
+_DOMAINS = [
+    "infrastructure",
+    "security",
+    "observability",
+    "networking",
+    "storage",
+    "authentication",
+    "billing",
+    "analytics",
+    "data-pipeline",
+    "ML-ops",
+]
+_SERVICES = [
+    "auth-service",
+    "payment-gateway",
+    "user-api",
+    "notification-hub",
+    "search-indexer",
+    "order-processor",
+    "inventory-sync",
+    "email-relay",
+    "cdn-edge",
+    "rate-limiter",
+    "session-store",
+    "config-server",
+]
+_COMPANIES = ["Cloudflare", "Datadog", "PagerDuty", "Snowflake", "Confluent", "HashiCorp", "Elastic", "MongoDB", "CockroachDB", "Temporal"]
+_PERSONS = [
+    "Alice Chen",
+    "Bob Martinez",
+    "Carol Wu",
+    "David Park",
+    "Eva Johansson",
+    "Frank Okafor",
+    "Grace Kim",
+    "Hiro Tanaka",
+    "Isla Reeves",
+    "Jamal Washington",
+]
 
 
 def _deterministic_hash(seed: int, salt: str = "") -> int:
@@ -200,10 +245,23 @@ def _generate_filler_block(index: int, block_type: str = "decision") -> dict:
     template = templates[s % len(templates)]
     try:
         statement = template.format(
-            tech=tech, alt_tech=alt_tech, domain=domain, service=service,
-            company=company, person=person, year=year, month=month, day=day,
-            q=q, count=count, count2=count2, amount=amount,
-            throughput=throughput, major=major, minor=minor, patch=patch,
+            tech=tech,
+            alt_tech=alt_tech,
+            domain=domain,
+            service=service,
+            company=company,
+            person=person,
+            year=year,
+            month=month,
+            day=day,
+            q=q,
+            count=count,
+            count2=count2,
+            amount=amount,
+            throughput=throughput,
+            major=major,
+            minor=minor,
+            patch=patch,
             pr_num=pr_num,
         )
     except (KeyError, IndexError):
@@ -250,6 +308,7 @@ def _build_needle_block_md(needle_id: str, needle_text: str) -> str:
 # ---------------------------------------------------------------------------
 # Workspace builder
 # ---------------------------------------------------------------------------
+
 
 def _build_workspace(
     haystack_size: int,
@@ -320,18 +379,22 @@ def _build_workspace(
 # Search functions
 # ---------------------------------------------------------------------------
 
+
 def _build_indexes(workspace: str) -> None:
     """Build FTS5 + vector indexes."""
     from mind_mem.sqlite_index import build_index
+
     build_index(workspace, incremental=False)
 
     from mind_mem.recall_vector import VectorBackend
+
     vb = VectorBackend(_RECALL_CONFIG)
     vb.index(workspace)
 
 
 def _hybrid_search(workspace: str, query: str, limit: int = 10) -> list[dict]:
     from mind_mem.hybrid_recall import HybridBackend
+
     hb = HybridBackend(_RECALL_CONFIG)
     return hb.search(query, workspace, limit=limit, active_only=False, rerank=False)
 
@@ -350,6 +413,7 @@ def _check_needle_found(results: list[dict], needle_id: str, expected_keywords: 
 # ---------------------------------------------------------------------------
 # Pytest parametrized test — 250 cases, build-test-cleanup per case
 # ---------------------------------------------------------------------------
+
 
 def _make_test_id(size, depth, needle_idx):
     return f"sz{size}_d{depth}_n{needle_idx}"
@@ -397,6 +461,7 @@ def test_niah_hybrid(haystack_size: int, depth_pct: int, needle_idx: int):
 # Standalone runner
 # ---------------------------------------------------------------------------
 
+
 def run_niah_standalone():
     """Run NIAH benchmark standalone with progress reporting."""
     print("=" * 70)
@@ -432,21 +497,25 @@ def run_niah_standalone():
             passed += 1
         else:
             failed += 1
-            failures.append({
-                "size": size, "depth": depth, "needle_idx": needle_idx,
-                "query": needle["query"],
-                "got": [r.get("_id", "?") for r in results],
-            })
+            failures.append(
+                {
+                    "size": size,
+                    "depth": depth,
+                    "needle_idx": needle_idx,
+                    "query": needle["query"],
+                    "got": [r.get("_id", "?") for r in results],
+                }
+            )
 
         if (i + 1) % 25 == 0 or (i + 1) == total:
             elapsed = time.time() - start
             rate = (i + 1) / elapsed if elapsed > 0 else 0
             eta = (total - i - 1) / rate if rate > 0 else 0
-            print(f"  [{i+1:3d}/{total}] pass={passed} fail={failed} ({elapsed:.0f}s, ETA {eta:.0f}s)")
+            print(f"  [{i + 1:3d}/{total}] pass={passed} fail={failed} ({elapsed:.0f}s, ETA {eta:.0f}s)")
 
     elapsed = time.time() - start
-    print(f"\n{'='*70}")
-    print(f"RESULTS: {passed}/{total} passed ({100*passed/total:.1f}%) in {elapsed:.0f}s")
+    print(f"\n{'=' * 70}")
+    print(f"RESULTS: {passed}/{total} passed ({100 * passed / total:.1f}%) in {elapsed:.0f}s")
     if failures:
         print(f"\nFAILURES ({len(failures)}):")
         for f in failures[:30]:

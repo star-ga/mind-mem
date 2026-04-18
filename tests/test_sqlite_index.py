@@ -66,9 +66,7 @@ class TestBuildIndex(_WorkspaceMixin, unittest.TestCase):
     def test_full_build_creates_db(self):
         ws = self._setup_workspace(
             self.td,
-            decisions=(
-                "[D-20260101-001]\nStatement: Use PostgreSQL for the database\nStatus: active\nDate: 2026-01-01\n"
-            ),
+            decisions=("[D-20260101-001]\nStatement: Use PostgreSQL for the database\nStatus: active\nDate: 2026-01-01\n"),
         )
         result = build_index(ws, incremental=False)
         self.assertTrue(os.path.isfile(_db_path(ws)))
@@ -181,9 +179,7 @@ class TestQueryIndex(_WorkspaceMixin, unittest.TestCase):
         """When index doesn't exist, should fall back to filesystem recall."""
         empty = tempfile.mkdtemp()
         try:
-            ws = self._setup_workspace(
-                empty, decisions=("[D-20260101-001]\nStatement: Use PostgreSQL\nStatus: active\n")
-            )
+            ws = self._setup_workspace(empty, decisions=("[D-20260101-001]\nStatement: Use PostgreSQL\nStatus: active\n"))
             # Don't build index — should fallback
             results = query_index(ws, "PostgreSQL")
             self.assertGreater(len(results), 0)
@@ -426,9 +422,7 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
 
     def test_modified_block_queryable(self):
         """After modifying a block, the new content should be searchable."""
-        ws = self._setup_workspace(
-            self.td, decisions=("[D-20260101-001]\nStatement: Use MySQL for database\nStatus: active\n")
-        )
+        ws = self._setup_workspace(self.td, decisions=("[D-20260101-001]\nStatement: Use MySQL for database\nStatus: active\n"))
         build_index(ws, incremental=False)
 
         # Modify content

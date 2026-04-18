@@ -159,9 +159,7 @@ class BlockMetadataManager:
         except (sqlite3.Error, TypeError):
             return 1.0
 
-    def evolve_keywords(
-        self, block_id: str, query_tokens: list[str], block_content: str = "", max_keywords: int = 20
-    ) -> None:
+    def evolve_keywords(self, block_id: str, query_tokens: list[str], block_content: str = "", max_keywords: int = 20) -> None:
         """Add query tokens found in block content to block's keyword set."""
         if not query_tokens:
             return

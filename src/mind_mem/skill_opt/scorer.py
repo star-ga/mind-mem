@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from ._types import CritiqueReport, SkillScore
 
@@ -127,9 +126,7 @@ def build_critique_prompt(
     rubric: tuple[RubricItem, ...],
 ) -> str:
     """Build the structured critique prompt sent to fleet critics."""
-    rubric_lines = "\n".join(
-        f"- {r.key} (weight {r.weight}): {r.description}" for r in rubric
-    )
+    rubric_lines = "\n".join(f"- {r.key} (weight {r.weight}): {r.description}" for r in rubric)
     return f"""You are evaluating an AI agent skill's output quality. Score each rubric item from 1-10 (integers only).
 
 ## Skill Definition (system prompt being tested)

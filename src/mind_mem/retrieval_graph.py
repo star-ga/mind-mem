@@ -335,9 +335,7 @@ def record_hard_negatives(
             ce = cand.get("ce_score", 1.0)
             if bm25 > bm25_threshold and ce < ce_threshold:
                 conn.execute(
-                    "INSERT OR IGNORE INTO hard_negatives "
-                    "(mem_id, query_hash, bm25_score, ce_score) "
-                    "VALUES (?, ?, ?, ?)",
+                    "INSERT OR IGNORE INTO hard_negatives (mem_id, query_hash, bm25_score, ce_score) VALUES (?, ?, ?, ?)",
                     (cand.get("_id", ""), qhash, bm25, ce),
                 )
                 count += 1

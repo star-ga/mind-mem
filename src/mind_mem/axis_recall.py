@@ -401,8 +401,7 @@ def _merge_rotation(primary: list[dict], rotation: list[dict]) -> list[dict]:
         if bid in index:
             existing = index[bid]
             existing["_axis_score"] = round(
-                float(existing.get("_axis_score", 0.0))
-                + float(res.get("_axis_score", 0.0)),
+                float(existing.get("_axis_score", 0.0)) + float(res.get("_axis_score", 0.0)),
                 6,
             )
             new_axes = res.get("observation", {}).get("axes", [])

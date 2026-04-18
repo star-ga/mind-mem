@@ -19,8 +19,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping, Optional
-
+from typing import Any, Mapping, Optional
 
 # ---------------------------------------------------------------------------
 # Hook event schema
@@ -99,14 +98,14 @@ def validate_event(event: Mapping[str, Any]) -> list[str]:
 
 
 _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"sk-ant-[A-Za-z0-9_\-]{20,}"),         # Anthropic API keys
-    re.compile(r"xai-[A-Za-z0-9]{20,}"),               # xAI API keys
-    re.compile(r"sk-[A-Za-z0-9]{20,}"),                # generic secret-key prefix
-    re.compile(r"pypi-[A-Za-z0-9_\-]{20,}"),           # PyPI macaroons
-    re.compile(r"AKIA[0-9A-Z]{16}"),                   # AWS access key id
-    re.compile(r"AIza[0-9A-Za-z_\-]{35}"),             # Google API key
-    re.compile(r"ghp_[A-Za-z0-9]{36}"),                # GitHub personal token
-    re.compile(r"xox[baprs]-[A-Za-z0-9\-]{10,}"),      # Slack tokens
+    re.compile(r"sk-ant-[A-Za-z0-9_\-]{20,}"),  # Anthropic API keys
+    re.compile(r"xai-[A-Za-z0-9]{20,}"),  # xAI API keys
+    re.compile(r"sk-[A-Za-z0-9]{20,}"),  # generic secret-key prefix
+    re.compile(r"pypi-[A-Za-z0-9_\-]{20,}"),  # PyPI macaroons
+    re.compile(r"AKIA[0-9A-Z]{16}"),  # AWS access key id
+    re.compile(r"AIza[0-9A-Za-z_\-]{35}"),  # Google API key
+    re.compile(r"ghp_[A-Za-z0-9]{36}"),  # GitHub personal token
+    re.compile(r"xox[baprs]-[A-Za-z0-9\-]{10,}"),  # Slack tokens
     re.compile(r"<private>[\s\S]*?</private>"),
 )
 
@@ -169,7 +168,7 @@ def observation_to_block(
 
 import shutil as _shutil
 import sys as _sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 _MM_MARKER = "# mind-mem"
 
@@ -247,8 +246,8 @@ class AgentSpec:
     # v3.1.0: native MCP registration. When set, install_mcp_config()
     # knows how to write the per-client MCP server registration so the
     # client gets the full 57-tool surface, not just "shell out to mm CLI".
-    mcp_fmt: str = ""          # "" = not MCP-aware
-    mcp_path_tmpl: str = ""    # file path to write into
+    mcp_fmt: str = ""  # "" = not MCP-aware
+    mcp_path_tmpl: str = ""  # file path to write into
 
     def expand_path(self, workspace: str) -> str:
         return self.path_tmpl.format(
@@ -352,9 +351,7 @@ def _merge_openclaw_hooks(existing: dict, workspace: str) -> tuple[dict, bool]:
     ``.hooks.internal.entries.mind-mem`` so we reuse this merger.
     """
     out = json.loads(json.dumps(existing))
-    hooks = out.setdefault("hooks", {}).setdefault("internal", {}).setdefault(
-        "entries", {}
-    )
+    hooks = out.setdefault("hooks", {}).setdefault("internal", {}).setdefault("entries", {})
     # v1.9.2: `mm capture` and `mm vault status` are not CLI
     # subcommands (only exist in the design doc). Use `mm status`
     # until those ship. `mm inject` still requires a query positional;
@@ -377,10 +374,7 @@ def _merge_openclaw_hooks(existing: dict, workspace: str) -> tuple[dict, bool]:
 
 def _merge_gemini(existing: dict, workspace: str) -> tuple[dict, bool]:
     """Gemini settings.json system_instruction injection."""
-    instr = (
-        f"mind-mem workspace: {workspace}; "
-        "run `mm inject --agent gemini` before answering."
-    )
+    instr = f"mind-mem workspace: {workspace}; run `mm inject --agent gemini` before answering."
     out = dict(existing)
     changed = out.get("system_instruction") != instr
     out["system_instruction"] = instr
@@ -390,10 +384,7 @@ def _merge_gemini(existing: dict, workspace: str) -> tuple[dict, bool]:
 def _merge_continue(existing: dict, workspace: str) -> tuple[dict, bool]:
     """Continue.dev config.json: inject a systemMessage."""
     out = json.loads(json.dumps(existing))
-    sys_msg = (
-        f"mind-mem workspace: {workspace}. "
-        "Run `mm inject --agent continue` before composing responses."
-    )
+    sys_msg = f"mind-mem workspace: {workspace}. Run `mm inject --agent continue` before composing responses."
     if out.get("systemMessage") == sys_msg:
         return out, False
     out["systemMessage"] = sys_msg
@@ -404,10 +395,7 @@ def _merge_zed(existing: dict, workspace: str) -> tuple[dict, bool]:
     """Zed settings.json: inject assistant default_model_instructions."""
     out = json.loads(json.dumps(existing))
     assistant = out.setdefault("assistant", {})
-    sys_msg = (
-        f"mind-mem workspace: {workspace}. "
-        "Use `mm inject --agent zed` for context."
-    )
+    sys_msg = f"mind-mem workspace: {workspace}. Use `mm inject --agent zed` for context."
     if assistant.get("default_system_message") == sys_msg:
         return out, False
     assistant["default_system_message"] = sys_msg
@@ -505,12 +493,7 @@ def _merge_mcp_codex_toml(existing_text: str, ws: str, srv: dict) -> tuple[str, 
     # Build the replacement section
     args_toml = "[" + ", ".join(f'"{a}"' for a in srv["args"]) + "]"
     env_pairs = ", ".join(f'{k} = "{v}"' for k, v in srv["env"].items())
-    new_section = (
-        "[mcp_servers.mind-mem]\n"
-        f'command = "{srv["command"]}"\n'
-        f"args = {args_toml}\n"
-        f"env = {{ {env_pairs} }}\n"
-    )
+    new_section = f'[mcp_servers.mind-mem]\ncommand = "{srv["command"]}"\nargs = {args_toml}\nenv = {{ {env_pairs} }}\n'
 
     text = existing_text or ""
     # Quick check — already present with identical body?
@@ -527,7 +510,7 @@ def _merge_mcp_codex_toml(existing_text: str, ws: str, srv: dict) -> tuple[str, 
         r"\[mcp_servers\.mind-mem(?:\.[^\]]+)?\][\s\S]*?"
         r"(?=\n\[(?!mcp_servers\.mind-mem)[^\]]+\]|\Z)"
     )
-    had_any = bool(pattern.search(text))
+    bool(pattern.search(text))
     text = pattern.sub("", text)
     # Tidy consecutive blank lines left behind.
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -571,8 +554,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         config_fmt="text-block",
         path_tmpl="{ws}/AGENTS.md",
         content_tmpl=(
-            f"{_MM_MARKER}: agent instructions (auto-written)\n\n"
-            "Before every response, run `mm context \"$QUERY\"` and prepend the output.\n"
+            f'{_MM_MARKER}: agent instructions (auto-written)\n\nBefore every response, run `mm context "$QUERY"` and prepend the output.\n'
         ),
         detect_binaries=("codex",),
         mcp_fmt="mcp-toml-codex",
@@ -593,10 +575,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Cursor editor",
         config_fmt="text-block",
         path_tmpl="{ws}/.cursorrules",
-        content_tmpl=(
-            f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\n"
-            "Use `mm inject --agent cursor` before answering.\n"
-        ),
+        content_tmpl=(f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\nUse `mm inject --agent cursor` before answering.\n"),
         detect_paths=(
             "{home}/.cursor",
             "{home}/Library/Application Support/Cursor",
@@ -611,10 +590,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Windsurf editor (Codeium)",
         config_fmt="text-block",
         path_tmpl="{ws}/.windsurfrules",
-        content_tmpl=(
-            f"{_MM_MARKER}\nworkspace: {{ws}}\n"
-            "prefer `mm inject --agent windsurf`.\n"
-        ),
+        content_tmpl=(f"{_MM_MARKER}\nworkspace: {{ws}}\nprefer `mm inject --agent windsurf`.\n"),
         detect_paths=(
             "{home}/.codeium/windsurf",
             "{home}/.windsurf",
@@ -629,10 +605,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="aider CLI (paul-gauthier)",
         config_fmt="yaml-block",
         path_tmpl="{ws}/.aider.conf.yml",
-        content_tmpl=(
-            f"{_MM_MARKER} auto-config\n"
-            "read: [\"{ws}/CLAUDE.md\"]\n"
-        ),
+        content_tmpl=(f'{_MM_MARKER} auto-config\nread: ["{{ws}}/CLAUDE.md"]\n'),
         detect_binaries=("aider",),
     ),
     "openclaw": AgentSpec(
@@ -673,10 +646,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Cline (VS Code extension)",
         config_fmt="text-block",
         path_tmpl="{ws}/.clinerules",
-        content_tmpl=(
-            f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\n"
-            "Run `mm inject --agent cline` before tool use.\n"
-        ),
+        content_tmpl=(f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\nRun `mm inject --agent cline` before tool use.\n"),
         detect_paths=(
             "{home}/.vscode/extensions",
             "{home}/.vscode-server/extensions",
@@ -689,10 +659,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Roo Code (VS Code fork / extension)",
         config_fmt="text-block",
         path_tmpl="{ws}/.roo/system-prompt.md",
-        content_tmpl=(
-            f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\n"
-            "Use `mm inject --agent roo` before answering.\n"
-        ),
+        content_tmpl=(f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\nUse `mm inject --agent roo` before answering.\n"),
         detect_paths=(
             "{home}/.roo",
             "{home}/.vscode/extensions",
@@ -740,10 +707,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Qodo Gen (formerly CodiumAI)",
         config_fmt="text-block",
         path_tmpl="{ws}/.codium/ai-rules.md",
-        content_tmpl=(
-            f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\n"
-            "Consult mind-mem memory before proposing changes.\n"
-        ),
+        content_tmpl=(f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\nConsult mind-mem memory before proposing changes.\n"),
         detect_paths=("{home}/.codium", "{home}/.qodo"),
     ),
 }
@@ -1010,18 +974,14 @@ def install_all(
             r["phase"] = "hook"
             results.append(r)
         except Exception as exc:  # pragma: no cover — per-agent isolation
-            results.append(
-                {"agent": name, "phase": "hook", "error": str(exc), "written": False}
-            )
+            results.append({"agent": name, "phase": "hook", "error": str(exc), "written": False})
         if include_mcp:
             try:
                 r = install_mcp_config(name, workspace, dry_run=dry_run, force=force)
                 r["phase"] = "mcp"
                 results.append(r)
             except Exception as exc:  # pragma: no cover
-                results.append(
-                    {"agent": name, "phase": "mcp", "error": str(exc), "written": False}
-                )
+                results.append({"agent": name, "phase": "mcp", "error": str(exc), "written": False})
     return results
 
 

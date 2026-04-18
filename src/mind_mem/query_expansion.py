@@ -221,19 +221,102 @@ class NLPQueryExpander:
     def _extract_keywords(self, query: str) -> str | None:
         """Extract content-bearing keywords, dropping function words."""
         stopwords = {
-            "a", "an", "the", "is", "are", "was", "were", "be", "been",
-            "being", "have", "has", "had", "do", "does", "did", "will",
-            "would", "could", "should", "may", "might", "can", "shall",
-            "to", "of", "in", "for", "on", "with", "at", "by", "from",
-            "as", "into", "through", "during", "before", "after", "above",
-            "below", "between", "about", "against", "and", "but", "or",
-            "nor", "not", "so", "yet", "both", "either", "neither",
-            "each", "every", "all", "any", "few", "more", "most", "other",
-            "some", "such", "than", "too", "very", "just", "how", "what",
-            "when", "where", "why", "who", "which", "that", "this",
-            "these", "those", "it", "its", "i", "me", "my", "we", "our",
-            "you", "your", "he", "him", "his", "she", "her", "they",
-            "them", "their",
+            "a",
+            "an",
+            "the",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "can",
+            "shall",
+            "to",
+            "of",
+            "in",
+            "for",
+            "on",
+            "with",
+            "at",
+            "by",
+            "from",
+            "as",
+            "into",
+            "through",
+            "during",
+            "before",
+            "after",
+            "above",
+            "below",
+            "between",
+            "about",
+            "against",
+            "and",
+            "but",
+            "or",
+            "nor",
+            "not",
+            "so",
+            "yet",
+            "both",
+            "either",
+            "neither",
+            "each",
+            "every",
+            "all",
+            "any",
+            "few",
+            "more",
+            "most",
+            "other",
+            "some",
+            "such",
+            "than",
+            "too",
+            "very",
+            "just",
+            "how",
+            "what",
+            "when",
+            "where",
+            "why",
+            "who",
+            "which",
+            "that",
+            "this",
+            "these",
+            "those",
+            "it",
+            "its",
+            "i",
+            "me",
+            "my",
+            "we",
+            "our",
+            "you",
+            "your",
+            "he",
+            "him",
+            "his",
+            "she",
+            "her",
+            "they",
+            "them",
+            "their",
         }
         words = re.findall(r"\b\w+\b", query.lower())
         keywords = [w for w in words if w not in stopwords and len(w) > 1]
@@ -312,9 +395,7 @@ class LLMQueryExpander:
 
         api_key = _os.environ.get(self.api_key_env)
         if not api_key:
-            raise RuntimeError(
-                f"LLM expansion requires {self.api_key_env} environment variable"
-            )
+            raise RuntimeError(f"LLM expansion requires {self.api_key_env} environment variable")
 
         prompt = (
             f"Generate exactly {n} alternative phrasings of this search query. "
@@ -341,11 +422,13 @@ class LLMQueryExpander:
             "x-api-key": api_key,
             "anthropic-version": "2023-06-01",
         }
-        body = _json.dumps({
-            "model": self.model,
-            "max_tokens": 256,
-            "messages": [{"role": "user", "content": prompt}],
-        }).encode("utf-8")
+        body = _json.dumps(
+            {
+                "model": self.model,
+                "max_tokens": 256,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+        ).encode("utf-8")
 
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
         with urllib.request.urlopen(req, timeout=10) as resp:
@@ -382,11 +465,13 @@ class LLMQueryExpander:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
         }
-        body = _json.dumps({
-            "model": self.model,
-            "max_tokens": 256,
-            "messages": [{"role": "user", "content": prompt}],
-        }).encode("utf-8")
+        body = _json.dumps(
+            {
+                "model": self.model,
+                "max_tokens": 256,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+        ).encode("utf-8")
 
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
         with urllib.request.urlopen(req, timeout=10) as resp:

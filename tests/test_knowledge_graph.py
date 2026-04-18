@@ -10,9 +10,6 @@ from pathlib import Path
 import pytest
 
 from mind_mem.knowledge_graph import (
-    Edge,
-    EntityRegistry,
-    GraphStats,
     KnowledgeGraph,
     Predicate,
 )
@@ -93,7 +90,9 @@ class TestEntityRegistry:
 class TestEdges:
     def test_add_edge_resolves_endpoints(self, graph: KnowledgeGraph) -> None:
         e = graph.add_edge(
-            "Alice", Predicate.AUTHORED_BY, "Project mind-mem",
+            "Alice",
+            Predicate.AUTHORED_BY,
+            "Project mind-mem",
             source_block_id="D-001",
         )
         assert e.subject == "alice"
@@ -103,7 +102,10 @@ class TestEdges:
 
     def test_add_edge_string_predicate(self, graph: KnowledgeGraph) -> None:
         e = graph.add_edge(
-            "A", "depends_on", "B", source_block_id="D-001",
+            "A",
+            "depends_on",
+            "B",
+            source_block_id="D-001",
         )
         assert e.predicate is Predicate.DEPENDS_ON
 
@@ -119,8 +121,11 @@ class TestEdges:
     def test_confidence_out_of_range_rejected(self, graph: KnowledgeGraph) -> None:
         with pytest.raises(ValueError, match="confidence"):
             graph.add_edge(
-                "A", Predicate.DEPENDS_ON, "B",
-                source_block_id="D-001", confidence=1.5,
+                "A",
+                Predicate.DEPENDS_ON,
+                "B",
+                source_block_id="D-001",
+                confidence=1.5,
             )
 
 
@@ -153,7 +158,9 @@ class TestQueries:
 
     def test_expired_edges_hidden_by_default(self, graph: KnowledgeGraph) -> None:
         graph.add_edge(
-            "A", Predicate.DEPENDS_ON, "B",
+            "A",
+            Predicate.DEPENDS_ON,
+            "B",
             source_block_id="D-001",
             valid_until="2020-01-01T00:00:00Z",
         )
@@ -164,7 +171,9 @@ class TestQueries:
         """Audit regression: ASCII string compare breaks on `.999Z` suffixes."""
         # Expires ~50 years in the future with fractional seconds.
         graph.add_edge(
-            "A", Predicate.DEPENDS_ON, "B",
+            "A",
+            Predicate.DEPENDS_ON,
+            "B",
             source_block_id="D-001",
             valid_until="2076-01-01T00:00:00.999Z",
         )
@@ -175,7 +184,9 @@ class TestQueries:
     def test_malformed_timestamp_rejected(self, graph: KnowledgeGraph) -> None:
         with pytest.raises(ValueError):
             graph.add_edge(
-                "A", Predicate.DEPENDS_ON, "B",
+                "A",
+                Predicate.DEPENDS_ON,
+                "B",
                 source_block_id="D-001",
                 valid_until="not-a-date",
             )
@@ -183,7 +194,9 @@ class TestQueries:
     def test_valid_until_before_valid_from_rejected(self, graph: KnowledgeGraph) -> None:
         with pytest.raises(ValueError, match="valid_until"):
             graph.add_edge(
-                "A", Predicate.DEPENDS_ON, "B",
+                "A",
+                Predicate.DEPENDS_ON,
+                "B",
                 source_block_id="D-001",
                 valid_from="2030-01-01T00:00:00Z",
                 valid_until="2020-01-01T00:00:00Z",
@@ -194,7 +207,9 @@ class TestQueries:
         from datetime import datetime as _dt
 
         graph.add_edge(
-            "A", Predicate.DEPENDS_ON, "B",
+            "A",
+            Predicate.DEPENDS_ON,
+            "B",
             source_block_id="D-001",
             metadata={"extracted_at": _dt(2026, 4, 13)},
         )

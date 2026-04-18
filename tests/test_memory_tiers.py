@@ -13,7 +13,6 @@ import shutil
 import sqlite3
 import tempfile
 import threading
-import time
 import unittest
 from datetime import datetime, timedelta, timezone
 
@@ -24,7 +23,6 @@ from mind_mem.memory_tiers import (
     TierPolicy,
     default_policies,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -225,23 +223,17 @@ class TestCheckPromotion(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_working_eligible_for_shared(self):
-        _seed_block_meta(
-            self.db_path, "B-001", access_count=5, created_at=_hours_ago(2)
-        )
+        _seed_block_meta(self.db_path, "B-001", access_count=5, created_at=_hours_ago(2))
         result = self.mgr.check_promotion("B-001")
         self.assertEqual(result, MemoryTier.SHARED)
 
     def test_working_not_eligible_too_few_accesses(self):
-        _seed_block_meta(
-            self.db_path, "B-002", access_count=1, created_at=_hours_ago(2)
-        )
+        _seed_block_meta(self.db_path, "B-002", access_count=1, created_at=_hours_ago(2))
         result = self.mgr.check_promotion("B-002")
         self.assertIsNone(result)
 
     def test_working_not_eligible_too_young(self):
-        _seed_block_meta(
-            self.db_path, "B-003", access_count=10, created_at=_hours_ago(0.1)
-        )
+        _seed_block_meta(self.db_path, "B-003", access_count=10, created_at=_hours_ago(0.1))
         result = self.mgr.check_promotion("B-003")
         self.assertIsNone(result)
 
@@ -291,9 +283,7 @@ class TestRunPromotionCycle(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_cycle_promotes_eligible_block(self):
-        _seed_block_meta(
-            self.db_path, "B-001", access_count=5, created_at=_hours_ago(2)
-        )
+        _seed_block_meta(self.db_path, "B-001", access_count=5, created_at=_hours_ago(2))
         # Explicitly register in WORKING tier so cycle can find it
         self.mgr._register_block("B-001", MemoryTier.WORKING)
         promotions = self.mgr.run_promotion_cycle()
@@ -304,9 +294,7 @@ class TestRunPromotionCycle(unittest.TestCase):
         self.assertEqual(new_tier, MemoryTier.SHARED)
 
     def test_cycle_returns_tuple_of_three(self):
-        _seed_block_meta(
-            self.db_path, "B-002", access_count=5, created_at=_hours_ago(2)
-        )
+        _seed_block_meta(self.db_path, "B-002", access_count=5, created_at=_hours_ago(2))
         self.mgr._register_block("B-002", MemoryTier.WORKING)
         promotions = self.mgr.run_promotion_cycle()
         self.assertEqual(len(promotions[0]), 3)

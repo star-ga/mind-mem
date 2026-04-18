@@ -38,7 +38,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Iterable, Mapping, Optional
 
-
 # ---------------------------------------------------------------------------
 # Signal taxonomy
 # ---------------------------------------------------------------------------
@@ -62,10 +61,41 @@ _TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 
 _STOPWORDS: frozenset[str] = frozenset(
     {
-        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
-        "how", "i", "if", "in", "is", "it", "me", "my", "of", "on", "or",
-        "the", "their", "them", "to", "was", "were", "when", "where",
-        "who", "why", "will", "with", "you", "your",
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "for",
+        "from",
+        "how",
+        "i",
+        "if",
+        "in",
+        "is",
+        "it",
+        "me",
+        "my",
+        "of",
+        "on",
+        "or",
+        "the",
+        "their",
+        "them",
+        "to",
+        "was",
+        "were",
+        "when",
+        "where",
+        "who",
+        "why",
+        "will",
+        "with",
+        "you",
+        "your",
     }
 )
 
@@ -79,11 +109,7 @@ _MAX_TOKEN_INPUT: int = 8192
 
 def _tokens(text: str) -> set[str]:
     capped = text[:_MAX_TOKEN_INPUT].lower()
-    return {
-        t
-        for t in _TOKEN_RE.findall(capped)
-        if t and t not in _STOPWORDS
-    }
+    return {t for t in _TOKEN_RE.findall(capped) if t and t not in _STOPWORDS}
 
 
 def jaccard_similarity(a: str, b: str) -> float:
@@ -202,9 +228,7 @@ class Signal:
             signal_type=SignalType(data["signal_type"]),
             previous_query=str(data["previous_query"]),
             new_query=str(data["new_query"]),
-            previous_results=tuple(
-                str(x) for x in data.get("previous_results", [])
-            ),
+            previous_results=tuple(str(x) for x in data.get("previous_results", [])),
             similarity=float(data.get("similarity", 0.0)),
             metadata=dict(data.get("metadata", {})),
         )

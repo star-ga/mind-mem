@@ -31,7 +31,6 @@ Zero external deps — all stdlib (dataclasses, datetime, json, sqlite3).
 from __future__ import annotations
 
 import json
-import math
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -352,27 +351,18 @@ class BeliefStore:
         Args:
             threshold: Confidence floor (default 0.3).
         """
-        return [
-            s for s in self._beliefs.values()
-            if self._updater.should_review(s, threshold=threshold)
-        ]
+        return [s for s in self._beliefs.values() if self._updater.should_review(s, threshold=threshold)]
 
     def to_dict(self) -> dict:
         """Serialize all beliefs to a JSON-compatible dict."""
-        return {
-            block_id: _state_to_dict(state)
-            for block_id, state in self._beliefs.items()
-        }
+        return {block_id: _state_to_dict(state) for block_id, state in self._beliefs.items()}
 
     def from_dict(self, data: dict) -> None:
         """Restore beliefs from a dict produced by to_dict().
 
         Existing in-memory beliefs are replaced.
         """
-        self._beliefs = {
-            block_id: _state_from_dict(raw)
-            for block_id, raw in data.items()
-        }
+        self._beliefs = {block_id: _state_from_dict(raw) for block_id, raw in data.items()}
         if self._db_path:
             for block_id in self._beliefs:
                 self._persist(block_id)
@@ -391,8 +381,7 @@ class BeliefStore:
             return
         with sqlite3.connect(self._db_path) as conn:
             rows = conn.execute(
-                "SELECT block_id, estimate, variance, last_updated, "
-                "observation_count, source_reliability FROM beliefs"
+                "SELECT block_id, estimate, variance, last_updated, observation_count, source_reliability FROM beliefs"
             ).fetchall()
         for row in rows:
             block_id, estimate, variance, last_updated_str, obs_count, sr_json = row

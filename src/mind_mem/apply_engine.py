@@ -198,9 +198,7 @@ def validate_proposal(proposal):
     if stored_fp and ops:
         computed_fp = compute_fingerprint(proposal)
         if computed_fp != stored_fp:
-            errors.append(
-                f"Fingerprint mismatch: stored={stored_fp}, computed={computed_fp} (proposal may have been tampered)"
-            )
+            errors.append(f"Fingerprint mismatch: stored={stored_fp}, computed={computed_fp} (proposal may have been tampered)")
 
     return errors
 
@@ -961,8 +959,7 @@ def _op_supersede_decision(filepath, op):
     has_invariant = any(s.get("enforcement") == "invariant" for s in sigs)
     if has_invariant:
         return False, (
-            f"supersede_decision: {target} has invariant enforcement"
-            " (manual edit required — invariants cannot be modified by automation)"
+            f"supersede_decision: {target} has invariant enforcement (manual edit required — invariants cannot be modified by automation)"
         )
 
     # Build the complete new file content in memory, then write atomically.
@@ -1122,9 +1119,7 @@ def check_deferred_cooldown(ws, proposal):
                     created_dt = datetime.fromisoformat(created)
                     if created_dt > cutoff:
                         pid = b.get("ProposalId")
-                        return False, (
-                            f"Target {target} has {b.get('Status')} proposal {pid} within {cooldown_days}d cooldown"
-                        )
+                        return False, (f"Target {target} has {b.get('Status')} proposal {pid} within {cooldown_days}d cooldown")
                 except (ValueError, TypeError):
                     pass
     return True, "No cooldown conflict"
@@ -1581,9 +1576,7 @@ def rollback(ws, receipt_ts):
             if source_file:
                 _mark_proposal_status(source_file, proposal_id, "rolled_back")
             if _proposal:
-                _record_belief_update(
-                    ws, _proposal.get("TargetBlock", ""), 0.0, "rollback"
-                )
+                _record_belief_update(ws, _proposal.get("TargetBlock", ""), 0.0, "rollback")
 
     print(f"\n═══ ROLLED BACK from {receipt_ts} ═══")
     return True

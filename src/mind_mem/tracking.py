@@ -21,12 +21,10 @@ Pure stdlib.
 from __future__ import annotations
 
 import re
-import statistics
-from collections import Counter, defaultdict, deque
-from dataclasses import dataclass, field
+from collections import Counter, deque
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Iterable, Mapping, Optional
-
+from typing import Any, Iterable, Optional
 
 # ---------------------------------------------------------------------------
 # MRR tracker
@@ -119,11 +117,7 @@ class PackingQualityMeter:
         self._events += 1
 
     def ratio(self) -> float:
-        return (
-            (self._referenced_tokens / self._packed_tokens)
-            if self._packed_tokens
-            else 0.0
-        )
+        return (self._referenced_tokens / self._packed_tokens) if self._packed_tokens else 0.0
 
     def stats(self) -> dict[str, float]:
         return {

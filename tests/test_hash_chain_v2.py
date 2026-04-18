@@ -5,10 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sqlite3
-import tempfile
-import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -21,7 +18,6 @@ from mind_mem.hash_chain_v2 import (
     MigrationError,
     convert_from_v1,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

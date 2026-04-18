@@ -17,12 +17,10 @@ Pure-Python stdlib only.
 
 from __future__ import annotations
 
-import json
 import re
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping, Optional
-
+from typing import Any, Mapping, Optional
 
 # ---------------------------------------------------------------------------
 # Type definitions
@@ -60,14 +58,10 @@ class EntityType:
 
     def __post_init__(self) -> None:
         if not self.name or not re.fullmatch(r"[A-Z][A-Z0-9_]*", self.name):
-            raise ValueError(
-                f"EntityType.name must be UPPER_SNAKE_CASE, got {self.name!r}"
-            )
+            raise ValueError(f"EntityType.name must be UPPER_SNAKE_CASE, got {self.name!r}")
         conflict = set(self.required) & set(self.optional)
         if conflict:
-            raise ValueError(
-                f"property cannot be both required and optional: {sorted(conflict)!r}"
-            )
+            raise ValueError(f"property cannot be both required and optional: {sorted(conflict)!r}")
 
     def all_properties(self) -> set[str]:
         return set(self.required) | set(self.optional)
@@ -105,13 +99,9 @@ class Ontology:
             raise ValueError("Ontology.version must be a non-empty string")
         for name, et in self.types.items():
             if et.name != name:
-                raise ValueError(
-                    f"Ontology key {name!r} does not match EntityType.name={et.name!r}"
-                )
+                raise ValueError(f"Ontology key {name!r} does not match EntityType.name={et.name!r}")
             if et.parent and et.parent not in self.types:
-                raise ValueError(
-                    f"EntityType {name!r} references unknown parent {et.parent!r}"
-                )
+                raise ValueError(f"EntityType {name!r} references unknown parent {et.parent!r}")
 
     def type_names(self) -> list[str]:
         return sorted(self.types.keys())
@@ -192,10 +182,7 @@ class Ontology:
                 continue
             value = block[prop]
             if not isinstance(value, expected):
-                errors.append(
-                    f"type mismatch for {prop!r}: expected {label}, "
-                    f"got {type(value).__name__}"
-                )
+                errors.append(f"type mismatch for {prop!r}: expected {label}, got {type(value).__name__}")
         return errors
 
     def to_dict(self) -> dict[str, Any]:

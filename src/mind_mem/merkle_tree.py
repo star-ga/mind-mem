@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from .observability import get_logger
@@ -234,9 +234,7 @@ class MerkleTree:
         """
         payload = {
             "root_hash": self.root_hash,
-            "leaves": [
-                {"block_id": bid, "content_hash": ch} for bid, ch in self._leaves
-            ],
+            "leaves": [{"block_id": bid, "content_hash": ch} for bid, ch in self._leaves],
         }
         return json.dumps(payload, separators=(",", ":"))
 
@@ -248,17 +246,11 @@ class MerkleTree:
         export; callers should treat the import as failed.
         """
         payload = json.loads(data)
-        leaves = [
-            (entry["block_id"], entry["content_hash"])
-            for entry in payload["leaves"]
-        ]
+        leaves = [(entry["block_id"], entry["content_hash"]) for entry in payload["leaves"]]
         self.build(leaves)
         expected_root = payload.get("root_hash", "")
         if expected_root and expected_root != self.root_hash:
-            raise ValueError(
-                f"Merkle import root mismatch: stored={expected_root[:16]}… "
-                f"recomputed={self.root_hash[:16]}…"
-            )
+            raise ValueError(f"Merkle import root mismatch: stored={expected_root[:16]}… recomputed={self.root_hash[:16]}…")
 
     # ------------------------------------------------------------------
     # Private helpers

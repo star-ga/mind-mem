@@ -4,20 +4,16 @@
 from __future__ import annotations
 
 import os
-import sys
-import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from mind_mem import (
-    agent_bridge,
     context_core,
     core_export,
     hook_installer,
     ingestion_pipeline,
-    interaction_signals,
     ledger_anchor,
     memory_mesh,
     mind_kernels,
@@ -29,7 +25,6 @@ from mind_mem import (
     tracking,
     turbo_quant,
 )
-
 
 # ---------------------------------------------------------------------------
 # TurboQuant
@@ -120,9 +115,7 @@ class TestMRS:
         assert slis[0].name == "a" and slis[0].weight == 2.0
 
     def test_retrieval_slis_structure(self) -> None:
-        slis = mrs.retrieval_slis(
-            relevance_decay=0.1, contradiction_density=1.0, staleness_ratio=0.5
-        )
+        slis = mrs.retrieval_slis(relevance_decay=0.1, contradiction_density=1.0, staleness_ratio=0.5)
         assert {s.name for s in slis} == {"relevance_decay", "contradiction_density", "staleness_ratio"}
 
 
@@ -187,16 +180,20 @@ class TestTieredMemory:
 
     def test_promote_candidates_threshold(self) -> None:
         block = tiered_memory.TieredBlock(
-            block_id="B", tier=tiered_memory.Tier.EPISODIC,
-            strength=0.5, session_count=5,
+            block_id="B",
+            tier=tiered_memory.Tier.EPISODIC,
+            strength=0.5,
+            session_count=5,
         )
         cands = tiered_memory.promote_candidates([block])
         assert cands and cands[0].to_tier == tiered_memory.Tier.SEMANTIC
 
     def test_procedural_never_promoted(self) -> None:
         block = tiered_memory.TieredBlock(
-            block_id="X", tier=tiered_memory.Tier.PROCEDURAL,
-            strength=1.0, session_count=100,
+            block_id="X",
+            tier=tiered_memory.Tier.PROCEDURAL,
+            strength=1.0,
+            session_count=100,
         )
         assert tiered_memory.promote_candidates([block]) == []
 
@@ -216,9 +213,7 @@ class TestHookInstaller:
         assert "hidden" not in out
 
     def test_validate_event_rejects_unknown_type(self) -> None:
-        errors = hook_installer.validate_event(
-            {"type": "bogus", "timestamp": "t", "project": "p", "session_id": "s"}
-        )
+        errors = hook_installer.validate_event({"type": "bogus", "timestamp": "t", "project": "p", "session_id": "s"})
         assert any("invalid type" in e for e in errors)
 
     def test_observation_to_block_dedup(self) -> None:
@@ -235,9 +230,7 @@ class TestHookInstaller:
         assert a is not None and b is None  # duplicate collapsed
 
     def test_install_config_dry_run(self, tmp_path) -> None:
-        res = hook_installer.install_config(
-            "codex", str(tmp_path), dry_run=True
-        )
+        res = hook_installer.install_config("codex", str(tmp_path), dry_run=True)
         assert res["written"] is False and "mm context" in res["content"]
 
     def test_install_config_writes(self, tmp_path) -> None:
@@ -257,9 +250,7 @@ class TestMultiModal:
         assert block.description == "a photo of a cat"
 
     def test_build_audio_block_duration(self) -> None:
-        block = multi_modal.build_audio_block(
-            "A-1", "transcript", "/tmp/x", duration_seconds=30
-        )
+        block = multi_modal.build_audio_block("A-1", "transcript", "/tmp/x", duration_seconds=30)
         assert block.duration_seconds == 30
 
     def test_cross_modal_similarity_identical(self) -> None:
@@ -313,8 +304,7 @@ class TestIngestionPipeline:
         _, stop = ingestion_pipeline.serve_webhook(port, q, wal=wal)
         try:
             conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
-            conn.request("POST", "/ingest", body=_json.dumps({"hello": "world"}),
-                          headers={"Content-Type": "application/json"})
+            conn.request("POST", "/ingest", body=_json.dumps({"hello": "world"}), headers={"Content-Type": "application/json"})
             resp = conn.getresponse()
             assert resp.status == 202
         finally:
@@ -339,12 +329,8 @@ class TestOnlineTrainer:
 
     def test_weight_registry_promotion_gated(self) -> None:
         reg = online_trainer.WeightRegistry()
-        reg.set_active(online_trainer.WeightRef(
-            model_id="m", version="1", path="/a", base_mrr=0.5, promoted_at="t"
-        ))
-        reg.set_candidate(online_trainer.WeightRef(
-            model_id="m", version="2", path="/b", base_mrr=0.0, promoted_at="t"
-        ))
+        reg.set_active(online_trainer.WeightRef(model_id="m", version="1", path="/a", base_mrr=0.5, promoted_at="t"))
+        reg.set_candidate(online_trainer.WeightRef(model_id="m", version="2", path="/b", base_mrr=0.0, promoted_at="t"))
         ok, _ = reg.promote("m", new_mrr=0.4)
         assert ok is False  # regression rejected
 
@@ -363,11 +349,7 @@ class TestOnlineTrainer:
             return {"loss": 0.1}
 
         loop = online_trainer.TrainingLoop(fake_step, batch_size=2)
-        loop.submit([
-            online_trainer.TrainingTuple(
-                query="q", positive_ids=(), negative_ids=(), signal_type="re_query"
-            ) for _ in range(5)
-        ])
+        loop.submit([online_trainer.TrainingTuple(query="q", positive_ids=(), negative_ids=(), signal_type="re_query") for _ in range(5)])
         assert sum(calls) == 4  # two batches of 2; one leftover
 
 
@@ -406,8 +388,11 @@ class TestCoreExport:
         path = tmp_path / "core.mmcore"
         context_core.build_core(
             str(path),
-            namespace="ns", version="1.0",
-            blocks=blocks or [], edges=edges or [], built_at=built_at,
+            namespace="ns",
+            version="1.0",
+            blocks=blocks or [],
+            edges=edges or [],
+            built_at=built_at,
         )
         return context_core.load_core(str(path))
 

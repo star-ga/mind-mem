@@ -23,7 +23,6 @@ from mind_mem.dream_cycle import (
     run_dream_cycle,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -134,10 +133,7 @@ class TestCitationRepair:
         """References to nonexistent decision IDs are reported."""
         ws = _make_workspace(tmp_path)
         decisions = tmp_path / "decisions" / "DECISIONS.md"
-        decisions.write_text(
-            "[D-20260101-001]\nStatement: Valid decision\nStatus: active\n\n"
-            "See also D-20260101-999 for context.\n"
-        )
+        decisions.write_text("[D-20260101-001]\nStatement: Valid decision\nStatus: active\n\nSee also D-20260101-999 for context.\n")
 
         broken = pass_citation_repair(ws)
         cited_ids = [b.cited_id for b in broken]
@@ -161,9 +157,7 @@ class TestCitationRepair:
         """Broken T- references in entity files are detected."""
         ws = _make_workspace(tmp_path)
         entities = tmp_path / "entities" / "projects.md"
-        entities.write_text(
-            "[PRJ-myproject]\nRelated task: T-20260101-999\n"
-        )
+        entities.write_text("[PRJ-myproject]\nRelated task: T-20260101-999\n")
         # No tasks file, so T-20260101-999 is broken
         broken = pass_citation_repair(ws)
         cited_ids = [b.cited_id for b in broken]
@@ -179,12 +173,7 @@ class TestCitationRepair:
         """BrokenCitation includes the correct line number."""
         ws = _make_workspace(tmp_path)
         decisions = tmp_path / "decisions" / "DECISIONS.md"
-        decisions.write_text(
-            "# Decisions\n\n"
-            "[D-20260101-001]\n"
-            "Statement: Valid\n"
-            "See D-20260101-888 here\n"
-        )
+        decisions.write_text("# Decisions\n\n[D-20260101-001]\nStatement: Valid\nSee D-20260101-888 here\n")
 
         broken = pass_citation_repair(ws)
         match = next(b for b in broken if b.cited_id == "D-20260101-888")
@@ -217,9 +206,7 @@ class TestStaleDetection:
         ws = _make_workspace(tmp_path)
         today_compact = datetime.now().strftime("%Y%m%d")
         decisions = tmp_path / "decisions" / "DECISIONS.md"
-        decisions.write_text(
-            f"[D-{today_compact}-001]\nStatement: Fresh decision\nStatus: active\n"
-        )
+        decisions.write_text(f"[D-{today_compact}-001]\nStatement: Fresh decision\nStatus: active\n")
 
         stale = pass_stale_detection(ws, stale_days=30)
         assert len(stale) == 0
@@ -313,12 +300,10 @@ class TestIntegritySummary:
         report = DreamCycleReport(
             timestamp="2026-04-10T03:00:00",
             workspace=ws,
-            entity_proposals=(
-                EntityProposal("project", "foo", "github_repo", "excerpt", "2026-04-10.md"),
-            ),
+            entity_proposals=(EntityProposal("project", "foo", "github_repo", "excerpt", "2026-04-10.md"),),
         )
 
-        content = pass_integrity_summary(ws, report, dry_run=False)
+        pass_integrity_summary(ws, report, dry_run=False)
         today = _today_str()
         report_path = tmp_path / "memory" / f"dream-cycle-{today}.md"
         assert report_path.exists()
@@ -346,17 +331,9 @@ class TestIntegritySummary:
         report = DreamCycleReport(
             timestamp="2026-04-10T03:00:00",
             workspace="/tmp/test",
-            broken_citations=(
-                BrokenCitation("decisions/DECISIONS.md", "D-20260101-999", 5, "context"),
-            ),
-            stale_blocks=(
-                StaleBlock("D-20240101-001", "decisions/DECISIONS.md", "2024-01-01", 460),
-            ),
-            consolidation_candidates=(
-                ConsolidationCandidate(
-                    "Repeated fact here", 4, ("2026-04-07.md", "2026-04-08.md")
-                ),
-            ),
+            broken_citations=(BrokenCitation("decisions/DECISIONS.md", "D-20260101-999", 5, "context"),),
+            stale_blocks=(StaleBlock("D-20240101-001", "decisions/DECISIONS.md", "2024-01-01", 460),),
+            consolidation_candidates=(ConsolidationCandidate("Repeated fact here", 4, ("2026-04-07.md", "2026-04-08.md")),),
             errors=("Pass 1 failed: test error",),
         )
 
@@ -389,16 +366,12 @@ class TestDreamCycleReport:
                 EntityProposal("project", "a", "github_repo", "x", "f.md"),
                 EntityProposal("tool", "b", "cli_tool", "x", "f.md"),
             ),
-            broken_citations=(
-                BrokenCitation("f.md", "D-001", 1, "ctx"),
-            ),
+            broken_citations=(BrokenCitation("f.md", "D-001", 1, "ctx"),),
             stale_blocks=(
                 StaleBlock("D-002", "f.md", "2024-01-01", 100),
                 StaleBlock("T-003", "t.md", "2024-02-01", 70),
             ),
-            consolidation_candidates=(
-                ConsolidationCandidate("fact", 3, ("a.md", "b.md", "c.md")),
-            ),
+            consolidation_candidates=(ConsolidationCandidate("fact", 3, ("a.md", "b.md", "c.md")),),
         )
         assert report.total_findings == 6
 
@@ -447,10 +420,7 @@ class TestRunDreamCycle:
 
         # Add a broken citation
         decisions = tmp_path / "decisions" / "DECISIONS.md"
-        decisions.write_text(
-            "[D-20260101-001]\nStatement: Decision\nStatus: active\n\n"
-            "Depends on D-20260101-999\n"
-        )
+        decisions.write_text("[D-20260101-001]\nStatement: Decision\nStatus: active\n\nDepends on D-20260101-999\n")
 
         report = run_dream_cycle(ws, dry_run=False)
         assert report.total_findings > 0

@@ -8,7 +8,6 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-
 DEFAULT_FLEET_MODELS: dict[str, list[str]] = {
     "test_execution": ["grok-4-1-fast-reasoning", "mistral-large-latest"],
     "critique": [
@@ -29,9 +28,7 @@ DEFAULT_SKILL_SOURCES: dict[str, str] = {
     "gemini": "~/.gemini",
 }
 
-ORCHESTRATOR_PATH = os.path.expanduser(
-    "~/.claude/plugins/marketplaces/claude-code-ultimate/multi-llm-orchestrator"
-)
+ORCHESTRATOR_PATH = os.path.expanduser("~/.claude/plugins/marketplaces/claude-code-ultimate/multi-llm-orchestrator")
 
 ENV_PATH = os.path.expanduser("~/.claude-ultimate/.env")
 

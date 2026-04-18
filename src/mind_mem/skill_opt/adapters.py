@@ -22,7 +22,7 @@ def _parse_yaml_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     if end == -1:
         return {}, text
     raw = text[4:end].strip()
-    body = text[end + 4:].lstrip("\n")
+    body = text[end + 4 :].lstrip("\n")
     meta: dict[str, Any] = {}
     for line in raw.splitlines():
         if ":" not in line:
@@ -38,6 +38,7 @@ def _parse_yaml_frontmatter(text: str) -> tuple[dict[str, Any], str]:
             val = _parse_inline_list(val)
         elif val.startswith("{"):
             import json
+
             try:
                 val = json.loads(val)
             except (json.JSONDecodeError, ValueError):
@@ -146,11 +147,7 @@ class ClaudeAgentAdapter:
         root = os.path.expanduser(root)
         if not os.path.isdir(root):
             return []
-        return sorted(
-            os.path.join(root, f)
-            for f in os.listdir(root)
-            if f.endswith(".md") and not f.startswith(".")
-        )
+        return sorted(os.path.join(root, f) for f in os.listdir(root) if f.endswith(".md") and not f.startswith("."))
 
 
 class CodexSkillAdapter:
@@ -222,11 +219,7 @@ class GeminiInstructionAdapter:
         root = os.path.expanduser(root)
         if not os.path.isdir(root):
             return []
-        return sorted(
-            os.path.join(root, f)
-            for f in os.listdir(root)
-            if f.endswith(".md") and not f.startswith(".")
-        )
+        return sorted(os.path.join(root, f) for f in os.listdir(root) if f.endswith(".md") and not f.startswith("."))
 
 
 ADAPTER_REGISTRY: dict[str, SkillAdapter] = {

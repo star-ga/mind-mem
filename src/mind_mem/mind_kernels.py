@@ -22,8 +22,7 @@ import hashlib
 import math
 import os
 import types
-from typing import Iterable, Mapping, Sequence
-
+from typing import Mapping, Sequence
 
 # ---------------------------------------------------------------------------
 # BM25F scoring — matches _recall_scoring.bm25f_score contract
@@ -53,9 +52,7 @@ def bm25f_score(
             tf_sum += tf
         if tf_sum <= 0:
             continue
-        norm = tf_sum * (k1 + 1) / (
-            tf_sum + k1 * (1 - b + b * doc_length / avg_doc_length)
-        )
+        norm = tf_sum * (k1 + 1) / (tf_sum + k1 * (1 - b + b * doc_length / avg_doc_length))
         total += norm
     return total
 
@@ -93,9 +90,7 @@ def sha3_512_chain_verify(entries: Sequence[Mapping[str, str]]) -> bool:
         )
         stored = entry.get("entry_hash")
         # v3 scheme — TAG_v1 NUL-separated preimage.
-        v3_expected = hashlib.sha3_512(
-            _preimage("CHAIN_v1", *fields)
-        ).hexdigest()
+        v3_expected = hashlib.sha3_512(_preimage("CHAIN_v1", *fields)).hexdigest()
         if stored == v3_expected:
             seen_v3 = True
         elif seen_v3:
@@ -104,9 +99,7 @@ def sha3_512_chain_verify(entries: Sequence[Mapping[str, str]]) -> bool:
             return False
         else:
             # Legacy v1 scheme — ``|``-joined canonical string.
-            v1_expected = hashlib.sha3_512(
-                "|".join(fields).encode("utf-8")
-            ).hexdigest()
+            v1_expected = hashlib.sha3_512("|".join(fields).encode("utf-8")).hexdigest()
             if stored != v1_expected:
                 return False
         prev = stored
@@ -191,7 +184,7 @@ def load_kernels(path: str | None = None) -> types.ModuleType:
             # resolved library so callers can attempt native calls.
             return types.SimpleNamespace(
                 _native=lib,
-                bm25f_score=bm25f_score,      # native caller override below
+                bm25f_score=bm25f_score,  # native caller override below
                 sha3_512_chain_verify=sha3_512_chain_verify,
                 cosine=cosine,
                 dot=dot,

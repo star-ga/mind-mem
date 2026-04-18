@@ -59,10 +59,7 @@ class TestDetectQueryType(unittest.TestCase):
         )
 
     def test_long_conjunction_is_multihop(self):
-        q = (
-            "What activities did Caroline and Melanie both participate in together "
-            "and also how did their relationship evolve over time?"
-        )
+        q = "What activities did Caroline and Melanie both participate in together and also how did their relationship evolve over time?"
         self.assertEqual(detect_query_type(q), "multi-hop")
 
     # -- Open-domain / Single-hop ---------------------------------------

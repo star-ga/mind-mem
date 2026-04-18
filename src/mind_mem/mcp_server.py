@@ -367,6 +367,7 @@ def _get_client_id() -> str:
         pass
     return "default"
 
+
 # Per-query timeout in seconds (read from config at call time via _get_limits)
 QUERY_TIMEOUT_SECONDS = _DEFAULT_LIMITS["query_timeout_seconds"]
 
@@ -737,13 +738,12 @@ def _recall_impl(query: str, limit: int = 10, active_only: bool = False, backend
             limit=timeout_seconds,
             backend=used_backend,
         )
-        warnings.append(
-            f"Query exceeded timeout ({round(recall_elapsed, 1)}s > {timeout_seconds}s). Results may be incomplete."
-        )
+        warnings.append(f"Query exceeded timeout ({round(recall_elapsed, 1)}s > {timeout_seconds}s). Results may be incomplete.")
 
     # Generate query_id for calibration feedback loop
     try:
         from mind_mem.calibration import make_query_id
+
         query_id = make_query_id(query)
     except ImportError:
         query_id = ""
@@ -975,8 +975,7 @@ def build_core(namespace: str, version: str, filename: str = "") -> str:
                 edges.append(e.as_dict())
             # Pull all edges regardless of subject: walk the DB directly.
             rows = kg._conn.execute(
-                "SELECT subject, predicate, object, source_block_id, confidence, "
-                "valid_from, valid_until, metadata FROM edges"
+                "SELECT subject, predicate, object, source_block_id, confidence, valid_from, valid_until, metadata FROM edges"
             ).fetchall()
             for row in rows:
                 edges.append(
@@ -1079,9 +1078,7 @@ def list_cores() -> str:
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
-    return json.dumps(
-        {"cores": _core_registry().stats(), "_schema_version": "1.0"}, indent=2
-    )
+    return json.dumps({"cores": _core_registry().stats(), "_schema_version": "1.0"}, indent=2)
 
 
 @mcp.tool
@@ -1221,8 +1218,7 @@ def ontology_load(spec: str, make_active: bool = False) -> str:
             "loaded": True,
             "version": ont.version,
             "types": ont.type_names(),
-            "active": bool(make_active)
-            or _ontology_registry().active().version == ont.version,
+            "active": bool(make_active) or _ontology_registry().active().version == ont.version,
             "_schema_version": "1.0",
         },
         indent=2,
@@ -1297,9 +1293,7 @@ def propagate_staleness(seed_block_ids: str, max_hops: int = 3) -> str:
 
     if not isinstance(seed_block_ids, str) or not seed_block_ids.strip():
         return json.dumps({"error": "seed_block_ids must be a non-empty string"})
-    seeds = [
-        bid.strip() for bid in seed_block_ids.split(",") if bid.strip()
-    ][:64]
+    seeds = [bid.strip() for bid in seed_block_ids.split(",") if bid.strip()][:64]
     if not seeds:
         return json.dumps({"error": "no seed block ids supplied"})
     if not (0 <= max_hops <= 8):
@@ -1359,9 +1353,7 @@ def project_profile(name: str = "", top_k: int = 10) -> str:
         conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
         conn.row_factory = _sqlite3.Row
         try:
-            rows = conn.execute(
-                "SELECT id, type, file, date, json_blob FROM blocks LIMIT 50000"
-            ).fetchall()
+            rows = conn.execute("SELECT id, type, file, date, json_blob FROM blocks LIMIT 50000").fetchall()
             for r in rows:
                 entry: dict[str, Any] = {
                     "_id": r["id"],
@@ -1453,11 +1445,7 @@ def _vault_allowlist() -> list[str]:
     if not raw:
         return []
     sep = ";" if ";" in raw else ":"
-    return [
-        os.path.realpath(p.strip())
-        for p in raw.split(sep)
-        if p.strip()
-    ]
+    return [os.path.realpath(p.strip()) for p in raw.split(sep) if p.strip()]
 
 
 def _vault_root_allowed(vault_root: str) -> tuple[bool, str]:
@@ -1473,9 +1461,7 @@ def _vault_root_allowed(vault_root: str) -> tuple[bool, str]:
             continue
         if common == root:
             return True, ""
-    return False, (
-        f"vault_root {vault_root!r} is outside MIND_MEM_VAULT_ALLOWLIST"
-    )
+    return False, (f"vault_root {vault_root!r} is outside MIND_MEM_VAULT_ALLOWLIST")
 
 
 @mcp.tool
@@ -1553,9 +1539,7 @@ def vault_sync(
         )
     except (FileNotFoundError, FileExistsError, ValueError) as exc:
         return json.dumps({"error": str(exc)})
-    return json.dumps(
-        {"written": target, "_schema_version": "1.0"}, indent=2
-    )
+    return json.dumps({"written": target, "_schema_version": "1.0"}, indent=2)
 
 
 @mcp.tool
@@ -1666,7 +1650,9 @@ def graph_add_edge(
     kg = KnowledgeGraph(_kg_path(ws))
     try:
         edge = kg.add_edge(
-            subject, pred, object,
+            subject,
+            pred,
+            object,
             source_block_id=source_block_id,
             confidence=float(confidence),
         )
@@ -1720,9 +1706,7 @@ def graph_query(
         except ValueError as exc:
             return json.dumps({"error": str(exc)})
     if direction not in {"outgoing", "incoming", "both"}:
-        return json.dumps(
-            {"error": "direction must be 'outgoing' / 'incoming' / 'both'"}
-        )
+        return json.dumps({"error": "direction must be 'outgoing' / 'incoming' / 'both'"})
 
     kg = KnowledgeGraph(_kg_path(ws))
     try:
@@ -1763,8 +1747,7 @@ def graph_stats() -> str:
     kg_file = _kg_path(ws)
     if not os.path.isfile(kg_file):
         return json.dumps(
-            {"entities": 0, "edges": 0, "predicates": {}, "orphan_entities": 0,
-             "_schema_version": "1.0"},
+            {"entities": 0, "edges": 0, "predicates": {}, "orphan_entities": 0, "_schema_version": "1.0"},
             indent=2,
         )
     kg = KnowledgeGraph(kg_file)
@@ -1819,11 +1802,7 @@ def observe_signal(
 
     prev_ids: list[str] = []
     if previous_results.strip():
-        prev_ids = [
-            bid.strip()
-            for bid in previous_results.split(",")
-            if bid.strip()
-        ][:64]
+        prev_ids = [bid.strip() for bid in previous_results.split(",") if bid.strip()][:64]
 
     store = SignalStore(_signal_store_path(ws))
     result = store.observe_pair(
@@ -1833,9 +1812,7 @@ def observe_signal(
         previous_results=prev_ids,
     )
     if result is None:
-        return json.dumps(
-            {"captured": False, "reason": "unrelated or duplicate"}
-        )
+        return json.dumps({"captured": False, "reason": "unrelated or duplicate"})
     return json.dumps(
         {
             "captured": True,
@@ -1894,17 +1871,13 @@ def mind_mem_verify(snapshot: str = "") -> str:
         if len(snap) > 512:
             return json.dumps({"error": "snapshot path too long"})
         if os.path.isabs(snap) or snap.startswith(("/", "\\")):
-            return json.dumps(
-                {"error": "snapshot must be a workspace-relative path"}
-            )
+            return json.dumps({"error": "snapshot must be a workspace-relative path"})
         # Normalise and double-check: after joining with ws, the result
         # must still live under ws. verify_workspace also enforces this
         # but failing early in the MCP layer yields a cleaner error.
         resolved = os.path.realpath(os.path.join(ws, snap))
         if not resolved.startswith(os.path.realpath(ws) + os.sep):
-            return json.dumps(
-                {"error": f"snapshot path escapes workspace: {snap!r}"}
-            )
+            return json.dumps({"error": f"snapshot path escapes workspace: {snap!r}"})
     report = verify_workspace(ws, snapshot=snap)
     envelope = report.as_dict()
     envelope["_schema_version"] = "1.0"
@@ -1959,7 +1932,7 @@ def recall_with_axis(
     # Bound the inputs up front so a misbehaving caller can't burn
     # unbounded CPU on enum lookups or a huge result fetch.
     _MAX_ARG_LEN = 1024  # axes / weights string length
-    _MAX_TOKENS = 16     # per enum, number of axes / weight pairs
+    _MAX_TOKENS = 16  # per enum, number of axes / weight pairs
     _MAX_LIMIT = 500
 
     if len(axes) > _MAX_ARG_LEN or len(weights) > _MAX_ARG_LEN:
@@ -2095,9 +2068,7 @@ def propose_update(
             "status": "proposed",
             "written": written,
             "location": "intelligence/SIGNALS.md",
-            "next_step": (
-                "Run /apply or `python3 maintenance/apply_engine.py` to review and promote to source of truth."
-            ),
+            "next_step": ("Run /apply or `python3 maintenance/apply_engine.py` to review and promote to source of truth."),
             "safety": "This signal is in SIGNALS.md only. It has NOT been written to DECISIONS.md or TASKS.md.",
         },
         indent=2,
@@ -3354,9 +3325,7 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blo
         "data": jsonl_output,
     }
     if truncated:
-        envelope["warning"] = (
-            f"Output truncated to {max_blocks} blocks (total: {total}). Increase max_blocks to export more."
-        )
+        envelope["warning"] = f"Output truncated to {max_blocks} blocks (total: {total}). Increase max_blocks to export more."
 
     return json.dumps(
         envelope,
@@ -3466,8 +3435,7 @@ def list_evidence(
                     {
                         "_schema_version": MCP_SCHEMA_VERSION,
                         "error": (
-                            f"Unknown action: {action!r}. "
-                            "Valid values: PROPOSE, APPLY, ROLLBACK, CONTRADICT, DRIFT, RESOLVE, VERIFY"
+                            f"Unknown action: {action!r}. Valid values: PROPOSE, APPLY, ROLLBACK, CONTRADICT, DRIFT, RESOLVE, VERIFY"
                         ),
                     },
                     indent=2,
@@ -3523,10 +3491,12 @@ def get_block(block_id: str) -> str:
         JSON with the full block content, source file, and metadata.
     """
     if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": f"Invalid block_id format: {block_id}",
-        })
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Invalid block_id format: {block_id}",
+            }
+        )
 
     ws = _workspace()
     ws_err = _check_workspace(ws)
@@ -3543,12 +3513,16 @@ def get_block(block_id: str) -> str:
                     rel_path = os.path.relpath(filepath, ws)
                     block["_source_file"] = rel_path.replace(os.sep, "/")
                     metrics.inc("mcp_get_block")
-                    return json.dumps({
-                        "_schema_version": MCP_SCHEMA_VERSION,
-                        "block_id": block_id,
-                        "found": True,
-                        "block": block,
-                    }, indent=2, default=str)
+                    return json.dumps(
+                        {
+                            "_schema_version": MCP_SCHEMA_VERSION,
+                            "block_id": block_id,
+                            "found": True,
+                            "block": block,
+                        },
+                        indent=2,
+                        default=str,
+                    )
         except (OSError, ValueError, BlockCorruptedError) as exc:
             _log.debug("get_block_parse_failed", file=filepath, error=str(exc))
 
@@ -3569,23 +3543,30 @@ def get_block(block_id: str) -> str:
                     if block.get("_id") == block_id:
                         block["_source_file"] = f"{subdir}/{fn}"
                         metrics.inc("mcp_get_block")
-                        return json.dumps({
-                            "_schema_version": MCP_SCHEMA_VERSION,
-                            "block_id": block_id,
-                            "found": True,
-                            "block": block,
-                        }, indent=2, default=str)
+                        return json.dumps(
+                            {
+                                "_schema_version": MCP_SCHEMA_VERSION,
+                                "block_id": block_id,
+                                "found": True,
+                                "block": block,
+                            },
+                            indent=2,
+                            default=str,
+                        )
             except (OSError, ValueError, BlockCorruptedError):
                 continue
 
     metrics.inc("mcp_get_block_miss")
-    return json.dumps({
-        "_schema_version": MCP_SCHEMA_VERSION,
-        "block_id": block_id,
-        "found": False,
-        "error": f"Block {block_id} not found in any corpus file.",
-        "hint": "Check the block ID and ensure the workspace is initialized.",
-    }, indent=2)
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "block_id": block_id,
+            "found": False,
+            "error": f"Block {block_id} not found in any corpus file.",
+            "hint": "Check the block ID and ensure the workspace is initialized.",
+        },
+        indent=2,
+    )
 
 
 @mcp.tool
@@ -3644,6 +3625,7 @@ def memory_health() -> str:
     stale_count = 0
     try:
         from mind_mem.causal_graph import CausalGraph
+
         cg = CausalGraph(ws)
         stale = cg.get_stale_blocks()
         stale_count = len(stale)
@@ -3651,8 +3633,7 @@ def memory_health() -> str:
         if stale_count > 0:
             health["stale_block_ids"] = [s["block_id"] for s in stale[:10]]
             recommendations.append(
-                f"{stale_count} stale block(s) need review. "
-                "Use stale_blocks tool for details, then update or clear staleness."
+                f"{stale_count} stale block(s) need review. Use stale_blocks tool for details, then update or clear staleness."
             )
     except (ImportError, sqlite3.OperationalError, OSError, ValueError) as exc:
         health["stale_blocks"] = 0
@@ -3668,14 +3649,14 @@ def memory_health() -> str:
             pass
     health["drift_items"] = drift_count
     if drift_count > 0:
-        recommendations.append(
-            f"{drift_count} drift item(s) detected. Review intelligence/DRIFT.md for belief shifts."
-        )
+        recommendations.append(f"{drift_count} drift item(s) detected. Review intelligence/DRIFT.md for belief shifts.")
 
     # 4. Embedding/vector coverage
     import struct as _struct_mod
+
     try:
         from mind_mem.recall_vector import _index_path
+
         vec_path = _index_path(ws)
         if os.path.isfile(vec_path):
             with open(vec_path, "rb") as f:
@@ -3687,9 +3668,7 @@ def memory_health() -> str:
                         coverage = round(embedded_count / total_blocks * 100, 1)
                         health["embedding_coverage_pct"] = coverage
                         if coverage < 80:
-                            recommendations.append(
-                                f"Embedding coverage is {coverage}%. Run reindex(include_vectors=True)."
-                            )
+                            recommendations.append(f"Embedding coverage is {coverage}%. Run reindex(include_vectors=True).")
                 else:
                     health["embedded_blocks"] = 0
                     health["embedding_coverage_pct"] = 0.0
@@ -3697,9 +3676,7 @@ def memory_health() -> str:
             health["embedded_blocks"] = 0
             health["embedding_coverage_pct"] = 0.0
             if total_blocks > 10:
-                recommendations.append(
-                    "No vector index found. Run reindex(include_vectors=True) for hybrid search."
-                )
+                recommendations.append("No vector index found. Run reindex(include_vectors=True) for hybrid search.")
     except (ImportError, OSError, _struct_mod.error):
         health["embedded_blocks"] = "unknown"
         health["embedding_coverage_pct"] = "unknown"
@@ -3715,9 +3692,7 @@ def memory_health() -> str:
             pass
     health["pending_signals"] = pending_signals
     if pending_signals > 5:
-        recommendations.append(
-            f"{pending_signals} pending signals. Review and apply or reject them."
-        )
+        recommendations.append(f"{pending_signals} pending signals. Review and apply or reject them.")
 
     contra_path = os.path.join(ws, "intelligence", "CONTRADICTIONS.md")
     contra_count = 0
@@ -3728,15 +3703,14 @@ def memory_health() -> str:
             pass
     health["unresolved_contradictions"] = contra_count
     if contra_count > 0:
-        recommendations.append(
-            f"{contra_count} unresolved contradiction(s). Use list_contradictions for details."
-        )
+        recommendations.append(f"{contra_count} unresolved contradiction(s). Use list_contradictions for details.")
 
     # 6. FTS index freshness
     db = fts_db_path(ws)
     if db and os.path.isfile(db):
         try:
             from mind_mem.sqlite_index import index_status as fts_status
+
             info = fts_status(ws)
             health["fts_index"] = {
                 "exists": True,
@@ -3747,9 +3721,7 @@ def memory_health() -> str:
             }
             stale_files = info.get("stale_files", 0)
             if stale_files > 0:
-                recommendations.append(
-                    f"FTS index has {stale_files} stale file(s). Run reindex tool."
-                )
+                recommendations.append(f"FTS index has {stale_files} stale file(s). Run reindex tool.")
         except (sqlite3.OperationalError, OSError, ValueError):
             health["fts_index"] = {"exists": True, "error": "Could not read index status"}
     else:
@@ -3759,6 +3731,7 @@ def memory_health() -> str:
     # 7. Compaction candidates
     try:
         from mind_mem.compaction import archive_completed_blocks, compact_signals
+
         archivable = archive_completed_blocks(ws, days=90, dry_run=True)
         compactable_signals = compact_signals(ws, days=60, dry_run=True)
         health["compaction"] = {
@@ -3767,9 +3740,7 @@ def memory_health() -> str:
         }
         total_compactable = len(archivable) + len(compactable_signals)
         if total_compactable > 0:
-            recommendations.append(
-                f"{total_compactable} item(s) ready for compaction. Run compact tool."
-            )
+            recommendations.append(f"{total_compactable} item(s) ready for compaction. Run compact tool.")
     except (ImportError, OSError, ValueError) as exc:
         health["compaction"] = {"error": str(exc)}
 
@@ -3800,18 +3771,22 @@ def traverse_graph(block_id: str, depth: int = 2, direction: str = "both") -> st
         JSON with graph nodes, edges, and causal chains from the starting block.
     """
     if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": f"Invalid block_id format: {block_id}",
-        })
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Invalid block_id format: {block_id}",
+            }
+        )
 
     depth = max(1, min(depth, 5))
 
     if direction not in ("upstream", "downstream", "both"):
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": f"Invalid direction: {direction}. Use 'upstream', 'downstream', or 'both'.",
-        })
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Invalid direction: {direction}. Use 'upstream', 'downstream', or 'both'.",
+            }
+        )
 
     ws = _workspace()
     try:
@@ -3855,12 +3830,14 @@ def traverse_graph(block_id: str, depth: int = 2, direction: str = "both") -> st
                         if e.source_id not in visited:
                             visited.add(e.source_id)
                             next_layer.append(e.source_id)
-                            downstream_nodes.append({
-                                "block_id": e.source_id,
-                                "depends_on": node_id,
-                                "edge_type": e.edge_type,
-                                "depth": d + 1,
-                            })
+                            downstream_nodes.append(
+                                {
+                                    "block_id": e.source_id,
+                                    "depends_on": node_id,
+                                    "edge_type": e.edge_type,
+                                    "depth": d + 1,
+                                }
+                            )
                 current_layer = next_layer
                 if not current_layer:
                     break
@@ -3886,22 +3863,28 @@ def traverse_graph(block_id: str, depth: int = 2, direction: str = "both") -> st
         return json.dumps(result, indent=2, default=str)
 
     except ImportError:
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": "causal_graph module not available",
-            "block_id": block_id,
-        }, indent=2)
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "causal_graph module not available",
+                "block_id": block_id,
+            },
+            indent=2,
+        )
     except sqlite3.OperationalError as exc:
         if _is_db_locked(exc):
             return _sqlite_busy_error()
         raise
     except (OSError, ValueError) as exc:
         _log.warning("traverse_graph_failed", block_id=block_id, error=str(exc))
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": f"Graph traversal failed: {exc}",
-            "block_id": block_id,
-        }, indent=2)
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Graph traversal failed: {exc}",
+                "block_id": block_id,
+            },
+            indent=2,
+        )
 
 
 @mcp.tool
@@ -3978,18 +3961,23 @@ def compact(dry_run: bool = True, archive_days: int = 90, signal_days: int = 60,
     metrics.inc("mcp_compact")
     _log.info("mcp_compact", dry_run=dry_run, total_actions=total_actions)
 
-    return json.dumps({
-        "_schema_version": MCP_SCHEMA_VERSION,
-        "status": "dry_run" if dry_run else "executed",
-        "dry_run": dry_run,
-        "total_actions": total_actions,
-        "actions": actions,
-        "next_step": (
-            "Call again with dry_run=False to execute." if dry_run and total_actions > 0
-            else "Workspace is clean — nothing to compact." if total_actions == 0
-            else None
-        ),
-    }, indent=2)
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "status": "dry_run" if dry_run else "executed",
+            "dry_run": dry_run,
+            "total_actions": total_actions,
+            "actions": actions,
+            "next_step": (
+                "Call again with dry_run=False to execute."
+                if dry_run and total_actions > 0
+                else "Workspace is clean — nothing to compact."
+                if total_actions == 0
+                else None
+            ),
+        },
+        indent=2,
+    )
 
 
 @mcp.tool
@@ -4020,57 +4008,75 @@ def stale_blocks(limit: int = 20, clear_block_id: str = "") -> str:
         # Clear mode
         if clear_block_id:
             if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", clear_block_id):
-                return json.dumps({
-                    "_schema_version": MCP_SCHEMA_VERSION,
-                    "error": f"Invalid block_id format: {clear_block_id}",
-                })
+                return json.dumps(
+                    {
+                        "_schema_version": MCP_SCHEMA_VERSION,
+                        "error": f"Invalid block_id format: {clear_block_id}",
+                    }
+                )
             cleared = cg.clear_staleness(clear_block_id)
             metrics.inc("mcp_stale_cleared")
-            return json.dumps({
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "action": "cleared",
-                "block_id": clear_block_id,
-                "was_stale": cleared,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "_schema_version": MCP_SCHEMA_VERSION,
+                    "action": "cleared",
+                    "block_id": clear_block_id,
+                    "was_stale": cleared,
+                },
+                indent=2,
+            )
 
         # List mode
         stale = cg.get_stale_blocks()
-        stale = stale[:max(1, min(limit, 100))]
+        stale = stale[: max(1, min(limit, 100))]
 
         metrics.inc("mcp_stale_blocks")
         _log.info("mcp_stale_blocks", count=len(stale))
 
         if not stale:
-            return json.dumps({
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "status": "clean",
-                "stale_count": 0,
-                "message": "No stale blocks. All blocks are up to date.",
-            }, indent=2)
+            return json.dumps(
+                {
+                    "_schema_version": MCP_SCHEMA_VERSION,
+                    "status": "clean",
+                    "stale_count": 0,
+                    "message": "No stale blocks. All blocks are up to date.",
+                },
+                indent=2,
+            )
 
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "status": "stale_found",
-            "stale_count": len(stale),
-            "blocks": stale,
-            "hint": "Review each stale block and update or call stale_blocks(clear_block_id='...') to clear.",
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "status": "stale_found",
+                "stale_count": len(stale),
+                "blocks": stale,
+                "hint": "Review each stale block and update or call stale_blocks(clear_block_id='...') to clear.",
+            },
+            indent=2,
+            default=str,
+        )
 
     except ImportError:
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": "causal_graph module not available",
-        }, indent=2)
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "causal_graph module not available",
+            },
+            indent=2,
+        )
     except sqlite3.OperationalError as exc:
         if _is_db_locked(exc):
             return _sqlite_busy_error()
         raise
     except (OSError, ValueError) as exc:
         _log.warning("stale_blocks_failed", error=str(exc))
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": f"Stale block lookup failed: {exc}",
-        }, indent=2)
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Stale block lookup failed: {exc}",
+            },
+            indent=2,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -4106,19 +4112,23 @@ def calibration_feedback(
     ws = _workspace()
 
     if feedback_type not in ("accepted", "rejected", "ignored"):
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": f"Invalid feedback_type: {feedback_type}. Must be accepted/rejected/ignored.",
-        })
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Invalid feedback_type: {feedback_type}. Must be accepted/rejected/ignored.",
+            }
+        )
 
     useful = block_ids_useful or []
     not_useful = block_ids_not_useful or []
 
     if not useful and not not_useful:
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": "At least one of block_ids_useful or block_ids_not_useful must be provided.",
-        })
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "At least one of block_ids_useful or block_ids_not_useful must be provided.",
+            }
+        )
 
     try:
         from mind_mem.calibration import CalibrationManager
@@ -4131,16 +4141,20 @@ def calibration_feedback(
             feedback_type=feedback_type,
         )
     except ImportError:
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": "Calibration module not available.",
-        })
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "Calibration module not available.",
+            }
+        )
     except Exception as exc:
         _log.warning("calibration_feedback_failed", error=str(exc))
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": f"Failed to record feedback: {exc}",
-        })
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Failed to record feedback: {exc}",
+            }
+        )
 
     metrics.inc("mcp_calibration_feedback")
     return json.dumps(
@@ -4173,16 +4187,20 @@ def calibration_stats() -> str:
         cal = CalibrationManager(ws)
         stats = cal.get_calibration_stats()
     except ImportError:
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": "Calibration module not available.",
-        })
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "Calibration module not available.",
+            }
+        )
     except Exception as exc:
         _log.warning("calibration_stats_failed", error=str(exc))
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": f"Failed to retrieve calibration stats: {exc}",
-        })
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Failed to retrieve calibration stats: {exc}",
+            }
+        )
 
     metrics.inc("mcp_calibration_stats")
     return json.dumps(
@@ -4234,10 +4252,12 @@ def dream_cycle(
         )
     except Exception as exc:
         _log.warning("dream_cycle_failed", error=str(exc))
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": f"Dream cycle failed: {exc}",
-        })
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Dream cycle failed: {exc}",
+            }
+        )
 
     result = {
         "_schema_version": MCP_SCHEMA_VERSION,
@@ -4250,30 +4270,15 @@ def dream_cycle(
     }
 
     if report.entity_proposals:
-        result["entities"] = [
-            {"type": e.entity_type, "slug": e.slug, "source": e.source_file}
-            for e in report.entity_proposals[:20]
-        ]
+        result["entities"] = [{"type": e.entity_type, "slug": e.slug, "source": e.source_file} for e in report.entity_proposals[:20]]
     if report.broken_citations:
-        result["citations"] = [
-            {"id": c.cited_id, "file": c.source_file, "line": c.line_number}
-            for c in report.broken_citations[:20]
-        ]
+        result["citations"] = [{"id": c.cited_id, "file": c.source_file, "line": c.line_number} for c in report.broken_citations[:20]]
     if report.stale_blocks:
-        result["stale"] = [
-            {"id": s.block_id, "days": s.days_stale}
-            for s in report.stale_blocks[:20]
-        ]
+        result["stale"] = [{"id": s.block_id, "days": s.days_stale} for s in report.stale_blocks[:20]]
     if report.consolidation_candidates:
-        result["consolidation"] = [
-            {"fact": c.fact_text[:80], "count": c.occurrences}
-            for c in report.consolidation_candidates[:10]
-        ]
+        result["consolidation"] = [{"fact": c.fact_text[:80], "count": c.occurrences} for c in report.consolidation_candidates[:10]]
     if report.repair_actions:
-        result["repairs"] = [
-            {"type": a.action_type, "target": a.target, "detail": a.detail}
-            for a in report.repair_actions
-        ]
+        result["repairs"] = [{"type": a.action_type, "target": a.target, "detail": a.detail} for a in report.repair_actions]
         result["total_repairs"] = len(report.repair_actions)
     if report.errors:
         result["errors"] = list(report.errors)
@@ -4299,19 +4304,24 @@ def compiled_truth_load(entity_id: str) -> str:
 
     try:
         from mind_mem.compiled_truth import load_truth_page
+
         page = load_truth_page(ws, entity_id)
     except Exception as exc:
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": f"Failed to load truth page: {exc}",
-        })
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Failed to load truth page: {exc}",
+            }
+        )
 
     if page is None:
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": f"No compiled truth page found for '{entity_id}'.",
-            "hint": "Create one with compiled_truth_add_evidence.",
-        })
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"No compiled truth page found for '{entity_id}'.",
+                "hint": "Create one with compiled_truth_add_evidence.",
+            }
+        )
 
     result = {
         "_schema_version": MCP_SCHEMA_VERSION,
@@ -4401,10 +4411,12 @@ def compiled_truth_add_evidence(
         path = save_truth_page(ws, page)
 
     except Exception as exc:
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": f"Failed to add evidence: {exc}",
-        })
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Failed to add evidence: {exc}",
+            }
+        )
 
     result = {
         "_schema_version": MCP_SCHEMA_VERSION,
@@ -4439,17 +4451,21 @@ def compiled_truth_contradictions(entity_id: str) -> str:
 
         page = load_truth_page(ws, entity_id)
         if page is None:
-            return json.dumps({
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": f"No compiled truth page found for '{entity_id}'.",
-            })
+            return json.dumps(
+                {
+                    "_schema_version": MCP_SCHEMA_VERSION,
+                    "error": f"No compiled truth page found for '{entity_id}'.",
+                }
+            )
 
         conflicts = detect_contradictions(page)
     except Exception as exc:
-        return json.dumps({
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": f"Failed to detect contradictions: {exc}",
-        })
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Failed to detect contradictions: {exc}",
+            }
+        )
 
     result = {
         "_schema_version": MCP_SCHEMA_VERSION,
@@ -4513,15 +4529,11 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Mind-Mem MCP Server")
-    parser.add_argument(
-        "--transport", choices=["stdio", "http"], default="stdio", help="Transport protocol (default: stdio)"
-    )
+    parser.add_argument("--transport", choices=["stdio", "http"], default="stdio", help="Transport protocol (default: stdio)")
     parser.add_argument("--port", type=int, default=8765, help="HTTP port (only used with --transport http)")
     parser.add_argument("--token", default=None, help="Bearer token for HTTP auth (or set MIND_MEM_TOKEN env var)")
     parser.add_argument("--watch", action="store_true", help="Auto-reindex when workspace .md files change")
-    parser.add_argument(
-        "--watch-interval", type=float, default=5.0, help="File watch polling interval in seconds (default: 5.0)"
-    )
+    parser.add_argument("--watch-interval", type=float, default=5.0, help="File watch polling interval in seconds (default: 5.0)")
     args = parser.parse_args()
 
     # Set token from CLI arg if provided (env var takes precedence if both set)
@@ -4529,8 +4541,7 @@ def main():
         import warnings
 
         warnings.warn(
-            "Passing --token on the command line exposes it in /proc/cmdline. "
-            "Use MIND_MEM_TOKEN environment variable instead.",
+            "Passing --token on the command line exposes it in /proc/cmdline. Use MIND_MEM_TOKEN environment variable instead.",
             stacklevel=2,
         )
         os.environ["MIND_MEM_TOKEN"] = args.token
@@ -4575,8 +4586,7 @@ def main():
         if not auth_tokens:
             _log.warning(
                 "mcp_http_no_auth",
-                hint="HTTP transport running without token auth. "
-                "Set MIND_MEM_TOKEN or MIND_MEM_ADMIN_TOKEN for security.",
+                hint="HTTP transport running without token auth. Set MIND_MEM_TOKEN or MIND_MEM_ADMIN_TOKEN for security.",
             )
         else:
             # Enforce Bearer token auth on HTTP transport.

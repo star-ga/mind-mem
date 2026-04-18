@@ -683,11 +683,7 @@ def recall(
         for hop, decay in enumerate(hop_decays):
             # On first hop, seed from BM25 results; on later hops, seed from
             # newly discovered neighbors
-            seeds = (
-                results
-                if hop == 0
-                else [{"_id": nid, "score": ns} for nid, ns in neighbor_scores.items() if nid not in score_by_id]
-            )
+            seeds = results if hop == 0 else [{"_id": nid, "score": ns} for nid, ns in neighbor_scores.items() if nid not in score_by_id]
             hop_added = 0
             for r in seeds:
                 rid = r["_id"]
@@ -1062,9 +1058,7 @@ def recall(
                     top_k=ce_config.get("top_k", limit),
                     blend_weight=ce_config.get("blend_weight", 0.6),
                 )
-                _log.info(
-                    "cross_encoder_rerank", candidates=len(ce_input), blend_weight=ce_config.get("blend_weight", 0.6)
-                )
+                _log.info("cross_encoder_rerank", candidates=len(ce_input), blend_weight=ce_config.get("blend_weight", 0.6))
                 # #429: Record hard negatives — blocks BM25 liked but CE rejected
                 try:
                     record_hard_negatives(workspace, query, deduped)
@@ -1223,9 +1217,7 @@ def _load_backend(workspace: str) -> str | RecallBackend | None:
 
                 return VectorBackend(recall_cfg)
             except ImportError:
-                _log.warning(
-                    "vector_backend_unavailable", hint="recall_vector not installed, falling back to BM25 scan"
-                )
+                _log.warning("vector_backend_unavailable", hint="recall_vector not installed, falling back to BM25 scan")
     return None  # use built-in BM25 scan
 
 
@@ -1325,9 +1317,7 @@ def main():
     parser.add_argument("--active-only", action="store_true", help="Only search active blocks")
     parser.add_argument("--graph", action="store_true", help="Enable graph-based neighbor boosting")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
-    parser.add_argument(
-        "--retrieve-wide-k", type=int, default=200, help="Candidates to retrieve before reranking (default 200)"
-    )
+    parser.add_argument("--retrieve-wide-k", type=int, default=200, help="Candidates to retrieve before reranking (default 200)")
     parser.add_argument("--no-rerank", action="store_true", help="Disable v7 deterministic reranking (use pure BM25)")
     parser.add_argument("--rerank-debug", action="store_true", help="Show reranker feature breakdowns in JSON output")
     parser.add_argument(

@@ -7,10 +7,7 @@ tracking, stale belief detection, serialization, and SQLite persistence.
 
 from __future__ import annotations
 
-import math
-import os
-import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 
@@ -285,9 +282,7 @@ class TestBeliefStore:
         store = BeliefStore()
         store.get_belief("D-001")  # ensure entry exists
         store.get_belief("D-002")
-        variances_before = {
-            bid: store.get_belief(bid).variance for bid in ("D-001", "D-002")
-        }
+        variances_before = {bid: store.get_belief(bid).variance for bid in ("D-001", "D-002")}
         store.decay_all(hours_elapsed=10.0)
         for bid in ("D-001", "D-002"):
             assert store.get_belief(bid).variance >= variances_before[bid]
@@ -309,9 +304,7 @@ class TestBeliefStore:
     def test_get_stale_beliefs_filters_correctly(self):
         store = BeliefStore()
         store._beliefs["D-good"] = _state(estimate=0.9, variance=0.01)
-        store._beliefs["D-bad"] = _state(
-            block_id="D-bad", estimate=0.1, variance=0.9
-        )
+        store._beliefs["D-bad"] = _state(block_id="D-bad", estimate=0.1, variance=0.9)
         stale = store.get_stale_beliefs(threshold=0.3)
         ids = [s.block_id for s in stale]
         assert "D-bad" in ids
@@ -355,9 +348,7 @@ class TestBeliefStore:
 
         # Reload from db to confirm persistence fired inside from_dict
         store3 = BeliefStore(db_path=db_path2)
-        assert store3.get_belief("D-010").estimate == pytest.approx(
-            store1.get_belief("D-010").estimate, abs=1e-9
-        )
+        assert store3.get_belief("D-010").estimate == pytest.approx(store1.get_belief("D-010").estimate, abs=1e-9)
 
 
 class TestInputValidation:

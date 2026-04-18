@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import os
 import tempfile
 from pathlib import Path
 
@@ -16,7 +15,6 @@ from mind_mem.agent_bridge import (
     VaultBlock,
     VaultBridge,
 )
-
 
 # ---------------------------------------------------------------------------
 # AgentFormatter
@@ -106,13 +104,11 @@ def vault():
         (root / "tasks").mkdir()
         (root / ".obsidian").mkdir()
         (root / "decisions" / "auth.md").write_text(
-            "---\nid: D-AUTH\ntype: decision\ntitle: Auth flow\n---\n\n"
-            "Use OAuth2 with PKCE.\n",
+            "---\nid: D-AUTH\ntype: decision\ntitle: Auth flow\n---\n\nUse OAuth2 with PKCE.\n",
             encoding="utf-8",
         )
         (root / "tasks" / "jwt.md").write_text(
-            "---\nid: T-JWT\ntype: task\n---\n\n"
-            "Rotate signing keys.\n",
+            "---\nid: T-JWT\ntype: task\n---\n\nRotate signing keys.\n",
             encoding="utf-8",
         )
         # Excluded directory entry that should be skipped.

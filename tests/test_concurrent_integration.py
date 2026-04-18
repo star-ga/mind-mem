@@ -330,9 +330,7 @@ class TestPartialFailureRollback(unittest.TestCase):
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
 
         # Apply (mock preconditions to pass)
-        with patch(
-            "mind_mem.apply_engine.check_preconditions", return_value=(True, ["validate: PASS (TOTAL 0 issues)"])
-        ):
+        with patch("mind_mem.apply_engine.check_preconditions", return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
             ok, msg = apply_proposal(self.ws, "P-20260202-001")
 
         # Apply should have failed
@@ -341,9 +339,7 @@ class TestPartialFailureRollback(unittest.TestCase):
         # Workspace should be rolled back to original state
         with open(dec_path) as f:
             restored_content = f.read()
-        self.assertEqual(
-            original_content, restored_content, "Workspace was not restored to pre-apply state after partial failure"
-        )
+        self.assertEqual(original_content, restored_content, "Workspace was not restored to pre-apply state after partial failure")
 
         # Receipt should exist with rolled_back status
         applied_dir = os.path.join(self.ws, "intelligence", "applied")
@@ -375,9 +371,7 @@ class TestPartialFailureRollback(unittest.TestCase):
         proposal = _build_proposal_block("P-20260202-002", "D-20260101-001", ops)
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
 
-        with patch(
-            "mind_mem.apply_engine.check_preconditions", return_value=(True, ["validate: PASS (TOTAL 0 issues)"])
-        ):
+        with patch("mind_mem.apply_engine.check_preconditions", return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
             ok, msg = apply_proposal(self.ws, "P-20260202-002")
 
         self.assertFalse(ok)
@@ -397,9 +391,7 @@ class TestPartialFailureRollback(unittest.TestCase):
 
         # Op 1: append a block (creates new content -- succeeds)
         # Op 2: fail on non-existent target
-        new_block_text = (
-            "[D-20260202-099]\nStatement: Orphan block that should be removed\nStatus: active\nDate: 2026-02-02\n"
-        )
+        new_block_text = "[D-20260202-099]\nStatement: Orphan block that should be removed\nStatus: active\nDate: 2026-02-02\n"
         ops = [
             {"op": "append_block", "file": "decisions/DECISIONS.md", "patch": new_block_text},
             {
@@ -413,9 +405,7 @@ class TestPartialFailureRollback(unittest.TestCase):
         proposal = _build_proposal_block("P-20260202-003", "D-20260101-001", ops)
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
 
-        with patch(
-            "mind_mem.apply_engine.check_preconditions", return_value=(True, ["validate: PASS (TOTAL 0 issues)"])
-        ):
+        with patch("mind_mem.apply_engine.check_preconditions", return_value=(True, ["validate: PASS (TOTAL 0 issues)"])):
             ok, msg = apply_proposal(self.ws, "P-20260202-003")
 
         self.assertFalse(ok)
@@ -423,9 +413,7 @@ class TestPartialFailureRollback(unittest.TestCase):
         # The appended block text should not remain in the file
         with open(dec_path) as f:
             content = f.read()
-        self.assertNotIn(
-            "Orphan block that should be removed", content, "Orphan content from failed op remains after rollback"
-        )
+        self.assertNotIn("Orphan block that should be removed", content, "Orphan content from failed op remains after rollback")
 
 
 # ===========================================================================
@@ -641,8 +629,7 @@ class TestConcurrentRecall(unittest.TestCase):
             found = any(keyword.lower() in item.get("excerpt", "").lower() for item in r)
             self.assertTrue(
                 found,
-                f"Thread {idx}: expected keyword '{keyword}' "
-                f"not found in results: {[item.get('excerpt', '')[:50] for item in r]}",
+                f"Thread {idx}: expected keyword '{keyword}' not found in results: {[item.get('excerpt', '')[:50] for item in r]}",
             )
 
     def test_many_concurrent_recalls_no_corruption(self):
@@ -730,9 +717,7 @@ class TestFileLockContention(unittest.TestCase):
             t.join(timeout=30)
 
         self.assertEqual(counter[0], 5, "Not all threads completed")
-        self.assertEqual(
-            max_concurrent[0], 1, f"Multiple threads held lock simultaneously: max_concurrent={max_concurrent[0]}"
-        )
+        self.assertEqual(max_concurrent[0], 1, f"Multiple threads held lock simultaneously: max_concurrent={max_concurrent[0]}")
 
     def test_timeout_raises_lock_timeout(self):
         """A thread waiting longer than timeout should get LockTimeout."""
@@ -1042,9 +1027,7 @@ class TestPostCheckFailureRollback(unittest.TestCase):
 
         # Create a proposal that appends a block (creating new content),
         # and then the post-check fails
-        new_block = (
-            "[D-20260204-099]\nStatement: Orphan decision created by append_block\nStatus: active\nDate: 2026-02-04\n"
-        )
+        new_block = "[D-20260204-099]\nStatement: Orphan decision created by append_block\nStatus: active\nDate: 2026-02-04\n"
         ops = [{"op": "append_block", "file": "decisions/DECISIONS.md", "patch": new_block}]
         proposal = _build_proposal_block("P-20260204-003", "D-20260101-001", ops)
         _write_proposal(self.ws, _proposal_to_markdown(proposal))
@@ -1126,18 +1109,9 @@ class TestSnapshotRestoreFidelity(unittest.TestCase):
 
         _write_decisions(
             self.ws,
-            (
-                "# Decisions\n\n"
-                "[D-20260101-001]\n"
-                "Statement: Snapshot fidelity test\n"
-                "Status: active\n"
-                "Date: 2026-01-01\n"
-                "\n---\n"
-            ),
+            ("# Decisions\n\n[D-20260101-001]\nStatement: Snapshot fidelity test\nStatus: active\nDate: 2026-01-01\n\n---\n"),
         )
-        _write_tasks(
-            self.ws, ("# Tasks\n\n[T-20260101-001]\nTitle: Test task for snapshot\nStatus: todo\nPriority: P1\n\n---\n")
-        )
+        _write_tasks(self.ws, ("# Tasks\n\n[T-20260101-001]\nTitle: Test task for snapshot\nStatus: todo\nPriority: P1\n\n---\n"))
 
     def tearDown(self):
         shutil.rmtree(self.ws, ignore_errors=True)

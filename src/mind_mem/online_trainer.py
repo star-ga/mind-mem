@@ -162,10 +162,7 @@ class WeightRegistry:
                 return False, "no candidate weights registered"
             prev = self._active.get(model_id)
             if prev is not None and new_mrr < prev.base_mrr + min_improvement:
-                return False, (
-                    f"MRR regression or insufficient improvement: "
-                    f"candidate={new_mrr:.4f}, baseline={prev.base_mrr:.4f}"
-                )
+                return False, (f"MRR regression or insufficient improvement: candidate={new_mrr:.4f}, baseline={prev.base_mrr:.4f}")
             if prev is not None:
                 self._rollback[model_id] = prev
             promoted = WeightRef(

@@ -5,13 +5,12 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-import os
 import sys
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
-from .config import ENV_PATH, ORCHESTRATOR_PATH
+from .config import ORCHESTRATOR_PATH
 
 
 @dataclass(frozen=True)
@@ -86,8 +85,7 @@ class FleetBridge:
             providers_mod, keys = _load_orchestrator()
         except (ImportError, ModuleNotFoundError) as exc:
             raise RuntimeError(
-                f"Multi-LLM orchestrator not found at {ORCHESTRATOR_PATH}. "
-                "Install it or update ORCHESTRATOR_PATH in skill_opt/config.py."
+                f"Multi-LLM orchestrator not found at {ORCHESTRATOR_PATH}. Install it or update ORCHESTRATOR_PATH in skill_opt/config.py."
             ) from exc
         rate_cls = getattr(providers_mod, "RateLimitConfig")
         for model_key in self._requested_models:
@@ -151,9 +149,7 @@ class FleetBridge:
             )
         except Exception as exc:
             elapsed = (time.monotonic() - t0) * 1000
-            return FleetResponse(
-                model=model_key, content="", latency_ms=elapsed, error=str(exc)
-            )
+            return FleetResponse(model=model_key, content="", latency_ms=elapsed, error=str(exc))
 
     @property
     def available_models(self) -> list[str]:

@@ -74,9 +74,7 @@ class GovernanceGate:
         os.makedirs(memory_dir, exist_ok=True)
 
         self._chain = HashChainV2(os.path.join(memory_dir, "hash_chain_v2.db"))
-        self._evidence = EvidenceChain(
-            store_path=os.path.join(memory_dir, "evidence_chain.jsonl")
-        )
+        self._evidence = EvidenceChain(store_path=os.path.join(memory_dir, "evidence_chain.jsonl"))
         self._spec_mgr = SpecBindingManager(self._config_path)
         # Serialize admit() so evidence-then-chain writes cannot interleave
         # across threads: two interleaved admits could write evidence A,
@@ -133,9 +131,7 @@ class GovernanceGate:
             # Step 1 — spec-hash check (only when a binding exists)
             spec_hash = self._current_spec_hash()
             if spec_hash is None:
-                _log.debug(
-                    "governance_gate.no_binding", block_id=block_id, action=action
-                )
+                _log.debug("governance_gate.no_binding", block_id=block_id, action=action)
             else:
                 valid, reason = self._spec_mgr.verify()
                 if not valid:
@@ -145,10 +141,7 @@ class GovernanceGate:
                         action=action,
                         reason=reason,
                     )
-                    raise GovernanceBypassError(
-                        f"GovernanceGate blocked write to '{block_id}': "
-                        f"spec-hash drifted. {reason}"
-                    )
+                    raise GovernanceBypassError(f"GovernanceGate blocked write to '{block_id}': spec-hash drifted. {reason}")
 
             # Step 2 — create evidence object
             ev_action = _map_action(action)

@@ -124,9 +124,7 @@ def is_skeptical_query(query: str) -> bool:
     words = query.split()
     if len(words) <= 5:
         specific = [
-            w
-            for w in words
-            if len(w) > 4 and w.lower() not in {"what", "which", "where", "about", "their", "there", "these", "those"}
+            w for w in words if len(w) > 4 and w.lower() not in {"what", "which", "where", "about", "their", "there", "these", "those"}
         ]
         if len(specific) <= 1:
             return True

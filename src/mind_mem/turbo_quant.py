@@ -15,11 +15,9 @@ the full-precision copy in a cold store.
 
 from __future__ import annotations
 
-import math
 import struct
 from dataclasses import dataclass
 from typing import Iterable, Sequence
-
 
 _LEVELS: int = 8  # 3 bits per channel
 
@@ -93,17 +91,10 @@ def quantize(vector: Sequence[float]) -> QuantizedVector:
     hi = max(vector)
     if hi == lo:
         # Constant vector — zero-scale; dequantise reconstructs lo exactly.
-        return QuantizedVector(
-            dim=dim, scale=0.0, offset=float(lo), payload=_pack_codes([0] * dim)
-        )
+        return QuantizedVector(dim=dim, scale=0.0, offset=float(lo), payload=_pack_codes([0] * dim))
     scale = (hi - lo) / (_LEVELS - 1)
-    codes = [
-        max(0, min(_LEVELS - 1, int(round((v - lo) / scale))))
-        for v in vector
-    ]
-    return QuantizedVector(
-        dim=dim, scale=scale, offset=float(lo), payload=_pack_codes(codes)
-    )
+    codes = [max(0, min(_LEVELS - 1, int(round((v - lo) / scale)))) for v in vector]
+    return QuantizedVector(dim=dim, scale=scale, offset=float(lo), payload=_pack_codes(codes))
 
 
 def dequantize(qv: QuantizedVector) -> list[float]:

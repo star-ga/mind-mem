@@ -41,7 +41,6 @@ from .hash_chain_v2 import HashChainV2
 from .merkle_tree import MerkleTree
 from .spec_binding import SpecBindingCorruptedError, SpecBindingManager
 
-
 # ---------------------------------------------------------------------------
 # Exit codes
 # ---------------------------------------------------------------------------
@@ -196,11 +195,8 @@ def check_snapshot(
         report.record("snapshot_anchor", True, "no snapshot requested")
         return
     ws_root = os.path.realpath(workspace)
-    manifest_path = os.path.realpath(
-        os.path.join(workspace, snapshot, "manifest.json")
-    )
-    if not (manifest_path == os.path.join(ws_root, os.path.relpath(manifest_path, ws_root))
-            and manifest_path.startswith(ws_root + os.sep)):
+    manifest_path = os.path.realpath(os.path.join(workspace, snapshot, "manifest.json"))
+    if not (manifest_path == os.path.join(ws_root, os.path.relpath(manifest_path, ws_root)) and manifest_path.startswith(ws_root + os.sep)):
         report.record(
             "snapshot_anchor",
             False,
@@ -273,10 +269,7 @@ def check_snapshot(
         return
 
     if merkle_root and merkle_leaves:
-        leaves = [
-            (entry["block_id"], entry["content_hash"])
-            for entry in merkle_leaves
-        ]
+        leaves = [(entry["block_id"], entry["content_hash"]) for entry in merkle_leaves]
         tree = MerkleTree()
         tree.build(leaves)
         if tree.root_hash == merkle_root:
@@ -344,10 +337,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--snapshot",
         dest="snapshot",
         default=None,
-        help=(
-            "Optional relative path to a snapshot directory whose manifest "
-            "will be verified against the live chain and Merkle leaves."
-        ),
+        help=("Optional relative path to a snapshot directory whose manifest will be verified against the live chain and Merkle leaves."),
     )
     parser.add_argument(
         "--json",

@@ -74,9 +74,9 @@ class HashEntry:
     timestamp: str
     block_id: str
     action: str
-    content_hash: str    # SHA3-512(content)
-    previous_hash: str   # global chain linkage
-    entry_hash: str      # SHA3-512(canonical representation)
+    content_hash: str  # SHA3-512(content)
+    previous_hash: str  # global chain linkage
+    entry_hash: str  # SHA3-512(canonical representation)
 
 
 class MigrationError(Exception):
@@ -206,9 +206,7 @@ class HashChainV2:
             uri = f"file:{self._db_path}?mode=ro"
             conn = sqlite3.connect(uri, uri=True, timeout=30.0)
         else:
-            conn = sqlite3.connect(
-                self._db_path, timeout=30.0, isolation_level="DEFERRED"
-            )
+            conn = sqlite3.connect(self._db_path, timeout=30.0, isolation_level="DEFERRED")
         conn.row_factory = sqlite3.Row
         if not self._readonly:
             conn.execute("PRAGMA journal_mode=WAL")
@@ -251,9 +249,7 @@ class HashChainV2:
             The newly created, immutable HashEntry.
         """
         if self._readonly:
-            raise PermissionError(
-                "HashChainV2 opened read-only; append() is not permitted"
-            )
+            raise PermissionError("HashChainV2 opened read-only; append() is not permitted")
         entry_id = str(uuid.uuid4())
         if timestamp is None:
             timestamp = datetime.now(timezone.utc).isoformat()
@@ -266,14 +262,10 @@ class HashChainV2:
         with self._lock:
             with self._connect() as conn:
                 conn.execute("BEGIN IMMEDIATE")
-                last_row = conn.execute(
-                    "SELECT entry_hash FROM hash_chain ORDER BY rowid DESC LIMIT 1"
-                ).fetchone()
+                last_row = conn.execute("SELECT entry_hash FROM hash_chain ORDER BY rowid DESC LIMIT 1").fetchone()
                 previous_hash = last_row["entry_hash"] if last_row else GENESIS_HASH
 
-                entry_hash = _compute_entry_hash(
-                    entry_id, timestamp, block_id, action, content_hash, previous_hash
-                )
+                entry_hash = _compute_entry_hash(entry_id, timestamp, block_id, action, content_hash, previous_hash)
 
                 conn.execute(
                     """
@@ -310,10 +302,7 @@ class HashChainV2:
             entry.content_hash,
             entry.previous_hash,
         )
-        return (
-            entry.entry_hash == _compute_entry_hash_v3(*args)
-            or entry.entry_hash == _compute_entry_hash_v1(*args)
-        )
+        return entry.entry_hash == _compute_entry_hash_v3(*args) or entry.entry_hash == _compute_entry_hash_v1(*args)
 
     def verify_chain(self) -> tuple[bool, int]:
         """Verify the full global chain integrity.
@@ -418,9 +407,7 @@ class HashChainV2:
             Number of entries exported.
         """
         with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM hash_chain ORDER BY rowid ASC"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM hash_chain ORDER BY rowid ASC").fetchall()
 
         with open(output_path, "w", encoding="utf-8") as fh:
             for row in rows:
@@ -460,9 +447,7 @@ class HashChainV2:
             FileNotFoundError: If input_path does not exist.
         """
         if self._readonly:
-            raise PermissionError(
-                "HashChainV2 opened read-only; import_jsonl is not permitted"
-            )
+            raise PermissionError("HashChainV2 opened read-only; import_jsonl is not permitted")
         entries = _load_jsonl_entries(input_path)
 
         # Lock for the entire head-read + validate + insert sequence so a
@@ -473,17 +458,13 @@ class HashChainV2:
         with self._lock:
             with self._connect() as conn:
                 conn.execute("BEGIN IMMEDIATE")
-                head_row = conn.execute(
-                    "SELECT entry_hash FROM hash_chain ORDER BY rowid DESC LIMIT 1"
-                ).fetchone()
+                head_row = conn.execute("SELECT entry_hash FROM hash_chain ORDER BY rowid DESC LIMIT 1").fetchone()
                 prev_hash = head_row["entry_hash"] if head_row else GENESIS_HASH
 
                 for idx, entry in enumerate(entries):
                     if not self.verify_entry(entry):
                         conn.rollback()
-                        raise ValueError(
-                            f"Entry at line {idx + 1} (id={entry.entry_id}) is tampered or corrupt"
-                        )
+                        raise ValueError(f"Entry at line {idx + 1} (id={entry.entry_id}) is tampered or corrupt")
                     if entry.previous_hash != prev_hash:
                         conn.rollback()
                         raise ValueError(

@@ -18,11 +18,9 @@ The goal: flag any regressions in the governance integration wiring
 before a release goes out. If a v3.0.0 change breaks any of these,
 the failure is immediately legible.
 """
+
 from __future__ import annotations
 
-import json
-import os
-import time
 from pathlib import Path
 
 import pytest
@@ -204,9 +202,7 @@ class TestFieldAuditorRecordsChange:
             agent="pytest",
             reason="e2e",
         )
-        history = auditor.field_history(
-            block_id="D-20260413-001", field="Status"
-        )
+        history = auditor.field_history(block_id="D-20260413-001", field="Status")
         assert len(history) == 1
         row = history[0]
         assert row.old_value == "active"

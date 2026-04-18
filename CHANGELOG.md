@@ -2,6 +2,35 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.1.3 (2026-04-18)
+
+**CI green, no behavior change.** All lint, format, and test jobs pass
+end-to-end across the Ubuntu / macOS / Windows × Python 3.10–3.14
+matrix.
+
+### Fixed
+
+- **CI — lint (ruff)**: 209 pre-existing lint errors cleared. 167
+  auto-fixed (`F401`, `I001`, `F811`), 8 unsafe-fixes accepted
+  (unused variables, redefined imports). Line-length bumped from
+  120 → 140 to match STARGA house style; per-file ignores added
+  for test fixtures and data-dense modules (`test_niah.py`,
+  `test_dedup.py`, `test_verify_cli.py`, `test_smart_chunker.py`,
+  `skill_opt/history.py`) and for `hook_installer.py` E402
+  (legitimate conditional imports after version check).
+- **CI — format (ruff format)**: 133 files reformatted to the
+  repository's canonical style. No behavior change.
+- **CI — test (Python 3.13)**: `fastmcp` added to the `test` extra
+  so `pip install -e ".[test]"` resolves the MCP integration
+  tests on every matrix job, not just the ones that also install
+  `[all]`.
+
+### Operations
+
+- Pyproject `[project.optional-dependencies].test` now includes
+  `fastmcp>=3.2.0`; bump your local editable install with
+  `pip install -e ".[test]" --upgrade` to pick it up.
+
 ## 3.1.2 (2026-04-18)
 
 **Documentation + metadata alignment.** No code changes, no behavior

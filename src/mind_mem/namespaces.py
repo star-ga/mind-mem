@@ -210,9 +210,7 @@ class NamespaceManager:
         agents_dir = os.path.join(self.workspace, "agents")
         if not os.path.isdir(agents_dir):
             return []
-        return sorted(
-            d for d in os.listdir(agents_dir) if os.path.isdir(os.path.join(agents_dir, d)) and not d.startswith(".")
-        )
+        return sorted(d for d in os.listdir(agents_dir) if os.path.isdir(os.path.join(agents_dir, d)) and not d.startswith("."))
 
     def get_agent_namespace(self) -> str | None:
         """Get the namespace path for the current agent."""
@@ -342,9 +340,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="mind-mem Namespace Manager")
     parser.add_argument("workspace", nargs="?", default=".")
-    parser.add_argument(
-        "--init", nargs="*", metavar="AGENT_ID", help="Initialize multi-agent workspace with given agent IDs"
-    )
+    parser.add_argument("--init", nargs="*", metavar="AGENT_ID", help="Initialize multi-agent workspace with given agent IDs")
     parser.add_argument("--list-agents", action="store_true", help="List registered agents")
     parser.add_argument("--check", nargs=2, metavar=("AGENT_ID", "PATH"), help="Check if agent can access path")
     args = parser.parse_args()

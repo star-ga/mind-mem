@@ -26,7 +26,7 @@ from __future__ import annotations
 import enum
 import sqlite3
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -52,6 +52,7 @@ def _hours_since(iso_timestamp: str | None, now: datetime) -> float:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return max(0.0, (now - dt).total_seconds() / 3600.0)
+
 
 _log = get_logger("memory_tiers")
 
@@ -209,9 +210,7 @@ class TierManager:
         """
         try:
             conn = self._conn_mgr.get_read_connection()
-            row = conn.execute(
-                "SELECT tier FROM block_tiers WHERE id = ?", (block_id,)
-            ).fetchone()
+            row = conn.execute("SELECT tier FROM block_tiers WHERE id = ?", (block_id,)).fetchone()
             if row is None:
                 return MemoryTier.WORKING
             return MemoryTier(row[0])
@@ -311,9 +310,7 @@ class TierManager:
         _log.info("promotion_cycle_complete", promotions=len(promotions))
         return promotions
 
-    def run_decay_cycle(
-        self, *, now: datetime | None = None
-    ) -> tuple[list[tuple[str, MemoryTier, MemoryTier]], list[str]]:
+    def run_decay_cycle(self, *, now: datetime | None = None) -> tuple[list[tuple[str, MemoryTier, MemoryTier]], list[str]]:
         """Apply TTL + max-idle decay across every tracked block.
 
         Two outcomes per block:
@@ -387,9 +384,7 @@ class TierManager:
             try:
                 with self._conn_mgr.write_lock:
                     conn = self._conn_mgr.get_write_connection()
-                    cur = conn.execute(
-                        "DELETE FROM block_tiers WHERE id = ?", (block_id,)
-                    )
+                    cur = conn.execute("DELETE FROM block_tiers WHERE id = ?", (block_id,))
                     conn.commit()
                     return cur.rowcount > 0
             except sqlite3.Error as exc:
@@ -432,9 +427,7 @@ class TierManager:
             except sqlite3.Error as exc:
                 _log.error("schema_init_failed", error=str(exc))
 
-    def _write_tier(
-        self, block_id: str, tier: MemoryTier, *, demotion_reason: str | None
-    ) -> bool:
+    def _write_tier(self, block_id: str, tier: MemoryTier, *, demotion_reason: str | None) -> bool:
         now = datetime.now(timezone.utc).isoformat()
         with self._lock:
             try:
@@ -448,8 +441,13 @@ class TierManager:
                                updated_at = ?,
                                demotion_reason = ?""",
                         (
-                            block_id, tier.value, now, demotion_reason,
-                            tier.value, now, demotion_reason,
+                            block_id,
+                            tier.value,
+                            now,
+                            demotion_reason,
+                            tier.value,
+                            now,
+                            demotion_reason,
                         ),
                     )
                     conn.commit()

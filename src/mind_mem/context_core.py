@@ -34,7 +34,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Optional
 
-
 # ---------------------------------------------------------------------------
 # Format versioning
 # ---------------------------------------------------------------------------
@@ -136,9 +135,7 @@ def _canonical_jsonl(records: Iterable[Mapping[str, Any]]) -> bytes:
 
 
 def _canonical_json(obj: Any) -> bytes:
-    return json.dumps(
-        obj, sort_keys=True, separators=(",", ":"), default=str
-    ).encode("utf-8")
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
 
 
 def _sha256(chunks: Iterable[bytes]) -> str:
@@ -153,11 +150,9 @@ def _validate_namespace(namespace: str) -> str:
         raise ValueError("namespace must be a non-empty string")
     # Namespaces are used as filename prefixes downstream; restrict to a
     # safe alphabet so they can't contain path separators or shell meta.
-    bad = set("/\\:*?\"<>|\n\r\t")
+    bad = set('/\\:*?"<>|\n\r\t')
     if any(ch in bad for ch in namespace):
-        raise ValueError(
-            f"namespace must not contain path separators or control chars, got {namespace!r}"
-        )
+        raise ValueError(f"namespace must not contain path separators or control chars, got {namespace!r}")
     if len(namespace) > 128:
         raise ValueError("namespace must be ≤128 chars")
     return namespace.strip()
@@ -240,6 +235,7 @@ def build_core(
     # which breaks byte-for-byte reproducibility across build sites.
     tar_buf = io.BytesIO()
     with tarfile.open(fileobj=tar_buf, mode="w") as tf:
+
         def _tarinfo(name: str, size: int) -> tarfile.TarInfo:
             info = tarfile.TarInfo(name=name)
             info.size = size
@@ -261,9 +257,7 @@ def build_core(
     tar_bytes = tar_buf.getvalue()
 
     with open(output_path, "wb") as raw:
-        with gzip.GzipFile(
-            fileobj=raw, mode="wb", compresslevel=6, filename="", mtime=0
-        ) as gz:
+        with gzip.GzipFile(fileobj=raw, mode="wb", compresslevel=6, filename="", mtime=0) as gz:
             gz.write(tar_bytes)
     return manifest
 
@@ -318,9 +312,7 @@ def load_core(
     try:
         members = [m for m in tf.getmembers() if m.isfile()]
         if len(members) > max_entries:
-            raise CoreLoadError(
-                f"core archive has too many entries ({len(members)} > {max_entries})"
-            )
+            raise CoreLoadError(f"core archive has too many entries ({len(members)} > {max_entries})")
         names = [m.name for m in members]
         for name in names:
             if name not in _KNOWN_ENTRIES:
@@ -331,43 +323,30 @@ def load_core(
         entries: dict[str, bytes] = {}
         for info in members:
             if info.size > max_entry_bytes:
-                raise CoreLoadError(
-                    f"core entry {info.name!r} exceeds {max_entry_bytes} bytes "
-                    f"({info.size})"
-                )
+                raise CoreLoadError(f"core entry {info.name!r} exceeds {max_entry_bytes} bytes ({info.size})")
             reader = tf.extractfile(info)
             if reader is None:
                 continue
             entries[info.name] = reader.read(max_entry_bytes + 1)
             if len(entries[info.name]) > max_entry_bytes:
-                raise CoreLoadError(
-                    f"core entry {info.name!r} exceeds {max_entry_bytes} bytes "
-                    f"on read (possible size-header lie)"
-                )
+                raise CoreLoadError(f"core entry {info.name!r} exceeds {max_entry_bytes} bytes on read (possible size-header lie)")
     finally:
         tf.close()
 
     try:
-        manifest = CoreManifest.from_dict(
-            json.loads(entries[_MANIFEST_ENTRY].decode("utf-8", errors="replace"))
-        )
+        manifest = CoreManifest.from_dict(json.loads(entries[_MANIFEST_ENTRY].decode("utf-8", errors="replace")))
     except (json.JSONDecodeError, KeyError, ValueError, TypeError) as exc:
         raise CoreLoadError(f"manifest.json is malformed: {exc}") from exc
 
     if manifest.format_version != CORE_FORMAT_VERSION:
-        raise CoreLoadError(
-            f"unsupported core format: manifest says "
-            f"{manifest.format_version!r}, loader expects {CORE_FORMAT_VERSION!r}"
-        )
+        raise CoreLoadError(f"unsupported core format: manifest says {manifest.format_version!r}, loader expects {CORE_FORMAT_VERSION!r}")
 
     payload_names = sorted(n for n in entries if n != _MANIFEST_ENTRY)
     if verify:
         recomputed = _sha256(entries[n] for n in payload_names)
         if recomputed != manifest.content_hash:
             raise CoreLoadError(
-                "content hash mismatch: archive payload has been modified "
-                f"(expected {manifest.content_hash[:16]}…, "
-                f"got {recomputed[:16]}…)"
+                f"content hash mismatch: archive payload has been modified (expected {manifest.content_hash[:16]}…, got {recomputed[:16]}…)"
             )
 
     blocks = _parse_jsonl(entries.get(_BLOCKS_ENTRY))
@@ -381,15 +360,9 @@ def load_core(
     # callers debugging a known-tampered archive can still load it.
     if verify:
         if len(blocks) != manifest.block_count:
-            raise CoreLoadError(
-                f"block count mismatch: manifest={manifest.block_count}, "
-                f"archive={len(blocks)}"
-            )
+            raise CoreLoadError(f"block count mismatch: manifest={manifest.block_count}, archive={len(blocks)}")
         if len(edges) != manifest.edge_count:
-            raise CoreLoadError(
-                f"edge count mismatch: manifest={manifest.edge_count}, "
-                f"archive={len(edges)}"
-            )
+            raise CoreLoadError(f"edge count mismatch: manifest={manifest.edge_count}, archive={len(edges)}")
         if manifest.has_retrieval_policies != (retrieval is not None):
             raise CoreLoadError("has_retrieval_policies flag mismatch")
         if manifest.has_ontology != (ontology is not None):
@@ -453,9 +426,7 @@ class CoreRegistry:
     def load(self, path: str, *, verify: bool = True) -> LoadedCore:
         core = load_core(path, verify=verify)
         if len(self._cores) >= self._max and core.manifest.namespace not in self._cores:
-            raise RuntimeError(
-                f"core registry full (max={self._max}); unload before loading more"
-            )
+            raise RuntimeError(f"core registry full (max={self._max}); unload before loading more")
         self._cores[core.manifest.namespace] = core
         return core
 

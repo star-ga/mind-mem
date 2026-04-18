@@ -1,5 +1,6 @@
 # Copyright 2026 STARGA, Inc.
 """Tests for the registry-driven hook installer (v3.0.0)."""
+
 from __future__ import annotations
 
 import json
@@ -22,13 +23,24 @@ from mind_mem.hook_installer import (
 class TestAgentRegistry:
     def test_registry_has_all_known_clients(self) -> None:
         expected = {
-            "claude-code", "codex", "gemini", "cursor", "windsurf", "aider",
-            "openclaw", "nanoclaw", "nemoclaw",
-            "continue", "cline", "roo", "zed", "copilot", "cody", "qodo",
+            "claude-code",
+            "codex",
+            "gemini",
+            "cursor",
+            "windsurf",
+            "aider",
+            "openclaw",
+            "nanoclaw",
+            "nemoclaw",
+            "continue",
+            "cline",
+            "roo",
+            "zed",
+            "copilot",
+            "cody",
+            "qodo",
         }
-        assert set(AGENT_REGISTRY.keys()) >= expected, (
-            f"missing: {expected - set(AGENT_REGISTRY.keys())}"
-        )
+        assert set(AGENT_REGISTRY.keys()) >= expected, f"missing: {expected - set(AGENT_REGISTRY.keys())}"
 
     def test_every_spec_has_required_fields(self) -> None:
         for name, spec in AGENT_REGISTRY.items():
@@ -40,9 +52,7 @@ class TestAgentRegistry:
 
 class TestInstallConfigForEveryAgent:
     @pytest.mark.parametrize("agent", sorted(AGENT_REGISTRY.keys()))
-    def test_dry_run_returns_content_for_every_agent(
-        self, agent: str, tmp_path: Path
-    ) -> None:
+    def test_dry_run_returns_content_for_every_agent(self, agent: str, tmp_path: Path) -> None:
         path = AGENT_REGISTRY[agent].expand_path(str(tmp_path))
         mtime_before = os.path.getmtime(path) if os.path.isfile(path) else None
         size_before = os.path.getsize(path) if os.path.isfile(path) else None
@@ -85,11 +95,13 @@ class TestInstallNonDestructive:
         spec = hi.AGENT_REGISTRY["continue"]
         # override path_tmpl to tmp-local
         hi.AGENT_REGISTRY["continue"] = AgentSpec(
-            name=spec.name, description=spec.description,
+            name=spec.name,
+            description=spec.description,
             config_fmt=spec.config_fmt,
             path_tmpl=str(path),
             content_tmpl=spec.content_tmpl,
-            detect_paths=spec.detect_paths, detect_binaries=spec.detect_binaries,
+            detect_paths=spec.detect_paths,
+            detect_binaries=spec.detect_binaries,
             always_offer=spec.always_offer,
         )
         try:
@@ -104,9 +116,7 @@ class TestInstallNonDestructive:
 
 
 class TestClawFamily:
-    def test_openclaw_nanoclaw_nemoclaw_share_hook_shape(
-        self, tmp_path: Path
-    ) -> None:
+    def test_openclaw_nanoclaw_nemoclaw_share_hook_shape(self, tmp_path: Path) -> None:
         # All three claw variants route through _merge_openclaw_hooks.
         for agent in ("openclaw", "nanoclaw", "nemoclaw"):
             result = install_config(agent, str(tmp_path), dry_run=True)
@@ -129,9 +139,7 @@ class TestClaudeCodeHookFormat:
     ``mm vault status``) that aren't real CLI subcommands yet.
     """
 
-    def test_claude_code_hooks_use_nested_matcher_shape(
-        self, tmp_path: Path
-    ) -> None:
+    def test_claude_code_hooks_use_nested_matcher_shape(self, tmp_path: Path) -> None:
         result = install_config("claude-code", str(tmp_path), dry_run=True)
         content = json.loads(result["content"])
         for event in ("SessionStart", "Stop"):
@@ -141,16 +149,10 @@ class TestClaudeCodeHookFormat:
             for entry in entries:
                 # Reject the legacy flat shape outright.
                 assert "hooks" in entry, (
-                    f"{event} entry uses flat {{command: ...}} shape; "
-                    f"required nested {{matcher, hooks: [...]}} shape. "
-                    f"Got: {entry!r}"
+                    f"{event} entry uses flat {{command: ...}} shape; required nested {{matcher, hooks: [...]}} shape. Got: {entry!r}"
                 )
-                assert entry.get("matcher", None) is not None, (
-                    f"{event} entry missing 'matcher' field"
-                )
-                assert isinstance(entry["hooks"], list), (
-                    f"{event} entry 'hooks' must be a list"
-                )
+                assert entry.get("matcher", None) is not None, f"{event} entry missing 'matcher' field"
+                assert isinstance(entry["hooks"], list), f"{event} entry 'hooks' must be a list"
                 for inner in entry["hooks"]:
                     assert inner.get("type") == "command"
                     assert inner.get("command"), "inner command is empty"
@@ -162,22 +164,17 @@ class TestClaudeCodeHookFormat:
         result = install_config("claude-code", str(tmp_path), dry_run=True)
         text = result["content"]
         assert "mm capture" not in text, (
-            "PostToolUse hook points at mm capture which is not a "
-            "real CLI subcommand yet — will block every tool call"
+            "PostToolUse hook points at mm capture which is not a real CLI subcommand yet — will block every tool call"
         )
         assert "mm vault status" not in text, (
-            "Stop hook points at mm vault status which is not a real "
-            "CLI subcommand — `mm vault` only has {scan, write}"
+            "Stop hook points at mm vault status which is not a real CLI subcommand — `mm vault` only has {scan, write}"
         )
 
-    def test_install_is_idempotent_across_both_shapes(
-        self, tmp_path: Path
-    ) -> None:
+    def test_install_is_idempotent_across_both_shapes(self, tmp_path: Path) -> None:
         # Pre-populate settings.json with the LEGACY flat shape a
         # pre-v1.9.2 installer would have written. Running the new
         # installer must NOT duplicate and MUST migrate to the nested
         # shape in place.
-        import mind_mem.hook_installer as hi
 
         legacy = {
             "hooks": {
@@ -202,12 +199,10 @@ class TestClaudeCodeHookFormat:
 
         # Running install again should be a no-op (or at least not
         # add a duplicate).
-        result2 = install_config("claude-code", str(tmp_path), dry_run=False)
+        install_config("claude-code", str(tmp_path), dry_run=False)
         loaded2 = json.loads(Path(settings_path).read_text())
         for event in ("SessionStart", "Stop"):
-            assert len(loaded2["hooks"][event]) == 1, (
-                f"{event} duplicated on re-install"
-            )
+            assert len(loaded2["hooks"][event]) == 1, f"{event} duplicated on re-install"
 
 
 class TestNativeMCPConfig:
@@ -217,18 +212,19 @@ class TestNativeMCPConfig:
         "agent",
         ["codex", "gemini", "cursor", "windsurf", "continue", "cline", "roo", "zed"],
     )
-    def test_mcp_dry_run_for_every_supported_agent(
-        self, agent: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_mcp_dry_run_for_every_supported_agent(self, agent: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         # Redirect the real per-client MCP path into tmp so we don't
         # touch real config files on the developer's machine.
         spec = AGENT_REGISTRY[agent]
         # Move the per-client mcp_path into tmp_path
         relocated = AgentSpec(
-            name=spec.name, description=spec.description,
-            config_fmt=spec.config_fmt, path_tmpl=spec.path_tmpl,
+            name=spec.name,
+            description=spec.description,
+            config_fmt=spec.config_fmt,
+            path_tmpl=spec.path_tmpl,
             content_tmpl=spec.content_tmpl,
-            detect_paths=spec.detect_paths, detect_binaries=spec.detect_binaries,
+            detect_paths=spec.detect_paths,
+            detect_binaries=spec.detect_binaries,
             always_offer=spec.always_offer,
             mcp_fmt=spec.mcp_fmt,
             mcp_path_tmpl=str(tmp_path / f"{agent}_mcp.json"),
@@ -247,20 +243,28 @@ class TestNativeMCPConfig:
     def test_mcp_writer_preserves_user_keys(self, tmp_path: Path) -> None:
         # Pre-populate a Cursor-style mcp.json with user content.
         path = tmp_path / "mcp.json"
-        path.write_text(json.dumps({
-            "mcpServers": {"my-tool": {"command": "node", "args": ["x.js"]}},
-            "schemaVersion": 1,
-        }))
+        path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {"my-tool": {"command": "node", "args": ["x.js"]}},
+                    "schemaVersion": 1,
+                }
+            )
+        )
 
         # Relocate cursor's mcp_path into tmp.
         spec = AGENT_REGISTRY["cursor"]
         relocated = AgentSpec(
-            name=spec.name, description=spec.description,
-            config_fmt=spec.config_fmt, path_tmpl=spec.path_tmpl,
+            name=spec.name,
+            description=spec.description,
+            config_fmt=spec.config_fmt,
+            path_tmpl=spec.path_tmpl,
             content_tmpl=spec.content_tmpl,
-            detect_paths=spec.detect_paths, detect_binaries=spec.detect_binaries,
+            detect_paths=spec.detect_paths,
+            detect_binaries=spec.detect_binaries,
             always_offer=spec.always_offer,
-            mcp_fmt=spec.mcp_fmt, mcp_path_tmpl=str(path),
+            mcp_fmt=spec.mcp_fmt,
+            mcp_path_tmpl=str(path),
         )
         original = AGENT_REGISTRY["cursor"]
         AGENT_REGISTRY["cursor"] = relocated
@@ -295,9 +299,7 @@ class TestDetectInstalledAgents:
         detected = detect_installed_agents(str(tmp_path))
         assert "copilot" in detected  # always_offer=True
 
-    def test_detection_returns_list_of_registered_names(
-        self, tmp_path: Path
-    ) -> None:
+    def test_detection_returns_list_of_registered_names(self, tmp_path: Path) -> None:
         detected = detect_installed_agents(str(tmp_path))
         for name in detected:
             assert name in AGENT_REGISTRY
@@ -317,9 +319,7 @@ class TestInstallAll:
         for r in results:
             assert r["written"] is False
 
-    def test_install_all_with_mcp_emits_hook_plus_mcp_phase(
-        self, tmp_path: Path
-    ) -> None:
+    def test_install_all_with_mcp_emits_hook_plus_mcp_phase(self, tmp_path: Path) -> None:
         # Default: include_mcp=True → two results per MCP-aware agent.
         results = install_all(
             str(tmp_path),

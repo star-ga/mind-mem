@@ -20,14 +20,10 @@ retrieval pipeline. Zero new dependencies.
 
 from __future__ import annotations
 
-import os
-import threading
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Iterable, Mapping, Optional
-
 
 # ---------------------------------------------------------------------------
 # Forgetting state machine
@@ -38,9 +34,9 @@ class BlockLifecycle(str, Enum):
     """States a block can inhabit in the forgetting cycle."""
 
     ACTIVE = "active"
-    MARKED = "marked"       # flagged for review
-    MERGED = "merged"       # combined into a summary block
-    ARCHIVED = "archived"   # cold storage — still queryable, not in hot index
+    MARKED = "marked"  # flagged for review
+    MERGED = "merged"  # combined into a summary block
+    ARCHIVED = "archived"  # cold storage — still queryable, not in hot index
     FORGOTTEN = "forgotten"  # permanently removed; grace window expired
 
 
@@ -49,8 +45,8 @@ class BlockCognition:
     """Per-block telemetry used by the forgetting decision functions."""
 
     block_id: str
-    importance: float               # [0, 1]; higher = keep
-    last_accessed: Optional[str]    # ISO8601 or None
+    importance: float  # [0, 1]; higher = keep
+    last_accessed: Optional[str]  # ISO8601 or None
     access_count: int
     created_at: Optional[str]
     size_bytes: int = 0
@@ -58,9 +54,7 @@ class BlockCognition:
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.importance <= 1.0:
-            raise ValueError(
-                f"importance must be in [0, 1], got {self.importance!r}"
-            )
+            raise ValueError(f"importance must be in [0, 1], got {self.importance!r}")
         if self.access_count < 0:
             raise ValueError("access_count must be >= 0")
         if self.size_bytes < 0:
@@ -290,9 +284,7 @@ def pack_to_budget(
     if not 0.0 <= provenance_reserve_frac < 1.0:
         raise ValueError("provenance_reserve_frac must be in [0, 1)")
     if graph_reserve_frac + provenance_reserve_frac >= 1.0:
-        raise ValueError(
-            "graph + provenance reserves must leave room for block content"
-        )
+        raise ValueError("graph + provenance reserves must leave room for block content")
 
     reserved_graph = int(max_tokens * graph_reserve_frac)
     reserved_prov = int(max_tokens * provenance_reserve_frac)

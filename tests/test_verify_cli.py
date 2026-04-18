@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import io
 import json
-import os
 import tempfile
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -24,7 +23,6 @@ from mind_mem.verify_cli import (
     main,
     verify_workspace,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -291,9 +289,7 @@ class TestReadOnlyVerifier:
     def test_merkle_one_anchor_without_the_other_fails(self, empty_ws):
         snap = empty_ws / "snapshots" / "snap-001"
         snap.mkdir(parents=True)
-        (snap / "manifest.json").write_text(
-            json.dumps({"merkle_root": "f" * 128}), encoding="utf-8"
-        )
+        (snap / "manifest.json").write_text(json.dumps({"merkle_root": "f" * 128}), encoding="utf-8")
         report = verify_workspace(str(empty_ws), snapshot="snapshots/snap-001")
         assert report.checks.get("merkle_root") is False
         assert report.exit_code == EXIT_MERKLE
@@ -319,12 +315,14 @@ class TestReport:
         _seed_hash_chain(empty_ws, entries=3)
         # Tamper hash chain first, then also seed a broken spec binding.
         import sqlite3
+
         db = sqlite3.connect(str(empty_ws / "memory" / "hash_chain_v2.db"))
         db.execute("UPDATE hash_chain SET entry_hash = REPLACE(entry_hash, SUBSTR(entry_hash,1,1), 'x') WHERE rowid = 1")
         db.commit()
         db.close()
 
         from mind_mem.spec_binding import SpecBindingManager
+
         cfg = _seed_config(empty_ws)
         SpecBindingManager(str(cfg)).bind(str(cfg))
         (empty_ws / ".spec_binding.json").write_text("{ broken", encoding="utf-8")

@@ -96,12 +96,7 @@ class TestFTSFallback(unittest.TestCase):
 
     def setUp(self):
         self.td = tempfile.mkdtemp()
-        decisions = (
-            "[D-20260101-001]\n"
-            "Statement: Use PostgreSQL for the primary database\n"
-            "Status: active\n"
-            "Tags: database, infrastructure\n"
-        )
+        decisions = "[D-20260101-001]\nStatement: Use PostgreSQL for the primary database\nStatus: active\nTags: database, infrastructure\n"
         _make_workspace(self.td, decisions_content=decisions)
         # Ensure no FTS5 database exists
         for candidate in ["memory/fts.db", "memory/recall.db", ".mind-mem/fts.db"]:
@@ -336,11 +331,7 @@ class TestBlockSizeCap(unittest.TestCase):
             f.write(filler_line * repeats)
             # Start a block after the boundary
             f.write(
-                "\n---\n\n"
-                "[D-20260101-099]\n"
-                "Statement: Block near boundary that may be truncated\n"
-                "Status: active\n"
-                "Tags: boundary, test\n"
+                "\n---\n\n[D-20260101-099]\nStatement: Block near boundary that may be truncated\nStatus: active\nTags: boundary, test\n"
             )
             tmp_path = f.name
 

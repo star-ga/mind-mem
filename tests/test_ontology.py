@@ -5,14 +5,13 @@ from __future__ import annotations
 
 import pytest
 
+from mind_mem.change_stream import ChangeStream
 from mind_mem.ontology import (
     EntityType,
     Ontology,
     OntologyRegistry,
     software_engineering_ontology,
 )
-from mind_mem.change_stream import ChangeStream, StreamStats
-
 
 # ---------------------------------------------------------------------------
 # EntityType
@@ -77,7 +76,7 @@ class TestOntology:
     def test_inherited_property_types(self) -> None:
         ont = software_engineering_ontology()
         pt = ont.effective_property_types("PROJECT")
-        assert pt["name"] == "str"   # inherited from ENTITY
+        assert pt["name"] == "str"  # inherited from ENTITY
         assert pt["status"] == "str"  # declared on PROJECT
 
 
@@ -95,14 +94,13 @@ class TestValidate:
         assert any("missing required property: 'name'" in e for e in errs)
 
     def test_valid_block_empty_errors(self) -> None:
-        errs = self._ont().validate(
-            "PERSON", {"name": "Alice", "role": "engineer"}
-        )
+        errs = self._ont().validate("PERSON", {"name": "Alice", "role": "engineer"})
         assert errs == []
 
     def test_type_mismatch_reported(self) -> None:
         errs = self._ont().validate(
-            "PERSON", {"name": "Alice", "role": 42},  # role should be str
+            "PERSON",
+            {"name": "Alice", "role": 42},  # role should be str
         )
         assert any("type mismatch for 'role'" in e for e in errs)
 

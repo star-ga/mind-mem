@@ -44,10 +44,7 @@ def test_index_stats_surfaces_prefix_cache_stats(minimal_workspace):
     assert "prefix_caches" in stats
     namespaces = {entry["namespace"] for entry in stats["prefix_caches"]}
     assert "test_ns_unique_b1" in namespaces
-    target = next(
-        entry for entry in stats["prefix_caches"]
-        if entry["namespace"] == "test_ns_unique_b1"
-    )
+    target = next(entry for entry in stats["prefix_caches"] if entry["namespace"] == "test_ns_unique_b1")
     assert target["hits"] >= 1
     assert target["misses"] >= 1
 

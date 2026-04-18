@@ -19,7 +19,6 @@ import os
 import time
 from typing import Any
 
-
 _DEFAULT_PATH = os.path.join(".", ".mind-mem", "extraction-feedback.json")
 
 
@@ -80,7 +79,9 @@ class ExtractionFeedback:
         key = f"{model}:{operation}:{content_type}"
         if key not in self._stats:
             self._stats[key] = {
-                "total": 0, "empty": 0, "total_output": 0,
+                "total": 0,
+                "empty": 0,
+                "total_output": 0,
                 "total_latency_ms": 0.0,
             }
         s = self._stats[key]

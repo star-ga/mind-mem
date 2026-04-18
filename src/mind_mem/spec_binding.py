@@ -155,9 +155,7 @@ class SpecBindingManager:
 
     def __init__(self, config_path: str) -> None:
         self._config_path = os.path.abspath(config_path)
-        self._binding_path = os.path.join(
-            os.path.dirname(self._config_path), _BINDING_FILENAME
-        )
+        self._binding_path = os.path.join(os.path.dirname(self._config_path), _BINDING_FILENAME)
         self._cached: Optional[SpecBinding] = None
 
     # ------------------------------------------------------------------
@@ -313,6 +311,4 @@ class SpecBindingManager:
             return binding
         except (json.JSONDecodeError, KeyError, ValueError) as exc:
             _log.warning("spec_binding.load_failed", error=str(exc))
-            raise SpecBindingCorruptedError(
-                f"Binding file at {self._binding_path} exists but is corrupted: {exc}"
-            ) from exc
+            raise SpecBindingCorruptedError(f"Binding file at {self._binding_path} exists but is corrupted: {exc}") from exc

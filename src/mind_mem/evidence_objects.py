@@ -335,9 +335,7 @@ class EvidenceChain:
             timestamp_iso = now.isoformat()
 
             payload_hash = _compute_payload_hash(payload)
-            previous_hash = (
-                self._entries[-1].evidence_hash if self._entries else _GENESIS_HASH
-            )
+            previous_hash = self._entries[-1].evidence_hash if self._entries else _GENESIS_HASH
 
             evidence_hash = _compute_evidence_hash(
                 evidence_id,
@@ -443,9 +441,9 @@ class EvidenceChain:
 
         prev_hash = _GENESIS_HASH
         seen_v3 = False  # downgrade-attack mitigation: once v3 scheme
-                          # has signed a record in this chain, no later
-                          # record is permitted to verify only under the
-                          # separator-injection-vulnerable v1 scheme.
+        # has signed a record in this chain, no later
+        # record is permitted to verify only under the
+        # separator-injection-vulnerable v1 scheme.
         for ev in self._entries:
             scheme = self._verify_scheme(ev)
             if scheme is None:
@@ -537,19 +535,14 @@ class EvidenceChain:
                     raise ValueError(f"Line {line_no}: invalid evidence record — {exc}") from exc
 
                 if not self.verify(ev):
-                    raise ValueError(
-                        f"Line {line_no}: tamper detected in evidence_id={ev.evidence_id}"
-                    )
+                    raise ValueError(f"Line {line_no}: tamper detected in evidence_id={ev.evidence_id}")
                 loaded.append(ev)
 
         # Verify chain linkage after all records are parsed
         prev_hash = _GENESIS_HASH
         for idx, ev in enumerate(loaded, 1):
             if ev.previous_hash != prev_hash:
-                raise ValueError(
-                    f"Chain linkage broken at record {idx} (evidence_id={ev.evidence_id}): "
-                    f"previous_hash mismatch"
-                )
+                raise ValueError(f"Chain linkage broken at record {idx} (evidence_id={ev.evidence_id}): previous_hash mismatch")
             prev_hash = ev.evidence_hash
 
         self._entries = loaded
@@ -612,9 +605,7 @@ class EvidenceChain:
                 try:
                     ev = EvidenceObject.from_dict(json.loads(stripped))
                 except (json.JSONDecodeError, KeyError, ValueError) as exc:
-                    _log.warning(
-                        "evidence_load_parse_error", line=line_num, error=str(exc)
-                    )
+                    _log.warning("evidence_load_parse_error", line=line_num, error=str(exc))
                     self._integrity_compromised = True
                     return
                 if not self.verify(ev):

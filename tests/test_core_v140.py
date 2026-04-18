@@ -108,9 +108,7 @@ class TestBlockCorruptedError(unittest.TestCase):
     """BlockCorruptedError should carry metadata."""
 
     def test_error_attributes(self):
-        err = BlockCorruptedError(
-            "test error", block_line_number=10, file_path="/tmp/test.md", context="[BAD-BLOCK]\nStatus: ?"
-        )
+        err = BlockCorruptedError("test error", block_line_number=10, file_path="/tmp/test.md", context="[BAD-BLOCK]\nStatus: ?")
         self.assertEqual(err.block_line_number, 10)
         self.assertEqual(err.file_path, "/tmp/test.md")
         self.assertIn("BAD-BLOCK", err.context)

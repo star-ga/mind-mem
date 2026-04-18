@@ -25,9 +25,8 @@ from __future__ import annotations
 import hashlib
 import math
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Optional
-
 
 # ---------------------------------------------------------------------------
 # IMAGE + AUDIO blocks
@@ -141,9 +140,7 @@ def build_audio_block(
 # ---------------------------------------------------------------------------
 
 
-def cross_modal_similarity(
-    a: Iterable[float], b: Iterable[float]
-) -> float:
+def cross_modal_similarity(a: Iterable[float], b: Iterable[float]) -> float:
     ax = list(a)
     bx = list(b)
     if not ax or not bx:
@@ -202,6 +199,7 @@ def modal_token_cost(
             text = v
             break
     from .cognitive_forget import estimate_tokens
+
     return estimate_tokens(text)
 
 

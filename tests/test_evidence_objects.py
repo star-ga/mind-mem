@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
-from datetime import datetime, timezone
 
 import pytest
 
@@ -17,7 +15,6 @@ from mind_mem.evidence_objects import (
     _compute_evidence_hash,
     _compute_payload_hash,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -98,20 +95,35 @@ class TestHashHelpers:
 
     def test_evidence_hash_deterministic(self):
         h1 = _compute_evidence_hash(
-            "ev-001", "2026-01-01T00:00:00+00:00", "PROPOSE",
-            "actor1", "B-001", "ph1", "prev1",
+            "ev-001",
+            "2026-01-01T00:00:00+00:00",
+            "PROPOSE",
+            "actor1",
+            "B-001",
+            "ph1",
+            "prev1",
         )
         h2 = _compute_evidence_hash(
-            "ev-001", "2026-01-01T00:00:00+00:00", "PROPOSE",
-            "actor1", "B-001", "ph1", "prev1",
+            "ev-001",
+            "2026-01-01T00:00:00+00:00",
+            "PROPOSE",
+            "actor1",
+            "B-001",
+            "ph1",
+            "prev1",
         )
         assert h1 == h2
         assert len(h1) == 64
 
     def test_evidence_hash_changes_with_any_field(self):
         base_args = (
-            "ev-001", "2026-01-01T00:00:00+00:00", "PROPOSE",
-            "actor1", "B-001", "ph1", "prev1",
+            "ev-001",
+            "2026-01-01T00:00:00+00:00",
+            "PROPOSE",
+            "actor1",
+            "B-001",
+            "ph1",
+            "prev1",
         )
         base = _compute_evidence_hash(*base_args)
         # Change each field individually and confirm hash changes
@@ -133,6 +145,7 @@ class TestEvidenceObjectCreation:
 
     def test_evidence_id_is_uuid4(self, chain):
         import uuid
+
         ev = _make_evidence(chain)
         parsed = uuid.UUID(ev.evidence_id, version=4)
         assert str(parsed) == ev.evidence_id
@@ -206,23 +219,27 @@ class TestEvidenceHashVerification:
         ev = _make_evidence(chain)
         # Bypass frozen dataclass via object.__setattr__
         import dataclasses
+
         tampered = dataclasses.replace(ev, actor="hacker")
         assert chain.verify(tampered) is False
 
     def test_tamper_payload_hash_fails_verify(self, chain):
         import dataclasses
+
         ev = _make_evidence(chain)
         tampered = dataclasses.replace(ev, payload_hash="a" * 64)
         assert chain.verify(tampered) is False
 
     def test_tamper_previous_hash_fails_verify(self, chain):
         import dataclasses
+
         ev = _make_evidence(chain)
         tampered = dataclasses.replace(ev, previous_hash="b" * 64)
         assert chain.verify(tampered) is False
 
     def test_tamper_action_fails_verify(self, chain):
         import dataclasses
+
         ev = _make_evidence(chain)
         tampered = dataclasses.replace(ev, action=EvidenceAction.ROLLBACK, evidence_hash=ev.evidence_hash)
         # evidence_hash was computed for PROPOSE, but now action is ROLLBACK
@@ -267,6 +284,7 @@ class TestChainLinkage:
 
     def test_verify_chain_detects_tampered_entry(self, chain):
         import dataclasses
+
         ev1 = _make_evidence(chain, target_block_id="B-001")
         _make_evidence(chain, target_block_id="B-002")
 
@@ -280,6 +298,7 @@ class TestChainLinkage:
 
     def test_verify_chain_detects_broken_linkage(self, chain):
         import dataclasses
+
         _make_evidence(chain, target_block_id="B-001")
         ev2 = _make_evidence(chain, target_block_id="B-002")
         # Corrupt ev2's previous_hash without touching evidence_hash (broken link)

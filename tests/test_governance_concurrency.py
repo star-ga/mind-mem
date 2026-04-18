@@ -21,6 +21,7 @@ These tests are slower than unit tests so they're collected only
 under the `stress` marker — default pytest runs skip them unless
 ``-m stress`` is explicitly passed.
 """
+
 from __future__ import annotations
 
 import concurrent.futures
@@ -36,9 +37,7 @@ pytestmark = pytest.mark.stress
 
 class TestAuditChainConcurrentAppends:
     @pytest.mark.parametrize("writers,ops_per_writer", [(4, 50), (8, 25)])
-    def test_no_lost_or_duplicate_entries(
-        self, tmp_path: Path, writers: int, ops_per_writer: int
-    ) -> None:
+    def test_no_lost_or_duplicate_entries(self, tmp_path: Path, writers: int, ops_per_writer: int) -> None:
         from mind_mem.audit_chain import AuditChain
 
         expected_count = writers * ops_per_writer
@@ -79,9 +78,7 @@ class TestAuditChainConcurrentAppends:
 
 
 class TestHashChainV2ConcurrentAppends:
-    def test_parallel_inserts_keep_chain_verifiable(
-        self, tmp_path: Path
-    ) -> None:
+    def test_parallel_inserts_keep_chain_verifiable(self, tmp_path: Path) -> None:
         from mind_mem.hash_chain_v2 import HashChainV2
 
         db = tmp_path / "chain.db"

@@ -23,8 +23,8 @@ import hashlib
 import threading
 import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional
+from dataclasses import dataclass
+from typing import Any, Optional
 
 # Upper bound on how many PrefixCache instances the module-level registry
 # will keep alive. Every well-known subsystem (cross-encoder, intent

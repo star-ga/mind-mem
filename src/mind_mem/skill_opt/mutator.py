@@ -10,7 +10,6 @@ from typing import Any
 from ._types import Mutation, SkillSpec
 from .fleet_bridge import FleetBridge
 
-
 _MUTATION_STRATEGIES = {
     "targeted_patch": (
         "Rewrite ONLY the sections of this skill that are causing the identified failures. "

@@ -42,9 +42,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="mind-mem Bootstrap Corpus Backfill")
     parser.add_argument("workspace", help="Path to mind-mem workspace")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be written without writing")
-    parser.add_argument(
-        "--max-transcripts", type=int, default=0, help="Limit number of transcripts to process (0 = unlimited)"
-    )
+    parser.add_argument("--max-transcripts", type=int, default=0, help="Limit number of transcripts to process (0 = unlimited)")
     args = parser.parse_args()
 
     ws = os.path.abspath(args.workspace)

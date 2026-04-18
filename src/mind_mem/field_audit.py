@@ -388,8 +388,7 @@ class FieldAuditor:
 
             agent_counts = {}
             for row in conn.execute(
-                "SELECT agent, COUNT(*) as cnt FROM field_changes "
-                "WHERE agent != '' GROUP BY agent ORDER BY cnt DESC LIMIT ?",
+                "SELECT agent, COUNT(*) as cnt FROM field_changes WHERE agent != '' GROUP BY agent ORDER BY cnt DESC LIMIT ?",
                 (last_n,),
             ):
                 agent_counts[row["agent"]] = row["cnt"]

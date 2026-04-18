@@ -55,10 +55,7 @@ class TestParseBlocks(unittest.TestCase):
         self.assertEqual(blocks[0]["Status"], "active")
 
     def test_ops_section(self):
-        text = (
-            "[P-20260213-001]\nProposalId: P-20260213-001\n"
-            "Ops:\n- op: append_block\n  file: decisions/DECISIONS.md\n  block: test\n"
-        )
+        text = "[P-20260213-001]\nProposalId: P-20260213-001\nOps:\n- op: append_block\n  file: decisions/DECISIONS.md\n  block: test\n"
         blocks = parse_blocks(text)
         self.assertEqual(len(blocks), 1)
         self.assertIn("Ops", blocks[0])
@@ -287,11 +284,7 @@ class TestFactKeyEnrichment(unittest.TestCase):
 
     def test_fact_keys_across_separator(self):
         """Fact keys should be present on both blocks separated by ---."""
-        text = (
-            "[D-20260213-001]\nStatement: See T-20260213-002 on 2026-01-15\n"
-            "---\n"
-            "[D-20260213-002]\nStatement: We never did this\n"
-        )
+        text = "[D-20260213-001]\nStatement: See T-20260213-002 on 2026-01-15\n---\n[D-20260213-002]\nStatement: We never did this\n"
         blocks = parse_blocks(text)
         self.assertEqual(len(blocks), 2)
         self.assertIn("T-20260213-002", blocks[0]["_entities"])

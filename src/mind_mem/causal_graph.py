@@ -172,9 +172,7 @@ class CausalGraph:
             conn.execute("BEGIN IMMEDIATE")
             if self._would_create_cycle_on_conn(conn, source_id, target_id):
                 conn.rollback()
-                raise ValueError(
-                    f"Adding edge {source_id} → {target_id} would create a cycle"
-                )
+                raise ValueError(f"Adding edge {source_id} → {target_id} would create a cycle")
             conn.execute(
                 "INSERT INTO causal_edges (source_id, target_id, edge_type, weight, metadata) "
                 "VALUES (?, ?, ?, ?, ?) "
@@ -318,6 +316,7 @@ class CausalGraph:
         chains: list[list[str]] = []
         conn = _connect(self.workspace)
         try:
+
             def _adj(current: str) -> list[str]:
                 rows = conn.execute(
                     "SELECT target_id FROM causal_edges WHERE source_id = ?",

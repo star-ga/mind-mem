@@ -101,9 +101,7 @@ class MindMemKernel:
                 # Restrict to allowed directories (prevent arbitrary .so loading)
                 resolved = Path(env_path).resolve()
                 allowed = [Path(__file__).parent.parent / "lib"]
-                in_allowed = any(
-                    resolved == d.resolve() or str(resolved).startswith(str(d.resolve()) + os.sep) for d in allowed
-                )
+                in_allowed = any(resolved == d.resolve() or str(resolved).startswith(str(d.resolve()) + os.sep) for d in allowed)
                 if in_allowed and resolved.exists():
                     self._lib = ctypes.CDLL(str(resolved), mode=_LAZY)
 
@@ -114,9 +112,7 @@ class MindMemKernel:
                         break
 
         if self._lib is None:
-            raise OSError(
-                "MIND kernel library not found. Compile with: mindc mind/*.mind --emit=shared -o lib/libmindmem.so"
-            )
+            raise OSError("MIND kernel library not found. Compile with: mindc mind/*.mind --emit=shared -o lib/libmindmem.so")
 
         # Declare argtypes for all kernel functions (prevents silent memory corruption)
         _f = ctypes.c_float
@@ -280,9 +276,7 @@ class MindMemKernel:
         )
         return list(out)
 
-    def importance_batch_py(
-        self, access_counts: list[int], days_since: list[float], base: float = 1.0, decay: float = 0.01
-    ) -> list[float]:
+    def importance_batch_py(self, access_counts: list[int], days_since: list[float], base: float = 1.0, decay: float = 0.01) -> list[float]:
         """Importance batch scoring via compiled MIND kernel."""
         assert self._lib is not None
         n = len(access_counts)
@@ -386,9 +380,7 @@ class MindMemKernel:
         )
         return list(out)
 
-    def query_category_relevance_py(
-        self, query_kw: list[float], cat_kw: list[float], n_cats: int, n_keywords: int
-    ) -> list[float]:
+    def query_category_relevance_py(self, query_kw: list[float], cat_kw: list[float], n_cats: int, n_keywords: int) -> list[float]:
         """Query-category relevance via compiled MIND kernel.
 
         query_kw: flat [K] keyword weights.
@@ -446,8 +438,7 @@ def get_kernel() -> MindMemKernel | None:
     except (OSError, ImportError):
         _USE_MIND = False
         _log.info(
-            "MIND kernel .so not found — using pure Python fallback. "
-            "Compile with: mindc mind/*.mind --emit=shared -o lib/libmindmem.so"
+            "MIND kernel .so not found — using pure Python fallback. Compile with: mindc mind/*.mind --emit=shared -o lib/libmindmem.so"
         )
         return None
 
@@ -482,9 +473,7 @@ def list_kernels(directory: str) -> list[str]:
     if not os.path.isdir(directory):
         return []
     try:
-        return sorted(
-            fname[:-5] for fname in os.listdir(directory) if fname.endswith(".mind") and not fname.startswith(".")
-        )
+        return sorted(fname[:-5] for fname in os.listdir(directory) if fname.endswith(".mind") and not fname.startswith("."))
     except OSError:
         return []
 

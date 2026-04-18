@@ -233,12 +233,8 @@ class TestGraphBoostCrossRef(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             decisions = "\n\n---\n\n".join(
                 [
-                    _block(
-                        "D-20260101-001", "Adopt Kubernetes for container orchestration", Context="See D-20260101-002"
-                    ),
-                    _block(
-                        "D-20260101-002", "Helm charts for deployment automation", Context="Feeds into D-20260101-003"
-                    ),
+                    _block("D-20260101-001", "Adopt Kubernetes for container orchestration", Context="See D-20260101-002"),
+                    _block("D-20260101-002", "Helm charts for deployment automation", Context="Feeds into D-20260101-003"),
                     _block("D-20260101-003", "Monitoring dashboard for cluster health"),
                 ]
             )
@@ -477,9 +473,7 @@ class TestBlockCap(unittest.TestCase):
             parts = []
             for i in range(1, 501):
                 parts.append(
-                    f"[D-20260101-{i:03d}]\n"
-                    f"Statement: Authentication decision number {i} about tokens\n"
-                    f"Status: active\nDate: 2026-01-01\n"
+                    f"[D-20260101-{i:03d}]\nStatement: Authentication decision number {i} about tokens\nStatus: active\nDate: 2026-01-01\n"
                 )
             decisions = "\n---\n\n".join(parts)
             ws = _make_workspace(td, decisions=decisions)
@@ -493,9 +487,7 @@ class TestBlockCap(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             parts = []
             for i in range(1, 101):
-                parts.append(
-                    f"[D-20260101-{i:03d}]\nStatement: Database migration step {i}\nStatus: active\nDate: 2026-01-01\n"
-                )
+                parts.append(f"[D-20260101-{i:03d}]\nStatement: Database migration step {i}\nStatus: active\nDate: 2026-01-01\n")
             decisions = "\n---\n\n".join(parts)
             ws = _make_workspace(td, decisions=decisions)
 
@@ -521,9 +513,7 @@ class TestGraphBoostIntegration(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             decisions = "\n\n---\n\n".join(
                 [
-                    _block(
-                        "D-20260101-001", "Adopt GraphQL for the API gateway", Context="Complementary to D-20260101-002"
-                    ),
+                    _block("D-20260101-001", "Adopt GraphQL for the API gateway", Context="Complementary to D-20260101-002"),
                     _block("D-20260101-002", "REST fallback for legacy clients", Context="Fallback for D-20260101-001"),
                 ]
             )
@@ -544,10 +534,7 @@ class TestGraphBoostIntegration(unittest.TestCase):
             )
             tasks = "\n\n---\n\n".join(
                 [
-                    "[T-20260101-001]\n"
-                    "Title: Rate limiter implementation\n"
-                    "Status: active\n"
-                    "AlignsWith: D-20260101-001\n",
+                    "[T-20260101-001]\nTitle: Rate limiter implementation\nStatus: active\nAlignsWith: D-20260101-001\n",
                     "[T-20260101-099]\nTitle: Placeholder\nStatus: active\n",
                 ]
             )

@@ -7,9 +7,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from mind_mem.project_profile import ProjectProfile, build_profile
-from mind_mem.staleness import StalenessPlan, propagate_staleness
-
+from mind_mem.project_profile import build_profile
+from mind_mem.staleness import propagate_staleness
 
 # ---------------------------------------------------------------------------
 # Staleness propagation
@@ -76,9 +75,7 @@ class TestStaleness:
         assert "X" not in plan.scores
 
     def test_custom_decay(self) -> None:
-        plan = propagate_staleness(
-            ["A"], {"A": ["B"], "B": []}, decay=(1.0, 0.01)
-        )
+        plan = propagate_staleness(["A"], {"A": ["B"], "B": []}, decay=(1.0, 0.01))
         assert plan.scores["B"] == pytest.approx(0.01)
 
     def test_invalid_decay_rejected(self) -> None:
@@ -91,9 +88,7 @@ class TestStaleness:
         assert "C" not in plan.scores
 
     def test_flagged_by_threshold(self) -> None:
-        plan = propagate_staleness(
-            ["A"], {"A": ["B"], "B": ["C"], "C": []}
-        )
+        plan = propagate_staleness(["A"], {"A": ["B"], "B": ["C"], "C": []})
         assert plan.flagged(0.6) == ["A", "B"]
         # Threshold at 1.0 only returns the seed.
         assert plan.flagged(1.0) == ["A"]
@@ -201,6 +196,12 @@ class TestBuildProfile:
         prof = build_profile([{"type": "decision"}], name="x", now=_now())
         d = prof.as_dict()
         assert set(d.keys()) >= {
-            "name", "total_blocks", "block_types", "top_concepts",
-            "top_files", "top_entities", "recent_block_count", "generated_at",
+            "name",
+            "total_blocks",
+            "block_types",
+            "top_concepts",
+            "top_files",
+            "top_entities",
+            "recent_block_count",
+            "generated_at",
         }

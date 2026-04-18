@@ -822,6 +822,7 @@ def query_index(
     _cal_mgr = None
     try:
         from .calibration import CalibrationManager
+
         _cal_mgr = CalibrationManager(workspace)
     except (ImportError, Exception) as _cal_err:
         _log.debug("calibration_unavailable_in_fts", error=str(_cal_err))

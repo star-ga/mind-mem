@@ -108,9 +108,7 @@ class TestRunJob(unittest.TestCase):
     @mock.patch("mind_mem.cron_runner.os.path.isfile", return_value=True)
     def test_failure(self, _mock_isfile, mock_run):
         """Failed job (nonzero exit) returns status='failed' with stderr."""
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=1, stdout="", stderr="error: out of memory"
-        )
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="error: out of memory")
         result = run_job("entity_ingest", "/tmp/ws")
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["returncode"], 1)

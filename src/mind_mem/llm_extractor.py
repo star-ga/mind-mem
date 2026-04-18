@@ -133,15 +133,11 @@ def is_available(backend: str = "auto") -> bool:
 
 
 def _vllm_url() -> str:
-    return os.environ.get(
-        "MIND_MEM_VLLM_URL", "http://localhost:8000/v1"
-    ).rstrip("/")
+    return os.environ.get("MIND_MEM_VLLM_URL", "http://localhost:8000/v1").rstrip("/")
 
 
 def _oai_url() -> str:
-    return os.environ.get(
-        "MIND_MEM_LLM_BASE_URL", _vllm_url()
-    ).rstrip("/")
+    return os.environ.get("MIND_MEM_LLM_BASE_URL", _vllm_url()).rstrip("/")
 
 
 def _openai_compatible_available(base_url: str) -> bool:
@@ -161,8 +157,9 @@ def _openai_compatible_available(base_url: str) -> bool:
 
 def _transformers_available() -> bool:
     try:
-        import transformers  # noqa: F401
         import torch  # noqa: F401
+        import transformers  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -278,14 +275,12 @@ def _query_transformers(prompt: str, model: str) -> str:
         cache[model] = (tok, m)
     tok, m = cache[model]
     msgs = [{"role": "user", "content": prompt}]
-    enc = tok.apply_chat_template(
-        msgs, add_generation_prompt=True, return_tensors="pt", return_dict=True
-    )
+    enc = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt", return_dict=True)
     if hasattr(enc, "to"):
         enc = enc.to(m.device)
     with torch.no_grad():
         out = m.generate(**enc, max_new_tokens=512, do_sample=False)
-    new_tokens = out[0][enc["input_ids"].shape[1]:]
+    new_tokens = out[0][enc["input_ids"].shape[1] :]
     return tok.decode(new_tokens, skip_special_tokens=True)
 
 
@@ -295,11 +290,7 @@ def _query_llm(prompt: str, model: str, backend: str = "auto") -> str:
     Order for ``auto`` mode: ollama → vllm → openai-compat → llama-cpp →
     transformers. Each is tried until one returns a non-empty string.
     """
-    backends = (
-        [backend]
-        if backend != "auto"
-        else ["ollama", "vllm", "openai-compatible", "llama-cpp", "transformers"]
-    )
+    backends = [backend] if backend != "auto" else ["ollama", "vllm", "openai-compatible", "llama-cpp", "transformers"]
     for b in backends:
         try:
             if b == "ollama":
@@ -462,9 +453,7 @@ def extract_facts(text: str, model: str = "qwen3.5:9b", backend: str = "auto") -
     return validated
 
 
-def _record_extraction_feedback(
-    model: str, operation: str, input_length: int, output_count: int, latency_ms: float
-) -> None:
+def _record_extraction_feedback(model: str, operation: str, input_length: int, output_count: int, latency_ms: float) -> None:
     """Best-effort ExtractionFeedback.record wrapper. Never raises."""
     try:
         from .extraction_feedback import ExtractionFeedback

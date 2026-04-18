@@ -4,10 +4,8 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 from datetime import datetime, timezone
-from typing import Any
 
 from ._types import Mutation, SkillSpec, TestCase, ValidationResult
 from .analyzer import aggregate_analysis, analyze_skill
@@ -55,7 +53,7 @@ async def validate_mutation(
         if old_val < pre_score - config.regression_threshold:
             regression_categories.append(key)
 
-    analysis = aggregate_analysis(critiques)
+    aggregate_analysis(critiques)
     critic_votes: dict[str, bool] = {}
     for model in {c.critic_model for c in critiques}:
         model_scores = [c.overall_score for c in critiques if c.critic_model == model]

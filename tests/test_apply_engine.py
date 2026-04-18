@@ -305,9 +305,7 @@ class TestFingerprintPayload(unittest.TestCase):
         p1 = {
             "Type": "edit",
             "TargetBlock": "D-20260214-001",
-            "Ops": [
-                {"op": "update_field", "file": "decisions/DECISIONS.md", "target": "D-20260214-001", "value": "active"}
-            ],
+            "Ops": [{"op": "update_field", "file": "decisions/DECISIONS.md", "target": "D-20260214-001", "value": "active"}],
         }
         p2 = {
             "Type": "edit",
@@ -570,9 +568,7 @@ class TestSnapshotRecursionPrevention(unittest.TestCase):
 
             # The new snapshot's intelligence/ should NOT contain applied/
             nested_applied = os.path.join(snap_dir, "intelligence/applied")
-            self.assertFalse(
-                os.path.exists(nested_applied), "Snapshot must not recursively include intelligence/applied/"
-            )
+            self.assertFalse(os.path.exists(nested_applied), "Snapshot must not recursively include intelligence/applied/")
 
             # But intelligence files (like CONTRADICTIONS.md) SHOULD be copied
             intel_dir = os.path.join(snap_dir, "intelligence")
@@ -890,13 +886,7 @@ class TestRollbackStatusSync(unittest.TestCase):
 
             proposal_path = os.path.join(ws, "intelligence", "proposed", "DECISIONS_PROPOSED.md")
             with open(proposal_path, "w") as f:
-                f.write(
-                    "[P-20260217-001]\n"
-                    "ProposalId: P-20260217-001\n"
-                    "Type: edit\n"
-                    "TargetBlock: D-20260217-001\n"
-                    "Status: applied\n"
-                )
+                f.write("[P-20260217-001]\nProposalId: P-20260217-001\nType: edit\nTargetBlock: D-20260217-001\nStatus: applied\n")
 
             receipt_ts = "20260217-120010"
             snap_dir = create_snapshot(ws, receipt_ts, files_touched=["decisions/DECISIONS.md"])

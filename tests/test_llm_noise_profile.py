@@ -8,12 +8,10 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 
 import pytest
 
 from mind_mem.llm_noise_profile import LLMNoiseProfiler, NoiseProfile
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -238,9 +236,7 @@ def test_save_and_load_roundtrip(profiler, tmp_path):
 
     profiler2 = LLMNoiseProfiler()
     profiler2.load(path)
-    assert profiler2.get_reliability("m1") == pytest.approx(
-        profiler.get_reliability("m1"), rel=1e-6
-    )
+    assert profiler2.get_reliability("m1") == pytest.approx(profiler.get_reliability("m1"), rel=1e-6)
 
 
 def test_save_creates_parent_dirs(profiler, tmp_path):

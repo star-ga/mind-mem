@@ -24,8 +24,8 @@ import json
 import os
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping, Optional
+from dataclasses import dataclass
+from typing import Any, Optional
 
 
 @dataclass(frozen=True)
@@ -86,9 +86,7 @@ class AnchorHistory:
         )
         with self._lock:
             with open(self._path, "a", encoding="utf-8") as fh:
-                fh.write(
-                    json.dumps(entry.as_dict(), separators=(",", ":")) + "\n"
-                )
+                fh.write(json.dumps(entry.as_dict(), separators=(",", ":")) + "\n")
                 fh.flush()
                 os.fsync(fh.fileno())
         return entry

@@ -15,7 +15,6 @@ Copyright (c) STARGA, Inc.
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import sqlite3
 import time
@@ -249,9 +248,7 @@ class CalibrationManager:
         """Return ISO date string for the rolling window cutoff."""
         now = datetime.now(timezone.utc)
         cutoff = now.timestamp() - (CALIBRATION_WINDOW_DAYS * 86400)
-        return datetime.fromtimestamp(cutoff, tz=timezone.utc).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        return datetime.fromtimestamp(cutoff, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def get_block_weight(self, block_id: str) -> float:
         """Compute calibration weight for a single block.

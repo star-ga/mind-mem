@@ -158,8 +158,7 @@ class AutoResolver:
             # Check domain-specific preference
             if domain:
                 row = conn.execute(
-                    "SELECT SUM(chosen) as c, SUM(rejected) as r "
-                    "FROM resolution_preferences WHERE strategy = ? AND domain = ?",
+                    "SELECT SUM(chosen) as c, SUM(rejected) as r FROM resolution_preferences WHERE strategy = ? AND domain = ?",
                     (strategy, domain),
                 ).fetchone()
                 if row and row["c"]:
@@ -262,16 +261,10 @@ class AutoResolver:
 
             if row:
                 if chosen:
-                    sql = (
-                        "UPDATE resolution_preferences SET chosen = chosen + 1,"
-                        " timestamp = datetime('now') WHERE id = ?"
-                    )
+                    sql = "UPDATE resolution_preferences SET chosen = chosen + 1, timestamp = datetime('now') WHERE id = ?"
                     conn.execute(sql, (row["id"],))
                 else:
-                    sql = (
-                        "UPDATE resolution_preferences SET rejected = rejected + 1,"
-                        " timestamp = datetime('now') WHERE id = ?"
-                    )
+                    sql = "UPDATE resolution_preferences SET rejected = rejected + 1, timestamp = datetime('now') WHERE id = ?"
                     conn.execute(sql, (row["id"],))
             else:
                 conn.execute(
@@ -292,9 +285,7 @@ class AutoResolver:
         conn = _connect(self.workspace)
         try:
             conn.execute(
-                "INSERT INTO resolution_history "
-                "(contradiction_id, strategy, confidence, accepted, side_effects) "
-                "VALUES (?, ?, ?, 1, ?)",
+                "INSERT INTO resolution_history (contradiction_id, strategy, confidence, accepted, side_effects) VALUES (?, ?, ?, 1, ?)",
                 (
                     suggestion.contradiction_id,
                     suggestion.strategy,
@@ -326,9 +317,7 @@ class AutoResolver:
         conn = _connect(self.workspace)
         try:
             conn.execute(
-                "INSERT INTO resolution_history "
-                "(contradiction_id, strategy, confidence, accepted, side_effects) "
-                "VALUES (?, ?, ?, 0, ?)",
+                "INSERT INTO resolution_history (contradiction_id, strategy, confidence, accepted, side_effects) VALUES (?, ?, ?, 0, ?)",
                 (
                     suggestion.contradiction_id,
                     suggestion.strategy,

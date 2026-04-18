@@ -6,8 +6,6 @@ Copyright (c) STARGA, Inc.
 from __future__ import annotations
 
 import os
-import sqlite3
-import tempfile
 import time
 
 import pytest
@@ -18,11 +16,9 @@ from mind_mem.calibration import (
     MIN_CALIBRATION_WEIGHT,
     MIN_FEEDBACK_THRESHOLD,
     CalibrationManager,
-    CalibrationScore,
     _compute_weight,
     make_query_id,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -69,9 +65,9 @@ def test_make_query_id_deterministic_prefix():
 
 def test_make_query_id_unique_suffix():
     """Different timestamps mean different full IDs."""
-    qid1 = make_query_id("same query")
+    make_query_id("same query")
     time.sleep(0.002)
-    qid2 = make_query_id("same query")
+    make_query_id("same query")
     # They might collide if run in the same ms, but usually differ
     # We don't assert uniqueness here since it's time-based
 

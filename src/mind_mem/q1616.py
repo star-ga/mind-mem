@@ -20,6 +20,7 @@ Round-trip error is at most ``2**-17`` so re-decoding produces a float
 that is statistically indistinguishable from the original within one
 ULP of the original Python float.
 """
+
 from __future__ import annotations
 
 _SCALE: int = 1 << 16

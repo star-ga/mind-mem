@@ -253,9 +253,7 @@ class TestCheckDecisions:
         (tmp_path / "mind-mem.json").write_text("{}")
         (tmp_path / "decisions").mkdir()
         (tmp_path / "decisions" / "DECISIONS.md").write_text(
-            "[BAD-ID]\nDate: 2026-01-01\nStatus: active\n"
-            "Scope: global\nStatement: x\nRationale: x\n"
-            "Supersedes: none\nTags: x\nSources: x\n"
+            "[BAD-ID]\nDate: 2026-01-01\nStatus: active\nScope: global\nStatement: x\nRationale: x\nSupersedes: none\nTags: x\nSources: x\n"
         )
         v = Validator(str(tmp_path))
         v._check_decisions()

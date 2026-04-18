@@ -185,12 +185,7 @@ class TestResolveContradictions(unittest.TestCase):
         # parser accepts but _ID_RE won't match, so the first 2 regex hits
         # are the decision IDs)
         with open(os.path.join(self.td, "intelligence", "CONTRADICTIONS.md"), "w") as f:
-            f.write(
-                "[CONTRA-001]\n"
-                "Type: contradiction\n"
-                "Blocks: D-20260101-001 vs D-20260215-001\n"
-                "Description: Database choice conflict\n"
-            )
+            f.write("[CONTRA-001]\nType: contradiction\nBlocks: D-20260101-001 vs D-20260215-001\nDescription: Database choice conflict\n")
         result = resolve_contradictions(self.td)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["block_a"], "D-20260101-001")

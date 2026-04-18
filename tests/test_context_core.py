@@ -14,9 +14,7 @@ import pytest
 from mind_mem.context_core import (
     CORE_FORMAT_VERSION,
     CoreLoadError,
-    CoreManifest,
     CoreRegistry,
-    LoadedCore,
     build_core,
     load_core,
 )
@@ -114,12 +112,14 @@ class TestDeterminism:
         b = tmp_path / "b.mmcore"
         build_core(
             str(a),
-            namespace="x", version="1",
+            namespace="x",
+            version="1",
             blocks=[{"a": 1, "b": 2}],
         )
         build_core(
             str(b),
-            namespace="x", version="1",
+            namespace="x",
+            version="1",
             blocks=[{"b": 2, "a": 1}],  # same semantics, different insertion
         )
         assert load_core(str(a)).manifest.content_hash == load_core(str(b)).manifest.content_hash
@@ -133,7 +133,9 @@ class TestDeterminism:
 class TestIntegrity:
     def test_tampered_payload_fails_verify(self, tmp_core: str) -> None:
         build_core(
-            tmp_core, namespace="x", version="1",
+            tmp_core,
+            namespace="x",
+            version="1",
             blocks=[{"_id": "B-1"}, {"_id": "B-2"}],
         )
         # Repackage the tar with a modified blocks.jsonl but the
@@ -154,7 +156,9 @@ class TestIntegrity:
 
     def test_verify_false_skips_integrity_check(self, tmp_core: str) -> None:
         build_core(
-            tmp_core, namespace="x", version="1",
+            tmp_core,
+            namespace="x",
+            version="1",
             blocks=[{"_id": "B-1"}, {"_id": "B-2"}],
         )
         # Same tamper as above.

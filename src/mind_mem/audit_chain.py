@@ -197,9 +197,7 @@ class AuditEntry:
         prev_hash: str,
     ) -> str:
         """Dispatch to the active (v3) hash scheme."""
-        return AuditEntry.compute_entry_hash_v3(
-            seq, timestamp, operation, target, agent, reason, payload_hash, prev_hash
-        )
+        return AuditEntry.compute_entry_hash_v3(seq, timestamp, operation, target, agent, reason, payload_hash, prev_hash)
 
 
 class AuditChain:
@@ -378,10 +376,7 @@ class AuditChain:
                     if entry.entry_hash == v3_hash:
                         seen_v3 = True
                     elif seen_v3:
-                        errors.append(
-                            f"Line {line_num} (seq {entry.seq}): "
-                            "downgrade to v1 scheme after v3 entry — rejected"
-                        )
+                        errors.append(f"Line {line_num} (seq {entry.seq}): downgrade to v1 scheme after v3 entry — rejected")
                     else:
                         legacy = AuditEntry.compute_entry_hash_v1(*args)
                         if entry.entry_hash == legacy:

@@ -20,15 +20,41 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping, Optional
 
-
 _TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 
 _STOPWORDS: frozenset[str] = frozenset(
     {
-        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
-        "how", "i", "if", "in", "is", "it", "of", "on", "or", "the",
-        "to", "was", "will", "with", "this", "that", "these", "those",
-        "we", "us", "our",
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "for",
+        "from",
+        "how",
+        "i",
+        "if",
+        "in",
+        "is",
+        "it",
+        "of",
+        "on",
+        "or",
+        "the",
+        "to",
+        "was",
+        "will",
+        "with",
+        "this",
+        "that",
+        "these",
+        "those",
+        "we",
+        "us",
+        "our",
     }
 )
 
@@ -79,11 +105,7 @@ def _parse_iso(value: Optional[str]) -> Optional[datetime]:
 
 
 def _tokens(text: str) -> list[str]:
-    return [
-        t
-        for t in _TOKEN_RE.findall(text.lower())
-        if t not in _STOPWORDS and len(t) >= 3
-    ]
+    return [t for t in _TOKEN_RE.findall(text.lower()) if t not in _STOPWORDS and len(t) >= 3]
 
 
 def build_profile(

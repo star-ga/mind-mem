@@ -13,8 +13,7 @@ out of scope — callers wire whatever transport they already have.
 
 from __future__ import annotations
 
-import statistics
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Optional
 
 
@@ -193,9 +192,7 @@ def parse_slo_spec(spec: Mapping[str, Any]) -> list[SLI]:
                 name=str(entry.get("name", "unnamed")),
                 value=float(entry.get("value", 0.0)),
                 unit=str(entry.get("unit", "")),
-                threshold=(
-                    float(entry["threshold"]) if "threshold" in entry else None
-                ),
+                threshold=(float(entry["threshold"]) if "threshold" in entry else None),
                 weight=float(entry.get("weight", 1.0)),
             )
         )

@@ -31,7 +31,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Iterable, Mapping, Optional
 
-
 # ---------------------------------------------------------------------------
 # ObservationAxis enum
 # ---------------------------------------------------------------------------
@@ -65,9 +64,7 @@ class ObservationAxis(str, Enum):
             if axis.value == normalised:
                 return axis
         valid = ", ".join(a.value for a in cls)
-        raise ValueError(
-            f"Unknown observation axis: {name!r}. Valid: {valid}"
-        )
+        raise ValueError(f"Unknown observation axis: {name!r}. Valid: {valid}")
 
 
 # ---------------------------------------------------------------------------
@@ -130,14 +127,7 @@ class AxisWeights:
 
     def normalised(self) -> "AxisWeights":
         """Return a copy where weights sum to 1.0 (or all-zero stays all-zero)."""
-        total = (
-            self.lexical
-            + self.semantic
-            + self.temporal
-            + self.entity_graph
-            + self.contradiction
-            + self.adversarial
-        )
+        total = self.lexical + self.semantic + self.temporal + self.entity_graph + self.contradiction + self.adversarial
         if total <= 0:
             return self
         return AxisWeights(
@@ -210,9 +200,7 @@ class AxisScore:
         if not math.isfinite(self.confidence):
             raise ValueError("AxisScore.confidence must be finite")
         if not 0.0 <= self.confidence <= 1.0:
-            raise ValueError(
-                f"AxisScore.confidence must be in [0, 1], got {self.confidence!r}"
-            )
+            raise ValueError(f"AxisScore.confidence must be in [0, 1], got {self.confidence!r}")
         if self.rank is not None and self.rank < 1:
             raise ValueError(f"AxisScore.rank must be >=1, got {self.rank!r}")
 

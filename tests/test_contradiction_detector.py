@@ -521,9 +521,7 @@ class TestCheckProposalContradictions:
         """When mind-mem.json is absent, uses default threshold."""
         ws = str(tmp_path)
         (tmp_path / "decisions").mkdir()
-        (tmp_path / "decisions" / "DECISIONS.md").write_text(
-            "[D-001]\nTitle: Test\nStatus: active\nDecision: Hello world\n"
-        )
+        (tmp_path / "decisions" / "DECISIONS.md").write_text("[D-001]\nTitle: Test\nStatus: active\nDecision: Hello world\n")
         proposal = {"Title": "Test hello world", "Ops": []}
         report = check_proposal_contradictions(ws, proposal)
         assert isinstance(report, dict)

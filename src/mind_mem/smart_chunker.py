@@ -256,14 +256,16 @@ def _segment_document(text: str) -> list[_Segment]:
                     sub_text = chunk[sub_start:sub_end].strip()
                     if not sub_text:
                         continue
-                    segments.append(_Segment(
-                        text=sub_text,
-                        start=start + sub_start,
-                        end=start + sub_end,
-                        kind="code",
-                        header_text=current_header,
-                        header_level=current_header_level,
-                    ))
+                    segments.append(
+                        _Segment(
+                            text=sub_text,
+                            start=start + sub_start,
+                            end=start + sub_end,
+                            kind="code",
+                            header_text=current_header,
+                            header_level=current_header_level,
+                        )
+                    )
                 continue
 
         seg = _Segment(
@@ -359,12 +361,14 @@ def _merge_segments_into_chunks(
         if current_segs and (current_size + seg_size + 1) > config.max_chunk_size:
             # But first check if the boundary score is low — if so, we might
             # want to force-split the current segment instead
-            groups.append((
-                list(current_segs),
-                current_header,
-                str(current_header_level),
-                current_segs[0].start,
-            ))
+            groups.append(
+                (
+                    list(current_segs),
+                    current_header,
+                    str(current_header_level),
+                    current_segs[0].start,
+                )
+            )
             current_segs = []
             current_size = 0
 
@@ -385,12 +389,14 @@ def _merge_segments_into_chunks(
                     header_text=seg.header_text,
                     header_level=seg.header_level,
                 )
-                groups.append((
-                    [sub_seg],
-                    current_header,
-                    str(current_header_level),
-                    sub_seg.start,
-                ))
+                groups.append(
+                    (
+                        [sub_seg],
+                        current_header,
+                        str(current_header_level),
+                        sub_seg.start,
+                    )
+                )
             continue
 
         current_segs.append(seg)
@@ -398,12 +404,14 @@ def _merge_segments_into_chunks(
 
     # Close last group
     if current_segs:
-        groups.append((
-            list(current_segs),
-            current_header,
-            str(current_header_level),
-            current_segs[0].start,
-        ))
+        groups.append(
+            (
+                list(current_segs),
+                current_header,
+                str(current_header_level),
+                current_segs[0].start,
+            )
+        )
 
     return groups
 
@@ -635,13 +643,15 @@ def smart_chunk(
     # Step 1: Segment the document
     segments = _segment_document(text)
     if not segments:
-        return [Chunk(
-            text=text.strip(),
-            index=0,
-            start_char=0,
-            end_char=len(text),
-            metadata={"source": effective_source, "section": "", "position": "only"},
-        )]
+        return [
+            Chunk(
+                text=text.strip(),
+                index=0,
+                start_char=0,
+                end_char=len(text),
+                metadata={"source": effective_source, "section": "", "position": "only"},
+            )
+        ]
 
     # Step 2: Score boundaries between segments
     boundary_scores: list[tuple[int, float]] = []
@@ -651,9 +661,7 @@ def smart_chunk(
 
     # Step 3: Optional LLM refinement
     if config.llm_refine:
-        boundary_scores = _refine_boundaries_with_llm(
-            segments, boundary_scores, config
-        )
+        boundary_scores = _refine_boundaries_with_llm(segments, boundary_scores, config)
 
     # Step 4: Group segments into chunks respecting size limits
     groups = _merge_segments_into_chunks(segments, config)

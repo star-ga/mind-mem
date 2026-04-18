@@ -218,11 +218,7 @@ def detect_contradictions(decisions, report):
     if contradictions:
         for c in contradictions:
             sev = c["severity"]
-            msg = (
-                f"{c['sig1']['decision']}:{c['sig1']['sig']['id']} vs "
-                f"{c['sig2']['decision']}:{c['sig2']['sig']['id']} — "
-                f"{c['reason']}"
-            )
+            msg = f"{c['sig1']['decision']}:{c['sig1']['sig']['id']} vs {c['sig2']['decision']}:{c['sig2']['sig']['id']} — {c['reason']}"
             if sev == "critical":
                 report.critical_msg(msg)
             else:
@@ -607,9 +603,7 @@ def build_impact_graph(data, report):
                 "incidents": sorted(affected_incidents),
             }
             impacts.append(impact)
-            report.info_msg(
-                f"{did} -> PRJ:{len(affected_projects)} T:{len(affected_tasks)} INC:{len(affected_incidents)}"
-            )
+            report.info_msg(f"{did} -> PRJ:{len(affected_projects)} T:{len(affected_tasks)} INC:{len(affected_incidents)}")
 
     if not impacts:
         report.ok("No impact edges found.")
@@ -669,10 +663,7 @@ def generate_snapshot(data, ws, report):
     report.ok(f"Snapshot saved: {snap_path}")
     decisions_snap: dict = snapshot["decisions"]  # type: ignore[assignment]
     tasks_snap: dict = snapshot["tasks"]  # type: ignore[assignment]
-    report.info_msg(
-        f"Active: {len(decisions_snap['active'])} decisions, "
-        f"{len(tasks_snap['todo']) + len(tasks_snap['doing'])} active tasks"
-    )
+    report.info_msg(f"Active: {len(decisions_snap['active'])} decisions, {len(tasks_snap['todo']) + len(tasks_snap['doing'])} active tasks")
 
     return snapshot
 
@@ -742,9 +733,7 @@ def generate_briefing(data, contradictions, drift_signals, impacts, ws, report):
     briefing_lines.append("Risks:")
     if contradictions:
         for c in contradictions:
-            briefing_lines.append(
-                f"- Contradiction: {c['sig1']['decision']} vs {c['sig2']['decision']} ({c['severity']})"
-            )
+            briefing_lines.append(f"- Contradiction: {c['sig1']['decision']} vs {c['sig2']['decision']} ({c['severity']})")
     if drift_signals:
         for s in drift_signals:
             if s["severity"] in ("high", "medium"):
@@ -890,9 +879,7 @@ def _run_semantic_drift_detector(ws, data, report):
         detector = DriftDetector(ws)
         signals = detector.scan()
         if signals:
-            report.info_msg(
-                f"DriftDetector: {len(signals)} semantic drift signal(s) stored"
-            )
+            report.info_msg(f"DriftDetector: {len(signals)} semantic drift signal(s) stored")
     except Exception as exc:  # pragma: no cover — best-effort
         report.info_msg(f"DriftDetector skipped: {exc}")
 
@@ -1104,9 +1091,7 @@ def generate_proposals(contradictions, drift_signals, ws, intel_state, report):
                 "target": target_dec,
                 "risk": "high",
                 "evidence": c["reason"],
-                "ops": [
-                    {"op": "set_status", "file": "decisions/DECISIONS.md", "target": target_dec, "status": "revoked"}
-                ],
+                "ops": [{"op": "set_status", "file": "decisions/DECISIONS.md", "target": target_dec, "status": "revoked"}],
                 "rollback": "restore_snapshot",
             }
         )
@@ -1127,9 +1112,7 @@ def generate_proposals(contradictions, drift_signals, ws, intel_state, report):
                         "target": did,
                         "risk": "medium",
                         "evidence": "Decision not referenced by any active task",
-                        "ops": [
-                            {"op": "set_status", "file": "decisions/DECISIONS.md", "target": did, "status": "revoked"}
-                        ],
+                        "ops": [{"op": "set_status", "file": "decisions/DECISIONS.md", "target": did, "status": "revoked"}],
                         "rollback": "restore_snapshot",
                     }
                 )
@@ -1277,9 +1260,7 @@ def main():
             generate_proposals(contradictions, drift_signals, ws, intel_state, report)
         else:
             if mode == "detect_only" and (contradictions or drift_signals):
-                report.info_msg(
-                    "Mode is detect_only — skipping proposal generation. Switch to 'propose' to generate fix proposals."
-                )
+                report.info_msg("Mode is detect_only — skipping proposal generation. Switch to 'propose' to generate fix proposals.")
 
         # Generate briefing
         generate_briefing(data, contradictions, drift_signals, impacts, ws, report)
@@ -1341,10 +1322,7 @@ def _finalize_report(ws, report) -> None:
     """
     report.lines.append("")
     report.lines.append("=" * 50)
-    report.lines.append(
-        f"TOTAL: {report.critical} critical | "
-        f"{report.warnings} warnings | {report.info} info"
-    )
+    report.lines.append(f"TOTAL: {report.critical} critical | {report.warnings} warnings | {report.info} info")
     report.lines.append("=" * 50)
 
     report_path = f"{ws}/maintenance/intel-report.txt"

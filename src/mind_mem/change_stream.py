@@ -26,8 +26,8 @@ from __future__ import annotations
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Mapping, Optional
+from dataclasses import dataclass
+from typing import Any, Callable, Mapping, Optional
 
 
 @dataclass(frozen=True)
@@ -115,9 +115,7 @@ class ChangeStream:
     def subscribe(self, listener: Listener) -> int:
         """Register *listener* and return an opaque subscription id."""
         with self._lock:
-            self._subs.append(
-                _Subscription(listener=listener, queue=deque(maxlen=self._max_depth))
-            )
+            self._subs.append(_Subscription(listener=listener, queue=deque(maxlen=self._max_depth)))
             return len(self._subs) - 1
 
     def unsubscribe(self, sub_id: int) -> bool:

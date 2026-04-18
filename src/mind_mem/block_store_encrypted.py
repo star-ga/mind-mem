@@ -27,6 +27,7 @@ user breaks.
   migration helper that walks every Markdown file under the corpus
   directories and encrypts each in-place.
 """
+
 from __future__ import annotations
 
 import os
@@ -63,13 +64,9 @@ class EncryptedBlockStore:
     safe to deploy against a partially-migrated workspace.
     """
 
-    def __init__(
-        self, workspace: str, *, passphrase: str, inner: BlockStore | None = None
-    ) -> None:
+    def __init__(self, workspace: str, *, passphrase: str, inner: BlockStore | None = None) -> None:
         if not passphrase:
-            raise ValueError(
-                "EncryptedBlockStore requires a non-empty passphrase"
-            )
+            raise ValueError("EncryptedBlockStore requires a non-empty passphrase")
         self._workspace = workspace
         self._passphrase = passphrase
         self._inner = inner or MarkdownBlockStore(workspace)
@@ -196,11 +193,9 @@ def encrypt_workspace(workspace: str) -> dict[str, int]:
     """
     passphrase = _passphrase()
     if not passphrase:
-        raise RuntimeError(
-            "encrypt_workspace requires MIND_MEM_ENCRYPTION_PASSPHRASE"
-        )
+        raise RuntimeError("encrypt_workspace requires MIND_MEM_ENCRYPTION_PASSPHRASE")
 
-    from .encryption import EncryptionManager, _MAGIC
+    from .encryption import _MAGIC, EncryptionManager
 
     em = EncryptionManager(workspace, passphrase)
     encrypted = skipped = failed = 0
@@ -222,9 +217,7 @@ def encrypt_workspace(workspace: str) -> dict[str, int]:
                     em.encrypt_file(fpath)
                     encrypted += 1
                 except Exception as exc:  # pragma: no cover
-                    _log.warning(
-                        "encrypt_workspace_failed", path=fpath, error=str(exc)
-                    )
+                    _log.warning("encrypt_workspace_failed", path=fpath, error=str(exc))
                     failed += 1
     return {"encrypted": encrypted, "skipped": skipped, "failed": failed}
 

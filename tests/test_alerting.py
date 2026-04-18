@@ -1,11 +1,11 @@
 # Copyright 2026 STARGA, Inc.
 """Tests for the alerting router + sinks (v3.0.0 — GH #503)."""
+
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -116,10 +116,15 @@ class TestWebhookSink:
         mock_open.return_value = mock_resp
 
         sink = WebhookSink("https://example.com/hook")
-        ok = sink.send(Alert(
-            severity="critical", event="e", payload={"k": "v"},
-            workspace="/ws", timestamp="2026-04-13T00:00:00Z",
-        ))
+        ok = sink.send(
+            Alert(
+                severity="critical",
+                event="e",
+                payload={"k": "v"},
+                workspace="/ws",
+                timestamp="2026-04-13T00:00:00Z",
+            )
+        )
         assert ok is True
         call = mock_open.call_args
         req = call.args[0]
@@ -140,11 +145,15 @@ class TestSlackSink:
         mock_open.return_value = mock_resp
 
         sink = SlackSink("https://hooks.slack.com/services/T/B/X")
-        ok = sink.send(Alert(
-            severity="warning", event="drift_detected",
-            payload={"block_a": "D-1", "sim": 0.42},
-            workspace="/ws", timestamp="2026-04-13T00:00:00Z",
-        ))
+        ok = sink.send(
+            Alert(
+                severity="warning",
+                event="drift_detected",
+                payload={"block_a": "D-1", "sim": 0.42},
+                workspace="/ws",
+                timestamp="2026-04-13T00:00:00Z",
+            )
+        )
         assert ok is True
         body = json.loads(mock_open.call_args.args[0].data.decode())
         assert "mind-mem" in body["text"]
@@ -161,12 +170,16 @@ class TestGetAlertRouter:
         assert isinstance(router.sinks[0], LogSink)
 
     def test_with_webhook_config_adds_webhook_sink(self, tmp_path: Path) -> None:
-        (tmp_path / "mind-mem.json").write_text(json.dumps({
-            "alerts": {
-                "webhook_url": "https://example.com/alert",
-                "min_severity": "critical",
-            }
-        }))
+        (tmp_path / "mind-mem.json").write_text(
+            json.dumps(
+                {
+                    "alerts": {
+                        "webhook_url": "https://example.com/alert",
+                        "min_severity": "critical",
+                    }
+                }
+            )
+        )
         router = get_alert_router(str(tmp_path))
         assert router.min_severity == "critical"
         names = [s.name for s in router.sinks]
@@ -174,11 +187,15 @@ class TestGetAlertRouter:
         assert "webhook" in names
 
     def test_with_slack_config_adds_slack_sink(self, tmp_path: Path) -> None:
-        (tmp_path / "mind-mem.json").write_text(json.dumps({
-            "alerts": {
-                "slack_webhook_url": "https://hooks.slack.com/services/T/B/X",
-            }
-        }))
+        (tmp_path / "mind-mem.json").write_text(
+            json.dumps(
+                {
+                    "alerts": {
+                        "slack_webhook_url": "https://hooks.slack.com/services/T/B/X",
+                    }
+                }
+            )
+        )
         router = get_alert_router(str(tmp_path))
         assert any(s.name == "slack" for s in router.sinks)
 

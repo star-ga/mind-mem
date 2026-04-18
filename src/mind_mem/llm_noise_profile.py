@@ -100,9 +100,7 @@ class LLMNoiseProfiler:
     # Registration
     # ------------------------------------------------------------------
 
-    def register_provider(
-        self, provider_id: str, initial_reliability: float = _DEFAULT_RELIABILITY
-    ) -> None:
+    def register_provider(self, provider_id: str, initial_reliability: float = _DEFAULT_RELIABILITY) -> None:
         """Register an LLM provider. Ignored if already registered."""
         if provider_id in self._profiles:
             return
@@ -115,9 +113,7 @@ class LLMNoiseProfiler:
     # Outcome recording
     # ------------------------------------------------------------------
 
-    def record_outcome(
-        self, provider_id: str, domain: str, *, was_correct: bool
-    ) -> None:
+    def record_outcome(self, provider_id: str, domain: str, *, was_correct: bool) -> None:
         """Update reliability scores for a provider after an observed outcome.
 
         Uses EMA to blend the new binary signal into both global and
@@ -136,9 +132,7 @@ class LLMNoiseProfiler:
         alpha = self._alpha
 
         # Update global reliability via EMA
-        profile.global_reliability = (
-            profile.global_reliability * alpha + signal * (1.0 - alpha)
-        )
+        profile.global_reliability = profile.global_reliability * alpha + signal * (1.0 - alpha)
 
         # Update domain reliability via EMA; seed directly from global if new (no EMA on first entry)
         if domain in profile.domain_reliability:
@@ -169,9 +163,7 @@ class LLMNoiseProfiler:
             return profile.global_reliability
         return profile.domain_reliability.get(domain, profile.global_reliability)
 
-    def get_observation_noise(
-        self, provider_id: str, domain: str | None = None
-    ) -> float:
+    def get_observation_noise(self, provider_id: str, domain: str | None = None) -> float:
         """Return the noise level (1 - reliability) for a provider.
 
         A higher value means the provider is less trustworthy for this domain.
@@ -198,9 +190,7 @@ class LLMNoiseProfiler:
             key=lambda pid: self.get_reliability(pid, domain),
         )
 
-    def ranking(
-        self, domain: str | None = None
-    ) -> list[tuple[str, float]]:
+    def ranking(self, domain: str | None = None) -> list[tuple[str, float]]:
         """Return all providers sorted by reliability (descending).
 
         Args:
@@ -210,10 +200,7 @@ class LLMNoiseProfiler:
             List of (provider_id, reliability) tuples, highest first.
         """
         return sorted(
-            (
-                (pid, self.get_reliability(pid, domain))
-                for pid in self._profiles
-            ),
+            ((pid, self.get_reliability(pid, domain)) for pid in self._profiles),
             key=lambda pair: pair[1],
             reverse=True,
         )
@@ -237,10 +224,7 @@ class LLMNoiseProfiler:
         data: dict[str, Any] = {
             "version": 1,
             "saved_at": time.time(),
-            "profiles": {
-                pid: profile.to_dict()
-                for pid, profile in self._profiles.items()
-            },
+            "profiles": {pid: profile.to_dict() for pid, profile in self._profiles.items()},
         }
         tmp_path = path + ".tmp"
         with open(tmp_path, "w") as f:

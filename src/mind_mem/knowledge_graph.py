@@ -29,8 +29,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Iterable, Mapping, Optional
-
+from typing import Any, Mapping, Optional
 
 # ---------------------------------------------------------------------------
 # Predicate registry
@@ -132,9 +131,7 @@ class EntityRegistry:
         if not canon:
             raise ValueError("entity name must not be empty")
         with self._lock:
-            row = self._conn.execute(
-                "SELECT entity_id FROM aliases WHERE alias = ?", (canon,)
-            ).fetchone()
+            row = self._conn.execute("SELECT entity_id FROM aliases WHERE alias = ?", (canon,)).fetchone()
             if row is not None:
                 return row["entity_id"]
             # New entity — id derived from the canonical form. Surface
@@ -158,9 +155,7 @@ class EntityRegistry:
         Raises ValueError when the target id is unknown.
         """
         with self._lock:
-            exists = self._conn.execute(
-                "SELECT 1 FROM entities WHERE id = ?", (entity_id,)
-            ).fetchone()
+            exists = self._conn.execute("SELECT 1 FROM entities WHERE id = ?", (entity_id,)).fetchone()
             if exists is None:
                 raise ValueError(f"unknown entity_id: {entity_id!r}")
             self._conn.execute(
@@ -198,9 +193,7 @@ class Edge:
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.confidence <= 1.0:
-            raise ValueError(
-                f"confidence must be in [0, 1], got {self.confidence!r}"
-            )
+            raise ValueError(f"confidence must be in [0, 1], got {self.confidence!r}")
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -502,9 +495,7 @@ class KnowledgeGraph:
         depth = min(int(depth), 8)
         direction = direction.lower()
         if direction not in {"outgoing", "incoming", "both"}:
-            raise ValueError(
-                "direction must be 'outgoing', 'incoming', or 'both'"
-            )
+            raise ValueError("direction must be 'outgoing', 'incoming', or 'both'")
 
         start = self.entities.resolve(entity)
         seen: set[str] = {start}
@@ -549,15 +540,9 @@ class KnowledgeGraph:
 
     def stats(self) -> GraphStats:
         with self._lock:
-            entity_count = self._conn.execute(
-                "SELECT COUNT(*) AS c FROM entities"
-            ).fetchone()["c"]
-            edge_count = self._conn.execute(
-                "SELECT COUNT(*) AS c FROM edges"
-            ).fetchone()["c"]
-            rows = self._conn.execute(
-                "SELECT predicate, COUNT(*) AS c FROM edges GROUP BY predicate"
-            ).fetchall()
+            entity_count = self._conn.execute("SELECT COUNT(*) AS c FROM entities").fetchone()["c"]
+            edge_count = self._conn.execute("SELECT COUNT(*) AS c FROM edges").fetchone()["c"]
+            rows = self._conn.execute("SELECT predicate, COUNT(*) AS c FROM edges GROUP BY predicate").fetchall()
             pred_counts = {r["predicate"]: r["c"] for r in rows}
             # Orphans: entities that do not appear as subject or object.
             orphan_row = self._conn.execute(

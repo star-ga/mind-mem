@@ -179,8 +179,7 @@ class VectorBackend(RecallBackend):
     def _get_cached_embedding(self, conn, block_id: str, content_hash: str) -> list[float] | None:
         """Look up cached embedding. Returns None on miss."""
         row = conn.execute(
-            "SELECT embedding, dimension FROM embedding_cache "
-            "WHERE block_id = ? AND content_hash = ? AND model_name = ?",
+            "SELECT embedding, dimension FROM embedding_cache WHERE block_id = ? AND content_hash = ? AND model_name = ?",
             (block_id, content_hash, self.model_name),
         ).fetchone()
         if row is None:
@@ -196,9 +195,7 @@ class VectorBackend(RecallBackend):
         dim = len(embedding)
         blob = self._serialize_embedding(embedding)
         conn.execute(
-            "INSERT OR REPLACE INTO embedding_cache "
-            "(block_id, content_hash, model_name, dimension, embedding) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO embedding_cache (block_id, content_hash, model_name, dimension, embedding) VALUES (?, ?, ?, ?, ?)",
             (block_id, content_hash, self.model_name, dim, blob),
         )
 
@@ -264,9 +261,7 @@ class VectorBackend(RecallBackend):
                 _log.info("embedding_model_loaded", model=self.model_name)
             except ImportError as e:
                 _log.error("sentence_transformers_not_installed", error=str(e))
-                raise ImportError(
-                    "sentence-transformers not installed. Install with: pip install 'mind-mem[embeddings]'"
-                ) from e
+                raise ImportError("sentence-transformers not installed. Install with: pip install 'mind-mem[embeddings]'") from e
         return self._model
 
     @staticmethod

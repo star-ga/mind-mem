@@ -292,8 +292,7 @@ def entities_to_signals(entities: list[dict], source_file: str) -> list[dict]:
             {
                 "line": 0,
                 "type": "entity",
-                "text": f"New {ent['entity_type']} detected: {prefix}-{ent['slug']} "
-                f"(via {ent['source_pattern']}) — {ent['excerpt'][:100]}",
+                "text": f"New {ent['entity_type']} detected: {prefix}-{ent['slug']} (via {ent['source_pattern']}) — {ent['excerpt'][:100]}",
                 "pattern": "auto-capture-entity",
                 "confidence": "medium",
                 "priority": "P2",

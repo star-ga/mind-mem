@@ -22,7 +22,6 @@ import os
 import sys
 from typing import Any, Optional
 
-
 # ---------------------------------------------------------------------------
 # Workspace resolution (mirrors mcp_server._workspace)
 # ---------------------------------------------------------------------------
@@ -105,9 +104,7 @@ def _cmd_install(args: argparse.Namespace) -> int:
 
     ws = _workspace()
     try:
-        result = install_config(
-            args.agent, ws, dry_run=args.dry_run, force=args.force
-        )
+        result = install_config(args.agent, ws, dry_run=args.dry_run, force=args.force)
     except ValueError as exc:
         print(json.dumps({"error": str(exc)}, indent=2))
         return 1
@@ -261,7 +258,6 @@ def _cmd_skill_optimize(args: argparse.Namespace) -> int:
     from mind_mem.skill_opt.fleet_bridge import FleetBridge
     from mind_mem.skill_opt.history import HistoryStore
     from mind_mem.skill_opt.mutator import propose_mutations
-    from mind_mem.skill_opt.scorer import aggregate_critiques
     from mind_mem.skill_opt.test_runner import generate_test_cases, run_tests
     from mind_mem.skill_opt.validator import submit_to_governance, validate_mutation
 
@@ -290,8 +286,13 @@ def _cmd_skill_optimize(args: argparse.Namespace) -> int:
         for m in mutations:
             v = await validate_mutation(spec, m, cases, fleet, cfg)
             store.store_mutation(
-                run_id, m.mutation_id, spec.skill_id, m.proposed_content,
-                m.rationale, v.score_before, v.score_after,
+                run_id,
+                m.mutation_id,
+                spec.skill_id,
+                m.proposed_content,
+                m.rationale,
+                v.score_before,
+                v.score_after,
             )
             if v.accepted and (best_validation is None or v.score_after > best_validation.score_after):
                 best_mutation = m
@@ -437,10 +438,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_install_all.add_argument(
         "--agent",
         action="append",
-        help=(
-            "Restrict installation to these named agents. Repeat flag for "
-            "multiple. Default = auto-detect every installed client."
-        ),
+        help=("Restrict installation to these named agents. Repeat flag for multiple. Default = auto-detect every installed client."),
     )
     p_install_all.add_argument("--dry-run", action="store_true")
     p_install_all.add_argument("--force", action="store_true")

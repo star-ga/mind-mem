@@ -17,7 +17,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Iterable, Mapping, Optional
@@ -120,10 +120,7 @@ class MemoryMesh:
         )
         with self._lock:
             if peer.peer_id not in self._peers and len(self._peers) >= _MESH_MAX_PEERS:
-                raise RuntimeError(
-                    f"memory mesh peer cap reached ({_MESH_MAX_PEERS}); "
-                    "remove idle peers before adding more"
-                )
+                raise RuntimeError(f"memory mesh peer cap reached ({_MESH_MAX_PEERS}); remove idle peers before adding more")
             self._peers[peer.peer_id] = peer
         return peer
 

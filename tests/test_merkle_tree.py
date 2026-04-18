@@ -17,7 +17,6 @@ from mind_mem.merkle_tree import (
     _node_hash,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -115,9 +114,7 @@ class TestBuildFromBlocks:
         expected_root = _node_hash(parent_left, parent_right)
         assert tree.root_hash == expected_root
 
-    def test_odd_leaf_count_duplicates_last(
-        self, three_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_odd_leaf_count_duplicates_last(self, three_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(three_blocks)
         # Odd: last leaf duplicated (leaf hash includes block_id)
@@ -135,9 +132,7 @@ class TestBuildFromBlocks:
         tree.build(four_blocks)
         assert tree.size == 4
 
-    def test_build_replaces_previous_tree(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_build_replaces_previous_tree(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build([("blk-001", "aaa111")])
         old_root = tree.root_hash
@@ -152,9 +147,7 @@ class TestBuildFromBlocks:
 
 
 class TestProofGenerationAndVerification:
-    def test_proof_verifies_for_every_leaf(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_proof_verifies_for_every_leaf(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         root = tree.root_hash
@@ -162,9 +155,7 @@ class TestProofGenerationAndVerification:
             proof = tree.get_proof(block_id)
             assert tree.verify_proof(block_id, content_hash, proof, root) is True
 
-    def test_proof_length_is_log2_leaves(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_proof_length_is_log2_leaves(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)  # 4 leaves → depth 2 → proof length 1 per level
         proof = tree.get_proof("blk-001")
@@ -178,9 +169,7 @@ class TestProofGenerationAndVerification:
             assert isinstance(hash_val, str) and len(hash_val) > 0
             assert direction in ("left", "right")
 
-    def test_proof_unknown_block_raises(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_proof_unknown_block_raises(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         with pytest.raises(KeyError):
@@ -193,42 +182,27 @@ class TestProofGenerationAndVerification:
 
 
 class TestTamperDetection:
-    def test_wrong_content_hash_fails_verify(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_wrong_content_hash_fails_verify(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         proof = tree.get_proof("blk-001")
         # Use the correct proof but a tampered content hash
-        assert (
-            tree.verify_proof("blk-001", "tampered_hash", proof, tree.root_hash)
-            is False
-        )
+        assert tree.verify_proof("blk-001", "tampered_hash", proof, tree.root_hash) is False
 
-    def test_wrong_root_hash_fails_verify(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_wrong_root_hash_fails_verify(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         proof = tree.get_proof("blk-001")
-        assert (
-            tree.verify_proof("blk-001", "aaa111", proof, "bad_root_hash") is False
-        )
+        assert tree.verify_proof("blk-001", "aaa111", proof, "bad_root_hash") is False
 
-    def test_corrupted_proof_fails_verify(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_corrupted_proof_fails_verify(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         proof = tree.get_proof("blk-001")
         corrupted = [(proof[0][0] + "x", proof[0][1])] + proof[1:]
-        assert (
-            tree.verify_proof("blk-001", "aaa111", corrupted, tree.root_hash) is False
-        )
+        assert tree.verify_proof("blk-001", "aaa111", corrupted, tree.root_hash) is False
 
-    def test_verify_tree_detects_root_corruption(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_verify_tree_detects_root_corruption(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         # Manually corrupt the root node hash
@@ -243,9 +217,7 @@ class TestTamperDetection:
 
 
 class TestAddRemoveBlocks:
-    def test_add_block_increases_size(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_add_block_increases_size(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         tree.add_block("blk-005", "eee555")
@@ -258,43 +230,33 @@ class TestAddRemoveBlocks:
         tree.add_block("blk-005", "eee555")
         assert tree.root_hash != old_root
 
-    def test_add_block_proof_verifies(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_add_block_proof_verifies(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         tree.add_block("blk-005", "eee555")
         proof = tree.get_proof("blk-005")
         assert tree.verify_proof("blk-005", "eee555", proof, tree.root_hash) is True
 
-    def test_remove_block_decreases_size(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_remove_block_decreases_size(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         tree.remove_block("blk-002")
         assert tree.size == 3
 
-    def test_remove_block_changes_root(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_remove_block_changes_root(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         old_root = tree.root_hash
         tree.remove_block("blk-002")
         assert tree.root_hash != old_root
 
-    def test_remove_unknown_block_raises(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_remove_unknown_block_raises(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         with pytest.raises(KeyError):
             tree.remove_block("nonexistent")
 
-    def test_remove_all_blocks_gives_empty_tree(
-        self, three_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_remove_all_blocks_gives_empty_tree(self, three_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(three_blocks)
         for block_id, _ in three_blocks:
@@ -309,16 +271,12 @@ class TestAddRemoveBlocks:
 
 
 class TestVerifyTree:
-    def test_freshly_built_tree_verifies(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_freshly_built_tree_verifies(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         assert tree.verify_tree() is True
 
-    def test_tree_after_add_verifies(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_tree_after_add_verifies(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         tree.add_block("blk-005", "eee555")
@@ -364,9 +322,7 @@ class TestSerialization:
         assert restored.root_hash == original_root
         assert restored.size == 4
 
-    def test_imported_tree_proofs_verify(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_imported_tree_proofs_verify(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         serialized = tree.export_json()
@@ -378,9 +334,7 @@ class TestSerialization:
             proof = restored.get_proof(block_id)
             assert restored.verify_proof(block_id, content_hash, proof, root) is True
 
-    def test_export_json_is_valid_json(
-        self, four_blocks: list[tuple[str, str]]
-    ) -> None:
+    def test_export_json_is_valid_json(self, four_blocks: list[tuple[str, str]]) -> None:
         tree = MerkleTree()
         tree.build(four_blocks)
         data = json.loads(tree.export_json())

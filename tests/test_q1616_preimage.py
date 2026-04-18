@@ -1,12 +1,12 @@
 # Copyright 2026 STARGA, Inc.
 """Tests for q1616.py + preimage.py (v2.10.0 audit-integrity helpers)."""
+
 from __future__ import annotations
 
 import pytest
 
 from mind_mem.preimage import preimage
 from mind_mem.q1616 import from_q16_16, hex_q16_16, to_q16_16
-
 
 # ---------------------------------------------------------------------------
 # Q16.16

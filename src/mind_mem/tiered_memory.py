@@ -20,10 +20,10 @@ Tier-aware retrieval multiplies the BM25F score by:
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import IntEnum
-from typing import Any, Iterable, Mapping, Optional
+from typing import Iterable, Optional
 
 
 class Tier(IntEnum):
@@ -128,10 +128,7 @@ def promote_candidates(
         if b.session_count < min_sessions_per_tier:
             continue
         target = Tier(int(b.tier) + 1)
-        reason = (
-            f"observed in {b.session_count} sessions "
-            f"(threshold {min_sessions_per_tier})"
-        )
+        reason = f"observed in {b.session_count} sessions (threshold {min_sessions_per_tier})"
         out.append(
             PromotionCandidate(
                 block_id=b.block_id,
