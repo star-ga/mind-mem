@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 466 | **Est. tokens:** ~964,439
-**Generated:** 2026-04-18 12:45 UTC
+**Files:** 466 | **Est. tokens:** ~964,444
+**Generated:** 2026-04-18 13:15 UTC
 
 ## Token Budget Guide
 
@@ -46,7 +46,7 @@
 | `src/mind_mem/` | 113 | ~390,408 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 179 | ~363,155 |
+| `tests/` | 179 | ~363,160 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -500,7 +500,7 @@
 - `test_mind_ffi.py` (~291 tok, medium) — Tests for MIND FFI module."""
 - `test_multi_file_recall.py` (~329 tok, medium) — Tests for recall across multiple files."""
 - `test_namespaces.py` (~2411 tok, huge) — Tests for namespaces.py — zero external deps (stdlib unittest)."""
-- `test_niah.py` (~4982 tok, huge) — Needle In A Haystack (NIAH) benchmark for mind-mem recall.
+- `test_niah.py` (~4987 tok, huge) — Needle In A Haystack (NIAH) benchmark for mind-mem recall.
 - `test_observability.py` (~791 tok, large) — Tests for observability.py — structured logging and metrics."""
 - `test_observation_axis.py` (~3330 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_observation_compress.py` (~2754 tok, huge) — Tests for observation_compress module.

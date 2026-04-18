@@ -426,6 +426,7 @@ for size in HAYSTACK_SIZES:
             _TEST_PARAMS.append((size, depth, needle_idx))
 
 
+@pytest.mark.stress
 @pytest.mark.parametrize(
     "haystack_size,depth_pct,needle_idx",
     _TEST_PARAMS,
