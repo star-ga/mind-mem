@@ -22,6 +22,20 @@
 
 set -uo pipefail
 
+# Runtime deprecation warning (v3.1.x) — surface the deprecation
+# notice on stderr at every invocation so anyone scripting this
+# script knows to migrate. Suppress by exporting
+# MIND_MEM_VALIDATE_BASH=1 when you really do want the bash engine
+# (e.g. comparing outputs against validate_py during a parity audit).
+if [[ "${MIND_MEM_VALIDATE_BASH:-0}" != "1" ]]; then
+  cat >&2 <<'EOF'
+[mind-mem][deprecation] validate.sh is deprecated; use:
+    python3 -m mind_mem.validate_py [workspace_path]
+The bash engine will be replaced by a Python forwarder in v3.2.0.
+Set MIND_MEM_VALIDATE_BASH=1 to silence this notice.
+EOF
+fi
+
 # Load task-status literals derived from enums.py (auto-generated; do
 # not edit by hand — run `make regen-bash-literals` to refresh).
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
