@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 457 | **Est. tokens:** ~953,369
-**Generated:** 2026-04-18 09:29 UTC
+**Files:** 459 | **Est. tokens:** ~954,258
+**Generated:** 2026-04-18 09:30 UTC
 
 ## Token Budget Guide
 
@@ -43,10 +43,10 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~441 |
-| `src/mind_mem/` | 111 | ~389,091 |
+| `src/mind_mem/` | 112 | ~389,562 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 176 | ~361,443 |
+| `tests/` | 177 | ~361,861 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -267,6 +267,7 @@
 - `drift_detector.py` (~4365 tok, huge) — mind-mem Semantic Belief Drift Detection.
 - `encryption.py` (~3115 tok, huge) — mind-mem Encryption at Rest — optional AES-256 encryption for memory blocks.
 - `entity_ingest.py` (~3220 tok, huge) — mind-mem Entity Ingestion — regex-based entity extraction. Zero external deps.
+- `enums.py` (~471 tok, medium) — Centralised enum definitions for mind-mem.
 - `error_codes.py` (~1751 tok, huge) — mind-mem Error Codes — structured error classification.
 - `evidence_objects.py` (~5859 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `evidence_packer.py` (~3267 tok, huge) — Deterministic evidence packer for Mind-Mem.
@@ -444,6 +445,7 @@
 - `test_edge_cases.py` (~3943 tok, huge) — Edge-case and stress tests for mind-mem — block_parser, recall, and MCP server."""
 - `test_encryption.py` (~1732 tok, huge) — Tests for mind-mem encryption at rest."""
 - `test_entity_ingest.py` (~4091 tok, huge) — Tests for the entity_ingest module — extraction, filtering, signal generation."""
+- `test_enums.py` (~418 tok, medium) — Tests for centralised enums (mind_mem.enums)."""
 - `test_error_codes.py` (~2394 tok, huge) — Tests for mind-mem Error Codes module."""
 - `test_error_paths.py` (~5892 tok, huge) — Error path and edge-case tests for mind-mem — malformed inputs, missing files, bad configs."""
 - `test_evidence_objects.py` (~4031 tok, huge) — # Copyright 2026 STARGA, Inc.
