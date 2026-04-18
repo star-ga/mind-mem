@@ -61,12 +61,7 @@ def pytest_collection_modifyitems(config, items):
         else:
             source = ""
         lowered_id = item.nodeid.lower()
-        needs_vector = (
-            "sqlite_vec" in source
-            or "niah" in lowered_id
-            or "_vector" in lowered_id
-            or "semantic" in lowered_id
-        )
+        needs_vector = "sqlite_vec" in source or "niah" in lowered_id or "_vector" in lowered_id or "semantic" in lowered_id
         if needs_vector:
             item.add_marker(skip_marker)
 

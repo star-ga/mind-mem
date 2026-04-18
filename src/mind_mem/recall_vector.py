@@ -550,9 +550,7 @@ class VectorBackend(RecallBackend):
         # `enable_load_extension` is unavailable; callers already fall
         # through to BM25-only recall when the vector backend can't init.
         if not hasattr(conn, "enable_load_extension"):
-            raise RuntimeError(
-                "sqlite was compiled without loadable extensions — vector backend unavailable"
-            )
+            raise RuntimeError("sqlite was compiled without loadable extensions — vector backend unavailable")
         conn.enable_load_extension(True)
         sqlite_vec.load(conn)
         conn.enable_load_extension(False)

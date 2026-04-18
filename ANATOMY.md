@@ -5,7 +5,7 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 456 | **Est. tokens:** ~950,274
+**Files:** 456 | **Est. tokens:** ~950,252
 **Generated:** 2026-04-18 08:56 UTC
 
 ## Token Budget Guide
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 26 | ~62,524 |
+| `./` | 26 | ~62,509 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 32 | ~35,992 |
@@ -43,7 +43,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~441 |
-| `src/mind_mem/` | 111 | ~388,779 |
+| `src/mind_mem/` | 111 | ~388,772 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 176 | ~360,664 |
@@ -55,7 +55,7 @@
 ### `./`
 
 - `CLAUDE.md` (~1028 tok, large) — mind-mem — Persistent AI Memory System
-- `conftest.py` (~673 tok, large) — Shared pytest fixtures for mind-mem test suite."""
+- `conftest.py` (~658 tok, large) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
 - `demo-setup.sh` (~323 tok, medium) — Pre-seed a demo workspace for VHS recording
 - `demo.tape` (~93 tok, small) — # mind-mem demo — terminal recording for README
@@ -320,7 +320,7 @@
 - `_recall_scoring.py` (~3112 tok, huge) — Recall engine scoring — BM25F helper, date scores, graph boosting, negation, date proximity, categories."""
 - `_recall_temporal.py` (~2044 tok, huge) — Recall engine temporal filtering — resolve relative time references and filter blocks."""
 - `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
-- `recall_vector.py` (~13955 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
+- `recall_vector.py` (~13948 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `retrieval_graph.py` (~4984 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
 - `schema_version.py` (~1897 tok, huge) — Mind-Mem Schema Version Migration. Zero external deps.
 - `session_summarizer.py` (~2885 tok, huge) — mind-mem Session Summarizer. Zero external deps.
