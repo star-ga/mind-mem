@@ -17,7 +17,7 @@ def ws(tmp_path):
     init(ws)
     # Create a test block file
     blocks_md = os.path.join(ws, "decisions", "edge.md")
-    with open(blocks_md, "w") as f:
+    with open(blocks_md, "w", encoding="utf-8") as f:
         f.write("[EDGE-001]\nType: Decision\nStatement: Empty query test\n\n")
         f.write("[EDGE-002]\nType: Decision\nStatement: Special chars !@#$%^&*()\n\n")
         f.write("[EDGE-003]\nType: Decision\nStatement: Very long " + "word " * 200 + "\n\n")

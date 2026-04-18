@@ -15,7 +15,7 @@ def _ws():
     os.makedirs(ws)
     init(ws)
     p = os.path.join(ws, "decisions", "eq.md")
-    with open(p, "w") as f:
+    with open(p, "w", encoding="utf-8") as f:
         f.write("[EQ-001]\nType: Decision\nStatement: Test block\n\n")
     return ws, td
 

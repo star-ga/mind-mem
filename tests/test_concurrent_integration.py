@@ -151,7 +151,7 @@ def _scaffold_workspace(ws):
     for fname in SNAPSHOT_FILES:
         path = os.path.join(ws, fname)
         if not os.path.exists(path):
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write("")
 
 
@@ -437,7 +437,7 @@ class TestWALCrashRecovery(unittest.TestCase):
 
         target_path = os.path.join(self.ws, "decisions", "DECISIONS.md")
         original_content = "# Decisions\n\n[D-20260101-001]\nStatement: Original content before crash\nStatus: active\n"
-        with open(target_path, "w") as f:
+        with open(target_path, "w", encoding="utf-8") as f:
             f.write(original_content)
 
         # Begin WAL entry
@@ -445,7 +445,7 @@ class TestWALCrashRecovery(unittest.TestCase):
         wal.begin("update", target_path, "new content that simulates crash")
 
         # Simulate the write happening (as if the process was in the middle of writing)
-        with open(target_path, "w") as f:
+        with open(target_path, "w", encoding="utf-8") as f:
             f.write("CORRUPTED PARTIAL WRITE -- crash happened here")
 
         # Verify the WAL entry is pending
@@ -469,14 +469,14 @@ class TestWALCrashRecovery(unittest.TestCase):
         """Committed WAL entries should be cleaned up and not replayed."""
 
         target_path = os.path.join(self.ws, "decisions", "DECISIONS.md")
-        with open(target_path, "w") as f:
+        with open(target_path, "w", encoding="utf-8") as f:
             f.write("original content")
 
         wal = WAL(self.ws)
         entry_id = wal.begin("update", target_path, "new content")
 
         # Simulate successful write
-        with open(target_path, "w") as f:
+        with open(target_path, "w", encoding="utf-8") as f:
             f.write("new content successfully written")
 
         # Commit the entry
@@ -505,7 +505,7 @@ class TestWALCrashRecovery(unittest.TestCase):
         wal.begin("create", target_path, "brand new file content")
 
         # Simulate the file being created
-        with open(target_path, "w") as f:
+        with open(target_path, "w", encoding="utf-8") as f:
             f.write("brand new file content")
 
         # Don't commit -- simulate crash
@@ -521,9 +521,9 @@ class TestWALCrashRecovery(unittest.TestCase):
 
         file_a = os.path.join(self.ws, "decisions", "FILE_A.md")
         file_b = os.path.join(self.ws, "decisions", "FILE_B.md")
-        with open(file_a, "w") as f:
+        with open(file_a, "w", encoding="utf-8") as f:
             f.write("original A")
-        with open(file_b, "w") as f:
+        with open(file_b, "w", encoding="utf-8") as f:
             f.write("original B")
 
         wal = WAL(self.ws)
@@ -531,9 +531,9 @@ class TestWALCrashRecovery(unittest.TestCase):
         wal.begin("update", file_b, "new B")
 
         # Corrupt both files
-        with open(file_a, "w") as f:
+        with open(file_a, "w", encoding="utf-8") as f:
             f.write("corrupted A")
-        with open(file_b, "w") as f:
+        with open(file_b, "w", encoding="utf-8") as f:
             f.write("corrupted B")
 
         self.assertEqual(wal.pending_count(), 2)
@@ -674,7 +674,7 @@ class TestFileLockContention(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp(prefix="memos_filelock_")
         self.target = os.path.join(self.tmpdir, "target.md")
-        with open(self.target, "w") as f:
+        with open(self.target, "w", encoding="utf-8") as f:
             f.write("lock target content")
 
     def tearDown(self):
@@ -755,7 +755,7 @@ class TestFileLockContention(unittest.TestCase):
         # Write a lock file with a PID that does not exist.
         # PID 4194304 (2^22) is very unlikely to exist on any system.
         dead_pid = 4194304
-        with open(lock_path, "w") as f:
+        with open(lock_path, "w", encoding="utf-8") as f:
             f.write(f"{dead_pid}\n")
 
         # A new FileLock should detect the stale lock and acquire successfully
@@ -1131,9 +1131,9 @@ class TestSnapshotRestoreFidelity(unittest.TestCase):
         snap_dir = create_snapshot(self.ws, ts)
 
         # Mutate the workspace
-        with open(dec_path, "w") as f:
+        with open(dec_path, "w", encoding="utf-8") as f:
             f.write("MUTATED DECISIONS CONTENT")
-        with open(task_path, "w") as f:
+        with open(task_path, "w", encoding="utf-8") as f:
             f.write("MUTATED TASKS CONTENT")
 
         # Restore

@@ -81,7 +81,7 @@ class TestFileLockBasic(unittest.TestCase):
         try:
             lock_path = path + ".lock"
             # Create a lock file with a definitely-dead PID
-            with open(lock_path, "w") as f:
+            with open(lock_path, "w", encoding="utf-8") as f:
                 f.write("999999999\n")
             lock = FileLock(path, timeout=2.0)
             lock.acquire()  # Should break stale lock and succeed

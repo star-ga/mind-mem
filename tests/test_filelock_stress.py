@@ -24,7 +24,7 @@ class TestFileLockContention:
         lock_file = data_file
         errors = []
 
-        with open(data_file, "w") as f:
+        with open(data_file, "w", encoding="utf-8") as f:
             f.write("")
 
         def writer(thread_id: int, iterations: int):
@@ -86,7 +86,7 @@ class TestFileLockContention:
         """Mixed read/write operations under lock."""
         data_file = str(tmp_path / "rw.txt")
         lock_file = data_file
-        with open(data_file, "w") as f:
+        with open(data_file, "w", encoding="utf-8") as f:
             f.write("initial\n")
 
         errors = []
@@ -95,7 +95,7 @@ class TestFileLockContention:
             try:
                 for _ in range(iterations):
                     with FileLock(lock_file):
-                        with open(data_file, "r") as f:
+                        with open(data_file, "r", encoding="utf-8") as f:
                             _ = f.read()
             except Exception as e:
                 errors.append(str(e))
@@ -122,7 +122,7 @@ class TestFileLockContention:
     def test_lock_file_cleanup(self, tmp_path):
         """Lock files should be cleaned up after context exit."""
         lock_file = str(tmp_path / "cleanup.txt")
-        with open(lock_file, "w") as f:
+        with open(lock_file, "w", encoding="utf-8") as f:
             f.write("test")
         with FileLock(lock_file):
             pass

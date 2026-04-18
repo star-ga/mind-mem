@@ -543,7 +543,12 @@ def parse_file(filepath: str, *, strict: bool = False) -> list[dict]:
     Returns:
         List of parsed block dicts.
     """
-    with open(filepath, "r", encoding="utf-8") as f:
+    # errors="replace" tolerates non-UTF-8 bytes — on Windows, files written
+    # through `open(p, "w")` without encoding= default to the locale codepage
+    # (cp1252 on en-US). Production callers should always write UTF-8; the
+    # tolerant read is here so a malformed byte does not shadow the whole
+    # block from the index.
+    with open(filepath, "r", encoding="utf-8", errors="replace") as f:
         content = f.read(MAX_PARSE_SIZE + 1)
     if len(content) > MAX_PARSE_SIZE:
         content = content[:MAX_PARSE_SIZE]

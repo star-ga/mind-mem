@@ -16,7 +16,7 @@ def ws(tmp_path):
     os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "limit_test.md")
-    with open(blocks_md, "w") as f:
+    with open(blocks_md, "w", encoding="utf-8") as f:
         for i in range(20):
             f.write(f"[LIM-{i:03d}]\nType: Decision\nStatement: Test block {i} about limiting\n\n")
     return ws
@@ -28,7 +28,7 @@ def ws_small(tmp_path):
     os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "limit_test.md")
-    with open(blocks_md, "w") as f:
+    with open(blocks_md, "w", encoding="utf-8") as f:
         for i in range(3):
             f.write(f"[LIM-{i:03d}]\nType: Decision\nStatement: Test block {i} about limiting\n\n")
     return ws

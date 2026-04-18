@@ -15,7 +15,7 @@ def _make_workspace():
     os.makedirs(ws)
     init(ws)
     path = os.path.join(ws, "decisions", "refs.md")
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write("[REF-001]\nType: Decision\nStatement: Primary decision\nReferences: REF-002\n\n")
         f.write("[REF-002]\nType: Decision\nStatement: Referenced decision\nReferences: REF-001\n\n")
     return ws, td

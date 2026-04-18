@@ -36,7 +36,7 @@ class TestGovernanceBench:
 
     def test_contradiction_detection_with_decisions(self, workspace, bench):
         path = os.path.join(workspace, "decisions", "DECISIONS.md")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write("""
 [D-20260301-001]
 Date: 2026-03-01
@@ -78,7 +78,7 @@ Subject: Use MySQL instead
     def test_scalability(self, workspace, bench):
         # Create some test blocks
         path = os.path.join(workspace, "decisions", "DECISIONS.md")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             for i in range(10):
                 f.write(f"\n[D-20260301-{i:03d}]\nSubject: Decision {i}\n\n---\n")
 

@@ -16,7 +16,7 @@ def ws(tmp_path):
     os.makedirs(ws)
     init(ws)
     p = os.path.join(ws, "decisions", "sup.md")
-    with open(p, "w") as f:
+    with open(p, "w", encoding="utf-8") as f:
         f.write("[SUP-001]\nType: Decision\nStatement: Original decision\nStatus: Superseded\n\n")
         f.write("[SUP-002]\nType: Decision\nStatement: Replacement decision\nSupersedes: SUP-001\nStatus: Active\n\n")
     return ws

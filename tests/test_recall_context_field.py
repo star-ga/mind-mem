@@ -15,7 +15,7 @@ def _ws():
     os.makedirs(ws)
     init(ws)
     p = os.path.join(ws, "decisions", "ctx.md")
-    with open(p, "w") as f:
+    with open(p, "w", encoding="utf-8") as f:
         f.write("[CTX-001]\nType: Decision\nStatement: Main content\nContext: During sprint planning\n\n")
         f.write("[CTX-002]\nType: Decision\nStatement: Other content\nContext: During code review\n\n")
     return ws, td

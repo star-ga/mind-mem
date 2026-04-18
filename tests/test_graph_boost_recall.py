@@ -16,7 +16,7 @@ def ws(tmp_path):
     os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "graph_test.md")
-    with open(blocks_md, "w") as f:
+    with open(blocks_md, "w", encoding="utf-8") as f:
         f.write("[GR-001]\nType: Decision\nStatement: Graph boost test alpha\nReferences: GR-002\n\n")
         f.write("[GR-002]\nType: Decision\nStatement: Graph boost test beta\nReferences: GR-001\n\n")
         f.write("[GR-003]\nType: Decision\nStatement: Unrelated block gamma\n\n")

@@ -112,7 +112,7 @@ class TestSQLiteBusyError(unittest.TestCase):
         """Recall tool should catch sqlite3.OperationalError for locked DB."""
         db_path = self.mod.fts_db_path(self.td)
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        with open(db_path, "w") as f:
+        with open(db_path, "w", encoding="utf-8") as f:
             f.write("")  # dummy file
 
         with patch.object(self.mod, "fts_query", side_effect=sqlite3.OperationalError("database is locked")):

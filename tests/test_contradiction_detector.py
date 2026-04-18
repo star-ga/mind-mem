@@ -500,7 +500,7 @@ class TestCheckProposalContradictions:
     def test_config_threshold_used(self, workspace, contradicting_proposal):
         # Override config threshold to very high
         config_path = os.path.join(workspace, "mind-mem.json")
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump({"contradiction": {"threshold": 0.99}}, f)
 
         report = check_proposal_contradictions(workspace, contradicting_proposal)

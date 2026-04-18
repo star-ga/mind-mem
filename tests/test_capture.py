@@ -11,7 +11,7 @@ from mind_mem.capture import append_signals, scan_log
 class TestScanLog(unittest.TestCase):
     def _write_log(self, tmpdir, content):
         path = os.path.join(tmpdir, "test.md")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(content)
         return path
 
@@ -59,7 +59,7 @@ class TestAppendSignals(unittest.TestCase):
         intel_dir = os.path.join(tmpdir, "intelligence")
         os.makedirs(intel_dir, exist_ok=True)
         sig_path = os.path.join(intel_dir, "SIGNALS.md")
-        with open(sig_path, "w") as f:
+        with open(sig_path, "w", encoding="utf-8") as f:
             f.write("# Captured Signals\n\n" + existing_signals)
         return tmpdir
 
@@ -135,7 +135,7 @@ class TestCaptureConfidence(unittest.TestCase):
 
     def _write_log(self, tmpdir, content):
         path = os.path.join(tmpdir, "test.md")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(content)
         return path
 
@@ -189,7 +189,7 @@ class TestCaptureConfidence(unittest.TestCase):
         intel_dir = os.path.join(tmpdir, "intelligence")
         os.makedirs(intel_dir, exist_ok=True)
         sig_path = os.path.join(intel_dir, "SIGNALS.md")
-        with open(sig_path, "w") as f:
+        with open(sig_path, "w", encoding="utf-8") as f:
             f.write("# Captured Signals\n\n" + existing_signals)
         return tmpdir
 

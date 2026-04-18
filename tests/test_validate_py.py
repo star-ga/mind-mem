@@ -232,7 +232,7 @@ class TestCheckFileStructure:
     def test_memory_md_without_protocol_header(self, empty_workspace):
         """MEMORY.md without Protocol v1.0 header should fail."""
         mem_path = os.path.join(empty_workspace, "MEMORY.md")
-        with open(mem_path, "w") as f:
+        with open(mem_path, "w", encoding="utf-8") as f:
             f.write("# Just some notes\n")
         v = Validator(empty_workspace)
         v._check_file_structure()

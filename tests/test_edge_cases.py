@@ -140,7 +140,7 @@ class TestRecallEdgeCases(unittest.TestCase):
         ]:
             path = os.path.join(tmpdir, fname)
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write(f"# {os.path.basename(fname)}\n")
         return tmpdir
 
@@ -271,7 +271,7 @@ class TestMCPEdgeCases(unittest.TestCase):
             "intelligence/SIGNALS.md",
         ]:
             path = os.path.join(self.td, fname)
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write(f"# {os.path.basename(fname)}\n")
 
         self.mod = _load_server(self.td)

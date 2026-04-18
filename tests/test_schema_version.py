@@ -28,21 +28,21 @@ class TestGetWorkspaceVersion(unittest.TestCase):
 
     def test_reads_version_field(self):
         config_path = os.path.join(self.td, "mind-mem.json")
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump({"version": "1.0.0"}, f)
         version = get_workspace_version(self.td)
         self.assertEqual(version, "1.0.0")
 
     def test_schema_version_takes_precedence(self):
         config_path = os.path.join(self.td, "mind-mem.json")
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump({"version": "1.0.0", "schema_version": "2.0.0"}, f)
         version = get_workspace_version(self.td)
         self.assertEqual(version, "2.0.0")
 
     def test_corrupt_json_defaults_to_1_0_0(self):
         config_path = os.path.join(self.td, "mind-mem.json")
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             f.write("not valid json {{{")
         version = get_workspace_version(self.td)
         self.assertEqual(version, "1.0.0")
@@ -57,14 +57,14 @@ class TestCheckMigrationNeeded(unittest.TestCase):
 
     def test_no_migration_needed_when_current(self):
         config_path = os.path.join(self.td, "mind-mem.json")
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump({"schema_version": CURRENT_SCHEMA_VERSION}, f)
         steps = check_migration_needed(self.td)
         self.assertEqual(steps, [])
 
     def test_migration_needed_for_v1(self):
         config_path = os.path.join(self.td, "mind-mem.json")
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump({"version": "1.0.0"}, f)
         steps = check_migration_needed(self.td)
         self.assertGreater(len(steps), 0)
@@ -85,7 +85,7 @@ class TestMigrateWorkspace(unittest.TestCase):
     def _create_v1_workspace(self):
         """Create a minimal v1 workspace."""
         config_path = os.path.join(self.td, "mind-mem.json")
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump({"version": "1.0.0", "workspace_path": "."}, f)
         os.makedirs(os.path.join(self.td, "decisions"), exist_ok=True)
         os.makedirs(os.path.join(self.td, "intelligence"), exist_ok=True)
@@ -146,7 +146,7 @@ class TestMigrateWorkspace(unittest.TestCase):
 
     def test_skip_if_already_current(self):
         config_path = os.path.join(self.td, "mind-mem.json")
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump({"schema_version": CURRENT_SCHEMA_VERSION}, f)
         result = migrate_workspace(self.td)
         self.assertFalse(result["migrated"])

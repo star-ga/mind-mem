@@ -15,7 +15,7 @@ def _make_workspace():
     os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "wide_test.md")
-    with open(blocks_md, "w") as f:
+    with open(blocks_md, "w", encoding="utf-8") as f:
         for i in range(20):
             f.write(f"[WD-{i:03d}]\nType: Decision\nStatement: Wide retrieval test {i}\n\n")
     return ws, td

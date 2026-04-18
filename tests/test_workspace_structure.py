@@ -29,7 +29,7 @@ def test_directories_are_writable():
         init(ws)
         for d in EXPECTED_DIRS:
             test_file = os.path.join(ws, d, "write_test.tmp")
-            with open(test_file, "w") as f:
+            with open(test_file, "w", encoding="utf-8") as f:
                 f.write("test")
             os.unlink(test_file)
 

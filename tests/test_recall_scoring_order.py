@@ -16,7 +16,7 @@ def ws(tmp_path):
     os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "order_test.md")
-    with open(blocks_md, "w") as f:
+    with open(blocks_md, "w", encoding="utf-8") as f:
         # Block with high relevance (multiple keyword matches)
         f.write("[ORD-001]\nType: Decision\nStatement: BM25 scoring algorithm for text retrieval search\n\n")
         # Block with medium relevance

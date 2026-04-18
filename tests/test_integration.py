@@ -43,7 +43,7 @@ class TestFullLifecycle(unittest.TestCase):
         # 2. Write a daily log with decision-like language
         today = datetime.now().strftime("%Y-%m-%d")
         log_path = os.path.join(self.ws, "memory", f"{today}.md")
-        with open(log_path, "w") as f:
+        with open(log_path, "w", encoding="utf-8") as f:
             f.write(f"# {today}\n\n")
             f.write("We decided to use PostgreSQL for the main database.\n")
             f.write("Reviewed D-20260101-001 for context.\n")  # has xref, should skip
@@ -76,7 +76,7 @@ class TestFullLifecycle(unittest.TestCase):
 
         # 5. Write a formal decision block for recall to find
         decisions_path = os.path.join(self.ws, "decisions", "DECISIONS.md")
-        with open(decisions_path, "w") as f:
+        with open(decisions_path, "w", encoding="utf-8") as f:
             f.write("# Decisions\n\n")
             f.write(f"[D-{today.replace('-', '')}-001]\n")
             f.write("Statement: Use PostgreSQL for the main database\n")
@@ -121,7 +121,7 @@ class TestFullLifecycle(unittest.TestCase):
         init(self.ws)
         today = datetime.now().strftime("%Y-%m-%d")
         decisions_path = os.path.join(self.ws, "decisions", "DECISIONS.md")
-        with open(decisions_path, "w") as f:
+        with open(decisions_path, "w", encoding="utf-8") as f:
             f.write("# Decisions\n\n")
             f.write(f"[D-{today.replace('-', '')}-001]\n")
             f.write("Statement: Active decision about testing\n")

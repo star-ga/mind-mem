@@ -44,7 +44,7 @@ def test_init_preserves_existing_files():
         os.makedirs(ws)
         init(ws)
         marker = os.path.join(ws, "decisions", "existing.md")
-        with open(marker, "w") as f:
+        with open(marker, "w", encoding="utf-8") as f:
             f.write("keep me")
         init(ws)
         assert os.path.isfile(marker)

@@ -37,7 +37,7 @@ class TestFileWatcher(unittest.TestCase):
 
     def test_detects_modified_file(self):
         path = os.path.join(self.td, "existing.md")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write("# Original\n")
 
         watcher = FileWatcher(self.td, callback=self._callback, interval=0.1)
@@ -53,7 +53,7 @@ class TestFileWatcher(unittest.TestCase):
 
     def test_detects_deleted_file(self):
         path = os.path.join(self.td, "delete-me.md")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write("# Will be deleted\n")
 
         watcher = FileWatcher(self.td, callback=self._callback, interval=0.1)
@@ -107,7 +107,7 @@ class TestFileWatcher(unittest.TestCase):
 
     def test_no_callback_on_unchanged(self):
         path = os.path.join(self.td, "stable.md")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write("# Stable\n")
 
         watcher = FileWatcher(self.td, callback=self._callback, interval=0.1)

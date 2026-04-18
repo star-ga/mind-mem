@@ -16,7 +16,7 @@ def _make_workspace():
     os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "hybrid.md")
-    with open(blocks_md, "w") as f:
+    with open(blocks_md, "w", encoding="utf-8") as f:
         f.write("[HYB-001]\nType: Decision\nStatement: Use BM25 for text retrieval\n\n")
         f.write("[HYB-002]\nType: Decision\nStatement: Vector search for semantic matching\n\n")
         f.write("[HYB-003]\nType: Decision\nStatement: RRF fusion combines both scores\n\n")

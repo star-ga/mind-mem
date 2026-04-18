@@ -15,7 +15,7 @@ def _ws():
     os.makedirs(ws)
     init(ws)
     p = os.path.join(ws, "decisions", "src_test.md")
-    with open(p, "w") as f:
+    with open(p, "w", encoding="utf-8") as f:
         f.write("[SRC-001]\nType: Decision\nStatement: Source field test\n\n")
     return ws, td
 

@@ -49,7 +49,7 @@ def _setup_workspace(tmpdir, decisions_content="", tasks_content=""):
     ):
         path = os.path.join(tmpdir, fname)
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(f"# {os.path.basename(fname)}\n")
 
     return tmpdir

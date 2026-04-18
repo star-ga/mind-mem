@@ -57,7 +57,7 @@ def _setup_workspace(tmp_path, blocks_md):
         path = os.path.join(ws, fname)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         if not os.path.exists(path):
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write(f"# {os.path.basename(fname)}\n")
     return ws
 

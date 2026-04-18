@@ -360,7 +360,7 @@ class TestScanForPromotableFacts:
         fact = "The mind-mem package uses hybrid BM25 and vector search for recall."
         for day in ("2026-04-08.md", "2026-04-09.md", "2026-04-10.md"):
             path = os.path.join(workspace, "memory", day)
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write(f"# Daily Log\n\n{fact}\n")
 
         results = scan_for_promotable_facts(workspace, min_mentions=3)
@@ -372,7 +372,7 @@ class TestScanForPromotableFacts:
         fact = "This fact appears only twice in the logs."
         for day in ("2026-04-08.md", "2026-04-09.md"):
             path = os.path.join(workspace, "memory", day)
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write(f"# Daily Log\n\n{fact}\n")
 
         results = scan_for_promotable_facts(workspace, min_mentions=3)
@@ -385,7 +385,7 @@ class TestScanForPromotableFacts:
     def test_short_sentences_ignored(self, workspace):
         for day in ("2026-04-08.md", "2026-04-09.md", "2026-04-10.md"):
             path = os.path.join(workspace, "memory", day)
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write("Short.\n")
 
         results = scan_for_promotable_facts(workspace, min_mentions=1)
@@ -396,7 +396,7 @@ class TestScanForPromotableFacts:
         fact_b = "Fact B appears in even more daily memory log files for testing."
         for day in ("2026-04-07.md", "2026-04-08.md", "2026-04-09.md"):
             path = os.path.join(workspace, "memory", day)
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write(f"{fact_a}\n")
 
         for day in ("2026-04-06.md", "2026-04-07.md", "2026-04-08.md", "2026-04-09.md"):

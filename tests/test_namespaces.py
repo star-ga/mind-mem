@@ -116,7 +116,7 @@ class TestNamespaceManager(unittest.TestCase):
         ns.init_namespace("shared")
         # Create a test file
         decisions_path = os.path.join(self.td, "shared", "decisions", "DECISIONS.md")
-        with open(decisions_path, "w") as f:
+        with open(decisions_path, "w", encoding="utf-8") as f:
             f.write("[D-20260101-001]\nStatement: Test\n")
 
         paths = ns.resolve_corpus_paths("decisions/DECISIONS.md")
@@ -131,7 +131,7 @@ class TestNamespaceManager(unittest.TestCase):
 
     def test_corrupted_acl_falls_back(self):
         acl_path = os.path.join(self.td, "mind-mem-acl.json")
-        with open(acl_path, "w") as f:
+        with open(acl_path, "w", encoding="utf-8") as f:
             f.write("{bad json")
         ns = NamespaceManager(self.td, agent_id="test")
         # Should fall back to DEFAULT_ACL
@@ -144,7 +144,7 @@ class TestSharedLedger(unittest.TestCase):
         intel_dir = os.path.join(self.td, "shared", "intelligence")
         os.makedirs(intel_dir)
         ledger_path = os.path.join(intel_dir, "LEDGER.md")
-        with open(ledger_path, "w") as f:
+        with open(ledger_path, "w", encoding="utf-8") as f:
             f.write("# Shared Fact Ledger\n\n")
 
     def tearDown(self):
@@ -238,7 +238,7 @@ class TestInitMultiAgentWorkspace(unittest.TestCase):
     def test_no_overwrite_existing_acl(self):
         # Pre-create ACL
         acl_path = os.path.join(self.td, "mind-mem-acl.json")
-        with open(acl_path, "w") as f:
+        with open(acl_path, "w", encoding="utf-8") as f:
             json.dump({"custom": True}, f)
         init_multi_agent_workspace(self.td, agents=["x"])
         with open(acl_path) as f:

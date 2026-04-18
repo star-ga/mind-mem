@@ -50,7 +50,7 @@ class _WorkspaceMixin:
         ]:
             path = os.path.join(tmpdir, fname)
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write(f"# {os.path.basename(fname)}\n")
 
         return tmpdir
@@ -270,7 +270,7 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
         import time
 
         time.sleep(0.05)
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(content)
 
         result = build_index(ws, incremental=True)

@@ -80,7 +80,7 @@ class TestDriftSignal:
 class TestDriftDetector:
     def _write_decisions(self, workspace, blocks_text):
         path = os.path.join(workspace, "decisions", "DECISIONS.md")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(blocks_text)
 
     def test_empty_workspace(self, detector):

@@ -254,7 +254,7 @@ def test_load_nonexistent_file_is_noop(profiler, tmp_path):
 
 def test_load_corrupted_json_is_noop(profiler, tmp_path):
     path = str(tmp_path / "bad.json")
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write("{not valid json")
     profiler.load(path)  # must not raise
     assert len(profiler._profiles) == 0

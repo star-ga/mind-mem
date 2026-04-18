@@ -30,7 +30,7 @@ class TestMalformedConfig(unittest.TestCase):
         """load_config returns defaults when JSON has syntax errors."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 f.write("{invalid json,,}")
             cfg = load_config(ws)
             self.assertIsInstance(cfg, dict)
@@ -39,7 +39,7 @@ class TestMalformedConfig(unittest.TestCase):
         """load_config returns defaults when config file is empty."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
-            with open(config_path, "w"):
+            with open(config_path, "w", encoding="utf-8"):
                 pass  # empty file
             cfg = load_config(ws)
             self.assertIsInstance(cfg, dict)
@@ -54,7 +54,7 @@ class TestMalformedConfig(unittest.TestCase):
         """load_config handles JSON array instead of object."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 json.dump([1, 2, 3], f)
             cfg = load_config(ws)
             self.assertIsInstance(cfg, (dict, list))
@@ -63,7 +63,7 @@ class TestMalformedConfig(unittest.TestCase):
         """load_config handles JSON null without crashing."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 f.write("null")
             # Should not raise — may return None since json.load("null") -> None
             # and _validate_config passes it through
@@ -475,7 +475,7 @@ class TestRecallWithBadConfig(unittest.TestCase):
         """Recall falls back gracefully when mind-mem.json is corrupt."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 f.write("{broken json")
             # Should not raise — recall ignores bad config
             results = recall(ws, "test query")
@@ -485,7 +485,7 @@ class TestRecallWithBadConfig(unittest.TestCase):
         """Recall handles config where recall section is wrong type."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 json.dump({"recall": "not_a_dict"}, f)
             results = recall(ws, "test query")
             self.assertIsInstance(results, list)
@@ -494,7 +494,7 @@ class TestRecallWithBadConfig(unittest.TestCase):
         """Recall handles config with unknown backend name."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 json.dump({"recall": {"backend": "nonexistent_backend"}}, f)
             results = recall(ws, "test query")
             self.assertIsInstance(results, list)

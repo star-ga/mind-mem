@@ -20,7 +20,7 @@ def _make_workspace():
     os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "prefetch_test.md")
-    with open(blocks_md, "w") as f:
+    with open(blocks_md, "w", encoding="utf-8") as f:
         f.write("[PF-001]\nType: Decision\nStatement: Prefetch test block\n\n")
     return ws, td
 

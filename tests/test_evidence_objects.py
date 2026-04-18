@@ -403,11 +403,11 @@ class TestJsonlRoundTrip:
         chain.export_jsonl(out)
 
         # Corrupt the file
-        with open(out, "r") as f:
+        with open(out, "r", encoding="utf-8") as f:
             lines = f.readlines()
         data = json.loads(lines[0])
         data["actor"] = "tampered"
-        with open(out, "w") as f:
+        with open(out, "w", encoding="utf-8") as f:
             f.write(json.dumps(data) + "\n")
 
         fresh = EvidenceChain()
@@ -424,7 +424,7 @@ class TestJsonlRoundTrip:
 
     def test_import_empty_file(self, tmp_path):
         out = str(tmp_path / "empty.jsonl")
-        with open(out, "w") as f:
+        with open(out, "w", encoding="utf-8") as f:
             f.write("")
         fresh = EvidenceChain()
         fresh.import_jsonl(out)

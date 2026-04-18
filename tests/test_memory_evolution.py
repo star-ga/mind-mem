@@ -42,7 +42,7 @@ def test_evolution_returns_history():
     ws, td = _make_workspace()
     try:
         blocks_md = os.path.join(ws, "decisions", "evo.md")
-        with open(blocks_md, "w") as f:
+        with open(blocks_md, "w", encoding="utf-8") as f:
             f.write("[EVO-001]\nType: Decision\nStatement: Original\n\n")
         result = track_evolution(ws, "EVO-001")
         assert isinstance(result, (dict, list, type(None)))

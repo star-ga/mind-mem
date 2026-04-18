@@ -131,7 +131,7 @@ class TestSnapshotRollback(unittest.TestCase):
             # Set up workspace structure
             os.makedirs(os.path.join(ws, "decisions"))
             original = os.path.join(ws, "decisions", "DECISIONS.md")
-            with open(original, "w") as f:
+            with open(original, "w", encoding="utf-8") as f:
                 f.write("# Decisions\n")
 
             # Create snapshot
@@ -139,7 +139,7 @@ class TestSnapshotRollback(unittest.TestCase):
 
             # Simulate a failed op creating a new file
             rogue_file = os.path.join(ws, "decisions", "ROGUE.md")
-            with open(rogue_file, "w") as f:
+            with open(rogue_file, "w", encoding="utf-8") as f:
                 f.write("# This should not survive rollback\n")
             self.assertTrue(os.path.exists(rogue_file))
 
@@ -156,13 +156,13 @@ class TestSnapshotRollback(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             os.makedirs(os.path.join(ws, "decisions"))
             original = os.path.join(ws, "decisions", "DECISIONS.md")
-            with open(original, "w") as f:
+            with open(original, "w", encoding="utf-8") as f:
                 f.write("original content")
 
             snap_dir = create_snapshot(ws, "test-content")
 
             # Modify file
-            with open(original, "w") as f:
+            with open(original, "w", encoding="utf-8") as f:
                 f.write("corrupted content")
 
             restore_snapshot(ws, snap_dir)
@@ -180,7 +180,7 @@ class TestSnapshotIntelligenceRestore(unittest.TestCase):
             os.makedirs(os.path.join(ws, "decisions"))
             os.makedirs(os.path.join(ws, "intelligence"))
             signals = os.path.join(ws, "intelligence", "SIGNALS.md")
-            with open(signals, "w") as f:
+            with open(signals, "w", encoding="utf-8") as f:
                 f.write("original signals")
             with open(os.path.join(ws, "decisions", "DECISIONS.md"), "w") as f:
                 f.write("# D\n")
@@ -188,7 +188,7 @@ class TestSnapshotIntelligenceRestore(unittest.TestCase):
             snap_dir = create_snapshot(ws, "test-intel")
 
             # Mutate intelligence file
-            with open(signals, "w") as f:
+            with open(signals, "w", encoding="utf-8") as f:
                 f.write("mutated signals")
 
             restore_snapshot(ws, snap_dir)
@@ -253,7 +253,7 @@ class TestFingerprintDedup(unittest.TestCase):
             )
             for fn in ["DECISIONS_PROPOSED.md", "TASKS_PROPOSED.md", "EDITS_PROPOSED.md"]:
                 path = os.path.join(ws, "intelligence", "proposed", fn)
-                with open(path, "w") as f:
+                with open(path, "w", encoding="utf-8") as f:
                     f.write(block_text if fn == "DECISIONS_PROPOSED.md" else "")
             is_dup, dup_id = check_fingerprint_dedup(ws, proposal)
             self.assertFalse(is_dup)
@@ -383,7 +383,7 @@ class TestModeGate(unittest.TestCase):
             with open(state_path) as f:
                 state = json.load(f)
             state["governance_mode"] = "propose"
-            with open(state_path, "w") as f:
+            with open(state_path, "w", encoding="utf-8") as f:
                 json.dump(state, f)
             ok, msg = apply_proposal(ws, "P-20260214-999", dry_run=False)
             self.assertFalse(ok)
@@ -407,7 +407,7 @@ class TestBacklogLimit(unittest.TestCase):
             with open(config_path) as f:
                 config = json.load(f)
             config["proposal_budget"] = {"backlog_limit": 3}
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(config, f)
 
             # Create 3 staged proposals
@@ -433,7 +433,7 @@ class TestBacklogLimit(unittest.TestCase):
             with open(config_path) as f:
                 config = json.load(f)
             config["proposal_budget"] = {"backlog_limit": 5}
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(config, f)
 
             proposed_dir = os.path.join(ws, "intelligence/proposed")
@@ -630,12 +630,12 @@ class TestMinimalSnapshot(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             src = os.path.join(td, "source.md")
             dst = os.path.join(td, "dest.md")
-            with open(src, "w") as f:
+            with open(src, "w", encoding="utf-8") as f:
                 f.write("original content")
             _safe_copy(src, dst)
             self.assertTrue(os.path.isfile(dst))
             # Modify source — dst must remain unchanged
-            with open(src, "w") as f:
+            with open(src, "w", encoding="utf-8") as f:
                 f.write("modified content")
             with open(dst) as f:
                 self.assertEqual(f.read(), "original content")
@@ -647,7 +647,7 @@ class TestMinimalSnapshot(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             src = os.path.join(td, "source.md")
             dst = os.path.join(td, "deep", "nested", "dest.md")
-            with open(src, "w") as f:
+            with open(src, "w", encoding="utf-8") as f:
                 f.write("test")
             _safe_copy(src, dst)
             self.assertTrue(os.path.isfile(dst))
@@ -679,14 +679,14 @@ class TestMinimalSnapshot(unittest.TestCase):
             decisions_path = os.path.join(ws, "decisions", "DECISIONS.md")
             sidecar_path = os.path.join(ws, "decisions", "CUSTOM.md")
 
-            with open(decisions_path, "w") as f:
+            with open(decisions_path, "w", encoding="utf-8") as f:
                 f.write("[D-001]\nStatement: Original\nStatus: active\n")
-            with open(sidecar_path, "w") as f:
+            with open(sidecar_path, "w", encoding="utf-8") as f:
                 f.write("preexisting sidecar\n")
 
             snap_dir = create_snapshot(ws, "20260217-120003", files_touched=["decisions/DECISIONS.md"])
 
-            with open(decisions_path, "w") as f:
+            with open(decisions_path, "w", encoding="utf-8") as f:
                 f.write("[D-001]\nStatement: Mutated\nStatus: active\n")
 
             restore_snapshot(ws, snap_dir)
@@ -713,7 +713,7 @@ class TestDeferredCooldown(unittest.TestCase):
             with open(state_path) as f:
                 state = json.load(f)
             state["defer_cooldown_days"] = 7
-            with open(state_path, "w") as f:
+            with open(state_path, "w", encoding="utf-8") as f:
                 json.dump(state, f)
 
             # Create a recently rejected proposal
@@ -746,7 +746,7 @@ class TestDeferredCooldown(unittest.TestCase):
             with open(state_path) as f:
                 state = json.load(f)
             state["defer_cooldown_days"] = 7
-            with open(state_path, "w") as f:
+            with open(state_path, "w", encoding="utf-8") as f:
                 json.dump(state, f)
 
             # Create an OLD rejected proposal (30 days ago)
@@ -785,7 +785,7 @@ class TestOpSupersedeDecision(unittest.TestCase):
     def test_supersede_marks_old_and_appends_new(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             dec_file = os.path.join(td, "DECISIONS.md")
-            with open(dec_file, "w") as f:
+            with open(dec_file, "w", encoding="utf-8") as f:
                 f.write("[D-20260213-001]\nStatus: active\nStatement: Old decision\n")
             new_block = "[D-20260213-002]\nStatus: active\nStatement: New decision\nSupersedes: D-20260213-001\n"
             ok, msg = _op_supersede_decision(
@@ -804,7 +804,7 @@ class TestOpSupersedeDecision(unittest.TestCase):
     def test_supersede_rejects_missing_target(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             dec_file = os.path.join(td, "DECISIONS.md")
-            with open(dec_file, "w") as f:
+            with open(dec_file, "w", encoding="utf-8") as f:
                 f.write("[D-20260213-001]\nStatus: active\n")
             ok, msg = _op_supersede_decision(
                 dec_file,
@@ -819,7 +819,7 @@ class TestOpSupersedeDecision(unittest.TestCase):
     def test_supersede_rejects_invariant(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             dec_file = os.path.join(td, "DECISIONS.md")
-            with open(dec_file, "w") as f:
+            with open(dec_file, "w", encoding="utf-8") as f:
                 f.write(
                     "[D-20260213-001]\nStatus: active\nStatement: Invariant\n"
                     "ConstraintSignatures:\n- id: CS-001\n  enforcement: invariant\n"
@@ -841,7 +841,7 @@ class TestOpReplaceRange(unittest.TestCase):
     def test_replaces_between_markers(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             filepath = os.path.join(td, "DECISIONS.md")
-            with open(filepath, "w") as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 f.write("[D-20260213-001]\nStatus: active\n<!-- START -->\nold content\n<!-- END -->\nTags: test\n")
             ok, msg = _op_replace_range(
                 filepath,
@@ -861,7 +861,7 @@ class TestOpReplaceRange(unittest.TestCase):
     def test_rejects_missing_markers(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             filepath = os.path.join(td, "DECISIONS.md")
-            with open(filepath, "w") as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 f.write("[D-20260213-001]\nStatus: active\n")
             ok, msg = _op_replace_range(
                 filepath,
@@ -885,13 +885,13 @@ class TestRollbackStatusSync(unittest.TestCase):
             init(ws)
 
             proposal_path = os.path.join(ws, "intelligence", "proposed", "DECISIONS_PROPOSED.md")
-            with open(proposal_path, "w") as f:
+            with open(proposal_path, "w", encoding="utf-8") as f:
                 f.write("[P-20260217-001]\nProposalId: P-20260217-001\nType: edit\nTargetBlock: D-20260217-001\nStatus: applied\n")
 
             receipt_ts = "20260217-120010"
             snap_dir = create_snapshot(ws, receipt_ts, files_touched=["decisions/DECISIONS.md"])
             receipt_path = os.path.join(snap_dir, "APPLY_RECEIPT.md")
-            with open(receipt_path, "w") as f:
+            with open(receipt_path, "w", encoding="utf-8") as f:
                 f.write(f"[AR-{receipt_ts}]\nProposal: P-20260217-001\nResult: applied\n")
 
             with patch(
@@ -988,7 +988,7 @@ class TestManifestRestore(unittest.TestCase):
 
             # Create a rogue file after snapshot
             rogue = os.path.join(ws, "decisions", "ROGUE.md")
-            with open(rogue, "w") as f:
+            with open(rogue, "w", encoding="utf-8") as f:
                 f.write("rogue file\n")
             self.assertTrue(os.path.exists(rogue))
 

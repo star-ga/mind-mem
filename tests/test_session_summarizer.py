@@ -228,7 +228,7 @@ class TestWriteSummary:
         ws = str(tmp_path / "ws")
         os.makedirs(ws)
         t_path = str(tmp_path / "t.jsonl")
-        with open(t_path, "w") as f:
+        with open(t_path, "w", encoding="utf-8") as f:
             f.write("fake transcript\n")
 
         msgs = _make_messages(5)
@@ -246,7 +246,7 @@ class TestWriteSummary:
         ws = str(tmp_path / "ws")
         os.makedirs(ws)
         t_path = str(tmp_path / "t.jsonl")
-        with open(t_path, "w") as f:
+        with open(t_path, "w", encoding="utf-8") as f:
             f.write("same transcript\n")
 
         msgs = _make_messages(5)
@@ -262,7 +262,7 @@ class TestWriteSummary:
         ws = str(tmp_path / "ws")
         os.makedirs(ws)
         t_path = str(tmp_path / "t.jsonl")
-        with open(t_path, "w") as f:
+        with open(t_path, "w", encoding="utf-8") as f:
             f.write("dry run transcript\n")
 
         msgs = _make_messages(5)
@@ -282,7 +282,7 @@ class TestWriteSummary:
         ws = str(tmp_path / "ws")
         os.makedirs(ws)
         t_path = str(tmp_path / "t.jsonl")
-        with open(t_path, "w") as f:
+        with open(t_path, "w", encoding="utf-8") as f:
             f.write("short\n")
 
         msgs = _make_messages(2)  # less than 3
@@ -298,7 +298,7 @@ class TestWriteSummary:
         ids = []
         for i in range(3):
             t_path = str(tmp_path / f"t{i}.jsonl")
-            with open(t_path, "w") as f:
+            with open(t_path, "w", encoding="utf-8") as f:
                 f.write(f"transcript {i}\n")
             sess_id = write_summary(ws, t_path, _make_messages(5))
             if sess_id:
@@ -316,7 +316,7 @@ class TestWriteSummary:
         ws = str(tmp_path / "ws")
         os.makedirs(ws)
         t_path = str(tmp_path / "t.jsonl")
-        with open(t_path, "w") as f:
+        with open(t_path, "w", encoding="utf-8") as f:
             f.write("signal transcript\n")
 
         write_summary(ws, t_path, _make_messages(5))
@@ -331,7 +331,7 @@ class TestWriteSummary:
         ws = str(tmp_path / "ws")
         os.makedirs(ws)
         t_path = str(tmp_path / "t.jsonl")
-        with open(t_path, "w") as f:
+        with open(t_path, "w", encoding="utf-8") as f:
             f.write("header transcript\n")
 
         write_summary(ws, t_path, _make_messages(5))
@@ -379,7 +379,7 @@ class TestEdgeCases:
         def worker(idx):
             try:
                 t_path = str(tmp_path / f"concurrent_{idx}.jsonl")
-                with open(t_path, "w") as f:
+                with open(t_path, "w", encoding="utf-8") as f:
                     f.write(f"transcript {idx}\n")
                 sid = write_summary(ws, t_path, _make_messages(5))
                 results.append(sid)
@@ -401,7 +401,7 @@ class TestEdgeCases:
     def test_empty_workspace_creates_dirs(self, mock_lock, mock_signals, tmp_path):
         ws = str(tmp_path / "brand_new_workspace")
         t_path = str(tmp_path / "t.jsonl")
-        with open(t_path, "w") as f:
+        with open(t_path, "w", encoding="utf-8") as f:
             f.write("content\n")
 
         sess_id = write_summary(ws, t_path, _make_messages(4))

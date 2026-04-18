@@ -15,7 +15,7 @@ def _make_workspace():
     os.makedirs(ws)
     init(ws)
     path = os.path.join(ws, "decisions", "speaker.md")
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write("[SPK-001]\nType: Decision\nStatement: User said this\nSpeaker: alice\n\n")
         f.write("[SPK-002]\nType: Decision\nStatement: System generated\nSpeaker: system\n\n")
     return ws, td

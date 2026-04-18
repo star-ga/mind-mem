@@ -15,7 +15,7 @@ def _make_workspace():
     os.makedirs(ws)
     init(ws)
     path = os.path.join(ws, "decisions", "tags.md")
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write("[TAG-001]\nType: Decision\nStatement: Tagged decision\nTags: api, design\n\n")
         f.write("[TAG-002]\nType: Decision\nStatement: Another tagged\nTags: performance, optimization\n\n")
     return ws, td

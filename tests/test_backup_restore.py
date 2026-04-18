@@ -37,7 +37,7 @@ class TestWAL(unittest.TestCase):
 
     def test_begin_backs_up_existing_file(self):
         target = os.path.join(self.td, "existing.md")
-        with open(target, "w") as f:
+        with open(target, "w", encoding="utf-8") as f:
             f.write("original content")
         wal = WAL(self.td)
         entry_id = wal.begin("write", target, "new content")
@@ -48,12 +48,12 @@ class TestWAL(unittest.TestCase):
 
     def test_rollback_restores_backup(self):
         target = os.path.join(self.td, "rollback_test.md")
-        with open(target, "w") as f:
+        with open(target, "w", encoding="utf-8") as f:
             f.write("original")
         wal = WAL(self.td)
         entry_id = wal.begin("write", target, "replacement")
         # Simulate the write happening
-        with open(target, "w") as f:
+        with open(target, "w", encoding="utf-8") as f:
             f.write("replacement")
         # Rollback
         result = wal.rollback(entry_id)
@@ -66,7 +66,7 @@ class TestWAL(unittest.TestCase):
         wal = WAL(self.td)
         entry_id = wal.begin("write", target, "new content")
         # Simulate the write
-        with open(target, "w") as f:
+        with open(target, "w", encoding="utf-8") as f:
             f.write("new content")
         wal.rollback(entry_id)
         self.assertFalse(os.path.isfile(target))
@@ -78,12 +78,12 @@ class TestWAL(unittest.TestCase):
 
     def test_replay_rolls_back_pending(self):
         target = os.path.join(self.td, "crash_test.md")
-        with open(target, "w") as f:
+        with open(target, "w", encoding="utf-8") as f:
             f.write("before crash")
         wal = WAL(self.td)
         wal.begin("write", target, "during crash")
         # Simulate crash: file was overwritten but WAL entry still pending
-        with open(target, "w") as f:
+        with open(target, "w", encoding="utf-8") as f:
             f.write("during crash")
         replayed = wal.replay()
         self.assertEqual(replayed, 1)
@@ -106,7 +106,7 @@ class TestWAL(unittest.TestCase):
 
     def test_commit_cleans_backup_file(self):
         target = os.path.join(self.td, "cleanup.md")
-        with open(target, "w") as f:
+        with open(target, "w", encoding="utf-8") as f:
             f.write("original")
         wal = WAL(self.td)
         entry_id = wal.begin("write", target, "new")

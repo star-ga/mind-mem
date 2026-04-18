@@ -93,7 +93,7 @@ class TestEncryptDecrypt:
 class TestFileEncryption:
     def test_encrypt_decrypt_file(self, workspace, mgr):
         path = os.path.join(workspace, "test.md")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write("# Secret Decision\nUse AES-256 for encryption.")
 
         mgr.encrypt_file(path)
@@ -111,19 +111,19 @@ class TestFileEncryption:
     def test_decrypt_in_place(self, workspace, mgr):
         path = os.path.join(workspace, "test.md")
         original = "# Original content"
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(original)
 
         mgr.encrypt_file(path)
         mgr.decrypt_file_in_place(path)
 
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             content = f.read()
         assert content == original
 
     def test_double_encrypt_noop(self, workspace, mgr):
         path = os.path.join(workspace, "test.md")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write("content")
 
         mgr.encrypt_file(path)
@@ -134,7 +134,7 @@ class TestFileEncryption:
 
     def test_is_encrypted(self, workspace, mgr):
         path = os.path.join(workspace, "test.md")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write("plain text")
 
         assert not mgr.is_encrypted(path)
@@ -143,7 +143,7 @@ class TestFileEncryption:
 
     def test_decrypt_unencrypted_returns_asis(self, workspace, mgr):
         path = os.path.join(workspace, "plain.md")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write("not encrypted")
 
         content = mgr.decrypt_file(path)
@@ -186,7 +186,7 @@ class TestKeyManagement:
 
         # Encrypt a file
         path = os.path.join(workspace, "data.md")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write("sensitive content")
         mgr.encrypt_file(path)
 

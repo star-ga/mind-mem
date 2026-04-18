@@ -25,7 +25,7 @@ class TestParseTranscript(unittest.TestCase):
 
     def _write_jsonl(self, lines):
         path = os.path.join(self.td, "session.jsonl")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             for obj in lines:
                 f.write(json.dumps(obj) + "\n")
         return path
@@ -81,7 +81,7 @@ class TestParseTranscript(unittest.TestCase):
 
     def test_skips_invalid_json_lines(self):
         path = os.path.join(self.td, "bad.jsonl")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write("{bad json\n")
             f.write(json.dumps({"role": "user", "content": "Valid"}) + "\n")
         msgs = parse_transcript(path)
@@ -102,7 +102,7 @@ class TestParseTranscript(unittest.TestCase):
 
     def test_skips_blank_lines(self):
         path = os.path.join(self.td, "blanks.jsonl")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(json.dumps({"role": "user", "content": "First"}) + "\n")
             f.write("\n")
             f.write("\n")
@@ -132,7 +132,7 @@ class TestScanTranscript(unittest.TestCase):
 
     def _write_jsonl(self, lines):
         path = os.path.join(self.td, "session.jsonl")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             for obj in lines:
                 f.write(json.dumps(obj) + "\n")
         return path

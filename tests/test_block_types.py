@@ -20,7 +20,7 @@ def _make_workspace():
         ("entities", "Entity", "ENT"),
     ]:
         path = os.path.join(ws, dir_name, "types.md")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(f"[{prefix}-001]\nType: {block_type}\nStatement: Type test {block_type}\n\n")
     return ws, td
 

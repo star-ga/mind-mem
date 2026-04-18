@@ -18,7 +18,7 @@ def ws(tmp_path):
     # Create blocks in multiple directories
     for dir_name, prefix in [("decisions", "DEC"), ("tasks", "TASK"), ("entities", "ENT")]:
         blocks_md = os.path.join(ws, dir_name, "multi.md")
-        with open(blocks_md, "w") as f:
+        with open(blocks_md, "w", encoding="utf-8") as f:
             for i in range(3):
                 f.write(f"[{prefix}-{i:03d}]\nType: {dir_name.title()[:-1]}\n")
                 f.write(f"Statement: Multi-file test for {dir_name} number {i}\n\n")

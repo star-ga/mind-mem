@@ -132,7 +132,7 @@ class TestParseFileCorruptionHandling(unittest.TestCase):
 
     def _write(self, name, content):
         path = os.path.join(self.tmpdir, name)
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(content)
         return path
 

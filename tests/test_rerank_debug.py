@@ -15,7 +15,7 @@ def _make_workspace():
     os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "rerank_test.md")
-    with open(blocks_md, "w") as f:
+    with open(blocks_md, "w", encoding="utf-8") as f:
         for i in range(5):
             f.write(f"[RR-{i:03d}]\nType: Decision\nStatement: Rerank test {i}\n\n")
     return ws, td

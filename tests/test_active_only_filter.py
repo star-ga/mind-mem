@@ -16,7 +16,7 @@ def ws(tmp_path):
     os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "active_test.md")
-    with open(blocks_md, "w") as f:
+    with open(blocks_md, "w", encoding="utf-8") as f:
         f.write("[ACT-001]\nType: Decision\nStatement: Active decision\nStatus: Active\n\n")
         f.write("[ACT-002]\nType: Decision\nStatement: Archived decision\nStatus: Archived\n\n")
         f.write("[ACT-003]\nType: Decision\nStatement: WIP decision\nStatus: WIP\n\n")

@@ -16,7 +16,7 @@ def _ws():
     os.makedirs(ws)
     init(ws)
     p = os.path.join(ws, "decisions", "conc.md")
-    with open(p, "w") as f:
+    with open(p, "w", encoding="utf-8") as f:
         for i in range(10):
             f.write(f"[CC-{i:03d}]\nType: Decision\nStatement: Concurrent test {i}\n\n")
     return ws, td

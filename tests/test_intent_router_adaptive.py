@@ -247,7 +247,7 @@ class TestPersistence:
     def test_corrupt_file_no_crash(self, workspace: str):
         """Loading corrupt JSON does not crash, just ignores."""
         path = os.path.join(workspace, "memory", "intent_router_stats.json")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write("{invalid json!!")
         r = IntentRouter(workspace=workspace)
         assert r._intent_stats == {}

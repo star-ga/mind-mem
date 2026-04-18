@@ -232,7 +232,7 @@ class TestInitWorkspace(unittest.TestCase):
     def test_does_not_overwrite(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             config_path = os.path.join(ws, "mind-mem.json")
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 json.dump({"custom": True}, f)
             init(ws)
             with open(config_path) as f:

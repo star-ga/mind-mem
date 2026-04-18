@@ -15,7 +15,7 @@ def _make_workspace():
     os.makedirs(ws)
     init(ws)
     path = os.path.join(ws, "decisions", "dated.md")
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write("[DT-001]\nType: Decision\nStatement: Recent decision\nDate: 2026-02-24\n\n")
         f.write("[DT-002]\nType: Decision\nStatement: Old decision\nDate: 2025-01-01\n\n")
     return ws, td

@@ -20,7 +20,7 @@ def _make_workspace():
     os.makedirs(ws)
     init(ws)
     blocks_md = os.path.join(ws, "decisions", "delete_test.md")
-    with open(blocks_md, "w") as f:
+    with open(blocks_md, "w", encoding="utf-8") as f:
         f.write("[DEL-001]\nType: Decision\nStatement: To be deleted\n\n")
         f.write("[DEL-002]\nType: Decision\nStatement: To keep\n\n")
     return ws, td

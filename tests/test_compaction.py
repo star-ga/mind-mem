@@ -116,7 +116,7 @@ class TestCleanupDailyLogs(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             init(td)
             old_log = os.path.join(td, "memory", "2024-01-15.md")
-            with open(old_log, "w") as f:
+            with open(old_log, "w", encoding="utf-8") as f:
                 f.write("# 2024-01-15\n\nOld daily log content.\n")
 
             actions = cleanup_daily_logs(td, days=30)
@@ -134,7 +134,7 @@ class TestCleanupDailyLogs(unittest.TestCase):
             init(td)
             today = datetime.now().strftime("%Y-%m-%d")
             log = os.path.join(td, "memory", f"{today}.md")
-            with open(log, "w") as f:
+            with open(log, "w", encoding="utf-8") as f:
                 f.write("today's log\n")
 
             actions = cleanup_daily_logs(td, days=30)
@@ -147,7 +147,7 @@ class TestCompactSignals(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             init(td)
             signals_path = os.path.join(td, "intelligence", "SIGNALS.md")
-            with open(signals_path, "w") as f:
+            with open(signals_path, "w", encoding="utf-8") as f:
                 f.write("# Captured Signals\n\n")
                 f.write("[SIG-20240101-001]\nDate: 2024-01-01\nStatus: resolved\nExcerpt: old signal\n\n---\n")
                 f.write("[SIG-20260215-001]\nDate: 2026-02-15\nStatus: pending\nExcerpt: new signal\n\n---\n")
@@ -163,7 +163,7 @@ class TestCompactSignals(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             init(td)
             signals_path = os.path.join(td, "intelligence", "SIGNALS.md")
-            with open(signals_path, "w") as f:
+            with open(signals_path, "w", encoding="utf-8") as f:
                 f.write("# Captured Signals\n\n")
                 f.write("[SIG-20240101-001]\nDate: 2024-01-01\nStatus: pending\nExcerpt: old but pending\n\n---\n")
 

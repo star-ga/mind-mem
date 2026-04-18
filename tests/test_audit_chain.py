@@ -161,13 +161,13 @@ class TestAuditChain:
 
         # Tamper with the chain file
         chain_path = chain._chain_path
-        with open(chain_path, "r") as f:
+        with open(chain_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         # Modify an entry's operation
         entry = json.loads(lines[0])
         entry["operation"] = "delete_block"
         lines[0] = json.dumps(entry) + "\n"
-        with open(chain_path, "w") as f:
+        with open(chain_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
 
         ok, errors = chain.verify()
@@ -181,10 +181,10 @@ class TestAuditChain:
 
         # Delete middle entry
         chain_path = chain._chain_path
-        with open(chain_path, "r") as f:
+        with open(chain_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         del lines[1]
-        with open(chain_path, "w") as f:
+        with open(chain_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
 
         ok, errors = chain.verify()
@@ -258,7 +258,7 @@ class TestAuditChain:
         count = chain.export(export_path)
         assert count == 2
 
-        with open(export_path, "r") as f:
+        with open(export_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         assert len(lines) == 3  # header + 2 entries
         header = json.loads(lines[0])
@@ -281,7 +281,7 @@ class TestAuditChain:
             payload={"secret": "my-api-key-12345"},
         )
         # Verify raw payload is NOT in the chain file
-        with open(chain._chain_path, "r") as f:
+        with open(chain._chain_path, "r", encoding="utf-8") as f:
             content = f.read()
         assert "my-api-key-12345" not in content
         assert "secret" not in content

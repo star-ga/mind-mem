@@ -16,7 +16,7 @@ def _ws(n=100):
     os.makedirs(ws)
     init(ws)
     p = os.path.join(ws, "decisions", "large.md")
-    with open(p, "w") as f:
+    with open(p, "w", encoding="utf-8") as f:
         for i in range(n):
             f.write(f"[LG-{i:04d}]\nType: Decision\n")
             f.write(f"Statement: Large workspace block {i} about topic {chr(65 + i % 26)}\n\n")
