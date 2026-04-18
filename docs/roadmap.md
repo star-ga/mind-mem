@@ -4,7 +4,49 @@
 > in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
 > full milestone breakdown.
 
-## v3.1.1 (Current — released 2026-04-15)
+## v3.1.7 (Current — released 2026-04-18)
+
+Static-typing cleanup. The 39 pre-existing mypy errors across 14
+modules are resolved (explicit constructor casts, corrected
+argument types on two call sites, and narrowed annotations where
+`Any` was leaking into the signature). `typecheck` is now a real
+gate in CI. GitHub repository **About** refreshed to match v3.1.x
+reality (57 MCP tools, 17 native AI-client integrations, 4B local
+model, zero core deps).
+
+## v3.1.6 (Released 2026-04-18)
+
+Range-pin `onnxruntime`, `tokenizers`, `sentence-transformers` in
+the `[test]` extra (the prior `1.24.2` pin was not resolvable on
+macOS wheels); `TemporaryDirectory(ignore_cleanup_errors=True)`
+across every test to avoid Windows `PermissionError` on SQLite
+handles still open at teardown.
+
+## v3.1.5 (Released 2026-04-18)
+
+Restored the optional-extras visibility for tests that import
+`onnxruntime` / `tokenizers` / `sentence-transformers` directly.
+Stale `demo.gif` removed from the README pending a v3.1.x refresh.
+
+## v3.1.4 (Released 2026-04-18)
+
+**Mistral Vibe CLI** added as a first-class client (`mm install-all`
+now wires 17 clients). Fixes the Windows path-separator round-trip
+in `agent_bridge.VaultBridge.scan`. Adds `sqlite-vec` to the
+`[test]` extra so CI test matrices install it.
+
+## v3.1.3 (Released 2026-04-18)
+
+CI-layer patch release: ruff lint + format cleared across the repo,
+`fastmcp` added to the `[test]` extra. No runtime change.
+
+## v3.1.2 (Released 2026-04-18)
+
+Docs + metadata alignment to v3.1.x. README badges corrected
+(`tests-3610`, `MCP_tools-57`), stale "release local (no Actions)"
+badge removed. `CLAUDE.md` and `docs/roadmap.md` refreshed.
+
+## v3.1.1 (Released 2026-04-15)
 
 Patch release. Claude Code hook-installer fix: `install claude-code`
 now writes the required nested hook shape and migrates legacy flat
