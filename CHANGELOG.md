@@ -2,6 +2,67 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.1.8 (2026-04-18)
+
+**CI parity + cross-platform stability + v3.2.0 architectural
+prep.** All 16 matrix jobs (Linux/macOS/Windows × Python
+3.10/3.12/3.13/3.14) green with zero warnings.
+
+### Fixed
+
+- **`tests/test_niah.py` marked `@pytest.mark.stress`.** The
+  250-test parametrised NIAH benchmark (5 sizes × 5 depths × 10
+  needles) takes ~10 s per test — 40+ minutes total — and was
+  the actual cause of the CI hangs across the v3.1.4 → v3.1.7
+  release window. The default `pytest` invocation now skips it
+  (matches the existing `addopts = "-m 'not stress'"` config).
+  Run explicitly with `pytest -m stress tests/test_niah.py` or
+  via the dedicated benchmark workflow.
+- **`tests/test_enums.py::test_str_enum_serialises_as_string`** —
+  removed the f-string assertion whose result diverges between
+  Python 3.10 and 3.11+ (PEP 663). Now tests the stable contract:
+  `isinstance(_, str)`, equality with the literal, `.value`
+  round-trip, and `json.dumps`.
+- **`tests/test_hook_installer_force_preserves_siblings.py`** now
+  patches `USERPROFILE` in addition to `HOME` so
+  `os.path.expanduser('~')` redirects to the temp tree on Windows
+  too.
+
+### Added
+
+- **`src/mind_mem/validate.sh`** ships a runtime deprecation
+  warning to stderr at every invocation; opt-out via
+  `MIND_MEM_VALIDATE_BASH=1`. The bash engine is on track for
+  replacement by a Python forwarder in v3.2.0; v3.1.8 makes the
+  migration visible to anyone scripting the bash entry.
+- **`tests/test_validate_sh_deprecation.py`** pins the warning
+  text and the env-var opt-out semantics. Skipped on Windows
+  (validate.sh requires bash).
+- **`docs/v3.2.0-mcp-decomposition-plan.md`** — full migration
+  plan for §1.2 of `AUDIT_FINDINGS_FOR_CLAUDE.md`. mcp_server.py
+  (4,604 LOC, 57 tools, 8 resources) decomposes into 14 tool
+  modules + 8 resource modules + 6 infra modules. Per-PR
+  migration order with backward-compat shim removed in v4.0.
+- **`docs/v3.2.0-blockstore-routing-plan.md`** — refactor plan
+  for §1.4. Adds `write_block` / `delete_block` / `snapshot` /
+  `restore` / `lock` to the BlockStore protocol; the
+  `MarkdownBlockStore` keeps current behaviour bit-identically.
+  PostgresBlockStore sketched with schema + transactional
+  restore + LISTEN/NOTIFY invalidation.
+- **`docs/v3.2.0-atomicity-scope-plan.md`** — fix for §2.2.
+  Subdivides `maintenance/` into `maintenance/append-only/`
+  (snapshot-excluded) + `maintenance/tracked/` (snapshot-
+  included) so multi-stage applies that crash mid-migration
+  don't leave behavioural state files out of sync with the
+  rolled-back corpus.
+
+### Changed
+
+- **`.github/workflows/ci.yml`** — concurrency group now cancels
+  superseded runs on the same ref so a chain of fast-follow
+  pushes doesn't accumulate zombie in-progress runs the GitHub
+  API later refuses to cancel.
+
 ## 3.1.7 (2026-04-18)
 
 **Exhaustive type-check cleanup across the source tree.** Zero
