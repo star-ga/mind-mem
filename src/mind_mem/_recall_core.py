@@ -686,12 +686,13 @@ def recall(
             seeds = results if hop == 0 else [{"_id": nid, "score": ns} for nid, ns in neighbor_scores.items() if nid not in score_by_id]
             hop_added = 0
             for r in seeds:
-                rid = r["_id"]
+                rid = str(r["_id"])
                 neighbors = xref_graph.get(rid, set())
                 for neighbor_id in neighbors:
                     if hop_added >= MAX_GRAPH_NEIGHBORS_PER_HOP:
                         break
-                    boost = r["score"] * decay
+                    score_val = r["score"]
+                    boost = float(score_val) * decay  # type: ignore[arg-type]
                     if neighbor_id not in score_by_id:
                         neighbor_scores[neighbor_id] = neighbor_scores.get(neighbor_id, 0) + boost
                         hop_added += 1
