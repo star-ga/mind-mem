@@ -743,7 +743,40 @@ Close the production-readiness gap. Everything local-first but horizontal-ready.
 - [ ] **CLI debug visualization** — `mm inspect <block_id>` (full block + provenance tree), `mm explain <query>` (retrieval trace: BM25 score → vector score → RRF fusion → rerank), `mm trace --live` (stream last N MCP calls with OTel span data)
 - [ ] **Config schema additions** — `storage.{adapter,url,pool_size,replicas}`, `api.{rest,grpc,auth}`, `observability.{otel_endpoint,prom_port}`, `cache.{redis_url,ttl_seconds}` sections
 
-**Estimated:** ~800 lines storage adapter + ~600 lines REST + ~400 lines JS SDK + deploy artifacts. New optional extras: `mind-mem[postgres]`, `mind-mem[api]`, `mind-mem[otel]`.
+### Structural-debt cleanup (from the 2026-04-18 audit)
+
+Four code-health items surfaced by the architectural audit
+(`AUDIT_FINDINGS_FOR_CLAUDE.md`). Scoped into v3.2.0 because each is
+a prerequisite for the production-deployment work above:
+
+- [ ] **Decompose `src/mind_mem/mcp_server.py`** — the file is ~158 KB
+  and houses the bodies of ~all 57 MCP tools. Break it into
+  domain-scoped modules (`tools_recall.py`, `tools_governance.py`,
+  `tools_snapshot.py`, `tools_graph.py`, etc.) and keep
+  `mcp_server.py` as a thin dispatcher. Unblocks the tool-surface
+  reduction work above and makes per-tool testing tractable.
+- [ ] **Centralize task-status literals into an `enums.py`** — the
+  strings `"todo" | "doing" | "blocked" | "done" | "canceled"` are
+  duplicated across eight files (`sqlite_index.py`, `validate_py.py`,
+  `_recall_core.py`, `intel_scan.py`, `recall_vector.py`,
+  `_recall_constants.py`, `capture.py`, and the `validate.sh` bash
+  mirror). Extract to a `TaskStatus(str, Enum)`; migrate each call
+  site in a single coordinated patch.
+- [ ] **Unify validation: deprecate `validate.sh` in favour of
+  `validate_py.py`** — the two engines enforce the same SPEC.md
+  invariants in parallel; risk is "enforcement drift" where one
+  accepts what the other rejects. Audit SPEC.md citations, ensure
+  `validate_py.py` covers every bash rule, then mark the shell
+  script as deprecated + wrap it as a subprocess shim that defers
+  to Python for the actual checks.
+- [ ] **Route `apply_engine.py` writes through the `BlockStore`
+  protocol** — today the apply engine performs atomic markdown
+  writes and file-lock acquisition directly. SPEC.md requires every
+  write to go through `BlockStore`. Refactor to call `BlockStore`
+  methods so the Postgres adapter (above) works without a second
+  engine-level port.
+
+**Estimated:** ~800 lines storage adapter + ~600 lines REST + ~400 lines JS SDK + ~1200 lines structural-debt refactor + deploy artifacts. New optional extras: `mind-mem[postgres]`, `mind-mem[api]`, `mind-mem[otel]`.
 
 ## v3.3.0 — Reasoning-Grade Retrieval (1–2 months)
 
