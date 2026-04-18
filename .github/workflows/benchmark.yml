@@ -25,6 +25,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[test,benchmark]"
 
+      - name: Run NIAH benchmark suite (250 tests)
+        run: |
+          # Marked @pytest.mark.stress in v3.1.8 to keep the default
+          # unit suite fast (each test is ~10s; 250 tests = 40+ min).
+          # Benchmark workflow is the right home for it.
+          python -m pytest tests/test_niah.py -m stress -v --tb=short
+
       - name: Run benchmark suite
         run: |
           python -m pytest tests/ -k "benchmark or perf" \

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 466 | **Est. tokens:** ~964,444
-**Generated:** 2026-04-18 13:25 UTC
+**Files:** 466 | **Est. tokens:** ~964,528
+**Generated:** 2026-04-18 13:26 UTC
 
 ## Token Budget Guide
 
@@ -31,7 +31,7 @@
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 9 | ~3,189 |
+| `.github/workflows/` | 9 | ~3,273 |
 | `hooks/` | 3 | ~801 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -165,7 +165,7 @@
 - `SECURITY_CONTACTS.md` (~124 tok, small) — Security Contacts
 ### `.github/workflows/`
 
-- `benchmark.yml` (~651 tok, large) — name: Benchmark
+- `benchmark.yml` (~735 tok, large) — name: Benchmark
 - `ci.yml` (~813 tok, large) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
