@@ -667,13 +667,70 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
 - [x] **`mind-mem.json` defaults** — `extraction.model` updated from `mind-mem:7b` → `mind-mem:4b`, `backend` from `auto` → `ollama` (explicit)
 - [x] **Docs alignment** — 11 audit issues fixed: tool count 54 → 57 in nine locations, "Mind-Mem:7B" → "mind-mem:4b" heading, new §Extraction (LLM Backend) in `docs/configuration.md`, `--no-mcp` flag documented, `install_mcp_config()` public API documented, env vars section updated
 
+## v3.1.1 — Claude Code Hook-Install Fix ✅ Released 2026-04-15
+
+Patch release. Two bugs in `mm install claude-code` that silently
+produced hook entries Claude Code rejected at runtime.
+
+- [x] **`hook_installer._merge_claude_hooks`** writes the required
+  nested shape `{"matcher": "", "hooks": [{"type": "command",
+  "command": "..."}]}` instead of the bare `{"command": "..."}`
+  shape. Auto-detects and migrates pre-3.1.1 legacy flat entries
+  in-place on re-install — operators who ran earlier versions get
+  upgraded without duplicates.
+- [x] **`SessionStart` hook** command changed from
+  `mm inject --agent claude-code --workspace <X>` (silently failed —
+  `mm inject` requires a positional query the hook cannot supply) to
+  `mm status`. `mm inject-on-start` is planned as a future
+  hook-native subcommand.
+- [x] **`Stop` hook** command changed from `mm vault status` (not a
+  shipped subcommand — `mm vault` only has `{scan, write}`) to
+  `mm status`.
+
+## v3.1.2 — Docs + Metadata Alignment ✅ Released 2026-04-18
+
+No code changes. Publishes a clean v3.1.x representation to users who
+read the repo, the PyPI page, or the skill files.
+
+- [x] **README badges** — corrected `tests-3444` → `tests-3610` and
+  `MCP_tools-54` → `MCP_tools-57` (verified via
+  `pytest --collect-only` and `@mcp.tool` decorator count). Removed
+  stale "release local (no Actions)" badge — GitHub Actions is
+  re-enabled on the repository.
+- [x] **CLAUDE.md refresh** — v1.9.1 → v3.1.2 header. Architecture
+  section now reflects current subsystems: at-rest encryption, tier
+  decay, governance alerting, audit-integrity patterns,
+  `mind-mem-4b` local model, native-MCP integration for 16 clients.
+- [x] **docs/roadmap.md rewrite** — v3.1.1 is "current" instead of
+  the stale v2.0.0b1 line; shipped vs upcoming separated cleanly.
+- [x] **docs/benchmarks.md clarification** — LoCoMo snapshot
+  predates v3.x and remains representative; refreshed benchmark
+  artifact planned for next release.
+- [x] **docs/client-integrations.md** — documents the v3.1.1 hook
+  fix and the pre-3.1.1 auto-migration on re-install.
+- [x] **Skill file** — test count 2180 → 3610 and MCP tool
+  inventory 19 → 57 in
+  `.agents/skills/mind-mem-development/SKILL.md`.
+- [x] **Release pipeline** — Actions re-enabled, OIDC trusted
+  publishing working end-to-end via `.github/workflows/release.yml`
+  on tag push `v*` (first fully automated release since account-wide
+  Actions disabling).
+
 ## v3.2.0 — Production Deployment (2–4 weeks)
 
 Close the production-readiness gap. Everything local-first but horizontal-ready. No changes to the retrieval pipeline; all new work is adapters + gateway.
 
 - [ ] **Postgres storage adapter** — `src/mind_mem/storage/postgres_adapter.py` implementing `BlockStore` protocol; reuse the existing `block_store.py` interface so the retrieval engine sees the same API
 - [ ] **Storage factory** — `src/mind_mem/storage/__init__.py` selects adapter from `mind-mem.json` `storage.adapter` key (`"sqlite"` | `"postgres"`); `connection_manager.py` accepts adapter type + pool size
-- [ ] **REST API layer** — `src/mind_mem/api/rest.py` (FastAPI); endpoints mirror the 57 MCP tools; OIDC/JWT auth in `src/mind_mem/api/auth.py`; `mm serve` CLI command to launch it
+- [ ] **MCP tool-surface reduction (57 → ~20)** — consolidate
+  recall-family tools into a single `recall` with explicit modes
+  (`hybrid`, `vector`, `bm25`, `similar`, `rerank`); fold
+  `propose_update` + `approve_apply` + `rollback_proposal` into one
+  `staged_change` flow with a `phase` argument; move the remaining
+  tools behind a `*/advanced` namespace gated by a config flag. Goal:
+  agent context windows stay tight and tool-selection reliability
+  improves without losing capability. Tracked in issue [#501].
+- [ ] **REST API layer** — `src/mind_mem/api/rest.py` (FastAPI); endpoints mirror the reduced MCP tool set (with advanced tools behind a flag); OIDC/JWT auth in `src/mind_mem/api/auth.py`; `mm serve` CLI command to launch it
 - [ ] **JS/TS SDK + Go SDK** — `sdk/js/` (fetch wrapper) and `sdk/go/` (standard-library client); both match the Python SDK surface
 - [ ] **Dockerfile + docker-compose** — `deploy/docker/Dockerfile`, `deploy/docker-compose.yml` with mind-mem + pgvector + Ollama; one-command `make up`
 - [ ] **One-command installer** — `curl -sSL install.mind-mem.sh | bash`
@@ -704,7 +761,7 @@ Close the retrieval-quality gap and widen the governance moat. All additive — 
 
 ## v4.0.0 — Platform Scale (production)
 
-Horizontal scaling, multi-tenant isolation, and edge deployment. This version turns mind-mem from a library into a platform.
+Horizontal scaling, multi-tenant isolation, and edge deployment. This version turns mind-mem from a library into a platform. The multi-tenancy thread is also tracked as issue [#505].
 
 - [ ] **Sharded Postgres (Citus)** — `src/mind_mem/storage/sharded_pg.py`; shard by `namespace_id` with consistent hashing; cross-shard recall merging
 - [ ] **Replication + consensus for governance** — Raft log wrapper around `audit_chain.py`; strong consistency for governance writes, eventual consistency for recall reads
