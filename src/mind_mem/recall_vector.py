@@ -544,6 +544,15 @@ class VectorBackend(RecallBackend):
 
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
+        # Loadable extensions are not enabled on every Python build — most
+        # notably the python.org macOS installer ships without
+        # `--enable-loadable-sqlite-extensions`. Degrade gracefully when
+        # `enable_load_extension` is unavailable; callers already fall
+        # through to BM25-only recall when the vector backend can't init.
+        if not hasattr(conn, "enable_load_extension"):
+            raise RuntimeError(
+                "sqlite was compiled without loadable extensions — vector backend unavailable"
+            )
         conn.enable_load_extension(True)
         sqlite_vec.load(conn)
         conn.enable_load_extension(False)
