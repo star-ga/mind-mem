@@ -2,6 +2,43 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.1.7 (2026-04-18)
+
+**Exhaustive type-check cleanup across the source tree.** Zero
+runtime-behavior change. Describes only the actions taken — CI
+outcome will be visible on the release run.
+
+### Fixed
+
+- **mypy now reports zero errors across 121 source files.** The
+  pre-existing 39-error baseline is down to 0. Fixes touch 14
+  modules and are individually minimal: wrap `Any`-typed returns
+  in explicit constructors (`int(...)`, `str(...)`, `bool(...)`,
+  `float(...)`), introduce correctly-typed intermediates, fix one
+  genuine API call-site bug (`VectorBackend(workspace=..., config=...)`
+  no longer type-checks against the 1-arg constructor — rewritten
+  to pass workspace inside the config dict), fix a structlog
+  kwarg collision in `alerting.LogSink.send` (renamed `event=`
+  kwarg to `alert_event=` so the positional `event` arg wins),
+  retype `ChangeStream._subs` to `list[_Subscription | None]`
+  since the code stores `None` to preserve subscription-id
+  stability, add explicit `Callable[[], list[Any]]` type to the
+  `single_pass` dispatch map in `dream_cycle.main`, and replace a
+  private-module attribute reference with a typed getattr in
+  `mcp_server`.
+- **GitHub repository About** updated. The description no longer
+  says "19 MCP tools, co-retrieval graph" — it now reflects
+  v3.1.x reality: 57 MCP tools, 17 native AI-client integrations,
+  full governance stack, optional 4B local model.
+
+### Operations
+
+- Local preflight before this release (all exit 0, zero warnings):
+  `python3 -m ruff check src/ tests/`,
+  `python3 -m ruff format --check src/ tests/`,
+  `python3 -m mypy src/ --ignore-missing-imports`,
+  targeted pytest sanity on previously-failing modules.
+
 ## 3.1.6 (2026-04-18)
 
 **Two fixes uncovered by the v3.1.5 CI run.** Outcomes will be

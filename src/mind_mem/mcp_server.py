@@ -971,7 +971,8 @@ def build_core(namespace: str, version: str, filename: str = "") -> str:
     if os.path.isfile(kg_file):
         kg = KnowledgeGraph(kg_file)
         try:
-            for e in kg.edges_from("__all__") if False else []:
+            fallback_edges: list[Any] = []
+            for e in kg.edges_from("__all__") if False else fallback_edges:
                 edges.append(e.as_dict())
             # Pull all edges regardless of subject: walk the DB directly.
             rows = kg._conn.execute(
@@ -2179,7 +2180,7 @@ def list_contradictions() -> str:
         suggestions = AutoResolver(ws).suggest_resolutions()
         by_id = {s.contradiction_id: s for s in suggestions}
         for res in resolutions:
-            sug = by_id.get(res.get("contradiction_id"))
+            sug = by_id.get(str(res.get("contradiction_id", "")))
             merged = dict(res)
             if sug is not None:
                 merged["confidence_score"] = sug.confidence_score
@@ -3655,9 +3656,9 @@ def memory_health() -> str:
     import struct as _struct_mod
 
     try:
-        from mind_mem.recall_vector import _index_path
+        from mind_mem import recall_vector as _rv
 
-        vec_path = _index_path(ws)
+        vec_path = _rv._index_path(ws)  # type: ignore[attr-defined]
         if os.path.isfile(vec_path):
             with open(vec_path, "rb") as f:
                 header = f.read(8)

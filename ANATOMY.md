@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 457 | **Est. tokens:** ~974,863
-**Generated:** 2026-04-18 08:25 UTC
+**Files:** 456 | **Est. tokens:** ~949,558
+**Generated:** 2026-04-18 08:44 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~87,438 |
+| `./` | 26 | ~61,967 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 32 | ~35,992 |
@@ -43,8 +43,8 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~441 |
-| `src/mind_mem/` | 111 | ~388,496 |
-| `src/mind_mem/skill_opt/` | 11 | ~13,458 |
+| `src/mind_mem/` | 111 | ~388,620 |
+| `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 176 | ~360,664 |
 | `tests/integration/` | 2 | ~1,436 |
@@ -54,7 +54,6 @@
 
 ### `./`
 
-- `CHANGELOG.md` (~25471 tok, huge) — Changelog
 - `CLAUDE.md` (~1028 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
@@ -232,7 +231,7 @@
 
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
 - `agent_bridge.py` (~3567 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `alerting.py` (~2407 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `alerting.py` (~2411 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `apply_engine.py` (~15651 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~4167 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
 - `auto_resolver.py` (~3194 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
@@ -248,7 +247,7 @@
 - `capture.py` (~3683 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
 - `category_distiller.py` (~6264 tok, huge) — mind-mem Category Distiller — auto-generates thematic summary files from memory blocks.
 - `causal_graph.py` (~3956 tok, huge) — mind-mem Temporal Causal Graph — directed dependency tracking with staleness.
-- `change_stream.py` (~1551 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `change_stream.py` (~1553 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_version.py` (~622 tok, large) — Version consistency checker for mind-mem.
 - `coding_schemas.py` (~2127 tok, huge) — mind-mem Coding-Native Memory Schemas.
 - `cognitive_forget.py` (~2667 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -262,20 +261,20 @@
 - `corpus_registry.py` (~262 tok, medium) — Central corpus path registry for mind-mem.
 - `cron_runner.py` (~1846 tok, huge) — mind-mem Cron Runner — single entry point for all periodic jobs. Zero external deps.
 - `cross_encoder_reranker.py` (~749 tok, large) — mind-mem Optional Cross-Encoder Reranker.
-- `dedup.py` (~4589 tok, huge) — mind-mem 4-layer deduplication filter for search results.
-- `dream_cycle.py` (~8809 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
+- `dedup.py` (~4593 tok, huge) — mind-mem 4-layer deduplication filter for search results.
+- `dream_cycle.py` (~8852 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
 - `drift_detector.py` (~4365 tok, huge) — mind-mem Semantic Belief Drift Detection.
 - `encryption.py` (~3115 tok, huge) — mind-mem Encryption at Rest — optional AES-256 encryption for memory blocks.
 - `entity_ingest.py` (~3220 tok, huge) — mind-mem Entity Ingestion — regex-based entity extraction. Zero external deps.
 - `error_codes.py` (~1751 tok, huge) — mind-mem Error Codes — structured error classification.
-- `evidence_objects.py` (~5829 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `evidence_objects.py` (~5859 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `evidence_packer.py` (~3267 tok, huge) — Deterministic evidence packer for Mind-Mem.
-- `extraction_feedback.py` (~1168 tok, large) — mind-mem Extraction Quality Feedback Tracker.
+- `extraction_feedback.py` (~1177 tok, large) — mind-mem Extraction Quality Feedback Tracker.
 - `extractor.py` (~6597 tok, huge) — mind-mem Entity & Fact Extractor (Regex NER-lite). Zero external deps.
 - `field_audit.py` (~3103 tok, huge) — mind-mem Per-Field Mutation Audit — tracks individual field changes.
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
 - `governance_gate.py` (~2009 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hash_chain_v2.py` (~5511 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~9305 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hybrid_recall.py` (~4861 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -285,18 +284,18 @@
 - `intent_router.py` (~3106 tok, huge) — mind-mem Intent Router — 9-type adaptive query intent classification.
 - `interaction_signals.py` (~4278 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kalman_belief.py` (~4219 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `knowledge_graph.py` (~5307 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `knowledge_graph.py` (~5308 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1183 tok, large) — # Copyright 2026 STARGA, Inc.
-- `llm_extractor.py` (~4535 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
+- `llm_extractor.py` (~4538 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
 - `llm_noise_profile.py` (~2339 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mcp_entry.py` (~217 tok, medium) — Thin entry point for mind-mem-mcp console script."""
 - `memory_mesh.py` (~1903 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `memory_tiers.py` (~4912 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `memory_tiers.py` (~4934 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `merkle_tree.py` (~3354 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mind_ffi.py` (~5094 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~4752 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~4757 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mrs.py` (~1604 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `multi_modal.py` (~1659 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `namespaces.py` (~3560 tok, huge) — mind-mem Multi-Agent Namespace & ACL Engine. Zero external deps.
@@ -327,7 +326,7 @@
 - `session_summarizer.py` (~2885 tok, huge) — mind-mem Session Summarizer. Zero external deps.
 ### `src/mind_mem/skill_opt/`
 
-- `adapters.py` (~2195 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `adapters.py` (~2237 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `analyzer.py` (~1145 tok, large) — # Copyright 2026 STARGA, Inc.
 - `config.py` (~925 tok, large) — # Copyright 2026 STARGA, Inc.
 - `fleet_bridge.py` (~1364 tok, large) — # Copyright 2026 STARGA, Inc.

@@ -150,7 +150,7 @@ def _openai_compatible_available(base_url: str) -> bool:
     try:
         req = urllib.request.Request(f"{base_url}/models", method="GET")
         with urllib.request.urlopen(req, timeout=2) as resp:
-            return resp.status == 200
+            return bool(resp.status == 200)
     except (OSError, urllib.error.URLError, urllib.error.HTTPError):
         return False
 
@@ -281,7 +281,7 @@ def _query_transformers(prompt: str, model: str) -> str:
     with torch.no_grad():
         out = m.generate(**enc, max_new_tokens=512, do_sample=False)
     new_tokens = out[0][enc["input_ids"].shape[1] :]
-    return tok.decode(new_tokens, skip_special_tokens=True)
+    return str(tok.decode(new_tokens, skip_special_tokens=True))
 
 
 def _query_llm(prompt: str, model: str, backend: str = "auto") -> str:

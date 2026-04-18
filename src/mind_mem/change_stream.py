@@ -102,7 +102,7 @@ class ChangeStream:
             raise ValueError("max_queue_depth must be >= 1")
         self._max_depth = int(max_queue_depth)
         self._lock = threading.RLock()
-        self._subs: list[_Subscription] = []
+        self._subs: list[_Subscription | None] = []
         self._published = 0
         self._delivered = 0
         self._dropped = 0

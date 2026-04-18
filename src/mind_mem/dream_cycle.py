@@ -20,8 +20,10 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Any
 
 from .observability import get_logger, metrics, timed
 
@@ -190,8 +192,8 @@ _DATE_FILE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\.md$")
 def _extract_slug(m: re.Match, source: str) -> str | None:
     """Extract and validate a slug from a regex match."""
     if source == "github_repo":
-        return m.group(2).lower().rstrip(".")
-    slug = m.group(1).lower() if m.lastindex else m.group(0).lower()
+        return str(m.group(2)).lower().rstrip(".")
+    slug = str(m.group(1)).lower() if m.lastindex else str(m.group(0)).lower()
     if source == "local_project" and (slug in _IGNORE_DIRS or len(slug) < 3):
         return None
     return slug
@@ -835,8 +837,9 @@ def pass_auto_repair(
     for candidate in report.consolidation_candidates:
         if promoted >= max_promotions:
             break
-        entity_id = _promote_to_compiled_truth(workspace, candidate)
-        if entity_id:
+        promoted_entity_id = _promote_to_compiled_truth(workspace, candidate)
+        if promoted_entity_id:
+            entity_id = promoted_entity_id
             actions.append(
                 RepairAction(
                     action_type="truth_promoted",
@@ -1024,7 +1027,7 @@ def main() -> None:
     print()
 
     if args.single_pass:
-        dispatch = {
+        dispatch: dict[str, Callable[[], list[Any]]] = {
             "entity_discovery": lambda: pass_entity_discovery(ws, lookback_days=args.lookback_days),
             "citation_repair": lambda: pass_citation_repair(ws),
             "stale_detection": lambda: pass_stale_detection(ws, stale_days=args.stale_days),

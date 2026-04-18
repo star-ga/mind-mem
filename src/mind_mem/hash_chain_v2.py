@@ -226,7 +226,7 @@ class HashChainV2:
         """Total number of entries in the chain."""
         with self._connect() as conn:
             row = conn.execute("SELECT COUNT(*) FROM hash_chain").fetchone()
-            return row[0]
+            return int(row[0])
 
     def append(
         self,

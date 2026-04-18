@@ -372,9 +372,9 @@ class TierManager:
                     return None
                 # row may be sqlite3.Row or tuple — pick the single column
                 try:
-                    return row["updated_at"]
+                    return str(row["updated_at"]) if row["updated_at"] is not None else None
                 except (IndexError, KeyError, TypeError):
-                    return row[0]
+                    return str(row[0]) if row[0] is not None else None
             except sqlite3.Error:
                 return None
 
@@ -488,7 +488,7 @@ class TierManager:
             return None
 
     def _satisfies_policy(self, meta: dict, policy: TierPolicy) -> bool:
-        return (
+        return bool(
             meta["access_count"] >= policy.min_access_count
             and meta["age_hours"] >= policy.min_age_hours
             and meta["confirmations"] >= policy.min_confirmations

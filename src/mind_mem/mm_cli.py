@@ -125,7 +125,8 @@ def _cmd_install_all(args: argparse.Namespace) -> int:
         agents=agents,
         include_mcp=not getattr(args, "no_mcp", False),
     )
-    summary = {
+    errored = sum(1 for r in results if "error" in r)
+    summary: dict[str, Any] = {
         "workspace": ws,
         "agents": agents if agents is not None else detect_installed_agents(ws),
         "results": results,
@@ -133,12 +134,12 @@ def _cmd_install_all(args: argparse.Namespace) -> int:
             "written": sum(1 for r in results if r.get("written")),
             "merged": sum(1 for r in results if r.get("merged")),
             "skipped": sum(1 for r in results if r.get("skipped")),
-            "errored": sum(1 for r in results if "error" in r),
+            "errored": errored,
             "total": len(results),
         },
     }
     print(json.dumps(summary, indent=2))
-    return 0 if summary["summary"]["errored"] == 0 else 1
+    return 0 if errored == 0 else 1
 
 
 def _cmd_detect(args: argparse.Namespace) -> int:
@@ -511,7 +512,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    return int(args.func(args))
 
 
 if __name__ == "__main__":  # pragma: no cover

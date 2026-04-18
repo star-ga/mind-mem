@@ -27,27 +27,30 @@ def _parse_yaml_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     for line in raw.splitlines():
         if ":" not in line:
             continue
-        key, _, val = line.partition(":")
+        key, _, raw_val = line.partition(":")
         key = key.strip()
-        val = val.strip()
-        if val.startswith('"') and val.endswith('"'):
-            val = val[1:-1]
-        elif val.startswith("'") and val.endswith("'"):
-            val = val[1:-1]
-        elif val.startswith("[") and val.endswith("]"):
-            val = _parse_inline_list(val)
-        elif val.startswith("{"):
+        raw_val = raw_val.strip()
+        parsed: Any
+        if raw_val.startswith('"') and raw_val.endswith('"'):
+            parsed = raw_val[1:-1]
+        elif raw_val.startswith("'") and raw_val.endswith("'"):
+            parsed = raw_val[1:-1]
+        elif raw_val.startswith("[") and raw_val.endswith("]"):
+            parsed = _parse_inline_list(raw_val)
+        elif raw_val.startswith("{"):
             import json
 
             try:
-                val = json.loads(val)
+                parsed = json.loads(raw_val)
             except (json.JSONDecodeError, ValueError):
-                pass
-        elif val.lower() in ("true", "false"):
-            val = val.lower() == "true"
-        elif re.match(r"^-?\d+$", val):
-            val = int(val)
-        meta[key] = val
+                parsed = raw_val
+        elif raw_val.lower() in ("true", "false"):
+            parsed = raw_val.lower() == "true"
+        elif re.match(r"^-?\d+$", raw_val):
+            parsed = int(raw_val)
+        else:
+            parsed = raw_val
+        meta[key] = parsed
     return meta, body
 
 

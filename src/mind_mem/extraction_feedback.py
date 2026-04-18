@@ -100,7 +100,7 @@ class ExtractionFeedback:
         s = self._stats.get(key)
         if not s or s["total"] == 0:
             return 0.0
-        return s["empty"] / s["total"]
+        return float(s["empty"]) / float(s["total"])
 
     def get_avg_output(self, model: str, operation: str = "entities") -> float:
         """Average number of items extracted per call."""
@@ -108,7 +108,7 @@ class ExtractionFeedback:
         s = self._stats.get(key)
         if not s or s["total"] == 0:
             return 0.0
-        return s["total_output"] / s["total"]
+        return float(s["total_output"]) / float(s["total"])
 
     def should_skip_extraction(self, model: str, operation: str = "entities") -> bool:
         """
@@ -119,7 +119,7 @@ class ExtractionFeedback:
         s = self._stats.get(key)
         if not s or s["total"] < 10:
             return False
-        return (s["empty"] / s["total"]) > 0.8
+        return bool((s["empty"] / s["total"]) > 0.8)
 
     def summary(self) -> dict[str, Any]:
         """Get summary stats for logging/debugging."""

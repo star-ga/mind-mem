@@ -407,14 +407,19 @@ class EvidenceChain:
             evidence.payload_hash,
             evidence.previous_hash,
         )
-        kwargs = {
-            "target_file": evidence.target_file,
-            "metadata": evidence.metadata,
-            "confidence": evidence.confidence,
-        }
-        if evidence.evidence_hash == _compute_evidence_hash_v3(*args, **kwargs):
+        if evidence.evidence_hash == _compute_evidence_hash_v3(
+            *args,
+            target_file=evidence.target_file,
+            metadata=evidence.metadata,
+            confidence=evidence.confidence,
+        ):
             return "v3"
-        if evidence.evidence_hash == _compute_evidence_hash_v1(*args, **kwargs):
+        if evidence.evidence_hash == _compute_evidence_hash_v1(
+            *args,
+            target_file=evidence.target_file,
+            metadata=evidence.metadata,
+            confidence=evidence.confidence,
+        ):
             return "v1"
         return None
 

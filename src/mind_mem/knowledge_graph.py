@@ -133,7 +133,7 @@ class EntityRegistry:
         with self._lock:
             row = self._conn.execute("SELECT entity_id FROM aliases WHERE alias = ?", (canon,)).fetchone()
             if row is not None:
-                return row["entity_id"]
+                return str(row["entity_id"])
             # New entity — id derived from the canonical form. Surface
             # strings that canonicalise identically are intentionally
             # merged (that's the whole point of the registry).

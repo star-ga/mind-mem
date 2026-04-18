@@ -126,7 +126,7 @@ class LogSink(AlertSink):
         _log.warning(
             "alert",
             severity=alert.severity,
-            event=alert.event,
+            alert_event=alert.event,
             workspace=alert.workspace,
             payload=alert.payload,
         )
@@ -154,7 +154,7 @@ class WebhookSink(AlertSink):
         )
         try:
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-                return 200 <= resp.status < 300
+                return bool(200 <= resp.status < 300)
         except (urllib.error.URLError, OSError) as exc:  # pragma: no cover
             _log.warning("webhook_send_failed", url=self._url, error=str(exc))
             return False
@@ -206,7 +206,7 @@ class SlackSink(AlertSink):
         )
         try:
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-                return 200 <= resp.status < 300
+                return bool(200 <= resp.status < 300)
         except (urllib.error.URLError, OSError) as exc:  # pragma: no cover
             _log.warning("slack_send_failed", error=str(exc))
             return False

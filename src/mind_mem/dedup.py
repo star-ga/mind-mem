@@ -195,7 +195,7 @@ def _extract_source_key(result: dict[str, Any]) -> str:
     block ID (``D-20260222-001``).  For non-chunked results, the key is the
     ``_id`` itself.
     """
-    rid = result.get("_id", "")
+    rid = str(result.get("_id", ""))
     # Chunked IDs have a ``.N`` numeric suffix
     if "." in rid:
         base, suffix = rid.rsplit(".", 1)
@@ -374,7 +374,7 @@ def layer_vector_cosine_dedup(
         try:
             from .recall_vector import VectorBackend
 
-            backend = VectorBackend(workspace=workspace, config=config or {})
+            backend = VectorBackend(config={**(config or {}), "workspace": workspace})
             texts = [_get_result_text(r) for r in results]
             embeddings = backend.embed(texts)
 
