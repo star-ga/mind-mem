@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 456 | **Est. tokens:** ~950,252
-**Generated:** 2026-04-18 08:56 UTC
+**Files:** 457 | **Est. tokens:** ~951,159
+**Generated:** 2026-04-18 09:08 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 26 | ~62,509 |
+| `./` | 27 | ~63,185 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 32 | ~35,992 |
@@ -43,7 +43,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~441 |
-| `src/mind_mem/` | 111 | ~388,772 |
+| `src/mind_mem/` | 111 | ~389,003 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 176 | ~360,664 |
@@ -54,6 +54,7 @@
 
 ### `./`
 
+- `AUDIT_FINDINGS_FOR_CLAUDE.md` (~676 tok, large) — Full Audit of mind-mem Repository
 - `CLAUDE.md` (~1028 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~658 tok, large) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
@@ -232,7 +233,7 @@
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
 - `agent_bridge.py` (~3567 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `alerting.py` (~2411 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `apply_engine.py` (~15651 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
+- `apply_engine.py` (~15882 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~4167 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
 - `auto_resolver.py` (~3194 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
 - `axis_recall.py` (~4217 tok, huge) — # Copyright 2026 STARGA, Inc.

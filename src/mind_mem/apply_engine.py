@@ -86,14 +86,31 @@ def _list_workspace_files(ws):
 
 
 def _cleanup_orphan_files(ws, pre_apply_files):
-    """Delete files created during a failed transaction (orphan cleanup)."""
+    """Delete files created during a failed transaction (orphan cleanup).
+
+    On Windows, SQLite connections may still hold a handle on ``.db``
+    files created during the aborted op; :func:`os.remove` then raises
+    ``PermissionError: [WinError 32]``. Those locks release when the
+    connection garbage-collects, so we treat lock-failures on ``.db``
+    as soft — the GC cycle removes the file on the next workspace
+    init, and the rollback integrity check does not depend on the
+    immediate delete succeeding.
+    """
     current_files = _list_workspace_files(ws)
     orphans = current_files - pre_apply_files
     for orphan in orphans:
         path = os.path.join(ws, orphan)
         if os.path.isfile(path):
-            os.remove(path)
-            print(f"  Cleaned orphan: {orphan}")
+            try:
+                os.remove(path)
+                print(f"  Cleaned orphan: {orphan}")
+            except PermissionError as exc:
+                # Windows-only: SQLite handle still open. Skip and let
+                # GC release the handle; the orphan will be reaped by
+                # the next workspace init. Surface as a visible warning
+                # so operators are not misled into thinking the rollback
+                # is incomplete.
+                print(f"  Deferred orphan cleanup (file locked): {orphan} — {exc}")
 
 
 # ═══════════════════════════════════════════════
