@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 457 | **Est. tokens:** ~972,616
-**Generated:** 2026-04-18 08:01 UTC
+**Files:** 457 | **Est. tokens:** ~972,948
+**Generated:** 2026-04-18 08:07 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~86,563 |
+| `./` | 27 | ~86,895 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,472 |
 | `docs/` | 32 | ~35,992 |
@@ -54,7 +54,7 @@
 
 ### `./`
 
-- `CHANGELOG.md` (~24901 tok, huge) — Changelog
+- `CHANGELOG.md` (~25131 tok, huge) — Changelog
 - `CLAUDE.md` (~1028 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~121 tok, small) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
@@ -72,9 +72,9 @@
 - `mcp_server.py` (~448 tok, medium) — Source-checkout entrypoint for the packaged Mind-Mem MCP server."""
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
-- `pyproject.toml` (~937 tok, large) — [project]
+- `pyproject.toml` (~1002 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~22053 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~22090 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
 - `ROADMAP.md` (~14114 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy

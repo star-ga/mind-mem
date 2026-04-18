@@ -59,10 +59,6 @@ mind-mem-recall -q "API decisions" --workspace ~/my-workspace  # Hybrid BM25F se
 mind-mem-scan ~/my-workspace        # Detect drift & contradictions
 ```
 
-<p align="center">
-  <img src="demo.gif" alt="mind-mem recall and scan demo" width="720">
-</p>
-
 Output:
 ```
 [1.204] D-20260215-001 (decision) — Use async/await for all API endpoints
@@ -70,6 +66,8 @@ Output:
 [1.094] D-20260210-003 (decision) — REST over GraphQL for public API
         decisions/DECISIONS.md:20
 ```
+
+<sub>A fresh v3.1.x walkthrough (native MCP for 16 clients, 57 tools, `mind-mem:4b` local model, governance alerting) is on the way — the earlier `demo.gif` predated v3.x and was removed to avoid misrepresenting the current surface.</sub>
 
 ### Trust Signals
 

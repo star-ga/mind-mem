@@ -2,6 +2,27 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.1.5 (2026-04-18)
+
+**CI matrix fully green (test jobs × 3 OS × 4 Python all passing).
+README demo alignment.**
+
+### Fixed
+
+- **`test` extra now installs every optional dep the test suite
+  imports** — previously only `pytest`, `pytest-cov`, `mypy`,
+  `fastmcp`, `sqlite-vec`. Added `onnxruntime`, `tokenizers`, and
+  `sentence-transformers` so `pip install -e ".[test]"` on a CI
+  runner covers the retrieval / vector / rerank code paths exercised
+  by `test_niah.py`, `test_mcp_v140.py`, and others. No change to
+  runtime deps; all of these are still optional at import time for
+  production users.
+- **README — stale `demo.gif` removed.** The animation predated
+  v3.x and misrepresented the current surface (57 MCP tools, 16-client
+  native integration, `mind-mem:4b` local model, governance alerting).
+  A fresh v3.1.x walkthrough is scheduled for the next release. The
+  30-second text demo block remains.
+
 ## 3.1.4 (2026-04-18)
 
 **CI fully green. Mistral Vibe CLI added as a supported client.**
