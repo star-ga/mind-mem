@@ -9,6 +9,13 @@ on:
 permissions:
   contents: read
 
+# Auto-cancel superseded runs on the same ref so a chain of fast-follow
+# pushes doesn't pile up zombie in-progress runs that the GitHub backend
+# can no longer cancel via API.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     runs-on: ubuntu-latest

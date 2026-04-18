@@ -15,10 +15,21 @@ class TestTaskStatus:
         assert TaskStatus.CANCELED == "canceled"
 
     def test_str_enum_serialises_as_string(self):
-        """Behaves as a plain string for any str-accepting API."""
+        """Behaves as a plain string for any str-accepting API.
+
+        Avoids asserting on f-string output because ``str.__format__``
+        dispatch for str-mixin enums diverged in Python 3.11 (PEP 663):
+        3.10 yields the value ("todo"), 3.11+ yields the enum repr.
+        The stable contract is membership in ``str`` plus ``.value``
+        being the canonical wire-format literal.
+        """
+        import json
+
         assert isinstance(TaskStatus.TODO, str)
-        assert f"status={TaskStatus.TODO}" == "status=TaskStatus.TODO"
+        assert TaskStatus.TODO == "todo"
         assert TaskStatus.TODO.value == "todo"
+        # JSON dump round-trip — what every persistence path actually does.
+        assert json.dumps(TaskStatus.TODO) == '"todo"'
 
     def test_open_closed_partition(self):
         """open() + closed() must cover the whole universe and be disjoint."""

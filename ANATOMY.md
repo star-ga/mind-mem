@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 462 | **Est. tokens:** ~957,194
-**Generated:** 2026-04-18 11:03 UTC
+**Files:** 462 | **Est. tokens:** ~957,436
+**Generated:** 2026-04-18 11:31 UTC
 
 ## Token Budget Guide
 
@@ -31,7 +31,7 @@
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 9 | ~3,127 |
+| `.github/workflows/` | 9 | ~3,189 |
 | `hooks/` | 3 | ~801 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -46,7 +46,7 @@
 | `src/mind_mem/` | 113 | ~390,252 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 178 | ~362,500 |
+| `tests/` | 178 | ~362,680 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -163,7 +163,7 @@
 ### `.github/workflows/`
 
 - `benchmark.yml` (~651 tok, large) — name: Benchmark
-- `ci.yml` (~751 tok, large) — name: CI
+- `ci.yml` (~813 tok, large) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs
@@ -447,7 +447,7 @@
 - `test_edge_cases.py` (~3943 tok, huge) — Edge-case and stress tests for mind-mem — block_parser, recall, and MCP server."""
 - `test_encryption.py` (~1732 tok, huge) — Tests for mind-mem encryption at rest."""
 - `test_entity_ingest.py` (~4091 tok, huge) — Tests for the entity_ingest module — extraction, filtering, signal generation."""
-- `test_enums.py` (~418 tok, medium) — Tests for centralised enums (mind_mem.enums)."""
+- `test_enums.py` (~534 tok, large) — Tests for centralised enums (mind_mem.enums)."""
 - `test_error_codes.py` (~2394 tok, huge) — Tests for mind-mem Error Codes module."""
 - `test_error_paths.py` (~5892 tok, huge) — Error path and edge-case tests for mind-mem — malformed inputs, missing files, bad configs."""
 - `test_evidence_objects.py` (~4031 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -468,7 +468,7 @@
 - `test_graph_boost_recall.py` (~315 tok, medium) — Tests for graph_boost recall parameter."""
 - `test_grid_search.py` (~1199 tok, large) — Tests for benchmarks/grid_search.py — grid generation and utility functions."""
 - `test_hash_chain_v2.py` (~3462 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_hook_installer_force_preserves_siblings.py` (~639 tok, large) — Regression test for the --force clobber bug in hook_installer."""
+- `test_hook_installer_force_preserves_siblings.py` (~703 tok, large) — Regression test for the --force clobber bug in hook_installer."""
 - `test_hook_installer_registry.py` (~3841 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hybrid_recall.py` (~2855 tok, huge) — Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
 - `test_hybrid_search.py` (~599 tok, large) — Tests for hybrid search functionality."""

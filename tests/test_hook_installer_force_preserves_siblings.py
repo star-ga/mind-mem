@@ -51,7 +51,13 @@ def test_install_config_force_preserves_siblings(tmp_path: Path) -> None:
     }
     config_path.write_text(json.dumps(prior, indent=2), encoding="utf-8")
 
-    with mock.patch.dict(os.environ, {"HOME": str(fake_home)}):
+    # On Windows ``os.path.expanduser("~")`` reads ``USERPROFILE``;
+    # on POSIX it reads ``HOME``.  Patch both so the install routine
+    # writes to the temporary tree instead of the real user home.
+    with mock.patch.dict(
+        os.environ,
+        {"HOME": str(fake_home), "USERPROFILE": str(fake_home)},
+    ):
         install_config("openclaw", str(tmp_path), force=True)
 
     after = json.loads(config_path.read_text(encoding="utf-8"))
