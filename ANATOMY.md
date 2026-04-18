@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 459 | **Est. tokens:** ~954,672
-**Generated:** 2026-04-18 09:33 UTC
+**Files:** 459 | **Est. tokens:** ~954,913
+**Generated:** 2026-04-18 09:34 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~64,447 |
+| `./` | 27 | ~64,688 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,429 |
 | `docs/` | 32 | ~36,406 |
@@ -72,11 +72,11 @@
 - `mcp_server.py` (~438 tok, medium) — Source-checkout entrypoint for the packaged Mind-Mem MCP server."""
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
-- `pyproject.toml` (~1143 tok, large) — [project]
+- `pyproject.toml` (~1272 tok, large) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22227 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~14582 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~14694 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
 - `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
 - `train_mind7b_runpod.py` (~1654 tok, huge)

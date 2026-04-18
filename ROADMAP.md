@@ -775,6 +775,13 @@ a prerequisite for the production-deployment work above:
   write to go through `BlockStore`. Refactor to call `BlockStore`
   methods so the Postgres adapter (above) works without a second
   engine-level port.
+- [ ] **Widen snapshot atomicity scope** — Section 5 of SPEC.md
+  currently excludes `maintenance/` and `intelligence/applied/`
+  from snapshot coverage, which means a multi-stage apply that
+  fails partway through can leave untracked residue in those two
+  trees. Decide whether to extend the snapshot invariant to cover
+  both, or to document the exclusion as a known boundary with a
+  sweep pass that reconciles them on the next `mm scan`.
 
 **Estimated:** ~800 lines storage adapter + ~600 lines REST + ~400 lines JS SDK + ~1200 lines structural-debt refactor + deploy artifacts. New optional extras: `mind-mem[postgres]`, `mind-mem[api]`, `mind-mem[otel]`.
 

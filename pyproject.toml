@@ -125,6 +125,15 @@ warn_unused_configs = true
 ignore_missing_imports = true
 check_untyped_defs = true
 disallow_untyped_defs = false
+# The root-level mcp_server.py is a developer-checkout entrypoint that
+# intentionally duplicates the module name exposed from src/ (the
+# packaged wheel registers "mcp_server" under src/ via py-modules).
+# When mypy is run from the repo root it otherwise emits a
+# "Duplicate module named 'mcp_server'" error. Excluding the root
+# shim from the whole-repo scan removes that error without affecting
+# the typechecking of the packaged copy (which CI already covers
+# via `mypy src/`).
+exclude = ["^mcp_server\\.py$"]
 
 [tool.coverage.run]
 source = ["mind_mem"]
