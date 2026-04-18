@@ -6,6 +6,7 @@ engine migrates before the forwarder lands. This test guards the
 warning text + the env-var opt-out so the next bash refactor doesn't
 silently regress the deprecation signal.
 """
+
 from __future__ import annotations
 
 import os
