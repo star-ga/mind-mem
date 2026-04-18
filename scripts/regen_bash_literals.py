@@ -44,13 +44,13 @@ def main() -> None:
         # enums.py; run `make regen-bash-literals` after any enum change.
 
         TASK_STATUS_RE="{pipe_joined}"
-        TASK_STATUS_VALUES=({' '.join(f'"{v}"' for v in values)})
+        TASK_STATUS_VALUES=({" ".join(f'"{v}"' for v in values)})
         """
     )
 
     out_path.write_text(content, encoding="utf-8")
     print(f"Written {out_path.relative_to(REPO_ROOT)}")
-    print(f"  TASK_STATUS_RE=\"{pipe_joined}\"")
+    print(f'  TASK_STATUS_RE="{pipe_joined}"')
     print(f"  TASK_STATUS_VALUES=({len(values)} values)")
 
 
