@@ -17,7 +17,7 @@
     <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-    <img src="https://img.shields.io/badge/tests-3611-brightgreen?style=flat-square" alt="Tests: 3611">
+    <img src="https://img.shields.io/badge/tests-3617-brightgreen?style=flat-square" alt="Tests: 3617">
     <img src="https://img.shields.io/badge/MCP_tools-57-blue?style=flat-square" alt="MCP Tools: 57">
     <img src="https://img.shields.io/badge/clients-17-blueviolet?style=flat-square" alt="AI Clients: 17">
     <img src="https://img.shields.io/badge/audit-3--LLM_joint-darkgreen?style=flat-square" alt="3-LLM joint audit per release">
