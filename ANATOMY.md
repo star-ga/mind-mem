@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 467 | **Est. tokens:** ~965,721
-**Generated:** 2026-04-19 02:20 UTC
+**Files:** 468 | **Est. tokens:** ~967,547
+**Generated:** 2026-04-19 06:19 UTC
 
 ## Token Budget Guide
 
@@ -43,10 +43,10 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 113 | ~390,408 |
+| `src/mind_mem/` | 114 | ~392,162 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 179 | ~363,160 |
+| `tests/` | 179 | ~363,232 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -359,8 +359,9 @@
 - `transcript_capture.py` (~2333 tok, huge) — mind-mem Transcript JSONL Capture. Zero external deps.
 - `turbo_quant.py` (~1078 tok, large) — # Copyright 2026 STARGA, Inc.
 - `uncertainty_propagation.py` (~1262 tok, large) — # Copyright 2026 STARGA, Inc.
-- `validate_py.py` (~3428 tok, huge) — Mind Mem Integrity Validator — canonical engine.
-- `validate.sh` (~7140 tok, huge) — mind-mem Integrity Validator v1.1
+- `validate_py.py` (~4830 tok, huge) — Mind Mem Integrity Validator — canonical engine.
+- `validate.sh` (~352 tok, medium) — src/mind_mem/validate.sh — thin forwarder to the Python validator.
+- `validate.sh.pre-forwarder` (~7140 tok, huge) — #!/usr/bin/env bash
 - `verify_cli.py` (~3178 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `watcher.py` (~886 tok, large) — Mind-Mem File Watcher — auto-reindex on workspace changes. Zero external deps.
 ### `templates/`
@@ -563,7 +564,7 @@
 - `test_unicode_edge_cases.py` (~2440 tok, huge) — Tests for Unicode and edge case handling across mind-mem modules."""
 - `test_v28_completion.py` (~4565 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_validate_py.py` (~3438 tok, huge) — Tests for validate_py.py — workspace integrity validator."""
-- `test_validate_sh_deprecation.py` (~475 tok, medium) — Pin the runtime deprecation warning on validate.sh.
+- `test_validate_sh_deprecation.py` (~547 tok, large) — Pin the runtime deprecation warning on validate.sh.
 - `test_verify_cli.py` (~3202 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_watcher.py` (~1217 tok, large) — Tests for watcher.py — file change detection for auto-reindex."""
 - `test_wide_retrieval.py` (~346 tok, medium) — Tests for wide retrieval parameter."""

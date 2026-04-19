@@ -36,7 +36,13 @@ def test_validate_sh_emits_deprecation_warning_to_stderr(tmp_path: Path) -> None
         text=True,
         env={**os.environ, "MIND_MEM_VALIDATE_BASH": "0"},
     )
-    assert "[mind-mem][deprecation] validate.sh is deprecated" in result.stderr
+    # v3.1.x emitted "validate.sh is deprecated"; v3.2.0 collapsed the
+    # bash engine into a forwarder and now emits "is now a forwarder".
+    # Both are valid deprecation signals.
+    assert (
+        "[mind-mem][deprecation] validate.sh is deprecated" in result.stderr
+        or "[mind-mem][deprecation] validate.sh is now a forwarder" in result.stderr
+    )
     assert "python3 -m mind_mem.validate_py" in result.stderr
     assert "MIND_MEM_VALIDATE_BASH=1" in result.stderr
 

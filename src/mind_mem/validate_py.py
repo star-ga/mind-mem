@@ -88,6 +88,8 @@ class Validator:
         self._check_provenance()
         self._check_cross_refs()
         self._check_intelligence()
+        self._check_signatures_v11()
+        self._check_proposed_fingerprints()
 
         self.log("")
         self.log("=" * 43)
@@ -350,6 +352,142 @@ class Validator:
         else:
             for d in sorted(dangling):
                 self.fail(f"MISSING: {d} (referenced but not defined)")
+
+    def _check_signatures_v11(self):
+        """v1.1 ConstraintSignature checks — ports V2.1 / V2.2 / V2.6 / V2.7
+        from the legacy bash engine.
+
+        Covered signals:
+          V2.1 — decisions tagged integrity|security|memory|retrieval
+                 must carry at least one ConstraintSignature.
+          V2.2 — every signature carries the nine required fields.
+          V2.6 — signature.axis.key, signature.relation, signature.enforcement
+                 are present and drawn from the legal enums.
+          V2.7 — signature.lifecycle.created_by is present.
+        """
+        self.section("7. CONSTRAINT SIGNATURES (v1.1)")
+        dec_path = os.path.join(self.ws, "decisions", "DECISIONS.md")
+        if not os.path.isfile(dec_path):
+            self.warn("decisions/DECISIONS.md missing — skipping signature checks")
+            return
+        try:
+            blocks = parse_file(dec_path)
+        except Exception as e:
+            self.fail(f"Failed to parse decisions/DECISIONS.md: {e}")
+            return
+
+        required_tags = {"integrity", "security", "memory", "retrieval"}
+        required_sig_fields = [
+            "id",
+            "domain",
+            "subject",
+            "predicate",
+            "object",
+            "modality",
+            "priority",
+            "scope",
+            "evidence",
+        ]
+        valid_relations = {
+            "standalone",
+            "requires",
+            "implies",
+            "composes_with",
+            "overrides",
+            "equivalent",
+        }
+        valid_enforcement = {"invariant", "structural", "policy", "guideline"}
+
+        v21_missing: list[str] = []
+        v22_issues: list[str] = []
+        v26_issues: list[str] = []
+        v27_issues: list[str] = []
+        for b in blocks:
+            if b.get("Status") != "active":
+                continue
+            tags_raw = b.get("Tags", "") or ""
+            tags = {t.strip() for t in tags_raw.split(",") if t.strip()}
+            bid = b.get("_id", "<no-id>")
+            sigs = b.get("ConstraintSignatures", []) or []
+
+            if tags & required_tags and not sigs:
+                v21_missing.append(bid)
+
+            for sig in sigs if isinstance(sigs, list) else []:
+                if not isinstance(sig, dict):
+                    continue
+                sid = sig.get("id", "?")
+                missing = [f for f in required_sig_fields if f not in sig]
+                if missing:
+                    v22_issues.append(f"{bid}:{sid} missing {','.join(missing)}")
+
+                ax = sig.get("axis")
+                if not isinstance(ax, dict) or not ax.get("key"):
+                    v26_issues.append(f"{bid}:{sid} missing axis.key")
+                rel = sig.get("relation")
+                if rel and rel not in valid_relations:
+                    v26_issues.append(f"{bid}:{sid} bad relation {rel!r}")
+                enf = sig.get("enforcement")
+                if enf and enf not in valid_enforcement:
+                    v26_issues.append(f"{bid}:{sid} bad enforcement {enf!r}")
+
+                lc = sig.get("lifecycle")
+                if not isinstance(lc, dict) or not lc.get("created_by"):
+                    v27_issues.append(f"{bid}:{sid} missing lifecycle.created_by")
+
+        if v21_missing:
+            for bid in v21_missing:
+                self.warn(f"V2.1: {bid} tagged integrity/security/memory/retrieval but no ConstraintSignatures")
+        else:
+            self.pass_("V2.1: All relevant active decisions have ConstraintSignatures")
+
+        if v22_issues:
+            for msg in v22_issues:
+                self.fail(f"V2.2: {msg}")
+        else:
+            self.pass_("V2.2: All ConstraintSignatures have required fields")
+
+        if v26_issues:
+            for msg in v26_issues:
+                self.warn(f"V2.6: {msg}")
+        else:
+            self.pass_("V2.6: All signatures have valid axis.key/relation/enforcement")
+
+        if v27_issues:
+            for msg in v27_issues:
+                self.warn(f"V2.7: {msg}")
+        else:
+            self.pass_("V2.7: All signatures have lifecycle.created_by")
+
+    def _check_proposed_fingerprints(self):
+        """V2.9 — staged proposals must carry a Fingerprint field."""
+        self.section("8. PROPOSED FINGERPRINTS")
+        proposed_dir = os.path.join(self.ws, "intelligence", "proposed")
+        if not os.path.isdir(proposed_dir):
+            self.warn("intelligence/proposed/ missing — skipping V2.9")
+            return
+
+        any_files = False
+        for fname in sorted(os.listdir(proposed_dir)):
+            if not fname.endswith("_PROPOSED.md"):
+                continue
+            any_files = True
+            path = os.path.join(proposed_dir, fname)
+            try:
+                with open(path, encoding="utf-8") as f:
+                    content = f.read()
+            except OSError as e:
+                self.warn(f"V2.9: {fname} read error: {e}")
+                continue
+            staged = len(re.findall(r"^Status: staged", content, re.MULTILINE))
+            fingerprints = len(re.findall(r"^Fingerprint: ", content, re.MULTILINE))
+            if staged > 0 and fingerprints < staged:
+                self.warn(f"V2.9: {fname} has {staged} staged proposals but only {fingerprints} Fingerprint field(s)")
+            elif staged > 0:
+                self.pass_(f"V2.9: {fname} staged proposals have Fingerprints")
+
+        if not any_files:
+            self.warn("V2.9: no *_PROPOSED.md files present to validate")
 
     def _check_intelligence(self):
         self.section("6. INTELLIGENCE FILES")
