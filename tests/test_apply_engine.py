@@ -351,8 +351,7 @@ class TestValidateUninitWorkspace(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("No mind-mem.json found", result.stdout)
             self.assertTrue(
-                "init_workspace" in result.stdout
-                or "mind-mem-init" in result.stdout,
+                "init_workspace" in result.stdout or "mind-mem-init" in result.stdout,
                 f"expected init-workspace hint in output, got: {result.stdout!r}",
             )
 

@@ -28,14 +28,7 @@ def _check_workspace(ws: str) -> str | None:
         return json.dumps({"error": "Workspace not found. Run: mind-mem-init <path>"})
     decisions_dir = os.path.join(ws, "decisions")
     if not os.path.isdir(decisions_dir):
-        return json.dumps(
-            {
-                "error": (
-                    "Workspace is missing the 'decisions/' directory. "
-                    "Run: mind-mem-init <path>"
-                )
-            }
-        )
+        return json.dumps({"error": ("Workspace is missing the 'decisions/' directory. Run: mind-mem-init <path>")})
     return None
 
 
