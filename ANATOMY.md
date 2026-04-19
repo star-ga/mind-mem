@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 474 | **Est. tokens:** ~971,865
-**Generated:** 2026-04-19 21:39 UTC
+**Files:** 475 | **Est. tokens:** ~972,967
+**Generated:** 2026-04-19 22:07 UTC
 
 ## Token Budget Guide
 
@@ -45,7 +45,7 @@
 | `src/` | 1 | ~258 |
 | `src/mind_mem/` | 115 | ~393,817 |
 | `src/mind_mem/mcp/` | 1 | ~215 |
-| `src/mind_mem/mcp/infra/` | 3 | ~1,575 |
+| `src/mind_mem/mcp/infra/` | 4 | ~2,677 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 180 | ~364,105 |
@@ -302,7 +302,8 @@
 ### `src/mind_mem/mcp/infra/`
 
 - `acl.py` (~895 tok, large) — Per-tool ACL — scope enforcement for the MCP surface.
-- `__init__.py` (~197 tok, small) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
+- `__init__.py` (~294 tok, medium) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
+- `rate_limit.py` (~1005 tok, large) — Per-client sliding-window rate limiter for the MCP surface.
 - `workspace.py` (~483 tok, medium) — Workspace resolution + path-safety helpers.
 ### `src/mind_mem/mcp/`
 

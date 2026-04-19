@@ -15,6 +15,15 @@ from .acl import (
     _get_request_scope,
     check_tool_acl,
 )
+from .rate_limit import (
+    _RATE_LIMITER_MAX,
+    SlidingWindowRateLimiter,
+    _get_client_id,
+    _get_client_rate_limiter,
+    _init_rate_limiter,
+    _rate_limiters,
+    _rate_limiters_lock,
+)
 from .workspace import _check_workspace, _read_file, _validate_path, _workspace
 
 __all__ = [
@@ -27,4 +36,11 @@ __all__ = [
     "_ADMIN_SCOPES",
     "check_tool_acl",
     "_get_request_scope",
+    "SlidingWindowRateLimiter",
+    "_init_rate_limiter",
+    "_get_client_rate_limiter",
+    "_get_client_id",
+    "_RATE_LIMITER_MAX",
+    "_rate_limiters",
+    "_rate_limiters_lock",
 ]

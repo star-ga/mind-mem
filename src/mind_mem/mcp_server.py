@@ -88,9 +88,7 @@ import re as _re_mod
 import sqlite3
 import sys
 import tempfile
-import threading
 import time
-from collections import OrderedDict
 from typing import Any
 
 # Allow running `python3 mcp_server.py` directly from a source checkout.
@@ -104,7 +102,6 @@ from mind_mem.block_parser import BlockCorruptedError, get_active, parse_file  #
 from mind_mem.corpus_registry import CORPUS_DIRS  # noqa: E402
 from mind_mem.mind_filelock import FileLock  # noqa: E402
 from fastmcp import FastMCP  # noqa: E402
-from fastmcp.server.dependencies import get_access_token  # noqa: E402
 from mind_mem.mind_ffi import (  # noqa: E402
     get_mind_dir,
     is_available as mind_kernel_available,
@@ -175,31 +172,23 @@ def _build_http_auth_tokens() -> dict[str, dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # Rate limiter — sliding window (#21)
 # ---------------------------------------------------------------------------
-
-
-class SlidingWindowRateLimiter:
-    """In-memory sliding-window rate limiter."""
-
-    def __init__(self, max_calls: int = 120, window_seconds: int = 60):
-        self.max_calls = max_calls
-        self.window = window_seconds
-        self._timestamps: list[float] = []
-        self._lock = threading.Lock()
-
-    def allow(self) -> tuple[bool, float]:
-        """Check if a call is allowed.
-
-        Returns (allowed, retry_after_seconds).  retry_after is 0.0 when allowed.
-        """
-        now = time.monotonic()
-        with self._lock:
-            cutoff = now - self.window
-            self._timestamps = [t for t in self._timestamps if t > cutoff]
-            if len(self._timestamps) >= self.max_calls:
-                retry_after = self._timestamps[0] - cutoff
-                return False, max(retry_after, 0.1)
-            self._timestamps.append(now)
-            return True, 0.0
+#
+# v3.2.0 §1.2 PR-1: rate-limit primitives moved to
+# mind_mem.mcp.infra.rate_limit. Re-exported here so every existing call
+# site (``mcp_tool_observe``, ``tests/test_mcp_integration.py``) keeps
+# working. ``_get_limits`` / ``_DEFAULT_LIMITS`` stay here for now and
+# move alongside the rest of config handling in a later step of PR-1;
+# ``_init_rate_limiter`` in the new module late-imports ``_get_limits``
+# from this module to avoid the import cycle.
+from mind_mem.mcp.infra.rate_limit import (  # noqa: E402,F401 — public re-export shim
+    _RATE_LIMITER_MAX,
+    SlidingWindowRateLimiter,
+    _get_client_id,
+    _get_client_rate_limiter,
+    _init_rate_limiter,
+    _rate_limiters,
+    _rate_limiters_lock,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -233,51 +222,6 @@ def _get_limits(ws: str | None = None) -> dict:
             except (TypeError, ValueError):
                 pass  # keep default
     return result
-
-
-def _init_rate_limiter() -> SlidingWindowRateLimiter:
-    """Create a rate limiter from config limits (used as per-client factory)."""
-    try:
-        limits = _get_limits()
-        max_calls = limits["rate_limit_calls_per_minute"]
-    except Exception:
-        max_calls = 120
-    return SlidingWindowRateLimiter(max_calls=max_calls, window_seconds=60)
-
-
-# Per-client rate limiters keyed by client_id — prevents one client from
-# exhausting the global budget and blocking all other clients. An
-# attacker rotating Authorization tokens on every request would
-# otherwise grow this dict unbounded, so we LRU-evict the least-
-# recently-used entry when the cap is reached.
-_RATE_LIMITER_MAX: int = 1024
-_rate_limiters: "OrderedDict[str, SlidingWindowRateLimiter]" = OrderedDict()
-_rate_limiters_lock = threading.Lock()
-
-
-def _get_client_rate_limiter(client_id: str) -> SlidingWindowRateLimiter:
-    """Return (creating if needed) the per-client SlidingWindowRateLimiter."""
-    with _rate_limiters_lock:
-        existing = _rate_limiters.get(client_id)
-        if existing is not None:
-            _rate_limiters.move_to_end(client_id, last=True)
-            return existing
-        limiter = _init_rate_limiter()
-        _rate_limiters[client_id] = limiter
-        while len(_rate_limiters) > _RATE_LIMITER_MAX:
-            _rate_limiters.popitem(last=False)
-        return limiter
-
-
-def _get_client_id() -> str:
-    """Return a stable client identifier for the current request."""
-    try:
-        token = get_access_token()
-        if token is not None and token.client_id:
-            return token.client_id
-    except Exception:
-        pass
-    return "default"
 
 
 # Per-query timeout in seconds (read from config at call time via _get_limits)
