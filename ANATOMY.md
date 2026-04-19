@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 468 | **Est. tokens:** ~967,547
-**Generated:** 2026-04-19 06:19 UTC
+**Files:** 470 | **Est. tokens:** ~969,912
+**Generated:** 2026-04-19 06:26 UTC
 
 ## Token Budget Guide
 
@@ -43,10 +43,10 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 114 | ~392,162 |
+| `src/mind_mem/` | 115 | ~393,817 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 179 | ~363,232 |
+| `tests/` | 180 | ~363,942 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -238,7 +238,7 @@
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
 - `agent_bridge.py` (~3567 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `alerting.py` (~2411 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `apply_engine.py` (~15882 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
+- `apply_engine.py` (~16085 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~4167 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
 - `auto_resolver.py` (~3194 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
 - `axis_recall.py` (~4217 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -264,7 +264,7 @@
 - `context_core.py` (~4313 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `contradiction_detector.py` (~4888 tok, huge) — mind-mem Contradiction Detector — Surface conflicts at the governance gate.
 - `core_export.py` (~1689 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `corpus_registry.py` (~262 tok, medium) — Central corpus path registry for mind-mem.
+- `corpus_registry.py` (~471 tok, medium) — Central corpus path registry for mind-mem.
 - `cron_runner.py` (~1846 tok, huge) — mind-mem Cron Runner — single entry point for all periodic jobs. Zero external deps.
 - `cross_encoder_reranker.py` (~749 tok, large) — mind-mem Optional Cross-Encoder Reranker.
 - `dedup.py` (~4593 tok, huge) — mind-mem 4-layer deduplication filter for search results.
@@ -295,6 +295,7 @@
 - `ledger_anchor.py` (~1183 tok, large) — # Copyright 2026 STARGA, Inc.
 - `llm_extractor.py` (~4538 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
 - `llm_noise_profile.py` (~2339 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `maintenance_migrate.py` (~1243 tok, large) — v3.2.0 §2.2 — one-shot migration helper for ``maintenance/`` subdivision.
 - `mcp_entry.py` (~217 tok, medium) — Thin entry point for mind-mem-mcp console script."""
 - `memory_mesh.py` (~1903 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `memory_tiers.py` (~4934 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -491,6 +492,7 @@
 - `test_knowledge_graph.py` (~3437 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_llm_extractor.py` (~1820 tok, huge) — Tests for the optional LLM entity/fact extractor module."""
 - `test_llm_noise_profile.py` (~2354 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_maintenance_migrate.py` (~710 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_mcp_integration.py` (~5110 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_server.py` (~4897 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
 - `test_mcp_tools.py` (~277 tok, medium) — Tests for MCP server tool definitions."""

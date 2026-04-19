@@ -26,7 +26,7 @@ from datetime import datetime, timedelta
 # Import block parser from same directory
 from .backup_restore import WAL
 from .block_parser import get_by_id, parse_file
-from .corpus_registry import SNAPSHOT_DIRS
+from .corpus_registry import SNAPSHOT_DIRS, SNAPSHOT_EXCLUDE_DIRS
 from .mind_filelock import FileLock
 from .namespaces import NamespaceManager
 from .observability import get_logger
@@ -62,13 +62,34 @@ PROPOSED_FILES = [
 SNAPSHOT_FILES = ["AGENTS.md", "MEMORY.md", "IDENTITY.md", "mind-mem.json"]
 
 
+def _is_in_excluded_dir(ws: str, path: str) -> bool:
+    """True when ``path`` falls under one of SNAPSHOT_EXCLUDE_DIRS.
+
+    Normalises separators so a Windows-native path under
+    ``maintenance\\append-only\\...`` still matches the canonical
+    forward-slash-declared exclude list.
+    """
+    rel = os.path.relpath(path, ws).replace(os.sep, "/")
+    for excluded in SNAPSHOT_EXCLUDE_DIRS:
+        if rel == excluded or rel.startswith(excluded + "/"):
+            return True
+    return False
+
+
 def _list_workspace_files(ws):
-    """List all files in workspace (relative paths) for orphan detection."""
+    """List all files in workspace (relative paths) for orphan detection.
+
+    Honours v3.2.0 §2.2 exclusions: ``maintenance/append-only/`` and
+    ``intelligence/applied/`` are both walked-but-skipped so neither
+    bloats the snapshot nor shows up as an orphan during rollback.
+    """
     result = set()
     for d in SNAPSHOT_DIRS:
         dirpath = os.path.join(ws, d)
         if os.path.isdir(dirpath):
             for root, dirs, files in os.walk(dirpath):
+                if _is_in_excluded_dir(ws, root):
+                    continue
                 for f in files:
                     result.add(os.path.relpath(os.path.join(root, f), ws))
     for f in SNAPSHOT_FILES:
@@ -78,7 +99,7 @@ def _list_workspace_files(ws):
     intel_dir = os.path.join(ws, "intelligence")
     if os.path.isdir(intel_dir):
         for root, dirs, files in os.walk(intel_dir):
-            if "applied" in root.split(os.sep):
+            if _is_in_excluded_dir(ws, root):
                 continue
             for f in files:
                 result.add(os.path.relpath(os.path.join(root, f), ws))
