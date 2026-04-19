@@ -344,10 +344,17 @@ class TestValidateUninitWorkspace(unittest.TestCase):
                 text=True,
                 timeout=30,
             )
-            # Should exit with error and helpful message
+            # Should exit with error and helpful message. v3.2.0 collapsed
+            # validate.sh into a forwarder to the Python validator, which
+            # uses the `mind-mem-init` CLI name rather than the legacy
+            # `init_workspace.py` path — accept either wording.
             self.assertEqual(result.returncode, 1)
             self.assertIn("No mind-mem.json found", result.stdout)
-            self.assertIn("init_workspace", result.stdout)
+            self.assertTrue(
+                "init_workspace" in result.stdout
+                or "mind-mem-init" in result.stdout,
+                f"expected init-workspace hint in output, got: {result.stdout!r}",
+            )
 
 
 class TestModeGate(unittest.TestCase):

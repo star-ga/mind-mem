@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 470 | **Est. tokens:** ~969,912
-**Generated:** 2026-04-19 06:26 UTC
+**Files:** 473 | **Est. tokens:** ~970,881
+**Generated:** 2026-04-19 06:33 UTC
 
 ## Token Budget Guide
 
@@ -44,9 +44,11 @@
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
 | `src/mind_mem/` | 115 | ~393,817 |
+| `src/mind_mem/mcp/` | 1 | ~215 |
+| `src/mind_mem/mcp/infra/` | 2 | ~654 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 180 | ~363,942 |
+| `tests/` | 180 | ~364,042 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -297,6 +299,15 @@
 - `llm_noise_profile.py` (~2339 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `maintenance_migrate.py` (~1243 tok, large) — v3.2.0 §2.2 — one-shot migration helper for ``maintenance/`` subdivision.
 - `mcp_entry.py` (~217 tok, medium) — Thin entry point for mind-mem-mcp console script."""
+### `src/mind_mem/mcp/infra/`
+
+- `__init__.py` (~142 tok, small) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
+- `workspace.py` (~512 tok, large) — Workspace resolution + path-safety helpers.
+### `src/mind_mem/mcp/`
+
+- `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
+### `src/mind_mem/`
+
 - `memory_mesh.py` (~1903 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `memory_tiers.py` (~4934 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `merkle_tree.py` (~3354 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -399,7 +410,7 @@
 - `test_agent_id_filter.py` (~335 tok, medium) — Tests for agent_id namespace filtering."""
 - `test_alerting.py` (~1777 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_allow_decompose.py` (~311 tok, medium) — Tests for _allow_decompose recall parameter."""
-- `test_apply_engine.py` (~11472 tok, huge) — Tests for apply_engine.py — focus on security, validation, and rollback."""
+- `test_apply_engine.py` (~11572 tok, huge) — Tests for apply_engine.py — focus on security, validation, and rollback."""
 - `test_audit_chain.py` (~2398 tok, huge) — Tests for mind-mem hash-chain mutation log (audit_chain.py)."""
 - `test_auto_resolver.py` (~1185 tok, large) — Tests for mind-mem auto contradiction resolution (auto_resolver.py)."""
 - `test_axis_recall_mcp.py` (~1381 tok, large) — # Copyright 2026 STARGA, Inc.

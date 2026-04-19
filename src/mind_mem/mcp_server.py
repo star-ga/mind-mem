@@ -477,48 +477,22 @@ mcp = FastMCP(
 )
 
 
-def _workspace() -> str:
-    """Resolve workspace path from environment."""
-    ws = os.environ.get("MIND_MEM_WORKSPACE", ".")
-    return os.path.abspath(ws)
-
-
-def _check_workspace(ws: str) -> str | None:
-    """Validate workspace exists and has expected structure.
-
-    Returns None if valid, or an error JSON string if invalid.
-    """
-    if not os.path.isdir(ws):
-        return json.dumps({"error": "Workspace not found. Run: mind-mem-init <path>"})
-    decisions_dir = os.path.join(ws, "decisions")
-    if not os.path.isdir(decisions_dir):
-        return json.dumps({"error": "Workspace is missing the 'decisions/' directory. Run: mind-mem-init <path>"})
-    return None
-
-
-def _validate_path(ws: str, rel_path: str) -> str:
-    """Validate that rel_path resolves inside workspace. Returns resolved path.
-
-    Raises ValueError if the path escapes the workspace boundary.
-    """
-    ws_real = os.path.realpath(ws)
-    path = os.path.realpath(os.path.join(ws_real, rel_path))
-    if path != ws_real and not path.startswith(ws_real + os.sep):
-        raise ValueError("Invalid path: escapes workspace")
-    return path
-
-
-def _read_file(rel_path: str) -> str:
-    """Read a file from workspace, return contents or error message."""
-    ws = _workspace()
-    try:
-        path = _validate_path(ws, rel_path)
-    except ValueError:
-        return "Error: path escapes workspace"
-    if not os.path.isfile(path):
-        return f"File not found: {rel_path}"
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
+# v3.2.0 §1.2 PR-1: workspace helpers moved to mind_mem.mcp.infra.workspace.
+# Re-exported here so every existing call site inside this module + every
+# test that patches `mcp_server._workspace` keeps working.
+#
+# Absolute import (not relative) because the top-level developer-checkout
+# shim ``/home/n/mind-mem/mcp_server.py`` runs this file via
+# ``exec(compile(...))`` with no parent package, and the test harness
+# loads it via ``spec_from_file_location`` which also strips the package.
+# ``mind_mem.mcp.infra.workspace`` resolves in both paths because the
+# shim inserts ``src/`` onto ``sys.path`` before the exec.
+from mind_mem.mcp.infra.workspace import (  # noqa: E402,F401 — public re-export shim
+    _check_workspace,
+    _read_file,
+    _validate_path,
+    _workspace,
+)
 
 
 def _blocks_to_json(blocks: list[dict]) -> str:
