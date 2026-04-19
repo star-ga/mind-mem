@@ -2,6 +2,33 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.1.9 (2026-04-18)
+
+**Hotfix for v3.1.8 release hygiene + duplicate entry-point
+cleanup.**
+
+### Fixed
+
+- **`src/mind_mem/__init__.py` `__version__` now matches
+  `pyproject.toml`.** v3.1.8 shipped with pyproject=3.1.8 but
+  `__init__.py` still reading 3.1.7, so
+  `python -c "import mind_mem; print(mind_mem.__version__)"`
+  on a `pip install mind-mem==3.1.8` installation printed
+  `3.1.7`. The `test_versions_match` regression test would have
+  caught this but the CI run on the release commit was cancelled
+  by the concurrency group when the niah-Benchmark wiring
+  follow-up landed. v3.1.9 brings the two sources of truth back
+  into alignment. PyPI users can `pip install -U mind-mem` to
+  pick up the correct version string.
+- **Duplicate MCP server entry-point cleanup (§1.1 of audit).**
+  `mcp_server.py` (top-level developer-checkout shim) simplified
+  from 47 LOC using `exec(compile())` to 41 LOC using a standard
+  `sys.path` insert + import. `src/mcp_server.py` (wheel-level
+  compatibility module) simplified from 50 LOC using `globals()`
+  + `__getattr__` delegation to 32 LOC using a clean star-import
+  + `main` re-export. Both wrappers preserve the full public
+  surface (105 symbols including the `FastMCP` instance).
+
 ## 3.1.8 (2026-04-18)
 
 **CI parity + cross-platform stability + v3.2.0 architectural

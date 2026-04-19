@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 466 | **Est. tokens:** ~964,528
-**Generated:** 2026-04-18 13:26 UTC
+**Files:** 466 | **Est. tokens:** ~964,325
+**Generated:** 2026-04-19 01:51 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~65,216 |
+| `./` | 27 | ~65,196 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,429 |
 | `docs/` | 35 | ~42,778 |
@@ -42,7 +42,7 @@
 | `skills/apply-proposal/` | 1 | ~345 |
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
-| `src/` | 1 | ~441 |
+| `src/` | 1 | ~258 |
 | `src/mind_mem/` | 113 | ~390,408 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
@@ -54,7 +54,7 @@
 
 ### `./`
 
-- `AUDIT_FINDINGS_FOR_CLAUDE.md` (~1239 tok, large) — Comprehensive Architectural Audit: mind-mem (Clean Git Repo)
+- `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: mind-mem (Commit 30d8b71)
 - `CLAUDE.md` (~1028 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
@@ -69,7 +69,7 @@
 - `install.sh` (~3337 tok, huge) — mind-mem installer — sets up MCP server + hooks for all supported clients
 - `LICENSE` (~2695 tok, huge)
 - `Makefile` (~569 tok, large) — .PHONY: test lint bench install dev clean smoke help regen-bash-literals
-- `mcp_server.py` (~438 tok, medium) — Source-checkout entrypoint for the packaged Mind-Mem MCP server."""
+- `mcp_server.py` (~662 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
 - `pyproject.toml` (~1411 tok, large) — [project]
@@ -231,7 +231,7 @@
 - `SKILL.md` (~549 tok, large) — /recall — Memory Search
 ### `src/`
 
-- `mcp_server.py` (~441 tok, medium) — Compatibility wrapper for the packaged Mind-Mem MCP server."""
+- `mcp_server.py` (~258 tok, medium) — Wheel-level compatibility module for `mind_mem.mcp_server`.
 ### `src/mind_mem/`
 
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
