@@ -274,27 +274,35 @@ class TestACLEnforcement:
         assert "not in ACL policy" in parsed["error"]
 
     def test_request_scope_uses_access_token_scopes(self, server, monkeypatch):
+        # v3.2.0 §1.2 PR-1: _get_request_scope moved to
+        # mind_mem.mcp.infra.acl; patch the real call site.
+        from mind_mem.mcp.infra import acl as _acl
+
         monkeypatch.setattr(
-            server,
+            _acl,
             "get_access_token",
             lambda: AccessToken(token="adm", client_id="client", scopes=["admin"], claims={}),
         )
         assert server._get_request_scope() == "admin"
 
     def test_request_scope_defaults_user_for_non_admin_token(self, server, monkeypatch):
+        from mind_mem.mcp.infra import acl as _acl
+
         monkeypatch.setattr(
-            server,
+            _acl,
             "get_access_token",
             lambda: AccessToken(token="usr", client_id="client", scopes=["user"], claims={}),
         )
         assert server._get_request_scope() == "user"
 
     def test_http_request_scope_overrides_process_scope(self, server, workspace, monkeypatch):
+        from mind_mem.mcp.infra import acl as _acl
+
         monkeypatch.setenv("MIND_MEM_ADMIN_TOKEN", "admin-tok")
         monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
         monkeypatch.setenv("MIND_MEM_WORKSPACE", str(workspace))
         monkeypatch.setattr(
-            server,
+            _acl,
             "get_access_token",
             lambda: AccessToken(token="usr", client_id="client", scopes=["user"], claims={}),
         )

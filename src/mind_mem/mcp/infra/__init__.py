@@ -8,6 +8,13 @@ source compatibility with the callers still inside mcp_server.py.
 
 from __future__ import annotations
 
+from .acl import (
+    _ADMIN_SCOPES,
+    ADMIN_TOOLS,
+    USER_TOOLS,
+    _get_request_scope,
+    check_tool_acl,
+)
 from .workspace import _check_workspace, _read_file, _validate_path, _workspace
 
 __all__ = [
@@ -15,4 +22,9 @@ __all__ = [
     "_check_workspace",
     "_validate_path",
     "_read_file",
+    "ADMIN_TOOLS",
+    "USER_TOOLS",
+    "_ADMIN_SCOPES",
+    "check_tool_acl",
+    "_get_request_scope",
 ]

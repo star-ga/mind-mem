@@ -129,112 +129,24 @@ MCP_SCHEMA_VERSION = "1.0"
 # ---------------------------------------------------------------------------
 # ACL — per-tool scope enforcement (#20)
 # ---------------------------------------------------------------------------
-
-ADMIN_TOOLS = frozenset(
-    {
-        "write_memory",
-        "apply_proposal",
-        "approve_apply",
-        "rollback_proposal",
-        "delete_memory_item",
-        "reindex_vectors",
-        "propose_update",
-        "reindex",
-        "export_memory",
-        "verify_chain",
-        "compact",
-        "encrypt_file",
-        "decrypt_file",
-    }
+#
+# v3.2.0 §1.2 PR-1: ACL helpers moved to mind_mem.mcp.infra.acl. Re-exported
+# here so every existing call site in this module + every test that patches
+# ``mcp_server.check_tool_acl`` / ``mcp_server.ADMIN_TOOLS`` keeps working.
+#
+# Absolute import (not relative) because the top-level developer-checkout
+# shim ``/home/n/mind-mem/mcp_server.py`` runs this file via
+# ``exec(compile(...))`` with no parent package, and the test harness loads
+# it via ``spec_from_file_location`` which also strips the package.
+# ``mind_mem.mcp.infra.acl`` resolves in both paths because the shim
+# inserts ``src/`` onto ``sys.path`` before the exec.
+from mind_mem.mcp.infra.acl import (  # noqa: E402,F401 — public re-export shim
+    ADMIN_TOOLS,
+    USER_TOOLS,
+    _ADMIN_SCOPES,
+    _get_request_scope,
+    check_tool_acl,
 )
-
-USER_TOOLS = frozenset(
-    {
-        "recall",
-        "recall_with_axis",
-        "verify_merkle",
-        "mind_mem_verify",
-        "observe_signal",
-        "signal_stats",
-        "graph_query",
-        "graph_stats",
-        "graph_add_edge",
-        "build_core",
-        "load_core",
-        "unload_core",
-        "list_cores",
-        "plan_consolidation",
-        "pack_recall_budget",
-        "ontology_load",
-        "ontology_validate",
-        "stream_status",
-        "propagate_staleness",
-        "project_profile",
-        "vault_sync",
-        "vault_scan",
-        "agent_inject",
-        "search_memory",
-        "list_memory",
-        "list_contradictions",
-        "scan",
-        "hybrid_search",
-        "find_similar",
-        "intent_classify",
-        "index_stats",
-        "retrieval_diagnostics",
-        "memory_evolution",
-        "category_summary",
-        "prefetch",
-        "list_mind_kernels",
-        "get_mind_kernel",
-        "calibration_feedback",
-        "calibration_stats",
-        "list_evidence",
-        "get_block",
-        "memory_health",
-        "traverse_graph",
-        "stale_blocks",
-        "dream_cycle",
-        "compiled_truth_load",
-        "compiled_truth_add_evidence",
-        "compiled_truth_contradictions",
-        "governance_health_bench",
-    }
-)
-
-_ADMIN_SCOPES = frozenset({"admin", "full", "mind-mem:admin"})
-
-
-def check_tool_acl(tool_name: str, scope: str) -> str | None:
-    """Check whether *scope* is allowed to call *tool_name*.
-
-    Returns None if allowed, or a JSON error string if denied.
-    """
-    if tool_name in ADMIN_TOOLS and scope != "admin":
-        metrics.inc("mcp_acl_denied")
-        _log.warning("acl_denied", tool=tool_name, scope=scope)
-        return json.dumps(
-            {
-                "error": f"Permission denied: '{tool_name}' requires admin scope",
-                "scope": scope,
-                "hint": "Admin scope is controlled via MIND_MEM_SCOPE=admin env var.",
-            }
-        )
-    return None
-
-
-def _get_request_scope() -> str | None:
-    """Return ACL scope from the active FastMCP access token, if any."""
-    try:
-        access_token = get_access_token()
-    except Exception:
-        return None
-
-    if access_token is None:
-        return None
-
-    token_scopes = set(access_token.scopes or [])
-    return "admin" if token_scopes & _ADMIN_SCOPES else "user"
 
 
 def _build_http_auth_tokens() -> dict[str, dict[str, Any]]:

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 473 | **Est. tokens:** ~970,848
-**Generated:** 2026-04-19 06:33 UTC
+**Files:** 474 | **Est. tokens:** ~971,865
+**Generated:** 2026-04-19 21:39 UTC
 
 ## Token Budget Guide
 
@@ -45,10 +45,10 @@
 | `src/` | 1 | ~258 |
 | `src/mind_mem/` | 115 | ~393,817 |
 | `src/mind_mem/mcp/` | 1 | ~215 |
-| `src/mind_mem/mcp/infra/` | 2 | ~625 |
+| `src/mind_mem/mcp/infra/` | 3 | ~1,575 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 180 | ~364,038 |
+| `tests/` | 180 | ~364,105 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -301,7 +301,8 @@
 - `mcp_entry.py` (~217 tok, medium) — Thin entry point for mind-mem-mcp console script."""
 ### `src/mind_mem/mcp/infra/`
 
-- `__init__.py` (~142 tok, small) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
+- `acl.py` (~895 tok, large) — Per-tool ACL — scope enforcement for the MCP surface.
+- `__init__.py` (~197 tok, small) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
 - `workspace.py` (~483 tok, medium) — Workspace resolution + path-safety helpers.
 ### `src/mind_mem/mcp/`
 
@@ -504,7 +505,7 @@
 - `test_llm_extractor.py` (~1820 tok, huge) — Tests for the optional LLM entity/fact extractor module."""
 - `test_llm_noise_profile.py` (~2354 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_maintenance_migrate.py` (~710 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
-- `test_mcp_integration.py` (~5110 tok, huge) — MCP transport and auth integration tests (#474).
+- `test_mcp_integration.py` (~5177 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_server.py` (~4897 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
 - `test_mcp_tools.py` (~277 tok, medium) — Tests for MCP server tool definitions."""
 - `test_mcp_v140.py` (~5241 tok, huge) — Tests for MCP v1.4.0 features — issues #29, #31, #35, #36.
