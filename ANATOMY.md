@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 501 | **Est. tokens:** ~1,022,372
-**Generated:** 2026-04-20 06:21 UTC
+**Files:** 508 | **Est. tokens:** ~1,029,897
+**Generated:** 2026-04-20 06:26 UTC
 
 ## Token Budget Guide
 
@@ -22,10 +22,12 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~65,589 |
+| `./` | 28 | ~67,345 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,429 |
-| `docs/` | 37 | ~45,775 |
+| `deploy/` | 2 | ~588 |
+| `deploy/docker/` | 1 | ~495 |
+| `docs/` | 38 | ~46,863 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `examples/` | 2 | ~466 |
@@ -43,13 +45,14 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 116 | ~399,324 |
+| `src/mind_mem/` | 116 | ~401,041 |
 | `src/mind_mem/mcp/` | 3 | ~3,092 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
 | `src/mind_mem/mcp/tools/` | 16 | ~32,001 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
+| `src/mind_mem/storage/` | 1 | ~809 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 182 | ~368,225 |
+| `tests/` | 183 | ~369,297 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -69,6 +72,7 @@
 - `generate_mind7b_training.py` (~5558 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
 - `.gitignore` (~114 tok, small) — *.pyc
+- `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~3337 tok, huge) — mind-mem installer — sets up MCP server + hooks for all supported clients
 - `LICENSE` (~2695 tok, huge)
 - `Makefile` (~569 tok, large) — .PHONY: test lint bench install dev clean smoke help regen-bash-literals
@@ -100,6 +104,15 @@
 - `niah_full_results.txt` (~5140 tok, huge) — ============================= test session starts ==============================
 - `NIAH.md` (~1513 tok, huge) — Needle In A Haystack (NIAH) Benchmark
 - `REPORT.md` (~3973 tok, huge) — mind-mem Benchmark Report
+### `deploy/`
+
+- `docker-compose.yml` (~506 tok, large) — name: mind-mem
+### `deploy/docker/`
+
+- `Dockerfile` (~495 tok, medium) — # Stage 1: build — install all deps and produce a pruned site-packages
+### `deploy/`
+
+- `Makefile` (~82 tok, small) — .PHONY: up down logs shell status build pull
 ### `docs/adr/`
 
 - `001-zero-dependencies.md` (~316 tok, medium) — ADR-001: Zero External Dependencies in Core
@@ -116,7 +129,7 @@
 - `client-integrations.md` (~2533 tok, huge) — Client Integrations
 - `comparison.md` (~313 tok, medium) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~5223 tok, huge) — Configuration Reference
+- `configuration.md` (~5865 tok, huge) — Configuration Reference
 ### `docs/design/`
 
 - `v3-mcp-surface-reduction.md` (~1080 tok, large) — v3.0 Design: MCP Tool Surface Reduction
@@ -124,6 +137,7 @@
 ### `docs/`
 
 - `development.md` (~358 tok, medium) — Development Guide
+- `docker-deployment.md` (~446 tok, medium) — Docker Deployment
 - `faq.md` (~374 tok, medium) — FAQ
 - `getting-started.md` (~405 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
@@ -251,7 +265,7 @@
 - `block_metadata.py` (~2223 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~7111 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_store_encrypted.py` (~2244 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store.py` (~4246 tok, huge) — BlockStore abstraction — decouples block access from storage format.
+- `block_store.py` (~5923 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `calibration.py` (~4811 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
 - `capture.py` (~3698 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
@@ -289,7 +303,7 @@
 - `hook_installer.py` (~9442 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hybrid_recall.py` (~4861 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `__init__.py` (~499 tok, medium) — # Mind Mem — Memory + Immune System for AI agents
+- `__init__.py` (~539 tok, large) — # Mind Mem — Memory + Immune System for AI agents
 - `init_workspace.py` (~2062 tok, huge) — mind-mem workspace initializer. Zero external deps.
 - `intel_scan.py` (~12579 tok, huge) — Mind Mem Intelligence Scanner v2.0 — Self-hosted, zero external dependencies.
 - `intent_router.py` (~3106 tok, huge) — mind-mem Intent Router — 9-type adaptive query intent classification.
@@ -395,6 +409,11 @@
 - `speculative_prefetch.py` (~3195 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `sqlite_index.py` (~10959 tok, huge) — Mind Mem SQLite FTS5 Index — incremental lexical indexing. Zero external deps.
 - `staleness.py` (~1179 tok, large) — # Copyright 2026 STARGA, Inc.
+### `src/mind_mem/storage/`
+
+- `__init__.py` (~809 tok, large) — Storage factory for mind-mem block stores (v3.2.0).
+### `src/mind_mem/`
+
 - `_task_status_literals.sh` (~118 tok, small) — AUTO-GENERATED — do not edit by hand.
 - `tiered_memory.py` (~1102 tok, large) — # Copyright 2026 STARGA, Inc.
 - `tracking.py` (~1918 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -601,6 +620,7 @@
 - `test_speculative_prefetch.py` (~3071 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sqlite_index.py` (~4726 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
 - `test_stopwords.py` (~247 tok, medium) — Tests for stopword handling."""
+- `test_storage_factory.py` (~1072 tok, large) — Tests for mind_mem.storage.get_block_store factory (v3.2.0)."""
 - `test_temporal.py` (~223 tok, medium) — Tests for temporal filtering module."""
 - `test_tier_decay.py` (~924 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_tokenization.py` (~436 tok, medium) — Tests for tokenization module."""
