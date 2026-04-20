@@ -864,17 +864,52 @@ docs.
 
 Close the retrieval-quality gap and widen the governance moat. All additive — no breaking changes to existing recall contracts.
 
-- [ ] **Query decomposition** — `src/mind_mem/query_planner.py`; LLM-backed plan that splits complex queries into sub-queries and merges results; config toggle `retrieval.query_decomposition`
-- [ ] **Multi-hop graph traversal** — `src/mind_mem/graph_recall.py`; extend `causal_graph.py` to traverse `relates_to` / `supersedes` / `contradicts` edges up to N hops; `recall(multi_hop=True, max_hops=3)`
+### LoCoMo score improvements — 4-tier roadmap
+
+Baseline: v1.1.0 overall mean 70.54 (Mistral-Large answerer + judge). LoCoMo category breakdown shows where points bleed:
+
+| Category | Baseline | N | Biggest intervention |
+|---|---|---|---|
+| multi-hop | 51.10 | 321 | graph traversal + decomposition |
+| temporal | 65.89 | 96 | half-life decay in scorer |
+| single-hop | 68.68 | 282 | query reformulation + RRF |
+| open-domain | 70.27 | 841 | conversation-boundary preservation |
+| adversarial | 87.22 | 446 | at ceiling |
+
+Projected v3.3.0 overall with Tier-1+2 shipped: **74-76 (Mistral-Mistral)** / **82-85 (Opus answerer + Mistral judge)**.
+
+#### Tier 1 — highest leverage, must ship
+
+- [ ] **Query decomposition** — `src/mind_mem/query_planner.py`; LLM-backed plan that splits complex queries into sub-queries and merges results; config toggle `retrieval.query_decomposition`. **Target: multi-hop 51 → 65 (+4.5 overall).** ~400 LOC + small-model fallback (Mistral-small / mind-mem-4b).
+- [ ] **Multi-hop graph traversal** — `src/mind_mem/graph_recall.py`; extend `causal_graph.py` to traverse `relates_to` / `supersedes` / `contradicts` edges up to N hops; `recall(multi_hop=True, max_hops=3)`. **Target: multi-hop +10 further (+3.2 overall).** ~600 LOC.
+- [ ] **Temporal re-weighting in the hot path** — half-life decay on `Created:` / `Date:` field inside the scorer (not just as a filter); config `retrieval.temporal_half_life_days` (default 90). **Target: temporal 66 → 78 (+0.6 overall).** ~80 LOC in `_recall_scoring.py`.
+
+#### Tier 2 — not currently roadmapped, high ROI
+
+- [ ] **Query reformulation + RRF** — generate 3-5 LLM paraphrases of the question, retrieve for each variant, RRF-fuse. Config: `retrieval.reformulations: 3`. **Target: single-hop 68 → 76, open-domain 70 → 76 (+2.7 overall).** ~150 LOC; reuses existing RRF infra. Small-model fallback so it doesn't force an LLM call per recall.
+- [ ] **Conversation-boundary preservation** — LoCoMo inputs are multi-session dialogues; v3.x flattens to block-sized chunks, which breaks co-reference. Preserve `session_id` as block metadata and weight blocks from the same session as the question's topic higher. **Target: multi-hop + open-domain +3 each (+1.3 overall).** ~200 LOC across ingestion + scorer.
+- [ ] **Default cross-encoder rerank on ambiguous queries** — already shipped as config-gated. Default ON for top-30 → top-10 when intent router flags multi-hop or temporal. **Target: +2 overall across all categories.** ~40 LOC in `intent_router.py` + one config toggle; no new deps since cross-encoder already exists.
+
+#### Tier 3 — bigger architectural bets
+
+- [ ] **Answerer co-design: structured evidence bundle** — `recall(format="bundle")` returns `{facts: [...], relations: [...], timeline: [...]}` JSON instead of 18 raw blocks, letting the answerer reason over pre-digested structure. **Target: open-domain + multi-hop +4 each (+1.9 overall).** ~500 LOC; gated on config so existing callers unchanged.
+- [ ] **Entity-graph prefetch** — when a question mentions a Person / Project / Tool, pre-walk their edges before BM25 and inject those blocks into the RRF pool. **Target: +2 overall.** ~300 LOC; depends on entity extraction hook (already in ingestion).
+
+#### Tier 4 — infrastructure (v3.4.0+ material)
+
+- [ ] **Reranker ensemble** — `src/mind_mem/rerank_ensemble.py`; cross-encoder + BGE + LLM-as-reranker, Borda-count voting. **Target: +1-2 overall.** ~400 LOC, heavy dep footprint; gated behind `mind-mem[rerank-ensemble]` extra.
+- [ ] **Per-tier learned weights** — replace the hard-coded `Tier.retrieval_boost` multipliers (0.7 / 1.0 / 1.5 / 2.0) with per-category weights learned from the LoCoMo judge signal. Offline training loop reads `locomo_judge_results_*.json`, grid-searches multipliers, writes `retrieval.tier_boost_weights` into `mind-mem.json`. **Target: +1 overall.** ~200 LOC code + one-off training script.
+
+### Other v3.3.0 items (not primarily LoCoMo-score-driven)
+
 - [ ] **Expanded typed-edge taxonomy** (LeanKG-inspired) — add first-class edges `cites` / `derives_from` / `depends_on` / `tested_by` alongside the existing `relates_to` / `supersedes` / `contradicts`; enables impact-analysis queries ("what depends on DEC-006?", "what cites this invariant?") as graph traversal instead of scans. Targets the same token-reduction story LeanKG demonstrates for code graphs (13–42 tokens for impact queries vs 10K+ via full recall) but over decisions / entities / invariants instead of AST. Paired with `graph_recall.py` above — same traversal engine, richer edge semantics.
-- [ ] **Temporal re-weighting in the hot path** — half-life decay on `Created:` field inside the scorer; config `retrieval.temporal_half_life_days` (default 90); currently available as a filter but not as a ranking signal
 - [ ] **Probabilistic truth score** — `src/mind_mem/truth_score.py`; Bayesian update on block `importance` from contradiction votes; exposed as `block.truth_score` in recall responses
 - [ ] **Streaming ingest + back-pressure queue** — `src/mind_mem/streaming.py`; websocket/SSE endpoint with back-pressure via a bounded mpsc channel (drop-oldest when writer pool saturates); drop-in replacement for `capture --stdin` in high-rate pipelines; per-client token-bucket rate limit
 - [ ] **Consensus voting** — extend `conflict_resolver.py` with quorum across agents, weighted by `namespace.trust_weight`; resolves contradictions without human review when confidence exceeds threshold
 - [ ] **Graph + timeline visualization** — `web/` Next.js app; D3 / react-flow graph view (nodes = blocks, edges = relationships), timeline view, drift heatmap; reads from REST API shipped in v3.2.0. v3.2.0 already emits `[[wikilinks]]` on `vault_sync` so an Obsidian-mounted vault gets a graph view for free; this web UI is the non-Obsidian alternative.
 - [ ] **mind-mem-4b v2 fine-tune** — retrain the bundled 4B model on the v3.2.0 MCP surface so it natively emits the 7 consolidated dispatcher calls (`recall(mode=…)`, `staged_change(phase=…)`, `graph(action=…)`, etc.). v3.2.0 works with the v1 fine-tune because every legacy tool name still resolves; this is a tool-selection-reliability upgrade, not a correctness fix. Training data re-uses the v3.2.0 test fixtures + recorded tool-call transcripts.
 
-**Estimated:** ~1500 lines retrieval + ~2000 lines web UI + ~2 GPU-days retrain. New optional extras: `mind-mem[reasoning]`, `mind-mem[streaming]`.
+**Estimated (v3.3.0):** ~2400 lines retrieval (Tier 1+2+3) + ~2000 lines web UI + ~2 GPU-days retrain. New optional extras: `mind-mem[reasoning]`, `mind-mem[streaming]`, `mind-mem[rerank-ensemble]` (Tier 4).
 
 ## v4.0.0 — Platform Scale (production)
 

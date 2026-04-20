@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 579 | **Est. tokens:** ~1,182,480
-**Generated:** 2026-04-20 12:44 UTC
+**Files:** 579 | **Est. tokens:** ~1,183,512
+**Generated:** 2026-04-20 16:28 UTC
 
 ## Token Budget Guide
 
@@ -22,9 +22,9 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~72,154 |
+| `./` | 30 | ~73,016 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `benchmarks/` | 16 | ~43,789 |
+| `benchmarks/` | 16 | ~43,959 |
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
@@ -91,7 +91,7 @@
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22305 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~15978 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~16840 tok, huge) — mind-mem Roadmap
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
 - `SECURITY.md` (~1752 tok, huge) — Security Policy
 - `SPEC.md` (~5184 tok, huge) — Mind Mem Formal Specification v1.0
@@ -111,7 +111,7 @@
 - `grid_search.py` (~2849 tok, huge) — BM25F Field Weight Grid Search for mind-mem Recall Engine.
 - `__init__.py` (~0 tok, tiny)
 - `locomo_harness.py` (~4147 tok, huge) — LoCoMo Benchmark Harness for mind-mem Recall Engine.
-- `locomo_judge.py` (~10745 tok, huge) — LoCoMo LLM-as-Judge Evaluation for Mind-Mem.
+- `locomo_judge.py` (~10915 tok, huge) — LoCoMo LLM-as-Judge Evaluation for Mind-Mem.
 - `longmemeval_harness.py` (~2973 tok, huge) — LongMemEval Benchmark Harness for mind-mem recall engine.
 - `niah_full_results.txt` (~5140 tok, huge) — ============================= test session starts ==============================
 - `NIAH.md` (~1620 tok, huge) — Needle In A Haystack (NIAH) Benchmark
