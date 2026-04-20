@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 597 | **Est. tokens:** ~1,220,620
-**Generated:** 2026-04-20 17:52 UTC
+**Files:** 601 | **Est. tokens:** ~1,225,383
+**Generated:** 2026-04-20 17:55 UTC
 
 ## Token Budget Guide
 
@@ -24,7 +24,7 @@
 |-----------|-------|-------------|
 | `./` | 30 | ~73,423 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `benchmarks/` | 19 | ~49,643 |
+| `benchmarks/` | 21 | ~51,163 |
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
@@ -51,7 +51,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 126 | ~440,554 |
+| `src/mind_mem/` | 127 | ~442,309 |
 | `src/mind_mem/api/` | 4 | ~12,861 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 211 | ~420,723 |
+| `tests/` | 212 | ~422,211 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -114,11 +114,13 @@
 - `__init__.py` (~0 tok, tiny)
 - `locomo_harness.py` (~4147 tok, huge) — LoCoMo Benchmark Harness for mind-mem Recall Engine.
 - `locomo_judge.py` (~10915 tok, huge) — LoCoMo LLM-as-Judge Evaluation for Mind-Mem.
+- `locomo_v3.3.0_benchmark_config.json` (~431 tok, medium) — Keys: _comment, version, recall, cache, cross_encoder
 - `longmemeval_harness.py` (~2973 tok, huge) — LongMemEval Benchmark Harness for mind-mem recall engine.
 - `niah_full_results.txt` (~5140 tok, huge) — ============================= test session starts ==============================
 - `NIAH.md` (~1620 tok, huge) — Needle In A Haystack (NIAH) Benchmark
 - `niah_v3.2.1_redis_results.txt` (~113 tok, small) — ============================= test session starts ==============================
 - `niah_v3.2.1_results.txt` (~205 tok, medium) — ============================= test session starts ==============================
+- `README_benchmark_mode.md` (~1089 tok, large) — Full-capability benchmark mode (v3.3.0)
 - `REPORT.md` (~3973 tok, huge) — mind-mem Benchmark Report
 - `tier_weight_search.py` (~1615 tok, huge) — Grid-search per-tier weights against LoCoMo judge scores (v3.3.0 T4 #10).
 ### `deploy/`
@@ -383,7 +385,7 @@
 - `graph_recall.py` (~1907 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~9442 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hybrid_recall.py` (~7721 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `hybrid_recall.py` (~7943 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~539 tok, large) — # Mind Mem — Memory + Immune System for AI agents
 - `init_workspace.py` (~2062 tok, huge) — mind-mem workspace initializer. Zero external deps.
@@ -473,6 +475,7 @@
 - `rerank_ensemble.py` (~3275 tok, huge) — Reranker ensemble via Borda count (v3.3.0 Tier 4 #9).
 - `retrieval_graph.py` (~4984 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
 - `schema_version.py` (~1897 tok, huge) — Mind-Mem Schema Version Migration. Zero external deps.
+- `session_boost.py` (~1533 tok, huge) — Session-boundary preservation for recall (v3.3.0 Tier 2 #5).
 - `session_summarizer.py` (~2885 tok, huge) — mind-mem Session Summarizer. Zero external deps.
 ### `src/mind_mem/skill_opt/`
 
@@ -720,6 +723,7 @@
 - `test_scan_engine.py` (~333 tok, medium) — Tests for integrity scan engine."""
 - `test_schema_version.py` (~1758 tok, huge) — Tests for schema_version.py — zero external deps (stdlib unittest)."""
 - `test_scoring.py` (~337 tok, medium) — Tests for BM25 scoring functions."""
+- `test_session_boost.py` (~1488 tok, large) — v3.3.0 Tier 2 #5 — session-boundary preservation via recall-side boost.
 - `test_session_summarizer.py` (~3973 tok, huge) — Comprehensive tests for mind_mem/session_summarizer.py.
 - `test_skeptical_query.py` (~194 tok, small) — Tests for skeptical query detection."""
 - `test_skill_opt.py` (~3356 tok, huge) — # Copyright 2026 STARGA, Inc.

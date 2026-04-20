@@ -1,0 +1,68 @@
+{
+  "_comment": "v3.3.0 benchmark-mode config — activates every optional retrieval feature so LoCoMo measures the full capability of the release. Paste into a workspace's mind-mem.json before running benchmarks/locomo_judge.py. Every optional toggle is explicit; nothing relies on auto-enable inference.",
+  "version": "3.3.0",
+  "recall": {
+    "backend": "hybrid",
+    "rrf_k": 60,
+    "bm25_weight": 1.0,
+    "vector_weight": 1.0,
+    "model": "all-MiniLM-L6-v2",
+    "vector_enabled": true,
+    "onnx_backend": true,
+    "provider": "sqlite_vec",
+    "knee_cutoff": false
+  },
+  "cache": {
+    "enabled": true,
+    "redis_url": "redis://localhost:6379/0",
+    "ttl_seconds": 3600,
+    "lru_max_entries": 2048
+  },
+  "cross_encoder": {
+    "enabled": true,
+    "auto_enable": true,
+    "top_k": 10,
+    "blend_weight": 0.6
+  },
+  "query_expansion": {
+    "enabled": true,
+    "auto_enable": true,
+    "provider": "nlp",
+    "max_expansions": 3
+  },
+  "retrieval": {
+    "temporal_half_life_days": 90,
+    "tier_boost": true,
+    "query_decomposition": {
+      "enabled": true,
+      "auto_enable": true,
+      "provider": "nlp",
+      "max_subqueries": 4
+    },
+    "multi_hop": {
+      "enabled": true,
+      "auto_enable": true,
+      "max_hops": 2,
+      "decay": 0.5,
+      "max_neighbors_per_hop": 5
+    },
+    "entity_prefetch": {
+      "enabled": true,
+      "auto_enable": true,
+      "max_entities": 3,
+      "max_hops": 1,
+      "entity_score": 5.0
+    },
+    "session_boost": {
+      "enabled": true,
+      "auto_enable": true,
+      "top_seed_count": 3,
+      "boost": 0.3
+    },
+    "reranker_ensemble": {
+      "enabled": true,
+      "rerankers": ["cross_encoder", "bge"],
+      "top_k": 10
+    }
+  }
+}

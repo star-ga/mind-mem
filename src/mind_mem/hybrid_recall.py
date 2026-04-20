@@ -424,6 +424,9 @@ class HybridBackend:
             result = self._maybe_graph_expand(query, workspace, result, corpus=corpus)
             result = self._maybe_entity_prefetch(query, workspace, result, corpus=corpus)
 
+            # v3.3.0 Tier 2 #5 — session-boundary preservation.
+            result = self._maybe_session_boost(result)
+
             # Enforce the caller's limit AFTER expansions — previous code
             # truncated before the graph/entity expansions appended
             # blocks, so the final list could exceed ``limit``. Dedup
@@ -524,6 +527,25 @@ class HybridBackend:
         )
 
         return fused[:limit]
+
+    def _maybe_session_boost(self, results: list[dict]) -> list[dict]:
+        """Apply session-boundary preservation (v3.3.0 Tier 2 #5)."""
+        if not results:
+            return results
+        try:
+            from .session_boost import (
+                apply_session_boost,
+                is_session_boost_enabled,
+                resolve_session_boost_config,
+            )
+
+            if not is_session_boost_enabled(self._config, results):
+                return results
+            params = resolve_session_boost_config(self._config)
+            return apply_session_boost(results, **params)
+        except Exception as exc:  # pragma: no cover — defensive
+            _log.warning("session_boost_failed", error=str(exc))
+            return results
 
     def _load_corpus_if_needed(self, query: str, workspace: str) -> list[dict] | None:
         """Return the workspace block corpus — shared by graph + entity
