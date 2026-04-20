@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 575 | **Est. tokens:** ~1,178,432
-**Generated:** 2026-04-20 12:10 UTC
+**Files:** 579 | **Est. tokens:** ~1,182,480
+**Generated:** 2026-04-20 12:44 UTC
 
 ## Token Budget Guide
 
@@ -24,7 +24,7 @@
 |-----------|-------|-------------|
 | `./` | 30 | ~72,154 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `benchmarks/` | 12 | ~39,741 |
+| `benchmarks/` | 16 | ~43,789 |
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
@@ -103,6 +103,9 @@
 ### `benchmarks/`
 
 - `bench_kernels.py` (~4027 tok, huge) — Benchmark: MIND kernels vs pure Python scoring.
+- `cache_effectiveness.py` (~2680 tok, huge) — Cache-effectiveness benchmark — Redis L2 vs LRU-only vs no-cache.
+- `cache_effectiveness_v3.2.1.json` (~227 tok, medium) — Keys: n_blocks, n_queries, pool_size, repeat_pct, runs
+- `CACHE.md` (~1028 tok, large) — Recall Cache Effectiveness Benchmark
 - `compare_runs.py` (~857 tok, large) — Compare two LoCoMo benchmark runs side-by-side.
 - `crossencoder_ab.py` (~3205 tok, huge) — Cross-Encoder A/B Test — retrieval-level comparison.
 - `grid_search.py` (~2849 tok, huge) — BM25F Field Weight Grid Search for mind-mem Recall Engine.
@@ -112,6 +115,7 @@
 - `longmemeval_harness.py` (~2973 tok, huge) — LongMemEval Benchmark Harness for mind-mem recall engine.
 - `niah_full_results.txt` (~5140 tok, huge) — ============================= test session starts ==============================
 - `NIAH.md` (~1620 tok, huge) — Needle In A Haystack (NIAH) Benchmark
+- `niah_v3.2.1_redis_results.txt` (~113 tok, small) — ============================= test session starts ==============================
 - `niah_v3.2.1_results.txt` (~205 tok, medium) — ============================= test session starts ==============================
 - `REPORT.md` (~3973 tok, huge) — mind-mem Benchmark Report
 ### `deploy/`
