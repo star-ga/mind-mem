@@ -5,7 +5,7 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 543 | **Est. tokens:** ~1,084,262
+**Files:** 544 | **Est. tokens:** ~1,087,457
 **Generated:** 2026-04-20 06:56 UTC
 
 ## Token Budget Guide
@@ -28,7 +28,7 @@
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 40 | ~52,122 |
+| `docs/` | 41 | ~54,720 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `examples/` | 2 | ~466 |
@@ -50,7 +50,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 118 | ~412,804 |
+| `src/mind_mem/` | 118 | ~413,407 |
 | `src/mind_mem/api/` | 2 | ~3,933 |
 | `src/mind_mem/mcp/` | 3 | ~3,122 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,854 |
@@ -58,7 +58,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~1,018 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 189 | ~382,242 |
+| `tests/` | 189 | ~382,236 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -140,7 +140,7 @@
 - `client-integrations.md` (~2533 tok, huge) — Client Integrations
 - `comparison.md` (~313 tok, medium) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~6244 tok, huge) — Configuration Reference
+- `configuration.md` (~6451 tok, huge) — Configuration Reference
 ### `docs/design/`
 
 - `v3-mcp-surface-reduction.md` (~1080 tok, large) — v3.0 Design: MCP Tool Surface Reduction
@@ -167,6 +167,7 @@
 - `security-audit-sow.md` (~3336 tok, huge) — mind-mem — External Security Audit Statement of Work (SoW)
 - `security-model.md` (~350 tok, medium) — Security Model
 - `setup.md` (~1741 tok, huge) — Setup
+- `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide
 - `supply-chain-security.md` (~1051 tok, large) — Supply-Chain Security
 - `testing-guide.md` (~369 tok, medium) — Testing Guide
 - `troubleshooting.md` (~681 tok, large) — Troubleshooting
