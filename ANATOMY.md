@@ -5,7 +5,7 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 567 | **Est. tokens:** ~1,159,182
+**Files:** 567 | **Est. tokens:** ~1,159,146
 **Generated:** 2026-04-20 08:28 UTC
 
 ## Token Budget Guide
@@ -31,7 +31,7 @@
 | `docs/` | 48 | ~68,091 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
-| `docs/security-baselines/` | 1 | ~19,010 |
+| `docs/security-baselines/` | 1 | ~18,974 |
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
