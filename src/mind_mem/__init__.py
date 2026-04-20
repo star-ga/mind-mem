@@ -36,6 +36,6 @@ Core modules:
 
 from .storage import get_block_store
 
-__version__ = "3.1.9"
+__version__ = "3.2.0"
 
 __all__ = ["get_block_store"]
