@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 601 | **Est. tokens:** ~1,225,383
-**Generated:** 2026-04-20 17:55 UTC
+**Files:** 603 | **Est. tokens:** ~1,228,581
+**Generated:** 2026-04-20 17:57 UTC
 
 ## Token Budget Guide
 
@@ -51,7 +51,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 127 | ~442,309 |
+| `src/mind_mem/` | 128 | ~443,987 |
 | `src/mind_mem/api/` | 4 | ~12,861 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 212 | ~422,211 |
+| `tests/` | 213 | ~423,731 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -510,6 +510,7 @@
 - `tracking.py` (~1918 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `trajectory.py` (~2233 tok, huge) — Trajectory Memory — task execution trace storage and recall.
 - `transcript_capture.py` (~2333 tok, huge) — mind-mem Transcript JSONL Capture. Zero external deps.
+- `truth_score.py` (~1678 tok, huge) — Probabilistic truth score for memory blocks (v3.3.0).
 - `turbo_quant.py` (~1078 tok, large) — # Copyright 2026 STARGA, Inc.
 - `uncertainty_propagation.py` (~1262 tok, large) — # Copyright 2026 STARGA, Inc.
 - `validate_py.py` (~4830 tok, huge) — Mind Mem Integrity Validator — canonical engine.
@@ -743,6 +744,7 @@
 - `test_tokenization.py` (~436 tok, medium) — Tests for tokenization module."""
 - `test_trajectory.py` (~2392 tok, huge) — Tests for trajectory.py — trajectory memory block operations."""
 - `test_transcript_capture.py` (~3235 tok, huge) — Tests for transcript_capture.py — zero external deps (stdlib unittest)."""
+- `test_truth_score.py` (~1520 tok, huge) — v3.3.0 — probabilistic truth score.
 - `test_uncertainty_propagation.py` (~2158 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_unicode_edge_cases.py` (~2440 tok, huge) — Tests for Unicode and edge case handling across mind-mem modules."""
 - `test_v28_completion.py` (~4565 tok, huge) — # Copyright 2026 STARGA, Inc.
