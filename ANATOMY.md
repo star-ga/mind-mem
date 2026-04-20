@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 542 | **Est. tokens:** ~1,078,111
-**Generated:** 2026-04-20 06:55 UTC
+**Files:** 543 | **Est. tokens:** ~1,084,262
+**Generated:** 2026-04-20 06:56 UTC
 
 ## Token Budget Guide
 
@@ -42,7 +42,7 @@
 | `lib/` | 1 | ~2,176 |
 | `mind/` | 19 | ~5,516 |
 | `scripts/` | 3 | ~2,692 |
-| `sdk/go/` | 9 | ~6,719 |
+| `sdk/go/` | 9 | ~6,773 |
 | `sdk/js/` | 5 | ~1,388 |
 | `sdk/js/src/` | 4 | ~2,320 |
 | `sdk/js/test/` | 1 | ~2,191 |
@@ -50,15 +50,15 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 118 | ~409,976 |
-| `src/mind_mem/api/` | 2 | ~3,817 |
+| `src/mind_mem/` | 118 | ~412,804 |
+| `src/mind_mem/api/` | 2 | ~3,933 |
 | `src/mind_mem/mcp/` | 3 | ~3,122 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,854 |
 | `src/mind_mem/mcp/tools/` | 16 | ~32,301 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~1,018 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 188 | ~379,089 |
+| `tests/` | 189 | ~382,242 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -258,12 +258,12 @@
 - `client.go` (~1008 tok, large) — Option is a functional option for NewClient.
 - `client_test.go` (~2905 tok, huge) — Helpers
 - `doc.go` (~334 tok, medium) — Package mindmem is the official Go SDK for the mind-mem REST API.
-- `errors.go` (~583 tok, large) — APIError is returned for any non-2xx response from the mind-mem server.
+- `errors.go` (~640 tok, large) — APIError is returned for any non-2xx response from the mind-mem server.
 - `.gitignore` (~5 tok, tiny) — *.test
 - `go.mod` (~13 tok, tiny) — module github.com/star-ga/mind-mem/sdk/go
 - `methods.go` (~500 tok, large) — Recall queries the memory store using full-text and semantic search.
 - `README.md` (~520 tok, large) — mind-mem Go SDK
-- `types.go` (~851 tok, large) — BlockTier represents the storage tier of a memory block.
+- `types.go` (~848 tok, large) — BlockTier represents the storage tier of a memory block.
 ### `sdk/js/`
 
 - `.gitignore` (~5 tok, tiny) — node_modules/
@@ -302,7 +302,7 @@
 ### `src/mind_mem/api/`
 
 - `__init__.py` (~20 tok, tiny)
-- `rest.py` (~3797 tok, huge) — REST API layer for mind-mem (v3.2.0).
+- `rest.py` (~3913 tok, huge) — REST API layer for mind-mem (v3.2.0).
 ### `src/mind_mem/`
 
 - `apply_engine.py` (~12984 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
@@ -409,7 +409,7 @@
 - `mind_ffi.py` (~5094 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~4942 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~8373 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mrs.py` (~1604 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `multi_modal.py` (~1659 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `namespaces.py` (~3560 tok, huge) — mind-mem Multi-Agent Namespace & ACL Engine. Zero external deps.
@@ -625,6 +625,7 @@
 - `test_observation_axis.py` (~3330 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_observation_compress.py` (~2754 tok, huge) — Tests for observation_compress module.
 - `test_ontology.py` (~2306 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_postgres_block_store.py` (~3153 tok, huge) — v3.2.0 §1.4 PR-5 — PostgresBlockStore integration tests.
 - `test_prefetch_context.py` (~1487 tok, large) — Tests for prefetch_context() in recall.py."""
 - `test_prefetch.py` (~326 tok, medium) — Tests for prefetch functionality."""
 - `test_prefix_cache.py` (~3140 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -658,7 +659,7 @@
 - `test_recall_vector.py` (~4901 tok, huge) — Tests for recall_vector.py — VectorBackend semantic search."""
 - `test_rerank_debug.py` (~342 tok, medium) — Tests for rerank debug mode."""
 - `test_reranking.py` (~246 tok, medium) — Tests for reranking module."""
-- `test_rest_api.py` (~3511 tok, huge) — Tests for the mind-mem REST API layer (v3.2.0).
+- `test_rest_api.py` (~3505 tok, huge) — Tests for the mind-mem REST API layer (v3.2.0).
 - `test_retrieval_diagnostics.py` (~2419 tok, huge) — Tests for retrieval diagnostics (#428), corpus isolation (#429), and intent instrumentation (#430)."""
 - `test_retrieval_graph.py` (~2242 tok, huge) — Tests for retrieval_graph.py — retrieval logging, co-retrieval graph, hard negatives."""
 - `test_rm3_expand.py` (~321 tok, medium) — Tests for RM3 query expansion."""
