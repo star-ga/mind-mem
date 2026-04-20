@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 523 | **Est. tokens:** ~1,044,034
-**Generated:** 2026-04-20 06:32 UTC
+**Files:** 526 | **Est. tokens:** ~1,050,605
+**Generated:** 2026-04-20 06:33 UTC
 
 ## Token Budget Guide
 
@@ -22,19 +22,19 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 28 | ~67,386 |
+| `./` | 29 | ~67,928 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,429 |
 | `deploy/` | 2 | ~588 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 38 | ~46,882 |
+| `docs/` | 39 | ~50,578 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 9 | ~3,273 |
+| `.github/workflows/` | 10 | ~5,591 |
 | `hooks/` | 3 | ~801 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -49,7 +49,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 117 | ~402,666 |
+| `src/mind_mem/` | 117 | ~402,681 |
 | `src/mind_mem/mcp/` | 3 | ~3,092 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
 | `src/mind_mem/mcp/tools/` | 16 | ~32,176 |
@@ -76,13 +76,14 @@
 - `generate_mind7b_training.py` (~5558 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
 - `.gitignore` (~114 tok, small) — *.pyc
+- `.gitleaks.toml` (~307 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~3337 tok, huge) — mind-mem installer — sets up MCP server + hooks for all supported clients
 - `LICENSE` (~2695 tok, huge)
 - `Makefile` (~569 tok, large) — .PHONY: test lint bench install dev clean smoke help regen-bash-literals
 - `mcp_server.py` (~662 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
-- `.pre-commit-config.yaml` (~131 tok, small) — repos:
+- `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~1541 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22227 tok, huge) — Shared Memory Across All Your AI Agents
@@ -136,7 +137,7 @@
 - `client-integrations.md` (~2533 tok, huge) — Client Integrations
 - `comparison.md` (~313 tok, medium) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~5884 tok, huge) — Configuration Reference
+- `configuration.md` (~6244 tok, huge) — Configuration Reference
 ### `docs/design/`
 
 - `v3-mcp-surface-reduction.md` (~1080 tok, large) — v3.0 Design: MCP Tool Surface Reduction
@@ -160,6 +161,7 @@
 - `quickstart.md` (~601 tok, large) — mind-mem Quickstart
 - `roadmap.md` (~1294 tok, large) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
+- `security-audit-sow.md` (~3336 tok, huge) — mind-mem — External Security Audit Statement of Work (SoW)
 - `security-model.md` (~350 tok, medium) — Security Model
 - `setup.md` (~1741 tok, huge) — Setup
 - `testing-guide.md` (~369 tok, medium) — Testing Guide
@@ -197,8 +199,9 @@
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs
 - `label-sync.yml` (~112 tok, small) — name: Label Sync
-- `release.yml` (~531 tok, large) — name: Release
+- `release.yml` (~1163 tok, large) — name: Release
 - `security-review.yml` (~240 tok, medium) — name: Security Review
+- `security.yml` (~1686 tok, huge) — name: Supply-Chain Security
 - `stale.yml` (~241 tok, medium) — name: Stale Issues
 ### `hooks/`
 
@@ -401,7 +404,7 @@
 - `query_expansion.py` (~4600 tok, huge) — Multi-query expansion for improved recall.
 - `_recall_constants.py` (~2420 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
 - `_recall_context.py` (~2601 tok, huge) — Recall engine context packing — post-retrieval augmentation rules."""
-- `_recall_core.py` (~14229 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
+- `_recall_core.py` (~14244 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
 - `_recall_detection.py` (~5162 tok, huge) — Recall engine detection — query type classification, text extraction, block utilities."""
 - `_recall_expansion.py` (~3267 tok, huge) — Recall engine query expansion — domain synonyms, month normalization, RM3."""
 - `recall.py` (~1049 tok, large) — mind-mem Recall Engine (BM25 + TF-IDF + Graph + Stemming). Zero external deps.
