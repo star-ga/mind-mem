@@ -31,7 +31,7 @@ user breaks.
 from __future__ import annotations
 
 import os
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from .block_parser import get_active, get_by_id, parse_file
 from .block_store import BlockStore, MarkdownBlockStore
@@ -184,7 +184,11 @@ def get_block_store(workspace: str) -> BlockStore:
     passphrase = _passphrase()
     if passphrase:
         try:
-            return EncryptedBlockStore(workspace, passphrase=passphrase)
+            # EncryptedBlockStore duck-types the BlockStore Protocol —
+            # mypy can't infer structural conformance across the
+            # dependent-type wrapper, hence the cast. Fixed in v3.2.1
+            # per docs/review-architecture-v3.2.0.md §5.
+            return cast(BlockStore, EncryptedBlockStore(workspace, passphrase=passphrase))
         except Exception as exc:
             _log.warning(
                 "encrypted_block_store_init_failed",

@@ -28,4 +28,5 @@ except ModuleNotFoundError as exc:  # pragma: no cover
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
+    raise SystemExit(0)

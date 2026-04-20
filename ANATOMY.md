@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 570 | **Est. tokens:** ~1,167,469
-**Generated:** 2026-04-20 09:23 UTC
+**Files:** 570 | **Est. tokens:** ~1,167,625
+**Generated:** 2026-04-20 09:28 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~71,456 |
+| `./` | 30 | ~71,527 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,429 |
 | `deploy/` | 2 | ~690 |
@@ -50,12 +50,12 @@
 | `skills/apply-proposal/` | 1 | ~345 |
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
-| `src/` | 1 | ~258 |
-| `src/mind_mem/` | 121 | ~422,105 |
-| `src/mind_mem/api/` | 4 | ~11,335 |
+| `src/` | 1 | ~259 |
+| `src/mind_mem/` | 121 | ~422,177 |
+| `src/mind_mem/api/` | 4 | ~11,336 |
 | `src/mind_mem/mcp/` | 3 | ~3,229 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,854 |
-| `src/mind_mem/mcp/tools/` | 17 | ~37,187 |
+| `src/mind_mem/mcp/tools/` | 17 | ~37,198 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~1,018 |
 | `templates/` | 19 | ~1,041 |
@@ -87,7 +87,7 @@
 - `mcp_server.py` (~662 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
-- `pyproject.toml` (~1586 tok, huge) — [project]
+- `pyproject.toml` (~1657 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22305 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
@@ -309,7 +309,7 @@
 - `SKILL.md` (~549 tok, large) — /recall — Memory Search
 ### `src/`
 
-- `mcp_server.py` (~258 tok, medium) — Wheel-level compatibility module for `mind_mem.mcp_server`.
+- `mcp_server.py` (~259 tok, medium) — Wheel-level compatibility module for `mind_mem.mcp_server`.
 ### `src/mind_mem/`
 
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
@@ -320,7 +320,7 @@
 - `api_keys.py` (~2717 tok, huge) — Per-agent API key store for the mind-mem REST API.
 - `auth.py` (~2479 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
 - `__init__.py` (~20 tok, tiny)
-- `rest.py` (~6119 tok, huge) — REST API layer for mind-mem (v3.2.0).
+- `rest.py` (~6120 tok, huge) — REST API layer for mind-mem (v3.2.0).
 ### `src/mind_mem/`
 
 - `apply_engine.py` (~13120 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
@@ -331,7 +331,7 @@
 - `baseline_snapshot.py` (~4176 tok, huge) — Baseline snapshot for intent drift detection.
 - `block_metadata.py` (~2223 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~7111 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
-- `block_store_encrypted.py` (~2244 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `block_store_encrypted.py` (~2316 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `block_store_postgres.py` (~7972 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~2101 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
 - `block_store.py` (~8980 tok, huge) — BlockStore abstraction — decouples block access from storage format.
@@ -418,7 +418,7 @@
 - `kernels.py` (~1905 tok, huge) — MIND kernel + compiled-truth MCP tools.
 - `memory_ops.py` (~7082 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
-- `public.py` (~4227 tok, huge) — v3.2.0 — MCP consolidated tool dispatchers.
+- `public.py` (~4238 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `recall.py` (~4614 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 ### `src/mind_mem/`

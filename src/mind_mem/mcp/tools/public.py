@@ -1,3 +1,4 @@
+# mypy: disable-error-code="no-any-return"
 """v3.2.0 — MCP consolidated tool dispatchers.
 
 Adds 7 consolidated dispatchers (``recall``, ``staged_change``,

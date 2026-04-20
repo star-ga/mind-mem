@@ -53,7 +53,7 @@ def _extract_bearer(
 ) -> str | None:
     """Return raw token string from Authorization: Bearer <token>, or None."""
     if credentials is not None:
-        return credentials.credentials
+        return str(credentials.credentials)
     return None
 
 
