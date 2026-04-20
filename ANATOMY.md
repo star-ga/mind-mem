@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 487 | **Est. tokens:** ~983,080
-**Generated:** 2026-04-20 02:04 UTC
+**Files:** 488 | **Est. tokens:** ~985,267
+**Generated:** 2026-04-20 02:07 UTC
 
 ## Token Budget Guide
 
@@ -46,7 +46,7 @@
 | `src/mind_mem/` | 115 | ~393,817 |
 | `src/mind_mem/mcp/` | 2 | ~1,557 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
-| `src/mind_mem/mcp/tools/` | 7 | ~5,923 |
+| `src/mind_mem/mcp/tools/` | 8 | ~8,110 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 180 | ~364,105 |
@@ -316,6 +316,7 @@
 - `resources.py` (~1342 tok, large) — MCP ``@mcp.resource`` declarations.
 ### `src/mind_mem/mcp/tools/`
 
+- `audit.py` (~2187 tok, huge) — Audit MCP tools — Merkle proofs, hash chain + evidence chain verification.
 - `benchmark.py` (~1019 tok, large) — Benchmark + category-summary MCP tools.
 - `calibration.py` (~1162 tok, large) — Calibration feedback MCP tools — ``calibration_feedback`` + ``calibration_stats``.
 - `encryption.py` (~1144 tok, large) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
