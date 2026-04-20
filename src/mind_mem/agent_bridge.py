@@ -256,6 +256,53 @@ def _id_from_filename(path: str) -> str:
     return name or "block"
 
 
+def _build_links_section(block_id: str, kg_path: Optional[str]) -> str:
+    """Return an Obsidian ``## Links`` markdown section for *block_id*'s outgoing KG edges.
+
+    Returns an empty string when *kg_path* is None, absent, or the block
+    has no outgoing edges — so callers never need to guard the result.
+
+    Duplicate object slugs are deduplicated: when two edges share the same
+    object entity, a single ``[[slug]]`` line is emitted carrying all
+    predicate labels joined by ``/``.
+    """
+    if not kg_path or not os.path.isfile(kg_path):
+        return ""
+
+    import logging
+
+    try:
+        from mind_mem.knowledge_graph import KnowledgeGraph
+    except ImportError:
+        logging.getLogger(__name__).warning("mind_mem.knowledge_graph not importable; skipping links")
+        return ""
+
+    try:
+        with KnowledgeGraph(kg_path) as kg:
+            edges = kg.edges_from(block_id)
+    except Exception:
+        logging.getLogger(__name__).warning("KG query failed for %r; skipping links", block_id, exc_info=True)
+        return ""
+
+    if not edges:
+        return ""
+
+    # Group by object slug, collecting predicate labels in insertion order.
+    seen: dict[str, list[str]] = {}
+    for edge in edges:
+        slug = edge.object
+        if slug not in seen:
+            seen[slug] = []
+        label = edge.predicate.value
+        if label not in seen[slug]:
+            seen[slug].append(label)
+
+    lines = ["## Links"]
+    for slug, labels in seen.items():
+        lines.append(f"- [[{slug}]] — {', '.join(labels)}")
+    return "\n".join(lines)
+
+
 @dataclass
 class VaultBridge:
     """Forward (vault → mind-mem) + reverse (mind-mem → vault) sync."""
@@ -343,6 +390,7 @@ class VaultBridge:
         block: VaultBlock,
         *,
         overwrite: bool = False,
+        kg_path: Optional[str] = None,
     ) -> str:
         """Write *block* into the vault, returning the absolute path.
 
@@ -350,6 +398,16 @@ class VaultBridge:
         target exists and ``overwrite`` is False. The frontmatter
         always includes ``id``, ``type``, and ``title`` so a future
         round-trip parses cleanly.
+
+        Args:
+            block: The block to write.
+            overwrite: Allow overwriting an existing file.
+            kg_path: Optional path to the KnowledgeGraph SQLite DB.  When
+                provided and the file exists, outgoing edges from
+                ``block.block_id`` are queried and appended as an Obsidian
+                ``## Links`` section so Obsidian's graph view visualises
+                memory relationships.  When *None* or the file is absent,
+                writing proceeds without a links section.
         """
         root = os.path.realpath(self.vault_root)
         if not os.path.isdir(root):
@@ -371,7 +429,11 @@ class VaultBridge:
             title=block.title,
             updated=_now_iso(),
         )
-        text = _serialise_frontmatter(fm) + (block.body.rstrip() + "\n")
+        body = block.body.rstrip()
+        links_section = _build_links_section(block.block_id, kg_path)
+        if links_section:
+            body = body + "\n\n" + links_section
+        text = _serialise_frontmatter(fm) + (body + "\n")
         # Atomic write: write to .tmp then rename.
         tmp = target + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:

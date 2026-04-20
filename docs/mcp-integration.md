@@ -102,6 +102,69 @@ Add to `~/.claude/mcp.json`:
 | `compiled_truth_contradictions` | Detect contradictions in an entity's evidence trail |
 | `list_compiled_truths` | List all compiled truth pages in the workspace |
 
+### Vault Tools
+
+| Tool | Description |
+|------|-------------|
+| `vault_scan` | Walk an Obsidian-style vault and return parsed blocks |
+| `vault_sync` | Write a block back into the vault at a relative path |
+
+## Obsidian Graph View
+
+When vault_sync writes a block, it can automatically append an Obsidian
+`## Links` section that wires up mind-mem's internal KnowledgeGraph edges
+as Obsidian wikilinks. This causes Obsidian's graph view to render the
+same semantic relationships that mind-mem tracks internally — without
+requiring users to author any links by hand.
+
+### Enabling wikilinks
+
+Pass `include_links: true` to `vault_sync`:
+
+```json
+{
+  "tool": "vault_sync",
+  "arguments": {
+    "vault_root": "/path/to/vault",
+    "block_id": "PRJ-mind-mem",
+    "relative_path": "projects/mind-mem.md",
+    "body": "The flagship memory product.",
+    "include_links": true
+  }
+}
+```
+
+When the workspace `knowledge_graph.db` contains outgoing edges from
+`PRJ-mind-mem`, the written note will include:
+
+```markdown
+## Links
+- [[prj-sqlite]] — depends_on
+- [[prj-mem-os]] — supersedes
+```
+
+Obsidian resolves `[[prj-sqlite]]` to the note whose filename matches
+(case-insensitively), creating a live graph edge. If no matching note
+exists, Obsidian marks the link as unresolved — it will become live once
+that block is synced.
+
+### KG edge types rendered
+
+All seven typed predicates are rendered as-is:
+`authored_by`, `depends_on`, `contradicts`, `supersedes`, `part_of`,
+`mentioned_in`, `related_to`.
+
+When multiple edges share the same target slug (e.g. `depends_on` and
+`related_to` both pointing at `prj-sqlite`), only one `[[slug]]` is
+emitted with all predicate labels joined: `depends_on, related_to`.
+
+### Without include_links
+
+When `include_links` is `false` (the default) or the workspace has no
+`knowledge_graph.db`, the block is written without a `## Links` section.
+This preserves backward-compatible behavior for vaults that do not use
+Obsidian's graph view.
+
 ## Best Practices
 
 1. Use `recall` for most queries — it's fast and well-tuned

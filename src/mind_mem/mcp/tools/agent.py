@@ -137,8 +137,15 @@ def vault_sync(
     block_type: str = "note",
     title: str = "",
     overwrite: bool = False,
+    include_links: bool = False,
 ) -> str:
-    """Write a single block back into a vault at a relative path."""
+    """Write a single block back into a vault at a relative path.
+
+    When *include_links* is ``True`` and the workspace contains a
+    KnowledgeGraph database, outgoing edges from *block_id* are appended
+    as an Obsidian ``## Links`` section so Obsidian's graph view can
+    visualise memory relationships without manual link authoring.
+    """
     from mind_mem.agent_bridge import VaultBlock, VaultBridge
 
     for arg, label in (
@@ -151,6 +158,16 @@ def vault_sync(
     ok, reason = _vault_root_allowed(vault_root)
     if not ok:
         return json.dumps({"error": reason})
+
+    # Resolve KG path only when include_links is requested.
+    kg_path: str | None = None
+    if include_links:
+        ws = _workspace()
+        if ws:
+            candidate = os.path.join(ws, "knowledge_graph.db")
+            if os.path.isfile(candidate):
+                kg_path = candidate
+
     try:
         bridge = VaultBridge(vault_root=vault_root.strip())
         target = bridge.write(
@@ -162,10 +179,14 @@ def vault_sync(
                 body=body,
             ),
             overwrite=bool(overwrite),
+            kg_path=kg_path,
         )
     except (FileNotFoundError, FileExistsError, ValueError) as exc:
         return json.dumps({"error": str(exc)})
-    return json.dumps({"written": target, "_schema_version": "1.0"}, indent=2)
+    return json.dumps(
+        {"written": target, "links_included": kg_path is not None, "_schema_version": "1.0"},
+        indent=2,
+    )
 
 
 @mcp_tool_observe

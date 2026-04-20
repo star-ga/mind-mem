@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 527 | **Est. tokens:** ~1,051,675
-**Generated:** 2026-04-20 06:34 UTC
+**Files:** 527 | **Est. tokens:** ~1,052,168
+**Generated:** 2026-04-20 06:35 UTC
 
 ## Token Budget Guide
 
@@ -28,7 +28,7 @@
 | `deploy/` | 2 | ~588 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 40 | ~51,629 |
+| `docs/` | 40 | ~52,122 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `examples/` | 2 | ~466 |
@@ -150,7 +150,7 @@
 - `getting-started.md` (~405 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
 - `maintenance-namespaces.md` (~1601 tok, huge) — `maintenance/` namespaces
-- `mcp-integration.md` (~1045 tok, large) — MCP Integration Guide
+- `mcp-integration.md` (~1538 tok, huge) — MCP Integration Guide
 - `mcp-tool-examples.md` (~902 tok, large) — MCP Tool Examples
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
 - `migration.md` (~2754 tok, huge) — Migration Guide: mem-os to mind-mem
