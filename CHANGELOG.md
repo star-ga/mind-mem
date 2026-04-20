@@ -2,7 +2,7 @@
 
 All notable changes to mind-mem are documented in this file.
 
-## 3.2.0 (2026-04-20 — release candidate)
+## 3.2.0 (2026-04-20)
 
 **Production-deployment release.** Turns mind-mem from a single-host
 Markdown-on-disk memory into a production-ready system with
@@ -10,6 +10,26 @@ Postgres, Docker, REST, multi-language SDKs, observability, and a
 publishable security posture. See
 [docs/v3.2.0-release-notes.md](docs/v3.2.0-release-notes.md) for
 the full narrative.
+
+> **Stability labels.** Markdown + stdio-MCP (the default
+> deployment) is **GA** and rock-solid. Postgres backend, multi-
+> worker REST, and OIDC admin-scope enforcement are **beta** —
+> they work end-to-end for typical workloads but the v3.2.0
+> self-audit surfaced two architectural refactors that complete
+> their production story in v3.2.1:
+>
+> 1. Apply engine op executors will route through BlockStore
+>    (Postgres apply currently writes to local FS that Postgres
+>    never sees — a silent divergence on this path).
+> 2. REST request-scoping will drop `os.environ` mutation in
+>    favour of a request-local workspace argument (current impl
+>    is thread-unsafe past one uvicorn worker).
+> 3. OIDC JWTs will be honoured on protected endpoints, not just
+>    at `/v1/auth/oidc/callback`.
+>
+> See `docs/review-architecture-v3.2.0.md` for the full
+> architecture review + `ROADMAP.md` § v3.2.1 for the remediation
+> plan.
 
 ### Added
 
