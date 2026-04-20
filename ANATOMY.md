@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 633 | **Est. tokens:** ~1,261,925
-**Generated:** 2026-04-20 18:40 UTC
+**Files:** 635 | **Est. tokens:** ~1,265,609
+**Generated:** 2026-04-20 18:42 UTC
 
 ## Token Budget Guide
 
@@ -51,7 +51,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 136 | ~459,318 |
+| `src/mind_mem/` | 137 | ~461,714 |
 | `src/mind_mem/api/` | 4 | ~12,861 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 222 | ~434,179 |
+| `tests/` | 223 | ~435,467 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -333,6 +333,7 @@
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
 - `agent_bridge.py` (~4158 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `alerting.py` (~2411 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `answer_quality.py` (~2396 tok, huge) — Answer-quality layer: verification + self-consistency + per-category spec.
 ### `src/mind_mem/api/`
 
 - `api_keys.py` (~2717 tok, huge) — Per-agent API key store for the mind-mem REST API.
@@ -566,6 +567,7 @@
 - `test_agent_id_filter.py` (~335 tok, medium) — Tests for agent_id namespace filtering."""
 - `test_alerting.py` (~1777 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_allow_decompose.py` (~311 tok, medium) — Tests for _allow_decompose recall parameter."""
+- `test_answer_quality.py` (~1288 tok, large) — Tests for the v3.3.0 answer-quality shims."""
 - `test_api_keys.py` (~2133 tok, huge) — Tests for APIKeyStore in src/mind_mem/api/api_keys.py."""
 - `test_apply_engine_backend_routing.py` (~1066 tok, large) — v3.2.0 §1.4 PR-6 — apply_engine routes through configured BlockStore."""
 - `test_apply_engine_op_routing.py` (~1830 tok, huge) — v3.2.2 — execute_op routes block-level ops through BlockStore.
