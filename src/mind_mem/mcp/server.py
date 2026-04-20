@@ -23,7 +23,7 @@ from __future__ import annotations
 from fastmcp import FastMCP
 
 from mind_mem.mcp import resources as _resources
-from mind_mem.mcp.infra.http_auth import _build_http_auth_tokens, _check_token
+from mind_mem.mcp.infra.http_auth import _build_http_auth_tokens, _check_token, check_token_strength
 from mind_mem.mcp.infra.workspace import _workspace
 from mind_mem.mcp.tools import (
     agent as _tools_agent,
@@ -136,6 +136,8 @@ def main() -> None:
         )
 
     token = _check_token()
+    for _warn in check_token_strength():
+        _log.warning("weak_token_config", detail=_warn)
     _log.info(
         "mcp_server_start",
         transport=args.transport,

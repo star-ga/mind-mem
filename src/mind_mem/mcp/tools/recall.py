@@ -42,8 +42,15 @@ from ..infra.workspace import _check_workspace, _workspace
 _log = get_logger("mcp_server")
 
 
+_MAX_QUERY_LEN = 8192
+
+
 def _recall_impl(query: str, limit: int = 10, active_only: bool = False, backend: str = "auto") -> str:
     """Core recall implementation shared by recall() and hybrid_search()."""
+    if not isinstance(query, str):
+        return json.dumps({"error": "query must be a string"})
+    if len(query) > _MAX_QUERY_LEN:
+        return json.dumps({"error": f"query must be ≤{_MAX_QUERY_LEN} characters"})
     ws = _workspace()
     ws_err = _check_workspace(ws)
     if ws_err:
@@ -354,6 +361,8 @@ def find_similar(block_id: str, limit: int = 5) -> str:
 @mcp_tool_observe
 def intent_classify(query: str) -> str:
     """Show the routing strategy for a query."""
+    if not isinstance(query, str) or len(query) > _MAX_QUERY_LEN:
+        return json.dumps({"error": f"query must be a string of ≤{_MAX_QUERY_LEN} characters"})
     try:
         from mind_mem.intent_router import IntentRouter
 

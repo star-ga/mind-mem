@@ -26,10 +26,12 @@ services:
     environment:
       MIND_MEM_WORKSPACE: /workspace
       MIND_MEM_TRANSPORT: http
-      # Optional auth token — set in your shell or a .env file:
-      # MIND_MEM_TOKEN: changeme
-      # MIND_MEM_ADMIN_TOKEN: changeme-admin
-      DATABASE_URL: postgresql://mindmem:mindmem@postgres:5432/mindmem
+      # Set auth tokens in your shell or a .env file before running docker compose up.
+      # MIND_MEM_TOKEN and MIND_MEM_ADMIN_TOKEN MUST be set to non-empty values for
+      # any internet-facing deployment. Example: openssl rand -hex 32
+      MIND_MEM_TOKEN: ${MIND_MEM_TOKEN:?MIND_MEM_TOKEN must be set}
+      MIND_MEM_ADMIN_TOKEN: ${MIND_MEM_ADMIN_TOKEN:?MIND_MEM_ADMIN_TOKEN must be set}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mindmem}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-mindmem}
       OLLAMA_BASE_URL: http://ollama:11434
     depends_on:
       postgres:
@@ -46,9 +48,9 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     environment:
-      POSTGRES_USER: mindmem
-      POSTGRES_PASSWORD: mindmem
-      POSTGRES_DB: mindmem
+      POSTGRES_USER: ${POSTGRES_USER:-mindmem}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:-mindmem}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mindmem -d mindmem"]
       interval: 10s
