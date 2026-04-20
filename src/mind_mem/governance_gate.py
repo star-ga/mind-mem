@@ -24,6 +24,7 @@ from .hash_chain_v2 import HashChainV2
 from .observability import get_logger
 from .spec_binding import SpecBindingManager
 
+
 # Resolve the current_agent_id contextvar lazily so the API layer is not a
 # hard dependency of the governance layer (the REST API is optional).
 def _current_agent() -> str:
