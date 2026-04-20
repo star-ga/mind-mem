@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 479 | **Est. tokens:** ~975,815
-**Generated:** 2026-04-20 00:29 UTC
+**Files:** 480 | **Est. tokens:** ~977,157
+**Generated:** 2026-04-20 01:54 UTC
 
 ## Token Budget Guide
 
@@ -44,7 +44,7 @@
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
 | `src/mind_mem/` | 115 | ~393,817 |
-| `src/mind_mem/mcp/` | 1 | ~215 |
+| `src/mind_mem/mcp/` | 2 | ~1,557 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
@@ -312,6 +312,7 @@
 ### `src/mind_mem/mcp/`
 
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
+- `resources.py` (~1342 tok, large) — MCP ``@mcp.resource`` declarations.
 ### `src/mind_mem/`
 
 - `memory_mesh.py` (~1903 tok, huge) — # Copyright 2026 STARGA, Inc.

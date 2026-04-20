@@ -240,112 +240,29 @@ from mind_mem.mcp.infra.workspace import (  # noqa: E402,F401 — public re-expo
 )
 
 
-def _blocks_to_json(blocks: list[dict]) -> str:
-    """Convert parsed blocks to JSON string."""
-    return json.dumps(blocks, indent=2, default=str)
-
-
 # ---------------------------------------------------------------------------
 # Resources (read-only)
 # ---------------------------------------------------------------------------
+#
+# v3.2.0 §1.2 PR-2: @mcp.resource bodies moved to mind_mem.mcp.resources.
+# The module defines every resource function at module level and exposes
+# ``register(mcp)`` which wires them onto the FastMCP instance. We
+# re-export the function names here so ``server.get_decisions`` etc.
+# keep resolving for tests + callers.
+from mind_mem.mcp import resources as _mcp_resources  # noqa: E402,F401
+from mind_mem.mcp.resources import (  # noqa: E402,F401 — public re-export shim
+    _blocks_to_json,
+    get_contradictions,
+    get_decisions,
+    get_entities,
+    get_health,
+    get_ledger,
+    get_recall,
+    get_signals,
+    get_tasks,
+)
 
-
-@mcp.resource("mind-mem://decisions")
-def get_decisions() -> str:
-    """Active decisions from the workspace. Structured blocks with IDs, statements, dates, and status."""
-    ws = _workspace()
-    path = os.path.join(ws, "decisions", "DECISIONS.md")
-    if not os.path.isfile(path):
-        return json.dumps([])
-    blocks = parse_file(path)
-    active = get_active(blocks)
-    return _blocks_to_json(active)
-
-
-@mcp.resource("mind-mem://tasks")
-def get_tasks() -> str:
-    """All tasks from the workspace."""
-    ws = _workspace()
-    path = os.path.join(ws, "tasks", "TASKS.md")
-    if not os.path.isfile(path):
-        return json.dumps([])
-    blocks = parse_file(path)
-    return _blocks_to_json(blocks)
-
-
-@mcp.resource("mind-mem://entities/{entity_type}")
-def get_entities(entity_type: str) -> str:
-    """Entity files: projects, people, tools, or incidents."""
-    allowed = {"projects", "people", "tools", "incidents"}
-    if entity_type not in allowed:
-        return json.dumps({"error": f"Unknown entity type: {entity_type}. Use: {', '.join(sorted(allowed))}"})
-    return _read_file(f"entities/{entity_type}.md")
-
-
-@mcp.resource("mind-mem://signals")
-def get_signals() -> str:
-    """Auto-captured signals pending review."""
-    return _read_file("intelligence/SIGNALS.md")
-
-
-@mcp.resource("mind-mem://contradictions")
-def get_contradictions() -> str:
-    """Detected contradictions between decisions."""
-    return _read_file("intelligence/CONTRADICTIONS.md")
-
-
-@mcp.resource("mind-mem://health")
-def get_health() -> str:
-    """Workspace health summary: block counts, coverage, and metrics."""
-    ws = _workspace()
-    result: dict[str, Any] = {"files": {}, "metrics": {}}
-
-    corpus = {
-        "decisions": "decisions/DECISIONS.md",
-        "tasks": "tasks/TASKS.md",
-        "contradictions": "intelligence/CONTRADICTIONS.md",
-        "signals": "intelligence/SIGNALS.md",
-    }
-
-    for label, rel_path in corpus.items():
-        path = os.path.join(ws, rel_path)
-        if os.path.isfile(path):
-            blocks = parse_file(path)
-            result["files"][label] = {
-                "total": len(blocks),
-                "active": len(get_active(blocks)),
-            }
-        else:
-            result["files"][label] = {"total": 0, "active": 0}
-
-    # State snapshot metrics
-    state_path = os.path.join(ws, "memory", "intel-state.json")
-    if os.path.isfile(state_path):
-        with open(state_path, "r", encoding="utf-8") as f:
-            try:
-                state = json.load(f)
-                result["metrics"] = state.get("metrics", {})
-            except json.JSONDecodeError:
-                pass
-
-    return json.dumps(result, indent=2)
-
-
-@mcp.resource("mind-mem://recall/{query}")
-def get_recall(query: str) -> str:
-    """Search memory using ranked recall (FTS5 or BM25 scan)."""
-    ws = _workspace()
-    if os.path.isfile(fts_db_path(ws)):
-        results = fts_query(ws, query, limit=10)
-    else:
-        results = recall_engine(ws, query, limit=10)
-    return json.dumps(results, indent=2, default=str)
-
-
-@mcp.resource("mind-mem://ledger")
-def get_ledger() -> str:
-    """Shared fact ledger for multi-agent memory propagation."""
-    return _read_file("shared/intelligence/LEDGER.md")
+_mcp_resources.register(mcp)
 
 
 # ---------------------------------------------------------------------------
