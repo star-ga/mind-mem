@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 562 | **Est. tokens:** ~1,128,913
-**Generated:** 2026-04-20 07:16 UTC
+**Files:** 563 | **Est. tokens:** ~1,130,794
+**Generated:** 2026-04-20 07:19 UTC
 
 ## Token Budget Guide
 
@@ -28,7 +28,7 @@
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 44 | ~59,147 |
+| `docs/` | 45 | ~61,028 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `examples/` | 2 | ~466 |
@@ -179,6 +179,7 @@
 - `v3.2.0-atomicity-scope-plan.md` (~1681 tok, huge) — v3.2.0 — Atomicity scope plan (§2.2)
 - `v3.2.0-blockstore-routing-plan.md` (~2116 tok, huge) — v3.2.0 — Apply engine → BlockStore routing plan
 - `v3.2.0-mcp-decomposition-plan.md` (~2575 tok, huge) — v3.2.0 — MCP server decomposition plan
+- `v3.2.0-release-notes.md` (~1881 tok, huge) — mind-mem v3.2.0 — Production Deployment Release
 - `workspace-structure.md` (~352 tok, medium) — Workspace Structure
 ### `examples/`
 

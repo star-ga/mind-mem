@@ -2,6 +2,138 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.2.0 (2026-04-20 — release candidate)
+
+**Production-deployment release.** Turns mind-mem from a single-host
+Markdown-on-disk memory into a production-ready system with
+Postgres, Docker, REST, multi-language SDKs, observability, and a
+publishable security posture. See
+[docs/v3.2.0-release-notes.md](docs/v3.2.0-release-notes.md) for
+the full narrative.
+
+### Added
+
+- **Postgres storage backend** (opt-in via
+  ``block_store.backend: "postgres"``) — full ``BlockStore``
+  protocol implementation with atomic snapshot/restore, upsert
+  writes, FTS search. Optional extra: ``mind-mem[postgres]``.
+- **Read-replica routing** — ``block_store.replicas: [...]``
+  round-robins reads across a replica pool with a 3-failure /
+  30-second circuit breaker.
+- **Storage migration guide** — bidirectional Markdown ↔
+  Postgres migration with dry-run, verification, and receipt
+  trail at ``docs/storage-migration.md``.
+- **REST API layer** (FastAPI) at ``src/mind_mem/api/rest.py``;
+  run with ``mm serve --port 8080``. Mirrors the MCP tool
+  surface with Pydantic validation + OpenAPI docs.
+- **OIDC/SSO auth** — Okta / Auth0 / Google Workspace / Azure AD
+  JWT validation at ``src/mind_mem/api/auth.py``.
+- **Per-agent API keys** — ``mmk_live_*`` tokens with SQLite
+  rotation + revocation at ``src/mind_mem/api/api_keys.py``.
+- **Audit attribution** — every governance-chain entry now
+  carries an ``agent_id``.
+- **JS/TS SDK** — publishable ``@mind-mem/sdk`` at ``sdk/js/``
+  covering the read-only REST surface; TypeScript 5.4 strict.
+- **Go SDK** — publishable ``github.com/star-ga/mind-mem/sdk/go``
+  at ``sdk/go/``; stdlib-only.
+- **Dockerfile + docker-compose** — multi-stage
+  ``python:3.12-slim`` build (142 MB), compose bringing up
+  mind-mem + pgvector + Ollama; ``make up`` one-command start.
+- **One-command installer** — ``curl -sSL install.mind-mem.sh |
+  bash`` via ``install-bootstrap.sh``.
+- **OpenTelemetry + Prometheus** at
+  ``src/mind_mem/telemetry.py``; OTLP exporter, ``@traced``
+  decorator, Prometheus ``/v1/metrics`` endpoint.
+- **Grafana dashboard** at
+  ``deploy/grafana/mind-mem-dashboard.json`` — recall p50/p95/p99,
+  qps, propose_update rate, apply-rollback rate.
+- **Distributed recall cache** at
+  ``src/mind_mem/recall_cache.py`` — two-tier LRU + Redis;
+  namespace-wide invalidation on governance events.
+- **Hot/cold tier-aware retrieval** at
+  ``src/mind_mem/tier_recall.py`` — opt-in score boost per
+  memory tier (WORKING 0.7x → VERIFIED 2.0x).
+- **Obsidian wikilink export** — ``vault_sync`` emits
+  ``[[wikilinks]]`` from knowledge-graph edges so Obsidian's
+  graph view visualizes memory links.
+- **CLI debug commands** — ``mm inspect`` /
+  ``mm explain`` / ``mm trace`` for block introspection,
+  retrieval-stage tracing, and MCP call streaming.
+- **MCP consolidated dispatchers** (7) — ``recall``,
+  ``staged_change``, ``memory_verify``, ``graph``, ``core``,
+  ``kernels``, ``compiled_truth`` with ``mode`` / ``phase`` /
+  ``action`` arguments that route to existing implementations.
+  **Additive — all 57 v3.1.x tool names still resolve.**
+- **External security audit SoW** at
+  ``docs/security-audit-sow.md`` — RFP-shape document for
+  tier-1 audit firms.
+- **Internal security audit report** at
+  ``SECURITY_AUDIT_2026-04.md`` — 3 findings (2 HIGH, 1 MEDIUM),
+  all fixed pre-release.
+- **``SECURITY.md``** — supported versions, 90-day disclosure,
+  threat model, in-scope definition.
+- **Supply-chain CI** at ``.github/workflows/security.yml`` —
+  CodeQL, bandit, pip-audit, gitleaks, trivy, CycloneDX SBOM
+  generation.
+- **Sigstore signing** of wheels + tarballs on release tags.
+- **Pre-commit hooks** — ruff, bandit, detect-secrets.
+- **Workspace-wide lock primitive** at
+  ``BlockStore.lock(blocking, timeout)`` — process-serializing
+  context manager for migrations and batched writes.
+
+### Changed
+
+- **Architecture cleanup (audit §1.2)** — ``mcp_server.py``
+  decomposed from 4,578 → 245 LOC (94.6% reduction) into 14
+  tool modules + 7 infra modules + server/resources/public
+  modules.
+- **Architecture cleanup (audit §1.4)** — 7-PR BlockStore
+  routing series: ``list_files`` → ``list_blocks`` rename
+  (alias deprecated), ``write_block`` / ``delete_block`` added,
+  snapshot/restore/diff moved from apply_engine into
+  ``MarkdownBlockStore``, Postgres adapter shipped, storage
+  factory wired, migration helper documented.
+- **Atomicity (audit §2.2)** — ``maintenance/`` split into
+  ``tracked/`` (snapshot-included) and ``append-only/`` (snapshot-
+  excluded) to fix the "dedup-hash survives rollback" class of
+  bug. Orphan-cleanup walk honors the exclusion. Auto-migration
+  on first v3.2.0 apply.
+- **Token hardening** — bearer tokens over 4096 chars are
+  rejected before the hmac compare (DoS prevention); startup
+  emits a warning on tokens under 32 chars.
+- **Query-length cap** — recall rejects queries over 8192 chars
+  to mitigate regex-DoS.
+- **Docker compose credentials** — all hardcoded passwords
+  replaced with required env-var substitution (CWE-798 fix).
+
+### Fixed
+
+- **Orphan-cleanup walk descent** — post-restore sweep no longer
+  descends into ``maintenance/append-only/`` or
+  ``intelligence/applied/`` subtrees. Pinned by regression test
+  ``test_atomicity_maintenance_scope.py``.
+- **``test_apply_engine`` hashlib import** — previous refactor
+  dropped the import while retaining the call sites; restored.
+- **Resource leaks in tests** — three test files had
+  ``open(path).read()`` calls without context managers; all use
+  ``with open(...)`` now so ``pytest -W error`` passes clean.
+
+### Deprecated
+
+- ``BlockStore.list_files()`` — use ``list_blocks()``. Alias
+  stays through v3.x; removed in v4.0.
+- ``validate.sh`` — already a Python forwarder; shell script
+  removed in v4.0.
+
+### Security
+
+- 3 findings from the internal v3.2.0 audit (2 HIGH, 1 MEDIUM)
+  — all fixed pre-release. Full report at
+  ``SECURITY_AUDIT_2026-04.md``.
+- Dependency CVE recommendations (not auto-bumped): ``authlib``
+  via fastmcp → recommend ``>=1.6.9``; ``aiohttp`` →
+  recommend ``>=3.13.4``.
+
 ## 3.1.9 (2026-04-18)
 
 **Hotfix for v3.1.8 release hygiene + duplicate entry-point
