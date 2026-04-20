@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 494 | **Est. tokens:** ~1,016,076
-**Generated:** 2026-04-20 02:15 UTC
+**Files:** 495 | **Est. tokens:** ~1,015,971
+**Generated:** 2026-04-20 02:18 UTC
 
 ## Token Budget Guide
 
@@ -43,10 +43,10 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 116 | ~415,056 |
+| `src/mind_mem/` | 116 | ~411,832 |
 | `src/mind_mem/mcp/` | 2 | ~1,557 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
-| `src/mind_mem/mcp/tools/` | 13 | ~17,680 |
+| `src/mind_mem/mcp/tools/` | 14 | ~20,799 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 180 | ~364,105 |
@@ -316,7 +316,7 @@
 - `resources.py` (~1342 tok, large) — MCP ``@mcp.resource`` declarations.
 ### `src/mind_mem/`
 
-- `mcp_server.py` (~21239 tok, huge) — Mind-Mem MCP Server — persistent memory for paranoid/safety-first coding agents.
+- `mcp_server.py` (~18015 tok, huge) — Mind-Mem MCP Server — persistent memory for paranoid/safety-first coding agents.
 ### `src/mind_mem/mcp/tools/`
 
 - `agent.py` (~1592 tok, huge) — Agent-bridge + vault MCP tools.
@@ -326,6 +326,7 @@
 - `consolidation.py` (~2361 tok, huge) — Memory-consolidation MCP tools.
 - `core.py` (~1508 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~1144 tok, large) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
+- `governance.py` (~3119 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
 - `graph.py` (~2204 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `_helpers.py` (~596 tok, large) — Shared tool-internal helpers — workspace paths + lazy-init singletons.
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
