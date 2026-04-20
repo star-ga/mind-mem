@@ -5,7 +5,7 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 549 | **Est. tokens:** ~1,095,877
+**Files:** 549 | **Est. tokens:** ~1,095,874
 **Generated:** 2026-04-20 06:59 UTC
 
 ## Token Budget Guide
@@ -58,7 +58,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~1,018 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 191 | ~386,961 |
+| `tests/` | 191 | ~386,958 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -684,7 +684,7 @@
 - `test_telemetry.py` (~2829 tok, huge) — Tests for src/mind_mem/telemetry.py.
 - `test_temporal.py` (~223 tok, medium) — Tests for temporal filtering module."""
 - `test_tier_decay.py` (~924 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_tier_recall.py` (~1409 tok, large) — Tests for tier-aware recall boosting (v3.2.0 hot/cold tier wire-up)."""
+- `test_tier_recall.py` (~1406 tok, large) — Tests for tier-aware recall boosting (v3.2.0 hot/cold tier wire-up)."""
 - `test_tokenization.py` (~436 tok, medium) — Tests for tokenization module."""
 - `test_trajectory.py` (~2392 tok, huge) — Tests for trajectory.py — trajectory memory block operations."""
 - `test_transcript_capture.py` (~3235 tok, huge) — Tests for transcript_capture.py — zero external deps (stdlib unittest)."""
