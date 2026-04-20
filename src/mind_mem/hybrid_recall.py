@@ -287,6 +287,60 @@ class HybridBackend:
                     fallback="single_query",
                 )
 
+        # v3.3.0 Tier 1 #1 — query decomposition for multi-hop queries.
+        # Split compound questions ("A after B") into independent
+        # sub-queries, run retrieval on each, RRF-fuse. Same opt-out
+        # shape as expansion: ``retrieval.query_decomposition.auto_enable
+        # = false`` to skip.
+        decomp_cfg = self._config.get("retrieval", {}).get("query_decomposition", {})
+        if not isinstance(decomp_cfg, dict):
+            decomp_cfg = {}
+        decomp_active = bool(decomp_cfg.get("enabled", False))
+        if not decomp_active and decomp_cfg.get("auto_enable", True):
+            try:
+                from ._recall_detection import detect_query_type
+
+                if detect_query_type(query) == "multi-hop":
+                    decomp_active = True
+                    _log.info(
+                        "query_decomposition_auto_enabled",
+                        reason="v3.3.0_tier1_multi_hop",
+                    )
+            except Exception:  # pragma: no cover
+                pass
+        if decomp_active:
+            try:
+                from .query_planner import decompose_query
+
+                decomposed = decompose_query(
+                    query,
+                    config=self._config,
+                    max_subqueries=int(decomp_cfg.get("max_subqueries", 4)),
+                )
+                if len(decomposed) > 1:
+                    _log.info(
+                        "multi_query_decomposition",
+                        original=query,
+                        sub_queries=len(decomposed),
+                    )
+                    metrics.inc("query_decomposition_used")
+                    return self._search_expanded(
+                        queries=decomposed,
+                        workspace=workspace,
+                        limit=limit,
+                        active_only=active_only,
+                        graph_boost=graph_boost,
+                        retrieve_wide_k=retrieve_wide_k,
+                        rerank=rerank,
+                        **kwargs,
+                    )
+            except Exception as exc:
+                _log.warning(
+                    "query_decomposition_failed",
+                    error=str(exc),
+                    fallback="single_query",
+                )
+
         with timed("hybrid_search"):
             if not self._vector_available:
                 _log.info("hybrid_bm25_only", query=query)
