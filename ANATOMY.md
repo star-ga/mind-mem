@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 558 | **Est. tokens:** ~1,120,139
-**Generated:** 2026-04-20 07:11 UTC
+**Files:** 560 | **Est. tokens:** ~1,125,003
+**Generated:** 2026-04-20 07:13 UTC
 
 ## Token Budget Guide
 
@@ -50,15 +50,15 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 119 | ~415,213 |
-| `src/mind_mem/api/` | 4 | ~10,913 |
+| `src/mind_mem/` | 120 | ~418,153 |
+| `src/mind_mem/api/` | 4 | ~10,921 |
 | `src/mind_mem/mcp/` | 3 | ~3,229 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,854 |
 | `src/mind_mem/mcp/tools/` | 17 | ~36,528 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~1,018 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 196 | ~397,371 |
+| `tests/` | 197 | ~399,287 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -308,7 +308,7 @@
 - `api_keys.py` (~2405 tok, huge) — Per-agent API key store for the mind-mem REST API.
 - `auth.py` (~2479 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
 - `__init__.py` (~20 tok, tiny)
-- `rest.py` (~6009 tok, huge) — REST API layer for mind-mem (v3.2.0).
+- `rest.py` (~6017 tok, huge) — REST API layer for mind-mem (v3.2.0).
 ### `src/mind_mem/`
 
 - `apply_engine.py` (~13120 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
@@ -431,6 +431,7 @@
 - `py.typed` (~0 tok, tiny)
 - `q1616.py` (~562 tok, large) — # Copyright 2026 STARGA, Inc.
 - `query_expansion.py` (~4600 tok, huge) — Multi-query expansion for improved recall.
+- `recall_cache.py` (~2940 tok, huge) — v3.2.0 — distributed recall result cache (Redis + in-process LRU fallback).
 - `_recall_constants.py` (~2420 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
 - `_recall_context.py` (~2601 tok, huge) — Recall engine context packing — post-retrieval augmentation rules."""
 - `_recall_core.py` (~14244 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
@@ -646,6 +647,7 @@
 - `test_query_decomposition.py` (~1604 tok, huge) — Tests for multi-hop query decomposition (#6)."""
 - `test_query_expansion_multi_provider.py` (~1237 tok, large) — Tests for multi-provider LLM query expansion (OpenAI-compatible endpoints)."""
 - `test_query_expansion.py` (~3809 tok, huge) — Tests for query_expansion.py -- multi-query expansion for improved recall."""
+- `test_recall_cache.py` (~1916 tok, huge) — Tests for v3.2.0 distributed recall cache (LRU + Redis)."""
 - `test_recall_concurrent.py` (~344 tok, medium) — Tests for concurrent recall queries."""
 - `test_recall_context_field.py` (~263 tok, medium) — Tests for context field in blocks."""
 - `test_recall_cross_encoder.py` (~1345 tok, large) — Tests for cross-encoder reranker integration in recall pipeline."""
