@@ -27,9 +27,9 @@ title = "mind-mem gitleaks config"
     '''[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}''',
   ]
   paths = [
-    # Ignore vendored or generated files
-    '''.github/''',
+    # Ignore vendored or generated files (regex — not glob!)
+    '''\.github/''',
     '''dist/''',
     '''__pycache__/''',
-    '''*.pyc''',
+    '''.*\.pyc$''',
   ]

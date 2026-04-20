@@ -28,6 +28,7 @@ except ImportError as _err:  # pragma: no cover
 from mind_mem.mcp.infra.constants import MCP_SCHEMA_VERSION
 from mind_mem.mcp.infra.http_auth import _check_token, verify_token
 from mind_mem.mcp.infra.rate_limit import SlidingWindowRateLimiter, _get_client_rate_limiter
+from mind_mem.mcp.infra.workspace import use_workspace
 from mind_mem.schema_version import CURRENT_SCHEMA_VERSION
 
 # ---------------------------------------------------------------------------
@@ -280,7 +281,15 @@ def _active_workspace(workspace: str | None) -> str:
 
 
 def _set_workspace_env(workspace: str) -> None:
-    """Temporarily export workspace so MCP tool functions resolve it."""
+    """Export workspace so MCP tool functions resolve it.
+
+    .. deprecated:: 3.2.1
+        Kept for compatibility with existing callers. New code should
+        wrap request handlers in :func:`mind_mem.mcp.infra.workspace.use_workspace`
+        to avoid mutating process-global state. A FastAPI middleware in
+        :func:`create_app` now sets a per-request ``ContextVar`` override
+        which takes precedence over this env var.
+    """
     os.environ["MIND_MEM_WORKSPACE"] = workspace
 
 
@@ -319,6 +328,21 @@ def create_app(workspace: str | None = None) -> FastAPI:
         redoc_url="/redoc",
         openapi_url="/openapi.json",
     )
+
+    # ------------------------------------------------------------------
+    # Per-request workspace scoping (v3.2.1)
+    # ------------------------------------------------------------------
+    #
+    # Wrap every request in ``use_workspace`` so tool calls read the
+    # workspace from a request-local ``ContextVar`` instead of mutating
+    # ``os.environ`` on every handler. ContextVar is task-local under
+    # asyncio and propagates through Starlette's thread pool for sync
+    # handlers, so concurrent requests can no longer race on workspace
+    # state (v3.2.0 audit finding → v3.2.1).
+    @application.middleware("http")
+    async def _scope_workspace(request: Request, call_next):  # type: ignore[no-untyped-def]
+        with use_workspace(resolved_ws):
+            return await call_next(request)
 
     # ------------------------------------------------------------------
     # Observability
@@ -373,7 +397,6 @@ def create_app(workspace: str | None = None) -> FastAPI:
         dependencies=[Depends(_rate_limit)],
     )
     def recall(body: RecallRequest, _token: Annotated[str | None, Depends(_require_auth)]) -> Any:
-        _set_workspace_env(resolved_ws)
         from mind_mem.mcp.tools.recall import _recall_impl
 
         raw = _recall_impl(
@@ -391,7 +414,6 @@ def create_app(workspace: str | None = None) -> FastAPI:
         dependencies=[Depends(_rate_limit)],
     )
     def get_block(block_id: str, _token: Annotated[str | None, Depends(_require_auth)]) -> Any:
-        _set_workspace_env(resolved_ws)
         from mind_mem.mcp.tools.memory_ops import get_block as _get_block
 
         raw = _get_block(block_id)
@@ -411,7 +433,6 @@ def create_app(workspace: str | None = None) -> FastAPI:
         dependencies=[Depends(_rate_limit)],
     )
     def propose_update(body: ProposeUpdateRequest, _token: Annotated[str | None, Depends(_require_admin)]) -> Any:
-        _set_workspace_env(resolved_ws)
         from mind_mem.mcp.tools.governance import propose_update as _propose_update
 
         raw = _propose_update(
@@ -430,7 +451,6 @@ def create_app(workspace: str | None = None) -> FastAPI:
         dependencies=[Depends(_rate_limit)],
     )
     def approve_apply(body: ApproveApplyRequest, _token: Annotated[str | None, Depends(_require_admin)]) -> Any:
-        _set_workspace_env(resolved_ws)
         from mind_mem.mcp.tools.governance import approve_apply as _approve_apply
 
         raw = _approve_apply(proposal_id=body.proposal_id, dry_run=body.dry_run)
@@ -443,7 +463,6 @@ def create_app(workspace: str | None = None) -> FastAPI:
         dependencies=[Depends(_rate_limit)],
     )
     def rollback_proposal(body: RollbackProposalRequest, _token: Annotated[str | None, Depends(_require_admin)]) -> Any:
-        _set_workspace_env(resolved_ws)
         from mind_mem.mcp.tools.governance import rollback_proposal as _rollback
 
         raw = _rollback(receipt_ts=body.receipt_ts)
@@ -456,7 +475,6 @@ def create_app(workspace: str | None = None) -> FastAPI:
         dependencies=[Depends(_rate_limit)],
     )
     def scan(_token: Annotated[str | None, Depends(_require_auth)]) -> Any:
-        _set_workspace_env(resolved_ws)
         from mind_mem.mcp.tools.governance import scan as _scan
 
         raw = _scan()
@@ -469,7 +487,6 @@ def create_app(workspace: str | None = None) -> FastAPI:
         dependencies=[Depends(_rate_limit)],
     )
     def list_contradictions(_token: Annotated[str | None, Depends(_require_auth)]) -> Any:
-        _set_workspace_env(resolved_ws)
         from mind_mem.mcp.tools.governance import list_contradictions as _list_contradictions
 
         raw = _list_contradictions()

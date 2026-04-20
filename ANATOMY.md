@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 570 | **Est. tokens:** ~1,167,393
-**Generated:** 2026-04-20 09:45 UTC
+**Files:** 571 | **Est. tokens:** ~1,168,973
+**Generated:** 2026-04-20 09:51 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~71,527 |
+| `./` | 30 | ~71,534 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,429 |
 | `deploy/` | 2 | ~690 |
@@ -52,14 +52,14 @@
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
 | `src/mind_mem/` | 121 | ~421,967 |
-| `src/mind_mem/api/` | 4 | ~11,307 |
+| `src/mind_mem/api/` | 4 | ~11,546 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
-| `src/mind_mem/mcp/infra/` | 8 | ~5,850 |
+| `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
 | `src/mind_mem/mcp/tools/` | 17 | ~37,198 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 199 | ~404,290 |
+| `tests/` | 200 | ~405,264 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -79,7 +79,7 @@
 - `generate_mind7b_training.py` (~5558 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
 - `.gitignore` (~114 tok, small) — *.pyc
-- `.gitleaks.toml` (~307 tok, medium) — title = "mind-mem gitleaks config"
+- `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~3337 tok, huge) — mind-mem installer — sets up MCP server + hooks for all supported clients
 - `LICENSE` (~2695 tok, huge)
@@ -320,7 +320,7 @@
 - `api_keys.py` (~2717 tok, huge) — Per-agent API key store for the mind-mem REST API.
 - `auth.py` (~2476 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
 - `__init__.py` (~20 tok, tiny)
-- `rest.py` (~6094 tok, huge) — REST API layer for mind-mem (v3.2.0).
+- `rest.py` (~6333 tok, huge) — REST API layer for mind-mem (v3.2.0).
 ### `src/mind_mem/`
 
 - `apply_engine.py` (~13120 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
@@ -393,7 +393,7 @@
 - `__init__.py` (~449 tok, medium) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
 - `observability.py` (~1175 tok, large) — Observability + DB-busy helpers for the MCP surface.
 - `rate_limit.py` (~928 tok, large) — Per-client sliding-window rate limiter for the MCP surface.
-- `workspace.py` (~483 tok, medium) — Workspace resolution + path-safety helpers.
+- `workspace.py` (~843 tok, large) — Workspace resolution + path-safety helpers.
 ### `src/mind_mem/mcp/`
 
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
@@ -723,6 +723,7 @@
 - `test_verify_cli.py` (~3202 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_watcher.py` (~1217 tok, large) — Tests for watcher.py — file change detection for auto-reindex."""
 - `test_wide_retrieval.py` (~346 tok, medium) — Tests for wide retrieval parameter."""
+- `test_workspace_contextvar.py` (~974 tok, large) — v3.2.1 — regression test for per-request workspace ContextVar scoping.
 - `test_workspace_init.py` (~498 tok, medium) — Tests for workspace initialization."""
 - `test_workspace_structure.py` (~546 tok, large) — Tests for workspace directory structure."""
 ### `train/`
