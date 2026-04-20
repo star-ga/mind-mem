@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 495 | **Est. tokens:** ~1,015,971
-**Generated:** 2026-04-20 02:18 UTC
+**Files:** 496 | **Est. tokens:** ~1,015,487
+**Generated:** 2026-04-20 02:24 UTC
 
 ## Token Budget Guide
 
@@ -43,13 +43,13 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 116 | ~411,832 |
+| `src/mind_mem/` | 116 | ~407,175 |
 | `src/mind_mem/mcp/` | 2 | ~1,557 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
-| `src/mind_mem/mcp/tools/` | 14 | ~20,799 |
+| `src/mind_mem/mcp/tools/` | 15 | ~24,919 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 180 | ~364,105 |
+| `tests/` | 180 | ~364,158 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -316,7 +316,7 @@
 - `resources.py` (~1342 tok, large) — MCP ``@mcp.resource`` declarations.
 ### `src/mind_mem/`
 
-- `mcp_server.py` (~18015 tok, huge) — Mind-Mem MCP Server — persistent memory for paranoid/safety-first coding agents.
+- `mcp_server.py` (~13358 tok, huge) — Mind-Mem MCP Server — persistent memory for paranoid/safety-first coding agents.
 ### `src/mind_mem/mcp/tools/`
 
 - `agent.py` (~1592 tok, huge) — Agent-bridge + vault MCP tools.
@@ -332,6 +332,7 @@
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
 - `kernels.py` (~1905 tok, huge) — MIND kernel + compiled-truth MCP tools.
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
+- `recall.py` (~4120 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 ### `src/mind_mem/`
 
@@ -534,7 +535,7 @@
 - `test_mcp_integration.py` (~5177 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_server.py` (~4897 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
 - `test_mcp_tools.py` (~277 tok, medium) — Tests for MCP server tool definitions."""
-- `test_mcp_v140.py` (~5241 tok, huge) — Tests for MCP v1.4.0 features — issues #29, #31, #35, #36.
+- `test_mcp_v140.py` (~5294 tok, huge) — Tests for MCP v1.4.0 features — issues #29, #31, #35, #36.
 - `test_memory_evolution.py` (~340 tok, medium) — Tests for memory evolution tracking."""
 - `test_memory_practical_e2e.py` (~2389 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_memory_tiers.py` (~3479 tok, huge) — # Copyright 2026 STARGA, Inc.

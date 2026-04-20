@@ -86,7 +86,6 @@ import re as _re_mod
 import sqlite3
 import sys
 import tempfile
-import time
 from typing import Any
 
 # Allow running `python3 mcp_server.py` directly from a source checkout.
@@ -107,11 +106,8 @@ from mind_mem.mind_ffi import (  # noqa: E402
     list_kernels as ffi_list_kernels,
 )
 from mind_mem.observability import get_logger, metrics  # noqa: E402
-from mind_mem.recall import recall as recall_engine  # noqa: E402
-from mind_mem.retrieval_graph import retrieval_diagnostics as _retrieval_diag  # noqa: E402
 from mind_mem.sqlite_index import (  # noqa: E402
     _db_path as fts_db_path,
-    query_index as fts_query,
 )
 
 _log = get_logger("mcp_server")
@@ -266,131 +262,24 @@ _mcp_resources.register(mcp)
 # ---------------------------------------------------------------------------
 # Tools
 # ---------------------------------------------------------------------------
+#
+# v3.2.0 §1.2 PR-3: recall tools moved to mcp.tools.recall.
+# ``_recall_impl`` is re-exported because ``agent_inject`` still
+# late-imports it via ``mind_mem.mcp_server._recall_impl``.
+from mind_mem.mcp.tools import recall as _tools_recall  # noqa: E402,F401
+from mind_mem.mcp.tools.recall import (  # noqa: E402,F401 — public re-export shim
+    _recall_impl,
+    find_similar,
+    hybrid_search,
+    intent_classify,
+    pack_recall_budget,
+    prefetch,
+    recall,
+    recall_with_axis,
+    retrieval_diagnostics,
+)
 
-
-def _recall_impl(query: str, limit: int = 10, active_only: bool = False, backend: str = "auto") -> str:
-    """Core recall implementation shared by recall() and hybrid_search()."""
-    ws = _workspace()
-    ws_err = _check_workspace(ws)
-    if ws_err:
-        return ws_err
-    limits = _get_limits(ws)
-    limit = max(1, min(limit, limits["max_recall_results"]))
-    timeout_seconds = limits.get("query_timeout_seconds", QUERY_TIMEOUT_SECONDS)
-    recall_start = time.monotonic()
-    if backend not in ("auto", "bm25", "hybrid"):
-        backend = "auto"
-    warnings: list[str] = []
-    config_warnings: list[str] = []
-    used_backend = "scan"
-    results: list = []
-
-    # --- Hybrid path (backend="hybrid" or "auto") ---
-    if backend in ("hybrid", "auto"):
-        try:
-            from mind_mem.hybrid_recall import HybridBackend, validate_recall_config
-
-            config = _load_config(ws)
-            recall_cfg = config.get("recall", {})
-            if not isinstance(recall_cfg, dict):
-                recall_cfg = {}
-            schema_errors = validate_recall_config(recall_cfg)
-            if schema_errors:
-                config_warnings = schema_errors
-                _log.warning("recall_config_errors", errors=schema_errors)
-            hb = HybridBackend.from_config(config)
-            results = hb.search(query, ws, limit=limit, active_only=active_only)
-            used_backend = "hybrid"
-        except ImportError:
-            if backend == "hybrid":
-                warnings.append("Hybrid backend unavailable — falling back to BM25.")
-            # Fall through to BM25 path
-        except sqlite3.OperationalError as exc:
-            if _is_db_locked(exc):
-                return _sqlite_busy_error()
-            raise
-        except (OSError, ValueError, KeyError) as exc:
-            _log.warning("recall_hybrid_failed", query=query, error=str(exc))
-            if backend == "hybrid":
-                warnings.append(f"Hybrid search failed — falling back to BM25: {exc}")
-
-    # --- BM25 path (backend="bm25", or fallback from auto/hybrid) ---
-    if used_backend != "hybrid":
-        try:
-            if os.path.isfile(fts_db_path(ws)):
-                results = fts_query(ws, query, limit=limit, active_only=active_only)
-                used_backend = "sqlite"
-            else:
-                results = recall_engine(ws, query, limit=limit, active_only=active_only)
-                used_backend = "scan"
-                warnings.append("FTS5 index not found — using full scan. Run 'reindex' tool for faster queries.")
-        except sqlite3.OperationalError as exc:
-            if _is_db_locked(exc):
-                return _sqlite_busy_error()
-            raise
-
-    # Query timeout enforcement (#476)
-    recall_elapsed = time.monotonic() - recall_start
-    if recall_elapsed > timeout_seconds:
-        _log.warning(
-            "query_timeout_exceeded",
-            elapsed=round(recall_elapsed, 2),
-            limit=timeout_seconds,
-            backend=used_backend,
-        )
-        warnings.append(f"Query exceeded timeout ({round(recall_elapsed, 1)}s > {timeout_seconds}s). Results may be incomplete.")
-
-    # Generate query_id for calibration feedback loop
-    try:
-        from mind_mem.calibration import make_query_id
-
-        query_id = make_query_id(query)
-    except ImportError:
-        query_id = ""
-
-    metrics.inc("mcp_recall_queries")
-    _log.info("mcp_recall", query=query, backend=used_backend, results=len(results))
-    envelope: dict = {
-        "_schema_version": MCP_SCHEMA_VERSION,
-        "backend": used_backend,
-        "query": query,
-        "query_id": query_id,
-        "count": len(results),
-        "results": results,
-    }
-    if warnings:
-        envelope["warnings"] = warnings
-    if config_warnings:
-        envelope["config_warnings"] = config_warnings
-    if not results:
-        envelope["message"] = "No matching blocks found. Try broader terms or check workspace."
-    return json.dumps(envelope, indent=2, default=str)
-
-
-@mcp.tool
-@mcp_tool_observe
-def recall(
-    query: str,
-    limit: int = 10,
-    active_only: bool = False,
-    backend: str = "auto",
-) -> str:
-    """Search across all memory files with ranked retrieval.
-
-    Supports BM25 (FTS5), hybrid BM25+Vector RRF fusion, or auto mode
-    which tries hybrid first and falls back to BM25.
-
-    Args:
-        query: Search query (supports stemming and domain-aware expansion).
-        limit: Maximum number of results (default: 10).
-        active_only: Only return blocks with Status: active.
-        backend: Retrieval backend — "auto" (default, hybrid→BM25 fallback),
-                 "bm25" (keyword only), or "hybrid" (BM25+Vector RRF fusion).
-
-    Returns:
-        JSON array of ranked results with scores, IDs, and matched content.
-    """
-    return _recall_impl(query, limit=limit, active_only=active_only, backend=backend)
+_tools_recall.register(mcp)
 
 
 # v3.2.0 §1.2 PR-3: audit tools moved to mcp.tools.audit (see end of file
@@ -468,58 +357,6 @@ from mind_mem.mcp.tools.agent import (  # noqa: E402,F401 — public re-export s
 _tools_agent.register(mcp)
 
 
-@mcp.tool
-@mcp_tool_observe
-def pack_recall_budget(query: str, max_tokens: int = 2000, limit: int = 20) -> str:
-    """Run a recall, then pack the result list under a token budget.
-
-    Returns the subset of results that fits and the tail that was
-    dropped, plus the reserved token budget for graph / provenance
-    metadata. Use when wiring mind-mem into an agent whose prompt
-    already approaches its model's context window.
-    """
-    from .cognitive_forget import pack_to_budget
-
-    ws = _workspace()
-    ws_err = _check_workspace(ws)
-    if ws_err:
-        return ws_err
-
-    if not isinstance(query, str) or not query.strip():
-        return json.dumps({"error": "query must be a non-empty string"})
-    if max_tokens <= 0 or max_tokens > 1_000_000:
-        return json.dumps({"error": "max_tokens must be in [1, 1_000_000]"})
-    if limit < 1 or limit > 500:
-        return json.dumps({"error": "limit must be in [1, 500]"})
-
-    raw = json.loads(_recall_impl(query, limit=limit))
-    # _recall_impl returns an envelope or a list depending on configuration;
-    # normalise to a flat list of result dicts.
-    if isinstance(raw, dict):
-        results = raw.get("results", []) or []
-    elif isinstance(raw, list):
-        results = raw
-    else:
-        results = []
-
-    try:
-        packed = pack_to_budget(results, max_tokens=int(max_tokens))
-    except ValueError as exc:
-        return json.dumps({"error": str(exc)})
-
-    return json.dumps(
-        {
-            "query": query,
-            "included": packed.included,
-            "dropped": packed.dropped,
-            **packed.as_dict(),
-            "_schema_version": "1.0",
-        },
-        indent=2,
-        default=str,
-    )
-
-
 # v3.2.0 §1.2 PR-3: graph tools moved to mcp.tools.graph (traverse_graph
 # moves in the same module — see below where it used to live).
 from mind_mem.mcp.tools import graph as _tools_graph  # noqa: E402,F401
@@ -541,125 +378,6 @@ from mind_mem.mcp.tools.signal import (  # noqa: E402,F401 — public re-export 
 )
 
 _tools_signal.register(mcp)
-
-
-@mcp.tool
-@mcp_tool_observe
-def recall_with_axis(
-    query: str,
-    axes: str = "lexical,semantic",
-    weights: str = "",
-    limit: int = 10,
-    active_only: bool = False,
-    adversarial: bool = False,
-    allow_rotation: bool = True,
-) -> str:
-    """Axis-aware recall under the Observer-Dependent Cognition model.
-
-    Declares the observation basis explicitly. Each result carries per-axis
-    confidence scores, and the system rotates to orthogonal axes when
-    initial confidence is low.
-
-    Args:
-        query: Search query.
-        axes: Comma-separated axes (``lexical,semantic,temporal,entity_graph,
-              contradiction,adversarial``). Defaults to ``lexical,semantic``
-              (matches the v1.x behaviour).
-        weights: Optional ``axis=weight,axis=weight`` override. Non-zero
-              weights implicitly activate their axis; ``axes`` acts as a
-              safety allowlist when both are supplied.
-        limit: Maximum results (default 10).
-        active_only: Exclude superseded blocks (contradiction / adversarial
-              axes ignore this flag so dissent stays visible).
-        adversarial: When true, run each active axis's adversarial pair in
-              parallel and fuse the results.
-        allow_rotation: When true (default), rotate to orthogonal axes if
-              top-confidence falls below the rotation threshold.
-
-    Returns:
-        JSON envelope with ``results`` (each tagged with per-axis metadata),
-        ``weights``, ``rotated``, ``diversity``, and ``attempts``.
-    """
-    from .axis_recall import recall_with_axis as _axis_recall
-    from .observation_axis import AxisWeights, ObservationAxis
-
-    ws = _workspace()
-    ws_err = _check_workspace(ws)
-    if ws_err:
-        return ws_err
-
-    # Bound the inputs up front so a misbehaving caller can't burn
-    # unbounded CPU on enum lookups or a huge result fetch.
-    _MAX_ARG_LEN = 1024  # axes / weights string length
-    _MAX_TOKENS = 16  # per enum, number of axes / weight pairs
-    _MAX_LIMIT = 500
-
-    if len(axes) > _MAX_ARG_LEN or len(weights) > _MAX_ARG_LEN:
-        return json.dumps({"error": f"axes/weights args must be ≤{_MAX_ARG_LEN} chars"})
-    if limit < 1 or limit > _MAX_LIMIT:
-        return json.dumps({"error": f"limit must be in [1, {_MAX_LIMIT}]"})
-
-    # Parse axis list
-    axis_tokens = [tok.strip() for tok in axes.split(",") if tok.strip()]
-    if not axis_tokens:
-        return json.dumps({"error": "axes must include at least one axis name"})
-    if len(axis_tokens) > _MAX_TOKENS:
-        return json.dumps({"error": f"axes list must contain ≤{_MAX_TOKENS} entries"})
-    try:
-        allowed = {ObservationAxis.from_str(tok) for tok in axis_tokens}
-    except ValueError as exc:
-        return json.dumps({"error": str(exc)})
-
-    # Parse optional explicit weights
-    if weights.strip():
-        weight_entries = [kv for kv in weights.split(",") if kv.strip()]
-        if len(weight_entries) > _MAX_TOKENS:
-            return json.dumps({"error": f"weights list must contain ≤{_MAX_TOKENS} entries"})
-        weight_map: dict[str, float] = {}
-        for kv in weight_entries:
-            kv = kv.strip()
-            if "=" not in kv:
-                return json.dumps({"error": f"weight entry must be axis=value, got {kv!r}"})
-            axis_name, value = kv.split("=", 1)
-            try:
-                weight_map[axis_name.strip()] = float(value.strip())
-            except ValueError:
-                return json.dumps({"error": f"weight for {axis_name!r} is not numeric: {value!r}"})
-        try:
-            parsed_weights = AxisWeights.from_mapping(weight_map)
-        except ValueError as exc:
-            return json.dumps({"error": str(exc)})
-        # Zero out any axis not in the allowlist so the ``axes`` arg wins.
-        effective: dict[str, float] = {}
-        for axis in allowed:
-            effective[axis.value] = parsed_weights.as_dict().get(axis.value, 0.0)
-        weight_obj = AxisWeights.from_mapping(effective)
-    else:
-        weight_obj = AxisWeights.uniform(allowed)
-
-    try:
-        result = _axis_recall(
-            ws,
-            query,
-            weights=weight_obj,
-            limit=limit,
-            active_only=active_only,
-            adversarial=adversarial,
-            allow_rotation=allow_rotation,
-        )
-    except ValueError as exc:
-        return json.dumps({"error": str(exc)})
-
-    envelope = {
-        "query": query,
-        "results": result["results"],
-        "weights": result["weights"],
-        "rotated": result["rotated"],
-        "diversity": result["diversity"],
-        "attempts": result["attempts"],
-        "_schema_version": "1.0",
-    }
-    return json.dumps(envelope, indent=2, default=str)
 
 
 # v3.2.0 §1.2 PR-3: governance tools moved to mcp.tools.governance
@@ -707,151 +425,6 @@ _tools_benchmark.register(mcp)
 # ---------------------------------------------------------------------------
 # New Tools (7-12) — Hybrid, similarity, intent, stats, reindex, evolution
 # ---------------------------------------------------------------------------
-
-
-@mcp.tool
-@mcp_tool_observe
-def hybrid_search(query: str, limit: int = 10, active_only: bool = False) -> str:
-    """Hybrid BM25+Vector recall with RRF fusion.
-
-    .. deprecated::
-        Use ``recall(backend="hybrid")`` instead. This tool will be removed in a
-        future release.
-
-    Args:
-        query: Search query.
-        limit: Maximum results (default: 10).
-        active_only: Only return active blocks.
-
-    Returns:
-        JSON array of ranked results from fused retrieval.
-    """
-    import warnings
-
-    warnings.warn(
-        "hybrid_search is deprecated. Use recall(backend='hybrid') instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    raw = _recall_impl(query, limit=limit, active_only=active_only, backend="hybrid")
-    try:
-        envelope = json.loads(raw)
-        envelope["_deprecation_notice"] = "hybrid_search is deprecated. Use recall with backend='hybrid' instead."
-        return json.dumps(envelope, indent=2)
-    except (json.JSONDecodeError, TypeError):
-        return raw
-
-
-@mcp.tool
-@mcp_tool_observe
-def find_similar(block_id: str, limit: int = 5) -> str:
-    """Find blocks similar to a given block using vector similarity.
-
-    Requires vector backend (sentence-transformers). Falls back gracefully.
-
-    Args:
-        block_id: Source block ID to find similar blocks for.
-        limit: Maximum similar blocks to return (default: 5).
-
-    Returns:
-        JSON array of similar blocks with similarity scores.
-    """
-    if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
-        return json.dumps({"error": f"Invalid block_id format: {block_id}"})
-    ws = _workspace()
-    limits = _get_limits(ws)
-    limit = max(1, min(limit, limits["max_similar_results"]))
-    try:
-        from mind_mem.block_metadata import BlockMetadataManager
-
-        db_path = os.path.join(ws, "memory", "block_meta.db")
-        mgr = BlockMetadataManager(db_path)
-        co_blocks = mgr.get_co_occurring_blocks(block_id, limit=limit)
-        metrics.inc("mcp_find_similar_queries")
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "source": block_id,
-                "similar": co_blocks,
-                "method": "co-occurrence",
-            },
-            indent=2,
-        )
-    except ImportError:
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": "find_similar requires block_metadata module",
-                "block_id": block_id,
-            },
-            indent=2,
-        )
-    except sqlite3.OperationalError as exc:
-        if _is_db_locked(exc):
-            return _sqlite_busy_error()
-        raise
-    except (OSError, ValueError, KeyError) as exc:
-        _log.warning("find_similar_failed", block_id=block_id, error=str(exc))
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": "Failed to find similar blocks. The co-occurrence index may not be initialized.",
-                "block_id": block_id,
-            },
-            indent=2,
-        )
-
-
-@mcp.tool
-@mcp_tool_observe
-def intent_classify(query: str) -> str:
-    """Show the routing strategy for a query.
-
-    Classifies query intent into one of 9 types (WHY, WHEN, ENTITY, WHAT,
-    HOW, LIST, VERIFY, COMPARE, TRACE) and returns retrieval parameters.
-
-    Args:
-        query: The query to classify.
-
-    Returns:
-        JSON with intent type, confidence, sub-intents, and parameters.
-    """
-    try:
-        from mind_mem.intent_router import IntentRouter
-
-        router = IntentRouter()
-        result = router.classify(query)
-        metrics.inc("mcp_intent_classify")
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "query": query,
-                "intent": result.intent,
-                "confidence": result.confidence,
-                "sub_intents": result.sub_intents,
-                "params": result.params,
-            },
-            indent=2,
-        )
-    except ImportError:
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": "intent_router module not available",
-                "query": query,
-            },
-            indent=2,
-        )
-    except (ValueError, KeyError, AttributeError) as exc:
-        _log.warning("intent_classify_failed", query=query, error=str(exc))
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": "Intent classification failed",
-                "query": query,
-            },
-            indent=2,
-        )
 
 
 @mcp.tool
@@ -946,34 +519,6 @@ def index_stats() -> str:
 
 @mcp.tool
 @mcp_tool_observe
-def retrieval_diagnostics(last_n: int = 50, max_age_days: int = 7) -> str:
-    """Pipeline diagnostics: per-stage rejection rates, intent distribution, and hard negative summary.
-
-    Surfaces the internal veto histogram — candidates rejected at each gate
-    (BM25, dedup, rerank, knee cutoff) plus confidence distributions.
-
-    Args:
-        last_n: Number of recent queries to analyze (default 50).
-        max_age_days: Only consider queries within this window (default 7).
-
-    Returns:
-        JSON with stage_stats, rejection_rates, intent_distribution,
-        score_distribution, and hard_negatives summary.
-    """
-    ws = _workspace()
-    try:
-        result = _retrieval_diag(ws, last_n=last_n, max_age_days=max_age_days)
-    except sqlite3.OperationalError as exc:
-        if _is_db_locked(exc):
-            return _sqlite_busy_error()
-        raise
-    result["_schema_version"] = MCP_SCHEMA_VERSION
-    metrics.inc("mcp_retrieval_diagnostics")
-    return json.dumps(result, indent=2)
-
-
-@mcp.tool
-@mcp_tool_observe
 def reindex(include_vectors: bool = False) -> str:
     """Trigger FTS index rebuild, optionally with vector indexing.
 
@@ -1036,64 +581,6 @@ def reindex(include_vectors: bool = False) -> str:
 # ---------------------------------------------------------------------------
 # Category & Prefetch tools (13-14)
 # ---------------------------------------------------------------------------
-
-
-@mcp.tool
-@mcp_tool_observe
-def prefetch(signals: str, limit: int = 5) -> str:
-    """Pre-assembles likely-needed context from recent conversation signals.
-
-    Given entity mentions, topic keywords, or short phrases from the current
-    conversation, anticipates what memory blocks will be needed next.
-
-    Args:
-        signals: Comma-separated list of recent signals (entity names, topics,
-                 keywords from the conversation).
-        limit: Maximum blocks to return (default: 5).
-
-    Returns:
-        JSON array of pre-ranked blocks ready for context injection.
-    """
-    ws = _workspace()
-    signal_list = [s.strip() for s in signals.split(",") if s.strip()]
-    if not signal_list:
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": "No signals provided. Pass comma-separated keywords.",
-            }
-        )
-
-    limits = _get_limits(ws)
-    limit = max(1, min(limit, limits["max_prefetch_results"]))
-    try:
-        from mind_mem.recall import prefetch_context
-
-        results = prefetch_context(ws, signal_list, limit=limit)
-        metrics.inc("mcp_prefetch_queries")
-        _log.info("mcp_prefetch", signals=signal_list, results=len(results))
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "signals": signal_list,
-                "count": len(results),
-                "results": results,
-            },
-            indent=2,
-            default=str,
-        )
-    except Exception:
-        import traceback
-
-        _log.warning("prefetch_failed", signals=signal_list, traceback=traceback.format_exc())
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": "Prefetch failed",
-                "signals": signal_list,
-            },
-            indent=2,
-        )
 
 
 # ---------------------------------------------------------------------------

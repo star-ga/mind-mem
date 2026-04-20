@@ -115,7 +115,11 @@ class TestSQLiteBusyError(unittest.TestCase):
         with open(db_path, "w", encoding="utf-8") as f:
             f.write("")  # dummy file
 
-        with patch.object(self.mod, "fts_query", side_effect=sqlite3.OperationalError("database is locked")):
+        # v3.2.0 §1.2 PR-3: recall moved to mind_mem.mcp.tools.recall;
+        # patch the real call site instead of the mcp_server re-export.
+        from mind_mem.mcp.tools import recall as _recall_mod
+
+        with patch.object(_recall_mod, "fts_query", side_effect=sqlite3.OperationalError("database is locked")):
             result_str = _call_tool(self.mod.recall, "test query", backend="bm25")
             result = json.loads(result_str)
             self.assertEqual(result["error"], "database_busy")
