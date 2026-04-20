@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 603 | **Est. tokens:** ~1,228,581
-**Generated:** 2026-04-20 17:57 UTC
+**Files:** 605 | **Est. tokens:** ~1,231,682
+**Generated:** 2026-04-20 17:58 UTC
 
 ## Token Budget Guide
 
@@ -51,7 +51,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 128 | ~443,987 |
+| `src/mind_mem/` | 129 | ~445,642 |
 | `src/mind_mem/api/` | 4 | ~12,861 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 213 | ~423,731 |
+| `tests/` | 214 | ~425,177 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -503,6 +503,7 @@
 - `__init__.py` (~980 tok, large) — Storage factory for mind-mem block stores (v3.2.0).
 ### `src/mind_mem/`
 
+- `streaming.py` (~1655 tok, huge) — Back-pressure-aware streaming ingest (v3.3.0).
 - `_task_status_literals.sh` (~118 tok, small) — AUTO-GENERATED — do not edit by hand.
 - `telemetry.py` (~2401 tok, huge) — mind-mem Telemetry — OpenTelemetry traces + Prometheus metrics.
 - `tiered_memory.py` (~1102 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -735,6 +736,7 @@
 - `test_sqlite_index.py` (~4726 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
 - `test_stopwords.py` (~247 tok, medium) — Tests for stopword handling."""
 - `test_storage_factory.py` (~1066 tok, large) — Tests for mind_mem.storage.get_block_store factory (v3.2.0)."""
+- `test_streaming.py` (~1446 tok, large) — v3.3.0 — back-pressure-aware streaming ingest queue."""
 - `test_telemetry.py` (~2829 tok, huge) — Tests for src/mind_mem/telemetry.py.
 - `test_temporal_decay_scoring.py` (~863 tok, large) — v3.3.0 Tier 1 #3 — half-life decay on block ``Created``/``Date`` field.
 - `test_temporal.py` (~223 tok, medium) — Tests for temporal filtering module."""
