@@ -400,7 +400,10 @@ class PostgresBlockStore:
         """Return distinct ``file_path`` values for all active blocks."""
         self._ensure_schema()
         pool = self._get_pool()
-        sql = f"SELECT DISTINCT file_path FROM {self._schema}.blocks WHERE active = TRUE ORDER BY file_path"
+        sql = _sql(
+            self._schema,
+            "SELECT DISTINCT file_path FROM {s}.blocks WHERE active = TRUE ORDER BY file_path",
+        )
         try:
             with pool.connection() as conn:
                 with conn.cursor() as cur:
@@ -420,15 +423,16 @@ class PostgresBlockStore:
         self._ensure_schema()
         pool = self._get_pool()
         block_id, file_path, content, metadata_json = _block_to_row(block)
-        sql = f"""
-            INSERT INTO {self._schema}.blocks (id, file_path, content, metadata, updated_at)
-            VALUES (%s, %s, %s, %s::jsonb, NOW())
-            ON CONFLICT (id) DO UPDATE
-                SET file_path  = EXCLUDED.file_path,
-                    content    = EXCLUDED.content,
-                    metadata   = EXCLUDED.metadata,
-                    updated_at = EXCLUDED.updated_at
-        """
+        sql = _sql(
+            self._schema,
+            "INSERT INTO {s}.blocks (id, file_path, content, metadata, updated_at)"
+            " VALUES (%s, %s, %s, %s::jsonb, NOW())"
+            " ON CONFLICT (id) DO UPDATE"
+            "     SET file_path  = EXCLUDED.file_path,"
+            "         content    = EXCLUDED.content,"
+            "         metadata   = EXCLUDED.metadata,"
+            "         updated_at = EXCLUDED.updated_at",
+        )
         try:
             with pool.connection() as conn:
                 with conn.transaction():
@@ -447,12 +451,16 @@ class PostgresBlockStore:
         """
         self._ensure_schema()
         pool = self._get_pool()
-        sql_delete = f"DELETE FROM {self._schema}.blocks WHERE id = %s RETURNING id, content"
-        sql_log = f"""
-            INSERT INTO {self._schema}.deleted_blocks (block_id, content, deleted_at)
-            VALUES (%s, %s, NOW())
-            ON CONFLICT DO NOTHING
-        """
+        sql_delete = _sql(
+            self._schema,
+            "DELETE FROM {s}.blocks WHERE id = %s RETURNING id, content",
+        )
+        sql_log = _sql(
+            self._schema,
+            "INSERT INTO {s}.deleted_blocks (block_id, content, deleted_at)"
+            " VALUES (%s, %s, NOW())"
+            " ON CONFLICT DO NOTHING",
+        )
         try:
             with pool.connection() as conn:
                 with conn.transaction():
@@ -513,28 +521,32 @@ class PostgresBlockStore:
         manifest: dict[str, Any] = {"files": files_in_snap, "version": 2}
         manifest_json = json.dumps(manifest, default=str)
 
-        sql_snap = f"""
-            INSERT INTO {self._schema}.snapshots (snap_id, manifest)
-            VALUES (%s, %s::jsonb)
-            ON CONFLICT (snap_id) DO UPDATE SET manifest = EXCLUDED.manifest,
-                                                created_at = NOW()
-        """
-        sql_blocks = f"""
-            INSERT INTO {self._schema}.snapshot_blocks (snap_id, block_id, content, metadata)
-            VALUES (%s, %s, %s, %s::jsonb)
-            ON CONFLICT (snap_id, block_id) DO UPDATE
-                SET content  = EXCLUDED.content,
-                    metadata = EXCLUDED.metadata
-        """
+        sql_snap = _sql(
+            self._schema,
+            "INSERT INTO {s}.snapshots (snap_id, manifest)"
+            " VALUES (%s, %s::jsonb)"
+            " ON CONFLICT (snap_id) DO UPDATE"
+            "     SET manifest   = EXCLUDED.manifest,"
+            "         created_at = NOW()",
+        )
+        sql_del_blocks = _sql(
+            self._schema,
+            "DELETE FROM {s}.snapshot_blocks WHERE snap_id = %s",
+        )
+        sql_blocks = _sql(
+            self._schema,
+            "INSERT INTO {s}.snapshot_blocks (snap_id, block_id, content, metadata)"
+            " VALUES (%s, %s, %s, %s::jsonb)"
+            " ON CONFLICT (snap_id, block_id) DO UPDATE"
+            "     SET content  = EXCLUDED.content,"
+            "         metadata = EXCLUDED.metadata",
+        )
         try:
             with pool.connection() as conn:
                 with conn.transaction():
                     conn.execute(sql_snap, (snap_id, manifest_json))
                     # Remove stale snapshot_blocks from a previous overwrite.
-                    conn.execute(
-                        f"DELETE FROM {self._schema}.snapshot_blocks WHERE snap_id = %s",
-                        (snap_id,),
-                    )
+                    conn.execute(sql_del_blocks, (snap_id,))
                     with conn.cursor() as cur:
                         for b in blocks_to_snap:
                             bid = b.get("_id", "")
@@ -566,18 +578,22 @@ class PostgresBlockStore:
         if not snap_id:
             raise ValueError(f"Cannot derive snap_id from snap_dir={snap_dir!r}")
 
-        sql_check = f"SELECT snap_id FROM {self._schema}.snapshots WHERE snap_id = %s"
-        sql_clear = f"DELETE FROM {self._schema}.blocks"
-        sql_insert = f"""
-            INSERT INTO {self._schema}.blocks (id, file_path, content, metadata, active)
-            SELECT sb.block_id,
-                   COALESCE(sb.metadata->>'_source_file', ''),
-                   sb.content,
-                   sb.metadata,
-                   TRUE
-            FROM {self._schema}.snapshot_blocks sb
-            WHERE sb.snap_id = %s
-        """
+        sql_check = _sql(
+            self._schema,
+            "SELECT snap_id FROM {s}.snapshots WHERE snap_id = %s",
+        )
+        sql_clear = _sql(self._schema, "DELETE FROM {s}.blocks")
+        sql_insert = _sql(
+            self._schema,
+            "INSERT INTO {s}.blocks (id, file_path, content, metadata, active)"
+            " SELECT sb.block_id,"
+            "        COALESCE(sb.metadata->>'_source_file', ''),"
+            "        sb.content,"
+            "        sb.metadata,"
+            "        TRUE"
+            " FROM {s}.snapshot_blocks sb"
+            " WHERE sb.snap_id = %s",
+        )
         try:
             with pool.connection() as conn:
                 with conn.transaction():
