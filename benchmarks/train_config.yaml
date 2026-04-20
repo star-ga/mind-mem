@@ -1,0 +1,31 @@
+# mind-mem-4b v2 training config — H200 full fine-tune.
+# Referenced by benchmarks/train_mind_mem_4b.py and the
+# docs/mind-mem-4b-v2-training-recipe.md runbook.
+#
+# Edit per-deployment: paths, report_to (wandb / tensorboard / none),
+# and the data mix ratio live outside this file (see recipe step 6).
+
+base_model: star-ga/mind-mem-4b
+output_dir: /workspace/mind-mem-4b-v2
+
+dtype: bfloat16
+optim: adamw_torch_fused
+learning_rate: 5.0e-6
+lr_scheduler_type: cosine
+warmup_ratio: 0.03
+
+num_train_epochs: 3
+per_device_train_batch_size: 16
+gradient_accumulation_steps: 2
+max_seq_length: 4096
+packing: true
+
+save_strategy: steps
+save_steps: 500
+logging_steps: 25
+report_to: none
+seed: 42
+
+# Leave unset for full fine-tune on H200. Set to "4bit" for QLoRA
+# on A100 80GB and smaller. bitsandbytes must be installed.
+# quantize: 4bit
