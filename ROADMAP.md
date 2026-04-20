@@ -880,15 +880,15 @@ Projected v3.3.0 overall with Tier-1+2 shipped: **74-76 (Mistral-Mistral)** / **
 
 #### Tier 1 — highest leverage, must ship
 
-- [ ] **Query decomposition** — `src/mind_mem/query_planner.py`; LLM-backed plan that splits complex queries into sub-queries and merges results; config toggle `retrieval.query_decomposition`. **Target: multi-hop 51 → 65 (+4.5 overall).** ~400 LOC + small-model fallback (Mistral-small / mind-mem-4b).
-- [ ] **Multi-hop graph traversal** — `src/mind_mem/graph_recall.py`; extend `causal_graph.py` to traverse `relates_to` / `supersedes` / `contradicts` edges up to N hops; `recall(multi_hop=True, max_hops=3)`. **Target: multi-hop +10 further (+3.2 overall).** ~600 LOC.
-- [ ] **Temporal re-weighting in the hot path** — half-life decay on `Created:` / `Date:` field inside the scorer (not just as a filter); config `retrieval.temporal_half_life_days` (default 90). **Target: temporal 66 → 78 (+0.6 overall).** ~80 LOC in `_recall_scoring.py`.
+- [x] **Query decomposition** — shipped in `src/mind_mem/query_planner.py` (commit `0c69561`). NLP pattern-split default + optional LLM decomposer via `retrieval.query_decomposition.provider`. Auto-enables on multi-hop query type; wired into `HybridBackend.search` ahead of RRF fusion. 20 regression tests. **Target: multi-hop 51 → 65 (+4.5 overall).**
+- [x] **Multi-hop graph traversal** — shipped in `src/mind_mem/graph_recall.py` (commit `2c55ec3`). BFS over `build_xref_graph`, decayed scores, N-hop cap, auto-enables on multi-hop queries. Wired post-CE-rerank in `_maybe_graph_expand`. 16 regression tests. **Target: multi-hop +10 further (+3.2 overall).**
+- [x] **Temporal re-weighting in the hot path** — shipped in `_recall_scoring.temporal_decay_score` (commit `a63d572`). Exponential half-life decay; configurable via `retrieval.temporal_half_life_days` (default 90). 13 regression tests. **Target: temporal 66 → 78 (+0.6 overall).**
 
 #### Tier 2 — not currently roadmapped, high ROI
 
-- [ ] **Query reformulation + RRF** — generate 3-5 LLM paraphrases of the question, retrieve for each variant, RRF-fuse. Config: `retrieval.reformulations: 3`. **Target: single-hop 68 → 76, open-domain 70 → 76 (+2.7 overall).** ~150 LOC; reuses existing RRF infra. Small-model fallback so it doesn't force an LLM call per recall.
-- [ ] **Conversation-boundary preservation** — LoCoMo inputs are multi-session dialogues; v3.x flattens to block-sized chunks, which breaks co-reference. Preserve `session_id` as block metadata and weight blocks from the same session as the question's topic higher. **Target: multi-hop + open-domain +3 each (+1.3 overall).** ~200 LOC across ingestion + scorer.
-- [ ] **Default cross-encoder rerank on ambiguous queries** — already shipped as config-gated. Default ON for top-30 → top-10 when intent router flags multi-hop or temporal. **Target: +2 overall across all categories.** ~40 LOC in `intent_router.py` + one config toggle; no new deps since cross-encoder already exists.
+- [x] **Query reformulation + RRF** — shipped (commit `4da44d0`). Existing `query_expansion` infrastructure plus auto-enable on multi-hop/temporal query types (`query_expansion.auto_enable: true` default). NLP + LLM expanders both available. 5 regression tests. **Target: single-hop 68 → 76, open-domain 70 → 76 (+2.7 overall).**
+- [ ] **Conversation-boundary preservation** — deferred: LoCoMo-specific (dialog session IDs) and needs ingestion-layer changes to preserve `session_id` / `dia_id` metadata on blocks. Tracked for v3.3.1. **Target: multi-hop + open-domain +3 each (+1.3 overall).**
+- [x] **Default cross-encoder rerank on ambiguous queries** — shipped (commit `a2eeff6`). `_maybe_cross_encoder_rerank` auto-enables for multi-hop/temporal queries via `cross_encoder.auto_enable: true`. Applies on both BM25-only and hybrid paths. 5 regression tests. **Target: +2 overall across all categories.**
 
 #### Tier 3 — bigger architectural bets
 
