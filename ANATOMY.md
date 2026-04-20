@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 629 | **Est. tokens:** ~1,257,361
-**Generated:** 2026-04-20 18:35 UTC
+**Files:** 633 | **Est. tokens:** ~1,261,925
+**Generated:** 2026-04-20 18:40 UTC
 
 ## Token Budget Guide
 
@@ -51,7 +51,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 134 | ~456,689 |
+| `src/mind_mem/` | 136 | ~459,318 |
 | `src/mind_mem/api/` | 4 | ~12,861 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 220 | ~432,244 |
+| `tests/` | 222 | ~434,179 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -387,6 +387,7 @@
 - `evidence_packer.py` (~3267 tok, huge) — Deterministic evidence packer for Mind-Mem.
 - `extraction_feedback.py` (~1177 tok, large) — mind-mem Extraction Quality Feedback Tracker.
 - `extractor.py` (~6597 tok, huge) — mind-mem Entity & Fact Extractor (Regex NER-lite). Zero external deps.
+- `feature_gate.py` (~1377 tok, large) — Shared config-resolver for retrieval features (architect audit item #6).
 - `field_audit.py` (~3103 tok, huge) — mind-mem Per-Field Mutation Audit — tracks individual field changes.
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
 - `governance_gate.py` (~2212 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -483,6 +484,7 @@
 - `recall_vector.py` (~13960 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `rerank_ensemble.py` (~3275 tok, huge) — Reranker ensemble via Borda count (v3.3.0 Tier 4 #9).
 - `retrieval_graph.py` (~4984 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
+- `retrieval_trace.py` (~1252 tok, large) — Per-feature retrieval attribution (v3.3.0 architect audit item #7).
 - `schema_version.py` (~1897 tok, huge) — Mind-Mem Schema Version Migration. Zero external deps.
 - `session_boost.py` (~1533 tok, huge) — Session-boundary preservation for recall (v3.3.0 Tier 2 #5).
 - `session_summarizer.py` (~2885 tok, huge) — mind-mem Session Summarizer. Zero external deps.
@@ -640,6 +642,7 @@
 - `test_export_memory.py` (~346 tok, medium) — Tests for memory export functionality."""
 - `test_extractor.py` (~3387 tok, huge) — Tests for the regex NER-lite entity/fact extractor."""
 - `test_fact_indexing.py` (~3101 tok, huge) — Tests for Feature 2 (fact card indexing) and Feature 4 (metadata-augmented embeddings)."""
+- `test_feature_gate.py` (~1031 tok, large) — Tests for FeatureGate — the shared config-resolver for retrieval features."""
 - `test_field_audit.py` (~1399 tok, large) — Tests for mind-mem per-field mutation audit (field_audit.py)."""
 - `test_field_extraction.py` (~201 tok, medium) — Tests for field token extraction."""
 - `test_filelock.py` (~979 tok, large) — Tests for filelock.py — cross-platform advisory locking."""
@@ -735,6 +738,7 @@
 - `test_rest_api.py` (~3505 tok, huge) — Tests for the mind-mem REST API layer (v3.2.0).
 - `test_retrieval_diagnostics.py` (~2419 tok, huge) — Tests for retrieval diagnostics (#428), corpus isolation (#429), and intent instrumentation (#430)."""
 - `test_retrieval_graph.py` (~2242 tok, huge) — Tests for retrieval_graph.py — retrieval logging, co-retrieval graph, hard negatives."""
+- `test_retrieval_trace.py` (~904 tok, large) — Tests for v3.3.0 per-feature retrieval attribution."""
 - `test_rm3_expand.py` (~321 tok, medium) — Tests for RM3 query expansion."""
 - `test_scan_engine.py` (~333 tok, medium) — Tests for integrity scan engine."""
 - `test_schema_version.py` (~1758 tok, huge) — Tests for schema_version.py — zero external deps (stdlib unittest)."""
