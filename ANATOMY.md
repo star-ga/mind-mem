@@ -5,7 +5,7 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 629 | **Est. tokens:** ~1,257,364
+**Files:** 629 | **Est. tokens:** ~1,257,361
 **Generated:** 2026-04-20 18:35 UTC
 
 ## Token Budget Guide
@@ -24,7 +24,7 @@
 |-----------|-------|-------------|
 | `./` | 30 | ~73,472 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `benchmarks/` | 23 | ~54,239 |
+| `benchmarks/` | 23 | ~54,236 |
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
@@ -128,7 +128,7 @@
 - `REPORT.md` (~3973 tok, huge) — mind-mem Benchmark Report
 - `tier_weight_search.py` (~1615 tok, huge) — Grid-search per-tier weights against LoCoMo judge scores (v3.3.0 T4 #10).
 - `train_config.yaml` (~208 tok, medium) — base_model: star-ga/mind-mem-4b
-- `train_mind_mem_4b.py` (~2849 tok, huge) — mind-mem-4b v2 training script — Runpod H200 full-fine-tune.
+- `train_mind_mem_4b.py` (~2846 tok, huge) — mind-mem-4b v2 training script — Runpod H200 full-fine-tune.
 ### `deploy/`
 
 - `docker-compose.yml` (~608 tok, large) — name: mind-mem
