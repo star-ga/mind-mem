@@ -5,7 +5,7 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 588 | **Est. tokens:** ~1,200,504
+**Files:** 588 | **Est. tokens:** ~1,200,501
 **Generated:** 2026-04-20 17:19 UTC
 
 ## Token Budget Guide
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 208 | ~416,786 |
+| `tests/` | 208 | ~416,783 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -604,7 +604,7 @@
 - `test_edge_cases.py` (~3943 tok, huge) — Edge-case and stress tests for mind-mem — block_parser, recall, and MCP server."""
 - `test_encryption.py` (~1732 tok, huge) — Tests for mind-mem encryption at rest."""
 - `test_entity_ingest.py` (~4091 tok, huge) — Tests for the entity_ingest module — extraction, filtering, signal generation."""
-- `test_entity_prefetch.py` (~1677 tok, huge) — v3.3.0 Tier 3 #8 — entity-graph prefetch.
+- `test_entity_prefetch.py` (~1674 tok, huge) — v3.3.0 Tier 3 #8 — entity-graph prefetch.
 - `test_enums.py` (~534 tok, large) — Tests for centralised enums (mind_mem.enums)."""
 - `test_error_codes.py` (~2394 tok, huge) — Tests for mind-mem Error Codes module."""
 - `test_error_paths.py` (~5892 tok, huge) — Error path and edge-case tests for mind-mem — malformed inputs, missing files, bad configs."""

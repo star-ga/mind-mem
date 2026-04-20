@@ -195,11 +195,10 @@ def prefetch_entity_blocks(
     # traversal respects the same decay + cap semantics as Tier 1 #2.
     if max_hops > 0:
         try:
-            from .graph_recall import graph_expand
-
             # graph_expand needs the full block corpus for neighbour
             # resolution. Load it lazily.
             from .block_store import MarkdownBlockStore
+            from .graph_recall import graph_expand
 
             store = MarkdownBlockStore(workspace)
             from .block_parser import parse_file

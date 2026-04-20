@@ -7,7 +7,6 @@ RRF fusion has that evidence even when BM25 misses the entity tokens.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest

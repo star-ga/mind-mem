@@ -137,6 +137,16 @@ PROVIDER_CONFIG = {
         "key_env": "MISTRAL_API_KEY",
         "format": "openai",
     },
+    # Route claude-proxy/* models through the local CLI-auth proxy on
+    # port 8766 (OAuth-backed, no API key required). Model names like
+    # ``claude-proxy/claude-opus-4-7`` are stripped of the prefix by the
+    # proxy itself (claude-proxy.js line 314). Match this prefix before
+    # "claude" so we don't trigger the Anthropic API path.
+    "claude-proxy": {
+        "base_url": "http://127.0.0.1:8766/v1/chat/completions",
+        "key_env": None,
+        "format": "openai",
+    },
     "claude": {
         "base_url": "https://api.anthropic.com/v1/messages",
         "key_env": "ANTHROPIC_API_KEY",
@@ -149,9 +159,13 @@ def _resolve_provider(model: str) -> tuple[str, str, str]:
     """Resolve API base URL, key, and format from model name prefix."""
     for prefix, cfg in PROVIDER_CONFIG.items():
         if model.startswith(prefix):
-            key = os.environ.get(cfg["key_env"], "")
+            key_env = cfg["key_env"]
+            if key_env is None:
+                # claude-proxy / local CLI-auth path — no bearer required.
+                return cfg["base_url"], "", cfg["format"]
+            key = os.environ.get(key_env, "")
             if not key:
-                raise RuntimeError(f"{cfg['key_env']} not set for model {model}")
+                raise RuntimeError(f"{key_env} not set for model {model}")
             return cfg["base_url"], key, cfg["format"]
     raise RuntimeError(f"Unknown model provider for: {model}")
 
