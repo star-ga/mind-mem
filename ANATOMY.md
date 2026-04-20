@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 500 | **Est. tokens:** ~1,017,070
-**Generated:** 2026-04-20 06:16 UTC
+**Files:** 501 | **Est. tokens:** ~1,022,372
+**Generated:** 2026-04-20 06:21 UTC
 
 ## Token Budget Guide
 
@@ -43,13 +43,13 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 116 | ~396,371 |
+| `src/mind_mem/` | 116 | ~399,324 |
 | `src/mind_mem/mcp/` | 3 | ~3,092 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
 | `src/mind_mem/mcp/tools/` | 16 | ~32,001 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 181 | ~365,876 |
+| `tests/` | 182 | ~368,225 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -251,7 +251,7 @@
 - `block_metadata.py` (~2223 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~7111 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_store_encrypted.py` (~2244 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store.py` (~1293 tok, large) — BlockStore abstraction — decouples block access from storage format.
+- `block_store.py` (~4246 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `calibration.py` (~4811 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
 - `capture.py` (~3698 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
@@ -459,6 +459,7 @@
 - `test_block_parser.py` (~3093 tok, huge) — Tests for block_parser.py — zero external deps (stdlib unittest)."""
 - `test_block_store_encrypted.py` (~999 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_block_store.py` (~2202 tok, huge) — Tests for block_store.py — BlockStore protocol and MarkdownBlockStore."""
+- `test_block_store_write.py` (~2349 tok, huge) — v3.2.0 §1.4 PR-2 — MarkdownBlockStore.write_block + delete_block tests."""
 - `test_block_types.py` (~437 tok, medium) — Tests for different block types in recall."""
 - `test_bootstrap_corpus.py` (~1798 tok, huge) — Tests for bootstrap_corpus.py — backfill pipeline module."""
 - `test_calibration.py` (~3269 tok, huge) — Tests for calibration feedback loop.
