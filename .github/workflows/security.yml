@@ -105,7 +105,7 @@ jobs:
           fetch-depth: 0
 
       - name: Gitleaks scan
-        uses: gitleaks/gitleaks-action@ff98106e4c7b9b76a5e7d2f3be5b1a9b83dc9d1b  # v2.3.9
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
@@ -172,7 +172,7 @@ jobs:
 
       - name: Run Trivy image scan
         if: steps.df_changed.outputs.changed == 'true' || github.event_name == 'schedule'
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2  # v0.29.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
         with:
           image-ref: mind-mem:scan
           format: sarif
