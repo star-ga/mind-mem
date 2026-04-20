@@ -892,13 +892,13 @@ Projected v3.3.0 overall with Tier-1+2 shipped: **74-76 (Mistral-Mistral)** / **
 
 #### Tier 3 — bigger architectural bets
 
-- [ ] **Answerer co-design: structured evidence bundle** — `recall(format="bundle")` returns `{facts: [...], relations: [...], timeline: [...]}` JSON instead of 18 raw blocks, letting the answerer reason over pre-digested structure. **Target: open-domain + multi-hop +4 each (+1.9 overall).** ~500 LOC; gated on config so existing callers unchanged.
-- [ ] **Entity-graph prefetch** — when a question mentions a Person / Project / Tool, pre-walk their edges before BM25 and inject those blocks into the RRF pool. **Target: +2 overall.** ~300 LOC; depends on entity extraction hook (already in ingestion).
+- [x] **Answerer co-design: structured evidence bundle** — shipped in `src/mind_mem/evidence_bundle.py` (commit `96a3ae6`). `build_bundle(query, results)` returns typed `{facts, relations, timeline, entities, source_blocks}`. Rule-based extraction — Statement/Fact/Claim/Summary → facts; Supersedes/Dependencies/Relates_to/Cites → relations; ISO-dated blocks → timeline; PER/PRJ/TOOL/INC prefixes → entities. Confidence blends Status × Tier. Gated on explicit caller opt-in so existing callers unchanged. 19 regression tests. **Target: open-domain + multi-hop +4 each (+1.9 overall).**
+- [x] **Entity-graph prefetch** — shipped in `src/mind_mem/entity_prefetch.py` (commit `e7ba6ae` + security-hardened in `b31e862`). Regex extracts entity candidates (capitalised names, block-IDs, acronyms); matches against Name/Aliases/Statement/Type of entity-prefix blocks (PER/PRJ/TOOL/INC); walks 1-hop via graph_expand. Bounded at 500 files / 2MB / symlink-escape-refused. 18 regression tests. **Target: +2 overall.**
 
-#### Tier 4 — infrastructure (v3.4.0+ material)
+#### Tier 4 — infrastructure (shipped in v3.3.0)
 
-- [ ] **Reranker ensemble** — `src/mind_mem/rerank_ensemble.py`; cross-encoder + BGE + LLM-as-reranker, Borda-count voting. **Target: +1-2 overall.** ~400 LOC, heavy dep footprint; gated behind `mind-mem[rerank-ensemble]` extra.
-- [ ] **Per-tier learned weights** — replace the hard-coded `Tier.retrieval_boost` multipliers (0.7 / 1.0 / 1.5 / 2.0) with per-category weights learned from the LoCoMo judge signal. Offline training loop reads `locomo_judge_results_*.json`, grid-searches multipliers, writes `retrieval.tier_boost_weights` into `mind-mem.json`. **Target: +1 overall.** ~200 LOC code + one-off training script.
+- [x] **Reranker ensemble** — shipped in `src/mind_mem/rerank_ensemble.py` (commit `6053847`). `EnsembleReranker` composes N rerankers and fuses via Borda count; factory wires cross_encoder / bge / llm per config; each member is fail-open so one failure never blocks recall. SSRF-guarded base_url for the LLM member. 12 regression tests. **Target: +1-2 overall.** Heavy BGE deps behind `mind-mem[cross-encoder]`.
+- [x] **Per-tier learned weights** — shipped in `src/mind_mem/tier_recall.resolve_tier_weights` (commit `954d473` + tests). Operators override the baseline 0.7/1.0/1.5/2.0 multipliers via `retrieval.tier_boost_weights` (name or integer keys, case-insensitive). Invalid values fall back to baseline. 9 regression tests. Training script `benchmarks/tier_weight_search.py` follow-up. **Target: +1 overall.**
 
 ### Other v3.3.0 items (not primarily LoCoMo-score-driven)
 
@@ -910,6 +910,27 @@ Projected v3.3.0 overall with Tier-1+2 shipped: **74-76 (Mistral-Mistral)** / **
 - [ ] **mind-mem-4b v2 fine-tune** — retrain the bundled 4B model on the v3.2.0 MCP surface so it natively emits the 7 consolidated dispatcher calls (`recall(mode=…)`, `staged_change(phase=…)`, `graph(action=…)`, etc.). v3.2.0 works with the v1 fine-tune because every legacy tool name still resolves; this is a tool-selection-reliability upgrade, not a correctness fix. Training data re-uses the v3.2.0 test fixtures + recorded tool-call transcripts.
 
 **Estimated (v3.3.0):** ~2400 lines retrieval (Tier 1+2+3) + ~2000 lines web UI + ~2 GPU-days retrain. New optional extras: `mind-mem[reasoning]`, `mind-mem[streaming]`, `mind-mem[rerank-ensemble]` (Tier 4).
+
+**v3.3.0 retrieval shipped (9 of 10 tier items, 2026-04-20):**
+
+| Tier | Item | Status | Commit | New tests |
+|---|---|---|---|---|
+| T1 #1 | Query decomposition | ✓ | `0c69561` | 20 |
+| T1 #2 | Multi-hop graph traversal | ✓ | `2c55ec3` | 16 |
+| T1 #3 | Temporal half-life decay | ✓ | `a63d572` | 13 |
+| T2 #4 | Query reformulation + RRF auto-enable | ✓ | `4da44d0` | 5 |
+| T2 #5 | Conversation-boundary preservation | deferred v3.3.1 | — | — |
+| T2 #6 | Cross-encoder auto-enable | ✓ | `a2eeff6` | 5 |
+| T3 #7 | Structured evidence bundle | ✓ | `96a3ae6` | 19 |
+| T3 #8 | Entity-graph prefetch | ✓ | `e7ba6ae` | 18 |
+| T4 #9 | Reranker ensemble (Borda count) | ✓ | `6053847` | 12 |
+| T4 #10 | Per-tier learned weights | ✓ | `954d473` | 9 |
+
+Plus 12+ audit defects closed (SSRF guard, symlink escape, limit
+violation, BFS O(N), corpus double-load, thread-safety race, float
+underflow, bare exceptions) in commits `b31e862` and `954d473`.
+
+Total: +117 regression tests, 3758 passing as of 2026-04-20.
 
 ## v4.0.0 — Platform Scale (production)
 
