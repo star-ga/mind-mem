@@ -8,6 +8,7 @@ file-based Markdown parsing.
 from __future__ import annotations
 
 import os
+import warnings
 from typing import Any, Optional, Protocol, runtime_checkable
 
 from .block_parser import get_active, get_by_id, parse_file
@@ -18,7 +19,12 @@ _log = get_logger("block_store")
 
 @runtime_checkable
 class BlockStore(Protocol):
-    """Protocol for block storage backends."""
+    """Protocol for block storage backends.
+
+    v3.2.0 §1.4 renames ``list_files`` → ``list_blocks`` as part of
+    the apply-engine routing work. ``list_files`` remains as a thin
+    alias with a ``DeprecationWarning``; it will be removed in v4.0.
+    """
 
     def get_all(self, *, active_only: bool = False) -> list[dict[str, Any]]:
         """Return all blocks, optionally filtered to active only."""
@@ -32,8 +38,14 @@ class BlockStore(Protocol):
         """Search blocks by text query."""
         ...
 
-    def list_files(self) -> list[str]:
-        """Return list of corpus files managed by this store."""
+    def list_blocks(self) -> list[str]:
+        """Return the list of block-containing artifacts managed by this store.
+
+        For filesystem-backed stores this is the set of .md files in
+        the corpus. For database-backed stores this is the logical
+        equivalent (e.g., table partitions or rowids). Callers should
+        treat it as an opaque identifier list.
+        """
         ...
 
 
@@ -106,9 +118,26 @@ class MarkdownBlockStore:
                     break
         return matches
 
-    def list_files(self) -> list[str]:
-        """Return list of corpus .md files managed by this store."""
+    def list_blocks(self) -> list[str]:
+        """Return list of corpus .md file paths managed by this store.
+
+        v3.2.0 §1.4: renamed from ``list_files``. The old name is
+        preserved as a deprecation shim on both this class and every
+        wrapping store (``EncryptedBlockStore``) — callers migrating
+        from v3.1.x should switch to ``list_blocks`` at their
+        convenience; the shim stays through v3.2.x.
+        """
         return list(self._discover_files())
+
+    def list_files(self) -> list[str]:
+        """Deprecated alias for :meth:`list_blocks` — removed in v4.0."""
+        warnings.warn(
+            "BlockStore.list_files() is deprecated; use list_blocks() instead. "
+            "The alias will be removed in v4.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.list_blocks()
 
     def invalidate_cache(self) -> None:
         """Clear file discovery cache (call after corpus changes)."""

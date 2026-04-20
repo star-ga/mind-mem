@@ -83,7 +83,7 @@ class EncryptedBlockStore:
 
     def get_all(self, *, active_only: bool = False) -> list[dict[str, Any]]:
         blocks: list[dict[str, Any]] = []
-        for fpath in self.list_files():
+        for fpath in self.list_blocks():
             parsed = self._parse_maybe_encrypted(fpath)
             if active_only:
                 parsed = get_active(parsed)
@@ -91,7 +91,7 @@ class EncryptedBlockStore:
         return blocks
 
     def get_by_id(self, block_id: str) -> Optional[dict[str, Any]]:
-        for fpath in self.list_files():
+        for fpath in self.list_blocks():
             parsed = self._parse_maybe_encrypted(fpath)
             result = get_by_id(parsed, block_id)
             if result:
@@ -109,8 +109,21 @@ class EncryptedBlockStore:
                     break
         return matches
 
+    def list_blocks(self) -> list[str]:
+        """v3.2.0 §1.4: forwards to the underlying store's list_blocks."""
+        return self._inner.list_blocks()
+
     def list_files(self) -> list[str]:
-        return self._inner.list_files()
+        """Deprecated alias for :meth:`list_blocks` — removed in v4.0."""
+        import warnings
+
+        warnings.warn(
+            "BlockStore.list_files() is deprecated; use list_blocks() instead. "
+            "The alias will be removed in v4.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.list_blocks()
 
     # ------------------------------------------------------------------
     # Internal

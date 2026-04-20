@@ -121,32 +121,54 @@ class TestGetById:
 
 
 # ---------------------------------------------------------------------------
-# list_files
+# list_blocks (v3.2.0 §1.4 — renamed from list_files)
 # ---------------------------------------------------------------------------
 
 
-class TestListFiles:
+class TestListBlocks:
     def test_discovers_md_files(self, corpus_workspace):
         store = MarkdownBlockStore(corpus_workspace, corpus_dirs=("decisions", "tasks"))
-        files = store.list_files()
+        files = store.list_blocks()
         assert len(files) == 2
         basenames = {os.path.basename(f) for f in files}
         assert basenames == {"DECISIONS.md", "TASKS.md"}
 
     def test_ignores_non_md_files(self, corpus_workspace):
-        # Add a non-md file — should not appear in list_files
         with open(os.path.join(corpus_workspace, "decisions", "README.txt"), "w") as f:
             f.write("not a markdown block file")
         store = MarkdownBlockStore(corpus_workspace, corpus_dirs=("decisions",))
-        files = store.list_files()
+        files = store.list_blocks()
         basenames = {os.path.basename(f) for f in files}
         assert "README.txt" not in basenames
 
     def test_missing_corpus_dir_is_skipped(self, corpus_workspace):
         store = MarkdownBlockStore(corpus_workspace, corpus_dirs=("decisions", "nonexistent"))
-        files = store.list_files()
+        files = store.list_blocks()
         # Only decisions dir exists
         assert len(files) == 1
+
+
+class TestListFilesDeprecationShim:
+    """v3.2.0 §1.4 — list_files() is a DeprecationWarning-gated alias."""
+
+    def test_returns_same_as_list_blocks(self, corpus_workspace):
+        import warnings
+
+        store = MarkdownBlockStore(corpus_workspace, corpus_dirs=("decisions", "tasks"))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            legacy = store.list_files()
+        assert legacy == store.list_blocks()
+
+    def test_emits_deprecation_warning(self, corpus_workspace):
+        import warnings
+
+        store = MarkdownBlockStore(corpus_workspace, corpus_dirs=("decisions",))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", DeprecationWarning)
+            store.list_files()
+        assert any(issubclass(w.category, DeprecationWarning) for w in caught)
+        assert any("list_files" in str(w.message) and "list_blocks" in str(w.message) for w in caught)
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +209,7 @@ class TestInvalidateCache:
     def test_invalidate_clears_cached_files(self, corpus_workspace):
         store = MarkdownBlockStore(corpus_workspace, corpus_dirs=("decisions", "tasks"))
         # Populate the cache
-        files_before = store.list_files()
+        files_before = store.list_blocks()
         assert len(files_before) == 2
 
         # Add a new file
@@ -195,11 +217,11 @@ class TestInvalidateCache:
             f.write("[D-20260301-099]\nStatement: New decision\nStatus: active\n")
 
         # Cache is stale — still 2 files
-        assert len(store.list_files()) == 2
+        assert len(store.list_blocks()) == 2
 
         # Invalidate and re-discover
         store.invalidate_cache()
-        files_after = store.list_files()
+        files_after = store.list_blocks()
         assert len(files_after) == 3
 
 
@@ -213,6 +235,6 @@ class TestDefaultCorpusDirs:
         """When corpus_dirs is not specified, CORPUS_DIRS from corpus_registry is used."""
         store = MarkdownBlockStore(corpus_workspace)
         # Should not raise; corpus_dirs defaults from corpus_registry
-        files = store.list_files()
+        files = store.list_blocks()
         # Our workspace has decisions + tasks which overlap with default CORPUS_DIRS
         assert isinstance(files, list)
