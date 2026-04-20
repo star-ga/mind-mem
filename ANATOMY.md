@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 573 | **Est. tokens:** ~1,175,964
-**Generated:** 2026-04-20 10:19 UTC
+**Files:** 573 | **Est. tokens:** ~1,176,627
+**Generated:** 2026-04-20 10:29 UTC
 
 ## Token Budget Guide
 
@@ -51,7 +51,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 121 | ~423,062 |
+| `src/mind_mem/` | 121 | ~423,383 |
 | `src/mind_mem/api/` | 4 | ~12,861 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 202 | ~408,541 |
+| `tests/` | 202 | ~408,883 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -323,7 +323,7 @@
 - `rest.py` (~7648 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
 ### `src/mind_mem/`
 
-- `apply_engine.py` (~14215 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
+- `apply_engine.py` (~14536 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~4167 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
 - `auto_resolver.py` (~3194 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
 - `axis_recall.py` (~4217 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -535,7 +535,7 @@
 - `test_allow_decompose.py` (~311 tok, medium) — Tests for _allow_decompose recall parameter."""
 - `test_api_keys.py` (~2133 tok, huge) — Tests for APIKeyStore in src/mind_mem/api/api_keys.py."""
 - `test_apply_engine_backend_routing.py` (~1066 tok, large) — v3.2.0 §1.4 PR-6 — apply_engine routes through configured BlockStore."""
-- `test_apply_engine_op_routing.py` (~1561 tok, huge) — v3.2.2 — execute_op routes block-level ops through BlockStore.
+- `test_apply_engine_op_routing.py` (~1830 tok, huge) — v3.2.2 — execute_op routes block-level ops through BlockStore.
 - `test_apply_engine.py` (~11568 tok, huge) — Tests for apply_engine.py — focus on security, validation, and rollback."""
 - `test_atomicity_maintenance_scope.py` (~1283 tok, large) — v3.2.0 §2.2 — regression test for the ``maintenance/`` atomicity fix.
 - `test_audit_chain.py` (~2398 tok, huge) — Tests for mind-mem hash-chain mutation log (audit_chain.py)."""
@@ -725,7 +725,7 @@
 - `test_verify_cli.py` (~3202 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_watcher.py` (~1217 tok, large) — Tests for watcher.py — file change detection for auto-reindex."""
 - `test_wide_retrieval.py` (~346 tok, medium) — Tests for wide retrieval parameter."""
-- `test_workspace_contextvar.py` (~974 tok, large) — v3.2.1 — regression test for per-request workspace ContextVar scoping.
+- `test_workspace_contextvar.py` (~1047 tok, large) — v3.2.1 — regression test for per-request workspace ContextVar scoping.
 - `test_workspace_init.py` (~498 tok, medium) — Tests for workspace initialization."""
 - `test_workspace_structure.py` (~546 tok, large) — Tests for workspace directory structure."""
 ### `train/`

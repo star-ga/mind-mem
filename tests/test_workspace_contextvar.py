@@ -91,10 +91,16 @@ class TestContextVarOverride:
         # should have observed the env fallback, not ctx_ws.
         assert results == [str(env_ws)]
 
-    def test_use_workspace_abspath(self, tmp_path) -> None:
-        """``use_workspace`` normalises to an absolute path."""
-        rel = os.path.relpath(str(tmp_path))
-        with use_workspace(rel) as resolved:
+    def test_use_workspace_abspath(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """``use_workspace`` normalises to an absolute path.
+
+        Uses ``monkeypatch.chdir(tmp_path)`` so we can feed a relative
+        path like ``"."`` without hitting Windows' cross-drive
+        ``os.path.relpath`` failure (GitHub Actions Windows runners
+        put the repo on ``D:`` and tmp_path on ``C:``).
+        """
+        monkeypatch.chdir(tmp_path)
+        with use_workspace(".") as resolved:
             assert os.path.isabs(resolved)
             assert resolved == os.path.abspath(str(tmp_path))
             assert _workspace() == resolved

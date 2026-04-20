@@ -151,6 +151,35 @@ class TestOpRoutingViaStore:
         assert "D-20260420-001" in ids
         assert "D-20260420-002" in ids
 
+    def test_supersede_decision_calls_write_block(self, ws: Path) -> None:
+        """``supersede_decision`` marks old superseded + writes new block via store."""
+        store = MarkdownBlockStore(str(ws))
+        spy = MagicMock(wraps=store)
+
+        new_block_text = textwrap.dedent("""\
+            [D-20260420-003]
+            type: decision
+            Status: active
+            Statement: New decision supersedes D-20260420-001.
+            ---
+        """)
+        op = {
+            "op": "supersede_decision",
+            "file": "decisions/DECISIONS.md",
+            "target": "D-20260420-001",
+            "new_block": new_block_text,
+        }
+        ok, msg = execute_op(str(ws), op, store=spy)
+        assert ok, msg
+
+        # Two writes: old block with superseded Status + new block.
+        assert spy.write_block.call_count == 2
+
+        blocks = parse_file(str(ws / "decisions" / "DECISIONS.md"))
+        by_id = {b.get("_id"): b for b in blocks}
+        assert by_id["D-20260420-001"]["Status"] == "superseded"
+        assert "D-20260420-003" in by_id
+
     def test_backward_compat_store_none_uses_factory(self, ws: Path) -> None:
         """When no ``store`` argument is given, execute_op resolves via factory.
 

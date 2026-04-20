@@ -473,7 +473,7 @@ def execute_op(ws, op, *, store=None):
         elif op_type == "replace_range":
             return _op_replace_range(filepath, op)
         elif op_type == "supersede_decision":
-            return _op_supersede_decision(filepath, op)
+            return _op_supersede_decision(filepath, op, store=store)
         else:
             return False, f"Unknown op: {op_type}"
     except (OSError, IOError, ValueError, KeyError, IndexError) as e:
@@ -812,16 +812,26 @@ def _op_replace_range(filepath, op):
     return True, f"replace_range: replaced {end_line - start_line} lines in {target}"
 
 
-def _op_supersede_decision(filepath, op):
-    """Atomic supersede: append new block + mark old as superseded."""
+def _op_supersede_decision(filepath, op, store=None):
+    """Atomic supersede: append new block + mark old as superseded.
+
+    v3.2.2: when ``store`` is provided, both phases route through
+    ``store.write_block`` — the old block's Status is mutated and
+    written, then the new block (parsed from ``new_block``/``patch``
+    text) is written. Legacy filesystem path is preserved for
+    callers that don't pass a store.
+    """
     target = op.get("target")
     new_block = op.get("new_block") or op.get("patch", "")
     if not target or not new_block:
         return False, "supersede_decision: missing target or new_block/patch"
 
     # Check that target exists and is not invariant enforcement
-    blocks = parse_file(filepath)
-    old = get_by_id(blocks, target)
+    if store is not None:
+        old = store.get_by_id(target)
+    else:
+        blocks = parse_file(filepath)
+        old = get_by_id(blocks, target)
     if not old:
         return False, f"supersede_decision: target {target} not found"
 
@@ -832,6 +842,23 @@ def _op_supersede_decision(filepath, op):
         return False, (
             f"supersede_decision: {target} has invariant enforcement (manual edit required — invariants cannot be modified by automation)"
         )
+
+    # v3.2.2 — BlockStore path.
+    if store is not None:
+        from .block_parser import parse_blocks
+
+        try:
+            new_blocks = parse_blocks(new_block)
+        except Exception as exc:
+            return False, f"supersede_decision: parse failed: {exc}"
+        if not new_blocks or not all(b.get("_id") for b in new_blocks):
+            return False, "supersede_decision: new_block missing or has no '_id'"
+
+        old["Status"] = "superseded"
+        store.write_block(old)
+        for b in new_blocks:
+            store.write_block(b)
+        return True, f"supersede_decision: superseded {target} → {new_blocks[0].get('_id')}"
 
     # Build the complete new file content in memory, then write atomically.
     # Reading the file once here avoids two separate read-modify-write cycles.
@@ -1274,6 +1301,10 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
     delta: dict[str, list[str]] = {"created": [], "modified": []}
     wal_entries = []  # Track WAL entries for this apply
     actually_modified_files: set[str] = set()  # Track all files modified during execution
+    # Resolve the BlockStore once for the whole proposal — avoids
+    # re-resolving on every op and gives all ops a consistent view
+    # of the configured backend (v3.2.1).
+    store = _store_for(ws)
     for i, op in enumerate(proposal.get("Ops", [])):
         raw_file = op.get("file", "")
         try:
@@ -1289,7 +1320,7 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
         )
         wal_entries.append(wal_id)
 
-        ok, msg = execute_op(ws, op)
+        ok, msg = execute_op(ws, op, store=store)
         print(f"  [{i}] {op.get('op')}: {msg}")
         if not ok:
             # WAL: rollback this failed op's WAL entry
