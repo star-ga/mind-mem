@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 572 | **Est. tokens:** ~1,173,028
-**Generated:** 2026-04-20 10:04 UTC
+**Files:** 572 | **Est. tokens:** ~1,173,008
+**Generated:** 2026-04-20 10:08 UTC
 
 ## Token Budget Guide
 
@@ -28,7 +28,7 @@
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 50 | ~72,543 |
+| `docs/` | 50 | ~72,523 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -142,7 +142,7 @@
 - `cli-reference.md` (~1595 tok, huge) — CLI Reference
 - `comparison.md` (~313 tok, medium) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~7966 tok, huge) — Configuration Reference
+- `configuration.md` (~7946 tok, huge) — Configuration Reference
 ### `docs/design/`
 
 - `v3-mcp-surface-reduction.md` (~1080 tok, large) — v3.0 Design: MCP Tool Surface Reduction

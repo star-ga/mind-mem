@@ -730,35 +730,38 @@ mutating the workspace.
 
 ## Tier-Aware Retrieval Scoring (v3.2.0+)
 
-Memory blocks can be tagged with a `Tier:` field in their frontmatter
-(`WORKING`, `SHARED`, `LONG_TERM`, `VERIFIED`). When
-`retrieval.tier_boost` is enabled, recall applies a multiplicative
-score boost so tier-aligned blocks rank above untagged ones.
+Memory blocks assigned to a TierManager tier (`WORKING`, `SHARED`,
+`LONG_TERM`, `VERIFIED` — see `memory_tiers.py`) get a score
+multiplier applied after RRF fusion. Opt-in via a single boolean;
+the multipliers are fixed so operators don't need to hand-tune four
+dials to feel the effect.
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `retrieval.tier_boost.enabled` | boolean | `false` | Master switch. Keep disabled if your corpus doesn't populate `Tier:` fields consistently — the boost would otherwise penalise untagged blocks. |
-| `retrieval.tier_boost.working` | float | `1.20` | Score multiplier for `Tier: WORKING` blocks (hot — recent context the agent is actively reasoning about). |
-| `retrieval.tier_boost.shared` | float | `1.10` | Score multiplier for `Tier: SHARED` blocks (shared team knowledge). |
-| `retrieval.tier_boost.long_term` | float | `1.00` | Score multiplier for `Tier: LONG_TERM` blocks (stable historical decisions). |
-| `retrieval.tier_boost.verified` | float | `1.30` | Score multiplier for `Tier: VERIFIED` blocks (human-approved ground truth). |
+| `retrieval.tier_boost` | boolean | `false` | Master switch. Keep disabled if your workspace hasn't adopted the tier system — boost treats untiered blocks as `WORKING` (0.7x), which would demote them below tiered peers. |
+
+Fixed multipliers (from `src/mind_mem/tier_recall.py`):
+
+| Tier | Multiplier | Intent |
+| --- | --- | --- |
+| `WORKING` | 0.7x | Hot scratch context — demoted so trusted tiers surface first. |
+| `SHARED` | 1.0x | Shared team knowledge — neutral. |
+| `LONG_TERM` | 1.5x | Stable historical decisions. |
+| `VERIFIED` | 2.0x | Human-approved ground truth — ranks highest. |
 
 ```json
 {
   "retrieval": {
-    "tier_boost": {
-      "enabled": true,
-      "working": 1.20,
-      "shared": 1.10,
-      "long_term": 1.00,
-      "verified": 1.30
-    }
+    "tier_boost": true
   }
 }
 ```
 
 Boosts are applied after RRF fusion so the relative ranking within
 each tier is preserved — the boost only re-weights *across* tiers.
+A future release may promote this from boolean to a nested
+dictionary once enough workspaces have confirmed the fixed policy
+fits their corpus.
 
 ---
 
