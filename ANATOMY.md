@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 572 | **Est. tokens:** ~1,173,008
-**Generated:** 2026-04-20 10:08 UTC
+**Files:** 572 | **Est. tokens:** ~1,173,060
+**Generated:** 2026-04-20 10:09 UTC
 
 ## Token Budget Guide
 
@@ -52,7 +52,7 @@
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
 | `src/mind_mem/` | 121 | ~421,967 |
-| `src/mind_mem/api/` | 4 | ~12,809 |
+| `src/mind_mem/api/` | 4 | ~12,861 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
 | `src/mind_mem/mcp/tools/` | 17 | ~37,198 |
@@ -320,7 +320,7 @@
 - `api_keys.py` (~2717 tok, huge) — Per-agent API key store for the mind-mem REST API.
 - `auth.py` (~2476 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
 - `__init__.py` (~20 tok, tiny)
-- `rest.py` (~7596 tok, huge) — REST API layer for mind-mem (v3.2.0).
+- `rest.py` (~7648 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
 ### `src/mind_mem/`
 
 - `apply_engine.py` (~13120 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.

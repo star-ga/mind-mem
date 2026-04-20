@@ -1,9 +1,12 @@
-"""REST API layer for mind-mem (v3.2.0).
+"""REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
 
 FastAPI application that mirrors the MCP tool surface with:
 - Pydantic-validated request models
-- Bearer-token auth via existing MIND_MEM_TOKEN / MIND_MEM_ADMIN_TOKEN env vars
+- Bearer-token auth via MIND_MEM_TOKEN / MIND_MEM_ADMIN_TOKEN env vars
+- OIDC JWT auth (v3.2.1) — JWT scopes drive the admin gate
 - Per-client sliding-window rate limiting
+- Per-request workspace scoping via ContextVar (v3.2.1 — replaces
+  earlier ``os.environ`` mutation which raced under concurrent load)
 - Optional Prometheus exposition at /v1/metrics
 - OpenAPI docs at /openapi.json (FastAPI default)
 
