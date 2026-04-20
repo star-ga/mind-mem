@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 566 | **Est. tokens:** ~1,140,149
-**Generated:** 2026-04-20 08:27 UTC
+**Files:** 567 | **Est. tokens:** ~1,159,182
+**Generated:** 2026-04-20 08:28 UTC
 
 ## Token Budget Guide
 
@@ -31,6 +31,7 @@
 | `docs/` | 48 | ~68,091 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
+| `docs/security-baselines/` | 1 | ~19,010 |
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
@@ -50,7 +51,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 121 | ~422,082 |
+| `src/mind_mem/` | 121 | ~422,105 |
 | `src/mind_mem/api/` | 4 | ~11,335 |
 | `src/mind_mem/mcp/` | 3 | ~3,229 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,854 |
@@ -170,6 +171,11 @@
 - `roadmap.md` (~1294 tok, large) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `security-audit-sow.md` (~3336 tok, huge) — mind-mem — External Security Audit Statement of Work (SoW)
+### `docs/security-baselines/`
+
+- `bandit-v3.2.0-baseline.json` (~18974 tok, huge) — Keys: errors, generated_at, metrics, results
+### `docs/`
+
 - `security-model.md` (~350 tok, medium) — Security Model
 - `setup.md` (~1741 tok, huge) — Setup
 - `storage-backends.md` (~1091 tok, large) — Storage Backends
@@ -324,7 +330,7 @@
 - `block_metadata.py` (~2223 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~7111 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_store_encrypted.py` (~2244 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store_postgres.py` (~7956 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
+- `block_store_postgres.py` (~7972 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~2101 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
 - `block_store.py` (~8980 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.

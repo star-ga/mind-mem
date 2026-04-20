@@ -625,25 +625,26 @@ class PostgresBlockStore:
         if not snap_id:
             raise ValueError(f"Cannot derive snap_id from snap_dir={snap_dir!r}")
 
-        sql = f"""
-            SELECT COALESCE(live.file_path, snap.metadata->>'_source_file', snap.block_id) AS path,
-                   CASE
-                     WHEN live.id IS NULL              THEN 'removed'
-                     WHEN snap.block_id IS NULL         THEN 'added'
-                     ELSE                                   'modified'
-                   END AS change_type
-            FROM {self._schema}.blocks AS live
-            FULL OUTER JOIN {self._schema}.snapshot_blocks AS snap
-                ON live.id = snap.block_id AND snap.snap_id = %s
-            WHERE snap.snap_id = %s OR snap.snap_id IS NULL
-              AND (
-                   live.id IS NULL
-                   OR snap.block_id IS NULL
-                   OR live.content <> snap.content
-                   OR live.metadata::text <> snap.metadata::text
-              )
-            ORDER BY path
-        """
+        sql = _sql(
+            self._schema,
+            "SELECT COALESCE(live.file_path, snap.metadata->>'_source_file', snap.block_id) AS path,"
+            "       CASE"
+            "         WHEN live.id IS NULL       THEN 'removed'"
+            "         WHEN snap.block_id IS NULL  THEN 'added'"
+            "         ELSE                            'modified'"
+            "       END AS change_type"
+            " FROM {s}.blocks AS live"
+            " FULL OUTER JOIN {s}.snapshot_blocks AS snap"
+            "     ON live.id = snap.block_id AND snap.snap_id = %s"
+            " WHERE snap.snap_id = %s OR snap.snap_id IS NULL"
+            "   AND ("
+            "        live.id IS NULL"
+            "        OR snap.block_id IS NULL"
+            "        OR live.content <> snap.content"
+            "        OR live.metadata::text <> snap.metadata::text"
+            "   )"
+            " ORDER BY path",
+        )
         try:
             with pool.connection() as conn:
                 with conn.cursor() as cur:
@@ -681,12 +682,16 @@ class PostgresBlockStore:
         pool = self._get_pool()
         lock_id = "workspace"
         holder = str(os.getpid())
-        sql_acquire = f"""
-            INSERT INTO {self._schema}.workspace_lock (lock_id, holder)
-            VALUES (%s, %s)
-            ON CONFLICT (lock_id) DO NOTHING
-        """
-        sql_release = f"DELETE FROM {self._schema}.workspace_lock WHERE lock_id = %s AND holder = %s"
+        sql_acquire = _sql(
+            self._schema,
+            "INSERT INTO {s}.workspace_lock (lock_id, holder)"
+            " VALUES (%s, %s)"
+            " ON CONFLICT (lock_id) DO NOTHING",
+        )
+        sql_release = _sql(
+            self._schema,
+            "DELETE FROM {s}.workspace_lock WHERE lock_id = %s AND holder = %s",
+        )
 
         deadline = time.monotonic() + timeout
 
