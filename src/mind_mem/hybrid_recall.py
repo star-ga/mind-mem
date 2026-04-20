@@ -407,6 +407,9 @@ class HybridBackend:
             # also benefits from auto-enable on multi-hop/temporal queries.
             result = self._maybe_cross_encoder_rerank(query, result, limit)
 
+            # v3.3.0 Tier 1 #2 — multi-hop graph expansion.
+            result = self._maybe_graph_expand(query, workspace, result)
+
             # 4-layer dedup filter (post-fusion, post-rerank)
             dedup_cfg = self._config.get("dedup")
             if dedup_cfg is None or (isinstance(dedup_cfg, dict) and dedup_cfg.get("enabled", True)):
@@ -498,6 +501,52 @@ class HybridBackend:
         )
 
         return fused[:limit]
+
+    def _maybe_graph_expand(self, query: str, workspace: str, results: list[dict]) -> list[dict]:
+        """Append graph-walked blocks when enabled (v3.3.0 Tier 1 #2).
+
+        Loads the workspace block corpus, builds the xref graph, and
+        walks N hops from each initial result. Fails open on any
+        error so recall never blocks on graph issues.
+        """
+        if not results:
+            return results
+        try:
+            from .graph_recall import (
+                graph_expand,
+                is_graph_expand_enabled,
+                resolve_graph_config,
+            )
+
+            if not is_graph_expand_enabled(self._config, query):
+                return results
+            # Load the corpus once per call — graph_expand needs the
+            # full block set to resolve neighbour IDs. Cheap for
+            # typical workspaces (hundreds of blocks); heavy workspaces
+            # can pin graph_expand behind enabled:false.
+            from .block_parser import parse_file
+            from .block_store import MarkdownBlockStore
+
+            store = MarkdownBlockStore(workspace)
+            all_blocks: list[dict] = []
+            for path in store.list_blocks():
+                try:
+                    all_blocks.extend(parse_file(path))
+                except Exception:  # pragma: no cover
+                    continue
+            params = resolve_graph_config(self._config)
+            expanded = graph_expand(results, all_blocks, **params)
+            if len(expanded) > len(results):
+                _log.info(
+                    "graph_expand_applied",
+                    seeds=len(results),
+                    final=len(expanded),
+                    max_hops=params["max_hops"],
+                )
+            return expanded
+        except Exception as exc:  # pragma: no cover — defensive
+            _log.warning("graph_expand_failed", error=str(exc))
+            return results
 
     def _maybe_cross_encoder_rerank(self, query: str, result: list[dict], limit: int) -> list[dict]:
         """Apply cross-encoder rerank when appropriate.

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 584 | **Est. tokens:** ~1,192,353
-**Generated:** 2026-04-20 16:50 UTC
+**Files:** 586 | **Est. tokens:** ~1,196,008
+**Generated:** 2026-04-20 17:00 UTC
 
 ## Token Budget Guide
 
@@ -51,7 +51,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 122 | ~427,433 |
+| `src/mind_mem/` | 123 | ~429,653 |
 | `src/mind_mem/api/` | 4 | ~12,861 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 206 | ~413,674 |
+| `tests/` | 207 | ~415,109 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -374,9 +374,10 @@
 - `field_audit.py` (~3103 tok, huge) — mind-mem Per-Field Mutation Audit — tracks individual field changes.
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
 - `governance_gate.py` (~2212 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `graph_recall.py` (~1703 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~9442 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hybrid_recall.py` (~6003 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `hybrid_recall.py` (~6520 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~539 tok, large) — # Mind Mem — Memory + Immune System for AI agents
 - `init_workspace.py` (~2062 tok, huge) — mind-mem workspace initializer. Zero external deps.
@@ -621,6 +622,7 @@
 - `test_governance_concurrency.py` (~1363 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_graph_boost.py` (~6050 tok, huge) — Tests for graph boost, context packing, config validation, and block cap.
 - `test_graph_boost_recall.py` (~315 tok, medium) — Tests for graph_boost recall parameter."""
+- `test_graph_recall.py` (~1435 tok, large) — v3.3.0 Tier 1 #2 — multi-hop graph traversal on recall results.
 - `test_grid_search.py` (~1199 tok, large) — Tests for benchmarks/grid_search.py — grid generation and utility functions."""
 - `test_hash_chain_v2.py` (~3462 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hook_installer_force_preserves_siblings.py` (~703 tok, large) — Regression test for the --force clobber bug in hook_installer."""
