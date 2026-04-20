@@ -93,10 +93,10 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - name: Download signed dist artifacts
+      - name: Download dist artifacts (wheel + sdist only)
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6
         with:
-          name: dist-signed
+          name: dist
           path: dist/
 
       - name: Publish to PyPI
@@ -106,6 +106,10 @@ jobs:
           # Attestations (PEP 740) are generated automatically by pypi-publish
           # when id-token: write is present and the package is uploaded from
           # a trusted publisher environment.
+          # Intentionally pulls the raw ``dist`` artifact (wheel + sdist
+          # only), not ``dist-signed`` — the sign job's ``*.sigstore.json``
+          # outputs are for the GitHub release, not PyPI. Twine check in
+          # this action rejects anything that isn't a wheel or sdist.
 
   # ── GitHub Release (dist + SBOM + signatures) ────────────────────────────────
   github-release:
