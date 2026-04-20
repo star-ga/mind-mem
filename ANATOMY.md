@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 568 | **Est. tokens:** ~1,161,403
-**Generated:** 2026-04-20 08:31 UTC
+**Files:** 569 | **Est. tokens:** ~1,165,324
+**Generated:** 2026-04-20 08:34 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~70,792 |
+| `./` | 30 | ~71,456 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,429 |
 | `deploy/` | 2 | ~690 |
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~1,018 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 198 | ~401,059 |
+| `tests/` | 199 | ~404,316 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -91,7 +91,7 @@
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22305 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~14694 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~15358 tok, huge) — mind-mem Roadmap
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
 - `SECURITY.md` (~1752 tok, huge) — Security Policy
 - `SPEC.md` (~5184 tok, huge) — Mind Mem Formal Specification v1.0
@@ -715,6 +715,7 @@
 - `test_uncertainty_propagation.py` (~2158 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_unicode_edge_cases.py` (~2440 tok, huge) — Tests for Unicode and edge case handling across mind-mem modules."""
 - `test_v28_completion.py` (~4565 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_v320_gaps.py` (~3257 tok, huge) — v3.2.0 gap tests — regression and edge-case coverage for new modules.
 - `test_validate_py.py` (~3438 tok, huge) — Tests for validate_py.py — workspace integrity validator."""
 - `test_validate_sh_deprecation.py` (~547 tok, large) — Pin the runtime deprecation warning on validate.sh.
 - `test_vault_wikilinks.py` (~1783 tok, huge) — # Copyright 2026 STARGA, Inc.

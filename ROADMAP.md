@@ -785,6 +785,47 @@ a prerequisite for the production-deployment work above:
 
 **Estimated:** ~800 lines storage adapter + ~600 lines REST + ~400 lines JS SDK + ~1200 lines structural-debt refactor + deploy artifacts. New optional extras: `mind-mem[postgres]`, `mind-mem[api]`, `mind-mem[otel]`.
 
+## v3.2.1 — Hotfix follow-up
+
+Closes the two architectural CRITICALs surfaced by the v3.2.0
+self-audit (`docs/review-architecture-v3.2.0.md`). v3.2.0 Postgres
++ REST surfaces are labelled "beta" in the release notes; v3.2.1
+promotes both to GA.
+
+- [ ] **Apply engine routes through `BlockStore`** — the seven
+  `_op_*` handlers in `apply_engine.py` currently speak raw
+  `open()` / `shutil` on corpus Markdown files. On a Postgres
+  backend they write to the local FS that Postgres never sees, so
+  `apply_proposal` succeeds while DB state silently diverges.
+  Re-plumb through `BlockStore.write_block` / `delete_block`.
+  ~2 days.
+- [ ] **REST request-scoping** — `src/mind_mem/api/rest.py`
+  currently uses `os.environ["MIND_MEM_WORKSPACE"] = workspace`
+  to carry per-request workspace selection, which is thread-unsafe
+  the moment `uvicorn` runs >1 worker. Extract a
+  `mind_mem.core.services` module that both REST and MCP call
+  with an explicit `workspace` argument. ~1 day.
+- [ ] **OIDC wired into `_require_admin`** — v3.2.0 OIDC only
+  validates tokens on `/v1/auth/oidc/callback`; protected
+  endpoints cannot accept OIDC JWTs. Map JWT `scopes` claim to
+  the internal scope grammar. ~0.5 day.
+- [ ] **`PostgresBlockStore.snapshot(snap_id=…)`** — current
+  signature requires a filesystem path for the MANIFEST.json
+  write, breaking cross-host Postgres snapshots. Accept a plain
+  `snap_id: str` and make the on-disk manifest optional. ~0.5
+  day.
+- [ ] **Wire `cached_recall` into `_recall_impl`** — the Redis
+  cache module ships in v3.2.0 but the call-site wiring is
+  deferred. One-liner in
+  `src/mind_mem/mcp/tools/recall.py::_recall_impl`. ~0.5 hour.
+- [ ] **Two config keys documented in `docs/configuration.md`** —
+  `cache.redis_url` and `retrieval.tier_boost`. Docs-only.
+- [ ] **Dependency CVE bumps** — `authlib>=1.6.9`, `aiohttp>=3.13.4`
+  per the v3.2.0 audit's INFO findings. Transitive via `fastmcp`.
+
+**Estimated:** ~1200 lines refactor, ~400 LOC tests, ~200 LOC
+docs.
+
 ## v3.3.0 — Reasoning-Grade Retrieval (1–2 months)
 
 Close the retrieval-quality gap and widen the governance moat. All additive — no breaking changes to existing recall contracts.
@@ -795,9 +836,10 @@ Close the retrieval-quality gap and widen the governance moat. All additive — 
 - [ ] **Probabilistic truth score** — `src/mind_mem/truth_score.py`; Bayesian update on block `importance` from contradiction votes; exposed as `block.truth_score` in recall responses
 - [ ] **Streaming ingest + back-pressure queue** — `src/mind_mem/streaming.py`; websocket/SSE endpoint with back-pressure via a bounded mpsc channel (drop-oldest when writer pool saturates); drop-in replacement for `capture --stdin` in high-rate pipelines; per-client token-bucket rate limit
 - [ ] **Consensus voting** — extend `conflict_resolver.py` with quorum across agents, weighted by `namespace.trust_weight`; resolves contradictions without human review when confidence exceeds threshold
-- [ ] **Graph + timeline visualization** — `web/` Next.js app; D3 / react-flow graph view (nodes = blocks, edges = relationships), timeline view, drift heatmap; reads from REST API shipped in v3.2.0
+- [ ] **Graph + timeline visualization** — `web/` Next.js app; D3 / react-flow graph view (nodes = blocks, edges = relationships), timeline view, drift heatmap; reads from REST API shipped in v3.2.0. v3.2.0 already emits `[[wikilinks]]` on `vault_sync` so an Obsidian-mounted vault gets a graph view for free; this web UI is the non-Obsidian alternative.
+- [ ] **mind-mem-4b v2 fine-tune** — retrain the bundled 4B model on the v3.2.0 MCP surface so it natively emits the 7 consolidated dispatcher calls (`recall(mode=…)`, `staged_change(phase=…)`, `graph(action=…)`, etc.). v3.2.0 works with the v1 fine-tune because every legacy tool name still resolves; this is a tool-selection-reliability upgrade, not a correctness fix. Training data re-uses the v3.2.0 test fixtures + recorded tool-call transcripts.
 
-**Estimated:** ~1500 lines retrieval + ~2000 lines web UI. New optional extras: `mind-mem[reasoning]`, `mind-mem[streaming]`.
+**Estimated:** ~1500 lines retrieval + ~2000 lines web UI + ~2 GPU-days retrain. New optional extras: `mind-mem[reasoning]`, `mind-mem[streaming]`.
 
 ## v4.0.0 — Platform Scale (production)
 
