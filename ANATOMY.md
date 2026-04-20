@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 526 | **Est. tokens:** ~1,050,605
-**Generated:** 2026-04-20 06:33 UTC
+**Files:** 527 | **Est. tokens:** ~1,051,679
+**Generated:** 2026-04-20 06:34 UTC
 
 ## Token Budget Guide
 
@@ -28,7 +28,7 @@
 | `deploy/` | 2 | ~588 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 39 | ~50,578 |
+| `docs/` | 40 | ~51,629 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `examples/` | 2 | ~466 |
@@ -52,7 +52,7 @@
 | `src/mind_mem/` | 117 | ~402,681 |
 | `src/mind_mem/mcp/` | 3 | ~3,092 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
-| `src/mind_mem/mcp/tools/` | 16 | ~32,176 |
+| `src/mind_mem/mcp/tools/` | 16 | ~32,199 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~870 |
 | `templates/` | 19 | ~1,041 |
@@ -164,6 +164,7 @@
 - `security-audit-sow.md` (~3336 tok, huge) — mind-mem — External Security Audit Statement of Work (SoW)
 - `security-model.md` (~350 tok, medium) — Security Model
 - `setup.md` (~1741 tok, huge) — Setup
+- `supply-chain-security.md` (~1051 tok, large) — Supply-Chain Security
 - `testing-guide.md` (~369 tok, medium) — Testing Guide
 - `troubleshooting.md` (~681 tok, large) — Troubleshooting
 - `usage.md` (~2011 tok, huge) — Usage
@@ -370,7 +371,7 @@
 - `consolidation.py` (~2361 tok, huge) — Memory-consolidation MCP tools.
 - `core.py` (~1508 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~1144 tok, large) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
-- `governance.py` (~3119 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
+- `governance.py` (~3142 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
 - `graph.py` (~2204 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `_helpers.py` (~596 tok, large) — Shared tool-internal helpers — workspace paths + lazy-init singletons.
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).

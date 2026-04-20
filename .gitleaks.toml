@@ -1,0 +1,35 @@
+# Gitleaks configuration for mind-mem
+# Allowlist rules for test fixtures and known-safe patterns only.
+# All default Gitleaks detection rules remain active.
+
+title = "mind-mem gitleaks config"
+
+[allowlist]
+  description = "Allowlist for test fixtures and dummy tokens"
+  commits = []
+  files = [
+    # Test fixtures are allowed to contain dummy credential patterns
+    '''tests/.*\.py$''',
+    '''tests/fixtures/.*''',
+    '''tests/data/.*''',
+    # Example config files explicitly contain placeholder values
+    '''mind-mem\.example\.json''',
+    # Docs may show redacted/example tokens
+    '''docs/.*\.md$''',
+  ]
+  # Regex patterns that are known-safe (dummy/placeholder values only)
+  regexes = [
+    # Dummy API key patterns used in tests (abc123... style)
+    '''(?i)(abc123token|dummytoken|fake_api_key|test_token|placeholder_key|REPLACE_ME|YOUR_KEY_HERE|sk-test-[a-z0-9]{8,})''',
+    # SQLite in-memory URIs in test code
+    ''':memory:''',
+    # UUIDs used as test identifiers (not real credentials)
+    '''[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}''',
+  ]
+  paths = [
+    # Ignore vendored or generated files
+    '''.github/''',
+    '''dist/''',
+    '''__pycache__/''',
+    '''*.pyc''',
+  ]

@@ -1,0 +1,185 @@
+name: Supply-Chain Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  # ── CodeQL SAST ──────────────────────────────────────────────────────────────
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@c793b717bc78562f491db7b0e93a3a178b099162  # v4
+        with:
+          languages: python
+          queries: +security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@c793b717bc78562f491db7b0e93a3a178b099162  # v4
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@c793b717bc78562f491db7b0e93a3a178b099162  # v4
+        with:
+          category: /language:python
+
+  # ── pip-audit dependency audit ───────────────────────────────────────────────
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit
+        run: |
+          pip-audit --desc \
+            --format json \
+            --output pip-audit-results.json \
+            -r <(pip install --dry-run . 2>&1 | grep "Requirement already satisfied\|Would install" || true) \
+            . || true
+          # Also run directly against pyproject.toml dependencies
+          pip install . --dry-run 2>/dev/null || true
+          pip-audit --desc --format json --output pip-audit-results.json . || EXIT=$?
+          cat pip-audit-results.json
+          exit ${EXIT:-0}
+
+      - name: Upload pip-audit results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: pip-audit-results
+          path: pip-audit-results.json
+          retention-days: 90
+
+  # ── Bandit SAST → SARIF → Code Scanning ─────────────────────────────────────
+  bandit:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install bandit
+        run: pip install bandit[sarif]
+
+      - name: Run bandit
+        run: bandit -r src -f sarif -o bandit.sarif || true
+
+      - name: Upload SARIF to GitHub code scanning
+        uses: github/codeql-action/upload-sarif@c793b717bc78562f491db7b0e93a3a178b099162  # v4
+        with:
+          sarif_file: bandit.sarif
+          category: bandit
+
+  # ── Gitleaks secret scanning ─────────────────────────────────────────────────
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks scan
+        uses: gitleaks/gitleaks-action@ff98106e4c7b9b76a5e7d2f3be5b1a9b83dc9d1b  # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  # ── CycloneDX SBOM generation ─────────────────────────────────────────────────
+  sbom:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Generate CycloneDX SBOM
+        uses: CycloneDX/gh-python-generate-sbom@v2
+        with:
+          input: pyproject.toml
+          output: sbom.cdx.json
+          format: json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: sbom-cdx
+          path: sbom.cdx.json
+          retention-days: 90
+
+      - name: Attach SBOM to release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2
+        with:
+          files: sbom.cdx.json
+
+  # ── Docker / Trivy image scan (only on Dockerfile changes) ───────────────────
+  docker-scan:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.changed_files, 'Dockerfile'))
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Check if Dockerfile changed
+        id: df_changed
+        run: |
+          git diff --name-only ${{ github.event.before || 'HEAD^' }} HEAD \
+            | grep -qE 'Dockerfile|deploy/docker/' \
+            && echo "changed=true" >> "$GITHUB_OUTPUT" \
+            || echo "changed=false" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        if: steps.df_changed.outputs.changed == 'true' || github.event_name == 'schedule'
+        run: |
+          docker build -t mind-mem:scan \
+            -f ${DOCKERFILE:-Dockerfile} .
+
+      - name: Run Trivy image scan
+        if: steps.df_changed.outputs.changed == 'true' || github.event_name == 'schedule'
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2  # v0.29.0
+        with:
+          image-ref: mind-mem:scan
+          format: sarif
+          output: trivy-image.sarif
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF
+        if: always() && (steps.df_changed.outputs.changed == 'true' || github.event_name == 'schedule')
+        uses: github/codeql-action/upload-sarif@c793b717bc78562f491db7b0e93a3a178b099162  # v4
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy
