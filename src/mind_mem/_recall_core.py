@@ -60,6 +60,7 @@ from ._recall_tokenization import tokenize
 from .block_parser import chunk_block, deduplicate_chunks, get_active, parse_file
 from .enums import TaskStatus
 from .observability import get_logger, metrics
+from .telemetry import traced as _traced
 from .retrieval_graph import (
     get_hard_negative_ids,
     log_retrieval,
@@ -222,6 +223,7 @@ class RecallBackend(ABC):
         ...
 
 
+@_traced("recall")
 def recall(
     workspace: str,
     query: str,

@@ -45,6 +45,12 @@ mcp = ["fastmcp>=3.2.0"]
 embeddings = ["onnxruntime==1.24.2", "tokenizers==0.22.2"]
 cross-encoder = ["sentence-transformers==5.2.3"]
 benchmark = ["pytest-benchmark>=4.0,<6.0"]
+otel = [
+    "opentelemetry-api>=1.20,<2.0",
+    "opentelemetry-sdk>=1.20,<2.0",
+    "opentelemetry-exporter-otlp>=1.20,<2.0",
+    "prometheus-client>=0.18,<1.0",
+]
 all = ["fastmcp>=3.2.0", "onnxruntime==1.24.2", "tokenizers==0.22.2", "sentence-transformers==5.2.3"]
 
 [project.urls]

@@ -82,6 +82,10 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
     "max_category_results": 10,
     "query_timeout_seconds": 30,
     "rate_limit_calls_per_minute": 120
+  },
+  "observability": {
+    "otel_endpoint": null,
+    "prom_port": 9090
   }
 }
 ```
@@ -582,3 +586,41 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
   }
 }
 ```
+
+---
+
+## Observability Settings
+
+Requires the optional `otel` extra: `pip install "mind-mem[otel]"`.
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `observability.otel_endpoint` | string \| null | `null` | OTLP gRPC endpoint for OpenTelemetry traces (e.g. `"http://jaeger:4317"`). When `null`, a NoOp tracer is used (zero overhead). |
+| `observability.prom_port` | integer | `9090` | TCP port for the Prometheus metrics HTTP server started by `init_prometheus()`. Set to `0` to disable. |
+
+### Enabling Tracing at Runtime
+
+```python
+from mind_mem.telemetry import init_tracing, init_prometheus
+
+# Send spans to a local Jaeger / OTLP collector
+init_tracing(endpoint="http://localhost:4317")
+
+# Expose /metrics on port 9090
+init_prometheus(port=9090)
+```
+
+Both calls are idempotent and silently degrade when the optional packages
+(`opentelemetry-api`, `opentelemetry-sdk`, `opentelemetry-exporter-otlp`,
+`prometheus-client`) are not installed.
+
+### Grafana Dashboard
+
+A pre-built dashboard JSON is included at `deploy/grafana/mind-mem-dashboard.json`.
+Import it via Grafana UI → Dashboards → Import → Upload JSON file. It contains
+four panels:
+
+- **Recall Latency (p50 / p95 / p99)** — `histogram_quantile` over `recall_duration_seconds`.
+- **Recall QPS** — `rate(recall_total[5m])`.
+- **propose_update Rate** — `rate(propose_update_total[5m])`.
+- **Apply Rollback Rate** — `rate(apply_rollback_total[5m])`.
