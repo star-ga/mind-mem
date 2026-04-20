@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 580 | **Est. tokens:** ~1,184,904
-**Generated:** 2026-04-20 16:32 UTC
+**Files:** 581 | **Est. tokens:** ~1,186,749
+**Generated:** 2026-04-20 16:36 UTC
 
 ## Token Budget Guide
 
@@ -51,7 +51,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 121 | ~423,912 |
+| `src/mind_mem/` | 121 | ~424,268 |
 | `src/mind_mem/api/` | 4 | ~12,861 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 203 | ~409,746 |
+| `tests/` | 204 | ~411,235 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -376,7 +376,7 @@
 - `governance_gate.py` (~2212 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~9442 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hybrid_recall.py` (~4861 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `hybrid_recall.py` (~5217 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~539 tok, large) — # Mind Mem — Memory + Immune System for AI agents
 - `init_workspace.py` (~2062 tok, huge) — mind-mem workspace initializer. Zero external deps.
@@ -587,6 +587,7 @@
 - `test_contradiction_detector.py` (~5832 tok, huge) — Tests for contradiction_detector.py — Contradiction detection at governance gate (#432).
 - `test_core_v140.py` (~2707 tok, huge) — Tests for v1.4.0 core hardening: issues #28, #30, #32, #34."""
 - `test_cron_runner.py` (~2716 tok, huge) — Tests for cron_runner.py — periodic job orchestration, config loading, subprocess dispatch."""
+- `test_cross_encoder_auto_enable.py` (~1489 tok, large) — v3.3.0 Tier 2 #6 — cross-encoder rerank auto-enables on ambiguous queries.
 - `test_cross_encoder.py` (~1324 tok, large) — Tests for optional cross-encoder reranker."""
 - `test_date_score.py` (~174 tok, small) — Tests for date scoring function."""
 - `test_decompose_query.py` (~223 tok, medium) — Tests for query decomposition."""

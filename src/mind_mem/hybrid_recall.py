@@ -283,6 +283,9 @@ class HybridBackend:
                     **kwargs,
                 )
                 metrics.inc("hybrid_searches_bm25_only")
+                # v3.3.0 Tier 2: cross-encoder rerank also applies to
+                # BM25-only deployments (previously only post-fusion).
+                results = self._maybe_cross_encoder_rerank(query, results, limit)
                 return results
 
             # Run BM25 + vector in parallel
@@ -327,32 +330,10 @@ class HybridBackend:
             metrics.inc("hybrid_searches_fused")
             result = fused[:limit]
 
-            # Cross-encoder reranking (post-fusion)
-            ce_cfg = self._config.get("cross_encoder", {})
-            if ce_cfg.get("enabled", False) and result:
-                try:
-                    from .cross_encoder_reranker import CrossEncoderReranker
-
-                    if CrossEncoderReranker.is_available():
-                        ce = CrossEncoderReranker()
-                        for r in result:
-                            if "content" not in r:
-                                r["content"] = r.get("excerpt", "")
-                        result = ce.rerank(
-                            query,
-                            result,
-                            top_k=ce_cfg.get("top_k", limit),
-                            blend_weight=ce_cfg.get("blend_weight", 0.6),
-                        )
-                        _log.info(
-                            "cross_encoder_rerank",
-                            candidates=len(fused[:limit]),
-                            blend_weight=ce_cfg.get("blend_weight", 0.6),
-                        )
-                except ImportError as ie:
-                    _log.warning("cross_encoder_import_failed", error=str(ie))
-                except Exception as e:
-                    _log.warning("cross_encoder_unavailable", error=str(e))
+            # Cross-encoder reranking (post-fusion) — v3.3.0 Tier 2
+            # extracted into a helper so the BM25-only early-return path
+            # also benefits from auto-enable on multi-hop/temporal queries.
+            result = self._maybe_cross_encoder_rerank(query, result, limit)
 
             # 4-layer dedup filter (post-fusion, post-rerank)
             dedup_cfg = self._config.get("dedup")
@@ -445,6 +426,59 @@ class HybridBackend:
         )
 
         return fused[:limit]
+
+    def _maybe_cross_encoder_rerank(self, query: str, result: list[dict], limit: int) -> list[dict]:
+        """Apply cross-encoder rerank when appropriate.
+
+        v3.3.0 Tier 2 #6 — auto-enables on multi-hop / temporal queries
+        (per detect_query_type) even when ``cross_encoder.enabled`` is
+        false, unless operator sets ``cross_encoder.auto_enable: false``.
+        Returns ``result`` unchanged on any failure.
+        """
+        if not result:
+            return result
+        ce_cfg = self._config.get("cross_encoder", {})
+        ce_enabled = bool(ce_cfg.get("enabled", False))
+        if not ce_enabled and ce_cfg.get("auto_enable", True):
+            try:
+                from ._recall_detection import detect_query_type
+
+                qt = detect_query_type(query)
+                if qt in ("multi-hop", "temporal"):
+                    ce_enabled = True
+                    _log.info(
+                        "cross_encoder_auto_enabled",
+                        query_type=qt,
+                        reason="v3.3.0_tier2_ambiguous_query",
+                    )
+            except Exception:  # pragma: no cover — defensive
+                pass
+        if not ce_enabled:
+            return result
+        try:
+            from .cross_encoder_reranker import CrossEncoderReranker
+
+            if CrossEncoderReranker.is_available():
+                ce = CrossEncoderReranker()
+                for r in result:
+                    if "content" not in r:
+                        r["content"] = r.get("excerpt", "")
+                result = ce.rerank(
+                    query,
+                    result,
+                    top_k=ce_cfg.get("top_k", limit),
+                    blend_weight=ce_cfg.get("blend_weight", 0.6),
+                )
+                _log.info(
+                    "cross_encoder_rerank",
+                    candidates=len(result),
+                    blend_weight=ce_cfg.get("blend_weight", 0.6),
+                )
+        except ImportError as ie:
+            _log.warning("cross_encoder_import_failed", error=str(ie))
+        except Exception as e:
+            _log.warning("cross_encoder_unavailable", error=str(e))
+        return result
 
     # -- backend wrappers ---------------------------------------------------
 
