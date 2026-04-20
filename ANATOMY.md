@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 497 | **Est. tokens:** ~1,015,021
-**Generated:** 2026-04-20 02:42 UTC
+**Files:** 498 | **Est. tokens:** ~1,012,871
+**Generated:** 2026-04-20 02:46 UTC
 
 ## Token Budget Guide
 
@@ -43,8 +43,8 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 116 | ~399,294 |
-| `src/mind_mem/mcp/` | 2 | ~1,557 |
+| `src/mind_mem/` | 116 | ~395,609 |
+| `src/mind_mem/mcp/` | 3 | ~3,092 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
 | `src/mind_mem/mcp/tools/` | 16 | ~32,001 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
@@ -314,9 +314,10 @@
 
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
 - `resources.py` (~1342 tok, large) — MCP ``@mcp.resource`` declarations.
+- `server.py` (~1535 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/`
 
-- `mcp_server.py` (~5465 tok, huge) — Mind-Mem MCP Server — persistent memory for paranoid/safety-first coding agents.
+- `mcp_server.py` (~1780 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
 ### `src/mind_mem/mcp/tools/`
 
 - `agent.py` (~1592 tok, huge) — Agent-bridge + vault MCP tools.
