@@ -31,6 +31,11 @@ Core modules:
     encryption      — Optional AES-256 encryption at rest
     calibration     — Retrieval quality feedback loop with per-block calibration weights
     evidence_objects — Structured tamper-evident Evidence Objects for governance decisions
+    storage         — Storage factory (get_block_store) for backend selection via config
 """
 
+from .storage import get_block_store
+
 __version__ = "3.1.9"
+
+__all__ = ["get_block_store"]

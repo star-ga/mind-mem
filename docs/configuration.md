@@ -348,6 +348,80 @@ Controls MCP server numeric limits for result caps, timeouts, and rate limiting.
 
 ---
 
+## Block Store (Storage Backend)
+
+Controls which storage backend is used for Markdown block I/O. Added in v3.2.0.
+
+```json
+{
+  "block_store": {
+    "backend": "markdown"
+  }
+}
+```
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `block_store.backend` | string | `"markdown"` | Storage backend for block data. See Backend Values below. |
+| `block_store.dsn` | string | (none) | Connection string for database backends (Postgres, v3.2.0 PR-5). Example: `"postgresql://user:pass@localhost/mind_mem"`. |
+| `block_store.schema` | string | `"mind_mem"` | Database schema name for the Postgres backend (v3.2.0 PR-5). |
+
+### Backend Values
+
+| Value | Description | Requirements |
+| --- | --- | --- |
+| `"markdown"` | Default. Reads and writes plain Markdown files under the workspace corpus directories. Zero dependencies. | None |
+| `"encrypted"` | Transparent AES-256 encryption at rest via `EncryptedBlockStore`. Wraps the markdown backend. | `MIND_MEM_ENCRYPTION_PASSPHRASE` env var must be set to a non-empty string. |
+| `"postgres"` | Postgres-backed block store. **Stub only** — raises `NotImplementedError` until v3.2.0 PR-5 ships the adapter. | `block_store.dsn` required. |
+
+### Encrypted Backend
+
+Set the passphrase via environment variable (never in the config file):
+
+```bash
+export MIND_MEM_ENCRYPTION_PASSPHRASE="your-strong-passphrase"
+```
+
+Then set the backend in `mind-mem.json`:
+
+```json
+{
+  "block_store": {
+    "backend": "encrypted"
+  }
+}
+```
+
+The factory raises `ValueError` immediately if `backend` is `"encrypted"` and the environment variable is absent or empty, preventing silent plaintext fallback.
+
+### Postgres Backend (v3.2.0 PR-5)
+
+```json
+{
+  "block_store": {
+    "backend": "postgres",
+    "dsn": "postgresql://mind_mem:secret@localhost:5432/mind_mem_db",
+    "schema": "mind_mem"
+  }
+}
+```
+
+Requesting the `"postgres"` backend before PR-5 ships raises `NotImplementedError`. The config surface is stable now so operators can add the key in preparation.
+
+### Factory API
+
+```python
+from mind_mem.storage import get_block_store
+
+# Auto-load backend from <workspace>/mind-mem.json
+store = get_block_store("/path/to/workspace")
+
+# Or pass config explicitly (useful in tests)
+store = get_block_store("/path/to/workspace", config={"block_store": {"backend": "markdown"}})
+```
+
+---
+
 ## Environment Variables
 
 Environment variables take precedence over config file values where applicable.
@@ -362,6 +436,7 @@ Environment variables take precedence over config file values where applicable.
 | `MIND_MEM_VLLM_URL` | Base URL for a local vLLM OpenAI-compatible server. Default: `http://127.0.0.1:8000/v1`. Used only when `extraction.backend` is `"vllm"` or `"auto"`. |
 | `MIND_MEM_LLM_BASE_URL` | Base URL for any OpenAI-compatible endpoint (LM Studio, llama-server, TGI, OpenAI, etc.). No default. Used only when `extraction.backend` is `"openai-compatible"` or `"auto"`. |
 | `MIND_MEM_LLM_API_KEY` | Optional API key for the `openai-compatible` backend. Sent as `Authorization: Bearer <key>`. Not required for local endpoints. |
+| `MIND_MEM_ENCRYPTION_PASSPHRASE` | Passphrase for the `encrypted` block store backend. Required when `block_store.backend` is `"encrypted"`. Never put this value in the config file — always use an environment variable or a secret manager. |
 
 ---
 
