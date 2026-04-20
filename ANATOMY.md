@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 482 | **Est. tokens:** ~978,408
-**Generated:** 2026-04-20 01:57 UTC
+**Files:** 485 | **Est. tokens:** ~981,092
+**Generated:** 2026-04-20 02:02 UTC
 
 ## Token Budget Guide
 
@@ -46,7 +46,7 @@
 | `src/mind_mem/` | 115 | ~393,817 |
 | `src/mind_mem/mcp/` | 2 | ~1,557 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
-| `src/mind_mem/mcp/tools/` | 2 | ~1,251 |
+| `src/mind_mem/mcp/tools/` | 5 | ~3,935 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 180 | ~364,105 |
@@ -316,8 +316,11 @@
 - `resources.py` (~1342 tok, large) — MCP ``@mcp.resource`` declarations.
 ### `src/mind_mem/mcp/tools/`
 
+- `calibration.py` (~1162 tok, large) — Calibration feedback MCP tools — ``calibration_feedback`` + ``calibration_stats``.
 - `encryption.py` (~1144 tok, large) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
+- `_helpers.py` (~596 tok, large) — Shared tool-internal helpers — workspace paths + lazy-init singletons.
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
+- `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 ### `src/mind_mem/`
 
 - `memory_mesh.py` (~1903 tok, huge) — # Copyright 2026 STARGA, Inc.

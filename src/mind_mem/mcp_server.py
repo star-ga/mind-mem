@@ -476,55 +476,18 @@ def verify_merkle(block_id: str, content_hash: str) -> str:
     )
 
 
-def _signal_store_path(ws: str) -> str:
-    return os.path.join(ws, "memory", "interaction_signals.jsonl")
-
-
-def _kg_path(ws: str) -> str:
-    return os.path.join(ws, "memory", "knowledge_graph.db")
-
-
-_ONTOLOGY_REGISTRY: Any = None
-_CHANGE_STREAM: Any = None
-
-
-def _ontology_registry() -> Any:
-    global _ONTOLOGY_REGISTRY
-    if _ONTOLOGY_REGISTRY is None:
-        from .ontology import OntologyRegistry, software_engineering_ontology
-
-        _ONTOLOGY_REGISTRY = OntologyRegistry()
-        # Preload the in-box SE ontology so ontology_validate works on
-        # a fresh workspace without a separate ontology_load step.
-        _ONTOLOGY_REGISTRY.load(software_engineering_ontology(), make_active=True)
-    return _ONTOLOGY_REGISTRY
-
-
-def _change_stream() -> Any:
-    global _CHANGE_STREAM
-    if _CHANGE_STREAM is None:
-        from .change_stream import ChangeStream
-
-        _CHANGE_STREAM = ChangeStream()
-    return _CHANGE_STREAM
-
-
-_CORE_REGISTRY: Any = None
-
-
-def _core_registry() -> Any:
-    global _CORE_REGISTRY
-    if _CORE_REGISTRY is None:
-        from .context_core import CoreRegistry
-
-        _CORE_REGISTRY = CoreRegistry()
-    return _CORE_REGISTRY
-
-
-def _core_dir(ws: str) -> str:
-    path = os.path.join(ws, "memory", "cores")
-    os.makedirs(path, exist_ok=True)
-    return path
+# v3.2.0 §1.2 PR-3: workspace-path helpers + lazy singletons moved to
+# mind_mem.mcp.tools._helpers so every tool module shares a single
+# definition. Re-exported here because later tools in this file still
+# reference them at call time (pre-extraction).
+from mind_mem.mcp.tools._helpers import (  # noqa: E402,F401 — public re-export shim
+    _change_stream,
+    _core_dir,
+    _core_registry,
+    _kg_path,
+    _ontology_registry,
+    _signal_store_path,
+)
 
 
 @mcp.tool
@@ -1361,93 +1324,14 @@ def graph_stats() -> str:
     return json.dumps({**stats, "_schema_version": "1.0"}, indent=2)
 
 
-@mcp.tool
-@mcp_tool_observe
-def observe_signal(
-    session_id: str,
-    previous_query: str,
-    new_query: str,
-    previous_results: str = "",
-) -> str:
-    """Capture a re-query / refinement / correction feedback signal.
+# v3.2.0 §1.2 PR-3: signal tools moved to mcp.tools.signal
+from mind_mem.mcp.tools import signal as _tools_signal  # noqa: E402,F401
+from mind_mem.mcp.tools.signal import (  # noqa: E402,F401 — public re-export shim
+    observe_signal,
+    signal_stats,
+)
 
-    Called by the recall pipeline (or an external agent) when the user
-    rephrases or retries a query within the same session. The classifier
-    decides whether the pair is a genuine feedback event and, if so,
-    appends a structured :class:`Signal` to the append-only store.
-
-    Args:
-        session_id: Conversation / agent session identifier.
-        previous_query: The earlier query the user issued.
-        new_query: The follow-up query.
-        previous_results: Comma-separated block ids returned by the
-            earlier recall. Used by the A/B eval harness to score future
-            retrieval changes against what the user already saw.
-
-    Returns:
-        JSON with either a captured signal (``signal_id``, ``type``,
-        ``similarity``) or ``{"captured": false}`` when the two queries
-        are unrelated and no feedback was recorded.
-    """
-    from .interaction_signals import SignalStore
-
-    ws = _workspace()
-    ws_err = _check_workspace(ws)
-    if ws_err:
-        return ws_err
-
-    if not isinstance(session_id, str) or not session_id.strip():
-        return json.dumps({"error": "session_id must be a non-empty string"})
-    if not isinstance(previous_query, str) or not isinstance(new_query, str):
-        return json.dumps({"error": "queries must be strings"})
-    if len(previous_query) > 8192 or len(new_query) > 8192:
-        return json.dumps({"error": "queries must be ≤8192 chars"})
-
-    prev_ids: list[str] = []
-    if previous_results.strip():
-        prev_ids = [bid.strip() for bid in previous_results.split(",") if bid.strip()][:64]
-
-    store = SignalStore(_signal_store_path(ws))
-    result = store.observe_pair(
-        session_id=session_id,
-        previous_query=previous_query,
-        new_query=new_query,
-        previous_results=prev_ids,
-    )
-    if result is None:
-        return json.dumps({"captured": False, "reason": "unrelated or duplicate"})
-    return json.dumps(
-        {
-            "captured": True,
-            "signal_id": result.signal_id,
-            "signal_type": result.signal_type.value,
-            "similarity": round(result.similarity, 4),
-            "_schema_version": "1.0",
-        }
-    )
-
-
-@mcp.tool
-@mcp_tool_observe
-def signal_stats() -> str:
-    """Return aggregated interaction-signal counts for the workspace.
-
-    Useful for operators monitoring how often users re-query / correct /
-    refine — a spike in corrections usually flags a regression in the
-    underlying recall pipeline.
-    """
-    from .interaction_signals import SignalStore
-
-    ws = _workspace()
-    ws_err = _check_workspace(ws)
-    if ws_err:
-        return ws_err
-
-    store = SignalStore(_signal_store_path(ws))
-    return json.dumps(
-        {**store.stats().as_dict(), "_schema_version": "1.0"},
-        indent=2,
-    )
+_tools_signal.register(mcp)
 
 
 @mcp.tool
@@ -3588,136 +3472,15 @@ def stale_blocks(limit: int = 20, clear_block_id: str = "") -> str:
 
 
 # ---------------------------------------------------------------------------
-# Calibration feedback tools
+# Calibration feedback tools (v3.2.0 §1.2 PR-3 — moved to mcp.tools.calibration)
 # ---------------------------------------------------------------------------
+from mind_mem.mcp.tools import calibration as _tools_calibration  # noqa: E402,F401
+from mind_mem.mcp.tools.calibration import (  # noqa: E402,F401 — public re-export shim
+    calibration_feedback,
+    calibration_stats,
+)
 
-
-@mcp.tool
-@mcp_tool_observe
-def calibration_feedback(
-    query_id: str,
-    block_ids_useful: list[str] | None = None,
-    block_ids_not_useful: list[str] | None = None,
-    feedback_type: str = "accepted",
-) -> str:
-    """Record retrieval quality feedback for calibration.
-
-    After a recall query, report which blocks were useful and which were not.
-    This feeds a calibration loop that adjusts block ranking over time:
-    consistently useful blocks get boosted, consistently unhelpful blocks
-    get demoted.
-
-    Args:
-        query_id: The query_id from a previous recall result envelope.
-        block_ids_useful: Block IDs that were useful/relevant.
-        block_ids_not_useful: Block IDs that were not useful/irrelevant.
-        feedback_type: Feedback kind — "accepted" (user used results),
-            "rejected" (results were wrong), or "ignored" (user skipped).
-
-    Returns:
-        JSON confirmation with recorded feedback counts.
-    """
-    ws = _workspace()
-
-    if feedback_type not in ("accepted", "rejected", "ignored"):
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": f"Invalid feedback_type: {feedback_type}. Must be accepted/rejected/ignored.",
-            }
-        )
-
-    useful = block_ids_useful or []
-    not_useful = block_ids_not_useful or []
-
-    if not useful and not not_useful:
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": "At least one of block_ids_useful or block_ids_not_useful must be provided.",
-            }
-        )
-
-    try:
-        from mind_mem.calibration import CalibrationManager
-
-        cal = CalibrationManager(ws)
-        result = cal.record_feedback(
-            query_id=query_id,
-            block_ids_useful=useful,
-            block_ids_not_useful=not_useful,
-            feedback_type=feedback_type,
-        )
-    except ImportError:
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": "Calibration module not available.",
-            }
-        )
-    except Exception as exc:
-        _log.warning("calibration_feedback_failed", error=str(exc))
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": f"Failed to record feedback: {exc}",
-            }
-        )
-
-    metrics.inc("mcp_calibration_feedback")
-    return json.dumps(
-        {
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "status": "recorded",
-            **result,
-        },
-        indent=2,
-    )
-
-
-@mcp.tool
-@mcp_tool_observe
-def calibration_stats() -> str:
-    """Report calibration health — per-block scores, per-query-type accuracy.
-
-    Shows which blocks are being boosted or demoted by the calibration
-    feedback loop, and how accurate retrieval is for different query types
-    (WHAT, WHEN, WHO, HOW, etc.).
-
-    Returns:
-        JSON report with calibration health metrics.
-    """
-    ws = _workspace()
-
-    try:
-        from mind_mem.calibration import CalibrationManager
-
-        cal = CalibrationManager(ws)
-        stats = cal.get_calibration_stats()
-    except ImportError:
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": "Calibration module not available.",
-            }
-        )
-    except Exception as exc:
-        _log.warning("calibration_stats_failed", error=str(exc))
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": f"Failed to retrieve calibration stats: {exc}",
-            }
-        )
-
-    metrics.inc("mcp_calibration_stats")
-    return json.dumps(
-        {
-            "_schema_version": MCP_SCHEMA_VERSION,
-            **stats,
-        },
-        indent=2,
-    )
+_tools_calibration.register(mcp)
 
 
 # ---------------------------------------------------------------------------
