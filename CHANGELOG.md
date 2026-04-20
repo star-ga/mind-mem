@@ -13,6 +13,20 @@ SHAs). No breaking changes — v3.2.0 deployments upgrade cleanly.
 
 ### Fixed
 
+- **Apply engine routes block-level ops through BlockStore.** The
+  three block-mutation ops (``update_field``, ``append_list_item``,
+  ``set_status``) previously spoke raw ``open()`` on corpus
+  Markdown files, so Postgres-backed workspaces silently diverged
+  (the filesystem changed but the DB did not). Refactored to use
+  ``BlockStore.get_by_id`` + ``BlockStore.write_block``.
+  Markdown's ``write_block`` is itself the same atomic file ops
+  under the hood, so Markdown deployments see zero behavioural
+  change. ``execute_op`` now accepts an optional ``store`` kwarg
+  for callers that want to inject a specific backend; legacy
+  callers (no kwarg) resolve the active store via the factory.
+  File-level ops (``append_block``, ``insert_after_block``,
+  ``replace_range``, ``supersede_decision``) remain filesystem-
+  based in v3.2.1 and are tracked for v3.2.2.
 - **REST request-scoping.** Previously every handler mutated
   ``os.environ["MIND_MEM_WORKSPACE"]`` on each request, which raced
   under concurrent requests. Replaced with a per-request

@@ -792,14 +792,20 @@ self-audit (`docs/review-architecture-v3.2.0.md`). v3.2.0 Postgres
 + REST surfaces are labelled "beta" in the release notes; v3.2.1
 promotes both to GA.
 
-- [ ] **Apply engine routes through `BlockStore`** — the seven
-  `_op_*` handlers in `apply_engine.py` currently speak raw
-  `open()` / `shutil` on corpus Markdown files. On a Postgres
-  backend they write to the local FS that Postgres never sees, so
-  `apply_proposal` succeeds while DB state silently diverges.
-  Re-plumb through `BlockStore.write_block` / `delete_block`.
-  ~2 days. (Deferred to v3.2.2 — larger refactor than the v3.2.1
-  hotfix window allows.)
+- [x] **Apply engine — block-level ops route through BlockStore.**
+  The three most common ops (``update_field``, ``append_list_item``,
+  ``set_status``) now use ``store.get_by_id`` + ``store.write_block``
+  so Postgres-backed workspaces see the writes. ``execute_op`` takes
+  an optional ``store`` kwarg; when omitted, the active store is
+  resolved via the factory. Backward-compatible with every existing
+  caller.
+- [ ] **Apply engine — file-level ops through BlockStore** — the
+  remaining four ops (``append_block``, ``insert_after_block``,
+  ``replace_range``, ``supersede_decision``) still speak raw
+  ``open()`` because they manipulate text ranges that don't have
+  a clean block-dict representation. Deferred to v3.2.2 — requires
+  designing a ``BlockStore.write_text_range`` or promoting the ops
+  to work on block dicts. ~1 day.
 - [x] **REST request-scoping** — swapped env-var mutation for a
   per-request ``ContextVar`` override in
   ``mind_mem.mcp.infra.workspace`` + a FastAPI HTTP middleware.

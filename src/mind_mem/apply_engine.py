@@ -432,8 +432,18 @@ def _get_mode(ws="."):
 # ═══════════════════════════════════════════════
 
 
-def execute_op(ws, op):
-    """Execute a single op. Returns (success, message)."""
+def execute_op(ws, op, *, store=None):
+    """Execute a single op. Returns (success, message).
+
+    v3.2.2: accepts an optional ``store`` BlockStore kwarg so block-
+    level ops route through ``store.write_block`` instead of speaking
+    raw ``open()``/``shutil`` directly. When ``store`` is None (legacy
+    callers), the active BlockStore is resolved via :func:`_store_for`.
+    The Markdown backend's ``write_block`` performs the same atomic
+    file write as the pre-v3.2.2 file ops, so behaviour is identical
+    for Markdown deployments — the change is load-bearing for the
+    Postgres backend where the DB must see the write.
+    """
     op_type = op.get("op")
     raw_file = op.get("file", "")
 
@@ -446,17 +456,20 @@ def execute_op(ws, op):
     if not os.path.isfile(filepath):
         return False, f"File not found: {filepath}"
 
+    if store is None:
+        store = _store_for(ws)
+
     try:
         if op_type == "append_block":
             return _op_append_block(filepath, op)
         elif op_type == "insert_after_block":
             return _op_insert_after_block(filepath, op)
         elif op_type == "update_field":
-            return _op_update_field(filepath, op, ws=ws)
+            return _op_update_field(filepath, op, ws=ws, store=store)
         elif op_type == "append_list_item":
-            return _op_append_list_item(filepath, op)
+            return _op_append_list_item(filepath, op, store=store)
         elif op_type == "set_status":
-            return _op_set_status(filepath, op, ws=ws)
+            return _op_set_status(filepath, op, ws=ws, store=store)
         elif op_type == "replace_range":
             return _op_replace_range(filepath, op)
         elif op_type == "supersede_decision":
@@ -516,12 +529,18 @@ def _op_insert_after_block(filepath, op):
     return True, f"insert_after_block: inserted after {target}"
 
 
-def _op_update_field(filepath, op, ws=None):
+def _op_update_field(filepath, op, ws=None, store=None):
     """Update a field value within a specific block.
 
-    When *ws* is provided the before/after values are piped through
-    :class:`field_audit.FieldAuditor` so every field mutation leaves
-    an audit-chain entry (integration finding #3).
+    v3.2.2: when ``store`` is provided, the mutation routes through
+    ``store.get_by_id`` + ``store.write_block`` so non-Markdown
+    backends see the write. Markdown's ``write_block`` is itself
+    atomic file ops so behaviour on Markdown deployments is
+    identical to the pre-v3.2.2 path.
+
+    When ``ws`` is provided the before/after values are piped
+    through :class:`field_audit.FieldAuditor` so every field
+    mutation leaves an audit-chain entry (integration finding #3).
     """
     target = op.get("target")
     field = op.get("field")
@@ -529,6 +548,41 @@ def _op_update_field(filepath, op, ws=None):
     if not target or not field:
         return False, "update_field: missing target or field"
 
+    # v3.2.2 — prefer BlockStore path when available.
+    if store is not None:
+        block = store.get_by_id(target)
+        if block is None:
+            return False, f"update_field: block {target} not found"
+        if field not in block:
+            return False, f"update_field: field '{field}' not found in block {target}"
+        old_value = str(block[field])
+        block[field] = value
+        store.write_block(block)
+
+        if ws:
+            try:
+                from .field_audit import FieldAuditor
+
+                FieldAuditor(ws).record_change(
+                    block_id=target,
+                    target=os.path.relpath(filepath, ws) if ws != "." else filepath,
+                    field=field,
+                    old_value=old_value,
+                    new_value=str(value),
+                    agent=op.get("agent", "apply_engine"),
+                    reason=op.get("reason", ""),
+                )
+            except Exception as exc:  # pragma: no cover — audit is best-effort
+                _log.warning(
+                    "field_audit_record_failed",
+                    target=target,
+                    field=field,
+                    error=str(exc),
+                )
+
+        return True, f"update_field: {target}.{field} = {value}"
+
+    # Legacy path — kept for callers that haven't threaded store yet.
     with open(filepath, "r") as f:
         lines = f.readlines()
 
@@ -536,7 +590,7 @@ def _op_update_field(filepath, op, ws=None):
     field_value_pattern = re.compile(rf"^{re.escape(field)}:\s+(.*)$")
     in_target = False
     updated = False
-    old_value: str = ""
+    old_value_legacy: str = ""
 
     for i, line in enumerate(lines):
         if target_pattern.match(line):
@@ -547,7 +601,7 @@ def _op_update_field(filepath, op, ws=None):
         if in_target:
             field_match = field_value_pattern.match(line)
             if field_match:
-                old_value = field_match.group(1).rstrip()
+                old_value_legacy = field_match.group(1).rstrip()
                 lines[i] = f"{field}: {value}\n"
                 updated = True
                 break
@@ -566,7 +620,7 @@ def _op_update_field(filepath, op, ws=None):
                 block_id=target,
                 target=os.path.relpath(filepath, ws) if ws != "." else filepath,
                 field=field,
-                old_value=old_value,
+                old_value=old_value_legacy,
                 new_value=str(value),
                 agent=op.get("agent", "apply_engine"),
                 reason=op.get("reason", ""),
@@ -582,13 +636,39 @@ def _op_update_field(filepath, op, ws=None):
     return True, f"update_field: {target}.{field} = {value}"
 
 
-def _op_append_list_item(filepath, op):
-    """Append an item to a list field within a block."""
+def _op_append_list_item(filepath, op, store=None):
+    """Append an item to a list field within a block.
+
+    v3.2.2: routes through ``store.get_by_id`` + ``store.write_block``
+    when a store is provided, so non-Markdown backends see the write.
+    """
     target = op.get("target")
     list_field = op.get("list")
     item = op.get("item", "")
     if not target or not list_field:
         return False, "append_list_item: missing target or list"
+
+    # Clean item — remove surrounding quotes if present.
+    item_clean = item.strip().strip('"').strip("'")
+
+    # v3.2.2 — BlockStore path.
+    if store is not None:
+        block = store.get_by_id(target)
+        if block is None:
+            return False, f"append_list_item: block {target} not found"
+        if list_field not in block:
+            return False, f"append_list_item: list '{list_field}' not found in {target}"
+        current = block.get(list_field)
+        if isinstance(current, list):
+            current.append(item_clean)
+            block[list_field] = current
+        elif isinstance(current, str):
+            # Single-value field being converted to a list by appending.
+            block[list_field] = [current, item_clean]
+        else:
+            block[list_field] = [item_clean]
+        store.write_block(block)
+        return True, f"append_list_item: added to {target}.{list_field}"
 
     with open(filepath, "r") as f:
         lines = f.readlines()
@@ -625,8 +705,6 @@ def _op_append_list_item(filepath, op):
     if insert_at is None:
         return False, f"append_list_item: list '{list_field}' not found in {target}"
 
-    # Clean item — remove surrounding quotes if present
-    item_clean = item.strip().strip('"').strip("'")
     lines.insert(insert_at, f"- {item_clean}\n")
 
     with open(filepath, "w") as f:
@@ -634,8 +712,12 @@ def _op_append_list_item(filepath, op):
     return True, f"append_list_item: added to {target}.{list_field}"
 
 
-def _op_set_status(filepath, op, ws=None):
-    """Update Status field + auto-append History entry."""
+def _op_set_status(filepath, op, ws=None, store=None):
+    """Update Status field + auto-append History entry.
+
+    v3.2.2: passes ``store`` through to the two underlying ops so
+    the BlockStore write path is used when configured.
+    """
     target = op.get("target")
     status = op.get("status")
     history = op.get("history", "")
@@ -647,13 +729,18 @@ def _op_set_status(filepath, op, ws=None):
         filepath,
         {"target": target, "field": "Status", "value": status},
         ws=ws,
+        store=store,
     )
     if not ok:
         return False, f"set_status: field update failed: {msg}"
 
     # Then append History entry if provided
     if history:
-        ok2, msg2 = _op_append_list_item(filepath, {"target": target, "list": "History", "item": history})
+        ok2, msg2 = _op_append_list_item(
+            filepath,
+            {"target": target, "list": "History", "item": history},
+            store=store,
+        )
         if not ok2:
             return False, f"set_status: history append failed: {msg2}"
 
