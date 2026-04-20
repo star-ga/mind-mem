@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 527 | **Est. tokens:** ~1,052,976
-**Generated:** 2026-04-20 06:49 UTC
+**Files:** 531 | **Est. tokens:** ~1,056,284
+**Generated:** 2026-04-20 06:52 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 29 | ~67,928 |
+| `./` | 30 | ~70,660 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,429 |
 | `deploy/` | 2 | ~690 |
@@ -42,6 +42,7 @@
 | `lib/` | 1 | ~2,176 |
 | `mind/` | 19 | ~5,516 |
 | `scripts/` | 3 | ~2,692 |
+| `sdk/go/` | 3 | ~352 |
 | `sdk/js/` | 5 | ~1,388 |
 | `sdk/js/src/` | 4 | ~2,320 |
 | `sdk/js/test/` | 1 | ~2,191 |
@@ -49,7 +50,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 117 | ~402,741 |
+| `src/mind_mem/` | 117 | ~402,965 |
 | `src/mind_mem/mcp/` | 3 | ~3,122 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,854 |
 | `src/mind_mem/mcp/tools/` | 16 | ~32,301 |
@@ -89,7 +90,8 @@
 - `README.md` (~22227 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
 - `ROADMAP.md` (~14694 tok, huge) — mind-mem Roadmap
-- `SECURITY.md` (~1414 tok, large) — Security Policy
+- `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
+- `SECURITY.md` (~1743 tok, huge) — Security Policy
 - `SPEC.md` (~5184 tok, huge) — Mind Mem Formal Specification v1.0
 - `train_mind7b_runpod.py` (~1654 tok, huge)
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
@@ -250,6 +252,11 @@
 - `anatomy-hook.sh` (~258 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
 - `anatomy.sh` (~2010 tok, huge) — anatomy — Generate ANATOMY.md for any repo
 - `regen_bash_literals.py` (~424 tok, medium) — Regenerate src/mind_mem/_task_status_literals.sh from enums.py.
+### `sdk/go/`
+
+- `doc.go` (~334 tok, medium) — Package mindmem is the official Go SDK for the mind-mem REST API.
+- `.gitignore` (~5 tok, tiny) — *.test
+- `go.mod` (~13 tok, tiny) — module github.com/star-ga/mind-mem/sdk/go
 ### `sdk/js/`
 
 - `.gitignore` (~5 tok, tiny) — node_modules/
@@ -294,7 +301,7 @@
 - `block_metadata.py` (~2223 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~7111 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_store_encrypted.py` (~2244 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store.py` (~8064 tok, huge) — BlockStore abstraction — decouples block access from storage format.
+- `block_store.py` (~8388 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `calibration.py` (~4811 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
 - `capture.py` (~3698 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
