@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 488 | **Est. tokens:** ~985,267
-**Generated:** 2026-04-20 02:07 UTC
+**Files:** 490 | **Est. tokens:** ~988,979
+**Generated:** 2026-04-20 02:10 UTC
 
 ## Token Budget Guide
 
@@ -46,7 +46,7 @@
 | `src/mind_mem/` | 115 | ~393,817 |
 | `src/mind_mem/mcp/` | 2 | ~1,557 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
-| `src/mind_mem/mcp/tools/` | 8 | ~8,110 |
+| `src/mind_mem/mcp/tools/` | 10 | ~11,822 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 180 | ~364,105 |
@@ -319,7 +319,9 @@
 - `audit.py` (~2187 tok, huge) — Audit MCP tools — Merkle proofs, hash chain + evidence chain verification.
 - `benchmark.py` (~1019 tok, large) — Benchmark + category-summary MCP tools.
 - `calibration.py` (~1162 tok, large) — Calibration feedback MCP tools — ``calibration_feedback`` + ``calibration_stats``.
+- `core.py` (~1508 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~1144 tok, large) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
+- `graph.py` (~2204 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `_helpers.py` (~596 tok, large) — Shared tool-internal helpers — workspace paths + lazy-init singletons.
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
