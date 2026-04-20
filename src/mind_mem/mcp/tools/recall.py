@@ -46,7 +46,15 @@ _MAX_QUERY_LEN = 8192
 
 
 def _recall_impl(query: str, limit: int = 10, active_only: bool = False, backend: str = "auto") -> str:
-    """Core recall implementation shared by recall() and hybrid_search()."""
+    """Core recall implementation shared by recall() and hybrid_search().
+
+    v3.2.1: when ``cache.redis_url`` is configured in ``mind-mem.json``
+    (or the in-process LRU fallback is enabled — which is the default),
+    results are served from :mod:`mind_mem.recall_cache` when a prior
+    identical query hit within the TTL window. Governance events
+    (``propose_update`` / ``approve_apply`` / ``rollback_proposal``)
+    invalidate the namespace-wide cache.
+    """
     if not isinstance(query, str):
         return json.dumps({"error": "query must be a string"})
     if len(query) > _MAX_QUERY_LEN:
@@ -55,6 +63,31 @@ def _recall_impl(query: str, limit: int = 10, active_only: bool = False, backend
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
+    # v3.2.1 — cache wrap. The cache wrapper short-circuits straight
+    # to the cached envelope when the key hits, so everything below
+    # (limits, timeout, backend selection, telemetry) only fires on
+    # cache misses. Opt-out: set ``cache.enabled: false`` in
+    # ``mind-mem.json``. Default is enabled.
+    from mind_mem.recall_cache import cached_recall
+
+    _raw_config = _load_config(ws)
+    _cache_cfg = _raw_config.get("cache", {}) if isinstance(_raw_config, dict) else {}
+    if isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True):
+        return cached_recall(
+            _recall_impl_uncached,
+            query,
+            limit=limit,
+            backend=backend,
+            active_only=active_only,
+            config=_raw_config,
+            ttl_seconds=int(_cache_cfg.get("ttl_seconds", 3600)),
+        )
+    return _recall_impl_uncached(query, limit=limit, active_only=active_only, backend=backend)
+
+
+def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False, backend: str = "auto") -> str:
+    """The original recall body, now callable as the cache-miss branch of ``_recall_impl``."""
+    ws = _workspace()
     limits = _get_limits(ws)
     limit = max(1, min(limit, limits["max_recall_results"]))
     timeout_seconds = limits.get("query_timeout_seconds", QUERY_TIMEOUT_SECONDS)

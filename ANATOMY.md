@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 570 | **Est. tokens:** ~1,166,810
-**Generated:** 2026-04-20 09:05 UTC
+**Files:** 570 | **Est. tokens:** ~1,167,469
+**Generated:** 2026-04-20 09:23 UTC
 
 ## Token Budget Guide
 
@@ -55,7 +55,7 @@
 | `src/mind_mem/api/` | 4 | ~11,335 |
 | `src/mind_mem/mcp/` | 3 | ~3,229 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,854 |
-| `src/mind_mem/mcp/tools/` | 17 | ~36,528 |
+| `src/mind_mem/mcp/tools/` | 17 | ~37,187 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~1,018 |
 | `templates/` | 19 | ~1,041 |
@@ -411,7 +411,7 @@
 - `consolidation.py` (~2361 tok, huge) — Memory-consolidation MCP tools.
 - `core.py` (~1508 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~1144 tok, large) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
-- `governance.py` (~3142 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
+- `governance.py` (~3409 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
 - `graph.py` (~2204 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `_helpers.py` (~596 tok, large) — Shared tool-internal helpers — workspace paths + lazy-init singletons.
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
@@ -419,7 +419,7 @@
 - `memory_ops.py` (~7082 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
 - `public.py` (~4227 tok, huge) — v3.2.0 — MCP consolidated tool dispatchers.
-- `recall.py` (~4222 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~4614 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 ### `src/mind_mem/`
 

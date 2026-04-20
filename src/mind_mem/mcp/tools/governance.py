@@ -75,6 +75,10 @@ def propose_update(
     metrics.inc("mcp_proposals")
     _log.info("mcp_propose", block_type=block_type, confidence=confidence, written=written)
 
+    # v3.2.1: invalidate the recall cache so the next query doesn't
+    # serve a pre-proposal envelope that omits the new signal.
+    _invalidate_recall_cache()
+
     return json.dumps(
         {
             "_schema_version": MCP_SCHEMA_VERSION,
@@ -86,6 +90,23 @@ def propose_update(
         },
         indent=2,
     )
+
+
+def _invalidate_recall_cache() -> None:
+    """Flush the recall cache after a governance event.
+
+    Namespace-wide invalidation — targeted per-block invalidation
+    would require tracking which queries touched which blocks, which
+    is more complexity than the typical workspace needs. Best-effort
+    (swallows errors so governance operations never fail because the
+    cache backend is unavailable).
+    """
+    try:
+        from mind_mem.recall_cache import invalidate
+
+        invalidate()
+    except Exception as exc:  # pragma: no cover — best-effort
+        _log.debug("recall_cache_invalidate_failed", error=str(exc))
 
 
 @mcp_tool_observe
@@ -228,6 +249,10 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
     metrics.inc("mcp_apply_calls")
     _log.info("mcp_approve_apply", proposal_id=proposal_id, dry_run=dry_run, success=success)
 
+    # v3.2.1: invalidate recall cache only on a real (non-dry-run) apply.
+    if success and not dry_run:
+        _invalidate_recall_cache()
+
     blocked_by_contradictions = not success and message == "Blocked: contradictions detected"
 
     result: dict[str, Any] = {
@@ -290,6 +315,10 @@ def rollback_proposal(receipt_ts: str) -> str:
 
     metrics.inc("mcp_rollbacks")
     _log.info("mcp_rollback", receipt_ts=receipt_ts, success=success)
+
+    # v3.2.1: post-rollback cache flush so recall sees the restored state.
+    if success:
+        _invalidate_recall_cache()
 
     return json.dumps(
         {
