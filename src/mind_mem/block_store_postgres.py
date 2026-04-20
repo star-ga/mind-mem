@@ -87,46 +87,102 @@ def _require_psycopg() -> tuple[Any, Any]:
 
 # ─── DDL ──────────────────────────────────────────────────────────────────────
 
-_DDL_TEMPLATE = """
-CREATE SCHEMA IF NOT EXISTS {schema};
 
-CREATE TABLE IF NOT EXISTS {schema}.blocks (
-    id           TEXT PRIMARY KEY,
-    file_path    TEXT NOT NULL,
-    content      TEXT NOT NULL,
-    metadata     JSONB NOT NULL DEFAULT '{{}}',
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    active       BOOLEAN NOT NULL DEFAULT TRUE
-);
+def _ddl(schema: str) -> Any:
+    """Return a psycopg Composable DDL batch with the schema safely quoted.
 
-CREATE INDEX IF NOT EXISTS blocks_file_path ON {schema}.blocks(file_path);
-CREATE INDEX IF NOT EXISTS blocks_active    ON {schema}.blocks(active) WHERE active;
+    All schema references use ``psycopg.sql.Identifier`` so the schema name
+    can never act as an SQL injection vector.  ``_validate_schema_name`` is
+    also enforced at ``__init__`` time for defence-in-depth.
+    """
+    from psycopg import sql as pgsql
 
-CREATE TABLE IF NOT EXISTS {schema}.snapshots (
-    snap_id    TEXT PRIMARY KEY,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    manifest   JSONB NOT NULL
-);
+    s = pgsql.Identifier(schema)
+    stmts: list[Any] = [
+        pgsql.SQL("CREATE SCHEMA IF NOT EXISTS {s}").format(s=s),
+        pgsql.SQL(
+            "CREATE TABLE IF NOT EXISTS {s}.blocks ("
+            "    id           TEXT PRIMARY KEY,"
+            "    file_path    TEXT NOT NULL,"
+            "    content      TEXT NOT NULL,"
+            "    metadata     JSONB NOT NULL DEFAULT '{}',"
+            "    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+            "    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+            "    active       BOOLEAN NOT NULL DEFAULT TRUE"
+            ")"
+        ).format(s=s),
+        pgsql.SQL(
+            "CREATE INDEX IF NOT EXISTS blocks_file_path ON {s}.blocks(file_path)"
+        ).format(s=s),
+        pgsql.SQL(
+            "CREATE INDEX IF NOT EXISTS blocks_active ON {s}.blocks(active) WHERE active"
+        ).format(s=s),
+        # GIN index: avoids per-row tsvector recomputation on every search().
+        pgsql.SQL(
+            "CREATE INDEX IF NOT EXISTS blocks_fts"
+            " ON {s}.blocks USING GIN (to_tsvector('english', content))"
+        ).format(s=s),
+        # updated_at DESC: supports time-range queries without a seq-scan.
+        pgsql.SQL(
+            "CREATE INDEX IF NOT EXISTS blocks_updated_at ON {s}.blocks(updated_at DESC)"
+        ).format(s=s),
+        # Covering partial index: makes list_blocks() an index-only scan.
+        pgsql.SQL(
+            "CREATE INDEX IF NOT EXISTS blocks_active_file_path"
+            " ON {s}.blocks(file_path) WHERE active"
+        ).format(s=s),
+        pgsql.SQL(
+            "CREATE TABLE IF NOT EXISTS {s}.snapshots ("
+            "    snap_id    TEXT PRIMARY KEY,"
+            "    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+            "    manifest   JSONB NOT NULL"
+            ")"
+        ).format(s=s),
+        pgsql.SQL(
+            "CREATE TABLE IF NOT EXISTS {s}.snapshot_blocks ("
+            "    snap_id   TEXT REFERENCES {s}.snapshots(snap_id) ON DELETE CASCADE,"
+            "    block_id  TEXT NOT NULL,"
+            "    content   TEXT NOT NULL,"
+            "    metadata  JSONB NOT NULL,"
+            "    PRIMARY KEY (snap_id, block_id)"
+            ")"
+        ).format(s=s),
+        # expires_at: prevents indefinite lock hold when the holder is killed.
+        pgsql.SQL(
+            "CREATE TABLE IF NOT EXISTS {s}.workspace_lock ("
+            "    lock_id     TEXT PRIMARY KEY,"
+            "    holder      TEXT NOT NULL,"
+            "    acquired_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+            "    expires_at  TIMESTAMPTZ NOT NULL"
+            "                    DEFAULT NOW() + INTERVAL '5 minutes'"
+            ")"
+        ).format(s=s),
+        pgsql.SQL(
+            "CREATE INDEX IF NOT EXISTS workspace_lock_expires_at"
+            " ON {s}.workspace_lock(expires_at)"
+        ).format(s=s),
+        # Schema versioning table: enables safe future ALTER TABLE migrations.
+        pgsql.SQL(
+            "CREATE TABLE IF NOT EXISTS {s}.schema_migrations ("
+            "    version     INTEGER PRIMARY KEY,"
+            "    applied_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+            "    description TEXT NOT NULL"
+            ")"
+        ).format(s=s),
+    ]
+    return pgsql.SQL(";\n").join(stmts)
 
-CREATE TABLE IF NOT EXISTS {schema}.snapshot_blocks (
-    snap_id   TEXT REFERENCES {schema}.snapshots(snap_id) ON DELETE CASCADE,
-    block_id  TEXT NOT NULL,
-    content   TEXT NOT NULL,
-    metadata  JSONB NOT NULL,
-    PRIMARY KEY (snap_id, block_id)
-);
 
-CREATE TABLE IF NOT EXISTS {schema}.workspace_lock (
-    lock_id     TEXT PRIMARY KEY,
-    holder      TEXT NOT NULL,
-    acquired_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-"""
+def _sql(schema: str, template: str) -> Any:
+    """Return a psycopg Composable for *template* with ``{s}`` replaced by the
+    safely-quoted schema identifier.
 
+    Row values must still be passed as ``%s`` bind parameters — this helper
+    only secures the schema name, not row data.
+    """
+    from psycopg import sql as pgsql
 
-def _ddl(schema: str) -> str:
-    return _DDL_TEMPLATE.format(schema=schema)
+    return pgsql.SQL(template).format(s=pgsql.Identifier(schema))
 
 
 # ─── Row → block dict ─────────────────────────────────────────────────────────
@@ -253,8 +309,18 @@ class PostgresBlockStore:
         self._ensure_schema()
         pool = self._get_pool()
         psycopg, _ = _require_psycopg()
-        where = "WHERE active = TRUE" if active_only else ""
-        sql = f"SELECT id, file_path, content, metadata, created_at, updated_at, active FROM {self._schema}.blocks {where} ORDER BY id"
+        if active_only:
+            sql = _sql(
+                self._schema,
+                "SELECT id, file_path, content, metadata, created_at, updated_at, active"
+                " FROM {s}.blocks WHERE active = TRUE ORDER BY id",
+            )
+        else:
+            sql = _sql(
+                self._schema,
+                "SELECT id, file_path, content, metadata, created_at, updated_at, active"
+                " FROM {s}.blocks ORDER BY id",
+            )
         try:
             with pool.connection() as conn:
                 with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
@@ -268,7 +334,11 @@ class PostgresBlockStore:
         self._ensure_schema()
         pool = self._get_pool()
         psycopg, _ = _require_psycopg()
-        sql = f"SELECT id, file_path, content, metadata, created_at, updated_at, active FROM {self._schema}.blocks WHERE id = %s"
+        sql = _sql(
+            self._schema,
+            "SELECT id, file_path, content, metadata, created_at, updated_at, active"
+            " FROM {s}.blocks WHERE id = %s",
+        )
         try:
             with pool.connection() as conn:
                 with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
@@ -290,24 +360,28 @@ class PostgresBlockStore:
         self._ensure_schema()
         pool = self._get_pool()
         psycopg, _ = _require_psycopg()
-        fts_sql = f"""
-            SELECT id, file_path, content, metadata, created_at, updated_at, active,
-                   ts_rank(
-                       to_tsvector('english', content || ' ' || COALESCE(metadata->>'Statement', '')),
-                       plainto_tsquery('english', %s)
-                   ) AS rank
-            FROM {self._schema}.blocks
-            WHERE to_tsvector('english', content || ' ' || COALESCE(metadata->>'Statement', ''))
-                  @@ plainto_tsquery('english', %s)
-            ORDER BY rank DESC
-            LIMIT %s
-        """
-        ilike_sql = f"""
-            SELECT id, file_path, content, metadata, created_at, updated_at, active
-            FROM {self._schema}.blocks
-            WHERE content ILIKE %s OR metadata->>'Statement' ILIKE %s
-            LIMIT %s
-        """
+        fts_sql = _sql(
+            self._schema,
+            "SELECT id, file_path, content, metadata, created_at, updated_at, active,"
+            "       ts_rank("
+            "           to_tsvector('english', content || ' '"
+            "               || COALESCE(metadata->>'Statement', '')),"
+            "           plainto_tsquery('english', %s)"
+            "       ) AS rank"
+            " FROM {s}.blocks"
+            " WHERE to_tsvector('english', content || ' '"
+            "           || COALESCE(metadata->>'Statement', ''))"
+            "       @@ plainto_tsquery('english', %s)"
+            " ORDER BY rank DESC"
+            " LIMIT %s",
+        )
+        ilike_sql = _sql(
+            self._schema,
+            "SELECT id, file_path, content, metadata, created_at, updated_at, active"
+            " FROM {s}.blocks"
+            " WHERE content ILIKE %s OR metadata->>'Statement' ILIKE %s"
+            " LIMIT %s",
+        )
         try:
             with pool.connection() as conn:
                 with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:

@@ -29,7 +29,7 @@ ranking behaves sensibly.
 from __future__ import annotations
 
 import os
-from typing import Any, Iterable
+from typing import Any
 
 from .observability import get_logger
 
@@ -158,8 +158,8 @@ def tier_boost_summary(tier_map: dict[str, int]) -> dict[str, Any]:
     return counts
 
 
-__all__: Iterable[str] = (
+__all__: list[str] = [
     "apply_tier_boosts",
     "is_tier_boost_enabled",
     "tier_boost_summary",
-)
+]

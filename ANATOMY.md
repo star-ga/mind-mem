@@ -5,7 +5,7 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 566 | **Est. tokens:** ~1,140,048
+**Files:** 566 | **Est. tokens:** ~1,140,078
 **Generated:** 2026-04-20 08:26 UTC
 
 ## Token Budget Guide
@@ -50,7 +50,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 121 | ~421,981 |
+| `src/mind_mem/` | 121 | ~422,011 |
 | `src/mind_mem/api/` | 4 | ~11,335 |
 | `src/mind_mem/mcp/` | 3 | ~3,229 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,854 |
@@ -324,7 +324,7 @@
 - `block_metadata.py` (~2223 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~7111 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_store_encrypted.py` (~2244 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store_postgres.py` (~7848 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
+- `block_store_postgres.py` (~7889 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~2101 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
 - `block_store.py` (~8980 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.

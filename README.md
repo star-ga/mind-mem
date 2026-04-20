@@ -83,7 +83,7 @@ Output:
 | **No vendor lock-in**   | Plain Markdown files. Move to any system, any time.                               |
 | **Zero magic**          | Every check is a grep, every mutation is a file write. Read the source in 30 min. |
 | **No silent mutation**  | Nothing writes to source of truth without explicit `/apply`. Ever.                |
-| **Zero infrastructure** | No Redis, no Postgres, no vector DB, no GPU. Python 3.10+ and stdlib only.        |
+| **Zero infrastructure** | Core requires only Python 3.10+ stdlib. Postgres, Redis, Docker, and GPU are opt-in extras — nothing is required to start. |
 | **100% NIAH**           | 250/250 Needle In A Haystack retrieval. Every needle, every depth, every size.     |
 
 ---
@@ -705,9 +705,9 @@ your-workspace/
 | Hybrid retrieval | BM25F + vector + RRF | Vector only | Hybrid | Graph + vector |
 | Governance (propose/review/apply) | Yes | No | No | No |
 | Contradiction detection | Yes | No | No | No |
-| Tests | 3,193 | - | - | - |
-| LoCoMo benchmark | 67.3% | 68.5% | 74.0% | - |
-| MCP tools | 54 | - | - | - |
+| Tests | 3,600+ | - | - | - |
+| LoCoMo benchmark | 77.9 mean | 66.88 | 74.0% | - |
+| MCP tools | 64 (57 legacy + 7 dispatchers) | - | - | - |
 | Core dependencies | 0 | Many | Many | Many |
 
 ### At a Glance

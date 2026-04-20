@@ -36,9 +36,9 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
-from .block_store import BlockStore, BlockStoreError
+from .block_store import BlockStore
 from .block_store_postgres import PostgresBlockStore
 from .observability import get_logger, metrics
 
@@ -130,7 +130,7 @@ class ReplicatedPostgresBlockStore:
             rep.record_success()
             metrics.inc("replica_read_success")
             return result
-        except (BlockStoreError, Exception) as exc:
+        except Exception as exc:
             rep.record_failure()
             metrics.inc("replica_read_failure")
             _log.warning("replica_read_failed", method=method_name, error=str(exc))
@@ -139,19 +139,19 @@ class ReplicatedPostgresBlockStore:
     # ─── Read surface → replica ──────────────────────────────────────
 
     def get_all(self, *, active_only: bool = False) -> list[dict[str, Any]]:
-        return self._run_on_replica("get_all", active_only=active_only)
+        return cast(list[dict[str, Any]], self._run_on_replica("get_all", active_only=active_only))
 
     def get_by_id(self, block_id: str) -> dict[str, Any] | None:
-        return self._run_on_replica("get_by_id", block_id)
+        return cast(dict[str, Any] | None, self._run_on_replica("get_by_id", block_id))
 
     def search(self, query: str, *, limit: int = 10) -> list[dict[str, Any]]:
-        return self._run_on_replica("search", query, limit=limit)
+        return cast(list[dict[str, Any]], self._run_on_replica("search", query, limit=limit))
 
     def list_blocks(self) -> list[str]:
-        return self._run_on_replica("list_blocks")
+        return cast(list[str], self._run_on_replica("list_blocks"))
 
     def diff(self, snap_dir: str) -> list[str]:
-        return self._run_on_replica("diff", snap_dir)
+        return cast(list[str], self._run_on_replica("diff", snap_dir))
 
     # ─── Write surface → primary ─────────────────────────────────────
 

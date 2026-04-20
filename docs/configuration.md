@@ -457,8 +457,8 @@ Controls which storage backend is used for Markdown block I/O. Added in v3.2.0.
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `block_store.backend` | string | `"markdown"` | Storage backend for block data. See Backend Values below. |
-| `block_store.dsn` | string | (none) | Connection string for database backends (Postgres, v3.2.0 PR-5). Example: `"postgresql://user:pass@localhost/mind_mem"`. |
-| `block_store.schema` | string | `"mind_mem"` | Database schema name for the Postgres backend (v3.2.0 PR-5). |
+| `block_store.dsn` | string | (none) | Connection string for the Postgres backend. Example: `"postgresql://user:pass@localhost/mind_mem"`. |
+| `block_store.schema` | string | `"mind_mem"` | Database schema name for the Postgres backend. |
 
 ### Backend Values
 
@@ -466,7 +466,7 @@ Controls which storage backend is used for Markdown block I/O. Added in v3.2.0.
 | --- | --- | --- |
 | `"markdown"` | Default. Reads and writes plain Markdown files under the workspace corpus directories. Zero dependencies. | None |
 | `"encrypted"` | Transparent AES-256 encryption at rest via `EncryptedBlockStore`. Wraps the markdown backend. | `MIND_MEM_ENCRYPTION_PASSPHRASE` env var must be set to a non-empty string. |
-| `"postgres"` | Postgres-backed block store. **Stub only** — raises `NotImplementedError` until v3.2.0 PR-5 ships the adapter. | `block_store.dsn` required. |
+| `"postgres"` | Postgres-backed block store with atomic snapshot/restore, upsert writes, FTS search, and read-replica routing. Ships in v3.2.0. | `block_store.dsn` required; `pip install "mind-mem[postgres]"`. |
 
 ### Encrypted Backend
 
@@ -488,7 +488,7 @@ Then set the backend in `mind-mem.json`:
 
 The factory raises `ValueError` immediately if `backend` is `"encrypted"` and the environment variable is absent or empty, preventing silent plaintext fallback.
 
-### Postgres Backend (v3.2.0 PR-5)
+### Postgres Backend (v3.2.0+)
 
 ```json
 {
@@ -500,7 +500,13 @@ The factory raises `ValueError` immediately if `backend` is `"encrypted"` and th
 }
 ```
 
-Requesting the `"postgres"` backend before PR-5 ships raises `NotImplementedError`. The config surface is stable now so operators can add the key in preparation.
+Install the optional dependency before enabling:
+
+```bash
+pip install "mind-mem[postgres]"
+```
+
+See `docs/storage-backends.md` for Docker Compose setup, schema details, read-replica routing, and performance tuning.
 
 ### Factory API
 

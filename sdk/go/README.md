@@ -61,7 +61,7 @@ client := mindmem.NewClient("http://localhost:8080",
 
 | Method | Endpoint |
 |---|---|
-| `Recall(ctx, query, RecallOptions)` | `GET /v1/recall` |
+| `Recall(ctx, query, RecallOptions)` | `POST /v1/recall` |
 | `GetBlock(ctx, blockID)` | `GET /v1/blocks/{id}` |
 | `ListContradictions(ctx)` | `GET /v1/contradictions` |
 | `Health(ctx)` | `GET /v1/health` |

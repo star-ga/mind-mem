@@ -46,7 +46,7 @@ import json
 import threading
 import time
 from collections import OrderedDict
-from typing import Any, Optional
+from typing import Any
 
 from .observability import get_logger, metrics
 
@@ -110,7 +110,7 @@ class LRUCache:
         self._data: "OrderedDict[str, tuple[float, str]]" = OrderedDict()
         self._lock = threading.Lock()
 
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         with self._lock:
             entry = self._data.get(key)
             if entry is None:
@@ -167,7 +167,7 @@ class _RedisCache:
 
         self._client = redis.from_url(url, decode_responses=True, socket_timeout=1.0)
 
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         try:
             val = self._client.get(key)
             return val if isinstance(val, str) else None
@@ -240,7 +240,7 @@ class RecallCache:
     def backend_label(self) -> str:
         return self._backend_label
 
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         hit = self._lru.get(key)
         if hit is not None:
             metrics.inc("recall_cache_hits_total")
@@ -322,7 +322,7 @@ def cached_recall(
     hit = cache.get(key)
     if hit is not None:
         return hit
-    envelope = inner(query, limit=limit, active_only=active_only, backend=backend)
+    envelope: str = str(inner(query, limit=limit, active_only=active_only, backend=backend))
     cache.set(key, envelope, ttl_seconds=ttl_seconds)
     return envelope
 
