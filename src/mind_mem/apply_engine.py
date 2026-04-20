@@ -544,6 +544,14 @@ def _cleanup_orphans_from_manifest(ws, manifest, cleanup_inventory=None):
 
     This handles the case where ops created new files after the snapshot —
     those files must be removed on rollback for true atomic restore.
+
+    Paths under ``SNAPSHOT_EXCLUDE_DIRS`` (``maintenance/append-only/``,
+    ``intelligence/applied/``) are skipped because they were deliberately
+    left out of the snapshot capture. Treating them as orphans during the
+    cleanup walk would clobber append-only observability output and break
+    the v3.2.0 §2.2 atomicity contract (append-only files must survive
+    rollback even when their parent dir shares a top-level prefix with a
+    tracked snapshot path like ``maintenance/tracked/``).
     """
     # Normalize manifest to POSIX for consistent set lookups
     manifest_set = set(m.replace(os.sep, "/") for m in manifest)
@@ -578,7 +586,23 @@ def _cleanup_orphans_from_manifest(ws, manifest, cleanup_inventory=None):
         else:
             dirpath = os.path.join(ws, d)
             if os.path.isdir(dirpath):
-                for root, _dirs, files in os.walk(dirpath):
+                for root, dirs, files in os.walk(dirpath):
+                    # Honor SNAPSHOT_EXCLUDE_DIRS — prune append-only +
+                    # applied/ subtrees from the orphan walk entirely so
+                    # their contents aren't mistaken for orphans just
+                    # because they share a top-level prefix (e.g.
+                    # ``maintenance/`` hosts both ``tracked/`` and
+                    # ``append-only/``).
+                    if _is_in_excluded_dir(ws, root):
+                        dirs.clear()
+                        continue
+                    # Prune any excluded-dir immediate children before
+                    # recursing so os.walk doesn't step into them.
+                    dirs[:] = [
+                        sub
+                        for sub in dirs
+                        if not _is_in_excluded_dir(ws, os.path.join(root, sub))
+                    ]
                     for fname in files:
                         rel = os.path.relpath(os.path.join(root, fname), ws)
                         if rel.replace(os.sep, "/") not in allowed:
