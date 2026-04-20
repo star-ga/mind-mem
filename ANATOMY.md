@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 527 | **Est. tokens:** ~1,052,168
-**Generated:** 2026-04-20 06:35 UTC
+**Files:** 527 | **Est. tokens:** ~1,052,683
+**Generated:** 2026-04-20 06:45 UTC
 
 ## Token Budget Guide
 
@@ -25,7 +25,7 @@
 | `./` | 29 | ~67,928 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,429 |
-| `deploy/` | 2 | ~588 |
+| `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
 | `docs/` | 40 | ~52,122 |
@@ -49,14 +49,14 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 117 | ~402,681 |
-| `src/mind_mem/mcp/` | 3 | ~3,092 |
-| `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
-| `src/mind_mem/mcp/tools/` | 16 | ~32,199 |
+| `src/mind_mem/` | 117 | ~402,741 |
+| `src/mind_mem/mcp/` | 3 | ~3,122 |
+| `src/mind_mem/mcp/infra/` | 8 | ~5,854 |
+| `src/mind_mem/mcp/tools/` | 16 | ~32,301 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~870 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 186 | ~374,465 |
+| `tests/` | 186 | ~374,357 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -111,7 +111,7 @@
 - `REPORT.md` (~3973 tok, huge) — mind-mem Benchmark Report
 ### `deploy/`
 
-- `docker-compose.yml` (~506 tok, large) — name: mind-mem
+- `docker-compose.yml` (~608 tok, large) — name: mind-mem
 ### `deploy/docker/`
 
 - `Dockerfile` (~495 tok, medium) — # Stage 1: build — install all deps and produce a pruned site-packages
@@ -285,7 +285,7 @@
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
 - `agent_bridge.py` (~4158 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `alerting.py` (~2411 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `apply_engine.py` (~13031 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
+- `apply_engine.py` (~12984 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~4167 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
 - `auto_resolver.py` (~3194 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
 - `axis_recall.py` (~4217 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -349,7 +349,7 @@
 - `acl.py` (~895 tok, large) — Per-tool ACL — scope enforcement for the MCP surface.
 - `config.py` (~817 tok, large) — ``mind-mem.json`` config loading + configurable limits.
 - `constants.py` (~98 tok, small) — MCP-surface-wide constants shared by the infra submodules.
-- `http_auth.py` (~680 tok, large) — HTTP bearer-token authentication helpers for the MCP surface.
+- `http_auth.py` (~1009 tok, large) — HTTP bearer-token authentication helpers for the MCP surface.
 - `__init__.py` (~449 tok, medium) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
 - `observability.py` (~1175 tok, large) — Observability + DB-busy helpers for the MCP surface.
 - `rate_limit.py` (~928 tok, large) — Per-client sliding-window rate limiter for the MCP surface.
@@ -358,7 +358,7 @@
 
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
 - `resources.py` (~1342 tok, large) — MCP ``@mcp.resource`` declarations.
-- `server.py` (~1535 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
+- `server.py` (~1565 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/`
 
 - `mcp_server.py` (~1780 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
@@ -378,7 +378,7 @@
 - `kernels.py` (~1905 tok, huge) — MIND kernel + compiled-truth MCP tools.
 - `memory_ops.py` (~7082 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
-- `recall.py` (~4120 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~4222 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 ### `src/mind_mem/`
 
@@ -444,7 +444,7 @@
 ### `src/mind_mem/`
 
 - `_task_status_literals.sh` (~118 tok, small) — AUTO-GENERATED — do not edit by hand.
-- `telemetry.py` (~2297 tok, huge) — mind-mem Telemetry — OpenTelemetry traces + Prometheus metrics.
+- `telemetry.py` (~2404 tok, huge) — mind-mem Telemetry — OpenTelemetry traces + Prometheus metrics.
 - `tiered_memory.py` (~1102 tok, large) — # Copyright 2026 STARGA, Inc.
 - `tracking.py` (~1918 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `trajectory.py` (~2233 tok, huge) — Trajectory Memory — task execution trace storage and recall.
@@ -508,7 +508,7 @@
 - `test_block_parser.py` (~3093 tok, huge) — Tests for block_parser.py — zero external deps (stdlib unittest)."""
 - `test_block_store_encrypted.py` (~999 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_block_store.py` (~2202 tok, huge) — Tests for block_store.py — BlockStore protocol and MarkdownBlockStore."""
-- `test_block_store_snapshot.py` (~752 tok, large) — v3.2.0 §1.4 PR-3 — MarkdownBlockStore.snapshot / restore / diff tests."""
+- `test_block_store_snapshot.py` (~749 tok, large) — v3.2.0 §1.4 PR-3 — MarkdownBlockStore.snapshot / restore / diff tests."""
 - `test_block_store_write.py` (~2349 tok, huge) — v3.2.0 §1.4 PR-2 — MarkdownBlockStore.write_block + delete_block tests."""
 - `test_block_types.py` (~437 tok, medium) — Tests for different block types in recall."""
 - `test_bootstrap_corpus.py` (~1798 tok, huge) — Tests for bootstrap_corpus.py — backfill pipeline module."""
@@ -652,7 +652,7 @@
 - `test_sqlite_index.py` (~4726 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
 - `test_stopwords.py` (~247 tok, medium) — Tests for stopword handling."""
 - `test_storage_factory.py` (~1067 tok, large) — Tests for mind_mem.storage.get_block_store factory (v3.2.0)."""
-- `test_telemetry.py` (~2638 tok, huge) — Tests for src/mind_mem/telemetry.py.
+- `test_telemetry.py` (~2533 tok, huge) — Tests for src/mind_mem/telemetry.py.
 - `test_temporal.py` (~223 tok, medium) — Tests for temporal filtering module."""
 - `test_tier_decay.py` (~924 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_tokenization.py` (~436 tok, medium) — Tests for tokenization module."""

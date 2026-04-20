@@ -7,19 +7,158 @@ file-based Markdown parsing.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re as _re
+import shutil
 import tempfile
 import warnings
 from datetime import datetime, timezone
 from typing import Any, Optional, Protocol, runtime_checkable
 
 from .block_parser import get_active, get_by_id, parse_file
+from .corpus_registry import SNAPSHOT_DIRS, SNAPSHOT_EXCLUDE_DIRS
 from .mind_filelock import FileLock
 from .observability import get_logger
 
 _log = get_logger("block_store")
+
+# ─── Snapshot constants (v3.2.0 §1.4 PR-3) ───────────────────────────────────
+
+# Config / root files always included in every snapshot for rollback integrity.
+SNAPSHOT_FILES: list[str] = ["AGENTS.md", "MEMORY.md", "IDENTITY.md", "mind-mem.json"]
+
+
+# ─── Snapshot helper functions ────────────────────────────────────────────────
+
+
+def _is_in_excluded_dir(ws: str, path: str) -> bool:
+    """True when ``path`` falls under one of SNAPSHOT_EXCLUDE_DIRS.
+
+    Normalises separators so a Windows-native path under
+    ``maintenance\\append-only\\...`` still matches the canonical
+    forward-slash-declared exclude list.
+    """
+    rel = os.path.relpath(path, ws).replace(os.sep, "/")
+    for excluded in SNAPSHOT_EXCLUDE_DIRS:
+        if rel == excluded or rel.startswith(excluded + "/"):
+            return True
+    return False
+
+
+def _safe_copy(src: str, dst: str) -> None:
+    """Copy a file for snapshot purposes. Always uses copy2 (not hardlinks).
+
+    Hardlinks are unsuitable for mutable-file snapshots because Python's
+    open("w") truncates the inode in-place, corrupting both the workspace
+    file and its hardlinked snapshot copy.
+    """
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    shutil.copy2(src, dst)
+
+
+def _build_cleanup_inventory(ws: str, roots: set[str]) -> dict[str, list[str]]:
+    """Capture the pre-snapshot file inventory for touched top-level roots."""
+    inventory: dict[str, list[str]] = {}
+    normalized_roots = {root.replace("\\", "/").strip("/") for root in roots if root}
+    for root in sorted(normalized_roots):
+        entries: list[str] = []
+        root_path = os.path.join(ws, root)
+        if not os.path.isdir(root_path):
+            inventory[root] = entries
+            continue
+        for walk_root, dirs, files in os.walk(root_path):
+            rel_walk_root = os.path.relpath(walk_root, ws)
+            if root == "intelligence" and "applied" in rel_walk_root.split(os.sep):
+                dirs.clear()
+                continue
+            for fname in files:
+                rel = os.path.relpath(os.path.join(walk_root, fname), ws)
+                entries.append(rel.replace(os.sep, "/"))
+        inventory[root] = sorted(entries)
+    return inventory
+
+
+def _build_manifest(snap_dir: str, files: list[str], cleanup_inventory: dict[str, list[str]] | None = None) -> None:
+    """Write snapshot manifest for efficient delta-based restore."""
+    normalized = [f.replace(os.sep, "/") for f in files]
+    manifest_path = os.path.join(snap_dir, "MANIFEST.json")
+    payload: dict[str, Any] = {"files": normalized, "version": 2}
+    if cleanup_inventory:
+        payload["cleanup_inventory"] = cleanup_inventory
+    with open(manifest_path, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh)
+
+
+def _read_manifest(snap_dir: str) -> dict[str, Any] | None:
+    """Read snapshot manifest, or None for legacy snapshots."""
+    manifest_path = os.path.join(snap_dir, "MANIFEST.json")
+    if not os.path.exists(manifest_path):
+        return None
+    with open(manifest_path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    if isinstance(data, list):
+        return {"files": data, "cleanup_inventory": {}, "version": 1}
+    return {
+        "files": data.get("files", []),
+        "cleanup_inventory": data.get("cleanup_inventory", {}),
+        "version": data.get("version", 1),
+    }
+
+
+def _cleanup_orphans_from_manifest(ws: str, manifest: list[str], cleanup_inventory: dict[str, list[str]] | None = None) -> None:
+    """Remove files in snapshotted directories that aren't in the manifest.
+
+    This handles the case where ops created new files after the snapshot —
+    those files must be removed on rollback for true atomic restore.
+
+    Paths under ``SNAPSHOT_EXCLUDE_DIRS`` are skipped because they were
+    deliberately left out of the snapshot capture.
+    """
+    manifest_set = {m.replace(os.sep, "/") for m in manifest}
+    inventory_sets: dict[str, set[str]] = {
+        root.replace("\\", "/").strip("/"): {entry.replace(os.sep, "/") for entry in entries}
+        for root, entries in (cleanup_inventory or {}).items()
+    }
+
+    snapshotted_dirs: set[str] = set()
+    for rel in manifest:
+        top_dir = rel.split("/")[0]
+        snapshotted_dirs.add(top_dir)
+    snapshotted_dirs.update(inventory_sets.keys())
+
+    for d in snapshotted_dirs:
+        allowed = inventory_sets.get(d, manifest_set)
+        if d in ("intelligence",):
+            intel_dir = os.path.join(ws, "intelligence")
+            if os.path.isdir(intel_dir):
+                for root, dirs, files in os.walk(intel_dir):
+                    rel_root = os.path.relpath(root, ws)
+                    if "applied" in rel_root.split(os.sep):
+                        dirs.clear()
+                        continue
+                    for fname in files:
+                        rel = os.path.relpath(os.path.join(root, fname), ws)
+                        if rel.replace(os.sep, "/") not in allowed:
+                            os.remove(os.path.join(root, fname))
+        else:
+            dirpath = os.path.join(ws, d)
+            if os.path.isdir(dirpath):
+                for root, dirs, files in os.walk(dirpath):
+                    if _is_in_excluded_dir(ws, root):
+                        dirs.clear()
+                        continue
+                    dirs[:] = [
+                        sub
+                        for sub in dirs
+                        if not _is_in_excluded_dir(ws, os.path.join(root, sub))
+                    ]
+                    for fname in files:
+                        rel = os.path.relpath(os.path.join(root, fname), ws)
+                        if rel.replace(os.sep, "/") not in allowed:
+                            os.remove(os.path.join(root, fname))
+
 
 # Block-id prefix → (corpus subdir, filename) routing. Shared with
 # ``mcp.tools.memory_ops._BLOCK_PREFIX_MAP``; duplicated here so the
@@ -267,6 +406,27 @@ class BlockStore(Protocol):
         """
         ...
 
+    # ─── snapshot surface (v3.2.0 §1.4 PR-3) ─────────────────────────
+    def snapshot(
+        self,
+        snap_dir: str,
+        *,
+        files_touched: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create a point-in-time snapshot. Returns the manifest dict."""
+        ...
+
+    def restore(self, snap_dir: str) -> None:
+        """Restore the workspace from a snapshot directory."""
+        ...
+
+    def diff(self, snap_dir: str) -> list[str]:
+        """Per-file diff (added / modified / deleted) vs. a snapshot.
+
+        Returns relative POSIX paths of files that differ.
+        """
+        ...
+
 
 class MarkdownBlockStore:
     """BlockStore backed by Markdown files on disk.
@@ -460,3 +620,200 @@ class MarkdownBlockStore:
         self.invalidate_cache()
         _log.info("block_store_delete", block_id=block_id, file=os.path.relpath(target, self._workspace))
         return True
+
+    # ─── snapshot surface (v3.2.0 §1.4 PR-3) ────────────────────────────
+
+    def snapshot(
+        self,
+        snap_dir: str,
+        *,
+        files_touched: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create a point-in-time snapshot in ``snap_dir``. Returns manifest dict.
+
+        When ``files_touched`` is provided only those files are captured —
+        O(touched) instead of O(workspace). Falls back to a full snapshot when
+        ``files_touched`` is empty or None.
+
+        ``intelligence/applied/`` is always excluded to prevent recursive
+        nesting (snapshots containing snapshots).
+        """
+        ws = self._workspace
+        os.makedirs(snap_dir, exist_ok=True)
+
+        manifest_files: list[str] = []
+        cleanup_inventory: dict[str, list[str]] | None = None
+
+        if files_touched:
+            ws_real = os.path.realpath(ws)
+            cleanup_inventory = _build_cleanup_inventory(
+                ws,
+                {p.replace("\\", "/").split("/", 1)[0] for p in files_touched if p},
+            )
+            for rel_path in files_touched:
+                resolved = os.path.realpath(os.path.join(ws_real, rel_path))
+                if not resolved.startswith(ws_real + os.sep) and resolved != ws_real:
+                    continue
+                if os.path.isfile(resolved):
+                    _safe_copy(resolved, os.path.join(snap_dir, rel_path))
+                    manifest_files.append(rel_path)
+            for f in SNAPSHOT_FILES:
+                src = os.path.join(ws, f)
+                if os.path.isfile(src):
+                    _safe_copy(src, os.path.join(snap_dir, f))
+                    manifest_files.append(f)
+        else:
+            for d in SNAPSHOT_DIRS:
+                src_dir = os.path.join(ws, d)
+                if os.path.isdir(src_dir):
+                    for root, _dirs, files in os.walk(src_dir):
+                        for fname in files:
+                            src_file = os.path.join(root, fname)
+                            rel = os.path.relpath(src_file, ws)
+                            dst_file = os.path.join(snap_dir, rel)
+                            os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+                            _safe_copy(src_file, dst_file)
+                            manifest_files.append(rel)
+
+            intel_src = os.path.join(ws, "intelligence")
+            if os.path.isdir(intel_src):
+                for root, dirs, files in os.walk(intel_src):
+                    rel_root = os.path.relpath(root, ws)
+                    if "applied" in rel_root.split(os.sep):
+                        dirs.clear()
+                        continue
+                    for fname in files:
+                        src_file = os.path.join(root, fname)
+                        rel = os.path.relpath(src_file, ws)
+                        dst_file = os.path.join(snap_dir, rel)
+                        os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+                        _safe_copy(src_file, dst_file)
+                        manifest_files.append(rel)
+
+            for f in SNAPSHOT_FILES:
+                src = os.path.join(ws, f)
+                if os.path.isfile(src):
+                    _safe_copy(src, os.path.join(snap_dir, f))
+                    manifest_files.append(f)
+
+        _build_manifest(snap_dir, manifest_files, cleanup_inventory=cleanup_inventory)
+        manifest_data = _read_manifest(snap_dir)
+        assert manifest_data is not None
+        _log.info("block_store_snapshot", snap_dir=snap_dir, file_count=len(manifest_files))
+        return manifest_data
+
+    def restore(self, snap_dir: str) -> None:
+        """Restore workspace from snapshot.
+
+        Uses the MANIFEST.json fast-path (O(manifest)) when available;
+        falls back to the legacy copytree approach for pre-manifest snapshots.
+
+        ``intelligence/applied/`` is always skipped to prevent deleting
+        active snapshots during a restore.
+        """
+        ws = self._workspace
+        manifest_data = _read_manifest(snap_dir)
+        if manifest_data is not None:
+            manifest = manifest_data.get("files", [])
+            cleanup_inventory = manifest_data.get("cleanup_inventory", {})
+            for rel_posix in manifest:
+                rel_path = rel_posix.replace("/", os.sep)
+                src = os.path.join(snap_dir, rel_path)
+                dst = os.path.join(ws, rel_path)
+                if os.path.exists(src):
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    shutil.copy2(src, dst)
+            _cleanup_orphans_from_manifest(ws, manifest, cleanup_inventory)
+            _log.info("block_store_restore", snap_dir=snap_dir, file_count=len(manifest))
+            return
+
+        # Legacy fallback: copytree-based restore for pre-manifest snapshots.
+        for d in SNAPSHOT_DIRS:
+            src = os.path.join(snap_dir, d)
+            dst = os.path.join(ws, d)
+            if os.path.isdir(src):
+                tmp_dst = dst + ".rollback_tmp"
+                if os.path.islink(tmp_dst):
+                    os.unlink(tmp_dst)
+                elif os.path.isdir(tmp_dst):
+                    shutil.rmtree(tmp_dst)
+                shutil.copytree(src, tmp_dst)
+                if os.path.islink(dst):
+                    os.unlink(dst)
+                elif os.path.isdir(dst):
+                    shutil.rmtree(dst)
+                os.rename(tmp_dst, dst)
+
+        intel_snap = os.path.join(snap_dir, "intelligence")
+        intel_ws = os.path.join(ws, "intelligence")
+        if os.path.isdir(intel_snap):
+            for item in os.listdir(intel_snap):
+                if item == "applied":
+                    continue
+                src = os.path.join(intel_snap, item)
+                dst = os.path.join(intel_ws, item)
+                if os.path.isfile(src):
+                    shutil.copy2(src, dst)
+                elif os.path.isdir(src):
+                    tmp_dst = dst + ".rollback_tmp"
+                    if os.path.islink(tmp_dst):
+                        os.unlink(tmp_dst)
+                    elif os.path.isdir(tmp_dst):
+                        shutil.rmtree(tmp_dst)
+                    shutil.copytree(src, tmp_dst)
+                    if os.path.islink(dst):
+                        os.unlink(dst)
+                    elif os.path.isdir(dst):
+                        shutil.rmtree(dst)
+                    os.rename(tmp_dst, dst)
+
+        for f in SNAPSHOT_FILES:
+            src = os.path.join(snap_dir, f)
+            if os.path.isfile(src):
+                shutil.copy2(src, os.path.join(ws, f))
+
+        _log.info("block_store_restore_legacy", snap_dir=snap_dir)
+
+    def diff(self, snap_dir: str) -> list[str]:
+        """Return sorted list of relative POSIX paths that differ vs. snapshot.
+
+        Uses the manifest fast-path when available; walks the snapshot tree
+        for legacy (pre-manifest) snapshots. Compares files by SHA-256 hash.
+        """
+        ws = self._workspace
+        diffs: list[str] = []
+        manifest_data = _read_manifest(snap_dir)
+
+        if manifest_data is not None:
+            files_to_check = manifest_data.get("files", [])
+        else:
+            files_to_check = []
+            for root, _dirs, files in os.walk(snap_dir):
+                for fname in files:
+                    snap_file = os.path.join(root, fname)
+                    rel = os.path.relpath(snap_file, snap_dir).replace(os.sep, "/")
+                    if rel in ("MANIFEST.json", "APPLY_RECEIPT.md"):
+                        continue
+                    files_to_check.append(rel)
+
+        for rel_posix in files_to_check:
+            rel_native = rel_posix.replace("/", os.sep)
+            ws_file = os.path.join(ws, rel_native)
+            snap_file = os.path.join(snap_dir, rel_native)
+
+            ws_exists = os.path.isfile(ws_file)
+            snap_exists = os.path.isfile(snap_file)
+
+            if snap_exists and not ws_exists:
+                diffs.append(rel_posix)
+            elif not snap_exists and ws_exists:
+                diffs.append(rel_posix)
+            elif snap_exists and ws_exists:
+                with open(snap_file, "rb") as fh:
+                    snap_hash = hashlib.sha256(fh.read()).hexdigest()
+                with open(ws_file, "rb") as fh:
+                    ws_hash = hashlib.sha256(fh.read()).hexdigest()
+                if snap_hash != ws_hash:
+                    diffs.append(rel_posix)
+
+        return sorted(diffs)
