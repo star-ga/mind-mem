@@ -112,6 +112,60 @@ def date_score(block: dict) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Temporal half-life decay (v3.3.0 Tier 1 #3)
+# ---------------------------------------------------------------------------
+#
+# Pre-v3.3.0 ``date_score`` used a linear 1.0..0.1 ramp over a fixed
+# 365-day window — fine as a coarse filter but too flat to meaningfully
+# rank within a recall result set. The half-life decay below is
+# multiplicatively compatible (still 0..1) and configurable via
+# ``retrieval.temporal_half_life_days`` in ``mind-mem.json``.
+
+
+def _resolve_half_life_days(config: dict | None) -> int:
+    """Resolve the decay half-life from config, defaulting to 90 days."""
+    default = 90
+    if not isinstance(config, dict):
+        return default
+    retrieval = config.get("retrieval")
+    if not isinstance(retrieval, dict):
+        return default
+    value = retrieval.get("temporal_half_life_days", default)
+    if not isinstance(value, int) or value <= 0:
+        return default
+    return value
+
+
+def temporal_decay_score(block: dict, half_life_days: int = 90) -> float:
+    """Exponential half-life decay on a block's ``Created`` / ``Date`` field.
+
+    ``score = 0.5 ** (age_days / half_life_days)``. Returns 1.0 for a
+    same-day or future-dated block, 0.5 at one half-life, 0.25 at two
+    half-lives, asymptotically approaches 0. Blocks without a parseable
+    date return 0.5 (neutral — avoids penalising undated content).
+
+    Half-life (default 90 days) is tunable via
+    ``retrieval.temporal_half_life_days`` in ``mind-mem.json``. Used as a
+    multiplicative ranking feature in the recall scorer, so an older
+    block still ranks above a brand-new irrelevant one when BM25 strongly
+    favours it.
+    """
+    raw = block.get("Created") or block.get("Date") or ""
+    if not raw:
+        return 0.5
+    try:
+        d = _datetime.strptime(str(raw)[:10], "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return 0.5
+    now = _datetime.now()
+    age_days = (now - d).days
+    if age_days <= 0:
+        return 1.0
+    hl = max(1, int(half_life_days))
+    return float(0.5 ** (age_days / hl))
+
+
+# ---------------------------------------------------------------------------
 # Graph-based recall — cross-reference neighbor boosting
 # ---------------------------------------------------------------------------
 

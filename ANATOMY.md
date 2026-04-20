@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 579 | **Est. tokens:** ~1,183,512
-**Generated:** 2026-04-20 16:28 UTC
+**Files:** 580 | **Est. tokens:** ~1,184,904
+**Generated:** 2026-04-20 16:32 UTC
 
 ## Token Budget Guide
 
@@ -51,7 +51,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 121 | ~423,383 |
+| `src/mind_mem/` | 121 | ~423,912 |
 | `src/mind_mem/api/` | 4 | ~12,861 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 202 | ~408,883 |
+| `tests/` | 203 | ~409,746 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -458,7 +458,7 @@
 - `_recall_expansion.py` (~3267 tok, huge) — Recall engine query expansion — domain synonyms, month normalization, RM3."""
 - `recall.py` (~1049 tok, large) — mind-mem Recall Engine (BM25 + TF-IDF + Graph + Stemming). Zero external deps.
 - `_recall_reranking.py` (~3247 tok, huge) — Recall engine reranking — deterministic feature-based re-scoring of BM25 hits."""
-- `_recall_scoring.py` (~3112 tok, huge) — Recall engine scoring — BM25F helper, date scores, graph boosting, negation, date proximity, categories."""
+- `_recall_scoring.py` (~3641 tok, huge) — Recall engine scoring — BM25F helper, date scores, graph boosting, negation, date proximity, categories."""
 - `_recall_temporal.py` (~2044 tok, huge) — Recall engine temporal filtering — resolve relative time references and filter blocks."""
 - `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
 - `recall_vector.py` (~13960 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
@@ -715,6 +715,7 @@
 - `test_stopwords.py` (~247 tok, medium) — Tests for stopword handling."""
 - `test_storage_factory.py` (~1066 tok, large) — Tests for mind_mem.storage.get_block_store factory (v3.2.0)."""
 - `test_telemetry.py` (~2829 tok, huge) — Tests for src/mind_mem/telemetry.py.
+- `test_temporal_decay_scoring.py` (~863 tok, large) — v3.3.0 Tier 1 #3 — half-life decay on block ``Created``/``Date`` field.
 - `test_temporal.py` (~223 tok, medium) — Tests for temporal filtering module."""
 - `test_tier_decay.py` (~924 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_tier_recall.py` (~1418 tok, large) — Tests for tier-aware recall boosting (v3.2.0 hot/cold tier wire-up)."""
