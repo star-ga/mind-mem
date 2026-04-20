@@ -8,9 +8,7 @@ regex; the LLM decomposer is opt-in and falls back to NLP.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from mind_mem.query_planner import (
     LLMQueryDecomposer,
@@ -82,15 +80,6 @@ class TestLLMDecomposer:
 
     def test_parses_llm_response(self) -> None:
         dec = LLMQueryDecomposer()
-        fake_body = {
-            "choices": [
-                {
-                    "message": {
-                        "content": "What did Alice say?\nWhen did Bob leave?\nDid anyone else comment?",
-                    }
-                }
-            ]
-        }
         with patch.object(
             dec,
             "_call_llm",

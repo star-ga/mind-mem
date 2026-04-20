@@ -5,7 +5,7 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 584 | **Est. tokens:** ~1,192,426
+**Files:** 584 | **Est. tokens:** ~1,192,353
 **Generated:** 2026-04-20 16:50 UTC
 
 ## Token Budget Guide
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 206 | ~413,747 |
+| `tests/` | 206 | ~413,674 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -672,7 +672,7 @@
 - `test_query_expansion_auto_enable.py` (~1091 tok, large) — v3.3.0 Tier 2 #4 — query expansion auto-enables on ambiguous queries.
 - `test_query_expansion_multi_provider.py` (~1237 tok, large) — Tests for multi-provider LLM query expansion (OpenAI-compatible endpoints)."""
 - `test_query_expansion.py` (~3809 tok, huge) — Tests for query_expansion.py -- multi-query expansion for improved recall."""
-- `test_query_planner.py` (~1421 tok, large) — v3.3.0 Tier 1 #1 — query decomposition for multi-hop questions.
+- `test_query_planner.py` (~1348 tok, large) — v3.3.0 Tier 1 #1 — query decomposition for multi-hop questions.
 - `test_recall_cache.py` (~1916 tok, huge) — Tests for v3.2.0 distributed recall cache (LRU + Redis)."""
 - `test_recall_concurrent.py` (~344 tok, medium) — Tests for concurrent recall queries."""
 - `test_recall_context_field.py` (~263 tok, medium) — Tests for context field in blocks."""
