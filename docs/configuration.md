@@ -86,9 +86,43 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
   "observability": {
     "otel_endpoint": null,
     "prom_port": 9090
+  },
+  "block_store": {
+    "backend": "markdown",
+    "dsn": ""
   }
 }
 ```
+
+---
+
+## Block Store Settings (v3.2.0)
+
+The `block_store` section selects the storage backend for block persistence.
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `backend` | string | `"markdown"` | Storage backend. Valid values: `"markdown"`, `"encrypted"`, `"postgres"`. |
+| `dsn` | string | `""` | PostgreSQL connection string. Required when `backend = "postgres"`. |
+
+### Postgres Backend
+
+```json
+{
+  "block_store": {
+    "backend": "postgres",
+    "dsn": "postgresql://user:password@localhost:5432/mind_mem"
+  }
+}
+```
+
+Install the optional dependency before enabling the Postgres backend:
+
+```bash
+pip install "mind-mem[postgres]"
+```
+
+See `docs/storage-backends.md` for a full setup guide including Docker Compose and schema details.
 
 ---
 

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 549 | **Est. tokens:** ~1,095,874
-**Generated:** 2026-04-20 06:59 UTC
+**Files:** 549 | **Est. tokens:** ~1,095,873
+**Generated:** 2026-04-20 07:02 UTC
 
 ## Token Budget Guide
 
@@ -58,7 +58,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~1,018 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 191 | ~386,958 |
+| `tests/` | 191 | ~386,957 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -680,7 +680,7 @@
 - `test_speculative_prefetch.py` (~3071 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sqlite_index.py` (~4726 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
 - `test_stopwords.py` (~247 tok, medium) — Tests for stopword handling."""
-- `test_storage_factory.py` (~1067 tok, large) — Tests for mind_mem.storage.get_block_store factory (v3.2.0)."""
+- `test_storage_factory.py` (~1066 tok, large) — Tests for mind_mem.storage.get_block_store factory (v3.2.0)."""
 - `test_telemetry.py` (~2829 tok, huge) — Tests for src/mind_mem/telemetry.py.
 - `test_temporal.py` (~223 tok, medium) — Tests for temporal filtering module."""
 - `test_tier_decay.py` (~924 tok, large) — # Copyright 2026 STARGA, Inc.

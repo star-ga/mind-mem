@@ -65,10 +65,10 @@ def test_encrypted_with_passphrase_wraps_markdown(tmp_path, monkeypatch):
     assert isinstance(store._inner, MarkdownBlockStore)
 
 
-def test_postgres_raises_not_implemented(tmp_path):
-    """backend='postgres' → NotImplementedError (ships in PR-5)."""
+def test_postgres_raises_value_error_without_dsn(tmp_path):
+    """backend='postgres' without a dsn → ValueError (PR-5)."""
     ws = _make_workspace(tmp_path)
-    with pytest.raises(NotImplementedError, match="PR-5"):
+    with pytest.raises(ValueError, match="dsn"):
         get_block_store(ws, config={"block_store": {"backend": "postgres"}})
 
 

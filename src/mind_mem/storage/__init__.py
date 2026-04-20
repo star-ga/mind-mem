@@ -56,9 +56,10 @@ def get_block_store(workspace: str, config: dict[str, Any] | None = None) -> Blo
     Raises:
         ValueError: The ``block_store.backend`` value is not recognised, or
                     the ``encrypted`` backend is requested but
-                    ``MIND_MEM_ENCRYPTION_PASSPHRASE`` is not set.
-        NotImplementedError: The ``postgres`` backend is requested (lands in
-                             v3.2.0 PR-5).
+                    ``MIND_MEM_ENCRYPTION_PASSPHRASE`` is not set, or the
+                    ``postgres`` backend is selected but ``dsn`` is absent.
+        ImportError: The ``postgres`` backend is requested but
+                     ``psycopg[binary]`` is not installed.
     """
     if config is None:
         config = _load_workspace_config(workspace)
@@ -84,7 +85,19 @@ def get_block_store(workspace: str, config: dict[str, Any] | None = None) -> Blo
         return cast(BlockStore, EncryptedBlockStore(workspace, passphrase=passphrase, inner=inner))
 
     if backend == "postgres":
-        raise NotImplementedError("Postgres backend lands in v3.2.0 PR-5")
+        dsn: str = bs_cfg.get("dsn", "")
+        if not dsn:
+            raise ValueError(
+                "block_store.backend='postgres' requires block_store.dsn to be set in mind-mem.json"
+            )
+        try:
+            from ..block_store_postgres import PostgresBlockStore
+        except ImportError as exc:
+            raise ImportError(
+                "The PostgreSQL backend requires psycopg. "
+                'Install it with: pip install "mind-mem[postgres]"'
+            ) from exc
+        return cast(BlockStore, PostgresBlockStore(dsn=dsn, workspace=workspace))
 
     raise ValueError(
         f"Unknown block_store.backend={backend!r}. "
