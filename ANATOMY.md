@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 508 | **Est. tokens:** ~1,029,873
-**Generated:** 2026-04-20 06:28 UTC
+**Files:** 518 | **Est. tokens:** ~1,036,367
+**Generated:** 2026-04-20 06:31 UTC
 
 ## Token Budget Guide
 
@@ -41,18 +41,20 @@
 | `lib/` | 1 | ~2,176 |
 | `mind/` | 19 | ~5,516 |
 | `scripts/` | 3 | ~2,692 |
+| `sdk/js/` | 3 | ~418 |
+| `sdk/js/src/` | 4 | ~2,320 |
 | `skills/apply-proposal/` | 1 | ~345 |
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 116 | ~400,961 |
+| `src/mind_mem/` | 117 | ~402,186 |
 | `src/mind_mem/mcp/` | 3 | ~3,092 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
 | `src/mind_mem/mcp/tools/` | 16 | ~32,001 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~870 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 183 | ~369,292 |
+| `tests/` | 185 | ~371,823 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -239,6 +241,19 @@
 - `anatomy-hook.sh` (~258 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
 - `anatomy.sh` (~2010 tok, huge) — anatomy — Generate ANATOMY.md for any repo
 - `regen_bash_literals.py` (~424 tok, medium) — Regenerate src/mind_mem/_task_status_literals.sh from enums.py.
+### `sdk/js/`
+
+- `.gitignore` (~5 tok, tiny) — node_modules/
+- `package.json` (~266 tok, medium) — Keys: name, version, description, license, type
+### `sdk/js/src/`
+
+- `client.ts` (~1250 tok, large) — Normalise: strip trailing slash so path joining is consistent.
+- `errors.ts` (~438 tok, medium) — Restore prototype chain (required when extending built-ins in TS)
+- `index.ts` (~99 tok, small)
+- `types.ts` (~533 tok, large) — Shared domain types
+### `sdk/js/`
+
+- `tsconfig.json` (~147 tok, small) — Keys: compilerOptions, include, exclude
 ### `skills/apply-proposal/`
 
 - `SKILL.md` (~345 tok, medium) — /apply — Apply Proposals
@@ -254,9 +269,9 @@
 ### `src/mind_mem/`
 
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
-- `agent_bridge.py` (~3579 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `agent_bridge.py` (~3763 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `alerting.py` (~2411 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `apply_engine.py` (~14202 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
+- `apply_engine.py` (~12946 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~4167 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
 - `auto_resolver.py` (~3194 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
 - `axis_recall.py` (~4217 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -415,6 +430,7 @@
 ### `src/mind_mem/`
 
 - `_task_status_literals.sh` (~118 tok, small) — AUTO-GENERATED — do not edit by hand.
+- `telemetry.py` (~2297 tok, huge) — mind-mem Telemetry — OpenTelemetry traces + Prometheus metrics.
 - `tiered_memory.py` (~1102 tok, large) — # Copyright 2026 STARGA, Inc.
 - `tracking.py` (~1918 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `trajectory.py` (~2233 tok, huge) — Trajectory Memory — task execution trace storage and recall.
@@ -478,6 +494,7 @@
 - `test_block_parser.py` (~3093 tok, huge) — Tests for block_parser.py — zero external deps (stdlib unittest)."""
 - `test_block_store_encrypted.py` (~999 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_block_store.py` (~2202 tok, huge) — Tests for block_store.py — BlockStore protocol and MarkdownBlockStore."""
+- `test_block_store_snapshot.py` (~752 tok, large) — v3.2.0 §1.4 PR-3 — MarkdownBlockStore.snapshot / restore / diff tests."""
 - `test_block_store_write.py` (~2349 tok, huge) — v3.2.0 §1.4 PR-2 — MarkdownBlockStore.write_block + delete_block tests."""
 - `test_block_types.py` (~437 tok, medium) — Tests for different block types in recall."""
 - `test_bootstrap_corpus.py` (~1798 tok, huge) — Tests for bootstrap_corpus.py — backfill pipeline module."""
@@ -631,6 +648,7 @@
 - `test_v28_completion.py` (~4565 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_validate_py.py` (~3438 tok, huge) — Tests for validate_py.py — workspace integrity validator."""
 - `test_validate_sh_deprecation.py` (~547 tok, large) — Pin the runtime deprecation warning on validate.sh.
+- `test_vault_wikilinks.py` (~1779 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_verify_cli.py` (~3202 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_watcher.py` (~1217 tok, large) — Tests for watcher.py — file change detection for auto-reindex."""
 - `test_wide_retrieval.py` (~346 tok, medium) — Tests for wide retrieval parameter."""

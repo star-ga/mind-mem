@@ -1,0 +1,41 @@
+{
+  "name": "@mind-mem/sdk",
+  "version": "0.1.0",
+  "description": "JS/TS client SDK for the mind-mem REST API",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test test/*.test.js",
+    "test:ts": "npx --yes tsx --test test/*.test.ts",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/star-ga/mind-mem.git",
+    "directory": "sdk/js"
+  },
+  "bugs": {
+    "url": "https://github.com/star-ga/mind-mem/issues"
+  },
+  "homepage": "https://github.com/star-ga/mind-mem/tree/main/sdk/js#readme",
+  "keywords": ["mind-mem", "memory", "ai", "mcp", "sdk"],
+  "author": "STARGA Inc <noreply@star.ga>"
+}
