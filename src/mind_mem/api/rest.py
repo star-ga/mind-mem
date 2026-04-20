@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+from contextvars import ContextVar
 from typing import Annotated, Any
 
 try:
@@ -31,6 +32,14 @@ from mind_mem.mcp.infra.constants import MCP_SCHEMA_VERSION
 from mind_mem.mcp.infra.http_auth import _check_token, verify_token
 from mind_mem.mcp.infra.rate_limit import SlidingWindowRateLimiter, _get_client_rate_limiter
 from mind_mem.schema_version import CURRENT_SCHEMA_VERSION
+
+# ---------------------------------------------------------------------------
+# Agent-ID context variable (set by auth dependencies, read by audit chain)
+# ---------------------------------------------------------------------------
+
+#: The current request's authenticated agent ID.  Defaults to "anonymous".
+#: Set this from MCP tool entry points to propagate identity through the stack.
+current_agent_id: ContextVar[str] = ContextVar("current_agent_id", default="anonymous")
 
 # ---------------------------------------------------------------------------
 # Auth helpers
@@ -56,23 +65,57 @@ def _client_id_from_token(token: str | None) -> str:
     return token[-16:] if len(token) >= 16 else token
 
 
-def _verify_bearer(token: str | None) -> bool:
-    """Return True if token is valid for any scope (user or admin).
+def _verify_bearer(token: str | None) -> tuple[bool, str]:
+    """Return (valid, agent_id) for a bearer/API-key token.
 
-    Accepts either MIND_MEM_TOKEN (user) or MIND_MEM_ADMIN_TOKEN (admin),
-    mirroring the MCP surface where the admin token is a superset credential.
-    Falls back to verify_token for the user-scope check.
+    Priority:
+    1. MIND_MEM_ADMIN_TOKEN match → agent_id "admin"
+    2. ``mmk_live_*`` or ``mmk_test_*`` → look up in APIKeyStore
+    3. MIND_MEM_TOKEN match → agent_id "user"
+    4. No auth configured → anonymous access allowed, agent_id "anonymous"
     """
     if token is None:
-        # No token provided — valid only when no auth is configured
         headers: dict[str, str] = {}
-        return verify_token(headers)
-    # Check admin token first (constant-time)
+        return verify_token(headers), "anonymous"
+
+    # 1. Admin token — fast path
     if _has_admin_scope(token):
-        return True
-    # Delegate user-token check
+        return True, "admin"
+
+    # 2. API key (mmk_live_* / mmk_test_*)
+    if token.startswith("mmk_live_") or token.startswith("mmk_test_"):
+        record = _resolve_api_key_store_record(token)
+        if record is not None:
+            return True, record["agent_id"]
+        return False, "anonymous"
+
+    # 3. User bearer token
     headers = {"Authorization": f"Bearer {token}"}
-    return verify_token(headers)
+    if verify_token(headers):
+        return True, "user"
+    return False, "anonymous"
+
+
+def _resolve_api_key_store_record(raw_key: str) -> dict | None:
+    """Verify an mmk_* API key and return its record, or None."""
+    store = _get_api_key_store()
+    if store is None:
+        return None
+    return store.verify(raw_key)
+
+
+def _get_api_key_store() -> Any:
+    """Lazily load the APIKeyStore if configured."""
+    db_path = os.environ.get("MIND_MEM_API_KEY_DB")
+    if not db_path:
+        return None
+    try:
+        from mind_mem.api.api_keys import APIKeyStore  # noqa: PLC0415
+
+        production = os.environ.get("MIND_MEM_ENV", "production") == "production"
+        return APIKeyStore(db_path, production=production)
+    except Exception:
+        return None
 
 
 def _has_admin_scope(token: str | None) -> bool:
@@ -87,6 +130,17 @@ def _has_admin_scope(token: str | None) -> bool:
     return hmac.compare_digest(token, admin)
 
 
+def _api_key_has_admin_scope(token: str | None) -> bool:
+    """Return True when an mmk_* key carries the admin scope."""
+    if token is None or not (token.startswith("mmk_live_") or token.startswith("mmk_test_")):
+        return False
+    record = _resolve_api_key_store_record(token)
+    if record is None:
+        return False
+    scopes: list[str] = record.get("scopes", [])
+    return "admin" in scopes
+
+
 # ---------------------------------------------------------------------------
 # FastAPI dependencies
 # ---------------------------------------------------------------------------
@@ -95,25 +149,33 @@ def _has_admin_scope(token: str | None) -> bool:
 def _require_auth(
     token: Annotated[str | None, Depends(_extract_bearer)],
 ) -> str | None:
-    """Dependency: require valid bearer token when auth is configured."""
-    if not _verify_bearer(token):
+    """Dependency: require valid bearer/API-key token when auth is configured.
+
+    Sets the ``current_agent_id`` contextvar so audit records carry the
+    authenticated identity.
+    """
+    valid, agent_id = _verify_bearer(token)
+    if not valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing bearer token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    current_agent_id.set(agent_id)
     return token
 
 
 def _require_admin(
     token: Annotated[str | None, Depends(_require_auth)],
 ) -> str | None:
-    """Dependency: require admin-scope token."""
-    if _check_token() is not None and not _has_admin_scope(token):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin scope required",
-        )
+    """Dependency: require admin-scope token (bearer or mmk_* with admin scope)."""
+    if _check_token() is not None:
+        is_admin = _has_admin_scope(token) or _api_key_has_admin_scope(token)
+        if not is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin scope required",
+            )
     return token
 
 
@@ -135,6 +197,14 @@ def _rate_limit(request: Request, token: Annotated[str | None, Depends(_require_
 # ---------------------------------------------------------------------------
 
 _BACKEND_CHOICES = ("auto", "bm25", "hybrid")
+
+
+class CreateAPIKeyRequest(BaseModel):
+    """Request body for POST /v1/admin/api_keys."""
+
+    agent_id: str = Field(..., min_length=1, max_length=128, description="Agent identifier")
+    scopes: list[str] = Field(default_factory=list, description="Access scopes")
+    expires_in_days: int = Field(90, ge=1, le=3650, description="Key validity in days")
 
 
 class RecallRequest(BaseModel):
@@ -406,6 +476,158 @@ def create_app(workspace: str | None = None) -> FastAPI:
 
         raw = _list_contradictions()
         return _parse_tool_json(raw)
+
+    # ------------------------------------------------------------------
+    # OIDC / SSO callback
+    # ------------------------------------------------------------------
+
+    @application.post(
+        "/v1/auth/oidc/callback",
+        tags=["auth"],
+        summary="Exchange an OIDC access_token for a validated session",
+    )
+    def oidc_callback(
+        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
+    ) -> JSONResponse:
+        """Validate an OIDC JWT supplied via ``Authorization: Bearer <token>``.
+
+        When valid, returns the decoded claims so callers can confirm their
+        identity was accepted.  Configure the issuer via ``OIDC_ISSUER``,
+        ``OIDC_CLIENT_ID``, ``OIDC_AUDIENCE`` environment variables.
+        """
+        oidc_issuer = os.environ.get("OIDC_ISSUER")
+        oidc_client_id = os.environ.get("OIDC_CLIENT_ID", "")
+        oidc_client_secret = os.environ.get("OIDC_CLIENT_SECRET", "")
+        oidc_audience = os.environ.get("OIDC_AUDIENCE", "")
+
+        if not oidc_issuer:
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail="OIDC not configured (set OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_AUDIENCE)",
+            )
+        if credentials is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing Bearer token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        try:
+            from mind_mem.api.auth import AuthError, OIDCConfig, OIDCProvider  # noqa: PLC0415
+
+            config = OIDCConfig(
+                issuer=oidc_issuer,
+                client_id=oidc_client_id,
+                client_secret=oidc_client_secret,
+                audience=oidc_audience,
+            )
+            provider = OIDCProvider(config)
+            claims = provider.verify(credentials.credentials)
+            scopes = provider.extract_scopes(claims)
+            agent_id = claims.get("sub", "oidc-user")
+            current_agent_id.set(agent_id)
+        except AuthError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(exc),
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from exc
+
+        return JSONResponse({"authenticated": True, "agent_id": agent_id, "scopes": scopes})
+
+    # ------------------------------------------------------------------
+    # Admin: per-agent API key management
+    # ------------------------------------------------------------------
+
+    @application.post(
+        "/v1/admin/api_keys",
+        tags=["admin"],
+        summary="Create a new per-agent API key (admin scope required)",
+    )
+    def create_api_key(
+        body: CreateAPIKeyRequest,
+        _token: Annotated[str | None, Depends(_require_admin)],
+    ) -> JSONResponse:
+        store = _get_api_key_store()
+        if store is None:
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail="API key store not configured (set MIND_MEM_API_KEY_DB)",
+            )
+        raw_key = store.create(
+            agent_id=body.agent_id,
+            scopes=body.scopes,
+            expires_in_days=body.expires_in_days,
+        )
+        return JSONResponse(
+            {"key": raw_key, "agent_id": body.agent_id, "scopes": body.scopes},
+            status_code=status.HTTP_201_CREATED,
+        )
+
+    @application.get(
+        "/v1/admin/api_keys",
+        tags=["admin"],
+        summary="List API keys (admin scope required)",
+    )
+    def list_api_keys(
+        _token: Annotated[str | None, Depends(_require_admin)],
+        agent_id: str = "",
+    ) -> JSONResponse:
+        store = _get_api_key_store()
+        if store is None:
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail="API key store not configured (set MIND_MEM_API_KEY_DB)",
+            )
+        keys = store.list_keys(agent_id=agent_id)
+        return JSONResponse({"keys": keys})
+
+    @application.delete(
+        "/v1/admin/api_keys/{key_id}",
+        tags=["admin"],
+        summary="Revoke an API key (admin scope required)",
+    )
+    def revoke_api_key(
+        key_id: str,
+        _token: Annotated[str | None, Depends(_require_admin)],
+    ) -> JSONResponse:
+        store = _get_api_key_store()
+        if store is None:
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail="API key store not configured (set MIND_MEM_API_KEY_DB)",
+            )
+        revoked = store.revoke(key_id)
+        if not revoked:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"API key not found or already revoked: {key_id}",
+            )
+        return JSONResponse({"revoked": True, "key_id": key_id})
+
+    @application.post(
+        "/v1/admin/api_keys/{key_id}/rotate",
+        tags=["admin"],
+        summary="Rotate an API key — revoke old, issue new (admin scope required)",
+    )
+    def rotate_api_key(
+        key_id: str,
+        _token: Annotated[str | None, Depends(_require_admin)],
+    ) -> JSONResponse:
+        store = _get_api_key_store()
+        if store is None:
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail="API key store not configured (set MIND_MEM_API_KEY_DB)",
+            )
+        try:
+            new_key = store.rotate(key_id)
+        except KeyError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"API key not found: {key_id}",
+            )
+        return JSONResponse({"key": new_key, "rotated_from": key_id})
 
     return application
 

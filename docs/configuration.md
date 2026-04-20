@@ -96,6 +96,62 @@ mind-mem is configured via `mind-mem.json` in your workspace root. This file is 
 
 ---
 
+## Auth Settings (v3.2.0)
+
+The `api.auth` section controls how the REST API authenticates requests.
+
+### Auth Mode
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `api.auth.mode` | string | `"bearer"` | Auth strategy. Valid values: `"bearer"` (env-var tokens), `"oidc"` (JWT SSO), `"api_keys"` (mmk_live_* keys), `"combined"` (bearer + api_keys, OIDC via /v1/auth/oidc/callback). |
+
+### OIDC Configuration
+
+Set these **environment variables** when `api.auth.mode` is `"oidc"` or `"combined"`:
+
+| Variable | Description |
+| --- | --- |
+| `OIDC_ISSUER` | Issuer URL, e.g. `https://dev-123.okta.com/oauth2/default` |
+| `OIDC_CLIENT_ID` | Application client ID from your identity provider |
+| `OIDC_CLIENT_SECRET` | Application client secret (server-side only) |
+| `OIDC_AUDIENCE` | Expected `aud` claim, e.g. `api://mind-mem` |
+
+Supported providers via preset factories in `OIDCProvider`:
+
+| Provider | Factory method |
+| --- | --- |
+| Okta | `OIDCProvider.for_okta(domain, client_id, client_secret, audience)` |
+| Auth0 | `OIDCProvider.for_auth0(domain, client_id, client_secret, audience)` |
+| Google Workspace | `OIDCProvider.for_google_workspace(client_id, client_secret, audience)` |
+| Azure AD / Entra ID | `OIDCProvider.for_azure_ad(tenant_id, client_id, client_secret, audience)` |
+
+### Per-Agent API Keys
+
+| Variable | Description |
+| --- | --- |
+| `MIND_MEM_API_KEY_DB` | Filesystem path for the SQLite key store. Required to enable mmk_* keys. |
+| `MIND_MEM_ENV` | `"production"` (default) issues `mmk_live_*` keys; any other value issues `mmk_test_*` keys. |
+
+Keys are created via the admin REST endpoints:
+
+```
+POST   /v1/admin/api_keys               → create (returns raw key once)
+GET    /v1/admin/api_keys               → list (key_hash never exposed)
+DELETE /v1/admin/api_keys/{key_id}      → revoke
+POST   /v1/admin/api_keys/{key_id}/rotate → rotate (revoke old, issue new)
+```
+
+All admin endpoints require the `MIND_MEM_ADMIN_TOKEN` credential.
+
+### Audit Attribution
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `observability.audit_agent_attribution` | bool | `true` | When true, every governance audit record carries the authenticated `agent_id` in its metadata and `actor` field. Set via the `current_agent_id` contextvar in `mind_mem.api.rest`. The MCP layer can set the same contextvar at tool entry to propagate identity end-to-end. |
+
+---
+
 ## Block Store Settings (v3.2.0)
 
 The `block_store` section selects the storage backend for block persistence.

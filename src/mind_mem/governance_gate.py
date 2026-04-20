@@ -24,6 +24,17 @@ from .hash_chain_v2 import HashChainV2
 from .observability import get_logger
 from .spec_binding import SpecBindingManager
 
+# Resolve the current_agent_id contextvar lazily so the API layer is not a
+# hard dependency of the governance layer (the REST API is optional).
+def _current_agent() -> str:
+    """Return the authenticated agent ID from the REST context, or 'system'."""
+    try:
+        from mind_mem.api.rest import current_agent_id  # noqa: PLC0415
+
+        return current_agent_id.get()
+    except Exception:
+        return "system"
+
 _log = get_logger("governance_gate")
 
 
@@ -101,7 +112,7 @@ class GovernanceGate:
         action: str,
         block_id: str,
         content: str,
-        actor: str = "system",
+        actor: str = "",
         target_file: str = "",
         metadata: Optional[dict] = None,
     ) -> bool:
@@ -127,6 +138,9 @@ class GovernanceGate:
             GovernanceBypassError: When the spec-hash has drifted and the
                 write is blocked.
         """
+        # Resolve actor: explicit argument wins; fall back to contextvar then "system"
+        effective_actor = actor if actor else _current_agent()
+
         with self._admit_lock:
             # Step 1 — spec-hash check (only when a binding exists)
             spec_hash = self._current_spec_hash()
@@ -148,9 +162,12 @@ class GovernanceGate:
             meta = dict(metadata or {})
             if spec_hash:
                 meta["spec_hash"] = spec_hash
+            # Always surface the resolved agent ID in metadata so the audit
+            # record carries attribution regardless of which field consumers read.
+            meta.setdefault("agent_id", effective_actor)
             self._evidence.create(
                 action=ev_action,
-                actor=actor,
+                actor=effective_actor,
                 target_block_id=block_id,
                 target_file=target_file,
                 payload=content,
@@ -169,7 +186,7 @@ class GovernanceGate:
                     "governance_gate.chain_append_failed_after_evidence",
                     block_id=block_id,
                     action=action,
-                    actor=actor,
+                    actor=effective_actor,
                 )
                 raise
 
@@ -177,7 +194,7 @@ class GovernanceGate:
                 "governance_gate.admitted",
                 block_id=block_id,
                 action=action,
-                actor=actor,
+                actor=effective_actor,
             )
             return True
 
