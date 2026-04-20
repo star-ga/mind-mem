@@ -123,11 +123,15 @@ jobs:
           python-version: "3.12"
 
       - name: Generate CycloneDX SBOM
-        uses: CycloneDX/gh-python-generate-sbom@v2
-        with:
-          input: pyproject.toml
-          output: sbom.cdx.json
-          format: json
+        # CycloneDX/gh-python-generate-sbom@v2 installs cyclonedx-bom<4,
+        # whose CLI imports ``pkg_resources`` — removed in setuptools 78+.
+        # Install cyclonedx-bom>=5 directly and invoke the new CLI instead.
+        run: |
+          python -m pip install --upgrade pip setuptools
+          python -m pip install "cyclonedx-bom>=5"
+          cyclonedx-py environment \
+            --output-format json \
+            --output-file sbom.cdx.json
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
