@@ -410,6 +410,9 @@ class HybridBackend:
             # v3.3.0 Tier 1 #2 — multi-hop graph expansion.
             result = self._maybe_graph_expand(query, workspace, result)
 
+            # v3.3.0 Tier 3 #8 — entity-graph prefetch.
+            result = self._maybe_entity_prefetch(query, workspace, result)
+
             # 4-layer dedup filter (post-fusion, post-rerank)
             dedup_cfg = self._config.get("dedup")
             if dedup_cfg is None or (isinstance(dedup_cfg, dict) and dedup_cfg.get("enabled", True)):
@@ -501,6 +504,54 @@ class HybridBackend:
         )
 
         return fused[:limit]
+
+    def _maybe_entity_prefetch(self, query: str, workspace: str, results: list[dict]) -> list[dict]:
+        """Inject entity-graph prefetched blocks (v3.3.0 Tier 3 #8).
+
+        When the query mentions a Person/Project/Tool/Incident, fetch
+        the entity block + 1-hop neighbourhood and merge into the
+        result set. Fails open on any error.
+        """
+        try:
+            from .entity_prefetch import (
+                is_entity_prefetch_enabled,
+                prefetch_entity_blocks,
+                resolve_entity_prefetch_config,
+            )
+
+            if not is_entity_prefetch_enabled(self._config):
+                return results
+            params = resolve_entity_prefetch_config(self._config)
+            prefetched = prefetch_entity_blocks(
+                query,
+                workspace,
+                max_entities=params["max_entities"],
+                max_hops=params["max_hops"],
+                entity_score=params["entity_score"],
+            )
+            if not prefetched:
+                return results
+            # Merge: keep original order, append prefetched blocks that
+            # aren't already in the result set. Downstream dedup catches
+            # any ID collisions.
+            seen_ids = {str(r.get("_id")) for r in results if r.get("_id")}
+            merged = list(results)
+            for b in prefetched:
+                bid = str(b.get("_id") or "")
+                if not bid or bid in seen_ids:
+                    continue
+                seen_ids.add(bid)
+                merged.append(b)
+            if len(merged) > len(results):
+                _log.info(
+                    "entity_prefetch_merged",
+                    seeds=len(results),
+                    added=len(merged) - len(results),
+                )
+            return merged
+        except Exception as exc:  # pragma: no cover — defensive
+            _log.warning("entity_prefetch_failed", error=str(exc))
+            return results
 
     def _maybe_graph_expand(self, query: str, workspace: str, results: list[dict]) -> list[dict]:
         """Append graph-walked blocks when enabled (v3.3.0 Tier 1 #2).
