@@ -308,7 +308,8 @@ class VaultBridge:
                     # against hardcoded "foo/bar.md" regardless of platform.
                     rel = os.path.relpath(full, root).replace(os.sep, "/")
                     try:
-                        text = open(full, "r", encoding="utf-8", errors="replace").read()
+                        with open(full, "r", encoding="utf-8", errors="replace") as _fh:
+                            text = _fh.read()
                     except OSError:
                         continue
                     fm, body = _parse_frontmatter(text)

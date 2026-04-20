@@ -134,7 +134,13 @@ class TestSQLiteBusyError(unittest.TestCase):
             mock_backend.search.side_effect = sqlite3.OperationalError("database is locked")
             mock_hybrid.HybridBackend.from_config.return_value = mock_backend
 
-            result_str = _call_tool(self.mod.hybrid_search, "test query")
+            # ``hybrid_search`` is intentionally exercised here to cover the
+            # lock-detection path; its DeprecationWarning is expected.
+            import warnings as _w
+
+            with _w.catch_warnings():
+                _w.simplefilter("ignore", DeprecationWarning)
+                result_str = _call_tool(self.mod.hybrid_search, "test query")
             result = json.loads(result_str)
             self.assertEqual(result["error"], "database_busy")
 
@@ -404,7 +410,14 @@ class TestSchemaVersionInAllResponses(unittest.TestCase):
         self._assert_schema_version(result, "rollback_proposal")
 
     def test_hybrid_search_has_schema_version(self):
-        result = _call_tool(self.mod.hybrid_search, "test")
+        # ``hybrid_search`` is the deprecated alias for ``recall(backend='hybrid')``;
+        # silence the DeprecationWarning here since the test's purpose is the
+        # schema-version envelope contract, not the deprecation itself.
+        import warnings as _w
+
+        with _w.catch_warnings():
+            _w.simplefilter("ignore", DeprecationWarning)
+            result = _call_tool(self.mod.hybrid_search, "test")
         self._assert_schema_version(result, "hybrid_search")
 
     def test_find_similar_has_schema_version(self):

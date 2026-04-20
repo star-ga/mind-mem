@@ -266,7 +266,8 @@ class TestBlockLevelIncremental(_WorkspaceMixin, unittest.TestCase):
 
         # Touch the file (change mtime) but keep same content
         path = os.path.join(ws, "decisions", "DECISIONS.md")
-        content = open(path).read()
+        with open(path, encoding="utf-8") as _f:
+            content = _f.read()
         import time
 
         time.sleep(0.05)

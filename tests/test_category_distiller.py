@@ -207,7 +207,8 @@ def test_write_category_file(tmp_path):
         assert len(md_files) > 0, "Should have at least one category file"
         arch_file = os.path.join(cats_dir, md_files[0])
 
-    content = open(arch_file, encoding="utf-8").read()
+    with open(arch_file, encoding="utf-8") as _f:
+        content = _f.read()
     assert "D-20260218-030" in content, "Block ID should appear in category file"
     assert "Redis" in content or "caching" in content, "Block content should appear"
 
@@ -286,7 +287,8 @@ def test_distill_incremental(tmp_path):
     assert len(md_files) >= 1
 
     for md_file in md_files:
-        content = open(os.path.join(cats_dir, md_file), encoding="utf-8").read()
+        with open(os.path.join(cats_dir, md_file), encoding="utf-8") as _f:
+            content = _f.read()
         count = content.count("D-20260218-070")
         if count > 0:
             assert count == 1, f"Block ID should appear exactly once, found {count} times"

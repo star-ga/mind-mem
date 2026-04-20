@@ -94,6 +94,13 @@ addopts = "-m 'not stress'"
 markers = [
     "stress: slow concurrency/stress tests; run with `pytest -m stress`",
 ]
+filterwarnings = [
+    # Upstream SWIG bindings in transitive deps emit this during import on
+    # Python 3.12+. Not fixable in mind-mem itself; silence the Python-side
+    # noise so CI logs stay useful.
+    "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type swigvarlink has no __module__ attribute::",
+]
 
 [tool.ruff]
 target-version = "py310"

@@ -44,6 +44,11 @@ class SkillSpec:
 class TestCase:
     """A synthetic test case derived from a skill definition."""
 
+    # Pytest sees any class named ``Test*`` as a test class by default and
+    # emits ``PytestCollectionWarning`` because dataclasses declare
+    # ``__init__``. This attribute is pytest's documented opt-out.
+    __test__ = False
+
     test_id: str
     skill_id: str
     category: str
