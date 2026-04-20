@@ -313,32 +313,49 @@ def check_preconditions(ws):
 
 
 
+def _store_for(ws):
+    """Resolve the active BlockStore for *ws* via the storage factory.
+
+    v3.2.0 §1.4 PR-6 — routes through ``mind_mem.storage.get_block_store``
+    which reads ``mind-mem.json`` ``block_store.backend`` and returns
+    the matching implementation (Markdown default, Postgres opt-in,
+    Encrypted wrapper when passphrase is set). Falls back to a direct
+    :class:`MarkdownBlockStore` construction when the factory raises —
+    keeps apply_engine resilient on first-run / misconfigured workspaces.
+    """
+    try:
+        from .storage import get_block_store
+
+        return get_block_store(ws)
+    except Exception:
+        return MarkdownBlockStore(ws)
+
+
 def create_snapshot(ws, ts, files_touched=None):
     """Create a pre-apply snapshot for rollback. Returns the snap_dir path.
 
-    Thin wrapper around ``MarkdownBlockStore.snapshot``.  All snapshot logic
-    lives in block_store (v3.2.0 §1.4 PR-3); this function keeps the existing
-    call signature so every caller in apply_engine keeps working unchanged.
+    Routes through the configured BlockStore so Postgres-backed
+    deployments snapshot via SQL instead of the on-disk copy tree.
     """
     snap_dir = os.path.join(ws, "intelligence/applied", ts)
-    MarkdownBlockStore(ws).snapshot(snap_dir, files_touched=files_touched or None)
+    _store_for(ws).snapshot(snap_dir, files_touched=files_touched or None)
     return snap_dir
 
 
 def restore_snapshot(ws, snap_dir):
     """Restore workspace from a snapshot directory.
 
-    Thin wrapper around ``MarkdownBlockStore.restore`` (v3.2.0 §1.4 PR-3).
+    Routes through the configured BlockStore (v3.2.0 §1.4 PR-6).
     """
-    MarkdownBlockStore(ws).restore(snap_dir)
+    _store_for(ws).restore(snap_dir)
 
 
 def snapshot_diff(ws, snap_dir):
     """Return list of files that differ between current workspace and snapshot.
 
-    Thin wrapper around ``MarkdownBlockStore.diff`` (v3.2.0 §1.4 PR-3).
+    Routes through the configured BlockStore (v3.2.0 §1.4 PR-6).
     """
-    return MarkdownBlockStore(ws).diff(snap_dir)
+    return _store_for(ws).diff(snap_dir)
 
 
 # ═══════════════════════════════════════════════

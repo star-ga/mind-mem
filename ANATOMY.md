@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 554 | **Est. tokens:** ~1,110,738
-**Generated:** 2026-04-20 07:09 UTC
+**Files:** 558 | **Est. tokens:** ~1,120,139
+**Generated:** 2026-04-20 07:11 UTC
 
 ## Token Budget Guide
 
@@ -28,7 +28,7 @@
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 44 | ~58,543 |
+| `docs/` | 44 | ~59,147 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `examples/` | 2 | ~466 |
@@ -50,7 +50,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 119 | ~415,074 |
+| `src/mind_mem/` | 119 | ~415,213 |
 | `src/mind_mem/api/` | 4 | ~10,913 |
 | `src/mind_mem/mcp/` | 3 | ~3,229 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,854 |
@@ -58,7 +58,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~1,018 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 192 | ~388,713 |
+| `tests/` | 196 | ~397,371 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -141,7 +141,7 @@
 - `cli-reference.md` (~1595 tok, huge) — CLI Reference
 - `comparison.md` (~313 tok, medium) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~6451 tok, huge) — Configuration Reference
+- `configuration.md` (~7055 tok, huge) — Configuration Reference
 ### `docs/design/`
 
 - `v3-mcp-surface-reduction.md` (~1080 tok, large) — v3.0 Design: MCP Tool Surface Reduction
@@ -311,7 +311,7 @@
 - `rest.py` (~6009 tok, huge) — REST API layer for mind-mem (v3.2.0).
 ### `src/mind_mem/`
 
-- `apply_engine.py` (~12984 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
+- `apply_engine.py` (~13120 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~4167 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
 - `auto_resolver.py` (~3194 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
 - `axis_recall.py` (~4217 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -354,7 +354,7 @@
 - `extractor.py` (~6597 tok, huge) — mind-mem Entity & Fact Extractor (Regex NER-lite). Zero external deps.
 - `field_audit.py` (~3103 tok, huge) — mind-mem Per-Field Mutation Audit — tracks individual field changes.
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
-- `governance_gate.py` (~2209 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `governance_gate.py` (~2212 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~9442 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hybrid_recall.py` (~4861 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
@@ -519,6 +519,8 @@
 - `test_agent_id_filter.py` (~335 tok, medium) — Tests for agent_id namespace filtering."""
 - `test_alerting.py` (~1777 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_allow_decompose.py` (~311 tok, medium) — Tests for _allow_decompose recall parameter."""
+- `test_api_keys.py` (~2141 tok, huge) — Tests for APIKeyStore in src/mind_mem/api/api_keys.py."""
+- `test_apply_engine_backend_routing.py` (~1034 tok, large) — v3.2.0 §1.4 PR-6 — apply_engine routes through configured BlockStore."""
 - `test_apply_engine.py` (~11568 tok, huge) — Tests for apply_engine.py — focus on security, validation, and rollback."""
 - `test_atomicity_maintenance_scope.py` (~1287 tok, large) — v3.2.0 §2.2 — regression test for the ``maintenance/`` atomicity fix.
 - `test_audit_chain.py` (~2398 tok, huge) — Tests for mind-mem hash-chain mutation log (audit_chain.py)."""
@@ -634,6 +636,7 @@
 - `test_observability.py` (~791 tok, large) — Tests for observability.py — structured logging and metrics."""
 - `test_observation_axis.py` (~3330 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_observation_compress.py` (~2754 tok, huge) — Tests for observation_compress module.
+- `test_oidc_auth.py` (~2768 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
 - `test_ontology.py` (~2306 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_postgres_block_store.py` (~3140 tok, huge) — v3.2.0 §1.4 PR-5 — PostgresBlockStore integration tests.
 - `test_prefetch_context.py` (~1487 tok, large) — Tests for prefetch_context() in recall.py."""
@@ -669,6 +672,7 @@
 - `test_recall_vector.py` (~4901 tok, huge) — Tests for recall_vector.py — VectorBackend semantic search."""
 - `test_rerank_debug.py` (~342 tok, medium) — Tests for rerank debug mode."""
 - `test_reranking.py` (~246 tok, medium) — Tests for reranking module."""
+- `test_rest_api_oidc.py` (~2715 tok, huge) — Tests for OIDC callback + admin API key endpoints (v3.2.0)."""
 - `test_rest_api.py` (~3505 tok, huge) — Tests for the mind-mem REST API layer (v3.2.0).
 - `test_retrieval_diagnostics.py` (~2419 tok, huge) — Tests for retrieval diagnostics (#428), corpus isolation (#429), and intent instrumentation (#430)."""
 - `test_retrieval_graph.py` (~2242 tok, huge) — Tests for retrieval_graph.py — retrieval logging, co-retrieval graph, hard negatives."""
