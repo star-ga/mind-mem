@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 605 | **Est. tokens:** ~1,231,682
-**Generated:** 2026-04-20 17:58 UTC
+**Files:** 607 | **Est. tokens:** ~1,234,696
+**Generated:** 2026-04-20 18:01 UTC
 
 ## Token Budget Guide
 
@@ -51,7 +51,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 129 | ~445,642 |
+| `src/mind_mem/` | 130 | ~447,513 |
 | `src/mind_mem/api/` | 4 | ~12,861 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 214 | ~425,177 |
+| `tests/` | 215 | ~426,320 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -360,6 +360,7 @@
 - `compiled_truth.py` (~6414 tok, huge) — mind-mem Compiled Truth — synthesized entity pages with append-only evidence.
 - `conflict_resolver.py` (~3119 tok, huge) — mind-mem Automated Conflict Resolution Pipeline. Zero external deps.
 - `connection_manager.py` (~1059 tok, large) — SQLite connection manager with read/write separation and WAL mode.
+- `consensus_vote.py` (~1871 tok, huge) — Quorum-based consensus voting on contradictions (v3.3.0).
 - `context_core.py` (~4313 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `contradiction_detector.py` (~4888 tok, huge) — mind-mem Contradiction Detector — Surface conflicts at the governance gate.
 - `core_export.py` (~1689 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -594,6 +595,7 @@
 - `test_concurrent_integration.py` (~10786 tok, huge) — Integration tests for concurrent access and partial failure in mind-mem.
 - `test_conflict_resolver.py` (~2340 tok, huge) — Tests for conflict_resolver.py — zero external deps (stdlib unittest)."""
 - `test_connection_manager.py` (~2536 tok, huge) — Tests for ConnectionManager — SQLite connection pooling with read/write separation (#466)."""
+- `test_consensus_vote.py` (~1143 tok, large) — v3.3.0 — quorum-based consensus voting on contradictions."""
 - `test_constants.py` (~371 tok, medium) — Tests for recall constants module."""
 - `test_context_core.py` (~3175 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_context_pack.py` (~2584 tok, huge) — Tests for context_pack rules: adjacency, diversity, pronoun rescue."""
