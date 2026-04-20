@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from typing import Any, cast
 
 from ..block_store import BlockStore, MarkdownBlockStore
 
@@ -32,10 +32,11 @@ def _load_workspace_config(workspace: str) -> dict[str, Any]:
     if os.path.isfile(config_path):
         try:
             with open(config_path, encoding="utf-8") as fh:
-                return json.load(fh)
+                raw: dict[str, Any] = json.load(fh)
+                return raw
         except (OSError, json.JSONDecodeError, UnicodeDecodeError):
             pass
-    return {}
+    return {}  # type: ignore[return-value]
 
 
 def get_block_store(workspace: str, config: dict[str, Any] | None = None) -> BlockStore:
@@ -78,7 +79,9 @@ def get_block_store(workspace: str, config: dict[str, Any] | None = None) -> Blo
         from ..block_store_encrypted import EncryptedBlockStore
 
         inner = MarkdownBlockStore(workspace)
-        return EncryptedBlockStore(workspace, passphrase=passphrase, inner=inner)
+        # cast: EncryptedBlockStore satisfies BlockStore structurally;
+        # mypy can't prove it without Protocol membership (PR-4 will add it).
+        return cast(BlockStore, EncryptedBlockStore(workspace, passphrase=passphrase, inner=inner))
 
     if backend == "postgres":
         raise NotImplementedError("Postgres backend lands in v3.2.0 PR-5")

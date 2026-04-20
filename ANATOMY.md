@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 508 | **Est. tokens:** ~1,032,076
-**Generated:** 2026-04-20 06:27 UTC
+**Files:** 508 | **Est. tokens:** ~1,029,873
+**Generated:** 2026-04-20 06:28 UTC
 
 ## Token Budget Guide
 
@@ -45,12 +45,12 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 116 | ~403,225 |
+| `src/mind_mem/` | 116 | ~400,961 |
 | `src/mind_mem/mcp/` | 3 | ~3,092 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
 | `src/mind_mem/mcp/tools/` | 16 | ~32,001 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
-| `src/mind_mem/storage/` | 1 | ~809 |
+| `src/mind_mem/storage/` | 1 | ~870 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 183 | ~369,292 |
 | `tests/integration/` | 2 | ~1,436 |
@@ -256,7 +256,7 @@
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
 - `agent_bridge.py` (~3579 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `alerting.py` (~2411 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `apply_engine.py` (~16466 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
+- `apply_engine.py` (~14202 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~4167 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
 - `auto_resolver.py` (~3194 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
 - `axis_recall.py` (~4217 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -411,7 +411,7 @@
 - `staleness.py` (~1179 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/storage/`
 
-- `__init__.py` (~809 tok, large) — Storage factory for mind-mem block stores (v3.2.0).
+- `__init__.py` (~870 tok, large) — Storage factory for mind-mem block stores (v3.2.0).
 ### `src/mind_mem/`
 
 - `_task_status_literals.sh` (~118 tok, small) — AUTO-GENERATED — do not edit by hand.
