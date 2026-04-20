@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 518 | **Est. tokens:** ~1,036,367
-**Generated:** 2026-04-20 06:31 UTC
+**Files:** 523 | **Est. tokens:** ~1,044,034
+**Generated:** 2026-04-20 06:32 UTC
 
 ## Token Budget Guide
 
@@ -22,12 +22,13 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 28 | ~67,345 |
+| `./` | 28 | ~67,386 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,429 |
 | `deploy/` | 2 | ~588 |
 | `deploy/docker/` | 1 | ~495 |
-| `docs/` | 38 | ~46,863 |
+| `deploy/grafana/` | 1 | ~1,145 |
+| `docs/` | 38 | ~46,882 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `examples/` | 2 | ~466 |
@@ -41,20 +42,21 @@
 | `lib/` | 1 | ~2,176 |
 | `mind/` | 19 | ~5,516 |
 | `scripts/` | 3 | ~2,692 |
-| `sdk/js/` | 3 | ~418 |
+| `sdk/js/` | 5 | ~1,388 |
 | `sdk/js/src/` | 4 | ~2,320 |
+| `sdk/js/test/` | 1 | ~2,191 |
 | `skills/apply-proposal/` | 1 | ~345 |
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 117 | ~402,186 |
+| `src/mind_mem/` | 117 | ~402,666 |
 | `src/mind_mem/mcp/` | 3 | ~3,092 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
-| `src/mind_mem/mcp/tools/` | 16 | ~32,001 |
+| `src/mind_mem/mcp/tools/` | 16 | ~32,176 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~870 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 185 | ~371,823 |
+| `tests/` | 186 | ~374,469 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -81,7 +83,7 @@
 - `mcp_server.py` (~662 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~131 tok, small) — repos:
-- `pyproject.toml` (~1500 tok, huge) — [project]
+- `pyproject.toml` (~1541 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22227 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
@@ -112,6 +114,9 @@
 ### `deploy/docker/`
 
 - `Dockerfile` (~495 tok, medium) — # Stage 1: build — install all deps and produce a pruned site-packages
+### `deploy/grafana/`
+
+- `mind-mem-dashboard.json` (~1145 tok, large) — Keys: __inputs, __requires, annotations, description, editable
 ### `deploy/`
 
 - `Makefile` (~82 tok, small) — .PHONY: up down logs shell status build pull
@@ -131,7 +136,7 @@
 - `client-integrations.md` (~2533 tok, huge) — Client Integrations
 - `comparison.md` (~313 tok, medium) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
-- `configuration.md` (~5865 tok, huge) — Configuration Reference
+- `configuration.md` (~5884 tok, huge) — Configuration Reference
 ### `docs/design/`
 
 - `v3-mcp-surface-reduction.md` (~1080 tok, large) — v3.0 Design: MCP Tool Surface Reduction
@@ -244,13 +249,18 @@
 ### `sdk/js/`
 
 - `.gitignore` (~5 tok, tiny) — node_modules/
-- `package.json` (~266 tok, medium) — Keys: name, version, description, license, type
+- `package.json` (~275 tok, medium) — Keys: name, version, description, license, type
+- `package-lock.json` (~381 tok, medium) — Keys: name, version, lockfileVersion, requires, packages
+- `README.md` (~580 tok, large) — @mind-mem/sdk
 ### `sdk/js/src/`
 
 - `client.ts` (~1250 tok, large) — Normalise: strip trailing slash so path joining is consistent.
 - `errors.ts` (~438 tok, medium) — Restore prototype chain (required when extending built-ins in TS)
 - `index.ts` (~99 tok, small)
 - `types.ts` (~533 tok, large) — Shared domain types
+### `sdk/js/test/`
+
+- `client.test.ts` (~2191 tok, huge) — Minimal fetch mock helpers
 ### `sdk/js/`
 
 - `tsconfig.json` (~147 tok, small) — Keys: compilerOptions, include, exclude
@@ -269,9 +279,9 @@
 ### `src/mind_mem/`
 
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
-- `agent_bridge.py` (~3763 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `agent_bridge.py` (~4158 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `alerting.py` (~2411 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `apply_engine.py` (~12946 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
+- `apply_engine.py` (~13031 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~4167 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
 - `auto_resolver.py` (~3194 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
 - `axis_recall.py` (~4217 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -350,7 +360,7 @@
 - `mcp_server.py` (~1780 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
 ### `src/mind_mem/mcp/tools/`
 
-- `agent.py` (~1592 tok, huge) — Agent-bridge + vault MCP tools.
+- `agent.py` (~1767 tok, huge) — Agent-bridge + vault MCP tools.
 - `audit.py` (~2187 tok, huge) — Audit MCP tools — Merkle proofs, hash chain + evidence chain verification.
 - `benchmark.py` (~1019 tok, large) — Benchmark + category-summary MCP tools.
 - `calibration.py` (~1162 tok, large) — Calibration feedback MCP tools — ``calibration_feedback`` + ``calibration_stats``.
@@ -638,6 +648,7 @@
 - `test_sqlite_index.py` (~4726 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
 - `test_stopwords.py` (~247 tok, medium) — Tests for stopword handling."""
 - `test_storage_factory.py` (~1067 tok, large) — Tests for mind_mem.storage.get_block_store factory (v3.2.0)."""
+- `test_telemetry.py` (~2642 tok, huge) — Tests for src/mind_mem/telemetry.py.
 - `test_temporal.py` (~223 tok, medium) — Tests for temporal filtering module."""
 - `test_tier_decay.py` (~924 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_tokenization.py` (~436 tok, medium) — Tests for tokenization module."""
@@ -648,7 +659,7 @@
 - `test_v28_completion.py` (~4565 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_validate_py.py` (~3438 tok, huge) — Tests for validate_py.py — workspace integrity validator."""
 - `test_validate_sh_deprecation.py` (~547 tok, large) — Pin the runtime deprecation warning on validate.sh.
-- `test_vault_wikilinks.py` (~1779 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_vault_wikilinks.py` (~1783 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_verify_cli.py` (~3202 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_watcher.py` (~1217 tok, large) — Tests for watcher.py — file change detection for auto-reindex."""
 - `test_wide_retrieval.py` (~346 tok, medium) — Tests for wide retrieval parameter."""

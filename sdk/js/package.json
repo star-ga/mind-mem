@@ -12,7 +12,9 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "node --test test/*.test.js",
@@ -24,8 +26,8 @@
     "node": ">=18"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "typescript": "^5.4.0"
+    "@types/node": "^20.19.39",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",
@@ -36,6 +38,12 @@
     "url": "https://github.com/star-ga/mind-mem/issues"
   },
   "homepage": "https://github.com/star-ga/mind-mem/tree/main/sdk/js#readme",
-  "keywords": ["mind-mem", "memory", "ai", "mcp", "sdk"],
+  "keywords": [
+    "mind-mem",
+    "memory",
+    "ai",
+    "mcp",
+    "sdk"
+  ],
   "author": "STARGA Inc <noreply@star.ga>"
 }
