@@ -100,6 +100,15 @@ _tools_memory_ops.register(mcp)
 _tools_kernels.register(mcp)
 _tools_calibration.register(mcp)
 
+# v3.2.0 — additive consolidated dispatchers (recall, staged_change,
+# memory_verify, graph, core, kernels, compiled_truth). Registered
+# last so the shadowed ``recall`` name routes through the
+# mode-aware dispatcher; every other dispatcher name is new so no
+# collision. See ``mcp/tools/public.py`` for the design rationale.
+from mind_mem.mcp.tools import public as _tools_public  # noqa: E402
+
+_tools_public.register(mcp)
+
 
 def main() -> None:
     """Entry point for the MCP server (used by console_scripts and __main__)."""

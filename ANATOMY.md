@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 554 | **Est. tokens:** ~1,109,000
-**Generated:** 2026-04-20 07:07 UTC
+**Files:** 554 | **Est. tokens:** ~1,110,738
+**Generated:** 2026-04-20 07:09 UTC
 
 ## Token Budget Guide
 
@@ -50,8 +50,8 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 119 | ~414,874 |
-| `src/mind_mem/api/` | 4 | ~9,375 |
+| `src/mind_mem/` | 119 | ~415,074 |
+| `src/mind_mem/api/` | 4 | ~10,913 |
 | `src/mind_mem/mcp/` | 3 | ~3,229 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,854 |
 | `src/mind_mem/mcp/tools/` | 17 | ~36,528 |
@@ -308,7 +308,7 @@
 - `api_keys.py` (~2405 tok, huge) — Per-agent API key store for the mind-mem REST API.
 - `auth.py` (~2479 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
 - `__init__.py` (~20 tok, tiny)
-- `rest.py` (~4471 tok, huge) — REST API layer for mind-mem (v3.2.0).
+- `rest.py` (~6009 tok, huge) — REST API layer for mind-mem (v3.2.0).
 ### `src/mind_mem/`
 
 - `apply_engine.py` (~12984 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
@@ -354,7 +354,7 @@
 - `extractor.py` (~6597 tok, huge) — mind-mem Entity & Fact Extractor (Regex NER-lite). Zero external deps.
 - `field_audit.py` (~3103 tok, huge) — mind-mem Per-Field Mutation Audit — tracks individual field changes.
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
-- `governance_gate.py` (~2009 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `governance_gate.py` (~2209 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~9442 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hybrid_recall.py` (~4861 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
