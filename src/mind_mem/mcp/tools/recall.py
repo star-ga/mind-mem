@@ -45,7 +45,13 @@ _log = get_logger("mcp_server")
 _MAX_QUERY_LEN = 8192
 
 
-def _recall_impl(query: str, limit: int = 10, active_only: bool = False, backend: str = "auto") -> str:
+def _recall_impl(
+    query: str,
+    limit: int = 10,
+    active_only: bool = False,
+    backend: str = "auto",
+    format: str = "blocks",
+) -> str:
     """Core recall implementation shared by recall() and hybrid_search().
 
     v3.2.1: when ``cache.redis_url`` is configured in ``mind-mem.json``
@@ -54,11 +60,19 @@ def _recall_impl(query: str, limit: int = 10, active_only: bool = False, backend
     identical query hit within the TTL window. Governance events
     (``propose_update`` / ``approve_apply`` / ``rollback_proposal``)
     invalidate the namespace-wide cache.
+
+    v3.3.0 Tier 3 #7: ``format="bundle"`` returns the structured
+    :class:`~mind_mem.evidence_bundle.EvidenceBundle` shape instead of
+    raw blocks — pre-digested facts / relations / timeline / entities
+    for answerer co-design. Default is ``"blocks"`` so existing callers
+    see no behavioural change.
     """
     if not isinstance(query, str):
         return json.dumps({"error": "query must be a string"})
     if len(query) > _MAX_QUERY_LEN:
         return json.dumps({"error": f"query must be ≤{_MAX_QUERY_LEN} characters"})
+    if format not in ("blocks", "bundle"):
+        return json.dumps({"error": f"format must be 'blocks' or 'bundle', got {format!r}"})
     ws = _workspace()
     ws_err = _check_workspace(ws)
     if ws_err:
@@ -72,9 +86,26 @@ def _recall_impl(query: str, limit: int = 10, active_only: bool = False, backend
 
     _raw_config = _load_config(ws)
     _cache_cfg = _raw_config.get("cache", {}) if isinstance(_raw_config, dict) else {}
+
+    def _inner_with_format(query, limit, backend, active_only, **kwargs):
+        raw_json = _recall_impl_uncached(query, limit=limit, active_only=active_only, backend=backend)
+        if format == "blocks":
+            return raw_json
+        # format="bundle": re-parse JSON → build_bundle → re-serialize.
+        try:
+            from mind_mem.evidence_bundle import build_bundle
+
+            parsed = json.loads(raw_json)
+            results = parsed.get("results", []) if isinstance(parsed, dict) else []
+            bundle = build_bundle(query, results)
+            return json.dumps(bundle.to_dict(), default=str)
+        except Exception as exc:  # pragma: no cover — fallback to blocks
+            _log.warning("recall_bundle_format_failed", error=str(exc))
+            return raw_json
+
     if isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True):
         return cached_recall(
-            _recall_impl_uncached,
+            _inner_with_format,
             query,
             limit=limit,
             backend=backend,
@@ -82,7 +113,7 @@ def _recall_impl(query: str, limit: int = 10, active_only: bool = False, backend
             config=_raw_config,
             ttl_seconds=int(_cache_cfg.get("ttl_seconds", 3600)),
         )
-    return _recall_impl_uncached(query, limit=limit, active_only=active_only, backend=backend)
+    return _inner_with_format(query, limit=limit, active_only=active_only, backend=backend)
 
 
 def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False, backend: str = "auto") -> str:

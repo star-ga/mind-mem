@@ -74,14 +74,7 @@ class RunResult:
         hit_p50 = self.p50(self.hit_latencies_ms)
         hit_p95 = self.p95(self.hit_latencies_ms)
         speedup = f"{miss_p50 / hit_p50:.0f}×" if hit_p50 > 0 and miss_p50 > 0 else "—"
-        return (
-            f"  {self.name:<10} "
-            f"{self.hit_rate:>5.1f}%  "
-            f"{miss_p50:>7.2f}ms  "
-            f"{hit_p50:>6.2f}ms  "
-            f"{hit_p95:>6.2f}ms  "
-            f"{speedup:>7}"
-        )
+        return f"  {self.name:<10} {self.hit_rate:>5.1f}%  {miss_p50:>7.2f}ms  {hit_p50:>6.2f}ms  {hit_p95:>6.2f}ms  {speedup:>7}"
 
 
 def build_workspace(n_blocks: int) -> str:
@@ -92,10 +85,26 @@ def build_workspace(n_blocks: int) -> str:
 
     decisions_md = os.path.join(ws, "decisions", "DECISIONS.md")
     topics = [
-        "PostgreSQL", "Redis", "Kubernetes", "Docker", "FastAPI",
-        "asyncio", "gRPC", "REST", "OAuth2", "JWT",
-        "sqlite", "BM25", "RRF", "vector search", "RAG",
-        "Prometheus", "Grafana", "OpenTelemetry", "CI/CD", "GitHub Actions",
+        "PostgreSQL",
+        "Redis",
+        "Kubernetes",
+        "Docker",
+        "FastAPI",
+        "asyncio",
+        "gRPC",
+        "REST",
+        "OAuth2",
+        "JWT",
+        "sqlite",
+        "BM25",
+        "RRF",
+        "vector search",
+        "RAG",
+        "Prometheus",
+        "Grafana",
+        "OpenTelemetry",
+        "CI/CD",
+        "GitHub Actions",
     ]
     domains = ["auth", "storage", "recall", "observability", "deployment"]
 
@@ -119,10 +128,26 @@ def build_workspace(n_blocks: int) -> str:
 def seed_query_pool(k: int) -> list[str]:
     """Build a pool of ``k`` realistic natural-language queries."""
     topics = [
-        "PostgreSQL", "Redis", "Kubernetes", "Docker", "FastAPI",
-        "asyncio", "gRPC", "REST", "OAuth2", "JWT",
-        "sqlite", "BM25", "RRF", "vector search", "RAG",
-        "Prometheus", "Grafana", "OpenTelemetry", "CI/CD", "GitHub Actions",
+        "PostgreSQL",
+        "Redis",
+        "Kubernetes",
+        "Docker",
+        "FastAPI",
+        "asyncio",
+        "gRPC",
+        "REST",
+        "OAuth2",
+        "JWT",
+        "sqlite",
+        "BM25",
+        "RRF",
+        "vector search",
+        "RAG",
+        "Prometheus",
+        "Grafana",
+        "OpenTelemetry",
+        "CI/CD",
+        "GitHub Actions",
     ]
     domains = ["auth", "storage", "recall", "observability", "deployment"]
     queries: list[str] = []
@@ -137,6 +162,7 @@ def reset_caches() -> None:
     """Drop the singleton + flush Redis so each config runs clean."""
     try:
         from mind_mem.recall_cache import reset_singleton
+
         reset_singleton()
     except ImportError:
         pass
@@ -188,6 +214,7 @@ def run_config(
 
     # Build indexes.
     from mind_mem.sqlite_index import build_index
+
     build_index(ws, incremental=False)
 
     # Fresh _recall_impl with the new cache config.
@@ -211,9 +238,7 @@ def run_config(
     return result
 
 
-def build_query_stream(
-    total: int, pool: list[str], repeat_pct: float, seed: int = 42
-) -> list[str]:
+def build_query_stream(total: int, pool: list[str], repeat_pct: float, seed: int = 42) -> list[str]:
     """Generate ``total`` queries. First ``|pool|`` unique, rest sampled."""
     rng = random.Random(seed)
     stream: list[str] = list(pool)
@@ -233,7 +258,7 @@ def main() -> int:
     parser.add_argument("--output", help="Optional path to write result JSON")
     args = parser.parse_args()
 
-    print(f"mind-mem cache-effectiveness bench")
+    print("mind-mem cache-effectiveness bench")
     print(f"  blocks: {args.n}")
     print(f"  queries: {args.queries} (unique pool size {args.pool}, repeat {args.repeat_pct:.0f}%)")
     print(f"  redis: {args.redis_url}")

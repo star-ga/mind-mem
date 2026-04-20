@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 594 | **Est. tokens:** ~1,214,613
-**Generated:** 2026-04-20 17:45 UTC
+**Files:** 597 | **Est. tokens:** ~1,220,620
+**Generated:** 2026-04-20 17:52 UTC
 
 ## Token Budget Guide
 
@@ -24,7 +24,7 @@
 |-----------|-------|-------------|
 | `./` | 30 | ~73,423 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `benchmarks/` | 16 | ~43,959 |
+| `benchmarks/` | 19 | ~49,643 |
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
@@ -55,7 +55,7 @@
 | `src/mind_mem/api/` | 4 | ~12,861 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
-| `src/mind_mem/mcp/tools/` | 17 | ~37,198 |
+| `src/mind_mem/mcp/tools/` | 17 | ~37,521 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
@@ -103,11 +103,13 @@
 ### `benchmarks/`
 
 - `bench_kernels.py` (~4027 tok, huge) — Benchmark: MIND kernels vs pure Python scoring.
-- `cache_effectiveness.py` (~2680 tok, huge) — Cache-effectiveness benchmark — Redis L2 vs LRU-only vs no-cache.
+- `cache_effectiveness.py` (~2717 tok, huge) — Cache-effectiveness benchmark — Redis L2 vs LRU-only vs no-cache.
 - `cache_effectiveness_v3.2.1.json` (~227 tok, medium) — Keys: n_blocks, n_queries, pool_size, repeat_pct, runs
 - `CACHE.md` (~1028 tok, large) — Recall Cache Effectiveness Benchmark
 - `compare_runs.py` (~857 tok, large) — Compare two LoCoMo benchmark runs side-by-side.
 - `crossencoder_ab.py` (~3205 tok, huge) — Cross-Encoder A/B Test — retrieval-level comparison.
+- `generate_dispatcher_examples.py` (~2346 tok, huge) — Generate synthetic training examples for the v3.2.x 7-dispatcher MCP surface.
+- `generate_retrieval_examples.py` (~1686 tok, huge) — Generate training examples for v3.3.0 retrieval shapes.
 - `grid_search.py` (~2849 tok, huge) — BM25F Field Weight Grid Search for mind-mem Recall Engine.
 - `__init__.py` (~0 tok, tiny)
 - `locomo_harness.py` (~4147 tok, huge) — LoCoMo Benchmark Harness for mind-mem Recall Engine.
@@ -118,6 +120,7 @@
 - `niah_v3.2.1_redis_results.txt` (~113 tok, small) — ============================= test session starts ==============================
 - `niah_v3.2.1_results.txt` (~205 tok, medium) — ============================= test session starts ==============================
 - `REPORT.md` (~3973 tok, huge) — mind-mem Benchmark Report
+- `tier_weight_search.py` (~1615 tok, huge) — Grid-search per-tier weights against LoCoMo judge scores (v3.3.0 T4 #10).
 ### `deploy/`
 
 - `docker-compose.yml` (~608 tok, large) — name: mind-mem
@@ -429,7 +432,7 @@
 - `memory_ops.py` (~7082 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
 - `public.py` (~4238 tok, huge) — # mypy: disable-error-code="no-any-return"
-- `recall.py` (~4614 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~4937 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 ### `src/mind_mem/`
 
