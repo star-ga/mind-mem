@@ -461,7 +461,7 @@ def execute_op(ws, op, *, store=None):
 
     try:
         if op_type == "append_block":
-            return _op_append_block(filepath, op)
+            return _op_append_block(filepath, op, store=store)
         elif op_type == "insert_after_block":
             return _op_insert_after_block(filepath, op)
         elif op_type == "update_field":
@@ -480,11 +480,32 @@ def execute_op(ws, op, *, store=None):
         return False, f"Op {op_type} failed: {e}"
 
 
-def _op_append_block(filepath, op):
-    """Append a new block at end of file."""
+def _op_append_block(filepath, op, store=None):
+    """Append a new block at end of file.
+
+    v3.2.2: when ``store`` is provided, parses ``patch`` as block
+    text and routes through ``store.write_block`` so non-Markdown
+    backends actually persist the new block. Falls back to raw
+    file append for the legacy path.
+    """
     patch = op.get("patch", "")
     if not patch:
         return False, "append_block: empty patch"
+
+    if store is not None:
+        from .block_parser import parse_blocks
+
+        try:
+            blocks = parse_blocks(patch)
+        except Exception as exc:
+            return False, f"append_block: parse failed: {exc}"
+        if not blocks:
+            return False, "append_block: patch did not parse as any block"
+        for block in blocks:
+            if not block.get("_id"):
+                return False, "append_block: parsed block is missing '_id'"
+            store.write_block(block)
+        return True, f"append_block: wrote {len(blocks)} block(s) via BlockStore"
 
     with open(filepath, "a") as f:
         f.write(f"\n{patch}\n")

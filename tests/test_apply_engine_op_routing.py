@@ -121,6 +121,36 @@ class TestOpRoutingViaStore:
         assert ok, msg
         spy.write_block.assert_called_once()
 
+    def test_append_block_calls_write_block(self, ws: Path) -> None:
+        """``append_block`` parses patch text and writes via BlockStore."""
+        store = MarkdownBlockStore(str(ws))
+        spy = MagicMock(wraps=store)
+
+        patch_text = textwrap.dedent("""\
+            [D-20260420-002]
+            type: decision
+            Status: active
+            Statement: Add a second decision for the test.
+            ---
+        """)
+        op = {
+            "op": "append_block",
+            "file": "decisions/DECISIONS.md",
+            "patch": patch_text,
+        }
+        ok, msg = execute_op(str(ws), op, store=spy)
+
+        assert ok, msg
+        spy.write_block.assert_called_once()
+        written = spy.write_block.call_args[0][0]
+        assert written["_id"] == "D-20260420-002"
+
+        # The original block is still present on disk.
+        blocks = parse_file(str(ws / "decisions" / "DECISIONS.md"))
+        ids = {b.get("_id") for b in blocks}
+        assert "D-20260420-001" in ids
+        assert "D-20260420-002" in ids
+
     def test_backward_compat_store_none_uses_factory(self, ws: Path) -> None:
         """When no ``store`` argument is given, execute_op resolves via factory.
 
