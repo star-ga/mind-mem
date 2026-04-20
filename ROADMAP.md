@@ -798,30 +798,46 @@ promotes both to GA.
   backend they write to the local FS that Postgres never sees, so
   `apply_proposal` succeeds while DB state silently diverges.
   Re-plumb through `BlockStore.write_block` / `delete_block`.
-  ~2 days.
-- [ ] **REST request-scoping** — `src/mind_mem/api/rest.py`
-  currently uses `os.environ["MIND_MEM_WORKSPACE"] = workspace`
-  to carry per-request workspace selection, which is thread-unsafe
-  the moment `uvicorn` runs >1 worker. Extract a
-  `mind_mem.core.services` module that both REST and MCP call
-  with an explicit `workspace` argument. ~1 day.
-- [ ] **OIDC wired into `_require_admin`** — v3.2.0 OIDC only
-  validates tokens on `/v1/auth/oidc/callback`; protected
-  endpoints cannot accept OIDC JWTs. Map JWT `scopes` claim to
-  the internal scope grammar. ~0.5 day.
+  ~2 days. (Deferred to v3.2.2 — larger refactor than the v3.2.1
+  hotfix window allows.)
+- [x] **REST request-scoping** — swapped env-var mutation for a
+  per-request ``ContextVar`` override in
+  ``mind_mem.mcp.infra.workspace`` + a FastAPI HTTP middleware.
+  Task-local under asyncio, thread-local through Starlette's
+  thread pool. Standalone MCP server still reads the env var.
+- [x] **OIDC wired into `_require_admin`** — JWT `scope` / `scopes`
+  / `roles` claims now drive the admin gate;
+  ``MIND_MEM_OIDC_ADMIN_SCOPES`` env configures which scope names
+  count. Admin gate is enforced when OIDC is configured even
+  without static tokens. Invalid JWTs reject with 401 instead of
+  falling through to the permissive static-token path.
 - [ ] **`PostgresBlockStore.snapshot(snap_id=…)`** — current
   signature requires a filesystem path for the MANIFEST.json
   write, breaking cross-host Postgres snapshots. Accept a plain
   `snap_id: str` and make the on-disk manifest optional. ~0.5
-  day.
-- [ ] **Wire `cached_recall` into `_recall_impl`** — the Redis
-  cache module ships in v3.2.0 but the call-site wiring is
-  deferred. One-liner in
-  `src/mind_mem/mcp/tools/recall.py::_recall_impl`. ~0.5 hour.
-- [ ] **Two config keys documented in `docs/configuration.md`** —
-  `cache.redis_url` and `retrieval.tier_boost`. Docs-only.
-- [ ] **Dependency CVE bumps** — `authlib>=1.6.9`, `aiohttp>=3.13.4`
-  per the v3.2.0 audit's INFO findings. Transitive via `fastmcp`.
+  day. (Deferred to v3.2.2 — cross-backend snapshot API design
+  needs alignment with Markdown backend.)
+- [x] **Wire `cached_recall` into `_recall_impl`** — done in
+  v3.2.0 commit `7c54844`.
+- [x] **Two config keys documented in `docs/configuration.md`** —
+  `cache.redis_url` and `retrieval.tier_boost` appear in the
+  v3.2.0 docs; verified as part of the v3.2.1 release checklist.
+- [ ] **Dependency CVE bumps** — no ``authlib`` or ``aiohttp`` in
+  mind-mem's direct or transitive deps as of v3.2.1 (``pip-audit``
+  verified). Kept as tracking item in case a future ``fastmcp``
+  release reintroduces either.
+
+v3.2.1 CI-plumbing fixes (shipped):
+
+- [x] Ruff format drift (25 files)
+- [x] Windows path-separator assertion in
+  `test_apply_engine_backend_routing.py`
+- [x] SBOM `pkg_resources` crash — pin `cyclonedx-bom>=5` in
+  `release.yml` + `security.yml`
+- [x] Dead action SHAs — bump `trivy-action` to v0.35.0, correct
+  `gitleaks-action` v2.3.9 SHA
+- [x] Gitleaks glob-vs-regex in `.gitleaks.toml` (`*.pyc` →
+  `.*\.pyc$`)
 
 **Estimated:** ~1200 lines refactor, ~400 LOC tests, ~200 LOC
 docs.

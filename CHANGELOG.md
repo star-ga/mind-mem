@@ -2,6 +2,81 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.2.1 (2026-04-20)
+
+**Hotfix / production-hardening release.** Addresses the three
+architectural debt items called out in the v3.2.0 release notes:
+REST request-scoping, OIDC admin-gate wiring, and CI plumbing. Also
+cleans up a clutch of CI reds (ruff format, Windows path separators,
+gitleaks regex, cyclonedx-bom `pkg_resources` crash, dead action
+SHAs). No breaking changes — v3.2.0 deployments upgrade cleanly.
+
+### Fixed
+
+- **REST request-scoping.** Previously every handler mutated
+  ``os.environ["MIND_MEM_WORKSPACE"]`` on each request, which raced
+  under concurrent requests. Replaced with a per-request
+  ``ContextVar`` override in ``mind_mem.mcp.infra.workspace`` (via a
+  new ``use_workspace`` context manager) plus a FastAPI HTTP
+  middleware that scopes every request automatically. The env var
+  remains authoritative for the standalone MCP server.
+- **OIDC JWTs drive the admin gate.** Pre-v3.2.1 ``_require_admin``
+  only recognised ``MIND_MEM_ADMIN_TOKEN`` matches and mmk_* keys
+  with an explicit ``admin`` scope — an OIDC JWT carrying an admin
+  scope was silently downgraded. ``_verify_bearer`` now returns a
+  ``(valid, agent_id, scopes)`` triple; ``_require_auth`` stashes
+  the validated scopes on ``request.state`` for cross-dependency
+  reads; ``_require_admin`` consults ``request.state.oidc_scopes``
+  when evaluating admin access. Scope names configurable via
+  ``MIND_MEM_OIDC_ADMIN_SCOPES`` (default: ``mind-mem.admin admin``).
+- **Invalid OIDC JWTs reject instead of falling through.** When
+  OIDC is configured and a token fails validation,
+  ``_verify_bearer`` now returns ``(False, ...)`` instead of
+  accepting the request under the permissive "no auth configured"
+  fallback that applied when ``MIND_MEM_TOKEN`` was unset.
+- **CI — ruff format + Windows path separator.** 25 files picked
+  up minor format drift; formatted via ``ruff format``.
+  ``tests/test_apply_engine_backend_routing.py`` asserted with
+  forward-slash on ``args[0].endswith(...)`` — Windows' ``os.sep``
+  emits backslashes, so the assertion normalises via
+  ``args[0].replace(os.sep, "/")``.
+- **CI — SBOM job ``pkg_resources`` crash.**
+  ``CycloneDX/gh-python-generate-sbom@v2`` and unpinned
+  ``cyclonedx-bom`` both pulled in cyclonedx-bom<4, whose CLI
+  imports the ``pkg_resources`` shim removed in setuptools 78+.
+  Both workflows now install ``cyclonedx-bom>=5`` and invoke
+  ``cyclonedx-py environment`` directly.
+- **CI — dead action SHAs.** Bumped
+  ``aquasecurity/trivy-action`` to v0.35.0 (internal pin to
+  ``setup-trivy@v0.2.1`` was deleted upstream). Corrected
+  ``gitleaks/gitleaks-action`` v2.3.9 SHA which had a
+  transcription error.
+- **CI — gitleaks regex.** ``*.pyc`` was glob-syntax in
+  ``.gitleaks.toml`` ``paths[]`` which requires regex. Escaped
+  to ``.*\.pyc$``.
+
+### Added
+
+- **``mind_mem.mcp.infra.workspace.use_workspace``** — context
+  manager for scoping a block of code (or a FastAPI request) to a
+  specific workspace via ContextVar override. Task-local under
+  asyncio and thread-local through Starlette's thread pool.
+- **``MIND_MEM_OIDC_ADMIN_SCOPES`` env var** — comma/space-separated
+  list of OIDC scope names that grant admin access.
+- **``tests/test_workspace_contextvar.py``** — 5 regression tests
+  covering ContextVar precedence, reset on exception, nested
+  stacking, thread isolation, and abspath normalisation.
+- **``tests/test_oidc_admin_enforcement.py``** — 6 regression
+  tests covering OIDC admin-scope passthrough, non-admin rejection,
+  invalid-JWT 401, scope-name override, and OIDC-path bypass when
+  unconfigured.
+
+### Deprecated
+
+- **``mind_mem.api.rest._set_workspace_env``** — kept for
+  compatibility. New code should prefer
+  ``mind_mem.mcp.infra.workspace.use_workspace``.
+
 ## 3.2.0 (2026-04-20)
 
 **Production-deployment release.** Turns mind-mem from a single-host

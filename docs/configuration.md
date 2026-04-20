@@ -116,6 +116,15 @@ Set these **environment variables** when `api.auth.mode` is `"oidc"` or `"combin
 | `OIDC_CLIENT_ID` | Application client ID from your identity provider |
 | `OIDC_CLIENT_SECRET` | Application client secret (server-side only) |
 | `OIDC_AUDIENCE` | Expected `aud` claim, e.g. `api://mind-mem` |
+| `MIND_MEM_OIDC_ADMIN_SCOPES` (v3.2.1) | Space/comma-separated list of JWT scope names that grant admin access. Default: `"mind-mem.admin admin"`. Override when your IdP uses a different scope convention — e.g. set to `"roles:platform-admin"` for an Okta custom scope, or `"prod:mindmem:admin"` for an Auth0 namespaced permission. |
+
+When OIDC is configured (both `OIDC_ISSUER` and `OIDC_AUDIENCE` are
+set), every bearer token is first probed as a JWT:
+
+- Valid JWT → agent authenticates; scopes drive the admin gate.
+- JWT that fails signature / audience / expiry validation → 401.
+- Non-JWT token → falls through to the `MIND_MEM_TOKEN` /
+  `MIND_MEM_ADMIN_TOKEN` static-token path.
 
 Supported providers via preset factories in `OIDCProvider`:
 
@@ -682,6 +691,74 @@ Kernel parameters override in-code defaults when present. The `get_mind_kernel` 
   }
 }
 ```
+
+---
+
+## Distributed Recall Cache (v3.2.0+)
+
+Two-tier recall cache with an in-process LRU (L1) and an optional
+Redis backend (L2). Shared across uvicorn workers when Redis is
+configured; falls back to LRU-only when Redis is absent or
+unreachable (fail-open).
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `cache.enabled` | boolean | `true` | Set to `false` to bypass the cache entirely (useful for debugging recall changes). |
+| `cache.redis_url` | string \| null | `null` | Redis connection URL (e.g. `"redis://localhost:6379/0"`). When `null`, only the in-process LRU is used. |
+| `cache.ttl_seconds` | integer | `300` | Time-to-live for cached recall results. Governance writes (`propose_update`, `approve_apply`) invalidate the namespace anyway, so the TTL is a safety net rather than a correctness boundary. |
+| `cache.lru_max_entries` | integer | `1024` | Max entries in the in-process LRU. Each entry is the serialized recall payload (~2-20KB typical). |
+
+**Cache key format:** `mindmem:recall:<namespace>:<sha256(query+limit+backend+active_only)>`
+
+```json
+{
+  "cache": {
+    "enabled": true,
+    "redis_url": "redis://cache.internal:6379/0",
+    "ttl_seconds": 300,
+    "lru_max_entries": 2048
+  }
+}
+```
+
+The REDIS_URL can also be supplied via the `MIND_MEM_REDIS_URL`
+environment variable, which takes precedence over the config file
+so deployments can inject the URL via Kubernetes secrets without
+mutating the workspace.
+
+---
+
+## Tier-Aware Retrieval Scoring (v3.2.0+)
+
+Memory blocks can be tagged with a `Tier:` field in their frontmatter
+(`WORKING`, `SHARED`, `LONG_TERM`, `VERIFIED`). When
+`retrieval.tier_boost` is enabled, recall applies a multiplicative
+score boost so tier-aligned blocks rank above untagged ones.
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `retrieval.tier_boost.enabled` | boolean | `false` | Master switch. Keep disabled if your corpus doesn't populate `Tier:` fields consistently — the boost would otherwise penalise untagged blocks. |
+| `retrieval.tier_boost.working` | float | `1.20` | Score multiplier for `Tier: WORKING` blocks (hot — recent context the agent is actively reasoning about). |
+| `retrieval.tier_boost.shared` | float | `1.10` | Score multiplier for `Tier: SHARED` blocks (shared team knowledge). |
+| `retrieval.tier_boost.long_term` | float | `1.00` | Score multiplier for `Tier: LONG_TERM` blocks (stable historical decisions). |
+| `retrieval.tier_boost.verified` | float | `1.30` | Score multiplier for `Tier: VERIFIED` blocks (human-approved ground truth). |
+
+```json
+{
+  "retrieval": {
+    "tier_boost": {
+      "enabled": true,
+      "working": 1.20,
+      "shared": 1.10,
+      "long_term": 1.00,
+      "verified": 1.30
+    }
+  }
+}
+```
+
+Boosts are applied after RRF fusion so the relative ranking within
+each tier is preserved — the boost only re-weights *across* tiers.
 
 ---
 
