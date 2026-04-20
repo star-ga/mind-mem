@@ -15,6 +15,13 @@ from .acl import (
     _get_request_scope,
     check_tool_acl,
 )
+from .config import (
+    _DEFAULT_LIMITS,
+    QUERY_TIMEOUT_SECONDS,
+    _get_limits,
+    _load_config,
+    _load_extra_categories,
+)
 from .rate_limit import (
     _RATE_LIMITER_MAX,
     SlidingWindowRateLimiter,
@@ -43,4 +50,9 @@ __all__ = [
     "_RATE_LIMITER_MAX",
     "_rate_limiters",
     "_rate_limiters_lock",
+    "_DEFAULT_LIMITS",
+    "_get_limits",
+    "_load_config",
+    "_load_extra_categories",
+    "QUERY_TIMEOUT_SECONDS",
 ]

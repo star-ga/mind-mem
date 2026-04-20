@@ -56,11 +56,7 @@ class SlidingWindowRateLimiter:
 def _init_rate_limiter() -> SlidingWindowRateLimiter:
     """Create a rate limiter from config limits (used as per-client factory)."""
     try:
-        # Late import: ``_get_limits`` still lives in mcp_server.py and will
-        # move to ``infra/config.py`` in a later step of this PR-1. The
-        # deferred lookup avoids the import cycle that a top-level import
-        # would create (mcp_server → infra.rate_limit → mcp_server).
-        from mind_mem.mcp_server import _get_limits
+        from .config import _get_limits
 
         limits = _get_limits()
         max_calls = limits["rate_limit_calls_per_minute"]

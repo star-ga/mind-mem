@@ -194,38 +194,17 @@ from mind_mem.mcp.infra.rate_limit import (  # noqa: E402,F401 — public re-exp
 # ---------------------------------------------------------------------------
 # Configurable limits (#37) — loaded from mind-mem.json "limits" section
 # ---------------------------------------------------------------------------
-
-_DEFAULT_LIMITS = {
-    "max_recall_results": 100,
-    "max_similar_results": 50,
-    "max_prefetch_results": 20,
-    "max_category_results": 10,
-    "query_timeout_seconds": 30,
-    "rate_limit_calls_per_minute": 120,
-}
-
-
-def _get_limits(ws: str | None = None) -> dict:
-    """Return the limits dict from config, falling back to defaults."""
-    if ws is None:
-        try:
-            ws = _workspace()
-        except Exception:
-            return dict(_DEFAULT_LIMITS)
-    cfg = _load_config(ws)
-    limits = cfg.get("limits", {})
-    result = dict(_DEFAULT_LIMITS)
-    for key in _DEFAULT_LIMITS:
-        if key in limits:
-            try:
-                result[key] = int(limits[key])
-            except (TypeError, ValueError):
-                pass  # keep default
-    return result
-
-
-# Per-query timeout in seconds (read from config at call time via _get_limits)
-QUERY_TIMEOUT_SECONDS = _DEFAULT_LIMITS["query_timeout_seconds"]
+#
+# v3.2.0 §1.2 PR-1: config helpers moved to mind_mem.mcp.infra.config.
+# Re-exported here so every existing call site + every test that reads
+# ``server._get_limits`` / ``server._DEFAULT_LIMITS`` keeps working.
+from mind_mem.mcp.infra.config import (  # noqa: E402,F401 — public re-export shim
+    _DEFAULT_LIMITS,
+    QUERY_TIMEOUT_SECONDS,
+    _get_limits,
+    _load_config,
+    _load_extra_categories,
+)
 
 
 def _sqlite_busy_error() -> str:
@@ -354,40 +333,6 @@ from mind_mem.mcp.infra.workspace import (  # noqa: E402,F401 — public re-expo
 def _blocks_to_json(blocks: list[dict]) -> str:
     """Convert parsed blocks to JSON string."""
     return json.dumps(blocks, indent=2, default=str)
-
-
-def _load_config(ws: str) -> dict:
-    """Load mind-mem.json config with graceful fallback (#26).
-
-    On JSONDecodeError, logs line/column and returns DEFAULT_CONFIG.
-    """
-    config_path = os.path.join(ws, "mind-mem.json")
-    if not os.path.isfile(config_path):
-        return {}
-    try:
-        with open(config_path, encoding="utf-8") as f:
-            return dict(json.load(f))
-    except json.JSONDecodeError as exc:
-        _log.warning(
-            "config_json_decode_error",
-            path=config_path,
-            line=exc.lineno,
-            column=exc.colno,
-            msg=str(exc),
-        )
-        # Fall back to built-in defaults
-        from mind_mem.init_workspace import DEFAULT_CONFIG
-
-        return dict(DEFAULT_CONFIG)
-    except (OSError, UnicodeDecodeError) as exc:
-        _log.warning("config_read_error", path=config_path, error=str(exc))
-        return {}
-
-
-def _load_extra_categories(ws: str) -> dict:
-    """Load extra_categories from mind-mem.json config."""
-    cfg = _load_config(ws)
-    return dict(cfg.get("categories", {}).get("extra_categories", {}))
 
 
 # ---------------------------------------------------------------------------
