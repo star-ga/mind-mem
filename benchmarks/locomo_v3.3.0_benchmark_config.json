@@ -32,7 +32,9 @@
   },
   "retrieval": {
     "temporal_half_life_days": 90,
+    "temporal_decay_hot_path": true,
     "tier_boost": true,
+    "truth_score": {"enabled": true},
     "query_decomposition": {
       "enabled": true,
       "auto_enable": true,

@@ -5,7 +5,7 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 607 | **Est. tokens:** ~1,235,602
+**Files:** 607 | **Est. tokens:** ~1,235,621
 **Generated:** 2026-04-20 18:10 UTC
 
 ## Token Budget Guide
@@ -24,7 +24,7 @@
 |-----------|-------|-------------|
 | `./` | 30 | ~73,472 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `benchmarks/` | 21 | ~51,163 |
+| `benchmarks/` | 21 | ~51,182 |
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
@@ -114,7 +114,7 @@
 - `__init__.py` (~0 tok, tiny)
 - `locomo_harness.py` (~4147 tok, huge) — LoCoMo Benchmark Harness for mind-mem Recall Engine.
 - `locomo_judge.py` (~10915 tok, huge) — LoCoMo LLM-as-Judge Evaluation for Mind-Mem.
-- `locomo_v3.3.0_benchmark_config.json` (~431 tok, medium) — Keys: _comment, version, recall, cache, cross_encoder
+- `locomo_v3.3.0_benchmark_config.json` (~450 tok, medium) — Keys: _comment, version, recall, cache, cross_encoder
 - `longmemeval_harness.py` (~2973 tok, huge) — LongMemEval Benchmark Harness for mind-mem recall engine.
 - `niah_full_results.txt` (~5140 tok, huge) — ============================= test session starts ==============================
 - `NIAH.md` (~1620 tok, huge) — Needle In A Haystack (NIAH) Benchmark
