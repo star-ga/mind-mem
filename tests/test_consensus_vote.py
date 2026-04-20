@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from mind_mem.consensus_vote import (
-    ConsensusDecision,
     Vote,
     reach_consensus,
     resolve_consensus_config,
