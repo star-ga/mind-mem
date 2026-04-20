@@ -210,6 +210,7 @@ class HybridBackend:
         graph_boost: bool = False,
         retrieve_wide_k: int = 200,
         rerank: bool = True,
+        _skip_auto_features: bool = False,
         **kwargs: Any,
     ) -> list[dict]:
         """Run BM25 and (optionally) vector search, fuse via RRF.
@@ -240,7 +241,15 @@ class HybridBackend:
         # v3.3.0 Tier 2 #4: auto-enable on multi-hop/temporal queries
         # even when operator hasn't flipped ``query_expansion.enabled``,
         # unless ``query_expansion.auto_enable: false`` is set.
-        expansion_active = self._query_expansion_enabled
+        # Thread-safety: _search_expanded recurses into search() with
+        # _skip_auto_features=True to avoid re-entering expansion /
+        # decomposition loops. Previous version mutated
+        # ``self._query_expansion_enabled`` which races between
+        # concurrent requests (python-reviewer 2026-04-20).
+        if _skip_auto_features:
+            expansion_active = False
+        else:
+            expansion_active = self._query_expansion_enabled
         if not expansion_active and self._query_expansion_config.get("auto_enable", True):
             try:
                 from ._recall_detection import detect_query_type
@@ -295,7 +304,7 @@ class HybridBackend:
         decomp_cfg = self._config.get("retrieval", {}).get("query_decomposition", {})
         if not isinstance(decomp_cfg, dict):
             decomp_cfg = {}
-        decomp_active = bool(decomp_cfg.get("enabled", False))
+        decomp_active = False if _skip_auto_features else bool(decomp_cfg.get("enabled", False))
         if not decomp_active and decomp_cfg.get("auto_enable", True):
             try:
                 from ._recall_detection import detect_query_type
@@ -476,25 +485,25 @@ class HybridBackend:
         Returns:
             RRF-fused ranked list of result dicts.
         """
-        # Temporarily disable expansion to avoid infinite recursion
-        orig_enabled = self._query_expansion_enabled
-        self._query_expansion_enabled = False
-        try:
-            per_query_results: list[list[dict]] = []
-            for q in queries:
-                results = self.search(
-                    q,
-                    workspace,
-                    limit=retrieve_wide_k,
-                    active_only=active_only,
-                    graph_boost=graph_boost,
-                    retrieve_wide_k=retrieve_wide_k,
-                    rerank=rerank,
-                    **kwargs,
-                )
-                per_query_results.append(results)
-        finally:
-            self._query_expansion_enabled = orig_enabled
+        # Pass _skip_auto_features=True so the recursion into search()
+        # doesn't re-trigger expansion/decomposition. Previous code
+        # mutated self._query_expansion_enabled which raced under
+        # concurrent calls (python-reviewer 2026-04-20 → commit
+        # b31e862 follow-up).
+        per_query_results: list[list[dict]] = []
+        for q in queries:
+            results = self.search(
+                q,
+                workspace,
+                limit=retrieve_wide_k,
+                active_only=active_only,
+                graph_boost=graph_boost,
+                retrieve_wide_k=retrieve_wide_k,
+                rerank=rerank,
+                _skip_auto_features=True,
+                **kwargs,
+            )
+            per_query_results.append(results)
 
         if not per_query_results:
             return []
