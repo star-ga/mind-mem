@@ -22,6 +22,9 @@ from .config import (
     _load_config,
     _load_extra_categories,
 )
+from .constants import MCP_SCHEMA_VERSION
+from .http_auth import _build_http_auth_tokens, _check_token, verify_token
+from .observability import _is_db_locked, _sqlite_busy_error, mcp_tool_observe
 from .rate_limit import (
     _RATE_LIMITER_MAX,
     SlidingWindowRateLimiter,
@@ -55,4 +58,11 @@ __all__ = [
     "_load_config",
     "_load_extra_categories",
     "QUERY_TIMEOUT_SECONDS",
+    "MCP_SCHEMA_VERSION",
+    "mcp_tool_observe",
+    "_sqlite_busy_error",
+    "_is_db_locked",
+    "_check_token",
+    "verify_token",
+    "_build_http_auth_tokens",
 ]

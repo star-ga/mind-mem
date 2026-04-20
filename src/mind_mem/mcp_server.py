@@ -80,8 +80,6 @@ Claude Desktop config (~/.claude/claude_desktop_config.json):
 
 from __future__ import annotations
 
-import functools
-import hmac
 import json
 import os
 import re as _re_mod
@@ -120,7 +118,10 @@ from mind_mem.sqlite_index import (  # noqa: E402
 
 _log = get_logger("mcp_server")
 
-MCP_SCHEMA_VERSION = "1.0"
+# v3.2.0 §1.2 PR-1: MCP_SCHEMA_VERSION re-exported from mcp.infra.constants
+# so every infra submodule and the remaining mcp_server body share a single
+# source of truth (avoids the two-definition drift risk).
+from mind_mem.mcp.infra.constants import MCP_SCHEMA_VERSION  # noqa: E402,F401
 
 
 # ---------------------------------------------------------------------------
@@ -146,27 +147,16 @@ from mind_mem.mcp.infra.acl import (  # noqa: E402,F401 — public re-export shi
 )
 
 
-def _build_http_auth_tokens() -> dict[str, dict[str, Any]]:
-    """Build StaticTokenVerifier token metadata from environment variables."""
-    tokens: dict[str, dict[str, Any]] = {}
-
-    user_token = _check_token()
-    if user_token:
-        tokens[user_token] = {
-            "client_id": "mind-mem-user",
-            "scopes": ["user"],
-            "sub": "mind-mem-user",
-        }
-
-    admin_token = os.environ.get("MIND_MEM_ADMIN_TOKEN")
-    if admin_token:
-        tokens[admin_token] = {
-            "client_id": "mind-mem-admin",
-            "scopes": ["user", "admin"],
-            "sub": "mind-mem-admin",
-        }
-
-    return tokens
+# v3.2.0 §1.2 PR-1: HTTP auth helpers moved to
+# mind_mem.mcp.infra.http_auth. Re-exported here so every tool body and
+# every test that references ``server.verify_token`` /
+# ``server._build_http_auth_tokens`` / ``server._check_token`` keeps
+# working.
+from mind_mem.mcp.infra.http_auth import (  # noqa: E402,F401 — public re-export shim
+    _build_http_auth_tokens,
+    _check_token,
+    verify_token,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -207,95 +197,15 @@ from mind_mem.mcp.infra.config import (  # noqa: E402,F401 — public re-export 
 )
 
 
-def _sqlite_busy_error() -> str:
-    """Return structured JSON error for SQLite database locked (#29)."""
-    return json.dumps(
-        {
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "error": "database_busy",
-            "message": "Database is temporarily locked by another process",
-            "retry_after_seconds": 1,
-        }
-    )
-
-
-def _is_db_locked(exc: sqlite3.OperationalError) -> bool:
-    """Check if a sqlite3.OperationalError is a database-locked error."""
-    return "database is locked" in str(exc).lower()
-
-
-def mcp_tool_observe(fn):
-    """Decorator that wraps MCP tool calls with observability logging (#31).
-
-    Logs structured JSON for every call: tool_name, duration_ms, success,
-    error_type, result_size.  Also increments success/failure counters.
-    """
-
-    @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        tool_name = fn.__name__
-
-        # Rate limit enforcement (#475): per-client sliding window
-        client_id = _get_client_id()
-        limiter = _get_client_rate_limiter(client_id)
-        allowed, retry_after = limiter.allow()
-        if not allowed:
-            _log.warning("rate_limit_exceeded", tool=tool_name, client=client_id, retry_after=retry_after)
-            return json.dumps(
-                {
-                    "error": "Rate limit exceeded. Try again later.",
-                    "retry_after_seconds": round(retry_after, 1),
-                    "_schema_version": MCP_SCHEMA_VERSION,
-                }
-            )
-
-        # ACL enforcement: when MIND_MEM_ADMIN_TOKEN is configured,
-        # admin tools require MIND_MEM_SCOPE=admin (stdio) or a valid
-        # Authorization header (http).  When no admin token is set the
-        # check is skipped so single-user local setups are unaffected.
-        admin_token = os.environ.get("MIND_MEM_ADMIN_TOKEN")
-        request_scope = _get_request_scope()
-        acl_scope = request_scope or os.environ.get("MIND_MEM_SCOPE", "user")
-        acl_active = admin_token is not None or request_scope is not None
-        if acl_active and tool_name in ADMIN_TOOLS:
-            scope = acl_scope
-            acl_error = check_tool_acl(tool_name, scope)
-            if acl_error:
-                _log.warning("acl_blocked", tool=tool_name, scope=scope)
-                return acl_error
-        elif acl_active and tool_name not in USER_TOOLS:
-            _log.warning("acl_unknown_tool", tool=tool_name)
-            return json.dumps({"error": f"Tool '{tool_name}' is not in ACL policy", "_schema_version": "1.0"})
-
-        start = time.monotonic()
-        error_type = None
-        success = True
-        result = ""
-        try:
-            result = fn(*args, **kwargs)
-            return result
-        except Exception as exc:
-            success = False
-            error_type = type(exc).__name__
-            raise
-        finally:
-            duration_ms = round((time.monotonic() - start) * 1000, 2)
-            result_size = len(result) if isinstance(result, str) else 0
-            _log.info(
-                "mcp_tool_call",
-                tool_name=tool_name,
-                duration_ms=duration_ms,
-                success=success,
-                error_type=error_type,
-                result_size=result_size,
-            )
-            metrics.observe("mcp_tool_duration_ms", duration_ms)
-            if success:
-                metrics.inc("mcp_tool_success")
-            else:
-                metrics.inc("mcp_tool_failure")
-
-    return wrapper
+# v3.2.0 §1.2 PR-1: observability helpers moved to
+# mind_mem.mcp.infra.observability. Re-exported here so every
+# ``@mcp_tool_observe`` decorator application + every test that patches
+# ``server._sqlite_busy_error`` keeps working.
+from mind_mem.mcp.infra.observability import (  # noqa: E402,F401 — public re-export shim
+    _is_db_locked,
+    _sqlite_busy_error,
+    mcp_tool_observe,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -4264,40 +4174,6 @@ def compiled_truth_contradictions(entity_id: str) -> str:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
-
-
-def _check_token() -> str | None:
-    """Get token from environment. Returns None if no auth configured."""
-    return os.environ.get("MIND_MEM_TOKEN")
-
-
-def verify_token(headers: dict) -> bool:
-    """Verify Bearer token from request headers. Constant-time compare.
-
-    Returns True if:
-      - No token is configured (open access), or
-      - Token matches via Authorization: Bearer <token> or X-MindMem-Token header.
-
-    Returns False if token is configured but missing/invalid.
-    """
-    expected = _check_token()
-    if expected is None:
-        return True  # No auth configured — allow
-
-    # Try Authorization: Bearer <token>
-    auth = headers.get("authorization", headers.get("Authorization", ""))
-    if auth.startswith("Bearer "):
-        provided = auth[7:]
-        if hmac.compare_digest(provided, expected):
-            return True
-
-    # Try X-MindMem-Token header
-    alt = headers.get("x-mindmem-token", headers.get("X-MindMem-Token", ""))
-    if alt and hmac.compare_digest(alt, expected):
-        return True
-
-    metrics.inc("mcp_http_auth_failures")
-    return False
 
 
 def main():

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 476 | **Est. tokens:** ~973,771
-**Generated:** 2026-04-20 00:25 UTC
+**Files:** 479 | **Est. tokens:** ~975,815
+**Generated:** 2026-04-20 00:29 UTC
 
 ## Token Budget Guide
 
@@ -45,7 +45,7 @@
 | `src/` | 1 | ~258 |
 | `src/mind_mem/` | 115 | ~393,817 |
 | `src/mind_mem/mcp/` | 1 | ~215 |
-| `src/mind_mem/mcp/infra/` | 5 | ~3,481 |
+| `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 180 | ~364,105 |
@@ -303,7 +303,10 @@
 
 - `acl.py` (~895 tok, large) — Per-tool ACL — scope enforcement for the MCP surface.
 - `config.py` (~817 tok, large) — ``mind-mem.json`` config loading + configurable limits.
-- `__init__.py` (~358 tok, medium) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
+- `constants.py` (~98 tok, small) — MCP-surface-wide constants shared by the infra submodules.
+- `http_auth.py` (~680 tok, large) — HTTP bearer-token authentication helpers for the MCP surface.
+- `__init__.py` (~449 tok, medium) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
+- `observability.py` (~1175 tok, large) — Observability + DB-busy helpers for the MCP surface.
 - `rate_limit.py` (~928 tok, large) — Per-client sliding-window rate limiter for the MCP surface.
 - `workspace.py` (~483 tok, medium) — Workspace resolution + path-safety helpers.
 ### `src/mind_mem/mcp/`
