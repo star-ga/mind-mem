@@ -7,14 +7,8 @@ tests are pure function checks (no I/O).
 
 from __future__ import annotations
 
-import pytest
-
 from mind_mem.evidence_bundle import (
     EntityRef,
-    EvidenceBundle,
-    Fact,
-    Relation,
-    TimelineEvent,
     build_bundle,
 )
 

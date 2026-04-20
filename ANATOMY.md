@@ -5,7 +5,7 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 591 | **Est. tokens:** ~1,207,735
+**Files:** 591 | **Est. tokens:** ~1,207,715
 **Generated:** 2026-04-20 17:37 UTC
 
 ## Token Budget Guide
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 210 | ~419,212 |
+| `tests/` | 210 | ~419,192 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -609,7 +609,7 @@
 - `test_enums.py` (~534 tok, large) — Tests for centralised enums (mind_mem.enums)."""
 - `test_error_codes.py` (~2394 tok, huge) — Tests for mind-mem Error Codes module."""
 - `test_error_paths.py` (~5892 tok, huge) — Error path and edge-case tests for mind-mem — malformed inputs, missing files, bad configs."""
-- `test_evidence_bundle.py` (~1582 tok, huge) — v3.3.0 Tier 3 #7 — structured evidence bundle.
+- `test_evidence_bundle.py` (~1562 tok, huge) — v3.3.0 Tier 3 #7 — structured evidence bundle.
 - `test_evidence_objects.py` (~4031 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_evidence_packer.py` (~5180 tok, huge) — Tests for the evidence packer module."""
 - `test_excerpt.py` (~248 tok, medium) — Tests for excerpt generation."""
