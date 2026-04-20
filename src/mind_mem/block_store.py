@@ -351,6 +351,15 @@ def _locate_block_in_text(text: str, block_id: str) -> Optional[tuple[int, int, 
     return block_start, block_end, content
 
 
+class BlockStoreError(Exception):
+    """Raised when a storage operation fails in a BlockStore implementation.
+
+    Re-exported here so callers can catch ``mind_mem.block_store.BlockStoreError``
+    regardless of which backend is active.  ``PostgresBlockStore`` imports and
+    raises this same class.
+    """
+
+
 @runtime_checkable
 class BlockStore(Protocol):
     """Protocol for block storage backends.
@@ -427,6 +436,29 @@ class BlockStore(Protocol):
         """
         ...
 
+    # ─── lock surface (v3.2.0 §1.4 PR-4) ─────────────────────────────
+
+    def lock(
+        self,
+        *,
+        blocking: bool = True,
+        timeout: float = 30.0,
+    ) -> "Any":
+        """Acquire an exclusive workspace-wide lock.
+
+        Returns a context manager; the lock is released on ``__exit__``.
+        ``blocking=False`` raises :class:`~mind_mem.mind_filelock.LockTimeout`
+        immediately if the lock is held elsewhere. ``timeout`` is the
+        max wait when ``blocking=True``.
+
+        The Markdown backend maps this to a single workspace-level
+        ``.workspace.lock`` file; the Postgres backend uses a row in
+        the ``workspace_lock`` table. Semantics are identical from
+        the caller's perspective — exclusive while held, released on
+        context exit.
+        """
+        ...
+
 
 class MarkdownBlockStore:
     """BlockStore backed by Markdown files on disk.
@@ -442,6 +474,14 @@ class MarkdownBlockStore:
             corpus_dirs = CORPUS_DIRS
         self._corpus_dirs = corpus_dirs
         self._files: list[str] | None = None
+        # v3.2.0 §1.4 PR-4: workspace-wide lock target. ``FileLock``
+        # appends ``.lock`` to form the sidecar, so the resulting lock
+        # file lives at ``<workspace>/.workspace.lock``. Co-located
+        # with the workspace so it follows a rename / mount-point
+        # change; per-file FileLocks on individual block files remain
+        # in use for fine-grained write coordination inside
+        # ``write_block`` / ``delete_block``.
+        self._lock_target = os.path.join(workspace, ".workspace")
 
     def _discover_files(self) -> list[str]:
         """Discover all .md files in corpus directories."""
@@ -521,6 +561,46 @@ class MarkdownBlockStore:
     def invalidate_cache(self) -> None:
         """Clear file discovery cache (call after corpus changes)."""
         self._files = None
+
+    # ─── lock surface (v3.2.0 §1.4 PR-4) ─────────────────────────────
+
+    def lock(self, *, blocking: bool = True, timeout: float = 30.0) -> FileLock:
+        """Return an exclusive workspace-wide lock as a context manager.
+
+        Implementation maps to a single ``.workspace.lock`` file at the
+        workspace root. The underlying :class:`FileLock` honors:
+
+        * ``blocking=False`` → ``timeout=0`` so the first failed
+          acquire raises :class:`LockTimeout` immediately.
+        * ``blocking=True`` → ``timeout`` seconds (default 30) before
+          the caller gets ``LockTimeout``.
+
+        Cross-process semantics: two mind-mem processes targeting the
+        same workspace serialize on this lock. Within a process the
+        :class:`FileLock` also holds a :class:`threading.Lock` keyed
+        on the lock path so multithreaded callers don't trample one
+        another.
+
+        Note: the per-file locks used inside :meth:`write_block` /
+        :meth:`delete_block` are orthogonal — they protect individual
+        block-file read-modify-writes even when the workspace-wide
+        lock is not held. Callers that want strict end-to-end
+        serialization should acquire the workspace lock first, then
+        the per-file lock inside.
+
+        Example::
+
+            with store.lock(timeout=10):
+                block = store.get_by_id("D-20260420-001")
+                block["Status"] = "superseded"
+                store.write_block(block)
+        """
+        # Ensure the workspace directory exists so FileLock can create
+        # its .lock sidecar — first-run on a fresh workspace would
+        # otherwise fail when the parent directory is absent.
+        os.makedirs(self._workspace, exist_ok=True)
+        effective_timeout = 0.0 if not blocking else timeout
+        return FileLock(self._lock_target, timeout=effective_timeout)
 
     # ─── write surface (v3.2.0 §1.4 PR-2) ────────────────────────────
 

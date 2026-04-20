@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 531 | **Est. tokens:** ~1,056,284
-**Generated:** 2026-04-20 06:52 UTC
+**Files:** 542 | **Est. tokens:** ~1,078,111
+**Generated:** 2026-04-20 06:55 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~70,660 |
+| `./` | 30 | ~70,705 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,429 |
 | `deploy/` | 2 | ~690 |
@@ -42,7 +42,7 @@
 | `lib/` | 1 | ~2,176 |
 | `mind/` | 19 | ~5,516 |
 | `scripts/` | 3 | ~2,692 |
-| `sdk/go/` | 3 | ~352 |
+| `sdk/go/` | 9 | ~6,719 |
 | `sdk/js/` | 5 | ~1,388 |
 | `sdk/js/src/` | 4 | ~2,320 |
 | `sdk/js/test/` | 1 | ~2,191 |
@@ -50,14 +50,15 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
-| `src/mind_mem/` | 117 | ~402,965 |
+| `src/mind_mem/` | 118 | ~409,976 |
+| `src/mind_mem/api/` | 2 | ~3,817 |
 | `src/mind_mem/mcp/` | 3 | ~3,122 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,854 |
 | `src/mind_mem/mcp/tools/` | 16 | ~32,301 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
-| `src/mind_mem/storage/` | 1 | ~870 |
+| `src/mind_mem/storage/` | 1 | ~1,018 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 186 | ~374,650 |
+| `tests/` | 188 | ~379,089 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -85,7 +86,7 @@
 - `mcp_server.py` (~662 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
-- `pyproject.toml` (~1541 tok, huge) — [project]
+- `pyproject.toml` (~1586 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22227 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
@@ -254,9 +255,15 @@
 - `regen_bash_literals.py` (~424 tok, medium) — Regenerate src/mind_mem/_task_status_literals.sh from enums.py.
 ### `sdk/go/`
 
+- `client.go` (~1008 tok, large) — Option is a functional option for NewClient.
+- `client_test.go` (~2905 tok, huge) — Helpers
 - `doc.go` (~334 tok, medium) — Package mindmem is the official Go SDK for the mind-mem REST API.
+- `errors.go` (~583 tok, large) — APIError is returned for any non-2xx response from the mind-mem server.
 - `.gitignore` (~5 tok, tiny) — *.test
 - `go.mod` (~13 tok, tiny) — module github.com/star-ga/mind-mem/sdk/go
+- `methods.go` (~500 tok, large) — Recall queries the memory store using full-text and semantic search.
+- `README.md` (~520 tok, large) — mind-mem Go SDK
+- `types.go` (~851 tok, large) — BlockTier represents the storage tier of a memory block.
 ### `sdk/js/`
 
 - `.gitignore` (~5 tok, tiny) — node_modules/
@@ -292,6 +299,12 @@
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
 - `agent_bridge.py` (~4158 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `alerting.py` (~2411 tok, huge) — # Copyright 2026 STARGA, Inc.
+### `src/mind_mem/api/`
+
+- `__init__.py` (~20 tok, tiny)
+- `rest.py` (~3797 tok, huge) — REST API layer for mind-mem (v3.2.0).
+### `src/mind_mem/`
+
 - `apply_engine.py` (~12984 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
 - `audit_chain.py` (~4167 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
 - `auto_resolver.py` (~3194 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
@@ -301,7 +314,8 @@
 - `block_metadata.py` (~2223 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~7111 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_store_encrypted.py` (~2244 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store.py` (~8388 tok, huge) — BlockStore abstraction — decouples block access from storage format.
+- `block_store_postgres.py` (~6134 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
+- `block_store.py` (~8980 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `calibration.py` (~4811 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
 - `capture.py` (~3698 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
@@ -395,7 +409,7 @@
 - `mind_ffi.py` (~5094 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~4757 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~4942 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mrs.py` (~1604 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `multi_modal.py` (~1659 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `namespaces.py` (~3560 tok, huge) — mind-mem Multi-Agent Namespace & ACL Engine. Zero external deps.
@@ -447,7 +461,7 @@
 - `staleness.py` (~1179 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/storage/`
 
-- `__init__.py` (~870 tok, large) — Storage factory for mind-mem block stores (v3.2.0).
+- `__init__.py` (~1018 tok, large) — Storage factory for mind-mem block stores (v3.2.0).
 ### `src/mind_mem/`
 
 - `_task_status_literals.sh` (~118 tok, small) — AUTO-GENERATED — do not edit by hand.
@@ -514,6 +528,7 @@
 - `test_block_parser_multifile.py` (~337 tok, medium) — Tests for parsing multiple files."""
 - `test_block_parser.py` (~3093 tok, huge) — Tests for block_parser.py — zero external deps (stdlib unittest)."""
 - `test_block_store_encrypted.py` (~999 tok, large) — # Copyright 2026 STARGA, Inc.
+- `test_block_store_lock.py` (~928 tok, large) — v3.2.0 §1.4 PR-4 — MarkdownBlockStore.lock() tests."""
 - `test_block_store.py` (~2202 tok, huge) — Tests for block_store.py — BlockStore protocol and MarkdownBlockStore."""
 - `test_block_store_snapshot.py` (~749 tok, large) — v3.2.0 §1.4 PR-3 — MarkdownBlockStore.snapshot / restore / diff tests."""
 - `test_block_store_write.py` (~2346 tok, huge) — v3.2.0 §1.4 PR-2 — MarkdownBlockStore.write_block + delete_block tests."""
@@ -643,6 +658,7 @@
 - `test_recall_vector.py` (~4901 tok, huge) — Tests for recall_vector.py — VectorBackend semantic search."""
 - `test_rerank_debug.py` (~342 tok, medium) — Tests for rerank debug mode."""
 - `test_reranking.py` (~246 tok, medium) — Tests for reranking module."""
+- `test_rest_api.py` (~3511 tok, huge) — Tests for the mind-mem REST API layer (v3.2.0).
 - `test_retrieval_diagnostics.py` (~2419 tok, huge) — Tests for retrieval diagnostics (#428), corpus isolation (#429), and intent instrumentation (#430)."""
 - `test_retrieval_graph.py` (~2242 tok, huge) — Tests for retrieval_graph.py — retrieval logging, co-retrieval graph, hard negatives."""
 - `test_rm3_expand.py` (~321 tok, medium) — Tests for RM3 query expansion."""
