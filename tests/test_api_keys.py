@@ -75,9 +75,7 @@ class TestCreate:
     def test_custom_expiry_stored(self, store: APIKeyStore, tmp_path: Any) -> None:
         store.create("agent-exp", ["user"], expires_in_days=7)
         conn = sqlite3.connect(str(tmp_path / "api_keys.db"))
-        row = conn.execute(
-            "SELECT expires_at, created_at FROM api_keys WHERE agent_id = ?", ("agent-exp",)
-        ).fetchone()
+        row = conn.execute("SELECT expires_at, created_at FROM api_keys WHERE agent_id = ?", ("agent-exp",)).fetchone()
         conn.close()
         assert row is not None
         # Rough check: expires_at should be after created_at

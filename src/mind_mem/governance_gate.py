@@ -36,6 +36,7 @@ def _current_agent() -> str:
     except Exception:
         return "system"
 
+
 _log = get_logger("governance_gate")
 
 

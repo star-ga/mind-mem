@@ -49,8 +49,7 @@ def check_token_strength() -> list[str]:
     token = _check_token()
     if token is not None and len(token) < RECOMMENDED_MIN_TOKEN_LEN:
         warnings.append(
-            f"MIND_MEM_TOKEN is only {len(token)} characters; "
-            f"recommend ≥{RECOMMENDED_MIN_TOKEN_LEN} chars (e.g. openssl rand -hex 32)"
+            f"MIND_MEM_TOKEN is only {len(token)} characters; recommend ≥{RECOMMENDED_MIN_TOKEN_LEN} chars (e.g. openssl rand -hex 32)"
         )
     admin = os.environ.get("MIND_MEM_ADMIN_TOKEN")
     if admin is not None and len(admin) < RECOMMENDED_MIN_TOKEN_LEN:

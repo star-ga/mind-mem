@@ -42,10 +42,7 @@ _SAFE_PG_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]{0,62}$")
 def _validate_schema_name(name: str) -> str:
     """Raise ValueError if *name* is not a safe Postgres schema identifier."""
     if not _SAFE_PG_IDENTIFIER_RE.match(name):
-        raise ValueError(
-            f"Unsafe Postgres schema name {name!r}. "
-            "Schema must match [A-Za-z_][A-Za-z0-9_$]{{0,62}}."
-        )
+        raise ValueError(f"Unsafe Postgres schema name {name!r}. Schema must match [A-Za-z_][A-Za-z0-9_$]{{{{0,62}}}}.")
     return name
 
 
@@ -69,19 +66,13 @@ def _require_psycopg() -> tuple[Any, Any]:
 
             _psycopg = _ps
         except ModuleNotFoundError as exc:
-            raise ImportError(
-                "The PostgreSQL backend requires psycopg. "
-                'Install it with: pip install "mind-mem[postgres]"'
-            ) from exc
+            raise ImportError('The PostgreSQL backend requires psycopg. Install it with: pip install "mind-mem[postgres]"') from exc
         try:
             from psycopg_pool import ConnectionPool as _CP
 
             _psycopg_pool = _CP
         except ModuleNotFoundError as exc:
-            raise ImportError(
-                "The PostgreSQL backend requires psycopg_pool. "
-                'Install it with: pip install "mind-mem[postgres]"'
-            ) from exc
+            raise ImportError('The PostgreSQL backend requires psycopg_pool. Install it with: pip install "mind-mem[postgres]"') from exc
     return _psycopg, _psycopg_pool
 
 
@@ -111,26 +102,14 @@ def _ddl(schema: str) -> Any:
             "    active       BOOLEAN NOT NULL DEFAULT TRUE"
             ")"
         ).format(s=s),
-        pgsql.SQL(
-            "CREATE INDEX IF NOT EXISTS blocks_file_path ON {s}.blocks(file_path)"
-        ).format(s=s),
-        pgsql.SQL(
-            "CREATE INDEX IF NOT EXISTS blocks_active ON {s}.blocks(active) WHERE active"
-        ).format(s=s),
+        pgsql.SQL("CREATE INDEX IF NOT EXISTS blocks_file_path ON {s}.blocks(file_path)").format(s=s),
+        pgsql.SQL("CREATE INDEX IF NOT EXISTS blocks_active ON {s}.blocks(active) WHERE active").format(s=s),
         # GIN index: avoids per-row tsvector recomputation on every search().
-        pgsql.SQL(
-            "CREATE INDEX IF NOT EXISTS blocks_fts"
-            " ON {s}.blocks USING GIN (to_tsvector('english', content))"
-        ).format(s=s),
+        pgsql.SQL("CREATE INDEX IF NOT EXISTS blocks_fts ON {s}.blocks USING GIN (to_tsvector('english', content))").format(s=s),
         # updated_at DESC: supports time-range queries without a seq-scan.
-        pgsql.SQL(
-            "CREATE INDEX IF NOT EXISTS blocks_updated_at ON {s}.blocks(updated_at DESC)"
-        ).format(s=s),
+        pgsql.SQL("CREATE INDEX IF NOT EXISTS blocks_updated_at ON {s}.blocks(updated_at DESC)").format(s=s),
         # Covering partial index: makes list_blocks() an index-only scan.
-        pgsql.SQL(
-            "CREATE INDEX IF NOT EXISTS blocks_active_file_path"
-            " ON {s}.blocks(file_path) WHERE active"
-        ).format(s=s),
+        pgsql.SQL("CREATE INDEX IF NOT EXISTS blocks_active_file_path ON {s}.blocks(file_path) WHERE active").format(s=s),
         pgsql.SQL(
             "CREATE TABLE IF NOT EXISTS {s}.snapshots ("
             "    snap_id    TEXT PRIMARY KEY,"
@@ -157,10 +136,7 @@ def _ddl(schema: str) -> Any:
             "                    DEFAULT NOW() + INTERVAL '5 minutes'"
             ")"
         ).format(s=s),
-        pgsql.SQL(
-            "CREATE INDEX IF NOT EXISTS workspace_lock_expires_at"
-            " ON {s}.workspace_lock(expires_at)"
-        ).format(s=s),
+        pgsql.SQL("CREATE INDEX IF NOT EXISTS workspace_lock_expires_at ON {s}.workspace_lock(expires_at)").format(s=s),
         # Schema versioning table: enables safe future ALTER TABLE migrations.
         pgsql.SQL(
             "CREATE TABLE IF NOT EXISTS {s}.schema_migrations ("
@@ -312,14 +288,12 @@ class PostgresBlockStore:
         if active_only:
             sql = _sql(
                 self._schema,
-                "SELECT id, file_path, content, metadata, created_at, updated_at, active"
-                " FROM {s}.blocks WHERE active = TRUE ORDER BY id",
+                "SELECT id, file_path, content, metadata, created_at, updated_at, active FROM {s}.blocks WHERE active = TRUE ORDER BY id",
             )
         else:
             sql = _sql(
                 self._schema,
-                "SELECT id, file_path, content, metadata, created_at, updated_at, active"
-                " FROM {s}.blocks ORDER BY id",
+                "SELECT id, file_path, content, metadata, created_at, updated_at, active FROM {s}.blocks ORDER BY id",
             )
         try:
             with pool.connection() as conn:
@@ -336,8 +310,7 @@ class PostgresBlockStore:
         psycopg, _ = _require_psycopg()
         sql = _sql(
             self._schema,
-            "SELECT id, file_path, content, metadata, created_at, updated_at, active"
-            " FROM {s}.blocks WHERE id = %s",
+            "SELECT id, file_path, content, metadata, created_at, updated_at, active FROM {s}.blocks WHERE id = %s",
         )
         try:
             with pool.connection() as conn:
@@ -457,9 +430,7 @@ class PostgresBlockStore:
         )
         sql_log = _sql(
             self._schema,
-            "INSERT INTO {s}.deleted_blocks (block_id, content, deleted_at)"
-            " VALUES (%s, %s, NOW())"
-            " ON CONFLICT DO NOTHING",
+            "INSERT INTO {s}.deleted_blocks (block_id, content, deleted_at) VALUES (%s, %s, NOW()) ON CONFLICT DO NOTHING",
         )
         try:
             with pool.connection() as conn:
@@ -515,9 +486,7 @@ class PostgresBlockStore:
             blocks_to_snap = all_blocks
 
         # Build the manifest file list.
-        files_in_snap: list[str] = sorted(
-            {b.get("_source_file", "") for b in blocks_to_snap if b.get("_source_file")}
-        )
+        files_in_snap: list[str] = sorted({b.get("_source_file", "") for b in blocks_to_snap if b.get("_source_file")})
         manifest: dict[str, Any] = {"files": files_in_snap, "version": 2}
         manifest_json = json.dumps(manifest, default=str)
 
@@ -654,7 +623,6 @@ class PostgresBlockStore:
         except Exception as exc:
             raise BlockStoreError(f"diff failed for snap_id={snap_id!r}: {exc}") from exc
 
-
     # ─── Workspace lock surface ───────────────────────────────────────────────
 
     def lock(self, *, blocking: bool = True, timeout: float = 30.0) -> Any:
@@ -684,9 +652,7 @@ class PostgresBlockStore:
         holder = str(os.getpid())
         sql_acquire = _sql(
             self._schema,
-            "INSERT INTO {s}.workspace_lock (lock_id, holder)"
-            " VALUES (%s, %s)"
-            " ON CONFLICT (lock_id) DO NOTHING",
+            "INSERT INTO {s}.workspace_lock (lock_id, holder) VALUES (%s, %s) ON CONFLICT (lock_id) DO NOTHING",
         )
         sql_release = _sql(
             self._schema,
@@ -734,8 +700,7 @@ class PostgresBlockStore:
         import warnings
 
         warnings.warn(
-            "BlockStore.list_files() is deprecated; use list_blocks() instead. "
-            "The alias will be removed in v4.0.",
+            "BlockStore.list_files() is deprecated; use list_blocks() instead. The alias will be removed in v4.0.",
             DeprecationWarning,
             stacklevel=2,
         )

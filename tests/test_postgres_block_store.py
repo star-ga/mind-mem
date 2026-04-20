@@ -186,9 +186,7 @@ class TestSnapshotRestore:
         assert manifest["version"] == 2
         assert (tmp_path / "snap01" / "MANIFEST.json").is_file()
 
-    def test_snapshot_then_restore_reverts_changes(
-        self, store: PostgresBlockStore, tmp_path: Path
-    ) -> None:
+    def test_snapshot_then_restore_reverts_changes(self, store: PostgresBlockStore, tmp_path: Path) -> None:
         store.write_block(_make_block("D-20260419-110", statement="Before snapshot"))
         snap_dir = str(tmp_path / "snap02")
         store.snapshot(snap_dir)

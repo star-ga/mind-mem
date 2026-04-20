@@ -13,9 +13,7 @@ from mind_mem.block_store import MarkdownBlockStore
 def ws(tmp_path: Path) -> Path:
     """Minimal workspace with a decisions file and a root config file."""
     (tmp_path / "decisions").mkdir()
-    (tmp_path / "decisions" / "DECISIONS.md").write_text(
-        "[D-001]\nStatement: initial\nStatus: active\n\n---\n"
-    )
+    (tmp_path / "decisions" / "DECISIONS.md").write_text("[D-001]\nStatement: initial\nStatus: active\n\n---\n")
     (tmp_path / "intelligence").mkdir()
     (tmp_path / "memory").mkdir()
     (tmp_path / "AGENTS.md").write_text("agents config\n")

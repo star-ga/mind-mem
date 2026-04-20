@@ -17,9 +17,7 @@ try:
     from jose import ExpiredSignatureError, JWTError, jwt
     from jose.backends.rsa_backend import RSAKey  # noqa: F401 — presence check
 except ImportError as _err:  # pragma: no cover
-    raise ImportError(
-        "OIDC auth requires the 'api' extra: pip install 'mind-mem[api]'"
-    ) from _err
+    raise ImportError("OIDC auth requires the 'api' extra: pip install 'mind-mem[api]'") from _err
 
 
 # ---------------------------------------------------------------------------

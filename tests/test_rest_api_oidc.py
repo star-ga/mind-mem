@@ -172,11 +172,7 @@ class TestAdminAPIKeysEndToEnd:
             headers=_ADMIN_HEADER,
         )
         list_resp = admin_client.get("/v1/admin/api_keys", headers=_ADMIN_HEADER)
-        key_id = next(
-            k["key_id"]
-            for k in list_resp.json()["keys"]
-            if k["agent_id"] == "revoke-bot"
-        )
+        key_id = next(k["key_id"] for k in list_resp.json()["keys"] if k["agent_id"] == "revoke-bot")
         resp = admin_client.delete(f"/v1/admin/api_keys/{key_id}", headers=_ADMIN_HEADER)
         assert resp.status_code == 200
         assert resp.json()["revoked"] is True
@@ -193,11 +189,7 @@ class TestAdminAPIKeysEndToEnd:
         )
         old_key = create_resp.json()["key"]
         list_resp = admin_client.get("/v1/admin/api_keys", headers=_ADMIN_HEADER)
-        key_id = next(
-            k["key_id"]
-            for k in list_resp.json()["keys"]
-            if k["agent_id"] == "rotate-bot"
-        )
+        key_id = next(k["key_id"] for k in list_resp.json()["keys"] if k["agent_id"] == "rotate-bot")
         rotate_resp = admin_client.post(
             f"/v1/admin/api_keys/{key_id}/rotate",
             headers=_ADMIN_HEADER,

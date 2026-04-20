@@ -184,7 +184,7 @@ class TestCachedRecall:
 
         def inner(query: str, *, limit: int, active_only: bool, backend: str) -> str:
             call_count["n"] += 1
-            return f'limit={limit}'
+            return f"limit={limit}"
 
         cached_recall(inner, "q", limit=5)
         cached_recall(inner, "q", limit=10)

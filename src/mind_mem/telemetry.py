@@ -29,10 +29,7 @@ from typing import Any, Callable, TypeVar
 # Availability probes (zero-import-cost checks)
 # ---------------------------------------------------------------------------
 
-_HAS_OTEL = (
-    importlib.util.find_spec("opentelemetry") is not None
-    and importlib.util.find_spec("opentelemetry.trace") is not None
-)
+_HAS_OTEL = importlib.util.find_spec("opentelemetry") is not None and importlib.util.find_spec("opentelemetry.trace") is not None
 _HAS_PROM = importlib.util.find_spec("prometheus_client") is not None
 
 # ---------------------------------------------------------------------------

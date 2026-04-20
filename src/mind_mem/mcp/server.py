@@ -131,8 +131,7 @@ def main() -> None:
 
     if args.token and not os.environ.get("MIND_MEM_TOKEN"):
         warnings.warn(
-            "Passing --token on the command line exposes it in /proc/cmdline. "
-            "Use MIND_MEM_TOKEN environment variable instead.",
+            "Passing --token on the command line exposes it in /proc/cmdline. Use MIND_MEM_TOKEN environment variable instead.",
             stacklevel=2,
         )
         os.environ["MIND_MEM_TOKEN"] = args.token

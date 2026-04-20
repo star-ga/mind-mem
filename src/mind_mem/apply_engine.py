@@ -311,8 +311,6 @@ def check_preconditions(ws):
 # ═══════════════════════════════════════════════
 
 
-
-
 def _store_for(ws):
     """Resolve the active BlockStore for *ws* via the storage factory.
 

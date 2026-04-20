@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 570 | **Est. tokens:** ~1,167,625
-**Generated:** 2026-04-20 09:28 UTC
+**Files:** 570 | **Est. tokens:** ~1,167,314
+**Generated:** 2026-04-20 09:37 UTC
 
 ## Token Budget Guide
 
@@ -51,15 +51,15 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 121 | ~422,177 |
-| `src/mind_mem/api/` | 4 | ~11,336 |
-| `src/mind_mem/mcp/` | 3 | ~3,229 |
-| `src/mind_mem/mcp/infra/` | 8 | ~5,854 |
+| `src/mind_mem/` | 121 | ~421,967 |
+| `src/mind_mem/api/` | 4 | ~11,307 |
+| `src/mind_mem/mcp/` | 3 | ~3,225 |
+| `src/mind_mem/mcp/infra/` | 8 | ~5,850 |
 | `src/mind_mem/mcp/tools/` | 17 | ~37,198 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
-| `src/mind_mem/storage/` | 1 | ~1,018 |
+| `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 199 | ~404,316 |
+| `tests/` | 199 | ~404,290 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -318,9 +318,9 @@
 ### `src/mind_mem/api/`
 
 - `api_keys.py` (~2717 tok, huge) — Per-agent API key store for the mind-mem REST API.
-- `auth.py` (~2479 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
+- `auth.py` (~2476 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
 - `__init__.py` (~20 tok, tiny)
-- `rest.py` (~6120 tok, huge) — REST API layer for mind-mem (v3.2.0).
+- `rest.py` (~6094 tok, huge) — REST API layer for mind-mem (v3.2.0).
 ### `src/mind_mem/`
 
 - `apply_engine.py` (~13120 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
@@ -331,10 +331,10 @@
 - `baseline_snapshot.py` (~4176 tok, huge) — Baseline snapshot for intent drift detection.
 - `block_metadata.py` (~2223 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~7111 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
-- `block_store_encrypted.py` (~2316 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store_postgres.py` (~7972 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
-- `block_store_postgres_replica.py` (~2101 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
-- `block_store.py` (~8980 tok, huge) — BlockStore abstraction — decouples block access from storage format.
+- `block_store_encrypted.py` (~2313 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `block_store_postgres.py` (~7858 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
+- `block_store_postgres_replica.py` (~2095 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
+- `block_store.py` (~8923 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `calibration.py` (~4811 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
 - `capture.py` (~3698 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
@@ -389,7 +389,7 @@
 - `acl.py` (~895 tok, large) — Per-tool ACL — scope enforcement for the MCP surface.
 - `config.py` (~817 tok, large) — ``mind-mem.json`` config loading + configurable limits.
 - `constants.py` (~98 tok, small) — MCP-surface-wide constants shared by the infra submodules.
-- `http_auth.py` (~1009 tok, large) — HTTP bearer-token authentication helpers for the MCP surface.
+- `http_auth.py` (~1005 tok, large) — HTTP bearer-token authentication helpers for the MCP surface.
 - `__init__.py` (~449 tok, medium) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
 - `observability.py` (~1175 tok, large) — Observability + DB-busy helpers for the MCP surface.
 - `rate_limit.py` (~928 tok, large) — Per-client sliding-window rate limiter for the MCP surface.
@@ -398,7 +398,7 @@
 
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
 - `resources.py` (~1342 tok, large) — MCP ``@mcp.resource`` declarations.
-- `server.py` (~1672 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
+- `server.py` (~1668 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/`
 
 - `mcp_server.py` (~1780 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
@@ -429,7 +429,7 @@
 - `mind_ffi.py` (~5094 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~8377 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~8350 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mrs.py` (~1604 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `multi_modal.py` (~1659 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `namespaces.py` (~3560 tok, huge) — mind-mem Multi-Agent Namespace & ACL Engine. Zero external deps.
@@ -482,11 +482,11 @@
 - `staleness.py` (~1179 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/storage/`
 
-- `__init__.py` (~1018 tok, large) — Storage factory for mind-mem block stores (v3.2.0).
+- `__init__.py` (~980 tok, large) — Storage factory for mind-mem block stores (v3.2.0).
 ### `src/mind_mem/`
 
 - `_task_status_literals.sh` (~118 tok, small) — AUTO-GENERATED — do not edit by hand.
-- `telemetry.py` (~2404 tok, huge) — mind-mem Telemetry — OpenTelemetry traces + Prometheus metrics.
+- `telemetry.py` (~2401 tok, huge) — mind-mem Telemetry — OpenTelemetry traces + Prometheus metrics.
 - `tiered_memory.py` (~1102 tok, large) — # Copyright 2026 STARGA, Inc.
 - `tier_recall.py` (~1478 tok, large) — Tier-aware recall score boosting (v3.2.0 hot/cold tier wire-up).
 - `tracking.py` (~1918 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -533,10 +533,10 @@
 - `test_agent_id_filter.py` (~335 tok, medium) — Tests for agent_id namespace filtering."""
 - `test_alerting.py` (~1777 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_allow_decompose.py` (~311 tok, medium) — Tests for _allow_decompose recall parameter."""
-- `test_api_keys.py` (~2138 tok, huge) — Tests for APIKeyStore in src/mind_mem/api/api_keys.py."""
-- `test_apply_engine_backend_routing.py` (~1034 tok, large) — v3.2.0 §1.4 PR-6 — apply_engine routes through configured BlockStore."""
+- `test_api_keys.py` (~2133 tok, huge) — Tests for APIKeyStore in src/mind_mem/api/api_keys.py."""
+- `test_apply_engine_backend_routing.py` (~1066 tok, large) — v3.2.0 §1.4 PR-6 — apply_engine routes through configured BlockStore."""
 - `test_apply_engine.py` (~11568 tok, huge) — Tests for apply_engine.py — focus on security, validation, and rollback."""
-- `test_atomicity_maintenance_scope.py` (~1287 tok, large) — v3.2.0 §2.2 — regression test for the ``maintenance/`` atomicity fix.
+- `test_atomicity_maintenance_scope.py` (~1283 tok, large) — v3.2.0 §2.2 — regression test for the ``maintenance/`` atomicity fix.
 - `test_audit_chain.py` (~2398 tok, huge) — Tests for mind-mem hash-chain mutation log (audit_chain.py)."""
 - `test_auto_resolver.py` (~1185 tok, large) — Tests for mind-mem auto contradiction resolution (auto_resolver.py)."""
 - `test_axis_recall_mcp.py` (~1381 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -554,7 +554,7 @@
 - `test_block_store_encrypted.py` (~999 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_block_store_lock.py` (~928 tok, large) — v3.2.0 §1.4 PR-4 — MarkdownBlockStore.lock() tests."""
 - `test_block_store.py` (~2202 tok, huge) — Tests for block_store.py — BlockStore protocol and MarkdownBlockStore."""
-- `test_block_store_snapshot.py` (~749 tok, large) — v3.2.0 §1.4 PR-3 — MarkdownBlockStore.snapshot / restore / diff tests."""
+- `test_block_store_snapshot.py` (~746 tok, large) — v3.2.0 §1.4 PR-3 — MarkdownBlockStore.snapshot / restore / diff tests."""
 - `test_block_store_write.py` (~2346 tok, huge) — v3.2.0 §1.4 PR-2 — MarkdownBlockStore.write_block + delete_block tests."""
 - `test_block_types.py` (~437 tok, medium) — Tests for different block types in recall."""
 - `test_bootstrap_corpus.py` (~1798 tok, huge) — Tests for bootstrap_corpus.py — backfill pipeline module."""
@@ -636,24 +636,24 @@
 - `test_mcp_integration.py` (~5177 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_server.py` (~4897 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
 - `test_mcp_tools.py` (~277 tok, medium) — Tests for MCP server tool definitions."""
-- `test_mcp_tool_surface_v3_2.py` (~1738 tok, huge) — v3.2.0 — consolidated MCP public dispatcher tests."""
+- `test_mcp_tool_surface_v3_2.py` (~1733 tok, huge) — v3.2.0 — consolidated MCP public dispatcher tests."""
 - `test_mcp_v140.py` (~5456 tok, huge) — Tests for MCP v1.4.0 features — issues #29, #31, #35, #36.
 - `test_memory_evolution.py` (~340 tok, medium) — Tests for memory evolution tracking."""
 - `test_memory_practical_e2e.py` (~2389 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_memory_tiers.py` (~3479 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_merkle_tree.py` (~3185 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mind_ffi.py` (~291 tok, medium) — Tests for MIND FFI module."""
-- `test_mm_cli_debug.py` (~3347 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_mm_cli_debug.py` (~3339 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_multi_file_recall.py` (~329 tok, medium) — Tests for recall across multiple files."""
 - `test_namespaces.py` (~2411 tok, huge) — Tests for namespaces.py — zero external deps (stdlib unittest)."""
 - `test_niah.py` (~4987 tok, huge) — Needle In A Haystack (NIAH) benchmark for mind-mem recall.
 - `test_observability.py` (~791 tok, large) — Tests for observability.py — structured logging and metrics."""
 - `test_observation_axis.py` (~3330 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_observation_compress.py` (~2754 tok, huge) — Tests for observation_compress module.
-- `test_oidc_auth.py` (~2765 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
+- `test_oidc_auth.py` (~2754 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
 - `test_ontology.py` (~2306 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_postgres_block_store.py` (~3140 tok, huge) — v3.2.0 §1.4 PR-5 — PostgresBlockStore integration tests.
-- `test_postgres_replica_routing.py` (~1784 tok, huge) — v3.2.0 — tests for read-replica routing in ReplicatedPostgresBlockStore."""
+- `test_postgres_block_store.py` (~3136 tok, huge) — v3.2.0 §1.4 PR-5 — PostgresBlockStore integration tests.
+- `test_postgres_replica_routing.py` (~1777 tok, huge) — v3.2.0 — tests for read-replica routing in ReplicatedPostgresBlockStore."""
 - `test_prefetch_context.py` (~1487 tok, large) — Tests for prefetch_context() in recall.py."""
 - `test_prefetch.py` (~326 tok, medium) — Tests for prefetch functionality."""
 - `test_prefix_cache.py` (~3140 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -688,7 +688,7 @@
 - `test_recall_vector.py` (~4901 tok, huge) — Tests for recall_vector.py — VectorBackend semantic search."""
 - `test_rerank_debug.py` (~342 tok, medium) — Tests for rerank debug mode."""
 - `test_reranking.py` (~246 tok, medium) — Tests for reranking module."""
-- `test_rest_api_oidc.py` (~2709 tok, huge) — Tests for OIDC callback + admin API key endpoints (v3.2.0)."""
+- `test_rest_api_oidc.py` (~2686 tok, huge) — Tests for OIDC callback + admin API key endpoints (v3.2.0)."""
 - `test_rest_api.py` (~3505 tok, huge) — Tests for the mind-mem REST API layer (v3.2.0).
 - `test_retrieval_diagnostics.py` (~2419 tok, huge) — Tests for retrieval diagnostics (#428), corpus isolation (#429), and intent instrumentation (#430)."""
 - `test_retrieval_graph.py` (~2242 tok, huge) — Tests for retrieval_graph.py — retrieval logging, co-retrieval graph, hard negatives."""
@@ -709,7 +709,7 @@
 - `test_telemetry.py` (~2829 tok, huge) — Tests for src/mind_mem/telemetry.py.
 - `test_temporal.py` (~223 tok, medium) — Tests for temporal filtering module."""
 - `test_tier_decay.py` (~924 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_tier_recall.py` (~1406 tok, large) — Tests for tier-aware recall boosting (v3.2.0 hot/cold tier wire-up)."""
+- `test_tier_recall.py` (~1418 tok, large) — Tests for tier-aware recall boosting (v3.2.0 hot/cold tier wire-up)."""
 - `test_tokenization.py` (~436 tok, medium) — Tests for tokenization module."""
 - `test_trajectory.py` (~2392 tok, huge) — Tests for trajectory.py — trajectory memory block operations."""
 - `test_transcript_capture.py` (~3235 tok, huge) — Tests for transcript_capture.py — zero external deps (stdlib unittest)."""

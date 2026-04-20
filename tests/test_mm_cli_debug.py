@@ -147,10 +147,7 @@ class TestMmExplain:
         assert exc.value.code == 0
 
     def _fake_results(self, n: int = 3) -> list[dict[str, Any]]:
-        return [
-            {"_id": f"D-00{i}", "score": 0.9 - i * 0.1, "Statement": f"result {i}"}
-            for i in range(1, n + 1)
-        ]
+        return [{"_id": f"D-00{i}", "score": 0.9 - i * 0.1, "Statement": f"result {i}"} for i in range(1, n + 1)]
 
     _EMPTY_DIAG: dict[str, Any] = {"intent_distribution": {}, "stage_rejection_rates": {}}
 

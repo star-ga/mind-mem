@@ -22,10 +22,7 @@ def ws_with_tiers(tmp_path: Path) -> Path:
     db_dir.mkdir()
     db_path = db_dir / "index.db"
     conn = sqlite3.connect(str(db_path))
-    conn.execute(
-        "CREATE TABLE block_tiers (id TEXT PRIMARY KEY, tier INTEGER NOT NULL DEFAULT 1, "
-        "updated_at TEXT, demotion_reason TEXT)"
-    )
+    conn.execute("CREATE TABLE block_tiers (id TEXT PRIMARY KEY, tier INTEGER NOT NULL DEFAULT 1, updated_at TEXT, demotion_reason TEXT)")
     # Seed four blocks, one per tier.
     seed = [
         ("D-20260420-001", 1, "2026-04-20T00:00:00Z", None),
@@ -125,7 +122,13 @@ class TestConfigFlag:
 class TestSummary:
     def test_counts_per_tier(self) -> None:
         tier_map = {
-            "A": 1, "B": 1, "C": 2, "D": 3, "E": 3, "F": 3, "G": 4,
+            "A": 1,
+            "B": 1,
+            "C": 2,
+            "D": 3,
+            "E": 3,
+            "F": 3,
+            "G": 4,
         }
         summary = tier_boost_summary(tier_map)
         assert summary == {

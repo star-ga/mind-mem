@@ -101,9 +101,7 @@ class TestOIDCConfig:
 class TestOIDCProviderInit:
     def test_jwks_fetched_lazily(self) -> None:
         """JWKS should only be fetched when verify() is first called."""
-        config = OIDCConfig(
-            issuer=_ISSUER, client_id=_CLIENT_ID, client_secret="s", audience=_AUDIENCE
-        )
+        config = OIDCConfig(issuer=_ISSUER, client_id=_CLIENT_ID, client_secret="s", audience=_AUDIENCE)
         provider = OIDCProvider(config)
         assert provider._jwks is None
 
@@ -236,9 +234,7 @@ class TestExtractScopes:
 
     def test_combined_claims_deduplicated(self) -> None:
         provider = _provider()
-        scopes = provider.extract_scopes(
-            {"scope": "openid", "scopes": ["openid", "user"], "roles": ["user"]}
-        )
+        scopes = provider.extract_scopes({"scope": "openid", "scopes": ["openid", "user"], "roles": ["user"]})
         assert scopes.count("openid") == 1
         assert scopes.count("user") == 1
 

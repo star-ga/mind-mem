@@ -98,8 +98,7 @@ class ReplicatedPostgresBlockStore:
             raise ValueError("ReplicatedPostgresBlockStore requires ≥1 replica DSN")
         self._primary = PostgresBlockStore(primary_dsn, schema=schema, workspace=workspace)
         self._replicas: list[_ReplicaState] = [
-            _ReplicaState(PostgresBlockStore(dsn, schema=schema, workspace=workspace))
-            for dsn in replica_dsns
+            _ReplicaState(PostgresBlockStore(dsn, schema=schema, workspace=workspace)) for dsn in replica_dsns
         ]
         self._rr_counter = 0
         self._rr_lock = threading.Lock()
@@ -184,8 +183,7 @@ class ReplicatedPostgresBlockStore:
         import warnings
 
         warnings.warn(
-            "BlockStore.list_files() is deprecated; use list_blocks() instead. "
-            "The alias will be removed in v4.0.",
+            "BlockStore.list_files() is deprecated; use list_blocks() instead. The alias will be removed in v4.0.",
             DeprecationWarning,
             stacklevel=2,
         )

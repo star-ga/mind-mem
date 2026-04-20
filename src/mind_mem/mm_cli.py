@@ -260,11 +260,7 @@ def _render_inspect_text(block: dict[str, Any], provenance: dict[str, Any]) -> s
     if contradictions:
         lines.append(_c("  Contradictions / supersessions:", _C_BOLD))
         for edge in contradictions:
-            lines.append(
-                f"  {_c(edge['source_id'], _C_RED)}"
-                f" [{edge['edge_type']}] "
-                f"{_c(edge['target_id'], _C_RED)}"
-            )
+            lines.append(f"  {_c(edge['source_id'], _C_RED)} [{edge['edge_type']}] {_c(edge['target_id'], _C_RED)}")
     return "\n".join(lines)
 
 
@@ -867,10 +863,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_trace.add_argument(
         "--live",
         action="store_true",
-        help=(
-            "Stream new events in real time. Reads MIND_MEM_LOG_FILE if set, "
-            "otherwise reads stdin."
-        ),
+        help=("Stream new events in real time. Reads MIND_MEM_LOG_FILE if set, otherwise reads stdin."),
     )
     p_trace.add_argument(
         "--last",

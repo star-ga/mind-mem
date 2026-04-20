@@ -118,8 +118,7 @@ class EncryptedBlockStore:
         import warnings
 
         warnings.warn(
-            "BlockStore.list_files() is deprecated; use list_blocks() instead. "
-            "The alias will be removed in v4.0.",
+            "BlockStore.list_files() is deprecated; use list_blocks() instead. The alias will be removed in v4.0.",
             DeprecationWarning,
             stacklevel=2,
         )

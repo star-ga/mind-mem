@@ -23,10 +23,7 @@ try:
     from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
     from pydantic import BaseModel, Field, field_validator
 except ImportError as _err:  # pragma: no cover
-    raise ImportError(
-        "mind-mem REST API requires the 'api' extra: "
-        "pip install 'mind-mem[api]'"
-    ) from _err
+    raise ImportError("mind-mem REST API requires the 'api' extra: pip install 'mind-mem[api]'") from _err
 
 from mind_mem.mcp.infra.constants import MCP_SCHEMA_VERSION
 from mind_mem.mcp.infra.http_auth import _check_token, verify_token
@@ -413,9 +410,7 @@ def create_app(workspace: str | None = None) -> FastAPI:
         summary="Stage a new decision or task proposal",
         dependencies=[Depends(_rate_limit)],
     )
-    def propose_update(
-        body: ProposeUpdateRequest, _token: Annotated[str | None, Depends(_require_admin)]
-    ) -> Any:
+    def propose_update(body: ProposeUpdateRequest, _token: Annotated[str | None, Depends(_require_admin)]) -> Any:
         _set_workspace_env(resolved_ws)
         from mind_mem.mcp.tools.governance import propose_update as _propose_update
 
@@ -434,9 +429,7 @@ def create_app(workspace: str | None = None) -> FastAPI:
         summary="Apply a staged proposal (admin scope required)",
         dependencies=[Depends(_rate_limit)],
     )
-    def approve_apply(
-        body: ApproveApplyRequest, _token: Annotated[str | None, Depends(_require_admin)]
-    ) -> Any:
+    def approve_apply(body: ApproveApplyRequest, _token: Annotated[str | None, Depends(_require_admin)]) -> Any:
         _set_workspace_env(resolved_ws)
         from mind_mem.mcp.tools.governance import approve_apply as _approve_apply
 
@@ -449,9 +442,7 @@ def create_app(workspace: str | None = None) -> FastAPI:
         summary="Rollback an applied proposal (admin scope required)",
         dependencies=[Depends(_rate_limit)],
     )
-    def rollback_proposal(
-        body: RollbackProposalRequest, _token: Annotated[str | None, Depends(_require_admin)]
-    ) -> Any:
+    def rollback_proposal(body: RollbackProposalRequest, _token: Annotated[str | None, Depends(_require_admin)]) -> Any:
         _set_workspace_env(resolved_ws)
         from mind_mem.mcp.tools.governance import rollback_proposal as _rollback
 
@@ -665,10 +656,7 @@ def run(host: str = "127.0.0.1", port: int = 8080, workspace: str | None = None)
     try:
         import uvicorn  # type: ignore[import-untyped]
     except ImportError as err:  # pragma: no cover
-        raise ImportError(
-            "uvicorn is required to run the REST API server. "
-            "Install: pip install 'mind-mem[api]'"
-        ) from err
+        raise ImportError("uvicorn is required to run the REST API server. Install: pip install 'mind-mem[api]'") from err
 
     server_app = create_app(workspace)
     uvicorn.run(server_app, host=host, port=port)

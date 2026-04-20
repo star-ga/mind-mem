@@ -149,11 +149,7 @@ def _cleanup_orphans_from_manifest(ws: str, manifest: list[str], cleanup_invento
                     if _is_in_excluded_dir(ws, root):
                         dirs.clear()
                         continue
-                    dirs[:] = [
-                        sub
-                        for sub in dirs
-                        if not _is_in_excluded_dir(ws, os.path.join(root, sub))
-                    ]
+                    dirs[:] = [sub for sub in dirs if not _is_in_excluded_dir(ws, os.path.join(root, sub))]
                     for fname in files:
                         rel = os.path.relpath(os.path.join(root, fname), ws)
                         if rel.replace(os.sep, "/") not in allowed:
@@ -217,9 +213,7 @@ _CANONICAL_FIELD_ORDER: tuple[str, ...] = (
     "Excerpt",
     "Action",
 )
-_FORBIDDEN_WRITE_FIELDS: frozenset[str] = frozenset(
-    {"_id", "_source_file", "_line_number", "_raw"}
-)
+_FORBIDDEN_WRITE_FIELDS: frozenset[str] = frozenset({"_id", "_source_file", "_line_number", "_raw"})
 
 
 def _render_block(block: dict[str, Any]) -> str:
@@ -333,11 +327,7 @@ def _locate_block_in_text(text: str, block_id: str) -> Optional[tuple[int, int, 
             block_start = i
         elif block_start is not None and block_end is None:
             stripped = line.strip()
-            if (
-                line.startswith("[")
-                and stripped.endswith("]")
-                and _re.match(r"^\[[A-Z]+-", stripped)
-            ):
+            if line.startswith("[") and stripped.endswith("]") and _re.match(r"^\[[A-Z]+-", stripped):
                 block_end = i
             elif stripped == "---":
                 preceding_blank = (i == 0) or (lines[i - 1].strip() == "")
@@ -551,8 +541,7 @@ class MarkdownBlockStore:
     def list_files(self) -> list[str]:
         """Deprecated alias for :meth:`list_blocks` — removed in v4.0."""
         warnings.warn(
-            "BlockStore.list_files() is deprecated; use list_blocks() instead. "
-            "The alias will be removed in v4.0.",
+            "BlockStore.list_files() is deprecated; use list_blocks() instead. The alias will be removed in v4.0.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -626,10 +615,7 @@ class MarkdownBlockStore:
             raise ValueError(f"invalid block id: {block_id!r}")
         target = _resolve_block_file(self._workspace, block_id)
         if target is None:
-            raise ValueError(
-                f"no canonical file mapping for block id {block_id!r}; "
-                f"add an entry to _BLOCK_PREFIX_MAP to enable writes"
-            )
+            raise ValueError(f"no canonical file mapping for block id {block_id!r}; add an entry to _BLOCK_PREFIX_MAP to enable writes")
 
         rendered = _render_block(block)
         os.makedirs(os.path.dirname(target), exist_ok=True)

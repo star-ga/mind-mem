@@ -173,6 +173,4 @@ class TestBuildFromConfig:
         from mind_mem.block_store_postgres_replica import build_from_config
 
         with pytest.raises(ValueError, match="replicas"):
-            build_from_config(
-                {"block_store": {"dsn": "x", "replicas": "not-a-list"}}
-            )
+            build_from_config({"block_store": {"dsn": "x", "replicas": "not-a-list"}})

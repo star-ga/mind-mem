@@ -96,8 +96,7 @@ class TestAtomicityMaintenanceScope:
         # snapshot, because those entries are signal (errors logged during
         # the failed apply, validation progress, etc.).
         assert "appended-during-apply" in report.read_text(), (
-            "append-only file was reverted by restore_snapshot — "
-            "atomicity exclusion rule violated"
+            "append-only file was reverted by restore_snapshot — atomicity exclusion rule violated"
         )
 
     def test_restore_creates_missing_tracked_file(self, ws: Path) -> None:

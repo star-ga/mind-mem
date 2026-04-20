@@ -73,10 +73,7 @@ def get_block_store(workspace: str, config: dict[str, Any] | None = None) -> Blo
     if backend == "encrypted":
         passphrase = os.environ.get("MIND_MEM_ENCRYPTION_PASSPHRASE", "").strip()
         if not passphrase:
-            raise ValueError(
-                "block_store.backend='encrypted' requires the "
-                "MIND_MEM_ENCRYPTION_PASSPHRASE environment variable to be set"
-            )
+            raise ValueError("block_store.backend='encrypted' requires the MIND_MEM_ENCRYPTION_PASSPHRASE environment variable to be set")
         from ..block_store_encrypted import EncryptedBlockStore
 
         inner = MarkdownBlockStore(workspace)
@@ -87,19 +84,11 @@ def get_block_store(workspace: str, config: dict[str, Any] | None = None) -> Blo
     if backend == "postgres":
         dsn: str = bs_cfg.get("dsn", "")
         if not dsn:
-            raise ValueError(
-                "block_store.backend='postgres' requires block_store.dsn to be set in mind-mem.json"
-            )
+            raise ValueError("block_store.backend='postgres' requires block_store.dsn to be set in mind-mem.json")
         try:
             from ..block_store_postgres import PostgresBlockStore
         except ImportError as exc:
-            raise ImportError(
-                "The PostgreSQL backend requires psycopg. "
-                'Install it with: pip install "mind-mem[postgres]"'
-            ) from exc
+            raise ImportError('The PostgreSQL backend requires psycopg. Install it with: pip install "mind-mem[postgres]"') from exc
         return cast(BlockStore, PostgresBlockStore(dsn=dsn, workspace=workspace))
 
-    raise ValueError(
-        f"Unknown block_store.backend={backend!r}. "
-        f"Supported values: {', '.join(repr(b) for b in _SUPPORTED_BACKENDS)}"
-    )
+    raise ValueError(f"Unknown block_store.backend={backend!r}. Supported values: {', '.join(repr(b) for b in _SUPPORTED_BACKENDS)}")

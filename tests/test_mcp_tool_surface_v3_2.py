@@ -188,9 +188,7 @@ class TestRegistration:
         public.register(mock_mcp)
         # 7 dispatchers: recall, staged_change, memory_verify,
         # graph, core, kernels, compiled_truth.
-        registered_names = [
-            call.args[0].__name__ for call in mock_mcp.tool.call_args_list if call.args
-        ]
+        registered_names = [call.args[0].__name__ for call in mock_mcp.tool.call_args_list if call.args]
         expected = {
             "recall",
             "staged_change",
