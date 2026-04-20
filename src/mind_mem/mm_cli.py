@@ -180,6 +180,301 @@ def _cmd_vault_write(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Debug visualization subcommands (v3.2.0)
+# ---------------------------------------------------------------------------
+
+# ANSI colour codes — used only when stdout is a TTY
+_C_RESET = "\033[0m"
+_C_BOLD = "\033[1m"
+_C_DIM = "\033[2m"
+_C_GREEN = "\033[32m"
+_C_YELLOW = "\033[33m"
+_C_CYAN = "\033[36m"
+_C_RED = "\033[31m"
+
+_INSPECT_FIXED_FIELDS = ("_id", "Statement", "Status", "Date", "Tags")
+_INSPECT_SKIP = frozenset({"_source_file", "_line_number", "_raw"})
+
+
+def _use_color() -> bool:
+    return sys.stdout.isatty()
+
+
+def _c(text: str, *codes: str) -> str:
+    if not _use_color():
+        return text
+    return "".join(codes) + text + _C_RESET
+
+
+def _build_provenance(workspace: str, block_id: str) -> dict[str, Any]:
+    """Gather edges + causal chains for a block from the CausalGraph."""
+    from mind_mem.causal_graph import CausalGraph
+
+    graph = CausalGraph(workspace)
+    deps = [e.to_dict() for e in graph.dependencies(block_id)]
+    chains = graph.causal_chain(block_id, max_depth=3)
+    contradiction_types = {"contradicts", "supersedes"}
+    all_edges = deps + [e.to_dict() for e in graph.dependents(block_id)]
+    contradictions = [e for e in all_edges if e.get("edge_type") in contradiction_types]
+    return {
+        "block_id": block_id,
+        "dependencies": deps,
+        "causal_chains": chains,
+        "contradictions": contradictions,
+    }
+
+
+def _render_inspect_text(block: dict[str, Any], provenance: dict[str, Any]) -> str:
+    lines: list[str] = []
+    block_id = block.get("_id", "?")
+    lines.append(_c(f"Block: {block_id}", _C_BOLD, _C_CYAN))
+    lines.append(_c("─" * 60, _C_DIM))
+    for key in _INSPECT_FIXED_FIELDS:
+        if key in block and key not in _INSPECT_SKIP:
+            lines.append(f"{_c(f'  {key}:', _C_BOLD)} {block[key]}")
+    remaining = sorted(k for k in block if k not in _INSPECT_FIXED_FIELDS and k not in _INSPECT_SKIP)
+    for key in remaining:
+        lines.append(f"{_c(f'  {key}:', _C_DIM)} {block[key]}")
+
+    lines.append("")
+    lines.append(_c("Provenance", _C_BOLD, _C_YELLOW))
+    lines.append(_c("─" * 60, _C_DIM))
+    deps = provenance.get("dependencies", [])
+    if deps:
+        lines.append(_c("  Direct dependencies:", _C_BOLD))
+        for edge in deps:
+            tid = edge["target_id"]
+            etype = edge["edge_type"]
+            w = edge.get("weight", 1.0)
+            lines.append(f"  {_c(f'→ {tid}', _C_GREEN)}  [{etype}]  weight={w:.2f}")
+    else:
+        lines.append(_c("  No direct dependencies.", _C_DIM))
+
+    chains = provenance.get("causal_chains", [])
+    if chains:
+        lines.append(_c("  Causal chains (depth ≤ 3):", _C_BOLD))
+        for chain in chains:
+            lines.append("    " + _c(" → ", _C_DIM).join(chain))
+
+    contradictions = provenance.get("contradictions", [])
+    if contradictions:
+        lines.append(_c("  Contradictions / supersessions:", _C_BOLD))
+        for edge in contradictions:
+            lines.append(
+                f"  {_c(edge['source_id'], _C_RED)}"
+                f" [{edge['edge_type']}] "
+                f"{_c(edge['target_id'], _C_RED)}"
+            )
+    return "\n".join(lines)
+
+
+def _cmd_inspect(args: argparse.Namespace) -> int:
+    ws = _workspace()
+    from mind_mem.block_store import MarkdownBlockStore
+
+    store = MarkdownBlockStore(ws)
+    block = store.get_by_id(args.block_id)
+    if block is None:
+        print(json.dumps({"error": f"Block not found: {args.block_id}"}, indent=2), file=sys.stderr)
+        return 1
+
+    provenance = _build_provenance(ws, args.block_id)
+    fmt = getattr(args, "format", "text") or "text"
+    if fmt == "json":
+        print(json.dumps({"block": block, "provenance": provenance}, indent=2, default=str))
+    else:
+        print(_render_inspect_text(block, provenance))
+    return 0
+
+
+# ── mm explain ────────────────────────────────────────────────────────────────
+
+
+def _stage_bar(stages_hit: list[bool]) -> str:
+    if _use_color():
+        symbols = [_c("◉", _C_GREEN) if s else _c("◯", _C_DIM) for s in stages_hit]
+    else:
+        symbols = [f"[{'x' if s else ' '}]" for s in stages_hit]
+    return " ".join(symbols)
+
+
+def _cmd_explain(args: argparse.Namespace) -> int:
+    ws = _workspace()
+    limit = getattr(args, "limit", 10) or 10
+    backend = getattr(args, "backend", "auto") or "auto"
+
+    if backend == "hybrid":
+        try:
+            from mind_mem.hybrid_recall import HybridBackend
+
+            cfg: dict[str, Any] = {}
+            cfg_path = os.path.join(ws, "mind-mem.json")
+            if os.path.isfile(cfg_path):
+                with open(cfg_path, encoding="utf-8") as fh:
+                    cfg = json.load(fh).get("recall", {})
+            results = HybridBackend(cfg).search(ws, args.query, limit=limit)
+        except Exception:
+            from mind_mem.recall import recall as _recall
+
+            results = _recall(ws, args.query, limit=limit)
+    else:
+        from mind_mem.recall import recall as _recall
+
+        results = _recall(ws, args.query, limit=limit)
+
+    trace_rows: list[dict[str, Any]] = []
+    for rank, r in enumerate(results, 1):
+        bm25 = r.get("score", r.get("bm25_score", 0.0))
+        vec = r.get("vector_score", r.get("embed_score"))
+        rrf = r.get("rrf_score")
+        rerank = r.get("rerank_score", r.get("ce_score"))
+        trace_rows.append(
+            {
+                "rank": rank,
+                "block_id": r.get("_id", "?"),
+                "bm25": round(float(bm25), 4),
+                "vector": round(float(vec), 4) if vec is not None else None,
+                "rrf": round(float(rrf), 4) if rrf is not None else None,
+                "rerank": round(float(rerank), 4) if rerank is not None else None,
+                "stages_hit": [True, vec is not None, rrf is not None, rerank is not None],
+            }
+        )
+
+    from mind_mem.retrieval_graph import retrieval_diagnostics
+
+    diag = retrieval_diagnostics(ws, last_n=20)
+
+    fmt = getattr(args, "format", "text") or "text"
+    if fmt == "json":
+        print(json.dumps({"query": args.query, "results": trace_rows, "diagnostics": diag}, indent=2, default=str))
+        return 0
+
+    print(_c(f"Retrieval trace: {args.query!r}", _C_BOLD, _C_CYAN))
+    print(_c("─" * 70, _C_DIM))
+    header = f"  {'#':>4}  {'BLOCK':20}  {'BM25':>7}  {'VEC':>7}  {'RRF':>7}  {'RERANK':>7}  STAGES"
+    print(_c(header, _C_BOLD))
+    print(_c("─" * 70, _C_DIM))
+    for row in trace_rows:
+        bm25_s = f"{row['bm25']:7.4f}"
+        vec_s = f"{row['vector']:7.4f}" if row["vector"] is not None else "      -"
+        rrf_s = f"{row['rrf']:7.4f}" if row["rrf"] is not None else "      -"
+        rer_s = f"{row['rerank']:7.4f}" if row["rerank"] is not None else "      -"
+        bid = str(row["block_id"])[:20]
+        print(f"  {row['rank']:>4}  {bid:20}  {bm25_s}  {vec_s}  {rrf_s}  {rer_s}  {_stage_bar(row['stages_hit'])}")
+
+    print()
+    print(_c("Diagnostics summary", _C_BOLD, _C_YELLOW))
+    intent_dist = diag.get("intent_distribution", {})
+    if intent_dist:
+        top_intent = max(intent_dist, key=lambda k: intent_dist[k])
+        print(f"  Intent: {_c(top_intent, _C_CYAN)} ({intent_dist[top_intent]} recent queries)")
+    for stage, rate in sorted(diag.get("stage_rejection_rates", {}).items()):
+        print(f"  {stage}: {rate:.1%} rejected")
+    return 0
+
+
+# ── mm trace ─────────────────────────────────────────────────────────────────
+
+_TRACE_HEADER = "TIME              TOOL                           DURATION  STATUS  SIZE"
+
+
+def _parse_log_lines(lines: list[str], *, tool_filter: Optional[str] = None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for raw in lines:
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            entry = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if entry.get("event") != "mcp_tool_call":
+            continue
+        data = entry.get("data") or {}
+        tool = data.get("tool") or entry.get("tool") or "?"
+        if tool_filter and tool != tool_filter:
+            continue
+        rows.append(
+            {
+                "time": entry.get("ts", ""),
+                "tool": str(tool),
+                "duration_ms": data.get("duration_ms", data.get("latency_ms")),
+                "success": data.get("success", True),
+                "result_size": data.get("result_size"),
+            }
+        )
+    return rows
+
+
+def _render_trace_rows(rows: list[dict[str, Any]]) -> None:
+    print(_c(_TRACE_HEADER, _C_BOLD))
+    print(_c("─" * 70, _C_DIM))
+    for r in rows:
+        ts = str(r["time"])[:16]
+        tool = str(r["tool"])[:29]
+        dur = f"{int(r['duration_ms']):>6}ms" if r["duration_ms"] is not None else "      ?"
+        size = str(r["result_size"]) if r["result_size"] is not None else "-"
+        ok = r.get("success", True)
+        status_str = _c("OK   ", _C_GREEN) if ok else _c("ERROR", _C_RED)
+        print(f"{ts:16}  {tool:29}  {dur}  {status_str}  {size}")
+
+
+def _cmd_trace(args: argparse.Namespace) -> int:
+    last_n = getattr(args, "last", 20) or 20
+    tool_filter: Optional[str] = getattr(args, "tool", None)
+    live = getattr(args, "live", False)
+
+    if live:
+        log_file = os.environ.get("MIND_MEM_LOG_FILE", "")
+        if log_file and os.path.isfile(log_file):
+            import subprocess
+
+            proc = subprocess.Popen(["tail", "-f", "-n", str(last_n), log_file], stdout=subprocess.PIPE, text=True)
+            try:
+                for line in proc.stdout:  # type: ignore[union-attr]
+                    rows = _parse_log_lines([line], tool_filter=tool_filter)
+                    if rows:
+                        _render_trace_rows(rows)
+                        sys.stdout.flush()
+            except KeyboardInterrupt:
+                proc.terminate()
+        else:
+            import select
+
+            while True:
+                try:
+                    ready, _, _ = select.select([sys.stdin], [], [], 0.5)
+                    if ready:
+                        line = sys.stdin.readline()
+                        if not line:
+                            break
+                        rows = _parse_log_lines([line], tool_filter=tool_filter)
+                        if rows:
+                            _render_trace_rows(rows)
+                            sys.stdout.flush()
+                except KeyboardInterrupt:
+                    break
+        return 0
+
+    log_file = os.environ.get("MIND_MEM_LOG_FILE", "")
+    if log_file and os.path.isfile(log_file):
+        with open(log_file, encoding="utf-8", errors="replace") as fh:
+            all_lines = fh.readlines()
+    elif not sys.stdin.isatty():
+        all_lines = sys.stdin.readlines()
+    else:
+        all_lines = []
+
+    rows = _parse_log_lines(all_lines, tool_filter=tool_filter)
+    rows = rows[-last_n:]
+    if not rows:
+        print(_c("No mcp_tool_call log entries found.", _C_DIM))
+        return 0
+    _render_trace_rows(rows)
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # skill subcommands
 # ---------------------------------------------------------------------------
 
@@ -357,6 +652,18 @@ def _cmd_skill_score(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# serve subcommand
+# ---------------------------------------------------------------------------
+
+
+def _cmd_serve(args: argparse.Namespace) -> int:
+    from mind_mem.api.rest import run
+
+    run(host=args.host, port=args.port, workspace=_workspace())
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
 
@@ -505,6 +812,80 @@ def build_parser() -> argparse.ArgumentParser:
     s_score = ssub.add_parser("score", help="Show current score for a skill.")
     s_score.add_argument("skill_id")
     s_score.set_defaults(func=_cmd_skill_score)
+
+    # serve — launch the REST API
+    p_serve = sub.add_parser(
+        "serve",
+        help="Launch the mind-mem REST API server (requires mind-mem[api]).",
+    )
+    p_serve.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
+    p_serve.add_argument("--port", type=int, default=8080, help="TCP port (default: 8080)")
+    p_serve.set_defaults(func=_cmd_serve)
+
+    # ── inspect — full block fields + provenance tree ──────────────────────
+    p_inspect = sub.add_parser(
+        "inspect",
+        help="Print full block fields and provenance tree for a block ID.",
+    )
+    p_inspect.add_argument("block_id", help="Block ID to inspect (e.g. D-001).")
+    p_inspect.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        dest="format",
+        help="Output format: human-readable text (default) or structured JSON.",
+    )
+    p_inspect.set_defaults(func=_cmd_inspect)
+
+    # ── explain — retrieval trace for a query ─────────────────────────────
+    p_explain = sub.add_parser(
+        "explain",
+        help="Show per-stage retrieval scores (BM25 → vector → RRF → rerank) for a query.",
+    )
+    p_explain.add_argument("query", help="Search query to trace.")
+    p_explain.add_argument("--limit", type=int, default=10, help="Number of results to show (default: 10).")
+    p_explain.add_argument(
+        "--backend",
+        choices=["auto", "bm25", "hybrid"],
+        default="auto",
+        help="Retrieval backend: auto (default), bm25, or hybrid.",
+    )
+    p_explain.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        dest="format",
+        help="Output format: human-readable text (default) or structured JSON.",
+    )
+    p_explain.set_defaults(func=_cmd_explain)
+
+    # ── trace — MCP call log tail ─────────────────────────────────────────
+    p_trace = sub.add_parser(
+        "trace",
+        help="Display recent MCP tool calls parsed from structured JSON logs.",
+    )
+    p_trace.add_argument(
+        "--live",
+        action="store_true",
+        help=(
+            "Stream new events in real time. Reads MIND_MEM_LOG_FILE if set, "
+            "otherwise reads stdin."
+        ),
+    )
+    p_trace.add_argument(
+        "--last",
+        type=int,
+        default=20,
+        metavar="N",
+        help="Show the last N MCP calls (default: 20).",
+    )
+    p_trace.add_argument(
+        "--tool",
+        default=None,
+        metavar="TOOL_NAME",
+        help="Filter output to a single tool name.",
+    )
+    p_trace.set_defaults(func=_cmd_trace)
 
     return parser
 
