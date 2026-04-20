@@ -39,12 +39,82 @@ _log = get_logger("tier_recall")
 # duplicating here avoids pulling the TierManager SQLite state into
 # every recall call. The boost only depends on the integer value,
 # not the live DB state.
+#
+# v3.3.0 Tier 4 #10 — ``_TIER_BOOST`` is the baseline. Callers that
+# configure ``retrieval.tier_boost_weights`` in ``mind-mem.json`` get
+# per-tier override multipliers instead; see
+# :func:`resolve_tier_weights` below.
 _TIER_BOOST: dict[int, float] = {
     1: 0.7,  # WORKING
     2: 1.0,  # SHARED
     3: 1.5,  # LONG_TERM
     4: 2.0,  # VERIFIED
 }
+
+
+# Canonical tier name → integer mapping so operators can write
+# human-readable config without memorising the integer codes.
+_TIER_NAME_TO_INT: dict[str, int] = {
+    "WORKING": 1,
+    "SHARED": 2,
+    "LONG_TERM": 3,
+    "VERIFIED": 4,
+}
+
+
+def resolve_tier_weights(config: dict[str, Any] | None) -> dict[int, float]:
+    """Resolve per-tier boost multipliers from config.
+
+    v3.3.0 Tier 4 #10 — ``retrieval.tier_boost_weights`` lets operators
+    hand-tune or learn per-tier multipliers without patching the
+    baseline ``_TIER_BOOST`` constant. Config accepts either
+    human-readable tier names or integer keys:
+
+    .. code-block:: json
+
+        {
+          "retrieval": {
+            "tier_boost_weights": {
+              "WORKING": 0.6,
+              "SHARED": 1.0,
+              "LONG_TERM": 1.8,
+              "VERIFIED": 2.4
+            }
+          }
+        }
+
+    Missing tier keys fall back to the baseline value. Non-positive or
+    non-numeric values are rejected and fall back to the baseline.
+
+    An offline training loop (see ``benchmarks/tier_weight_search.py``
+    in the v3.3.0 bench kit) reads ``locomo_judge_results_*.json`` and
+    grid-searches the four multipliers against the LoCoMo mean score
+    to produce an optimised weight dict the operator pastes into their
+    ``mind-mem.json``.
+    """
+    baseline = dict(_TIER_BOOST)
+    if not config or not isinstance(config, dict):
+        return baseline
+    retrieval = config.get("retrieval", {})
+    if not isinstance(retrieval, dict):
+        return baseline
+    weights = retrieval.get("tier_boost_weights", {})
+    if not isinstance(weights, dict):
+        return baseline
+    out = dict(baseline)
+    for key, val in weights.items():
+        if isinstance(val, (int, float)) and val > 0:
+            tier_int: int | None = None
+            if isinstance(key, int) and key in out:
+                tier_int = key
+            elif isinstance(key, str):
+                if key.upper() in _TIER_NAME_TO_INT:
+                    tier_int = _TIER_NAME_TO_INT[key.upper()]
+                elif key.isdigit() and int(key) in out:
+                    tier_int = int(key)
+            if tier_int is not None:
+                out[tier_int] = float(val)
+    return out
 
 
 def _tier_db_path(workspace: str) -> str:

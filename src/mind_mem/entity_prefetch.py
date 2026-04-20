@@ -57,10 +57,20 @@ _ENTITY_TYPES: dict[str, str] = {
 }
 
 
-# Heuristic: capitalised words of 3+ chars are likely entity candidates.
-# Real entities get confirmed against the block corpus; false positives
-# drop out at the lookup step.
-_CANDIDATE_TOKEN_RE = re.compile(r"\b[A-Z][a-zA-Z][a-zA-Z]+\b")
+# v3.3.0 Tier 3 #8 — candidate extraction widened for LoCoMo.
+# Previous version only matched ``[A-Z][a-zA-Z]{2+}`` which missed:
+# - Block-ID style refs: PER-001, INC-42
+# - Short acronyms: AWS, IAM, SSO, TLS
+# - Lowercase speaker names from conversational queries
+#   ("what did alice say...") — covered by a separate token-based
+#   match against the entity corpus at lookup time.
+_CANDIDATE_TOKEN_RE = re.compile(
+    r"\b(?:"
+    r"(?:PER|PRJ|TOOL|INC)-\d+"  # block-ID references
+    r"|[A-Z]{2,}"  # acronyms (AWS, IAM)
+    r"|[A-Z][a-zA-Z][a-zA-Z]+"  # capitalised names
+    r")\b"
+)
 
 
 def _tokenize_lower(s: str) -> set[str]:
@@ -90,27 +100,65 @@ def extract_entity_candidates(query: str) -> list[str]:
     return out
 
 
+# v3.3.0 Tier 3 #8 — bounded corpus load (security review 2026-04-20).
+# Caps prevent an attacker who can drop files into ``entities/`` from
+# triggering resource exhaustion via millions of tiny files or a few
+# giant ones. Realistic workspaces have <500 entity files / <1MB each.
+_MAX_ENTITY_FILES = 500
+_MAX_ENTITY_FILE_SIZE = 2 * 1024 * 1024  # 2 MB per file
+
+
 def _load_entity_blocks(workspace: str) -> list[dict]:
-    """Load every block from the ``entities/`` directory.
+    """Load every block from the ``entities/`` directory (bounded).
 
     Returns an empty list when the workspace lacks an entities dir
-    (e.g., fresh install). No exception is raised — the caller
-    handles the empty result naturally.
+    (e.g., fresh install). Any file exceeding ``_MAX_ENTITY_FILE_SIZE``
+    or appearing beyond ``_MAX_ENTITY_FILES`` is skipped with a log
+    entry. Symlinks pointing outside the ``entities/`` directory are
+    refused — closes a path-traversal vector where a tampered
+    workspace could plant ``entities/evil.md -> /etc/passwd``.
     """
     ent_dir = os.path.join(workspace, "entities")
     if not os.path.isdir(ent_dir):
         return []
-    blocks: list[dict] = []
     try:
         from .block_parser import parse_file
-    except Exception:
+    except Exception as exc:
+        _log.error("entity_prefetch_parse_import_failed", error=str(exc))
         return []
-    for name in sorted(os.listdir(ent_dir)):
+    blocks: list[dict] = []
+    try:
+        real_ent_dir = os.path.realpath(ent_dir)
+    except OSError:
+        return []
+    names = sorted(os.listdir(ent_dir))
+    if len(names) > _MAX_ENTITY_FILES:
+        _log.warning(
+            "entity_prefetch_dir_truncated",
+            count=len(names),
+            cap=_MAX_ENTITY_FILES,
+        )
+        names = names[:_MAX_ENTITY_FILES]
+    for name in names:
         if not name.endswith(".md"):
             continue
         path = os.path.join(ent_dir, name)
         try:
-            blocks.extend(parse_file(path))
+            real_path = os.path.realpath(path)
+        except OSError:
+            continue
+        # Refuse symlink escape.
+        if not (real_path == real_ent_dir or real_path.startswith(real_ent_dir + os.sep)):
+            _log.warning("entity_prefetch_symlink_escape_blocked", path=path)
+            continue
+        try:
+            if os.path.getsize(real_path) > _MAX_ENTITY_FILE_SIZE:
+                _log.warning("entity_prefetch_file_too_large", path=path)
+                continue
+        except OSError:
+            continue
+        try:
+            blocks.extend(parse_file(real_path))
         except Exception:  # pragma: no cover
             continue
     return blocks
@@ -138,6 +186,7 @@ def prefetch_entity_blocks(
     max_entities: int = 3,
     max_hops: int = 1,
     entity_score: float = 5.0,
+    corpus: list[dict] | None = None,
 ) -> list[dict]:
     """Return entity blocks + 1-hop neighbours that match ``query``.
 
@@ -148,6 +197,9 @@ def prefetch_entity_blocks(
         max_hops: Hops to walk from each matched entity block.
         entity_score: Score to assign each prefetched block (fed into
             RRF at the fusion layer).
+        corpus: Pre-loaded workspace block list — when provided,
+            skips reloading from disk during the graph walk (shared
+            by hybrid_recall's graph_expand pipeline, v3.3.0).
 
     Returns:
         Ranked list of prefetched block dicts. Empty when no entity
@@ -195,20 +247,23 @@ def prefetch_entity_blocks(
     # traversal respects the same decay + cap semantics as Tier 1 #2.
     if max_hops > 0:
         try:
-            # graph_expand needs the full block corpus for neighbour
-            # resolution. Load it lazily.
-            from .block_store import MarkdownBlockStore
             from .graph_recall import graph_expand
 
-            store = MarkdownBlockStore(workspace)
-            from .block_parser import parse_file
+            if corpus is not None:
+                all_blocks = corpus
+            else:
+                # graph_expand needs the full block corpus for neighbour
+                # resolution. Load it lazily.
+                from .block_parser import parse_file
+                from .block_store import MarkdownBlockStore
 
-            all_blocks: list[dict] = []
-            for path in store.list_blocks():
-                try:
-                    all_blocks.extend(parse_file(path))
-                except Exception:  # pragma: no cover
-                    continue
+                store = MarkdownBlockStore(workspace)
+                all_blocks = []
+                for path in store.list_blocks():
+                    try:
+                        all_blocks.extend(parse_file(path))
+                    except Exception:  # pragma: no cover
+                        continue
             out = graph_expand(
                 out,
                 all_blocks,

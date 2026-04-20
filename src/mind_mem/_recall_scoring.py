@@ -162,7 +162,11 @@ def temporal_decay_score(block: dict, half_life_days: int = 90) -> float:
     if age_days <= 0:
         return 1.0
     hl = max(1, int(half_life_days))
-    return float(0.5 ** (age_days / hl))
+    # Clamp to ``1e-6`` so a century-old block still multiplies its
+    # BM25 score to a non-zero ranking value. Hard zero would suppress
+    # the block entirely regardless of query match strength — review
+    # by python-reviewer flagged this as a correctness bug (2026-04-20).
+    return max(float(0.5 ** (age_days / hl)), 1e-6)
 
 
 # ---------------------------------------------------------------------------

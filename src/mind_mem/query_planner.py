@@ -115,6 +115,29 @@ class NLPQueryDecomposer:
 # ---------------------------------------------------------------------------
 
 
+_DEFAULT_ALLOWED_HOSTS: frozenset[str] = frozenset({"127.0.0.1", "localhost", "::1", "[::1]"})
+
+
+def _validate_base_url(url: str, allow_external: bool = False) -> str:
+    """Reject non-loopback / non-http(s) URLs unless the operator opted in.
+
+    Closes SSRF where a tampered ``mind-mem.json`` could point
+    ``base_url`` at an internal metadata service (AWS 169.254.169.254,
+    etc.). Raises :class:`ValueError` on any disallowed URL.
+    """
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"disallowed scheme: {parsed.scheme!r}")
+    if allow_external:
+        return url
+    host = (parsed.hostname or "").lower()
+    if host not in _DEFAULT_ALLOWED_HOSTS:
+        raise ValueError(f"non-loopback base_url blocked: {host!r} (set retrieval.query_decomposition.allow_external: true to override)")
+    return url
+
+
 class LLMQueryDecomposer:
     """LLM-backed decomposer via OpenAI-compatible endpoint.
 
@@ -122,12 +145,21 @@ class LLMQueryDecomposer:
     model ``claude-proxy/claude-opus-4-7`` for free OAuth routing,
     or at any other OpenAI-compatible endpoint with an API key.
 
-    Fails open to :class:`NLPQueryDecomposer` on any error.
+    Fails open to :class:`NLPQueryDecomposer` on any error. Enforces
+    a loopback-only URL allowlist by default; operators that deliberately
+    hit an external provider set ``retrieval.query_decomposition.allow_external: true``.
     """
 
     def __init__(self, config: dict[str, Any] | None = None):
         cfg = config or {}
-        self.base_url: str = cfg.get("base_url", "http://127.0.0.1:8766/v1/chat/completions")
+        raw_url = cfg.get("base_url", "http://127.0.0.1:8766/v1/chat/completions")
+        allow_external = bool(cfg.get("allow_external", False))
+        try:
+            self.base_url: str = _validate_base_url(raw_url, allow_external=allow_external)
+        except ValueError as exc:
+            _log.warning("llm_decomposer_url_rejected", url=raw_url, error=str(exc))
+            # Force fallback: base_url is never called.
+            self.base_url = ""
         self.model: str = cfg.get("model", "claude-proxy/claude-opus-4-7")
         self.api_key_env: str = cfg.get("api_key_env", "")
         self.timeout: float = float(cfg.get("timeout", 20.0))
@@ -136,9 +168,14 @@ class LLMQueryDecomposer:
     def decompose(self, query: str, max_subqueries: int = 4) -> list[str]:
         if not query or not query.strip():
             return [query] if query else [""]
+        if not self.base_url:
+            # URL rejected at init time — never attempted, go straight to NLP.
+            return self._fallback.decompose(query, max_subqueries)
         try:
             subs = self._call_llm(query.strip(), max_subqueries - 1)
-        except Exception as exc:
+        except (OSError, TimeoutError, ValueError, KeyError, IndexError) as exc:
+            # Narrowed from bare ``Exception`` — programming errors (AttributeError,
+            # etc.) now surface instead of silently degrading to NLP.
             _log.warning("llm_decomposition_failed", error=str(exc), fallback="nlp")
             return self._fallback.decompose(query, max_subqueries)
         results: list[str] = [query.strip()]

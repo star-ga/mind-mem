@@ -147,10 +147,15 @@ class TestResolveGraphConfig:
         assert cfg == {"max_hops": 2, "decay": 0.5, "max_neighbors_per_hop": 5}
 
     def test_custom_values(self) -> None:
-        cfg = resolve_graph_config({"retrieval": {"multi_hop": {"max_hops": 4, "decay": 0.8, "max_neighbors_per_hop": 10}}})
-        assert cfg["max_hops"] == 4
+        cfg = resolve_graph_config({"retrieval": {"multi_hop": {"max_hops": 3, "decay": 0.8, "max_neighbors_per_hop": 10}}})
+        assert cfg["max_hops"] == 3
         assert cfg["decay"] == pytest.approx(0.8)
         assert cfg["max_neighbors_per_hop"] == 10
+
+    def test_max_hops_clamped_to_3(self) -> None:
+        """Security hard-ceiling: retrieval.multi_hop.max_hops > 3 clamps to 3."""
+        cfg = resolve_graph_config({"retrieval": {"multi_hop": {"max_hops": 99}}})
+        assert cfg["max_hops"] == 3
 
     def test_invalid_values_fall_back_to_defaults(self) -> None:
         cfg = resolve_graph_config({"retrieval": {"multi_hop": {"max_hops": -1, "decay": 1.5, "max_neighbors_per_hop": "x"}}})

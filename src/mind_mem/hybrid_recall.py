@@ -407,11 +407,19 @@ class HybridBackend:
             # also benefits from auto-enable on multi-hop/temporal queries.
             result = self._maybe_cross_encoder_rerank(query, result, limit)
 
-            # v3.3.0 Tier 1 #2 — multi-hop graph expansion.
-            result = self._maybe_graph_expand(query, workspace, result)
+            # v3.3.0 Tier 1 #2 + Tier 3 #8 — multi-hop graph expansion +
+            # entity prefetch. Corpus is loaded once and shared across
+            # both helpers (was O(2N) disk reads, now O(N); architect +
+            # python-reviewer 2026-04-20).
+            corpus = self._load_corpus_if_needed(query, workspace)
+            result = self._maybe_graph_expand(query, workspace, result, corpus=corpus)
+            result = self._maybe_entity_prefetch(query, workspace, result, corpus=corpus)
 
-            # v3.3.0 Tier 3 #8 — entity-graph prefetch.
-            result = self._maybe_entity_prefetch(query, workspace, result)
+            # Enforce the caller's limit AFTER expansions — previous code
+            # truncated before the graph/entity expansions appended
+            # blocks, so the final list could exceed ``limit``. Dedup
+            # runs next, then we slice to the requested size.
+            # (python-reviewer 2026-04-20)
 
             # 4-layer dedup filter (post-fusion, post-rerank)
             dedup_cfg = self._config.get("dedup")
@@ -423,6 +431,9 @@ class HybridBackend:
                     result = deduplicate_results(result, config=dc)
                 except Exception as e:
                     _log.warning("hybrid_dedup_failed", error=str(e))
+
+            # Final slice so callers never receive more than they asked for.
+            result = result[:limit]
 
             _log.info(
                 "hybrid_search_complete",
@@ -505,12 +516,50 @@ class HybridBackend:
 
         return fused[:limit]
 
-    def _maybe_entity_prefetch(self, query: str, workspace: str, results: list[dict]) -> list[dict]:
+    def _load_corpus_if_needed(self, query: str, workspace: str) -> list[dict] | None:
+        """Return the workspace block corpus — shared by graph + entity
+        helpers so we load once per request rather than twice.
+
+        Returns None when no feature needs the corpus — avoids paying
+        the disk cost at all when both auto-enables are off.
+        """
+        try:
+            from .entity_prefetch import is_entity_prefetch_enabled
+            from .graph_recall import is_graph_expand_enabled
+        except ImportError:  # pragma: no cover
+            return None
+        if not (is_graph_expand_enabled(self._config, query) or is_entity_prefetch_enabled(self._config)):
+            return None
+        try:
+            from .block_parser import parse_file
+            from .block_store import MarkdownBlockStore
+
+            store = MarkdownBlockStore(workspace)
+            blocks: list[dict] = []
+            for path in store.list_blocks():
+                try:
+                    blocks.extend(parse_file(path))
+                except Exception:  # pragma: no cover
+                    continue
+            return blocks
+        except Exception as exc:  # pragma: no cover
+            _log.warning("corpus_load_failed", error=str(exc))
+            return None
+
+    def _maybe_entity_prefetch(
+        self,
+        query: str,
+        workspace: str,
+        results: list[dict],
+        *,
+        corpus: list[dict] | None = None,
+    ) -> list[dict]:
         """Inject entity-graph prefetched blocks (v3.3.0 Tier 3 #8).
 
         When the query mentions a Person/Project/Tool/Incident, fetch
         the entity block + 1-hop neighbourhood and merge into the
-        result set. Fails open on any error.
+        result set. ``corpus`` — when passed — skips a workspace reload
+        (shared with graph_expand). Fails open on any error.
         """
         try:
             from .entity_prefetch import (
@@ -528,6 +577,7 @@ class HybridBackend:
                 max_entities=params["max_entities"],
                 max_hops=params["max_hops"],
                 entity_score=params["entity_score"],
+                corpus=corpus,
             )
             if not prefetched:
                 return results
@@ -553,12 +603,19 @@ class HybridBackend:
             _log.warning("entity_prefetch_failed", error=str(exc))
             return results
 
-    def _maybe_graph_expand(self, query: str, workspace: str, results: list[dict]) -> list[dict]:
+    def _maybe_graph_expand(
+        self,
+        query: str,
+        workspace: str,
+        results: list[dict],
+        *,
+        corpus: list[dict] | None = None,
+    ) -> list[dict]:
         """Append graph-walked blocks when enabled (v3.3.0 Tier 1 #2).
 
-        Loads the workspace block corpus, builds the xref graph, and
-        walks N hops from each initial result. Fails open on any
-        error so recall never blocks on graph issues.
+        ``corpus`` — when provided — skips a workspace reload (shared
+        with entity_prefetch). Fails open on any error so recall
+        never blocks on graph issues.
         """
         if not results:
             return results
@@ -571,20 +628,20 @@ class HybridBackend:
 
             if not is_graph_expand_enabled(self._config, query):
                 return results
-            # Load the corpus once per call — graph_expand needs the
-            # full block set to resolve neighbour IDs. Cheap for
-            # typical workspaces (hundreds of blocks); heavy workspaces
-            # can pin graph_expand behind enabled:false.
-            from .block_parser import parse_file
-            from .block_store import MarkdownBlockStore
+            if corpus is not None:
+                all_blocks = corpus
+            else:
+                # Legacy path: caller didn't pre-load the corpus.
+                from .block_parser import parse_file
+                from .block_store import MarkdownBlockStore
 
-            store = MarkdownBlockStore(workspace)
-            all_blocks: list[dict] = []
-            for path in store.list_blocks():
-                try:
-                    all_blocks.extend(parse_file(path))
-                except Exception:  # pragma: no cover
-                    continue
+                store = MarkdownBlockStore(workspace)
+                all_blocks = []
+                for path in store.list_blocks():
+                    try:
+                        all_blocks.extend(parse_file(path))
+                    except Exception:  # pragma: no cover
+                        continue
             params = resolve_graph_config(self._config)
             expanded = graph_expand(results, all_blocks, **params)
             if len(expanded) > len(results):

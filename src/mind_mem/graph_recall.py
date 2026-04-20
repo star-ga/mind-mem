@@ -30,11 +30,15 @@ unless ``auto_enable`` is explicitly false.
 
 from __future__ import annotations
 
+from collections import deque
 from typing import Any, Iterable
 
 from .observability import get_logger
 
 _log = get_logger("graph_recall")
+
+
+_DEFAULT_MAX_TOTAL_ADDED = 50
 
 
 def graph_expand(
@@ -44,6 +48,7 @@ def graph_expand(
     max_hops: int = 2,
     decay: float = 0.5,
     max_neighbors_per_hop: int = 5,
+    max_total_added: int = _DEFAULT_MAX_TOTAL_ADDED,
     score_field: str = "score",
 ) -> list[dict]:
     """Walk the block cross-reference graph from each seed.
@@ -80,11 +85,13 @@ def graph_expand(
     seen_ids: set[str] = {str(r.get("_id")) for r in results if r.get("_id")}
 
     appended: list[dict] = []
-    # BFS frontier: list of (block_id, ORIGINAL seed_score, hop, parent_id).
+    # BFS frontier: (block_id, ORIGINAL seed_score, hop, parent_id).
     # The "seed_score" stays constant across hops — decay is computed
     # relative to the original seed so a 2-hop node gets decay**2, not
     # decay**2 * decay (which would compound on the already-decayed score).
-    frontier: list[tuple[str, float, int, str]] = []
+    # deque.popleft() is O(1); a plain list's pop(0) is O(N) and
+    # degrades on wide seed sets — review by python-reviewer (2026-04-20).
+    frontier: deque[tuple[str, float, int, str]] = deque()
     for r in results:
         bid = str(r.get("_id") or "")
         if not bid:
@@ -93,7 +100,13 @@ def graph_expand(
         frontier.append((bid, base_score, 0, bid))
 
     while frontier:
-        bid, seed_score, hop, parent = frontier.pop(0)
+        if len(appended) >= max_total_added:
+            # Security guard — unbounded graph (adversarial xref chains)
+            # could otherwise grow the result set arbitrarily. Cap across
+            # ALL hops, not just per-hop (security review 2026-04-20).
+            _log.info("graph_expand_total_cap_hit", cap=max_total_added)
+            break
+        bid, seed_score, hop, parent = frontier.popleft()
         if hop >= max_hops:
             continue
         neighbors: Iterable[str] = graph.get(bid, set())
@@ -101,6 +114,8 @@ def graph_expand(
         for nid in neighbors:
             if nid in seen_ids:
                 continue
+            if len(appended) >= max_total_added:
+                break
             block = id_to_block.get(nid)
             if block is None:
                 continue
@@ -182,7 +197,9 @@ def resolve_graph_config(config: dict[str, Any] | None) -> dict[str, Any]:
         return defaults
     out = dict(defaults)
     if isinstance(mh.get("max_hops"), int) and mh["max_hops"] > 0:
-        out["max_hops"] = int(mh["max_hops"])
+        # Hard ceiling of 3 — defends against config-driven DoS
+        # via wide graphs (security review 2026-04-20).
+        out["max_hops"] = min(3, int(mh["max_hops"]))
     if isinstance(mh.get("decay"), (int, float)) and 0 < mh["decay"] <= 1:
         out["decay"] = float(mh["decay"])
     if isinstance(mh.get("max_neighbors_per_hop"), int) and mh["max_neighbors_per_hop"] > 0:
