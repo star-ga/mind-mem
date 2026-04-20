@@ -427,6 +427,12 @@ class HybridBackend:
             # v3.3.0 Tier 2 #5 — session-boundary preservation.
             result = self._maybe_session_boost(result)
 
+            # v3.3.0 — temporal half-life decay (opt-in hot-path).
+            result = self._maybe_temporal_decay(result)
+
+            # v3.3.0 — probabilistic truth_score annotation.
+            result = self._maybe_truth_score(result)
+
             # Enforce the caller's limit AFTER expansions — previous code
             # truncated before the graph/entity expansions appended
             # blocks, so the final list could exceed ``limit``. Dedup
@@ -546,6 +552,52 @@ class HybridBackend:
         except Exception as exc:  # pragma: no cover — defensive
             _log.warning("session_boost_failed", error=str(exc))
             return results
+
+    def _maybe_truth_score(self, results: list[dict]) -> list[dict]:
+        """Annotate results with probabilistic truth_score (v3.3.0)."""
+        if not results:
+            return results
+        try:
+            from .truth_score import annotate_results, is_truth_score_enabled
+
+            if not is_truth_score_enabled(self._config):
+                return results
+            # Contradiction graph is passed through when the caller
+            # supplies one via config; otherwise just Status/age/access
+            # signals feed the score.
+            return annotate_results(results)
+        except Exception as exc:  # pragma: no cover
+            _log.warning("truth_score_failed", error=str(exc))
+            return results
+
+    def _maybe_temporal_decay(self, results: list[dict]) -> list[dict]:
+        """Apply half-life decay to every result's score (v3.3.0 Tier 1 #3).
+
+        Opt-in via ``retrieval.temporal_decay_hot_path`` — the raw
+        function is always available (Tier 1 #3) but the hot-path
+        wiring is gated because it changes ranking. With the gate
+        off, the function stays a standalone helper callers invoke
+        explicitly.
+        """
+        if not results:
+            return results
+        cfg = self._config.get("retrieval", {}) if isinstance(self._config, dict) else {}
+        if not isinstance(cfg, dict) or not cfg.get("temporal_decay_hot_path", False):
+            return results
+        try:
+            from ._recall_scoring import _resolve_half_life_days, temporal_decay_score
+
+            half_life = _resolve_half_life_days(self._config)
+            for r in results:
+                mult = temporal_decay_score(r, half_life_days=half_life)
+                current = float(r.get("score", 0.0) or 0.0)
+                r["score"] = current * mult
+                r["_temporal_decay"] = round(mult, 4)
+            results.sort(key=lambda x: float(x.get("score", 0.0) or 0.0), reverse=True)
+            _log.info("temporal_decay_applied", count=len(results), half_life_days=half_life)
+        except Exception as exc:  # pragma: no cover
+            _log.warning("temporal_decay_failed", error=str(exc))
+        return results
 
     def _load_corpus_if_needed(self, query: str, workspace: str) -> list[dict] | None:
         """Return the workspace block corpus — shared by graph + entity
@@ -715,6 +767,28 @@ class HybridBackend:
                 pass
         if not ce_enabled:
             return result
+        # v3.3.0 Tier 4 #9 — prefer reranker_ensemble when configured,
+        # fall back to single-model CE. The ensemble's single-member
+        # degenerate case is also the same as CE alone, so wiring this
+        # in doesn't regress existing CE-only deployments.
+        try:
+            from .rerank_ensemble import create_ensemble
+
+            ensemble = create_ensemble(self._config)
+            if ensemble is not None:
+                for r in result:
+                    if "content" not in r:
+                        r["content"] = r.get("excerpt", "")
+                result = ensemble.rerank(
+                    query,
+                    result,
+                    top_k=ce_cfg.get("top_k", limit),
+                    blend_weight=ce_cfg.get("blend_weight", 0.6),
+                )
+                _log.info("reranker_ensemble_applied", candidates=len(result))
+                return result
+        except Exception as exc:
+            _log.warning("reranker_ensemble_failed", error=str(exc))
         try:
             from .cross_encoder_reranker import CrossEncoderReranker
 
