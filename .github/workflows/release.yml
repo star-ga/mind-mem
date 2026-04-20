@@ -32,37 +32,101 @@ jobs:
           name: dist
           path: dist/
 
-  publish-pypi:
+  # ── Sigstore provenance signing ───────────────────────────────────────────────
+  sign:
     needs: build
     runs-on: ubuntu-latest
-    environment: pypi
     permissions:
       id-token: write
+      contents: read
     steps:
       - name: Download dist artifacts
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6
         with:
           name: dist
+          path: dist/
+
+      - name: Sign distributions with sigstore
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        with:
+          inputs: >-
+            dist/*.tar.gz
+            dist/*.whl
+
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: dist-signed
+          path: dist/
+
+  # ── CycloneDX SBOM ─────────────────────────────────────────────────────────
+  sbom:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Generate CycloneDX SBOM
+        uses: CycloneDX/gh-python-generate-sbom@v2
+        with:
+          input: pyproject.toml
+          output: sbom.cdx.json
+          format: json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: sbom-release
+          path: sbom.cdx.json
+
+  # ── PyPI publish (OIDC trusted publishing) ────────────────────────────────────
+  publish-pypi:
+    needs: [build, sign]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download signed dist artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6
+        with:
+          name: dist-signed
           path: dist/
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # release/v1
         with:
           print-hash: true
+          # Attestations (PEP 740) are generated automatically by pypi-publish
+          # when id-token: write is present and the package is uploaded from
+          # a trusted publisher environment.
 
+  # ── GitHub Release (dist + SBOM + signatures) ────────────────────────────────
   github-release:
-    needs: build
+    needs: [build, sign, sbom]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-      - name: Download dist artifacts
+      - name: Download signed dist artifacts
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6
         with:
-          name: dist
+          name: dist-signed
           path: dist/
+
+      - name: Download SBOM
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6
+        with:
+          name: sbom-release
+          path: .
 
       - name: Extract version from tag
         id: version
@@ -77,4 +141,5 @@ jobs:
           prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
           files: |
             dist/*
+            sbom.cdx.json
             libmindmem.so
