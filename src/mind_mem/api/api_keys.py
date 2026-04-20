@@ -208,6 +208,10 @@ class APIKeyStore:
     def rotate(self, old_key_id: str) -> str:
         """Rotate a key: revoke the old one and issue a new key for the same agent.
 
+        Both operations execute inside a single SQLite transaction so a crash
+        between them can never leave both the old and new key simultaneously
+        valid (which would constitute a privilege-elevation window).
+
         Args:
             old_key_id: The ``key_id`` of the key to replace.
 
@@ -217,6 +221,13 @@ class APIKeyStore:
         Raises:
             KeyError: When *old_key_id* does not exist.
         """
+        prefix = _LIVE_PREFIX if self._production else _TEST_PREFIX
+        new_raw_key = prefix + secrets.token_hex(_RAW_KEY_BYTES)
+        new_key_id = secrets.token_hex(16)
+        new_key_hash = _sha256(new_raw_key)
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(days=90)
+
         with self._lock:
             conn = self._connect()
             try:
@@ -224,17 +235,35 @@ class APIKeyStore:
                     "SELECT agent_id, scopes FROM api_keys WHERE key_id = ?",
                     (old_key_id,),
                 ).fetchone()
+                if row is None:
+                    raise KeyError(f"API key not found: {old_key_id}")
+
+                agent_id, scopes_json = row
+
+                # Insert new key and revoke old key atomically.
+                conn.execute(
+                    """
+                    INSERT INTO api_keys
+                        (key_id, key_hash, agent_id, scopes, created_at, expires_at, revoked)
+                    VALUES (?, ?, ?, ?, ?, ?, 0)
+                    """,
+                    (
+                        new_key_id,
+                        new_key_hash,
+                        agent_id,
+                        scopes_json,
+                        now.isoformat(),
+                        expires_at.isoformat(),
+                    ),
+                )
+                conn.execute(
+                    "UPDATE api_keys SET revoked = 1 WHERE key_id = ? AND revoked = 0",
+                    (old_key_id,),
+                )
+                conn.commit()
             finally:
                 conn.close()
 
-        if row is None:
-            raise KeyError(f"API key not found: {old_key_id}")
-
-        agent_id, scopes_json = row
-        scopes: list[str] = json.loads(scopes_json)
-
-        new_raw_key = self.create(agent_id, scopes)
-        self.revoke(old_key_id)
         return new_raw_key
 
     # ------------------------------------------------------------------

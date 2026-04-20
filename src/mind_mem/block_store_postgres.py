@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 from typing import TYPE_CHECKING, Any
 
@@ -27,6 +28,25 @@ from .block_store import BlockStoreError  # noqa: F401  (re-exported for conveni
 _log = logging.getLogger("mind_mem.block_store_postgres")
 
 __all__ = ["PostgresBlockStore", "BlockStoreError"]
+
+# Schema names must be safe Postgres identifiers (no injection surface).
+_SAFE_SCHEMA_RE = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
+
+# Postgres identifier allowlist: letters, digits, underscore, dollar sign.
+# Max 63 bytes (Postgres internal limit). No quoting is applied — the schema
+# name is embedded directly into DDL/DML f-strings, so we must reject any
+# value that could escape the identifier context.
+_SAFE_PG_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]{0,62}$")
+
+
+def _validate_schema_name(name: str) -> str:
+    """Raise ValueError if *name* is not a safe Postgres schema identifier."""
+    if not _SAFE_PG_IDENTIFIER_RE.match(name):
+        raise ValueError(
+            f"Unsafe Postgres schema name {name!r}. "
+            "Schema must match [A-Za-z_][A-Za-z0-9_$]{{0,62}}."
+        )
+    return name
 
 
 # ─── Sentinel: lazy import guard ──────────────────────────────────────────────
@@ -185,7 +205,7 @@ class PostgresBlockStore:
         workspace: str | None = None,
     ) -> None:
         self._dsn = dsn
-        self._schema = schema
+        self._schema = _validate_schema_name(schema)
         self._workspace = workspace
         self._pool: Any = None
         self._schema_ready = False
@@ -542,6 +562,75 @@ class PostgresBlockStore:
             return sorted({str(r[0]) for r in rows if r[0]})
         except Exception as exc:
             raise BlockStoreError(f"diff failed for snap_id={snap_id!r}: {exc}") from exc
+
+
+    # ─── Workspace lock surface ───────────────────────────────────────────────
+
+    def lock(self, *, blocking: bool = True, timeout: float = 30.0) -> Any:
+        """Acquire an exclusive workspace-wide lock via the Postgres ``workspace_lock`` table.
+
+        Uses ``INSERT … ON CONFLICT DO NOTHING`` within a transaction to
+        simulate advisory locking. The returned object is a context manager;
+        the lock row is deleted on ``__exit__``.
+
+        Args:
+            blocking: When ``True`` (default), poll until the lock is free or
+                      *timeout* elapses.  When ``False``, raise
+                      :class:`~mind_mem.mind_filelock.LockTimeout` immediately if
+                      the lock is held.
+            timeout:  Maximum seconds to wait when ``blocking=True``.
+
+        Raises:
+            BlockStoreError: On unexpected database errors.
+        """
+        import time
+
+        from .mind_filelock import LockTimeout
+
+        self._ensure_schema()
+        pool = self._get_pool()
+        lock_id = "workspace"
+        holder = str(os.getpid())
+        sql_acquire = f"""
+            INSERT INTO {self._schema}.workspace_lock (lock_id, holder)
+            VALUES (%s, %s)
+            ON CONFLICT (lock_id) DO NOTHING
+        """
+        sql_release = f"DELETE FROM {self._schema}.workspace_lock WHERE lock_id = %s AND holder = %s"
+
+        deadline = time.monotonic() + timeout
+
+        class _PgLock:
+            def __init__(self_inner) -> None:
+                pass
+
+            def __enter__(self_inner) -> "_PgLock":
+                while True:
+                    try:
+                        with pool.connection() as conn:
+                            with conn.transaction():
+                                with conn.cursor() as cur:
+                                    cur.execute(sql_acquire, (lock_id, holder))
+                                    acquired = cur.rowcount > 0
+                        if acquired:
+                            return self_inner
+                    except Exception as exc:
+                        raise BlockStoreError(f"lock acquire error: {exc}") from exc
+                    if not blocking:
+                        raise LockTimeout("Postgres workspace lock held by another process")
+                    if time.monotonic() >= deadline:
+                        raise LockTimeout(f"Timed out waiting for Postgres workspace lock after {timeout}s")
+                    time.sleep(0.1)
+
+            def __exit__(self_inner, *_: Any) -> None:
+                try:
+                    with pool.connection() as conn:
+                        with conn.transaction():
+                            conn.execute(sql_release, (lock_id, holder))
+                except Exception:
+                    pass  # best-effort release; non-fatal
+
+        return _PgLock()
 
     # ─── Compatibility shim ───────────────────────────────────────────────────
 

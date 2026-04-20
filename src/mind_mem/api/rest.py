@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import os
 from contextvars import ContextVar
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 try:
     from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -101,7 +101,7 @@ def _resolve_api_key_store_record(raw_key: str) -> dict | None:
     store = _get_api_key_store()
     if store is None:
         return None
-    return store.verify(raw_key)
+    return cast(dict[str, Any] | None, store.verify(raw_key))
 
 
 def _get_api_key_store() -> Any:
@@ -168,8 +168,15 @@ def _require_auth(
 def _require_admin(
     token: Annotated[str | None, Depends(_require_auth)],
 ) -> str | None:
-    """Dependency: require admin-scope token (bearer or mmk_* with admin scope)."""
-    if _check_token() is not None:
+    """Dependency: require admin-scope token (bearer or mmk_* with admin scope).
+
+    The gate is enforced when *either* MIND_MEM_TOKEN *or*
+    MIND_MEM_ADMIN_TOKEN is configured.  Using ``_check_token()`` alone
+    (MIND_MEM_TOKEN) was wrong: a deployment that skips MIND_MEM_TOKEN
+    but sets MIND_MEM_ADMIN_TOKEN would silently bypass the admin check.
+    """
+    token_configured = _check_token() is not None or os.environ.get("MIND_MEM_ADMIN_TOKEN") is not None
+    if token_configured:
         is_admin = _has_admin_scope(token) or _api_key_has_admin_scope(token)
         if not is_admin:
             raise HTTPException(
