@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 480 | **Est. tokens:** ~977,157
-**Generated:** 2026-04-20 01:54 UTC
+**Files:** 482 | **Est. tokens:** ~978,408
+**Generated:** 2026-04-20 01:57 UTC
 
 ## Token Budget Guide
 
@@ -46,6 +46,7 @@
 | `src/mind_mem/` | 115 | ~393,817 |
 | `src/mind_mem/mcp/` | 2 | ~1,557 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,525 |
+| `src/mind_mem/mcp/tools/` | 2 | ~1,251 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,500 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 180 | ~364,105 |
@@ -313,6 +314,10 @@
 
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
 - `resources.py` (~1342 tok, large) — MCP ``@mcp.resource`` declarations.
+### `src/mind_mem/mcp/tools/`
+
+- `encryption.py` (~1144 tok, large) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
+- `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
 ### `src/mind_mem/`
 
 - `memory_mesh.py` (~1903 tok, huge) — # Copyright 2026 STARGA, Inc.

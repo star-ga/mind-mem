@@ -1805,115 +1805,20 @@ def list_contradictions() -> str:
     )
 
 
-def _encryption_passphrase() -> str | None:
-    """Fetch the at-rest encryption passphrase from env. None = disabled."""
-    raw = os.environ.get("MIND_MEM_ENCRYPTION_PASSPHRASE", "").strip()
-    return raw or None
+# v3.2.0 §1.2 PR-3: encryption tools moved to
+# mind_mem.mcp.tools.encryption. Re-exported here so
+# ``server.encrypt_file(...)`` still routes through the observe
+# wrapper and tests that reference ``server._safe_vault_path`` /
+# ``server._encryption_passphrase`` still resolve.
+from mind_mem.mcp.tools import encryption as _tools_encryption  # noqa: E402,F401
+from mind_mem.mcp.tools.encryption import (  # noqa: E402,F401 — public re-export shim
+    _encryption_passphrase,
+    _safe_vault_path,
+    decrypt_file,
+    encrypt_file,
+)
 
-
-@mcp.tool
-@mcp_tool_observe
-def encrypt_file(file_path: str) -> str:
-    """Encrypt a single workspace file at rest.
-
-    Requires ``MIND_MEM_ENCRYPTION_PASSPHRASE`` to be set in the
-    server environment. Files already encrypted are no-ops.
-    Admin-scope tool — never exposed to user tokens.
-
-    Args:
-        file_path: Absolute path to the plaintext file.
-
-    Returns:
-        JSON status envelope.
-    """
-    passphrase = _encryption_passphrase()
-    if not passphrase:
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": "MIND_MEM_ENCRYPTION_PASSPHRASE is not set",
-            }
-        )
-    if not isinstance(file_path, str) or not file_path.strip():
-        return json.dumps({"error": "file_path must be a non-empty string"})
-    ws = _workspace()
-    try:
-        safe_path = _safe_vault_path(ws, file_path)
-    except Exception as exc:
-        return json.dumps({"error": f"path rejected: {exc}"})
-    try:
-        from mind_mem.encryption import EncryptionManager
-
-        EncryptionManager(ws, passphrase).encrypt_file(safe_path)
-    except Exception as exc:
-        return json.dumps({"error": f"encrypt failed: {exc}"})
-    return json.dumps(
-        {
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "encrypted": True,
-            "path": safe_path,
-        }
-    )
-
-
-@mcp.tool
-@mcp_tool_observe
-def decrypt_file(file_path: str) -> str:
-    """Return plaintext bytes (base64-encoded) for an encrypted file.
-
-    Does not modify the on-disk ciphertext. Admin-scope tool.
-
-    Args:
-        file_path: Absolute path to the encrypted file.
-
-    Returns:
-        JSON with ``plaintext_b64`` field on success.
-    """
-    import base64
-
-    passphrase = _encryption_passphrase()
-    if not passphrase:
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": "MIND_MEM_ENCRYPTION_PASSPHRASE is not set",
-            }
-        )
-    if not isinstance(file_path, str) or not file_path.strip():
-        return json.dumps({"error": "file_path must be a non-empty string"})
-    ws = _workspace()
-    try:
-        safe_path = _safe_vault_path(ws, file_path)
-    except Exception as exc:
-        return json.dumps({"error": f"path rejected: {exc}"})
-    try:
-        from mind_mem.encryption import EncryptionManager
-
-        plaintext = EncryptionManager(ws, passphrase).decrypt_file(safe_path)
-    except Exception as exc:
-        return json.dumps({"error": f"decrypt failed: {exc}"})
-    return json.dumps(
-        {
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "path": safe_path,
-            "plaintext_b64": base64.b64encode(plaintext).decode("ascii"),
-        }
-    )
-
-
-def _safe_vault_path(ws: str, candidate: str) -> str:
-    """Resolve *candidate* against *ws* and reject path-escapes."""
-    resolved = os.path.realpath(candidate)
-    ws_abs = os.path.realpath(ws)
-    try:
-        common = os.path.commonpath([resolved, ws_abs])
-    except ValueError as exc:
-        raise ValueError(f"path escapes workspace: {candidate}") from exc
-    if common != ws_abs:
-        raise ValueError(f"path escapes workspace: {candidate}")
-    if not os.path.isfile(resolved):
-        raise FileNotFoundError(resolved)
-    return resolved
+_tools_encryption.register(mcp)
 
 
 @mcp.tool
