@@ -256,7 +256,34 @@ The apply engine provides ACID-like guarantees for memory mutations.
 4. **Rollback on failure**: If validation fails, all files revert to pre-apply state
 5. **Receipt required**: Every apply produces an `APPLY_RECEIPT.md` in its snapshot directory (`intelligence/applied/<timestamp>/`)
 6. **No cascade**: One proposal per apply. No proposal may trigger another proposal
-7. **Snapshot scope**: Snapshots include workspace state directories (`decisions`, `tasks`, `entities`, `summaries`, `memory`), root-level files (`AGENTS.md`, `MEMORY.md`, `IDENTITY.md`), and `intelligence/` files copied individually. Excluded: `maintenance/` (transient reports), `intelligence/applied/` (prevents recursive nesting)
+7. **Snapshot scope** (v3.2.0 §2.2 refinement): Snapshots include
+   workspace state directories (`decisions`, `tasks`, `entities`,
+   `summaries`, `memory`), root-level files (`AGENTS.md`,
+   `MEMORY.md`, `IDENTITY.md`), and `intelligence/` files copied
+   individually. `maintenance/` is now **split**:
+   - `maintenance/tracked/` — **included** in snapshots. Holds
+     behavioural state files (`*-state.json`, `*-checkpoint.json`,
+     `*.lock`) whose presence or content changes the next apply's
+     behaviour. Rollback restores them atomically with the corpus,
+     preventing the "dedup hash survives rollback" class of bug.
+   - `maintenance/append-only/` — **excluded** from snapshots. Holds
+     append-only observability output (`*-report.txt`, `*.log`,
+     `*.ndjson`, `compaction-*` / `validation-*` / `intel-scan-*`
+     prefixes). Rollback deliberately preserves these so signal
+     written during a failed apply is not discarded.
+
+   `intelligence/applied/` remains excluded (prevents recursive
+   nesting). The post-restore orphan-cleanup walk honors both
+   exclusions — files under an excluded directory are never
+   treated as orphans, even when their parent dir shares a
+   top-level prefix with a snapshot-included path (as
+   `maintenance/` does).
+
+   Classification rule for new `maintenance/` files is pinned in
+   `docs/maintenance-namespaces.md`. A one-shot migration helper
+   (`mind_mem.maintenance_migrate`) moves legacy top-level files
+   into the correct subdirectory on first apply of a v3.2.0+
+   workspace.
 
 ### Apply Receipt Format
 

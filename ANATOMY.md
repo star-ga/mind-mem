@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 499 | **Est. tokens:** ~1,014,496
-**Generated:** 2026-04-20 06:08 UTC
+**Files:** 500 | **Est. tokens:** ~1,016,401
+**Generated:** 2026-04-20 06:13 UTC
 
 ## Token Budget Guide
 
@@ -22,10 +22,10 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 27 | ~65,285 |
+| `./` | 27 | ~65,589 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,429 |
-| `docs/` | 36 | ~44,174 |
+| `docs/` | 37 | ~45,775 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `examples/` | 2 | ~466 |
@@ -81,7 +81,7 @@
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
 - `ROADMAP.md` (~14694 tok, huge) — mind-mem Roadmap
 - `SECURITY.md` (~1414 tok, large) — Security Policy
-- `SPEC.md` (~4880 tok, huge) — Mind Mem Formal Specification v1.0
+- `SPEC.md` (~5184 tok, huge) — Mind Mem Formal Specification v1.0
 - `train_mind7b_runpod.py` (~1654 tok, huge)
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
 ### `.agents/skills/mind-mem-development/`
@@ -127,6 +127,7 @@
 - `faq.md` (~374 tok, medium) — FAQ
 - `getting-started.md` (~405 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
+- `maintenance-namespaces.md` (~1601 tok, huge) — `maintenance/` namespaces
 - `mcp-integration.md` (~1045 tok, large) — MCP Integration Guide
 - `mcp-tool-examples.md` (~902 tok, large) — MCP Tool Examples
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
