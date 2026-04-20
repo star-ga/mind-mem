@@ -793,19 +793,31 @@ self-audit (`docs/review-architecture-v3.2.0.md`). v3.2.0 Postgres
 promotes both to GA.
 
 - [x] **Apply engine — block-level ops route through BlockStore.**
-  The three most common ops (``update_field``, ``append_list_item``,
-  ``set_status``) now use ``store.get_by_id`` + ``store.write_block``
-  so Postgres-backed workspaces see the writes. ``execute_op`` takes
-  an optional ``store`` kwarg; when omitted, the active store is
-  resolved via the factory. Backward-compatible with every existing
-  caller.
-- [ ] **Apply engine — file-level ops through BlockStore** — the
-  remaining four ops (``append_block``, ``insert_after_block``,
-  ``replace_range``, ``supersede_decision``) still speak raw
-  ``open()`` because they manipulate text ranges that don't have
-  a clean block-dict representation. Deferred to v3.2.2 — requires
-  designing a ``BlockStore.write_text_range`` or promoting the ops
-  to work on block dicts. ~1 day.
+  Five of seven ``_op_*`` handlers now route through
+  ``store.get_by_id`` + ``store.write_block``: ``update_field``,
+  ``append_list_item``, ``set_status``, ``append_block``, and
+  ``supersede_decision``. ``execute_op`` takes an optional ``store``
+  kwarg; when omitted the active store is resolved via the factory.
+  ``apply_proposal`` resolves the store once at the top of the op
+  loop so every op in a proposal sees the same backend. Backward-
+  compatible with every existing caller.
+- [ ] **Apply engine — text-range ops** — the two remaining
+  handlers (``insert_after_block``, ``replace_range``) still speak
+  raw ``open()`` because they manipulate text ranges that don't
+  have a clean block-dict representation. No v3.2.0 caller
+  generates these ops in practice (they're exercised only by hand-
+  written proposals in tests). Deferred to v3.2.2 — either promote
+  them to block-level ops (``insert_after_block`` becomes
+  ``write_block`` with an ordering hint) or deprecate.
+- [ ] **Audit attribution through FastAPI sync deps** — the
+  ``current_agent_id`` ContextVar is set inside ``_require_auth``
+  (a sync FastAPI dependency), which runs in an anyio threadpool
+  worker. ContextVar writes in worker threads don't propagate back
+  to the calling request context, so downstream MCP tool functions
+  read ``'anonymous'`` even on authenticated requests. Fix by
+  stashing ``agent_id`` on ``request.state`` (same pattern as
+  ``oidc_scopes`` in v3.2.1) and reading it from a dependency
+  attached to each handler. ~0.5 day.
 - [x] **REST request-scoping** — swapped env-var mutation for a
   per-request ``ContextVar`` override in
   ``mind_mem.mcp.infra.workspace`` + a FastAPI HTTP middleware.

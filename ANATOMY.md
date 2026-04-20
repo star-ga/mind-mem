@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 573 | **Est. tokens:** ~1,176,627
-**Generated:** 2026-04-20 10:29 UTC
+**Files:** 574 | **Est. tokens:** ~1,178,120
+**Generated:** 2026-04-20 10:43 UTC
 
 ## Token Budget Guide
 
@@ -22,13 +22,13 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~71,963 |
+| `./` | 30 | ~72,154 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 11 | ~39,429 |
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 50 | ~72,523 |
+| `docs/` | 51 | ~73,825 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -91,7 +91,7 @@
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22305 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~15787 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~15978 tok, huge) — mind-mem Roadmap
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
 - `SECURITY.md` (~1752 tok, huge) — Security Policy
 - `SPEC.md` (~5184 tok, huge) — Mind Mem Formal Specification v1.0
@@ -191,6 +191,7 @@
 - `v3.2.0-blockstore-routing-plan.md` (~2116 tok, huge) — v3.2.0 — Apply engine → BlockStore routing plan
 - `v3.2.0-mcp-decomposition-plan.md` (~2575 tok, huge) — v3.2.0 — MCP server decomposition plan
 - `v3.2.0-release-notes.md` (~1881 tok, huge) — mind-mem v3.2.0 — Production Deployment Release
+- `v3.2.1-release-notes.md` (~1302 tok, large) — mind-mem v3.2.1 release notes
 - `workspace-structure.md` (~352 tok, medium) — Workspace Structure
 ### `examples/`
 
