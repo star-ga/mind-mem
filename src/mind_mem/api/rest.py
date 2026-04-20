@@ -37,7 +37,68 @@ from mind_mem.schema_version import CURRENT_SCHEMA_VERSION
 
 #: The current request's authenticated agent ID.  Defaults to "anonymous".
 #: Set this from MCP tool entry points to propagate identity through the stack.
+#:
+#: NOTE: ContextVar writes inside sync FastAPI dependencies run in
+#: threadpool workers and do not propagate back to the calling request
+#: context. Use :data:`fastapi.Request.state` when cross-dependency
+#: state is required (see ``_require_auth``'s ``request.state.oidc_scopes``
+#: handoff). ``current_agent_id`` is kept for audit-chain callers that
+#: read it within the same sync dependency frame.
 current_agent_id: ContextVar[str] = ContextVar("current_agent_id", default="anonymous")
+
+
+def _oidc_admin_scope_names() -> tuple[str, ...]:
+    """Scope names that grant admin access via OIDC.
+
+    Configured via ``MIND_MEM_OIDC_ADMIN_SCOPES`` env var (comma- or
+    space-separated). Defaults to ``"mind-mem.admin admin"`` so common
+    OIDC IdP conventions (Okta custom scopes, Auth0 roles) work without
+    extra configuration.
+    """
+    raw = os.environ.get("MIND_MEM_OIDC_ADMIN_SCOPES", "mind-mem.admin admin")
+    parts = [s.strip() for s in raw.replace(",", " ").split() if s.strip()]
+    return tuple(parts)
+
+
+def _verify_oidc_token(token: str) -> tuple[str, tuple[str, ...]] | None:
+    """Validate *token* as an OIDC JWT. Returns (agent_id, scopes) or None.
+
+    Returns None when OIDC is not configured, the token isn't a JWT,
+    or validation fails. Never raises — falls back cleanly so static
+    token auth keeps working in deployments without OIDC.
+    """
+    issuer = os.environ.get("OIDC_ISSUER")
+    audience = os.environ.get("OIDC_AUDIENCE", "")
+    if not issuer or not audience:
+        return None
+    if token.count(".") != 2:
+        # Fast reject: JWTs have exactly two dots. Avoids the cost of
+        # dragging in python-jose for every bearer token.
+        return None
+    try:
+        from mind_mem.api.auth import AuthError, OIDCConfig, OIDCProvider  # noqa: PLC0415
+    except ImportError:
+        return None
+
+    client_id = os.environ.get("OIDC_CLIENT_ID", "")
+    client_secret = os.environ.get("OIDC_CLIENT_SECRET", "")
+    config = OIDCConfig(
+        issuer=issuer,
+        client_id=client_id,
+        client_secret=client_secret,
+        audience=audience,
+    )
+    provider = OIDCProvider(config)
+    try:
+        claims = provider.verify(token)
+    except AuthError:
+        return None
+    except Exception:
+        return None
+    scopes = tuple(provider.extract_scopes(claims))
+    agent_id = str(claims.get("sub") or claims.get("email") or "oidc-user")
+    return agent_id, scopes
+
 
 # ---------------------------------------------------------------------------
 # Auth helpers
@@ -63,35 +124,59 @@ def _client_id_from_token(token: str | None) -> str:
     return token[-16:] if len(token) >= 16 else token
 
 
-def _verify_bearer(token: str | None) -> tuple[bool, str]:
-    """Return (valid, agent_id) for a bearer/API-key token.
+def _verify_bearer(token: str | None) -> tuple[bool, str, tuple[str, ...]]:
+    """Return (valid, agent_id, oidc_scopes) for a bearer/API-key token.
+
+    ``oidc_scopes`` is empty unless the token was validated as an OIDC
+    JWT. Callers hand the scopes to :func:`_has_admin_scope` and/or
+    stash them on ``request.state`` for cross-dependency reads.
 
     Priority:
     1. MIND_MEM_ADMIN_TOKEN match → agent_id "admin"
     2. ``mmk_live_*`` or ``mmk_test_*`` → look up in APIKeyStore
-    3. MIND_MEM_TOKEN match → agent_id "user"
-    4. No auth configured → anonymous access allowed, agent_id "anonymous"
+    3. OIDC JWT (when OIDC_ISSUER + OIDC_AUDIENCE configured) →
+       agent_id from ``sub``/``email`` claim, scopes extracted from
+       ``scope``/``scopes``/``roles`` claims.
+    4. MIND_MEM_TOKEN match → agent_id "user"
+    5. No auth configured → anonymous access allowed, agent_id "anonymous"
     """
     if token is None:
         headers: dict[str, str] = {}
-        return verify_token(headers), "anonymous"
+        return verify_token(headers), "anonymous", ()
 
-    # 1. Admin token — fast path
-    if _has_admin_scope(token):
-        return True, "admin"
+    # 1. Admin token — fast path (checks env directly, not ContextVar)
+    admin = os.environ.get("MIND_MEM_ADMIN_TOKEN")
+    if admin is not None:
+        import hmac
+
+        if hmac.compare_digest(token, admin):
+            return True, "admin", ()
 
     # 2. API key (mmk_live_* / mmk_test_*)
     if token.startswith("mmk_live_") or token.startswith("mmk_test_"):
         record = _resolve_api_key_store_record(token)
         if record is not None:
-            return True, record["agent_id"]
-        return False, "anonymous"
+            return True, record["agent_id"], ()
+        return False, "anonymous", ()
 
-    # 3. User bearer token
+    # 3. OIDC JWT (v3.2.1): validate and return scopes for admin-gate eval.
+    oidc_configured = os.environ.get("OIDC_ISSUER") is not None and os.environ.get("OIDC_AUDIENCE") is not None
+    oidc = _verify_oidc_token(token)
+    if oidc is not None:
+        agent_id, scopes = oidc
+        return True, agent_id, scopes
+    if oidc_configured and token.count(".") == 2:
+        # OIDC is configured and the token looks like a JWT (two dots)
+        # but validation failed. Reject — don't silently fall through
+        # to the static-token path which would accept any token when
+        # MIND_MEM_TOKEN is unset.
+        return False, "anonymous", ()
+
+    # 4. User bearer token
     headers = {"Authorization": f"Bearer {token}"}
     if verify_token(headers):
-        return True, "user"
-    return False, "anonymous"
+        return True, "user", ()
+    return False, "anonymous", ()
 
 
 def _resolve_api_key_store_record(raw_key: str) -> dict | None:
@@ -116,16 +201,33 @@ def _get_api_key_store() -> Any:
         return None
 
 
-def _has_admin_scope(token: str | None) -> bool:
-    """Return True when the provided token is the MIND_MEM_ADMIN_TOKEN."""
+def _has_admin_scope(token: str | None, oidc_scopes: tuple[str, ...] = ()) -> bool:
+    """Return True when the token grants admin access.
+
+    Admin is granted by either:
+    * Static ``MIND_MEM_ADMIN_TOKEN`` env var match (constant-time compare).
+    * An OIDC JWT that carries one of the configured admin scopes
+      (see :func:`_oidc_admin_scope_names`). Scopes must be passed in
+      by the caller (read off ``request.state.oidc_scopes`` which
+      :func:`_require_auth` populates after validating the JWT).
+    """
     if token is None:
         return False
-    admin = os.environ.get("MIND_MEM_ADMIN_TOKEN")
-    if admin is None:
-        return False
-    import hmac
 
-    return hmac.compare_digest(token, admin)
+    # Static admin token match
+    admin = os.environ.get("MIND_MEM_ADMIN_TOKEN")
+    if admin is not None:
+        import hmac
+
+        if hmac.compare_digest(token, admin):
+            return True
+
+    # OIDC scope match — empty tuple is a cheap no-op for non-JWT tokens.
+    if oidc_scopes:
+        admin_scopes = _oidc_admin_scope_names()
+        if any(s in admin_scopes for s in oidc_scopes):
+            return True
+    return False
 
 
 def _api_key_has_admin_scope(token: str | None) -> bool:
@@ -145,14 +247,19 @@ def _api_key_has_admin_scope(token: str | None) -> bool:
 
 
 def _require_auth(
+    request: Request,
     token: Annotated[str | None, Depends(_extract_bearer)],
 ) -> str | None:
     """Dependency: require valid bearer/API-key token when auth is configured.
 
     Sets the ``current_agent_id`` contextvar so audit records carry the
-    authenticated identity.
+    authenticated identity. Also stashes any OIDC scopes from the
+    validated JWT on ``request.state.oidc_scopes`` for
+    :func:`_require_admin` to consult — ContextVar writes inside sync
+    deps don't propagate back to the request context, so request.state
+    is the authoritative handoff.
     """
-    valid, agent_id = _verify_bearer(token)
+    valid, agent_id, oidc_scopes = _verify_bearer(token)
     if not valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -160,22 +267,32 @@ def _require_auth(
             headers={"WWW-Authenticate": "Bearer"},
         )
     current_agent_id.set(agent_id)
+    request.state.oidc_scopes = oidc_scopes
     return token
 
 
 def _require_admin(
+    request: Request,
     token: Annotated[str | None, Depends(_require_auth)],
 ) -> str | None:
-    """Dependency: require admin-scope token (bearer or mmk_* with admin scope).
+    """Dependency: require admin-scope token (bearer, mmk_*, or OIDC JWT).
 
-    The gate is enforced when *either* MIND_MEM_TOKEN *or*
-    MIND_MEM_ADMIN_TOKEN is configured.  Using ``_check_token()`` alone
-    (MIND_MEM_TOKEN) was wrong: a deployment that skips MIND_MEM_TOKEN
-    but sets MIND_MEM_ADMIN_TOKEN would silently bypass the admin check.
+    The gate is enforced when *any* admin auth mechanism is configured:
+    ``MIND_MEM_TOKEN`` (user-tier), ``MIND_MEM_ADMIN_TOKEN`` (static
+    admin), or OIDC (``OIDC_ISSUER`` + ``OIDC_AUDIENCE``). Using
+    ``_check_token()`` alone (MIND_MEM_TOKEN) was wrong: a deployment
+    that skips MIND_MEM_TOKEN but sets MIND_MEM_ADMIN_TOKEN would
+    silently bypass the admin check. Same bug applied pre-v3.2.1 for
+    OIDC-only deployments.
     """
-    token_configured = _check_token() is not None or os.environ.get("MIND_MEM_ADMIN_TOKEN") is not None
+    token_configured = (
+        _check_token() is not None
+        or os.environ.get("MIND_MEM_ADMIN_TOKEN") is not None
+        or (os.environ.get("OIDC_ISSUER") is not None and os.environ.get("OIDC_AUDIENCE") is not None)
+    )
     if token_configured:
-        is_admin = _has_admin_scope(token) or _api_key_has_admin_scope(token)
+        oidc_scopes: tuple[str, ...] = getattr(request.state, "oidc_scopes", ())
+        is_admin = _has_admin_scope(token, oidc_scopes=oidc_scopes) or _api_key_has_admin_scope(token)
         if not is_admin:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

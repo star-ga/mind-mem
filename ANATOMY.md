@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 571 | **Est. tokens:** ~1,168,973
-**Generated:** 2026-04-20 09:51 UTC
+**Files:** 572 | **Est. tokens:** ~1,171,952
+**Generated:** 2026-04-20 09:59 UTC
 
 ## Token Budget Guide
 
@@ -52,14 +52,14 @@
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
 | `src/mind_mem/` | 121 | ~421,967 |
-| `src/mind_mem/api/` | 4 | ~11,546 |
+| `src/mind_mem/api/` | 4 | ~12,809 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
 | `src/mind_mem/mcp/tools/` | 17 | ~37,198 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 200 | ~405,264 |
+| `tests/` | 201 | ~406,980 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -320,7 +320,7 @@
 - `api_keys.py` (~2717 tok, huge) — Per-agent API key store for the mind-mem REST API.
 - `auth.py` (~2476 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
 - `__init__.py` (~20 tok, tiny)
-- `rest.py` (~6333 tok, huge) — REST API layer for mind-mem (v3.2.0).
+- `rest.py` (~7596 tok, huge) — REST API layer for mind-mem (v3.2.0).
 ### `src/mind_mem/`
 
 - `apply_engine.py` (~13120 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
@@ -650,6 +650,7 @@
 - `test_observability.py` (~791 tok, large) — Tests for observability.py — structured logging and metrics."""
 - `test_observation_axis.py` (~3330 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_observation_compress.py` (~2754 tok, huge) — Tests for observation_compress module.
+- `test_oidc_admin_enforcement.py` (~1716 tok, huge) — v3.2.1 — OIDC JWTs must pass through ``_require_admin`` checks.
 - `test_oidc_auth.py` (~2754 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
 - `test_ontology.py` (~2306 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_postgres_block_store.py` (~3136 tok, huge) — v3.2.0 §1.4 PR-5 — PostgresBlockStore integration tests.
