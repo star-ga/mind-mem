@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 607 | **Est. tokens:** ~1,235,621
-**Generated:** 2026-04-20 18:10 UTC
+**Files:** 609 | **Est. tokens:** ~1,238,900
+**Generated:** 2026-04-20 18:12 UTC
 
 ## Token Budget Guide
 
@@ -51,7 +51,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 130 | ~448,376 |
+| `src/mind_mem/` | 131 | ~450,502 |
 | `src/mind_mem/api/` | 4 | ~12,861 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
@@ -59,7 +59,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~980 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 215 | ~426,314 |
+| `tests/` | 216 | ~427,467 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -375,6 +375,7 @@
 - `entity_prefetch.py` (~2867 tok, huge) — Entity-graph prefetch for recall (v3.3.0 Tier 3 #8).
 - `enums.py` (~471 tok, medium) — Centralised enum definitions for mind-mem.
 - `error_codes.py` (~1751 tok, huge) — mind-mem Error Codes — structured error classification.
+- `event_fanout.py` (~2126 tok, huge) — Governance event fan-out (v4.0 prep).
 - `evidence_bundle.py` (~2205 tok, huge) — Structured evidence bundle for answerer co-design (v3.3.0 Tier 3 #7).
 - `evidence_objects.py` (~5859 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `evidence_packer.py` (~3267 tok, huge) — Deterministic evidence packer for Mind-Mem.
@@ -621,6 +622,7 @@
 - `test_enums.py` (~534 tok, large) — Tests for centralised enums (mind_mem.enums)."""
 - `test_error_codes.py` (~2394 tok, huge) — Tests for mind-mem Error Codes module."""
 - `test_error_paths.py` (~5892 tok, huge) — Error path and edge-case tests for mind-mem — malformed inputs, missing files, bad configs."""
+- `test_event_fanout.py` (~1153 tok, large) — v4.0 prep — governance event fan-out."""
 - `test_evidence_bundle.py` (~1562 tok, huge) — v3.3.0 Tier 3 #7 — structured evidence bundle.
 - `test_evidence_objects.py` (~4031 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_evidence_packer.py` (~5180 tok, huge) — Tests for the evidence packer module."""
