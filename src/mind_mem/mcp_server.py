@@ -746,92 +746,14 @@ def plan_consolidation(
     )
 
 
-@mcp.tool
-@mcp_tool_observe
-def ontology_load(spec: str, make_active: bool = False) -> str:
-    """Load an ontology from an inline JSON spec.
+# v3.2.0 §1.2 PR-3: ontology tools moved to mcp.tools.ontology
+from mind_mem.mcp.tools import ontology as _tools_ontology  # noqa: E402,F401
+from mind_mem.mcp.tools.ontology import (  # noqa: E402,F401 — public re-export shim
+    ontology_load,
+    ontology_validate,
+)
 
-    The spec must be a JSON object with ``version`` and ``types``
-    fields (see ``Ontology.from_dict``). Pass ``make_active=True`` to
-    promote the loaded ontology to the default used by
-    ``ontology_validate``.
-    """
-    from .ontology import Ontology
-
-    ws = _workspace()
-    ws_err = _check_workspace(ws)
-    if ws_err:
-        return ws_err
-
-    if not isinstance(spec, str) or not spec.strip():
-        return json.dumps({"error": "spec must be a non-empty JSON string"})
-    if len(spec) > 1_048_576:
-        return json.dumps({"error": "spec must be ≤1 MiB"})
-    try:
-        data = json.loads(spec)
-    except json.JSONDecodeError as exc:
-        return json.dumps({"error": f"spec is not valid JSON: {exc}"})
-    if not isinstance(data, dict):
-        return json.dumps({"error": "spec must decode to a JSON object"})
-    try:
-        ont = Ontology.from_dict(data)
-    except (ValueError, KeyError, TypeError) as exc:
-        return json.dumps({"error": f"invalid ontology: {exc}"})
-
-    _ontology_registry().load(ont, make_active=bool(make_active))
-    return json.dumps(
-        {
-            "loaded": True,
-            "version": ont.version,
-            "types": ont.type_names(),
-            "active": bool(make_active) or _ontology_registry().active().version == ont.version,
-            "_schema_version": "1.0",
-        },
-        indent=2,
-    )
-
-
-@mcp.tool
-@mcp_tool_observe
-def ontology_validate(block: str, type_name: str, strict: bool = True) -> str:
-    """Validate *block* (JSON object) against the active ontology.
-
-    Returns ``{valid: bool, errors: [str]}`` — an empty ``errors``
-    list means the block satisfies the type's effective schema
-    (including inherited parent properties).
-    """
-    ws = _workspace()
-    ws_err = _check_workspace(ws)
-    if ws_err:
-        return ws_err
-
-    if not isinstance(block, str) or not block.strip():
-        return json.dumps({"error": "block must be a non-empty JSON string"})
-    if len(block) > 1_048_576:
-        return json.dumps({"error": "block must be ≤1 MiB"})
-    try:
-        block_obj = json.loads(block)
-    except json.JSONDecodeError as exc:
-        return json.dumps({"error": f"block is not valid JSON: {exc}"})
-    if not isinstance(block_obj, dict):
-        return json.dumps({"error": "block must decode to a JSON object"})
-    if not isinstance(type_name, str) or not type_name.strip():
-        return json.dumps({"error": "type_name must be a non-empty string"})
-
-    ont = _ontology_registry().active()
-    if ont is None:
-        return json.dumps({"error": "no active ontology; call ontology_load first"})
-    errors = ont.validate(type_name, block_obj, strict=bool(strict))
-    return json.dumps(
-        {
-            "valid": len(errors) == 0,
-            "errors": errors,
-            "type": type_name,
-            "ontology_version": ont.version,
-            "_schema_version": "1.0",
-        },
-        indent=2,
-    )
+_tools_ontology.register(mcp)
 
 
 @mcp.tool
@@ -1705,32 +1627,14 @@ from mind_mem.mcp.tools.encryption import (  # noqa: E402,F401 — public re-exp
 _tools_encryption.register(mcp)
 
 
-@mcp.tool
-@mcp_tool_observe
-def governance_health_bench() -> str:
-    """Run the governance health benchmark suite.
+# v3.2.0 §1.2 PR-3: benchmark tools moved to mcp.tools.benchmark
+from mind_mem.mcp.tools import benchmark as _tools_benchmark  # noqa: E402,F401
+from mind_mem.mcp.tools.benchmark import (  # noqa: E402,F401 — public re-export shim
+    category_summary,
+    governance_health_bench,
+)
 
-    Exercises contradiction detection, audit completeness, drift
-    detection, and scalability probes against the current workspace.
-
-    Returns:
-        JSON report covering all bench sub-suites and aggregated
-        pass/fail counts.
-    """
-    ws = _workspace()
-    try:
-        from mind_mem.governance_bench import GovernanceBench
-
-        report = GovernanceBench(ws).run_all()
-    except Exception as exc:
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": f"bench run failed: {exc}",
-            }
-        )
-    out = {"_schema_version": MCP_SCHEMA_VERSION, **report}
-    return json.dumps(out, indent=2, default=str)
+_tools_benchmark.register(mcp)
 
 
 @mcp.tool
@@ -2272,70 +2176,6 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
 # ---------------------------------------------------------------------------
 # Category & Prefetch tools (13-14)
 # ---------------------------------------------------------------------------
-
-
-@mcp.tool
-@mcp_tool_observe
-def category_summary(topic: str, limit: int = 3) -> str:
-    """Returns category summaries relevant to a given topic.
-
-    Uses the category distiller to find and return thematic summary files
-    matching the topic. Categories are auto-generated from memory blocks.
-
-    Args:
-        topic: Topic or query to find relevant categories for.
-        limit: Maximum number of category summaries to return (default: 3).
-
-    Returns:
-        Concatenated category summaries with block references.
-    """
-    ws = _workspace()
-    limits = _get_limits(ws)
-    try:
-        from mind_mem.category_distiller import CategoryDistiller
-
-        extra_cats = _load_extra_categories(ws)
-        distiller = CategoryDistiller(extra_categories=extra_cats if extra_cats else None)
-        context = distiller.get_category_context(topic, ws, limit=max(1, min(limit, limits["max_category_results"])))
-        cats = distiller.get_categories_for_query(topic)
-        metrics.inc("mcp_category_summary")
-        _log.info("mcp_category_summary", topic=topic, matched_categories=cats[:limit])
-        if not context:
-            return json.dumps(
-                {
-                    "_schema_version": MCP_SCHEMA_VERSION,
-                    "topic": topic,
-                    "status": "no_categories",
-                    "hint": "Run reindex to generate category files, or add blocks with matching tags.",
-                },
-                indent=2,
-            )
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "topic": topic,
-                "matched_categories": cats[:limit],
-                "content": context,
-            },
-            indent=2,
-        )
-    except ImportError:
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": "category_distiller module not available",
-            }
-        )
-    except (OSError, ValueError, KeyError) as exc:
-        _log.warning("category_summary_failed", topic=topic, error=str(exc))
-        return json.dumps(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "error": "Category summary lookup failed",
-                "topic": topic,
-            },
-            indent=2,
-        )
 
 
 @mcp.tool
