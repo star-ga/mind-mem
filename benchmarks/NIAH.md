@@ -4,6 +4,12 @@
 
 mind-mem achieves **100% retrieval** across all haystack sizes, burial depths, and needle types in the Needle In A Haystack benchmark.
 
+**Reconfirmed on v3.2.1 (2026-04-20):** 250/250 passed in 18:50
+(1130.13s). No regression from the v1.9.0 baseline (1128.02s) despite
+the v3.2.0 backend-protocol refactor and v3.2.1 apply-engine
+BlockStore routing. Result persists at the same matrix (5 sizes × 5
+depths × 10 needles) using the same hybrid BM25 + vector + RRF stack.
+
 ## Methodology
 
 A single "needle" fact is planted at a controlled depth within a haystack of semantically diverse filler memory blocks. The system must retrieve the needle in its **top-5 results** using only a natural-language query — no exact-match hints, no metadata filters.
@@ -143,7 +149,8 @@ python -m pytest tests/test_niah.py -v
 
 | System | NIAH Score | Search Method | Notes |
 |--------|-----------|---------------|-------|
-| **mind-mem v1.9.0** | **100% (250/250)** | Hybrid BM25+Vector+RRF | This benchmark |
+| **mind-mem v3.2.1** | **100% (250/250)** | Hybrid BM25+Vector+RRF | Reconfirmed 2026-04-20 |
+| mind-mem v1.9.0 | 100% (250/250) | Hybrid BM25+Vector+RRF | Original baseline |
 | Mem0 | — | Vector only | No published NIAH results |
 | Zep | — | Vector only | No published NIAH results |
 | LangMem | — | Vector only | No published NIAH results |
