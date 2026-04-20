@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 635 | **Est. tokens:** ~1,265,609
-**Generated:** 2026-04-20 18:42 UTC
+**Files:** 643 | **Est. tokens:** ~1,275,321
+**Generated:** 2026-04-20 18:47 UTC
 
 ## Token Budget Guide
 
@@ -27,6 +27,7 @@
 | `benchmarks/` | 23 | ~54,236 |
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
+| `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
 | `docs/` | 52 | ~75,508 |
 | `docs/adr/` | 2 | ~521 |
@@ -52,19 +53,20 @@
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
 | `src/mind_mem/` | 137 | ~461,714 |
-| `src/mind_mem/api/` | 4 | ~12,861 |
+| `src/mind_mem/api/` | 5 | ~14,584 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
 | `src/mind_mem/mcp/tools/` | 17 | ~37,521 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
-| `src/mind_mem/storage/` | 1 | ~980 |
+| `src/mind_mem/storage/` | 2 | ~3,859 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 223 | ~435,467 |
+| `tests/` | 225 | ~437,420 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
-| `web/components/` | 3 | ~1,643 |
+| `web/app/console/` | 1 | ~1,169 |
+| `web/components/` | 4 | ~2,482 |
 | `web/lib/` | 1 | ~669 |
 
 ## Files
@@ -135,6 +137,10 @@
 ### `deploy/docker/`
 
 - `Dockerfile` (~495 tok, medium) — # Stage 1: build — install all deps and produce a pruned site-packages
+### `deploy/edge/`
+
+- `pyoxidizer.bzl` (~605 tok, large) — # mind-mem-edge — PyOxidizer build spec (v4.0 prep).
+- `README.md` (~544 tok, large) — mind-mem-edge — single-binary distribution (v4.0 prep)
 ### `deploy/grafana/`
 
 - `mind-mem-dashboard.json` (~1145 tok, large) — Keys: __inputs, __requires, annotations, description, editable
@@ -338,6 +344,7 @@
 
 - `api_keys.py` (~2717 tok, huge) — Per-agent API key store for the mind-mem REST API.
 - `auth.py` (~2476 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
+- `grpc_server.py` (~1723 tok, huge) — gRPC wire protocol for mind-mem (v4.0 prep).
 - `__init__.py` (~20 tok, tiny)
 - `rest.py` (~7648 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
 ### `src/mind_mem/`
@@ -513,6 +520,7 @@
 ### `src/mind_mem/storage/`
 
 - `__init__.py` (~980 tok, large) — Storage factory for mind-mem block stores (v3.2.0).
+- `sharded_pg.py` (~2879 tok, huge) — Sharded Postgres / Citus routing (v4.0 prep).
 ### `src/mind_mem/`
 
 - `streaming.py` (~1655 tok, huge) — Back-pressure-aware streaming ingest (v3.3.0).
@@ -657,6 +665,7 @@
 - `test_graph_boost_recall.py` (~315 tok, medium) — Tests for graph_boost recall parameter."""
 - `test_graph_recall.py` (~1498 tok, large) — v3.3.0 Tier 1 #2 — multi-hop graph traversal on recall results.
 - `test_grid_search.py` (~1199 tok, large) — Tests for benchmarks/grid_search.py — grid generation and utility functions."""
+- `test_grpc_server.py` (~731 tok, large) — v4.0 prep — gRPC wire protocol (tests for the grpcio-free handlers)."""
 - `test_hash_chain_v2.py` (~3462 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hook_installer_force_preserves_siblings.py` (~703 tok, large) — Regression test for the --force clobber bug in hook_installer."""
 - `test_hook_installer_registry.py` (~3841 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -747,6 +756,7 @@
 - `test_scoring.py` (~337 tok, medium) — Tests for BM25 scoring functions."""
 - `test_session_boost.py` (~1488 tok, large) — v3.3.0 Tier 2 #5 — session-boundary preservation via recall-side boost.
 - `test_session_summarizer.py` (~3973 tok, huge) — Comprehensive tests for mind_mem/session_summarizer.py.
+- `test_sharded_pg.py` (~1222 tok, large) — v4.0 prep — sharded Postgres routing tests (mock underlying stores)."""
 - `test_skeptical_query.py` (~194 tok, small) — Tests for skeptical query detection."""
 - `test_skill_opt.py` (~3356 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_smart_chunker_code.py` (~1135 tok, large) — Tests for code-aware chunking in smart_chunker.py."""
@@ -795,6 +805,9 @@
 - `runpod_full_ft.py` (~1246 tok, large) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
 - `train_qlora.py` (~1195 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
 - `upload_to_hf.py` (~865 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-4b.
+### `web/app/console/`
+
+- `page.tsx` (~1169 tok, large) — Tolerate missing endpoint — show single-tenant UI.
 ### `web/app/`
 
 - `layout.tsx` (~168 tok, small)
@@ -803,6 +816,7 @@
 
 - `FactList.tsx` (~281 tok, medium)
 - `GraphView.tsx` (~1063 tok, large)
+- `TenantSwitcher.tsx` (~839 tok, large) — HeadersInit can be a Headers, a [string, string][], or a Record.
 - `TimelineView.tsx` (~299 tok, medium)
 ### `web/`
 
