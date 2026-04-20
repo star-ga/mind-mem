@@ -73,11 +73,17 @@ jobs:
           python-version: "3.12"
 
       - name: Generate CycloneDX SBOM
-        uses: CycloneDX/gh-python-generate-sbom@v2
-        with:
-          input: pyproject.toml
-          output: sbom.cdx.json
-          format: json
+        # CycloneDX/gh-python-generate-sbom@v2 crashes on Python 3.12.13
+        # with ``ModuleNotFoundError: pkg_resources`` because setuptools
+        # dropped that shim. Installing cyclonedx-bom directly + invoking
+        # the CLI keeps the output format identical while avoiding the
+        # broken action wrapper. Swap back when the action is repaired.
+        run: |
+          python -m pip install --upgrade pip setuptools
+          python -m pip install cyclonedx-bom
+          cyclonedx-py environment \
+            --output-format json \
+            --output-file sbom.cdx.json
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
