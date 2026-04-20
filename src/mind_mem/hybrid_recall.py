@@ -237,7 +237,25 @@ class HybridBackend:
         # When enabled, expand the query into alternative phrasings and
         # run a search for each variant.  Results are fused via RRF so
         # documents matching multiple phrasings rank higher.
-        if self._query_expansion_enabled:
+        # v3.3.0 Tier 2 #4: auto-enable on multi-hop/temporal queries
+        # even when operator hasn't flipped ``query_expansion.enabled``,
+        # unless ``query_expansion.auto_enable: false`` is set.
+        expansion_active = self._query_expansion_enabled
+        if not expansion_active and self._query_expansion_config.get("auto_enable", True):
+            try:
+                from ._recall_detection import detect_query_type
+
+                qt = detect_query_type(query)
+                if qt in ("multi-hop", "temporal"):
+                    expansion_active = True
+                    _log.info(
+                        "query_expansion_auto_enabled",
+                        query_type=qt,
+                        reason="v3.3.0_tier2_ambiguous_query",
+                    )
+            except Exception:  # pragma: no cover — defensive
+                pass
+        if expansion_active:
             try:
                 from .query_expansion import expand_queries
 
