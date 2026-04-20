@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 549 | **Est. tokens:** ~1,095,873
-**Generated:** 2026-04-20 07:02 UTC
+**Files:** 554 | **Est. tokens:** ~1,109,000
+**Generated:** 2026-04-20 07:07 UTC
 
 ## Token Budget Guide
 
@@ -28,7 +28,7 @@
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 43 | ~56,948 |
+| `docs/` | 44 | ~58,543 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `examples/` | 2 | ~466 |
@@ -51,14 +51,14 @@
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~258 |
 | `src/mind_mem/` | 119 | ~414,874 |
-| `src/mind_mem/api/` | 2 | ~3,933 |
-| `src/mind_mem/mcp/` | 3 | ~3,122 |
+| `src/mind_mem/api/` | 4 | ~9,375 |
+| `src/mind_mem/mcp/` | 3 | ~3,229 |
 | `src/mind_mem/mcp/infra/` | 8 | ~5,854 |
-| `src/mind_mem/mcp/tools/` | 16 | ~32,301 |
+| `src/mind_mem/mcp/tools/` | 17 | ~36,528 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 1 | ~1,018 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 191 | ~386,957 |
+| `tests/` | 192 | ~388,713 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 
@@ -138,6 +138,7 @@
 - `ci-workflows.md` (~254 tok, medium) — CI Workflows
 - `claude-desktop-setup.md` (~752 tok, large) — Claude Desktop Setup Guide
 - `client-integrations.md` (~2533 tok, huge) — Client Integrations
+- `cli-reference.md` (~1595 tok, huge) — CLI Reference
 - `comparison.md` (~313 tok, medium) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
 - `configuration.md` (~6451 tok, huge) — Configuration Reference
@@ -304,8 +305,10 @@
 - `alerting.py` (~2411 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/api/`
 
+- `api_keys.py` (~2405 tok, huge) — Per-agent API key store for the mind-mem REST API.
+- `auth.py` (~2479 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
 - `__init__.py` (~20 tok, tiny)
-- `rest.py` (~3913 tok, huge) — REST API layer for mind-mem (v3.2.0).
+- `rest.py` (~4471 tok, huge) — REST API layer for mind-mem (v3.2.0).
 ### `src/mind_mem/`
 
 - `apply_engine.py` (~12984 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
@@ -382,7 +385,7 @@
 
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
 - `resources.py` (~1342 tok, large) — MCP ``@mcp.resource`` declarations.
-- `server.py` (~1565 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
+- `server.py` (~1672 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/`
 
 - `mcp_server.py` (~1780 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
@@ -402,6 +405,7 @@
 - `kernels.py` (~1905 tok, huge) — MIND kernel + compiled-truth MCP tools.
 - `memory_ops.py` (~7082 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
+- `public.py` (~4227 tok, huge) — v3.2.0 — MCP consolidated tool dispatchers.
 - `recall.py` (~4222 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 ### `src/mind_mem/`
@@ -616,13 +620,14 @@
 - `test_mcp_integration.py` (~5177 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_server.py` (~4897 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
 - `test_mcp_tools.py` (~277 tok, medium) — Tests for MCP server tool definitions."""
+- `test_mcp_tool_surface_v3_2.py` (~1738 tok, huge) — v3.2.0 — consolidated MCP public dispatcher tests."""
 - `test_mcp_v140.py` (~5456 tok, huge) — Tests for MCP v1.4.0 features — issues #29, #31, #35, #36.
 - `test_memory_evolution.py` (~340 tok, medium) — Tests for memory evolution tracking."""
 - `test_memory_practical_e2e.py` (~2389 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_memory_tiers.py` (~3479 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_merkle_tree.py` (~3185 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mind_ffi.py` (~291 tok, medium) — Tests for MIND FFI module."""
-- `test_mm_cli_debug.py` (~3329 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_mm_cli_debug.py` (~3347 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_multi_file_recall.py` (~329 tok, medium) — Tests for recall across multiple files."""
 - `test_namespaces.py` (~2411 tok, huge) — Tests for namespaces.py — zero external deps (stdlib unittest)."""
 - `test_niah.py` (~4987 tok, huge) — Needle In A Haystack (NIAH) benchmark for mind-mem recall.
