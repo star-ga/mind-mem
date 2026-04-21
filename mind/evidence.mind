@@ -1,0 +1,33 @@
+# evidence.mind — Evidence-bundle assembly kernel
+# Consumed by src/mind_mem/evidence_bundle.py (v3.3.0).
+
+[bundle]
+# When recall(format="bundle") is called, this many top blocks drive
+# the fact/relation/timeline extraction. Higher = richer bundle but
+# more latency in the answer stage.
+max_blocks = 20
+# Cap on each sub-section. Prevents a single noisy category from
+# dominating the bundle envelope.
+max_facts = 20
+max_relations = 50
+max_timeline_events = 30
+max_entities = 30
+
+[relations]
+# Structured relations the extractor produces. Anything not on this
+# list is silently dropped — keeps the output schema tight.
+types = [
+  "supersedes",
+  "superseded_by",
+  "depends_on",
+  "relates_to",
+  "cites",
+  "tested_by",
+  "derived_from",
+]
+
+[confidence]
+# Per-block confidence blend: status × tier.
+# status_weight + tier_weight should sum to 1.0.
+status_weight = 0.7
+tier_weight   = 0.3

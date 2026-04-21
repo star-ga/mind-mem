@@ -1,0 +1,30 @@
+# truth.mind — Bayesian truth scoring kernel
+# Consumed by src/mind_mem/truth_score.py (v3.3.0).
+# Composes a calibrated confidence from status + recency - contradictions.
+
+[priors]
+# Status prior: P(fact is true | status)
+verified   = 0.92
+active     = 0.75
+draft      = 0.55
+pending    = 0.55
+superseded = 0.20
+retracted  = 0.10
+
+[age_decay]
+# Half-life in days. score *= 0.5 ** (age_days / half_life_days)
+half_life_days = 180.0
+# Floor (prevents underflow to 0 on very old blocks).
+floor = 0.000001
+
+[contradictions]
+# Each contradicting vote shaves this from the score.
+# Capped at prior × 0.9 so truth_score never goes negative.
+weight_per_vote = 0.18
+max_fraction_of_prior = 0.9
+
+[access_bonus]
+# Frequently-recalled blocks gain a small confidence nudge.
+# bonus = min(cap, log1p(access_count) / divisor)
+cap = 0.10
+divisor = 30.0

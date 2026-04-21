@@ -1,0 +1,44 @@
+# mind-mem-4b v2 training config — Runpod A100 80GB full fine-tune.
+# A100 variant of train_config.yaml (H200 version). Same optimizer
+# and schedule; smaller batch + gradient checkpointing to fit the
+# 80GB envelope.
+#
+# 4B full FT memory on A100 80GB @ bf16:
+#   weights          : ~8 GB
+#   gradients        : ~8 GB
+#   adamw states     : ~16 GB
+#   activations (bs=8, seq=4096, packed, grad-ckpt) : ~25-35 GB
+#   headroom         : ~10 GB
+# Total envelope ~67-75 GB — fits with margin.
+#
+# Expect ~10-16h for 15k samples × 3 epochs on A100 80GB.
+
+base_model: star-ga/mind-mem-4b
+output_dir: /workspace/mind-mem-4b-v2
+
+dtype: bfloat16
+optim: adamw_torch_fused
+learning_rate: 5.0e-6
+lr_scheduler_type: cosine
+warmup_ratio: 0.03
+
+num_train_epochs: 3
+# A100 80GB cuts batch in half vs H200 to fit optimizer + activations.
+per_device_train_batch_size: 8
+# Keep effective batch size = 32 to preserve the H200 recipe's optimiser
+# dynamics. 8 × 4 = 32.
+gradient_accumulation_steps: 4
+max_seq_length: 4096
+packing: true
+# Gradient checkpointing trades ~20% throughput for ~40% activation VRAM.
+# Required at seq=4096 + batch=8 on A100 80GB.
+gradient_checkpointing: true
+
+save_strategy: steps
+save_steps: 500
+logging_steps: 25
+report_to: none
+seed: 42
+
+# full fine-tune — NOT QLoRA. bitsandbytes not needed for this run.
+# quantize: 4bit   # uncomment only if dropping to A100 40GB

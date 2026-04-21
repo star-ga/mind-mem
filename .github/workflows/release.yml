@@ -23,6 +23,13 @@ jobs:
       - name: Install build tools
         run: pip install --upgrade build
 
+      - name: Bake integrity manifest
+        # SHA-256 manifest of critical modules, verified at import time
+        # in strict mode (MIND_MEM_INTEGRITY=strict). Released wheels
+        # carry the manifest; editable installs don't, so dev stays
+        # unaffected.
+        run: python scripts/build_integrity_manifest.py
+
       - name: Build distributions
         run: python -m build
 

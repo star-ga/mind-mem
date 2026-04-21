@@ -1,0 +1,26 @@
+# graph.mind — Multi-hop graph expansion kernel
+# Consumed by src/mind_mem/graph_recall.py (v3.3.0).
+# BFS over block references with per-hop decay.
+
+[expansion]
+enabled = false
+auto_enable = true
+# Security cap: hops > 3 are refused even if config requests them.
+# Matches _MAX_HOPS in graph_recall.py — do not widen without review.
+max_hops = 2
+decay = 0.5
+max_neighbors_per_hop = 5
+# Total neighbors added across *all* hops — bounds worst-case
+# fan-out at ~ max_hops × max_neighbors_per_hop.
+max_total_added = 50
+
+[detection]
+# Auto-enable conditions. Queries classified as multi-hop OR
+# temporal are the sweet spot for BFS expansion.
+categories = ["multi-hop", "temporal"]
+
+[seed_score]
+# Hop decay applies to the *seed* score, not the running score.
+# (Fixes architect audit #4: otherwise the head of the list attenuated
+# twice — once for rank, once for hop depth.)
+constant_across_hops = true

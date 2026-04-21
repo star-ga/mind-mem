@@ -1,0 +1,17 @@
+# session.mind — Same-session boost kernel
+# Consumed by src/mind_mem/session_boost.py (v3.3.0).
+# Multiplies scores of same-session blocks by (1 + boost).
+
+[boost]
+enabled = false
+auto_enable = false
+# Blocks sharing a session with one of the top N seeds get boosted.
+top_seed_count = 3
+boost = 0.3
+
+[session_extraction]
+# Order of signals tried when extracting a session id from metadata.
+# First hit wins.
+keys = ["dia_id", "session_id", "SessionId", "conversation_id"]
+# Regex used as a last resort — catches DIA-<id> / SES-<id>.
+fallback_regex = "^(?:DIA|SES)-([A-Za-z0-9_-]{4,64})"

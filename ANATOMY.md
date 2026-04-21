@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 643 | **Est. tokens:** ~1,275,321
-**Generated:** 2026-04-20 18:47 UTC
+**Files:** 658 | **Est. tokens:** ~1,287,243
+**Generated:** 2026-04-21 07:41 UTC
 
 ## Token Budget Guide
 
@@ -22,28 +22,28 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~73,472 |
+| `./` | 30 | ~73,478 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `benchmarks/` | 23 | ~54,236 |
+| `benchmarks/` | 26 | ~58,164 |
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 52 | ~75,508 |
+| `docs/` | 53 | ~76,951 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 10 | ~5,856 |
+| `.github/workflows/` | 10 | ~5,938 |
 | `hooks/` | 3 | ~801 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2,176 |
-| `mind/` | 19 | ~5,516 |
-| `scripts/` | 3 | ~2,692 |
+| `mind/` | 26 | ~7,230 |
+| `scripts/` | 4 | ~3,329 |
 | `sdk/go/` | 9 | ~6,773 |
 | `sdk/js/` | 5 | ~1,388 |
 | `sdk/js/src/` | 4 | ~2,320 |
@@ -52,7 +52,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 137 | ~461,714 |
+| `src/mind_mem/` | 138 | ~463,405 |
 | `src/mind_mem/api/` | 5 | ~14,584 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
@@ -60,7 +60,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 2 | ~3,859 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 225 | ~437,420 |
+| `tests/` | 227 | ~439,841 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -84,7 +84,7 @@
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
 - `generate_mind7b_training.py` (~5558 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
-- `.gitignore` (~114 tok, small) — *.pyc
+- `.gitignore` (~120 tok, small) — *.pyc
 - `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~3337 tok, huge) — mind-mem installer — sets up MCP server + hooks for all supported clients
@@ -118,6 +118,7 @@
 - `generate_retrieval_examples.py` (~1686 tok, huge) — Generate training examples for v3.3.0 retrieval shapes.
 - `grid_search.py` (~2849 tok, huge) — BM25F Field Weight Grid Search for mind-mem Recall Engine.
 - `__init__.py` (~0 tok, tiny)
+- `local_stack_audit.py` (~1802 tok, huge) — Single-shot audit of the local mind-mem stack before a bench run.
 - `locomo_harness.py` (~4147 tok, huge) — LoCoMo Benchmark Harness for mind-mem Recall Engine.
 - `locomo_judge.py` (~10915 tok, huge) — LoCoMo LLM-as-Judge Evaluation for Mind-Mem.
 - `locomo_v3.3.0_benchmark_config.json` (~450 tok, medium) — Keys: _comment, version, recall, cache, cross_encoder
@@ -128,7 +129,9 @@
 - `niah_v3.2.1_results.txt` (~205 tok, medium) — ============================= test session starts ==============================
 - `README_benchmark_mode.md` (~1089 tok, large) — Full-capability benchmark mode (v3.3.0)
 - `REPORT.md` (~3973 tok, huge) — mind-mem Benchmark Report
+- `runpod_kickoff.sh` (~1779 tok, huge) — mind-mem-4b v2 — Runpod one-shot kickoff.
 - `tier_weight_search.py` (~1615 tok, huge) — Grid-search per-tier weights against LoCoMo judge scores (v3.3.0 T4 #10).
+- `train_config_a100.yaml` (~347 tok, medium) — base_model: star-ga/mind-mem-4b
 - `train_config.yaml` (~208 tok, medium) — base_model: star-ga/mind-mem-4b
 - `train_mind_mem_4b.py` (~2846 tok, huge) — mind-mem-4b v2 training script — Runpod H200 full-fine-tune.
 ### `deploy/`
@@ -186,6 +189,7 @@
 - `mind-mem-4b-v2-training-recipe.md` (~1683 tok, huge) — mind-mem-4b v2 training recipe — Runpod H200
 - `odc-retrieval.md` (~834 tok, large) — Observer-Dependent Cognition in mind-mem
 - `performance-tuning.md` (~560 tok, large) — Performance Tuning
+- `protection.md` (~1443 tok, large) — mind-mem Library Protection
 - `quickstart.md` (~601 tok, large) — mind-mem Quickstart
 - `rest-api.md` (~1137 tok, large) — mind-mem REST API
 - `review-architecture-v3.2.0.md` (~1919 tok, huge) — Architecture Review — mind-mem v3.2.0 (Release Candidate)
@@ -243,7 +247,7 @@
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs
 - `label-sync.yml` (~112 tok, small) — name: Label Sync
-- `release.yml` (~1350 tok, large) — name: Release
+- `release.yml` (~1432 tok, large) — name: Release
 - `security-review.yml` (~240 tok, medium) — name: Security Review
 - `security.yml` (~1764 tok, huge) — name: Supply-Chain Security
 - `stale.yml` (~241 tok, medium) — name: Stale Issues
@@ -271,14 +275,19 @@
 
 - `abstention.mind` (~215 tok, medium) — Confidence gating: decide whether to abstain from answering
 - `adversarial.mind` (~156 tok, small)
+- `answer.mind` (~413 tok, medium)
 - `bm25.mind` (~477 tok, medium) — BM25F scoring kernel with field boosts and length normalization
 - `category.mind` (~395 tok, medium) — Category distillation scoring kernel
 - `cognitive.mind` (~437 tok, medium)
 - `cross_encoder.mind` (~174 tok, small)
+- `ensemble.mind` (~230 tok, medium)
+- `evidence.mind` (~225 tok, medium)
+- `graph.mind` (~228 tok, medium)
 - `hybrid.mind` (~169 tok, small)
 - `importance.mind` (~246 tok, medium) — A-MEM: auto-maintained importance scores for memory blocks
 - `intent.mind` (~149 tok, small)
 - `prefetch.mind` (~256 tok, medium) — Prefetch context scoring kernel
+- `query_plan.mind` (~259 tok, medium)
 - `ranking.mind` (~227 tok, medium) — Evidence ranking: combine multiple scoring signals for final ranking
 - `README.md` (~911 tok, large) — MIND Kernels
 - `recall.mind` (~207 tok, medium)
@@ -286,12 +295,15 @@
 - `rerank.mind` (~146 tok, small)
 - `rm3.mind` (~189 tok, small)
 - `rrf.mind` (~197 tok, small) — RRF: fuse ranked lists from multiple retrievers
+- `session.mind` (~148 tok, small)
 - `temporal.mind` (~113 tok, small)
 - `trajectory.mind` (~440 tok, medium)
+- `truth.mind` (~211 tok, medium)
 ### `scripts/`
 
 - `anatomy-hook.sh` (~258 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
 - `anatomy.sh` (~2010 tok, huge) — anatomy — Generate ANATOMY.md for any repo
+- `build_integrity_manifest.py` (~637 tok, large) — Bake ``_integrity_manifest.json`` into the package before wheel build.
 - `regen_bash_literals.py` (~424 tok, medium) — Regenerate src/mind_mem/_task_status_literals.sh from enums.py.
 ### `sdk/go/`
 
@@ -405,7 +417,7 @@
 - `hook_installer.py` (~9442 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hybrid_recall.py` (~8806 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `__init__.py` (~539 tok, large) — # Mind Mem — Memory + Immune System for AI agents
+- `__init__.py` (~667 tok, large) — # Mind Mem — Memory + Immune System for AI agents
 - `init_workspace.py` (~2062 tok, huge) — mind-mem workspace initializer. Zero external deps.
 - `intel_scan.py` (~12579 tok, huge) — Mind Mem Intelligence Scanner v2.0 — Self-hosted, zero external dependencies.
 - `intent_router.py` (~3106 tok, huge) — mind-mem Intent Router — 9-type adaptive query intent classification.
@@ -474,6 +486,7 @@
 - `prefix_cache.py` (~3043 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `preimage.py` (~1102 tok, large) — # Copyright 2026 STARGA, Inc.
 - `project_profile.py` (~1681 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `protection.py` (~1563 tok, huge) — Runtime protection layer for mind-mem (v3.3.0+).
 - `py.typed` (~0 tok, tiny)
 - `q1616.py` (~562 tok, large) — # Copyright 2026 STARGA, Inc.
 - `query_expansion.py` (~4600 tok, huge) — Multi-query expansion for improved recall.
@@ -696,6 +709,7 @@
 - `test_memory_tiers.py` (~3479 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_merkle_tree.py` (~3185 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_mind_ffi.py` (~291 tok, medium) — Tests for MIND FFI module."""
+- `test_mind_kernels_v3_3.py` (~1002 tok, large) — Kernel-loading tests for v3.3.0 features.
 - `test_mm_cli_debug.py` (~3339 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_multi_file_recall.py` (~329 tok, medium) — Tests for recall across multiple files."""
 - `test_namespaces.py` (~2411 tok, huge) — Tests for namespaces.py — zero external deps (stdlib unittest)."""
@@ -711,6 +725,7 @@
 - `test_prefetch_context.py` (~1487 tok, large) — Tests for prefetch_context() in recall.py."""
 - `test_prefetch.py` (~326 tok, medium) — Tests for prefetch functionality."""
 - `test_prefix_cache.py` (~3140 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_protection.py` (~1419 tok, large) — Tests for mind_mem.protection (v3.3.0+)."""
 - `test_q1616_preimage.py` (~1496 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_query_decomposition.py` (~1604 tok, huge) — Tests for multi-hop query decomposition (#6)."""
 - `test_query_expansion_auto_enable.py` (~1091 tok, large) — v3.3.0 Tier 2 #4 — query expansion auto-enables on ambiguous queries.

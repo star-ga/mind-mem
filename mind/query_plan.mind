@@ -1,0 +1,30 @@
+# query_plan.mind — Query decomposition + planner tuning kernel
+# Consumed by src/mind_mem/query_planner.py (v3.3.0).
+# Keep semantics identical to FieldSpec validators so the .mind file
+# can override runtime defaults without touching code.
+
+[query_decomposition]
+# Master switch — feature gate still respects retrieval.query_decomposition
+# in mind-mem.json; these are *defaults* when auto_enable fires.
+enabled = false
+auto_enable = true
+max_subqueries = 4
+min_subquery_length = 2
+
+# Regex priority order. First match wins.
+# Exposed so operators can disable a pattern without a code change.
+patterns = [
+  "temporal_after",   # "X after Y"
+  "causal",           # "why/because/due to"
+  "contrastive",      # "A vs B" / "compare"
+  "conjunction",      # "and/or"
+]
+
+[llm_decomposer]
+# SSRF-guarded — only loopback by default (127.0.0.1, ::1, localhost)
+# unless operator explicitly allow-lists a host in code.
+enabled = false
+base_url = "http://127.0.0.1:8766"
+model = "claude-opus-4-7"
+timeout_seconds = 30
+temperature = 0.1

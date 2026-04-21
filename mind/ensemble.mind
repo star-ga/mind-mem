@@ -1,0 +1,32 @@
+# ensemble.mind — Reranker ensemble kernel
+# Consumed by src/mind_mem/rerank_ensemble.py (v3.3.0).
+# Borda-count fusion across heterogeneous rerankers.
+
+[ensemble]
+enabled = false
+auto_enable = false
+# Members processed in list order. Empty = disabled.
+# Each member must be loadable; failures are fail-open (the rest still run).
+members = ["cross_encoder", "bge"]
+
+[cross_encoder]
+model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+weight = 1.0
+
+[bge]
+# bge-reranker-v2-m3 is the supported default.
+# bge-large-en-v1.5 is a *retrieval* model, not a reranker — don't swap.
+model = "BAAI/bge-reranker-v2-m3"
+weight = 1.0
+
+[llm]
+# Opt-in, expensive. Disabled by default.
+enabled = false
+base_url = "http://127.0.0.1:8766"
+model = "claude-opus-4-7"
+weight = 0.5
+
+[borda]
+# Points awarded to candidate at rank r in a list of N: (N - r).
+# Ties broken by original retriever rank (stable sort).
+tie_break = "original_rank"

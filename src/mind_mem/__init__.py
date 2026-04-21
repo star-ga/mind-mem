@@ -34,8 +34,32 @@ Core modules:
     storage         — Storage factory (get_block_store) for backend selection via config
 """
 
+from .protection import (
+    AUDIT_TAG,
+    AUTH_HEADER,
+    __author__,
+    __license__,
+    verify_integrity,
+)
 from .storage import get_block_store
 
 __version__ = "3.2.1"
 
-__all__ = ["get_block_store"]
+# Best-effort import-time integrity check. Fails open unless
+# MIND_MEM_INTEGRITY=strict, so editable installs and source checkouts
+# are unaffected.
+try:
+    verify_integrity()
+except RuntimeError:
+    raise
+except Exception:  # pragma: no cover — never block import on check bugs
+    pass
+
+__all__ = [
+    "AUDIT_TAG",
+    "AUTH_HEADER",
+    "__author__",
+    "__license__",
+    "get_block_store",
+    "verify_integrity",
+]
