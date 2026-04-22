@@ -101,6 +101,11 @@ def annotate_with_temporal_metadata(
     """
     if not blocks:
         return []
+    # ``(ref - dt).days`` floors to whole days; blocks created < 24h ago
+    # therefore show as ``[Stored 0 days ago • <date>]``, which is
+    # factually correct but callers inferring age in hours should read
+    # ``_temporal_delta_days`` (still 0) and the ``<date>`` string, not
+    # rely on the tag alone.
     ref = now or datetime.now(timezone.utc)
     if ref.tzinfo is None:
         ref = ref.replace(tzinfo=timezone.utc)

@@ -139,11 +139,13 @@ class EnsembleReranker:
             return candidates
 
         # Borda count: candidate at rank r in a list of N gets (N - r) points.
+        # (Rename the rank variable so it doesn't shadow the outer ``r``
+        # Reranker loop variable from a few lines up.)
         scores: dict[str, float] = {}
         for ranking in rankings:
             n = len(ranking)
-            for r, cid in enumerate(ranking):
-                scores[cid] = scores.get(cid, 0.0) + (n - r)
+            for rank_pos, cid in enumerate(ranking):
+                scores[cid] = scores.get(cid, 0.0) + (n - rank_pos)
 
         # Resolve back to candidate dicts, keeping stable order from
         # the first reranker for ties.

@@ -2,6 +2,34 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.4.2 (2026-04-22)
+
+**Zero-warning / zero-mypy-error patch.** Closes all remaining audit
+items (warnings + type issues) surfaced by `ruff`, `mypy src/`, and
+`pytest -W default`.
+
+### Fixed
+
+- **Type errors (7 → 0 on `mypy src/`):**
+  - `rerank_ensemble.py`: inner loop variable `r` shadowed the outer
+    `Reranker` loop variable; renamed to `rank_pos` so Borda count
+    stays numeric.
+  - `storage/sharded_pg.py`: write/delete/get_by_id/get_all now
+    coerce returns to the declared types (`str`, `bool`, `dict`,
+    `list`) so `disallow_any_return` is clean.
+  - `mcp/tools/recall.py`: `_inner_with_format` result coerced to
+    `str`.
+- **Warnings:** `pyproject.toml` now pins
+  `asyncio_default_fixture_loop_scope = "function"` +
+  `asyncio_default_test_loop_scope = "function"` so pytest-asyncio
+  ≥0.25 stops emitting its deprecation warning.
+- **Docstring:** `temporal_metadata.annotate_with_temporal_metadata`
+  now notes that `(ref - dt).days` floors to whole days; callers
+  needing sub-day precision should read the `<date>` string, not the
+  `N days ago` tag.
+- **Release hygiene:** `AGENTS.md` + `reproduce_bug.py` (agent
+  working files accidentally committed in v3.4.1) removed.
+
 ## 3.4.1 (2026-04-22)
 
 **Audit-fix patch.** Resolves 4 HIGH findings from the Gemini CLI

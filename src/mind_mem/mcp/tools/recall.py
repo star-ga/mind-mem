@@ -113,7 +113,8 @@ def _recall_impl(
             config=_raw_config,
             ttl_seconds=int(_cache_cfg.get("ttl_seconds", 3600)),
         )
-    return _inner_with_format(query, limit=limit, active_only=active_only, backend=backend)
+    result = _inner_with_format(query, limit=limit, active_only=active_only, backend=backend)
+    return str(result) if result is not None else ""
 
 
 def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False, backend: str = "auto") -> str:

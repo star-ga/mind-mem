@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 669 | **Est. tokens:** ~1,304,158
-**Generated:** 2026-04-22 04:27 UTC
+**Files:** 667 | **Est. tokens:** ~1,304,090
+**Generated:** 2026-04-22 04:57 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 32 | ~73,746 |
+| `./` | 30 | ~73,533 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 26 | ~59,234 |
 | `deploy/` | 2 | ~690 |
@@ -52,13 +52,13 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 142 | ~470,330 |
+| `src/mind_mem/` | 142 | ~470,443 |
 | `src/mind_mem/api/` | 5 | ~14,584 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
-| `src/mind_mem/mcp/tools/` | 17 | ~37,521 |
+| `src/mind_mem/mcp/tools/` | 17 | ~37,534 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
-| `src/mind_mem/storage/` | 2 | ~3,859 |
+| `src/mind_mem/storage/` | 2 | ~3,878 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 228 | ~442,702 |
 | `tests/integration/` | 2 | ~1,436 |
@@ -73,7 +73,6 @@
 
 ### `./`
 
-- `AGENTS.md` (~35 tok, tiny) — Memory Context
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: mind-mem (Commit 30d8b71)
 - `CLAUDE.md` (~1028 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
@@ -94,10 +93,9 @@
 - `mcp_server.py` (~662 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
-- `pyproject.toml` (~1657 tok, huge) — [project]
+- `pyproject.toml` (~1712 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22305 tok, huge) — Shared Memory Across All Your AI Agents
-- `reproduce_bug.py` (~233 tok, medium)
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
 - `ROADMAP.md` (~17296 tok, huge) — mind-mem Roadmap
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
@@ -472,7 +470,7 @@
 - `memory_ops.py` (~7082 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
 - `public.py` (~4238 tok, huge) — # mypy: disable-error-code="no-any-return"
-- `recall.py` (~4937 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~4950 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 ### `src/mind_mem/`
 
@@ -511,7 +509,7 @@
 - `_recall_temporal.py` (~2044 tok, huge) — Recall engine temporal filtering — resolve relative time references and filter blocks."""
 - `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
 - `recall_vector.py` (~13960 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
-- `rerank_ensemble.py` (~3275 tok, huge) — Reranker ensemble via Borda count (v3.3.0 Tier 4 #9).
+- `rerank_ensemble.py` (~3310 tok, huge) — Reranker ensemble via Borda count (v3.3.0 Tier 4 #9).
 - `retrieval_graph.py` (~4984 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
 - `retrieval_trace.py` (~1252 tok, large) — Per-feature retrieval attribution (v3.3.0 architect audit item #7).
 - `schema_version.py` (~1897 tok, huge) — Mind-Mem Schema Version Migration. Zero external deps.
@@ -541,13 +539,13 @@
 ### `src/mind_mem/storage/`
 
 - `__init__.py` (~980 tok, large) — Storage factory for mind-mem block stores (v3.2.0).
-- `sharded_pg.py` (~2879 tok, huge) — Sharded Postgres / Citus routing (v4.0 prep).
+- `sharded_pg.py` (~2898 tok, huge) — Sharded Postgres / Citus routing (v4.0 prep).
 ### `src/mind_mem/`
 
 - `streaming.py` (~1655 tok, huge) — Back-pressure-aware streaming ingest (v3.3.0).
 - `_task_status_literals.sh` (~118 tok, small) — AUTO-GENERATED — do not edit by hand.
 - `telemetry.py` (~2401 tok, huge) — mind-mem Telemetry — OpenTelemetry traces + Prometheus metrics.
-- `temporal_metadata.py` (~1373 tok, large) — Temporal metadata injection for retrieved blocks (v3.4.0).
+- `temporal_metadata.py` (~1451 tok, large) — Temporal metadata injection for retrieved blocks (v3.4.0).
 - `tenant_audit.py` (~1798 tok, huge) — Per-tenant audit chain isolation (v4.0 prep).
 - `tenant_kms.py` (~2181 tok, huge) — Per-tenant key management + envelope encryption (v4.0 prep).
 - `tiered_memory.py` (~1102 tok, large) — # Copyright 2026 STARGA, Inc.

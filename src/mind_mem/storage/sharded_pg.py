@@ -150,7 +150,8 @@ class ShardedPostgresBlockStore:
         ns = namespace or str(block.get("_namespace") or self._default_namespace)
         shard = self._router.shard_for(tid, ns)
         store = self._stores[shard.index]
-        return store.write_block(block)
+        result = store.write_block(block)
+        return str(result) if result is not None else ""
 
     def delete_block(
         self,
@@ -162,7 +163,7 @@ class ShardedPostgresBlockStore:
         tid = tenant_id or self._default_tenant
         ns = namespace or self._default_namespace
         shard = self._router.shard_for(tid, ns)
-        return self._stores[shard.index].delete_block(block_id)
+        return bool(self._stores[shard.index].delete_block(block_id))
 
     # ---- BlockStore read surface ------------------------------------------
 
@@ -173,7 +174,7 @@ class ShardedPostgresBlockStore:
         for store in self._stores.values():
             result = store.get_by_id(block_id)
             if result is not None:
-                return result
+                return dict(result)
         return None
 
     def search(self, query: str, *, limit: int = 10) -> list[dict[str, Any]]:
@@ -202,7 +203,7 @@ class ShardedPostgresBlockStore:
         fan-out across shards for admin/compliance scans."""
         if tenant_id is not None:
             shard = self._router.shard_for(tenant_id, self._default_namespace)
-            return self._stores[shard.index].get_all(active_only=active_only)
+            return list(self._stores[shard.index].get_all(active_only=active_only))
         out: list[dict[str, Any]] = []
         for store in self._stores.values():
             try:
