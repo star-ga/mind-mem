@@ -139,6 +139,8 @@ class TrainConfig:
     report_to: str = "none"
     seed: int = 42
     quantize: str | None = None  # "4bit" enables QLoRA for A100-class boxes
+    gradient_checkpointing: bool = False
+    save_total_limit: int = 2  # cap saved checkpoints to avoid disk overflow
     extra_config: dict[str, Any] = field(default_factory=dict)
 
 
@@ -175,6 +177,7 @@ def train(args: argparse.Namespace) -> int:
     from transformers import (  # type: ignore
         AutoModelForCausalLM,
         AutoTokenizer,
+        DataCollatorForLanguageModeling,
         Trainer,
         TrainingArguments,
     )
@@ -254,22 +257,55 @@ def train(args: argparse.Namespace) -> int:
         gradient_accumulation_steps=cfg.gradient_accumulation_steps,
         save_strategy=cfg.save_strategy,
         save_steps=cfg.save_steps,
+        save_total_limit=cfg.save_total_limit,
         logging_steps=cfg.logging_steps,
         report_to=cfg.report_to,
         seed=cfg.seed,
         optim=cfg.optim,
         bf16=torch_dtype == torch.bfloat16,
         fp16=torch_dtype == torch.float16,
+        gradient_checkpointing=cfg.gradient_checkpointing,
+        gradient_checkpointing_kwargs={"use_reentrant": False} if cfg.gradient_checkpointing else None,
     )
+    if cfg.gradient_checkpointing:
+        model.gradient_checkpointing_enable()
+        model.config.use_cache = False
 
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=ds,
-        tokenizer=tokenizer,
-    )
+    # DataCollatorForLanguageModeling(mlm=False) copies input_ids → labels
+    # and masks pad tokens to -100 so the model returns a causal-LM loss.
+    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+    # transformers >=4.46 renamed tokenizer= to processing_class=.
+    trainer_kwargs: dict[str, Any] = {
+        "model": model,
+        "args": training_args,
+        "train_dataset": ds,
+        "data_collator": data_collator,
+    }
+    import inspect
+
+    trainer_sig = inspect.signature(Trainer.__init__).parameters
+    if "processing_class" in trainer_sig:
+        trainer_kwargs["processing_class"] = tokenizer
+    else:
+        trainer_kwargs["tokenizer"] = tokenizer
+    trainer = Trainer(**trainer_kwargs)
+    # Auto-resume from latest checkpoint if output_dir already has one.
+    # Lets us survive SSH hangups and transient pod hiccups without
+    # losing previous training progress.
+    resume_from: str | bool = False
+    out = Path(cfg.output_dir)
+    if out.is_dir():
+        checkpoints = sorted(
+            (p for p in out.iterdir() if p.name.startswith("checkpoint-")),
+            key=lambda p: int(p.name.split("-")[1]) if p.name.split("-")[1].isdigit() else 0,
+        )
+        if checkpoints:
+            resume_from = str(checkpoints[-1])
+            print(f"[train] resuming from {resume_from}")
+
     print("[train] starting fit …")
-    trainer.train()
+    trainer.train(resume_from_checkpoint=resume_from or None)
     trainer.save_model(cfg.output_dir)
     tokenizer.save_pretrained(cfg.output_dir)
     print(f"[train] saved v2 checkpoint to {cfg.output_dir}")

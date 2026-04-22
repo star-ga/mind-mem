@@ -17,7 +17,7 @@
     <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-    <img src="https://img.shields.io/badge/tests-3600%2B-brightgreen?style=flat-square" alt="Tests: 3600+">
+    <img src="https://img.shields.io/badge/tests-4000%2B-brightgreen?style=flat-square" alt="Tests: 3600+">
     <img src="https://img.shields.io/badge/MCP_tools-57%2B7-blue?style=flat-square" alt="MCP Tools: 57 legacy + 7 consolidated dispatchers">
     <img src="https://img.shields.io/badge/clients-17-blueviolet?style=flat-square" alt="AI Clients: 17">
     <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">

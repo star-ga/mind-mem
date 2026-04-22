@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 658 | **Est. tokens:** ~1,287,243
-**Generated:** 2026-04-21 07:41 UTC
+**Files:** 662 | **Est. tokens:** ~1,292,300
+**Generated:** 2026-04-22 04:03 UTC
 
 ## Token Budget Guide
 
@@ -22,14 +22,14 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~73,478 |
+| `./` | 31 | ~73,513 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `benchmarks/` | 26 | ~58,164 |
+| `benchmarks/` | 26 | ~58,604 |
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 53 | ~76,951 |
+| `docs/` | 56 | ~81,533 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -73,6 +73,7 @@
 
 ### `./`
 
+- `AGENTS.md` (~35 tok, tiny) — Memory Context
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: mind-mem (Commit 30d8b71)
 - `CLAUDE.md` (~1028 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
@@ -133,7 +134,7 @@
 - `tier_weight_search.py` (~1615 tok, huge) — Grid-search per-tier weights against LoCoMo judge scores (v3.3.0 T4 #10).
 - `train_config_a100.yaml` (~347 tok, medium) — base_model: star-ga/mind-mem-4b
 - `train_config.yaml` (~208 tok, medium) — base_model: star-ga/mind-mem-4b
-- `train_mind_mem_4b.py` (~2846 tok, huge) — mind-mem-4b v2 training script — Runpod H200 full-fine-tune.
+- `train_mind_mem_4b.py` (~3286 tok, huge) — mind-mem-4b v2 training script — Runpod H200 full-fine-tune.
 ### `deploy/`
 
 - `docker-compose.yml` (~608 tok, large) — name: mind-mem
@@ -179,6 +180,7 @@
 - `faq.md` (~374 tok, medium) — FAQ
 - `getting-started.md` (~405 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
+- `hf-mind-mem-4b-v2-README.md` (~2154 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `maintenance-namespaces.md` (~1601 tok, huge) — `maintenance/` namespaces
 - `mcp-integration.md` (~1538 tok, huge) — MCP Integration Guide
 - `mcp-tool-examples.md` (~902 tok, large) — MCP Tool Examples
@@ -219,6 +221,8 @@
 - `v3.2.0-mcp-decomposition-plan.md` (~2575 tok, huge) — v3.2.0 — MCP server decomposition plan
 - `v3.2.0-release-notes.md` (~1881 tok, huge) — mind-mem v3.2.0 — Production Deployment Release
 - `v3.2.1-release-notes.md` (~1302 tok, large) — mind-mem v3.2.1 release notes
+- `v3.3.0-release-notes.md` (~1157 tok, large) — mind-mem v3.3.0 release notes
+- `v3.4.0-roadmap-llm-consensus.md` (~1271 tok, large) — v3.4.0 roadmap — path to 90+ on LoCoMo
 - `workspace-structure.md` (~352 tok, medium) — Workspace Structure
 ### `examples/`
 

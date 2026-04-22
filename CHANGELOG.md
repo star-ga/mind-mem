@@ -2,6 +2,157 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.3.0 (2026-04-21)
+
+**Platform-scale release.** Ships 12 v3.3.0 retrieval features, 8 v4.0
+preview modules, a protection layer for shipped wheels, 7 new .mind
+tuning kernels, and mind-mem-4b v2 (full fine-tune on H200 NVL replacing
+v1's QLoRA checkpoint). No breaking changes — v3.2.1 deployments upgrade
+cleanly.
+
+### Added — v3.3.0 retrieval features (12)
+
+- **``mind_mem.query_planner``** — NLP + LLM query decomposition
+  (regex patterns for temporal_after / causal / contrastive /
+  conjunction, plus SSRF-guarded LLM decomposer). Tunable via
+  ``mind/query_plan.mind``.
+- **``mind_mem.graph_recall``** — Multi-hop BFS graph expansion over
+  block references, decay=0.5 per hop, ``max_hops`` security-capped
+  at 3, ``max_total_added=50``. Tunable via ``mind/graph.mind``.
+- **``mind_mem.entity_prefetch``** — Widened regex
+  (``(?:PER|PRJ|TOOL|INC)-\d+|[A-Z]{2,}|[A-Z][a-zA-Z][a-zA-Z]+``),
+  symlink-escape guard, 500-file / 2MB safety caps.
+- **``mind_mem.session_boost``** — Same-session score multiplier
+  ``(1 + boost)`` with ``top_seed_count=3``, ``boost=0.3``. Tunable
+  via ``mind/session.mind``.
+- **``mind_mem.evidence_bundle``** — Structured (facts / relations /
+  timeline / entities) JSON bundle via ``recall(format="bundle")``.
+  Tunable via ``mind/evidence.mind``.
+- **``mind_mem.rerank_ensemble``** — Borda-count fusion across
+  cross-encoder (ms-marco-MiniLM-L-6-v2) + BGE-reranker-v2-m3.
+  Fail-open per member. Tunable via ``mind/ensemble.mind``.
+- **``mind_mem.truth_score``** — Bayesian truth scoring:
+  ``status_prior × age_decay − contradiction_mass + access_bonus``.
+  Tunable via ``mind/truth.mind``.
+- **``mind_mem.answer_quality``** — ``verify_answer`` regex patterns
+  (date/time/number/proper_noun/yes_no), ``self_consistency``
+  plurality voting, ``prompt_for_category`` per-category prompts.
+  Tunable via ``mind/answer.mind``.
+- **``mind_mem.streaming``** — Token-bucket back-pressure queue with
+  drop-oldest policy.
+- **``mind_mem.consensus_vote``** — Quorum voting with
+  ``trust_weight`` namespace fallback and 1.0-2.0 confidence scale.
+- **``mind_mem.retrieval_trace``** — ContextVar-backed zero-cost
+  tracing; activated when ``retrieval.trace_attribution`` is set.
+- **``mind_mem.feature_gate``** — Declarative ``FieldSpec`` +
+  ``FeatureGate`` pattern for v3.3.0 retrieval features. Collapses
+  the five near-identical ``is_X_enabled`` / ``resolve_X_config``
+  implementations into a single declaration.
+
+### Added — v4.0 preview modules (8)
+
+- **``mind_mem.event_fanout``** — Pluggable publisher protocol with
+  ``LoggingPublisher`` + ``RedisStreamPublisher``. Canonical event
+  kinds: ``contradiction_detected``, ``block_promoted``,
+  ``snapshot_created``.
+- **``mind_mem.tenant_audit``** — Per-tenant HMAC-separated audit
+  chains. ``_tenant_genesis = HMAC(root_secret, tenant_id)[:32]``.
+- **``mind_mem.tenant_kms``** — Envelope DEK encryption via
+  AES-256-GCM (cryptography library), SHAKE-256+HMAC fallback.
+  ``rotate_tenant_dek`` returns (new_dek, new_wrapped, old_dek).
+- **``mind_mem.governance_raft``** — Raft-style consensus wrapper.
+  ``Proposal`` + ``LocalConsensusLog`` + HMAC-signed
+  ``sign_proposal`` / ``verify_proposal``.
+- **``mind_mem.api.grpc_server``** — Typed ``RecallRequest`` /
+  ``RecallResponse`` / ``GovernanceRequest`` dataclasses.
+  ``serve(port)`` lazy-imports grpc when ``mind-mem[grpc]`` installed.
+- **``mind_mem.storage.sharded_pg``** — Consistent-hash ring with
+  virtual nodes (160 × weight). ``ShardedPostgresBlockStore``
+  implements the full ``BlockStore`` protocol.
+- **``deploy/edge/pyoxidizer.bzl``** — PyOxidizer single-binary edge
+  deployment (Linux x86_64, macOS arm64).
+- **``web/``** — Next.js console (``GraphView`` / ``TimelineView`` /
+  ``FactList`` / ``TenantSwitcher``).
+
+### Added — protection layer
+
+- **``src/mind_mem/protection.py``** — SHA-256 integrity manifest
+  verified at import time. ``MIND_MEM_INTEGRITY=strict`` turns
+  tamper detection into a hard fault. Frozen
+  ``AUTH_HEADER="X-MindMem-Token"`` and ``AUDIT_TAG="TAG_v1"``
+  constants that downstream consumers can pin with ``assert``.
+- **``scripts/build_integrity_manifest.py``** — Wheel-build hook that
+  bakes ``_integrity_manifest.json`` for 19 critical modules. Wired
+  into ``.github/workflows/release.yml``.
+- **``docs/protection.md``** — 15-layer defence-in-depth map
+  (OIDC trusted publishing → Sigstore → SBOM → integrity manifest →
+  strict-mode guard → world-writable dir check → frozen constants →
+  gitleaks → trivy → bandit → mypy → audit chain → tenant isolation
+  → envelope encryption).
+
+### Added — .mind tuning kernels (7 new, 25 total)
+
+Each v3.3.0 retrieval feature ships a TOML-style ``.mind`` config
+kernel so operators can tune bounds without patching code:
+
+- ``mind/query_plan.mind`` — decomposition + LLM-decomposer config
+- ``mind/graph.mind`` — BFS expansion bounds (hops ≤ 3)
+- ``mind/session.mind`` — same-session boost config
+- ``mind/truth.mind`` — Bayesian priors + age decay
+- ``mind/answer.mind`` — self-consistency + verification patterns
+- ``mind/evidence.mind`` — bundle assembly bounds
+- ``mind/ensemble.mind`` — reranker ensemble (cross_encoder + BGE)
+
+15 parameterised tests in ``tests/test_mind_kernels_v3_3.py`` pin
+expected section names + invariants (graph max_hops≤3, answer
+samples odd, ensemble uses reranker not retriever, etc.).
+
+### Changed — mind-mem-4b v2 (HuggingFace)
+
+- **``star-ga/mind-mem-4b``** replaced with v2 on HF main branch.
+- **Full fine-tune** on H200 NVL 141GB (v1 was QLoRA on RTX 3080).
+- 16,450 training examples (10k dispatcher + 5k retrieval + 1.45k v1
+  replay).
+- Hyperparameters: bf16, AdamW fused, LR 5e-6 cosine with 3% warmup,
+  batch 4 × accum 8 (effective 32), seq_length 384, gradient
+  checkpointing enabled. Final loss: 0.08 (converged).
+- GGUF Q4_K_M (2.7GB) imported to Ollama as ``mind-mem:4b``;
+  ``mind-mem:4b-v1`` tag preserved for rollback.
+- v2 model card at ``docs/hf-mind-mem-4b-v2-README.md`` advertises
+  the 7-dispatcher v3.2.x surface + v3.3.0 retrieval call shapes.
+
+### Added — benchmarking + ops
+
+- **``benchmarks/local_stack_audit.py``** — pre-bench health check
+  across 11 optional features (ollama, redis, claude-proxy, CE, BGE
+  v2-m3, sqlite-vec, v3.3.0 + v4.0-prep modules, 25 kernels).
+- **``benchmarks/runpod_kickoff.sh``** — one-shot Runpod H200/A100
+  training kickoff. Writes all artifacts to ``/runpod-volume``
+  (persists across pod termination).
+- **``benchmarks/train_config_a100.yaml``** — A100 80GB variant
+  (batch 8 × accum 4, gradient_checkpointing) of the H200 config.
+- **``benchmarks/train_mind_mem_4b.py``** now auto-resumes from
+  latest checkpoint when ``output_dir`` contains one. Survives SSH
+  hangups and pod restarts.
+
+### LoCoMo results (Opus 4.7 answerer, Mistral-Large judge)
+
+| | conv-0 | Notes |
+|---|---|---|
+| v1.1.0 (Mistral baseline) | 70.54 | Original LoCoMo run |
+| v3.2.1 (Opus, BM25) | 76.7 | Previous release |
+| v3.3.0 (Opus, BM25) | **77.06** | This release — 199 QAs, +0.36 over v3.2.1 |
+
+Per-category on v3.3.0 conv-0: adversarial=92.98, temporal=98.12,
+open-domain=74.87, single-hop=70.12, multi-hop=64.35.
+
+**Known limitation:** v3.3.0 feature experiment (query decomposition +
+rerank ensemble + self-consistency) regressed full-bench score to
+70.05 because sub-query RRF-fuse attenuated joint-reasoning bridges.
+Path to 85+ documented in ``docs/v3.4.0-roadmap-llm-consensus.md``
+based on 4-LLM consensus (Grok-4.1, Mistral-Large, DeepSeek-Reasoner,
+Gemini-3.1-Pro).
+
 ## 3.2.1 (2026-04-20)
 
 **Hotfix / production-hardening release.** Addresses the three
