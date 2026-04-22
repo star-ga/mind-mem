@@ -254,7 +254,7 @@ class TestTemporalMetadata:
     def test_prefixes_days_ago(self):
         blocks = [{"excerpt": "fact", "created_at": "2026-04-11"}]
         out = annotate_with_temporal_metadata(blocks, now=self._now())
-        assert out[0]["excerpt"].startswith("[Stored 10 days ago • 2026-04-11]")
+        assert out[0]["excerpt"].startswith("[Block date: 2026-04-11]")
         assert "fact" in out[0]["excerpt"]
 
     def test_original_block_not_mutated(self):
@@ -271,12 +271,22 @@ class TestTemporalMetadata:
         ts = int(datetime(2026, 4, 1, tzinfo=timezone.utc).timestamp())
         blocks = [{"excerpt": "fact", "timestamp": ts}]
         out = annotate_with_temporal_metadata(blocks, now=self._now())
-        assert "days ago" in out[0]["excerpt"]
+        assert "Block date: 2026-04-01" in out[0]["excerpt"]
+
+    def test_locomo_style_date_parses(self):
+        blocks = [{"Statement": "text", "Date": "1:56 pm on 7 May, 2023"}]
+        out = annotate_with_temporal_metadata(blocks, now=self._now())
+        assert out[0]["Statement"].startswith("[Block date: 2023-05-07]")
+
+    def test_capitalised_date_key_picked_up(self):
+        blocks = [{"excerpt": "text", "Date": "2023-05-07"}]
+        out = annotate_with_temporal_metadata(blocks, now=self._now())
+        assert out[0]["excerpt"].startswith("[Block date: 2023-05-07]")
 
     def test_nested_metadata_date(self):
         blocks = [{"excerpt": "fact", "metadata": {"created_at": "2026-04-21"}}]
         out = annotate_with_temporal_metadata(blocks, now=self._now())
-        assert out[0]["excerpt"].startswith("[Stored 0 days ago")
+        assert out[0]["excerpt"].startswith("[Block date: 2026-04-21]")
 
     def test_future_date_rejected(self):
         blocks = [{"excerpt": "fact", "created_at": "2099-01-01"}]
@@ -286,7 +296,7 @@ class TestTemporalMetadata:
     def test_iso_with_z_suffix(self):
         blocks = [{"excerpt": "fact", "created_at": "2026-04-20T12:00:00Z"}]
         out = annotate_with_temporal_metadata(blocks, now=self._now())
-        assert "days ago" in out[0]["excerpt"]
+        assert "Block date: 2026-04-20" in out[0]["excerpt"]
 
     def test_records_delta_days_field(self):
         blocks = [{"excerpt": "fact", "created_at": "2026-04-15"}]

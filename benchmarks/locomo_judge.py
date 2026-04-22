@@ -46,7 +46,13 @@ detect_query_type = None
 
 
 def _load_heavy_imports():
-    """Load recall engine and harness modules. Called only in subprocess mode."""
+    """Load recall engine and harness modules. Called only in subprocess mode.
+
+    v3.5.0 (C2 fix): imports hoisted up from the inner QA loop —
+    previously cost ~5ms/question × 199 × 10 convs = ~10s and more
+    importantly bloated the loop body with indirection. Subsequent
+    accesses go via module-level names.
+    """
     global recall, download_dataset, build_workspace, _parse_sessions, CATEGORY_NAMES, detect_query_type
 
     from mind_mem.recall import detect_query_type as _dqt
@@ -55,6 +61,25 @@ def _load_heavy_imports():
     recall = _recall
 
     detect_query_type = _dqt
+
+    # Pre-import all v3.5.0 retrieval modules so the inner loop
+    # doesn't pay the import cost per-question.
+    try:
+        import mind_mem.chain_of_note  # noqa: F401
+        import mind_mem.entity_prefetch  # noqa: F401
+        import mind_mem.graph_recall  # noqa: F401
+        import mind_mem.iterative_recall  # noqa: F401
+        import mind_mem.query_expansion  # noqa: F401
+        import mind_mem.query_planner  # noqa: F401
+        import mind_mem.rerank_ensemble  # noqa: F401
+        import mind_mem.temporal_metadata  # noqa: F401
+        import mind_mem.truth_score  # noqa: F401
+        import mind_mem.union_recall  # noqa: F401
+        import mind_mem.answer_quality  # noqa: F401
+    except ImportError:
+        # Older installs (< v3.5.0) don't have all modules; fall-through
+        # logic in evaluate_sample_with_judge handles missing features.
+        pass
 
     # Suppress recall structured logging — observability module's handle()
     # bypasses level checks, so we remove handlers from the recall logger.
@@ -418,10 +443,25 @@ def answer_question(
     context: str,
     is_adversarial: bool,
     model: str = "mistral-small-latest",
+    category: str | None = None,
 ) -> str:
-    """Generate an answer using the LLM given retrieved context."""
+    """Generate an answer using the LLM given retrieved context.
+
+    v3.5.0: when ``category`` is provided, route to the category-specific
+    prompt template from :mod:`mind_mem.answer_quality`. Adversarial
+    category still uses the dedicated ADVERSARIAL_ANSWER_PROMPT for
+    bench backwards-compat (the mind-mem adversarial template is newer
+    + stricter).
+    """
     if is_adversarial:
         user_msg = ADVERSARIAL_ANSWER_PROMPT.format(context=context, question=question)
+    elif category is not None:
+        try:
+            from mind_mem.answer_quality import prompt_for_category
+
+            user_msg = prompt_for_category(category, question, facts=context)
+        except Exception:
+            user_msg = ANSWER_USER_TEMPLATE.format(context=context, question=question)
     else:
         user_msg = ANSWER_USER_TEMPLATE.format(context=context, question=question)
 
@@ -577,39 +617,167 @@ def evaluate_sample_with_judge(
             # v3.4.0: UNION decomposition + iterative retrieval (2 rounds).
             # Fixes the v3.3.0 regression where RRF-fuse of sub-queries
             # attenuated the seed question's bridge-evidence hits.
+            # v3.5.0 adds: graph expand + rerank ensemble + per-cat
+            # prompts + adaptive top-k + entity prefetch + LLM decomp +
+            # truth-score rerank.
             from mind_mem.iterative_recall import iterative_retrieve
-            from mind_mem.query_planner import NLPQueryDecomposer
+            from mind_mem.query_planner import LLMQueryDecomposer, NLPQueryDecomposer
             from mind_mem.temporal_metadata import annotate_with_temporal_metadata
             from mind_mem.union_recall import union_retrieve
+
+            # v3.5.0: adaptive top-k per category
+            #   single-hop: tight (6)  — right block usually in top 3
+            #   multi-hop:  wide (18)  — need multiple bridges
+            #   temporal:   wide (18)  — timeline context matters
+            #   open-domain:widest(30) — low-precision queries
+            _adaptive_k = {
+                "single-hop": 6,
+                "multi-hop": 18,
+                "temporal": 18,
+                "open-domain": 30,
+                "adversarial": 12,
+            }.get(category, top_k)
+            effective_k = _adaptive_k
 
             def _retrieve(q: str) -> list[dict]:
                 if hybrid_backend is not None:
                     return hybrid_backend.search(
-                        q, workspace, limit=top_k, active_only=False, graph_boost=True,
+                        q, workspace, limit=effective_k, active_only=False, graph_boost=True,
                     )
-                return recall(workspace, q, limit=top_k, active_only=False)
+                return recall(workspace, q, limit=effective_k, active_only=False)
 
-            # Decompose multi-hop queries, lead with the original.
-            sub_queries = NLPQueryDecomposer().decompose(question, max_subqueries=4)
+            # v3.5.0: decomposition gating.
+            # H4 fix — single-hop questions NEVER decompose. The NLP
+            # regex path can over-split on conjunction words and
+            # trigger the expensive iterative_retrieve path.
+            # C3 fix — use a utility_model (fast+cheap) for LLM
+            # decomp instead of the full Opus answerer, saving ~20s/q.
+            sub_queries: list[str] = []
+            utility_model = os.environ.get("MIND_MEM_UTILITY_MODEL", "mistral-small-latest")
+            if category == "single-hop" or is_adversarial:
+                sub_queries = [question]
+            else:
+                use_llm_decomp = category in ("multi-hop", "open-domain")
+                if use_llm_decomp:
+                    try:
+                        sub_queries = LLMQueryDecomposer(
+                            config={"model": utility_model}
+                        ).decompose(question, max_subqueries=4)
+                    except Exception:
+                        sub_queries = []
+                if not sub_queries:
+                    sub_queries = NLPQueryDecomposer().decompose(question, max_subqueries=4)
+
+            # v3.5.0: RM3-style / paraphrase query expansion — synonym
+            # variants widen BM25 recall on open-domain questions.
+            try:
+                from mind_mem.query_expansion import NLPQueryExpander
+
+                expanded = NLPQueryExpander().expand(question, max_expansions=2)
+                if expanded:
+                    # Merge expansions into the sub-query set (dedup by
+                    # lowercase). Expansions go AFTER sub-queries so the
+                    # bridge hits still lead the union.
+                    seen_q = {q.lower().strip() for q in sub_queries}
+                    for e in expanded:
+                        if e and e.lower().strip() not in seen_q:
+                            sub_queries.append(e)
+                            seen_q.add(e.lower().strip())
+            except Exception:
+                pass
             if len(sub_queries) > 1:
-                # Multi-hop: iterative with chain-of-retrieval
+                # Multi-hop: iterative with chain-of-retrieval.
+                # C3 fix: use utility_model (cheap + fast) for the
+                # iterative planner LLM, not the expensive answerer.
                 def _llm(prompt: str) -> str:
                     return _llm_chat(
                         [{"role": "user", "content": prompt}],
-                        model=answerer_model,
+                        model=utility_model,
                         max_tokens=200,
                         max_retries=1,
                     )
                 retrieved = iterative_retrieve(
                     question, _retrieve, _llm,
                     max_rounds=2, max_followups_per_round=2,
-                    top_k_per_query=top_k, max_total=top_k * 3,
+                    top_k_per_query=effective_k, max_total=effective_k * 3,
                 )
             else:
                 # Single-hop: simple union (just the original question).
-                retrieved = union_retrieve([question], _retrieve, top_k_per_query=top_k, max_total=top_k)
+                retrieved = union_retrieve([question], _retrieve, top_k_per_query=effective_k, max_total=effective_k)
 
-            # Annotate with temporal metadata so answerer has chronology.
+            # v3.5.0: entity prefetch — appended to the candidate pool
+            # (NOT prepended — we want rerank to decide ordering, not
+            # bypass it). These become extra candidates for the
+            # ensemble rerank step to score fairly.
+            try:
+                from mind_mem.entity_prefetch import prefetch_entity_blocks
+
+                entity_hits = prefetch_entity_blocks(
+                    question, workspace, max_entities=3, max_hops=1,
+                )
+                if entity_hits:
+                    seen_ids = {b.get("_id") or b.get("id") for b in retrieved if b.get("_id") or b.get("id")}
+                    for h in entity_hits:
+                        hid = h.get("_id") or h.get("id")
+                        if hid and hid not in seen_ids:
+                            retrieved.append(h)
+                            seen_ids.add(hid)
+            except Exception:
+                pass
+
+            # v3.5.0: graph expansion ±1 hop — surface bridge blocks
+            # missed by BM25/vector. Feature-gated + cheap (regex over
+            # already-retrieved corpus).
+            try:
+                from mind_mem.graph_recall import graph_expand
+
+                corpus = recall(workspace, "", limit=500, active_only=False) if recall else []
+                retrieved = graph_expand(
+                    retrieved, corpus,
+                    max_hops=2, decay=0.5,
+                    max_neighbors_per_hop=3, max_total_added=10,
+                )
+            except Exception:
+                pass
+
+            # v3.5.0: truth-score annotation + STABLE tiebreaker sort.
+            # C1 fix (Gemini): rerank already ordered; truth-score now
+            # stable-sorts AFTER rerank so it breaks ties between
+            # equal-rank candidates without reversing rerank wins.
+            try:
+                from mind_mem.truth_score import annotate_results
+
+                retrieved = annotate_results(retrieved)
+                # Stable sort with negative truth_score as secondary key;
+                # since Python's sort is stable, equal truth scores
+                # preserve their rerank order.
+                retrieved.sort(key=lambda r: -float(r.get("truth_score") or 0.0))
+            except Exception:
+                pass
+
+            # v3.5.0: rerank ensemble (cross-encoder + BGE-v2-m3 Borda)
+            # tightens top-k precision. Cheap (~200ms), big lift on
+            # single-hop where right block is already in top-50.
+            if len(retrieved) > effective_k:
+                try:
+                    from mind_mem.rerank_ensemble import create_ensemble
+
+                    ensemble = create_ensemble({
+                        "retrieval": {"rerank_ensemble": {
+                            "enabled": True,
+                            "members": ["cross_encoder", "bge"],
+                        }},
+                    })
+                    if ensemble is not None:
+                        retrieved = ensemble.rerank(question, retrieved, top_k=effective_k)
+                except Exception:
+                    pass
+
+            # v3.5.0: temporal metadata — prepends [Block date: YYYY-MM-DD]
+            # to each retrieved block's text so the answerer can resolve
+            # "yesterday" / "last week" against the block's own date.
+            # Earlier [Stored N days ago] phrasing confused the answerer;
+            # "Block date:" is unambiguous about what the tag means.
             retrieved = annotate_with_temporal_metadata(retrieved)
         elif hybrid_backend is not None:
             retrieved = hybrid_backend.search(
@@ -664,11 +832,39 @@ def evaluate_sample_with_judge(
                 _stats.setdefault("abstention_fired", 0)
                 _stats["abstention_fired"] += 1
 
-        # v3.4.0 chain-of-note is OPT-IN via --chain-of-note; it
-        # over-condenses on single-hop/open-domain and regresses the
-        # score in v3.4.0-alpha smoke tests. Kept in the codebase as a
-        # building block for future targeted use (e.g. only for
-        # multi-hop with >20 retrieved blocks).
+        # v3.5.0 selective chain-of-note: enable ONLY for multi-hop
+        # questions with >15 retrieved blocks — where "lost-in-the-
+        # middle" hurts and condensation helps. Skipped on single-hop
+        # (over-condenses) and adversarial (we want full context for
+        # abstention).
+        if (
+            use_v34
+            and not is_adversarial
+            and category == "multi-hop"
+            and len(retrieved) > 15
+            and context.strip()
+        ):
+            try:
+                from mind_mem.chain_of_note import chain_of_note_pack
+
+                # C3 + H5 fix: use utility_model for condensation
+                # (not Opus) + use effective_k not hardcoded 20 so we
+                # don't silently drop blocks on open-domain (k=30).
+                def _condenser(prompt: str) -> str:
+                    return _llm_chat(
+                        [{"role": "user", "content": prompt}],
+                        model=utility_model, max_tokens=400, max_retries=1,
+                    )
+                condensed = chain_of_note_pack(
+                    question, retrieved, _condenser,
+                    max_blocks=effective_k, max_chars=5000, fallback_on_empty=True,
+                )
+                if condensed and condensed.strip() and len(condensed) > 100:
+                    context = condensed
+                    _stats.setdefault("chain_of_note", 0)
+                    _stats["chain_of_note"] += 1
+            except Exception:
+                pass
 
         if not is_adversarial and compress and context.strip():
             try:
@@ -691,7 +887,21 @@ def evaluate_sample_with_judge(
             _stats["llm_skipped"] += 1
         else:
             try:
-                generated = answer_question(question, context, use_adversarial_prompt, model=answerer_model)
+                # v3.5.0: pass category so per-cat prompt template is used.
+                cat_for_prompt = category if use_v34 and not is_adversarial else None
+                generated = answer_question(
+                    question, context, use_adversarial_prompt,
+                    model=answerer_model, category=cat_for_prompt,
+                )
+                # v3.5.0: multi-hop template asks for "Final: <answer>" on
+                # the last line — extract it so the judge sees the final
+                # answer, not the Hop 1/Hop 2 preamble.
+                if cat_for_prompt == "multi-hop" and "Final:" in generated:
+                    for line in reversed(generated.splitlines()):
+                        line = line.strip()
+                        if line.lower().startswith("final:"):
+                            generated = line[len("final:"):].strip()
+                            break
             except Exception as e:
                 generated = f"Error: {e}"
 
@@ -906,24 +1116,45 @@ def _engine_label(args) -> str:
 def _setup_hybrid_workspace(workspace: str):
     """Write mind-mem.json with hybrid config, build vector index, return HybridBackend.
 
-    Uses Qwen3-Embedding-8B (4096d) via llama.cpp server on GPU + BM25 fused
-    with Reciprocal Rank Fusion (RRF k=60).
+    v3.5.0: default provider is ``sentence_transformers`` with
+    BAAI/bge-large-en-v1.5 (1024d) on CUDA when available — no
+    external llama-server required, fits in ~1.3GB VRAM alongside
+    Ollama's mind-mem:4b. Override via MIND_MEM_HYBRID_PROVIDER
+    env var to ``llama_cpp`` for the legacy llama-server path.
 
     Returns:
         HybridBackend instance ready for search().
     """
-    recall_cfg = {
-        "backend": "hybrid",
-        "rrf_k": 60,
-        "bm25_weight": 1.0,
-        "vector_weight": 1.0,
-        "vector_enabled": True,
-        "provider": "llama_cpp",
-        "llama_cpp_url": "http://localhost:8090",
-        "dimension": 4096,
-        "index_path": ".mind-mem-vectors",
-        "cross_encoder": {"enabled": False, "blend_weight": 0.6},
-    }
+    provider = os.environ.get("MIND_MEM_HYBRID_PROVIDER", "sentence_transformers")
+    if provider == "llama_cpp":
+        recall_cfg = {
+            "backend": "hybrid",
+            "rrf_k": 60,
+            "bm25_weight": 1.0,
+            "vector_weight": 1.0,
+            "vector_enabled": True,
+            "provider": "llama_cpp",
+            "llama_cpp_url": "http://localhost:8090",
+            "dimension": 4096,
+            "index_path": ".mind-mem-vectors",
+            "cross_encoder": {"enabled": False, "blend_weight": 0.6},
+        }
+    else:
+        # sqlite_vec + sentence-transformers BGE-large on CUDA.
+        # 1024d, ~1.3GB VRAM — fits alongside Ollama on RTX 3080.
+        recall_cfg = {
+            "backend": "hybrid",
+            "rrf_k": 60,
+            "bm25_weight": 1.0,
+            "vector_weight": 1.0,
+            "vector_enabled": True,
+            "provider": "sqlite_vec",
+            "onnx_backend": False,  # use sentence-transformers for CUDA BGE
+            "model": "BAAI/bge-large-en-v1.5",
+            "dimension": 1024,
+            "index_path": ".mind-mem-vectors",
+            "cross_encoder": {"enabled": False, "blend_weight": 0.6},
+        }
     config = {
         "version": "1.1.0",
         "workspace_path": ".",

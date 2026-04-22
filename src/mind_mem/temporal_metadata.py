@@ -24,7 +24,25 @@ from .observability import get_logger
 
 _log = get_logger("temporal_metadata")
 
-_DATE_KEYS = ("created_at", "date", "timestamp", "last_seen", "updated_at")
+_DATE_KEYS = (
+    "created_at", "date", "timestamp", "last_seen", "updated_at",
+    # Capitalised variants emitted by the markdown block parser
+    # (``Date`` field on LoCoMo DIA-* blocks, etc.)
+    "Date", "Created_At", "Timestamp",
+)
+
+# Parseable LoCoMo / narrative date formats — tried in order.
+# The first two match ISO; the rest match common natural forms.
+_NATURAL_DATE_FORMATS: tuple[str, ...] = (
+    "%Y-%m-%d",
+    "%Y/%m/%d",
+    "%d %B %Y",             # "7 May 2023"
+    "%d %B, %Y",            # "7 May, 2023"
+    "%B %d, %Y",            # "May 7, 2023"
+    "%b %d, %Y",            # "May 7, 2023"  (abbreviated month)
+    "%d %b %Y",             # "7 May 2023"
+    "%d %b, %Y",            # "7 May, 2023"
+)
 
 
 def _parse_dt(raw: Any) -> datetime | None:
@@ -49,7 +67,22 @@ def _parse_dt(raw: Any) -> datetime | None:
             return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
         except ValueError:
             pass
-        # Accept bare YYYY-MM-DD.
+        # LoCoMo-style: "1:56 pm on 7 May, 2023"  →  strip the time prefix
+        # and parse the date portion. Kept narrow so we don't accept
+        # garbage; must contain "on " as separator.
+        import re as _re
+
+        m = _re.search(r"\bon\s+(.+?)\s*$", s, _re.IGNORECASE)
+        if m:
+            s = m.group(1).strip()
+        # Also tolerate " 7 May, 2023 at 13:56"
+        s = _re.sub(r"\s+at\s+.*$", "", s, flags=_re.IGNORECASE).strip()
+        for fmt in _NATURAL_DATE_FORMATS:
+            try:
+                return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+        # Last-chance: first 10 chars as YYYY-MM-DD.
         try:
             return datetime.strptime(s[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
         except ValueError:
@@ -131,7 +164,11 @@ def annotate_with_temporal_metadata(
             cp["_temporal_date_rejected"] = True
             out.append(cp)
             continue
-        tag = f"[Stored {delta} days ago • {dt.date().isoformat()}] "
+        # v3.5.0 fix: use unambiguous phrasing that makes clear this
+        # is the BLOCK/EVENT date, not "time since storage". Resolves
+        # LoCoMo temporal failures where the answerer confused
+        # `[Stored N days ago]` with the event date.
+        tag = f"[Block date: {dt.date().isoformat()}] "
         cp = dict(b)
         # Target the existing text field rather than creating a new
         # ``excerpt`` when only ``Statement`` is present — prevents
