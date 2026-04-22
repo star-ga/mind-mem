@@ -1,10 +1,11 @@
+<h1 align="center">
+  <img src="assets/logo.png" alt="mind-mem logo" width="140"><br>
+  mind-mem
+</h1>
 <p align="center">
-  <img src="assets/logo.png" alt="mind-mem logo" width="220">
-  <h1 align="center">mind-mem</h1>
-  <p align="center">
-    <strong>Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent.</strong><br>
-    <sub>OpenClaw is an <a href="https://github.com/openclaw/openclaw">open-source AI assistant platform</a> with multi-channel support.</sub>
-  </p>
+  <strong>Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent.</strong><br>
+  <sub>OpenClaw is an <a href="https://github.com/openclaw/openclaw">open-source AI assistant platform</a> with multi-channel support.</sub>
+</p>
   <p align="center">
     Local-first &bull; Zero-infrastructure &bull; Governance-aware &bull; MIND-accelerated
   </p>
@@ -23,7 +24,6 @@
     <img src="https://img.shields.io/badge/clients-17-blueviolet?style=flat-square" alt="AI Clients: 17">
     <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
     <img src="https://img.shields.io/badge/audit-3--LLM_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="3-LLM joint audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
-  </p>
 </p>
 
 ---
