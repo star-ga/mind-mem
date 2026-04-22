@@ -1,18 +1,39 @@
-# answer.mind — Answer-quality kernel
-# Consumed by src/mind_mem/answer_quality.py (v3.3.0).
+# answer.mind — Answer-quality kernel (v3.6.0)
+# Consumed by src/mind_mem/answer_quality.py and benchmarks/locomo_judge.py.
 # Drives self-consistency voting, verification, and per-category prompts.
+#
+# v3.6.0 reality check.
+#   Per-category prompts live behind MIND_MEM_PER_CAT_PROMPTS=1 and are
+#   OFF BY DEFAULT because they regressed the LoCoMo conv-0 baseline
+#   by 9.3 points in our own ablations (86.33 → 77.06). They are
+#   retained as a research lever — the failure modes the templates
+#   targeted ARE real (identity hedging, multi-fact truncation,
+#   relative-date collapse), but every working prompt needs to be
+#   calibrated against the specific answerer model (Mistral-Large in
+#   our bench) rather than injected blind. Treat this section as a
+#   starting point for a prompt sweep, not a production default.
+#
+#   Self-consistency (samples=5) is off by default too — gated on
+#   MIND_MEM_SELF_CONSISTENCY=N. At N=3 it triples Mistral API cost
+#   per question without consistent score lift on our corpus.
+#
+#   Verification regexes are always-on — they're cheap, catch
+#   blatant format failures (answerer returning JSON for a date
+#   question, etc.), and compose with the governance audit chain.
 
 [self_consistency]
-enabled = true
+# Opt-in via env var MIND_MEM_SELF_CONSISTENCY=<N> (default 1 = off).
+# When on, sample N answers, bucket with normalize_case+trim,
+# return plurality. Cost: N× answerer calls per question.
+enabled_default = false
 samples = 5
-# Bucket answers case-insensitively and pick plurality.
 normalize_case = true
-# Trim whitespace before bucketing.
 trim = true
 
 [verification]
 # Regex patterns keyed by answer_type. Each is a Python re.fullmatch
-# anchor applied to the answerer's output (stripped).
+# anchor applied to the answerer's output (stripped). Cheap check —
+# runs unconditionally, flags obvious format failures.
 enabled = true
 
 [verification.patterns]
@@ -24,13 +45,58 @@ number      = "-?\\d+(?:\\.\\d+)?"
 proper_noun = "[A-Z][a-zA-Z0-9'\\-]+(?:\\s+[A-Z][a-zA-Z0-9'\\-]+)*"
 yes_no      = "[Yy]es|[Nn]o"
 
-[prompts]
-# Short hints prepended to the category-specific answerer call.
-# LoCoMo calibrations — each template targets the failure mode
-# we see in that category (adversarial: over-commit; temporal:
-# anchor confusion; multi-hop: step skipping).
+[per_category_prompts]
+# Opt-in via env var MIND_MEM_PER_CAT_PROMPTS=1 (default 0 = off).
+# When on, these prompts replace the generic answerer system prompt
+# for the matching LoCoMo question category. SHIPPED OFF BY DEFAULT —
+# see the v3.6.0 reality-check note at the top of this file.
+enabled_default = false
+# Bench observation (v3.6.0 conv-0, Mistral-Large):
+#   generic tuned prompt         86.33   baseline
+#   per-cat prompts + v34-only   77.06   -9.27  ← regression
+#   per-cat + full-stack retrieval 69.91  -16.42 ← compounding regression
+# Net: per-cat prompts are a research tool, not a hot path.
+
+[per_category_prompts.templates]
+# Failure patterns each template targets. Kept for future sweeps;
+# production behaviour follows the generic tuned prompt.
 adversarial   = "If the evidence does not support a confident answer, respond with 'unknown'."
 temporal      = "Anchor every time reference to the timeline provided. Use ISO dates when possible."
 multi_hop     = "Chain the facts explicitly: state intermediate conclusions before the final answer."
 single_hop    = "Answer directly from the single most relevant fact. No speculation."
 open_domain   = "Prefer facts that appear in multiple blocks. Ignore blocks without grounding."
+
+[two_stage_extraction]
+# Opt-in via MIND_MEM_TWO_STAGE=1. Uses a utility model (default
+# mistral-small-latest, override with MIND_MEM_UTILITY_MODEL) to
+# extract structured facts from retrieved blocks, then passes only
+# the facts — not the raw blocks — to the answerer.
+# Regressed multi-hop/WHEN questions in our bench (collapsed relative
+# dates). Kept available for future scoring strategies.
+enabled_default = false
+
+[utility_model]
+# Router for the MIND_MEM_UTILITY_MODEL env var. Any model name
+# prefixed with "mind-mem" routes to the local Ollama OpenAI-compat
+# endpoint at http://127.0.0.1:11434/v1 so the bench can exercise
+# mind-mem:4b as the utility model without reaching paid APIs.
+ollama_endpoint = "http://127.0.0.1:11434/v1/chat/completions"
+ollama_prefix   = "mind-mem"
+strip_think_tags = true   # <think>...</think> stripped post-response
+
+[env_flags]
+# Complete list of bench-layer env gates that interact with this
+# kernel. Documented here so the Python runtime and the bench harness
+# share a single source of truth.
+MIND_MEM_SELF_CONSISTENCY  = "int, default 1"
+MIND_MEM_TWO_STAGE         = "bool, default 0"
+MIND_MEM_UTILITY_MODEL     = "str, default mistral-small-latest"
+MIND_MEM_PER_CAT_PROMPTS   = "bool, default 0"
+MIND_MEM_VERIFY            = "bool, default 0 (answerer-side self-check retry)"
+MIND_MEM_PREJUDGE          = "bool, default 0 (normalized-answer shortcut)"
+MIND_MEM_REWRITES          = "bool, default 0"
+MIND_MEM_WIDE_K            = "int, default top_k"
+MIND_MEM_RERANK            = "bool, default 0"
+MIND_MEM_SESSION_SCOPE     = "bool, default 0"
+MIND_MEM_BENCH_CROSS_ENCODER = "bool, default 1"
+MIND_MEM_RERANKER_DEVICE   = "str, default cuda (set cpu when GPU busy)"

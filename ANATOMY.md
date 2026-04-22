@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 668 | **Est. tokens:** ~1,314,184
-**Generated:** 2026-04-22 13:30 UTC
+**Files:** 669 | **Est. tokens:** ~1,316,635
+**Generated:** 2026-04-22 14:39 UTC
 
 ## Token Budget Guide
 
@@ -42,7 +42,7 @@
 | `intelligence/` | 1 | ~113 |
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2,176 |
-| `mind/` | 26 | ~7,230 |
+| `mind/` | 27 | ~9,681 |
 | `scripts/` | 4 | ~3,326 |
 | `sdk/go/` | 9 | ~6,773 |
 | `sdk/js/` | 5 | ~1,388 |
@@ -280,19 +280,20 @@
 
 - `abstention.mind` (~215 tok, medium) — Confidence gating: decide whether to abstain from answering
 - `adversarial.mind` (~156 tok, small)
-- `answer.mind` (~413 tok, medium)
+- `answer.mind` (~1285 tok, large)
 - `bm25.mind` (~477 tok, medium) — BM25F scoring kernel with field boosts and length normalization
 - `category.mind` (~395 tok, medium) — Category distillation scoring kernel
 - `cognitive.mind` (~437 tok, medium)
 - `cross_encoder.mind` (~174 tok, small)
-- `ensemble.mind` (~230 tok, medium)
-- `evidence.mind` (~225 tok, medium)
-- `graph.mind` (~228 tok, medium)
+- `ensemble.mind` (~237 tok, medium)
+- `evidence.mind` (~232 tok, medium)
+- `governance.mind` (~1537 tok, huge)
+- `graph.mind` (~235 tok, medium)
 - `hybrid.mind` (~169 tok, small)
 - `importance.mind` (~246 tok, medium) — A-MEM: auto-maintained importance scores for memory blocks
 - `intent.mind` (~149 tok, small)
 - `prefetch.mind` (~256 tok, medium) — Prefetch context scoring kernel
-- `query_plan.mind` (~259 tok, medium)
+- `query_plan.mind` (~266 tok, medium)
 - `ranking.mind` (~227 tok, medium) — Evidence ranking: combine multiple scoring signals for final ranking
 - `README.md` (~911 tok, large) — MIND Kernels
 - `recall.mind` (~207 tok, medium)
@@ -300,10 +301,10 @@
 - `rerank.mind` (~146 tok, small)
 - `rm3.mind` (~189 tok, small)
 - `rrf.mind` (~197 tok, small) — RRF: fuse ranked lists from multiple retrievers
-- `session.mind` (~148 tok, small)
+- `session.mind` (~155 tok, small)
 - `temporal.mind` (~113 tok, small)
 - `trajectory.mind` (~440 tok, medium)
-- `truth.mind` (~211 tok, medium)
+- `truth.mind` (~218 tok, medium)
 ### `scripts/`
 
 - `anatomy-hook.sh` (~258 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md

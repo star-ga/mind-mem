@@ -1,5 +1,5 @@
 # evidence.mind — Evidence-bundle assembly kernel
-# Consumed by src/mind_mem/evidence_bundle.py (v3.3.0).
+# Consumed by src/mind_mem/evidence_bundle.py (v3.3.0; still current as of v3.6.0).
 
 [bundle]
 # When recall(format="bundle") is called, this many top blocks drive

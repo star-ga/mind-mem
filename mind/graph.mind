@@ -1,5 +1,5 @@
 # graph.mind — Multi-hop graph expansion kernel
-# Consumed by src/mind_mem/graph_recall.py (v3.3.0).
+# Consumed by src/mind_mem/graph_recall.py (v3.3.0; still current as of v3.6.0).
 # BFS over block references with per-hop decay.
 
 [expansion]

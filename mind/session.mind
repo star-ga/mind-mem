@@ -1,5 +1,5 @@
 # session.mind — Same-session boost kernel
-# Consumed by src/mind_mem/session_boost.py (v3.3.0).
+# Consumed by src/mind_mem/session_boost.py (v3.3.0; still current as of v3.6.0).
 # Multiplies scores of same-session blocks by (1 + boost).
 
 [boost]

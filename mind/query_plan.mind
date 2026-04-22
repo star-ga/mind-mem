@@ -1,5 +1,5 @@
 # query_plan.mind — Query decomposition + planner tuning kernel
-# Consumed by src/mind_mem/query_planner.py (v3.3.0).
+# Consumed by src/mind_mem/query_planner.py (v3.3.0; still current as of v3.6.0).
 # Keep semantics identical to FieldSpec validators so the .mind file
 # can override runtime defaults without touching code.
 

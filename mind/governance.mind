@@ -1,0 +1,130 @@
+# governance.mind — Rationale chain, audit invariants (v3.6.0+)
+# Consumed by:
+#   src/mind_mem/mcp/tools/governance.py   (propose_update, reject_proposal,
+#                                            rollback_proposal)
+#   src/mind_mem/apply_engine.py           (_mark_proposal_status, rollback)
+#   src/mind_mem/audit_chain.py            (hash-preimage composition)
+#
+# Purpose.
+#   Every user-driven governance state transition (propose, reject,
+#   rollback) must carry a written rationale committed by sha256 hash.
+#   The rationale text lives inside the proposal's Markdown block as a
+#   timestamped audit record (or inside APPLY_RECEIPT.md for rollbacks).
+#   This kernel is the single source of truth for the rationale gate +
+#   audit-chain invariants. It mirrors the 512-mind v1.11.0 pattern
+#   (I-GOV-1/2/3, I-DISP-1/2) for the mind-mem governance surface so
+#   the same audit discipline applies regardless of which MIND project
+#   a reviewer is reading.
+
+[rationale]
+# Minimum length for any committed rationale, in non-whitespace chars.
+# Chosen as a compromise: long enough to deter "n/a" / "fix" inputs,
+# short enough that a single specific sentence clears the bar.
+min_length_bytes = 8
+
+# Which governance actions require a rationale gate.
+# Tasks stay permissive — operators file tasks more often than
+# decisions and forcing a rationale on every task creates friction
+# without a DIFC-equivalent audit driver.
+require_on_decision = true
+require_on_task     = false
+require_on_reject   = true
+require_on_rollback = true
+# Apply = approve path; rationale comes from the original
+# propose_update, not from the applier. No new gate here.
+require_on_apply    = false
+
+[audit_chain]
+# How the rationale is committed into the audit chain.
+#
+# preimage_format = "TAG_v1:<proposal_id>\0<status>\0<timestamp>\0<rationale>"
+# where each field is NUL-separated (prevents collision attacks by
+# value-boundary confusion, matching the v2.10.0 convention in
+# audit_chain.py).
+preimage_format_version = 1
+timestamp_field         = "iso_utc_seconds"   # 2026-04-22T13:45:22Z
+hash_algo               = "sha256"
+
+# Store the raw rationale text in-place inside the Markdown proposal
+# block (Reason: <text>) so a grepping auditor sees the text without
+# needing a separate evidence-store read. The hash commits to that
+# text; tampering either side breaks the audit-replay.
+store_inline   = true
+# Optional: also mirror the rationale into sealed_evidence / evidence_tier
+# under the same hash so a DIFC-style off-site audit works without
+# reading the workspace. Disabled by default (no wiring to those modules
+# in the FOSS build); 512-mind paths turn this on.
+mirror_to_evidence_store = false
+
+[markdown_safety]
+# Characters/sequences that terminate a proposal block or mimic a
+# state transition if they appear at line-start inside a rationale.
+# _sanitize_reason_for_markdown escapes every match with a leading
+# backslash before writing.
+escape_block_delim       = true    # [TYPE-id]
+escape_heading           = true    # #, ##, ###
+escape_field_keyword     = true    # Status / Applied / Rejected /
+                                   # RolledBack / Reason / Proposal
+# Proposal-block regex — must match apply_engine.find_proposal's parser
+# so an escaped line can never silently re-open a block.
+block_delim_regex        = "^\\[[A-Z]+-[^\\]]+\\]"
+
+[concurrency]
+# FileLock timeout for proposal-file and APPLY_RECEIPT.md writes.
+# Concurrent rejection/rollback of the same proposal serializes;
+# exceeding this returns LockTimeout → surfaced as "status: unchanged"
+# (no false success).
+lock_timeout_seconds = 5.0
+# Never drop the rationale silently. On LockTimeout, the MCP tool
+# returns an error envelope including proposal_id + status=unchanged.
+false_success_allowed = false
+
+# --- Invariants -------------------------------------------------------
+# Declarative invariants that the Python runtime enforces at state-
+# transition time. Not compiled — this section is documentation +
+# machine-parseable by the audit-replay tool.
+
+[invariants.I_GOV_1]
+name    = "vetoed_proposal_has_reasons"
+subject = "Proposal"
+rule    = "status == 'vetoed' ⇒ |veto_reasons| ≥ 1 ∧ ∀g∈vetoes: veto_reasons[g] ≠ 0"
+driver  = "governance.veto appends sha256(reason) to veto_reasons per vetoing guardian"
+# mind-mem surface inherits this from 512-mind; in mind-mem,
+# proposals are single-owner so guardian set is the admin's own
+# veto-of-self (rare). Still enforced.
+
+[invariants.I_GOV_2]
+name    = "rejected_proposal_has_reason"
+subject = "Proposal"
+rule    = "status == 'rejected' ⇒ rejection_reason_hash IS NOT NULL"
+driver  = "reject_proposal → _mark_proposal_status(status='rejected', reason) → Reason: line in block"
+
+[invariants.I_GOV_3]
+name    = "every_proposal_has_rationale"
+subject = "Proposal"
+rule    = "status ≠ 'expired' ⇒ rationale_hash ≠ 0"
+driver  = "propose_update gates len(rationale.strip()) ≥ min_length_bytes"
+# Expired proposals are clock-driven with no human decision attached;
+# exempted from the rationale requirement.
+expired_exempt = true
+
+[invariants.I_GOV_4]
+name    = "rolled_back_receipt_has_reason"
+subject = "APPLY_RECEIPT"
+rule    = "Result == 'rolled_back' ⇒ Reason: line exists after RolledBack:"
+driver  = "apply_engine.rollback appends Reason: via sanitized append under FileLock"
+
+[invariants.I_GOV_5]
+name    = "cycle_preserving_history"
+subject = "Proposal block"
+rule    = "∀ state transition: append new timestamped {Status:, Reason:} block; never overwrite older"
+driver  = "_mark_proposal_status inserts reason_lines after Status line without skip-if-exists"
+# Enables rejected → reopened → rejected-again to preserve both
+# rationales in temporal order inside the same Markdown block.
+
+# --- Error taxonomy ---------------------------------------------------
+
+[errors]
+rationale_too_short = "rationale is required (≥ %d non-whitespace chars) for decisions, rejections, and rollbacks"
+lock_timeout        = "could not acquire governance file lock within %.1fs — no state change was committed"
+status_transition   = "cannot %s a proposal in status '%s'"

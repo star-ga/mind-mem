@@ -1,5 +1,5 @@
 # ensemble.mind — Reranker ensemble kernel
-# Consumed by src/mind_mem/rerank_ensemble.py (v3.3.0).
+# Consumed by src/mind_mem/rerank_ensemble.py (v3.3.0; still current as of v3.6.0).
 # Borda-count fusion across heterogeneous rerankers.
 
 [ensemble]

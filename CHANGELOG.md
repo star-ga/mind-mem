@@ -2,6 +2,48 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.6.1 (2026-04-22)
+
+**Kernel rewrite + Postgres-on-/data SSD.** Housekeeping release that
+aligns the `mind/*.mind` config kernels to v3.6.0 reality and moves
+the optional Postgres backend onto a `data_ssd` tablespace so
+writes land on `/data` instead of the home SSD.
+
+### Added
+
+- **`mind/governance.mind`** — new kernel documenting the rationale
+  chain + five governance invariants (I-GOV-1..5) that the Python
+  layer enforces at state-transition time. Mirrors the 512-mind
+  v1.11.0 pattern so audit reviewers see the same discipline across
+  MIND projects. Includes the Markdown-safety rules
+  (`_sanitize_reason_for_markdown` preimage) and the concurrency
+  contract (FileLock 5s, no-false-success).
+- **Postgres tablespace `data_ssd`** pointing to
+  `/data/postgres-mindmem`. The workspace config template
+  (`mind-mem.json`) can now carry `recall.provider = "postgres"`
+  with the tablespace name recorded for reproducibility.
+
+### Changed
+
+- **`mind/answer.mind`** — rewritten against v3.6.0 observations.
+  Per-category prompts, self-consistency voting, and two-stage
+  extraction are all marked `enabled_default = false` with an
+  explicit bench note (86.33 generic → 77.06 per-cat → 69.91
+  full-stack-all-on) so future maintainers don't treat them as
+  hot-path defaults. Added `[env_flags]` section enumerating every
+  `MIND_MEM_*` env gate the bench harness + runtime share.
+- Six config kernels (`ensemble`, `evidence`, `graph`, `query_plan`,
+  `session`, `truth`) bumped "(v3.3.0)" header comments to
+  "(v3.3.0; still current as of v3.6.0)" so readers know the
+  version tag is a landing date, not a staleness marker.
+
+### Fixed
+
+- Docstring reference to `_recall_core.py` in `mind/cognitive.mind`
+  confirmed still valid (file lives at
+  `src/mind_mem/_recall_core.py`); no change needed but the audit
+  pass caught a false-positive that earlier releases left undocumented.
+
 ## 3.6.0 (2026-04-22)
 
 **Governance rationale + bench harness infra.** Two themes in one
