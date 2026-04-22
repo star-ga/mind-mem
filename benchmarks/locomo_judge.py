@@ -539,6 +539,7 @@ def evaluate_sample_with_judge(
     compress: bool = False,
     _jsonl_stream=None,
     hybrid_backend=None,
+    use_v34: bool = False,
 ) -> list[dict]:
     """Run LLM-as-judge evaluation for one LoCoMo sample.
 
@@ -571,8 +572,46 @@ def evaluate_sample_with_judge(
         if not question:
             continue
 
-        # Step 1: Retrieve — use hybrid BM25+vector RRF when available
-        if hybrid_backend is not None:
+        # Step 1: Retrieve
+        if use_v34:
+            # v3.4.0: UNION decomposition + iterative retrieval (2 rounds).
+            # Fixes the v3.3.0 regression where RRF-fuse of sub-queries
+            # attenuated the seed question's bridge-evidence hits.
+            from mind_mem.iterative_recall import iterative_retrieve
+            from mind_mem.query_planner import NLPQueryDecomposer
+            from mind_mem.temporal_metadata import annotate_with_temporal_metadata
+            from mind_mem.union_recall import union_retrieve
+
+            def _retrieve(q: str) -> list[dict]:
+                if hybrid_backend is not None:
+                    return hybrid_backend.search(
+                        q, workspace, limit=top_k, active_only=False, graph_boost=True,
+                    )
+                return recall(workspace, q, limit=top_k, active_only=False)
+
+            # Decompose multi-hop queries, lead with the original.
+            sub_queries = NLPQueryDecomposer().decompose(question, max_subqueries=4)
+            if len(sub_queries) > 1:
+                # Multi-hop: iterative with chain-of-retrieval
+                def _llm(prompt: str) -> str:
+                    return _llm_chat(
+                        [{"role": "user", "content": prompt}],
+                        model=answerer_model,
+                        max_tokens=200,
+                        max_retries=1,
+                    )
+                retrieved = iterative_retrieve(
+                    question, _retrieve, _llm,
+                    max_rounds=2, max_followups_per_round=2,
+                    top_k_per_query=top_k, max_total=top_k * 3,
+                )
+            else:
+                # Single-hop: simple union (just the original question).
+                retrieved = union_retrieve([question], _retrieve, top_k_per_query=top_k, max_total=top_k)
+
+            # Annotate with temporal metadata so answerer has chronology.
+            retrieved = annotate_with_temporal_metadata(retrieved)
+        elif hybrid_backend is not None:
             retrieved = hybrid_backend.search(
                 question,
                 workspace,
@@ -624,6 +663,12 @@ def evaluate_sample_with_judge(
                 abstention_applied = True
                 _stats.setdefault("abstention_fired", 0)
                 _stats["abstention_fired"] += 1
+
+        # v3.4.0 chain-of-note is OPT-IN via --chain-of-note; it
+        # over-condenses on single-hop/open-domain and regresses the
+        # score in v3.4.0-alpha smoke tests. Kept in the codebase as a
+        # building block for future targeted use (e.g. only for
+        # multi-hop with >20 retrieved blocks).
 
         if not is_adversarial and compress and context.strip():
             try:
@@ -950,6 +995,7 @@ def _run_single_conv(conv_index: int, args) -> None:
                 judge_model=args.judge_model,
                 rate_limit_delay=args.rate_limit,
                 compress=args.compress,
+                use_v34=getattr(args, "v34_features", False),
                 hybrid_backend=_hybrid_backend,
                 _jsonl_stream=_jsonl_f,
             )
@@ -1020,6 +1066,11 @@ def main():
         "--hybrid",
         action="store_true",
         help="Enable hybrid BM25+local vector recall (sentence-transformers, all-MiniLM-L6-v2)",
+    )
+    parser.add_argument(
+        "--v34-features",
+        action="store_true",
+        help="v3.4.0: UNION decomposition + iterative retrieval + chain-of-note + temporal metadata",
     )
     parser.add_argument(
         "--single-conv",

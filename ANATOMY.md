@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 662 | **Est. tokens:** ~1,292,300
-**Generated:** 2026-04-22 04:03 UTC
+**Files:** 667 | **Est. tokens:** ~1,303,488
+**Generated:** 2026-04-22 04:22 UTC
 
 ## Token Budget Guide
 
@@ -22,14 +22,14 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 31 | ~73,513 |
+| `./` | 30 | ~73,478 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `benchmarks/` | 26 | ~58,604 |
+| `benchmarks/` | 26 | ~59,234 |
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 56 | ~81,533 |
+| `docs/` | 57 | ~82,742 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -52,7 +52,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 138 | ~463,405 |
+| `src/mind_mem/` | 142 | ~469,928 |
 | `src/mind_mem/api/` | 5 | ~14,584 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
@@ -60,7 +60,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 2 | ~3,859 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 227 | ~439,841 |
+| `tests/` | 228 | ~442,702 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -73,7 +73,6 @@
 
 ### `./`
 
-- `AGENTS.md` (~35 tok, tiny) — Memory Context
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: mind-mem (Commit 30d8b71)
 - `CLAUDE.md` (~1028 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
@@ -121,7 +120,7 @@
 - `__init__.py` (~0 tok, tiny)
 - `local_stack_audit.py` (~1802 tok, huge) — Single-shot audit of the local mind-mem stack before a bench run.
 - `locomo_harness.py` (~4147 tok, huge) — LoCoMo Benchmark Harness for mind-mem Recall Engine.
-- `locomo_judge.py` (~10915 tok, huge) — LoCoMo LLM-as-Judge Evaluation for Mind-Mem.
+- `locomo_judge.py` (~11545 tok, huge) — LoCoMo LLM-as-Judge Evaluation for Mind-Mem.
 - `locomo_v3.3.0_benchmark_config.json` (~450 tok, medium) — Keys: _comment, version, recall, cache, cross_encoder
 - `longmemeval_harness.py` (~2973 tok, huge) — LongMemEval Benchmark Harness for mind-mem recall engine.
 - `niah_full_results.txt` (~5140 tok, huge) — ============================= test session starts ==============================
@@ -222,6 +221,7 @@
 - `v3.2.0-release-notes.md` (~1881 tok, huge) — mind-mem v3.2.0 — Production Deployment Release
 - `v3.2.1-release-notes.md` (~1302 tok, large) — mind-mem v3.2.1 release notes
 - `v3.3.0-release-notes.md` (~1157 tok, large) — mind-mem v3.3.0 release notes
+- `v3.4.0-release-notes.md` (~1209 tok, large) — mind-mem v3.4.0 release notes
 - `v3.4.0-roadmap-llm-consensus.md` (~1271 tok, large) — v3.4.0 roadmap — path to 90+ on LoCoMo
 - `workspace-structure.md` (~352 tok, medium) — Workspace Structure
 ### `examples/`
@@ -382,6 +382,7 @@
 - `capture.py` (~3698 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
 - `category_distiller.py` (~6264 tok, huge) — mind-mem Category Distiller — auto-generates thematic summary files from memory blocks.
 - `causal_graph.py` (~3956 tok, huge) — mind-mem Temporal Causal Graph — directed dependency tracking with staleness.
+- `chain_of_note.py` (~1435 tok, large) — Chain-of-note evidence packing (v3.4.0).
 - `change_stream.py` (~1553 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `check_version.py` (~622 tok, large) — Version consistency checker for mind-mem.
 - `coding_schemas.py` (~2127 tok, huge) — mind-mem Coding-Native Memory Schemas.
@@ -426,6 +427,7 @@
 - `intel_scan.py` (~12579 tok, huge) — Mind Mem Intelligence Scanner v2.0 — Self-hosted, zero external dependencies.
 - `intent_router.py` (~3106 tok, huge) — mind-mem Intent Router — 9-type adaptive query intent classification.
 - `interaction_signals.py` (~4278 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `iterative_recall.py` (~2599 tok, huge) — Iterative chain-of-retrieval for multi-hop evidence (v3.4.0).
 - `kalman_belief.py` (~4219 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `knowledge_graph.py` (~5308 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1183 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -543,6 +545,7 @@
 - `streaming.py` (~1655 tok, huge) — Back-pressure-aware streaming ingest (v3.3.0).
 - `_task_status_literals.sh` (~118 tok, small) — AUTO-GENERATED — do not edit by hand.
 - `telemetry.py` (~2401 tok, huge) — mind-mem Telemetry — OpenTelemetry traces + Prometheus metrics.
+- `temporal_metadata.py` (~1286 tok, large) — Temporal metadata injection for retrieved blocks (v3.4.0).
 - `tenant_audit.py` (~1798 tok, huge) — Per-tenant audit chain isolation (v4.0 prep).
 - `tenant_kms.py` (~2181 tok, huge) — Per-tenant key management + envelope encryption (v4.0 prep).
 - `tiered_memory.py` (~1102 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -553,6 +556,7 @@
 - `truth_score.py` (~1678 tok, huge) — Probabilistic truth score for memory blocks (v3.3.0).
 - `turbo_quant.py` (~1078 tok, large) — # Copyright 2026 STARGA, Inc.
 - `uncertainty_propagation.py` (~1262 tok, large) — # Copyright 2026 STARGA, Inc.
+- `union_recall.py` (~1203 tok, large) — Union-style retrieval for decomposed queries (v3.4.0).
 - `validate_py.py` (~4830 tok, huge) — Mind Mem Integrity Validator — canonical engine.
 - `validate.sh` (~352 tok, medium) — src/mind_mem/validate.sh — thin forwarder to the Python validator.
 - `validate.sh.pre-forwarder` (~7140 tok, huge) — #!/usr/bin/env bash
@@ -803,6 +807,7 @@
 - `test_unicode_edge_cases.py` (~2440 tok, huge) — Tests for Unicode and edge case handling across mind-mem modules."""
 - `test_v28_completion.py` (~4565 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_v320_gaps.py` (~3257 tok, huge) — v3.2.0 gap tests — regression and edge-case coverage for new modules.
+- `test_v34_features.py` (~2861 tok, huge) — Tests for v3.4.0 retrieval features.
 - `test_validate_py.py` (~3438 tok, huge) — Tests for validate_py.py — workspace integrity validator."""
 - `test_validate_sh_deprecation.py` (~547 tok, large) — Pin the runtime deprecation warning on validate.sh.
 - `test_vault_wikilinks.py` (~1783 tok, huge) — # Copyright 2026 STARGA, Inc.
