@@ -39,32 +39,36 @@ enabled = true
 [verification.patterns]
 # The .mind INI parser splits values on commas, so avoid ``{a,b}``
 # quantifiers. ``\d\d?`` is equivalent to ``\d{1,2}`` and parser-safe.
-date        = "\\d\\d\\d\\d-\\d\\d-\\d\\d|\\d\\d?\\s+[A-Za-z]+\\s+\\d\\d\\d\\d"
-time        = "\\d\\d?:\\d\\d(?:\\s*[APap][Mm])?"
-number      = "-?\\d+(?:\\.\\d+)?"
+date = "\\d\\d\\d\\d-\\d\\d-\\d\\d|\\d\\d?\\s+[A-Za-z]+\\s+\\d\\d\\d\\d"
+time = "\\d\\d?:\\d\\d(?:\\s*[APap][Mm])?"
+number = "-?\\d+(?:\\.\\d+)?"
 proper_noun = "[A-Z][a-zA-Z0-9'\\-]+(?:\\s+[A-Z][a-zA-Z0-9'\\-]+)*"
-yes_no      = "[Yy]es|[Nn]o"
+yes_no = "[Yy]es|[Nn]o"
 
-[per_category_prompts]
-# Opt-in via env var MIND_MEM_PER_CAT_PROMPTS=1 (default 0 = off).
-# When on, these prompts replace the generic answerer system prompt
-# for the matching LoCoMo question category. SHIPPED OFF BY DEFAULT —
-# see the v3.6.0 reality-check note at the top of this file.
-enabled_default = false
+[prompts]
+# Per-category answerer hints. Opt-in via MIND_MEM_PER_CAT_PROMPTS=1
+# (default 0 = off). When on, these prompts replace the generic
+# answerer system prompt for the matching LoCoMo question category.
+# SHIPPED OFF BY DEFAULT — see the v3.6.0 reality-check note at the
+# top of this file.
+#
 # Bench observation (v3.6.0 conv-0, Mistral-Large):
 #   generic tuned prompt         86.33   baseline
 #   per-cat prompts + v34-only   77.06   -9.27  ← regression
 #   per-cat + full-stack retrieval 69.91  -16.42 ← compounding regression
 # Net: per-cat prompts are a research tool, not a hot path.
-
-[per_category_prompts.templates]
+#
+# Section name is ``[prompts]`` (not ``[per_category_prompts]``) for
+# backward compatibility with the v3.3.0 kernel contract checked by
+# tests/test_mind_kernels_v3_3.py.
+enabled_default = false
 # Failure patterns each template targets. Kept for future sweeps;
 # production behaviour follows the generic tuned prompt.
-adversarial   = "If the evidence does not support a confident answer, respond with 'unknown'."
-temporal      = "Anchor every time reference to the timeline provided. Use ISO dates when possible."
-multi_hop     = "Chain the facts explicitly: state intermediate conclusions before the final answer."
-single_hop    = "Answer directly from the single most relevant fact. No speculation."
-open_domain   = "Prefer facts that appear in multiple blocks. Ignore blocks without grounding."
+adversarial = "If the evidence does not support a confident answer, respond with 'unknown'."
+temporal = "Anchor every time reference to the timeline provided. Use ISO dates when possible."
+multi_hop = "Chain the facts explicitly: state intermediate conclusions before the final answer."
+single_hop = "Answer directly from the single most relevant fact. No speculation."
+open_domain = "Prefer facts that appear in multiple blocks. Ignore blocks without grounding."
 
 [two_stage_extraction]
 # Opt-in via MIND_MEM_TWO_STAGE=1. Uses a utility model (default
@@ -81,22 +85,22 @@ enabled_default = false
 # endpoint at http://127.0.0.1:11434/v1 so the bench can exercise
 # mind-mem:4b as the utility model without reaching paid APIs.
 ollama_endpoint = "http://127.0.0.1:11434/v1/chat/completions"
-ollama_prefix   = "mind-mem"
-strip_think_tags = true   # <think>...</think> stripped post-response
+ollama_prefix = "mind-mem"
+strip_think_tags = true  # <think>...</think> stripped post-response
 
 [env_flags]
 # Complete list of bench-layer env gates that interact with this
 # kernel. Documented here so the Python runtime and the bench harness
 # share a single source of truth.
-MIND_MEM_SELF_CONSISTENCY  = "int, default 1"
-MIND_MEM_TWO_STAGE         = "bool, default 0"
-MIND_MEM_UTILITY_MODEL     = "str, default mistral-small-latest"
-MIND_MEM_PER_CAT_PROMPTS   = "bool, default 0"
-MIND_MEM_VERIFY            = "bool, default 0 (answerer-side self-check retry)"
-MIND_MEM_PREJUDGE          = "bool, default 0 (normalized-answer shortcut)"
-MIND_MEM_REWRITES          = "bool, default 0"
-MIND_MEM_WIDE_K            = "int, default top_k"
-MIND_MEM_RERANK            = "bool, default 0"
-MIND_MEM_SESSION_SCOPE     = "bool, default 0"
+MIND_MEM_SELF_CONSISTENCY = "int, default 1"
+MIND_MEM_TWO_STAGE = "bool, default 0"
+MIND_MEM_UTILITY_MODEL = "str, default mistral-small-latest"
+MIND_MEM_PER_CAT_PROMPTS = "bool, default 0"
+MIND_MEM_VERIFY = "bool, default 0 (answerer-side self-check retry)"
+MIND_MEM_PREJUDGE = "bool, default 0 (normalized-answer shortcut)"
+MIND_MEM_REWRITES = "bool, default 0"
+MIND_MEM_WIDE_K = "int, default top_k"
+MIND_MEM_RERANK = "bool, default 0"
+MIND_MEM_SESSION_SCOPE = "bool, default 0"
 MIND_MEM_BENCH_CROSS_ENCODER = "bool, default 1"
-MIND_MEM_RERANKER_DEVICE   = "str, default cuda (set cpu when GPU busy)"
+MIND_MEM_RERANKER_DEVICE = "str, default cuda (set cpu when GPU busy)"

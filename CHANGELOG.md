@@ -2,6 +2,23 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.6.3 (2026-04-22)
+
+**Fix — v3.6.1 CI red (answer.mind section rename).** The kernel
+rewrite in v3.6.1 renamed the ``[prompts]`` section of
+``mind/answer.mind`` to ``[per_category_prompts]`` to make the
+opt-in nature more explicit. That broke
+``tests/test_mind_kernels_v3_3.py::TestAnswerKernel`` — the v3.3.0
+contract test checks ``[prompts]`` by name on every platform in the
+matrix (Ubuntu/macOS/Windows × Python 3.10-3.14). Reverted the
+section name to ``[prompts]`` and kept the new content (bench
+receipts, env-flag table, two-stage block) inline.
+
+### Fixed
+
+- ``mind/answer.mind`` section ``[prompts]`` restored; kernel
+  contract test green on all matrix platforms again.
+
 ## 3.6.2 (2026-04-22)
 
 **Fix — WrappedDEK legacy-format compatibility.** Gemini CLI audit of

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 669 | **Est. tokens:** ~1,317,674
-**Generated:** 2026-04-22 15:00 UTC
+**Files:** 669 | **Est. tokens:** ~1,317,683
+**Generated:** 2026-04-22 15:04 UTC
 
 ## Token Budget Guide
 
@@ -42,7 +42,7 @@
 | `intelligence/` | 1 | ~113 |
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2,176 |
-| `mind/` | 27 | ~9,681 |
+| `mind/` | 27 | ~9,690 |
 | `scripts/` | 4 | ~3,326 |
 | `sdk/go/` | 9 | ~6,773 |
 | `sdk/js/` | 5 | ~1,388 |
@@ -280,7 +280,7 @@
 
 - `abstention.mind` (~215 tok, medium) — Confidence gating: decide whether to abstain from answering
 - `adversarial.mind` (~156 tok, small)
-- `answer.mind` (~1285 tok, large)
+- `answer.mind` (~1294 tok, large)
 - `bm25.mind` (~477 tok, medium) — BM25F scoring kernel with field boosts and length normalization
 - `category.mind` (~395 tok, medium) — Category distillation scoring kernel
 - `cognitive.mind` (~437 tok, medium)
