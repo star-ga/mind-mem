@@ -25,10 +25,16 @@ from .observability import get_logger
 _log = get_logger("temporal_metadata")
 
 _DATE_KEYS = (
-    "created_at", "date", "timestamp", "last_seen", "updated_at",
+    "created_at",
+    "date",
+    "timestamp",
+    "last_seen",
+    "updated_at",
     # Capitalised variants emitted by the markdown block parser
     # (``Date`` field on LoCoMo DIA-* blocks, etc.)
-    "Date", "Created_At", "Timestamp",
+    "Date",
+    "Created_At",
+    "Timestamp",
 )
 
 # Parseable LoCoMo / narrative date formats — tried in order.
@@ -36,12 +42,12 @@ _DATE_KEYS = (
 _NATURAL_DATE_FORMATS: tuple[str, ...] = (
     "%Y-%m-%d",
     "%Y/%m/%d",
-    "%d %B %Y",             # "7 May 2023"
-    "%d %B, %Y",            # "7 May, 2023"
-    "%B %d, %Y",            # "May 7, 2023"
-    "%b %d, %Y",            # "May 7, 2023"  (abbreviated month)
-    "%d %b %Y",             # "7 May 2023"
-    "%d %b, %Y",            # "7 May, 2023"
+    "%d %B %Y",  # "7 May 2023"
+    "%d %B, %Y",  # "7 May, 2023"
+    "%B %d, %Y",  # "May 7, 2023"
+    "%b %d, %Y",  # "May 7, 2023"  (abbreviated month)
+    "%d %b %Y",  # "7 May 2023"
+    "%d %b, %Y",  # "7 May, 2023"
 )
 
 

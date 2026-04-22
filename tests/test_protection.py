@@ -80,9 +80,7 @@ class TestWithManifest:
 
 
 class TestStrictMode:
-    def test_strict_raises_on_tamper(
-        self, fake_package: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_strict_raises_on_tamper(self, fake_package: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         files = {rel: _sha256(fake_package / rel) for rel in ("recall.py", "apply_engine.py")}
         (fake_package / protection._MANIFEST_FILENAME).write_text(
             json.dumps({"version": 1, "files": files}),

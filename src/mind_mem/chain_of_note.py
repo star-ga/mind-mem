@@ -64,7 +64,7 @@ def _render_evidence(blocks: list[dict[str, Any]], max_blocks: int, max_chars: i
     lines: list[str] = []
     total = 0
     for i, b in enumerate(blocks[:max_blocks], start=1):
-        text = (b.get("excerpt") or b.get("Statement") or "")
+        text = b.get("excerpt") or b.get("Statement") or ""
         text = re.sub(r"\s+", " ", text).strip()
         # Strip the delimiter so a malicious block can't close the tag.
         text = text.replace("<evidence>", "").replace("</evidence>", "")

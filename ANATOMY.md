@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 668 | **Est. tokens:** ~1,308,307
-**Generated:** 2026-04-22 06:36 UTC
+**Files:** 668 | **Est. tokens:** ~1,308,286
+**Generated:** 2026-04-22 06:37 UTC
 
 ## Token Budget Guide
 
@@ -52,7 +52,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 142 | ~471,347 |
+| `src/mind_mem/` | 142 | ~471,326 |
 | `src/mind_mem/api/` | 5 | ~14,584 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |

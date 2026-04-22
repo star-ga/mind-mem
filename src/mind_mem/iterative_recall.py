@@ -110,7 +110,8 @@ def _extract_followups(raw: str, max_followups: int) -> list[str]:
     # Fall back to line-based extraction.
     lines = [line.strip(" -*•\t") for line in stripped.splitlines() if line.strip()]
     candidates = [
-        line for line in lines
+        line
+        for line in lines
         if line
         and not line.lower().startswith(("original", "evidence", "output", "json"))
         and not line.lower().startswith(("here are", "the following", "based on"))
@@ -130,7 +131,7 @@ def _format_evidence(blocks: list[dict[str, Any]], max_blocks: int, max_chars: i
     lines: list[str] = []
     total = 0
     for i, b in enumerate(blocks[:max_blocks]):
-        excerpt = (b.get("excerpt") or b.get("Statement") or "")
+        excerpt = b.get("excerpt") or b.get("Statement") or ""
         excerpt = re.sub(r"\s+", " ", excerpt).strip()
         # Strip the delimiter tags from the excerpt so a malicious
         # block can't close one and inject its own.

@@ -81,22 +81,48 @@ class WrappedDEK:
     tag: bytes
 
     def to_b64(self) -> str:
-        mac_tag_len = len(self.tag).to_bytes(1, "big")
-        return base64.urlsafe_b64encode(
-            self.tenant_id.encode("utf-8") + b":" + self.nonce + b":" + mac_tag_len + self.tag + self.wrapped
-        ).decode("ascii")
+        """Length-prefixed wire: ``tid_len(2) | tid | nonce_len(1) | nonce |
+        tag_len(1) | tag | wrapped``. Previous delimiter-based format was
+        ambiguous when ``nonce`` contained ``0x3a`` (``:``)."""
+        tid_bytes = self.tenant_id.encode("utf-8")
+        if len(tid_bytes) > 0xFFFF:
+            raise ValueError("tenant_id too long for wire format (<= 65535 bytes)")
+        if len(self.nonce) > 0xFF or len(self.tag) > 0xFF:
+            raise ValueError("nonce/tag must be <= 255 bytes")
+        payload = (
+            len(tid_bytes).to_bytes(2, "big")
+            + tid_bytes
+            + len(self.nonce).to_bytes(1, "big")
+            + self.nonce
+            + len(self.tag).to_bytes(1, "big")
+            + self.tag
+            + self.wrapped
+        )
+        return base64.urlsafe_b64encode(payload).decode("ascii")
 
     @classmethod
     def from_b64(cls, blob: str) -> "WrappedDEK":
         raw = base64.urlsafe_b64decode(blob.encode("ascii"))
-        first_colon = raw.index(b":")
-        second_colon = raw.index(b":", first_colon + 1)
-        tenant_id = raw[:first_colon].decode("utf-8")
-        nonce = raw[first_colon + 1 : second_colon]
-        payload = raw[second_colon + 1 :]
-        tag_len = payload[0]
-        tag = payload[1 : 1 + tag_len]
-        wrapped = payload[1 + tag_len :]
+        if len(raw) < 4:
+            raise ValueError("wrapped DEK blob too short")
+        tid_len = int.from_bytes(raw[:2], "big")
+        o = 2 + tid_len
+        if len(raw) < o + 1:
+            raise ValueError("truncated tenant_id")
+        tenant_id = raw[2:o].decode("utf-8")
+        nonce_len = raw[o]
+        o += 1
+        if len(raw) < o + nonce_len + 1:
+            raise ValueError("truncated nonce")
+        nonce = raw[o : o + nonce_len]
+        o += nonce_len
+        tag_len = raw[o]
+        o += 1
+        if len(raw) < o + tag_len:
+            raise ValueError("truncated tag")
+        tag = raw[o : o + tag_len]
+        o += tag_len
+        wrapped = raw[o:]
         return cls(tenant_id=tenant_id, nonce=nonce, wrapped=wrapped, tag=tag)
 
 

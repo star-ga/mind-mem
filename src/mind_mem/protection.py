@@ -167,17 +167,10 @@ def verify_integrity() -> IntegrityReport:
             mismatched.append(rel)
 
     manifest_keys = set(manifest.keys())
-    discovered = {
-        str(p.relative_to(root)).replace(os.sep, "/")
-        for p in root.rglob("*.py")
-        if p.is_file()
-    }
+    discovered = {str(p.relative_to(root)).replace(os.sep, "/") for p in root.rglob("*.py") if p.is_file()}
     # Only report "extra" critical files — unexpected additions to the
     # tracked set. Ignore freshly-added modules outside the manifest.
-    extra = sorted(
-        rel for rel in _CRITICAL_MODULES
-        if rel in discovered and rel not in manifest_keys
-    )
+    extra = sorted(rel for rel in _CRITICAL_MODULES if rel in discovered and rel not in manifest_keys)
 
     ok = not mismatched and not missing and not warnings
 
@@ -202,8 +195,7 @@ def verify_integrity() -> IntegrityReport:
         )
         if strict:
             raise RuntimeError(
-                f"mind-mem integrity check failed (strict mode): "
-                f"mismatched={mismatched} missing={missing} warnings={warnings}",
+                f"mind-mem integrity check failed (strict mode): mismatched={mismatched} missing={missing} warnings={warnings}",
             )
 
     return report

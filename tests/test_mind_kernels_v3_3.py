@@ -96,8 +96,7 @@ class TestEnsembleKernel:
         cfg = _load("ensemble")
         bge_model = cfg["bge"]["model"]
         assert "reranker" in bge_model, (
-            f"ensemble.mind points to {bge_model} which isn't a reranker; "
-            "use bge-reranker-v2-m3, not bge-large-en-v1.5 (retrieval model)"
+            f"ensemble.mind points to {bge_model} which isn't a reranker; use bge-reranker-v2-m3, not bge-large-en-v1.5 (retrieval model)"
         )
 
     def test_ensemble_members_non_empty(self) -> None:

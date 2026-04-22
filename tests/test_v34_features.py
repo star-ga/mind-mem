@@ -73,6 +73,7 @@ class TestUnionRetrieve:
     def test_retriever_exception_is_fail_open(self):
         def bad(q):
             raise RuntimeError("boom")
+
         # Should not raise; returns empty list.
         result = union_retrieve(["q"], bad, top_k_per_query=5)
         assert result == []
@@ -235,8 +236,10 @@ class TestChainOfNotePack:
 
     def test_llm_exception_falls_back(self):
         blocks = [{"_id": "A1", "excerpt": "Raw"}]
+
         def bad(_):
             raise RuntimeError("boom")
+
         out = chain_of_note_pack("q", blocks, bad, fallback_on_empty=True)
         assert "Raw" in out
 

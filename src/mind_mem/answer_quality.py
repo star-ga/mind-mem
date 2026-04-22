@@ -191,10 +191,10 @@ _TEMPORAL_TEMPLATE = (
     "answer with the date or duration the question asks for.\n\n"
     "Each evidence block is prefixed with [Block date: YYYY-MM-DD] — "
     "that is the CONVERSATION DATE when the block was recorded. "
-    "Relative phrases in the block text (\"yesterday\", \"last week\", "
-    "\"next month\") MUST be resolved relative to the block's date, "
+    'Relative phrases in the block text ("yesterday", "last week", '
+    '"next month") MUST be resolved relative to the block\'s date, '
     "not today. Example: Block date 2023-05-07, text says "
-    "\"yesterday\" → event date is 2023-05-06.\n\n"
+    '"yesterday" → event date is 2023-05-06.\n\n'
     "Question: {question}\n\n"
     "Evidence timeline:\n{timeline}\n\n"
     "Facts:\n{facts}\n\n"
@@ -218,8 +218,8 @@ _MULTIHOP_TEMPLATE = (
     "with 'Final:' so it can be extracted.\n\n"
     "Rules for dates: every evidence block is prefixed with "
     "[Block date: YYYY-MM-DD]. Relative phrases in the block text "
-    "(\"yesterday\", \"last week\") MUST be resolved relative to that "
-    "block's date. Example: Block date 2023-05-07 + text \"yesterday\" "
+    '("yesterday", "last week") MUST be resolved relative to that '
+    'block\'s date. Example: Block date 2023-05-07 + text "yesterday" '
     "→ event date is 2023-05-06.\n\n"
     "Question: {question}\n\nSub-queries:\n{subqueries}\n\nEvidence:\n{facts}\n\n"
     "Step-by-step:"
