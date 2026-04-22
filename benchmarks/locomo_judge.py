@@ -625,13 +625,12 @@ def evaluate_sample_with_judge(
             from mind_mem.temporal_metadata import annotate_with_temporal_metadata
             from mind_mem.union_recall import union_retrieve
 
-            # v3.5.0: adaptive top-k per category
-            #   single-hop: tight (6)  — right block usually in top 3
-            #   multi-hop:  wide (18)  — need multiple bridges
-            #   temporal:   wide (18)  — timeline context matters
-            #   open-domain:widest(30) — low-precision queries
+            # v3.5.0: adaptive top-k per category.
+            # single-hop bumped 6→12 after conv-0 full-run diagnostic —
+            # list questions ("What books has Melanie read?") need
+            # multiple blocks to enumerate, 6 missed too many items.
             _adaptive_k = {
-                "single-hop": 6,
+                "single-hop": 12,
                 "multi-hop": 18,
                 "temporal": 18,
                 "open-domain": 30,

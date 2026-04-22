@@ -226,8 +226,17 @@ _MULTIHOP_TEMPLATE = (
 )
 
 _SINGLEHOP_TEMPLATE = (
-    "You are answering a SINGLE-HOP question. Give the shortest "
-    "factually-correct answer from the evidence. No elaboration.\n\n"
+    "You are answering a SINGLE-HOP question. Extract the requested "
+    "fact from the evidence.\n\n"
+    "Rules:\n"
+    "* If the question asks for a LIST (books, activities, events, "
+    "etc.), enumerate every matching item found in ANY evidence "
+    "block, comma-separated. Do NOT say 'insufficient evidence' "
+    "if even one item is in scope.\n"
+    "* If the question asks for a single value (name, date, number), "
+    "give the exact value from the evidence. Keep the answer short.\n"
+    "* Only say 'No information' if absolutely nothing in the "
+    "evidence addresses the question.\n\n"
     "Question: {question}\n\nEvidence:\n{facts}\n\n"
     "Answer:"
 )

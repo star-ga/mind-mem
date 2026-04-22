@@ -127,8 +127,6 @@ class TestWorldWritable:
 
     @pytest.mark.skipif(os.name != "posix", reason="POSIX-only")
     def test_detects_world_writable(self, tmp_path: Path) -> None:
-        import stat as _stat
-
         bad = tmp_path / "bad"
         bad.mkdir()
         bad.chmod(0o777)

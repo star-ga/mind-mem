@@ -5,15 +5,14 @@ Covers union_recall, iterative_recall, chain_of_note, temporal_metadata.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 
-from mind_mem.chain_of_note import chain_of_note_pack, _clean_bullets
+from mind_mem.chain_of_note import _clean_bullets, chain_of_note_pack
 from mind_mem.iterative_recall import _extract_followups, iterative_retrieve
 from mind_mem.temporal_metadata import annotate_with_temporal_metadata
 from mind_mem.union_recall import union_retrieve
-
 
 # ---------------------------------------------------------------------------
 # union_recall
@@ -169,7 +168,7 @@ class TestIterativeRetrieve:
         corpus = {"original": [{"_id": "A0", "excerpt": "seed"}]}
         # Every round generates new followups; max_rounds=2 means only
         # one LLM call (round 0 is seed, round 1 calls LLM once).
-        result = iterative_retrieve(
+        iterative_retrieve(
             "original",
             retrieve_fn=lambda q: corpus.get(q, []),
             llm_fn=llm,
