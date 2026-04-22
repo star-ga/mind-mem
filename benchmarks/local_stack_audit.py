@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import socket
 import subprocess
 import sys
@@ -80,9 +79,19 @@ def check_mind_kernels() -> tuple[str, str]:
         ws = os.environ.get("MIND_MEM_WORKSPACE", "/home/n/.openclaw/workspace")
         cfgs = load_all_kernel_configs(get_mind_dir(ws))
         required = {
-            "query_plan", "graph", "session", "truth",
-            "answer", "evidence", "ensemble",
-            "hybrid", "rrf", "bm25", "temporal", "intent", "prefetch",
+            "query_plan",
+            "graph",
+            "session",
+            "truth",
+            "answer",
+            "evidence",
+            "ensemble",
+            "hybrid",
+            "rrf",
+            "bm25",
+            "temporal",
+            "intent",
+            "prefetch",
         }
         missing = required - cfgs.keys()
         if missing:
@@ -97,7 +106,9 @@ def check_ollama() -> tuple[str, str]:
         return _fail("ollama not running on :11434")
     out = subprocess.run(
         ["curl", "-s", "http://127.0.0.1:11434/api/tags"],
-        capture_output=True, text=True, timeout=5,
+        capture_output=True,
+        text=True,
+        timeout=5,
     ).stdout
     models = [m.get("name", "") for m in json.loads(out).get("models", [])]
     mm = [m for m in models if m.startswith("mind-mem")]
@@ -111,7 +122,10 @@ def check_redis() -> tuple[str, str]:
         return _warn("redis not running on :6379 (L2 cache disabled)")
     try:
         out = subprocess.run(
-            ["redis-cli", "ping"], capture_output=True, text=True, timeout=2,
+            ["redis-cli", "ping"],
+            capture_output=True,
+            text=True,
+            timeout=2,
         ).stdout.strip()
         return _ok(out) if out == "PONG" else _fail(f"unexpected ping: {out}")
     except FileNotFoundError:
@@ -151,9 +165,18 @@ def check_sqlite_vec() -> tuple[str, str]:
 
 def check_v3_3_modules() -> tuple[str, str]:
     modules = [
-        "query_planner", "graph_recall", "entity_prefetch", "session_boost",
-        "evidence_bundle", "rerank_ensemble", "truth_score", "answer_quality",
-        "streaming", "consensus_vote", "retrieval_trace", "feature_gate",
+        "query_planner",
+        "graph_recall",
+        "entity_prefetch",
+        "session_boost",
+        "evidence_bundle",
+        "rerank_ensemble",
+        "truth_score",
+        "answer_quality",
+        "streaming",
+        "consensus_vote",
+        "retrieval_trace",
+        "feature_gate",
     ]
     missing = []
     for m in modules:
@@ -168,8 +191,12 @@ def check_v3_3_modules() -> tuple[str, str]:
 
 def check_v4_prep_modules() -> tuple[str, str]:
     modules = [
-        "event_fanout", "tenant_audit", "tenant_kms", "governance_raft",
-        "api.grpc_server", "storage.sharded_pg",
+        "event_fanout",
+        "tenant_audit",
+        "tenant_kms",
+        "governance_raft",
+        "api.grpc_server",
+        "storage.sharded_pg",
     ]
     missing = []
     for m in modules:

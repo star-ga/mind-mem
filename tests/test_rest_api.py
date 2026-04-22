@@ -217,6 +217,7 @@ class TestAdminRequired:
             json={
                 "block_type": "decision",
                 "statement": "Use Redis for caching.",
+                "rationale": "REST test rationale — decision audit requirement",
                 "confidence": "high",
             },
             headers=_AUTH_HEADER,  # user token, not admin
@@ -245,6 +246,7 @@ class TestAdminRequired:
             json={
                 "block_type": "decision",
                 "statement": "Use Redis for caching.",
+                "rationale": "REST test rationale — decision audit requirement",
                 "confidence": "high",
             },
             headers=_ADMIN_HEADER,
@@ -275,6 +277,7 @@ class TestProposeUpdateValidation:
             json={
                 "block_type": "decision",
                 "statement": "Some statement",
+                "rationale": "REST test rationale — decision audit requirement",
                 "confidence": "extreme",
             },
         )

@@ -20,7 +20,7 @@
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
     <img src="https://img.shields.io/badge/tests-4000%2B-brightgreen?style=flat-square" alt="Tests: 4000+">
-    <img src="https://img.shields.io/badge/MCP_tools-57%2B7-blue?style=flat-square" alt="MCP Tools: 57 legacy + 7 consolidated dispatchers">
+    <img src="https://img.shields.io/badge/MCP_tools-58%2B7-blue?style=flat-square" alt="MCP Tools: 58 legacy + 7 consolidated dispatchers">
     <img src="https://img.shields.io/badge/clients-17-blueviolet?style=flat-square" alt="AI Clients: 17">
     <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
     <img src="https://img.shields.io/badge/audit-3--LLM_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="3-LLM joint audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
@@ -222,7 +222,7 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 ### Transcript JSONL Capture
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
-### MCP Server (57 tools, 8 resources)
+### MCP Server (58 tools, 8 resources)
 Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 57 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
 
 ### 74+ Structural Checks + 3024 Unit Tests
@@ -588,7 +588,7 @@ TOTAL: 0 critical | 0 warnings | 16 info
 
 ```
 your-workspace/
-├── mcp_server.py            # MCP server (FastMCP, 57 tools, 8 resources)
+├── mcp_server.py            # MCP server (FastMCP, 58 tools, 8 resources)
 ├── mind-mem.json             # Config
 ├── MEMORY.md                # Protocol rules
 │
@@ -707,8 +707,8 @@ your-workspace/
 | Governance (propose/review/apply) | Yes | No | No | No |
 | Contradiction detection | Yes | No | No | No |
 | Tests | 3,600+ | - | - | - |
-| LoCoMo benchmark | 77.9 mean | 66.88 | 74.0% | - |
-| MCP tools | 64 (57 legacy + 7 dispatchers) | - | - | - |
+| LoCoMo benchmark | 86.33 conv-0 (v3.6, Mistral-Large) | 66.88 | 74.0% | - |
+| MCP tools | 65 (58 legacy + 7 dispatchers) | - | - | - |
 | Core dependencies | 0 | Many | Many | Many |
 
 ### At a Glance
@@ -725,7 +725,7 @@ your-workspace/
 | [**Graphlit**](https://www.graphlit.com) | Multimodal ingestion, semantic search, managed platform | Cloud-only, managed service |
 | [**ClawMem**](https://github.com/yoloshii/ClawMem) | Full ML pipeline (cross-encoder + QMD + beam search) | 4.5GB VRAM, 3 GPU processes required |
 | [**MemU**](https://github.com/supermemory/memu) | Hierarchical 3-layer memory, multimodal ingestion, LLM-based retrieval | Requires LLM for extraction and retrieval, no hybrid search |
-| **mind-mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 57 MCP tools + 3-LLM audit per release | Lexical recall by default (vector/CE optional) |
+| **mind-mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 58 MCP tools + 3-LLM audit per release | Lexical recall by default (vector/CE optional) |
 
 ### Full Feature Matrix
 
@@ -771,7 +771,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | No daemon       |                   —                    |                   —                   |                            —                            |               —                |               —               |                     Yes                     |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
 | GPU required    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                    **4.5GB**                    |                      No                      |     **No**     |
 | Git-friendly    |                   —                    |                   —                   |                            —                            |              Part              |               —               |                      —                      |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
-| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **57 tools**   |
+| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **58 tools**   |
 | MIND kernels    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **16 source**  |
 
 ### The Gap mind-mem Fills

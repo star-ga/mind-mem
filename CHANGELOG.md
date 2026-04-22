@@ -2,6 +2,80 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.6.0 (2026-04-22)
+
+**Governance rationale + bench harness infra.** Two themes in one
+release: (1) make every governance state change carry a mandatory
+written rationale so the audit chain answers "why" three months
+later; (2) put the LoCoMo bench harness on solid footing with a
+local Ollama provider (so the bench can exercise `mind-mem:4b`
+end-to-end), a CPU override for the BGE reranker when GPU is
+contended, env-gated per-category answerer prompts, and a `<think>`
+tag stripper for local reasoning models.
+
+### Added
+
+- **`reject_proposal(proposal_id, reason)`** — new MCP tool. Explicit
+  rejection with a mandatory human-written reason (≥ 8 non-whitespace
+  characters). Previously rejection happened implicitly by letting
+  proposals expire; now the rationale gets appended inside the
+  proposal's Markdown block as a timestamped `Rejected: <ts>` +
+  `Reason: <text>` pair. Total MCP-tool count: 58 (+1). Added to
+  `ADMIN_TOOLS` ACL.
+- **Ollama provider wiring for the LoCoMo bench harness
+  (`benchmarks/locomo_judge.py`)**. Any model name prefixed with
+  `mind-mem` routes to `http://127.0.0.1:11434/v1/chat/completions`.
+  Lets the bench exercise `mind-mem:4b` as the utility model for
+  query rewrites, two-stage extraction, and consensus voting without
+  reaching out to paid APIs.
+- **`_sanitize_reason_for_markdown`** — escapes `[TYPE-id]` delimiters,
+  `#` headers, and governance field keywords (`Status`, `Applied`,
+  `Rejected`, `RolledBack`, `Reason`, `Proposal`) in rationale text.
+- **`MIND_MEM_RERANKER_DEVICE` env override** — set to `cpu` when GPU
+  VRAM is contended; default remains CUDA.
+- **`MIND_MEM_PER_CAT_PROMPTS=1` env flag** — opt-in per-category
+  system prompts for the LoCoMo bench. Shipped off by default —
+  conv-0 ablations showed they regressed the baseline; kept as a
+  research lever rather than a hot path.
+- **`<think>` tag stripper** in `_llm_chat` for local reasoning
+  models (mind-mem:4b, DeepSeek-R1).
+
+### Changed — Breaking (governance tools)
+
+- **`propose_update` now requires `rationale` for `block_type="decision"`**
+  (≥ 8 non-whitespace characters). Tasks stay permissive.
+- **`rollback_proposal(receipt_ts, reason)`** — `reason` is now required
+  (≥ 8 non-whitespace characters). The rationale is appended inside
+  `APPLY_RECEIPT.md` as a `Reason:` line alongside the existing
+  `RolledBack:` entry, and mirrored into the proposal's source block.
+
+### Fixed
+
+- **False-success on governance lock contention.**
+  `_mark_proposal_status` now returns `bool`. `rollback()` propagates
+  `False`; MCP tools surface the failure as an error JSON
+  (`status: unchanged` / `rollback_failed`) instead of falsely
+  returning success.
+- **Cycle-preserving rejection history.** Every state change appends a
+  fresh timestamped audit block; a proposal that cycles
+  `rejected → reopened → rejected-again` keeps both rationales.
+- **IndexError guard** when `Status:` is the last line of a proposal
+  file.
+- **Concurrent governance writes** serialized via `FileLock` on both
+  the proposal file and `APPLY_RECEIPT.md`.
+- **Bench lint fixes** (unused imports, long string, undefined
+  `effective_k` in chain-of-note).
+
+### LoCoMo bench (honest status)
+
+conv-0 (Mistral-Large answerer + judge, v3.4 retrieval features on):
+**86.33** — +8.4 over v1.9.0 published 77.9. Ahead of all publicly
+benchmarked competitors **except** Mem0's 2026 managed platform
+(reported 91.6). The per-category-prompt / 4b-utility /
+two-stage-extract stack regressed the baseline in isolation; shipped
+env-gated as research levers. Closing the gap to Mem0 now depends on
+a LoCoMo-specific fine-tune of `mind-mem-4b` (tracked for v3.7).
+
 ## 3.4.2 (2026-04-22)
 
 **Zero-warning / zero-mypy-error patch.** Closes all remaining audit

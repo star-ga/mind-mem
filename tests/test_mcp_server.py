@@ -299,20 +299,24 @@ class TestMCPRollback(unittest.TestCase):
 
     def test_nonexistent_snapshot(self):
         fn = self.mod.rollback_proposal
+        # v3.6.0: rollback_proposal requires a written reason (≥ 8 chars).
+        reason = "rollback test — snapshot does not exist, verifying graceful failure"
         if hasattr(fn, "fn"):
-            result = fn.fn("20260101-120000")
+            result = fn.fn("20260101-120000", reason)
         else:
-            result = fn("20260101-120000")
+            result = fn("20260101-120000", reason)
         parsed = json.loads(result)
         self.assertFalse(parsed["success"])
         self.assertEqual(parsed["status"], "rollback_failed")
 
     def test_valid_format_accepted(self):
         fn = self.mod.rollback_proposal
+        # v3.6.0: rollback_proposal requires a written reason (≥ 8 chars).
+        reason = "rollback test — valid receipt format should not trigger format error"
         if hasattr(fn, "fn"):
-            result = fn.fn("20260215-143000")
+            result = fn.fn("20260215-143000", reason)
         else:
-            result = fn("20260215-143000")
+            result = fn("20260215-143000", reason)
         parsed = json.loads(result)
         # Should fail (no snapshot exists) but not due to format validation
         self.assertNotIn("error", parsed)

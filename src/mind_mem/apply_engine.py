@@ -33,7 +33,7 @@ from .block_store import (
     _safe_copy,  # noqa: F401 — re-exported; tests import from apply_engine
 )
 from .corpus_registry import SNAPSHOT_DIRS
-from .mind_filelock import FileLock
+from .mind_filelock import FileLock, LockTimeout
 from .namespaces import NamespaceManager
 from .observability import get_logger
 
@@ -1408,34 +1408,122 @@ def _record_belief_update(ws: str, block_id: str, observation: float, source: st
         _log.warning("belief_update_failed", block_id=block_id, error=str(exc))
 
 
-def _mark_proposal_status(source_file, proposal_id, new_status):
-    """Update the Status field in the proposal's source file."""
+def _sanitize_reason_for_markdown(reason: str) -> str:
+    """Escape Markdown control chars so a rationale can't break block framing.
+
+    The reason is written into a ``Reason: <text>`` line inside the
+    proposal's Markdown block and must not let a malicious operator
+    terminate the block early (``[TYPE-id]``) or inject new headers
+    / block-quotes that could mimic a status change.
+    """
+    normalized = reason.replace("\r\n", "\n")
+    out_lines = []
+    for ln in normalized.split("\n"):
+        if re.match(r"^\[[A-Z]+-[^\]]+\]", ln):
+            # New proposal-block delimiter — escape so parsing stops only
+            # where we placed the boundary.
+            out_lines.append("\\" + ln)
+        elif re.match(r"^\s*#", ln):
+            # Markdown header that could render as a section break.
+            out_lines.append("\\" + ln.lstrip())
+        elif re.match(r"^\s*(Status|Applied|Rejected|RolledBack|Reason|Proposal):", ln):
+            # Key-like line that looks like a governance field — escape
+            # the leading keyword so readers don't mistake it for a real
+            # state transition.
+            out_lines.append("\\" + ln.lstrip())
+        else:
+            out_lines.append(ln)
+    return "\n".join(out_lines)
+
+
+def _mark_proposal_status(source_file, proposal_id, new_status, *, reason=""):
+    """Update the Status field in the proposal's source file.
+
+    v3.6.1: when ``reason`` is provided, append a ``Reason: <text>``
+    line inside the proposal block (directly after the Status line) so
+    the rationale is preserved next to the status change in the same
+    Markdown block the proposal lives in.
+
+    Safety:
+    - File lock via :class:`FileLock` to serialize concurrent
+      rejection/rollback calls on the same proposal file.
+    - Bounds-checked insertion — if Status is the last line, reason
+      rows are appended without an IndexError.
+    - Every status change appends a fresh (timestamped) audit block,
+      even if a prior ``Reason:`` line exists from an earlier state
+      transition. This preserves the complete rejection-then-rollback
+      history instead of silently dropping the new rationale.
+    - Reason text is escaped so ``[FOO-bar]`` at line start cannot
+      terminate the proposal block early (Markdown injection).
+
+    Returns:
+        bool: ``True`` when the status change + rationale were persisted.
+        ``False`` on LockTimeout or I/O failure — callers must surface
+        the failure up through the MCP return shape so operators don't
+        get a false-success confirmation.
+    """
+    lock = FileLock(source_file + ".lock", timeout=5.0)
     try:
-        with open(source_file, "r") as f:
-            content = f.read()
-        # Find the proposal block and update its Status
-        # Simple approach: find line with "ProposalId: <id>" then find "Status:" nearby
-        lines = content.split("\n")
-        in_proposal = False
-        for i, line in enumerate(lines):
-            if f"ProposalId: {proposal_id}" in line:
-                in_proposal = True
-                continue
-            if in_proposal and line.startswith("Status:"):
-                lines[i] = f"Status: {new_status}"
-                break
-            if in_proposal and re.match(r"^\[[A-Z]+-[^\]]+\]", line):
-                break
-        tmp_path = source_file + ".tmp"
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines))
-        os.replace(tmp_path, source_file)
+        with lock:
+            with open(source_file, "r") as f:
+                content = f.read()
+            # Find the proposal block and update its Status
+            # Simple approach: find line with "ProposalId: <id>" then find "Status:" nearby
+            lines = content.split("\n")
+            in_proposal = False
+            status_idx = -1
+            for i, line in enumerate(lines):
+                if f"ProposalId: {proposal_id}" in line:
+                    in_proposal = True
+                    continue
+                if in_proposal and line.startswith("Status:"):
+                    lines[i] = f"Status: {new_status}"
+                    status_idx = i
+                    break
+                if in_proposal and re.match(r"^\[[A-Z]+-[^\]]+\]", line):
+                    break
+            if reason and status_idx >= 0:
+                sanitized = _sanitize_reason_for_markdown(reason.strip())
+                first, *rest = sanitized.split("\n")
+                timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+                reason_lines = [f"{new_status.capitalize()}: {timestamp}", f"Reason: {first}"]
+                for line in rest:
+                    reason_lines.append(f"  {line}")
+                # Always append the new status + reason block after the
+                # Status line, even when an older Reason: already exists —
+                # that way a proposal that cycles rejected → reopened →
+                # rejected-again keeps both rationales, not just the first.
+                # Bounds-safe: slice assignment works at len(lines), so
+                # inserting after the final line just appends.
+                insert_at = min(status_idx + 1, len(lines))
+                lines[insert_at:insert_at] = reason_lines
+            tmp_path = source_file + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines))
+            os.replace(tmp_path, source_file)
+        return True
+    except LockTimeout as e:
+        print(
+            f"WARNING: Could not acquire lock for proposal status update in {source_file}: {e}",
+            file=sys.stderr,
+        )
+        return False
     except (OSError, IOError, json.JSONDecodeError) as e:
         print(f"WARNING: Could not update proposal status in {source_file}: {e}", file=sys.stderr)
+        return False
 
 
-def rollback(ws, receipt_ts):
-    """Rollback from a receipt timestamp."""
+def rollback(ws, receipt_ts, reason=""):
+    """Rollback from a receipt timestamp.
+
+    Args:
+        ws: Workspace path.
+        receipt_ts: Receipt timestamp in YYYYMMDD-HHMMSS format.
+        reason: Human-written rationale for the rollback. Required by the
+            MCP-tool layer (``rollback_proposal``); empty strings are
+            permitted here so internal callers (tests, snapshots) keep
+            working without the discipline gate.
+    """
     ws = os.path.realpath(ws)
     # Sanitize receipt_ts: must match YYYYMMDD-HHMMSS format (no traversal)
     if not re.match(r"^\d{8}-\d{6}$", receipt_ts):
@@ -1461,24 +1549,50 @@ def rollback(ws, receipt_ts):
     for r in report:
         print(f"  {r}")
 
-    # Update receipt
+    # Update receipt — guarded by FileLock so concurrent rollbacks of the
+    # same receipt don't interleave Reason: lines on top of each other.
     receipt_path = os.path.join(snap_dir, "APPLY_RECEIPT.md")
     if os.path.isfile(receipt_path):
-        with open(receipt_path, "a") as f:
-            f.write(f"\nRolledBack: {datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')}\n")
-            f.write("Result: rolled_back\n")
+        receipt_lock = FileLock(receipt_path + ".lock", timeout=5.0)
+        try:
+            with receipt_lock, open(receipt_path, "a") as f:
+                f.write(f"\nRolledBack: {datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')}\n")
+                f.write("Result: rolled_back\n")
+                if reason:
+                    # Same sanitization as _mark_proposal_status so a
+                    # crafted reason can't corrupt the receipt's chain
+                    # of Proposal/Status/Reason key lines.
+                    sanitized = _sanitize_reason_for_markdown(reason.strip())
+                    first, *rest = sanitized.split("\n")
+                    f.write(f"Reason: {first}\n")
+                    for line in rest:
+                        f.write(f"  {line}\n")
+        except LockTimeout as exc:
+            print(
+                f"WARNING: Could not acquire lock for rollback receipt {receipt_path}: {exc}",
+                file=sys.stderr,
+            )
         proposal_id = None
         with open(receipt_path, "r", encoding="utf-8") as f:
             for line in f:
                 if line.startswith("Proposal:"):
                     proposal_id = line.split(":", 1)[1].strip()
                     break
+        status_persisted = True
         if proposal_id:
             _proposal, source_file = find_proposal(ws, proposal_id)
             if source_file:
-                _mark_proposal_status(source_file, proposal_id, "rolled_back")
+                status_persisted = _mark_proposal_status(source_file, proposal_id, "rolled_back", reason=reason)
             if _proposal:
                 _record_belief_update(ws, _proposal.get("TargetBlock", ""), 0.0, "rollback")
+        if not status_persisted:
+            print(
+                "WARNING: rollback completed on workspace but proposal status update failed "
+                "(lock contention or I/O). The file system reflects the rollback; the "
+                "Markdown status marker does not.",
+                file=sys.stderr,
+            )
+            return False
 
     print(f"\n═══ ROLLED BACK from {receipt_ts} ═══")
     return True

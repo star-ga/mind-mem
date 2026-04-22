@@ -291,6 +291,7 @@ class TestMCPEdgeCases(unittest.TestCase):
             self.mod.propose_update,
             block_type="decision",
             statement="",
+            rationale="Test rationale — decision requires ≥8 chars",
         )
         parsed = json.loads(result)
         # Should either succeed (writing an empty signal) or return an error,
@@ -304,6 +305,7 @@ class TestMCPEdgeCases(unittest.TestCase):
             self.mod.propose_update,
             block_type="decision",
             statement=long_stmt,
+            rationale="Test rationale — decision requires ≥8 chars",
         )
         parsed = json.loads(result)
         self.assertIsInstance(parsed, dict)
@@ -326,6 +328,7 @@ class TestMCPEdgeCases(unittest.TestCase):
             self.mod.propose_update,
             block_type="decision",
             statement="Some statement",
+            rationale="Test rationale — decision requires ≥8 chars",
             confidence="invalid_level",
         )
         parsed = json.loads(result)

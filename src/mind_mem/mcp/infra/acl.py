@@ -27,6 +27,7 @@ ADMIN_TOOLS = frozenset(
         "write_memory",
         "apply_proposal",
         "approve_apply",
+        "reject_proposal",
         "rollback_proposal",
         "delete_memory_item",
         "reindex_vectors",

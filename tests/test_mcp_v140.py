@@ -406,7 +406,9 @@ class TestSchemaVersionInAllResponses(unittest.TestCase):
         self._assert_schema_version(result, "approve_apply")
 
     def test_rollback_proposal_has_schema_version(self):
-        result = _call_tool(self.mod.rollback_proposal, "20260101-120000")
+        # v3.6.0: rollback_proposal requires a written reason (≥ 8 chars).
+        reason = "schema-version contract test — reason provided so response envelope is checked"
+        result = _call_tool(self.mod.rollback_proposal, "20260101-120000", reason)
         self._assert_schema_version(result, "rollback_proposal")
 
     def test_hybrid_search_has_schema_version(self):

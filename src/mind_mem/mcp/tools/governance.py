@@ -40,11 +40,31 @@ def propose_update(
     tags: str = "",
     confidence: str = "medium",
 ) -> str:
-    """Propose a new decision or task. Writes to SIGNALS.md for human review."""
+    """Propose a new decision or task. Writes to SIGNALS.md for human review.
+
+    v3.6.1: ``rationale`` is required for ``block_type="decision"`` (tasks
+    stay permissive). Forcing a written reason on every decision proposal
+    means the audit trail answers "why" three months later without having
+    to dig through Slack. Must be at least 8 non-whitespace characters
+    so callers can't bypass the gate with a trivial string.
+    """
     ws = _workspace()
 
     if block_type not in ("decision", "task"):
         return json.dumps({"error": f"block_type must be 'decision' or 'task', got '{block_type}'"})
+
+    if block_type == "decision" and len(rationale.strip()) < 8:
+        return json.dumps(
+            {
+                "error": (
+                    "rationale is required for decision proposals and must be at least "
+                    "8 non-whitespace characters. Decisions without written reasons leave "
+                    "no audit trail. Tasks may still omit rationale."
+                ),
+                "block_type": block_type,
+                "rationale_length": len(rationale.strip()),
+            }
+        )
 
     from datetime import datetime
 
@@ -293,14 +313,123 @@ def approve_apply(proposal_id: str, dry_run: bool = True) -> str:
 
 
 @mcp_tool_observe
-def rollback_proposal(receipt_ts: str) -> str:
-    """Rollback an applied proposal using its receipt timestamp."""
+def reject_proposal(proposal_id: str, reason: str) -> str:
+    """Reject a staged proposal explicitly, preserving the rationale.
+
+    v3.6.1: fills the "no explicit rejection tool" gap — previously
+    rejection happened implicitly by letting proposals expire. Now
+    operators can reject with a mandatory written reason (≥ 8
+    non-whitespace characters) which gets appended as a ``Reason:``
+    line inside the proposal block. The audit chain answers "why did
+    we reject P-20260412-007?" months later with the rationale in the
+    file, not in Slack.
+
+    Args:
+        proposal_id: The proposal's ID (e.g. ``P-20260412-007``).
+        reason: Human-written rationale. Required, ≥ 8 non-whitespace
+            characters. Multi-line reasons are preserved verbatim.
+    """
+    ws = _workspace()
+
+    if not proposal_id or not proposal_id.strip():
+        return json.dumps({"error": "proposal_id is required"})
+
+    if len(reason.strip()) < 8:
+        return json.dumps(
+            {
+                "error": (
+                    "reason is required and must be at least 8 non-whitespace characters. "
+                    "Rejections without a written reason leave no audit trail."
+                ),
+                "proposal_id": proposal_id,
+                "reason_length": len(reason.strip()),
+            }
+        )
+
+    from mind_mem.apply_engine import _mark_proposal_status, find_proposal
+
+    proposal, source_file = find_proposal(ws, proposal_id)
+    if not proposal or not source_file:
+        return json.dumps({"error": f"proposal not found: {proposal_id}"})
+
+    current_status = proposal.get("Status", "").strip().lower()
+    if current_status in ("applied", "rolled_back"):
+        return json.dumps(
+            {
+                "error": (f"cannot reject proposal in status '{current_status}'. Use rollback_proposal for applied proposals."),
+                "proposal_id": proposal_id,
+                "current_status": current_status,
+            }
+        )
+
+    ok = _mark_proposal_status(source_file, proposal_id, "rejected", reason=reason)
+    if not ok:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": (
+                    "rejection failed: could not persist the new status + rationale to the "
+                    "proposal file (lock contention or I/O error). Check stderr for details "
+                    "and retry. No state change was committed."
+                ),
+                "proposal_id": proposal_id,
+                "source_file": source_file,
+                "status": "unchanged",
+            },
+            indent=2,
+        )
+
+    metrics.inc("mcp_rejections")
+    _log.info(
+        "mcp_reject",
+        proposal_id=proposal_id,
+        reason_length=len(reason.strip()),
+    )
+
+    _invalidate_recall_cache()
+
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "status": "rejected",
+            "proposal_id": proposal_id,
+            "source_file": source_file,
+            "reason_preserved": True,
+        },
+        indent=2,
+    )
+
+
+@mcp_tool_observe
+def rollback_proposal(receipt_ts: str, reason: str = "") -> str:
+    """Rollback an applied proposal using its receipt timestamp.
+
+    v3.6.1: ``reason`` is required (≥ 8 non-whitespace characters). The
+    rationale is appended to the APPLY_RECEIPT.md as a ``Reason: <text>``
+    line so the audit chain preserves why the rollback was initiated.
+    This closes the "recurring churn is invisible" gap — a rejection
+    rationale three months ago shows up next to the receipt, not in
+    chat scrollback.
+    """
     ws = _workspace()
 
     import re
 
     if not re.match(r"^\d{8}-\d{6}$", receipt_ts):
         return json.dumps({"error": f"Invalid receipt timestamp format: {receipt_ts}. Expected YYYYMMDD-HHMMSS."})
+
+    if len(reason.strip()) < 8:
+        return json.dumps(
+            {
+                "error": (
+                    "reason is required and must be at least 8 non-whitespace characters. "
+                    "Rollbacks without a written reason leave no audit trail for why the "
+                    "revert happened."
+                ),
+                "receipt_ts": receipt_ts,
+                "reason_length": len(reason.strip()),
+            }
+        )
 
     import contextlib
     import io
@@ -309,12 +438,12 @@ def rollback_proposal(receipt_ts: str) -> str:
 
     capture = io.StringIO()
     with contextlib.redirect_stdout(capture):
-        success = engine_rollback(ws, receipt_ts)
+        success = engine_rollback(ws, receipt_ts, reason=reason)
 
     log_output = capture.getvalue()
 
     metrics.inc("mcp_rollbacks")
-    _log.info("mcp_rollback", receipt_ts=receipt_ts, success=success)
+    _log.info("mcp_rollback", receipt_ts=receipt_ts, success=success, has_reason=True)
 
     # v3.2.1: post-rollback cache flush so recall sees the restored state.
     if success:
@@ -402,5 +531,6 @@ def register(mcp) -> None:
     mcp.tool(scan)
     mcp.tool(list_contradictions)
     mcp.tool(approve_apply)
+    mcp.tool(reject_proposal)
     mcp.tool(rollback_proposal)
     mcp.tool(memory_evolution)

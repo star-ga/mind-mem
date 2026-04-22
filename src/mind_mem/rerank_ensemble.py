@@ -201,9 +201,12 @@ def _build_bge() -> Reranker | None:
     installed or the HuggingFace cache is empty and no network).
     """
     try:
+        import os
+
         from sentence_transformers import CrossEncoder  # type: ignore
 
-        model = CrossEncoder("BAAI/bge-reranker-v2-m3")
+        device = os.environ.get("MIND_MEM_RERANKER_DEVICE", "cpu")
+        model = CrossEncoder("BAAI/bge-reranker-v2-m3", device=device)
 
         class BGEAdapter:
             def rerank(
