@@ -2,6 +2,31 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.6.2 (2026-04-22)
+
+**Fix — WrappedDEK legacy-format compatibility.** Gemini CLI audit of
+the v3.4.2 → v3.6.1 delta flagged that
+``WrappedDEK.from_b64`` could not parse blobs persisted under the
+pre-v3.5.0-rc colon-delimited wire format (replaced by a
+length-prefixed format when ``nonce`` containing ``0x3a`` broke the
+delimiter). Any operator who had written DEK blobs under a preview
+build of the v4.0 KMS envelope encryption would see a ``ValueError``
+on upgrade — effectively losing their data keys. The KMS module was
+a v4.0 preview and the feature was never a stable-release default,
+so no known deployments are affected, but adding the fallback
+closes the upgrade-safety hole.
+
+### Fixed
+
+- ``WrappedDEK.from_b64`` now tries the length-prefixed parser
+  (``_from_raw_length_prefixed``) first, then falls back to the
+  legacy colon parser (``_from_raw_legacy_colon``). Both failing
+  raises a single ``ValueError`` with context. New writes continue
+  to use the length-prefixed format.
+- 3 new tests in ``test_tenant_kms.py::TestLegacyWireFormatCompat``:
+  legacy blob round-trips, length-prefixed blob with ``0x3a`` in
+  the nonce still works, and garbage input raises a clear error.
+
 ## 3.6.1 (2026-04-22)
 
 **Kernel rewrite + Postgres-on-/data SSD.** Housekeeping release that

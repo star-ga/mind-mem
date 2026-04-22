@@ -101,3 +101,56 @@ class TestCreateMasterKeyFromEnv:
         monkeypatch.setenv("TEST_MASTER", "!!!not base64!!!")
         with pytest.raises((RuntimeError, ValueError)):
             create_master_key_from_env("TEST_MASTER")
+
+
+# v3.6.2: legacy-format compatibility
+class TestLegacyWireFormatCompat:
+    """WrappedDEK.from_b64 must accept both the pre-v3.5.0-rc colon
+    format AND the current length-prefixed format so an operator who
+    persisted blobs under the v4.0-prep preview still decrypts them
+    after upgrade.
+    """
+
+    def _manual_legacy_blob(self, tenant_id: str, nonce: bytes, tag: bytes, wrapped: bytes) -> str:
+        import base64
+
+        payload = tenant_id.encode("utf-8") + b":" + nonce + b":" + len(tag).to_bytes(1, "big") + tag + wrapped
+        return base64.urlsafe_b64encode(payload).decode("ascii")
+
+    def test_legacy_colon_blob_parses(self):
+        from mind_mem.tenant_kms import WrappedDEK
+
+        blob = self._manual_legacy_blob(
+            tenant_id="acme",
+            nonce=b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c",
+            tag=b"\xde\xad\xbe\xef" * 4,
+            wrapped=b"wrapped-ciphertext-bytes" * 2,
+        )
+        d = WrappedDEK.from_b64(blob)
+        assert d.tenant_id == "acme"
+        assert d.nonce == b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c"
+        assert len(d.tag) == 16
+        assert d.wrapped.startswith(b"wrapped-ciphertext-bytes")
+
+    def test_round_trip_uses_length_prefixed(self):
+        from mind_mem.tenant_kms import WrappedDEK
+
+        src = WrappedDEK(
+            tenant_id="tenant-x",
+            nonce=b"\x3a" * 12,  # 0x3a == ':' — would collide in legacy format
+            wrapped=b"w" * 32,
+            tag=b"t" * 16,
+        )
+        d = WrappedDEK.from_b64(src.to_b64())
+        assert d.tenant_id == "tenant-x"
+        assert d.nonce == b"\x3a" * 12
+        assert d.wrapped == b"w" * 32
+        assert d.tag == b"t" * 16
+
+    def test_garbage_raises_clear_error(self):
+        import pytest
+
+        from mind_mem.tenant_kms import WrappedDEK
+
+        with pytest.raises(ValueError, match="did not match"):
+            WrappedDEK.from_b64("aaaaaaaa")  # valid b64, invalid both formats

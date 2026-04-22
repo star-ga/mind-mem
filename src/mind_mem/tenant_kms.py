@@ -102,9 +102,35 @@ class WrappedDEK:
 
     @classmethod
     def from_b64(cls, blob: str) -> "WrappedDEK":
+        """Parse a base64 WrappedDEK blob.
+
+        v3.5.0-rc replaced the colon-delimited wire format with a
+        length-prefixed one (the old format was ambiguous when
+        ``nonce`` contained ``0x3a`` == ``:``). The new format is the
+        only one ``to_b64`` emits. For forward compatibility with
+        any operator who persisted DEK blobs under a preview build
+        of v4.0 KMS, we try the length-prefixed parser first, then
+        fall back to the legacy colon-delimited parser. Both failing
+        raises a single ``ValueError``.
+        """
         raw = base64.urlsafe_b64decode(blob.encode("ascii"))
         if len(raw) < 4:
             raise ValueError("wrapped DEK blob too short")
+
+        try:
+            return cls._from_raw_length_prefixed(raw)
+        except (ValueError, UnicodeDecodeError, IndexError):
+            pass
+
+        try:
+            return cls._from_raw_legacy_colon(raw)
+        except (ValueError, UnicodeDecodeError, IndexError) as exc:
+            raise ValueError(
+                f"wrapped DEK blob did not match the length-prefixed format (v3.5.0-rc+) nor the legacy colon-delimited format: {exc}"
+            ) from exc
+
+    @classmethod
+    def _from_raw_length_prefixed(cls, raw: bytes) -> "WrappedDEK":
         tid_len = int.from_bytes(raw[:2], "big")
         o = 2 + tid_len
         if len(raw) < o + 1:
@@ -123,6 +149,30 @@ class WrappedDEK:
         tag = raw[o : o + tag_len]
         o += tag_len
         wrapped = raw[o:]
+        return cls(tenant_id=tenant_id, nonce=nonce, wrapped=wrapped, tag=tag)
+
+    @classmethod
+    def _from_raw_legacy_colon(cls, raw: bytes) -> "WrappedDEK":
+        """Parse the pre-v3.5.0-rc colon-delimited wire format.
+
+        Wire: ``<tenant_id_utf8>:<nonce_bytes>:<tag_len(1)><tag><wrapped>``
+
+        The parser below mirrors the original ``from_b64`` at commit
+        66b03be (v4.0-prep KMS landing). Kept only for upgrade
+        safety — new writes always use the length-prefixed format.
+        """
+        first_colon = raw.index(b":")
+        second_colon = raw.index(b":", first_colon + 1)
+        tenant_id = raw[:first_colon].decode("utf-8")
+        nonce = raw[first_colon + 1 : second_colon]
+        payload = raw[second_colon + 1 :]
+        if not payload:
+            raise ValueError("legacy blob missing tag length byte")
+        tag_len = payload[0]
+        if len(payload) < 1 + tag_len:
+            raise ValueError("legacy blob truncated tag")
+        tag = payload[1 : 1 + tag_len]
+        wrapped = payload[1 + tag_len :]
         return cls(tenant_id=tenant_id, nonce=nonce, wrapped=wrapped, tag=tag)
 
 

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 669 | **Est. tokens:** ~1,316,635
-**Generated:** 2026-04-22 14:39 UTC
+**Files:** 669 | **Est. tokens:** ~1,317,674
+**Generated:** 2026-04-22 15:00 UTC
 
 ## Token Budget Guide
 
@@ -52,7 +52,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 142 | ~472,763 |
+| `src/mind_mem/` | 142 | ~473,307 |
 | `src/mind_mem/api/` | 5 | ~14,584 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,217 |
@@ -60,7 +60,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 2 | ~3,878 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 228 | ~443,073 |
+| `tests/` | 228 | ~443,568 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -549,7 +549,7 @@
 - `telemetry.py` (~2401 tok, huge) — mind-mem Telemetry — OpenTelemetry traces + Prometheus metrics.
 - `temporal_metadata.py` (~1831 tok, huge) — Temporal metadata injection for retrieved blocks (v3.4.0).
 - `tenant_audit.py` (~1798 tok, huge) — Per-tenant audit chain isolation (v4.0 prep).
-- `tenant_kms.py` (~2416 tok, huge) — Per-tenant key management + envelope encryption (v4.0 prep).
+- `tenant_kms.py` (~2960 tok, huge) — Per-tenant key management + envelope encryption (v4.0 prep).
 - `tiered_memory.py` (~1102 tok, large) — # Copyright 2026 STARGA, Inc.
 - `tier_recall.py` (~2096 tok, huge) — Tier-aware recall score boosting (v3.2.0 hot/cold tier wire-up).
 - `tracking.py` (~1918 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -796,7 +796,7 @@
 - `test_temporal_decay_scoring.py` (~863 tok, large) — v3.3.0 Tier 1 #3 — half-life decay on block ``Created``/``Date`` field.
 - `test_temporal.py` (~223 tok, medium) — Tests for temporal filtering module."""
 - `test_tenant_audit.py` (~1462 tok, large) — v4.0 prep — per-tenant audit chain façade."""
-- `test_tenant_kms.py` (~955 tok, large) — v4.0 prep — per-tenant KMS envelope encryption."""
+- `test_tenant_kms.py` (~1450 tok, large) — v4.0 prep — per-tenant KMS envelope encryption."""
 - `test_tier_decay.py` (~924 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_tier_recall.py` (~1418 tok, large) — Tests for tier-aware recall boosting (v3.2.0 hot/cold tier wire-up)."""
 - `test_tier_weights_config.py` (~784 tok, large) — v3.3.0 Tier 4 #10 — per-tier learned weights override.
