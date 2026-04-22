@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 667 | **Est. tokens:** ~1,303,488
-**Generated:** 2026-04-22 04:22 UTC
+**Files:** 669 | **Est. tokens:** ~1,304,158
+**Generated:** 2026-04-22 04:27 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~73,478 |
+| `./` | 32 | ~73,746 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 26 | ~59,234 |
 | `deploy/` | 2 | ~690 |
@@ -52,7 +52,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 142 | ~469,928 |
+| `src/mind_mem/` | 142 | ~470,330 |
 | `src/mind_mem/api/` | 5 | ~14,584 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,210 |
@@ -73,6 +73,7 @@
 
 ### `./`
 
+- `AGENTS.md` (~35 tok, tiny) — Memory Context
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: mind-mem (Commit 30d8b71)
 - `CLAUDE.md` (~1028 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
@@ -96,6 +97,7 @@
 - `pyproject.toml` (~1657 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22305 tok, huge) — Shared Memory Across All Your AI Agents
+- `reproduce_bug.py` (~233 tok, medium)
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
 - `ROADMAP.md` (~17296 tok, huge) — mind-mem Roadmap
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
@@ -427,7 +429,7 @@
 - `intel_scan.py` (~12579 tok, huge) — Mind Mem Intelligence Scanner v2.0 — Self-hosted, zero external dependencies.
 - `intent_router.py` (~3106 tok, huge) — mind-mem Intent Router — 9-type adaptive query intent classification.
 - `interaction_signals.py` (~4278 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `iterative_recall.py` (~2599 tok, huge) — Iterative chain-of-retrieval for multi-hop evidence (v3.4.0).
+- `iterative_recall.py` (~2807 tok, huge) — Iterative chain-of-retrieval for multi-hop evidence (v3.4.0).
 - `kalman_belief.py` (~4219 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `knowledge_graph.py` (~5308 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1183 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -545,7 +547,7 @@
 - `streaming.py` (~1655 tok, huge) — Back-pressure-aware streaming ingest (v3.3.0).
 - `_task_status_literals.sh` (~118 tok, small) — AUTO-GENERATED — do not edit by hand.
 - `telemetry.py` (~2401 tok, huge) — mind-mem Telemetry — OpenTelemetry traces + Prometheus metrics.
-- `temporal_metadata.py` (~1286 tok, large) — Temporal metadata injection for retrieved blocks (v3.4.0).
+- `temporal_metadata.py` (~1373 tok, large) — Temporal metadata injection for retrieved blocks (v3.4.0).
 - `tenant_audit.py` (~1798 tok, huge) — Per-tenant audit chain isolation (v4.0 prep).
 - `tenant_kms.py` (~2181 tok, huge) — Per-tenant key management + envelope encryption (v4.0 prep).
 - `tiered_memory.py` (~1102 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -556,7 +558,7 @@
 - `truth_score.py` (~1678 tok, huge) — Probabilistic truth score for memory blocks (v3.3.0).
 - `turbo_quant.py` (~1078 tok, large) — # Copyright 2026 STARGA, Inc.
 - `uncertainty_propagation.py` (~1262 tok, large) — # Copyright 2026 STARGA, Inc.
-- `union_recall.py` (~1203 tok, large) — Union-style retrieval for decomposed queries (v3.4.0).
+- `union_recall.py` (~1310 tok, large) — Union-style retrieval for decomposed queries (v3.4.0).
 - `validate_py.py` (~4830 tok, huge) — Mind Mem Integrity Validator — canonical engine.
 - `validate.sh` (~352 tok, medium) — src/mind_mem/validate.sh — thin forwarder to the Python validator.
 - `validate.sh.pre-forwarder` (~7140 tok, huge) — #!/usr/bin/env bash

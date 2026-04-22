@@ -44,7 +44,13 @@ _MAX_TOTAL_QUERIES = 20
 # Accept follow-up queries only if they look like plain natural-language
 # text. Rejects shell metacharacters, SQL injection attempts, path
 # traversal. Length bounded 3..200 chars.
-_SAFE_QUERY_RE = re.compile(r"^[\w\s\-,.'\"()?!:&]{3,200}$")
+#
+# Allowed beyond \w\s (Gemini audit 2026-04-22 / H1):
+#   - ,.'"()?!:&       — common punctuation
+#   - / . [ ] @ #      — path separators, decorators, tags, anchors
+#                        so technical queries ("/src/main.py",
+#                        "@Component usage", "[ADR-42]") work
+_SAFE_QUERY_RE = re.compile(r"^[\w\s\-,.'\"()?!:&/@#\[\]]{3,200}$")
 
 _FOLLOWUP_PROMPT = """You are a retrieval planner for a memory system.
 
@@ -208,7 +214,15 @@ def iterative_retrieve(
         if not pool:
             _log.info("iterative_empty_pool", round=round_idx)
             break
-        evidence = _format_evidence(pool, evidence_max_blocks, evidence_max_chars)
+        # Pick evidence to show the LLM for follow-up planning — blend
+        # the top seed hits with the freshest round's additions so the
+        # LLM can evaluate what the last round surfaced (Gemini audit
+        # 2026-04-22 / H2: previously only round-0 blocks were visible).
+        half = max(1, evidence_max_blocks // 2)
+        recent = [b for b in pool if b.get("_iter_round") == round_idx - 1][-half:]
+        head = pool[: evidence_max_blocks - len(recent)]
+        evidence_blocks = head + recent
+        evidence = _format_evidence(evidence_blocks, evidence_max_blocks, evidence_max_chars)
         prompt = _FOLLOWUP_PROMPT.format(
             question=question,
             evidence=evidence,

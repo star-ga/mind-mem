@@ -32,13 +32,23 @@ _log = get_logger("union_recall")
 
 
 def _block_id(block: dict[str, Any]) -> str:
-    """Extract a stable identifier from a retrieval hit."""
-    bid = block.get("_id") or block.get("id") or block.get("block_id")
-    if bid:
-        return str(bid)
-    # Fall back to a content fingerprint so unrelated results don't collide.
-    excerpt = (block.get("excerpt") or block.get("Statement") or "")[:80]
-    return excerpt or repr(block)[:80]
+    """Extract a stable identifier from a retrieval hit.
+
+    Uses ``is not None`` instead of truthy checks so integer ``0`` and
+    empty-string ``""`` ids are handled correctly. Falls back to a
+    SHA-256 fingerprint of the full excerpt (16 hex chars) so blocks
+    sharing the same 80-char prefix (license headers, boilerplate)
+    don't collide and dedup incorrectly.
+    """
+    import hashlib
+
+    for key in ("_id", "id", "block_id"):
+        bid = block.get(key)
+        if bid is not None and bid != "":
+            return str(bid)
+    # Content fingerprint — full excerpt, not just the 80-char prefix.
+    content = str(block.get("excerpt") or block.get("Statement") or repr(block))
+    return "cf:" + hashlib.sha256(content.encode("utf-8", "replace")).hexdigest()[:16]
 
 
 def _min_rank(block: dict[str, Any], fallback: int) -> int:

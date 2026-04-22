@@ -128,9 +128,17 @@ def annotate_with_temporal_metadata(
             continue
         tag = f"[Stored {delta} days ago • {dt.date().isoformat()}] "
         cp = dict(b)
-        original = cp.get(excerpt_key) or cp.get("Statement") or ""
-        if original:
-            cp[excerpt_key] = tag + str(original)
+        # Target the existing text field rather than creating a new
+        # ``excerpt`` when only ``Statement`` is present — prevents
+        # schema drift for downstream consumers (Gemini audit 2026-04-22).
+        if cp.get(excerpt_key):
+            target_key = excerpt_key
+        elif cp.get("Statement"):
+            target_key = "Statement"
+        else:
+            target_key = None
+        if target_key is not None:
+            cp[target_key] = tag + str(cp[target_key])
             cp.setdefault("_temporal_delta_days", delta)
             annotated += 1
         out.append(cp)

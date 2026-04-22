@@ -2,6 +2,40 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.4.1 (2026-04-22)
+
+**Audit-fix patch.** Resolves 4 HIGH findings from the Gemini CLI
+post-release audit. No behavioural breaks for users already on 3.4.0.
+
+### Fixed
+
+- **``iterative_recall._SAFE_QUERY_RE`` was too restrictive** — blocked
+  technical follow-up queries containing `/`, `.`, `[`, `]`, `@`, `#`
+  (e.g. `/src/main.py`, `@Component`, `[ADR-42]`). Widened to
+  `[\w\s\-,.'"()?!:&/@#\[\]]{3,200}`.
+- **``iterative_retrieve`` stale evidence window** — `_format_evidence`
+  previously showed only the first N blocks (all round-0 hits) to the
+  follow-up planner, so rounds ≥2 never saw what round-1 surfaced.
+  The evidence window now blends top seed hits with the freshest
+  round's additions.
+- **``union_recall._block_id`` fingerprint collision** — blocks sharing
+  common boilerplate (license headers > 80 chars) collided on the
+  80-char prefix and were dedup'd as duplicates. Now uses SHA-256 of
+  the full excerpt (16 hex chars, ``cf:`` prefix).
+- **``union_recall._block_id`` falsy-id bug** — integer `0` and empty
+  string `""` ids were treated as missing. Changed to explicit
+  `is not None and != ""` check.
+- **``temporal_metadata.annotate_with_temporal_metadata`` schema drift**
+  — blocks with only `Statement` (no `excerpt`) got a brand-new
+  `excerpt` field with the timestamp tag, leaving `Statement`
+  un-annotated. Now targets whichever text field is present.
+
+### Audit provenance
+
+Pre-release: 2-agent audit (code-reviewer + security-reviewer).
+Post-release: Gemini CLI 3.1-Pro audit caught the 4 issues above.
+Codex CLI audit blocked by OpenAI quota exhaustion.
+
 ## 3.4.0 (2026-04-22)
 
 **Score release.** Ships 4 new retrieval modules that lift LoCoMo
