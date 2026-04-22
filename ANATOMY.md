@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 669 | **Est. tokens:** ~1,317,683
-**Generated:** 2026-04-22 15:04 UTC
+**Files:** 669 | **Est. tokens:** ~1,317,757
+**Generated:** 2026-04-22 15:46 UTC
 
 ## Token Budget Guide
 
@@ -60,7 +60,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,558 |
 | `src/mind_mem/storage/` | 2 | ~3,878 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 228 | ~443,568 |
+| `tests/` | 228 | ~443,642 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -774,7 +774,7 @@
 - `test_rest_api.py` (~3568 tok, huge) — Tests for the mind-mem REST API layer (v3.2.0).
 - `test_retrieval_diagnostics.py` (~2419 tok, huge) — Tests for retrieval diagnostics (#428), corpus isolation (#429), and intent instrumentation (#430)."""
 - `test_retrieval_graph.py` (~2242 tok, huge) — Tests for retrieval_graph.py — retrieval logging, co-retrieval graph, hard negatives."""
-- `test_retrieval_trace.py` (~904 tok, large) — Tests for v3.3.0 per-feature retrieval attribution."""
+- `test_retrieval_trace.py` (~978 tok, large) — Tests for v3.3.0 per-feature retrieval attribution."""
 - `test_rm3_expand.py` (~321 tok, medium) — Tests for RM3 query expansion."""
 - `test_scan_engine.py` (~333 tok, medium) — Tests for integrity scan engine."""
 - `test_schema_version.py` (~1758 tok, huge) — Tests for schema_version.py — zero external deps (stdlib unittest)."""

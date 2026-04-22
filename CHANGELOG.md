@@ -2,6 +2,22 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.6.4 (2026-04-22)
+
+**Fix — flaky Windows timing test.**
+``tests/test_retrieval_trace.py::test_step_latency_reflects_sleep``
+was asserting ``latency_ms >= 15`` after a ``time.sleep(0.02)``, but
+Windows's ~15.6 ms clock resolution + float representation could
+measure the same sleep as ``14.999999999986358 ms``. Non-deterministic
+CI red on ``windows-latest / python3.10`` since v3.6.1. Widened the
+threshold to ``>= 10`` — the test's purpose is to confirm ``step()``
+records a non-trivial latency, not to pin a precise floor.
+
+### Fixed
+
+- ``tests/test_retrieval_trace.py::TestStepRecording::test_step_latency_reflects_sleep``
+  no longer flakes on Windows clock-resolution boundaries.
+
 ## 3.6.3 (2026-04-22)
 
 **Fix — v3.6.1 CI red (answer.mind section rename).** The kernel
