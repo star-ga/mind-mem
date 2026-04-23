@@ -1345,10 +1345,10 @@ tokenizer = AutoTokenizer.from_pretrained("star-ga/mind-mem-4b")
 
 | Resource | Link |
 |----------|------|
-| Model (LoRA + GGUF) | [star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b) |
+| Model (GGUF + bf16 safetensors) | [star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b) |
 | Training data | [star-ga/mind7b-training](https://huggingface.co/datasets/star-ga/mind7b-training) |
 | Base model | Qwen/Qwen3.5-4B |
-| Training | QLoRA via Unsloth, 2600 examples, RTX 4090 |
+| Training | Full fine-tune on Runpod H200 NVL (141 GB HBM3e), 16,450 curated examples, bf16, batch 4 × accum 8, seq 384, gradient checkpointing, 700 cumulative steps |
 
 ### Platform Support
 
