@@ -932,6 +932,86 @@ underflow, bare exceptions) in commits `b31e862` and `954d473`.
 
 Total: +117 regression tests, 3758 passing as of 2026-04-20.
 
+## v3.7.0 — Model Safety Audit + Social Ingestion (planned)
+
+Two threads motivated by incidents in the broader AI ecosystem: malicious
+HuggingFace model drops that ship remote-code-execution payloads via
+`trust_remote_code` / `auto_map` / pickle imports, and the need for
+mind-mem to ingest social-media context (posts, reels, threads) as
+first-class memory sources rather than screenshots-in-attachments.
+
+### Model Safety Audit
+
+- [ ] **`mm audit-model <path-or-hf-id>`** — new CLI + MCP tool. One command
+  runs the full safety audit on any local checkpoint or HF repo and emits
+  a signed JSON report. Checks:
+  - Config scan for `auto_map` and `trust_remote_code` entries (RCE surface
+    via HF custom modeling files)
+  - Refuse-list for any `.py` files shipped inside the checkpoint
+  - Format verification — weights must be `.safetensors` or `.gguf`; legacy
+    `.bin` / pickle files trigger a deep pickle disassembly pass
+  - Pickle opcode walk (`pickletools.dis`) with import-surface enumeration;
+    flag any `os`, `subprocess`, `socket`, `ctypes`, `eval`, `exec`,
+    `__builtin__`, `sys` imports as HIGH severity
+  - Tokenizer string scan for injected URLs, shell patterns, known-bad
+    token sequences
+  - Provenance check — cross-reference base model claim against a signed
+    allowlist of upstream publishers (Alibaba Qwen, Meta Llama, Mistral,
+    Google Gemma, IBM Granite, OpenAI, Anthropic)
+- [ ] **SHA-256 manifest + signing** — `mm sign-model <path>` emits a
+  `MODEL_MANIFEST.json` with file tree, per-file hashes, Ed25519 signature
+  over the manifest. `mm verify-model <path>` rechecks; tamper-detected
+  models refuse to load through mind-mem's ingestion path.
+- [ ] **Load-gate integration** — any checkpoint consumed by mind-mem's
+  embedding or extractor backends (`backends.ollama`, `backends.hf`,
+  `backends.vllm`) goes through `mm audit-model` on first use; a
+  `--trust-without-audit` escape exists but emits a WARNING-level
+  governance event into the evidence chain.
+- [ ] **CI hook** — `mm audit-model` runs against every model pinned in
+  `mind-mem.json` on release CI; fails build on HIGH findings.
+
+### Social Ingestion
+
+- [ ] **`[SOCIAL]` block type** — new block kind for social-media content,
+  schema: `platform`, `author_handle`, `post_id`, `url`, `posted_at`,
+  `captured_at`, `content_type` (post / reel / thread / comment), `text`,
+  `media_refs`, `engagement_snapshot`. Fully typed, routable through
+  existing recall + contradiction engine.
+- [ ] **Platform fetchers** — `src/mind_mem/social/`:
+  - `x.py` — X/Twitter threads and quote-chains via the public OEmbed
+    endpoint; full-text fallback through the `snscrape` adapter when
+    unauthenticated API access returns partial data
+  - `linkedin.py` — LinkedIn posts, comments, and articles; cookie-based
+    auth, headless fetch with rate-limit backoff
+  - `instagram.py` — Instagram reels and posts (caption + transcript +
+    engagement), using the public GraphQL endpoint; video transcript via
+    local whisper
+  - `tiktok.py` — TikTok videos with caption + transcript; GraphQL
+    endpoint + whisper
+  - `moltbook.py` — native API (already documented in HEARTBEAT.md);
+    posts, threads, reactions
+  - `reddit.py` — public JSON API; posts, comments, threads
+  - `hackernews.py` — Firebase API; items + user submissions
+  - `bluesky.py`, `mastodon.py`, `farcaster.py` — ActivityPub / AT-proto
+    standard fetches
+- [ ] **`mm ingest-social <url>`** — CLI that detects the platform from
+  URL, invokes the appropriate fetcher, emits a `[SOCIAL]` block into the
+  active workspace, runs the standard entity + content-hash pipeline.
+- [ ] **MCP tool** — `ingest_social(url, namespace?)` for agents; returns
+  the created block id + summary.
+- [ ] **Quota + rate-limit governance** — per-platform rate limits tracked
+  in `governance.social_quota` namespace; evidence events for every fetch;
+  automatic back-off on 429 / 403.
+- [ ] **Content safety** — every fetched post goes through `mm audit-model`
+  before storage if it contains a model reference (HF link, model card);
+  tokenizer-injection patterns flagged on content-hash dedup.
+
+**Estimated:** ~1500 lines audit (CLI + pickle disassembly + Ed25519 +
+load-gate + CI hook) + ~2500 lines social fetchers (8 platforms + shared
+rate-limit + transcript pipeline) + ~600 lines `[SOCIAL]` block integration.
+New optional extras: `mind-mem[audit]` (cryptography + pickletools wrapper),
+`mind-mem[social]` (platform SDK deps + whisper).
+
 ## v4.0.0 — Platform Scale (production)
 
 Horizontal scaling, multi-tenant isolation, and edge deployment. This version turns mind-mem from a library into a platform. The multi-tenancy thread is also tracked as issue [#505].
