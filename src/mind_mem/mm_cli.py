@@ -659,6 +659,37 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_audit_model(args: argparse.Namespace) -> int:
+    from mind_mem.model_audit import audit_model, format_report_text
+
+    try:
+        report = audit_model(args.path)
+    except (FileNotFoundError, NotADirectoryError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        out = report.to_dict()
+        if not args.include_manifest:
+            out.pop("manifest", None)
+        print(json.dumps(out, indent=2))
+    else:
+        print(format_report_text(report, color=_use_color()))
+        if args.include_manifest:
+            print("\nmanifest (sha256):")
+            for name, digest in sorted(report.manifest.items()):
+                print(f"  {digest}  {name}")
+
+    if args.manifest_out:
+        out_path = os.path.expanduser(args.manifest_out)
+        with open(out_path, "w") as f:
+            for name, digest in sorted(report.manifest.items()):
+                f.write(f"{digest}  {name}\n")
+        print(f"\nmanifest written to {out_path}", file=sys.stderr)
+
+    return 0 if report.passed else 1
+
+
 # ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
@@ -817,6 +848,33 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     p_serve.add_argument("--port", type=int, default=8080, help="TCP port (default: 8080)")
     p_serve.set_defaults(func=_cmd_serve)
+
+    # audit-model — static security scan of any local model checkpoint
+    p_audit = sub.add_parser(
+        "audit-model",
+        help=(
+            "Static security scan of a local model checkpoint. Flags remote-code "
+            "hooks, unsafe pickle, tokenizer injection. Outputs SHA-256 manifest."
+        ),
+    )
+    p_audit.add_argument(
+        "path",
+        help="Path to a local model directory (HF checkpoint layout).",
+    )
+    p_audit.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON instead of text report."
+    )
+    p_audit.add_argument(
+        "--include-manifest",
+        action="store_true",
+        help="Include SHA-256 per-file manifest in output.",
+    )
+    p_audit.add_argument(
+        "--manifest-out",
+        default="",
+        help="Write SHA-256 manifest to this path (shasum-compatible format).",
+    )
+    p_audit.set_defaults(func=_cmd_audit_model)
 
     # ── inspect — full block fields + provenance tree ──────────────────────
     p_inspect = sub.add_parser(
