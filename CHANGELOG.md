@@ -2,6 +2,30 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.6.5 (2026-04-22)
+
+**Fix — native MIND kernels not loading on editable/dev installs.**
+The FFI loader searched ``<package>/lib/libmindmem.so`` (packaged
+layout) but the editable-install layout places the artifact at
+``<repo>/lib/libmindmem.so`` — one level up from the Python sources
+at ``<repo>/src/mind_mem/``. ``is_available()`` returned ``False``,
+the runtime fell back to Pure Python even when compiled kernels
+existed, and ``MIND_MEM_LIB`` env override was blocked by the
+allowlist for the same reason.
+
+### Fixed
+
+- ``_LIB_SEARCH_PATHS`` now includes both the packaged location
+  (``<package>/lib/``) and the editable-install location
+  (``<repo>/lib/``).
+- ``MIND_MEM_LIB`` env-override allowlist expanded to match so
+  operators can point at either path.
+- Verified end-to-end: ``MindMemKernel()`` loads
+  ``/home/n/mind-mem/lib/libmindmem.so``, ``is_available() ==
+  True``, and all exported scoring symbols (``bm25f_batch``,
+  ``rrf_fuse``, ``category_assign``, ``negation_penalty``,
+  ``date_proximity``) resolve.
+
 ## 3.6.4 (2026-04-22)
 
 **Fix — flaky Windows timing test.**

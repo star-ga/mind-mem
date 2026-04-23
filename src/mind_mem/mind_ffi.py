@@ -22,9 +22,17 @@ _log = get_logger("ffi")
 
 # --- Library loading ---
 
+# Search paths for the compiled MIND kernel library. Covers both:
+#   (a) packaged install — ``<package>/lib/libmindmem.so`` (co-located
+#       with the Python sources when shipped as a wheel).
+#   (b) editable dev install — ``<repo>/lib/libmindmem.so`` where the
+#       repo layout is ``repo/src/mind_mem/`` and ``repo/lib/`` holds
+#       the compiled artifact one level above ``src/``.
 _LIB_SEARCH_PATHS = [
     Path(__file__).parent.parent / "lib" / "libmindmem.so",
     Path(__file__).parent.parent / "lib" / "libmindmem.dylib",
+    Path(__file__).parent.parent.parent / "lib" / "libmindmem.so",
+    Path(__file__).parent.parent.parent / "lib" / "libmindmem.dylib",
 ]
 
 
@@ -100,7 +108,10 @@ class MindMemKernel:
             if env_path:
                 # Restrict to allowed directories (prevent arbitrary .so loading)
                 resolved = Path(env_path).resolve()
-                allowed = [Path(__file__).parent.parent / "lib"]
+                allowed = [
+                    Path(__file__).parent.parent / "lib",
+                    Path(__file__).parent.parent.parent / "lib",
+                ]
                 in_allowed = any(resolved == d.resolve() or str(resolved).startswith(str(d.resolve()) + os.sep) for d in allowed)
                 if in_allowed and resolved.exists():
                     self._lib = ctypes.CDLL(str(resolved), mode=_LAZY)

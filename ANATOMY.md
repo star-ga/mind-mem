@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 669 | **Est. tokens:** ~1,317,757
-**Generated:** 2026-04-22 15:46 UTC
+**Files:** 669 | **Est. tokens:** ~1,317,916
+**Generated:** 2026-04-23 05:20 UTC
 
 ## Token Budget Guide
 
@@ -52,7 +52,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 142 | ~473,307 |
+| `src/mind_mem/` | 142 | ~473,466 |
 | `src/mind_mem/api/` | 5 | ~14,584 |
 | `src/mind_mem/mcp/` | 3 | ~3,225 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,217 |
@@ -479,7 +479,7 @@
 - `memory_mesh.py` (~1903 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `memory_tiers.py` (~4934 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `merkle_tree.py` (~3354 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mind_ffi.py` (~5094 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
+- `mind_ffi.py` (~5253 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mm_cli.py` (~8350 tok, huge) — # Copyright 2026 STARGA, Inc.
