@@ -196,7 +196,8 @@ class MindMemKernel:
         vector_w: float = 1.0,
     ) -> list[float]:
         """RRF fusion via compiled MIND kernel."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("MindMemKernel: MIND shared library is not loaded")
         N = len(bm25_ranks)
         arr_t = ctypes.c_float * N
         out = arr_t()
@@ -223,7 +224,8 @@ class MindMemKernel:
         field_weight: float = 1.0,
     ) -> list[float]:
         """BM25F batch scoring via compiled MIND kernel."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("MindMemKernel: MIND shared library is not loaded")
         n = len(tfs)
         arr_t = ctypes.c_float * n
         out = arr_t()
@@ -243,7 +245,8 @@ class MindMemKernel:
 
     def negation_penalty_py(self, scores: list[float], has_negation: list[bool], penalty: float = 0.3) -> list[float]:
         """Negation penalty via compiled MIND kernel."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("MindMemKernel: MIND shared library is not loaded")
         n = len(scores)
         arr_t = ctypes.c_float * n
         out = arr_t()
@@ -259,7 +262,8 @@ class MindMemKernel:
 
     def date_proximity_py(self, days_diff: list[float], sigma: float = 30.0) -> list[float]:
         """Gaussian date proximity via compiled MIND kernel."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("MindMemKernel: MIND shared library is not loaded")
         n = len(days_diff)
         arr_t = ctypes.c_float * n
         out = arr_t()
@@ -273,7 +277,8 @@ class MindMemKernel:
 
     def category_boost_py(self, scores: list[float], matches: list[bool], boost: float = 1.15) -> list[float]:
         """Category boost via compiled MIND kernel."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("MindMemKernel: MIND shared library is not loaded")
         n = len(scores)
         arr_t = ctypes.c_float * n
         out = arr_t()
@@ -289,7 +294,8 @@ class MindMemKernel:
 
     def importance_batch_py(self, access_counts: list[int], days_since: list[float], base: float = 1.0, decay: float = 0.01) -> list[float]:
         """Importance batch scoring via compiled MIND kernel."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("MindMemKernel: MIND shared library is not loaded")
         n = len(access_counts)
         float_arr = ctypes.c_float * n
         int_arr = ctypes.c_int * n
@@ -314,7 +320,8 @@ class MindMemKernel:
         weights: tuple = (0.30, 0.25, 0.15, 0.20, 0.10),
     ) -> float:
         """Confidence score via compiled MIND kernel."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("MindMemKernel: MIND shared library is not loaded")
         self._lib.confidence_score.restype = ctypes.c_float
         return float(
             self._lib.confidence_score(
@@ -333,7 +340,8 @@ class MindMemKernel:
 
     def top_k_mask_py(self, scores: list[float], k: int) -> list[bool]:
         """Top-K mask via compiled MIND kernel."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("MindMemKernel: MIND shared library is not loaded")
         n = len(scores)
         arr_t = ctypes.c_float * n
         out = arr_t()
@@ -347,7 +355,8 @@ class MindMemKernel:
 
     def weighted_rank_py(self, scores: list[float], weights: list[float]) -> list[float]:
         """Weighted rank via compiled MIND kernel."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("MindMemKernel: MIND shared library is not loaded")
         n = len(scores)
         arr_t = ctypes.c_float * n
         out = arr_t()
@@ -374,7 +383,8 @@ class MindMemKernel:
 
         All inputs are flat row-major [N*C]. Returns flat [N*C] affinity scores.
         """
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("MindMemKernel: MIND shared library is not loaded")
         total = n_blocks * n_cats
         arr_t = ctypes.c_float * total
         out = arr_t()
@@ -398,7 +408,8 @@ class MindMemKernel:
         cat_kw: flat row-major [C*K] category keyword profiles.
         Returns [C] relevance scores.
         """
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("MindMemKernel: MIND shared library is not loaded")
         qk_t = ctypes.c_float * n_keywords
         ck_t = ctypes.c_float * (n_cats * n_keywords)
         out_t = ctypes.c_float * n_cats
@@ -417,7 +428,8 @@ class MindMemKernel:
 
         Returns [N*C] sigmoid-thresholded assignment weights.
         """
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("MindMemKernel: MIND shared library is not loaded")
         total = n_blocks * n_cats
         arr_t = ctypes.c_float * total
         out = arr_t()

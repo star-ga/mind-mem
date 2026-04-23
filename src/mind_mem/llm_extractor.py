@@ -28,10 +28,13 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
 from typing import Any
+
+_log = logging.getLogger("mind_mem.llm_extractor")
 
 # ---------------------------------------------------------------------------
 # Config loading
@@ -79,7 +82,7 @@ def _ollama_available(model: str = "") -> bool:
             "http://localhost:11434/api/tags",
             method="GET",
         )
-        with urllib.request.urlopen(req, timeout=2) as resp:
+        with urllib.request.urlopen(req, timeout=2) as resp:  # nosec B310 — URL is hardcoded to http://localhost:11434 (loopback only)
             if resp.status == 200:
                 return True
     except (OSError, ValueError):
@@ -147,9 +150,11 @@ def _openai_compatible_available(base_url: str) -> bool:
     import urllib.error
     import urllib.request
 
+    if not base_url.startswith(("http://", "https://")):
+        return False
     try:
         req = urllib.request.Request(f"{base_url}/models", method="GET")
-        with urllib.request.urlopen(req, timeout=2) as resp:
+        with urllib.request.urlopen(req, timeout=2) as resp:  # nosec B310 — scheme validated above to http/https only
             return bool(resp.status == 200)
     except (OSError, urllib.error.URLError, urllib.error.HTTPError):
         return False
@@ -188,7 +193,7 @@ def _query_ollama(prompt: str, model: str) -> str:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310 — URL is hardcoded to http://localhost:11434 (loopback only)
         body = json.loads(resp.read().decode())
     return str(body.get("response", ""))
 
@@ -219,6 +224,9 @@ def _query_openai_compatible(prompt: str, model: str, base_url: str) -> str:
     """
     import urllib.request
 
+    if not base_url.startswith(("http://", "https://")):
+        raise ValueError(f"Invalid URL scheme for LLM base_url: {base_url!r}")
+
     payload = json.dumps(
         {
             "model": model,
@@ -238,7 +246,7 @@ def _query_openai_compatible(prompt: str, model: str, base_url: str) -> str:
         headers=headers,
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310 — base_url from env/config, validated by _validate_base_url (http/https only)
         body = json.loads(resp.read().decode())
     choices = body.get("choices") or []
     if choices:
@@ -262,10 +270,10 @@ def _query_transformers(prompt: str, model: str) -> str:
         cache = {}
         _query_transformers._cache = cache  # type: ignore[attr-defined]
     if model not in cache:
-        tok = AutoTokenizer.from_pretrained(model, trust_remote_code=True)
+        tok = AutoTokenizer.from_pretrained(model, trust_remote_code=True)  # nosec B615 — model path is from operator-controlled mind-mem.json config, not user input; revision pinning is the operator's responsibility
         if tok.pad_token is None:
             tok.pad_token = tok.eos_token
-        m = AutoModelForCausalLM.from_pretrained(
+        m = AutoModelForCausalLM.from_pretrained(  # nosec B615 — same justification as above
             model,
             dtype=torch.bfloat16,
             device_map="auto",
@@ -465,8 +473,8 @@ def _record_extraction_feedback(model: str, operation: str, input_length: int, o
             output_count=output_count,
             latency_ms=latency_ms,
         )
-    except Exception:  # pragma: no cover — best-effort telemetry
-        pass
+    except Exception as exc:  # pragma: no cover — best-effort telemetry
+        _log.debug("extraction_feedback_skipped: %s", exc)
 
 
 # ---------------------------------------------------------------------------

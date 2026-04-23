@@ -2,6 +2,49 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.6.9 (2026-04-22)
+
+**Security — CodeQL path-injection hardening.** The v3.4.2 → v3.6.5
+audit surfaced 18 ``py/path-injection`` errors from CodeQL plus a
+``py/stack-trace-exposure`` warning. All 18 errors are in
+``block_store.py`` (snapshot restore + manifest walker) and
+``apply_engine.py`` (rollback receipt path). The call sites were
+already constrained to workspace-internal paths, but CodeQL's taint
+analysis did not follow the cleanse through helper functions. This
+release makes the guard explicit at every touchpoint.
+
+### Security
+
+- **Orphan-cleanup path-injection hardened** (Gemini CLI post-audit
+  finding). ``_cleanup_orphans_from_manifest`` walked
+  ``os.path.join(ws, d)`` for every key ``d`` in
+  ``MANIFEST.json``'s ``cleanup_inventory``; a crafted manifest with
+  ``d = ".."`` could reach the workspace's parent directory and
+  ``os.remove`` any file there not listed in the (also attacker-
+  controlled) inventory. Every ``d`` is now routed through
+  ``_safe_child_path`` with an explicit escape reject list
+  (``""``, ``"."``, ``".."``, ``"/"``, ``"\\"``) before ``os.walk``
+  ever sees it.
+
+- Added ``block_store._safe_child_path(root, relative)`` helper —
+  resolves symlinks and rejects any path that escapes ``root``
+  after resolution.
+- ``BlockStore.restore`` now passes every manifest entry and every
+  ``intelligence/`` item through the guard; unsafe entries are
+  logged and skipped rather than writing out-of-bounds. The
+  legacy (pre-manifest) copytree fallback is also guarded.
+- ``apply_engine.rollback`` re-routes the APPLY_RECEIPT.md path
+  through ``_safe_resolve(snap_dir, …)`` so CodeQL sees an
+  explicit precondition before the ``open(receipt_path)`` write.
+
+### Not Fixed Yet (tracked)
+
+Remaining open alerts: ``py/stack-trace-exposure`` on the REST
+``approve_apply`` path (1 warning), Bandit B110/B112
+exception-swallowing patterns (34 notes, intentional defensive
+code), B310 ``urllib.request.urlopen`` with parameterised URLs (13
+warnings). Scheduled for v3.6.7.
+
 ## 3.6.5 (2026-04-22)
 
 **Fix — native MIND kernels not loading on editable/dev installs.**

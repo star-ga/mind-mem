@@ -153,7 +153,7 @@ class WebhookSink(AlertSink):
             headers={"Content-Type": "application/json"},
         )
         try:
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # nosec B310 — scheme validated in __init__ to http/https only
                 return bool(200 <= resp.status < 300)
         except (urllib.error.URLError, OSError) as exc:  # pragma: no cover
             _log.warning("webhook_send_failed", url=self._url, error=str(exc))
@@ -178,6 +178,8 @@ class SlackSink(AlertSink):
     }
 
     def __init__(self, url: str, *, timeout: float = 5.0) -> None:
+        if not url.startswith(("http://", "https://")):
+            raise ValueError(f"SlackSink: invalid URL scheme {url!r}")
         if "hooks.slack.com" not in url:
             _log.warning("slack_sink_unexpected_url", url=url)
         self._url = url
@@ -205,7 +207,7 @@ class SlackSink(AlertSink):
             headers={"Content-Type": "application/json"},
         )
         try:
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # nosec B310 — scheme validated in __init__ to http/https only
                 return bool(200 <= resp.status < 300)
         except (urllib.error.URLError, OSError) as exc:  # pragma: no cover
             _log.warning("slack_send_failed", error=str(exc))

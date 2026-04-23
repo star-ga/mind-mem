@@ -473,7 +473,8 @@ class CategoryDistiller:
                 tag_match[idx] = tag_score
 
         # Call C kernels: affinity = kw_w * kw + tag_w * tag + ent_w * ent
-        assert _mind_ffi is not None
+        if _mind_ffi is None:
+            raise RuntimeError("invariant violated: _mind_ffi kernel is not loaded")
         affinity = _mind_ffi.category_affinity_py(
             kw_overlap,
             tag_match,

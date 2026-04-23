@@ -262,8 +262,8 @@ class HybridBackend:
                         query_type=qt,
                         reason="v3.3.0_tier2_ambiguous_query",
                     )
-            except Exception:  # pragma: no cover — defensive
-                pass
+            except Exception as exc:  # pragma: no cover — defensive
+                _log.debug("query_type_detect_skipped", error=str(exc))
         if expansion_active:
             try:
                 from .query_expansion import expand_queries
@@ -315,8 +315,8 @@ class HybridBackend:
                         "query_decomposition_auto_enabled",
                         reason="v3.3.0_tier1_multi_hop",
                     )
-            except Exception:  # pragma: no cover
-                pass
+            except Exception as exc:  # pragma: no cover
+                _log.debug("decomp_query_type_detect_skipped", error=str(exc))
         if decomp_active:
             try:
                 from .query_planner import decompose_query
@@ -622,7 +622,8 @@ class HybridBackend:
             for path in store.list_blocks():
                 try:
                     blocks.extend(parse_file(path))
-                except Exception:  # pragma: no cover
+                except Exception as exc:  # pragma: no cover
+                    _log.debug("corpus_block_parse_skipped", error=str(exc))
                     continue
             return blocks
         except Exception as exc:  # pragma: no cover
@@ -723,7 +724,8 @@ class HybridBackend:
                 for path in store.list_blocks():
                     try:
                         all_blocks.extend(parse_file(path))
-                    except Exception:  # pragma: no cover
+                    except Exception as exc:  # pragma: no cover
+                        _log.debug("graph_expand_block_parse_skipped", error=str(exc))
                         continue
             params = resolve_graph_config(self._config)
             expanded = graph_expand(results, all_blocks, **params)
@@ -763,8 +765,8 @@ class HybridBackend:
                         query_type=qt,
                         reason="v3.3.0_tier2_ambiguous_query",
                     )
-            except Exception:  # pragma: no cover — defensive
-                pass
+            except Exception as exc:  # pragma: no cover — defensive
+                _log.debug("ce_query_type_detect_skipped", error=str(exc))
         if not ce_enabled:
             return result
         # v3.3.0 Tier 4 #9 — prefer reranker_ensemble when configured,

@@ -27,8 +27,11 @@ independent workstream (2PC via PG ``PREPARE TRANSACTION``).
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Iterable
+
+_log = logging.getLogger("mind_mem.storage.sharded_pg")
 
 
 def _stable_hash(s: str) -> int:
@@ -185,7 +188,8 @@ class ShardedPostgresBlockStore:
         for store in self._stores.values():
             try:
                 per_shard_lists.append(store.search(query, limit=limit))
-            except Exception:
+            except Exception as exc:
+                _log.debug("shard_search_failed: %s", exc)
                 continue
         if not per_shard_lists:
             return []
@@ -208,7 +212,8 @@ class ShardedPostgresBlockStore:
         for store in self._stores.values():
             try:
                 out.extend(store.get_all(active_only=active_only))
-            except Exception:
+            except Exception as exc:
+                _log.debug("shard_get_all_failed: %s", exc)
                 continue
         return out
 
@@ -252,7 +257,8 @@ class ShardedPostgresBlockStore:
             shard_dir = os.path.join(snap_dir, f"shard-{idx:02d}")
             try:
                 out.extend(store.diff(shard_dir))
-            except Exception:
+            except Exception as exc:
+                _log.debug("shard_diff_failed shard=%s: %s", idx, exc)
                 continue
         return out
 
@@ -286,7 +292,8 @@ class _FanOutLock:
         for lock_cm in reversed(self._acquired):
             try:
                 lock_cm.__exit__(exc_type, exc, tb)
-            except Exception:
+            except Exception as exc2:
+                _log.debug("shard_lock_release_failed: %s", exc2)
                 continue
 
 

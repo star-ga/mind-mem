@@ -423,9 +423,9 @@ def _cmd_trace(args: argparse.Namespace) -> int:
     if live:
         log_file = os.environ.get("MIND_MEM_LOG_FILE", "")
         if log_file and os.path.isfile(log_file):
-            import subprocess
+            import subprocess  # nosec B404 — subprocess is used with a fixed argument list
 
-            proc = subprocess.Popen(["tail", "-f", "-n", str(last_n), log_file], stdout=subprocess.PIPE, text=True)
+            proc = subprocess.Popen(["tail", "-f", "-n", str(last_n), log_file], stdout=subprocess.PIPE, text=True)  # nosec B603 B607 — fixed arg list; log_file is from MIND_MEM_LOG_FILE env var (operator-controlled), validated isfile above; shell=False (default)
             try:
                 for line in proc.stdout:  # type: ignore[union-attr]
                     rows = _parse_log_lines([line], tool_filter=tool_filter)

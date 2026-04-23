@@ -256,7 +256,20 @@ class TestPresetFactories:
             client_secret="sec",
             audience="api://default",
         )
-        assert "okta.com" in p._config.issuer
+        # Validate the issuer hostname by parsing the URL and checking the
+        # *full* hostname component.  A plain `in` or `endswith` on the raw
+        # issuer string would be vulnerable to partial-match bypasses
+        # (e.g. "https://evil.notokta.com/…").  Parsing with urlparse and
+        # comparing the hostname field ensures we match on a label boundary.
+        # The hostname can only be "okta.com" exactly, or a label-prefixed
+        # subdomain ending at ".okta.com" (e.g. "dev-123.okta.com").
+        from urllib.parse import urlparse as _urlparse
+
+        _parsed = _urlparse(p._config.issuer)
+        _host = _parsed.hostname or ""
+        # Split on "." and verify the last two labels are "okta" and "com".
+        _labels = _host.split(".")
+        assert len(_labels) >= 2 and _labels[-2] == "okta" and _labels[-1] == "com", f"Issuer hostname {_host!r} is not an okta.com domain"
         assert p._config.issuer.endswith("/default")
 
     def test_okta_custom_auth_server(self) -> None:

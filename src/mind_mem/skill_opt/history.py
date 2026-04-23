@@ -158,7 +158,7 @@ class HistoryStore:
             updates += ", governance_signal_id=?"
             params.append(signal_id)
         params.append(mutation_id)
-        self._conn.execute(f"UPDATE mutations SET {updates} WHERE mutation_id=?", params)
+        self._conn.execute(f"UPDATE mutations SET {updates} WHERE mutation_id=?", params)  # nosec B608 — `updates` is built from a fixed set of column names ("status", "governance_signal_id"); no user input interpolated
         self._conn.commit()
 
     def get_run_history(self, skill_id: str, limit: int = 10) -> list[dict[str, Any]]:

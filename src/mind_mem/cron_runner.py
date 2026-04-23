@@ -21,7 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
+import subprocess  # nosec B404 — subprocess is used with a fixed argument list (shell=False) for scheduled internal jobs
 import sys
 import time
 
@@ -101,7 +101,7 @@ def run_job(job_name: str, workspace: str) -> dict:
 
     start = time.monotonic()
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 — cmd is [sys.executable, script_path, workspace] + extra_args; script_path is validated to be an existing file under SCRIPTS_DIR (package internal); shell=False (default)
             cmd,
             timeout=120,
             capture_output=True,

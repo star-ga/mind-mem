@@ -215,7 +215,8 @@ class EventFanout:
         for pub in self._publishers:
             try:
                 pub.close()
-            except Exception:  # pragma: no cover
+            except Exception as exc:  # pragma: no cover
+                _log.debug("publisher_close_failed", publisher=pub.name, error=str(exc))
                 continue
 
 

@@ -413,12 +413,33 @@ def _set_workspace_env(workspace: str) -> None:
     os.environ["MIND_MEM_WORKSPACE"] = workspace
 
 
+_SENSITIVE_LOG_KEYS = frozenset({"log", "traceback", "stack_trace", "exception"})
+
+
+def _strip_sensitive_fields(data: Any) -> Any:
+    """Recursively remove internal log/traceback fields before returning to clients.
+
+    Prevents stack-trace-exposure (CodeQL py/stack-trace-exposure) by ensuring
+    that fields carrying server-side diagnostic text never reach the wire.
+    """
+    if isinstance(data, dict):
+        return {k: _strip_sensitive_fields(v) for k, v in data.items() if k not in _SENSITIVE_LOG_KEYS}
+    if isinstance(data, list):
+        return [_strip_sensitive_fields(item) for item in data]
+    return data
+
+
 def _parse_tool_json(raw: str) -> Any:
-    """Parse JSON string returned by MCP tool functions."""
+    """Parse JSON string returned by MCP tool functions.
+
+    Strips internal diagnostic fields (log, traceback, etc.) so that
+    server-side stack traces are never forwarded to REST callers.
+    """
     try:
-        return json.loads(raw)
+        parsed = json.loads(raw)
     except (json.JSONDecodeError, TypeError):
         return {"raw": raw}
+    return _strip_sensitive_fields(parsed)
 
 
 # ---------------------------------------------------------------------------
@@ -463,6 +484,29 @@ def create_app(workspace: str | None = None) -> FastAPI:
     async def _scope_workspace(request: Request, call_next):  # type: ignore[no-untyped-def]
         with use_workspace(resolved_ws):
             return await call_next(request)
+
+    # ------------------------------------------------------------------
+    # Global exception handler — prevent stack-trace-exposure
+    # (CodeQL py/stack-trace-exposure): unhandled exceptions must never
+    # leak server-side tracebacks to REST callers.  FastAPI's default
+    # 500 handler already omits stack traces in non-debug mode, but we
+    # add an explicit handler here so CodeQL's taint analysis sees a
+    # sanitisation point that breaks the data-flow from tool calls to
+    # the HTTP response body.
+    # ------------------------------------------------------------------
+
+    from fastapi.responses import JSONResponse as _JSONResponse
+
+    @application.exception_handler(Exception)
+    async def _sanitise_unhandled(request: Request, exc: Exception) -> _JSONResponse:  # type: ignore[misc]
+        """Return a generic 500 body — never echo exception messages or tracebacks."""
+        from mind_mem.observability import get_logger as _get_logger
+
+        _get_logger("rest").warning("unhandled_exception", path=str(request.url.path), error=type(exc).__name__)
+        return _JSONResponse(
+            status_code=500,
+            content={"error": "internal_server_error", "detail": "An unexpected error occurred. See server logs."},
+        )
 
     # ------------------------------------------------------------------
     # Observability

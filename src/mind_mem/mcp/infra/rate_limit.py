@@ -21,11 +21,14 @@ are all preserved.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections import OrderedDict
 
 from fastmcp.server.dependencies import get_access_token
+
+_log = logging.getLogger("mind_mem.mcp.rate_limit")
 
 
 class SlidingWindowRateLimiter:
@@ -95,6 +98,6 @@ def _get_client_id() -> str:
         token = get_access_token()
         if token is not None and token.client_id:
             return token.client_id
-    except Exception:
-        pass
+    except Exception as exc:
+        _log.debug("client_id_resolution_failed: %s", exc)
     return "default"

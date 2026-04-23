@@ -287,7 +287,7 @@ def _build_llm(llm_cfg: dict[str, Any]) -> Reranker | None:
                     headers={"Content-Type": "application/json"},
                 )
                 try:
-                    with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — base_url is from trusted mind-mem.json config, enforced to http/https by LLMReranker.__init__
                         body = json.loads(resp.read().decode("utf-8"))
                     text = body["choices"][0]["message"]["content"].strip()
                     # Best-effort JSON parse — accept first {...} block.

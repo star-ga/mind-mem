@@ -15,6 +15,7 @@ Exit code: 0 = clean, 1 = critical issues found
 
 import hashlib
 import json
+import logging
 import os
 import re
 import sys
@@ -24,6 +25,8 @@ from datetime import datetime, timedelta, timezone
 from .block_parser import parse_file
 from .enums import TaskStatus
 from .mind_filelock import FileLock
+
+_log = logging.getLogger("mind_mem.intel_scan")
 
 # ═══════════════════════════════════════════════
 # Configuration
@@ -1304,8 +1307,8 @@ def _fire_scan_alerts(ws, contradictions, drift_signals) -> None:
                 event="drift_spike",
                 payload={"count": len(drift_signals)},
             )
-    except Exception:  # pragma: no cover — alerting is best-effort
-        pass
+    except Exception as exc:  # pragma: no cover — alerting is best-effort
+        _log.debug("alert_dispatch_failed: %s", exc)
 
 
 def _finalize_report(ws, report) -> None:

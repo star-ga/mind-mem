@@ -295,7 +295,7 @@ class CalibrationManager:
                 f"""SELECT block_id, feedback, COUNT(*) as cnt
                     FROM calibration_feedback
                     WHERE block_id IN ({placeholders}) AND created_at >= ?
-                    GROUP BY block_id, feedback""",
+                    GROUP BY block_id, feedback""",  # nosec B608 — placeholders is `? * N`, all block_ids passed as bind params; no user input in query string
                 [*block_ids, cutoff],
             ).fetchall()
         except sqlite3.OperationalError:

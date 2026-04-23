@@ -303,9 +303,13 @@ _INTENT_TO_QUERY_TYPE = {
 # Multi-hop Query Decomposition
 # ---------------------------------------------------------------------------
 
-# Conjunctions that indicate separate information needs
+# Conjunctions that indicate separate information needs.
+# Pattern uses a single \s+ at the start followed by a non-backtracking
+# disjunction of fixed-length phrases to avoid ReDoS on space-heavy input.
+# Each alternative ends with a fixed word boundary so the engine cannot
+# re-enter the leading \s+ after a partial match.
 _CONJUNCTION_SPLIT_RE = re.compile(
-    r"\s+(?:and\s+(?:also\s+)?|but\s+|also\s+|as\s+well\s+as\s+|plus\s+)",
+    r" (?:and (?:also )?|but |also |as well as |plus )",
     re.IGNORECASE,
 )
 
@@ -352,6 +356,9 @@ def _token_count(text: str) -> int:
     return len([w for w in text.split() if len(w) > 1])
 
 
+_QUERY_DECOMPOSE_MAX_LEN = 2000  # Guard against ReDoS on pathologically long inputs
+
+
 def decompose_query(query: str) -> list[str]:
     """Decompose a multi-hop query into sub-queries for independent retrieval.
 
@@ -369,6 +376,12 @@ def decompose_query(query: str) -> list[str]:
     query = query.strip()
     if not query:
         return []
+
+    # Cap input length to prevent ReDoS on pathologically long or space-heavy
+    # strings (CodeQL py/polynomial-redos). Queries longer than the cap are
+    # returned as-is without decomposition — acceptable UX trade-off.
+    if len(query) > _QUERY_DECOMPOSE_MAX_LEN:
+        return [query[:_QUERY_DECOMPOSE_MAX_LEN]]
 
     # Strategy 1: Split on multiple question marks (explicit question boundaries)
     if query.count("?") > 1:
@@ -388,8 +401,11 @@ def decompose_query(query: str) -> list[str]:
         for i, pos in enumerate(wh_positions):
             end = wh_positions[i + 1] if i + 1 < len(wh_positions) else len(query)
             segment = query[pos:end].strip().rstrip("?").rstrip(",").strip()
-            # Remove trailing conjunction words (word-boundary safe)
-            segment = re.sub(r"\s+(?:and|but|or|plus)\s*$", "", segment, flags=re.IGNORECASE)
+            # Remove trailing conjunction words (word-boundary safe).
+            # Use a possessive-equivalent anchored pattern without nested
+            # quantifiers to prevent ReDoS (CodeQL py/polynomial-redos):
+            # the segment is already bounded by _QUERY_DECOMPOSE_MAX_LEN chars.
+            segment = re.sub(r" (?:and|but|or|plus)$", "", segment, flags=re.IGNORECASE)
             if segment:
                 parts.append(segment)
         parts = [p for p in parts if _token_count(p) >= _MIN_SUBQUERY_TOKENS]

@@ -141,7 +141,7 @@ def extract_structure(text: str, sig_type: str, pattern: str) -> dict:
             break
 
     # Extract tags from common keywords
-    tag_keywords = {
+    tag_keywords = {  # nosec B105 — values are tag-category labels, not passwords; "security" refers to the tag name
         "database": "database",
         "db": "database",
         "postgres": "database",

@@ -223,7 +223,7 @@ class LLMQueryDecomposer:
             data=json.dumps(payload).encode("utf-8"),
             headers=headers,
         )
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # nosec B310 — URL scheme validated by _validate_base_url (http/https only, loopback-only unless allow_external)
             body = json.loads(resp.read().decode("utf-8"))
         text = body["choices"][0]["message"]["content"].strip()
         return [ln.strip() for ln in text.splitlines() if ln.strip()]

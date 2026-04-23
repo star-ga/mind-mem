@@ -431,7 +431,7 @@ class LLMQueryExpander:
         ).encode("utf-8")
 
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 — URL is hardcoded to https://api.anthropic.com (constant, always https)
             data = _json.loads(resp.read().decode("utf-8"))
 
         text = ""
@@ -460,7 +460,10 @@ class LLMQueryExpander:
         import json as _json
         import urllib.request
 
-        url = f"{self.base_url.rstrip('/')}/chat/completions"
+        base = self.base_url.rstrip("/")
+        if not base.startswith(("http://", "https://")):
+            raise ValueError(f"LLMQueryExpander: invalid URL scheme for base_url: {base!r}")
+        url = f"{base}/chat/completions"
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
@@ -474,7 +477,7 @@ class LLMQueryExpander:
         ).encode("utf-8")
 
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 — scheme validated above to http/https only
             data = _json.loads(resp.read().decode("utf-8"))
 
         # Extract text from the first choice

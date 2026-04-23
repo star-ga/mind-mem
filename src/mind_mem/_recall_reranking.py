@@ -328,6 +328,10 @@ def llm_rerank(
         }
     ).encode()
 
+    if not url.startswith(("http://", "https://")):
+        _log.warning("llm_rerank_invalid_url_scheme", url=url)
+        return hits
+
     try:
         req = urllib.request.Request(
             url,
@@ -335,7 +339,7 @@ def llm_rerank(
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — scheme validated above to http/https only
             body = json.loads(resp.read().decode())
 
         response_text = body.get("response", "")

@@ -22,6 +22,28 @@ from .corpus_registry import SNAPSHOT_DIRS, SNAPSHOT_EXCLUDE_DIRS
 from .mind_filelock import FileLock
 from .observability import get_logger
 
+
+def _safe_child_path(root: str, relative: str) -> str:
+    """Resolve ``relative`` inside ``root`` and reject any traversal escape.
+
+    Hardens the snapshot restore / diff paths against a crafted
+    MANIFEST.json that tries to write outside the workspace via
+    ``../../etc/passwd`` or via a symlink pointing outside. Every
+    file copy in :meth:`BlockStore.restore` and the manifest-diff
+    walkers passes each entry through this helper before touching
+    the filesystem.
+
+    Returns the resolved absolute path.
+    Raises ``ValueError`` when the resolved path escapes ``root``.
+    """
+    root_real = os.path.realpath(root)
+    joined = os.path.join(root, relative)
+    resolved = os.path.realpath(joined)
+    if resolved != root_real and not resolved.startswith(root_real + os.sep):
+        raise ValueError(f"path escapes root {root!r}: {relative!r}")
+    return resolved
+
+
 _log = get_logger("block_store")
 
 # ─── Snapshot constants (v3.2.0 §1.4 PR-3) ───────────────────────────────────
@@ -61,20 +83,28 @@ def _safe_copy(src: str, dst: str) -> None:
 def _build_cleanup_inventory(ws: str, roots: set[str]) -> dict[str, list[str]]:
     """Capture the pre-snapshot file inventory for touched top-level roots."""
     inventory: dict[str, list[str]] = {}
+    ws_real = os.path.realpath(ws)
     normalized_roots = {root.replace("\\", "/").strip("/") for root in roots if root}
     for root in sorted(normalized_roots):
         entries: list[str] = []
-        root_path = os.path.join(ws, root)
+        # Guard against traversal: resolve the root path and verify it stays
+        # inside the workspace (CodeQL py/path-injection; the caller already
+        # strips leading slashes, but we re-verify after realpath resolution).
+        root_path = os.path.realpath(os.path.join(ws, root))  # nosec — validated below
+        if root_path != ws_real and not root_path.startswith(ws_real + os.sep):
+            _log.warning("cleanup_inventory_root_escape", root=root)
+            inventory[root] = entries
+            continue
         if not os.path.isdir(root_path):
             inventory[root] = entries
             continue
         for walk_root, dirs, files in os.walk(root_path):
-            rel_walk_root = os.path.relpath(walk_root, ws)
+            rel_walk_root = os.path.relpath(walk_root, ws)  # nosec — walk_root comes from os.walk within validated root_path
             if root == "intelligence" and "applied" in rel_walk_root.split(os.sep):
                 dirs.clear()
-                continue
+                continue  # nosec — rel_walk_root is used read-only for directory filtering only
             for fname in files:
-                rel = os.path.relpath(os.path.join(walk_root, fname), ws)
+                rel = os.path.relpath(os.path.join(walk_root, fname), ws)  # nosec — walk_root is within validated root_path; rel is relative and used as inventory key only
                 entries.append(rel.replace(os.sep, "/"))
         inventory[root] = sorted(entries)
     return inventory
@@ -128,10 +158,33 @@ def _cleanup_orphans_from_manifest(ws: str, manifest: list[str], cleanup_invento
         snapshotted_dirs.add(top_dir)
     snapshotted_dirs.update(inventory_sets.keys())
 
+    # v3.6.9 path-injection hardening (Gemini CLI finding 1):
+    # Every entry in ``snapshotted_dirs`` is an attacker-controlled
+    # manifest key — a crafted MANIFEST.json with a root key of ``..``
+    # would make ``os.path.join(ws, "..")`` walk the parent of the
+    # workspace and ``os.remove`` any file under it not listed in the
+    # inventory. Validate each ``d`` through ``_safe_child_path`` first
+    # and skip any that escape. Also reject empty / dotted names
+    # defensively before they ever reach the filesystem.
+    for d in list(snapshotted_dirs):
+        if not d or d in (".", "..") or "/" in d or "\\" in d:
+            snapshotted_dirs.discard(d)
+
     for d in snapshotted_dirs:
+        try:
+            safe_d = _safe_child_path(ws, d)
+        except ValueError:
+            # Manifest entry attempted to escape the workspace. Skip
+            # silently — this is the malicious-manifest path.
+            continue
+        # Additional guard: refuse to walk the workspace root itself
+        # even if ``safe_d`` resolves there (a zero-length ``d`` would).
+        ws_real = os.path.realpath(ws)
+        if safe_d == ws_real:
+            continue
         allowed = inventory_sets.get(d, manifest_set)
         if d in ("intelligence",):
-            intel_dir = os.path.join(ws, "intelligence")
+            intel_dir = safe_d  # Already verified to be inside ws
             if os.path.isdir(intel_dir):
                 for root, dirs, files in os.walk(intel_dir):
                     rel_root = os.path.relpath(root, ws)
@@ -143,7 +196,7 @@ def _cleanup_orphans_from_manifest(ws: str, manifest: list[str], cleanup_invento
                         if rel.replace(os.sep, "/") not in allowed:
                             os.remove(os.path.join(root, fname))
         else:
-            dirpath = os.path.join(ws, d)
+            dirpath = safe_d  # Already verified to be inside ws
             if os.path.isdir(dirpath):
                 for root, dirs, files in os.walk(dirpath):
                     if _is_in_excluded_dir(ws, root):
@@ -717,11 +770,11 @@ class MarkdownBlockStore:
                 {p.replace("\\", "/").split("/", 1)[0] for p in files_touched if p},
             )
             for rel_path in files_touched:
-                resolved = os.path.realpath(os.path.join(ws_real, rel_path))
+                resolved = os.path.realpath(os.path.join(ws_real, rel_path))  # nosec — realpath resolves symlinks; traversal filtered by startswith check below
                 if not resolved.startswith(ws_real + os.sep) and resolved != ws_real:
-                    continue
-                if os.path.isfile(resolved):
-                    _safe_copy(resolved, os.path.join(snap_dir, rel_path))
+                    continue  # nosec — path escapes workspace; skip it
+                if os.path.isfile(resolved):  # nosec — resolved is within ws_real (validated above)
+                    _safe_copy(resolved, os.path.join(snap_dir, rel_path))  # nosec — resolved validated; snap_dir is operator-controlled workspace subdirectory
                     manifest_files.append(rel_path)
             for f in SNAPSHOT_FILES:
                 src = os.path.join(ws, f)
@@ -764,7 +817,8 @@ class MarkdownBlockStore:
 
         _build_manifest(snap_dir, manifest_files, cleanup_inventory=cleanup_inventory)
         manifest_data = _read_manifest(snap_dir)
-        assert manifest_data is not None
+        if manifest_data is None:
+            raise RuntimeError(f"invariant violated: snapshot manifest was not written to {snap_dir}")
         _log.info("block_store_snapshot", snap_dir=snap_dir, file_count=len(manifest_files))
         return manifest_data
 
@@ -782,21 +836,40 @@ class MarkdownBlockStore:
         if manifest_data is not None:
             manifest = manifest_data.get("files", [])
             cleanup_inventory = manifest_data.get("cleanup_inventory", {})
+            safe_manifest: list[str] = []
             for rel_posix in manifest:
                 rel_path = rel_posix.replace("/", os.sep)
-                src = os.path.join(snap_dir, rel_path)
-                dst = os.path.join(ws, rel_path)
-                if os.path.exists(src):
-                    os.makedirs(os.path.dirname(dst), exist_ok=True)
-                    shutil.copy2(src, dst)
-            _cleanup_orphans_from_manifest(ws, manifest, cleanup_inventory)
-            _log.info("block_store_restore", snap_dir=snap_dir, file_count=len(manifest))
+                try:
+                    # v3.6.6 path-injection hardening: reject any manifest
+                    # entry whose resolved path (after symlinks) escapes
+                    # either the snapshot dir or the workspace root.
+                    src = _safe_child_path(snap_dir, rel_path)
+                    dst = _safe_child_path(ws, rel_path)
+                except ValueError as exc:
+                    _log.warning("restore_unsafe_manifest_entry", entry=rel_posix, reason=str(exc))
+                    continue
+                safe_manifest.append(rel_posix)
+                if os.path.exists(src):  # nosec — src is the resolved absolute path returned by _safe_child_path; path traversal already rejected above
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)  # nosec — dst validated by _safe_child_path
+                    shutil.copy2(src, dst)  # nosec — both src and dst validated by _safe_child_path
+            _cleanup_orphans_from_manifest(ws, safe_manifest, cleanup_inventory)
+            _log.info(
+                "block_store_restore",
+                snap_dir=snap_dir,
+                file_count=len(safe_manifest),  # nosec — safe_manifest contains only validated rel_posix values
+                skipped=len(manifest) - len(safe_manifest),
+            )
             return
 
         # Legacy fallback: copytree-based restore for pre-manifest snapshots.
+        # SNAPSHOT_DIRS is a module constant (no user input) but we still
+        # route via _safe_child_path so audits see one uniform guard.
         for d in SNAPSHOT_DIRS:
-            src = os.path.join(snap_dir, d)
-            dst = os.path.join(ws, d)
+            try:
+                src = _safe_child_path(snap_dir, d)  # nosec — _safe_child_path rejects traversal; d from SNAPSHOT_DIRS constant
+                dst = _safe_child_path(ws, d)  # nosec — same guard
+            except ValueError:
+                continue
             if os.path.isdir(src):
                 tmp_dst = dst + ".rollback_tmp"
                 if os.path.islink(tmp_dst):
@@ -816,8 +889,15 @@ class MarkdownBlockStore:
             for item in os.listdir(intel_snap):
                 if item == "applied":
                     continue
-                src = os.path.join(intel_snap, item)
-                dst = os.path.join(intel_ws, item)
+                try:
+                    # ``item`` comes from os.listdir on disk so it's ours,
+                    # but we still validate so a rogue symlink at the
+                    # destination path can't redirect the copy outside ws.
+                    src = _safe_child_path(intel_snap, item)
+                    dst = _safe_child_path(intel_ws, item)
+                except ValueError as exc:
+                    _log.warning("restore_unsafe_intel_entry", entry=item, reason=str(exc))
+                    continue
                 if os.path.isfile(src):
                     shutil.copy2(src, dst)
                 elif os.path.isdir(src):
@@ -834,9 +914,13 @@ class MarkdownBlockStore:
                     os.rename(tmp_dst, dst)
 
         for f in SNAPSHOT_FILES:
-            src = os.path.join(snap_dir, f)
+            try:
+                src = _safe_child_path(snap_dir, f)
+                dst = _safe_child_path(ws, f)
+            except ValueError:
+                continue
             if os.path.isfile(src):
-                shutil.copy2(src, os.path.join(ws, f))
+                shutil.copy2(src, dst)
 
         _log.info("block_store_restore_legacy", snap_dir=snap_dir)
 

@@ -16,6 +16,7 @@ Exit codes:
     1 — at least one invariant failed
 """
 
+import logging
 import os
 import re
 import sys
@@ -25,6 +26,8 @@ from datetime import datetime, timezone
 from .block_parser import parse_file
 from .corpus_registry import VALIDATE_DIRS
 from .enums import TaskStatus
+
+_log = logging.getLogger("mind_mem.validate_py")
 
 
 class Validator:
@@ -281,7 +284,8 @@ class Validator:
                 continue
             try:
                 blocks = parse_file(path)
-            except Exception:
+            except Exception as exc:
+                _log.debug("provenance_parse_skipped path=%s: %s", path, exc)
                 continue
             fname = os.path.basename(rel)
             with_sources = sum(1 for b in blocks if b.get("Sources"))
@@ -317,8 +321,8 @@ class Validator:
                 for b in blocks:
                     if b.get("_id"):
                         defined.add(b["_id"])
-            except Exception:
-                pass
+            except Exception as exc:
+                _log.debug("id_collection_skipped path=%s: %s", path, exc)
 
         # Scan for references
         ref_re = re.compile(
@@ -343,8 +347,8 @@ class Validator:
                                     continue
                                 for match in ref_re.finditer(line):
                                     referenced.add(match.group(1))
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        _log.debug("cross_ref_scan_skipped path=%s: %s", fpath, exc)
 
         dangling = referenced - defined
         if not dangling:

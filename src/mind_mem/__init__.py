@@ -43,7 +43,7 @@ from .protection import (
 )
 from .storage import get_block_store
 
-__version__ = "3.6.5"
+__version__ = "3.6.9"
 
 # Best-effort import-time integrity check. Fails open unless
 # MIND_MEM_INTEGRITY=strict, so editable installs and source checkouts
@@ -52,8 +52,10 @@ try:
     verify_integrity()
 except RuntimeError:
     raise
-except Exception:  # pragma: no cover — never block import on check bugs
-    pass
+except Exception as exc:  # pragma: no cover — never block import on check bugs
+    import logging as _logging
+
+    _logging.getLogger("mind_mem").debug("integrity_check_skipped: %s", exc)
 
 __all__ = [
     "AUDIT_TAG",

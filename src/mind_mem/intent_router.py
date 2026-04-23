@@ -169,7 +169,8 @@ class IntentRouter:
         self._compiled: dict[str, list[re.Pattern[str]]] = {}
         for intent, cfg in INTENT_CONFIG.items():
             patterns = cfg["patterns"]
-            assert isinstance(patterns, list)
+            if not isinstance(patterns, list):
+                raise RuntimeError(f"invariant violated: INTENT_CONFIG[{intent!r}]['patterns'] is not a list")
             self._compiled[intent] = [re.compile(p, re.IGNORECASE) for p in patterns]
 
         # Adaptive routing state (#470)

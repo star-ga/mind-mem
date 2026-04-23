@@ -399,7 +399,7 @@ class VectorBackend(RecallBackend):
             batch = texts[i : i + BATCH]
             payload = json.dumps({"input": batch}).encode("utf-8")
             req = _req.Request(url, data=payload, headers={"Content-Type": "application/json"})
-            with _req.urlopen(req, timeout=120) as resp:
+            with _req.urlopen(req, timeout=120) as resp:  # nosec B310 — URL is hardcoded to http://localhost:*/ (loopback only)
                 result = json.loads(resp.read().decode("utf-8"))
             # llama.cpp returns a list of {index, embedding} objects
             if isinstance(result, list):
@@ -441,7 +441,7 @@ class VectorBackend(RecallBackend):
             payload = json.dumps({"model": model, "input": batch}).encode("utf-8")
             req = _req.Request(url, data=payload, headers={"Content-Type": "application/json"})
             with timed("embed_ollama"):
-                with _req.urlopen(req, timeout=120) as resp:
+                with _req.urlopen(req, timeout=120) as resp:  # nosec B310 — URL is hardcoded to http://localhost:11434 (loopback only)
                     result = json.loads(resp.read().decode("utf-8"))
             embeddings = result.get("embeddings", [])
             all_embeddings.extend(embeddings)
@@ -705,8 +705,8 @@ class VectorBackend(RecallBackend):
                     msg="Index was built with different model — results may be inaccurate. Run reindex.",
                 )
             check_conn.close()
-        except Exception:
-            pass  # Don't block search on metadata check failure
+        except Exception as exc:
+            _log.debug("vec_metadata_check_skipped", error=str(exc))  # non-fatal; don't block search
 
         # Embed query
         query_emb = self._embed_for_provider([query])[0]
@@ -949,8 +949,8 @@ class VectorBackend(RecallBackend):
         # Recreate collection
         try:
             client.delete_collection(collection)
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.debug("qdrant_delete_collection_skipped", collection=collection, error=str(exc))
 
         client.create_collection(
             collection_name=collection,
@@ -1355,8 +1355,8 @@ def rebuild_index(workspace: str) -> int:
             if fn.endswith(".md"):
                 try:
                     blocks.extend(_parse(os.path.join(d, fn)))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    _log.debug("corpus_file_parse_skipped", error=str(exc))
 
     if not blocks:
         _log.info("rebuild_index_empty", workspace=workspace)

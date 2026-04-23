@@ -444,8 +444,8 @@ class PostgresBlockStore:
                         # Best-effort: log deletion if the journal table exists.
                         try:
                             cur.execute(sql_log, (block_id, deleted_content))
-                        except Exception:
-                            pass  # table absent — non-fatal
+                        except Exception as exc:
+                            _log.debug("deletion_journal_skipped block_id=%s: %s", block_id, exc)  # journal table absent — non-fatal
             _log.debug("block_store_delete", extra={"block_id": block_id})
             return True
         except Exception as exc:
@@ -688,8 +688,8 @@ class PostgresBlockStore:
                     with pool.connection() as conn:
                         with conn.transaction():
                             conn.execute(sql_release, (lock_id, holder))
-                except Exception:
-                    pass  # best-effort release; non-fatal
+                except Exception as exc:
+                    _log.debug("pg_advisory_lock_release_failed lock_id=%s: %s", lock_id, exc)  # best-effort release; non-fatal
 
         return _PgLock()
 
@@ -713,8 +713,8 @@ class PostgresBlockStore:
         if self._pool is not None:
             try:
                 self._pool.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                _log.debug("pg_pool_close_failed: %s", exc)
             self._pool = None
 
     def __enter__(self) -> "PostgresBlockStore":

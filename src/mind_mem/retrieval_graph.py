@@ -97,7 +97,8 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     """Add columns from schema v2 (#428/#430) if missing."""
     try:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(retrieval_log)").fetchall()}
-    except Exception:
+    except Exception as exc:
+        _log.debug("schema_migrate_skipped", error=str(exc))
         return
     if "intent_type" not in cols:
         conn.execute("ALTER TABLE retrieval_log ADD COLUMN intent_type TEXT DEFAULT ''")
@@ -105,8 +106,8 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE retrieval_log ADD COLUMN stage_counts TEXT DEFAULT '{}'")
     try:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_rlog_intent ON retrieval_log(intent_type)")
-    except Exception:
-        pass
+    except Exception as exc:
+        _log.debug("retrieval_log_index_skipped", error=str(exc))
 
 
 def ensure_graph_tables(workspace: str) -> None:
@@ -202,8 +203,8 @@ def log_retrieval(
         if conn:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                _log.debug("retrieval_log_conn_close_failed", error=str(exc))
 
 
 # ---------------------------------------------------------------------------
@@ -349,8 +350,8 @@ def record_hard_negatives(
         if conn:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                _log.debug("hard_negative_conn_close_failed", error=str(exc))
     return count
 
 
@@ -365,14 +366,15 @@ def get_hard_negative_ids(workspace: str, *, max_age_days: int = 30) -> set[str]
             (f"-{max_age_days} days",),
         ).fetchall()
         return {row["mem_id"] for row in rows}
-    except Exception:
+    except Exception as exc:
+        _log.debug("hard_negative_ids_failed", error=str(exc))
         return set()
     finally:
         if conn:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as exc2:
+                _log.debug("hard_negative_ids_conn_close_failed", error=str(exc2))
 
 
 # ---------------------------------------------------------------------------
@@ -556,5 +558,5 @@ def retrieval_diagnostics(
         if conn:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as exc2:
+                _log.debug("diagnostics_conn_close_failed", error=str(exc2))

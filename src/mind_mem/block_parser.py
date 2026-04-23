@@ -143,7 +143,8 @@ def parse_blocks(text: str) -> list[dict]:
                 if current_sig is not None:
                     _finalize_sig(current_sig)
                     sigs = current["ConstraintSignatures"]
-                    assert isinstance(sigs, list)
+                    if not isinstance(sigs, list):
+                        raise RuntimeError("invariant violated: ConstraintSignatures is not a list")
                     sigs.append(current_sig)
                 current_sig = {"id": sig_start.group(1).strip()}
                 current_sig_field = None
@@ -178,7 +179,8 @@ def parse_blocks(text: str) -> list[dict]:
                 nested_kv = re.match(r"^    ([a-z_]+):\s+(.+)$", line)
                 if nested_kv and current_sig_field in _DICT_FIELDS:
                     parent = current_sig_field
-                    assert parent is not None
+                    if parent is None:
+                        raise RuntimeError("invariant violated: current_sig_field is None inside nested_kv branch")
                     if not isinstance(current_sig.get(parent), dict):
                         current_sig[parent] = {}
                     parent_dict = cast(dict[str, Any], current_sig[parent])
@@ -195,7 +197,8 @@ def parse_blocks(text: str) -> list[dict]:
                 time_kv = re.match(r"^      ([a-z_]+):\s+(.+)$", line)
                 if time_kv and current_sig_field in _DICT_FIELDS:
                     parent = current_sig_field
-                    assert parent is not None
+                    if parent is None:
+                        raise RuntimeError("invariant violated: current_sig_field is None inside time_kv branch")
                     if not isinstance(current_sig.get(parent), dict):
                         current_sig[parent] = {}
                     parent_dict = cast(dict[str, Any], current_sig[parent])
@@ -219,7 +222,8 @@ def parse_blocks(text: str) -> list[dict]:
                     if current_sig is not None:
                         _finalize_sig(current_sig)
                         sigs2 = current["ConstraintSignatures"]
-                        assert isinstance(sigs2, list)
+                        if not isinstance(sigs2, list):
+                            raise RuntimeError("invariant violated: ConstraintSignatures is not a list (end-of-block)")
                         sigs2.append(current_sig)
                     in_constraint_sigs = False
                     current_sig = None
@@ -248,12 +252,14 @@ def parse_blocks(text: str) -> list[dict]:
         if in_ops:
             # Multiline patch content (4+ space indent while in_patch)
             if in_patch:
-                assert current_op is not None
+                if current_op is None:
+                    raise RuntimeError("invariant violated: in_patch is True but current_op is None")
                 patch_line = re.match(r"^    (.*)$", line)
                 if patch_line:
                     current_op.setdefault("patch", [])
                     patch_val = current_op["patch"]
-                    assert isinstance(patch_val, list)
+                    if not isinstance(patch_val, list):
+                        raise RuntimeError("invariant violated: patch value is not a list")
                     patch_val.append(patch_line.group(1))
                     continue
                 else:
@@ -269,7 +275,8 @@ def parse_blocks(text: str) -> list[dict]:
             if op_start:
                 if current_op is not None:
                     ops_list = current["Ops"]
-                    assert isinstance(ops_list, list)
+                    if not isinstance(ops_list, list):
+                        raise RuntimeError("invariant violated: Ops is not a list")
                     ops_list.append(current_op)
                 current_op = {"op": op_start.group(1)}
                 current_op_field = None
@@ -312,7 +319,8 @@ def parse_blocks(text: str) -> list[dict]:
             if line.strip() == "" or re.match(r"^[A-Z][A-Za-z]+:", line):
                 if current_op is not None:
                     ops_list2 = current["Ops"]
-                    assert isinstance(ops_list2, list)
+                    if not isinstance(ops_list2, list):
+                        raise RuntimeError("invariant violated: Ops is not a list (end-of-block)")
                     ops_list2.append(current_op)
                 in_ops = False
                 current_op = None
@@ -424,7 +432,8 @@ def _finalize_ops(block: dict[str, Any], in_ops: bool, current_op: dict[str, Any
         if "patch" in current_op and isinstance(current_op["patch"], list):
             current_op["patch"] = "\n".join(current_op["patch"])
         ops = block["Ops"]
-        assert isinstance(ops, list)
+        if not isinstance(ops, list):
+            raise RuntimeError("invariant violated: Ops is not a list in _finalize_ops")
         ops.append(current_op)
 
 
@@ -435,7 +444,8 @@ def _finalize_block(block: dict[str, Any], in_sigs: bool, current_sig: dict[str,
         if "ConstraintSignatures" not in block:
             block["ConstraintSignatures"] = []
         sigs = block["ConstraintSignatures"]
-        assert isinstance(sigs, list)
+        if not isinstance(sigs, list):
+            raise RuntimeError("invariant violated: ConstraintSignatures is not a list in _finalize_block")
         sigs.append(current_sig)
 
 

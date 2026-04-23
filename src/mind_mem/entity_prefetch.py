@@ -159,7 +159,8 @@ def _load_entity_blocks(workspace: str) -> list[dict]:
             continue
         try:
             blocks.extend(parse_file(real_path))
-        except Exception:  # pragma: no cover
+        except Exception as exc:  # pragma: no cover
+            _log.debug("entity_file_parse_skipped", path=real_path, error=str(exc))
             continue
     return blocks
 
@@ -262,7 +263,8 @@ def prefetch_entity_blocks(
                 for path in store.list_blocks():
                     try:
                         all_blocks.extend(parse_file(path))
-                    except Exception:  # pragma: no cover
+                    except Exception as exc:  # pragma: no cover
+                        _log.debug("entity_store_block_parse_skipped", error=str(exc))
                         continue
             out = graph_expand(
                 out,

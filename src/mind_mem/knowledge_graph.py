@@ -418,7 +418,7 @@ class KnowledgeGraph:
         sql = (
             "SELECT subject, predicate, object, source_block_id, confidence, "
             "valid_from, valid_until, metadata FROM edges "
-            f"{where} ORDER BY confidence DESC, subject, predicate, object"
+            f"{where} ORDER BY confidence DESC, subject, predicate, object"  # nosec B608 — clauses are built from a fixed set of column names ("subject", "object", "predicate"); all values pass as bind params via `params`
         )
         with self._lock:
             rows = self._conn.execute(sql, tuple(params)).fetchall()

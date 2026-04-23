@@ -1179,8 +1179,8 @@ def recall(
             intent_type=_intent_type,
             stage_counts=_stage_counts,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        _log.debug("retrieval_log_skipped", error=str(exc))
 
     # --- Adaptive intent feedback (#470) ---
     if _HAS_INTENT_ROUTER and _intent_type:
@@ -1192,8 +1192,8 @@ def recall(
                 result_count=len(top),
                 avg_score=avg_sc,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.debug("intent_feedback_skipped", error=str(exc))
 
     return top
 

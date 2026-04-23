@@ -18,7 +18,7 @@ import hashlib
 import json
 import os
 import re
-import subprocess
+import subprocess  # nosec B404 — subprocess is used with a fixed argument list (shell=False) for internal tooling; no user input reaches the command
 import sys
 from datetime import datetime, timedelta
 
@@ -255,7 +255,7 @@ def check_preconditions(ws):
         report.append("validate: SKIP (script not found)")
         return True, report
     try:
-        result = subprocess.run(["bash", validate_sh, ws], capture_output=True, text=True, timeout=60, env=env)
+        result = subprocess.run(["bash", validate_sh, ws], capture_output=True, text=True, timeout=60, env=env)  # nosec B603 B607 — fixed argument list; validate_sh is a package-internal script path; shell=False (default)
         # Find the TOTAL line (contains "issues")
         total_line = ""
         for line in result.stdout.strip().split("\n"):
@@ -277,7 +277,7 @@ def check_preconditions(ws):
         report.append("intel_scan: SKIP (script not found)")
         return True, report
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 — fixed argument list using sys.executable; no user input in args; shell=False (default)
             [sys.executable, "-m", "mind_mem.intel_scan", ws],
             capture_output=True,
             text=True,
@@ -1200,8 +1200,8 @@ def apply_proposal(ws, proposal_id, dry_run=False, agent_id=None):
                 with open(config_path) as f:
                     cfg = json.load(f)
                 block_on_detect = cfg.get("contradiction", {}).get("block_on_detect", True)
-            except Exception:
-                pass  # default to blocking
+            except Exception as exc:
+                _log.debug("contradiction_config_read_failed", error=str(exc))  # default to blocking
 
             if block_on_detect:
                 print("  Contradiction blocking is ENABLED (contradiction.block_on_detect=true)")
@@ -1536,12 +1536,12 @@ def rollback(ws, receipt_ts, reason=""):
         print(f"ERROR: {e}")
         return False
 
-    if not os.path.isdir(snap_dir):
+    if not os.path.isdir(snap_dir):  # nosec — snap_dir is the resolved path from _safe_resolve; traversal already rejected
         print(f"ERROR: Snapshot directory not found: {snap_dir}")
         return False
 
     print(f"Restoring from snapshot: {snap_dir}")
-    restore_snapshot(ws, snap_dir)
+    restore_snapshot(ws, snap_dir)  # nosec — snap_dir validated by _safe_resolve above
 
     # Re-run checks
     print("\n--- Post-rollback checks ---")
@@ -1551,11 +1551,20 @@ def rollback(ws, receipt_ts, reason=""):
 
     # Update receipt — guarded by FileLock so concurrent rollbacks of the
     # same receipt don't interleave Reason: lines on top of each other.
-    receipt_path = os.path.join(snap_dir, "APPLY_RECEIPT.md")
-    if os.path.isfile(receipt_path):
+    # v3.6.6 path-injection hardening: re-route the receipt path through
+    # _safe_resolve so the taint analysis sees an explicit traversal guard.
+    # ``snap_dir`` is already validated above, but CodeQL does not follow
+    # the taint-cleanse through a helper — this redundant call makes the
+    # guard explicit for static analysis.
+    try:
+        receipt_path = _safe_resolve(snap_dir, "APPLY_RECEIPT.md")  # nosec — snap_dir validated; "APPLY_RECEIPT.md" is a literal constant
+    except ValueError as exc:
+        print(f"ERROR: receipt path escaped snapshot dir: {exc}", file=sys.stderr)
+        return False
+    if os.path.isfile(receipt_path):  # nosec — receipt_path validated by _safe_resolve
         receipt_lock = FileLock(receipt_path + ".lock", timeout=5.0)
         try:
-            with receipt_lock, open(receipt_path, "a") as f:
+            with receipt_lock, open(receipt_path, "a") as f:  # nosec — receipt_path validated by _safe_resolve
                 f.write(f"\nRolledBack: {datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')}\n")
                 f.write("Result: rolled_back\n")
                 if reason:
@@ -1564,7 +1573,7 @@ def rollback(ws, receipt_ts, reason=""):
                     # of Proposal/Status/Reason key lines.
                     sanitized = _sanitize_reason_for_markdown(reason.strip())
                     first, *rest = sanitized.split("\n")
-                    f.write(f"Reason: {first}\n")
+                    f.write(f"Reason: {first}\n")  # nosec — first is from sanitized (no raw user input)
                     for line in rest:
                         f.write(f"  {line}\n")
         except LockTimeout as exc:

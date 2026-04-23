@@ -429,7 +429,7 @@ def _index_file(
     if deleted_ids:
         placeholders = ",".join("?" for _ in deleted_ids)
         conn.execute(
-            f"DELETE FROM index_meta WHERE file_path = ? AND block_id IN ({placeholders})",
+            f"DELETE FROM index_meta WHERE file_path = ? AND block_id IN ({placeholders})",  # nosec B608 — placeholders is `? * N`, all values passed as bind params; no user input in query string
             [rel_path] + list(deleted_ids),
         )
 
@@ -577,7 +577,7 @@ def _delete_blocks(
 
     # Find child fact sub-blocks before deleting parents
     child_rows = conn.execute(
-        f"SELECT id FROM blocks WHERE parent_id IN ({placeholders})",
+        f"SELECT id FROM blocks WHERE parent_id IN ({placeholders})",  # nosec B608 — placeholders is `? * N`, values passed as bind params
         block_ids,
     ).fetchall()
     child_ids = [r["id"] for r in child_rows]
@@ -585,10 +585,10 @@ def _delete_blocks(
     all_ids = block_ids + child_ids
     all_ph = ",".join("?" for _ in all_ids)
 
-    conn.execute(f"DELETE FROM blocks WHERE id IN ({all_ph})", all_ids)
-    conn.execute(f"DELETE FROM blocks_fts WHERE block_id IN ({all_ph})", all_ids)
+    conn.execute(f"DELETE FROM blocks WHERE id IN ({all_ph})", all_ids)  # nosec B608 — placeholders is `? * N`, values passed as bind params
+    conn.execute(f"DELETE FROM blocks_fts WHERE block_id IN ({all_ph})", all_ids)  # nosec B608 — same as above
     conn.execute(
-        f"DELETE FROM xref_edges WHERE src IN ({all_ph}) OR dst IN ({all_ph})",
+        f"DELETE FROM xref_edges WHERE src IN ({all_ph}) OR dst IN ({all_ph})",  # nosec B608 — same as above
         all_ids + all_ids,
     )
 
@@ -755,7 +755,7 @@ def _aggregate_facts_to_parents(
     if missing:
         placeholders = ",".join("?" for _ in missing)
         rows = conn.execute(
-            f"SELECT * FROM blocks WHERE id IN ({placeholders}) AND parent_id = ''",
+            f"SELECT * FROM blocks WHERE id IN ({placeholders}) AND parent_id = ''",  # nosec B608 — placeholders is `? * N`, values passed as bind params
             list(missing),
         ).fetchall()
         for row in rows:
@@ -873,7 +873,7 @@ def query_index(
                 JOIN blocks b ON b.id = f.block_id
                 WHERE blocks_fts MATCH ?
                 ORDER BY bm25_score DESC
-                LIMIT ?""",
+                LIMIT ?""",  # nosec B608 — `weights` is a comma-separated list of floats derived from FTS5_COLUMNS (a static constant), never from user input
             (fts_query, max(retrieve_wide_k, limit)),
         ).fetchall()
     except sqlite3.OperationalError as e:
@@ -935,8 +935,8 @@ def query_index(
             try:
                 cal_weight = _cal_mgr.get_block_weight(row["id"])
                 score *= cal_weight
-            except Exception:
-                pass  # Graceful degradation — skip calibration for this block
+            except Exception as exc:
+                _log.debug("calibration_weight_skipped", block_id=row["id"], error=str(exc))  # graceful degradation; non-fatal
 
         result = {
             "_id": row["id"],
@@ -1034,7 +1034,7 @@ def _apply_graph_boost(
 
         placeholders = ",".join("?" for _ in seed_ids)
         edges = conn.execute(
-            f"SELECT src, dst FROM xref_edges WHERE src IN ({placeholders})",
+            f"SELECT src, dst FROM xref_edges WHERE src IN ({placeholders})",  # nosec B608 — placeholders is `? * N`, values passed as bind params; seed_ids sanitized above
             seed_ids,
         ).fetchall()
 
@@ -1063,7 +1063,7 @@ def _apply_graph_boost(
         if new_ids:
             placeholders = ",".join("?" for _ in new_ids)
             rows = conn.execute(
-                f"SELECT * FROM blocks WHERE id IN ({placeholders})",
+                f"SELECT * FROM blocks WHERE id IN ({placeholders})",  # nosec B608 — placeholders is `? * N`, values passed as bind params
                 new_ids,
             ).fetchall()
             for row in rows:
