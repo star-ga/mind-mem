@@ -1044,6 +1044,25 @@ Horizontal scaling, multi-tenant isolation, and edge deployment. This version tu
 
 ---
 
+## Companion Tools (External, Non-Dependency)
+
+External MCP-server tools that solve adjacent memory problems mind-mem deliberately
+does not solve. Documented here so users see them as complements rather than
+competitors. **mind-mem will not depend on any of these** — license, scope, and
+substrate-of-record concerns make co-existence the right pattern.
+
+- [ ] **GitNexus** (`github.com/h4ckf0r0day/GitNexus`) — code knowledge-graph indexer
+  exposed as MCP server. Parses repo structure (call graphs, dependencies, clusters)
+  and serves architectural-awareness tools to coding agents. Solves "what does the
+  code do at this point in time" — orthogonal to mind-mem's "what did we decide and
+  why over time." License: PolyForm Noncommercial — incompatible with Apache-2.0
+  programmatic dependency. Recommendation: install as a separate MCP server
+  alongside mind-mem; both end up in Claude Code / Cursor / Windsurf MCP lists,
+  no integration code required. Documentation will mention this in the README under
+  "Companion Tools" once the section is added (separate task).
+
+---
+
 ## Advanced Agent Memory Primitives
 
 mind-mem is designed as a governed-memory substrate for autonomous agents operating in interactive reasoning environments (benchmark agents, game-playing agents, long-horizon task agents). The following block types and retrieval capabilities extend the core schema for those workloads.
