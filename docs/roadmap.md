@@ -124,6 +124,91 @@ Direction:
 - Distributed workspace sync (mDNS-discovered mesh)
 - LoRA retrain loop wired into production pipeline
 
+## v3.7.0 candidates — Inbox / Auto-Consolidate / Extended HTTP API
+
+Inspired by Google Cloud's Always-On Memory Agent reference architecture
+(MIT, `GoogleCloudPlatform/generative-ai/gemini/agents/always-on-memory-agent`).
+Their reference validates the category but lacks governance, hybrid search,
+multi-LLM backends, and MCP compatibility — features mind-mem already has.
+Three patterns from their design are worth adopting on top of mind-mem's
+production-grade foundation:
+
+### 1. Inbox folder ingestion
+
+Drop any file into `./inbox/`, mind-mem detects, classifies by extension,
+routes to the right ingestion path:
+
+- text (`.txt`, `.md`, `.json`, `.csv`, `.log`, `.xml`, `.yaml`) →
+  markdown block (existing path)
+- image (`.png`, `.jpg`, `.gif`, `.webp`) → ImageBlock
+  (existing `multi_modal.py` schema; embedding via optional CLIP / SigLIP)
+- audio (`.mp3`, `.wav`, `.flac`, `.m4a`) → AudioBlock with transcript
+  (existing `multi_modal.py` schema; transcription via optional Whisper)
+- documents (`.pdf`) → text-extract → markdown block
+  (via optional `pypdf` / `pdfplumber`)
+
+CLI: `mm watch ./inbox/`. Extends existing `watcher.py` (currently `.md`-only)
+with multi-format routing. Heavy dependencies (CLIP / Whisper / pdf-extract)
+stay optional behind extras: `pip install mind-mem[multimodal]`.
+
+Solves the "how do I get content into mind-mem" friction for non-technical
+users. Files = universal interface, no API knowledge needed.
+
+### 2. Auto-scheduled dream cycle
+
+mind-mem already has `dream_cycle.py` (consolidation logic) and
+`cron_runner.py` (scheduler). Missing: default-on automatic schedule.
+
+Add:
+
+- `mm config set dream_cycle.auto_interval_seconds 1800` (default off,
+  enable per-deployment)
+- Background daemon mode: `mm daemon` runs `cron_runner` internally on
+  a thread, no external cron required
+- Documented in README as the "set it and forget it" mode
+
+"Drift prevention" is a core mind-mem promise — but only if dream cycle
+actually runs. Most users never set up cron, so dream cycle never fires.
+One config flag flips the default.
+
+### 3. Extended HTTP API surface
+
+mind-mem already has `/ingest` HTTP endpoint (`ingestion_pipeline.py`).
+Missing endpoints:
+
+- `GET /status` — health, memory count, last-scan timestamp,
+  dream-cycle last-run timestamp
+- `POST /query` — natural-language search (wraps `recall` / `hybrid_search`)
+- `GET /memories` — list/browse with filtering (by category, age, axis)
+- `POST /consolidate` — trigger dream cycle on demand
+- `DELETE /memories/{id}` — remove specific memory
+- `POST /clear` — wipe workspace (governance-protected, requires
+  rationale per v3.6.x mandatory rationale binding)
+
+MCP is great for AI agents; HTTP is required for non-MCP integrations
+(Slack bots, dashboards, web apps, monitoring tools, Streamlit/Gradio
+front-ends built by users). Most endpoints are 5-line wrappers around
+existing functions.
+
+### What we explicitly do NOT borrow
+
+- Streamlit dashboard. Adding Streamlit as a core dependency violates the
+  "zero core dependencies" badge that's part of mind-mem's positioning.
+  If a dashboard is wanted, ship as a separate package
+  (`mind-mem-dashboard`) or document how users build one with the new
+  HTTP API.
+- Gemini hardcoding. mind-mem stays embedding-model agnostic and
+  multi-LLM compatible.
+- SQLite-only backend. We keep markdown + Postgres + hybrid search.
+
+### Estimated effort
+
+1-2 weeks for one engineer. All three play together: a deployment using
+all three becomes "drop a file in inbox → ingested → consolidated
+automatically → queryable via HTTP" — the Google reference architecture
+pitch with mind-mem's governance, hybrid search, and audit chain
+underneath.
+
 ## Design Principles
 
 1. **Zero dependencies** — No external services required for the core
