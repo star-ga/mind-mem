@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 674 | **Est. tokens:** ~1,345,158
-**Generated:** 2026-04-29 13:07 UTC
+**Files:** 675 | **Est. tokens:** ~1,347,514
+**Generated:** 2026-04-29 13:36 UTC
 
 ## Token Budget Guide
 
@@ -61,7 +61,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 228 | ~443,858 |
+| `tests/` | 229 | ~446,214 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -717,6 +717,7 @@
 - `test_llm_extractor.py` (~1820 tok, huge) — Tests for the optional LLM entity/fact extractor module."""
 - `test_llm_noise_profile.py` (~2354 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_maintenance_migrate.py` (~710 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
+- `test_mcp_arch_mind_tools.py` (~2356 tok, huge) — Tests for the arch-mind MCP tool wrapper.
 - `test_mcp_integration.py` (~5177 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_server.py` (~4988 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
 - `test_mcp_tools.py` (~277 tok, medium) — Tests for MCP server tool definitions."""
