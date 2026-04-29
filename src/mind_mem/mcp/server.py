@@ -29,6 +29,9 @@ from mind_mem.mcp.tools import (
     agent as _tools_agent,
 )
 from mind_mem.mcp.tools import (
+    arch_mind as _tools_arch_mind,
+)
+from mind_mem.mcp.tools import (
     audit as _tools_audit,
 )
 from mind_mem.mcp.tools import (
@@ -94,6 +97,7 @@ _tools_agent.register(mcp)
 _tools_graph.register(mcp)
 _tools_signal.register(mcp)
 _tools_governance.register(mcp)
+_tools_arch_mind.register(mcp)
 _tools_encryption.register(mcp)
 _tools_benchmark.register(mcp)
 _tools_memory_ops.register(mcp)

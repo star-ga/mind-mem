@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 670 | **Est. tokens:** ~1,329,520
-**Generated:** 2026-04-27 11:01 UTC
+**Files:** 674 | **Est. tokens:** ~1,345,158
+**Generated:** 2026-04-29 13:07 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~74,984 |
+| `./` | 30 | ~77,438 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `benchmarks/` | 26 | ~64,933 |
 | `deploy/` | 2 | ~690 |
@@ -48,15 +48,16 @@
 | `sdk/js/` | 5 | ~1,388 |
 | `sdk/js/src/` | 4 | ~2,320 |
 | `sdk/js/test/` | 1 | ~2,191 |
+| `security/` | 3 | ~11,009 |
 | `skills/apply-proposal/` | 1 | ~345 |
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
 | `src/mind_mem/` | 143 | ~481,814 |
 | `src/mind_mem/api/` | 5 | ~15,104 |
-| `src/mind_mem/mcp/` | 3 | ~3,225 |
+| `src/mind_mem/mcp/` | 3 | ~3,250 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,247 |
-| `src/mind_mem/mcp/tools/` | 17 | ~38,772 |
+| `src/mind_mem/mcp/tools/` | 18 | ~40,922 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
@@ -97,7 +98,7 @@
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~22351 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-- `ROADMAP.md` (~18703 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~21157 tok, huge) — mind-mem Roadmap
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
 - `SECURITY.md` (~1752 tok, huge) — Security Policy
 - `SPEC.md` (~5184 tok, huge) — Mind Mem Formal Specification v1.0
@@ -340,6 +341,11 @@
 ### `sdk/js/`
 
 - `tsconfig.json` (~147 tok, small) — Keys: compilerOptions, include, exclude
+### `security/`
+
+- `api-security-2026-04-28.md` (~5929 tok, huge) — mind-mem v3.1.8 — API / MCP Surface Security Audit
+- `api-security-review-2026-04-28.md` (~3563 tok, huge) — mind-mem API Security Review — 2026-04-28
+- `threat-model-2026-04-28.md` (~1517 tok, huge) — mind-mem Threat Model — 2026-04-28
 ### `skills/apply-proposal/`
 
 - `SKILL.md` (~345 tok, medium) — /apply — Apply Proposals
@@ -451,13 +457,14 @@
 
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
 - `resources.py` (~1342 tok, large) — MCP ``@mcp.resource`` declarations.
-- `server.py` (~1668 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
+- `server.py` (~1693 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/`
 
 - `mcp_server.py` (~1780 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
 ### `src/mind_mem/mcp/tools/`
 
 - `agent.py` (~1767 tok, huge) — Agent-bridge + vault MCP tools.
+- `arch_mind.py` (~2150 tok, huge) — arch-mind MCP tools — wraps the ``arch-mind`` binary as 7 MCP tools.
 - `audit.py` (~2187 tok, huge) — Audit MCP tools — Merkle proofs, hash chain + evidence chain verification.
 - `benchmark.py` (~1019 tok, large) — Benchmark + category-summary MCP tools.
 - `calibration.py` (~1162 tok, large) — Calibration feedback MCP tools — ``calibration_feedback`` + ``calibration_stats``.
