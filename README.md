@@ -93,6 +93,7 @@ Output:
 
 - [Why mind-mem](#why-mind-mem)
 - [Features](#features)
+- [Integrations](#integrations)
 - [Benchmark Results](#benchmark-results)
 - [Quick Start](#quick-start)
 - [Health Summary](#health-summary)
@@ -276,6 +277,67 @@ Scheduled background enrichment: scans recent memory for missing cross-reference
 | Semantic-aware smart chunking | Y | — | — | — | — |
 | Compiled truth pages (per-entity) | Y | — | — | — | — |
 | Dream cycle (autonomous enrichment) | Y | — | — | — | — |
+
+---
+
+## Integrations
+
+> Honest positioning. The integrations below are *software-level* —
+> the named tool talks to mind-mem via the Model Context Protocol.
+> They are **not** commercial-customer relationships with any vendor.
+> Full positioning policy: [`docs/integrations.md`](docs/integrations.md).
+
+### Native MCP integration with 17 AI development tools
+
+```bash
+pip install mind-mem
+mm install-all
+```
+
+`mm install-all` auto-detects every supported client on your machine
+and writes the appropriate config file for each. mind-mem speaks the
+[Model Context Protocol](https://modelcontextprotocol.io/) — any
+MCP-compatible client connects with one command.
+
+| Client | Vendor | Client | Vendor |
+|--------|--------|--------|--------|
+| Claude Code | Anthropic | Cline | Cline.bot |
+| Claude Desktop | Anthropic | Roo | Roo Code |
+| Codex CLI | OpenAI | GitHub Copilot | GitHub / Microsoft |
+| Gemini CLI | Google | Cody | Sourcegraph |
+| Vibe (Mistral CLI) | Mistral | Qodo | Qodo |
+| Cursor | Anysphere | aider | aider-chat |
+| Windsurf | Codeium | OpenClaw | STARGA |
+| Zed | Zed Industries | NanoClaw / NemoClaw | STARGA |
+| Continue | Continue.dev | | |
+
+### Compatible with major LLM providers
+
+mind-mem's recall pipeline is provider-agnostic. Tested against
+Anthropic Claude (3.5 Sonnet, 4.x), OpenAI GPT (4o, 5.4), Google
+Gemini (2.0 Flash, 3.1 Pro), Mistral Large, and local endpoints
+(Ollama, vLLM, llama.cpp). Compatibility is at the API contract
+level — the same mind-mem server returns the same answers
+regardless of which LLM is asking.
+
+### Production usage at STARGA
+
+mind-mem is the daily-driver memory layer for STARGA's six active
+projects: `mind`, `mind-runtime`, `mindlang.dev`, `mind-inference`,
+`mind-fleet`, `arch-mind`. First-party, verifiable in our own
+commit history.
+
+### What we do not claim
+
+- ❌ "OpenAI / Microsoft / Anthropic / Google is a customer" — false.
+  These are software-level MCP integrations, not commercial
+  relationships.
+- ❌ "Used by N production teams outside STARGA" — we have no
+  telemetry. PyPI download counts measure installs, not active use.
+
+If a future integration becomes a real commercial relationship
+(signed contract, paid pilot, named reference), it will appear in
+the press release first — not in the README.
 
 ---
 
