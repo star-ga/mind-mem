@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 677 | **Est. tokens:** ~1,347,948
-**Generated:** 2026-04-30 07:35 UTC
+**Files:** 678 | **Est. tokens:** ~1,349,483
+**Generated:** 2026-04-30 07:37 UTC
 
 ## Token Budget Guide
 
@@ -30,7 +30,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 58 | ~84,120 |
+| `docs/` | 59 | ~85,655 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -186,6 +186,7 @@
 - `getting-started.md` (~405 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
 - `hf-mind-mem-4b-v2-README.md` (~2154 tok, huge) — mind-mem-4b v2 (2026-04-21)
+- `integrations.md` (~1535 tok, huge) — Integrations
 - `locomo-v3.4-conv0-results.md` (~449 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
 - `maintenance-namespaces.md` (~1601 tok, huge) — `maintenance/` namespaces
 - `mcp-integration.md` (~1538 tok, huge) — MCP Integration Guide
