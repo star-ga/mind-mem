@@ -72,7 +72,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>A fresh v3.1.x walkthrough (native MCP for 16 clients, 57 tools, `mind-mem:4b` local model, governance alerting) is on the way — the earlier `demo.gif` predated v3.x and was removed to avoid misrepresenting the current surface.</sub>
+<sub>A fresh v3.1.x walkthrough (native MCP for 17 clients, 71 tools, `mind-mem:4b` local model, governance alerting) is on the way — the earlier `demo.gif` predated v3.x and was removed to avoid misrepresenting the current surface.</sub>
 
 ### Trust Signals
 
@@ -116,7 +116,7 @@ Output:
 
 - [`docs/setup.md`](docs/setup.md) — install, configure, wire MCP, opt in to MIND native kernels
 - [`docs/usage.md`](docs/usage.md) — every surface (MCP tools by category, `mm` CLI, `mind-mem-verify`, Python library) with worked examples
-- [`docs/client-integrations.md`](docs/client-integrations.md) — **16 AI client integrations** (Claude Code, Codex, Gemini, Cursor, Windsurf, aider, OpenClaw, NanoClaw, NemoClaw, Continue, Cline, Roo, Zed, Copilot, Cody, Qodo) with `mm install-all` auto-detection
+- [`docs/client-integrations.md`](docs/client-integrations.md) — **17 AI client integrations** (Claude Code, Codex, Vibe, Gemini, Cursor, Windsurf, aider, OpenClaw, NanoClaw, NemoClaw, Continue, Cline, Roo, Zed, Copilot, Cody, Qodo) with `mm install-all` auto-detection
 - [`docs/mind-mem-4b-setup.md`](docs/mind-mem-4b-setup.md) — download + run the `star-ga/mind-mem-4b` full-FT model locally (transformers, exllamav2, vLLM, llama.cpp, Ollama)
 - [`ROADMAP.md`](ROADMAP.md) — feature roadmap (all 282 v2.x checkboxes closed in v2.8.0)
 - [`CHANGELOG.md`](CHANGELOG.md) — release notes for every published version
@@ -222,8 +222,8 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 ### Transcript JSONL Capture
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
-### MCP Server (58 tools, 8 resources)
-Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 57 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
+### MCP Server (71 tools, 8 resources)
+Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 71 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
 
 ### 74+ Structural Checks + 3024 Unit Tests
 `validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 3024 pytest unit tests covering all core modules.
@@ -588,7 +588,7 @@ TOTAL: 0 critical | 0 warnings | 16 info
 
 ```
 your-workspace/
-├── mcp_server.py            # MCP server (FastMCP, 58 tools, 8 resources)
+├── mcp_server.py            # MCP server (FastMCP, 71 tools, 8 resources)
 ├── mind-mem.json             # Config
 ├── MEMORY.md                # Protocol rules
 │
@@ -725,7 +725,7 @@ your-workspace/
 | [**Graphlit**](https://www.graphlit.com) | Multimodal ingestion, semantic search, managed platform | Cloud-only, managed service |
 | [**ClawMem**](https://github.com/yoloshii/ClawMem) | Full ML pipeline (cross-encoder + QMD + beam search) | 4.5GB VRAM, 3 GPU processes required |
 | [**MemU**](https://github.com/supermemory/memu) | Hierarchical 3-layer memory, multimodal ingestion, LLM-based retrieval | Requires LLM for extraction and retrieval, no hybrid search |
-| **mind-mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 58 MCP tools + 3-LLM audit per release | Lexical recall by default (vector/CE optional) |
+| **mind-mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 71 MCP tools + 3-LLM audit per release | Lexical recall by default (vector/CE optional) |
 
 ### Full Feature Matrix
 
@@ -771,7 +771,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | No daemon       |                   —                    |                   —                   |                            —                            |               —                |               —               |                     Yes                     |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
 | GPU required    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                    **4.5GB**                    |                      No                      |     **No**     |
 | Git-friendly    |                   —                    |                   —                   |                            —                            |              Part              |               —               |                      —                      |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
-| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **58 tools**   |
+| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **71 tools**   |
 | MIND kernels    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **16 source**  |
 
 ### The Gap mind-mem Fills
