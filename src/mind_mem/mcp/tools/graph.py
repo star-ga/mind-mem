@@ -17,12 +17,10 @@ import re as _re_mod
 import sqlite3
 from typing import Any
 
-from ._helpers import get_logger, metrics
-
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import _is_db_locked, _sqlite_busy_error, mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import _kg_path
+from ._helpers import _kg_path, get_logger, metrics
 
 _log = get_logger("mcp_server")
 

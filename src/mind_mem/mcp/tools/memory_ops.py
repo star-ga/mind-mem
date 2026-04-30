@@ -33,14 +33,13 @@ from mind_mem.mind_ffi import is_available as mind_kernel_available
 from mind_mem.mind_ffi import is_protected as mind_kernel_protected
 from mind_mem.mind_ffi import list_kernels as ffi_list_kernels
 from mind_mem.mind_filelock import FileLock
-from ._helpers import get_logger, metrics
 from mind_mem.sqlite_index import _db_path as fts_db_path
 
 from ..infra.config import _load_extra_categories
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import _is_db_locked, _sqlite_busy_error, mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import _signal_store_path
+from ._helpers import _signal_store_path, get_logger, metrics
 
 _log = get_logger("mcp_server")
 

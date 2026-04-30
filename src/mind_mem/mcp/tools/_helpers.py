@@ -36,7 +36,6 @@ from typing import Any
 # arch-mind modularity_q16 metric high — every tool that reaches across
 # package boundaries reduces it.
 # ---------------------------------------------------------------------------
-
 from mind_mem.observability import get_logger, metrics  # noqa: E402, F401
 from mind_mem.telemetry import traced  # noqa: E402, F401
 

@@ -36,7 +36,6 @@ from typing import Any
 
 from ..infra.observability import mcp_tool_observe
 
-
 # ---------------------------------------------------------------------------
 # Binary discovery
 # ---------------------------------------------------------------------------
@@ -235,7 +234,7 @@ def arch_metric_explain(metric: str, fixture: str) -> dict[str, Any]:
 
     # Extract the requested metric's line from explain's pretty output.
     lines = result["stdout"].splitlines()
-    selected = [l for l in lines if metric in l]
+    selected = [line for line in lines if metric in line]
     return {
         **result,
         "metric": metric,

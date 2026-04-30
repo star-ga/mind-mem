@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 678 | **Est. tokens:** ~1,350,064
-**Generated:** 2026-04-30 07:40 UTC
+**Files:** 678 | **Est. tokens:** ~1,350,037
+**Generated:** 2026-04-30 07:51 UTC
 
 ## Token Budget Guide
 
@@ -54,15 +54,15 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 143 | ~481,814 |
+| `src/mind_mem/` | 143 | ~481,807 |
 | `src/mind_mem/api/` | 5 | ~15,104 |
 | `src/mind_mem/mcp/` | 3 | ~3,250 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,247 |
-| `src/mind_mem/mcp/tools/` | 18 | ~41,113 |
+| `src/mind_mem/mcp/tools/` | 18 | ~41,103 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 229 | ~446,214 |
+| `tests/` | 229 | ~446,204 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -470,19 +470,19 @@
 ### `src/mind_mem/mcp/tools/`
 
 - `agent.py` (~1767 tok, huge) — Agent-bridge + vault MCP tools.
-- `arch_mind.py` (~2150 tok, huge) — arch-mind MCP tools — wraps the ``arch-mind`` binary as 7 MCP tools.
-- `audit.py` (~2184 tok, huge) — Audit MCP tools — Merkle proofs, hash chain + evidence chain verification.
+- `arch_mind.py` (~2152 tok, huge) — arch-mind MCP tools — wraps the ``arch-mind`` binary as 7 MCP tools.
+- `audit.py` (~2183 tok, huge) — Audit MCP tools — Merkle proofs, hash chain + evidence chain verification.
 - `benchmark.py` (~1016 tok, large) — Benchmark + category-summary MCP tools.
-- `calibration.py` (~1159 tok, large) — Calibration feedback MCP tools — ``calibration_feedback`` + ``calibration_stats``.
+- `calibration.py` (~1158 tok, large) — Calibration feedback MCP tools — ``calibration_feedback`` + ``calibration_stats``.
 - `consolidation.py` (~2358 tok, huge) — Memory-consolidation MCP tools.
 - `core.py` (~1508 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~1144 tok, large) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
 - `governance.py` (~4642 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
-- `graph.py` (~2201 tok, huge) — Knowledge-graph + causal-graph MCP tools.
+- `graph.py` (~2196 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `_helpers.py` (~816 tok, large) — Shared tool-internal helpers — workspace paths + lazy-init singletons.
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
-- `memory_ops.py` (~7079 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
+- `memory_ops.py` (~7074 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
 - `public.py` (~4238 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `recall.py` (~4947 tok, huge) — Recall surface — the retrieval core of the MCP API.
@@ -496,7 +496,7 @@
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `mm_cli.py` (~8903 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `model_audit.py` (~4008 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
+- `model_audit.py` (~4001 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
 - `mrs.py` (~1604 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `multi_modal.py` (~1659 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `namespaces.py` (~3560 tok, huge) — mind-mem Multi-Agent Namespace & ACL Engine. Zero external deps.
@@ -723,7 +723,7 @@
 - `test_llm_extractor.py` (~1820 tok, huge) — Tests for the optional LLM entity/fact extractor module."""
 - `test_llm_noise_profile.py` (~2354 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_maintenance_migrate.py` (~710 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
-- `test_mcp_arch_mind_tools.py` (~2356 tok, huge) — Tests for the arch-mind MCP tool wrapper.
+- `test_mcp_arch_mind_tools.py` (~2346 tok, huge) — Tests for the arch-mind MCP tool wrapper.
 - `test_mcp_integration.py` (~5177 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_server.py` (~4988 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
 - `test_mcp_tools.py` (~277 tok, medium) — Tests for MCP server tool definitions."""

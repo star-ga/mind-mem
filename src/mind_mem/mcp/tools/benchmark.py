@@ -14,12 +14,11 @@ from __future__ import annotations
 
 import json
 
-from ._helpers import get_logger, metrics
-
 from ..infra.config import _get_limits, _load_extra_categories
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _workspace
+from ._helpers import get_logger, metrics
 
 _log = get_logger("mcp_server")
 

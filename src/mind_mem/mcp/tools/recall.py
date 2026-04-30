@@ -28,7 +28,6 @@ import sqlite3
 import time
 from typing import Any
 
-from ._helpers import get_logger, metrics
 from mind_mem.recall import recall as recall_engine
 from mind_mem.retrieval_graph import retrieval_diagnostics as _retrieval_diag
 from mind_mem.sqlite_index import _db_path as fts_db_path
@@ -38,6 +37,7 @@ from ..infra.config import QUERY_TIMEOUT_SECONDS, _get_limits, _load_config
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import _is_db_locked, _sqlite_busy_error, mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
+from ._helpers import get_logger, metrics
 
 _log = get_logger("mcp_server")
 
