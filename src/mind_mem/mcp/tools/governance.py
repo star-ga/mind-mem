@@ -21,8 +21,8 @@ import sqlite3
 from typing import Any
 
 from mind_mem.block_parser import get_active, parse_file
-from mind_mem.observability import get_logger, metrics
-from mind_mem.telemetry import traced as _traced
+from ._helpers import get_logger, metrics
+from ._helpers import traced as _traced
 
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import _is_db_locked, _sqlite_busy_error, mcp_tool_observe

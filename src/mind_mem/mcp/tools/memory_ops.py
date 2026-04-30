@@ -33,7 +33,7 @@ from mind_mem.mind_ffi import is_available as mind_kernel_available
 from mind_mem.mind_ffi import is_protected as mind_kernel_protected
 from mind_mem.mind_ffi import list_kernels as ffi_list_kernels
 from mind_mem.mind_filelock import FileLock
-from mind_mem.observability import get_logger, metrics
+from ._helpers import get_logger, metrics
 from mind_mem.sqlite_index import _db_path as fts_db_path
 
 from ..infra.config import _load_extra_categories

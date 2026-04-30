@@ -18,7 +18,7 @@ import os
 import re as _re_mod
 
 from mind_mem.mind_ffi import get_mind_dir, load_all_kernel_configs, load_kernel_config
-from mind_mem.observability import get_logger, metrics
+from ._helpers import get_logger, metrics
 
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import mcp_tool_observe

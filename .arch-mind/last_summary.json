@@ -1,0 +1,23 @@
+{
+  "_aggregated_for_phase_a": {
+    "cyclic_edges": 0,
+    "intra_package_edges": 56,
+    "longest_path": 4,
+    "max_mcp_tool_overlap": 2,
+    "module_count": 444,
+    "pure_modules": 324,
+    "redundancy_excess": 96,
+    "sum_abs_symbol_diffs": 923582,
+    "sum_decision_points": 14764,
+    "sum_evidence_calls": 177,
+    "sum_protected_decls": 0,
+    "sum_symbols": 2511,
+    "total_edges": 338,
+    "total_mcp_tools": 29
+  },
+  "_comment": "Produced by `arch-mind sidecar-scan` from canonical-AST JSON. v0.0.4 / Phase D.",
+  "_languages": "python",
+  "_repo_root": "/home/n/mind-mem",
+  "edges": [],
+  "nodes": []
+}

@@ -28,7 +28,7 @@ import sqlite3
 import time
 from typing import Any
 
-from mind_mem.observability import get_logger, metrics
+from ._helpers import get_logger, metrics
 from mind_mem.recall import recall as recall_engine
 from mind_mem.retrieval_graph import retrieval_diagnostics as _retrieval_diag
 from mind_mem.sqlite_index import _db_path as fts_db_path

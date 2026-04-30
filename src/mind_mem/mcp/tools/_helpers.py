@@ -28,6 +28,30 @@ from __future__ import annotations
 import os
 from typing import Any
 
+# ---------------------------------------------------------------------------
+# Re-exports of cross-tier helpers used by every MCP tool. Importing them
+# here lets each tool module say `from ._helpers import get_logger, metrics,
+# traced` (within-package edge) instead of `from mind_mem.observability
+# import get_logger, metrics` (cross-package edge). This keeps the
+# arch-mind modularity_q16 metric high — every tool that reaches across
+# package boundaries reduces it.
+# ---------------------------------------------------------------------------
+
+from mind_mem.observability import get_logger, metrics  # noqa: E402, F401
+from mind_mem.telemetry import traced  # noqa: E402, F401
+
+__all__ = [
+    "_signal_store_path",
+    "_kg_path",
+    "_core_dir",
+    "_ontology_registry",
+    "_change_stream",
+    "_core_registry",
+    "get_logger",
+    "metrics",
+    "traced",
+]
+
 
 def _signal_store_path(ws: str) -> str:
     return os.path.join(ws, "memory", "interaction_signals.jsonl")

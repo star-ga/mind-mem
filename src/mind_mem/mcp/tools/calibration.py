@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from mind_mem.observability import get_logger, metrics
+from ._helpers import get_logger, metrics
 
 from ..infra.constants import MCP_SCHEMA_VERSION
 from ..infra.observability import mcp_tool_observe

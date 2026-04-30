@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 
-from mind_mem.observability import get_logger, metrics
+from ._helpers import get_logger, metrics
 
 from ..infra.config import _get_limits, _load_extra_categories
 from ..infra.constants import MCP_SCHEMA_VERSION

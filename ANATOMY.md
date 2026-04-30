@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 675 | **Est. tokens:** ~1,347,514
-**Generated:** 2026-04-29 13:36 UTC
+**Files:** 677 | **Est. tokens:** ~1,347,947
+**Generated:** 2026-04-30 07:23 UTC
 
 ## Token Budget Guide
 
@@ -24,6 +24,7 @@
 |-----------|-------|-------------|
 | `./` | 30 | ~77,438 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
+| `.arch-mind/` | 2 | ~242 |
 | `benchmarks/` | 26 | ~64,933 |
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
@@ -57,7 +58,7 @@
 | `src/mind_mem/api/` | 5 | ~15,104 |
 | `src/mind_mem/mcp/` | 3 | ~3,250 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,247 |
-| `src/mind_mem/mcp/tools/` | 18 | ~40,922 |
+| `src/mind_mem/mcp/tools/` | 18 | ~41,113 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
@@ -107,6 +108,10 @@
 ### `.agents/skills/mind-mem-development/`
 
 - `SKILL.md` (~456 tok, medium) — mind-mem Development
+### `.arch-mind/`
+
+- `last_summary.json` (~156 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
+- `scan.json` (~86 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
 ### `benchmarks/`
 
 - `bench_kernels.py` (~4027 tok, huge) — Benchmark: MIND kernels vs pure Python scoring.
@@ -465,21 +470,21 @@
 
 - `agent.py` (~1767 tok, huge) — Agent-bridge + vault MCP tools.
 - `arch_mind.py` (~2150 tok, huge) — arch-mind MCP tools — wraps the ``arch-mind`` binary as 7 MCP tools.
-- `audit.py` (~2187 tok, huge) — Audit MCP tools — Merkle proofs, hash chain + evidence chain verification.
-- `benchmark.py` (~1019 tok, large) — Benchmark + category-summary MCP tools.
-- `calibration.py` (~1162 tok, large) — Calibration feedback MCP tools — ``calibration_feedback`` + ``calibration_stats``.
-- `consolidation.py` (~2361 tok, huge) — Memory-consolidation MCP tools.
+- `audit.py` (~2184 tok, huge) — Audit MCP tools — Merkle proofs, hash chain + evidence chain verification.
+- `benchmark.py` (~1016 tok, large) — Benchmark + category-summary MCP tools.
+- `calibration.py` (~1159 tok, large) — Calibration feedback MCP tools — ``calibration_feedback`` + ``calibration_stats``.
+- `consolidation.py` (~2358 tok, huge) — Memory-consolidation MCP tools.
 - `core.py` (~1508 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~1144 tok, large) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
-- `governance.py` (~4647 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
-- `graph.py` (~2204 tok, huge) — Knowledge-graph + causal-graph MCP tools.
-- `_helpers.py` (~596 tok, large) — Shared tool-internal helpers — workspace paths + lazy-init singletons.
+- `governance.py` (~4642 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
+- `graph.py` (~2201 tok, huge) — Knowledge-graph + causal-graph MCP tools.
+- `_helpers.py` (~816 tok, large) — Shared tool-internal helpers — workspace paths + lazy-init singletons.
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
-- `kernels.py` (~1905 tok, huge) — MIND kernel + compiled-truth MCP tools.
-- `memory_ops.py` (~7082 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
+- `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
+- `memory_ops.py` (~7079 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
 - `public.py` (~4238 tok, huge) — # mypy: disable-error-code="no-any-return"
-- `recall.py` (~4950 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~4947 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 ### `src/mind_mem/`
 
