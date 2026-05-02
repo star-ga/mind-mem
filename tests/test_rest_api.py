@@ -47,9 +47,17 @@ def workspace(tmp_path: Any) -> str:
 
 @pytest.fixture()
 def client(workspace: str, monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
-    """TestClient with no auth configured."""
+    """TestClient with no auth configured.
+
+    v3.7.0 H4: REST auth fails closed by default. ``TestClient`` runs in
+    process and never binds a real socket, so the loopback opt-in env
+    var is the cleanest way to exercise the unauthenticated code paths
+    that all of these tests still exercise (rate limit, validation,
+    schema envelope, etc).
+    """
     monkeypatch.delenv("MIND_MEM_TOKEN", raising=False)
     monkeypatch.delenv("MIND_MEM_ADMIN_TOKEN", raising=False)
+    monkeypatch.setenv("MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST", "1")
     monkeypatch.setenv("MIND_MEM_WORKSPACE", workspace)
     app = create_app(workspace)
     with TestClient(app, raise_server_exceptions=False) as tc:
@@ -304,6 +312,7 @@ class TestRateLimit:
         """429 is returned after exceeding per-client limit."""
         monkeypatch.delenv("MIND_MEM_TOKEN", raising=False)
         monkeypatch.delenv("MIND_MEM_ADMIN_TOKEN", raising=False)
+        monkeypatch.setenv("MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST", "1")
         monkeypatch.setenv("MIND_MEM_WORKSPACE", workspace)
 
         from mind_mem.mcp.infra.rate_limit import SlidingWindowRateLimiter, _rate_limiters, _rate_limiters_lock

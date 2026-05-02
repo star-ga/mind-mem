@@ -383,10 +383,23 @@ class TestTokenVerification(unittest.TestCase):
         else:
             os.environ.pop("MIND_MEM_TOKEN", None)
 
-    def test_no_token_configured_allows_all(self):
+    def test_no_token_configured_fails_closed(self):
+        # v3.7.0 H4: missing MIND_MEM_TOKEN no longer auto-allows requests.
+        # The operator must explicitly opt in via the loopback env var
+        # (set by ``--allow-unauthenticated-localhost``).
         os.environ.pop("MIND_MEM_TOKEN", None)
-        self.assertTrue(self.mod.verify_token({}))
-        self.assertTrue(self.mod.verify_token({"Authorization": "Bearer anything"}))
+        os.environ.pop("MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST", None)
+        self.assertFalse(self.mod.verify_token({}))
+        self.assertFalse(self.mod.verify_token({"Authorization": "Bearer anything"}))
+
+    def test_no_token_configured_with_loopback_optin_allows_all(self):
+        os.environ.pop("MIND_MEM_TOKEN", None)
+        os.environ["MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST"] = "1"
+        try:
+            self.assertTrue(self.mod.verify_token({}))
+            self.assertTrue(self.mod.verify_token({"Authorization": "Bearer anything"}))
+        finally:
+            os.environ.pop("MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST", None)
 
     def test_valid_bearer_token(self):
         os.environ["MIND_MEM_TOKEN"] = "secret123"

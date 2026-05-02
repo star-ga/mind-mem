@@ -29,7 +29,11 @@ except ImportError as _err:  # pragma: no cover
     raise ImportError("mind-mem REST API requires the 'api' extra: pip install 'mind-mem[api]'") from _err
 
 from mind_mem.mcp.infra.constants import MCP_SCHEMA_VERSION
-from mind_mem.mcp.infra.http_auth import _check_token, verify_token
+from mind_mem.mcp.infra.http_auth import (
+    ALLOW_UNAUTH_ENV,
+    _check_token,
+    verify_token,
+)
 from mind_mem.mcp.infra.rate_limit import SlidingWindowRateLimiter, _get_client_rate_limiter
 from mind_mem.mcp.infra.workspace import use_workspace
 from mind_mem.schema_version import CURRENT_SCHEMA_VERSION
@@ -141,7 +145,10 @@ def _verify_bearer(token: str | None) -> tuple[bool, str, tuple[str, ...]]:
        agent_id from ``sub``/``email`` claim, scopes extracted from
        ``scope``/``scopes``/``roles`` claims.
     4. MIND_MEM_TOKEN match → agent_id "user"
-    5. No auth configured → anonymous access allowed, agent_id "anonymous"
+    5. No auth configured → fail CLOSED (v3.7.0 H4); operator must opt
+       in via ``MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST=1`` for tests
+       or loopback-only deployments. Pre-v3.7.0 anonymous access is
+       no longer the default.
     """
     if token is None:
         headers: dict[str, str] = {}
@@ -822,7 +829,56 @@ app = create_app()
 # ---------------------------------------------------------------------------
 
 
-def run(host: str = "127.0.0.1", port: int = 8080, workspace: str | None = None) -> None:
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def _auth_is_configured() -> bool:
+    """Return True when at least one authentication mechanism is set."""
+    if _check_token() is not None:
+        return True
+    if os.environ.get("MIND_MEM_ADMIN_TOKEN") is not None:
+        return True
+    if os.environ.get("MIND_MEM_API_KEY_DB"):
+        return True
+    if os.environ.get("OIDC_ISSUER") and os.environ.get("OIDC_AUDIENCE"):
+        return True
+    return False
+
+
+def _enforce_fail_closed(host: str, allow_unauthenticated_localhost: bool) -> None:
+    """v3.7.0 H4: refuse to bind a network port without authentication.
+
+    Raises :class:`SystemExit` with a structured message when:
+
+    * No auth is configured AND ``--allow-unauthenticated-localhost``
+      is not set → unauthenticated bind is forbidden.
+    * ``--allow-unauthenticated-localhost`` is set BUT ``host`` is not
+      a loopback interface → routable unauthenticated bind is forbidden.
+    """
+    if _auth_is_configured():
+        return
+    if not allow_unauthenticated_localhost:
+        raise SystemExit(
+            "mind-mem REST: refusing to start without authentication.\n"
+            "  Set MIND_MEM_TOKEN, MIND_MEM_ADMIN_TOKEN, MIND_MEM_API_KEY_DB,\n"
+            "  or OIDC_ISSUER+OIDC_AUDIENCE — or pass\n"
+            "  --allow-unauthenticated-localhost to bind 127.0.0.1 only."
+        )
+    if host not in _LOOPBACK_HOSTS:
+        raise SystemExit(
+            "mind-mem REST: --allow-unauthenticated-localhost requires a loopback bind.\n"
+            f"  Refusing to listen on host={host!r} without auth.\n"
+            "  Use --host 127.0.0.1 (or localhost / ::1)."
+        )
+
+
+def run(
+    host: str = "127.0.0.1",
+    port: int = 8080,
+    workspace: str | None = None,
+    *,
+    allow_unauthenticated_localhost: bool = False,
+) -> None:
     """Launch the REST API with uvicorn.
 
     Parameters
@@ -833,11 +889,19 @@ def run(host: str = "127.0.0.1", port: int = 8080, workspace: str | None = None)
         TCP port (default ``8080``).
     workspace:
         mind-mem workspace path; falls back to ``MIND_MEM_WORKSPACE`` or cwd.
+    allow_unauthenticated_localhost:
+        v3.7.0 H4: explicit operator opt-in to skip authentication.
+        Permitted only when ``host`` is a loopback interface; routable
+        binds without auth are refused at startup.
     """
     try:
         import uvicorn  # type: ignore[import-untyped]
     except ImportError as err:  # pragma: no cover
         raise ImportError("uvicorn is required to run the REST API server. Install: pip install 'mind-mem[api]'") from err
+
+    _enforce_fail_closed(host, allow_unauthenticated_localhost)
+    if allow_unauthenticated_localhost and not _auth_is_configured():
+        os.environ[ALLOW_UNAUTH_ENV] = "1"
 
     server_app = create_app(workspace)
     uvicorn.run(server_app, host=host, port=port)

@@ -20,10 +20,17 @@ surface below them in trace output.
 
 from __future__ import annotations
 
+import os
+
 from fastmcp import FastMCP
 
 from mind_mem.mcp import resources as _resources
-from mind_mem.mcp.infra.http_auth import _build_http_auth_tokens, _check_token, check_token_strength
+from mind_mem.mcp.infra.http_auth import (
+    ALLOW_UNAUTH_ENV,
+    _build_http_auth_tokens,
+    _check_token,
+    check_token_strength,
+)
 from mind_mem.mcp.infra.workspace import _workspace
 from mind_mem.mcp.tools import (
     agent as _tools_agent,
@@ -114,6 +121,39 @@ from mind_mem.mcp.tools import public as _tools_public  # noqa: E402
 _tools_public.register(mcp)
 
 
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def _enforce_http_auth_or_localhost(host: str, allow_unauthenticated_localhost: bool) -> None:
+    """v3.7.0 H4: refuse to expose the MCP HTTP transport without auth.
+
+    The previous behaviour logged a warning and started anyway, leaving
+    every mutating MCP tool reachable from any client that could reach
+    the listening socket. The contract now: either auth is configured
+    (``MIND_MEM_TOKEN`` / ``MIND_MEM_ADMIN_TOKEN`` /
+    ``OIDC_ISSUER+OIDC_AUDIENCE``), or the operator passes
+    ``--allow-unauthenticated-localhost`` AND binds to a loopback
+    interface. Anything else exits non-zero before the listener opens.
+    """
+    has_token = _check_token() is not None
+    has_admin = os.environ.get("MIND_MEM_ADMIN_TOKEN") is not None
+    has_oidc = os.environ.get("OIDC_ISSUER") is not None and os.environ.get("OIDC_AUDIENCE") is not None
+    if has_token or has_admin or has_oidc:
+        return
+    if not allow_unauthenticated_localhost:
+        raise SystemExit(
+            "mind-mem-mcp: refusing to start HTTP transport without authentication.\n"
+            "  Set MIND_MEM_TOKEN or MIND_MEM_ADMIN_TOKEN, configure OIDC,\n"
+            "  or pass --allow-unauthenticated-localhost (binds 127.0.0.1 only)."
+        )
+    if host not in _LOOPBACK_HOSTS:
+        raise SystemExit(
+            "mind-mem-mcp: --allow-unauthenticated-localhost requires a loopback bind.\n"
+            f"  Refusing to listen on host={host!r} without auth.\n"
+            "  Use --host 127.0.0.1 (or localhost / ::1)."
+        )
+
+
 def main() -> None:
     """Entry point for the MCP server (used by console_scripts and __main__)."""
     import argparse
@@ -122,8 +162,17 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Mind-Mem MCP Server")
     parser.add_argument("--transport", choices=["stdio", "http"], default="stdio", help="Transport protocol (default: stdio)")
+    parser.add_argument("--host", default="127.0.0.1", help="HTTP bind host (default: 127.0.0.1; only used with --transport http)")
     parser.add_argument("--port", type=int, default=8765, help="HTTP port (only used with --transport http)")
     parser.add_argument("--token", default=None, help="Bearer token for HTTP auth (or set MIND_MEM_TOKEN env var)")
+    parser.add_argument(
+        "--allow-unauthenticated-localhost",
+        action="store_true",
+        help=(
+            "v3.7.0 H4: explicit operator opt-in to start HTTP transport without "
+            "authentication. Requires a loopback bind (127.0.0.1 / localhost / ::1)."
+        ),
+    )
     parser.add_argument("--watch", action="store_true", help="Auto-reindex when workspace .md files change")
     parser.add_argument(
         "--watch-interval",
@@ -140,6 +189,11 @@ def main() -> None:
         )
         os.environ["MIND_MEM_TOKEN"] = args.token
 
+    if args.transport == "http":
+        _enforce_http_auth_or_localhost(args.host, args.allow_unauthenticated_localhost)
+        if args.allow_unauthenticated_localhost and _check_token() is None and os.environ.get("MIND_MEM_ADMIN_TOKEN") is None:
+            os.environ[ALLOW_UNAUTH_ENV] = "1"
+
     if args.transport == "http" and _check_token() and not os.environ.get("MIND_MEM_ADMIN_TOKEN"):
         warnings.warn(
             "HTTP transport without MIND_MEM_ADMIN_TOKEN: authenticated clients only receive user scope. "
@@ -154,7 +208,7 @@ def main() -> None:
         "mcp_server_start",
         transport=args.transport,
         workspace=_workspace(),
-        auth="token" if token else "none",
+        auth="token" if token else ("loopback-unauth" if args.allow_unauthenticated_localhost else "none"),
     )
 
     if args.watch:
@@ -183,14 +237,14 @@ def main() -> None:
         if not auth_tokens:
             _log.warning(
                 "mcp_http_no_auth",
-                hint="HTTP transport running without token auth. Set MIND_MEM_TOKEN or MIND_MEM_ADMIN_TOKEN for security.",
+                hint="HTTP transport running unauthenticated on loopback (operator opt-in).",
             )
         else:
             from fastmcp.server.auth import StaticTokenVerifier
 
             mcp.auth = StaticTokenVerifier(tokens=auth_tokens)
             _log.info("mcp_auth_enforced", mode="static_token", token_count=len(auth_tokens))
-        mcp.run(transport="sse", port=args.port)
+        mcp.run(transport="sse", host=args.host, port=args.port)
     else:
         mcp.run()
 

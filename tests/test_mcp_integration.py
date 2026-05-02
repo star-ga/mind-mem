@@ -148,8 +148,15 @@ def _clean_auth_env(monkeypatch):
 class TestBearerTokenAuth:
     """verify_token() honours MIND_MEM_TOKEN with constant-time compare."""
 
-    def test_no_token_configured_allows_any_request(self, server):
-        """When MIND_MEM_TOKEN is unset, every request passes."""
+    def test_no_token_configured_fails_closed(self, server, monkeypatch):
+        """v3.7.0 H4: missing MIND_MEM_TOKEN no longer auto-allows requests."""
+        monkeypatch.delenv("MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST", raising=False)
+        assert server.verify_token({}) is False
+        assert server.verify_token({"Authorization": "Bearer anything"}) is False
+
+    def test_no_token_configured_with_loopback_optin_allows_any_request(self, server, monkeypatch):
+        """v3.7.0 H4: explicit operator opt-in keeps loopback workflows green."""
+        monkeypatch.setenv("MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST", "1")
         assert server.verify_token({}) is True
         assert server.verify_token({"Authorization": "Bearer anything"}) is True
 

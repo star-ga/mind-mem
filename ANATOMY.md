@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 683 | **Est. tokens:** ~1,361,430
-**Generated:** 2026-05-02 01:19 UTC
+**Files:** 684 | **Est. tokens:** ~1,365,325
+**Generated:** 2026-05-02 01:29 UTC
 
 ## Token Budget Guide
 
@@ -54,15 +54,15 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 145 | ~485,531 |
-| `src/mind_mem/api/` | 5 | ~15,104 |
-| `src/mind_mem/mcp/` | 3 | ~3,250 |
-| `src/mind_mem/mcp/infra/` | 8 | ~6,247 |
+| `src/mind_mem/` | 145 | ~485,633 |
+| `src/mind_mem/api/` | 5 | ~15,697 |
+| `src/mind_mem/mcp/` | 3 | ~3,857 |
+| `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
 | `src/mind_mem/mcp/tools/` | 18 | ~41,103 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 231 | ~451,128 |
+| `tests/` | 232 | ~453,272 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -377,7 +377,7 @@
 - `auth.py` (~2476 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
 - `grpc_server.py` (~1723 tok, huge) — gRPC wire protocol for mind-mem (v4.0 prep).
 - `__init__.py` (~20 tok, tiny)
-- `rest.py` (~8168 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
+- `rest.py` (~8761 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
 ### `src/mind_mem/`
 
 - `apply_engine.py` (~16269 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
@@ -455,7 +455,7 @@
 - `acl.py` (~902 tok, large) — Per-tool ACL — scope enforcement for the MCP surface.
 - `config.py` (~817 tok, large) — ``mind-mem.json`` config loading + configurable limits.
 - `constants.py` (~98 tok, small) — MCP-surface-wide constants shared by the infra submodules.
-- `http_auth.py` (~1005 tok, large) — HTTP bearer-token authentication helpers for the MCP surface.
+- `http_auth.py` (~1454 tok, large) — HTTP bearer-token authentication helpers for the MCP surface.
 - `__init__.py` (~449 tok, medium) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
 - `observability.py` (~1175 tok, large) — Observability + DB-busy helpers for the MCP surface.
 - `rate_limit.py` (~958 tok, large) — Per-client sliding-window rate limiter for the MCP surface.
@@ -464,7 +464,7 @@
 
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
 - `resources.py` (~1342 tok, large) — MCP ``@mcp.resource`` declarations.
-- `server.py` (~1693 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
+- `server.py` (~2300 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/`
 
 - `mcp_server.py` (~1780 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
@@ -496,7 +496,7 @@
 - `mind_ffi.py` (~5481 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~8903 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~9005 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `model_audit.py` (~4001 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
 - `mrs.py` (~1604 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `multi_modal.py` (~1659 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -709,6 +709,7 @@
 - `test_hash_chain_v2.py` (~3462 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hook_installer_force_preserves_siblings.py` (~703 tok, large) — Regression test for the --force clobber bug in hook_installer."""
 - `test_hook_installer_registry.py` (~3841 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_http_auth_fail_closed.py` (~1724 tok, huge) — v3.7.0 H4: HTTP / REST auth must fail CLOSED by default.
 - `test_hybrid_recall.py` (~2855 tok, huge) — Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
 - `test_hybrid_search.py` (~599 tok, large) — Tests for hybrid search functionality."""
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -727,8 +728,8 @@
 - `test_llm_noise_profile.py` (~2354 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_maintenance_migrate.py` (~710 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_mcp_arch_mind_tools.py` (~2346 tok, huge) — Tests for the arch-mind MCP tool wrapper.
-- `test_mcp_integration.py` (~5177 tok, huge) — MCP transport and auth integration tests (#474).
-- `test_mcp_server.py` (~4988 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
+- `test_mcp_integration.py` (~5301 tok, huge) — MCP transport and auth integration tests (#474).
+- `test_mcp_server.py` (~5169 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
 - `test_mcp_tools.py` (~277 tok, medium) — Tests for MCP server tool definitions."""
 - `test_mcp_tool_surface_v3_2.py` (~1733 tok, huge) — v3.2.0 — consolidated MCP public dispatcher tests."""
 - `test_mcp_v140.py` (~5502 tok, huge) — Tests for MCP v1.4.0 features — issues #29, #31, #35, #36.
@@ -791,7 +792,7 @@
 - `test_rerank_ensemble.py` (~1531 tok, huge) — v3.3.0 Tier 4 #9 — reranker ensemble via Borda count.
 - `test_reranking.py` (~246 tok, medium) — Tests for reranking module."""
 - `test_rest_api_oidc.py` (~2686 tok, huge) — Tests for OIDC callback + admin API key endpoints (v3.2.0)."""
-- `test_rest_api.py` (~3568 tok, huge) — Tests for the mind-mem REST API layer (v3.2.0).
+- `test_rest_api.py` (~3683 tok, huge) — Tests for the mind-mem REST API layer (v3.2.0).
 - `test_retrieval_diagnostics.py` (~2419 tok, huge) — Tests for retrieval diagnostics (#428), corpus isolation (#429), and intent instrumentation (#430)."""
 - `test_retrieval_graph.py` (~2242 tok, huge) — Tests for retrieval_graph.py — retrieval logging, co-retrieval graph, hard negatives."""
 - `test_retrieval_trace.py` (~978 tok, large) — Tests for v3.3.0 per-feature retrieval attribution."""

@@ -655,7 +655,12 @@ def _cmd_skill_score(args: argparse.Namespace) -> int:
 def _cmd_serve(args: argparse.Namespace) -> int:
     from mind_mem.api.rest import run
 
-    run(host=args.host, port=args.port, workspace=_workspace())
+    run(
+        host=args.host,
+        port=args.port,
+        workspace=_workspace(),
+        allow_unauthenticated_localhost=args.allow_unauthenticated_localhost,
+    )
     return 0
 
 
@@ -847,6 +852,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_serve.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     p_serve.add_argument("--port", type=int, default=8080, help="TCP port (default: 8080)")
+    p_serve.add_argument(
+        "--allow-unauthenticated-localhost",
+        action="store_true",
+        help=(
+            "v3.7.0 H4: explicit operator opt-in to start the REST API without "
+            "authentication. Requires a loopback bind (127.0.0.1 / localhost / ::1)."
+        ),
+    )
     p_serve.set_defaults(func=_cmd_serve)
 
     # audit-model — static security scan of any local model checkpoint

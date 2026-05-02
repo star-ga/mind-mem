@@ -32,6 +32,27 @@ def _check_token() -> str | None:
     return os.environ.get("MIND_MEM_TOKEN")
 
 
+# Env var name for the explicit "I know there is no auth and I accept that
+# only because I'm bound to loopback" opt-out. Set by the
+# ``--allow-unauthenticated-localhost`` CLI flag on both ``mind-mem-mcp``
+# and ``mm serve``; tests using the in-process FastAPI/MCP TestClient set
+# it directly because TestClient does not bind a real port. Any other
+# value (or absence) means HTTP/REST auth is fail-CLOSED. v3.7.0 H4.
+ALLOW_UNAUTH_ENV = "MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST"
+
+
+def _unauthenticated_explicitly_allowed() -> bool:
+    """Return True when the operator has opted into unauthenticated localhost.
+
+    The opt-in is deliberately scoped — ``verify_token`` and
+    ``_verify_bearer`` consult this when no token is configured; the
+    CLI startup paths additionally enforce that binding is loopback-only
+    before honouring it.
+    """
+    val = os.environ.get(ALLOW_UNAUTH_ENV, "").strip().lower()
+    return val in ("1", "true", "yes", "on")
+
+
 _MAX_TOKEN_LEN = 4096
 # Recommended minimum token length for production deployments.
 # Shorter tokens are accepted (for backward compatibility and testing)
@@ -63,17 +84,31 @@ def check_token_strength() -> list[str]:
 def verify_token(headers: dict) -> bool:
     """Verify Bearer token from request headers. Constant-time compare.
 
-    Returns True if:
-      - No token is configured (open access), or
-      - Token matches via Authorization: Bearer <token> or X-MindMem-Token header.
+    v3.7.0 H4: fail-CLOSED by default when no token is configured.
+    Pre-v3.7.0 returned True in that case ("auth disabled — allow"),
+    which left HTTP/REST exposed unauthenticated for any operator who
+    forgot to set ``MIND_MEM_TOKEN``. The new contract:
 
-    Returns False if token is configured but missing/invalid.
-    Tokens longer than _MAX_TOKEN_LEN are rejected to prevent DoS via
-    oversized header values.
+    * Token configured + matching header → True
+    * Token configured + missing/wrong header → False
+    * No token configured + ``MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST=1``
+      → True (operator opted in for loopback-only deployments / tests)
+    * No token configured + opt-in absent → False (fail-closed)
+
+    Tokens longer than ``_MAX_TOKEN_LEN`` are rejected before any
+    compare to prevent DoS via oversized header values.
     """
     expected = _check_token()
     if expected is None:
-        return True  # No auth configured — allow
+        # v3.7.0 H4: refuse unauthenticated requests unless the operator
+        # has explicitly opted in via the env var. The CLI binds the
+        # server to loopback when the matching ``--allow-unauthenticated-
+        # localhost`` flag is passed; tests set the env var directly
+        # because the in-process TestClient skips network binding.
+        if _unauthenticated_explicitly_allowed():
+            return True
+        metrics.inc("mcp_http_auth_failures")
+        return False
 
     # Try Authorization: Bearer <token>
     auth = headers.get("authorization", headers.get("Authorization", ""))

@@ -2,6 +2,127 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.7.0 (2026-05-01)
+
+**External-audit response — HTTP/REST hardening + cross-platform
+rollback fix.** Closes the four high-priority findings and the
+install/dependency hygiene findings raised by the 2026-05-01 audit.
+**This release contains BREAKING CHANGES for HTTP/REST deployments:**
+authentication is now fail-CLOSED by default. Operators that have
+relied on the implicit "no token configured → anonymous access
+allowed" behaviour must take action — see *Migration* below.
+
+### Security — BREAKING
+
+- **HTTP/REST auth fails CLOSED by default (audit H4).** The shared
+  ``verify_token`` helper and the REST ``_verify_bearer`` dependency
+  no longer return ``True`` when no auth is configured. Pre-3.7.0
+  this left every mutating MCP tool (and the entire REST mutation
+  surface) reachable unauthenticated for any operator who forgot to
+  set ``MIND_MEM_TOKEN``. The new contract:
+  - Token configured + matching header → allowed
+  - Token configured + missing/wrong header → rejected
+  - No token + ``MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST=1`` →
+    allowed (operator opt-in for loopback-only deployments / tests)
+  - No token + opt-in absent → **rejected**
+- **MCP HTTP transport refuses to start without authentication.**
+  ``mind-mem-mcp --transport http`` exits non-zero unless either an
+  auth mechanism is configured (``MIND_MEM_TOKEN`` /
+  ``MIND_MEM_ADMIN_TOKEN`` / ``OIDC_ISSUER+OIDC_AUDIENCE``) or the
+  new ``--allow-unauthenticated-localhost`` flag is passed. The
+  flag additionally requires a loopback bind (``127.0.0.1`` /
+  ``localhost`` / ``::1``); routable unauthenticated binds are
+  rejected by the same gate.
+- **REST API ``mm serve`` wears the same gate.** ``run(host, port,
+  ..., allow_unauthenticated_localhost=False)`` exits at startup if
+  no auth is configured and the explicit opt-in is absent or the
+  bind host is not loopback.
+
+### Fixed
+
+- **Snapshot rollback now preserves files cross-platform (audit
+  H3).** Two regressions in v3.6.9's path-injection sweep, both
+  caused by ``os.path.realpath`` flipping the prefix on macOS
+  (``/var`` → ``/private/var``) and on Windows short-name runners
+  (``RUNNER~1`` → ``runneradmin``):
+  - ``_build_cleanup_inventory`` walked the realpath-resolved root
+    and emitted entries via ``relpath(child, ws)`` against the un-
+    resolved ``ws``, producing upward-traversing keys
+    (``../../private/...``) that never matched the manifest on
+    restore. Every legitimate file in the touched root was deleted
+    as an "orphan" on rollback.
+  - ``_cleanup_orphans_from_manifest`` (the v3.6.9 Gemini-CLI fix)
+    replaced ``dirpath = os.path.join(ws, d)`` with
+    ``dirpath = safe_d`` (the realpath-resolved value), reproducing
+    bug #1's failure mode in the cleanup walk.
+  Both functions now validate via ``_safe_child_path`` for path-
+  traversal protection and walk the un-resolved
+  ``os.path.join(ws, root)`` so every relpath stays consistent. The
+  malicious-manifest defence is unchanged. Cross-platform regression
+  test mimics the prefix divergence on Linux via a symlink so CI
+  catches this on every supported OS.
+- **``install.sh`` survives PEP 668 marker.** The pip ``--user``
+  fallback now retries with ``--break-system-packages`` when the
+  Debian / Ubuntu / recent Fedora ``EXTERNALLY-MANAGED`` marker
+  blocks the first attempt. ``--user`` already isolates the install
+  to ``~/.local`` so the marker's protection is redundant for this
+  path. The pipx path is unaffected.
+
+### Changed
+
+- **Install flow rewritten (audit H1).** ``install.sh`` now installs
+  via ``pipx install "mind-mem[mcp]"`` (preferred) or
+  ``pip install --user "mind-mem[mcp]"`` (fallback), then resolves
+  the ``mind-mem-mcp`` console script and writes that resolved path
+  into every client's MCP config. Previous behaviour wrote
+  ``python3 <repo>/mcp_server.py`` with no PYTHONPATH guidance, so
+  the first cold start blew up on ``ModuleNotFoundError: mind_mem``.
+  README, ``mcp_entry``, and the CI matrix all moved to the new
+  flow; ``install.sh --no-install`` is the path tests use.
+- **Dependency declarations reconciled (audit H2).**
+  ``requirements-optional.txt`` is now scoped to the embedding +
+  reranking stack (onnxruntime, tokenizers, sentence-transformers);
+  ``fastmcp`` lives only in the ``[mcp]`` extra (``>=3.2.0``). The
+  pre-3.7.0 file pinned ``fastmcp==2.14.5`` while pyproject demanded
+  ``>=3.2.0`` — anyone using ``--require-hashes`` would resolve a
+  fastmcp version that didn't satisfy the import surface. The error
+  message in ``src/mcp_server.py`` was updated to match.
+
+### Migration
+
+If your deployment depended on the implicit "no token →
+unauthenticated access" behaviour:
+
+1. **Recommended.** Set ``MIND_MEM_TOKEN=<random-32-bytes>`` and
+   ``MIND_MEM_ADMIN_TOKEN=<random-32-bytes>``. ``openssl rand -hex
+   32`` is fine. Restart the server.
+2. **Loopback-only deployments / tests.** Pass
+   ``--allow-unauthenticated-localhost`` to ``mind-mem-mcp`` /
+   ``mm serve``, or set
+   ``MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST=1`` in the process
+   environment, AND keep the bind host on ``127.0.0.1`` /
+   ``localhost`` / ``::1``.
+3. **OIDC-only deployments.** ``OIDC_ISSUER`` + ``OIDC_AUDIENCE``
+   counts as auth — no extra changes needed.
+
+The Docker Compose deployment was already safe: ``${VAR:?must be
+set}`` for ``MIND_MEM_TOKEN`` etc. forces a fail-fast before this
+release. The change makes the manual-launch path match.
+
+### Internals
+
+- New env var: ``MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST`` (read
+  by ``_unauthenticated_explicitly_allowed`` in ``http_auth``).
+- New CLI flags: ``--host`` (was implicit ``127.0.0.1``) and
+  ``--allow-unauthenticated-localhost`` on ``mind-mem-mcp``.
+- New helpers: ``mcp.server._enforce_http_auth_or_localhost``,
+  ``api.rest._enforce_fail_closed``, ``api.rest._auth_is_configured``.
+- New regression tests: ``tests/test_http_auth_fail_closed.py``
+  (15 cases), ``tests/test_apply_engine.py::
+  TestSnapshotRollbackSymlinkedWorkspace`` (Linux symlink mimics
+  macOS / Windows prefix divergence),
+  ``TestMaliciousManifestDoesNotEscape``.
+
 ## 3.6.9 (2026-04-22)
 
 **Security — CodeQL path-injection hardening.** The v3.4.2 → v3.6.5
@@ -1518,7 +1639,7 @@ These remain on the roadmap under v2.1.0 and ship when the training infrastructu
 - `verify_merkle` MCP tool (user scope) — builds the tree from the live FTS index, returns `{ok, root, proof, block_id}` for the supplied block.
 - `mind_mem_verify` MCP tool (user scope) — invokes the standalone verifier against the active workspace so agents can trigger verification without shelling out.
 
-### Fixed (audit-driven, pre-release — 3-LLM joint: Claude + codex/GPT-5.4 + Gemini/Grok via API)
+### Fixed (audit-driven, pre-release — 3-LLM joint: Claude + codex/GPT-5.5 + Gemini/Grok via API)
 - **[CRITICAL]** `sqlite_index.merkle_leaves()` was querying `blocks.content_hash`, a column that doesn't exist (content hashes live on `index_meta`). Every call would have crashed with `no such column`. Fixed to join `index_meta` with `blocks`.
 - **[CRITICAL]** `HashChainV2` gained `open_readonly(path)` + `readonly=True` constructor flag. The verifier now opens the ledger via `file:...?mode=ro` and skips `_init_db`, so auditing a workspace never mutates schema — not even on DBs that predate the current layout.
 - **[HIGH]** `verify_cli` `--snapshot` now canonicalises the path and requires it to stay under the workspace root. `..` traversal and absolute paths are rejected with a structured failure. `mind_mem_verify` MCP tool enforces the same invariant at the MCP layer so hostile callers can't coax the verifier into reading an external directory.
@@ -1541,7 +1662,7 @@ These remain on the roadmap under v2.1.0 and ship when the training infrastructu
 
 ## 2.0.0b1 (2026-04-13)
 
-**v2.0.0b1: inference acceleration — Python-only subset, hardened via 3-LLM joint audit (Claude Opus 4.6 + Grok 4.1 Fast + codex/GPT-5.4). LLM prefix cache + speculative prefetch predictor. The MIND-compiled hot paths (BM25F, SHA3-512, vector similarity, RRF fusion) are deferred until the `mindc` toolchain is available.**
+**v2.0.0b1: inference acceleration — Python-only subset, hardened via 3-LLM joint audit (Claude Opus 4.6 + Grok 4.1 Fast + codex/GPT-5.5). LLM prefix cache + speculative prefetch predictor. The MIND-compiled hot paths (BM25F, SHA3-512, vector similarity, RRF fusion) are deferred until the `mindc` toolchain is available.**
 
 ### Added
 - `prefix_cache.py` — per-namespace LRU prefix cache with optional TTL. Keys include the namespace so cross-encoder, intent-router, and query-expansion caches never collide. Registry bounded at 64 namespaces to prevent dynamic-namespace DoS; `set_max_namespaces()` exposes the cap. `PrefixCache.stats()` surfaces hit/miss/evictions/expirations counters; `all_stats()` snapshots every registered cache.
