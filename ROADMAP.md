@@ -785,6 +785,191 @@ a prerequisite for the production-deployment work above:
 
 **Estimated:** ~800 lines storage adapter + ~600 lines REST + ~400 lines JS SDK + ~1200 lines structural-debt refactor + deploy artifacts. New optional extras: `mind-mem[postgres]`, `mind-mem[api]`, `mind-mem[otel]`.
 
+### Security hardening pass (from 2026-04-28 audits)
+
+Two parallel audits ran on v3.1.8 — `threat-modeler` (STRIDE on
+governance + apply engine + local backends) and `api-security`
+(MCP wire surface + REST layer + crypto). Reports archived at
+`security/threat-model-2026-04-28.md` and
+`security/api-security-2026-04-28.md`.
+
+**Goal:** tight security defaults for the localhost threat model
+without making mind-mem painful to run. Every item below has its
+UX cost noted; "don't-bother" items are explicit so future-us
+doesn't accidentally implement them.
+
+#### Must fix in v3.2.0 (zero-or-low UX cost, high impact)
+
+- [ ] **N-01 / T-002: Default-on ACL gate.** `MIND_MEM_ADMIN_TOKEN`
+  unset currently disables the ACL — admin tools (`delete_memory_item`,
+  `export_memory`, `decrypt_file`, `rollback_proposal`,
+  `approve_apply`) are callable from any stdio client with zero
+  elevation. Flip to default-on; introduce
+  `MIND_MEM_ACL_DISABLED=true` as the explicit opt-out.
+  `mcp/infra/observability.py:83-86`. **UX cost: none** — existing
+  `MIND_MEM_SCOPE=user` already keeps user-tools open.
+- [ ] **T-006: Bound `vault_scan` / `vault_sync` filesystem walks.**
+  Empty `MIND_MEM_VAULT_ALLOWLIST` lets a caller pass
+  `vault_root=/etc` and exfil arbitrary host markdown. Reject the
+  call when allowlist is empty *or* `vault_root` resolves outside
+  every allowlisted prefix (use `os.path.realpath` on both sides
+  for symlink-safety, per gap #3 in the threat-model honest-gaps
+  list). **UX cost: low** — operator must set the allowlist once.
+- [ ] **N-02: REST `rollback_proposal` drops `reason`.** Endpoint
+  silently fails (returns HTTP 200 wrapping an app-level error).
+  Add `reason: str = Field(..., min_length=8, max_length=2000)` to
+  `RollbackProposalRequest`; pass it through. `api/rest.py:629-633`
+  + `RollbackProposalRequest` model line 382. **UX cost: low** —
+  REST callers must pass `reason` (already required by the MCP
+  tool, so this aligns parity).
+- [ ] **N-04: `staged_change` rollback dispatcher silently drops
+  `reason`.** Same root cause as N-02 on the dispatcher path; agent
+  callers using `staged_change(phase="rollback")` get a misleading
+  success-shaped error. Forward `rationale` → `reason`.
+  `mcp/tools/public.py:192`. **UX cost: none.**
+- [ ] **T-003: `propose_update` input bounds bypass.** `governance.py`
+  caps `statement` at 500 chars but `rationale` and `tags` are
+  written verbatim into `SIGNALS.md`. Apply
+  `_sanitize_reason_for_markdown` (already in `apply_engine.py:1411`)
+  + bounded length at `propose_update` entry, not just at
+  status-update/rollback. **UX cost: none** — sanitizer is invisible
+  to legitimate callers.
+- [ ] **N-03: Rate limiter collapses all stdio clients into
+  `"default"` bucket.** All 57 tools share one 120/min window in
+  stdio. Fall back to `f"pid-{os.getpid()}"` when no access token
+  exists. `mcp/infra/rate_limit.py:95-103`. **UX cost: none.**
+
+#### Should fix in v3.2.0 (low UX cost, real surface area)
+
+- [ ] **N-05: `/v1/health` leaks workspace absolute path
+  unauthenticated.** Strip `workspace` from the unauth response, or
+  gate the detailed view behind `_require_auth`.
+  `api/rest.py:515-531`. **UX cost: low.**
+- [ ] **N-06: `/v1/metrics` Prometheus exposition unauthenticated.**
+  Add `dependencies=[Depends(_require_auth)]` *or* gate on
+  `request.client.host == "127.0.0.1"`. `api/rest.py:533-551`.
+  **UX cost: none for localhost; low for network deploys (operator
+  configures Prom scrape token).**
+- [ ] **N-07: `/v1/auth/oidc/callback` leaks `scopes` + `agent_id`
+  to any bearer.** Omit `scopes` from response body; validate
+  `OIDC_ISSUER` against an operator allowlist at startup to block
+  JWKS-fetch SSRF. `api/rest.py:704-715`. **UX cost: low.**
+- [ ] **T-004: Webhook/Slack alerting payload exfil.** No URL
+  allowlist; raw payload (workspace path + block excerpts) POSTs
+  to operator-supplied URLs. Add an env-locked URL allowlist; scrub
+  payload (strip absolute paths, replace block content with
+  `block_id` + content hash). `alerting.py:280-303`. **UX cost: low**
+   — operator declares allowed alert hosts once.
+- [ ] **T-005: `--token` CLI arg leaks into `/proc/<pid>/cmdline`.**
+  Reject `--token` hard; require env var (`MIND_MEM_TOKEN`) or
+  stdin. **UX cost: low** — easy migration path.
+- [ ] **T-001 (partial): Content-provenance tags on block writes.**
+  Add `source: agent | user | external` to the block frontmatter
+  written by `propose_update` / `staged_change`; recall surface
+  marks agent-origin content as `untrusted` so downstream agents
+  can ignore embedded instructions. **UX cost: none for users;
+  small system-prompt update for agents.** Closes the
+  cross-session prompt-injection vector by giving the agent a
+  reliable tag to filter on.
+
+#### Nice-to-have in v3.2.x (low priority, low UX cost)
+
+- [ ] **N-08: `decrypt_file` audit trail.** Append
+  `{path, agent_id, timestamp}` to a new `decrypted_files.jsonl`
+  (mirroring `deleted_blocks.jsonl`). Forensic coverage for the
+  most-sensitive admin tool. **UX cost: low.**
+- [ ] **N-10: FTS5 token sanitiser silently drops Unicode.**
+  Allowlist regex `^[a-zA-Z0-9_\-\.]+$` strips Chinese / Japanese /
+  Arabic / emoji queries to empty. Switch to `^[\w\-\.]+$` with
+  `re.UNICODE`; FTS5 quoting still prevents injection.
+  `sqlite_index.py:70-72, 858-861`. **UX cost: low** —
+  improvement, not regression.
+- [ ] **N-11: `export_memory` size cap.** Already capped at 10000;
+  validate caller-supplied `max_blocks` against config limit.
+  Mostly mitigated by N-01. **UX cost: none.**
+- [ ] **N-12: REST rate-limit bucket key uses last-16-chars of
+  token.** Theoretically permits collision attacks; switch to
+  `sha256(token.encode()).hexdigest()[:16]`. `api/rest.py:122-127`.
+  **UX cost: none.** False-positive note: not exploitable in
+  practice (operator controls all tokens).
+- [ ] **N-13: OpenAPI docs unauthenticated.** Set
+  `docs_url=None, redoc_url=None` when `MIND_MEM_TOKEN` is
+  configured *and* host ≠ 127.0.0.1; keep open on localhost for
+  developer UX. `api/rest.py:464-471`. **UX cost: low.**
+- [ ] **T-007: OS-level append-only audit log.** `chattr +a` on
+  Linux, `chflags uappnd` on macOS, applied to `audit.log`. Hash
+  chain detects tampering today; this prevents it. **UX cost: low**
+   — operator runs one privileged command at install.
+- [ ] **T-009: Threat-model `online_trainer.py` separately.** Was
+  not reviewed in this pass; agent feedback feeds local Ollama
+  fine-tune so poisoned proposals could shape the local model.
+  Run a focused threat-modeler dispatch before any external
+  training-data ingest lands. **UX cost: none — this is review
+  work, not code.**
+
+#### Defer to v3.3.x / quarter (real cost, real benefit only at
+multi-tenant scale)
+
+- [ ] **T-008: SQLCipher coverage for FTS5 + sqlite-vec indices.**
+  Today only Markdown is wrapped. For hosted/multi-tenant deploys
+  this is a real gap; for localhost it's documented in code.
+  Decision deferred until we have a multi-tenant deploy target.
+- [ ] **WORM audit chain.** Beyond append-only flag — separate
+  storage class, only relevant for compliance customers.
+- [ ] **gRPC surface audit.** `src/mind_mem/api/grpc_server.py`
+  parallels REST; same auth/rate-limit hygiene needs to be applied
+  once REST changes settle.
+
+#### Don't bother (would hurt UX more than they help)
+
+These came up in audit and were explicitly rejected. Captured here
+so a future review pass doesn't accidentally re-litigate them.
+
+- **CSRF tokens on REST.** Bearer-token auth + browser same-origin
+  policy already block cross-origin POST.
+- **CSP / HSTS headers.** mind-mem REST is agent-facing, not
+  browser-facing.
+- **Treating `MIND_MEM_TOKEN` as a JWT.** It's an opaque static
+  bearer; adding expiry would require a signing ceremony with no
+  benefit on localhost.
+- **mTLS on stdio MCP transport.** Stdio is in-process; TLS at the
+  stdio layer is meaningless. If the HTTP transport is ever exposed
+  on a real network, terminate TLS at a reverse proxy.
+- **Forced rotation of `MIND_MEM_TOKEN`.** Localhost has no
+  credential-stealing adversary; rotation = cron jobs and config
+  churn for zero gain.
+- **Per-tool rate limits (57 separate windows).** A 57-entry map
+  lookup on every call complicates the mental model; the single
+  window already prevents runaway calls.
+- **Audit log for read operations (`recall`, `get_block`).** Would
+  produce ~100x the volume of governance events and surface
+  potentially-sensitive query strings in plaintext logs. The
+  write-path audit chain is sufficient.
+- **N-09: Replace HMAC-CTR custom stream cipher with AES-CTR.** The
+  current `encryption.py:60-73` HMAC-SHA256-in-counter-mode +
+  encrypt-then-MAC construction is cryptographically sound. Migrating
+  to `cryptography.hazmat` adds a non-zero external dep for zero
+  real-world security gain on localhost. Re-evaluate at v4.0 if
+  the encrypted-file format changes anyway.
+
+#### Honest gaps from the 2026-04-28 audits
+
+Surfaced in the reports; tracking here so they're not forgotten:
+
+1. FastMCP transport edge cases (reconnect, multiplexed sessions)
+   not verified without a live instance.
+2. `apply_engine.py:258` `bash validate.sh ws` — `shell=False` is
+   in effect, but only confirmed by inspection.
+3. `agent_bridge.VaultBridge.scan()` symlink behaviour past the
+   allowlist boundary not traced through. Affects T-006 mitigation
+   completeness.
+4. `mind-mem.json` write protection — if a poisoned agent can write
+   the file, it can re-configure alert webhooks or disable the rate
+   limiter. Path not fully traced.
+5. gRPC surface (`api/grpc_server.py`) not audited.
+6. `python-jose` `alg=none` exposure in `OIDCProvider.verify()`
+   confirmed-by-inspection only, not by running the code path.
+
 ## v3.2.1 — Hotfix follow-up
 
 Closes the two architectural CRITICALs surfaced by the v3.2.0
@@ -932,7 +1117,100 @@ underflow, bare exceptions) in commits `b31e862` and `954d473`.
 
 Total: +117 regression tests, 3758 passing as of 2026-04-20.
 
-## v3.7.0 — Model Safety Audit + Social Ingestion (planned)
+## v3.7.0 — External-Audit Response ✅ Released 2026-05-01
+
+Closes the nine findings from the 2026-05-01 external audit
+(`/home/n/.openclaw/workspace/projects/mind-mem-audit-2026-05-01/AUDIT.md`).
+Single `BREAKING` change: HTTP/REST authentication now fails CLOSED
+when no token is configured.
+
+### High-priority audit fixes (4)
+
+- **H1: install path.** `install.sh` now installs the package via
+  pipx (preferred, isolated venv) or `pip --user` (fallback) and
+  wires every MCP client to the `mind-mem-mcp` console script
+  instead of `python3 <repo>/mcp_server.py`. New CI matrix smoke-
+  tests both flows on a clean runner. PEP 668 `EXTERNALLY-MANAGED`
+  marker on Debian / Ubuntu retried with `--break-system-packages`
+  so isolated `--user` installs still succeed.
+- **H2: dependency drift.** `fastmcp` lives only in the `[mcp]`
+  extra (range-pinned `>=3.2.0`). `requirements-optional.txt` is
+  scoped to the embedding/reranking stack only; CI covers
+  `.[mcp]`, `.[api]`, `.[embeddings]`, `.[all]`, hashed-pin
+  re-download, and a clean docker build per release.
+- **H3: cross-platform rollback.** Two bugs in the v3.6.9 path-
+  injection sweep made `BlockStore.restore` walk realpath-resolved
+  inventories on macOS (where `/var → /private/var`) and Windows
+  (short-name expansion); rollback then computed `relpath` against
+  the un-resolved workspace and skipped every file. Both
+  `_build_cleanup_inventory` and `_cleanup_orphans_from_manifest`
+  now walk the un-resolved `os.path.join(ws, root)` after a
+  `_safe_child_path` validation; new symlink-based regression test
+  reproduces the macOS divergence on Linux runners.
+- **H4: HTTP/REST fail-closed.** ⚠ **BREAKING.** The shared
+  `verify_token` helper and the REST `_verify_bearer` dependency
+  no longer return `True` when no auth is configured. New escape
+  hatch: `MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST=1` +
+  `--allow-unauthenticated-localhost` flag enable unauthenticated
+  access only when bound to `127.0.0.1` / `::1` / `localhost`.
+  The MCP HTTP transport now refuses to start without one of
+  these. 15 new tests in `tests/test_http_auth_fail_closed.py`.
+
+### Medium-priority audit fixes (5)
+
+- **M5: CI strictness.** `typecheck` is now blocking (was
+  `continue-on-error: true`); Python 3.14 is required across
+  `ubuntu-latest` / `macos-latest` / `windows-latest`; coverage
+  gate raised 60 → 70 (current local ~73%); new
+  `extras-install`, `pinned-requirements`, `docker-build`, and
+  `compose-config` matrix jobs.
+- **M6: compose healthcheck.** Postgres healthcheck now reads
+  `$$POSTGRES_USER` / `$$POSTGRES_DB` at probe time so operator
+  overrides don't render the container unhealthy. New
+  `compose-config (defaults | overrides)` matrix job locks the
+  rendered command shape against regression.
+- **M7: `recall(mode="vector")`.** Removed from public surface —
+  the dispatcher silently rewrote it to `auto`, so callers who
+  asked for vector-only retrieval got hybrid results. Now
+  returns a dedicated v3.7.0-removal error pointing at
+  `hybrid` for today's hybrid path. `valid_modes` no longer
+  advertises `vector`.
+- **M8: `sqlite_index._file_hash`.** Was first-64KB + size; missed
+  in-place edits past 64KB when mtime+size stayed identical.
+  Now full SHA-256 streamed in 1 MiB chunks, gated by a
+  cheap `(size, mtime_ns)` pre-filter so steady-state reindex
+  cost is unchanged. `file_state` schema gains `mtime_ns`
+  (idempotent ALTER TABLE).
+- **M9: phantom `libmindmem.so` in release.** The release workflow
+  listed `libmindmem.so` in its files glob but no preceding step
+  built or downloaded it; the GH release silently omitted the
+  artifact. Removed from `files:` and added
+  `fail_on_unmatched_files: true` so future drift gates the
+  release. Pure-Python fallback in `mind_ffi` returns identical
+  results within f32 epsilon, so users lose nothing.
+
+### Phase 3 — docs alignment
+
+- README, `docs/configuration.md`, `docs/docker-deployment.md`,
+  and `docs/roadmap.md` updated to describe the v3.7.0
+  fail-closed contract; `mcp_server.py` shim error message
+  rewired from `pip install fastmcp==2.14.5` (stale) to
+  `pip install "mind-mem[mcp]"` so the version line stays in
+  one place.
+- GitHub repo About refreshed: leads with v3.7.0 + fail-closed
+  + cross-platform rollback callouts.
+
+### Migration
+
+Set `MIND_MEM_TOKEN=<random-string>` (or `MIND_MEM_ADMIN_TOKEN`)
+before starting the HTTP transport. Local dev / CI:
+`MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST=1 mind-mem-mcp
+--transport http --host 127.0.0.1 --allow-unauthenticated-localhost`.
+Docker compose (`deploy/docker-compose.yml`) already enforces both
+tokens via `${VAR:?must be set}` so containerised deployments
+require zero changes.
+
+## v3.9.0 — Model Safety Audit + Social Ingestion (planned)
 
 Two threads motivated by incidents in the broader AI ecosystem: malicious
 HuggingFace model drops that ship remote-code-execution payloads via
@@ -943,8 +1221,12 @@ first-class memory sources rather than screenshots-in-attachments.
 ### Model Safety Audit
 
 - [ ] **`mm audit-model <path-or-hf-id>`** — new CLI + MCP tool. One command
-  runs the full safety audit on any local checkpoint or HF repo and emits
-  a signed JSON report. Checks:
+  runs the full safety audit on any local checkpoint or HF repo and emits a
+  signed report in STARGA's native interchange formats (text: **mic@2** via
+  the `MAP` tool for git/LLM consumption; binary: **mic-b** for the audit
+  log next to the existing `evidence.jsonl`). No JSON — STARGA-native
+  formats are the standard for new artifacts (see 512-mind for the canonical
+  mic@2 / mic-b implementation). Checks:
   - Config scan for `auto_map` and `trust_remote_code` entries (RCE surface
     via HF custom modeling files)
   - Refuse-list for any `.py` files shipped inside the checkpoint
@@ -959,9 +1241,10 @@ first-class memory sources rather than screenshots-in-attachments.
     allowlist of upstream publishers (Alibaba Qwen, Meta Llama, Mistral,
     Google Gemma, IBM Granite, OpenAI, Anthropic)
 - [ ] **SHA-256 manifest + signing** — `mm sign-model <path>` emits a
-  `MODEL_MANIFEST.json` with file tree, per-file hashes, Ed25519 signature
-  over the manifest. `mm verify-model <path>` rechecks; tamper-detected
-  models refuse to load through mind-mem's ingestion path.
+  `MODEL_MANIFEST.mic-b` (binary mic-b with file tree, per-file hashes,
+  Ed25519 signature over the manifest) plus a sibling `MODEL_MANIFEST.mic@2`
+  for git/LLM-readable audit. `mm verify-model <path>` rechecks; tamper-
+  detected models refuse to load through mind-mem's ingestion path.
 - [ ] **Load-gate integration** — any checkpoint consumed by mind-mem's
   embedding or extractor backends (`backends.ollama`, `backends.hf`,
   `backends.vllm`) goes through `mm audit-model` on first use; a
