@@ -150,13 +150,25 @@ jobs:
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
+        # v3.7.0 M9: dropped ``libmindmem.so`` from the file list. The
+        # MIND kernel is built by ``mindc`` (STARGA's internal toolchain)
+        # which isn't reproducible on a public GitHub-hosted runner; the
+        # release was silently omitting the artifact because no build
+        # step produced it. Pure-Python fallback in ``mind_ffi`` returns
+        # bit-identical results within f32 epsilon (see README §"MIND
+        # kernel not loading"), so the release no longer pretends to
+        # ship a precompiled native artifact. Operators who want the
+        # perf path compile from source per ``mind/README.md``.
+        # ``fail_on_unmatched_files`` is set so a future drift between
+        # the file glob and the upload artifacts gates the release
+        # rather than passing silently.
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2
         with:
           name: "mind-mem v${{ steps.version.outputs.version }}"
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          fail_on_unmatched_files: true
           files: |
             dist/*
             sbom.cdx.json
-            libmindmem.so

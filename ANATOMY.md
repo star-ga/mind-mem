@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 684 | **Est. tokens:** ~1,367,681
-**Generated:** 2026-05-02 01:49 UTC
+**Files:** 684 | **Est. tokens:** ~1,367,887
+**Generated:** 2026-05-02 01:50 UTC
 
 ## Token Budget Guide
 
@@ -37,7 +37,7 @@
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 10 | ~7,362 |
+| `.github/workflows/` | 10 | ~7,568 |
 | `hooks/` | 3 | ~801 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -260,7 +260,7 @@
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs
 - `label-sync.yml` (~112 tok, small) — name: Label Sync
-- `release.yml` (~1432 tok, large) — name: Release
+- `release.yml` (~1638 tok, huge) — name: Release
 - `security-review.yml` (~240 tok, medium) — name: Security Review
 - `security.yml` (~1764 tok, huge) — name: Supply-Chain Security
 - `stale.yml` (~241 tok, medium) — name: Stale Issues
