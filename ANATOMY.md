@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 684 | **Est. tokens:** ~1,369,258
-**Generated:** 2026-05-02 02:29 UTC
+**Files:** 684 | **Est. tokens:** ~1,369,397
+**Generated:** 2026-05-02 02:51 UTC
 
 ## Token Budget Guide
 
@@ -63,7 +63,7 @@
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 232 | ~454,271 |
-| `tests/integration/` | 2 | ~1,436 |
+| `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
@@ -605,7 +605,7 @@
 ### `tests/integration/`
 
 - `__init__.py` (~0 tok, tiny)
-- `test_full_pipeline.py` (~1436 tok, large) — Integration test: full mind-mem pipeline.
+- `test_full_pipeline.py` (~1575 tok, huge) — Integration test: full mind-mem pipeline.
 ### `tests/`
 
 - `test_abstention_classifier.py` (~3963 tok, huge) — Tests for the adversarial abstention classifier."""
