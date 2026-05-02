@@ -123,20 +123,35 @@ jobs:
       - name: import mind_mem
         run: python -c "import mind_mem; print(mind_mem.__name__)"
 
-  hashed-requirements:
+  pinned-requirements:
+    # v3.7.0 M5 follow-up: requirements-optional.txt only pins three
+    # top-level packages (onnxruntime / tokenizers / sentence-
+    # transformers); transitive deps are intentionally resolved by pip.
+    # ``--require-hashes`` would force every transitive dep to also be
+    # hashed, which the file isn't structured to deliver — generating a
+    # full hashed lockfile (200+ entries) exceeds the file's stated
+    # scope ("the embedding + reranking stack only"). The job still
+    # gates the audit's intent: prove the pinned versions resolve on a
+    # fresh runner so a yanked wheel breaks the release, not prod.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.12"
-      - name: pip install --require-hashes -r requirements-optional.txt
-        # The pinned set must keep resolving on a fresh runner; if a
-        # wheel is yanked from PyPI or a hash is wrong, the release
-        # gates here, not in production.
+      - name: pip install -r requirements-optional.txt
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --require-hashes -r requirements-optional.txt
+          python -m pip install -r requirements-optional.txt
+      - name: Verify pinned hashes match downloaded wheels
+        # Hashes in the file are still load-bearing for the three
+        # pinned packages — re-download with --require-hashes --no-deps
+        # so any hash drift gates the run independent of transitive
+        # resolution.
+        run: |
+          python -m pip download --require-hashes --no-deps \
+            --dest /tmp/hash-verify \
+            -r requirements-optional.txt
 
   docker-build:
     runs-on: ubuntu-latest

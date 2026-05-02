@@ -47,7 +47,13 @@ select_package_spec() {
     return
   fi
   if [ -f "$MIND_MEM_DIR/pyproject.toml" ] && [ -d "$MIND_MEM_DIR/src" ]; then
-    DEFAULT_PACKAGE_SPEC="$MIND_MEM_DIR[mcp]"
+    # Use the relative form so install_package can ``cd`` into
+    # MIND_MEM_DIR first. Passing an absolute path with brackets
+    # (e.g. ``/d/a/mind-mem/mind-mem[mcp]``) trips pipx's package
+    # spec parser on Windows under git-bash, where MSYS path
+    # translation produces forward-slash paths that pipx rejects
+    # as "Unable to parse package spec".
+    DEFAULT_PACKAGE_SPEC=".[mcp]"
   else
     DEFAULT_PACKAGE_SPEC="mind-mem[mcp]"
   fi
@@ -86,15 +92,37 @@ select_installer() {
 }
 
 # Install the package + the [mcp] extra so `mind-mem-mcp` is on PATH.
+# When ``spec`` starts with ``./`` or equals ``.[...]`` we cd into the
+# checkout first so pipx/pip both resolve the local source tree without
+# ever seeing an absolute MSYS path (Windows-fragile, see
+# select_package_spec).
 install_package() {
   local installer="$1" spec="$2"
+  local is_local=false
+  case "$spec" in
+    .[*|.|./*) is_local=true ;;
+  esac
+
   case "$installer" in
     pipx)
       info "Installing $spec via pipx (isolated venv)"
       # `pipx install --force` upgrades or replaces an existing install.
       # mind-mem ships several entry points (mind-mem-init, mind-mem-mcp, ...);
       # `pipx install` registers the lot.
-      pipx install --force "$spec"
+      local pipx_ok=true
+      if $is_local; then
+        ( cd "$MIND_MEM_DIR" && pipx install --force "$spec" ) || pipx_ok=false
+      else
+        pipx install --force "$spec" || pipx_ok=false
+      fi
+      if ! $pipx_ok; then
+        # Hosts where pipx refuses to run (e.g. PIPX_HOME contains a
+        # space, or pipx and the system python disagree on the active
+        # interpreter) shouldn't dead-end the install. Fall back to
+        # pip --user with the same package spec.
+        warn "pipx install failed; falling back to pip --user"
+        install_package pip "$spec"
+      fi
       ;;
     pip)
       info "Installing $spec via pip --user"
@@ -103,10 +131,14 @@ install_package() {
       # `--break-system-packages` once when we detect that. `--user`
       # already isolates the install to ``~/.local`` so the marker's
       # protection is effectively redundant for this path.
-      if ! python3 -m pip install --user --upgrade "$spec" 2>/tmp/mind-mem-pip-err.$$; then
+      local pip_cwd="$PWD"
+      if $is_local; then
+        pip_cwd="$MIND_MEM_DIR"
+      fi
+      if ! ( cd "$pip_cwd" && python3 -m pip install --user --upgrade "$spec" ) 2>/tmp/mind-mem-pip-err.$$; then
         if grep -q "externally-managed\|EXTERNALLY-MANAGED\|PEP 668" /tmp/mind-mem-pip-err.$$; then
           warn "pip --user blocked by PEP 668; retrying with --break-system-packages"
-          python3 -m pip install --user --upgrade --break-system-packages "$spec"
+          ( cd "$pip_cwd" && python3 -m pip install --user --upgrade --break-system-packages "$spec" )
         else
           cat /tmp/mind-mem-pip-err.$$ >&2
           rm -f /tmp/mind-mem-pip-err.$$
@@ -158,7 +190,17 @@ ensure_workspace() {
   local ws="$1"
   if [ ! -d "$ws" ]; then
     info "Creating workspace at $ws"
-    python3 -m mind_mem.init_workspace "$ws"
+    # Prefer the ``mind-mem-init`` console script so this step works
+    # whether mind-mem was installed via pipx (isolated venv, not on
+    # the system python's import path) or via pip --user. Fall back to
+    # ``python3 -m mind_mem.init_workspace`` only if the console
+    # script isn't on PATH (e.g. --no-install used with a checkout
+    # that hasn't been pip-installed yet — devs running directly).
+    if command -v mind-mem-init &>/dev/null; then
+      mind-mem-init "$ws"
+    else
+      python3 -m mind_mem.init_workspace "$ws"
+    fi
   fi
   ok "Workspace: $ws"
 }
