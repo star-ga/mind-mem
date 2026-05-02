@@ -81,30 +81,45 @@ def _safe_copy(src: str, dst: str) -> None:
 
 
 def _build_cleanup_inventory(ws: str, roots: set[str]) -> dict[str, list[str]]:
-    """Capture the pre-snapshot file inventory for touched top-level roots."""
+    """Capture the pre-snapshot file inventory for touched top-level roots.
+
+    Stores POSIX-form paths relative to ``ws``. The inventory is the
+    authoritative ``allowed`` set for orphan cleanup on rollback —
+    every entry must compare byte-for-byte against
+    ``relpath(walked_file, ws)`` on restore.
+
+    Cross-platform invariant (v3.7.0 H3 fix): the walk root MUST be the
+    un-resolved ``os.path.join(ws, root)``, not its realpath. On macOS
+    (``/var`` → ``/private/var``) and Windows short-name runners
+    (``RUNNER~1`` → ``runneradmin``), realpath flips the prefix; a
+    later ``relpath(child, ws)`` against the un-resolved ``ws`` then
+    produces an upward-traversing key (``../../private/...``) that
+    never matches ``relpath`` on restore — so every file in the touched
+    root gets deleted as an "orphan" even when it IS in the inventory.
+    Validate via ``_safe_child_path`` for traversal protection, then
+    discard the resolved value and walk the un-resolved join.
+    """
     inventory: dict[str, list[str]] = {}
-    ws_real = os.path.realpath(ws)
     normalized_roots = {root.replace("\\", "/").strip("/") for root in roots if root}
     for root in sorted(normalized_roots):
         entries: list[str] = []
-        # Guard against traversal: resolve the root path and verify it stays
-        # inside the workspace (CodeQL py/path-injection; the caller already
-        # strips leading slashes, but we re-verify after realpath resolution).
-        root_path = os.path.realpath(os.path.join(ws, root))  # nosec — validated below
-        if root_path != ws_real and not root_path.startswith(ws_real + os.sep):
+        try:
+            _safe_child_path(ws, root)
+        except ValueError:
             _log.warning("cleanup_inventory_root_escape", root=root)
             inventory[root] = entries
             continue
-        if not os.path.isdir(root_path):
+        walk_dir = os.path.join(ws, root)
+        if not os.path.isdir(walk_dir):
             inventory[root] = entries
             continue
-        for walk_root, dirs, files in os.walk(root_path):
-            rel_walk_root = os.path.relpath(walk_root, ws)  # nosec — walk_root comes from os.walk within validated root_path
+        for walk_root, dirs, files in os.walk(walk_dir):
+            rel_walk_root = os.path.relpath(walk_root, ws)
             if root == "intelligence" and "applied" in rel_walk_root.split(os.sep):
                 dirs.clear()
-                continue  # nosec — rel_walk_root is used read-only for directory filtering only
+                continue
             for fname in files:
-                rel = os.path.relpath(os.path.join(walk_root, fname), ws)  # nosec — walk_root is within validated root_path; rel is relative and used as inventory key only
+                rel = os.path.relpath(os.path.join(walk_root, fname), ws)
                 entries.append(rel.replace(os.sep, "/"))
         inventory[root] = sorted(entries)
     return inventory
@@ -170,6 +185,7 @@ def _cleanup_orphans_from_manifest(ws: str, manifest: list[str], cleanup_invento
         if not d or d in (".", "..") or "/" in d or "\\" in d:
             snapshotted_dirs.discard(d)
 
+    ws_real = os.path.realpath(ws)
     for d in snapshotted_dirs:
         try:
             safe_d = _safe_child_path(ws, d)
@@ -177,14 +193,24 @@ def _cleanup_orphans_from_manifest(ws: str, manifest: list[str], cleanup_invento
             # Manifest entry attempted to escape the workspace. Skip
             # silently — this is the malicious-manifest path.
             continue
-        # Additional guard: refuse to walk the workspace root itself
-        # even if ``safe_d`` resolves there (a zero-length ``d`` would).
-        ws_real = os.path.realpath(ws)
+        # Refuse to walk the workspace root itself even if ``safe_d``
+        # resolves there (a zero-length ``d`` would).
         if safe_d == ws_real:
             continue
         allowed = inventory_sets.get(d, manifest_set)
+        # v3.7.0 H3 fix: walk via the un-resolved ``os.path.join(ws, d)``,
+        # NOT ``safe_d`` (which is realpath-resolved). On macOS
+        # (``/var`` → ``/private/var``) and Windows short-name runners
+        # (``RUNNER~1`` → ``runneradmin``), realpath flips the prefix;
+        # walking the resolved path makes ``os.walk`` yield child paths
+        # under the resolved prefix, so a later
+        # ``relpath(child, ws)`` against the un-resolved ``ws`` produces
+        # an upward-traversing key (``../../private/...``) that never
+        # matches the manifest — and every legitimate file gets deleted
+        # as an orphan. ``safe_d`` is still computed for path-traversal
+        # validation; it is just not used as the walk root.
         if d in ("intelligence",):
-            intel_dir = safe_d  # Already verified to be inside ws
+            intel_dir = os.path.join(ws, "intelligence")
             if os.path.isdir(intel_dir):
                 for root, dirs, files in os.walk(intel_dir):
                     rel_root = os.path.relpath(root, ws)
@@ -196,7 +222,7 @@ def _cleanup_orphans_from_manifest(ws: str, manifest: list[str], cleanup_invento
                         if rel.replace(os.sep, "/") not in allowed:
                             os.remove(os.path.join(root, fname))
         else:
-            dirpath = safe_d  # Already verified to be inside ws
+            dirpath = os.path.join(ws, d)
             if os.path.isdir(dirpath):
                 for root, dirs, files in os.walk(dirpath):
                     if _is_in_excluded_dir(ws, root):

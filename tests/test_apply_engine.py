@@ -171,6 +171,85 @@ class TestSnapshotRollback(unittest.TestCase):
                 self.assertEqual(f.read(), "original content")
 
 
+@unittest.skipIf(sys.platform == "win32", "POSIX symlinks unavailable on Windows runners without privilege")
+class TestSnapshotRollbackSymlinkedWorkspace(unittest.TestCase):
+    """Regression for v3.7.0 H3: rollback under a workspace path whose
+    realpath differs from its un-resolved form (macOS ``/var`` →
+    ``/private/var``, Windows ``RUNNER~1`` → ``runneradmin``).
+
+    Linux runners reproduce the failure mode by accessing the workspace
+    via a symlink, so this test gates the bug on every supported OS in
+    CI even though only macOS and Windows surface it natively.
+    """
+
+    def _make_symlinked_ws(self, container: str) -> str:
+        real_root = os.path.join(container, "private")
+        os.makedirs(real_root)
+        short_link = os.path.join(container, "short")
+        os.symlink(real_root, short_link)
+        ws = os.path.join(short_link, "workspace")
+        os.makedirs(ws)
+        return ws
+
+    def test_rollback_preserves_files_when_ws_path_differs_from_realpath(self):
+        from mind_mem.init_workspace import init
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as container:
+            ws = self._make_symlinked_ws(container)
+            self.assertNotEqual(ws, os.path.realpath(ws), "test setup failed: ws and realpath(ws) should differ")
+            init(ws)
+
+            decisions_path = os.path.join(ws, "decisions", "DECISIONS.md")
+            sidecar_path = os.path.join(ws, "decisions", "CUSTOM.md")
+            with open(decisions_path, "w", encoding="utf-8") as f:
+                f.write("[D-001]\nStatement: Original\nStatus: active\n")
+            with open(sidecar_path, "w", encoding="utf-8") as f:
+                f.write("preexisting sidecar\n")
+
+            snap_dir = create_snapshot(ws, "20260501-120000", files_touched=["decisions/DECISIONS.md"])
+
+            with open(decisions_path, "w", encoding="utf-8") as f:
+                f.write("CORRUPTED\n")
+            rogue_path = os.path.join(ws, "decisions", "ROGUE.md")
+            with open(rogue_path, "w", encoding="utf-8") as f:
+                f.write("rogue\n")
+
+            restore_snapshot(ws, snap_dir)
+
+            self.assertTrue(os.path.exists(decisions_path), "DECISIONS.md must survive: it is in the manifest")
+            self.assertTrue(os.path.exists(sidecar_path), "CUSTOM.md must survive: it is in cleanup_inventory")
+            self.assertFalse(os.path.exists(rogue_path), "ROGUE.md must be removed: not in manifest or inventory")
+            with open(decisions_path) as f:
+                self.assertEqual(f.read(), "[D-001]\nStatement: Original\nStatus: active\n")
+
+
+class TestMaliciousManifestDoesNotEscape(unittest.TestCase):
+    """Regression for v3.6.9 Gemini CLI finding: a crafted MANIFEST.json
+    must NOT cause the orphan cleanup to delete files outside the
+    workspace, even when the H3 fix relaxes the walk root from the
+    realpath-resolved ``safe_d`` back to the un-resolved
+    ``os.path.join(ws, d)``.
+    """
+
+    def test_dot_dot_top_dir_in_manifest_is_skipped(self):
+        from mind_mem.block_store import _cleanup_orphans_from_manifest
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as parent:
+            outside = os.path.join(parent, "outside.md")
+            with open(outside, "w", encoding="utf-8") as f:
+                f.write("must survive\n")
+
+            ws = os.path.join(parent, "ws")
+            os.makedirs(ws)
+
+            crafted_manifest = ["../outside.md"]
+            crafted_inventory = {"..": ["outside.md"]}
+
+            _cleanup_orphans_from_manifest(ws, crafted_manifest, crafted_inventory)
+
+            self.assertTrue(os.path.exists(outside), "Cleanup must refuse to follow `..` keys out of ws")
+
+
 class TestSnapshotIntelligenceRestore(unittest.TestCase):
     """Verify snapshot restore includes intelligence files."""
 
