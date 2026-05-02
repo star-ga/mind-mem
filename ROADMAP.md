@@ -1210,7 +1210,7 @@ Docker compose (`deploy/docker-compose.yml`) already enforces both
 tokens via `${VAR:?must be set}` so containerised deployments
 require zero changes.
 
-## v3.8.0 — Model Safety Audit + Social Ingestion (planned)
+## v3.8.0 — Model Safety Audit + Social Ingestion (in progress)
 
 Two threads motivated by incidents in the broader AI ecosystem: malicious
 HuggingFace model drops that ship remote-code-execution payloads via
@@ -1220,38 +1220,51 @@ first-class memory sources rather than screenshots-in-attachments.
 
 ### Model Safety Audit
 
-- [ ] **`mm audit-model <path-or-hf-id>`** — new CLI + MCP tool. One command
-  runs the full safety audit on any local checkpoint or HF repo and emits a
-  signed report in STARGA's native interchange formats (text: **mic@2** via
-  the `MAP` tool for git/LLM consumption; binary: **mic-b** for the audit
-  log next to the existing `evidence.jsonl`). No JSON — STARGA-native
-  formats are the standard for new artifacts (see 512-mind for the canonical
-  mic@2 / mic-b implementation). Checks:
-  - Config scan for `auto_map` and `trust_remote_code` entries (RCE surface
-    via HF custom modeling files)
-  - Refuse-list for any `.py` files shipped inside the checkpoint
-  - Format verification — weights must be `.safetensors` or `.gguf`; legacy
-    `.bin` / pickle files trigger a deep pickle disassembly pass
-  - Pickle opcode walk (`pickletools.dis`) with import-surface enumeration;
-    flag any `os`, `subprocess`, `socket`, `ctypes`, `eval`, `exec`,
-    `__builtin__`, `sys` imports as HIGH severity
-  - Tokenizer string scan for injected URLs, shell patterns, known-bad
-    token sequences
-  - Provenance check — cross-reference base model claim against a signed
-    allowlist of upstream publishers (Alibaba Qwen, Meta Llama, Mistral,
-    Google Gemma, IBM Granite, OpenAI, Anthropic)
-- [ ] **SHA-256 manifest + signing** — `mm sign-model <path>` emits a
-  `MODEL_MANIFEST.mic-b` (binary mic-b with file tree, per-file hashes,
-  Ed25519 signature over the manifest) plus a sibling `MODEL_MANIFEST.mic@2`
-  for git/LLM-readable audit. `mm verify-model <path>` rechecks; tamper-
-  detected models refuse to load through mind-mem's ingestion path.
+- [x] **`mm audit-model <path>`** — shipped in v3.8.0 (2026-05-02). Six
+  static checks: remote-code hooks (`auto_map` / `trust_remote_code`),
+  bundled `.py` refuser, weight format (`.safetensors` / `.gguf` only,
+  legacy `.bin` / `.pt` / `.ckpt` flagged), pickle raw-byte opcode walk
+  for `os` / `subprocess` / `socket` / `ctypes` / `importlib` / `eval` /
+  `exec` / `compile` / `__import__` references, tokenizer-injection
+  scanner over `tokenizer.json` / `tokenizer_config.json` /
+  `special_tokens_map.json`, and a `safetensors` header validator
+  (8-byte LE length, refuses headers > 100 MB, refuses
+  `__metadata__.code`). Emits a colour-coded text report or
+  `--json`-mode machine output, and an optional SHA-256 manifest
+  (`--manifest-out`) compatible with `sha256sum -c`. **31 unit tests**
+  in `tests/test_model_audit.py` exercise every public function and
+  every check (the actual byte-level pickle scanner runs on real
+  `pickle.dumps()` output, not mocks).
+- [x] **SHA-256 manifest + Ed25519 signing** — shipped in v3.8.1
+  (2026-05-02). `mm sign-model <path>` writes three sidecars next to
+  the checkpoint: `MODEL_MANIFEST.txt` (sorted, deterministic,
+  `sha256sum -c`-compatible), `MODEL_MANIFEST.txt.sig` (raw 64-byte
+  Ed25519 signature, RFC 8032 §5.1.6), and `MODEL_PUBKEY.pub` (raw
+  32-byte public key). Two key sources: `--key-file <sk>` (raw 32-byte
+  secret) or `--generate-key <prefix>` (writes `<prefix>.sk` mode 0600
+  + `<prefix>.pub`). `mm verify-model <path>` returns the structured
+  error kind (`manifest_mismatch` / `bad_signature` / `missing_file`)
+  so callers can distinguish drift from forgery from a missing
+  sidecar. `--pubkey <path>` overrides the sidecar for centrally-pinned
+  trust roots. **23 unit tests** in `tests/test_model_signing.py`.
+- [ ] **Provenance allowlist** — cross-reference the `base_model` claim
+  in `config.json` against an Ed25519-signed allowlist of upstream
+  publishers (Alibaba Qwen, Meta Llama, Mistral, Google Gemma, IBM
+  Granite, OpenAI, Anthropic). Returns HIGH severity on a mismatch
+  between the claim and any signed bundle in the allowlist.
+- [ ] **MCP tool wrapper** — expose `audit_model`, `sign_model`, and
+  `verify_model` over the MCP surface so agents can drive the pipeline
+  without shelling to `mm`. Identical schemas to the CLI but mic@2 +
+  mic-b interchange formats are the canonical output for new artifacts;
+  `--json` stays the legacy compatibility flag.
 - [ ] **Load-gate integration** — any checkpoint consumed by mind-mem's
   embedding or extractor backends (`backends.ollama`, `backends.hf`,
   `backends.vllm`) goes through `mm audit-model` on first use; a
   `--trust-without-audit` escape exists but emits a WARNING-level
   governance event into the evidence chain.
-- [ ] **CI hook** — `mm audit-model` runs against every model pinned in
-  `mind-mem.json` on release CI; fails build on HIGH findings.
+- [ ] **CI hook** — `mm audit-model` + `mm verify-model` runs against
+  every model pinned in `mind-mem.json` on release CI; fails build on
+  HIGH findings or any verify-model failure.
 
 ### Social Ingestion
 

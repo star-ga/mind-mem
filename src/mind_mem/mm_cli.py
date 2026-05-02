@@ -20,6 +20,7 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 from typing import Any, Optional
 
 # ---------------------------------------------------------------------------
@@ -695,6 +696,119 @@ def _cmd_audit_model(args: argparse.Namespace) -> int:
     return 0 if report.passed else 1
 
 
+def _read_keyfile(path: str, expected_len: int, kind: str) -> bytes:
+    """Read a raw Ed25519 key file and validate its length."""
+    p = Path(os.path.expanduser(path))
+    if not p.is_file():
+        raise FileNotFoundError(f"{kind} file not found: {p}")
+    data = p.read_bytes()
+    if len(data) != expected_len:
+        raise ValueError(f"{kind} file must be {expected_len} raw bytes, got {len(data)} ({p})")
+    return data
+
+
+def _cmd_sign_model(args: argparse.Namespace) -> int:
+    from mind_mem.model_signing import (
+        ED25519_PRIVATE_KEY_BYTES,
+        ED25519_PUBLIC_KEY_BYTES,
+        generate_keypair,
+        sign_model,
+    )
+
+    # Resolve the private key. Three modes:
+    #   --key-file <path>            (raw 32-byte Ed25519 secret key)
+    #   --generate-key <out-prefix>  (write <out-prefix>.sk + .pub, then sign)
+    #   default                      (error — refuse to sign with an
+    #                                 ephemeral key the operator can't
+    #                                 verify against later)
+    sk: bytes
+    if args.generate_key:
+        sk, pk = generate_keypair()
+        sk_path = Path(os.path.expanduser(args.generate_key + ".sk"))
+        pk_path = Path(os.path.expanduser(args.generate_key + ".pub"))
+        sk_path.write_bytes(sk)
+        try:
+            os.chmod(sk_path, 0o600)
+        except OSError:
+            pass  # Windows / non-POSIX FS — best effort
+        pk_path.write_bytes(pk)
+        print(f"generated keypair: {sk_path} (private, 0600), {pk_path} (public)", file=sys.stderr)
+    elif args.key_file:
+        try:
+            sk = _read_keyfile(args.key_file, ED25519_PRIVATE_KEY_BYTES, "private key")
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+    else:
+        print(
+            "error: pass --key-file <sk> or --generate-key <prefix>; refusing to sign with an unrecorded ephemeral key.",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        result = sign_model(args.path, sk, write_sidecars=not args.no_sidecars)
+    except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        out = {
+            "manifest_sha256": result.manifest_sha256,
+            "signature_hex": result.signature.hex(),
+            "public_key_hex": result.public_key.hex(),
+            "manifest_path": str(result.manifest_path) if result.manifest_path else None,
+            "signature_path": str(result.signature_path) if result.signature_path else None,
+            "pubkey_path": str(result.pubkey_path) if result.pubkey_path else None,
+            "files_signed": len(result.manifest_text.splitlines()),
+            "public_key_bytes": ED25519_PUBLIC_KEY_BYTES,
+        }
+        print(json.dumps(out, indent=2))
+    else:
+        print(f"manifest sha256:  {result.manifest_sha256}")
+        print(f"files signed:     {len(result.manifest_text.splitlines())}")
+        print(f"signature:        {result.signature.hex()}")
+        print(f"public key:       {result.public_key.hex()}")
+        if result.manifest_path:
+            print(f"wrote {result.manifest_path}")
+            print(f"wrote {result.signature_path}")
+            print(f"wrote {result.pubkey_path}")
+    return 0
+
+
+def _cmd_verify_model(args: argparse.Namespace) -> int:
+    from mind_mem.model_signing import ED25519_PUBLIC_KEY_BYTES, verify_model
+
+    pk: bytes | None = None
+    if args.pubkey:
+        try:
+            pk = _read_keyfile(args.pubkey, ED25519_PUBLIC_KEY_BYTES, "public key")
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+    try:
+        result = verify_model(args.path, public_key=pk)
+    except NotADirectoryError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        out = {
+            "passed": result.passed,
+            "manifest_sha256": result.manifest_sha256,
+            "error_kind": result.error_kind,
+            "error_detail": result.error_detail,
+        }
+        print(json.dumps(out, indent=2))
+    else:
+        if result.passed:
+            print(f"OK  manifest sha256: {result.manifest_sha256}")
+        else:
+            print(f"FAIL [{result.error_kind}] {result.error_detail}", file=sys.stderr)
+    return 0 if result.passed else 1
+
+
 # ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
@@ -886,6 +1000,54 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write SHA-256 manifest to this path (shasum-compatible format).",
     )
     p_audit.set_defaults(func=_cmd_audit_model)
+
+    # sign-model — Ed25519 manifest signing on a local checkpoint
+    p_sign = sub.add_parser(
+        "sign-model",
+        help=("Sign every file in a local model checkpoint with Ed25519. Writes MODEL_MANIFEST.txt + .sig + MODEL_PUBKEY.pub sidecars."),
+    )
+    p_sign.add_argument("path", help="Path to a local model directory.")
+    sign_key_group = p_sign.add_mutually_exclusive_group()
+    sign_key_group.add_argument(
+        "--key-file",
+        default="",
+        help="Path to a raw 32-byte Ed25519 private key file.",
+    )
+    sign_key_group.add_argument(
+        "--generate-key",
+        default="",
+        metavar="PREFIX",
+        help="Generate a new keypair, write PREFIX.sk (0600) + PREFIX.pub, then sign.",
+    )
+    p_sign.add_argument(
+        "--no-sidecars",
+        action="store_true",
+        help="Do not write MANIFEST/.sig/.pub files; print result only.",
+    )
+    p_sign.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON instead of human-readable lines.",
+    )
+    p_sign.set_defaults(func=_cmd_sign_model)
+
+    # verify-model — Ed25519 verification of a previously-signed checkpoint
+    p_verify = sub.add_parser(
+        "verify-model",
+        help=("Verify a previously-signed checkpoint. Returns nonzero if the manifest, signature, or public key fail."),
+    )
+    p_verify.add_argument("path", help="Path to a signed model directory.")
+    p_verify.add_argument(
+        "--pubkey",
+        default="",
+        help=("Path to a raw 32-byte Ed25519 public key. If omitted, the MODEL_PUBKEY.pub sidecar in the directory is used."),
+    )
+    p_verify.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON instead of human-readable lines.",
+    )
+    p_verify.set_defaults(func=_cmd_verify_model)
 
     # ── inspect — full block fields + provenance tree ──────────────────────
     p_inspect = sub.add_parser(

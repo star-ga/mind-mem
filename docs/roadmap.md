@@ -4,7 +4,32 @@
 > in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
 > full milestone breakdown.
 
-## v3.7.0 (Current — released 2026-05-01)
+## v3.8.1 (Current — released 2026-05-02)
+
+Ed25519 manifest signing for `mm audit-model` checkpoints. Adds the
+`mind_mem.model_signing` module plus `mm sign-model <path>` and
+`mm verify-model <path>` CLI subcommands. Three sidecars are written
+next to the checkpoint root: `MODEL_MANIFEST.txt` (sorted, deterministic
+SHA-256 manifest, `sha256sum -c`-compatible), `MODEL_MANIFEST.txt.sig`
+(raw 64-byte Ed25519 signature, RFC 8032 §5.1.6), and `MODEL_PUBKEY.pub`
+(raw 32-byte public key). `verify_model` returns a structured
+`error_kind` enum (`manifest_mismatch` / `bad_signature` /
+`missing_file`) so callers can distinguish drift from forgery from a
+missing sidecar. 23 unit tests in `tests/test_model_signing.py`.
+
+## v3.8.0 (Released 2026-05-02)
+
+Model Safety Audit — first slice. Static security scan of any local
+model checkpoint via `mm audit-model <path>`: remote-code hooks
+(`auto_map` / `trust_remote_code`), bundled `.py` refuser, weight
+format guard (`.safetensors` / `.gguf` only), pickle raw-byte opcode
+walk for dangerous-import references, tokenizer-injection scanner, and
+a `safetensors` header validator. 31 unit tests in
+`tests/test_model_audit.py`. Subsequent v3.8.x patches add Ed25519
+signing (v3.8.1, shipped), provenance allowlist, MCP wrapper, and
+load-gate integration into the extractor backends.
+
+## v3.7.0 (Released 2026-05-01)
 
 External-audit response (see CHANGELOG.md "3.7.0" for the full list).
 **Breaking change:** HTTP/REST authentication now fails CLOSED — any

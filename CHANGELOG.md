@@ -2,6 +2,92 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.1 (2026-05-02)
+
+**Model Safety Audit — Ed25519 manifest signing.** Second slice of
+the v3.8.0 plan in ``ROADMAP.md``. Adds raw-byte Ed25519 signing
+on top of the v3.8.0 SHA-256 manifest so a third party can verify
+that a checkpoint hasn't been tampered with since the audit. No
+breaking changes — every v3.8.0 surface continues to work
+unchanged.
+
+### Added
+
+- **``mind_mem.model_signing`` module** — Ed25519 keypair
+  generation, manifest signing, and detached-signature
+  verification. Raw 32-byte private / 32-byte public / 64-byte
+  signature (RFC 8032 §5.1) — no PEM, no DER, no ASN.1 parsing on
+  the verify side. Exports:
+  ``compute_manifest_text`` (deterministic, sorted-by-path,
+  ``sha256sum -c``-compatible), ``generate_keypair``,
+  ``public_key_from_private``, ``sign_manifest``,
+  ``verify_manifest``, ``sign_model``, ``verify_model``,
+  ``SignResult``, ``VerifyResult``.
+- **``mm sign-model <path>`` CLI** — sign every file in a local
+  model checkpoint. Two key sources: ``--key-file <sk>`` (raw
+  32-byte secret) or ``--generate-key <prefix>`` (writes
+  ``<prefix>.sk`` mode 0600 + ``<prefix>.pub``). Writes three
+  sidecars next to the checkpoint root —
+  ``MODEL_MANIFEST.txt`` / ``MODEL_MANIFEST.txt.sig`` /
+  ``MODEL_PUBKEY.pub`` — or runs in-memory only with
+  ``--no-sidecars``. ``--json`` for machine-readable output.
+- **``mm verify-model <path>`` CLI** — verify a previously-signed
+  checkpoint. Reads the ``.pub`` sidecar by default, or accepts
+  an explicit ``--pubkey <path>`` for centrally-managed keys.
+  Returns nonzero on any of three error kinds:
+  ``manifest_mismatch`` (file contents drifted),
+  ``bad_signature`` (signature invalid for the manifest), or
+  ``missing_file`` (manifest / signature / pubkey absent).
+  ``--json`` mode emits the structured ``VerifyResult``.
+- **Sidecar skip on re-sign** — ``compute_manifest_text`` skips
+  ``MODEL_MANIFEST.txt`` / ``.sig`` / ``MODEL_PUBKEY.pub`` so a
+  ``sign-model`` rerun is idempotent and signing isn't a
+  fixed-point hashing problem.
+
+### Tests
+
+- **``tests/test_model_signing.py``** — 23 new tests covering
+  manifest determinism + sidecar skip + missing-root errors,
+  keypair size invariants, sign / verify round trip + tampered
+  text + wrong pubkey + bad-length rejection, end-to-end
+  ``sign_model`` + ``verify_model`` happy path, and every
+  ``error_kind`` branch (manifest mismatch on file mutation,
+  ``bad_signature`` on flipped signature byte, missing manifest
+  / signature / pubkey).
+
+### Migration
+
+No migration required. Existing ``mm audit-model`` consumers
+keep working. Operators that want signature coverage:
+
+```bash
+# one-off — keypair lives in ./signer.sk + ./signer.pub
+mm sign-model ./my-checkpoint --generate-key ./signer
+
+# subsequent re-sign with the existing key
+mm sign-model ./my-checkpoint --key-file ./signer.sk
+
+# verify (sidecar pubkey)
+mm verify-model ./my-checkpoint
+
+# verify against a pinned, centrally-managed key
+mm verify-model ./my-checkpoint --pubkey ./trusted-publisher.pub
+```
+
+### Deferred to v3.8.x
+
+- Provenance allowlist of upstream publishers (Alibaba Qwen,
+  Meta Llama, Mistral, Google Gemma, IBM Granite, OpenAI,
+  Anthropic) cross-referenced against the ``base_model`` claim
+  in ``config.json``.
+- MCP tool wrapper for ``audit_model`` + ``sign_model`` /
+  ``verify_model``.
+- Load-gate integration into ``backends.ollama`` /
+  ``backends.hf`` / ``backends.vllm``.
+- mic@2 / mic-b output mode (STARGA-native interchange formats
+  for new audit + signing artifacts; ``--json`` stays the
+  legacy compatibility flag).
+
 ## 3.8.0 (2026-05-02)
 
 **Model Safety Audit — first slice.** First minor release of the
