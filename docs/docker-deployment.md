@@ -47,8 +47,9 @@ Set these in your shell or in a `.env` file in the `deploy/` directory:
 |----------|---------|-------------|
 | `MIND_MEM_WORKSPACE` | `/workspace` | Workspace path inside the container |
 | `MIND_MEM_TRANSPORT` | `http` | `http` or `stdio` |
-| `MIND_MEM_TOKEN` | _(none)_ | Bearer token for MCP HTTP auth |
-| `MIND_MEM_ADMIN_TOKEN` | _(none)_ | Admin-scope bearer token |
+| `MIND_MEM_TOKEN` | _(none — required for HTTP)_ | Bearer token for MCP HTTP auth. **As of v3.7.0, HTTP transport refuses to start when this is unset** unless `MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST=1` is also set (loopback opt-in). The bundled `docker-compose.yml` already enforces this via `${MIND_MEM_TOKEN:?must be set}`. |
+| `MIND_MEM_ADMIN_TOKEN` | _(none — required for HTTP)_ | Admin-scope bearer token. Same fail-closed contract as `MIND_MEM_TOKEN`. |
+| `MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST` | _(unset)_ | Opt-in escape hatch for loopback-only dev / test. Never set in containers exposed beyond `127.0.0.1`. |
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama endpoint |
 
 ## Pulling a model into Ollama

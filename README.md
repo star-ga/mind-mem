@@ -224,7 +224,7 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
 ### MCP Server (71 tools, 8 resources)
-Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 71 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports with optional bearer token auth.
+Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 71 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http).
 
 ### 74+ Structural Checks + 3024 Unit Tests
 `validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 3024 pytest unit tests covering all core modules.
@@ -1325,8 +1325,23 @@ MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py --transport http --p
 ### Token Auth (HTTP)
 
 ```bash
-MIND_MEM_TOKEN=your-secret python3 mcp_server.py --transport http --port 8765
+MIND_MEM_TOKEN=your-secret mind-mem-mcp --transport http --port 8765
 ```
+
+**As of v3.7.0, HTTP authentication fails CLOSED.** If neither
+`MIND_MEM_TOKEN` nor `MIND_MEM_ADMIN_TOKEN` is set, the server refuses
+to start. For local development you can opt back into the legacy
+behaviour, but only on a loopback bind:
+
+```bash
+MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST=1 \
+  mind-mem-mcp --transport http --host 127.0.0.1 --port 8765 \
+               --allow-unauthenticated-localhost
+```
+
+The flag is a no-op if the bind host isn't `127.0.0.1` / `::1` /
+`localhost` — the server still refuses to start. Production
+deployments should always set a token.
 
 ### Safety Guarantees
 

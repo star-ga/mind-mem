@@ -60,7 +60,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _missing_fastmcp() -> int:
     print(
-        "Error: fastmcp is required to run the Mind-Mem MCP server. Install the 'mcp' extra or `pip install fastmcp==2.14.5`.",
+        "Error: fastmcp is required to run the Mind-Mem MCP server. "
+        "Install the 'mcp' extra: `pip install \"mind-mem[mcp]\"` "
+        "(pulls fastmcp>=3.2.0 — the version line declared in pyproject.toml).",
         file=sys.stderr,
     )
     return 1
