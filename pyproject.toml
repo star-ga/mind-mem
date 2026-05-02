@@ -23,7 +23,10 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-# For hash-verified installs, use: pip install --require-hashes -r requirements-optional.txt
+# Optional dependencies — every extra here ships compatible version ranges.
+# `requirements-optional.txt` carries the same packages with hash-pinned
+# exact versions for `pip install --require-hashes` reproducible builds;
+# the version ranges below MUST stay supersets of those pinned versions.
 [project.optional-dependencies]
 test = [
     "pytest>=7.4,<10.0",
@@ -31,12 +34,11 @@ test = [
     "mypy>=1.14,<2.0",
     "fastmcp>=3.2.0",
     "sqlite-vec>=0.1.6",
-    # Runtime optional deps that several test modules exercise directly;
-    # install them in the CI matrix so the full suite runs, not a subset.
-    # Ranges (not pins) because CI resolves across 3 OS x 4 Python
-    # versions and the pinned versions in [all] / [embeddings] are not
-    # published on every wheel combination (e.g. onnxruntime 1.24 is not
-    # on PyPI as of 2026-04; max is 1.23.x).
+    # Runtime optional deps several test modules exercise directly. We
+    # use ranges (not pins) because the test matrix runs across
+    # 3 OS x 4 Python versions and the pinned wheels in [embeddings]
+    # / [all] are not published for every combination — these floors
+    # let `[test]` install on every supported runner.
     "onnxruntime>=1.20,<2.0",
     "tokenizers>=0.22,<1.0",
     "sentence-transformers>=5.0,<6.0",
@@ -54,8 +56,12 @@ api = [
 ]
 postgres = ["psycopg[binary]>=3.2,<4.0", "pgvector>=0.3,<1.0"]
 mcp = ["fastmcp>=3.2.0"]
-embeddings = ["onnxruntime==1.24.2", "tokenizers==0.22.2"]
-cross-encoder = ["sentence-transformers==5.2.3"]
+# Embeddings + cross-encoder use ranges so pip can resolve a wheel on
+# any supported (OS, Python) combination. The hash-pinned baseline in
+# requirements-optional.txt provides a known-good exact set for
+# reproducible-build users.
+embeddings = ["onnxruntime>=1.20,<2.0", "tokenizers>=0.22,<1.0"]
+cross-encoder = ["sentence-transformers>=5.0,<6.0"]
 benchmark = ["pytest-benchmark>=4.0,<6.0"]
 otel = [
     "opentelemetry-api>=1.20,<2.0",
@@ -63,7 +69,12 @@ otel = [
     "opentelemetry-exporter-otlp>=1.20,<2.0",
     "prometheus-client>=0.18,<1.0",
 ]
-all = ["fastmcp>=3.2.0", "onnxruntime==1.24.2", "tokenizers==0.22.2", "sentence-transformers==5.2.3"]
+all = [
+    "fastmcp>=3.2.0",
+    "onnxruntime>=1.20,<2.0",
+    "tokenizers>=0.22,<1.0",
+    "sentence-transformers>=5.0,<6.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/star-ga/mind-mem"

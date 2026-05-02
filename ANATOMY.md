@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 679 | **Est. tokens:** ~1,352,225
-**Generated:** 2026-05-02 00:51 UTC
+**Files:** 679 | **Est. tokens:** ~1,352,856
+**Generated:** 2026-05-02 00:54 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~78,980 |
+| `./` | 30 | ~79,133 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 3 | ~798 |
 | `benchmarks/` | 26 | ~64,933 |
@@ -37,7 +37,7 @@
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 10 | ~6,331 |
+| `.github/workflows/` | 10 | ~6,788 |
 | `hooks/` | 3 | ~801 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -53,7 +53,7 @@
 | `skills/apply-proposal/` | 1 | ~345 |
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
-| `src/` | 1 | ~259 |
+| `src/` | 1 | ~280 |
 | `src/mind_mem/` | 143 | ~482,086 |
 | `src/mind_mem/api/` | 5 | ~15,104 |
 | `src/mind_mem/mcp/` | 3 | ~3,250 |
@@ -95,10 +95,10 @@
 - `mcp_server.py` (~660 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
-- `pyproject.toml` (~1712 tok, huge) — [project]
+- `pyproject.toml` (~1811 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~23075 tok, huge) — Shared Memory Across All Your AI Agents
-- `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
+- `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `ROADMAP.md` (~21157 tok, huge) — mind-mem Roadmap
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
 - `SECURITY.md` (~1752 tok, huge) — Security Policy
@@ -255,7 +255,7 @@
 ### `.github/workflows/`
 
 - `benchmark.yml` (~735 tok, large) — name: Benchmark
-- `ci.yml` (~1206 tok, large) — name: CI
+- `ci.yml` (~1663 tok, huge) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs
@@ -364,7 +364,7 @@
 - `SKILL.md` (~549 tok, large) — /recall — Memory Search
 ### `src/`
 
-- `mcp_server.py` (~259 tok, medium) — Wheel-level compatibility module for `mind_mem.mcp_server`.
+- `mcp_server.py` (~280 tok, medium) — Wheel-level compatibility module for `mind_mem.mcp_server`.
 ### `src/mind_mem/`
 
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.

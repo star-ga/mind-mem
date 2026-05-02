@@ -94,6 +94,54 @@ jobs:
       - name: Validate workspace
         run: python -m mind_mem.validate_py /tmp/test-workspace
 
+  extras-install:
+    name: ".[${{ matrix.extra }}] installs"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        extra: [mcp, api, embeddings, all]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+      - name: pip install -e ".[${{ matrix.extra }}]"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[${{ matrix.extra }}]"
+      - name: import mind_mem
+        run: python -c "import mind_mem; print(mind_mem.__name__)"
+
+  hashed-requirements:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+      - name: pip install --require-hashes -r requirements-optional.txt
+        # The pinned set must keep resolving on a fresh runner; if a
+        # wheel is yanked from PyPI or a hash is wrong, the release
+        # gates here, not in production.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r requirements-optional.txt
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: docker/setup-buildx-action@988b5a0280414f521da01fcc63a27aeeb4b104db  # v3
+      - name: Build runtime image
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75  # v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          push: false
+          load: true
+          tags: mind-mem:ci
+
   install-smoke:
     name: install.sh smoke (${{ matrix.installer }})
     runs-on: ubuntu-latest

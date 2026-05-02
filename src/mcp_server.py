@@ -21,7 +21,9 @@ try:
 except ModuleNotFoundError as exc:  # pragma: no cover
     if exc.name == "fastmcp":
         sys.stderr.write(
-            "Error: fastmcp is required to run the Mind-Mem MCP server. Install the 'mcp' extra or `pip install fastmcp==2.14.5`.\n"
+            "Error: fastmcp is required to run the Mind-Mem MCP server.\n"
+            'Install the "mcp" extra:  pipx install "mind-mem[mcp]"\n'
+            '                      or  pip install "mind-mem[mcp]"\n'
         )
         raise SystemExit(1) from exc
     raise

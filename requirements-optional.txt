@@ -1,12 +1,17 @@
-# mind-mem optional dependencies — pinned with SHA256 integrity hashes.
-# Install with: pip install --require-hashes -r requirements-optional.txt
+# mind-mem optional ML stack — pinned with SHA256 integrity hashes for
+# reproducible-build users. Install with:
 #
-# These are OPTIONAL. mind-mem core works without them.
-# Update hashes when upgrading versions: pip download --no-deps --dest /tmp/h <pkg>==<ver> && pip hash /tmp/h/*.whl
-
-# MCP server support
-fastmcp==2.14.5 \
-    --hash=sha256:d81e8ec813f5089d3624bec93944beaefa86c0c3a4ef1111cbef676a761ebccf
+#   pip install --require-hashes -r requirements-optional.txt
+#
+# Scope: the *embedding + reranking* stack only. fastmcp lives in the
+# `[mcp]` extra (`pip install "mind-mem[mcp]"`); it's pinned only by
+# range there because reproducible builds rely on the host's hashed
+# wheel cache, not this file. Keeping fastmcp out of this file
+# prevents version drift between the [mcp] extra (>=3.2.0) and the
+# pinned line below.
+#
+# Update hashes when upgrading versions:
+#   pip download --no-deps --dest /tmp/h <pkg>==<ver> && pip hash /tmp/h/*.whl
 
 # ONNX Runtime for local embedding inference
 onnxruntime==1.24.2 \
