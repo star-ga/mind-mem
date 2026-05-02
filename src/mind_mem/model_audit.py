@@ -10,12 +10,11 @@ Six attack surfaces covered:
 
 Zero runtime dependencies beyond stdlib. No model loading. Static inspection only.
 """
+
 from __future__ import annotations
 
 import hashlib
-import io
 import json
-import pickletools
 import re
 import struct
 from dataclasses import dataclass, field
@@ -23,10 +22,29 @@ from pathlib import Path
 from typing import Any
 
 DANGEROUS_PICKLE_IMPORTS = {
-    "os", "posix", "nt", "subprocess", "socket", "ctypes", "importlib",
-    "builtins", "__builtin__", "runpy", "pty", "pickle", "shelve",
-    "pathlib", "shutil", "tempfile", "urllib", "requests", "httpx",
-    "eval", "exec", "compile", "__import__",
+    "os",
+    "posix",
+    "nt",
+    "subprocess",
+    "socket",
+    "ctypes",
+    "importlib",
+    "builtins",
+    "__builtin__",
+    "runpy",
+    "pty",
+    "pickle",
+    "shelve",
+    "pathlib",
+    "shutil",
+    "tempfile",
+    "urllib",
+    "requests",
+    "httpx",
+    "eval",
+    "exec",
+    "compile",
+    "__import__",
 }
 
 UNSAFE_WEIGHT_SUFFIXES = {".bin", ".pt", ".pth", ".ckpt", ".pkl", ".pickle"}
@@ -62,10 +80,7 @@ class AuditReport:
             "passed": self.passed,
             "file_count": self.file_count,
             "total_bytes": self.total_bytes,
-            "checks": [
-                {"name": c.name, "passed": c.passed, "detail": c.detail, "evidence": c.evidence}
-                for c in self.checks
-            ],
+            "checks": [{"name": c.name, "passed": c.passed, "detail": c.detail, "evidence": c.evidence} for c in self.checks],
             "manifest": self.manifest,
         }
 

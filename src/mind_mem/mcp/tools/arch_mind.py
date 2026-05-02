@@ -52,9 +52,7 @@ def _resolve_binary() -> str:
     found = shutil.which("arch-mind")
     if found:
         return found
-    raise ArchMindError(
-        "arch-mind binary not found. Set ARCH_MIND_BIN or place it on PATH."
-    )
+    raise ArchMindError("arch-mind binary not found. Set ARCH_MIND_BIN or place it on PATH.")
 
 
 def _run(args: list[str], *, timeout: float = 60.0) -> dict[str, Any]:
@@ -189,13 +187,19 @@ def arch_session_start(
     successful call with exactly one ``arch_session_end`` to close
     the chain.
     """
-    return _run([
-        "session-start",
-        "--repo", repo,
-        "--fixture", fixture,
-        "--agent", agent_id,
-        "--commit", commit_sha,
-    ])
+    return _run(
+        [
+            "session-start",
+            "--repo",
+            repo,
+            "--fixture",
+            fixture,
+            "--agent",
+            agent_id,
+            "--commit",
+            commit_sha,
+        ]
+    )
 
 
 @mcp_tool_observe
@@ -206,11 +210,15 @@ def arch_session_end(repo: str, fixture: str) -> dict[str, Any]:
     ``session_start``. Returns the per-metric delta and the
     ``any_regression`` boolean.
     """
-    return _run([
-        "session-end",
-        "--repo", repo,
-        "--fixture", fixture,
-    ])
+    return _run(
+        [
+            "session-end",
+            "--repo",
+            repo,
+            "--fixture",
+            fixture,
+        ]
+    )
 
 
 @mcp_tool_observe

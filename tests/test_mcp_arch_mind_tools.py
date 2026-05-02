@@ -16,13 +16,10 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
-import json
 import subprocess
 from pathlib import Path
-from unittest import mock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Module under test (loaded via importlib so we don't depend on the rest of
@@ -101,16 +98,12 @@ def test_resolve_binary_missing(monkeypatch):
 
 
 def _make_subprocess_result(returncode: int, stdout: str = "", stderr: str = ""):
-    return subprocess.CompletedProcess(
-        args=["arch-mind"], returncode=returncode, stdout=stdout, stderr=stderr
-    )
+    return subprocess.CompletedProcess(args=["arch-mind"], returncode=returncode, stdout=stdout, stderr=stderr)
 
 
 def test_run_success_parses_json(monkeypatch):
     monkeypatch.setenv("ARCH_MIND_BIN", "/bin/true")
-    monkeypatch.setattr(
-        subprocess, "run", lambda *a, **kw: _make_subprocess_result(0, '{"baseline_id": 7}\n')
-    )
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _make_subprocess_result(0, '{"baseline_id": 7}\n'))
     result = arch_mind._run(["baseline"])
     assert result["ok"] is True
     assert result["code"] == 0
@@ -119,9 +112,7 @@ def test_run_success_parses_json(monkeypatch):
 
 def test_run_failure_returns_structured(monkeypatch):
     monkeypatch.setenv("ARCH_MIND_BIN", "/bin/true")
-    monkeypatch.setattr(
-        subprocess, "run", lambda *a, **kw: _make_subprocess_result(2, "", "boom\n")
-    )
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _make_subprocess_result(2, "", "boom\n"))
     result = arch_mind._run(["scan"])
     assert result["ok"] is False
     assert result["code"] == 2
@@ -205,9 +196,7 @@ def test_arch_check_rules_default_rules_path(monkeypatch):
 
 def test_arch_check_rules_explicit(monkeypatch):
     captured = _capture_argv(monkeypatch)
-    arch_mind.arch_check_rules(
-        repo="/r", fixture="/f.json", rules="/x/rules.mind", mode="enforce"
-    )
+    arch_mind.arch_check_rules(repo="/r", fixture="/f.json", rules="/x/rules.mind", mode="enforce")
     assert "--rules" in captured["args"]
     assert "/x/rules.mind" in captured["args"]
     assert "enforce" in captured["args"]
@@ -215,9 +204,7 @@ def test_arch_check_rules_explicit(monkeypatch):
 
 def test_arch_session_start_argv(monkeypatch):
     captured = _capture_argv(monkeypatch)
-    arch_mind.arch_session_start(
-        repo="/r", fixture="/f.json", agent_id="claude-test", commit_sha="deadbeef" * 5
-    )
+    arch_mind.arch_session_start(repo="/r", fixture="/f.json", agent_id="claude-test", commit_sha="deadbeef" * 5)
     assert captured["args"][1] == "session-start"
     assert "--agent" in captured["args"]
     assert "claude-test" in captured["args"]
@@ -239,11 +226,7 @@ def test_arch_metric_explain_filters(monkeypatch):
         "run",
         lambda *a, **kw: _make_subprocess_result(
             0,
-            (
-                "Scan: f.json\n"
-                "  modularity_q16  q16=327680000  raw≈5000.00\n"
-                "  acyclicity_q16  q16=655360000  raw≈10000.00\n"
-            ),
+            ("Scan: f.json\n  modularity_q16  q16=327680000  raw≈5000.00\n  acyclicity_q16  q16=655360000  raw≈10000.00\n"),
         ),
     )
     result = arch_mind.arch_metric_explain(metric="modularity_q16", fixture="/f.json")
