@@ -383,6 +383,80 @@ mind-mem ships the *primitives* (MCP tools); each consumer ships its own
 Cross-repo adoption happens via the existing MCP integration list — no new
 transport, no new auth, no new convention.
 
+## v3.9.0 candidates — Hash-of-code invalidation + per-byte lineage
+
+Third v3.9.0 theme. Inspired by `cocoindex-io/cocoindex` (Apache-2.0,
+~7.4k stars, v1 in preview). Their distinctive value is the
+`target = F(source)` declarative incremental engine: re-run only
+the rows whose inputs *or transform code* changed, with byte-level
+provenance from target back to source. mind-mem already has incremental
+indexing (mtime + size + partial-hash via `sqlite_index.py`) and partial
+provenance (source path on each block), so the framework / multi-source
+connectors / Rust core / pipeline DAG don't fit. Two ideas do.
+
+### 1. Hash-of-code invalidation
+
+Today `@memo` and re-extraction key off input hash only. When the
+extractor, chunker, or summarizer code changes (e.g. a sharper splitter,
+new persona prompt, model upgrade), affected blocks stay stale until a
+manual reindex. Add:
+
+- `transform_hash` field on each block — hash of the extractor pipeline
+  source (extractor function + chunker version + prompt template +
+  backend model id).
+- Indexer compares `block.transform_hash` to `current_pipeline_hash` on
+  startup and during dream cycle. Mismatch → re-extract that block, even
+  if source bytes are unchanged.
+- Surfaces as an MCP tool `pipeline_dirty_blocks()` for inspection and
+  `reindex(scope="dirty")` for targeted rebuild — no full reindex needed.
+
+Catches a real failure mode: prompt-engineering improvements silently
+lose value because old blocks keep stale extractions. Fixes it without
+forcing full O(N) reindex on every prompt iteration.
+
+### 2. Per-byte source lineage
+
+Today blocks carry a source path. cocoindex tracks target byte → source
+byte. mind-mem's audit-chain story is stronger if every governed claim
+traces back to an exact byte range, not just a file. Add:
+
+- `source_span = {path, byte_start, byte_end, sha256}` on each block,
+  populated at extraction time.
+- `audit_chain.py` includes `source_span` in the preimage when sealing
+  a block, so any later edit to those bytes invalidates the chain link
+  cleanly (currently file-mtime based, which is coarser).
+- New MCP tool `block_lineage(block_id)` returns the full chain:
+  block → extractor pipeline (with code hash) → source span → file
+  sha256. One call answers "where did this claim come from?"
+
+Direct fit for `512-mind/sealed_evidence` and `arch-mind` evidence
+chains: every governed assertion has byte-level provenance.
+
+### What we explicitly do NOT borrow
+
+- The pipeline orchestration framework. mind-mem is a recall engine +
+  indexer; we don't need a flow DAG, transform composer, or `@flow`
+  decorator surface. Adding cocoindex as a runtime dep would import a
+  Rust core we don't ship today.
+- Multi-source connectors (S3, GDrive, Slack, Postgres CDC, Kafka).
+  mind-mem's per-workspace file model is the right unit; multi-source
+  ingestion is a Naestro-layer concern (see `~/naestro/ROADMAP.md` R6).
+- "React for data engineering" mental model as an API. Useful as
+  documentation framing for v4.0 networked mesh (see below) but not as
+  a replacement for the existing `@memo` / `extract` / `recall`
+  surfaces.
+- v1-preview code. Concepts only. mind-mem stays on its own indexer.
+
+### Estimated effort
+
+2-3 days for one engineer. Hash-of-code is a 1-day addition (`@memo`
+key extension + dirty-block sweep). Per-byte lineage is the heavier
+half: extractor instrumentation, audit-chain preimage change, span-aware
+re-extraction on partial source edits. Both are additive — no breaking
+change to existing block format (new fields, old blocks get
+`transform_hash=null` and are treated as always-dirty until first
+re-extract).
+
 ## v4.0 candidates — Networked Mesh + Parallel Pipelines
 
 mind-mem today is single-process and single-host. Two adjacent surfaces have
