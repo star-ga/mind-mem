@@ -298,6 +298,32 @@ handling on the co-retrieval graph). Persona is a 1-day projection wrapper.
 Both are additive — no breaking change to existing `recall` / `hybrid_search`
 contracts.
 
+### Cross-MIND-ecosystem consumers
+
+The walkthrough and persona primitives are designed for cross-repo consumption,
+not just mind-mem-internal use. Once shipped, the following MIND-ecosystem
+projects can adopt without parallel implementation:
+
+- **Naestro** — primary consumer. Spec'd as `R5 - Naestro Lens` in
+  `~/naestro/ROADMAP.md`. Surfaces walkthroughs through CLI (`naestro lens`),
+  Cockpit panel, Telegram channel, and governance evidence chain. Gated on
+  this v3.8.0 work.
+- **512-mind** — module-level walkthroughs over the 38-module governance
+  kernel (DOS / CVS / ICL / Five Anchors / payment_rail) for new contributors
+  and external auditors. Optional, opt-in.
+- **mind-inference** — pipeline walkthroughs over the LLM-inference DAG for
+  operators tuning quantization, batching, or backend selection. Optional.
+- **rfn-mind / MindLLM** — research-artifact walkthroughs once the Phase
+  truthfulness work (audit findings F1-F14) is closed; not blocked on that
+  work, but only useful once the codebase is buildable.
+- **mind-fleet** — swarm-orchestration walkthroughs as governance evidence
+  when human operators review autonomous fleet decisions.
+
+mind-mem ships the *primitives* (MCP tools); each consumer ships its own
+*surface* (CLI flag, panel, channel command). No per-consumer code in mind-mem.
+Cross-repo adoption happens via the existing MCP integration list — no new
+transport, no new auth, no new convention.
+
 ## v4.0 candidates — Networked Mesh + Parallel Pipelines
 
 mind-mem today is single-process and single-host. Two adjacent surfaces have
