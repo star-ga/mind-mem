@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 685 | **Est. tokens:** ~1,378,319
-**Generated:** 2026-05-02 06:09 UTC
+**Files:** 685 | **Est. tokens:** ~1,378,399
+**Generated:** 2026-05-02 06:26 UTC
 
 ## Token Budget Guide
 
@@ -62,7 +62,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 233 | ~457,574 |
+| `tests/` | 233 | ~457,654 |
 | `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -740,7 +740,7 @@
 - `test_mind_ffi.py` (~291 tok, medium) — Tests for MIND FFI module."""
 - `test_mind_kernels_v3_3.py` (~998 tok, large) — Kernel-loading tests for v3.3.0 features.
 - `test_mm_cli_debug.py` (~3339 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_model_audit.py` (~3303 tok, huge) — Tests for ``mind_mem.model_audit`` — checkpoint static-security audit.
+- `test_model_audit.py` (~3383 tok, huge) — Tests for ``mind_mem.model_audit`` — checkpoint static-security audit.
 - `test_multi_file_recall.py` (~329 tok, medium) — Tests for recall across multiple files."""
 - `test_namespaces.py` (~2411 tok, huge) — Tests for namespaces.py — zero external deps (stdlib unittest)."""
 - `test_niah.py` (~4987 tok, huge) — Needle In A Haystack (NIAH) benchmark for mind-mem recall.

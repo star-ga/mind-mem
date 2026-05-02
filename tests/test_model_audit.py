@@ -138,7 +138,11 @@ class TestCheckPickleSafety:
         assert check_pickle_safety(clean_ckpt).passed
 
     def test_dangerous_os_import_fails(self, clean_ckpt: Path) -> None:
-        # Build a real pickle that imports os (via __reduce__-like construct)
+        # Build a real pickle that imports os (via __reduce__-like construct).
+        # On POSIX ``os.system`` pickles as ``os.system``; on Windows it
+        # pickles as ``nt.system`` (os.system is actually nt.system there).
+        # Both ``os`` and ``nt`` are in DANGEROUS_PICKLE_IMPORTS, so the
+        # check fires either way — the test must accept both.
         class Evil:
             def __reduce__(self):  # noqa: D401
                 import os
@@ -148,7 +152,7 @@ class TestCheckPickleSafety:
         (clean_ckpt / "training_args.bin").write_bytes(pickle.dumps(Evil()))
         result = check_pickle_safety(clean_ckpt)
         assert not result.passed
-        assert any("os" in e for e in result.evidence)
+        assert any(("os" in e or "nt" in e or "posix" in e) for e in result.evidence)
 
     def test_safe_pickle_passes(self, clean_ckpt: Path) -> None:
         (clean_ckpt / "training_args.bin").write_bytes(pickle.dumps({"learning_rate": 0.001, "batch_size": 8}))
