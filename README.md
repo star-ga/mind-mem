@@ -1211,8 +1211,13 @@ mind-mem ships with a [Model Context Protocol](https://modelcontextprotocol.io/)
 ### Install
 
 ```bash
-pip install fastmcp
+pipx install "mind-mem[mcp]"   # preferred — isolated venv with mind-mem-mcp on PATH
+# or
+pip install --user "mind-mem[mcp]"
 ```
+
+The `[mcp]` extra pulls `fastmcp>=3.2.0` (the version line declared in
+pyproject.toml) and registers the `mind-mem-mcp` console script.
 
 ### Automatic Setup (Recommended)
 
@@ -1230,13 +1235,18 @@ For Claude Code, Claude Desktop, Cursor, Windsurf, and Gemini CLI, add to the re
 {
   "mcpServers": {
     "mind-mem": {
-      "command": "python3",
-      "args": ["/path/to/mind-mem/mcp_server.py"],
+      "command": "mind-mem-mcp",
+      "args": [],
       "env": {"MIND_MEM_WORKSPACE": "/path/to/your/workspace"}
     }
   }
 }
 ```
+
+`mind-mem-mcp` is the console script registered by `pipx install
+"mind-mem[mcp]"` (or `pip install --user "mind-mem[mcp]"`). If you're running
+out of a source checkout instead, replace `"command": "mind-mem-mcp"` with
+`"command": "python3", "args": ["/path/to/mind-mem/mcp_server.py"]`.
 
 | Client              | Config File                                   |
 | ------------------- | --------------------------------------------- |
@@ -1250,8 +1260,8 @@ For **Codex CLI** (TOML format), add to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.mind-mem]
-command = "python3"
-args = ["/path/to/mind-mem/mcp_server.py"]
+command = "mind-mem-mcp"
+args = []
 
 [mcp_servers.mind-mem.env]
 MIND_MEM_WORKSPACE = "/path/to/your/workspace"
@@ -1264,8 +1274,8 @@ For **Zed**, add to `~/.config/zed/settings.json` under `context_servers`:
   "context_servers": {
     "mind-mem": {
       "command": {
-        "path": "python3",
-        "args": ["/path/to/mind-mem/mcp_server.py"],
+        "path": "mind-mem-mcp",
+        "args": [],
         "env": {"MIND_MEM_WORKSPACE": "/path/to/your/workspace"}
       }
     }
@@ -1277,10 +1287,11 @@ For **Zed**, add to `~/.config/zed/settings.json` under `context_servers`:
 
 ```bash
 # stdio transport (default)
-MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py
+MIND_MEM_WORKSPACE=/path/to/workspace mind-mem-mcp
 
-# HTTP transport (multi-client / remote)
-MIND_MEM_WORKSPACE=/path/to/workspace python3 mcp_server.py --transport http --port 8765
+# HTTP transport (multi-client / remote) — requires MIND_MEM_TOKEN per v3.7.0 fail-closed contract
+MIND_MEM_WORKSPACE=/path/to/workspace MIND_MEM_TOKEN=$(openssl rand -hex 32) \
+  mind-mem-mcp --transport http --host 127.0.0.1 --port 8765
 ```
 
 ### Resources (read-only)

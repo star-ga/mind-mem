@@ -56,14 +56,23 @@ for r in results:
 
 ### MCP Server
 
-mind-mem includes an MCP server for integration with AI coding assistants:
+mind-mem includes an MCP server for integration with AI coding assistants.
+First install the `[mcp]` extra so the `mind-mem-mcp` console script is
+on `PATH`:
+
+```bash
+pipx install "mind-mem[mcp]"     # preferred (isolated venv)
+# or: pip install --user "mind-mem[mcp]"
+```
+
+Then point your AI client at the console script:
 
 ```json
 {
   "mcpServers": {
     "mind-mem": {
-      "command": "python3",
-      "args": ["/path/to/mind-mem/mcp_server.py"],
+      "command": "mind-mem-mcp",
+      "args": [],
       "env": {
         "MIND_MEM_WORKSPACE": "/path/to/workspace"
       }
@@ -71,6 +80,9 @@ mind-mem includes an MCP server for integration with AI coding assistants:
   }
 }
 ```
+
+For source checkouts, replace `"command": "mind-mem-mcp"` with
+`"command": "python3", "args": ["/path/to/mind-mem/mcp_server.py"]`.
 
 ## Next Steps
 
