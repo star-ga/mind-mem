@@ -2,6 +2,101 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.0 (2026-05-02)
+
+**Model Safety Audit — first slice.** First minor release of the
+v3.8.0 plan ("Model Safety Audit + Social Ingestion" in
+``ROADMAP.md``). Ships the static-inspection audit pipeline and its
+CLI surface; pickle / weight-format / remote-code / tokenizer-
+injection checks now have full test coverage. Subsequent v3.8.x
+patches will add Ed25519 manifest signing, the signed-publisher
+provenance allowlist, and the MCP tool wrapper. Social Ingestion
+(``[SOCIAL]`` block type, platform schemas) deferred to v3.9.0
+because it ships a different surface and would conflate this
+release.
+
+### Added
+
+- **``mm audit-model <path>`` CLI** — static security scan of any
+  local model checkpoint. Emits a colour-coded text report (or
+  ``--json`` for machine-readable output) plus an optional
+  SHA-256 manifest (``--manifest-out``). Exit code 0 on clean
+  audit, 1 on any check failure. Calls
+  ``mind_mem.model_audit.audit_model`` with no model load — pure
+  static inspection, zero runtime deps beyond stdlib.
+- **Six audit checks** (now exercised by 31 unit tests, prior
+  coverage was zero):
+  - ``check_remote_code_hooks`` — flags ``auto_map`` /
+    ``trust_remote_code=true`` in any ``config.json`` /
+    ``*_config.json`` / ``generation_config.json``.
+  - ``check_no_python_files`` — refuses any ``.py`` shipped
+    inside the checkpoint (HF custom-modeling RCE surface).
+  - ``check_weight_format`` — ``.safetensors`` / ``.gguf`` only;
+    flags ``.bin`` / ``.pt`` / ``.pth`` / ``.ckpt`` / ``.pkl``
+    weight files (``training_args.bin`` allow-listed because HF
+    convention emits it; covered by the pickle-safety scan).
+  - ``check_pickle_safety`` — raw-byte opcode walk of every
+    pickle stream looking for ``GLOBAL`` / ``STACK_GLOBAL``
+    references to ``os`` / ``subprocess`` / ``socket`` /
+    ``ctypes`` / ``importlib`` / ``builtins`` / ``runpy`` /
+    ``pty`` / ``shutil`` / ``urllib`` / ``requests`` / ``httpx``
+    / ``eval`` / ``exec`` / ``compile`` / ``__import__``. Avoids
+    ``pickletools.genops`` because its 3.12 ASCII default fails
+    on legitimate non-ASCII trainer configs.
+  - ``check_tokenizer_injection`` — scans the high-risk
+    ``added_tokens`` / ``post_processor`` / ``normalizer`` /
+    ``pre_tokenizer`` / ``decoder`` fields of ``tokenizer.json``
+    plus the entirety of ``tokenizer_config.json`` /
+    ``special_tokens_map.json`` for embedded URLs and shell
+    patterns. BPE ``vocab`` / ``merges`` skipped — substrings
+    like "curl" / "wget" are training-data artifacts, not attack
+    surface.
+  - ``check_safetensors_header`` — validates the leading 8-byte
+    little-endian header length, refuses headers larger than
+    100 MB (sanity cap), parses the JSON header and refuses any
+    ``__metadata__.code`` key.
+- **``compute_manifest``** — streaming SHA-256 over every file
+  in the checkpoint (1 MiB chunks). Manifest output is a
+  per-line ``<sha256>  <relpath>`` text format compatible with
+  ``sha256sum -c``.
+
+### Tests
+
+- **``tests/test_model_audit.py``** — 31 new tests covering
+  every public function, every check, and the full
+  ``audit_model`` happy path + multi-violation negative path.
+  Synthesised checkpoints use real safetensors headers and real
+  pickle streams (``pickle.dumps`` of an ``Evil.__reduce__``
+  class for the dangerous-import path) so the tests exercise
+  the actual byte-level scanner, not a mock.
+
+### Deferred to v3.8.x
+
+- Ed25519 manifest signing (``mm sign-model`` / ``mm
+  verify-model``).
+- Provenance allowlist of upstream publishers (Alibaba Qwen,
+  Meta Llama, Mistral, Google Gemma, IBM Granite, OpenAI,
+  Anthropic) cross-referenced against the ``base_model`` claim
+  in ``config.json``.
+- MCP tool wrapper (expose ``audit_model`` over the MCP
+  surface).
+- Load-gate integration (refuse to consume a checkpoint through
+  ``backends.ollama`` / ``backends.hf`` / ``backends.vllm``
+  unless it has a fresh ``mm audit-model`` pass — escape
+  ``--trust-without-audit`` writes a WARNING-level governance
+  event).
+- mic@2 / mic-b output mode (text + binary STARGA-native
+  interchange — the canonical pattern for new audit
+  artifacts; ``--json`` stays the legacy compatibility flag).
+
+### Deferred to v3.9.0
+
+- Social Ingestion: ``[SOCIAL]`` block type with platform-aware
+  schema (``platform`` / ``author_handle`` / ``post_id`` /
+  ``url`` / ``posted_at``), ``mm capture-social`` CLI, plus the
+  Twitter / Reddit ingestion adapters originally bundled with
+  this minor.
+
 ## 3.7.0 (2026-05-01)
 
 **External-audit response — HTTP/REST hardening + cross-platform
