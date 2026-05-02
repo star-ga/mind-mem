@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# mind-mem installer — sets up MCP server + hooks for all supported clients
+# mind-mem installer — installs the package + wires MCP config for AI clients
 # Usage: ./install.sh [--all] [--claude-code] [--claude-desktop] [--codex] [--gemini]
-#        [--cursor] [--windsurf] [--openclaw] [--workspace PATH]
+#        [--cursor] [--windsurf] [--zed] [--openclaw] [--workspace PATH]
+#        [--no-install] [--installer pipx|pip] [--package SPEC]
 set -euo pipefail
 
 MIND_MEM_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEFAULT_WORKSPACE="$HOME/.mind-mem/workspace"
+DEFAULT_PACKAGE_SPEC=""   # populated by select_package_spec()
 
 # Colors
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -15,7 +17,7 @@ ok()    { echo -e "${GREEN}[mind-mem]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[mind-mem]${NC} $*"; }
 err()   { echo -e "${RED}[mind-mem]${NC} $*" >&2; }
 
-# ---------- helpers ----------
+# ---------- runtime + package install ----------
 
 ensure_python3() {
   if ! command -v python3 &>/dev/null; then
@@ -34,45 +36,145 @@ ensure_python3() {
   ok "Python $ver"
 }
 
+# Decide which package spec to pass to pipx/pip:
+#   * If we are inside a checkout that contains pyproject.toml and a `src/`
+#     tree, install the local checkout in editable mode — avoids pulling
+#     a stale copy from PyPI when the user is hacking on the repo.
+#   * Otherwise install the published wheel from PyPI.
+select_package_spec() {
+  if [ -n "${MIND_MEM_PACKAGE_SPEC:-}" ]; then
+    DEFAULT_PACKAGE_SPEC="$MIND_MEM_PACKAGE_SPEC"
+    return
+  fi
+  if [ -f "$MIND_MEM_DIR/pyproject.toml" ] && [ -d "$MIND_MEM_DIR/src" ]; then
+    DEFAULT_PACKAGE_SPEC="$MIND_MEM_DIR[mcp]"
+  else
+    DEFAULT_PACKAGE_SPEC="mind-mem[mcp]"
+  fi
+}
+
+# Choose the install backend. Default order: pipx (preferred) -> pip --user.
+# Caller can force one with --installer pipx|pip.
+select_installer() {
+  local forced="${1:-auto}"
+  case "$forced" in
+    pipx)
+      if ! command -v pipx &>/dev/null; then
+        err "--installer pipx requested but pipx not on PATH. Install pipx first (https://pipx.pypa.io)."
+        exit 1
+      fi
+      echo "pipx"
+      return
+      ;;
+    pip)
+      echo "pip"
+      return
+      ;;
+    auto)
+      if command -v pipx &>/dev/null; then
+        echo "pipx"
+      else
+        echo "pip"
+      fi
+      return
+      ;;
+    *)
+      err "Unknown --installer value: $forced (use pipx or pip)"
+      exit 1
+      ;;
+  esac
+}
+
+# Install the package + the [mcp] extra so `mind-mem-mcp` is on PATH.
+install_package() {
+  local installer="$1" spec="$2"
+  case "$installer" in
+    pipx)
+      info "Installing $spec via pipx (isolated venv)"
+      # `pipx install --force` upgrades or replaces an existing install.
+      # mind-mem ships several entry points (mind-mem-init, mind-mem-mcp, ...);
+      # `pipx install` registers the lot.
+      pipx install --force "$spec"
+      ;;
+    pip)
+      info "Installing $spec via pip --user"
+      python3 -m pip install --user --upgrade "$spec"
+      ;;
+  esac
+}
+
+# Verify the package and its console script are reachable.
+# Records the absolute path to `mind-mem-mcp` on stdout.
+resolve_mcp_command() {
+  local cmd
+  cmd=$(command -v mind-mem-mcp 2>/dev/null || true)
+  if [ -z "$cmd" ]; then
+    # pipx installs to ~/.local/bin on most platforms, ~/Library/... on macOS.
+    for cand in "$HOME/.local/bin/mind-mem-mcp" \
+                "$HOME/Library/Python"/*/bin/mind-mem-mcp; do
+      if [ -x "$cand" ]; then
+        cmd="$cand"
+        break
+      fi
+    done
+  fi
+  if [ -z "$cmd" ]; then
+    err "mind-mem-mcp console script not found on PATH after install."
+    err "If you used pipx, run \`pipx ensurepath\` and re-open your shell."
+    exit 1
+  fi
+  echo "$cmd"
+}
+
+# Smoke-test: import the package + invoke the console script.
+verify_install() {
+  local cmd="$1"
+  info "Smoke test: $cmd --help"
+  if ! "$cmd" --help >/dev/null 2>&1; then
+    err "mind-mem-mcp --help failed. The install is broken — aborting."
+    exit 1
+  fi
+  ok "mind-mem-mcp resolves and runs"
+}
+
+# ---------- workspace + client config helpers ----------
+
 ensure_workspace() {
   local ws="$1"
   if [ ! -d "$ws" ]; then
     info "Creating workspace at $ws"
-    PYTHONPATH="$MIND_MEM_DIR/src${PYTHONPATH:+:$PYTHONPATH}" python3 -m mind_mem.init_workspace "$ws"
+    python3 -m mind_mem.init_workspace "$ws"
   fi
   ok "Workspace: $ws"
 }
 
 # JSON MCP config helper — merges mind-mem entry into a JSON file with mcpServers key
-# Usage: install_json_mcp <config_path> <mcp_key> <workspace>
+# Usage: install_json_mcp <config_path> <mcp_key> <workspace> <mcp_command>
 install_json_mcp() {
-  local config="$1" key="$2" ws="$3"
+  local config="$1" key="$2" ws="$3" cmd="$4"
   local dir
   dir=$(dirname "$config")
   mkdir -p "$dir"
 
-  python3 - "$config" "$key" "$ws" "$MIND_MEM_DIR" <<'PYEOF'
+  python3 - "$config" "$key" "$ws" "$cmd" <<'PYEOF'
 import json, sys, os
 
-config_path, mcp_key, workspace, mind_mem_dir = sys.argv[1:5]
+config_path, mcp_key, workspace, command = sys.argv[1:5]
 
-# Read existing or create new
 data = {}
 if os.path.isfile(config_path):
     with open(config_path) as f:
         data = json.load(f)
 
-# Ensure mcpServers key exists
 if mcp_key not in data:
     data[mcp_key] = {}
 
-# Add mind-mem entry
 data[mcp_key]["mind-mem"] = {
-    "command": "python3",
-    "args": [os.path.join(mind_mem_dir, "mcp_server.py")],
+    "command": command,
+    "args": [],
     "env": {
-        "MIND_MEM_WORKSPACE": workspace
-    }
+        "MIND_MEM_WORKSPACE": workspace,
+    },
 }
 
 with open(config_path, "w") as f:
@@ -82,32 +184,27 @@ PYEOF
 }
 
 # TOML MCP config helper — appends mind-mem entry to a TOML file (Codex CLI)
-# Usage: install_toml_mcp <config_path> <workspace>
+# Usage: install_toml_mcp <config_path> <workspace> <mcp_command>
 install_toml_mcp() {
-  local config="$1" ws="$2"
+  local config="$1" ws="$2" cmd="$3"
 
-  # Check if already configured
   if grep -q '\[mcp_servers\.mind-mem\]' "$config" 2>/dev/null; then
     warn "Codex: mind-mem already configured in $config, updating..."
-    # Remove existing mind-mem block and re-add
-    python3 - "$config" "$ws" "$MIND_MEM_DIR" <<'PYEOF'
-import re, sys, os
+    python3 - "$config" "$ws" "$cmd" <<'PYEOF'
+import re, sys
 
-config_path, workspace, mind_mem_dir = sys.argv[1:4]
+config_path, workspace, command = sys.argv[1:4]
 
 with open(config_path) as f:
     content = f.read()
 
-# Remove existing mind-mem MCP block (section + its keys until next section or EOF)
 pattern = r'\n?\[mcp_servers\.mind-mem\]\n(?:(?!\[)[^\n]*\n)*(?:\[mcp_servers\.mind-mem\.env\]\n(?:(?!\[)[^\n]*\n)*)?'
 content = re.sub(pattern, '\n', content)
 
-# Append new block
-mcp_py = os.path.join(mind_mem_dir, "mcp_server.py")
 block = f'''
 [mcp_servers.mind-mem]
-command = "python3"
-args = ["{mcp_py}"]
+command = "{command}"
+args = []
 
 [mcp_servers.mind-mem.env]
 MIND_MEM_WORKSPACE = "{workspace}"
@@ -118,13 +215,11 @@ with open(config_path, 'w') as f:
     f.write(content)
 PYEOF
   else
-    # Append new block
-    local mcp_py="$MIND_MEM_DIR/mcp_server.py"
     cat >> "$config" <<TOML
 
 [mcp_servers.mind-mem]
-command = "python3"
-args = ["$mcp_py"]
+command = "$cmd"
+args = []
 
 [mcp_servers.mind-mem.env]
 MIND_MEM_WORKSPACE = "$ws"
@@ -135,17 +230,15 @@ TOML
 # ---------- client installers ----------
 
 install_claude_code() {
-  local ws="$1"
+  local ws="$1" cmd="$2"
   local config="$HOME/.claude/mcp.json"
   info "Claude Code CLI: $config"
-  install_json_mcp "$config" "mcpServers" "$ws"
+  install_json_mcp "$config" "mcpServers" "$ws" "$cmd"
   ok "Claude Code CLI configured"
 }
 
 install_claude_desktop() {
-  local ws="$1"
-  # Linux: ~/.config/Claude/claude_desktop_config.json
-  # macOS: ~/Library/Application Support/Claude/claude_desktop_config.json
+  local ws="$1" cmd="$2"
   local config
   if [ "$(uname)" = "Darwin" ]; then
     config="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
@@ -153,12 +246,12 @@ install_claude_desktop() {
     config="$HOME/.config/Claude/claude_desktop_config.json"
   fi
   info "Claude Desktop: $config"
-  install_json_mcp "$config" "mcpServers" "$ws"
+  install_json_mcp "$config" "mcpServers" "$ws" "$cmd"
   ok "Claude Desktop configured"
 }
 
 install_codex() {
-  local ws="$1"
+  local ws="$1" cmd="$2"
   local config="$HOME/.codex/config.toml"
   if [ ! -f "$config" ]; then
     warn "Codex CLI config not found at $config, creating..."
@@ -166,12 +259,12 @@ install_codex() {
     touch "$config"
   fi
   info "Codex CLI: $config"
-  install_toml_mcp "$config" "$ws"
+  install_toml_mcp "$config" "$ws" "$cmd"
   ok "Codex CLI configured"
 }
 
 install_gemini() {
-  local ws="$1"
+  local ws="$1" cmd="$2"
   local config="$HOME/.gemini/settings.json"
   if [ ! -f "$config" ]; then
     warn "Gemini CLI config not found at $config, creating..."
@@ -179,39 +272,38 @@ install_gemini() {
     echo '{}' > "$config"
   fi
   info "Gemini CLI: $config"
-  install_json_mcp "$config" "mcpServers" "$ws"
+  install_json_mcp "$config" "mcpServers" "$ws" "$cmd"
   ok "Gemini CLI configured"
 }
 
 install_cursor() {
-  local ws="$1"
+  local ws="$1" cmd="$2"
   local config="$HOME/.cursor/mcp.json"
   info "Cursor: $config"
-  install_json_mcp "$config" "mcpServers" "$ws"
+  install_json_mcp "$config" "mcpServers" "$ws" "$cmd"
   ok "Cursor configured"
 }
 
 install_windsurf() {
-  local ws="$1"
+  local ws="$1" cmd="$2"
   local config="$HOME/.codeium/windsurf/mcp_config.json"
   info "Windsurf: $config"
-  install_json_mcp "$config" "mcpServers" "$ws"
+  install_json_mcp "$config" "mcpServers" "$ws" "$cmd"
   ok "Windsurf configured"
 }
 
 install_zed() {
-  local ws="$1"
-  # Zed uses ~/.config/zed/settings.json with context_servers key
+  local ws="$1" cmd="$2"
   local config="$HOME/.config/zed/settings.json"
   if [ ! -f "$config" ]; then
     warn "Zed config not found at $config, skipping..."
     return
   fi
   info "Zed: $config"
-  python3 - "$config" "$ws" "$MIND_MEM_DIR" <<'PYEOF'
-import json, sys, os
+  python3 - "$config" "$ws" "$cmd" <<'PYEOF'
+import json, sys
 
-config_path, workspace, mind_mem_dir = sys.argv[1:4]
+config_path, workspace, command = sys.argv[1:4]
 
 with open(config_path) as f:
     data = json.load(f)
@@ -221,10 +313,10 @@ if "context_servers" not in data:
 
 data["context_servers"]["mind-mem"] = {
     "command": {
-        "path": "python3",
-        "args": [os.path.join(mind_mem_dir, "mcp_server.py")],
-        "env": {"MIND_MEM_WORKSPACE": workspace}
-    }
+        "path": command,
+        "args": [],
+        "env": {"MIND_MEM_WORKSPACE": workspace},
+    },
 }
 
 with open(config_path, "w") as f:
@@ -235,26 +327,28 @@ PYEOF
 }
 
 install_openclaw() {
-  local ws="$1"
+  local ws="$1" cmd="$2"
   local hooks_dir="$HOME/.openclaw/hooks/mind-mem"
 
   info "OpenClaw: copying hooks to $hooks_dir"
   mkdir -p "$hooks_dir"
-  cp "$MIND_MEM_DIR/hooks/openclaw/mind-mem/handler.js" "$hooks_dir/handler.js"
-  cp "$MIND_MEM_DIR/hooks/openclaw/mind-mem/HOOK.md" "$hooks_dir/HOOK.md"
+  if [ -f "$MIND_MEM_DIR/hooks/openclaw/mind-mem/handler.js" ]; then
+    cp "$MIND_MEM_DIR/hooks/openclaw/mind-mem/handler.js" "$hooks_dir/handler.js"
+    cp "$MIND_MEM_DIR/hooks/openclaw/mind-mem/HOOK.md" "$hooks_dir/HOOK.md"
+  else
+    warn "OpenClaw hook sources not found in $MIND_MEM_DIR/hooks/openclaw/ (skipping handler copy)"
+  fi
 
-  # Update openclaw.json if it exists
   local oc_config="$HOME/.openclaw/openclaw.json"
   if [ -f "$oc_config" ]; then
     python3 - "$oc_config" "$ws" "$MIND_MEM_DIR" <<'PYEOF'
-import json, sys, os
+import json, sys
 
 config_path, workspace, mind_mem_dir = sys.argv[1:4]
 
 with open(config_path) as f:
     data = json.load(f)
 
-# Ensure hooks.internal.entries exists
 hooks = data.setdefault("hooks", {})
 internal = hooks.setdefault("internal", {"enabled": True})
 entries = internal.setdefault("entries", {})
@@ -263,11 +357,10 @@ entries["mind-mem"] = {
     "enabled": True,
     "env": {
         "MIND_MEM_WORKSPACE": workspace,
-        "MIND_MEM_HOME": mind_mem_dir
-    }
+        "MIND_MEM_HOME": mind_mem_dir,
+    },
 }
 
-# Remove old mem-os entry if present
 entries.pop("mem-os", None)
 
 with open(config_path, "w") as f:
@@ -279,27 +372,10 @@ PYEOF
     warn "OpenClaw config not found at $oc_config (create it or install OpenClaw first)"
   fi
 
-  # Also configure ~/.claude/mcp.json — OpenClaw spawns Claude CLI which reads it
   info "OpenClaw: configuring MCP server (Claude CLI used by OpenClaw reads ~/.claude/mcp.json)"
-  install_claude_code "$ws"
+  install_claude_code "$ws" "$cmd"
 
   ok "OpenClaw hooks + MCP configured"
-}
-
-install_claude_code_hooks() {
-  local ws="$1"
-  # Claude Code hooks.json for SessionStart/Stop
-  local hooks_dir="$HOME/.claude/hooks"
-  local hooks_file="$hooks_dir/hooks.json"
-
-  if [ ! -d "$hooks_dir" ]; then
-    mkdir -p "$hooks_dir"
-  fi
-
-  # Claude Code supports hooks via settings — just install the MCP server
-  # The hooks.json in the repo is for reference; Claude Code hooks go in settings
-  info "Claude Code hooks: MCP server handles all functionality via tools"
-  ok "No separate hooks needed for Claude Code (MCP server provides all tools)"
 }
 
 # ---------- auto-detect ----------
@@ -307,7 +383,6 @@ install_claude_code_hooks() {
 detect_clients() {
   local found=()
   [ -d "$HOME/.claude" ] && found+=("claude-code")
-  # Check Claude Desktop
   if [ "$(uname)" = "Darwin" ] && [ -d "$HOME/Library/Application Support/Claude" ]; then
     found+=("claude-desktop")
   elif [ -d "$HOME/.config/Claude" ]; then
@@ -341,6 +416,12 @@ Options:
   --zed              Install for Zed
   --openclaw         Install for OpenClaw
   --workspace PATH   Set workspace path (default: ~/.mind-mem/workspace)
+  --installer KIND   Force pipx or pip (default: auto)
+  --package SPEC     Override the package spec (default: local checkout if
+                     pyproject.toml is present, else "mind-mem[mcp]"). Set
+                     MIND_MEM_PACKAGE_SPEC to override globally.
+  --no-install       Skip the package install step (assumes mind-mem-mcp
+                     is already on PATH).
   --help             Show this help
 
 If no client flags are given, auto-detects installed clients and prompts.
@@ -349,6 +430,8 @@ Examples:
   $0 --all                              # Install for all detected clients
   $0 --claude-code --codex              # Install for Claude Code + Codex
   $0 --all --workspace /path/to/ws      # Custom workspace
+  $0 --all --installer pip              # Force pip --user instead of pipx
+  $0 --all --no-install                 # Wire clients only; skip pip/pipx install
 EOF
   exit 0
 }
@@ -357,21 +440,27 @@ main() {
   local workspace="$DEFAULT_WORKSPACE"
   local clients=()
   local auto=false
+  local installer_choice="auto"
+  local skip_install=false
+  local package_override=""
 
   while [ $# -gt 0 ]; do
     case "$1" in
-      --all)           auto=true; shift ;;
-      --claude-code)   clients+=("claude-code"); shift ;;
+      --all)            auto=true; shift ;;
+      --claude-code)    clients+=("claude-code"); shift ;;
       --claude-desktop) clients+=("claude-desktop"); shift ;;
-      --codex)         clients+=("codex"); shift ;;
-      --gemini)        clients+=("gemini"); shift ;;
-      --cursor)        clients+=("cursor"); shift ;;
-      --windsurf)      clients+=("windsurf"); shift ;;
-      --zed)           clients+=("zed"); shift ;;
-      --openclaw)      clients+=("openclaw"); shift ;;
-      --workspace)     workspace="$2"; shift 2 ;;
-      --help|-h)       usage ;;
-      *)               err "Unknown option: $1"; usage ;;
+      --codex)          clients+=("codex"); shift ;;
+      --gemini)         clients+=("gemini"); shift ;;
+      --cursor)         clients+=("cursor"); shift ;;
+      --windsurf)       clients+=("windsurf"); shift ;;
+      --zed)            clients+=("zed"); shift ;;
+      --openclaw)       clients+=("openclaw"); shift ;;
+      --workspace)      workspace="$2"; shift 2 ;;
+      --installer)      installer_choice="$2"; shift 2 ;;
+      --package)        package_override="$2"; shift 2 ;;
+      --no-install)     skip_install=true; shift ;;
+      --help|-h)        usage ;;
+      *)                err "Unknown option: $1"; usage ;;
     esac
   done
 
@@ -380,10 +469,27 @@ main() {
   echo -e "  ${BLUE}https://github.com/star-ga/mind-mem${NC}"
   echo ""
 
-  # Check python3
   ensure_python3
 
-  # Auto-detect if --all or no clients specified
+  # Resolve the package spec + the install backend, then install (unless
+  # --no-install) and verify the console script is reachable.
+  select_package_spec
+  if [ -n "$package_override" ]; then
+    DEFAULT_PACKAGE_SPEC="$package_override"
+  fi
+
+  if ! $skip_install; then
+    local installer
+    installer=$(select_installer "$installer_choice")
+    install_package "$installer" "$DEFAULT_PACKAGE_SPEC"
+  else
+    info "Skipping package install (--no-install)"
+  fi
+
+  local mcp_command
+  mcp_command=$(resolve_mcp_command)
+  verify_install "$mcp_command"
+
   if $auto || [ ${#clients[@]} -eq 0 ]; then
     local detected
     detected=$(detect_clients)
@@ -429,21 +535,19 @@ main() {
   info "Installing for: ${clients[*]}"
   echo ""
 
-  # Initialize workspace
   ensure_workspace "$workspace"
   echo ""
 
-  # Install for each client
   for client in "${clients[@]}"; do
     case "$client" in
-      claude-code)     install_claude_code "$workspace" ;;
-      claude-desktop)  install_claude_desktop "$workspace" ;;
-      codex)           install_codex "$workspace" ;;
-      gemini)          install_gemini "$workspace" ;;
-      cursor)          install_cursor "$workspace" ;;
-      windsurf)        install_windsurf "$workspace" ;;
-      zed)             install_zed "$workspace" ;;
-      openclaw)        install_openclaw "$workspace" ;;
+      claude-code)     install_claude_code "$workspace" "$mcp_command" ;;
+      claude-desktop)  install_claude_desktop "$workspace" "$mcp_command" ;;
+      codex)           install_codex "$workspace" "$mcp_command" ;;
+      gemini)          install_gemini "$workspace" "$mcp_command" ;;
+      cursor)          install_cursor "$workspace" "$mcp_command" ;;
+      windsurf)        install_windsurf "$workspace" "$mcp_command" ;;
+      zed)             install_zed "$workspace" "$mcp_command" ;;
+      openclaw)        install_openclaw "$workspace" "$mcp_command" ;;
       *)               warn "Unknown client: $client" ;;
     esac
   done
@@ -451,13 +555,13 @@ main() {
   echo ""
   ok "Installation complete!"
   echo ""
-  echo "  Workspace: $workspace"
-  echo "  MCP server: $MIND_MEM_DIR/mcp_server.py"
+  echo "  Workspace:  $workspace"
+  echo "  MCP server: $mcp_command"
   echo ""
   echo "  Next steps:"
   echo "    1. Restart your AI coding client to pick up the new MCP server"
   echo "    2. Try: recall \"what do I know about...\""
-  echo "    3. Run 'python3 -m mind_mem.intel_scan $workspace' for a health check"
+  echo "    3. Run 'mind-mem-init --health $workspace' for a health check"
   echo ""
 }
 

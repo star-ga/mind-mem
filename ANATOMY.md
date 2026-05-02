@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 679 | **Est. tokens:** ~1,350,593
-**Generated:** 2026-05-02 00:38 UTC
+**Files:** 679 | **Est. tokens:** ~1,352,225
+**Generated:** 2026-05-02 00:51 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~78,020 |
+| `./` | 30 | ~78,980 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 3 | ~798 |
 | `benchmarks/` | 26 | ~64,933 |
@@ -37,7 +37,7 @@
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 10 | ~5,938 |
+| `.github/workflows/` | 10 | ~6,331 |
 | `hooks/` | 3 | ~801 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -54,7 +54,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~259 |
-| `src/mind_mem/` | 143 | ~481,807 |
+| `src/mind_mem/` | 143 | ~482,086 |
 | `src/mind_mem/api/` | 5 | ~15,104 |
 | `src/mind_mem/mcp/` | 3 | ~3,250 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,247 |
@@ -89,7 +89,7 @@
 - `.gitignore` (~120 tok, small) — *.pyc
 - `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
-- `install.sh` (~3337 tok, huge) — mind-mem installer — sets up MCP server + hooks for all supported clients
+- `install.sh` (~4155 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
 - `LICENSE` (~2695 tok, huge)
 - `Makefile` (~569 tok, large) — .PHONY: test lint bench install dev clean smoke help regen-bash-literals
 - `mcp_server.py` (~660 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
@@ -97,7 +97,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~1712 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~22933 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~23075 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~714 tok, large) — # mind-mem optional dependencies — pinned with SHA256 integrity hashes.
 - `ROADMAP.md` (~21157 tok, huge) — mind-mem Roadmap
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
@@ -255,7 +255,7 @@
 ### `.github/workflows/`
 
 - `benchmark.yml` (~735 tok, large) — name: Benchmark
-- `ci.yml` (~813 tok, large) — name: CI
+- `ci.yml` (~1206 tok, large) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs
@@ -449,7 +449,7 @@
 - `llm_extractor.py` (~4746 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
 - `llm_noise_profile.py` (~2339 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `maintenance_migrate.py` (~1243 tok, large) — v3.2.0 §2.2 — one-shot migration helper for ``maintenance/`` subdivision.
-- `mcp_entry.py` (~217 tok, medium) — Thin entry point for mind-mem-mcp console script."""
+- `mcp_entry.py` (~496 tok, medium) — Thin entry point for the ``mind-mem-mcp`` console script.
 ### `src/mind_mem/mcp/infra/`
 
 - `acl.py` (~902 tok, large) — Per-tool ACL — scope enforcement for the MCP surface.

@@ -93,3 +93,41 @@ jobs:
         run: python -m mind_mem.init_workspace /tmp/test-workspace
       - name: Validate workspace
         run: python -m mind_mem.validate_py /tmp/test-workspace
+
+  install-smoke:
+    name: install.sh smoke (${{ matrix.installer }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        installer: [pipx, pip]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+      - name: Install pipx
+        if: matrix.installer == 'pipx'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pipx
+          python -m pipx ensurepath
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install package via documented one-liner
+        # The README tells users to run pipx install "mind-mem[mcp]"
+        # (or pip --user). This step exercises that exact path on a
+        # clean runner so a regression there is caught before release.
+        run: |
+          if [ "${{ matrix.installer }}" = "pipx" ]; then
+            pipx install --force ".[mcp]"
+          else
+            python -m pip install --user ".[mcp]"
+          fi
+      - name: mind-mem-mcp --help (smoke)
+        run: mind-mem-mcp --help
+      - name: install.sh wires clients without re-installing
+        # Run with --no-install so the script just resolves
+        # mind-mem-mcp on PATH and verifies it. The --claude-code flag
+        # writes to ~/.claude/mcp.json (created on demand) and avoids
+        # the interactive client picker.
+        run: ./install.sh --no-install --workspace /tmp/test-workspace --claude-code

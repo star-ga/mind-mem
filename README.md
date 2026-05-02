@@ -477,14 +477,27 @@ python3 benchmarks/locomo_harness.py --conv-ids 4,7,8
 
 ## Quick Start
 
-### pip install (quickest)
+### One-line install (recommended)
 
 ```bash
-pip install mind-mem
-mind-mem-recall "What decisions were made about the API?"
+pipx install "mind-mem[mcp]"
+mind-mem-mcp --help          # smoke-test
 ```
 
-### Universal Installer (Recommended)
+`pipx` keeps mind-mem in its own venv, exposes the `mind-mem-mcp` console
+script on `PATH`, and avoids polluting your system Python. If you don't have
+pipx, `pip install --user "mind-mem[mcp]"` works too.
+
+Then wire it into every AI coding client on your machine:
+
+```bash
+git clone https://github.com/star-ga/mind-mem.git
+cd mind-mem
+./install.sh --all --no-install   # Already installed via pipx, just wire clients
+```
+
+Or do both in one shot (the installer will auto-pick pipx if available, else
+fall back to pip):
 
 ```bash
 git clone https://github.com/star-ga/mind-mem.git
@@ -492,7 +505,9 @@ cd mind-mem
 ./install.sh --all
 ```
 
-This auto-detects every AI coding client on your machine and configures mind-mem for all of them. Supported clients:
+This auto-detects every AI coding client on your machine and configures mind-mem
+for all of them. Each client launches the same `mind-mem-mcp` binary, so all
+agents share one workspace. Supported clients:
 
 | Client                  | Config Location                               | Format  |
 | ----------------------- | --------------------------------------------- | ------- |
