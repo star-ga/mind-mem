@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 684 | **Est. tokens:** ~1,366,527
-**Generated:** 2026-05-02 01:41 UTC
+**Files:** 684 | **Est. tokens:** ~1,367,681
+**Generated:** 2026-05-02 01:49 UTC
 
 ## Token Budget Guide
 
@@ -54,7 +54,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 145 | ~485,633 |
+| `src/mind_mem/` | 145 | ~486,128 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,857 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
@@ -62,7 +62,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 232 | ~453,541 |
+| `tests/` | 232 | ~454,200 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -552,7 +552,7 @@
 - `smoke_test.sh` (~633 tok, large) — mind-mem Smoke Test — end-to-end verification
 - `spec_binding.py` (~2883 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `speculative_prefetch.py` (~3195 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `sqlite_index.py` (~11145 tok, huge) — Mind Mem SQLite FTS5 Index — incremental lexical indexing. Zero external deps.
+- `sqlite_index.py` (~11640 tok, huge) — Mind Mem SQLite FTS5 Index — incremental lexical indexing. Zero external deps.
 - `staleness.py` (~1179 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/storage/`
 
@@ -809,7 +809,7 @@
 - `test_smart_chunker.py` (~7744 tok, huge) — Tests for smart_chunker.py — semantic-boundary document chunking."""
 - `test_spec_binding.py` (~3156 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_speculative_prefetch.py` (~3071 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_sqlite_index.py` (~4726 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
+- `test_sqlite_index.py` (~5385 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
 - `test_stopwords.py` (~247 tok, medium) — Tests for stopword handling."""
 - `test_storage_factory.py` (~1066 tok, large) — Tests for mind_mem.storage.get_block_store factory (v3.2.0)."""
 - `test_streaming.py` (~1446 tok, large) — v3.3.0 — back-pressure-aware streaming ingest queue."""

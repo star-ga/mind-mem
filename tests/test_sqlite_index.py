@@ -94,6 +94,60 @@ class TestBuildIndex(_WorkspaceMixin, unittest.TestCase):
         self.assertGreater(r2["files_indexed"], 0)
         self.assertGreater(r2["blocks_indexed"], 0)
 
+    def test_incremental_detects_in_place_edit_past_64kb(self):
+        """v3.7.0 M8 regression: pre-3.7.0 ``_file_hash`` only hashed
+        the first 64KB + size. A file whose size + mtime stayed
+        identical but whose content past the 64KB mark changed (e.g.
+        an editor that rewrote 200 KB of corpus in place on a coarse-
+        mtime filesystem) was treated as unchanged and skipped on
+        the next reindex pass. This test sets ``size`` and
+        ``mtime_ns`` back to the pre-edit values to mimic that
+        scenario, then asserts the new full SHA-256 catches the diff.
+        """
+        from mind_mem.sqlite_index import _connect
+
+        # 80 KB of decisions content so the diff lands past the
+        # legacy 64 KB hash window.
+        big = "[D-20260101-001]\nStatement: " + ("a" * 80_000) + "\nStatus: active\n"
+        ws = self._setup_workspace(self.td, decisions=big)
+        build_index(ws, incremental=False)
+
+        decisions = os.path.join(ws, "decisions", "DECISIONS.md")
+        before_stat = os.stat(decisions)
+
+        # Rewrite past the 64 KB mark, KEEPING the on-disk size identical.
+        with open(decisions, "rb") as f:
+            data = bytearray(f.read())
+        flip_at = 70_000
+        if flip_at >= len(data):
+            self.skipTest("test corpus smaller than 70 KB — adjust setup")
+        data[flip_at] = ord("Z") if data[flip_at] != ord("Z") else ord("Q")
+        with open(decisions, "wb") as f:
+            f.write(data)
+        # Pin the (size, mtime_ns) back to the recorded pre-edit
+        # values so the cheap pre-filter would say "unchanged" the way
+        # it did pre-3.7.0.  os.utime takes (atime, mtime) as floats
+        # OR as ns-tuple via ``ns=``.
+        os.utime(decisions, ns=(before_stat.st_atime_ns, before_stat.st_mtime_ns))
+        self.assertEqual(os.stat(decisions).st_size, before_stat.st_size)
+        self.assertEqual(os.stat(decisions).st_mtime_ns, before_stat.st_mtime_ns)
+
+        r2 = build_index(ws, incremental=True)
+        self.assertGreater(
+            r2["files_indexed"],
+            0,
+            "v3.7.0 M8: full-file SHA-256 must catch in-place edits past 64KB even with identical mtime+size",
+        )
+
+        # Sanity: the file_state row carries the new mtime_ns column
+        conn = _connect(ws, readonly=True)
+        try:
+            row = conn.execute("SELECT mtime_ns, hash FROM file_state WHERE path = 'decisions/DECISIONS.md'").fetchone()
+        finally:
+            conn.close()
+        self.assertIsNotNone(row)
+        self.assertIsNotNone(row["mtime_ns"], "v3.7.0 M8: mtime_ns column populated on insert")
+
     def test_empty_workspace_builds(self):
         ws = self._setup_workspace(self.td)
         result = build_index(ws, incremental=False)

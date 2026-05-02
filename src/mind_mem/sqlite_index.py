@@ -144,10 +144,11 @@ def _init_schema(conn: sqlite3.Connection) -> None:
         );
 
         CREATE TABLE IF NOT EXISTS file_state (
-            path    TEXT PRIMARY KEY,
-            mtime   REAL NOT NULL,
-            size    INTEGER NOT NULL,
-            hash    TEXT NOT NULL
+            path     TEXT PRIMARY KEY,
+            mtime    REAL NOT NULL,
+            mtime_ns INTEGER,
+            size     INTEGER NOT NULL,
+            hash     TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS meta (
@@ -192,6 +193,15 @@ def _init_schema(conn: sqlite3.Connection) -> None:
     except sqlite3.OperationalError:
         pass  # Column already exists
 
+    # v3.7.0 M8 migration: add nanosecond mtime column. Legacy rows
+    # left at NULL force a one-time rehash (treated as "changed" by
+    # ``_get_changed_files``) which is cheap because the full SHA-256
+    # is now what gets compared anyway.
+    try:
+        conn.execute("ALTER TABLE file_state ADD COLUMN mtime_ns INTEGER")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
     # Secondary indexes for common query patterns
     conn.execute("CREATE INDEX IF NOT EXISTS idx_blocks_parent_id ON blocks(parent_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_blocks_file ON blocks(file)")
@@ -204,13 +214,26 @@ def _init_schema(conn: sqlite3.Connection) -> None:
 # ---------------------------------------------------------------------------
 
 
+_FILE_HASH_CHUNK = 1 << 20  # 1 MiB
+
+
 def _file_hash(path: str) -> str:
-    """Compute fast hash of file content (first 64KB + size)."""
+    """Compute SHA-256 of the entire file (v3.7.0 M8).
+
+    Pre-3.7.0 only hashed the first 64 KiB plus the file size, so a
+    file whose size + mtime stayed identical but whose content past
+    64 KiB changed (large markdown corpus rewritten in place; an
+    editor that truncates-and-rewrites within the same second on
+    coarse-mtime filesystems) was treated as unchanged and skipped on
+    the next reindex. Reading the whole file is unconditionally
+    correct; the cheap pre-filter in ``_get_changed_files`` keeps
+    the common steady-state path I/O-free.
+    """
     h = hashlib.sha256()
     try:
         with open(path, "rb") as f:
-            h.update(f.read(65536))
-        h.update(str(os.path.getsize(path)).encode())
+            for chunk in iter(lambda: f.read(_FILE_HASH_CHUNK), b""):
+                h.update(chunk)
     except OSError:
         return ""
     return h.hexdigest()
@@ -221,8 +244,12 @@ def _get_changed_files(conn: sqlite3.Connection, workspace: str) -> list[tuple[s
 
     A file is considered changed if:
     - It doesn't exist in file_state table
-    - Its mtime or size differs
-    - Its hash differs (for mtime-equal but content-changed cases)
+    - Its size differs from the recorded value
+    - Its ``mtime_ns`` differs from the recorded value (or the
+      recorded value is NULL — happens once per pre-3.7.0 row after
+      the M8 migration, which forces a single rehash)
+    - Its full SHA-256 differs (catches the same-size + same-mtime_ns
+      case where an in-place edit kept the metadata stable)
     """
     changed = []
     ws = os.path.abspath(workspace)
@@ -237,17 +264,34 @@ def _get_changed_files(conn: sqlite3.Connection, workspace: str) -> list[tuple[s
             continue
 
         stat = os.stat(full_path)
-        row = conn.execute("SELECT mtime, size, hash FROM file_state WHERE path = ?", (rel_path,)).fetchone()
+        row = conn.execute(
+            "SELECT mtime, mtime_ns, size, hash FROM file_state WHERE path = ?",
+            (rel_path,),
+        ).fetchone()
 
         if row is None:
             changed.append((label, rel_path))
             continue
 
-        if stat.st_mtime != row["mtime"] or stat.st_size != row["size"]:
+        if stat.st_size != row["size"]:
             changed.append((label, rel_path))
             continue
 
-        # Same mtime+size but verify hash for edge cases
+        # Prefer the nanosecond mtime when present; fall back to the
+        # legacy float mtime for pre-3.7.0 rows that haven't been
+        # rehashed yet. Either way we still verify the full hash next.
+        recorded_mtime_ns = row["mtime_ns"]
+        if recorded_mtime_ns is None:
+            # Legacy row — force a rehash so the migration completes
+            # for this file on the next index pass.
+            changed.append((label, rel_path))
+            continue
+        if stat.st_mtime_ns != recorded_mtime_ns:
+            changed.append((label, rel_path))
+            continue
+
+        # Same size + same nanosecond mtime — verify the full hash to
+        # catch in-place edits that kept the metadata stable.
         current_hash = _file_hash(full_path)
         if current_hash != row["hash"]:
             changed.append((label, rel_path))
@@ -267,8 +311,8 @@ def _update_file_state(conn: sqlite3.Connection, workspace: str, rel_path: str) 
     stat = os.stat(full_path)
     h = _file_hash(full_path)
     conn.execute(
-        "INSERT OR REPLACE INTO file_state (path, mtime, size, hash) VALUES (?, ?, ?, ?)",
-        (rel_path, stat.st_mtime, stat.st_size, h),
+        "INSERT OR REPLACE INTO file_state (path, mtime, mtime_ns, size, hash) VALUES (?, ?, ?, ?, ?)",
+        (rel_path, stat.st_mtime, stat.st_mtime_ns, stat.st_size, h),
     )
 
 
