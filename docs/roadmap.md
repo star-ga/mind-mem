@@ -4,7 +4,18 @@
 > in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
 > full milestone breakdown.
 
-## v3.8.2 (Current — released 2026-05-02)
+## v3.8.3 (Current — released 2026-05-02)
+
+MCP tool wrappers for the model audit + signing pipeline. Adds three
+new tools to the existing MCP instance: `audit_model_tool`,
+`sign_model_tool`, and `verify_model_tool`. Identical schemas to the
+CLI subcommands so agents can run the full seven-check audit, Ed25519
+manifest signing, and detached-signature verification through MCP
+without shelling to `mm`. Path-escape guards on every `path` argument
+(empty / NUL-byte rejection). 21 unit tests in
+`tests/test_mcp_tools_model.py`. No breaking changes.
+
+## v3.8.2 (Released 2026-05-02)
 
 Provenance allowlist for `mm audit-model`. Adds the seventh check —
 `base_model` namespace must match an allowlisted upstream publisher.

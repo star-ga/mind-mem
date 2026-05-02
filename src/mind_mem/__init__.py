@@ -43,7 +43,7 @@ from .protection import (
 )
 from .storage import get_block_store
 
-__version__ = "3.8.2"
+__version__ = "3.8.3"
 
 # Best-effort import-time integrity check. Fails open unless
 # MIND_MEM_INTEGRITY=strict, so editable installs and source checkouts

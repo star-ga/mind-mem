@@ -1259,11 +1259,17 @@ first-class memory sources rather than screenshots-in-attachments.
   silently; mis-typed or namespace-squat orgs fail with a clear
   evidence list. **25 unit tests** in
   ``tests/test_model_provenance.py``.
-- [ ] **MCP tool wrapper** — expose `audit_model`, `sign_model`, and
-  `verify_model` over the MCP surface so agents can drive the pipeline
-  without shelling to `mm`. Identical schemas to the CLI but mic@2 +
-  mic-b interchange formats are the canonical output for new artifacts;
-  `--json` stays the legacy compatibility flag.
+- [x] **MCP tool wrapper** — shipped in v3.8.3 (2026-05-02).
+  ``mind_mem.mcp.tools.model`` exposes ``audit_model_tool``,
+  ``sign_model_tool``, and ``verify_model_tool`` on the existing
+  ``mcp`` instance. Identical schemas to the CLI subcommands —
+  agents can run the full seven-check audit, Ed25519 manifest
+  signing, and detached-signature verification through MCP without
+  shelling to ``mm``. Path-escape guards (empty / NUL-byte rejection)
+  on every ``path`` argument. Manifest is omitted from
+  ``audit_model_tool`` by default so multi-GB checkpoints don't blow
+  up the response — caller opts in with ``include_manifest=True``.
+  **21 unit tests** in ``tests/test_mcp_tools_model.py``.
 - [ ] **Load-gate integration** — any checkpoint consumed by mind-mem's
   embedding or extractor backends (`backends.ollama`, `backends.hf`,
   `backends.vllm`) goes through `mm audit-model` on first use; a

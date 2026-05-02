@@ -2,6 +2,66 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.3 (2026-05-02)
+
+**Model Safety Audit — MCP tool wrappers.** Fourth slice of the
+v3.8.0 plan in ``ROADMAP.md``. Exposes ``audit_model`` /
+``sign_model`` / ``verify_model`` over the MCP surface so agents can
+drive the full audit + signing pipeline without shelling out to
+``mm``. Identical schemas to the CLI subcommands. No breaking
+changes — existing CLI consumers keep working.
+
+### Added
+
+- **``mind_mem.mcp.tools.model`` module** — three new MCP tools
+  registered on the existing ``mcp`` instance:
+  - ``audit_model_tool(path, allow_publisher=None,
+    include_manifest=False)`` — wraps ``model_audit.audit_model``,
+    returning the seven-check JSON envelope with an ``ok`` flag.
+    Manifest is omitted by default so multi-GB checkpoints don't
+    blow up the response.
+  - ``sign_model_tool(path, key_file=None,
+    generate_key_prefix=None, write_sidecars=True)`` — wraps
+    ``model_signing.sign_model``. Mutually-exclusive key sources;
+    refusing to sign with an unrecorded ephemeral key is intentional.
+  - ``verify_model_tool(path, pubkey_path=None)`` — wraps
+    ``model_signing.verify_model``. Returns the structured
+    ``error_kind`` enum (``manifest_mismatch`` / ``bad_signature``
+    / ``missing_file``) so callers can distinguish drift from
+    forgery from a missing sidecar.
+- **Path-escape guards** — every ``path`` argument is rejected if
+  it contains NULs or is empty. Concrete filesystem checks
+  (existence, directory-ness) are delegated to the underlying
+  functions which already raise structured errors.
+- **Three new ``mcp_tool_observe`` entries** — every audit / sign /
+  verify call lands in the standard MCP observability stream
+  (``mcp_audit_model`` / ``mcp_sign_model`` / ``mcp_verify_model``
+  metric counters + structured log lines).
+
+### Tests
+
+- **``tests/test_mcp_tools_model.py``** — 21 new tests covering
+  the three tool happy paths, the manifest opt-in toggle, the
+  provenance allowlist behaviour through the MCP wrapper, the
+  empty-path / NUL-byte / missing-path / missing-key /
+  bad-key-length error envelopes, the mutually-exclusive
+  key-source rule, the no-sidecars in-memory mode, the
+  re-sign-after-tamper flow, and the explicit-pubkey
+  override.
+
+### Migration
+
+No migration required. Operators using the ``mm`` CLI keep working
+unchanged. Agents that want to drive the audit + signing pipeline
+through MCP can call the three new tools directly — schemas mirror
+the CLI flags one-to-one.
+
+### Deferred to v3.8.x
+
+- Load-gate integration into ``backends.ollama`` /
+  ``backends.hf`` / ``backends.vllm`` (v3.8.4).
+- mic@2 / mic-b output mode for the audit + signing artifacts.
+
 ## 3.8.2 (2026-05-02)
 
 **Model Safety Audit — provenance allowlist.** Third slice of the
