@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 687 | **Est. tokens:** ~1,388,012
-**Generated:** 2026-05-02 07:30 UTC
+**Files:** 690 | **Est. tokens:** ~1,391,457
+**Generated:** 2026-05-02 07:47 UTC
 
 ## Token Budget Guide
 
@@ -24,13 +24,13 @@
 |-----------|-------|-------------|
 | `./` | 30 | ~81,804 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `.arch-mind/` | 3 | ~1,014 |
+| `.arch-mind/` | 3 | ~1,010 |
 | `benchmarks/` | 26 | ~64,933 |
 | `deploy/` | 2 | ~772 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 59 | ~90,771 |
+| `docs/` | 62 | ~94,220 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -110,7 +110,7 @@
 - `SKILL.md` (~456 tok, medium) — mind-mem Development
 ### `.arch-mind/`
 
-- `last_summary.json` (~156 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
+- `last_summary.json` (~152 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
 - `rules.mind` (~766 tok, large) — mind-mem architectural-governance rules
 - `scan.json` (~92 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
 ### `benchmarks/`
@@ -165,6 +165,7 @@
 
 - `api-reference.md` (~1477 tok, large) — API Reference
 - `architecture.md` (~1849 tok, huge) — Architecture
+- `audit_response.md` (~956 tok, large) — mind-mem — response to the 2026-05-02 ecosystem audit
 - `benchmarks.md` (~759 tok, large) — Benchmarks
 - `block-format.md` (~431 tok, medium) — Block Format
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
@@ -186,6 +187,7 @@
 - `faq.md` (~374 tok, medium) — FAQ
 - `getting-started.md` (~493 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
+- `governance.md` (~1365 tok, large) — mind-mem — governance design (5 layers)
 - `hf-mind-mem-4b-v2-README.md` (~2154 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `integrations.md` (~1535 tok, huge) — Integrations
 - `locomo-v3.4-conv0-results.md` (~449 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
@@ -217,6 +219,7 @@
 
 - `security-model.md` (~350 tok, medium) — Security Model
 - `setup.md` (~1741 tok, huge) — Setup
+- `status.md` (~1128 tok, large) — mind-mem — implementation status (alignment companion)
 - `storage-backends.md` (~1091 tok, large) — Storage Backends
 - `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide
 - `supply-chain-security.md` (~1051 tok, large) — Supply-Chain Security
