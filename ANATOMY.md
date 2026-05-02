@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 684 | **Est. tokens:** ~1,365,485
-**Generated:** 2026-05-02 01:37 UTC
+**Files:** 684 | **Est. tokens:** ~1,365,981
+**Generated:** 2026-05-02 01:38 UTC
 
 ## Token Budget Guide
 
@@ -26,7 +26,7 @@
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 3 | ~798 |
 | `benchmarks/` | 26 | ~64,933 |
-| `deploy/` | 2 | ~690 |
+| `deploy/` | 2 | ~772 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
@@ -37,7 +37,7 @@
 | `examples/` | 2 | ~466 |
 | `.github/` | 7 | ~4,109 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 10 | ~6,948 |
+| `.github/workflows/` | 10 | ~7,362 |
 | `hooks/` | 3 | ~801 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -143,7 +143,7 @@
 - `train_mind_mem_4b.py` (~3286 tok, huge) — mind-mem-4b v2 training script — Runpod H200 full-fine-tune.
 ### `deploy/`
 
-- `docker-compose.yml` (~608 tok, large) — name: mind-mem
+- `docker-compose.yml` (~690 tok, large) — name: mind-mem
 ### `deploy/docker/`
 
 - `Dockerfile` (~495 tok, medium) — # Stage 1: build — install all deps and produce a pruned site-packages
@@ -255,7 +255,7 @@
 ### `.github/workflows/`
 
 - `benchmark.yml` (~735 tok, large) — name: Benchmark
-- `ci.yml` (~1823 tok, huge) — name: CI
+- `ci.yml` (~2237 tok, huge) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs

@@ -52,7 +52,12 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       POSTGRES_DB: ${POSTGRES_DB:-mindmem}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mindmem -d mindmem"]
+      # v3.7.0 M6: read user/db from the container's own env so an
+      # operator override of POSTGRES_USER / POSTGRES_DB still passes
+      # the readiness probe. ``$$VAR`` in compose is the literal
+      # ``$VAR`` once interpolated — pg_isready then reads it inside
+      # the container at runtime.
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 10s
       timeout: 5s
       retries: 5

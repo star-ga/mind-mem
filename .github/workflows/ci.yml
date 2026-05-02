@@ -152,6 +152,43 @@ jobs:
           load: true
           tags: mind-mem:ci
 
+  compose-config:
+    # v3.7.0 M6: prove docker-compose.yml renders cleanly with both the
+    # default user/db AND an operator override. Pre-3.7.0 the postgres
+    # healthcheck hardcoded ``pg_isready -U mindmem -d mindmem``, so an
+    # operator who set POSTGRES_USER / POSTGRES_DB would see a healthy
+    # postgres container reported as unhealthy. The new healthcheck
+    # reads the env at probe time; this job validates the YAML still
+    # interpolates and that the rendered command keeps the env-var
+    # references intact under both defaults and overrides.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - name: defaults
+            user: ""
+            db: ""
+          - name: overrides
+            user: alice
+            db: factsdb
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - name: docker compose config
+        env:
+          MIND_MEM_TOKEN: ci-token
+          MIND_MEM_ADMIN_TOKEN: ci-admin
+          POSTGRES_PASSWORD: ci-pg-pw
+          POSTGRES_USER: ${{ matrix.scenario.user }}
+          POSTGRES_DB: ${{ matrix.scenario.db }}
+        run: |
+          docker compose -f deploy/docker-compose.yml config > /tmp/rendered.yml
+          # ``$$VAR`` in compose YAML renders as a literal ``$VAR`` once the
+          # container shell expands it at probe time. The check confirms the
+          # healthcheck still references ``POSTGRES_USER`` / ``POSTGRES_DB``
+          # rather than baked-in literals — the M6 regression we are gating.
+          grep -F 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' /tmp/rendered.yml
+
   install-smoke:
     name: install.sh smoke (${{ matrix.installer }})
     runs-on: ubuntu-latest
