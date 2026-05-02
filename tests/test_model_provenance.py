@@ -46,9 +46,7 @@ class TestKnownPublishers:
             ("tiiuae/falcon-7b", "TII Falcon"),
         ],
     )
-    def test_canonical_namespace_matches(
-        self, tmp_path: Path, base_model: str, expected_publisher: str
-    ) -> None:
+    def test_canonical_namespace_matches(self, tmp_path: Path, base_model: str, expected_publisher: str) -> None:
         _write_config(tmp_path, {"base_model": base_model})
         result = check_provenance(tmp_path)
         assert result.passed
