@@ -1210,7 +1210,7 @@ Docker compose (`deploy/docker-compose.yml`) already enforces both
 tokens via `${VAR:?must be set}` so containerised deployments
 require zero changes.
 
-## v3.9.0 — Model Safety Audit + Social Ingestion (planned)
+## v3.8.0 — Model Safety Audit + Social Ingestion (planned)
 
 Two threads motivated by incidents in the broader AI ecosystem: malicious
 HuggingFace model drops that ship remote-code-execution payloads via

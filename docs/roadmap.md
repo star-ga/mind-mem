@@ -144,14 +144,15 @@ Direction:
 - Distributed workspace sync (mDNS-discovered mesh)
 - LoRA retrain loop wired into production pipeline
 
-## v3.8.0 candidates — Inbox / Auto-Consolidate / Extended HTTP API
+## v3.9.0 candidates — Inbox / Auto-Consolidate / Extended HTTP API
 
 > **Note (2026-05-01):** these were originally drafted as v3.7.0
 > candidates, but v3.7.0 shipped as the external-audit response
 > (HTTP/REST fail-closed auth, cross-platform rollback fix, CI
-> hardening — see CHANGELOG.md). The Always-On Memory Agent patterns
-> below are renumbered as v3.8.0 candidates and live alongside the
-> walkthrough/persona theme below.
+> hardening — see CHANGELOG.md). v3.8.0 is now the Model Safety
+> Audit + Social Ingestion minor (see `ROADMAP.md` root); the
+> Always-On Memory Agent patterns below are deferred to v3.9.0
+> candidates and live alongside the walkthrough/persona theme below.
 
 Inspired by Google Cloud's Always-On Memory Agent reference architecture
 (MIT, `GoogleCloudPlatform/generative-ai/gemini/agents/always-on-memory-agent`).
@@ -236,11 +237,11 @@ automatically → queryable via HTTP" — the Google reference architecture
 pitch with mind-mem's governance, hybrid search, and audit chain
 underneath.
 
-## v3.8.0 candidates — Dependency-ordered walkthrough / Persona-aware recall
+## v3.9.0 candidates — Dependency-ordered walkthrough / Persona-aware recall
 
-Second v3.8.0 theme (the first is the Inbox / Auto-Consolidate / HTTP-API
-trio above). Both themes are additive and could ship together or be split
-across v3.8.0 / v3.9.0.
+Second v3.9.0 theme (the first is the Inbox / Auto-Consolidate / HTTP-API
+trio above). Both themes are additive and could ship together as v3.9.0
+or be split across v3.9.0 / v3.10.0.
 
 Inspired by `Lum1104/Understand-Anything` (MIT, ~10k stars). Their distinctive
 value is the *human browsing UX* — guided dependency-ordered walkthroughs and
@@ -307,7 +308,7 @@ projects can adopt without parallel implementation:
 - **Naestro** — primary consumer. Spec'd as `R5 - Naestro Lens` in
   `~/naestro/ROADMAP.md`. Surfaces walkthroughs through CLI (`naestro lens`),
   Cockpit panel, Telegram channel, and governance evidence chain. Gated on
-  this v3.8.0 work.
+  this v3.9.0 work.
 - **512-mind** — module-level walkthroughs over the 38-module governance
   kernel (DOS / CVS / ICL / Five Anchors / payment_rail) for new contributors
   and external auditors. Optional, opt-in.
