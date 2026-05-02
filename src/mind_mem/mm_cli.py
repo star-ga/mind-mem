@@ -668,8 +668,9 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 def _cmd_audit_model(args: argparse.Namespace) -> int:
     from mind_mem.model_audit import audit_model, format_report_text
 
+    extra = tuple(args.allow_publisher) if args.allow_publisher else None
     try:
-        report = audit_model(args.path)
+        report = audit_model(args.path, allow_extra_publishers=extra)
     except (FileNotFoundError, NotADirectoryError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -998,6 +999,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--manifest-out",
         default="",
         help="Write SHA-256 manifest to this path (shasum-compatible format).",
+    )
+    p_audit.add_argument(
+        "--allow-publisher",
+        action="append",
+        default=[],
+        metavar="HF_ORG_SLUG",
+        help=(
+            "Augment the default provenance allowlist with this HF org slug "
+            "(repeatable). Use for internal fine-tune orgs that aren't in "
+            "the canonical publisher list."
+        ),
     )
     p_audit.set_defaults(func=_cmd_audit_model)
 

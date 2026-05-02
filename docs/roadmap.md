@@ -4,7 +4,17 @@
 > in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
 > full milestone breakdown.
 
-## v3.8.1 (Current — released 2026-05-02)
+## v3.8.2 (Current — released 2026-05-02)
+
+Provenance allowlist for `mm audit-model`. Adds the seventh check —
+`base_model` namespace must match an allowlisted upstream publisher.
+Default list covers Alibaba Qwen, Meta Llama, Mistral AI, Google
+Gemma, IBM Granite, OpenAI, Anthropic, DeepSeek, Microsoft Phi, and
+TII Falcon. `mm audit-model --allow-publisher <slug>` (repeatable)
+extends the allowlist for internal fine-tune orgs. 25 unit tests in
+`tests/test_model_provenance.py`. No breaking changes.
+
+## v3.8.1 (Released 2026-05-02)
 
 Ed25519 manifest signing for `mm audit-model` checkpoints. Adds the
 `mind_mem.model_signing` module plus `mm sign-model <path>` and

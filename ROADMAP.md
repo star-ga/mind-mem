@@ -1247,11 +1247,18 @@ first-class memory sources rather than screenshots-in-attachments.
   so callers can distinguish drift from forgery from a missing
   sidecar. `--pubkey <path>` overrides the sidecar for centrally-pinned
   trust roots. **23 unit tests** in `tests/test_model_signing.py`.
-- [ ] **Provenance allowlist** — cross-reference the `base_model` claim
-  in `config.json` against an Ed25519-signed allowlist of upstream
-  publishers (Alibaba Qwen, Meta Llama, Mistral, Google Gemma, IBM
-  Granite, OpenAI, Anthropic). Returns HIGH severity on a mismatch
-  between the claim and any signed bundle in the allowlist.
+- [x] **Provenance allowlist** — shipped in v3.8.2 (2026-05-02).
+  ``mind_mem.model_provenance`` declares ten canonical publishers
+  (Alibaba Qwen, Meta Llama, Mistral AI, Google Gemma, IBM Granite,
+  OpenAI, Anthropic, DeepSeek, Microsoft Phi, TII Falcon).
+  ``audit_model`` runs ``check_provenance`` as its seventh check;
+  ``mm audit-model --allow-publisher <hf-org-slug>`` (repeatable)
+  extends the allowlist with operator-specific orgs. Namespace match
+  is case-insensitive on the leading namespace of ``base_model``.
+  Pretrain checkpoints (no ``base_model`` field) pass through
+  silently; mis-typed or namespace-squat orgs fail with a clear
+  evidence list. **25 unit tests** in
+  ``tests/test_model_provenance.py``.
 - [ ] **MCP tool wrapper** — expose `audit_model`, `sign_model`, and
   `verify_model` over the MCP surface so agents can drive the pipeline
   without shelling to `mm`. Identical schemas to the CLI but mic@2 +

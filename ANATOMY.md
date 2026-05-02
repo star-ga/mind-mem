@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 685 | **Est. tokens:** ~1,382,926
-**Generated:** 2026-05-02 06:57 UTC
+**Files:** 687 | **Est. tokens:** ~1,387,787
+**Generated:** 2026-05-02 07:22 UTC
 
 ## Token Budget Guide
 
@@ -24,7 +24,7 @@
 |-----------|-------|-------------|
 | `./` | 30 | ~81,711 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `.arch-mind/` | 3 | ~1,010 |
+| `.arch-mind/` | 3 | ~1,014 |
 | `benchmarks/` | 26 | ~64,933 |
 | `deploy/` | 2 | ~772 |
 | `deploy/docker/` | 1 | ~495 |
@@ -56,13 +56,13 @@
 | `src/` | 1 | ~280 |
 | `src/mind_mem/` | 145 | ~489,405 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
-| `src/mind_mem/mcp/` | 3 | ~3,857 |
+| `src/mind_mem/mcp/` | 3 | ~3,879 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
-| `src/mind_mem/mcp/tools/` | 18 | ~41,412 |
+| `src/mind_mem/mcp/tools/` | 19 | ~43,998 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 233 | ~457,930 |
+| `tests/` | 234 | ~460,179 |
 | `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -110,7 +110,7 @@
 - `SKILL.md` (~456 tok, medium) — mind-mem Development
 ### `.arch-mind/`
 
-- `last_summary.json` (~152 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
+- `last_summary.json` (~156 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
 - `rules.mind` (~766 tok, large) — mind-mem architectural-governance rules
 - `scan.json` (~92 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
 ### `benchmarks/`
@@ -464,7 +464,7 @@
 
 - `__init__.py` (~215 tok, medium) — v3.2.0 §1.2 decomposition namespace — subpackage for MCP server modules.
 - `resources.py` (~1342 tok, large) — MCP ``@mcp.resource`` declarations.
-- `server.py` (~2300 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
+- `server.py` (~2322 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/`
 
 - `mcp_server.py` (~1780 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
@@ -484,6 +484,7 @@
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
 - `memory_ops.py` (~7074 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
+- `model.py` (~2586 tok, huge) — Model audit / signing MCP tools — wraps ``mind_mem.model_audit``,
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
 - `public.py` (~4515 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `recall.py` (~4947 tok, huge) — Recall surface — the retrieval core of the MCP API.
@@ -730,6 +731,7 @@
 - `test_mcp_arch_mind_tools.py` (~2312 tok, huge) — Tests for the arch-mind MCP tool wrapper.
 - `test_mcp_integration.py` (~5301 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_server.py` (~5169 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
+- `test_mcp_tools_model.py` (~2249 tok, huge) — Tests for ``mind_mem.mcp.tools.model`` — MCP wrappers for audit / sign / verify."""
 - `test_mcp_tools.py` (~277 tok, medium) — Tests for MCP server tool definitions."""
 - `test_mcp_tool_surface_v3_2.py` (~2002 tok, huge) — v3.2.0 — consolidated MCP public dispatcher tests."""
 - `test_mcp_v140.py` (~5502 tok, huge) — Tests for MCP v1.4.0 features — issues #29, #31, #35, #36.

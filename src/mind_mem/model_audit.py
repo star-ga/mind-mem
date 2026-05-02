@@ -1,12 +1,18 @@
 """Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
 
-Six attack surfaces covered:
+Seven attack surfaces covered:
   1. Remote-code hooks  — auto_map / trust_remote_code flags in config files
   2. Python files       — any .py shipping with the checkpoint
   3. Weight format      — safetensors/gguf (safe) vs .bin/.pt/.pth (pickle, unsafe)
   4. Pickle opcodes     — dangerous imports (os, subprocess, socket, ctypes, eval, exec, __builtin__)
   5. Tokenizer strings  — URLs / shell redirectors / script refs inside tokenizer.json
-  6. SHA-256 manifest   — tamper-evident hash of every file
+  6. Safetensors header — 8-byte LE length + JSON metadata sanity check
+  7. Provenance         — base_model claim must match an allowlisted publisher
+                           (Qwen / Llama / Mistral / Gemma / Granite / OpenAI /
+                           Anthropic / DeepSeek / Phi / Falcon by default)
+
+Plus a SHA-256 manifest of every file for tamper-detection downstream
+(sign with ``mind_mem.model_signing`` to make the manifest signed).
 
 Zero runtime dependencies beyond stdlib. No model loading. Static inspection only.
 """
@@ -382,7 +388,19 @@ def compute_manifest(root: Path) -> tuple[dict[str, str], int]:
 # --- Top-level audit ---------------------------------------------------------
 
 
-def audit_model(path: str | Path) -> AuditReport:
+def audit_model(
+    path: str | Path,
+    *,
+    allow_extra_publishers: tuple[str, ...] | None = None,
+) -> AuditReport:
+    """Run all seven static checks against a local model checkpoint.
+
+    ``allow_extra_publishers`` augments the default provenance allowlist
+    with operator-specific HF org slugs (e.g. an internal fine-tune
+    org). Pass-through to :func:`mind_mem.model_provenance.check_provenance`.
+    """
+    from mind_mem.model_provenance import check_provenance
+
     root = Path(path).expanduser().resolve()
     if not root.exists():
         raise FileNotFoundError(f"model path not found: {root}")
@@ -395,6 +413,22 @@ def audit_model(path: str | Path) -> AuditReport:
     report.checks.append(check_pickle_safety(root))
     report.checks.append(check_tokenizer_injection(root))
     report.checks.append(check_safetensors_header(root))
+
+    # Provenance — translate ProvenanceFinding into our CheckResult shape
+    # so it lands in the same report stream as the other six.
+    prov = check_provenance(root, allow_extra=allow_extra_publishers)
+    prov_evidence = list(prov.evidence)
+    if prov.matched_publisher and prov.matched_publisher.startswith("operator-allowlist:"):
+        prov_evidence.append(f"matched_via=operator allowlist ({prov.matched_publisher})")
+    report.checks.append(
+        CheckResult(
+            name="provenance",
+            passed=prov.passed,
+            detail=prov.detail,
+            evidence=prov_evidence,
+        )
+    )
+
     report.manifest, report.total_bytes = compute_manifest(root)
     report.file_count = len(report.manifest)
     return report

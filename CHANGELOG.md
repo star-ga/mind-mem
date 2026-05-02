@@ -2,6 +2,68 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.2 (2026-05-02)
+
+**Model Safety Audit — provenance allowlist.** Third slice of the
+v3.8.0 plan in ``ROADMAP.md``. Adds the seventh check to
+``audit_model`` — the ``base_model`` claim in ``config.json`` must
+match an allowlisted upstream publisher. Operators with internal
+fine-tunes can extend the allowlist via ``--allow-publisher
+<hf-org-slug>`` (repeatable). No breaking changes.
+
+### Added
+
+- **``mind_mem.model_provenance`` module** — declarative allowlist of
+  ten canonical publishers (Alibaba Qwen, Meta Llama, Mistral AI,
+  Google Gemma, IBM Granite, OpenAI, Anthropic, DeepSeek, Microsoft
+  Phi, TII Falcon) plus a ``Publisher`` dataclass and a stable
+  ``check_provenance`` entrypoint. Matches namespace
+  case-insensitively (HF org slugs are case-sensitive in URLs but
+  configs frequently mis-case them). Returns ``passed=True`` when
+  ``base_model`` is missing entirely (pretrain checkpoints don't
+  declare it).
+- **Seventh check in ``audit_model``** — automatically runs after the
+  six existing static checks. Failures surface in the standard report
+  stream with ``namespace`` evidence so operators can see exactly
+  which slug was rejected and how many slugs the active allowlist
+  contains.
+- **``mm audit-model --allow-publisher <slug>``** — repeatable CLI
+  flag that augments the default allowlist with operator-specific HF
+  org slugs. Useful for internal fine-tune orgs that aren't in the
+  canonical publisher list.
+- **``allow_extra_publishers`` keyword in ``audit_model``** —
+  programmatic equivalent of the CLI flag for callers that drive
+  the audit from Python.
+
+### Tests
+
+- **``tests/test_model_provenance.py``** — 25 new tests: 12
+  parameterised happy-path cases (one per canonical publisher),
+  case-insensitive matching, four rejection cases (unknown,
+  typo-squat, missing namespace, empty namespace), four
+  missing-base_model cases (no config, no field, empty string,
+  non-string), allow-extra augmentation, full publisher-tuple
+  replacement (air-gapped operator path), serialisable view of
+  the allowlist, and a disjoint-slugs invariant test that catches
+  any future allowlist edit that would make ``matched_publisher``
+  non-deterministic.
+
+### Migration
+
+No migration required. Operators that ship checkpoints whose
+``base_model`` is from an internal HF org should add the slug via
+``--allow-publisher`` (or pass ``allow_extra_publishers=`` from
+Python). Pretrain checkpoints, ``base_model``-less builds, and the
+ten canonical publishers all keep passing without action.
+
+### Deferred to v3.8.x
+
+- MCP tool wrapper for ``audit_model`` / ``sign_model`` /
+  ``verify_model`` (v3.8.3).
+- Load-gate integration into ``backends.ollama`` / ``backends.hf`` /
+  ``backends.vllm`` (v3.8.4).
+- mic@2 / mic-b output mode for the audit + signing artifacts.
+
 ## 3.8.1 (2026-05-02)
 
 **Model Safety Audit — Ed25519 manifest signing.** Second slice of
