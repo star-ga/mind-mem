@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 678 | **Est. tokens:** ~1,350,037
-**Generated:** 2026-04-30 07:51 UTC
+**Files:** 679 | **Est. tokens:** ~1,350,593
+**Generated:** 2026-05-02 00:38 UTC
 
 ## Token Budget Guide
 
@@ -24,7 +24,7 @@
 |-----------|-------|-------------|
 | `./` | 30 | ~78,020 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `.arch-mind/` | 2 | ~242 |
+| `.arch-mind/` | 3 | ~798 |
 | `benchmarks/` | 26 | ~64,933 |
 | `deploy/` | 2 | ~690 |
 | `deploy/docker/` | 1 | ~495 |
@@ -111,7 +111,8 @@
 ### `.arch-mind/`
 
 - `last_summary.json` (~156 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
-- `scan.json` (~86 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
+- `rules.mind` (~550 tok, large) — mind-mem architectural-governance rules
+- `scan.json` (~92 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
 ### `benchmarks/`
 
 - `bench_kernels.py` (~4027 tok, huge) — Benchmark: MIND kernels vs pure Python scoring.

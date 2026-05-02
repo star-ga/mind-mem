@@ -1,0 +1,58 @@
+// mind-mem architectural-governance rules
+//
+// Enforced via:
+//   arch-mind check-rules --repo . --fixture .arch-mind/last_summary.json \
+//                         --rules .arch-mind/rules.mind --mode enforce
+//
+// Q16.16 fixed-point thresholds in [0, 10000].
+//
+// Copyright 2026 STARGA, Inc. — Apache-2.0.
+
+[protection]
+module mind_mem_rules {
+
+    // ─── locked ─────────────────────────────────────────────────────────
+
+    // Acyclicity is a hard invariant for the recall→propose→approve
+    // pipeline; a cycle there means contradiction-safety is broken.
+    [arch_rule(acyclicity_q16, eq)]
+    const NO_CYCLES: i32 = 10000
+
+    // ─── stage-appropriate floors ───────────────────────────────────────
+
+    // Currently 9904.
+    [arch_rule(redundancy_q16, ge)]
+    const REDUNDANCY_FLOOR: i32 = 9500
+
+    // Currently 6473 (post-test-filter; Python repo).
+    [arch_rule(q16_determinism_purity, ge)]
+    const PURITY_FLOOR: i32 = 6000
+
+    // Currently 4874 (post-test-filter). Floor catches a 4-pp drop.
+    [arch_rule(equality_q16, ge)]
+    const EQUALITY_FLOOR: i32 = 4500
+
+    // Currently 7000 (longest path = 4).
+    [arch_rule(depth_q16, ge)]
+    const DEPTH_FLOOR: i32 = 6000
+
+    // Currently 83 (post-test-filter; comment-stripping caught real
+    // [protection] decls). Floor 50 catches regression.
+    [arch_rule(governance_kernel_coverage, ge)]
+    const GOVERNANCE_FLOOR: i32 = 50
+
+    // Currently 10000 (post-test-filter). Tests/benches/examples are
+    // no longer counted as architectural; the remaining 56 dep-edges
+    // are all intra-package (mcp/tools using ._helpers re-exports).
+    [arch_rule(modularity_q16, eq)]
+    const NO_CROSS_PKG: i32 = 10000
+
+    // Currently 9800 (max overlap > 0 across 29 MCP tools).
+    [arch_rule(mcp_tool_isolation, ge)]
+    const MCP_ISOLATION_FLOOR: i32 = 9500
+
+    // Currently 65 (post-test-filter). Best by ratio of any STARGA repo.
+    [arch_rule(evidence_chain_density, ge)]
+    const EVIDENCE_FLOOR: i32 = 50
+
+}
