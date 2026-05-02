@@ -4,7 +4,21 @@
 > in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
 > full milestone breakdown.
 
-## v3.8.4 (Current — released 2026-05-02)
+## v3.8.5 (Current — released 2026-05-02)
+
+MIC/MAP Python toolchain — STARGA-native serialization for MIND IR
+graphs. New `mind_mem.mic_map` module ports the `mic@2` (text) and
+`mic-b` (binary) wire formats from the Rust reference at
+`mind/src/ir/compact/v2/` to Python. Faithful to every spec rule:
+sequential-only IDs, no forward refs, ULEB128 minimum encoding,
+zigzag for signed parameters, magic `MICB` + version `0x02`. All
+19 opcodes (with their opcode-specific param sections) and all 13
+dtypes covered. JSON paths inside the model-safety pipeline keep
+working — MIC/MAP is the right format for graphs, JSON stays for
+documents. 63 unit tests in `tests/test_mic_map.py`. No breaking
+changes.
+
+## v3.8.4 (Released 2026-05-02)
 
 Load-gate registry for `mm audit-model` checkpoints. Adds the
 `mind_mem.model_gate` module and `mm gate check / list / remove` CLI

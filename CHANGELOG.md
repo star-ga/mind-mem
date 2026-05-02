@@ -2,6 +2,65 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.5 (2026-05-02)
+
+**MIC/MAP Python toolchain — STARGA-native serialization.** First
+Python implementation of the ``mic@2`` (text) and ``mic-b`` (binary)
+wire formats for MIND IR graphs. Brings mind-mem off the JSON
+default for IR payloads and onto the canonical STARGA interchange
+formats already shipped by ``512-mind`` and the ``mind`` Rust
+reference. No breaking changes — JSON paths inside the model-safety
+pipeline keep working untouched.
+
+### Added
+
+- **``mind_mem.mic_map`` module** — full parse + emit for both
+  formats with the exact spec semantics:
+  - ``parse_mic2(text) → Graph`` and ``emit_mic2(g) → str`` for
+    the line-oriented LLM- and git-friendly text format.
+  - ``parse_micb(buf) → Graph`` and ``emit_micb(g) → bytes`` for
+    the ULEB128/zigzag binary that's ~4× smaller than text.
+  - ``Graph`` / ``Type`` / ``Arg`` / ``Param`` / ``Node`` frozen
+    dataclasses with ``Graph.validate()`` enforcing sequential
+    type IDs, no forward references, opcode arity, valid output.
+  - ``round_trip(g)`` and ``round_trip_b(g)`` convenience helpers.
+  - ``Mic2ParseError`` / ``MicbParseError`` for spec-violation
+    diagnostics with 1-based line numbers (text path).
+- **Spec security limits enforced** — ``MAX_INPUT_BYTES`` (10 MiB),
+  ``MAX_LINE_COUNT`` (1M), ``MAX_VALUE_COUNT`` (100k),
+  ``MAX_DIM_COUNT`` (32), ``MAX_STRING_COUNT`` (1M),
+  ``MAX_STRING_LEN`` (64 KiB) — every parser rejects oversized
+  input early.
+- **All 19 opcodes covered** — ``m + - * / r s sig th gelu ln t
+  rshp sum mean max cat split gth`` with opcode-specific param
+  sections (axis, perm, axes, axis+count) per ``micb-spec §4.0``.
+- **All 13 dtypes covered** — ``f16 f32 f64 bf16 i8 i16 i32 i64
+  u8 u16 u32 u64 bool``.
+
+### Tests
+
+- **``tests/test_mic_map.py``** — 63 new tests across 9 classes:
+  spec-residual-block parse, comments + blank lines, symbols
+  preserved, 11 rejection cases (missing/wrong header,
+  non-sequential type index, unknown dtype, forward reference,
+  unknown opcode, arity mismatch, output out of range, missing
+  output, trailing data, undefined type ref), canonical emit
+  (header-first, LF-only, no double spaces, idempotent), binary
+  shape (magic + version, smaller than text, deterministic),
+  binary parse (round-trip, text↔binary↔text canonical, bad magic,
+  unsupported version, truncated payload), parametrized
+  op-coverage (all 19 opcodes round-trip through both formats),
+  parametrized dtype-coverage (all 13 dtypes), and direct
+  ``Graph.validate()`` checks.
+
+### Migration
+
+No migration required. JSON remains the default for ``mm
+audit-model`` reports and other audit payloads (those are
+documents, not graphs). Use ``mind_mem.mic_map`` when you have a
+MIND IR graph to ship over MCP / disk / wire and want STARGA-native
+encoding.
+
 ## 3.8.4 (2026-05-02)
 
 **Model Safety Audit — load-gate registry.** Fifth slice of the

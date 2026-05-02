@@ -1281,9 +1281,21 @@ first-class memory sources rather than screenshots-in-attachments.
   sub-commands: ``mm gate check`` runs the gate, ``mm gate list``
   prints the ledger, ``mm gate remove`` drops a path. **12 unit
   tests** in ``tests/test_model_gate.py``.
+- [x] **MIC/MAP Python toolchain** — shipped in v3.8.5
+  (2026-05-02). ``mind_mem.mic_map`` ports the STARGA-native
+  ``mic@2`` (text) and ``mic-b`` (binary) wire formats from the
+  Rust reference at ``mind/src/ir/compact/v2/`` to Python.
+  Faithful spec implementation: sequential-only IDs, no forward
+  references, ULEB128 minimum encoding, zigzag for signed
+  parameters, first-seen string interning, magic ``MICB`` +
+  version byte ``0x02``. Covers all 19 opcodes (with their
+  opcode-specific param sections — axis, perm, axes, axis+count)
+  and all 13 dtypes. Replaces JSON for IR-graph payloads inside
+  mind-mem (audit reports stay JSON — those are documents, not
+  graphs). **63 unit tests** in ``tests/test_mic_map.py``.
 - [ ] **Backend wiring** — auto-invoke ``gate_check`` from
   ``backends.transformers`` (and optionally ``backends.hf``) when
-  any local checkpoint is loaded. Deferred to v3.8.5 because the
+  any local checkpoint is loaded. Deferred to v3.8.6 because the
   extractor backend's loading shape is currently coupled to
   ``llm_extractor.py`` and needs a small refactor to take a
   pre-validated path.
