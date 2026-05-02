@@ -17,12 +17,20 @@ def test_install_sh_bootstraps_clean_home(tmp_path):
     env = os.environ.copy()
     env["HOME"] = str(home).replace("\\", "/") if os.name == "nt" else str(home)
 
+    # Force the pip installer. The pipx path is exercised independently
+    # by the ``install.sh smoke (pipx)`` CI job; this test focuses on
+    # client-config wiring under an isolated HOME, where pipx's
+    # ``%LOCALAPPDATA%\\pipx`` cache (Windows) and
+    # ``~/Library/Application Support/pipx`` (macOS) defy isolation
+    # and time out the runner.
+    install_args = ["--codex", "--installer", "pip"]
+
     if os.name == "nt":
         bash = shutil.which("bash")
         assert bash is not None, "bash is required to run install.sh on Windows"
-        cmd = [bash, INSTALL_SH.replace("\\", "/"), "--codex"]
+        cmd = [bash, INSTALL_SH.replace("\\", "/"), *install_args]
     else:
-        cmd = [INSTALL_SH, "--codex"]
+        cmd = [INSTALL_SH, *install_args]
 
     result = subprocess.run(
         cmd,
@@ -30,7 +38,7 @@ def test_install_sh_bootstraps_clean_home(tmp_path):
         env=env,
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=180,
     )
 
     assert result.returncode == 0, result.stderr or result.stdout

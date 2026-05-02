@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 684 | **Est. tokens:** ~1,369,153
-**Generated:** 2026-05-02 02:19 UTC
+**Files:** 684 | **Est. tokens:** ~1,369,258
+**Generated:** 2026-05-02 02:29 UTC
 
 ## Token Budget Guide
 
@@ -62,7 +62,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 232 | ~454,166 |
+| `tests/` | 232 | ~454,271 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -715,7 +715,7 @@
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_index_stats.py` (~316 tok, medium) — Tests for index statistics."""
 - `test_init_workspace.py` (~2280 tok, huge) — Tests for init_workspace — config validation and workspace scaffolding."""
-- `test_install_script.py` (~376 tok, medium)
+- `test_install_script.py` (~481 tok, medium) — # Force the pip installer. The pipx path is exercised independently
 - `test_integration.py` (~1381 tok, large) — Integration test: full mind-mem lifecycle init → capture → scan → recall."""
 - `test_intel_scan.py` (~5905 tok, huge) — Tests for intel_scan.py — contradiction detection, drift analysis, impact graph."""
 - `test_intent_classify.py` (~328 tok, medium) — Tests for intent classification."""
