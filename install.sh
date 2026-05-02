@@ -98,7 +98,22 @@ install_package() {
       ;;
     pip)
       info "Installing $spec via pip --user"
-      python3 -m pip install --user --upgrade "$spec"
+      # PEP 668 ships an `EXTERNALLY-MANAGED` marker on Debian / Ubuntu /
+      # recent Fedora that blocks even `pip install --user`. Retry with
+      # `--break-system-packages` once when we detect that. `--user`
+      # already isolates the install to ``~/.local`` so the marker's
+      # protection is effectively redundant for this path.
+      if ! python3 -m pip install --user --upgrade "$spec" 2>/tmp/mind-mem-pip-err.$$; then
+        if grep -q "externally-managed\|EXTERNALLY-MANAGED\|PEP 668" /tmp/mind-mem-pip-err.$$; then
+          warn "pip --user blocked by PEP 668; retrying with --break-system-packages"
+          python3 -m pip install --user --upgrade --break-system-packages "$spec"
+        else
+          cat /tmp/mind-mem-pip-err.$$ >&2
+          rm -f /tmp/mind-mem-pip-err.$$
+          exit 1
+        fi
+      fi
+      rm -f /tmp/mind-mem-pip-err.$$
       ;;
   esac
 }

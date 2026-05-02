@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 679 | **Est. tokens:** ~1,352,856
-**Generated:** 2026-05-02 00:54 UTC
+**Files:** 683 | **Est. tokens:** ~1,361,430
+**Generated:** 2026-05-02 01:18 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~79,133 |
+| `./` | 30 | ~79,338 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 3 | ~798 |
 | `benchmarks/` | 26 | ~64,933 |
@@ -54,7 +54,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 143 | ~482,086 |
+| `src/mind_mem/` | 145 | ~485,531 |
 | `src/mind_mem/api/` | 5 | ~15,104 |
 | `src/mind_mem/mcp/` | 3 | ~3,250 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,247 |
@@ -62,7 +62,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 229 | ~446,204 |
+| `tests/` | 231 | ~451,128 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -89,7 +89,7 @@
 - `.gitignore` (~120 tok, small) — *.pyc
 - `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
-- `install.sh` (~4155 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
+- `install.sh` (~4360 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
 - `LICENSE` (~2695 tok, huge)
 - `Makefile` (~569 tok, large) — .PHONY: test lint bench install dev clean smoke help regen-bash-literals
 - `mcp_server.py` (~660 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
@@ -391,7 +391,7 @@
 - `block_store_encrypted.py` (~2313 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `block_store_postgres.py` (~7908 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~2095 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
-- `block_store.py` (~10269 tok, huge) — BlockStore abstraction — decouples block access from storage format.
+- `block_store.py` (~10443 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `calibration.py` (~4838 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
 - `capture.py` (~3722 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
@@ -504,6 +504,7 @@
 - `observability.py` (~1416 tok, large) — mind-mem Observability Module. Zero external deps.
 - `observation_axis.py` (~3925 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `observation_compress.py` (~1353 tok, large) — Observation Compression Layer for Mind-Mem.
+- `observation_compress.py.gpt54bak` (~1353 tok, large) — """Observation Compression Layer for Mind-Mem.
 - `online_trainer.py` (~2751 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ontology.py` (~2843 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `prefix_cache.py` (~3043 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -568,6 +569,7 @@
 - `tiered_memory.py` (~1102 tok, large) — # Copyright 2026 STARGA, Inc.
 - `tier_recall.py` (~2096 tok, huge) — Tier-aware recall score boosting (v3.2.0 hot/cold tier wire-up).
 - `tracking.py` (~1918 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `tracking.py.gpt54bak` (~1918 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `trajectory.py` (~2233 tok, huge) — Trajectory Memory — task execution trace storage and recall.
 - `transcript_capture.py` (~2333 tok, huge) — mind-mem Transcript JSONL Capture. Zero external deps.
 - `truth_score.py` (~1678 tok, huge) — Probabilistic truth score for memory blocks (v3.3.0).
@@ -617,7 +619,7 @@
 - `test_api_keys.py` (~2133 tok, huge) — Tests for APIKeyStore in src/mind_mem/api/api_keys.py."""
 - `test_apply_engine_backend_routing.py` (~1066 tok, large) — v3.2.0 §1.4 PR-6 — apply_engine routes through configured BlockStore."""
 - `test_apply_engine_op_routing.py` (~1830 tok, huge) — v3.2.2 — execute_op routes block-level ops through BlockStore.
-- `test_apply_engine.py` (~11568 tok, huge) — Tests for apply_engine.py — focus on security, validation, and rollback."""
+- `test_apply_engine.py` (~12501 tok, huge) — Tests for apply_engine.py — focus on security, validation, and rollback."""
 - `test_atomicity_maintenance_scope.py` (~1283 tok, large) — v3.2.0 §2.2 — regression test for the ``maintenance/`` atomicity fix.
 - `test_audit_chain.py` (~2398 tok, huge) — Tests for mind-mem hash-chain mutation log (audit_chain.py)."""
 - `test_auto_resolver.py` (~1185 tok, large) — Tests for mind-mem auto contradiction resolution (auto_resolver.py)."""
@@ -743,6 +745,7 @@
 - `test_observability.py` (~791 tok, large) — Tests for observability.py — structured logging and metrics."""
 - `test_observation_axis.py` (~3330 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_observation_compress.py` (~2754 tok, huge) — Tests for observation_compress module.
+- `test_observation_compress.py.gpt54bak` (~2754 tok, huge) — """Tests for observation_compress module.
 - `test_oidc_admin_enforcement.py` (~1716 tok, huge) — v3.2.1 — OIDC JWTs must pass through ``_require_admin`` checks.
 - `test_oidc_auth.py` (~2970 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
 - `test_ontology.py` (~2306 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -756,6 +759,7 @@
 - `test_query_decomposition.py` (~1604 tok, huge) — Tests for multi-hop query decomposition (#6)."""
 - `test_query_expansion_auto_enable.py` (~1091 tok, large) — v3.3.0 Tier 2 #4 — query expansion auto-enables on ambiguous queries.
 - `test_query_expansion_multi_provider.py` (~1237 tok, large) — Tests for multi-provider LLM query expansion (OpenAI-compatible endpoints)."""
+- `test_query_expansion_multi_provider.py.gpt54bak` (~1237 tok, large) — #!/usr/bin/env python3
 - `test_query_expansion.py` (~3809 tok, huge) — Tests for query_expansion.py -- multi-query expansion for improved recall."""
 - `test_query_planner.py` (~1348 tok, large) — v3.3.0 Tier 1 #1 — query decomposition for multi-hop questions.
 - `test_recall_cache.py` (~1916 tok, huge) — Tests for v3.2.0 distributed recall cache (LRU + Redis)."""
