@@ -874,9 +874,7 @@ def build_parser() -> argparse.ArgumentParser:
         "path",
         help="Path to a local model directory (HF checkpoint layout).",
     )
-    p_audit.add_argument(
-        "--json", action="store_true", help="Emit machine-readable JSON instead of text report."
-    )
+    p_audit.add_argument("--json", action="store_true", help="Emit machine-readable JSON instead of text report.")
     p_audit.add_argument(
         "--include-manifest",
         action="store_true",

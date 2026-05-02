@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 684 | **Est. tokens:** ~1,368,393
-**Generated:** 2026-05-02 01:52 UTC
+**Files:** 684 | **Est. tokens:** ~1,368,389
+**Generated:** 2026-05-02 01:53 UTC
 
 ## Token Budget Guide
 
@@ -54,7 +54,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 145 | ~486,128 |
+| `src/mind_mem/` | 145 | ~486,124 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,857 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
@@ -449,7 +449,7 @@
 - `llm_extractor.py` (~4746 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
 - `llm_noise_profile.py` (~2339 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `maintenance_migrate.py` (~1243 tok, large) — v3.2.0 §2.2 — one-shot migration helper for ``maintenance/`` subdivision.
-- `mcp_entry.py` (~496 tok, medium) — Thin entry point for the ``mind-mem-mcp`` console script.
+- `mcp_entry.py` (~495 tok, medium) — Thin entry point for the ``mind-mem-mcp`` console script.
 ### `src/mind_mem/mcp/infra/`
 
 - `acl.py` (~902 tok, large) — Per-tool ACL — scope enforcement for the MCP surface.
@@ -496,7 +496,7 @@
 - `mind_ffi.py` (~5481 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~9005 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~9002 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `model_audit.py` (~4001 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
 - `mrs.py` (~1604 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `multi_modal.py` (~1659 tok, huge) — # Copyright 2026 STARGA, Inc.

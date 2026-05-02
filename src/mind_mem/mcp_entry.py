@@ -46,11 +46,11 @@ def main() -> None:
                 file=sys.stderr,
             )
             print(
-                "Install the MCP extra:  pipx install \"mind-mem[mcp]\"",
+                'Install the MCP extra:  pipx install "mind-mem[mcp]"',
                 file=sys.stderr,
             )
             print(
-                "                     or pip install \"mind-mem[mcp]\"",
+                '                     or pip install "mind-mem[mcp]"',
                 file=sys.stderr,
             )
             sys.exit(1)
