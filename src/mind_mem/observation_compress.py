@@ -102,7 +102,7 @@ def compress_context(
     context: str,
     question: str,
     llm_fn,
-    model: str = "gpt-4o-mini",
+    model: str = "gpt-5.5-mini",
     max_tokens: int = 400,
     query_type: str | None = None,
 ) -> str:

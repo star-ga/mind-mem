@@ -179,7 +179,7 @@ class TestModelParam:
     def test_default_model(self):
         fn = _make_llm_fn()
         compress_context("ctx", "q?", fn)
-        assert fn.call_args[1]["model"] == "gpt-4o-mini"
+        assert fn.call_args[1]["model"] == "gpt-5.5-mini"
 
     def test_custom_model_forwarded(self):
         fn = _make_llm_fn()

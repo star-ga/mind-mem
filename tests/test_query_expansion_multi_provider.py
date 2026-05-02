@@ -54,7 +54,7 @@ class TestOpenAICompatibleProvider(unittest.TestCase):
         expander = LLMQueryExpander(
             config={
                 "provider": "openai",
-                "model": "gpt-5.4",
+                "model": "gpt-5.5",
                 "api_key_env": "OPENAI_API_KEY",
             }
         )
