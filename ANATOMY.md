@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 684 | **Est. tokens:** ~1,365,981
-**Generated:** 2026-05-02 01:38 UTC
+**Files:** 684 | **Est. tokens:** ~1,366,527
+**Generated:** 2026-05-02 01:41 UTC
 
 ## Token Budget Guide
 
@@ -58,11 +58,11 @@
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,857 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
-| `src/mind_mem/mcp/tools/` | 18 | ~41,103 |
+| `src/mind_mem/mcp/tools/` | 18 | ~41,380 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 232 | ~453,272 |
+| `tests/` | 232 | ~453,541 |
 | `tests/integration/` | 2 | ~1,436 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -485,7 +485,7 @@
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
 - `memory_ops.py` (~7074 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
-- `public.py` (~4238 tok, huge) — # mypy: disable-error-code="no-any-return"
+- `public.py` (~4515 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `recall.py` (~4947 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 ### `src/mind_mem/`
@@ -731,7 +731,7 @@
 - `test_mcp_integration.py` (~5301 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_server.py` (~5169 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
 - `test_mcp_tools.py` (~277 tok, medium) — Tests for MCP server tool definitions."""
-- `test_mcp_tool_surface_v3_2.py` (~1733 tok, huge) — v3.2.0 — consolidated MCP public dispatcher tests."""
+- `test_mcp_tool_surface_v3_2.py` (~2002 tok, huge) — v3.2.0 — consolidated MCP public dispatcher tests."""
 - `test_mcp_v140.py` (~5502 tok, huge) — Tests for MCP v1.4.0 features — issues #29, #31, #35, #36.
 - `test_memory_evolution.py` (~340 tok, medium) — Tests for memory evolution tracking."""
 - `test_memory_practical_e2e.py` (~2389 tok, huge) — # Copyright 2026 STARGA, Inc.

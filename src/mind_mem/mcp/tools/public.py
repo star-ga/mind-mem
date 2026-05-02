@@ -90,7 +90,6 @@ def recall(
     ``auto``    :func:`mcp.tools.recall.recall` (default backend)
     ``bm25``    recall(backend="bm25")
     ``hybrid``  recall(backend="hybrid")
-    ``vector``  recall(backend="hybrid") — vector-only routing via config
     ``similar`` :func:`mcp.tools.recall.find_similar` — needs ``block_id``
     ``axis``    :func:`mcp.tools.recall.recall_with_axis` — uses ``axes`` + ``weights``
     ``pack``    :func:`mcp.tools.recall.pack_recall_budget` — uses ``max_tokens``
@@ -98,6 +97,17 @@ def recall(
     ``classify`` :func:`mcp.tools.recall.intent_classify`
     ``diagnostics`` :func:`mcp.tools.recall.retrieval_diagnostics`
     =========== ================================================
+
+    .. note::
+       v3.7.0 M7: ``mode="vector"`` was removed. The pre-3.7.0 dispatcher
+       silently rewrote ``vector`` → ``auto`` (i.e. it returned hybrid
+       results, not vector-only), which left a contract gap callers were
+       hitting in practice. ``hybrid`` and ``auto`` cover every routing
+       the dispatcher actually supports today; true vector-only recall
+       is tracked for v3.8.0 and will reintroduce ``mode="vector"`` only
+       when the underlying ``recall_vector`` path is wired through. Any
+       caller passing ``mode="vector"`` now gets the standard
+       ``unknown mode`` error envelope so the gap is visible.
     """
     # Backward-compat: ``backend=`` alias for ``mode=``.
     if backend and mode == "auto":
@@ -105,9 +115,8 @@ def recall(
 
     from . import recall as _r
 
-    if mode in ("auto", "bm25", "hybrid", "vector"):
-        effective_backend = "auto" if mode in ("auto", "vector") else mode
-        return _r._recall_impl(query, limit=limit, active_only=active_only, backend=effective_backend)
+    if mode in ("auto", "bm25", "hybrid"):
+        return _r._recall_impl(query, limit=limit, active_only=active_only, backend=mode)
     if mode == "similar":
         if not block_id:
             return _err("mode='similar' requires 'block_id'")
@@ -126,13 +135,30 @@ def recall(
         return _r.intent_classify.__wrapped__(query)  # type: ignore[attr-defined]
     if mode == "diagnostics":
         return _r.retrieval_diagnostics.__wrapped__()  # type: ignore[attr-defined]
+    if mode == "vector":
+        # v3.7.0 M7: vector-only routing was a silent ``auto`` alias and
+        # is gone. Surface the gap rather than papering over it.
+        return _err(
+            "mode='vector' was removed in v3.7.0; use mode='hybrid' for hybrid retrieval. "
+            "True vector-only recall returns in v3.8.0 once recall_vector is wired through.",
+            valid_modes=[
+                "auto",
+                "bm25",
+                "hybrid",
+                "similar",
+                "axis",
+                "pack",
+                "prefetch",
+                "classify",
+                "diagnostics",
+            ],
+        )
     return _err(
         f"unknown mode: {mode!r}",
         valid_modes=[
             "auto",
             "bm25",
             "hybrid",
-            "vector",
             "similar",
             "axis",
             "pack",

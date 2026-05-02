@@ -84,6 +84,30 @@ class TestDispatchRecall:
         assert env["error"].startswith("unknown mode")
         assert "valid_modes" in env
 
+    def test_vector_mode_removed_returns_specific_error(self, ws: Path) -> None:
+        """v3.7.0 M7: ``mode='vector'`` used to silently rewrite to
+        ``auto`` (so callers got hybrid results, not vector-only). Now
+        it returns a dedicated error message that explains the removal
+        and points at ``hybrid`` for today's hybrid path."""
+        from mind_mem.mcp.tools import public
+
+        raw = public.recall.__wrapped__("q", mode="vector")
+        env = json.loads(raw)
+        assert "error" in env
+        assert "vector" in env["error"]
+        assert "v3.7.0" in env["error"]
+        assert "hybrid" in env["error"]
+        assert "valid_modes" in env
+        assert "vector" not in env["valid_modes"]
+
+    def test_vector_not_in_valid_modes_for_other_unknown(self, ws: Path) -> None:
+        """A separate unknown mode reports valid_modes without ``vector``."""
+        from mind_mem.mcp.tools import public
+
+        raw = public.recall.__wrapped__("q", mode="teleport")
+        env = json.loads(raw)
+        assert "vector" not in env["valid_modes"]
+
 
 class TestDispatchStagedChange:
     def test_phase_propose_validates_inputs(self, ws: Path) -> None:
