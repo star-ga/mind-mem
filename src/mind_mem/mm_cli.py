@@ -777,6 +777,66 @@ def _cmd_sign_model(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_gate_check(args: argparse.Namespace) -> int:
+    from mind_mem.model_gate import gate_check
+
+    extra = tuple(args.allow_publisher) if args.allow_publisher else None
+    decision = gate_check(
+        args.path,
+        trust_without_audit=args.trust_without_audit,
+        allow_extra_publishers=extra,
+    )
+    out = {
+        "passed": decision.passed,
+        "reason": decision.reason,
+        "path": decision.path,
+        "manifest_sha256": decision.manifest_sha256,
+        "audit_passed": decision.audit_passed,
+        "audit_summary": decision.audit_summary,
+    }
+    if args.json:
+        print(json.dumps(out, indent=2))
+    else:
+        verdict = "ALLOW" if decision.passed else "BLOCK"
+        print(f"{verdict}  reason={decision.reason}  path={decision.path}")
+        print(f"        manifest_sha256={decision.manifest_sha256}")
+        if decision.audit_summary:
+            print(f"        audit_summary={decision.audit_summary}")
+    return 0 if decision.passed else 1
+
+
+def _cmd_gate_list(args: argparse.Namespace) -> int:
+    from mind_mem.model_gate import gate_list
+
+    rows = gate_list()
+    if args.json:
+        print(json.dumps(rows, indent=2))
+    else:
+        if not rows:
+            print("(no entries — registry is empty)")
+            return 0
+        for row in rows:
+            audit_passed = row.get("audit_passed")
+            tag = "PASS " if audit_passed is True else "FAIL " if audit_passed is False else "??   "
+            override = " [override]" if row.get("trust_without_audit") else ""
+            print(f"{tag} {row['audited_at']}  {row['path']}{override}")
+            summary = row.get("audit_report_summary", {})
+            if summary.get("checks_failed"):
+                print(f"       failed: {', '.join(summary['checks_failed'])}")
+    return 0
+
+
+def _cmd_gate_remove(args: argparse.Namespace) -> int:
+    from mind_mem.model_gate import gate_remove
+
+    removed = gate_remove(args.path)
+    if args.json:
+        print(json.dumps({"removed": removed, "path": args.path}, indent=2))
+    else:
+        print(f"{'removed' if removed else 'not present'}: {args.path}")
+    return 0 if removed else 1
+
+
 def _cmd_verify_model(args: argparse.Namespace) -> int:
     from mind_mem.model_signing import ED25519_PUBLIC_KEY_BYTES, verify_model
 
@@ -1060,6 +1120,50 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit machine-readable JSON instead of human-readable lines.",
     )
     p_verify.set_defaults(func=_cmd_verify_model)
+
+    # gate — load-gate registry: check / list / remove
+    p_gate = sub.add_parser(
+        "gate",
+        help=("Load-gate registry that tracks which local checkpoints have been audited. Three sub-commands: check, list, remove."),
+    )
+    gsub = p_gate.add_subparsers(dest="gate_cmd", required=True)
+
+    g_check = gsub.add_parser(
+        "check",
+        help=(
+            "Run gate_check on PATH. Audits the checkpoint if not seen "
+            "before; re-audits on file drift; refuses to load a path that "
+            "fails any check."
+        ),
+    )
+    g_check.add_argument("path")
+    g_check.add_argument(
+        "--trust-without-audit",
+        action="store_true",
+        help=(
+            "Force-load even if the audit fails (or hasn't been run). "
+            "Recorded in the registry as an explicit override so the "
+            "decision is auditable."
+        ),
+    )
+    g_check.add_argument(
+        "--allow-publisher",
+        action="append",
+        default=[],
+        metavar="HF_ORG_SLUG",
+        help="Augment the provenance allowlist (repeatable).",
+    )
+    g_check.add_argument("--json", action="store_true")
+    g_check.set_defaults(func=_cmd_gate_check)
+
+    g_list = gsub.add_parser("list", help="Print the registry contents.")
+    g_list.add_argument("--json", action="store_true")
+    g_list.set_defaults(func=_cmd_gate_list)
+
+    g_remove = gsub.add_parser("remove", help="Remove a path from the registry.")
+    g_remove.add_argument("path")
+    g_remove.add_argument("--json", action="store_true")
+    g_remove.set_defaults(func=_cmd_gate_remove)
 
     # ── inspect — full block fields + provenance tree ──────────────────────
     p_inspect = sub.add_parser(

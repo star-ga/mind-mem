@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 690 | **Est. tokens:** ~1,391,457
-**Generated:** 2026-05-02 08:24 UTC
+**Files:** 692 | **Est. tokens:** ~1,397,284
+**Generated:** 2026-05-02 08:57 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~81,804 |
+| `./` | 30 | ~81,973 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 3 | ~1,010 |
 | `benchmarks/` | 26 | ~64,933 |
@@ -30,7 +30,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 62 | ~94,220 |
+| `docs/` | 62 | ~94,359 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -54,7 +54,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 145 | ~489,405 |
+| `src/mind_mem/` | 146 | ~492,898 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,879 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
@@ -62,7 +62,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 234 | ~460,176 |
+| `tests/` | 235 | ~462,202 |
 | `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -99,7 +99,7 @@
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~23370 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
-- `ROADMAP.md` (~22842 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~23011 tok, huge) — mind-mem Roadmap
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
 - `SECURITY.md` (~1752 tok, huge) — Security Policy
 - `SPEC.md` (~5184 tok, huge) — Mind Mem Formal Specification v1.0
@@ -208,7 +208,7 @@
 - `review-database-v3.2.0.md` (~3171 tok, huge) — Database Review — PostgresBlockStore v3.2.0
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — mind-mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — mind-mem v3.2.0
-- `roadmap.md` (~6926 tok, huge) — Roadmap
+- `roadmap.md` (~7065 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2257 tok, huge) — mind-mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
 - `security-audit-sow.md` (~3336 tok, huge) — mind-mem — External Security Audit Statement of Work (SoW)
@@ -500,8 +500,9 @@
 - `mind_ffi.py` (~5481 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~10697 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~11641 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `model_audit.py` (~4370 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
+- `model_gate.py` (~2549 tok, huge) — Load-gate registry for ``mm audit-model`` checkpoints.
 - `model_provenance.py` (~1751 tok, huge) — Provenance allowlist check for ``mm audit-model`` checkpoints.
 - `model_signing.py` (~2737 tok, huge) — Ed25519 manifest signing for ``mm audit-model`` checkpoints.
 - `mrs.py` (~1604 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -746,6 +747,7 @@
 - `test_mind_kernels_v3_3.py` (~998 tok, large) — Kernel-loading tests for v3.3.0 features.
 - `test_mm_cli_debug.py` (~3339 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_model_audit.py` (~3383 tok, huge) — Tests for ``mind_mem.model_audit`` — checkpoint static-security audit.
+- `test_model_gate.py` (~2026 tok, huge) — Tests for ``mind_mem.model_gate`` — load-gate registry."""
 - `test_model_provenance.py` (~1977 tok, huge) — Tests for ``mind_mem.model_provenance`` — base_model allowlist."""
 - `test_model_signing.py` (~2287 tok, huge) — Tests for ``mind_mem.model_signing`` — Ed25519 manifest signing."""
 - `test_multi_file_recall.py` (~329 tok, medium) — Tests for recall across multiple files."""

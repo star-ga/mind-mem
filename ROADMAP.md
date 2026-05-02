@@ -1270,11 +1270,23 @@ first-class memory sources rather than screenshots-in-attachments.
   ``audit_model_tool`` by default so multi-GB checkpoints don't blow
   up the response — caller opts in with ``include_manifest=True``.
   **21 unit tests** in ``tests/test_mcp_tools_model.py``.
-- [ ] **Load-gate integration** — any checkpoint consumed by mind-mem's
-  embedding or extractor backends (`backends.ollama`, `backends.hf`,
-  `backends.vllm`) goes through `mm audit-model` on first use; a
-  `--trust-without-audit` escape exists but emits a WARNING-level
-  governance event into the evidence chain.
+- [x] **Load-gate registry + primitives** — shipped in v3.8.4
+  (2026-05-02). ``mind_mem.model_gate`` records every audited
+  checkpoint in ``~/.mind-mem/model_gate.json`` with deterministic
+  manifest_sha256 for drift detection, atomic write-temp + replace
+  on every update, and a six-state ``GateDecision``
+  (``trusted_fresh`` / ``audited_now`` / ``drift_re_audited`` /
+  ``audit_failed`` / ``audit_failed_override`` /
+  ``never_audited_override`` / ``path_not_found``). Three CLI
+  sub-commands: ``mm gate check`` runs the gate, ``mm gate list``
+  prints the ledger, ``mm gate remove`` drops a path. **12 unit
+  tests** in ``tests/test_model_gate.py``.
+- [ ] **Backend wiring** — auto-invoke ``gate_check`` from
+  ``backends.transformers`` (and optionally ``backends.hf``) when
+  any local checkpoint is loaded. Deferred to v3.8.5 because the
+  extractor backend's loading shape is currently coupled to
+  ``llm_extractor.py`` and needs a small refactor to take a
+  pre-validated path.
 - [ ] **CI hook** — `mm audit-model` + `mm verify-model` runs against
   every model pinned in `mind-mem.json` on release CI; fails build on
   HIGH findings or any verify-model failure.

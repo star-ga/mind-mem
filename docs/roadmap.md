@@ -4,7 +4,19 @@
 > in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
 > full milestone breakdown.
 
-## v3.8.3 (Current — released 2026-05-02)
+## v3.8.4 (Current — released 2026-05-02)
+
+Load-gate registry for `mm audit-model` checkpoints. Adds the
+`mind_mem.model_gate` module and `mm gate check / list / remove` CLI
+sub-commands. Tracks every audited checkpoint by deterministic
+manifest_sha256 in `~/.mind-mem/model_gate.json`; subsequent loads of
+unchanged paths use the fast-path; file mutations trigger an
+automatic re-audit; failed audits refuse to load unless
+`--trust-without-audit` is set (which records the override in the
+ledger). 12 unit tests in `tests/test_model_gate.py`. No breaking
+changes.
+
+## v3.8.3 (Released 2026-05-02)
 
 MCP tool wrappers for the model audit + signing pipeline. Adds three
 new tools to the existing MCP instance: `audit_model_tool`,

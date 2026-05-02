@@ -2,6 +2,74 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.4 (2026-05-02)
+
+**Model Safety Audit — load-gate registry.** Fifth slice of the
+v3.8.0 plan in ``ROADMAP.md``. Adds a tamper-evident registry of
+audited checkpoints and a ``gate_check`` primitive that mind-mem's
+extractor / embedding backends can call to refuse a swapped or
+never-audited checkpoint. No breaking changes — every prior surface
+continues to work.
+
+### Added
+
+- **``mind_mem.model_gate`` module** — JSON registry at
+  ``~/.mind-mem/model_gate.json`` (overridable via
+  ``MIND_MEM_GATE_REGISTRY``) keyed by absolute checkpoint path.
+  Each entry records: ``audited_at`` (UTC ISO timestamp),
+  ``manifest_sha256`` (deterministic — drift detection),
+  ``audit_passed``, an audit summary, and the
+  ``trust_without_audit`` flag (auditable override).
+- **``gate_check(path, *, trust_without_audit=False,
+  allow_extra_publishers=None) → GateDecision``** — six-state
+  decision: ``trusted_fresh`` (clean fast path), ``audited_now``
+  (first audit), ``drift_re_audited`` (file mutation forced
+  re-audit), ``audit_failed`` (refuse to load),
+  ``audit_failed_override`` / ``never_audited_override`` (operator
+  forced load — recorded), ``path_not_found``.
+- **``gate_list()`` / ``gate_remove(path)``** — JSON-friendly
+  registry inspection + per-path removal (idempotent).
+- **``mm gate check / list / remove``** — three CLI sub-commands.
+  ``mm gate check <path>`` runs the full seven-check audit if not
+  yet seen and prints ``ALLOW`` / ``BLOCK`` with the reason; exit
+  code 0 on allow, 1 on block. Supports ``--trust-without-audit``
+  (with auditable override entry) and ``--allow-publisher
+  <slug>`` (repeatable). ``mm gate list`` prints the registry
+  ledger; ``mm gate remove`` drops a path.
+- **Atomic registry writes** — write-temp + ``os.replace`` so a
+  crash mid-update never leaves a half-written ledger. A corrupt
+  registry file is treated as empty on read and rebuilt cleanly on
+  the next ``gate_check``.
+
+### Tests
+
+- **``tests/test_model_gate.py``** — 12 new tests: first-audit
+  happy path, fast-path on second call, drift detection +
+  re-audit, audit-failure blocks load, ``allow_extra_publishers``
+  rescue, two override paths (``never_audited_override`` /
+  ``audit_failed_override``), missing-path handling,
+  ``gate_list`` / ``gate_remove`` round-trip + idempotency, and
+  registry robustness (corrupt JSON / non-dict shape rebuilt
+  cleanly).
+
+### Migration
+
+No migration required. Operators who want gate enforcement can
+opt-in by calling ``gate_check`` from any backend that loads a
+local checkpoint; the registry is created on first use. The
+existing ``mm audit-model`` / ``mm sign-model`` / ``mm
+verify-model`` paths keep working unchanged. Backend-side
+integration into ``llm_extractor.py`` (transformers backend) is
+deferred to v3.8.5 — v3.8.4 ships the gate primitives + CLI so
+operators can drive the policy manually.
+
+### Deferred to v3.8.x
+
+- Automatic ``gate_check`` invocation from
+  ``backends.transformers`` / ``backends.hf`` on ``from_pretrained``
+  (v3.8.5).
+- mic@2 / mic-b output mode for the audit + signing artifacts.
+
 ## 3.8.3 (2026-05-02)
 
 **Model Safety Audit — MCP tool wrappers.** Fourth slice of the
