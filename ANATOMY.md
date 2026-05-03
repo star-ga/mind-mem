@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 713 | **Est. tokens:** ~1,456,281
-**Generated:** 2026-05-03 09:35 UTC
+**Files:** 713 | **Est. tokens:** ~1,456,287
+**Generated:** 2026-05-03 10:08 UTC
 
 ## Token Budget Guide
 
@@ -54,7 +54,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 149 | ~514,450 |
+| `src/mind_mem/` | 149 | ~514,456 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,903 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
@@ -448,7 +448,7 @@
 - `hybrid_recall.py` (~8896 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~694 tok, large) — # Mind Mem — Memory + Immune System for AI agents
-- `init_workspace.py` (~2125 tok, huge) — mind-mem workspace initializer. Zero external deps.
+- `init_workspace.py` (~2131 tok, huge) — mind-mem workspace initializer. Zero external deps.
 - `intel_scan.py` (~12607 tok, huge) — Mind Mem Intelligence Scanner v2.0 — Self-hosted, zero external dependencies.
 - `intent_router.py` (~3134 tok, huge) — mind-mem Intent Router — 9-type adaptive query intent classification.
 - `interaction_signals.py` (~4278 tok, huge) — # Copyright 2026 STARGA, Inc.
