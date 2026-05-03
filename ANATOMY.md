@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 725 | **Est. tokens:** ~1,481,988
-**Generated:** 2026-05-03 11:43 UTC
+**Files:** 727 | **Est. tokens:** ~1,485,198
+**Generated:** 2026-05-03 11:54 UTC
 
 ## Token Budget Guide
 
@@ -30,7 +30,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 63 | ~99,652 |
+| `docs/` | 63 | ~99,794 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -54,7 +54,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 153 | ~528,760 |
+| `src/mind_mem/` | 154 | ~530,237 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,903 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
@@ -62,7 +62,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 250 | ~499,448 |
+| `tests/` | 251 | ~501,039 |
 | `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -216,7 +216,7 @@
 - `review-database-v3.2.0.md` (~3171 tok, huge) — Database Review — PostgresBlockStore v3.2.0
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — mind-mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — mind-mem v3.2.0
-- `roadmap.md` (~10075 tok, huge) — Roadmap
+- `roadmap.md` (~10217 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2257 tok, huge) — mind-mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
 - `security-audit-sow.md` (~3336 tok, huge) — mind-mem — External Security Audit Statement of Work (SoW)
@@ -450,7 +450,7 @@
 - `graph_recall.py` (~1907 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~9442 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `http_transport.py` (~4389 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
+- `http_transport.py` (~4607 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
 - `hybrid_recall.py` (~8896 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `inbox.py` (~3556 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -530,6 +530,7 @@
 - `observation_compress.py` (~1353 tok, large) — Observation Compression Layer for Mind-Mem.
 - `online_trainer.py` (~2751 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ontology.py` (~2843 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `personas.py` (~1259 tok, large) — Persona-aware recall projection (v3.9.0 candidate).
 - `pipeline_hash.py` (~2073 tok, huge) — Hash-of-code pipeline invalidation (v3.9.0 candidate).
 - `prefix_cache.py` (~3043 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `preimage.py` (~1102 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -736,7 +737,7 @@
 - `test_hook_installer_force_preserves_siblings.py` (~703 tok, large) — Regression test for the --force clobber bug in hook_installer."""
 - `test_hook_installer_registry.py` (~3841 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_auth_fail_closed.py` (~1724 tok, huge) — v3.7.0 H4: HTTP / REST auth must fail CLOSED by default.
-- `test_http_transport.py` (~3695 tok, huge) — Tests for the v3.9 HTTP transport adapter.
+- `test_http_transport.py` (~3950 tok, huge) — Tests for the v3.9 HTTP transport adapter.
 - `test_hybrid_recall.py` (~2855 tok, huge) — Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
 - `test_hybrid_search.py` (~599 tok, large) — Tests for hybrid search functionality."""
 - `test_inbox.py` (~2352 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
@@ -791,6 +792,7 @@
 - `test_oidc_admin_enforcement.py` (~1716 tok, huge) — v3.2.1 — OIDC JWTs must pass through ``_require_admin`` checks.
 - `test_oidc_auth.py` (~2970 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
 - `test_ontology.py` (~2306 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_personas.py` (~1336 tok, large) — Tests for the v3.9 persona-aware recall projection."""
 - `test_pipeline_hash.py` (~2007 tok, huge) — Tests for v3.9 hash-of-code pipeline invalidation."""
 - `test_postgres_block_store.py` (~5149 tok, huge) — v3.2.0 §1.4 PR-5 — PostgresBlockStore integration tests.
 - `test_postgres_replica_routing.py` (~1777 tok, huge) — v3.2.0 — tests for read-replica routing in ReplicatedPostgresBlockStore."""

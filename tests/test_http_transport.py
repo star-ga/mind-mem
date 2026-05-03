@@ -257,6 +257,26 @@ class TestQueryEndpoint:
         status, _ = _request(port, "POST", PATH_QUERY, body={"query": "x", "agent_id": 123})
         assert status == 400
 
+    def test_persona_unknown_400(self, server_localhost_unauth) -> None:
+        port, _ = server_localhost_unauth
+        status, body = _request(port, "POST", PATH_QUERY, body={"query": "x", "persona": "verbose"})
+        assert status == 400
+        assert "persona" in body["error"]
+
+    def test_persona_brief_returns_minimal_shape(self, server_localhost_unauth) -> None:
+        port, _ = server_localhost_unauth
+        status, body = _request(port, "POST", PATH_QUERY, body={"query": "test", "persona": "brief"})
+        assert status == 200
+        assert body.get("persona") == "brief"
+        # Even an empty result list is fine; if results came back they must be brief.
+        for r in body["results"]:
+            assert set(r.keys()) <= {"id", "score", "subject"}
+
+    def test_persona_must_be_string(self, server_localhost_unauth) -> None:
+        port, _ = server_localhost_unauth
+        status, _ = _request(port, "POST", PATH_QUERY, body={"query": "x", "persona": 42})
+        assert status == 400
+
 
 class TestMemoriesEndpoints:
     def test_list_default(self, server_localhost_unauth) -> None:

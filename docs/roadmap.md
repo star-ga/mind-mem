@@ -469,19 +469,31 @@ Distinct from existing `compile_truth` (which produces one consolidated page)
 and existing `graph_traversal_tool` (which returns neighborhoods, not ordered
 sequences). Builds on both.
 
-### 2. Persona-aware detail level
+### 2. Persona-aware detail level — **landed (in-progress branch)**
+
+> **Status (2026-05-03):** implemented on `feat/v3.9-http-transport`.
+> New module `src/mind_mem/personas.py`, 15 tests in
+> `tests/test_personas.py` (all passing). Wired into the v3.9 HTTP
+> `/query` endpoint via the `persona` body field; unknown personas
+> return HTTP 400.
 
 Same recall, different summary granularity per caller:
 
-- `recall(query, persona="brief")` — 1-line summaries per block, IDs only
-- `recall(query, persona="detailed")` — current default, full block content
-- `recall(query, persona="technical")` — full content + axis scores +
-  governance state + provenance hash chain
+- ✓ `apply_persona(results, persona="brief")` — id + score + 1-line
+  subject (≤120 chars). For routing layers, Slack snippets, status
+  panels.
+- ✓ `apply_persona(results, persona="detailed")` — current default,
+  full block (identity copy).
+- ✓ `apply_persona(results, persona="technical")` — full block +
+  promoted governance/provenance fields (`axis_scores`,
+  `governance_state`, `provenance_hash`, `source_span`,
+  `transform_hash`) so audit consumers don't have to fish them out
+  of nested keys.
 
 Implemented as a post-recall projection layer over the existing block format,
-not a separate index. Zero index cost. Useful when one agent (e.g. routing
-layer) wants a 1-line answer and another (e.g. audit / governance check) wants
-the full evidence trail.
+not a separate index. Zero index cost. The wrapper is wired into
+`POST /query` today; wiring into MCP-exposed `recall` /
+`hybrid_search` is a follow-up so the surface stays focused.
 
 ### What we explicitly do NOT borrow
 

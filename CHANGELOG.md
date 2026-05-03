@@ -35,6 +35,22 @@ All notable changes to mind-mem are documented in this file.
   failures). The `replicas` field must be a list of DSN strings;
   non-list values raise `ValueError`.
 
+- **Persona-aware recall projection** (`src/mind_mem/personas.py`).
+  Reshapes recall results for different consumers without touching the
+  index. Three named personas:
+    - `brief`     — id + score + 1-line subject (≤120 chars). For
+                    routing layers, Slack snippets, status panels.
+    - `detailed`  — full block (current default). Identity copy.
+    - `technical` — full block + promoted governance/provenance fields
+                    (`axis_scores`, `governance_state`,
+                    `provenance_hash`, `source_span`, `transform_hash`)
+                    so audit consumers don't have to fish them out of
+                    nested keys.
+  Pure function `apply_persona(blocks, persona)`, zero index cost,
+  input list never mutated. Wired into `POST /query` on the v3.9 HTTP
+  transport — pass `"persona": "brief"` in the body to get the
+  routing-friendly shape; unknown personas return HTTP 400.
+
 - **Hash-of-code pipeline invalidation** (`src/mind_mem/pipeline_hash.py`).
   Computes a deterministic hash of the *currently configured*
   extraction pipeline (package version + backend + model + extractor
@@ -85,6 +101,17 @@ All notable changes to mind-mem are documented in this file.
   workspace, no-enabled-tasks guard, dry-run last-run tracking,
   exception isolation, stop-event short-circuit), and `run_daemon`
   once-mode behaviour.
+- `tests/test_personas.py` — 15 tests covering per-block projection
+  (unknown persona raises, brief drops everything but id/score/subject,
+  brief truncates oversized subject, brief uses content first-line as
+  fallback, detailed is identity, technical promotes governance fields,
+  technical preserves existing keys), and list-level `apply_persona`
+  (default-when-none, default-when-empty-string, brief shape on each,
+  unknown persona raises, input not mutated, PERSONAS constant matches
+  DEFAULT_PERSONA).
+  + 3 new tests in `tests/test_http_transport.py` covering the
+  `/query` persona path (unknown persona 400, brief shape, persona
+  type-check).
 - `tests/test_pipeline_hash.py` — 18 tests covering pure-function
   determinism + collision resistance (NUL-separator preimage,
   version/backend/model/extractor/template invalidation), config

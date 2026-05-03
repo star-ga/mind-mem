@@ -181,7 +181,13 @@ def _handle_query(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, 
 
     Body schema::
 
-        {"query": "...", "limit"?: int, "active_only"?: bool, "agent_id"?: str}
+        {
+          "query":       "...",
+          "limit"?:      int,
+          "active_only"?: bool,
+          "agent_id"?:    str,
+          "persona"?:     "brief" | "detailed" | "technical"
+        }
     """
     query = body.get("query")
     if not isinstance(query, str) or not query.strip():
@@ -196,8 +202,18 @@ def _handle_query(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, 
     agent_id = body.get("agent_id")
     if agent_id is not None and not isinstance(agent_id, str):
         return (400, {"error": "agent_id must be a string"})
+    persona = body.get("persona")
+    if persona is not None and not isinstance(persona, str):
+        return (400, {"error": "persona must be a string"})
 
     from ._recall_core import recall as _recall
+    from .personas import PERSONAS, PersonaError, apply_persona
+
+    if persona is not None and persona not in PERSONAS:
+        return (
+            400,
+            {"error": f"unknown persona {persona!r}; must be one of {list(PERSONAS)}"},
+        )
 
     try:
         results = _recall(
@@ -211,7 +227,19 @@ def _handle_query(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, 
         _log.error("query_failed", extra={"error": str(exc)})
         return (500, {"error": "internal recall error"})
 
-    return (200, {"query": query, "results": results, "count": len(results)})
+    try:
+        projected = apply_persona(results, persona)
+    except PersonaError as exc:  # belt + suspenders; PERSONAS check above already gates this
+        return (400, {"error": str(exc)})
+
+    payload: dict[str, Any] = {
+        "query": query,
+        "results": projected,
+        "count": len(projected),
+    }
+    if persona is not None:
+        payload["persona"] = persona
+    return (200, payload)
 
 
 def _handle_list_memories(workspace: str, params: dict[str, str]) -> tuple[int, dict[str, Any]]:
