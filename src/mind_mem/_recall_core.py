@@ -102,6 +102,12 @@ except ImportError:
 
 _log = get_logger("recall")
 
+# v3.9.x security: agent_id is interpolated into ``agents/{agent_id}/...``
+# filesystem paths. Restrict it to a flat identifier so path-traversal
+# sequences cannot escape the workspace. Same regex as in
+# ``namespaces.NamespaceManager``.
+_AGENT_ID_RE = re.compile(r"(?=.*[^.])[A-Za-z0-9_.-]{1,64}")
+
 # ---------------------------------------------------------------------------
 # Config cache — mtime-based invalidation avoids re-reading mind-mem.json
 # on every recall() call (#473).
@@ -411,15 +417,23 @@ def recall(
     # Adjust effective limit for retrieval (retrieve more candidates, trim later)
     limit = int(limit * qparams.get("extra_limit_factor", 1.0))
 
-    # Namespace ACL: resolve accessible paths if agent_id is provided
+    # Namespace ACL: resolve accessible paths if agent_id is provided.
+    # v3.9.x security: agent_id flows into a filesystem path (agents/{agent_id}/...)
+    # so reject anything that isn't a flat identifier. Path-traversal sequences
+    # (../, leading /, NUL bytes) would let a caller probe paths outside the
+    # workspace; whitespace and shell metacharacters tighten the perimeter.
     ns_manager = None
     if agent_id:
-        try:
-            from .namespaces import NamespaceManager
+        if not _AGENT_ID_RE.fullmatch(agent_id):
+            _log.warning("invalid_agent_id_rejected", agent_id_len=len(agent_id))
+            agent_id = None
+        else:
+            try:
+                from .namespaces import NamespaceManager
 
-            ns_manager = NamespaceManager(workspace, agent_id=agent_id)
-        except ImportError:
-            _log.debug("namespaces_unavailable", agent_id=agent_id)
+                ns_manager = NamespaceManager(workspace, agent_id=agent_id)
+            except ImportError:
+                _log.debug("namespaces_unavailable", agent_id=agent_id)
 
     # Load all blocks with source file tracking
     all_blocks = []
