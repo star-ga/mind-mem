@@ -85,6 +85,52 @@ def store() -> Generator[PostgresBlockStore, None, None]:
 # ─── Tests ────────────────────────────────────────────────────────────────────
 
 
+class TestDDLEscaping:
+    """Regression tests for psycopg SQL.format placeholder collisions.
+
+    The DDL embeds a JSONB ``'{}'`` literal as the column default. psycopg
+    parses ``{}`` inside ``SQL.format()`` as a positional placeholder, so
+    the literal must be escaped to ``{{}}``. Without the escape, formatting
+    raises ``IndexError: tuple index out of range`` and no Postgres user
+    can ever bring up the schema.
+    """
+
+    def test_ddl_format_does_not_raise(self) -> None:
+        from mind_mem.block_store_postgres import _ddl
+
+        composed = _ddl("mind_mem")  # must not raise.
+        rendered = composed.as_string(None)
+        # The JSONB default literal must reach the SQL output unmangled.
+        assert "DEFAULT '{}'" in rendered
+        assert '"mind_mem"' in rendered
+        # Sanity: every CREATE TABLE we expect is emitted.
+        for tbl in ("blocks", "snapshots", "snapshot_blocks", "workspace_lock", "schema_migrations"):
+            assert f'"mind_mem".{tbl}' in rendered
+
+    def test_ddl_format_with_custom_schema(self) -> None:
+        from mind_mem.block_store_postgres import _ddl
+
+        composed = _ddl("custom_ns")  # arbitrary schema name.
+        rendered = composed.as_string(None)
+        assert '"custom_ns"' in rendered
+
+
+class TestInitLockReentrance:
+    """Regression: ``_ensure_schema`` calls ``_get_pool`` while holding
+    ``_init_lock``. A non-reentrant Lock self-deadlocks on the first call.
+    """
+
+    def test_init_lock_is_reentrant(self) -> None:
+        from mind_mem.block_store_postgres import PostgresBlockStore
+
+        store = PostgresBlockStore("postgresql://nobody@localhost/none")
+        # If this were a plain threading.Lock, reacquiring it from the
+        # same thread would deadlock instead of returning.
+        with store._init_lock:
+            with store._init_lock:
+                pass
+
+
 class TestRoundTrip:
     def test_write_then_get_by_id(self, store: PostgresBlockStore) -> None:
         block = _make_block("D-20260419-001", statement="Round-trip test")

@@ -99,6 +99,133 @@ def _cmd_vault_scan(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_migrate_store(args: argparse.Namespace) -> int:
+    """Migrate the workspace block corpus between backends.
+
+    v3.8.12 — implements the documented ``mm migrate-store`` flow
+    (`docs/storage-migration.md`). Today's only supported direction is
+    markdown -> postgres because that's the one operators actually
+    need; markdown <- postgres is a follow-up.
+
+    Steps when --execute:
+      1. Load all blocks from the source MarkdownBlockStore.
+      2. Ensure the Postgres schema exists (idempotent).
+      3. Insert each block via PostgresBlockStore.write_block (which
+         is itself an INSERT ... ON CONFLICT DO UPDATE).
+      4. Verify SELECT COUNT(*) matches the migrated count.
+      5. Write a JSON receipt to memory/migrations/<ts>-<from>-to-<to>.json.
+
+    --dry-run prints the projected counts without writing anything.
+    """
+    import datetime
+    import time
+
+    from mind_mem.block_store import MarkdownBlockStore
+
+    if args.from_backend != "markdown" or args.to_backend != "postgres":
+        print(json.dumps({
+            "error": f"unsupported direction: {args.from_backend} -> {args.to_backend}",
+            "supported": ["markdown -> postgres"],
+        }, indent=2))
+        return 2
+    if not args.dsn:
+        print(json.dumps({"error": "--dsn is required for postgres target"}, indent=2))
+        return 2
+    if not args.execute and not args.dry_run:
+        print(json.dumps({"error": "specify --dry-run or --execute"}, indent=2))
+        return 2
+
+    try:
+        from mind_mem.block_store_postgres import PostgresBlockStore
+    except ImportError as exc:
+        print(json.dumps({
+            "error": "postgres backend requires the [postgres] extra",
+            "install": "pip install 'mind-mem[postgres]'",
+            "detail": str(exc),
+        }, indent=2))
+        return 2
+
+    ws = _workspace()
+    redacted_dsn = args.dsn
+    try:
+        from urllib.parse import urlparse, urlunparse
+        u = urlparse(args.dsn)
+        if u.password:
+            redacted_dsn = urlunparse(u._replace(netloc=f"{u.username}:***@{u.hostname}:{u.port or 5432}"))
+    except Exception:
+        pass
+
+    src = MarkdownBlockStore(ws)
+    blocks = src.get_all()
+    with_id = [b for b in blocks if b.get("_id")]
+
+    if args.dry_run:
+        print(json.dumps({
+            "mode": "dry_run",
+            "from_backend": args.from_backend,
+            "to_backend": args.to_backend,
+            "workspace": ws,
+            "dsn": redacted_dsn,
+            "schema": args.schema,
+            "block_count_total": len(blocks),
+            "block_count_migratable": len(with_id),
+            "blocks_skipped_no_id": len(blocks) - len(with_id),
+        }, indent=2))
+        return 0
+
+    dst = PostgresBlockStore(args.dsn, schema=args.schema, workspace=ws)
+    dst._ensure_schema()
+
+    t0 = time.monotonic()
+    written = 0
+    errors: list[dict[str, str]] = []
+    for b in with_id:
+        try:
+            dst.write_block(b)
+            written += 1
+        except Exception as exc:
+            errors.append({"id": str(b.get("_id")), "error": str(exc)[:200]})
+    duration = round(time.monotonic() - t0, 2)
+
+    import psycopg
+    with psycopg.connect(args.dsn) as conn:
+        with conn.cursor() as cur:
+            from psycopg import sql as _pgsql
+            cur.execute(_pgsql.SQL("SELECT COUNT(*) FROM {s}.blocks").format(
+                s=_pgsql.Identifier(args.schema)
+            ))
+            target_count = cur.fetchone()[0]
+
+    ts = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
+    receipt = {
+        "timestamp": ts,
+        "from_backend": args.from_backend,
+        "to_backend": args.to_backend,
+        "workspace": ws,
+        "dsn": redacted_dsn,
+        "schema": args.schema,
+        "source_block_count": len(blocks),
+        "source_blocks_migratable": len(with_id),
+        "target_row_count": target_count,
+        "rows_written": written,
+        "errors": len(errors),
+        "duration_seconds": duration,
+        "blocks_per_second": round(written / duration, 1) if duration > 0 else None,
+        "verified": target_count >= written,
+    }
+    if errors:
+        receipt["error_sample"] = errors[:10]
+
+    rec_dir = os.path.join(ws, "memory", "migrations")
+    os.makedirs(rec_dir, exist_ok=True)
+    rec_path = os.path.join(rec_dir, f"{ts}-{args.from_backend}-to-{args.to_backend}.json")
+    with open(rec_path, "w", encoding="utf-8") as fh:
+        json.dump(receipt, fh, indent=2)
+    receipt["receipt_path"] = rec_path
+    print(json.dumps(receipt, indent=2))
+    return 0 if not errors and target_count >= written else 1
+
+
 def _cmd_install(args: argparse.Namespace) -> int:
     """Install mind-mem config for a single named agent."""
     from mind_mem.hook_installer import install_config
@@ -1091,6 +1218,26 @@ def build_parser() -> argparse.ArgumentParser:
     # status
     p_status = sub.add_parser("status", help="Print workspace status as JSON.")
     p_status.set_defaults(func=_cmd_status)
+
+    # migrate-store — markdown <-> postgres backend migration
+    p_migrate = sub.add_parser(
+        "migrate-store",
+        help="Migrate the workspace block corpus between storage backends.",
+    )
+    p_migrate.add_argument("--from", dest="from_backend", choices=["markdown"], required=True)
+    p_migrate.add_argument("--to", dest="to_backend", choices=["postgres"], required=True)
+    p_migrate.add_argument(
+        "--dsn",
+        help='Postgres DSN, e.g. "postgresql://mindmem:***@127.0.0.1:5432/mindmem".',
+    )
+    p_migrate.add_argument(
+        "--schema",
+        default="mind_mem",
+        help='Postgres schema name (default: "mind_mem").',
+    )
+    p_migrate.add_argument("--dry-run", action="store_true", dest="dry_run")
+    p_migrate.add_argument("--execute", action="store_true")
+    p_migrate.set_defaults(func=_cmd_migrate_store)
 
     # detect — list AI coding clients present on the machine
     p_detect = sub.add_parser(

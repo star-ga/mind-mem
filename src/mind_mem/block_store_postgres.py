@@ -96,7 +96,9 @@ def _ddl(schema: str) -> Any:
             "    id           TEXT PRIMARY KEY,"
             "    file_path    TEXT NOT NULL,"
             "    content      TEXT NOT NULL,"
-            "    metadata     JSONB NOT NULL DEFAULT '{}',"
+            # '{{}}' escapes psycopg's positional {} placeholder so
+            # the JSONB literal '{}' reaches the server unmangled.
+            "    metadata     JSONB NOT NULL DEFAULT '{{}}',"
             "    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
             "    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
             "    active       BOOLEAN NOT NULL DEFAULT TRUE"
@@ -241,7 +243,12 @@ class PostgresBlockStore:
         self._workspace = workspace
         self._pool: Any = None
         self._schema_ready = False
-        self._init_lock = threading.Lock()
+        # RLock so _ensure_schema() can call _get_pool() while still
+        # holding this lock without self-deadlocking. Both methods
+        # acquire it for the same purpose (one-time init), and the
+        # cost of re-entrance is zero compared to the cost of the
+        # bug it fixes (any first call from a single thread hangs).
+        self._init_lock = threading.RLock()
 
     # ─── Lifecycle ────────────────────────────────────────────────────────────
 

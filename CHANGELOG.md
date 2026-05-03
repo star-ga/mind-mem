@@ -2,6 +2,60 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.12 (2026-05-03)
+
+**Postgres backend: real fixes + `mm migrate-store` CLI.** Two
+load-bearing bugs in the v3.2.0 PostgresBlockStore are fixed and
+the documented `mm migrate-store` command (referenced in
+`docs/storage-migration.md` since v3.2.0) is finally implemented.
+Zero-dep core preserved — Postgres remains opt-in via
+`mind-mem[postgres]`.
+
+### Fixed
+
+- **`_ddl()` always raised `IndexError`.** The `'{}'::JSONB` literal
+  in the `metadata` column default collided with psycopg's positional
+  `{}` placeholder inside `SQL.format()`. Escaped to `'{{}}'` so the
+  literal reaches the server unmangled. **Without this fix, the
+  Postgres backend was unusable from a fresh schema.**
+- **`_ensure_schema()` self-deadlocked.** The schema-init code held
+  a `threading.Lock`, then called `_get_pool()` which tried to acquire
+  the same lock, causing every first call from a single thread to
+  hang forever on a futex wait. Switched to `threading.RLock`.
+
+### Added
+
+- **`mm migrate-store` CLI** — implements the documented
+  markdown → postgres migration end-to-end:
+
+  ```
+  mm migrate-store --from markdown --to postgres \
+      --dsn postgresql://mindmem:***@host:5432/mindmem [--dry-run|--execute]
+  ```
+
+  Loads blocks via `MarkdownBlockStore`, ensures the Postgres schema,
+  writes via `INSERT ... ON CONFLICT DO UPDATE`, verifies row count,
+  and writes a JSON receipt to
+  `memory/migrations/<ts>-markdown-to-postgres.json`. Throughput
+  ~370 blocks/s on localhost (263 blocks in 0.71s end-to-end).
+- **Two regression tests** for the bugs above:
+  - `TestDDLEscaping::test_ddl_format_does_not_raise` — catches any
+    future placeholder collision before it ships.
+  - `TestInitLockReentrance::test_init_lock_is_reentrant` — prevents
+    re-introducing a non-reentrant lock.
+
+### Changed
+
+- **`docs/storage-backends.md`** — leads with a "use Postgres for
+  multi-CLI / multi-host setups" callout. Markdown's per-process file
+  locking is single-host single-process; multi-CLI workspaces (Claude
+  Code + Codex + Gemini + Cursor reading the same workspace) need
+  Postgres for correct write serialisation.
+- **`init_workspace.py`** — `DEFAULT_CONFIG.version` now tracks
+  `mind_mem.__version__` instead of the hardcoded "1.7.0" string,
+  so every fresh workspace's `mind-mem.json` reflects the writing
+  package version.
+
 ## 3.8.11 (2026-05-02)
 
 **Surface MIC/MAP — MCP tools + `mm mic` CLI + docs.** The

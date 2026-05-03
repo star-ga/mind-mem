@@ -3,15 +3,25 @@
 mind-mem supports three block storage backends. The default is `markdown`
 (files on disk). Switching backends is a one-line change in `mind-mem.json`.
 
+> **Multi-CLI / multi-host setups should use Postgres.** If you have more
+> than one CLI (Claude Code + Codex + Gemini + Cursor + …) reading and
+> writing the same workspace — even on a single machine — Postgres is
+> the right backend. The Markdown backend's file-locking is per-process
+> on a single host; concurrent CLIs can deadlock or silently lose
+> writes. Postgres serialises writes at the row level and gives you
+> `LISTEN/NOTIFY` for cross-process cache invalidation. See
+> [`docs/storage-migration.md`](storage-migration.md) for the
+> `mm migrate-store` flow.
+
 ---
 
 ## Backends at a Glance
 
 | Backend | Best for | Requires |
 | ------- | -------- | -------- |
-| `markdown` (default) | Single-process, file-based workspaces | Nothing extra |
+| `markdown` (default) | Single-process, file-based workspaces; offline / air-gapped use | Nothing extra |
 | `encrypted` | At-rest encryption for sensitive workspaces | `MIND_MEM_ENCRYPTION_PASSPHRASE` env var |
-| `postgres` | Multi-host shared workspaces, concurrent agents | PostgreSQL 14+, `pip install "mind-mem[postgres]"` |
+| `postgres` | **Multi-CLI on one host, multi-host shared workspaces, network-attached agents, large corpora (>10 MB), shared LISTEN/NOTIFY invalidation** | PostgreSQL 14+, `pip install "mind-mem[postgres]"` |
 
 ---
 
