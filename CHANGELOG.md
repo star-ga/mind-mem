@@ -2,6 +2,56 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## Unreleased — v3.10.0 candidates
+
+**Theme: MCP wrapping for v3.9 walkthrough/persona + hash-of-code loop closure.**
+
+### Added
+- **Two new MCP tools** for `walkthrough` + `personas` (v3.9 modules
+  that previously only surfaced through the HTTP REST adapter):
+  - `compile_truth_walkthrough(topic, limit, active_only)` — returns
+    a dependency-ordered learning sequence (foundation → context →
+    current). Wraps `walkthrough.compile_walkthrough`.
+  - `recall_with_persona(query, persona, limit, active_only)` —
+    additive recall variant; reuses the existing recall pipeline
+    and projects results through `personas.apply_persona`. Three
+    personas: `brief`, `detailed`, `technical`. Kept separate from
+    the long-stable `recall` so the schema is not broken — clients
+    that want persona projection opt in by name.
+- **Two new MCP tools** for hash-of-code (v3.9 inspection primitive):
+  - `pipeline_status()` — current pipeline hash + dirty-block summary
+    (read-only).
+  - `reindex_dirty(limit, dry_run)` — re-stamp blocks whose stored
+    `TransformHash` is stale, supporting staged operator rollouts.
+- **`stamp_transform_hash(workspace, block)`** helper in
+  `pipeline_hash.py` — pure-function copy of *block* with
+  `TransformHash` set to the current pipeline hash. Used by the
+  inbox ingestion path so every newly-ingested block carries a
+  verifiable hash.
+- **`reextract_dirty_blocks(workspace, *, limit, dry_run)`** —
+  bulk re-stamp through the storage factory's `write_block`. Block
+  *content* is not re-extracted (that requires invoking the LLM
+  extractor and is left to a future revision); only the hash is
+  refreshed.
+
+### Changed
+- `inbox.ingest_text_file` and `_ingest_pdf` now wrap the block dict
+  in `stamp_transform_hash` before `write_block`, closing the v3.9
+  hash-of-code loop on the write side. Existing callers who built
+  blocks directly are unaffected (the helper is opt-in at the call
+  site, not enforced via the BlockStore interface).
+
+### Tests
+- 28 new MCP tool tests (`test_mcp_walkthrough_persona.py`,
+  `test_mcp_pipeline.py`).
+- 12 new helper tests in `test_pipeline_hash.py` (stamp + reextract).
+
+### Out of scope (deferred to v3.11)
+- Per-byte source lineage (`source_span` on every block, audit-chain
+  preimage extension). Requires the audit-chain refactor to take a
+  lineage-aware preimage; out of scope here to keep this PR focused
+  on the MCP surface + hash-of-code closure.
+
 ## Unreleased — v3.9.0 candidates
 
 **Theme: HTTP transport + replicated postgres routing.**
