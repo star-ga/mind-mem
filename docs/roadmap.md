@@ -4,7 +4,24 @@
 > in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
 > full milestone breakdown.
 
-## v3.8.6 (Current — released 2026-05-02)
+## v3.8.7 (Current — released 2026-05-02)
+
+CI hook — release-CI gate for the Model Safety Audit pipeline.
+Closes the Audit theme of the v3.8.0 plan. New
+`mind_mem.audit_pinned` module reads `audit_pinned_models` from
+`mind-mem.json` and runs the seven-check audit (and optional
+Ed25519 verify) against every entry. New `mm audit-pinned` CLI
+subcommand exits non-zero on HIGH findings or verify failures,
+designed for release-CI use. `.github/workflows/audit-pinned.yml`
+runs it on push to main / PR. Schema is permissive (bare path
+string OR object with `verify` / `allow_publishers` overrides),
+mixed lists accepted, empty list / missing key / missing file
+no-op pass. 25 unit tests in `tests/test_audit_pinned.py`. No
+breaking changes. Model Safety Audit theme is now complete (audit
+→ sign → provenance → MCP → gate → backend wiring → CI hook).
+Next: Social Ingestion (v3.8.8+).
+
+## v3.8.6 (Released 2026-05-02)
 
 Backend wiring for the load-gate. The extractor's transformers
 backend now calls `mind_mem.model_gate.gate_check` before

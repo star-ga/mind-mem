@@ -1305,9 +1305,19 @@ first-class memory sources rather than screenshots-in-attachments.
   ``RuntimeError`` with both override env-vars named in the
   message — fail-closed by default. **11 unit tests** in
   ``tests/test_llm_extractor_gate.py``.
-- [ ] **CI hook** — `mm audit-model` + `mm verify-model` runs against
-  every model pinned in `mind-mem.json` on release CI; fails build on
-  HIGH findings or any verify-model failure.
+- [x] **CI hook** — shipped in v3.8.7 (2026-05-02).
+  ``mind_mem.audit_pinned`` reads an ``audit_pinned_models`` list
+  from ``mind-mem.json`` and runs ``audit_model`` (and optional
+  ``verify_model``) against every entry. ``mm audit-pinned`` exits
+  ``0`` on a clean run / no-op, ``1`` on any HIGH finding or verify
+  failure, ``2`` on config-parse error or missing path with
+  ``--fail-on-missing``. ``.github/workflows/audit-pinned.yml`` runs
+  the gate on push to main / PR / workflow_dispatch with path
+  filtering. **25 unit tests** in ``tests/test_audit_pinned.py``.
+
+  This closes the Model Safety Audit theme of v3.8.0 — every item
+  in the Audit pipeline (audit → sign → provenance → MCP → gate →
+  backend wiring → CI hook) is shipped.
 
 ### Social Ingestion
 

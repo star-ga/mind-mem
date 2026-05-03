@@ -2,6 +2,68 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.7 (2026-05-02)
+
+**CI hook — release-CI gate for the Model Safety Audit pipeline.**
+Final slice of the Model Safety Audit theme in the v3.8.0 plan.
+Adds the ``mind_mem.audit_pinned`` module, the ``mm audit-pinned``
+CLI subcommand, and a GitHub Actions workflow that runs the
+seven-check audit (and optional Ed25519 verify) against every
+checkpoint pinned in ``mind-mem.json``. Fails the build on any
+HIGH finding or verify failure. No breaking changes — the gate is
+opt-in via the new ``audit_pinned_models`` config key.
+
+### Added
+
+- **``mind_mem.audit_pinned`` module** — pipeline that reads
+  ``audit_pinned_models`` from ``mind-mem.json`` and runs
+  ``audit_model`` (and optional ``verify_model``) on each entry.
+  Schema is permissive: a bare path string is the shorthand,
+  an object with ``{"path", "verify", "allow_publishers"}`` is the
+  full form. Mixed lists are accepted. Empty list / missing key /
+  missing file → no-op pass.
+- **``PinnedModel`` / ``PinnedAuditFinding`` /
+  ``PinnedAuditReport``** — typed dataclasses with
+  JSON-serialisable ``to_dict()`` for ``--json`` mode.
+- **``PinnedConfigError``** — raised on schema violations
+  (non-array ``audit_pinned_models``, object missing ``path``,
+  bad ``allow_publishers`` element type, etc.).
+- **``mm audit-pinned [--config mind-mem.json]
+  [--fail-on-missing] [--json]``** — CLI subcommand. Exit codes:
+  ``0`` clean (or no-op), ``1`` HIGH finding / verify failure,
+  ``2`` config-parse error or missing path with
+  ``--fail-on-missing``.
+- **``.github/workflows/audit-pinned.yml``** — release-CI
+  workflow that runs ``mm audit-pinned`` on push to ``main``,
+  PR, and ``workflow_dispatch``. Path-filtered to the audit
+  modules so unrelated commits don't trigger it. Cleanly skips
+  when ``mind-mem.json`` is absent.
+
+### Tests
+
+- **``tests/test_audit_pinned.py``** — 25 new tests across 6
+  classes: schema parsing (10 tests covering missing file,
+  empty list, both string + object entry forms, mixed lists,
+  every error case), pipeline happy paths (6 tests covering
+  no-config / empty / clean checkpoint / failing checkpoint /
+  ``allow_publishers`` rescue / relative path resolution),
+  missing-path handling, verify integration (signed +
+  unsigned), text-output formatting, and JSON
+  ``to_dict()`` round-trip.
+
+### Migration
+
+No migration required. Operators who want CI enforcement add an
+``audit_pinned_models`` array to their ``mind-mem.json`` and let
+the workflow run on every push. Pre-existing ``mind-mem.json``
+files without the key keep working — ``audit-pinned`` is a no-op
+pass when nothing is pinned.
+
+This commit closes the **Model Safety Audit** theme of v3.8.0.
+Six checks → seven checks (provenance) → MCP wrappers → load gate
+→ backend wiring → CI hook. Next: Social Ingestion (v3.8.8 →
+v3.8.13).
+
 ## 3.8.6 (2026-05-02)
 
 **Backend wiring — gate enforcement on local checkpoint loads.**

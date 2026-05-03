@@ -1,0 +1,55 @@
+name: Audit Pinned Models
+
+# Release-CI gate for the Model Safety Audit pipeline. Reads
+# ``audit_pinned_models`` from ``mind-mem.json`` (if present) and runs
+# ``mm audit-pinned`` against every entry. Fails the build on any HIGH
+# finding or verify failure. No-op pass when the config file is absent
+# or the list is empty — so a freshly-cloned repo without checkpoints
+# checked in still passes.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mind-mem.json'
+      - 'src/mind_mem/audit_pinned.py'
+      - 'src/mind_mem/model_audit.py'
+      - 'src/mind_mem/model_provenance.py'
+      - 'src/mind_mem/model_signing.py'
+      - '.github/workflows/audit-pinned.yml'
+  pull_request:
+    paths:
+      - 'mind-mem.json'
+      - 'src/mind_mem/audit_pinned.py'
+      - 'src/mind_mem/model_audit.py'
+      - 'src/mind_mem/model_provenance.py'
+      - 'src/mind_mem/model_signing.py'
+      - '.github/workflows/audit-pinned.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@e348410e00f449f30b87fbf9b9f6cb53907d3aef  # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install mind-mem
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Run mm audit-pinned
+        run: |
+          if [ ! -f mind-mem.json ]; then
+            echo "no mind-mem.json — skipping pinned-model audit"
+            exit 0
+          fi
+          mm audit-pinned --config mind-mem.json

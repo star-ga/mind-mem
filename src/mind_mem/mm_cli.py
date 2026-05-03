@@ -837,6 +837,46 @@ def _cmd_gate_remove(args: argparse.Namespace) -> int:
     return 0 if removed else 1
 
 
+def _cmd_audit_pinned(args: argparse.Namespace) -> int:
+    """Run the seven-check audit (and optional Ed25519 verify) on every
+    entry in ``audit_pinned_models`` of the chosen config. Designed for
+    release CI — exits non-zero on any HIGH finding or verify failure.
+    """
+    from mind_mem.audit_pinned import (
+        PinnedConfigError,
+        audit_pinned,
+        format_pinned_report_text,
+    )
+
+    try:
+        report = audit_pinned(
+            config_path=args.config,
+            workspace=os.path.dirname(os.path.abspath(args.config)) or ".",
+        )
+    except PinnedConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        print(format_pinned_report_text(report))
+
+    # Honour --fail-on-missing — by default a missing pinned path is a
+    # warning so a freshly-cloned repo without checkpoints checked in
+    # still passes.
+    if args.fail_on_missing:
+        for f in report.findings:
+            if not f.exists:
+                print(
+                    f"error: pinned path missing and --fail-on-missing set: {f.path}",
+                    file=sys.stderr,
+                )
+                return 2
+
+    return 0 if report.passed else 1
+
+
 def _cmd_verify_model(args: argparse.Namespace) -> int:
     from mind_mem.model_signing import ED25519_PUBLIC_KEY_BYTES, verify_model
 
@@ -1164,6 +1204,32 @@ def build_parser() -> argparse.ArgumentParser:
     g_remove.add_argument("path")
     g_remove.add_argument("--json", action="store_true")
     g_remove.set_defaults(func=_cmd_gate_remove)
+
+    # audit-pinned — release-CI gate that audits every pinned model
+    p_pinned = sub.add_parser(
+        "audit-pinned",
+        help=(
+            "Run the seven-check audit (and optional Ed25519 verify) on every "
+            "entry in audit_pinned_models of mind-mem.json. Designed for release "
+            "CI — non-zero exit on any HIGH finding or verify failure."
+        ),
+    )
+    p_pinned.add_argument(
+        "--config",
+        default="mind-mem.json",
+        help="Path to mind-mem.json (default: ./mind-mem.json).",
+    )
+    p_pinned.add_argument(
+        "--fail-on-missing",
+        action="store_true",
+        help=("Treat a missing pinned path as a hard failure (exit 2). By default, missing paths are skipped with a SKIP marker."),
+    )
+    p_pinned.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON instead of human-readable lines.",
+    )
+    p_pinned.set_defaults(func=_cmd_audit_pinned)
 
     # ── inspect — full block fields + provenance tree ──────────────────────
     p_inspect = sub.add_parser(
