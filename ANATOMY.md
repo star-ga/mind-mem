@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 711 | **Est. tokens:** ~1,446,591
-**Generated:** 2026-05-03 07:02 UTC
+**Files:** 711 | **Est. tokens:** ~1,446,748
+**Generated:** 2026-05-03 07:17 UTC
 
 ## Token Budget Guide
 
@@ -62,7 +62,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 245 | ~486,404 |
+| `tests/` | 245 | ~486,561 |
 | `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -759,7 +759,7 @@
 - `test_mic_map_bench.py` (~2544 tok, huge) — pytest-benchmark suite for ``mind_mem.mic_map``.
 - `test_mic_map_cli.py` (~1613 tok, huge) — Integration tests for the ``mm mic`` CLI subcommand.
 - `test_mic_map_fuzz.py` (~2243 tok, huge) — Property-based fuzz tests for ``mind_mem.mic_map``.
-- `test_mic_map_mcp.py` (~1655 tok, huge) — Integration tests for the MIC/MAP MCP tools (``mic_convert_tool``,
+- `test_mic_map_mcp.py` (~1812 tok, huge) — Integration tests for the MIC/MAP MCP tools (``mic_convert_tool``,
 - `test_mic_map.py` (~3230 tok, huge) — Tests for ``mind_mem.mic_map`` — STARGA mic@2 / mic-b serialization.
 - `test_mic_map_stream.py` (~2770 tok, huge) — Streaming-parser tests for ``mind_mem.mic_map.parse_micb_stream``.
 - `test_mind_ffi.py` (~291 tok, medium) — Tests for MIND FFI module."""

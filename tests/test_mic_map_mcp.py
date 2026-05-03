@@ -21,6 +21,7 @@ import json
 
 import pytest
 
+from mind_mem.mcp.infra.rate_limit import _rate_limiters, _rate_limiters_lock
 from mind_mem.mcp.tools.mic_map import (
     MAX_INPUT_BYTES,
     mic_convert_tool,
@@ -35,6 +36,21 @@ from mind_mem.mic_map import (
     emit_mic2,
     emit_micb,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_mcp_rate_limiters():
+    """Clear the per-client MCP rate-limiter cache before each test.
+
+    The limiter is process-global keyed by client_id (``"default"`` in
+    tests). Without this reset, by the time pytest reaches this file
+    the budget for ``"default"`` is exhausted by earlier MCP tool
+    calls in the session, and the tool returns a rate-limit envelope
+    instead of the format-error envelope these tests assert on.
+    """
+    with _rate_limiters_lock:
+        _rate_limiters.clear()
+    yield
 
 
 def _residual_block() -> Graph:
