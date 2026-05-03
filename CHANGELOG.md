@@ -35,6 +35,19 @@ All notable changes to mind-mem are documented in this file.
   failures). The `replicas` field must be a list of DSN strings;
   non-list values raise `ValueError`.
 
+- **Inbox folder ingestion** (`src/mind_mem/inbox.py`).
+  Drop a file into a watched directory, mind-mem classifies by
+  extension and routes to the right ingestion path. Text path is
+  stdlib-only (no new deps); image / audio / PDF paths raise a clear
+  error pointing at the optional `multimodal` extra. After processing,
+  files move to `inbox/_processed/<ts>/` (success) or
+  `inbox/_failed/<ts>/<file>.error.txt` (failure) — no destruction,
+  full audit trail. New CLI subcommand `mm inbox-watch <dir>
+  [--interval N] [--once]`. New block prefix `INBOX-` mapped to
+  `memory/INBOX.md` (added to `_BLOCK_PREFIX_MAP` in both
+  `block_store.py` and `mcp/tools/memory_ops.py` to keep the maps in
+  lockstep, per the duplicate-detection comment).
+
 - **Background daemon** (`src/mind_mem/daemon.py`).
   `mm daemon` blocks and runs configured periodic jobs (`dream_cycle`,
   `intel_scan`, `entity_ingest`, `transcript_scan`) on internal
@@ -59,6 +72,14 @@ All notable changes to mind-mem are documented in this file.
   workspace, no-enabled-tasks guard, dry-run last-run tracking,
   exception isolation, stop-event short-circuit), and `run_daemon`
   once-mode behaviour.
+- `tests/test_inbox.py` — 24 tests covering classification (every
+  routed extension + case insensitivity + unknown), text ingestion
+  (block written, empty file, oversize-rejected, filename
+  sanitization), `process_file` staging (success → `_processed`,
+  unknown ext → `_failed` with `.error.txt` sidecar, image handler
+  raises with `multimodal` hint), and InboxWatcher lifecycle
+  (validation, directory creation, mtime-ordered processing,
+  start/stop with live drop-in, callback exception isolation).
 - `tests/test_storage_factory.py` — added 2 tests for the replicated
   routing branch (replicas-must-be-list, empty-list-yields-bare-store).
 

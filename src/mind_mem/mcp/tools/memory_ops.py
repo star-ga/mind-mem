@@ -52,6 +52,8 @@ _BLOCK_PREFIX_MAP = {
     "PRJ": ("entities", "projects.md"),
     "PER": ("entities", "people.md"),
     "TOOL": ("entities", "tools.md"),
+    # v3.9: inbox folder ingestion (text + PDF) writes here.
+    "INBOX": ("memory", "INBOX.md"),
 }
 
 

@@ -953,6 +953,36 @@ def _cmd_daemon(args: argparse.Namespace) -> int:
     return run_daemon(_workspace(), dry_run=args.dry_run, once=args.once)
 
 
+def _cmd_inbox_watch(args: argparse.Namespace) -> int:
+    """Watch an inbox directory and route files into the workspace (v3.9)."""
+    import time as _time
+
+    from mind_mem.inbox import InboxWatcher
+
+    ws = _workspace()
+    watcher = InboxWatcher(workspace=ws, inbox=args.directory, interval=args.interval)
+    if args.once:
+        results = watcher.process_once()
+        ok = sum(1 for r in results if r.ok)
+        bad = len(results) - ok
+        print(f"mind-mem inbox-watch: processed {ok} ok, {bad} failed (of {len(results)})")
+        for r in results:
+            marker = "+" if r.ok else "!"
+            extra = r.block_id if r.ok else (r.error or "")
+            print(f"  [{marker}] {r.handler:6s} {r.path}  {extra}")
+        return 0 if bad == 0 else 1
+
+    print(f"mind-mem inbox-watch: workspace={ws} inbox={args.directory} interval={args.interval}s")
+    watcher.start()
+    try:
+        while True:
+            _time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nshutting down ...")
+        watcher.stop()
+    return 0
+
+
 def _cmd_audit_model(args: argparse.Namespace) -> int:
     from mind_mem.model_audit import audit_model, format_report_text
 
@@ -1557,6 +1587,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_daemon.add_argument("--dry-run", action="store_true", help="Log what would run, do not execute.")
     p_daemon.add_argument("--once", action="store_true", help="Run every enabled task once and exit.")
     p_daemon.set_defaults(func=_cmd_daemon)
+
+    # inbox-watch — v3.9 inbox folder ingestion
+    p_inbox = sub.add_parser(
+        "inbox-watch",
+        help="Watch an inbox directory; route files by extension into the workspace.",
+    )
+    p_inbox.add_argument("directory", help="Path to the inbox directory (created if absent).")
+    p_inbox.add_argument("--interval", type=float, default=5.0, help="Polling interval in seconds (>=0.5).")
+    p_inbox.add_argument("--once", action="store_true", help="Drain inbox once and exit.")
+    p_inbox.set_defaults(func=_cmd_inbox_watch)
 
     # audit-model — static security scan of any local model checkpoint
     p_audit = sub.add_parser(

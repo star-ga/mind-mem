@@ -246,6 +246,8 @@ _BLOCK_PREFIX_MAP: dict[str, tuple[str, str]] = {
     "PRJ": ("entities", "projects.md"),
     "PER": ("entities", "people.md"),
     "TOOL": ("entities", "tools.md"),
+    # v3.9: inbox folder ingestion (text + PDF) writes here.
+    "INBOX": ("memory", "INBOX.md"),
 }
 
 _BLOCK_ID_RE = _re.compile(r"^([A-Z]+)-[a-zA-Z0-9_.-]+$")

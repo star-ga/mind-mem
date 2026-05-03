@@ -327,23 +327,37 @@ multi-LLM backends, and MCP compatibility — features mind-mem already has.
 Three patterns from their design are worth adopting on top of mind-mem's
 production-grade foundation:
 
-### 1. Inbox folder ingestion
+### 1. Inbox folder ingestion — **landed (in-progress branch)**
 
-Drop any file into `./inbox/`, mind-mem detects, classifies by extension,
-routes to the right ingestion path:
+> **Status (2026-05-03):** implemented on `feat/v3.9-http-transport`.
+> New module `src/mind_mem/inbox.py`, 24 tests in
+> `tests/test_inbox.py` (all passing). CLI subcommand
+> `mm inbox-watch <dir> [--once]` wired. New block prefix `INBOX-`
+> mapped to `memory/INBOX.md` (both `_BLOCK_PREFIX_MAP` locations
+> updated in lockstep).
 
-- text (`.txt`, `.md`, `.json`, `.csv`, `.log`, `.xml`, `.yaml`) →
-  markdown block (existing path)
-- image (`.png`, `.jpg`, `.gif`, `.webp`) → ImageBlock
-  (existing `multi_modal.py` schema; embedding via optional CLIP / SigLIP)
-- audio (`.mp3`, `.wav`, `.flac`, `.m4a`) → AudioBlock with transcript
-  (existing `multi_modal.py` schema; transcription via optional Whisper)
-- documents (`.pdf`) → text-extract → markdown block
-  (via optional `pypdf` / `pdfplumber`)
+Drop any file into a watched inbox directory, mind-mem detects,
+classifies by extension, routes to the right ingestion path:
 
-CLI: `mm watch ./inbox/`. Extends existing `watcher.py` (currently `.md`-only)
-with multi-format routing. Heavy dependencies (CLIP / Whisper / pdf-extract)
-stay optional behind extras: `pip install mind-mem[multimodal]`.
+- ✓ text (`.txt`, `.md`, `.json`, `.csv`, `.log`, `.xml`, `.yaml`,
+  `.yml`) → markdown block (stdlib only).
+- · image (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) → ImageBlock
+  scaffold raises `NotImplementedError` with a clear pointer at the
+  optional `multimodal` extra (CLIP / SigLIP embedding wires in v3.10).
+- · audio (`.mp3`, `.wav`, `.flac`, `.m4a`) → AudioBlock scaffold,
+  same posture (Whisper transcription wires in v3.10).
+- ✓ documents (`.pdf`) → `pypdf` text-extract → markdown block (the
+  optional dep is auto-detected at handler time).
+
+After processing, files move to `inbox/_processed/<ts>/<file>` on
+success or `inbox/_failed/<ts>/<file>` (with sidecar
+`<file>.error.txt`) on failure — no destruction, full audit trail.
+The watcher polls (default 5s) so it works across volumes that
+don't support inotify; mtime ordering keeps the most-recent file at
+the end of the queue.
+
+Heavy dependencies (CLIP / Whisper / pdf-extract) stay optional behind
+the `multimodal` extra: `pip install mind-mem[multimodal]`.
 
 Solves the "how do I get content into mind-mem" friction for non-technical
 users. Files = universal interface, no API knowledge needed.

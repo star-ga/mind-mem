@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 721 | **Est. tokens:** ~1,470,738
-**Generated:** 2026-05-03 11:33 UTC
+**Files:** 723 | **Est. tokens:** ~1,477,274
+**Generated:** 2026-05-03 11:38 UTC
 
 ## Token Budget Guide
 
@@ -30,7 +30,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 63 | ~99,270 |
+| `docs/` | 63 | ~99,452 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -54,15 +54,15 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 151 | ~522,275 |
+| `src/mind_mem/` | 152 | ~526,253 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,903 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
-| `src/mind_mem/mcp/tools/` | 20 | ~46,434 |
+| `src/mind_mem/mcp/tools/` | 20 | ~46,458 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 248 | ~495,089 |
+| `tests/` | 249 | ~497,441 |
 | `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -216,7 +216,7 @@
 - `review-database-v3.2.0.md` (~3171 tok, huge) — Database Review — PostgresBlockStore v3.2.0
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — mind-mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — mind-mem v3.2.0
-- `roadmap.md` (~9693 tok, huge) — Roadmap
+- `roadmap.md` (~9875 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2257 tok, huge) — mind-mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
 - `security-audit-sow.md` (~3336 tok, huge) — mind-mem — External Security Audit Statement of Work (SoW)
@@ -405,7 +405,7 @@
 - `block_store_encrypted.py` (~2313 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `block_store_postgres.py` (~11346 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~2095 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
-- `block_store.py` (~10443 tok, huge) — BlockStore abstraction — decouples block access from storage format.
+- `block_store.py` (~10467 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `calibration.py` (~4838 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
 - `capture.py` (~3722 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
@@ -452,6 +452,7 @@
 - `hook_installer.py` (~9442 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `http_transport.py` (~4389 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
 - `hybrid_recall.py` (~8896 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `inbox.py` (~3556 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~694 tok, large) — # Mind Mem — Memory + Immune System for AI agents
 - `init_workspace.py` (~2131 tok, huge) — mind-mem workspace initializer. Zero external deps.
@@ -499,7 +500,7 @@
 - `_helpers.py` (~816 tok, large) — Shared tool-internal helpers — workspace paths + lazy-init singletons.
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
-- `memory_ops.py` (~7074 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
+- `memory_ops.py` (~7098 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `mic_map.py` (~2436 tok, huge) — MIC/MAP serialization MCP tools — wraps ``mind_mem.mic_map``.
 - `model.py` (~2586 tok, huge) — Model audit / signing MCP tools — wraps ``mind_mem.model_audit``,
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
@@ -516,7 +517,7 @@
 - `mind_ffi.py` (~5481 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~17087 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~17485 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `model_audit.py` (~4370 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
 - `model_gate.py` (~2549 tok, huge) — Load-gate registry for ``mm audit-model`` checkpoints.
 - `model_provenance.py` (~1751 tok, huge) — Provenance allowlist check for ``mm audit-model`` checkpoints.
@@ -737,6 +738,7 @@
 - `test_http_transport.py` (~3695 tok, huge) — Tests for the v3.9 HTTP transport adapter.
 - `test_hybrid_recall.py` (~2855 tok, huge) — Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
 - `test_hybrid_search.py` (~599 tok, large) — Tests for hybrid search functionality."""
+- `test_inbox.py` (~2352 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_index_stats.py` (~316 tok, medium) — Tests for index statistics."""
 - `test_init_workspace.py` (~2280 tok, huge) — Tests for init_workspace — config validation and workspace scaffolding."""
