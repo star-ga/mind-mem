@@ -380,11 +380,15 @@ def _handle_delete_memory(workspace: str, block_id: str) -> tuple[int, dict[str,
     try:
         if hasattr(store, "get_by_id") and store.get_by_id(block_id) is None:
             return (404, {"error": "block not found", "id": block_id})
-    except Exception:
+    except Exception as exc:
         # Treat get_by_id errors as best-effort — fall through to the
         # delete path which handles a missing block via its own return
-        # contract.
-        pass
+        # contract. Log at debug so the precheck failure is visible
+        # without surfacing as a server error.
+        _log.debug(
+            "delete_memory_precheck_failed",
+            extra={"error": _safe_log(exc), "block_id": _safe_log(block_id)},
+        )
 
     try:
         removed = store.delete_block(block_id)
@@ -432,7 +436,14 @@ def _handle_clear(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, 
             try:
                 if store.delete_block(bid):
                     deleted += 1
-            except Exception:  # one bad block must not abort the wipe
+            except Exception as block_exc:
+                # One bad block must not abort the wipe — record the
+                # failure at debug so the operator can investigate
+                # individual failures without losing the bulk-clear.
+                _log.debug(
+                    "clear_block_skip",
+                    extra={"block_id": _safe_log(bid), "error": _safe_log(block_exc)},
+                )
                 continue
     except Exception as exc:
         _log.error("clear_failed", extra={"error": str(exc)})
@@ -524,7 +535,11 @@ def build_handler(
             if err:
                 _write_status(self, err, "bad request body")
                 return
-            assert payload is not None  # mypy: err==0 implies non-None
+            if payload is None:
+                # err==0 implies non-None payload, but be defensive
+                # rather than assert — a stale handler shouldn't 500.
+                _write_status(self, 400, "empty body")
+                return
             if base == PATH_QUERY:
                 status, body = _handle_query(workspace, payload)
                 _write_json(self, status, body)

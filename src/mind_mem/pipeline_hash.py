@@ -198,7 +198,11 @@ def pipeline_dirty_blocks(workspace: str) -> list[str]:
     block.
     """
     current = current_pipeline_hash(workspace)
-    assert isinstance(current, str)  # narrowing for mypy
+    if not isinstance(current, str):
+        # current_pipeline_hash returns ``str`` on the no-args call; this
+        # check makes the runtime contract explicit so the type narrows
+        # for both mypy and bandit.
+        return []
 
     from .storage import get_block_store
 
