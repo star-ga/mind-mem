@@ -460,12 +460,26 @@ def recall(
             b["_source_label"] = label
             all_blocks.append(b)
 
-    # If agent has namespace, also search agent-private corpus files
+    # If agent has namespace, also search agent-private corpus files.
+    # Defense-in-depth: even after _AGENT_ID_RE rejects traversal in the
+    # raw input, normalize the resolved path and verify it stays inside
+    # the workspace root. This is the canonical CodeQL pattern for
+    # py/path-injection (see the rule's documentation example #3).
     if ns_manager and agent_id:
+        workspace_real = os.path.realpath(workspace)
         agent_ns = f"agents/{agent_id}"
         for label, rel_path in CORPUS_FILES.items():
             ns_path = os.path.join(agent_ns, rel_path)
-            full_path = os.path.join(workspace, ns_path)
+            full_path = os.path.normpath(os.path.join(workspace, ns_path))
+            # Reject any resolved path that escapes the workspace root
+            # (cannot happen given the regex, but the explicit check
+            # makes the cleansing visible to static analyzers).
+            if not full_path.startswith(workspace_real + os.sep) and full_path != workspace_real:
+                # Try the realpath form too, in case workspace itself is a symlink.
+                resolved = os.path.realpath(full_path)
+                if not resolved.startswith(workspace_real + os.sep):
+                    _log.warning("agent_corpus_path_escaped", agent_id=agent_id, ns_path=ns_path)
+                    continue
             if not os.path.isfile(full_path):
                 continue
             if not ns_manager.can_read(ns_path):
