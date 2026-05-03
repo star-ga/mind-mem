@@ -321,7 +321,7 @@ def _cmd_migrate_store(args: argparse.Namespace) -> int:
             cur.execute(_pgsql.SQL("SELECT COUNT(*) FROM {s}.blocks").format(s=_pgsql.Identifier(args.schema)))
             target_count = cur.fetchone()[0]
 
-    ts = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     receipt = {
         "timestamp": ts,
         "from_backend": args.from_backend,

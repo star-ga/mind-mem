@@ -658,7 +658,7 @@ class PostgresBlockStore:
                 "         embedding  = EXCLUDED.embedding,"
                 "         updated_at = EXCLUDED.updated_at",
             )
-            params = (block_id, file_path, content, metadata_json, _embedding_to_pg(embedding))
+            params: tuple[Any, ...] = (block_id, file_path, content, metadata_json, _embedding_to_pg(embedding))
         else:
             sql = _sql(
                 self._schema,

@@ -232,10 +232,7 @@ class TestPgVectorHardening:
         from mind_mem.block_store_postgres import _ddl
 
         sql = _ddl("mind_mem").as_string(None)
-        assert (
-            "to_tsvector('english', content || ' ' || COALESCE(metadata->>'Statement', ''))"
-            in sql
-        )
+        assert "to_tsvector('english', content || ' ' || COALESCE(metadata->>'Statement', ''))" in sql
 
     def test_embedding_to_pg_rejects_nan(self) -> None:
         """NaN in the embedding silently poisons RRF ranking via
