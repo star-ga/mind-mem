@@ -4,7 +4,21 @@
 > in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
 > full milestone breakdown.
 
-## v3.8.5 (Current — released 2026-05-02)
+## v3.8.6 (Current — released 2026-05-02)
+
+Backend wiring for the load-gate. The extractor's transformers
+backend now calls `mind_mem.model_gate.gate_check` before
+`AutoModel.from_pretrained` resolves a local directory checkpoint,
+closing the loop end-to-end (audit → sign → gate → backend
+refusal). HF hub IDs and single-file binaries pass through unchanged
+— the gate's manifest contract is for HF-style directory
+checkpoints. Two env-vars: `MIND_MEM_SKIP_GATE=1` bypasses entirely,
+`MIND_MEM_TRUST_WITHOUT_AUDIT=1` forwards the override flag to
+`gate_check` (still recorded in the ledger). Fail-closed by default —
+audit failures raise `RuntimeError`. 11 unit tests in
+`tests/test_llm_extractor_gate.py`. No breaking changes.
+
+## v3.8.5 (Released 2026-05-02)
 
 MIC/MAP Python toolchain — STARGA-native serialization for MIND IR
 graphs. New `mind_mem.mic_map` module ports the `mic@2` (text) and

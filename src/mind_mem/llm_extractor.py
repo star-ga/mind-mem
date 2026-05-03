@@ -255,12 +255,71 @@ def _query_openai_compatible(prompt: str, model: str, base_url: str) -> str:
     return ""
 
 
+def _gate_check_local(model: str, *, label: str = "transformers") -> None:
+    """Run :func:`mind_mem.model_gate.gate_check` before consuming a local
+    checkpoint directory.
+
+    Bypassed when:
+
+      * ``MIND_MEM_SKIP_GATE=1`` is set (operator escape hatch).
+      * ``model`` is not an existing path (HF hub IDs like
+        ``"Qwen/Qwen3-8B"`` are not local checkpoints).
+      * ``model`` resolves to a file rather than a directory
+        (e.g. a single ``.gguf``); the gate audits HF-style directory
+        checkpoints — single-file binaries fall outside its scope.
+
+    Honours ``MIND_MEM_TRUST_WITHOUT_AUDIT=1`` to forward the same flag
+    to :func:`gate_check` (still recorded in the registry as an
+    auditable override). Raises ``RuntimeError`` when the gate refuses
+    the load — mind-mem's contract is fail-closed, not warn-and-load.
+    """
+    if os.environ.get("MIND_MEM_SKIP_GATE") == "1":
+        _log.debug("gate skipped via MIND_MEM_SKIP_GATE for %s", model)
+        return
+    from pathlib import Path
+
+    p = Path(model).expanduser()
+    if not p.exists():
+        # Hub ID or otherwise non-local — gate doesn't apply. The
+        # backend will resolve via the HF cache; first-time fetches
+        # are trusted to the existing transformers cache (if a future
+        # release wants to gate post-fetch, that's a separate change).
+        return
+    if not p.is_dir():
+        # Single-file binaries (.gguf, .bin) — not in scope for the
+        # current gate, which manifests directories.
+        return
+
+    from mind_mem.model_gate import gate_check
+
+    trust = os.environ.get("MIND_MEM_TRUST_WITHOUT_AUDIT") == "1"
+    decision = gate_check(p, trust_without_audit=trust)
+    if not decision.passed:
+        raise RuntimeError(
+            f"mind-mem gate refused load of {label} checkpoint at {model!r}: "
+            f"reason={decision.reason}; "
+            f"set MIND_MEM_TRUST_WITHOUT_AUDIT=1 to override "
+            f"(records an auditable entry in the gate ledger), "
+            f"or MIND_MEM_SKIP_GATE=1 to bypass entirely."
+        )
+    _log.info(
+        "gate %s for %s (%s)",
+        "ALLOW" if decision.passed else "BLOCK",
+        model,
+        decision.reason,
+    )
+
+
 def _query_transformers(prompt: str, model: str) -> str:
     """Load the model in-process and run a single generate call.
 
     Caches the loaded model + tokenizer per *model* path so subsequent
     calls don't pay the load cost. Use only when no daemon is running;
     much slower than vLLM/Ollama for sustained workloads.
+
+    Local directory checkpoints clear ``mind_mem.model_gate.gate_check``
+    before the first load (per cached entry). HF hub IDs and single-file
+    binaries pass through unchanged — see :func:`_gate_check_local`.
     """
     import torch  # type: ignore[import-not-found]
     from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-not-found]
@@ -270,6 +329,7 @@ def _query_transformers(prompt: str, model: str) -> str:
         cache = {}
         _query_transformers._cache = cache  # type: ignore[attr-defined]
     if model not in cache:
+        _gate_check_local(model, label="transformers")
         tok = AutoTokenizer.from_pretrained(model, trust_remote_code=True)  # nosec B615 — model path is from operator-controlled mind-mem.json config, not user input; revision pinning is the operator's responsibility
         if tok.pad_token is None:
             tok.pad_token = tok.eos_token

@@ -1293,12 +1293,18 @@ first-class memory sources rather than screenshots-in-attachments.
   and all 13 dtypes. Replaces JSON for IR-graph payloads inside
   mind-mem (audit reports stay JSON — those are documents, not
   graphs). **63 unit tests** in ``tests/test_mic_map.py``.
-- [ ] **Backend wiring** — auto-invoke ``gate_check`` from
-  ``backends.transformers`` (and optionally ``backends.hf``) when
-  any local checkpoint is loaded. Deferred to v3.8.6 because the
-  extractor backend's loading shape is currently coupled to
-  ``llm_extractor.py`` and needs a small refactor to take a
-  pre-validated path.
+- [x] **Backend wiring** — shipped in v3.8.6 (2026-05-02).
+  ``mind_mem.llm_extractor._gate_check_local`` runs before
+  ``AutoModel.from_pretrained`` resolves a local directory
+  checkpoint. HF hub IDs and single-file binaries (``.gguf`` /
+  ``.bin``) bypass — the gate's manifest contract is for HF-style
+  directory checkpoints. ``MIND_MEM_SKIP_GATE=1`` opts out
+  entirely; ``MIND_MEM_TRUST_WITHOUT_AUDIT=1`` forwards
+  ``trust_without_audit`` to ``gate_check`` and records the
+  override in ``~/.mind-mem/model_gate.json``. Failed audits raise
+  ``RuntimeError`` with both override env-vars named in the
+  message — fail-closed by default. **11 unit tests** in
+  ``tests/test_llm_extractor_gate.py``.
 - [ ] **CI hook** — `mm audit-model` + `mm verify-model` runs against
   every model pinned in `mind-mem.json` on release CI; fails build on
   HIGH findings or any verify-model failure.

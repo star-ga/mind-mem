@@ -2,6 +2,67 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.6 (2026-05-02)
+
+**Backend wiring — gate enforcement on local checkpoint loads.**
+Sixth slice of the v3.8.0 plan in ``ROADMAP.md``. The
+``_query_transformers`` extractor backend now calls
+``mind_mem.model_gate.gate_check`` before
+``AutoModel.from_pretrained`` resolves a local directory
+checkpoint. Closes the loop end-to-end: ``mm audit-model`` →
+``mm sign-model`` → ``mm gate check`` → backend refuses to load
+unaudited / drifted / failed checkpoints unless the operator
+explicitly overrides. No breaking changes — HF hub IDs and
+single-file binaries pass through unchanged.
+
+### Added
+
+- **``mind_mem.llm_extractor._gate_check_local(model, *,
+  label="transformers")``** — gate-enforcement helper. Resolves
+  ``model`` to a path; if it's an existing directory, runs
+  ``gate_check`` and raises ``RuntimeError`` on failure. HF hub IDs
+  (path doesn't exist) and single-file binaries (``.gguf`` /
+  ``.bin``) bypass — the gate's manifest contract is for
+  HF-style directory checkpoints.
+- **``MIND_MEM_SKIP_GATE=1``** — env-var bypass for ad-hoc loads of
+  known-good checkpoints. Skips ``gate_check`` entirely; nothing
+  is recorded in the registry.
+- **``MIND_MEM_TRUST_WITHOUT_AUDIT=1``** — env-var that forwards
+  ``trust_without_audit=True`` to ``gate_check``. The override is
+  recorded in ``~/.mind-mem/model_gate.json`` so the next caller
+  sees the auditable entry.
+
+### Changed
+
+- **``_query_transformers``** — now calls ``_gate_check_local``
+  before the first ``from_pretrained`` for a given model path.
+  Cached subsequent calls (same path) skip the gate by virtue of
+  the existing per-path cache. Idempotent re-loads of unchanged
+  paths use ``gate_check``'s ``trusted_fresh`` fast path.
+
+### Tests
+
+- **``tests/test_llm_extractor_gate.py``** — 11 new tests across
+  6 classes: bypass paths (``MIND_MEM_SKIP_GATE=1`` / hub ID /
+  single-file), gate-allow on a clean checkpoint + fast-path on
+  the second call, gate-block raises ``RuntimeError`` with an
+  error message that names both override env-vars,
+  ``MIND_MEM_TRUST_WITHOUT_AUDIT=1`` rescue, label propagation
+  (default ``"transformers"`` and a custom label) so operators
+  can see which backend tripped the gate, and drift round-trip
+  (file mutation triggers a re-audit that still passes for a
+  clean change).
+
+### Migration
+
+No migration required. The gate enforces fail-closed behaviour by
+default — an operator who points mind-mem at a previously-unaudited
+local checkpoint will now see an audit run on first load. If the
+audit fails, ``MIND_MEM_TRUST_WITHOUT_AUDIT=1`` overrides (with a
+ledger entry); ``MIND_MEM_SKIP_GATE=1`` opts out entirely. Existing
+deployments using HF hub IDs or remote daemons (ollama, vLLM,
+openai-compatible, llama-cpp single file) are unaffected.
+
 ## 3.8.5 (2026-05-02)
 
 **MIC/MAP Python toolchain — STARGA-native serialization.** First
