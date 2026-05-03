@@ -76,9 +76,7 @@ def mic_payloads() -> dict:
 
 class TestMicConvertTool:
     def test_mic2_to_micb_byte_identical(self, mic_payloads: dict) -> None:
-        result = json.loads(
-            mic_convert_tool(mic_payloads["mic2_text"], input_format="mic2", output_format="micb")
-        )
+        result = json.loads(mic_convert_tool(mic_payloads["mic2_text"], input_format="mic2", output_format="micb"))
         assert result["ok"] is True
         assert result["input_format"] == "mic2"
         assert result["output_format"] == "micb"
@@ -89,25 +87,19 @@ class TestMicConvertTool:
         assert result["type_count"] == 2
 
     def test_micb_to_mic2_byte_identical(self, mic_payloads: dict) -> None:
-        result = json.loads(
-            mic_convert_tool(mic_payloads["micb_b64"], input_format="micb", output_format="mic2")
-        )
+        result = json.loads(mic_convert_tool(mic_payloads["micb_b64"], input_format="micb", output_format="mic2"))
         assert result["ok"] is True
         assert result["output"] == mic_payloads["mic2_text"]
 
     def test_auto_detect_mic2(self, mic_payloads: dict) -> None:
         # auto-detect on text — leading "mic@2"
-        result = json.loads(
-            mic_convert_tool(mic_payloads["mic2_text"], input_format="auto", output_format="micb")
-        )
+        result = json.loads(mic_convert_tool(mic_payloads["mic2_text"], input_format="auto", output_format="micb"))
         assert result["input_format"] == "mic2"
         assert base64.b64decode(result["output"]) == mic_payloads["micb_bytes"]
 
     def test_auto_detect_micb(self, mic_payloads: dict) -> None:
         # auto-detect on base64 mic-b — MICB magic after decode
-        result = json.loads(
-            mic_convert_tool(mic_payloads["micb_b64"], input_format="auto", output_format="mic2")
-        )
+        result = json.loads(mic_convert_tool(mic_payloads["micb_b64"], input_format="auto", output_format="mic2"))
         assert result["input_format"] == "micb"
         assert result["output"] == mic_payloads["mic2_text"]
 
@@ -145,16 +137,12 @@ class TestMicInspectTool:
 
 class TestErrorPaths:
     def test_invalid_input_format(self, mic_payloads: dict) -> None:
-        result = json.loads(
-            mic_convert_tool(mic_payloads["mic2_text"], input_format="bogus", output_format="micb")
-        )
+        result = json.loads(mic_convert_tool(mic_payloads["mic2_text"], input_format="bogus", output_format="micb"))
         assert result["ok"] is False
         assert "input_format" in result["error"]
 
     def test_invalid_output_format(self, mic_payloads: dict) -> None:
-        result = json.loads(
-            mic_convert_tool(mic_payloads["mic2_text"], input_format="mic2", output_format="json")
-        )
+        result = json.loads(mic_convert_tool(mic_payloads["mic2_text"], input_format="mic2", output_format="json"))
         assert result["ok"] is False
         assert "output_format" in result["error"]
 

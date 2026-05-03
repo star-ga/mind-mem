@@ -948,9 +948,7 @@ def _cmd_mic_inspect(args: argparse.Namespace) -> int:
             elif isinstance(v, Param):
                 out["values"].append({"index": i, "kind": "param", "name": v.name, "type_idx": v.type_idx})
             elif isinstance(v, Node):
-                out["values"].append(
-                    {"index": i, "kind": "node", "opcode": v.opcode, "inputs": list(v.inputs)}
-                )
+                out["values"].append({"index": i, "kind": "node", "opcode": v.opcode, "inputs": list(v.inputs)})
         print(json.dumps(out, indent=2))
     else:
         print(f"format:        {fmt}")
@@ -1371,19 +1369,13 @@ def build_parser() -> argparse.ArgumentParser:
     # ── mic — MIND IR graph serialization (mic@2 / mic-b) ─────────────────
     p_mic = sub.add_parser(
         "mic",
-        help=(
-            "MIND IR graph serialization (mic@2 text + mic-b binary). "
-            "Subcommands: convert, inspect."
-        ),
+        help=("MIND IR graph serialization (mic@2 text + mic-b binary). Subcommands: convert, inspect."),
     )
     mic_sub = p_mic.add_subparsers(dest="mic_action", required=True)
 
     p_mic_convert = mic_sub.add_parser(
         "convert",
-        help=(
-            "Convert a graph between mic@2 (text) and mic-b (binary). "
-            "Round-trips byte-for-byte."
-        ),
+        help=("Convert a graph between mic@2 (text) and mic-b (binary). Round-trips byte-for-byte."),
     )
     p_mic_convert.add_argument("path", help="Input file (auto-detect format).")
     p_mic_convert.add_argument(
@@ -1394,7 +1386,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output format.",
     )
     p_mic_convert.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         default="-",
         dest="mic_out",
         help="Output file (default: stdout). Binary written raw, text as UTF-8.",
@@ -1403,10 +1396,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_mic_inspect = mic_sub.add_parser(
         "inspect",
-        help=(
-            "Print a structural summary of a MIC payload: type/value count, "
-            "output index, per-value tag (Arg/Param/Node + opcode)."
-        ),
+        help=("Print a structural summary of a MIC payload: type/value count, output index, per-value tag (Arg/Param/Node + opcode)."),
     )
     p_mic_inspect.add_argument("path", help="Input file (auto-detect format).")
     p_mic_inspect.add_argument(

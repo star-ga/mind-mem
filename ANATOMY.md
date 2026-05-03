@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 711 | **Est. tokens:** ~1,446,329
-**Generated:** 2026-05-03 06:41 UTC
+**Files:** 711 | **Est. tokens:** ~1,446,591
+**Generated:** 2026-05-03 07:02 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 32 | ~83,903 |
+| `./` | 32 | ~84,169 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 3 | ~1,010 |
 | `benchmarks/` | 26 | ~64,933 |
@@ -54,7 +54,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 149 | ~508,225 |
+| `src/mind_mem/` | 149 | ~508,190 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,903 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
@@ -62,7 +62,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 245 | ~486,373 |
+| `tests/` | 245 | ~486,404 |
 | `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -75,7 +75,7 @@
 
 ### `./`
 
-- `AGENTS.md` (~306 tok, medium) — Memory Context
+- `AGENTS.md` (~572 tok, large) — Memory Context
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: mind-mem (Commit 30d8b71)
 - `CLAUDE.md` (~1028 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
@@ -509,7 +509,7 @@
 - `mind_ffi.py` (~5481 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~13847 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~13812 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `model_audit.py` (~4370 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
 - `model_gate.py` (~2549 tok, huge) — Load-gate registry for ``mm audit-model`` checkpoints.
 - `model_provenance.py` (~1751 tok, huge) — Provenance allowlist check for ``mm audit-model`` checkpoints.
@@ -757,9 +757,9 @@
 - `test_mic_map_accel.py` (~1656 tok, huge) — Regression tests for the optional Cython accelerator at
 - `test_mic_map_adversarial.py` (~3397 tok, huge) — Adversarial corpus for ``mind_mem.mic_map`` parsers.
 - `test_mic_map_bench.py` (~2544 tok, huge) — pytest-benchmark suite for ``mind_mem.mic_map``.
-- `test_mic_map_cli.py` (~1549 tok, huge) — Integration tests for the ``mm mic`` CLI subcommand.
+- `test_mic_map_cli.py` (~1613 tok, huge) — Integration tests for the ``mm mic`` CLI subcommand.
 - `test_mic_map_fuzz.py` (~2243 tok, huge) — Property-based fuzz tests for ``mind_mem.mic_map``.
-- `test_mic_map_mcp.py` (~1688 tok, huge) — Integration tests for the MIC/MAP MCP tools (``mic_convert_tool``,
+- `test_mic_map_mcp.py` (~1655 tok, huge) — Integration tests for the MIC/MAP MCP tools (``mic_convert_tool``,
 - `test_mic_map.py` (~3230 tok, huge) — Tests for ``mind_mem.mic_map`` — STARGA mic@2 / mic-b serialization.
 - `test_mic_map_stream.py` (~2770 tok, huge) — Streaming-parser tests for ``mind_mem.mic_map.parse_micb_stream``.
 - `test_mind_ffi.py` (~291 tok, medium) — Tests for MIND FFI module."""

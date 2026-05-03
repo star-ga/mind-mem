@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -50,9 +51,12 @@ def _residual_block() -> Graph:
 
 
 def _run_mm(args: list[str], **kwargs) -> subprocess.CompletedProcess:
-    """Invoke `mm` via the installed entry point, capturing stdout/err."""
+    """Invoke ``mm_cli.main`` via ``python -m`` so the test doesn't depend
+    on the ``mm`` entry-point script being on PATH (editable installs put
+    the script in different places on macOS / Windows / Linux). Same
+    behaviour as ``mm <args>``; portable across the CI matrix."""
     return subprocess.run(
-        ["mm", *args],
+        [sys.executable, "-m", "mind_mem.mm_cli", *args],
         capture_output=True,
         check=False,
         text=False,  # bytes — mic-b output is binary
