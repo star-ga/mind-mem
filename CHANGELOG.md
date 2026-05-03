@@ -35,6 +35,19 @@ All notable changes to mind-mem are documented in this file.
   failures). The `replicas` field must be a list of DSN strings;
   non-list values raise `ValueError`.
 
+- **Hash-of-code pipeline invalidation** (`src/mind_mem/pipeline_hash.py`).
+  Computes a deterministic hash of the *currently configured*
+  extraction pipeline (package version + backend + model + extractor
+  source SHA-256 + prompt-template SHA-256). New helper
+  `pipeline_dirty_blocks(workspace)` returns block ids whose
+  `TransformHash` field doesn't match the current hash — caught by
+  prompt-engineering, model-upgrade, and library-version drift even
+  when source bytes are unchanged. v3.9 ships the inspection primitive
+  (`mm pipeline-status [--list-dirty] [--json]`); v3.10 wires
+  re-extraction into the dream cycle. Inspired by
+  `cocoindex-io/cocoindex` (Apache-2.0); concept only — no runtime
+  dep on cocoindex.
+
 - **Inbox folder ingestion** (`src/mind_mem/inbox.py`).
   Drop a file into a watched directory, mind-mem classifies by
   extension and routes to the right ingestion path. Text path is
@@ -72,6 +85,14 @@ All notable changes to mind-mem are documented in this file.
   workspace, no-enabled-tasks guard, dry-run last-run tracking,
   exception isolation, stop-event short-circuit), and `run_daemon`
   once-mode behaviour.
+- `tests/test_pipeline_hash.py` — 18 tests covering pure-function
+  determinism + collision resistance (NUL-separator preimage,
+  version/backend/model/extractor/template invalidation), config
+  loading edge cases (no config, malformed JSON, unknown backend
+  distinct hash, prompt-template path + content changes), and
+  workspace integration (`pipeline_dirty_blocks` reports blocks
+  without TransformHash, ignores blocks with matching hash, flags
+  blocks with stale hash).
 - `tests/test_inbox.py` — 24 tests covering classification (every
   routed extension + case insensitivity + unknown), text ingestion
   (block written, empty file, oversize-rejected, filename

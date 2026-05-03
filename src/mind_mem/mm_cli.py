@@ -953,6 +953,37 @@ def _cmd_daemon(args: argparse.Namespace) -> int:
     return run_daemon(_workspace(), dry_run=args.dry_run, once=args.once)
 
 
+def _cmd_pipeline_status(args: argparse.Namespace) -> int:
+    """Show the current pipeline hash + dirty-block count (v3.9)."""
+    from mind_mem.pipeline_hash import current_pipeline_hash, pipeline_dirty_blocks
+
+    ws = _workspace()
+    digest, inputs = current_pipeline_hash(ws, return_inputs=True)  # type: ignore[misc]
+    print(f"workspace            : {ws}")
+    print(f"current pipeline hash: {digest}")
+    print(f"  package_version    : {inputs.package_version}")
+    print(f"  backend            : {inputs.backend}")
+    print(f"  model              : {inputs.model}")
+    print(f"  extractor sha256   : {inputs.extractor_source_sha256[:16]}...")
+    print(f"  prompt template    : {inputs.prompt_template_sha256[:16] if inputs.prompt_template_sha256 else '(none)'}")
+
+    if not args.list_dirty:
+        return 0
+
+    dirty = pipeline_dirty_blocks(ws)
+    print(f"\ndirty blocks (transform_hash != current): {len(dirty)}")
+    if args.json:
+        import json as _json
+
+        print(_json.dumps({"current_hash": digest, "dirty_blocks": dirty}, sort_keys=True))
+        return 0
+    for bid in dirty[:50]:
+        print(f"  {bid}")
+    if len(dirty) > 50:
+        print(f"  ... and {len(dirty) - 50} more")
+    return 0
+
+
 def _cmd_inbox_watch(args: argparse.Namespace) -> int:
     """Watch an inbox directory and route files into the workspace (v3.9)."""
     import time as _time
@@ -1597,6 +1628,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_inbox.add_argument("--interval", type=float, default=5.0, help="Polling interval in seconds (>=0.5).")
     p_inbox.add_argument("--once", action="store_true", help="Drain inbox once and exit.")
     p_inbox.set_defaults(func=_cmd_inbox_watch)
+
+    # pipeline-status — v3.9 hash-of-code invalidation inspection
+    p_pipeline = sub.add_parser(
+        "pipeline-status",
+        help="Show current extractor pipeline hash + count of dirty (re-extract) blocks.",
+    )
+    p_pipeline.add_argument("--list-dirty", action="store_true", help="List the block ids whose transform_hash is stale.")
+    p_pipeline.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    p_pipeline.set_defaults(func=_cmd_pipeline_status)
 
     # audit-model — static security scan of any local model checkpoint
     p_audit = sub.add_parser(

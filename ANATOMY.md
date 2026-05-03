@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 723 | **Est. tokens:** ~1,477,274
-**Generated:** 2026-05-03 11:38 UTC
+**Files:** 725 | **Est. tokens:** ~1,481,988
+**Generated:** 2026-05-03 11:43 UTC
 
 ## Token Budget Guide
 
@@ -30,7 +30,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 63 | ~99,452 |
+| `docs/` | 63 | ~99,652 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -54,7 +54,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 152 | ~526,253 |
+| `src/mind_mem/` | 153 | ~528,760 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,903 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
@@ -62,7 +62,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 249 | ~497,441 |
+| `tests/` | 250 | ~499,448 |
 | `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -216,7 +216,7 @@
 - `review-database-v3.2.0.md` (~3171 tok, huge) — Database Review — PostgresBlockStore v3.2.0
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — mind-mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — mind-mem v3.2.0
-- `roadmap.md` (~9875 tok, huge) — Roadmap
+- `roadmap.md` (~10075 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2257 tok, huge) — mind-mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
 - `security-audit-sow.md` (~3336 tok, huge) — mind-mem — External Security Audit Statement of Work (SoW)
@@ -517,7 +517,7 @@
 - `mind_ffi.py` (~5481 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~17485 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~17919 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `model_audit.py` (~4370 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
 - `model_gate.py` (~2549 tok, huge) — Load-gate registry for ``mm audit-model`` checkpoints.
 - `model_provenance.py` (~1751 tok, huge) — Provenance allowlist check for ``mm audit-model`` checkpoints.
@@ -530,6 +530,7 @@
 - `observation_compress.py` (~1353 tok, large) — Observation Compression Layer for Mind-Mem.
 - `online_trainer.py` (~2751 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ontology.py` (~2843 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `pipeline_hash.py` (~2073 tok, huge) — Hash-of-code pipeline invalidation (v3.9.0 candidate).
 - `prefix_cache.py` (~3043 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `preimage.py` (~1102 tok, large) — # Copyright 2026 STARGA, Inc.
 - `project_profile.py` (~1681 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -790,6 +791,7 @@
 - `test_oidc_admin_enforcement.py` (~1716 tok, huge) — v3.2.1 — OIDC JWTs must pass through ``_require_admin`` checks.
 - `test_oidc_auth.py` (~2970 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
 - `test_ontology.py` (~2306 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_pipeline_hash.py` (~2007 tok, huge) — Tests for v3.9 hash-of-code pipeline invalidation."""
 - `test_postgres_block_store.py` (~5149 tok, huge) — v3.2.0 §1.4 PR-5 — PostgresBlockStore integration tests.
 - `test_postgres_replica_routing.py` (~1777 tok, huge) — v3.2.0 — tests for read-replica routing in ReplicatedPostgresBlockStore."""
 - `test_prefetch_context.py` (~1487 tok, large) — Tests for prefetch_context() in recall.py."""

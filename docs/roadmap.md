@@ -538,21 +538,39 @@ indexing (mtime + size + partial-hash via `sqlite_index.py`) and partial
 provenance (source path on each block), so the framework / multi-source
 connectors / Rust core / pipeline DAG don't fit. Two ideas do.
 
-### 1. Hash-of-code invalidation
+### 1. Hash-of-code invalidation — **inspection primitive landed (in-progress branch)**
+
+> **Status (2026-05-03):** inspection primitive implemented on
+> `feat/v3.9-http-transport`. New module
+> `src/mind_mem/pipeline_hash.py`, 18 tests in
+> `tests/test_pipeline_hash.py` (all passing). CLI subcommand
+> `mm pipeline-status [--list-dirty] [--json]` wired. Re-extraction
+> wiring into the dream cycle is **deferred to v3.10** — v3.9 ships
+> only the read-only "what is dirty" surface.
 
 Today `@memo` and re-extraction key off input hash only. When the
 extractor, chunker, or summarizer code changes (e.g. a sharper splitter,
 new persona prompt, model upgrade), affected blocks stay stale until a
-manual reindex. Add:
+manual reindex.
 
-- `transform_hash` field on each block — hash of the extractor pipeline
-  source (extractor function + chunker version + prompt template +
-  backend model id).
-- Indexer compares `block.transform_hash` to `current_pipeline_hash` on
-  startup and during dream cycle. Mismatch → re-extract that block, even
-  if source bytes are unchanged.
-- Surfaces as an MCP tool `pipeline_dirty_blocks()` for inspection and
-  `reindex(scope="dirty")` for targeted rebuild — no full reindex needed.
+Implemented (v3.9):
+
+- ✓ `current_pipeline_hash(workspace)` — hex SHA-256 over
+  `version | backend | model | extractor-source-sha256 |
+  prompt-template-sha256` (NUL-separated to resist concat collisions).
+- ✓ `TransformHash:` field on each block — operator-set today,
+  populated automatically by the dream cycle in v3.10.
+- ✓ `pipeline_dirty_blocks(workspace)` returns block ids where
+  `TransformHash` ≠ current hash. Blocks without `TransformHash`
+  (i.e. extracted before v3.9) are reported as dirty so they show up
+  for re-extraction.
+- ✓ `mm pipeline-status [--list-dirty]` surfaces it via CLI.
+
+Deferred to v3.10:
+
+- · Auto-stamp `TransformHash` on every new block at extraction time.
+- · `reindex(scope="dirty")` MCP tool for targeted rebuild.
+- · Dream-cycle hook: re-extract any dirty block on the next pass.
 
 Catches a real failure mode: prompt-engineering improvements silently
 lose value because old blocks keep stale extractions. Fixes it without
