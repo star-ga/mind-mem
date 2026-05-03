@@ -45,6 +45,8 @@ __all__ = [
     "PipelineHashInputs",
     "compute_pipeline_hash",
     "pipeline_dirty_blocks",
+    "stamp_transform_hash",
+    "reextract_dirty_blocks",
 ]
 
 _log = logging.getLogger("mind_mem.pipeline_hash")
@@ -187,6 +189,111 @@ def current_pipeline_hash(workspace: str, *, return_inputs: bool = False) -> str
     if return_inputs:
         return (digest, inputs)
     return digest
+
+
+# ---------------------------------------------------------------------------
+# v3.10: write-side helpers — auto-stamp + targeted re-extract
+# ---------------------------------------------------------------------------
+
+
+def stamp_transform_hash(workspace: str, block: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of *block* with ``TransformHash`` set to the current pipeline hash.
+
+    Use this at write time so any block produced by the current
+    extractor pipeline carries a verifiable hash. The block is *not*
+    mutated; the returned dict is a shallow copy so callers can pass
+    immutable input.
+
+    If the input already carries a ``TransformHash`` (e.g. block was
+    re-stamped earlier in the request) it is overwritten — the field
+    always reflects the *currently configured* pipeline.
+
+    Markdown's block-parser only retains fields that start with a
+    capital letter, so we always write ``TransformHash`` (CapitalCase).
+    Postgres / sqlite-vec backends accept either form.
+    """
+    if not isinstance(block, dict):
+        raise TypeError("block must be a dict")
+    digest = current_pipeline_hash(workspace)
+    assert isinstance(digest, str)
+    out = dict(block)
+    out["TransformHash"] = digest
+    # Drop the lowercase form to avoid two-of-truth on round-trip.
+    out.pop("transform_hash", None)
+    return out
+
+
+def reextract_dirty_blocks(
+    workspace: str,
+    *,
+    limit: int | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Re-stamp blocks whose ``TransformHash`` is stale.
+
+    v3.10: targeted alternative to a full ``reindex``. The function
+    finds dirty blocks via :func:`pipeline_dirty_blocks` and rewrites
+    each one through the storage factory's ``write_block``. Block
+    *content* is not re-extracted — that requires invoking the LLM
+    extractor and is intentionally left to a future revision; this
+    helper only refreshes the hash so consumers can see "this block
+    has been verified against the new pipeline".
+
+    Args:
+        workspace: Workspace root.
+        limit: Maximum number of blocks to touch; ``None`` for all.
+        dry_run: When True, return the list of blocks that would be
+            re-stamped without writing.
+
+    Returns:
+        ``{processed, skipped, dry_run, ids}`` summary dict.
+    """
+    if limit is not None and limit < 1:
+        raise ValueError("limit must be >= 1 when set")
+
+    dirty_ids = pipeline_dirty_blocks(workspace)
+    if limit is not None:
+        dirty_ids = dirty_ids[:limit]
+
+    if dry_run:
+        return {
+            "processed": 0,
+            "skipped": 0,
+            "dry_run": True,
+            "ids": dirty_ids,
+        }
+
+    from .storage import get_block_store
+
+    try:
+        store = get_block_store(workspace)
+    except Exception as exc:
+        _log.warning("dirty_reextract_store_failed", extra={"error": str(exc)})
+        return {"processed": 0, "skipped": len(dirty_ids), "dry_run": False, "ids": []}
+
+    processed: list[str] = []
+    skipped: list[str] = []
+    for bid in dirty_ids:
+        try:
+            block = store.get_by_id(bid) if hasattr(store, "get_by_id") else None
+            if block is None:
+                skipped.append(bid)
+                continue
+            store.write_block(stamp_transform_hash(workspace, block))
+            processed.append(bid)
+        except Exception as exc:
+            _log.warning(
+                "dirty_reextract_failed",
+                extra={"block_id": bid, "error": str(exc)},
+            )
+            skipped.append(bid)
+
+    return {
+        "processed": len(processed),
+        "skipped": len(skipped),
+        "dry_run": False,
+        "ids": processed,
+    }
 
 
 def pipeline_dirty_blocks(workspace: str) -> list[str]:

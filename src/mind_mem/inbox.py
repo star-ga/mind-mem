@@ -147,10 +147,11 @@ def ingest_text_file(workspace: str, file_path: str) -> str:
     # Lazy import — storage factory is heavy. Keeping it out of module
     # import time means tests that exercise the routing table don't
     # need a workspace at all.
+    from .pipeline_hash import stamp_transform_hash
     from .storage import get_block_store
 
     store = get_block_store(workspace)
-    written_id = store.write_block(block)
+    written_id = store.write_block(stamp_transform_hash(workspace, block))
     _log.info("inbox_text_ingested", extra={"block_id": written_id, "source": file_path})
     return written_id
 
@@ -200,10 +201,11 @@ def _ingest_pdf(workspace: str, file_path: str) -> str:
         "Status": "active",
     }
 
+    from .pipeline_hash import stamp_transform_hash
     from .storage import get_block_store
 
     store = get_block_store(workspace)
-    return store.write_block(block)
+    return store.write_block(stamp_transform_hash(workspace, block))
 
 
 _HANDLERS: dict[str, Callable[[str, str], str]] = {
