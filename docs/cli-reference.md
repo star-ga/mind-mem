@@ -241,3 +241,34 @@ Show optimization run history.
 ### `mm skill score <skill_id>`
 
 Show the current consensus score for a skill.
+
+---
+
+## MIC/MAP subcommands (v3.8.11)
+
+mind-mem ships the same MIC/MAP serialization formats used by the wider STARGA
+stack — `mic@2` (text) and `mic-b` (varint binary). The `mm mic` subcommand
+exposes them on the CLI; the corresponding MCP tools are documented in
+[`docs/mcp-integration.md`](mcp-integration.md). For the format spec, runnable
+example, and Python API see [`docs/mic-map.md`](mic-map.md).
+
+### `mm mic convert <file> --to {mic2|micb} [-o <out>]`
+
+Convert a MIC graph file between text and binary forms. Auto-detects the input
+format from the magic bytes / leading header line. When `-o` is omitted, writes
+to stdout (text for `mic2`, raw bytes for `micb`).
+
+```
+mm mic convert graph.mic2 --to micb -o graph.micb
+mm mic convert graph.micb --to mic2          # text to stdout
+```
+
+### `mm mic inspect <file> [--json]`
+
+Print a structural summary: format, type/value/node counts, output index, and a
+per-value breakdown. `--json` emits a machine-readable envelope.
+
+```
+mm mic inspect graph.mic2
+mm mic inspect graph.micb --json
+```

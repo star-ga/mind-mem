@@ -72,7 +72,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>A fresh v3.1.x walkthrough (native MCP for 17 clients, 71 tools, `mind-mem:4b` local model, governance alerting) is on the way — the earlier `demo.gif` predated v3.x and was removed to avoid misrepresenting the current surface.</sub>
+<sub>A fresh v3.x walkthrough (native MCP for 17 clients, 77 tools incl. MIC/MAP, `mind-mem:4b` local model, governance alerting, optional Cython hot-path accelerator) is on the way — the earlier `demo.gif` predated v3.x and was removed to avoid misrepresenting the current surface.</sub>
 
 ### Trust Signals
 
@@ -226,8 +226,8 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 ### Transcript JSONL Capture
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
-### MCP Server (71 tools, 8 resources)
-Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 71 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http).
+### MCP Server (77 tools, 8 resources)
+Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 77 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 adds `mic_convert_tool` and `mic_inspect_tool` for the MIC/MAP wire format.
 
 ### 74+ Structural Checks + 3024 Unit Tests
 `validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 3024 pytest unit tests covering all core modules.
@@ -668,7 +668,7 @@ TOTAL: 0 critical | 0 warnings | 16 info
 
 ```
 your-workspace/
-├── mcp_server.py            # MCP server (FastMCP, 71 tools, 8 resources)
+├── mcp_server.py            # MCP server (FastMCP, 77 tools, 8 resources)
 ├── mind-mem.json             # Config
 ├── MEMORY.md                # Protocol rules
 │
@@ -805,7 +805,7 @@ your-workspace/
 | [**Graphlit**](https://www.graphlit.com) | Multimodal ingestion, semantic search, managed platform | Cloud-only, managed service |
 | [**ClawMem**](https://github.com/yoloshii/ClawMem) | Full ML pipeline (cross-encoder + QMD + beam search) | 4.5GB VRAM, 3 GPU processes required |
 | [**MemU**](https://github.com/supermemory/memu) | Hierarchical 3-layer memory, multimodal ingestion, LLM-based retrieval | Requires LLM for extraction and retrieval, no hybrid search |
-| **mind-mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 71 MCP tools + 3-LLM audit per release | Lexical recall by default (vector/CE optional) |
+| **mind-mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 77 MCP tools (incl. MIC/MAP) + 3-LLM audit per release | Lexical recall by default (vector/CE optional) |
 
 ### Full Feature Matrix
 
@@ -851,7 +851,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | No daemon       |                   —                    |                   —                   |                            —                            |               —                |               —               |                     Yes                     |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
 | GPU required    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                    **4.5GB**                    |                      No                      |     **No**     |
 | Git-friendly    |                   —                    |                   —                   |                            —                            |              Part              |               —               |                      —                      |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
-| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **71 tools**   |
+| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **77 tools**   |
 | MIND kernels    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **16 source**  |
 
 ### The Gap mind-mem Fills

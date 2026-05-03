@@ -7,12 +7,12 @@ provides. See [setup.md](setup.md) first.
 
 | Surface | When to use |
 |---|---|
-| **MCP server** | Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, Zed, OpenClaw, any MCP agent. 57 tools. |
+| **MCP server** | Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, Zed, OpenClaw, any MCP agent. 77 tools. |
 | **`mm` CLI** | Non-MCP agents: codex, gemini CLI, Cursor, Windsurf, Aider, plain shell. |
 | **`mind-mem-verify` CLI** | Third-party integrity audits. Standalone; no network. |
 | **Python library** | Direct import from your own code. |
 
-## MCP tool index (57 tools)
+## MCP tool index (77 tools)
 
 ### Retrieval
 - `recall(query, limit, active_only, backend)` — BM25 / hybrid / auto

@@ -2,7 +2,7 @@
 
 ## Overview
 
-mind-mem exposes 57 MCP tools for integration with AI coding assistants like Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, and Zed (v3.1.0+).
+mind-mem exposes 77 MCP tools for integration with AI coding assistants like Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, and Zed (v3.1.0+).
 
 ## Setup
 
@@ -108,6 +108,18 @@ Add to `~/.claude/mcp.json`:
 |------|-------------|
 | `vault_scan` | Walk an Obsidian-style vault and return parsed blocks |
 | `vault_sync` | Write a block back into the vault at a relative path |
+
+### MIC/MAP Tools (v3.8.11)
+
+| Tool | Description |
+|------|-------------|
+| `mic_convert_tool` | Convert between `mic@2` (text) and `mic-b` (binary) MIND IR formats. Auto-detect input. 8 MiB DoS guard. |
+| `mic_inspect_tool` | Return a structural summary of a MIC graph (type/value/node counts, output index, per-value breakdown). |
+
+Both tools take a `str` payload (text for `mic@2`, base64 for `mic-b`) and
+return a JSON envelope (`{ok, ...}` on success; `{ok: false, error}` on
+failure). The CLI equivalent is `mm mic convert / mm mic inspect`. See the
+full format spec in [`docs/mic-map.md`](mic-map.md).
 
 ## Obsidian Graph View
 

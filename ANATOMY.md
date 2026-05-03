@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 711 | **Est. tokens:** ~1,446,748
-**Generated:** 2026-05-03 07:17 UTC
+**Files:** 711 | **Est. tokens:** ~1,447,210
+**Generated:** 2026-05-03 08:08 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 32 | ~84,169 |
+| `./` | 32 | ~84,207 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 3 | ~1,010 |
 | `benchmarks/` | 26 | ~64,933 |
@@ -30,7 +30,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 63 | ~98,369 |
+| `docs/` | 63 | ~98,793 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -98,7 +98,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~1945 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~23511 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~23549 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `ROADMAP.md` (~23907 tok, huge) — mind-mem Roadmap
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
@@ -174,7 +174,7 @@
 - `ci-workflows.md` (~254 tok, medium) — CI Workflows
 - `claude-desktop-setup.md` (~752 tok, large) — Claude Desktop Setup Guide
 - `client-integrations.md` (~2533 tok, huge) — Client Integrations
-- `cli-reference.md` (~1595 tok, huge) — CLI Reference
+- `cli-reference.md` (~1857 tok, huge) — CLI Reference
 - `comparison.md` (~313 tok, medium) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
 - `configuration.md` (~8146 tok, huge) — Configuration Reference
@@ -191,10 +191,10 @@
 - `glossary.md` (~263 tok, medium) — Glossary
 - `governance.md` (~1365 tok, large) — mind-mem — governance design (5 layers)
 - `hf-mind-mem-4b-v2-README.md` (~2154 tok, huge) — mind-mem-4b v2 (2026-04-21)
-- `integrations.md` (~1535 tok, huge) — Integrations
+- `integrations.md` (~1544 tok, huge) — Integrations
 - `locomo-v3.4-conv0-results.md` (~449 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
 - `maintenance-namespaces.md` (~1601 tok, huge) — `maintenance/` namespaces
-- `mcp-integration.md` (~1538 tok, huge) — MCP Integration Guide
+- `mcp-integration.md` (~1691 tok, huge) — MCP Integration Guide
 - `mcp-tool-examples.md` (~902 tok, large) — MCP Tool Examples
 - `mic-map.md` (~1686 tok, huge) — MIC/MAP — MIND IR Graph Serialization
 - `migration-guide.md` (~421 tok, medium) — Migration Guide

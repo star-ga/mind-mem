@@ -59,9 +59,9 @@ Useful if you're writing a custom MCP config writer.
 
 ---
 
-## MCP Server (57 tools, 8 resources)
+## MCP Server (77 tools, 8 resources)
 
-The MCP server exposes 57 tools via JSON-RPC. See [MCP Tool Examples](mcp-tool-examples.md) and [MCP Integration Guide](mcp-integration.md).
+The MCP server exposes 77 tools via JSON-RPC. See [MCP Tool Examples](mcp-tool-examples.md) and [MCP Integration Guide](mcp-integration.md).
 
 ### Starting the Server
 

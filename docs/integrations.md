@@ -44,9 +44,9 @@ Currently supported:
 | OpenClaw | STARGA | `~/.openclaw/openclaw.json` |
 | NanoClaw / NemoClaw | STARGA | `~/.openclaw/openclaw.json` |
 
-**What this means**: each of these tools can call mind-mem's 71 MCP
-tools (recall, propose_update, scan, hybrid_search, etc.) the same
-way it calls any other MCP server.
+**What this means**: each of these tools can call mind-mem's 77 MCP
+tools (recall, propose_update, scan, hybrid_search, mic_convert_tool,
+mic_inspect_tool, etc.) the same way it calls any other MCP server.
 
 **What this does *not* mean**: none of these vendors are commercial
 customers, paying users, partners, or have endorsed mind-mem. The
