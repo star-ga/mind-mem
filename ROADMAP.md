@@ -1210,13 +1210,24 @@ Docker compose (`deploy/docker-compose.yml`) already enforces both
 tokens via `${VAR:?must be set}` so containerised deployments
 require zero changes.
 
-## v3.8.0 — Model Safety Audit + Social Ingestion (in progress)
+## v3.8.0 — Model Safety Audit (complete)
 
-Two threads motivated by incidents in the broader AI ecosystem: malicious
-HuggingFace model drops that ship remote-code-execution payloads via
-`trust_remote_code` / `auto_map` / pickle imports, and the need for
-mind-mem to ingest social-media context (posts, reels, threads) as
-first-class memory sources rather than screenshots-in-attachments.
+Hardening thread motivated by incidents in the broader AI ecosystem:
+malicious HuggingFace model drops that ship remote-code-execution
+payloads via `trust_remote_code` / `auto_map` / pickle imports.
+
+> **Scope note (2026-05-02):** Earlier drafts of this section also
+> bundled a "Social Ingestion" thread (per-platform fetchers for
+> HN / Reddit / X / LinkedIn / Instagram / TikTok / Moltbook /
+> Bluesky / Mastodon / Farcaster). That work has been **moved out
+> of mind-mem to naestro-bot** — fetching social content is an
+> agent-layer concern, not a memory-layer concern. mind-mem stays
+> the substrate (blocks + recall + governance); naestro-bot
+> extensions (alongside `extensions/discord/`, `extensions/slack/`,
+> etc.) own per-platform fetching and write into mind-mem via the
+> existing MCP surface. This preserves mind-mem's zero-dependency
+> posture and avoids inheriting 8 platforms' worth of auth, rate-
+> limit, anti-bot, and ToS maintenance liability.
 
 ### Model Safety Audit
 
@@ -1363,47 +1374,28 @@ streaming I/O, and a native accelerator for the hot loops.
   ``tests/test_mic_map_accel.py`` (TestModuleShape /
   TestEquivalence skip-if-no-accel / TestPurePythonAlwaysWorks).
 
-### Social Ingestion
+### Social Ingestion — moved to naestro-bot (2026-05-02)
 
-- [ ] **`[SOCIAL]` block type** — new block kind for social-media content,
-  schema: `platform`, `author_handle`, `post_id`, `url`, `posted_at`,
-  `captured_at`, `content_type` (post / reel / thread / comment), `text`,
-  `media_refs`, `engagement_snapshot`. Fully typed, routable through
-  existing recall + contradiction engine.
-- [ ] **Platform fetchers** — `src/mind_mem/social/`:
-  - `x.py` — X/Twitter threads and quote-chains via the public OEmbed
-    endpoint; full-text fallback through the `snscrape` adapter when
-    unauthenticated API access returns partial data
-  - `linkedin.py` — LinkedIn posts, comments, and articles; cookie-based
-    auth, headless fetch with rate-limit backoff
-  - `instagram.py` — Instagram reels and posts (caption + transcript +
-    engagement), using the public GraphQL endpoint; video transcript via
-    local whisper
-  - `tiktok.py` — TikTok videos with caption + transcript; GraphQL
-    endpoint + whisper
-  - `moltbook.py` — native API (already documented in HEARTBEAT.md);
-    posts, threads, reactions
-  - `reddit.py` — public JSON API; posts, comments, threads
-  - `hackernews.py` — Firebase API; items + user submissions
-  - `bluesky.py`, `mastodon.py`, `farcaster.py` — ActivityPub / AT-proto
-    standard fetches
-- [ ] **`mm ingest-social <url>`** — CLI that detects the platform from
-  URL, invokes the appropriate fetcher, emits a `[SOCIAL]` block into the
-  active workspace, runs the standard entity + content-hash pipeline.
-- [ ] **MCP tool** — `ingest_social(url, namespace?)` for agents; returns
-  the created block id + summary.
-- [ ] **Quota + rate-limit governance** — per-platform rate limits tracked
-  in `governance.social_quota` namespace; evidence events for every fetch;
-  automatic back-off on 429 / 403.
-- [ ] **Content safety** — every fetched post goes through `mm audit-model`
-  before storage if it contains a model reference (HF link, model card);
-  tokenizer-injection patterns flagged on content-hash dedup.
+The platform fetcher set (HN / Reddit / X / LinkedIn / Instagram /
+TikTok / Moltbook / Bluesky / Mastodon / Farcaster) and the
+URL-to-block ingestion CLI / MCP tool are no longer scoped to
+mind-mem. **Tracked in naestro-bot** alongside the existing
+`extensions/discord/` / `extensions/slack/` / `extensions/telegram/`
+/ `extensions/feishu/` channels — fetching social content is the
+same shape of work as bridging a chat platform, and naestro-bot
+already owns that surface. Naestro-bot extensions write captured
+posts into mind-mem through the existing MCP recall / capture
+tools, so mind-mem's role (substrate for blocks + recall +
+governance + contradiction detection) is unchanged.
+
+The split keeps mind-mem zero-dependency, avoids inheriting per-
+platform auth / anti-bot / ToS maintenance, and preserves the
+clean layering: **mind-mem stores; agents fetch.**
 
 **Estimated:** ~1500 lines audit (CLI + pickle disassembly + Ed25519 +
-load-gate + CI hook) + ~2500 lines social fetchers (8 platforms + shared
-rate-limit + transcript pipeline) + ~600 lines `[SOCIAL]` block integration.
-New optional extras: `mind-mem[audit]` (cryptography + pickletools wrapper),
-`mind-mem[social]` (platform SDK deps + whisper).
+load-gate + CI hook) — all shipped in v3.8.1 → v3.8.7. The social
+ingestion estimate (~2500 lines fetchers + ~600 lines block
+integration) is now a naestro-bot concern.
 
 ## v4.0.0 — Platform Scale (production)
 

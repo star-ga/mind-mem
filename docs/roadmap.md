@@ -33,7 +33,7 @@ residual-block fixture: `parse_micb` +16% small / +20% medium / +36%
 large — modest but real; bigger 5-10× wins deferred to a future v3.9.x
 with proper C-level buffer parsing. 11 regression tests in
 `tests/test_mic_map_accel.py`. Closes the three-slice MIC/MAP
-scale-hardening train. Next: Social Ingestion (v3.8.11+).
+scale-hardening train.
 
 ## v3.8.9 (Released 2026-05-02)
 
@@ -77,7 +77,9 @@ mixed lists accepted, empty list / missing key / missing file
 no-op pass. 25 unit tests in `tests/test_audit_pinned.py`. No
 breaking changes. Model Safety Audit theme is now complete (audit
 → sign → provenance → MCP → gate → backend wiring → CI hook).
-Next: Social Ingestion (v3.8.8+).
+Social ingestion has been moved out of mind-mem to naestro-bot
+(see ROADMAP.md root) — fetching is an agent-layer concern,
+mind-mem stays the substrate.
 
 ## v3.8.6 (Released 2026-05-02)
 
@@ -310,10 +312,13 @@ Direction:
 > **Note (2026-05-01):** these were originally drafted as v3.7.0
 > candidates, but v3.7.0 shipped as the external-audit response
 > (HTTP/REST fail-closed auth, cross-platform rollback fix, CI
-> hardening — see CHANGELOG.md). v3.8.0 is now the Model Safety
-> Audit + Social Ingestion minor (see `ROADMAP.md` root); the
-> Always-On Memory Agent patterns below are deferred to v3.9.0
-> candidates and live alongside the walkthrough/persona theme below.
+> hardening — see CHANGELOG.md). v3.8.0 was the Model Safety
+> Audit minor (see `ROADMAP.md` root). The originally-bundled
+> social-ingestion thread has been moved to naestro-bot — fetching
+> is an agent-layer concern and inheriting per-platform fetchers
+> would have broken mind-mem's zero-dep posture. The Always-On
+> Memory Agent patterns below are deferred to v3.9.0 candidates and
+> live alongside the walkthrough/persona theme below.
 
 Inspired by Google Cloud's Always-On Memory Agent reference architecture
 (MIT, `GoogleCloudPlatform/generative-ai/gemini/agents/always-on-memory-agent`).
