@@ -367,7 +367,29 @@ def _handle_delete_memory(workspace: str, block_id: str) -> tuple[int, dict[str,
 
     try:
         store = get_block_store(workspace)
+    except Exception as exc:
+        _log.error(
+            "delete_memory_store_init_failed",
+            extra={"error": _safe_log(exc), "block_id": _safe_log(block_id)},
+        )
+        return (500, {"error": "internal block store error"})
+
+    # Pre-check existence so a missing-block delete returns 404 even when
+    # the underlying store raises (e.g. Windows file-handle quirks under
+    # the lock acquisition path) instead of returning False.
+    try:
+        if hasattr(store, "get_by_id") and store.get_by_id(block_id) is None:
+            return (404, {"error": "block not found", "id": block_id})
+    except Exception:
+        # Treat get_by_id errors as best-effort — fall through to the
+        # delete path which handles a missing block via its own return
+        # contract.
+        pass
+
+    try:
         removed = store.delete_block(block_id)
+    except (FileNotFoundError, KeyError):
+        return (404, {"error": "block not found", "id": block_id})
     except Exception as exc:
         _log.error(
             "delete_memory_failed",
