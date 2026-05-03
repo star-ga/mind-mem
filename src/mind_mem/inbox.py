@@ -177,8 +177,7 @@ def _ingest_pdf(workspace: str, file_path: str) -> str:
         import pypdf  # type: ignore[import-untyped]
     except ImportError as exc:
         raise NotImplementedError(
-            "PDF ingestion requires the optional `multimodal` extra "
-            "(`pip install 'mind-mem[multimodal]'` — pulls in pypdf)."
+            "PDF ingestion requires the optional `multimodal` extra (`pip install 'mind-mem[multimodal]'` — pulls in pypdf)."
         ) from exc
 
     reader = pypdf.PdfReader(file_path)
