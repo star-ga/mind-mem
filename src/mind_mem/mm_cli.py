@@ -926,6 +926,26 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_http_serve(args: argparse.Namespace) -> int:
+    """Launch the v3.9 stdlib HTTP transport. Blocks until SIGINT."""
+    from mind_mem.http_transport import serve_http
+
+    ws = _workspace()
+    print(f"mind-mem http-serve: workspace={ws} bind={args.host}:{args.port}")
+    thread, stop = serve_http(
+        workspace=ws,
+        host=args.host,
+        port=args.port,
+        allow_unauthenticated_localhost=args.allow_unauthenticated_localhost,
+    )
+    try:
+        thread.join()
+    except KeyboardInterrupt:
+        print("\nshutting down ...")
+        stop()
+    return 0
+
+
 def _cmd_audit_model(args: argparse.Namespace) -> int:
     from mind_mem.model_audit import audit_model, format_report_text
 
@@ -1504,6 +1524,23 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_serve.set_defaults(func=_cmd_serve)
+
+    # http-serve — stdlib-only HTTP transport (v3.9 candidate)
+    p_http = sub.add_parser(
+        "http-serve",
+        help="Launch the v3.9 stdlib HTTP transport (zero dependencies; minimal endpoint surface).",
+    )
+    p_http.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
+    p_http.add_argument("--port", type=int, default=8765, help="TCP port (default: 8765)")
+    p_http.add_argument(
+        "--allow-unauthenticated-localhost",
+        action="store_true",
+        help=(
+            "Bypass token auth when the bind host is loopback. Required for "
+            "non-token operators; refuses to start without it when no MIND_MEM_TOKEN is set."
+        ),
+    )
+    p_http.set_defaults(func=_cmd_http_serve)
 
     # audit-model — static security scan of any local model checkpoint
     p_audit = sub.add_parser(

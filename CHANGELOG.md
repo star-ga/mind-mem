@@ -2,6 +2,49 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## Unreleased — v3.9.0 candidates
+
+**Theme: HTTP transport + replicated postgres routing.**
+
+### Added
+- **HTTP transport adapter** (`src/mind_mem/http_transport.py`).
+  Stdlib-only (no FastAPI / Pydantic), zero new dependencies. Six
+  endpoints intended for Slack bots, dashboards, monitoring tools, and
+  Streamlit/Gradio frontends that don't speak MCP:
+  - `GET  /status`           — health, memory count, last-scan timestamp
+  - `POST /query`            — natural-language search wrapping `recall`
+  - `GET  /memories`         — list/browse with `limit` + `active_only`
+                                filters
+  - `POST /consolidate`      — trigger dream cycle on demand
+  - `DELETE /memories/{id}`  — remove a specific memory
+  - `POST /clear`            — wipe workspace (governance-protected,
+                                requires 16+ char rationale + literal
+                                `confirm` field)
+
+  Auth via `X-MindMem-Token` header (matches MCP HTTP transport
+  convention). 1 MiB body limit. Refuses to start without a token
+  unless `--allow-unauthenticated-localhost` is set on a loopback
+  bind. New CLI subcommand `mm http-serve --port 8765`.
+
+- **Replicated postgres routing through the storage factory.**
+  `block_store.replicas` in `mind-mem.json` was previously silently
+  ignored; the factory now constructs a `ReplicatedPostgresBlockStore`
+  when one or more replica DSNs are present (existing
+  `block_store_postgres_replica.py` machinery — round-robin reads,
+  primary writes, 30-second circuit breaker after 3 consecutive
+  failures). The `replicas` field must be a list of DSN strings;
+  non-list values raise `ValueError`.
+
+### Tests
+- `tests/test_http_transport.py` — 34 tests covering parse helpers,
+  bootstrap (token-from-env, no-token-no-bypass, empty-workspace),
+  every endpoint (status / query / memories / consolidate / clear /
+  delete), auth (correct token / wrong token / no token), body limits
+  (oversize, malformed JSON, non-object payload), and lifecycle (thread
+  alive, stop is idempotent).
+- `tests/test_storage_factory.py` — added 2 tests for the replicated
+  routing branch (replicas-must-be-list, empty-list-yields-bare-store).
+
 ## 3.8.14 (2026-05-03)
 
 **v3.8.13 audit follow-through.** Three independent agent reviews

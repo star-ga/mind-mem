@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 713 | **Est. tokens:** ~1,456,287
-**Generated:** 2026-05-03 10:08 UTC
+**Files:** 719 | **Est. tokens:** ~1,465,598
+**Generated:** 2026-05-03 11:00 UTC
 
 ## Token Budget Guide
 
@@ -24,13 +24,13 @@
 |-----------|-------|-------------|
 | `./` | 32 | ~84,207 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `.arch-mind/` | 4 | ~1,093 |
+| `.arch-mind/` | 8 | ~1,223 |
 | `benchmarks/` | 26 | ~64,933 |
 | `deploy/` | 2 | ~772 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 63 | ~98,966 |
+| `docs/` | 63 | ~99,109 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -54,15 +54,15 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 149 | ~514,456 |
+| `src/mind_mem/` | 150 | ~519,182 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,903 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
 | `src/mind_mem/mcp/tools/` | 20 | ~46,434 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
-| `src/mind_mem/storage/` | 2 | ~3,968 |
+| `src/mind_mem/storage/` | 2 | ~4,193 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 246 | ~489,116 |
+| `tests/` | 247 | ~493,203 |
 | `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -112,9 +112,13 @@
 - `SKILL.md` (~456 tok, medium) — mind-mem Development
 ### `.arch-mind/`
 
-- `last_summary.json` (~155 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
+- `last_summary.json` (~156 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
+- `_log_rules.txt` (~13 tok, tiny) — rules: 9  scan_metrics: 9
+- `_log_scan.txt` (~11 tok, tiny) — wrote /home/n/mind-mem/.arch-mind/scan.json
+- `_log_sidecar.txt` (~13 tok, tiny) — wrote /home/n/mind-mem/.arch-mind/last_summary.json
 - `rules.mind` (~766 tok, large) — mind-mem architectural-governance rules
-- `scan.json` (~86 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
+- `scan_before.json` (~86 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
+- `scan.json` (~92 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
 - `scan_v3813.json` (~86 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
 ### `benchmarks/`
 
@@ -212,7 +216,7 @@
 - `review-database-v3.2.0.md` (~3171 tok, huge) — Database Review — PostgresBlockStore v3.2.0
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — mind-mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — mind-mem v3.2.0
-- `roadmap.md` (~9389 tok, huge) — Roadmap
+- `roadmap.md` (~9532 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2257 tok, huge) — mind-mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
 - `security-audit-sow.md` (~3336 tok, huge) — mind-mem — External Security Audit Statement of Work (SoW)
@@ -445,6 +449,7 @@
 - `graph_recall.py` (~1907 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~9442 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `http_transport.py` (~4389 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
 - `hybrid_recall.py` (~8896 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~694 tok, large) — # Mind Mem — Memory + Immune System for AI agents
@@ -510,7 +515,7 @@
 - `mind_ffi.py` (~5481 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~16571 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~16908 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `model_audit.py` (~4370 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
 - `model_gate.py` (~2549 tok, huge) — Load-gate registry for ``mm audit-model`` checkpoints.
 - `model_provenance.py` (~1751 tok, huge) — Provenance allowlist check for ``mm audit-model`` checkpoints.
@@ -572,7 +577,7 @@
 - `staleness.py` (~1179 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/storage/`
 
-- `__init__.py` (~980 tok, large) — Storage factory for mind-mem block stores (v3.2.0).
+- `__init__.py` (~1205 tok, large) — Storage factory for mind-mem block stores (v3.2.0).
 - `sharded_pg.py` (~2988 tok, huge) — Sharded Postgres / Citus routing (v4.0 prep).
 ### `src/mind_mem/`
 
@@ -727,6 +732,7 @@
 - `test_hook_installer_force_preserves_siblings.py` (~703 tok, large) — Regression test for the --force clobber bug in hook_installer."""
 - `test_hook_installer_registry.py` (~3841 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_auth_fail_closed.py` (~1724 tok, huge) — v3.7.0 H4: HTTP / REST auth must fail CLOSED by default.
+- `test_http_transport.py` (~3695 tok, huge) — Tests for the v3.9 HTTP transport adapter.
 - `test_hybrid_recall.py` (~2855 tok, huge) — Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
 - `test_hybrid_search.py` (~599 tok, large) — Tests for hybrid search functionality."""
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -840,7 +846,7 @@
 - `test_speculative_prefetch.py` (~3071 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sqlite_index.py` (~5385 tok, huge) — Tests for sqlite_index.py — SQLite FTS5 index for mind-mem recall."""
 - `test_stopwords.py` (~247 tok, medium) — Tests for stopword handling."""
-- `test_storage_factory.py` (~1066 tok, large) — Tests for mind_mem.storage.get_block_store factory (v3.2.0)."""
+- `test_storage_factory.py` (~1458 tok, large) — Tests for mind_mem.storage.get_block_store factory (v3.2.0)."""
 - `test_streaming.py` (~1446 tok, large) — v3.3.0 — back-pressure-aware streaming ingest queue."""
 - `test_telemetry.py` (~2829 tok, huge) — Tests for src/mind_mem/telemetry.py.
 - `test_temporal_decay_scoring.py` (~863 tok, large) — v3.3.0 Tier 1 #3 — half-life decay on block ``Created``/``Date`` field.

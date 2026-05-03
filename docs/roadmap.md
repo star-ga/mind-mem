@@ -365,19 +365,29 @@ Add:
 actually runs. Most users never set up cron, so dream cycle never fires.
 One config flag flips the default.
 
-### 3. Extended HTTP API surface
+### 3. Extended HTTP API surface — **landed (in-progress branch)**
+
+> **Status (2026-05-03):** core surface implemented on
+> `feat/v3.9-http-transport`. Stdlib-only (`src/mind_mem/http_transport.py`,
+> 34 tests in `tests/test_http_transport.py`, all passing).
+> CLI subcommand `mm http-serve` wired. CHANGELOG updated.
 
 mind-mem already has `/ingest` HTTP endpoint (`ingestion_pipeline.py`).
-Missing endpoints:
+The v3.9 transport adds (✓ = implemented):
 
-- `GET /status` — health, memory count, last-scan timestamp,
-  dream-cycle last-run timestamp
-- `POST /query` — natural-language search (wraps `recall` / `hybrid_search`)
-- `GET /memories` — list/browse with filtering (by category, age, axis)
-- `POST /consolidate` — trigger dream cycle on demand
-- `DELETE /memories/{id}` — remove specific memory
-- `POST /clear` — wipe workspace (governance-protected, requires
-  rationale per v3.6.x mandatory rationale binding)
+- ✓ `GET /status` — health, memory count, last-scan timestamp
+- ✓ `POST /query` — natural-language search (wraps `recall`)
+- ✓ `GET /memories` — list/browse with `limit` + `active_only` filters
+- ✓ `POST /consolidate` — trigger dream cycle on demand
+- ✓ `DELETE /memories/{id}` — remove specific memory
+- ✓ `POST /clear` — wipe workspace (governance-protected, 16+ char
+  rationale + literal `confirm` field)
+
+Auth via `X-MindMem-Token`; 1 MiB body limit; refuses to start without
+a token unless `--allow-unauthenticated-localhost` is set on a
+loopback bind. Bigger filtering (by category / age / axis) is a
+follow-up — current `GET /memories` returns id / type / category /
+subject / timestamp summaries.
 
 MCP is great for AI agents; HTTP is required for non-MCP integrations
 (Slack bots, dashboards, web apps, monitoring tools, Streamlit/Gradio
