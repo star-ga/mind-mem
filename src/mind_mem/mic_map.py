@@ -597,7 +597,11 @@ def parse_micb(data: bytes) -> Graph:
         chunk = buf.read(slen)
         if len(chunk) != slen:
             raise MicbParseError("unexpected EOF in string table")
-        strings.append(chunk.decode("utf-8"))
+        try:
+            decoded = chunk.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise MicbParseError(f"invalid UTF-8 in string table: {exc}") from exc
+        strings.append(decoded)
 
     # 2. Symbol table
     n_syms = _uleb128_decode(buf)

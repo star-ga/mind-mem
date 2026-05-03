@@ -1,6 +1,6 @@
 [project]
 name = "mind-mem"
-version = "3.8.7"
+version = "3.8.8"
 description = "Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -48,6 +48,10 @@ test = [
     "fastapi>=0.110,<1.0",
     "httpx>=0.27,<1.0",
     "python-jose[cryptography]>=3.3,<4.0",
+    # v3.8.8 fuzz harness for the MIC/MAP serialization primitive —
+    # property-based tests live in tests/test_mic_map_fuzz.py and
+    # importorskip-fence on absence so this is a soft floor.
+    "hypothesis>=6.0,<7.0",
 ]
 api = [
     "fastapi>=0.110,<1.0",

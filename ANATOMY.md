@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 698 | **Est. tokens:** ~1,418,939
-**Generated:** 2026-05-03 04:07 UTC
+**Files:** 701 | **Est. tokens:** ~1,427,794
+**Generated:** 2026-05-03 04:31 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 30 | ~82,395 |
+| `./` | 30 | ~82,841 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 3 | ~1,010 |
 | `benchmarks/` | 26 | ~64,933 |
@@ -30,7 +30,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 62 | ~95,848 |
+| `docs/` | 62 | ~96,031 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -54,7 +54,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 148 | ~503,906 |
+| `src/mind_mem/` | 148 | ~503,948 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,879 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
@@ -62,7 +62,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 238 | ~470,526 |
+| `tests/` | 241 | ~478,710 |
 | `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -95,11 +95,11 @@
 - `mcp_server.py` (~683 tok, large) — Source-checkout entrypoint for the packaged Mind-Mem MCP server.
 - `mind-mem.example.json` (~174 tok, small) — Keys: recall, prompts, categories, extraction, limits
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
-- `pyproject.toml` (~1811 tok, huge) — [project]
+- `pyproject.toml` (~1868 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~23370 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
-- `ROADMAP.md` (~23433 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~23822 tok, huge) — mind-mem Roadmap
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
 - `SECURITY.md` (~1752 tok, huge) — Security Policy
 - `SPEC.md` (~5184 tok, huge) — Mind Mem Formal Specification v1.0
@@ -208,7 +208,7 @@
 - `review-database-v3.2.0.md` (~3171 tok, huge) — Database Review — PostgresBlockStore v3.2.0
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — mind-mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — mind-mem v3.2.0
-- `roadmap.md` (~8554 tok, huge) — Roadmap
+- `roadmap.md` (~8737 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2257 tok, huge) — mind-mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
 - `security-audit-sow.md` (~3336 tok, huge) — mind-mem — External Security Audit Statement of Work (SoW)
@@ -499,7 +499,7 @@
 - `memory_mesh.py` (~1903 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `memory_tiers.py` (~4934 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `merkle_tree.py` (~3354 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mic_map.py` (~6736 tok, huge) — MIC/MAP — STARGA-native serialization for MIND IR graphs.
+- `mic_map.py` (~6778 tok, huge) — MIC/MAP — STARGA-native serialization for MIND IR graphs.
 - `mind_ffi.py` (~5481 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -748,6 +748,9 @@
 - `test_memory_practical_e2e.py` (~2389 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_memory_tiers.py` (~3479 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_merkle_tree.py` (~3185 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_mic_map_adversarial.py` (~3397 tok, huge) — Adversarial corpus for ``mind_mem.mic_map`` parsers.
+- `test_mic_map_bench.py` (~2544 tok, huge) — pytest-benchmark suite for ``mind_mem.mic_map``.
+- `test_mic_map_fuzz.py` (~2243 tok, huge) — Property-based fuzz tests for ``mind_mem.mic_map``.
 - `test_mic_map.py` (~3230 tok, huge) — Tests for ``mind_mem.mic_map`` — STARGA mic@2 / mic-b serialization.
 - `test_mind_ffi.py` (~291 tok, medium) — Tests for MIND FFI module."""
 - `test_mind_kernels_v3_3.py` (~998 tok, large) — Kernel-loading tests for v3.3.0 features.

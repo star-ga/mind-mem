@@ -1319,6 +1319,35 @@ first-class memory sources rather than screenshots-in-attachments.
   in the Audit pipeline (audit → sign → provenance → MCP → gate →
   backend wiring → CI hook) is shipped.
 
+### MIC/MAP Scale Hardening (added in v3.8.5 plan)
+
+Three slices ahead of any future MIC/MAP network layer. Today MIC/MAP
+is a single-shot serialization primitive; before it can carry
+production load on a wire we need crash safety on adversarial input,
+streaming I/O, and a native accelerator for the hot loops.
+
+- [x] **Fuzz harness + adversarial corpus + benchmarks** — shipped
+  in v3.8.8 (2026-05-02). 7 Hypothesis property tests
+  (round-trip, crash safety on arbitrary bytes / text), 26
+  hand-crafted DoS inputs (varint bombs, length-prefix overflow,
+  truncation, magic / version / tag fuzzing, output OOR), 12
+  pytest-benchmark tests + 6 throughput floors + 2 memory-ceiling
+  bounds. ``hypothesis`` added to ``[test]`` extras. Caught a real
+  bug — ``parse_micb`` was leaking ``UnicodeDecodeError`` on
+  invalid UTF-8 in the string table; now correctly wrapped as
+  ``MicbParseError``. **45 new tests**.
+- [ ] **Streaming parser** — incremental ``parse_micb`` that
+  yields nodes as bytes arrive instead of requiring the whole
+  payload in memory. Mandatory for any socket-based transport
+  (otherwise N concurrent 10 MiB inputs OOM the receiver).
+  Targeted for v3.8.9.
+- [ ] **Native accelerator** — Cython port of the hot loops
+  (``parse_micb`` / ``emit_micb`` / ULEB128 codec) keeping the
+  same Python API. Cython chosen over PyO3/Rust to keep the
+  build simple — single ``setup.py`` extension, no Cargo
+  toolchain in CI. Pure-Python fallback retained for platforms
+  where the C extension can't build. Targeted for v3.8.10.
+
 ### Social Ingestion
 
 - [ ] **`[SOCIAL]` block type** — new block kind for social-media content,

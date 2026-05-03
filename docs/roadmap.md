@@ -4,7 +4,21 @@
 > in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
 > full milestone breakdown.
 
-## v3.8.7 (Current — released 2026-05-02)
+## v3.8.8 (Current — released 2026-05-02)
+
+Scale-fragility hardening for MIC/MAP, slice 1/3. Adds a Hypothesis
+fuzz harness (`tests/test_mic_map_fuzz.py`, 7 tests including
+crash-safety on arbitrary bytes), a hand-crafted DoS corpus
+(`tests/test_mic_map_adversarial.py`, 26 tests covering every named
+attack vector from the spec security checklist), and a pytest-benchmark
+suite (`tests/test_mic_map_bench.py`, 12 benchmarks + 6 throughput
+floors + 2 memory-ceiling bounds). Caught one real bug: `parse_micb`
+was leaking `UnicodeDecodeError` on invalid UTF-8 in the string
+table — now wrapped as `MicbParseError`. `hypothesis>=6.0,<7.0` added
+to `[test]` extras. v3.8.9 will add a streaming parser; v3.8.10 will
+land a Cython accelerator.
+
+## v3.8.7 (Released 2026-05-02)
 
 CI hook — release-CI gate for the Model Safety Audit pipeline.
 Closes the Audit theme of the v3.8.0 plan. New

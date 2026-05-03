@@ -2,6 +2,83 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.8 (2026-05-02)
+
+**Scale-fragility hardening for MIC/MAP — fuzz + adversarial corpus
++ benchmarks.** First slice of the three-part scale-readiness work
+ahead of any future MIC/MAP network layer. Adds Hypothesis-driven
+property tests, a hand-crafted DoS corpus covering every named
+attack vector from the spec security checklist, and a
+pytest-benchmark suite with throughput floors. Caught and fixed
+one real bug: ``parse_micb`` was leaking ``UnicodeDecodeError``
+on invalid UTF-8 in the string table. No breaking changes — all
+work is in tests + a bug fix.
+
+### Added
+
+- **``tests/test_mic_map_fuzz.py``** — 7 Hypothesis-driven
+  property tests:
+  - Round-trip identity for both formats
+    (``parse(emit(g)) == g``).
+  - Text-binary-text canonical agreement.
+  - Crash safety on arbitrary bytes / arbitrary text — the
+    parser must raise ``Mic2ParseError`` /
+    ``MicbParseError`` or succeed; it must NEVER leak any
+    other exception type. 200-example budget per test for
+    arbitrary input, 100 for round-trip; deadlines bounded so
+    CI cost stays trivial.
+- **``tests/test_mic_map_adversarial.py``** — 26 hand-crafted DoS
+  inputs covering: varint bombs (ULEB128 padded with continuation
+  bytes), length-prefix overflow (string count / value count /
+  string length / type rank above the spec caps), truncation at
+  every layer (magic / version / string-count / string-payload),
+  magic / version mismatches, unknown value tag / dtype byte /
+  opcode byte, out-of-range string-index / type-index / output,
+  text-mode DoS (>10 MiB input, >1M lines, empty / comments-only),
+  zero-element edge cases, and the invalid-UTF-8 case the fuzz
+  caught. Every test asserts the parser returns within a 500 ms
+  wall-clock budget — catches O(n²) or unbounded-loop regressions.
+- **``tests/test_mic_map_bench.py``** — 12 pytest-benchmark
+  benchmarks (small / medium / large × emit / parse × text /
+  binary) plus 6 throughput-floor assertions and 2 memory-ceiling
+  bounds. Throughput floors (single-core, conservative — actual
+  numbers are 5-10× higher):
+
+  | Size | Floor (ops/sec) | Typical |
+  |---|---|---|
+  | small (residual block, 7 values) | 5,000 | 50,000–125,000 |
+  | medium (transformer layer, ~30 values) | 1,000 | 15,000–37,000 |
+  | large (200-layer relu stack, ~700 values) | 50 | 450–1,200 |
+
+  Skipped unless ``pytest-benchmark`` is installed
+  (``[benchmark]`` extras). Run with
+  ``pytest tests/test_mic_map_bench.py --benchmark-only``.
+- **``hypothesis>=6.0,<7.0``** added to the ``[test]`` optional
+  dependency group so the fuzz harness runs in the standard
+  test matrix.
+
+### Fixed
+
+- **``parse_micb`` leaked ``UnicodeDecodeError``** on invalid
+  UTF-8 in the string table. Now correctly wrapped as
+  ``MicbParseError("invalid UTF-8 in string table: ...")``.
+  Caught by the new fuzz harness on its first run — exactly
+  the kind of regression scale-fragility hardening is designed
+  to surface.
+
+### Migration
+
+No migration required. The existing public API (``parse_mic2``,
+``emit_mic2``, ``parse_micb``, ``emit_micb``, ``Graph``) is
+unchanged. Operators who want to run the fuzz tests need
+``pip install mind-mem[test]``; the benchmark suite needs
+``pip install mind-mem[benchmark]``.
+
+This is the first of three slices in the scale-fragility train.
+v3.8.9 will add a streaming parser (incremental parse without the
+whole-input-in-memory requirement). v3.8.10 will land a Cython
+accelerator for the hot loops.
+
 ## 3.8.7 (2026-05-02)
 
 **CI hook — release-CI gate for the Model Safety Audit pipeline.**
