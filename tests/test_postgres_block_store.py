@@ -131,6 +131,72 @@ class TestInitLockReentrance:
                 pass
 
 
+class TestPgVectorWiring:
+    """v3.8.13 — pgvector schema add-on, embedding writer, and hybrid recall."""
+
+    def test_ddl_pgvector_emits_alter_and_index(self) -> None:
+        from mind_mem.block_store_postgres import _ddl_pgvector
+
+        sql = _ddl_pgvector("mind_mem", embedding_dim=1024).as_string(None)
+        assert "ADD COLUMN IF NOT EXISTS embedding VECTOR(1024)" in sql
+        assert "USING ivfflat (embedding vector_cosine_ops) WITH (lists=100)" in sql
+        assert '"mind_mem"' in sql
+
+    def test_ddl_pgvector_respects_dim(self) -> None:
+        from mind_mem.block_store_postgres import _ddl_pgvector
+
+        for dim in (384, 768, 1024, 1536, 3072):
+            sql = _ddl_pgvector("mind_mem", embedding_dim=dim).as_string(None)
+            assert f"VECTOR({dim})" in sql
+
+    def test_embedding_to_pg_format(self) -> None:
+        from mind_mem.block_store_postgres import _embedding_to_pg
+
+        out = _embedding_to_pg([0.1, -0.2, 1e-7])
+        # pgvector text literal must start/end with brackets and be comma-separated.
+        assert out.startswith("[") and out.endswith("]")
+        assert out.count(",") == 2
+        # No NaN/inf, finite formatting only.
+        assert "nan" not in out.lower()
+        assert "inf" not in out.lower()
+
+    def test_embedding_to_pg_handles_int_floats(self) -> None:
+        from mind_mem.block_store_postgres import _embedding_to_pg
+
+        out = _embedding_to_pg([1, 2, 3])  # ints get coerced.
+        assert out == "[1,2,3]"
+
+    def test_default_pgvector_flags_are_safe(self) -> None:
+        """A PostgresBlockStore that's never called _ensure_schema must
+        report ``has_vector=False`` so callers don't try to embed."""
+        from mind_mem.block_store_postgres import PostgresBlockStore
+
+        s = PostgresBlockStore("postgresql://nobody@localhost/none")
+        assert s._has_vector is False
+        assert s._embedding_dim == 1024  # mxbai-embed-large default.
+
+    def test_write_block_embedding_dim_check(self) -> None:
+        """write_block must reject mismatched embedding dims even when
+        pgvector isn't installed (input validation runs before DB)."""
+        from mind_mem.block_store_postgres import BlockStoreError, PostgresBlockStore
+
+        s = PostgresBlockStore("postgresql://nobody@localhost/none")
+        s._schema_ready = True  # short-circuit the migration call.
+        s._has_vector = True
+        s._embedding_dim = 1024
+        with pytest.raises(BlockStoreError, match="embedding dim mismatch"):
+            s.write_block({"_id": "X", "Statement": "x"}, embedding=[0.1, 0.2])  # 2 != 1024
+
+    def test_backfill_embedding_requires_pgvector(self) -> None:
+        from mind_mem.block_store_postgres import BlockStoreError, PostgresBlockStore
+
+        s = PostgresBlockStore("postgresql://nobody@localhost/none")
+        s._schema_ready = True
+        s._has_vector = False
+        with pytest.raises(BlockStoreError, match="pgvector not available"):
+            s.backfill_embedding("X", [0.1] * 1024)
+
+
 class TestRoundTrip:
     def test_write_then_get_by_id(self, store: PostgresBlockStore) -> None:
         block = _make_block("D-20260419-001", statement="Round-trip test")

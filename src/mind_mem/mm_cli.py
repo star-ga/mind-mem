@@ -99,6 +99,62 @@ def _cmd_vault_scan(args: argparse.Namespace) -> int:
     return 0
 
 
+def _extract_embed_text(block: dict) -> str:
+    """Pick the best free-text content from a block for embedding.
+
+    Priority: ``Statement`` → ``content`` → ``Subject`` + ``Excerpt`` →
+    every non-private string field concatenated. Returns "" when no text
+    is available (caller skips the block).
+    """
+    for key in ("Statement", "content"):
+        v = block.get(key)
+        if isinstance(v, str) and v.strip():
+            return v
+    parts: list[str] = []
+    subj = block.get("Subject")
+    if isinstance(subj, str) and subj.strip():
+        parts.append(subj)
+    excerpt = block.get("Excerpt")
+    if isinstance(excerpt, str) and excerpt.strip():
+        parts.append(excerpt)
+    if parts:
+        return ". ".join(parts)
+    # Last-resort: glue every non-private string-ish field together.
+    fallback: list[str] = []
+    for k, v in block.items():
+        if k.startswith("_") or k in ("_id", "_source_file"):
+            continue
+        if isinstance(v, str) and v.strip():
+            fallback.append(f"{k}: {v}")
+    return " | ".join(fallback)
+
+
+def _embed_via_ollama(texts: list[str], model: str = "mxbai-embed-large") -> list[list[float]]:
+    """Minimal Ollama embedder for migrate-store --with-embeddings.
+
+    Kept inside mm_cli to avoid pulling the recall_vector module's heavy
+    deps just for migration. Mirrors recall_vector.embed_ollama batching
+    behaviour. URL is hardcoded to localhost loopback only.
+    """
+    import urllib.request as _req
+
+    MAX_CHARS = 1500
+    BATCH = 16
+    out: list[list[float]] = []
+    for i in range(0, len(texts), BATCH):
+        batch = [t[:MAX_CHARS] for t in texts[i : i + BATCH]]
+        payload = json.dumps({"model": model, "input": batch}).encode("utf-8")
+        req = _req.Request(
+            "http://localhost:11434/api/embed",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with _req.urlopen(req, timeout=180) as resp:  # nosec B310 — loopback only.
+            data = json.loads(resp.read().decode("utf-8"))
+        out.extend(data.get("embeddings", []))
+    return out
+
+
 def _cmd_migrate_store(args: argparse.Namespace) -> int:
     """Migrate the workspace block corpus between backends.
 
@@ -116,6 +172,12 @@ def _cmd_migrate_store(args: argparse.Namespace) -> int:
       5. Write a JSON receipt to memory/migrations/<ts>-<from>-to-<to>.json.
 
     --dry-run prints the projected counts without writing anything.
+
+    v3.8.13 — ``--with-embeddings`` adds an embedding-backfill pass after
+    the row insert. Uses Ollama by default with mxbai-embed-large; the
+    embedder model name comes from ``--embed-model`` (default
+    ``mxbai-embed-large``). Skipped silently when pgvector is missing
+    on the target.
     """
     import datetime
     import time
@@ -187,6 +249,28 @@ def _cmd_migrate_store(args: argparse.Namespace) -> int:
             errors.append({"id": str(b.get("_id")), "error": str(exc)[:200]})
     duration = round(time.monotonic() - t0, 2)
 
+    embedded = 0
+    embed_errors: list[dict[str, str]] = []
+    if args.with_embeddings:
+        if not dst._has_vector:
+            embed_errors.append({"id": "*", "error": "pgvector not available on target — skipped"})
+        else:
+            embed_t0 = time.monotonic()
+            for b in with_id:
+                bid = str(b.get("_id"))
+                content = _extract_embed_text(b)
+                if not content:
+                    continue
+                try:
+                    vecs = _embed_via_ollama([content], model=args.embed_model)
+                    if not vecs:
+                        raise RuntimeError("embedder returned empty list")
+                    dst.backfill_embedding(bid, vecs[0])
+                    embedded += 1
+                except Exception as exc:
+                    embed_errors.append({"id": bid, "error": str(exc)[:200]})
+            duration += round(time.monotonic() - embed_t0, 2)
+
     import psycopg
     with psycopg.connect(args.dsn) as conn:
         with conn.cursor() as cur:
@@ -212,9 +296,18 @@ def _cmd_migrate_store(args: argparse.Namespace) -> int:
         "duration_seconds": duration,
         "blocks_per_second": round(written / duration, 1) if duration > 0 else None,
         "verified": target_count >= written,
+        "embeddings": {
+            "requested": bool(args.with_embeddings),
+            "available": bool(dst._has_vector) if args.with_embeddings else None,
+            "embedder": args.embed_model if args.with_embeddings else None,
+            "rows_embedded": embedded,
+            "errors": len(embed_errors),
+        },
     }
     if errors:
         receipt["error_sample"] = errors[:10]
+    if embed_errors:
+        receipt["embeddings"]["error_sample"] = embed_errors[:10]
 
     rec_dir = os.path.join(ws, "memory", "migrations")
     os.makedirs(rec_dir, exist_ok=True)
@@ -1237,6 +1330,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_migrate.add_argument("--dry-run", action="store_true", dest="dry_run")
     p_migrate.add_argument("--execute", action="store_true")
+    p_migrate.add_argument(
+        "--with-embeddings",
+        action="store_true",
+        dest="with_embeddings",
+        help="Backfill embedding vectors after the row insert (requires pgvector + Ollama).",
+    )
+    p_migrate.add_argument(
+        "--embed-model",
+        default="mxbai-embed-large",
+        dest="embed_model",
+        help="Ollama embedding model name (default: mxbai-embed-large, dim 1024).",
+    )
     p_migrate.set_defaults(func=_cmd_migrate_store)
 
     # detect — list AI coding clients present on the machine

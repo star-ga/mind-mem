@@ -2,6 +2,58 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.13 (2026-05-03)
+
+**Postgres backend goes hybrid: pgvector wiring + embedding backfill +
+RRF recall.** The v3.8.12 fixes made the Postgres schema usable, but
+the "hybrid BM25 + vector" claim was still aspirational on Postgres —
+no `embedding` column existed and `recall` only did `ts_rank`. v3.8.13
+ships the missing half end-to-end and verifies it against the live
+Postgres workspace.
+
+### Added
+
+- **pgvector schema add-on.** `_ddl_pgvector(schema, embedding_dim)`
+  emits `ALTER TABLE blocks ADD COLUMN IF NOT EXISTS embedding
+  VECTOR(<dim>)` plus an IVFFlat cosine index. Probed on first
+  `_ensure_schema()` call via `_try_create_extension_vector`; absence
+  degrades gracefully to BM25-only without failing the migration.
+- **`PostgresBlockStore.write_block(block, embedding=...)`** — atomic
+  upsert of row + vector in the same INSERT ON CONFLICT statement.
+  Validates embedding dim against the schema-configured value before
+  hitting the DB.
+- **`PostgresBlockStore.backfill_embedding(id, vec)`** — set the vector
+  column on an existing row without touching content.
+  Idempotent. Used by the migrate-store backfill pass.
+- **`PostgresBlockStore.hybrid_search(query, query_embedding, ...)`** —
+  server-side BM25 (`ts_rank`) + cosine (`<=>`) parallel candidate
+  retrieval, fused with reciprocal rank fusion (k=60). Returns
+  `_score` + `_retrieval_source` ("hybrid_pgvector" | "bm25_only") on
+  every block. Falls back cleanly when `query_embedding` is None or
+  pgvector is missing.
+- **`mm migrate-store --with-embeddings [--embed-model NAME]`** — adds
+  a per-block embedding pass after the row insert. Default embedder
+  is Ollama `mxbai-embed-large` (1024-dim) via localhost:11434.
+- **Smarter embed-content extraction.** `_extract_embed_text(block)`
+  prefers `Statement` → `content` → `Subject` + `Excerpt` → all
+  non-private string fields concatenated. The naive "Statement-only"
+  path missed 234/263 blocks in our live workspace; the new path
+  embeds 100%.
+- **6 new regression tests** covering: pgvector DDL emission, dim
+  parametrisation, pgvector text-literal formatting, default-safe
+  flags, dim-mismatch validation, and the `pgvector not available`
+  guard on backfill.
+
+### Verified
+
+- Live migration on the ~/.openclaw/workspace corpus: 263 blocks
+  written + embedded in ~10s end-to-end (~25 blocks/s with embedding,
+  370/s without). Receipt at `memory/migrations/<ts>-markdown-to-postgres.json`.
+- `hybrid_search("STARGA git commit author policy", embedding=...)`
+  returns semantically related governance decisions ranked by RRF;
+  BM25-only path returns the exact-keyword matches; both share the
+  same SQL transaction and connection pool.
+
 ## 3.8.12 (2026-05-03)
 
 **Postgres backend: real fixes + `mm migrate-store` CLI.** Two

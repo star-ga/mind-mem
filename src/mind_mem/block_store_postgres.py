@@ -79,12 +79,20 @@ def _require_psycopg() -> tuple[Any, Any]:
 # ─── DDL ──────────────────────────────────────────────────────────────────────
 
 
+DEFAULT_EMBEDDING_DIM = 1024  # mxbai-embed-large native dim; matches workspace default.
+
+
 def _ddl(schema: str) -> Any:
     """Return a psycopg Composable DDL batch with the schema safely quoted.
 
     All schema references use ``psycopg.sql.Identifier`` so the schema name
     can never act as an SQL injection vector.  ``_validate_schema_name`` is
     also enforced at ``__init__`` time for defence-in-depth.
+
+    Note: this DDL only creates the base schema. The pgvector embedding
+    column + IVFFlat index are added by ``_ddl_pgvector()`` after a
+    server-side capability check, so deployments without pgvector still
+    get a working BM25-only schema.
     """
     from psycopg import sql as pgsql
 
@@ -163,6 +171,52 @@ def _sql(schema: str, template: str) -> Any:
     return pgsql.SQL(template).format(s=pgsql.Identifier(schema))
 
 
+def _try_create_extension_vector(conn: Any) -> bool:
+    """Attempt ``CREATE EXTENSION IF NOT EXISTS vector``. Returns True on
+    success, False when the extension is unavailable on the server. The
+    failure path leaves the transaction in a clean state for the caller.
+    """
+    try:
+        conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        return True
+    except Exception:
+        # Roll back the failed statement so the next exec inherits a
+        # clean transaction state. Conn is autocommit in our caller so
+        # this is a no-op there but defensive in case that changes.
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return False
+
+
+def _ddl_pgvector(schema: str, embedding_dim: int = DEFAULT_EMBEDDING_DIM) -> Any:
+    """Return DDL that adds the embedding column + IVFFlat cosine index.
+
+    Run this only after :func:`_try_create_extension_vector` confirmed
+    pgvector is available on the server. The ALTER TABLE is idempotent
+    (``ADD COLUMN IF NOT EXISTS``) so re-runs are safe.
+    """
+    from psycopg import sql as pgsql
+
+    s = pgsql.Identifier(schema)
+    dim = int(embedding_dim)
+    stmts: list[Any] = [
+        pgsql.SQL(
+            "ALTER TABLE {s}.blocks ADD COLUMN IF NOT EXISTS embedding VECTOR("
+            + str(dim)
+            + ")"
+        ).format(s=s),
+        # IVFFlat with cosine — good for retrieval up to ~100k blocks.
+        # Tune ``lists`` once the corpus exceeds that.
+        pgsql.SQL(
+            "CREATE INDEX IF NOT EXISTS blocks_embedding "
+            "ON {s}.blocks USING ivfflat (embedding vector_cosine_ops) WITH (lists=100)"
+        ).format(s=s),
+    ]
+    return pgsql.SQL(";\n").join(stmts)
+
+
 # ─── Row → block dict ─────────────────────────────────────────────────────────
 
 
@@ -187,6 +241,16 @@ def _row_to_block(row: dict[str, Any]) -> dict[str, Any]:
     if "active" in row:
         block.setdefault("active", row["active"])
     return block
+
+
+def _embedding_to_pg(embedding: list[float]) -> str:
+    """Render a Python float list as the pgvector text literal ``[a,b,...]``.
+
+    pgvector accepts ``'[1,2,3]'::vector`` and parses without requiring
+    the pgvector psycopg adapter to be installed — keeps the dependency
+    surface to plain ``psycopg``.
+    """
+    return "[" + ",".join(format(float(x), ".7g") for x in embedding) + "]"
 
 
 def _block_to_row(block: dict[str, Any]) -> tuple[str, str, str, str]:
@@ -249,6 +313,11 @@ class PostgresBlockStore:
         # cost of re-entrance is zero compared to the cost of the
         # bug it fixes (any first call from a single thread hangs).
         self._init_lock = threading.RLock()
+        # v3.8.13: pgvector wiring. Default dim matches mxbai-embed-large
+        # (1024). If the deployment uses a different embedder, set this
+        # before _ensure_schema() runs (constructor arg or attr write).
+        self._embedding_dim: int = DEFAULT_EMBEDDING_DIM
+        self._has_vector: bool = False
 
     # ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -268,7 +337,11 @@ class PostgresBlockStore:
         return self._pool
 
     def _ensure_schema(self) -> None:
-        """Run CREATE TABLE / INDEX migrations idempotently on first call."""
+        """Run CREATE TABLE / INDEX migrations idempotently on first call.
+
+        v3.8.13: also probes for pgvector. Sets ``self._has_vector`` so
+        downstream paths (write_block, hybrid_search) can route on it.
+        """
         if self._schema_ready:
             return
         with self._init_lock:
@@ -280,8 +353,25 @@ class PostgresBlockStore:
                 with pool.connection() as conn:
                     conn.autocommit = True
                     conn.execute(_ddl(self._schema))
+                    self._has_vector = _try_create_extension_vector(conn)
+                    if self._has_vector:
+                        try:
+                            conn.execute(_ddl_pgvector(self._schema, self._embedding_dim))
+                        except Exception as vec_exc:
+                            # Vector ext present but DDL failed (e.g. dim
+                            # mismatch with an existing column). Don't
+                            # fail the whole migration; degrade to
+                            # BM25-only and surface in the log.
+                            self._has_vector = False
+                            _log.warning(
+                                "postgres_pgvector_ddl_failed",
+                                extra={"schema": self._schema, "error": str(vec_exc)[:200]},
+                            )
                 self._schema_ready = True
-                _log.info("postgres_block_store_schema_ready", extra={"schema": self._schema})
+                _log.info(
+                    "postgres_block_store_schema_ready",
+                    extra={"schema": self._schema, "has_vector": self._has_vector},
+                )
             except Exception as exc:
                 raise BlockStoreError(f"Schema migration failed: {exc}") from exc
 
@@ -376,6 +466,117 @@ class PostgresBlockStore:
         except Exception as exc:
             raise BlockStoreError(f"search failed: {exc}") from exc
 
+    def hybrid_search(
+        self,
+        query: str,
+        *,
+        query_embedding: list[float] | None = None,
+        limit: int = 10,
+        rrf_k: int = 60,
+        candidate_pool: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Hybrid BM25 + cosine recall fused with reciprocal rank fusion.
+
+        v3.8.13 — runs both halves server-side in a single CTE batch:
+          * BM25-style: ``ts_rank`` over the indexed tsvector.
+          * Vector:     ``embedding <=> query_embedding`` cosine distance.
+
+        Each half retrieves the top-``candidate_pool`` rows; ranks are
+        fused per-id with RRF (``1 / (rrf_k + rank)``). Returns the
+        ``limit`` highest-scored merged rows.
+
+        Falls back to BM25-only when:
+          * pgvector is not installed on the server, OR
+          * ``query_embedding`` is None, OR
+          * the column is empty (every row has NULL embedding — no
+            backfill yet).
+
+        Search semantics intentionally match the canonical mind-mem
+        retrieval pipeline so callers can swap backends without
+        re-tuning weights.
+        """
+        self._ensure_schema()
+        psycopg, _ = _require_psycopg()
+        pool = self._get_pool()
+
+        do_vector = bool(query_embedding) and self._has_vector
+        if do_vector and len(query_embedding or []) != self._embedding_dim:
+            raise BlockStoreError(
+                f"query_embedding dim mismatch: got {len(query_embedding or [])},"
+                f" schema expects {self._embedding_dim}"
+            )
+
+        bm25_sql = _sql(
+            self._schema,
+            "SELECT id, ts_rank("
+            "    to_tsvector('english', content || ' ' || COALESCE(metadata->>'Statement', '')),"
+            "    plainto_tsquery('english', %s)"
+            ") AS rank"
+            " FROM {s}.blocks"
+            " WHERE active"
+            "   AND to_tsvector('english', content || ' ' || COALESCE(metadata->>'Statement', ''))"
+            "       @@ plainto_tsquery('english', %s)"
+            " ORDER BY rank DESC"
+            " LIMIT %s",
+        )
+        cos_sql = _sql(
+            self._schema,
+            "SELECT id, (embedding <=> %s::vector) AS dist"
+            " FROM {s}.blocks"
+            " WHERE active AND embedding IS NOT NULL"
+            " ORDER BY embedding <=> %s::vector"
+            " LIMIT %s",
+        )
+        fetch_sql = _sql(
+            self._schema,
+            "SELECT id, file_path, content, metadata, created_at, updated_at, active"
+            " FROM {s}.blocks WHERE id = ANY(%s)",
+        )
+
+        try:
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(bm25_sql, (query, query, candidate_pool))
+                    bm25_rows = cur.fetchall()  # [(id, rank), ...]
+                    cos_rows: list[tuple[str, float]] = []
+                    if do_vector:
+                        emb_lit = _embedding_to_pg(query_embedding or [])
+                        cur.execute(cos_sql, (emb_lit, emb_lit, candidate_pool))
+                        cos_rows = cur.fetchall()
+
+                    # RRF fusion. Both halves contribute 1/(k+rank); rank
+                    # is 1-based to match the standard formulation. Ties
+                    # broken by sum of contributions (already handled by
+                    # accumulation).
+                    fused: dict[str, float] = {}
+                    for rank, (bid, _r) in enumerate(bm25_rows, start=1):
+                        fused[bid] = fused.get(bid, 0.0) + 1.0 / (rrf_k + rank)
+                    for rank, (cid, _d) in enumerate(cos_rows, start=1):
+                        fused[cid] = fused.get(cid, 0.0) + 1.0 / (rrf_k + rank)
+
+                    if not fused:
+                        return []
+                    top = sorted(fused.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+                    top_ids = [bid for bid, _ in top]
+                    score_by_id = dict(top)
+
+                    with conn.cursor(row_factory=psycopg.rows.dict_row) as fcur:
+                        fcur.execute(fetch_sql, (top_ids,))
+                        rows_by_id = {r["id"]: dict(r) for r in fcur.fetchall()}
+
+                    out: list[dict[str, Any]] = []
+                    for bid in top_ids:
+                        row = rows_by_id.get(bid)
+                        if row is None:
+                            continue  # raced delete; skip silently.
+                        block = _row_to_block(row)
+                        block["_score"] = score_by_id[bid]
+                        block["_retrieval_source"] = "hybrid_pgvector" if do_vector else "bm25_only"
+                        out.append(block)
+                    return out
+        except Exception as exc:
+            raise BlockStoreError(f"hybrid_search failed: {exc}") from exc
+
     def list_blocks(self) -> list[str]:
         """Return distinct ``file_path`` values for all active blocks."""
         self._ensure_schema()
@@ -394,33 +595,83 @@ class PostgresBlockStore:
 
     # ─── Write surface ────────────────────────────────────────────────────────
 
-    def write_block(self, block: dict[str, Any]) -> str:
+    def write_block(self, block: dict[str, Any], *, embedding: list[float] | None = None) -> str:
         """Upsert a block. Returns the block's ``_id``.
 
         INSERT … ON CONFLICT (id) DO UPDATE is executed in a single
         transaction so it is genuinely atomic (no lost-update window).
+
+        v3.8.13: when ``embedding`` is provided AND the schema has the
+        pgvector column (``self._has_vector``), the embedding is upserted
+        atomically with the row. Without an embedding the column stays
+        NULL — backfill via ``backfill_embedding`` later.
         """
         self._ensure_schema()
         pool = self._get_pool()
         block_id, file_path, content, metadata_json = _block_to_row(block)
+        if embedding is not None and self._has_vector:
+            if len(embedding) != self._embedding_dim:
+                raise BlockStoreError(
+                    f"embedding dim mismatch: got {len(embedding)}, schema expects {self._embedding_dim}"
+                )
+            sql = _sql(
+                self._schema,
+                "INSERT INTO {s}.blocks (id, file_path, content, metadata, embedding, updated_at)"
+                " VALUES (%s, %s, %s, %s::jsonb, %s::vector, NOW())"
+                " ON CONFLICT (id) DO UPDATE"
+                "     SET file_path  = EXCLUDED.file_path,"
+                "         content    = EXCLUDED.content,"
+                "         metadata   = EXCLUDED.metadata,"
+                "         embedding  = EXCLUDED.embedding,"
+                "         updated_at = EXCLUDED.updated_at",
+            )
+            params = (block_id, file_path, content, metadata_json, _embedding_to_pg(embedding))
+        else:
+            sql = _sql(
+                self._schema,
+                "INSERT INTO {s}.blocks (id, file_path, content, metadata, updated_at)"
+                " VALUES (%s, %s, %s, %s::jsonb, NOW())"
+                " ON CONFLICT (id) DO UPDATE"
+                "     SET file_path  = EXCLUDED.file_path,"
+                "         content    = EXCLUDED.content,"
+                "         metadata   = EXCLUDED.metadata,"
+                "         updated_at = EXCLUDED.updated_at",
+            )
+            params = (block_id, file_path, content, metadata_json)
+        try:
+            with pool.connection() as conn:
+                with conn.transaction():
+                    conn.execute(sql, params)
+            _log.debug("block_store_write", extra={"block_id": block_id, "embedded": embedding is not None})
+            return block_id
+        except Exception as exc:
+            raise BlockStoreError(f"write_block failed for {block_id!r}: {exc}") from exc
+
+    def backfill_embedding(self, block_id: str, embedding: list[float]) -> None:
+        """Set the embedding for an existing row without touching content.
+
+        Used by ``mm migrate-store --with-embeddings`` to populate the
+        vector column post-hoc. Idempotent — overwrites whatever is
+        there. Raises ``BlockStoreError`` if pgvector is not available.
+        """
+        self._ensure_schema()
+        if not self._has_vector:
+            raise BlockStoreError("pgvector not available; cannot backfill embeddings")
+        if len(embedding) != self._embedding_dim:
+            raise BlockStoreError(
+                f"embedding dim mismatch: got {len(embedding)}, schema expects {self._embedding_dim}"
+            )
+        pool = self._get_pool()
         sql = _sql(
             self._schema,
-            "INSERT INTO {s}.blocks (id, file_path, content, metadata, updated_at)"
-            " VALUES (%s, %s, %s, %s::jsonb, NOW())"
-            " ON CONFLICT (id) DO UPDATE"
-            "     SET file_path  = EXCLUDED.file_path,"
-            "         content    = EXCLUDED.content,"
-            "         metadata   = EXCLUDED.metadata,"
-            "         updated_at = EXCLUDED.updated_at",
+            "UPDATE {s}.blocks SET embedding = %s::vector, updated_at = NOW() WHERE id = %s",
         )
         try:
             with pool.connection() as conn:
                 with conn.transaction():
-                    conn.execute(sql, (block_id, file_path, content, metadata_json))
-            _log.debug("block_store_write", extra={"block_id": block_id})
-            return block_id
+                    conn.execute(sql, (_embedding_to_pg(embedding), block_id))
         except Exception as exc:
-            raise BlockStoreError(f"write_block failed for {block_id!r}: {exc}") from exc
+            raise BlockStoreError(f"backfill_embedding failed for {block_id!r}: {exc}") from exc
 
     def delete_block(self, block_id: str) -> bool:
         """Delete a block by id. Returns True if a row was removed.

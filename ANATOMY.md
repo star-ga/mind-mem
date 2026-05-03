@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 711 | **Est. tokens:** ~1,449,406
-**Generated:** 2026-05-03 08:41 UTC
+**Files:** 712 | **Est. tokens:** ~1,454,124
+**Generated:** 2026-05-03 09:09 UTC
 
 ## Token Budget Guide
 
@@ -24,7 +24,7 @@
 |-----------|-------|-------------|
 | `./` | 32 | ~84,207 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `.arch-mind/` | 3 | ~1,010 |
+| `.arch-mind/` | 4 | ~1,093 |
 | `benchmarks/` | 26 | ~64,933 |
 | `deploy/` | 2 | ~772 |
 | `deploy/docker/` | 1 | ~495 |
@@ -54,7 +54,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 149 | ~509,744 |
+| `src/mind_mem/` | 149 | ~513,624 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,903 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
@@ -62,7 +62,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~3,968 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 245 | ~487,030 |
+| `tests/` | 245 | ~487,785 |
 | `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -112,9 +112,10 @@
 - `SKILL.md` (~456 tok, medium) — mind-mem Development
 ### `.arch-mind/`
 
-- `last_summary.json` (~152 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
+- `last_summary.json` (~155 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
 - `rules.mind` (~766 tok, large) — mind-mem architectural-governance rules
-- `scan.json` (~92 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
+- `scan.json` (~86 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
+- `scan_v3813.json` (~86 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
 ### `benchmarks/`
 
 - `bench_kernels.py` (~4027 tok, huge) — Benchmark: MIND kernels vs pure Python scoring.
@@ -398,7 +399,7 @@
 - `block_metadata.py` (~2223 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~7364 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_store_encrypted.py` (~2313 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store_postgres.py` (~8027 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
+- `block_store_postgres.py` (~10857 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~2095 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
 - `block_store.py` (~10443 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
@@ -509,7 +510,7 @@
 - `mind_ffi.py` (~5481 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~15184 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~16234 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `model_audit.py` (~4370 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
 - `model_gate.py` (~2549 tok, huge) — Load-gate registry for ``mm audit-model`` checkpoints.
 - `model_provenance.py` (~1751 tok, huge) — Provenance allowlist check for ``mm audit-model`` checkpoints.
@@ -778,7 +779,7 @@
 - `test_oidc_admin_enforcement.py` (~1716 tok, huge) — v3.2.1 — OIDC JWTs must pass through ``_require_admin`` checks.
 - `test_oidc_auth.py` (~2970 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
 - `test_ontology.py` (~2306 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_postgres_block_store.py` (~3605 tok, huge) — v3.2.0 §1.4 PR-5 — PostgresBlockStore integration tests.
+- `test_postgres_block_store.py` (~4360 tok, huge) — v3.2.0 §1.4 PR-5 — PostgresBlockStore integration tests.
 - `test_postgres_replica_routing.py` (~1777 tok, huge) — v3.2.0 — tests for read-replica routing in ReplicatedPostgresBlockStore."""
 - `test_prefetch_context.py` (~1487 tok, large) — Tests for prefetch_context() in recall.py."""
 - `test_prefetch.py` (~326 tok, medium) — Tests for prefetch functionality."""
