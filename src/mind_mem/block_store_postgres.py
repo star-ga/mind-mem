@@ -114,8 +114,17 @@ def _ddl(schema: str) -> Any:
         ).format(s=s),
         pgsql.SQL("CREATE INDEX IF NOT EXISTS blocks_file_path ON {s}.blocks(file_path)").format(s=s),
         pgsql.SQL("CREATE INDEX IF NOT EXISTS blocks_active ON {s}.blocks(active) WHERE active").format(s=s),
-        # GIN index: avoids per-row tsvector recomputation on every search().
-        pgsql.SQL("CREATE INDEX IF NOT EXISTS blocks_fts ON {s}.blocks USING GIN (to_tsvector('english', content))").format(s=s),
+        # GIN index over the SAME tsvector expression that search() and
+        # hybrid_search() use in their WHERE clauses — content + the
+        # Statement field from JSONB metadata. Without character-for-
+        # character match the planner falls back to a sequential scan
+        # with per-row tsvector recomputation. v3.8.13 had a
+        # ``to_tsvector('english', content)`` index that never matched.
+        pgsql.SQL(
+            "CREATE INDEX IF NOT EXISTS blocks_fts ON {s}.blocks USING GIN ("
+            "to_tsvector('english', content || ' ' || COALESCE(metadata->>'Statement', ''))"
+            ")"
+        ).format(s=s),
         # updated_at DESC: supports time-range queries without a seq-scan.
         pgsql.SQL("CREATE INDEX IF NOT EXISTS blocks_updated_at ON {s}.blocks(updated_at DESC)").format(s=s),
         # Covering partial index: makes list_blocks() an index-only scan.
@@ -191,27 +200,39 @@ def _try_create_extension_vector(conn: Any) -> bool:
 
 
 def _ddl_pgvector(schema: str, embedding_dim: int = DEFAULT_EMBEDDING_DIM) -> Any:
-    """Return DDL that adds the embedding column + IVFFlat cosine index.
+    """Return DDL that adds the embedding column + HNSW cosine index.
 
     Run this only after :func:`_try_create_extension_vector` confirmed
     pgvector is available on the server. The ALTER TABLE is idempotent
     (``ADD COLUMN IF NOT EXISTS``) so re-runs are safe.
+
+    Index choice: HNSW (pgvector >= 0.5.0). HNSW builds incrementally
+    on insert so the index quality is independent of when we run the
+    DDL relative to row population — fixing the IVFFlat-on-empty-table
+    bug v3.8.13 had where centroids were built before any rows existed.
+    HNSW is also more forgiving on small corpora than IVFFlat.
+    Defaults ``m=16, ef_construction=64`` are pgvector's documented
+    starting point.
+
+    The integer dimension is rendered through ``pgsql.Literal`` so the
+    SQL composition stays inside the Composable API; we never glue
+    user-controlled values into raw SQL text.
     """
     from psycopg import sql as pgsql
 
     s = pgsql.Identifier(schema)
-    dim = int(embedding_dim)
+    dim_lit = pgsql.Literal(int(embedding_dim))
     stmts: list[Any] = [
         pgsql.SQL(
-            "ALTER TABLE {s}.blocks ADD COLUMN IF NOT EXISTS embedding VECTOR("
-            + str(dim)
-            + ")"
-        ).format(s=s),
-        # IVFFlat with cosine — good for retrieval up to ~100k blocks.
-        # Tune ``lists`` once the corpus exceeds that.
+            "ALTER TABLE {s}.blocks ADD COLUMN IF NOT EXISTS embedding VECTOR({d})"
+        ).format(s=s, d=dim_lit),
+        # HNSW with cosine. lists/m tuning replaces the brittle
+        # IVFFlat lists=100 default that mis-bucketed any corpus
+        # smaller than ~100k rows.
         pgsql.SQL(
             "CREATE INDEX IF NOT EXISTS blocks_embedding "
-            "ON {s}.blocks USING ivfflat (embedding vector_cosine_ops) WITH (lists=100)"
+            "ON {s}.blocks USING hnsw (embedding vector_cosine_ops) "
+            "WITH (m=16, ef_construction=64)"
         ).format(s=s),
     ]
     return pgsql.SQL(";\n").join(stmts)
@@ -249,7 +270,18 @@ def _embedding_to_pg(embedding: list[float]) -> str:
     pgvector accepts ``'[1,2,3]'::vector`` and parses without requiring
     the pgvector psycopg adapter to be installed — keeps the dependency
     surface to plain ``psycopg``.
+
+    Rejects NaN/Inf at the boundary. Postgres + pgvector silently accept
+    ``'[nan,inf]'::vector`` but every cosine distance involving such a
+    row returns NaN, which silently poisons RRF ranking in
+    :meth:`PostgresBlockStore.hybrid_search`. Catching here is cheaper
+    than chasing NaN-tainted recall scores later.
     """
+    import math
+
+    for x in embedding:
+        if not math.isfinite(float(x)):
+            raise ValueError(f"non-finite value in embedding: {x!r}")
     return "[" + ",".join(format(float(x), ".7g") for x in embedding) + "]"
 
 
@@ -499,12 +531,21 @@ class PostgresBlockStore:
         psycopg, _ = _require_psycopg()
         pool = self._get_pool()
 
-        do_vector = bool(query_embedding) and self._has_vector
-        if do_vector and len(query_embedding or []) != self._embedding_dim:
+        # Bound caller-controlled values so a runaway agent can't trigger
+        # an OOM via huge candidate_pool / limit values. The caps are
+        # generous (5x default) but finite. Enforced before SQL.
+        limit = min(int(limit), 200)
+        candidate_pool = min(int(candidate_pool), 500)
+
+        # Treat None and empty list distinctly: empty-list is a caller bug
+        # (likely an embedder regression) and should fail loudly rather
+        # than silently degrade to BM25-only.
+        if query_embedding is not None and len(query_embedding) != self._embedding_dim:
             raise BlockStoreError(
-                f"query_embedding dim mismatch: got {len(query_embedding or [])},"
+                f"query_embedding dim mismatch: got {len(query_embedding)},"
                 f" schema expects {self._embedding_dim}"
             )
+        do_vector = query_embedding is not None and self._has_vector
 
         bm25_sql = _sql(
             self._schema,

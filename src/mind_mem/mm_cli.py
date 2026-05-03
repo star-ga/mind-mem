@@ -129,6 +129,38 @@ def _extract_embed_text(block: dict) -> str:
     return " | ".join(fallback)
 
 
+def _redact_dsn(dsn: str) -> str:
+    """Redact password fields from a Postgres DSN before logging it.
+
+    Handles BOTH formats psycopg accepts:
+      * URL form:        postgresql://user:secret@host:5432/db
+      * Keyword form:    host=localhost password=secret dbname=db
+
+    The URL parser misses the keyword form entirely (urlparse returns
+    no scheme + no .password), so v3.8.13's receipt JSON leaked the
+    password verbatim for any operator using the keyword DSN style.
+    Both formats now route through the same redaction.
+    """
+    import re
+
+    if not dsn:
+        return dsn
+    # URL form first.
+    try:
+        from urllib.parse import urlparse, urlunparse
+
+        u = urlparse(dsn)
+        if u.scheme and u.password:
+            new_netloc = f"{u.username or ''}:***@{u.hostname or ''}"
+            if u.port:
+                new_netloc += f":{u.port}"
+            return urlunparse(u._replace(netloc=new_netloc))
+    except Exception:
+        pass
+    # Keyword form (postgresql://… without password OR plain key=value).
+    return re.sub(r'(?i)\bpassword\s*=\s*\S+', "password=***", dsn)
+
+
 def _embed_via_ollama(texts: list[str], model: str = "mxbai-embed-large") -> list[list[float]]:
     """Minimal Ollama embedder for migrate-store --with-embeddings.
 
@@ -208,14 +240,7 @@ def _cmd_migrate_store(args: argparse.Namespace) -> int:
         return 2
 
     ws = _workspace()
-    redacted_dsn = args.dsn
-    try:
-        from urllib.parse import urlparse, urlunparse
-        u = urlparse(args.dsn)
-        if u.password:
-            redacted_dsn = urlunparse(u._replace(netloc=f"{u.username}:***@{u.hostname}:{u.port or 5432}"))
-    except Exception:
-        pass
+    redacted_dsn = _redact_dsn(args.dsn)
 
     src = MarkdownBlockStore(ws)
     blocks = src.get_all()
@@ -271,13 +296,18 @@ def _cmd_migrate_store(args: argparse.Namespace) -> int:
                     embed_errors.append({"id": bid, "error": str(exc)[:200]})
             duration += round(time.monotonic() - embed_t0, 2)
 
-    import psycopg
-    with psycopg.connect(args.dsn) as conn:
+    # Verify via the existing pool — keeps connection counts honest and
+    # avoids a second psycopg.connect that would bypass the pool's
+    # health-check + replay logic.
+    from psycopg import sql as _pgsql
+
+    with dst._get_pool().connection() as conn:
         with conn.cursor() as cur:
-            from psycopg import sql as _pgsql
-            cur.execute(_pgsql.SQL("SELECT COUNT(*) FROM {s}.blocks").format(
-                s=_pgsql.Identifier(args.schema)
-            ))
+            cur.execute(
+                _pgsql.SQL("SELECT COUNT(*) FROM {s}.blocks").format(
+                    s=_pgsql.Identifier(args.schema)
+                )
+            )
             target_count = cur.fetchone()[0]
 
     ts = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")

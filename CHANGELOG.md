@@ -2,6 +2,64 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.14 (2026-05-03)
+
+**v3.8.13 audit follow-through.** Three independent agent reviews
+(code-reviewer, security-reviewer, database-reviewer) of v3.8.13
+flagged five HIGH/CRITICAL issues. All five are fixed in this
+release; the live workspace was re-migrated and EXPLAIN-verified.
+
+### Fixed
+
+- **GIN FTS index never matched the queries.** `_ddl()` indexed
+  `to_tsvector('english', content)` but `search()` and `hybrid_search()`
+  queried `to_tsvector('english', content || ' ' || metadata->>'Statement')`.
+  The planner couldn't match expression to index and fell back to
+  per-row tsvector recomputation. Now the index expression matches
+  the query verbatim — `EXPLAIN` confirms `Bitmap Index Scan on
+  blocks_fts`.
+- **IVFFlat with `lists=100` on a small/empty table built degenerate
+  centroids** that never recovered without manual `REINDEX`. Switched
+  to **HNSW** (`m=16, ef_construction=64`) which builds incrementally
+  on insert — independent of when the DDL runs vs. when rows arrive.
+  Requires pgvector >= 0.5.0.
+- **`_ddl_pgvector` injected the dim via raw string concatenation**
+  (`"VECTOR(" + str(dim) + ")"`). Now goes through `pgsql.Literal`
+  inside the Composable API; SQL composition stays type-safe.
+- **`_embedding_to_pg` accepted NaN/Inf** which silently poisoned RRF
+  ranking via NaN-tainted cosine distances. Boundary check via
+  `math.isfinite` rejects with a clear error.
+- **`_redact_dsn` only handled URL-form DSNs**; the keyword form
+  (`host=… password=secret …`) leaked the password to the migration
+  receipt JSON. Now redacts both formats. Case-insensitive.
+- **`hybrid_search` empty-list embedding silently degraded to BM25.**
+  Now distinguishes None (graceful fallback) from `[]` (caller bug,
+  raises BlockStoreError with dim mismatch).
+- **`hybrid_search` had no upper bound on `limit` / `candidate_pool`.**
+  Capped at 200 / 500 respectively to prevent OOM under runaway
+  callers.
+- **`_cmd_migrate_store` did a bare `import psycopg`** that bypassed
+  the `_require_psycopg()` user-friendly error path and opened a
+  second connection outside the existing pool. Now uses
+  `dst._get_pool().connection()` for the verification COUNT.
+
+### Added
+
+- **8 new regression tests** in `TestPgVectorHardening` covering HNSW
+  switch, dim Literal, FTS expression match, NaN/Inf rejection,
+  empty-list embedding refusal.
+- **`tests/test_dsn_redaction.py`** — 7 tests for both URL and keyword
+  DSN forms, case sensitivity, and the no-password path.
+
+### Verified
+
+- Re-migrated `/home/n/.openclaw/workspace`: 263 blocks + 263
+  embeddings, 0 errors, 12.19s end-to-end.
+- `EXPLAIN` of the BM25 path now reports `Bitmap Index Scan on
+  blocks_fts` (was `Seq Scan` in v3.8.13).
+- HNSW index built and present:
+  `USING hnsw (embedding vector_cosine_ops) WITH (m=16, ef_construction=64)`.
+
 ## 3.8.13 (2026-05-03)
 
 **Postgres backend goes hybrid: pgvector wiring + embedding backfill +

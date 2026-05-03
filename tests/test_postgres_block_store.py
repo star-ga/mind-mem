@@ -135,11 +135,15 @@ class TestPgVectorWiring:
     """v3.8.13 — pgvector schema add-on, embedding writer, and hybrid recall."""
 
     def test_ddl_pgvector_emits_alter_and_index(self) -> None:
+        # v3.8.14: index switched from IVFFlat (lists=100) to HNSW for
+        # incremental build + small-corpus correctness. See
+        # TestPgVectorHardening.test_ddl_pgvector_uses_hnsw_not_ivfflat
+        # for the rationale.
         from mind_mem.block_store_postgres import _ddl_pgvector
 
         sql = _ddl_pgvector("mind_mem", embedding_dim=1024).as_string(None)
         assert "ADD COLUMN IF NOT EXISTS embedding VECTOR(1024)" in sql
-        assert "USING ivfflat (embedding vector_cosine_ops) WITH (lists=100)" in sql
+        assert "USING hnsw (embedding vector_cosine_ops)" in sql
         assert '"mind_mem"' in sql
 
     def test_ddl_pgvector_respects_dim(self) -> None:
@@ -195,6 +199,71 @@ class TestPgVectorWiring:
         s._has_vector = False
         with pytest.raises(BlockStoreError, match="pgvector not available"):
             s.backfill_embedding("X", [0.1] * 1024)
+
+
+class TestPgVectorHardening:
+    """v3.8.14 — fixes for the v3.8.13 multi-agent audit findings."""
+
+    def test_ddl_pgvector_uses_hnsw_not_ivfflat(self) -> None:
+        """IVFFlat with lists=100 builds degenerate centroids on small
+        empty tables and never recovers without a manual REINDEX. HNSW
+        builds incrementally on insert — no rebuild required."""
+        from mind_mem.block_store_postgres import _ddl_pgvector
+
+        sql = _ddl_pgvector("mind_mem", embedding_dim=1024).as_string(None)
+        assert "USING hnsw" in sql
+        assert "vector_cosine_ops" in sql
+        assert "lists=" not in sql  # IVFFlat artefact must be gone.
+
+    def test_ddl_pgvector_dim_uses_literal_not_string_concat(self) -> None:
+        """Composable API only — no raw string concatenation of caller
+        values into SQL text. The dim should round-trip through
+        psycopg.Literal."""
+        from mind_mem.block_store_postgres import _ddl_pgvector
+
+        sql = _ddl_pgvector("mind_mem", embedding_dim=768).as_string(None)
+        assert "VECTOR(768)" in sql
+
+    def test_ddl_includes_full_fts_expression(self) -> None:
+        """The GIN index on blocks_fts must use the SAME tsvector
+        expression as the WHERE clauses in search() and hybrid_search()
+        — otherwise the planner falls back to a sequential scan with
+        per-row tsvector recomputation. v3.8.13 had a mismatch."""
+        from mind_mem.block_store_postgres import _ddl
+
+        sql = _ddl("mind_mem").as_string(None)
+        assert (
+            "to_tsvector('english', content || ' ' || COALESCE(metadata->>'Statement', ''))"
+            in sql
+        )
+
+    def test_embedding_to_pg_rejects_nan(self) -> None:
+        """NaN in the embedding silently poisons RRF ranking via
+        cosine-distance NaN propagation. Reject at the boundary."""
+        from mind_mem.block_store_postgres import _embedding_to_pg
+
+        with pytest.raises(ValueError, match="non-finite"):
+            _embedding_to_pg([0.1, float("nan"), 0.2])
+
+    def test_embedding_to_pg_rejects_inf(self) -> None:
+        from mind_mem.block_store_postgres import _embedding_to_pg
+
+        with pytest.raises(ValueError, match="non-finite"):
+            _embedding_to_pg([0.1, float("inf"), 0.2])
+        with pytest.raises(ValueError, match="non-finite"):
+            _embedding_to_pg([float("-inf"), 0.1])
+
+    def test_hybrid_search_rejects_empty_embedding_loudly(self) -> None:
+        """v3.8.13 silently degraded to BM25 on an empty embedding list.
+        That hides caller bugs — fail loudly instead."""
+        from mind_mem.block_store_postgres import BlockStoreError, PostgresBlockStore
+
+        s = PostgresBlockStore("postgresql://nobody@localhost/none")
+        s._schema_ready = True
+        s._has_vector = True
+        s._embedding_dim = 1024
+        with pytest.raises(BlockStoreError, match="dim mismatch"):
+            s.hybrid_search("anything", query_embedding=[])  # 0 != 1024.
 
 
 class TestRoundTrip:
