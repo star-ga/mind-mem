@@ -1,6 +1,6 @@
 [project]
 name = "mind-mem"
-version = "3.8.9"
+version = "3.8.10"
 description = "Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -67,6 +67,11 @@ mcp = ["fastmcp>=3.2.0"]
 embeddings = ["onnxruntime>=1.20,<2.0", "tokenizers>=0.22,<1.0"]
 cross-encoder = ["sentence-transformers>=5.0,<6.0"]
 benchmark = ["pytest-benchmark>=4.0,<6.0"]
+# v3.8.10 optional Cython accelerator for the MIC/MAP hot loops
+# (ULEB128 codec + read_exact). Pure-Python fallback retained — the
+# extension is built only when Cython is present at install time, so
+# the default `pip install mind-mem` remains zero-toolchain.
+accelerated = ["cython>=3.0,<4.0"]
 otel = [
     "opentelemetry-api>=1.20,<2.0",
     "opentelemetry-sdk>=1.20,<2.0",
@@ -113,7 +118,7 @@ py-modules = ["mcp_server"]
 package-dir = {"" = "src"}
 
 [tool.setuptools.package-data]
-mind_mem = ["py.typed", "*.mind"]
+mind_mem = ["py.typed", "*.mind", "*.pyx"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

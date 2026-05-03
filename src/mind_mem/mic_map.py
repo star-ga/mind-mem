@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from io import BytesIO
-from typing import IO
+from typing import IO, cast
 
 # ----------------------------------------------------------------------
 # Spec constants — kept aligned with mic2-spec.md / micb-spec.md.
@@ -450,8 +450,8 @@ def _uleb128_encode(v: int) -> bytes:
             return bytes(out)
 
 
-def _read_exact(buf: IO[bytes], n: int) -> bytes:
-    """Read *exactly* ``n`` bytes from ``buf``, looping on short reads.
+def _py_read_exact(buf: IO[bytes], n: int) -> bytes:
+    """Pure-Python: read *exactly* ``n`` bytes, looping on short reads.
 
     Sockets, pipes, and any ``BufferedReader`` over a slow source can
     return fewer bytes than requested — the streaming parser must not
@@ -467,12 +467,12 @@ def _read_exact(buf: IO[bytes], n: int) -> bytes:
     return bytes(out)
 
 
-def _uleb128_decode(buf: IO[bytes]) -> int:
-    """Decode a ULEB128 from a binary stream, enforcing minimum encoding."""
+def _py_uleb128_decode(buf: IO[bytes]) -> int:
+    """Pure-Python ULEB128 decode, enforcing minimum encoding."""
     result = 0
     shift = 0
     while True:
-        ch = _read_exact(buf, 1)
+        ch = _py_read_exact(buf, 1)
         if not ch:
             raise MicbParseError("unexpected EOF in uleb128")
         byte = ch[0]
@@ -482,6 +482,33 @@ def _uleb128_decode(buf: IO[bytes]) -> int:
         shift += 7
         if shift > 70:
             raise MicbParseError("uleb128 too long (>10 bytes)")
+
+
+# Substitute the Cython accelerator if it was built into the wheel.
+# Falls back to the pure-Python codec when the .so isn't available
+# (default install). Behaviour is bit-identical either way; this is a
+# perf optimisation, not a feature flag.
+try:
+    from mind_mem import _mic_map_accel as _accel  # type: ignore[attr-defined]
+
+    _ACCEL_AVAILABLE: bool = True
+
+    def _read_exact(buf: IO[bytes], n: int) -> bytes:
+        # Cython returns concrete bytes; cast for mypy because the
+        # extension stubs aren't published.
+        return cast(bytes, _accel.read_exact(buf, n))
+
+    def _uleb128_decode(buf: IO[bytes]) -> int:
+        try:
+            return cast(int, _accel.uleb128_decode(buf))
+        except _accel.MicbAccelParseError as exc:
+            raise MicbParseError(str(exc)) from exc
+
+except ImportError:  # pragma: no cover - exercised by CI matrix
+    _accel = None  # type: ignore[assignment]
+    _ACCEL_AVAILABLE = False
+    _read_exact = _py_read_exact
+    _uleb128_decode = _py_uleb128_decode
 
 
 def _sleb128_encode(v: int) -> bytes:

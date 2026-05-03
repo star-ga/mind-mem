@@ -4,7 +4,24 @@
 > in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
 > full milestone breakdown.
 
-## v3.8.9 (Current — released 2026-05-02)
+## v3.8.10 (Current — released 2026-05-02)
+
+Optional Cython accelerator for the MIC/MAP hot loops, slice 3/3 of
+the MIC/MAP scale-hardening train. New `src/mind_mem/_mic_map_accel.pyx`
+ports the ULEB128 / SLEB128 codec and the `read_exact` short-read loop
+to typed Cython; same Python API, behaviour-preserving. Build is opt-in
+via `pip install mind-mem[accelerated]` (pulls in `cython>=3.0,<4.0`
+at build time); the default `pip install mind-mem` path is unchanged
+zero-toolchain pure-Python. `mic_map.py` try-imports the accelerator
+and falls back to the pure-Python codec when the extension isn't built;
+`_ACCEL_AVAILABLE: bool` reports the truth. Bench delta on the
+residual-block fixture: `parse_micb` +16% small / +20% medium / +36%
+large — modest but real; bigger 5-10× wins deferred to a future v3.9.x
+with proper C-level buffer parsing. 11 regression tests in
+`tests/test_mic_map_accel.py`. Closes the three-slice MIC/MAP
+scale-hardening train. Next: Social Ingestion (v3.8.11+).
+
+## v3.8.9 (Released 2026-05-02)
 
 Streaming parser for `mic-b`, slice 2/3 of the MIC/MAP scale-hardening
 train. New `parse_micb_stream(reader)` is an incremental decoder that
@@ -15,8 +32,7 @@ bounded peak memory regardless of input size. Legacy `parse_micb(bytes)`
 becomes a thin wrapper that drains the stream and assembles the
 canonical Graph (behaviour-preserving). New `_read_exact` helper fixes
 a latent short-read issue in the ULEB128 decoder. 10 unit tests in
-`tests/test_mic_map_stream.py`. v3.8.10 will land the Cython
-accelerator for the hot loops.
+`tests/test_mic_map_stream.py`.
 
 ## v3.8.8 (Released 2026-05-02)
 

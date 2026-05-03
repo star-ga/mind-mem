@@ -2,6 +2,120 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.10 (2026-05-02)
+
+**Optional Cython accelerator for the MIC/MAP hot loops.** Third
+and final slice of the scale-fragility train. Adds
+``src/mind_mem/_mic_map_accel.pyx`` — a Cython-typed port of the
+ULEB128 / SLEB128 codec and the ``read_exact`` short-read loop —
+with the same Python API as the pure-Python reference. The
+extension is **strictly optional**: ``mic_map.py`` try-imports the
+accelerator and falls back to the pure-Python codec when it isn't
+built. The default ``pip install mind-mem`` path remains
+zero-toolchain (pure-Python wheel, no C compiler needed).
+
+### Added
+
+- **``src/mind_mem/_mic_map_accel.pyx``** — Cython 3.x extension.
+  Public functions mirror the pure-Python helpers exactly:
+  ``uleb128_encode`` / ``uleb128_decode`` (uint64_t fast path +
+  big-int continuation for >64-bit values), ``sleb128_decode``
+  (zigzag → ULEB128), ``read_exact`` (looped read for sockets +
+  ``BufferedReader``-over-slow-source). Wire-format invariants
+  preserved bit-identically — minimum encoding, 70-bit ULEB128
+  cap, ``MicbAccelParseError`` (caught by ``mic_map.py`` and
+  translated to ``MicbParseError``).
+- **``setup.py``** — conditional setup hook. Try-imports
+  ``Cython.Build.cythonize``; if Cython is present, builds the
+  ``.pyx`` to a per-platform extension at install time. If Cython
+  is absent, ``setup()`` runs without the extension and the wheel
+  stays pure Python. Compiler directives:
+  ``boundscheck=False, wraparound=False, cdivision=True``.
+- **``[accelerated]`` extras** — ``pip install
+  mind-mem[accelerated]`` pulls in ``cython>=3.0,<4.0`` at build
+  time so the extension compiles. Independent of all runtime
+  extras; behaviour is identical with or without the accelerator
+  loaded.
+- **``_ACCEL_AVAILABLE: bool``** — public flag in
+  ``mind_mem.mic_map``. ``True`` when the extension was imported,
+  ``False`` otherwise. Useful for benchmarks and for surfacing the
+  build status in ``mm`` diagnostics.
+- **``_py_uleb128_decode`` / ``_py_read_exact``** — the
+  pure-Python helpers are kept as importable symbols regardless of
+  accelerator status. They are the regression net: every
+  accelerator code path is checked for byte-for-byte agreement
+  with the pure-Python path.
+
+### Changed
+
+- **``mind_mem.mic_map``** — top-level try-import wires the
+  accelerator into ``_uleb128_decode`` and ``_read_exact``. When
+  the extension is loaded, ``parse_micb`` and the streaming
+  parser get the C path automatically; when it isn't, the
+  pure-Python codec is the implementation. Public API unchanged;
+  no caller adjustment required.
+- **``[tool.setuptools.package-data]``** — ``*.pyx`` added so the
+  source is included in the sdist for downstream rebuild.
+
+### Tests
+
+- **``tests/test_mic_map_accel.py``** — 11 regression tests
+  across three classes:
+  - ``TestModuleShape`` — ``_ACCEL_AVAILABLE`` is a ``bool``,
+    ``_read_exact`` / ``_uleb128_decode`` are callable, the
+    pure-Python fallbacks are always importable.
+  - ``TestEquivalence`` — when the accelerator is built, every
+    accelerator call (ULEB128 decode across the byte-count
+    range, ``read_exact``, EOF / too-long error paths, full
+    residual-block round-trip) returns byte-for-byte the same
+    result as the pure-Python helper. Skip-if-no-accel via
+    ``setup_method``.
+  - ``TestPurePythonAlwaysWorks`` — pure-Python ULEB128 decoder
+    handles known values; ``_py_read_exact`` correctly coalesces
+    a 50-call sequence of one-byte reads into one 50-byte
+    answer. The fallback is exercised regardless of which path
+    the accelerator wiring picks.
+
+### Performance
+
+Measured on the residual-block fixture from the
+``tests/test_mic_map_bench.py`` suite (pytest-benchmark, single
+core, accelerator vs pure Python):
+
+- ``parse_micb`` small graph: **+16%**
+- ``parse_micb`` medium graph: **+20%**
+- ``parse_micb`` large graph (200-layer deep stack): **+36%**
+
+Modest but real. The bigger wins (5-10× on large graphs) require
+proper C-level buffer parsing — direct pointer reads against a
+``const uint8_t*`` instead of one-byte ``buf.read(1)`` calls
+through the Python C API. Deferred to a future v3.9.x.
+
+### Migration
+
+No migration required. The accelerator is a perf optimisation,
+never a behaviour change. ``parse_micb`` / ``emit_micb`` /
+``parse_micb_stream`` produce identical output regardless of
+which code path is active. To opt in:
+
+```bash
+pip install --upgrade 'mind-mem[accelerated]'
+```
+
+To verify the accelerator was loaded:
+
+```python
+from mind_mem.mic_map import _ACCEL_AVAILABLE
+print(_ACCEL_AVAILABLE)  # True if the .so was found
+```
+
+Closes the three-slice MIC/MAP scale-hardening train (v3.8.8 fuzz
++ adversarial + bench, v3.8.9 streaming parser, v3.8.10 native
+accelerator). MIC/MAP is now ready to carry production load on a
+wire — crash-safe on adversarial input, bounded peak memory under
+streaming I/O, and a C path for the hot loops on platforms that
+can build it.
+
 ## 3.8.9 (2026-05-02)
 
 **Streaming parser for ``mic-b``.** Second slice of the

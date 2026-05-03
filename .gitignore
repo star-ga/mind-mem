@@ -15,6 +15,12 @@ benchmarks/*results*.json*
 lib/*.so
 lib/*.dylib
 lib/*.o
+
+# Cython accelerator: built per-platform from src/mind_mem/_mic_map_accel.pyx
+# at install time. The .pyx source is committed; generated .c / .so are not.
+src/mind_mem/_mic_map_accel.c
+src/mind_mem/*.so
+src/mind_mem/*.pyd
 eval-results*.json
 PDR-*.md
 *.log

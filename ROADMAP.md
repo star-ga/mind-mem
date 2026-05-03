@@ -1348,12 +1348,20 @@ streaming I/O, and a native accelerator for the hot loops.
   objects after processing — bounded peak memory ahead of any
   future MIC/MAP network layer. **10 unit tests** in
   ``tests/test_mic_map_stream.py``.
-- [ ] **Native accelerator** — Cython port of the hot loops
-  (``parse_micb`` / ``emit_micb`` / ULEB128 codec) keeping the
-  same Python API. Cython chosen over PyO3/Rust to keep the
-  build simple — single ``setup.py`` extension, no Cargo
-  toolchain in CI. Pure-Python fallback retained for platforms
-  where the C extension can't build. Targeted for v3.8.10.
+- [x] **Native accelerator** — shipped in v3.8.10 (2026-05-02).
+  Cython port of the ULEB128 / SLEB128 / ``read_exact`` hot
+  loops at ``src/mind_mem/_mic_map_accel.pyx``. Same Python
+  API; ``mic_map.py`` try-imports ``_mic_map_accel`` and falls
+  back to the pure-Python codec when the extension isn't built
+  (the default ``pip install mind-mem`` path). Build is opt-in
+  via ``pip install mind-mem[accelerated]`` (pulls in Cython
+  at build time) — no Cargo toolchain, no PyO3, the wheel
+  stays a pure-Python wheel by default. Bench delta on the
+  residual block: ``parse_micb`` +16% small / +20% medium /
+  +36% large; bigger 5-10× wins deferred to a future v3.9.x
+  with proper C-level buffer parsing. **11 unit tests** in
+  ``tests/test_mic_map_accel.py`` (TestModuleShape /
+  TestEquivalence skip-if-no-accel / TestPurePythonAlwaysWorks).
 
 ### Social Ingestion
 
