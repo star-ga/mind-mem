@@ -58,6 +58,22 @@ __all__ = [
     "build_handler",
 ]
 
+
+def _safe_log(value: Any, max_len: int = 200) -> str:
+    """Sanitize a user-controlled value for log emission.
+
+    Strips CR / LF / NUL so a hostile caller cannot inject log
+    lines or split a single record across multiple log entries.
+    Truncates to *max_len* characters so a megabyte-scale payload
+    can't bloat the log file.
+    """
+    s = str(value)
+    s = s.replace("\r", " ").replace("\n", " ").replace("\x00", "")
+    if len(s) > max_len:
+        s = s[: max_len - 1] + "…"
+    return s
+
+
 _log = logging.getLogger("mind_mem.http_transport")
 
 # ---------------------------------------------------------------------------
@@ -353,7 +369,10 @@ def _handle_delete_memory(workspace: str, block_id: str) -> tuple[int, dict[str,
         store = get_block_store(workspace)
         removed = store.delete_block(block_id)
     except Exception as exc:
-        _log.error("delete_memory_failed", extra={"error": str(exc), "block_id": block_id})
+        _log.error(
+            "delete_memory_failed",
+            extra={"error": _safe_log(exc), "block_id": _safe_log(block_id)},
+        )
         return (500, {"error": "internal block store error"})
 
     if not removed:
@@ -399,7 +418,11 @@ def _handle_clear(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, 
 
     _log.warning(
         "workspace_cleared",
-        extra={"workspace": workspace, "deleted": deleted, "rationale": rationale[:120]},
+        extra={
+            "workspace": _safe_log(workspace),
+            "deleted": deleted,
+            "rationale": _safe_log(rationale, max_len=120),
+        },
     )
     return (200, {"ok": True, "deleted": deleted, "rationale": rationale})
 
