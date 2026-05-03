@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 729 | **Est. tokens:** ~1,491,485
-**Generated:** 2026-05-03 13:39 UTC
+**Files:** 725 | **Est. tokens:** ~1,491,601
+**Generated:** 2026-05-03 13:41 UTC
 
 ## Token Budget Guide
 
@@ -22,9 +22,9 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 32 | ~84,207 |
+| `./` | 32 | ~84,446 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `.arch-mind/` | 8 | ~1,223 |
+| `.arch-mind/` | 4 | ~1,100 |
 | `benchmarks/` | 26 | ~64,933 |
 | `deploy/` | 2 | ~772 |
 | `deploy/docker/` | 1 | ~495 |
@@ -77,7 +77,7 @@
 
 - `AGENTS.md` (~572 tok, large) — Memory Context
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: mind-mem (Commit 30d8b71)
-- `CLAUDE.md` (~1028 tok, large) — mind-mem — Persistent AI Memory System
+- `CLAUDE.md` (~1232 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
 - `demo-setup.sh` (~323 tok, medium) — Pre-seed a demo workspace for VHS recording
@@ -87,7 +87,7 @@
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
 - `generate_mind7b_training.py` (~5558 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
-- `.gitignore` (~176 tok, small) — *.pyc
+- `.gitignore` (~211 tok, medium) — *.pyc
 - `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~4823 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
@@ -113,11 +113,7 @@
 ### `.arch-mind/`
 
 - `last_summary.json` (~156 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
-- `_log_rules.txt` (~13 tok, tiny) — rules: 9  scan_metrics: 9
-- `_log_scan.txt` (~11 tok, tiny) — wrote /home/n/mind-mem/.arch-mind/scan.json
-- `_log_sidecar.txt` (~13 tok, tiny) — wrote /home/n/mind-mem/.arch-mind/last_summary.json
 - `rules.mind` (~766 tok, large) — mind-mem architectural-governance rules
-- `scan_before.json` (~86 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
 - `scan.json` (~92 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
 - `scan_v3813.json` (~86 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
 ### `benchmarks/`
