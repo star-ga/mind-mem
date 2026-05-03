@@ -946,6 +946,13 @@ def _cmd_http_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_daemon(args: argparse.Namespace) -> int:
+    """Launch the v3.9 background daemon (auto-scheduled jobs). Blocks."""
+    from mind_mem.daemon import run_daemon
+
+    return run_daemon(_workspace(), dry_run=args.dry_run, once=args.once)
+
+
 def _cmd_audit_model(args: argparse.Namespace) -> int:
     from mind_mem.model_audit import audit_model, format_report_text
 
@@ -1541,6 +1548,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_http.set_defaults(func=_cmd_http_serve)
+
+    # daemon — v3.9 background scheduler (set-and-forget mode)
+    p_daemon = sub.add_parser(
+        "daemon",
+        help="Launch the v3.9 background daemon — runs configured jobs on internal intervals.",
+    )
+    p_daemon.add_argument("--dry-run", action="store_true", help="Log what would run, do not execute.")
+    p_daemon.add_argument("--once", action="store_true", help="Run every enabled task once and exit.")
+    p_daemon.set_defaults(func=_cmd_daemon)
 
     # audit-model — static security scan of any local model checkpoint
     p_audit = sub.add_parser(

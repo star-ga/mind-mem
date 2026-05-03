@@ -348,18 +348,30 @@ stay optional behind extras: `pip install mind-mem[multimodal]`.
 Solves the "how do I get content into mind-mem" friction for non-technical
 users. Files = universal interface, no API knowledge needed.
 
-### 2. Auto-scheduled dream cycle
+### 2. Auto-scheduled dream cycle — **landed (in-progress branch)**
+
+> **Status (2026-05-03):** implemented on `feat/v3.9-http-transport`.
+> New module `src/mind_mem/daemon.py`, 15 tests in
+> `tests/test_daemon.py` (all passing). CLI subcommand
+> `mm daemon [--dry-run] [--once]` wired.
 
 mind-mem already has `dream_cycle.py` (consolidation logic) and
-`cron_runner.py` (scheduler). Missing: default-on automatic schedule.
+`cron_runner.py` (scheduler). Missing was a default-on automatic
+schedule — now provided by the daemon module.
 
-Add:
+Implemented:
 
-- `mm config set dream_cycle.auto_interval_seconds 1800` (default off,
-  enable per-deployment)
-- Background daemon mode: `mm daemon` runs `cron_runner` internally on
-  a thread, no external cron required
-- Documented in README as the "set it and forget it" mode
+- ✓ Config support: `daemon.dream_cycle.auto_interval_seconds`,
+  `daemon.intel_scan.auto_interval_seconds`,
+  `daemon.entity_ingest.auto_interval_seconds`,
+  `daemon.transcript_scan.auto_interval_seconds`. Default 0 (off);
+  intervals < 60s auto-clamp to 60s.
+- ✓ Background daemon: `mm daemon` runs each enabled task on its own
+  thread with internal scheduling. No external cron required. Job
+  exceptions are logged but do not kill the loop. SIGINT/SIGTERM
+  shut down cleanly.
+- ✓ One-shot mode: `mm daemon --once` runs every enabled task once
+  and exits — handy for operator runs and CI.
 
 "Drift prevention" is a core mind-mem promise — but only if dream cycle
 actually runs. Most users never set up cron, so dream cycle never fires.

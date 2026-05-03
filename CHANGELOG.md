@@ -35,6 +35,17 @@ All notable changes to mind-mem are documented in this file.
   failures). The `replicas` field must be a list of DSN strings;
   non-list values raise `ValueError`.
 
+- **Background daemon** (`src/mind_mem/daemon.py`).
+  `mm daemon` blocks and runs configured periodic jobs (`dream_cycle`,
+  `intel_scan`, `entity_ingest`, `transcript_scan`) on internal
+  intervals — no external cron needed. Each job runs on its own
+  thread with a per-task `auto_interval_seconds` config in
+  `mind-mem.json`. Defaults are all 0 (disabled) so adding the daemon
+  block is opt-in. Intervals < 60 seconds are auto-clamped (foot-gun
+  guard). Job exceptions never propagate; the loop logs and continues.
+  `--dry-run` logs intentions; `--once` runs every enabled task once
+  and exits (handy for ad-hoc operator runs).
+
 ### Tests
 - `tests/test_http_transport.py` — 34 tests covering parse helpers,
   bootstrap (token-from-env, no-token-no-bypass, empty-workspace),
@@ -42,6 +53,12 @@ All notable changes to mind-mem are documented in this file.
   delete), auth (correct token / wrong token / no token), body limits
   (oversize, malformed JSON, non-object payload), and lifecycle (thread
   alive, stop is idempotent).
+- `tests/test_daemon.py` — 15 tests covering config loading
+  (defaults, explicit disable, per-task intervals, negative/garbage
+  clamping, malformed JSON), Daemon lifecycle (rejection of empty
+  workspace, no-enabled-tasks guard, dry-run last-run tracking,
+  exception isolation, stop-event short-circuit), and `run_daemon`
+  once-mode behaviour.
 - `tests/test_storage_factory.py` — added 2 tests for the replicated
   routing branch (replicas-must-be-list, empty-list-yields-bare-store).
 

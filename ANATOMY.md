@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 719 | **Est. tokens:** ~1,465,598
-**Generated:** 2026-05-03 11:00 UTC
+**Files:** 721 | **Est. tokens:** ~1,470,738
+**Generated:** 2026-05-03 11:33 UTC
 
 ## Token Budget Guide
 
@@ -30,7 +30,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 63 | ~99,109 |
+| `docs/` | 63 | ~99,270 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -54,7 +54,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 150 | ~519,182 |
+| `src/mind_mem/` | 151 | ~522,275 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,903 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
@@ -62,7 +62,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 247 | ~493,203 |
+| `tests/` | 248 | ~495,089 |
 | `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -216,7 +216,7 @@
 - `review-database-v3.2.0.md` (~3171 tok, huge) — Database Review — PostgresBlockStore v3.2.0
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — mind-mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — mind-mem v3.2.0
-- `roadmap.md` (~9532 tok, huge) — Roadmap
+- `roadmap.md` (~9693 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2257 tok, huge) — mind-mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
 - `security-audit-sow.md` (~3336 tok, huge) — mind-mem — External Security Audit Statement of Work (SoW)
@@ -427,6 +427,7 @@
 - `corpus_registry.py` (~471 tok, medium) — Central corpus path registry for mind-mem.
 - `cron_runner.py` (~1920 tok, huge) — mind-mem Cron Runner — single entry point for all periodic jobs. Zero external deps.
 - `cross_encoder_reranker.py` (~749 tok, large) — mind-mem Optional Cross-Encoder Reranker.
+- `daemon.py` (~2914 tok, huge) — Background daemon — `mm daemon` (v3.9.0 candidate).
 - `dedup.py` (~4593 tok, huge) — mind-mem 4-layer deduplication filter for search results.
 - `dream_cycle.py` (~8852 tok, huge) — mind-mem Dream Cycle — autonomous memory enrichment. Zero external deps.
 - `drift_detector.py` (~4365 tok, huge) — mind-mem Semantic Belief Drift Detection.
@@ -515,7 +516,7 @@
 - `mind_ffi.py` (~5481 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~16908 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~17087 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `model_audit.py` (~4370 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
 - `model_gate.py` (~2549 tok, huge) — Load-gate registry for ``mm audit-model`` checkpoints.
 - `model_provenance.py` (~1751 tok, huge) — Provenance allowlist check for ``mm audit-model`` checkpoints.
@@ -688,6 +689,7 @@
 - `test_cron_runner.py` (~2716 tok, huge) — Tests for cron_runner.py — periodic job orchestration, config loading, subprocess dispatch."""
 - `test_cross_encoder_auto_enable.py` (~1489 tok, large) — v3.3.0 Tier 2 #6 — cross-encoder rerank auto-enables on ambiguous queries.
 - `test_cross_encoder.py` (~1324 tok, large) — Tests for optional cross-encoder reranker."""
+- `test_daemon.py` (~1886 tok, huge) — Tests for the v3.9 background daemon (`mm daemon`)."""
 - `test_date_score.py` (~174 tok, small) — Tests for date scoring function."""
 - `test_decompose_query.py` (~223 tok, medium) — Tests for query decomposition."""
 - `test_dedup.py` (~5670 tok, huge) — Tests for dedup.py -- 4-layer deduplication filter."""
