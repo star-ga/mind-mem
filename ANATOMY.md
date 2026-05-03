@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 727 | **Est. tokens:** ~1,485,198
-**Generated:** 2026-05-03 11:54 UTC
+**Files:** 729 | **Est. tokens:** ~1,490,875
+**Generated:** 2026-05-03 12:35 UTC
 
 ## Token Budget Guide
 
@@ -30,7 +30,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 63 | ~99,794 |
+| `docs/` | 63 | ~99,967 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -54,7 +54,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 154 | ~530,237 |
+| `src/mind_mem/` | 155 | ~533,086 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,903 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
@@ -62,7 +62,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 251 | ~501,039 |
+| `tests/` | 252 | ~503,694 |
 | `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -216,7 +216,7 @@
 - `review-database-v3.2.0.md` (~3171 tok, huge) — Database Review — PostgresBlockStore v3.2.0
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — mind-mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — mind-mem v3.2.0
-- `roadmap.md` (~10217 tok, huge) — Roadmap
+- `roadmap.md` (~10390 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2257 tok, huge) — mind-mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
 - `security-audit-sow.md` (~3336 tok, huge) — mind-mem — External Security Audit Statement of Work (SoW)
@@ -450,7 +450,7 @@
 - `graph_recall.py` (~1907 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~9442 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `http_transport.py` (~4607 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
+- `http_transport.py` (~5007 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
 - `hybrid_recall.py` (~8896 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `inbox.py` (~3556 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -604,6 +604,7 @@
 - `validate.sh` (~352 tok, medium) — src/mind_mem/validate.sh — thin forwarder to the Python validator.
 - `validate.sh.pre-forwarder` (~7140 tok, huge) — #!/usr/bin/env bash
 - `verify_cli.py` (~3178 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `walkthrough.py` (~2449 tok, huge) — Dependency-ordered walkthrough — `compile_walkthrough` (v3.9.0 candidate).
 - `watcher.py` (~886 tok, large) — Mind-Mem File Watcher — auto-reindex on workspace changes. Zero external deps.
 ### `templates/`
 
@@ -737,7 +738,7 @@
 - `test_hook_installer_force_preserves_siblings.py` (~703 tok, large) — Regression test for the --force clobber bug in hook_installer."""
 - `test_hook_installer_registry.py` (~3841 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_auth_fail_closed.py` (~1724 tok, huge) — v3.7.0 H4: HTTP / REST auth must fail CLOSED by default.
-- `test_http_transport.py` (~3950 tok, huge) — Tests for the v3.9 HTTP transport adapter.
+- `test_http_transport.py` (~4173 tok, huge) — Tests for the v3.9 HTTP transport adapter.
 - `test_hybrid_recall.py` (~2855 tok, huge) — Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
 - `test_hybrid_search.py` (~599 tok, large) — Tests for hybrid search functionality."""
 - `test_inbox.py` (~2352 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
@@ -878,6 +879,7 @@
 - `test_validate_sh_deprecation.py` (~547 tok, large) — Pin the runtime deprecation warning on validate.sh.
 - `test_vault_wikilinks.py` (~1783 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_verify_cli.py` (~3202 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_walkthrough.py` (~2432 tok, huge) — Tests for the v3.9 dependency-ordered walkthrough."""
 - `test_watcher.py` (~1217 tok, large) — Tests for watcher.py — file change detection for auto-reindex."""
 - `test_wide_retrieval.py` (~346 tok, medium) — Tests for wide retrieval parameter."""
 - `test_workspace_contextvar.py` (~1047 tok, large) — v3.2.1 — regression test for per-request workspace ContextVar scoping.

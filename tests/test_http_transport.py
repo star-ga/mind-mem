@@ -24,6 +24,7 @@ from mind_mem.http_transport import (
     PATH_MEMORIES,
     PATH_QUERY,
     PATH_STATUS,
+    PATH_WALKTHROUGH,
     _parse_query_params,
     serve_http,
 )
@@ -313,6 +314,27 @@ class TestMemoriesEndpoints:
         status, body = _request(port, "DELETE", "/memories/D-20990101-999")
         assert status == 404
         assert body["error"] == "block not found"
+
+
+class TestWalkthroughEndpoint:
+    def test_missing_topic_400(self, server_localhost_unauth) -> None:
+        port, _ = server_localhost_unauth
+        status, body = _request(port, "POST", PATH_WALKTHROUGH, body={})
+        assert status == 400
+        assert "topic" in body["error"]
+
+    def test_returns_steps_list(self, server_localhost_unauth) -> None:
+        port, _ = server_localhost_unauth
+        status, body = _request(port, "POST", PATH_WALKTHROUGH, body={"topic": "test"})
+        assert status == 200
+        assert "steps" in body
+        assert "count" in body
+        assert isinstance(body["steps"], list)
+
+    def test_limit_out_of_range(self, server_localhost_unauth) -> None:
+        port, _ = server_localhost_unauth
+        status, _ = _request(port, "POST", PATH_WALKTHROUGH, body={"topic": "x", "limit": 9999})
+        assert status == 400
 
 
 class TestConsolidateEndpoint:

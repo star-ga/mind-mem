@@ -74,6 +74,7 @@ PATH_QUERY = "/query"
 PATH_MEMORIES = "/memories"
 PATH_CONSOLIDATE = "/consolidate"
 PATH_CLEAR = "/clear"
+PATH_WALKTHROUGH = "/walkthrough"
 _MEMORY_ID_PREFIX = "/memories/"
 
 # Loopback addresses that may skip auth when the operator opts in.
@@ -275,6 +276,44 @@ def _handle_list_memories(workspace: str, params: dict[str, str]) -> tuple[int, 
     return (200, {"count": len(summaries), "total": len(blocks), "memories": summaries})
 
 
+def _handle_walkthrough(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    """``POST /walkthrough`` — dependency-ordered walkthrough.
+
+    Body schema::
+
+        {"topic": "...", "limit"?: int, "active_only"?: bool, "agent_id"?: str}
+    """
+    topic = body.get("topic")
+    if not isinstance(topic, str) or not topic.strip():
+        return (400, {"error": "topic is required and must be a non-empty string"})
+    try:
+        limit = int(body.get("limit", 25))
+    except (TypeError, ValueError):
+        return (400, {"error": "limit must be an integer"})
+    if limit < 1 or limit > 100:
+        return (400, {"error": "limit must be in [1, 100]"})
+    active_only = bool(body.get("active_only", False))
+    agent_id = body.get("agent_id")
+    if agent_id is not None and not isinstance(agent_id, str):
+        return (400, {"error": "agent_id must be a string"})
+
+    from .walkthrough import compile_walkthrough
+
+    try:
+        steps = compile_walkthrough(
+            workspace=workspace,
+            topic=topic,
+            limit=limit,
+            active_only=active_only,
+            agent_id=agent_id,
+        )
+    except Exception as exc:
+        _log.error("walkthrough_failed", extra={"error": str(exc)})
+        return (500, {"error": "internal walkthrough error"})
+
+    return (200, {"topic": topic, "steps": steps, "count": len(steps)})
+
+
 def _handle_consolidate(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     """``POST /consolidate`` — trigger dream cycle."""
     dry_run = bool(body.get("dry_run", False))
@@ -447,6 +486,10 @@ def build_handler(
                 return
             if base == PATH_CONSOLIDATE:
                 status, body = _handle_consolidate(workspace, payload)
+                _write_json(self, status, body)
+                return
+            if base == PATH_WALKTHROUGH:
+                status, body = _handle_walkthrough(workspace, payload)
                 _write_json(self, status, body)
                 return
             if base == PATH_CLEAR:

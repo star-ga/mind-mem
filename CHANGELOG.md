@@ -35,6 +35,18 @@ All notable changes to mind-mem are documented in this file.
   failures). The `replicas` field must be a list of DSN strings;
   non-list values raise `ValueError`.
 
+- **Dependency-ordered walkthrough** (`src/mind_mem/walkthrough.py`).
+  `compile_walkthrough(workspace, topic, limit=N)` re-orders recall
+  results into a *learning sequence* (foundations → context → current
+  state) so agents and humans don't have to reassemble the order
+  themselves. Algorithm: chronological backbone derived from the
+  block-id YYYYMMDD prefix, reinforced by co-retrieval edges from
+  `intelligence/state/retrieval_graph.db`, sorted with Kahn's
+  algorithm; cycles broken deterministically. Each step is tagged
+  `foundation` (first ~30%), `context` (middle ~40%), or `current`
+  (last ~30%). Wired into the v3.9 HTTP transport as `POST
+  /walkthrough` with body `{"topic": "...", "limit"?: int}`.
+
 - **Persona-aware recall projection** (`src/mind_mem/personas.py`).
   Reshapes recall results for different consumers without touching the
   index. Three named personas:
@@ -101,6 +113,20 @@ All notable changes to mind-mem are documented in this file.
   workspace, no-enabled-tasks guard, dry-run last-run tracking,
   exception isolation, stop-event short-circuit), and `run_daemon`
   once-mode behaviour.
+- `tests/test_walkthrough.py` — 28 tests covering pure functions
+  (date-key extraction, role assignment thresholds, Kahn's algorithm:
+  empty/no-edges/simple-chain/cycle-broken/self-loop-ignored/
+  unknown-nodes-ignored/deterministic), and workspace integration
+  (validation rejects empty workspace/topic/out-of-range limit, no
+  results returns empty, recall results emerge in chronological order,
+  step numbers are 1-based, role/score/subject fields populated, first
+  step is `foundation` and last is `current`, co-retrieval edges
+  consumed without crash, missing DB tolerated, deterministic across
+  calls). Plus 1 light integration test verifying walkthrough steps
+  feed into `apply_persona`.
+  + 3 new tests in `tests/test_http_transport.py` covering the
+  `/walkthrough` endpoint (missing topic 400, returns steps list,
+  limit out-of-range 400).
 - `tests/test_personas.py` — 15 tests covering per-block projection
   (unknown persona raises, brief drops everything but id/score/subject,
   brief truncates oversized subject, brief uses content first-line as

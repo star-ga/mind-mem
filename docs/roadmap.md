@@ -451,19 +451,34 @@ persona-adaptive detail. mind-mem already has graph traversal, hybrid search,
 and compiled-truth pages, so the dashboard / multi-agent extraction pipeline /
 JSON-in-repo convention don't fit. Two ideas do.
 
-### 1. Dependency-ordered walkthrough
+### 1. Dependency-ordered walkthrough — **landed (in-progress branch)**
+
+> **Status (2026-05-03):** implemented on `feat/v3.9-http-transport`.
+> New module `src/mind_mem/walkthrough.py`, 28 tests in
+> `tests/test_walkthrough.py` (all passing). Wired into the v3.9 HTTP
+> transport as `POST /walkthrough`. The `compile_walkthrough()` Python
+> entry is also callable directly; MCP-tool wrapping (renamed
+> `compile_truth_walkthrough` per the original spec) is the v3.10
+> follow-up.
 
 Today `recall` and `hybrid_search` return blocks ranked by relevance. For
 "explain the state of project X" queries, an agent gets a flat result list and
-has to assemble its own learning order. Add:
+has to assemble its own learning order.
 
-- New MCP tool: `compile_truth_walkthrough(topic, depth=auto)` — returns blocks
-  in dependency order (foundations → derived → current state) by walking the
-  existing co-retrieval graph (`graph_traversal_tool`) and topo-sorting.
-- Returns a sequence, not a set: `[{step: 1, block_id: ..., role: "foundation"},
-  {step: 2, block_id: ..., role: "context"}, ...]`.
-- Falls back to relevance order if the topic has no graph structure (single
-  isolated block, no connections).
+Implemented:
+
+- ✓ `compile_walkthrough(workspace, topic, limit=N)` — returns blocks
+  in dependency order (foundations → derived → current state).
+- ✓ Algorithm: chronological backbone (block-id YYYYMMDD prefix) +
+  co-retrieval edges from
+  `intelligence/state/retrieval_graph.db`. Topo-sorted with Kahn's
+  algorithm; cycles broken deterministically (lowest-degree-first).
+- ✓ Output sequence: `[{step: 1, block_id: ..., role: "foundation",
+  score: 0.87, subject: "..."}, {step: 2, ..., role: "context"}, ...]`.
+- ✓ Roles: first ~30% → `foundation`, middle ~40% → `context`,
+  last ~30% → `current`.
+- ✓ No-results returns empty list; single isolated block falls back
+  to a 1-element list tagged `context`.
 
 Distinct from existing `compile_truth` (which produces one consolidated page)
 and existing `graph_traversal_tool` (which returns neighborhoods, not ordered
