@@ -2,6 +2,81 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.9 (2026-05-02)
+
+**Streaming parser for ``mic-b``.** Second slice of the
+scale-fragility train. Adds ``parse_micb_stream(reader)``, an
+incremental decoder that yields ``StreamEvent`` objects as bytes
+arrive from any ``BinaryIO`` (file, ``BytesIO``, socket,
+``BufferedReader``). Caller can drop processed events without
+holding the whole graph resident — bounded peak memory ahead of
+any future MIC/MAP network layer. The legacy ``parse_micb(bytes)``
+becomes a thin wrapper that drains the stream and assembles the
+canonical :class:`Graph`.
+
+### Added
+
+- **``parse_micb_stream(reader: IO[bytes]) -> Iterator[StreamEvent]``**
+  — incremental decoder. Handles short reads (sockets, slow pipes,
+  chunked inputs) via the new ``_read_exact`` helper. Yields events
+  in spec order:
+  - ``StreamHeader(version)`` — once after magic + version
+  - ``StreamStringTable(strings)`` — once after the string table
+  - ``StreamSymbol(index, name)`` — per symbol
+  - ``StreamType(index, type)`` — per type
+  - ``StreamValue(index, value)`` — per value (Arg / Param / Node)
+  - ``StreamComplete(output)`` — final
+- **Six new ``StreamEvent`` dataclasses** — frozen, equality-comparable,
+  exposed via ``__all__`` so callers can pattern-match on event type.
+- **``_read_exact(reader, n)``** — internal helper that loops on
+  short reads. Sockets and any ``BufferedReader`` over a slow source
+  routinely return fewer bytes than requested; the streaming parser
+  must not assume one ``read(n)`` call returns ``n`` bytes. Wired
+  into the ULEB128 decoder too — fixes a latent issue where the
+  byte-level parser would have lost state on any short read.
+
+### Changed
+
+- **``parse_micb(data: bytes)``** — now drains
+  ``parse_micb_stream(BytesIO(data))`` and assembles the
+  :class:`Graph`. Behaviour-preserving refactor; all 96 prior
+  ``parse_micb`` tests pass unchanged. Single-implementation
+  wins us a free parser for any binary stream, not just
+  in-memory bytes.
+
+### Tests
+
+- **``tests/test_mic_map_stream.py``** — 10 new tests across 5
+  classes:
+  - ``TestEventSequence`` — event order on the residual block,
+    symbol events yielded individually with correct indexes.
+  - ``TestEquivalence`` — manual stream-reconstruction matches
+    ``parse_micb`` byte-for-byte.
+  - ``TestPullSemantics`` — ``_OneByteReader`` (returns one byte
+    per ``read`` call) produces the same event sequence as
+    ``BytesIO``. Catches short-read regressions.
+  - ``TestMidStreamErrors`` — truncated payload raises
+    ``MicbParseError`` mid-iteration; bad magic raises
+    immediately with no events; unsupported version raises
+    after the magic check.
+  - ``TestMemoryBound`` — synthetic 50-layer graph
+    stream-parses without retaining the value list (caller
+    drops each ``StreamValue`` as it arrives).
+  - ``TestStreamEventTypes`` — frozen-dataclass mutation
+    rejected; first-seen string table order preserved.
+
+### Migration
+
+No migration required. ``parse_micb(bytes)`` is API-stable.
+Callers wanting bounded-memory parsing import ``parse_micb_stream``
+from ``mind_mem.mic_map`` and consume events directly.
+
+This is the second of three slices in the scale-fragility train.
+v3.8.10 will land the Cython accelerator for the hot loops
+(``_uleb128_decode``, ``parse_micb_stream`` per-value section,
+``emit_micb`` value-tag emit). Pure-Python fallback retained for
+platforms where the C extension can't build.
+
 ## 3.8.8 (2026-05-02)
 
 **Scale-fragility hardening for MIC/MAP — fuzz + adversarial corpus

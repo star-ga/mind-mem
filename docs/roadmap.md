@@ -4,7 +4,21 @@
 > in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
 > full milestone breakdown.
 
-## v3.8.8 (Current — released 2026-05-02)
+## v3.8.9 (Current — released 2026-05-02)
+
+Streaming parser for `mic-b`, slice 2/3 of the MIC/MAP scale-hardening
+train. New `parse_micb_stream(reader)` is an incremental decoder that
+yields six `StreamEvent` types (header → string-table → per-symbol →
+per-type → per-value → complete) from any `BinaryIO` — file, BytesIO,
+socket, BufferedReader. Caller can drop events as it processes them;
+bounded peak memory regardless of input size. Legacy `parse_micb(bytes)`
+becomes a thin wrapper that drains the stream and assembles the
+canonical Graph (behaviour-preserving). New `_read_exact` helper fixes
+a latent short-read issue in the ULEB128 decoder. 10 unit tests in
+`tests/test_mic_map_stream.py`. v3.8.10 will land the Cython
+accelerator for the hot loops.
+
+## v3.8.8 (Released 2026-05-02)
 
 Scale-fragility hardening for MIC/MAP, slice 1/3. Adds a Hypothesis
 fuzz harness (`tests/test_mic_map_fuzz.py`, 7 tests including

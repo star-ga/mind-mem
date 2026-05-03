@@ -1336,11 +1336,18 @@ streaming I/O, and a native accelerator for the hot loops.
   bug — ``parse_micb`` was leaking ``UnicodeDecodeError`` on
   invalid UTF-8 in the string table; now correctly wrapped as
   ``MicbParseError``. **45 new tests**.
-- [ ] **Streaming parser** — incremental ``parse_micb`` that
-  yields nodes as bytes arrive instead of requiring the whole
-  payload in memory. Mandatory for any socket-based transport
-  (otherwise N concurrent 10 MiB inputs OOM the receiver).
-  Targeted for v3.8.9.
+- [x] **Streaming parser** — shipped in v3.8.9 (2026-05-02).
+  ``parse_micb_stream(reader)`` yields six event types
+  (``StreamHeader`` / ``StreamStringTable`` / ``StreamSymbol`` /
+  ``StreamType`` / ``StreamValue`` / ``StreamComplete``) as bytes
+  arrive from any ``BinaryIO``. Handles short reads via the new
+  ``_read_exact`` helper — sockets and ``BufferedReader``-over-
+  slow-source routinely return fewer bytes than requested. Legacy
+  ``parse_micb(bytes)`` is now a wrapper that drains the stream
+  and assembles the :class:`Graph`. Caller can drop ``StreamValue``
+  objects after processing — bounded peak memory ahead of any
+  future MIC/MAP network layer. **10 unit tests** in
+  ``tests/test_mic_map_stream.py``.
 - [ ] **Native accelerator** — Cython port of the hot loops
   (``parse_micb`` / ``emit_micb`` / ULEB128 codec) keeping the
   same Python API. Cython chosen over PyO3/Rust to keep the

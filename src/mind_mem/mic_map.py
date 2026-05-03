@@ -450,12 +450,29 @@ def _uleb128_encode(v: int) -> bytes:
             return bytes(out)
 
 
+def _read_exact(buf: IO[bytes], n: int) -> bytes:
+    """Read *exactly* ``n`` bytes from ``buf``, looping on short reads.
+
+    Sockets, pipes, and any ``BufferedReader`` over a slow source can
+    return fewer bytes than requested — the streaming parser must not
+    assume one ``read(n)`` call returns ``n`` bytes. Returns whatever
+    was read on EOF (0 .. n-1 bytes); callers check the length.
+    """
+    out = bytearray()
+    while len(out) < n:
+        chunk = buf.read(n - len(out))
+        if not chunk:
+            return bytes(out)
+        out.extend(chunk)
+    return bytes(out)
+
+
 def _uleb128_decode(buf: IO[bytes]) -> int:
     """Decode a ULEB128 from a binary stream, enforcing minimum encoding."""
     result = 0
     shift = 0
     while True:
-        ch = buf.read(1)
+        ch = _read_exact(buf, 1)
         if not ch:
             raise MicbParseError("unexpected EOF in uleb128")
         byte = ch[0]
@@ -572,115 +589,232 @@ def emit_micb(g: Graph) -> bytes:
     return bytes(out)
 
 
-def parse_micb(data: bytes) -> Graph:
-    """Decode a mic-b payload to a :class:`Graph`."""
-    if len(data) > MAX_INPUT_BYTES:
-        raise MicbParseError(f"input exceeds {MAX_INPUT_BYTES} bytes")
-    if len(data) < 5:
+# ----------------------------------------------------------------------
+# Streaming parser — incremental decode for network / large-input use
+# ----------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class StreamHeader:
+    """Emitted once after the magic + version bytes are consumed."""
+
+    version: int
+
+
+@dataclass(frozen=True)
+class StreamStringTable:
+    """Emitted once after the entire string table is decoded.
+
+    Strings are referenced by index from every later event, so the
+    full table has to be resident before symbols / types / values can
+    be decoded — no way around it without changing the wire format.
+    Peak memory at this point is bounded by ``MAX_STRING_COUNT *
+    MAX_STRING_LEN`` worst-case, but in practice the on-wire size
+    limit (``MAX_INPUT_BYTES``) caps it long before that.
+    """
+
+    strings: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class StreamSymbol:
+    """Emitted per symbol declaration, with its position in the table."""
+
+    index: int
+    name: str
+
+
+@dataclass(frozen=True)
+class StreamType:
+    """Emitted per type declaration."""
+
+    index: int
+    type: Type
+
+
+@dataclass(frozen=True)
+class StreamValue:
+    """Emitted per value (Arg / Param / Node). Caller can stream-process
+    each value into downstream consumers (compiler IR, validator, etc.)
+    without holding the whole graph in memory at once."""
+
+    index: int
+    value: Value
+
+
+@dataclass(frozen=True)
+class StreamComplete:
+    """Final event — output index of the graph."""
+
+    output: int
+
+
+# Discriminated-union alias for the events ``parse_micb_stream`` yields.
+StreamEvent = StreamHeader | StreamStringTable | StreamSymbol | StreamType | StreamValue | StreamComplete
+
+
+def parse_micb_stream(reader: IO[bytes]):
+    """Stream-parse a mic-b payload, yielding :class:`StreamEvent` as
+    bytes arrive.
+
+    Bounded peak memory: only the string table (capped by
+    ``MAX_STRING_COUNT`` × ``MAX_STRING_LEN`` and indirectly by the
+    on-wire byte caps), type registry, and current-value scratch are
+    held. Caller can drop ``StreamValue`` objects after processing —
+    the parser doesn't retain them. Compare with :func:`parse_micb`
+    which assembles the full :class:`Graph` and holds everything
+    resident.
+
+    Raises :class:`MicbParseError` mid-iteration on any spec violation.
+    Events emitted before the error are valid; events after are not
+    produced. Input length is *not* bounded by ``MAX_INPUT_BYTES``
+    here (the per-section limits + opcode arity caps are the
+    load-bearing defence in the streaming case — there's no total
+    length to check until EOF).
+    """
+    # 1. magic + version
+    magic = _read_exact(reader, 4)
+    if len(magic) != 4 or magic != MICB_MAGIC:
+        raise MicbParseError(f"bad magic: {magic!r}")
+    ver_byte = _read_exact(reader, 1)
+    if not ver_byte:
         raise MicbParseError("payload shorter than magic+version")
-    if data[:4] != MICB_MAGIC:
-        raise MicbParseError(f"bad magic: {data[:4]!r}")
-    if data[4] != MICB_VERSION:
-        raise MicbParseError(f"unsupported version: 0x{data[4]:02x}")
+    if ver_byte[0] != MICB_VERSION:
+        raise MicbParseError(f"unsupported version: 0x{ver_byte[0]:02x}")
+    yield StreamHeader(version=MICB_VERSION)
 
-    buf = BytesIO(data[5:])
-
-    # 1. String table
-    n_strs = _uleb128_decode(buf)
+    # 2. String table — fully loaded before any later section can
+    # decode (every later index is into this table).
+    n_strs = _uleb128_decode(reader)
     if n_strs > MAX_STRING_COUNT:
         raise MicbParseError(f"string count {n_strs} exceeds {MAX_STRING_COUNT}")
     strings: list[str] = []
     for _ in range(n_strs):
-        slen = _uleb128_decode(buf)
+        slen = _uleb128_decode(reader)
         if slen > MAX_STRING_LEN:
             raise MicbParseError(f"string length {slen} exceeds {MAX_STRING_LEN}")
-        chunk = buf.read(slen)
+        chunk = _read_exact(reader, slen)
         if len(chunk) != slen:
             raise MicbParseError("unexpected EOF in string table")
         try:
-            decoded = chunk.decode("utf-8")
+            strings.append(chunk.decode("utf-8"))
         except UnicodeDecodeError as exc:
             raise MicbParseError(f"invalid UTF-8 in string table: {exc}") from exc
-        strings.append(decoded)
+    yield StreamStringTable(strings=tuple(strings))
 
-    # 2. Symbol table
-    n_syms = _uleb128_decode(buf)
-    symbols: list[str] = []
-    for _ in range(n_syms):
-        si = _uleb128_decode(buf)
+    # 3. Symbol table
+    n_syms = _uleb128_decode(reader)
+    for i in range(n_syms):
+        si = _uleb128_decode(reader)
         if si >= len(strings):
             raise MicbParseError(f"symbol str_idx {si} out of bounds")
-        symbols.append(strings[si])
+        yield StreamSymbol(index=i, name=strings[si])
 
-    # 3. Type table
-    n_types = _uleb128_decode(buf)
-    types: list[Type] = []
-    for _ in range(n_types):
-        dt_byte = buf.read(1)
+    # 4. Type table — types must be retained because values reference
+    # them by index and we need the bounds check.
+    n_types = _uleb128_decode(reader)
+    type_count = 0
+    for i in range(n_types):
+        dt_byte = _read_exact(reader, 1)
         if not dt_byte:
             raise MicbParseError("EOF in type table")
         dtype = BYTE_TO_DTYPE.get(dt_byte[0])
         if dtype is None:
             raise MicbParseError(f"unknown dtype byte 0x{dt_byte[0]:02x}")
-        rank = _uleb128_decode(buf)
+        rank = _uleb128_decode(reader)
         if rank > MAX_DIM_COUNT:
             raise MicbParseError(f"rank {rank} exceeds {MAX_DIM_COUNT}")
         dims: list[str] = []
         for _ in range(rank):
-            di = _uleb128_decode(buf)
+            di = _uleb128_decode(reader)
             if di >= len(strings):
                 raise MicbParseError(f"dim str_idx {di} out of bounds")
             dims.append(strings[di])
-        types.append(Type(dtype=dtype, dims=tuple(dims)))
+        yield StreamType(index=i, type=Type(dtype=dtype, dims=tuple(dims)))
+        type_count = i + 1
 
-    # 4. Value table
-    n_vals = _uleb128_decode(buf)
+    # 5. Value table — bounds-check by *position* in the stream rather
+    # than by holding all prior values; this is the win that makes
+    # streaming useful.
+    n_vals = _uleb128_decode(reader)
     if n_vals > MAX_VALUE_COUNT:
         raise MicbParseError(f"value count {n_vals} exceeds {MAX_VALUE_COUNT}")
-    values: list[Value] = []
     for vid in range(n_vals):
-        tag = buf.read(1)
+        tag = _read_exact(reader, 1)
         if not tag:
             raise MicbParseError("EOF in value table")
         if tag[0] == 0:
-            ni = _uleb128_decode(buf)
-            ti = _uleb128_decode(buf)
+            ni = _uleb128_decode(reader)
+            ti = _uleb128_decode(reader)
             if ni >= len(strings):
                 raise MicbParseError(f"arg str_idx {ni} out of bounds")
-            if ti >= len(types):
+            if ti >= type_count:
                 raise MicbParseError(f"arg type_idx {ti} out of bounds")
-            values.append(Arg(name=strings[ni], type_idx=ti))
+            v: Value = Arg(name=strings[ni], type_idx=ti)
         elif tag[0] == 1:
-            ni = _uleb128_decode(buf)
-            ti = _uleb128_decode(buf)
+            ni = _uleb128_decode(reader)
+            ti = _uleb128_decode(reader)
             if ni >= len(strings):
                 raise MicbParseError(f"param str_idx {ni} out of bounds")
-            if ti >= len(types):
+            if ti >= type_count:
                 raise MicbParseError(f"param type_idx {ti} out of bounds")
-            values.append(Param(name=strings[ni], type_idx=ti))
+            v = Param(name=strings[ni], type_idx=ti)
         elif tag[0] == 2:
-            opc_b = buf.read(1)
+            opc_b = _read_exact(reader, 1)
             if not opc_b:
                 raise MicbParseError("EOF in node opcode")
             opcode = BYTE_TO_OPCODE.get(opc_b[0])
             if opcode is None:
                 raise MicbParseError(f"unknown opcode byte 0x{opc_b[0]:02x}")
-            op_params = _decode_op_params(buf, opcode)
-            n_inputs = _uleb128_decode(buf)
+            op_params = _decode_op_params(reader, opcode)
+            n_inputs = _uleb128_decode(reader)
             inputs: list[int] = []
             for _ in range(n_inputs):
-                inp = _uleb128_decode(buf)
+                inp = _uleb128_decode(reader)
                 if inp >= vid:
                     raise MicbParseError(f"value {vid}: input {inp} not earlier value (forward-ref)")
                 inputs.append(inp)
-            values.append(Node(opcode=opcode, inputs=tuple(inputs), op_params=op_params))
+            v = Node(opcode=opcode, inputs=tuple(inputs), op_params=op_params)
         else:
             raise MicbParseError(f"unknown value tag 0x{tag[0]:02x}")
+        yield StreamValue(index=vid, value=v)
 
-    # 5. Output
-    output = _uleb128_decode(buf)
-    if output >= len(values):
+    # 6. Output index
+    output = _uleb128_decode(reader)
+    if output >= n_vals:
         raise MicbParseError(f"output {output} not a valid value")
+    yield StreamComplete(output=output)
+
+
+def parse_micb(data: bytes) -> Graph:
+    """Decode a mic-b payload to a :class:`Graph`.
+
+    Thin wrapper around :func:`parse_micb_stream` that drains the
+    iterator and assembles the canonical in-memory graph. Use the
+    streaming API directly when memory is bounded — see
+    :func:`parse_micb_stream` for the per-event contract.
+    """
+    if len(data) > MAX_INPUT_BYTES:
+        raise MicbParseError(f"input exceeds {MAX_INPUT_BYTES} bytes")
+    if len(data) < 5:
+        raise MicbParseError("payload shorter than magic+version")
+
+    buf = BytesIO(data)
+    types: list[Type] = []
+    values: list[Value] = []
+    symbols: list[str] = []
+    output: int = -1
+
+    for ev in parse_micb_stream(buf):
+        if isinstance(ev, StreamSymbol):
+            symbols.append(ev.name)
+        elif isinstance(ev, StreamType):
+            types.append(ev.type)
+        elif isinstance(ev, StreamValue):
+            values.append(ev.value)
+        elif isinstance(ev, StreamComplete):
+            output = ev.output
+        # StreamHeader / StreamStringTable carry no graph-level state.
 
     g = Graph(types=types, values=values, output=output, symbols=symbols)
     g.validate()
@@ -749,6 +883,13 @@ __all__ = [
     "MicbParseError",
     "Node",
     "Param",
+    "StreamComplete",
+    "StreamEvent",
+    "StreamHeader",
+    "StreamStringTable",
+    "StreamSymbol",
+    "StreamType",
+    "StreamValue",
     "Type",
     "DTYPES",
     "OPCODES",
@@ -760,6 +901,7 @@ __all__ = [
     "emit_micb",
     "parse_mic2",
     "parse_micb",
+    "parse_micb_stream",
     "round_trip",
     "round_trip_b",
 ]
