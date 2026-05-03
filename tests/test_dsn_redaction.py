@@ -8,8 +8,6 @@ v3.8.14 ``_redact_dsn`` handles both forms.
 
 from __future__ import annotations
 
-import pytest
-
 from mind_mem.mm_cli import _redact_dsn
 
 

@@ -158,7 +158,7 @@ def _redact_dsn(dsn: str) -> str:
     except Exception:
         pass
     # Keyword form (postgresql://… without password OR plain key=value).
-    return re.sub(r'(?i)\bpassword\s*=\s*\S+', "password=***", dsn)
+    return re.sub(r"(?i)\bpassword\s*=\s*\S+", "password=***", dsn)
 
 
 def _embed_via_ollama(texts: list[str], model: str = "mxbai-embed-large") -> list[list[float]]:
@@ -217,10 +217,15 @@ def _cmd_migrate_store(args: argparse.Namespace) -> int:
     from mind_mem.block_store import MarkdownBlockStore
 
     if args.from_backend != "markdown" or args.to_backend != "postgres":
-        print(json.dumps({
-            "error": f"unsupported direction: {args.from_backend} -> {args.to_backend}",
-            "supported": ["markdown -> postgres"],
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "error": f"unsupported direction: {args.from_backend} -> {args.to_backend}",
+                    "supported": ["markdown -> postgres"],
+                },
+                indent=2,
+            )
+        )
         return 2
     if not args.dsn:
         print(json.dumps({"error": "--dsn is required for postgres target"}, indent=2))
@@ -232,11 +237,16 @@ def _cmd_migrate_store(args: argparse.Namespace) -> int:
     try:
         from mind_mem.block_store_postgres import PostgresBlockStore
     except ImportError as exc:
-        print(json.dumps({
-            "error": "postgres backend requires the [postgres] extra",
-            "install": "pip install 'mind-mem[postgres]'",
-            "detail": str(exc),
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "error": "postgres backend requires the [postgres] extra",
+                    "install": "pip install 'mind-mem[postgres]'",
+                    "detail": str(exc),
+                },
+                indent=2,
+            )
+        )
         return 2
 
     ws = _workspace()
@@ -247,17 +257,22 @@ def _cmd_migrate_store(args: argparse.Namespace) -> int:
     with_id = [b for b in blocks if b.get("_id")]
 
     if args.dry_run:
-        print(json.dumps({
-            "mode": "dry_run",
-            "from_backend": args.from_backend,
-            "to_backend": args.to_backend,
-            "workspace": ws,
-            "dsn": redacted_dsn,
-            "schema": args.schema,
-            "block_count_total": len(blocks),
-            "block_count_migratable": len(with_id),
-            "blocks_skipped_no_id": len(blocks) - len(with_id),
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "mode": "dry_run",
+                    "from_backend": args.from_backend,
+                    "to_backend": args.to_backend,
+                    "workspace": ws,
+                    "dsn": redacted_dsn,
+                    "schema": args.schema,
+                    "block_count_total": len(blocks),
+                    "block_count_migratable": len(with_id),
+                    "blocks_skipped_no_id": len(blocks) - len(with_id),
+                },
+                indent=2,
+            )
+        )
         return 0
 
     dst = PostgresBlockStore(args.dsn, schema=args.schema, workspace=ws)
@@ -303,11 +318,7 @@ def _cmd_migrate_store(args: argparse.Namespace) -> int:
 
     with dst._get_pool().connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                _pgsql.SQL("SELECT COUNT(*) FROM {s}.blocks").format(
-                    s=_pgsql.Identifier(args.schema)
-                )
-            )
+            cur.execute(_pgsql.SQL("SELECT COUNT(*) FROM {s}.blocks").format(s=_pgsql.Identifier(args.schema)))
             target_count = cur.fetchone()[0]
 
     ts = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")

@@ -223,9 +223,7 @@ def _ddl_pgvector(schema: str, embedding_dim: int = DEFAULT_EMBEDDING_DIM) -> An
     s = pgsql.Identifier(schema)
     dim_lit = pgsql.Literal(int(embedding_dim))
     stmts: list[Any] = [
-        pgsql.SQL(
-            "ALTER TABLE {s}.blocks ADD COLUMN IF NOT EXISTS embedding VECTOR({d})"
-        ).format(s=s, d=dim_lit),
+        pgsql.SQL("ALTER TABLE {s}.blocks ADD COLUMN IF NOT EXISTS embedding VECTOR({d})").format(s=s, d=dim_lit),
         # HNSW with cosine. lists/m tuning replaces the brittle
         # IVFFlat lists=100 default that mis-bucketed any corpus
         # smaller than ~100k rows.
@@ -541,10 +539,7 @@ class PostgresBlockStore:
         # (likely an embedder regression) and should fail loudly rather
         # than silently degrade to BM25-only.
         if query_embedding is not None and len(query_embedding) != self._embedding_dim:
-            raise BlockStoreError(
-                f"query_embedding dim mismatch: got {len(query_embedding)},"
-                f" schema expects {self._embedding_dim}"
-            )
+            raise BlockStoreError(f"query_embedding dim mismatch: got {len(query_embedding)}, schema expects {self._embedding_dim}")
         do_vector = query_embedding is not None and self._has_vector
 
         bm25_sql = _sql(
@@ -570,8 +565,7 @@ class PostgresBlockStore:
         )
         fetch_sql = _sql(
             self._schema,
-            "SELECT id, file_path, content, metadata, created_at, updated_at, active"
-            " FROM {s}.blocks WHERE id = ANY(%s)",
+            "SELECT id, file_path, content, metadata, created_at, updated_at, active FROM {s}.blocks WHERE id = ANY(%s)",
         )
 
         try:
@@ -652,9 +646,7 @@ class PostgresBlockStore:
         block_id, file_path, content, metadata_json = _block_to_row(block)
         if embedding is not None and self._has_vector:
             if len(embedding) != self._embedding_dim:
-                raise BlockStoreError(
-                    f"embedding dim mismatch: got {len(embedding)}, schema expects {self._embedding_dim}"
-                )
+                raise BlockStoreError(f"embedding dim mismatch: got {len(embedding)}, schema expects {self._embedding_dim}")
             sql = _sql(
                 self._schema,
                 "INSERT INTO {s}.blocks (id, file_path, content, metadata, embedding, updated_at)"
@@ -699,9 +691,7 @@ class PostgresBlockStore:
         if not self._has_vector:
             raise BlockStoreError("pgvector not available; cannot backfill embeddings")
         if len(embedding) != self._embedding_dim:
-            raise BlockStoreError(
-                f"embedding dim mismatch: got {len(embedding)}, schema expects {self._embedding_dim}"
-            )
+            raise BlockStoreError(f"embedding dim mismatch: got {len(embedding)}, schema expects {self._embedding_dim}")
         pool = self._get_pool()
         sql = _sql(
             self._schema,
