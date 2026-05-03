@@ -68,6 +68,7 @@ class InvalidAgentIdError(ValueError):
     """Raised when an agent_id contains characters that could be used to
     escape the workspace via path traversal."""
 
+
 # Standard directories that get replicated per namespace
 NAMESPACE_DIRS = [
     "decisions",
@@ -100,9 +101,7 @@ class NamespaceManager:
     def __init__(self, workspace: str, agent_id: str | None = None) -> None:
         if agent_id is not None and not _AGENT_ID_RE.fullmatch(agent_id):
             # Don't echo the raw value back — it may contain control bytes.
-            raise InvalidAgentIdError(
-                f"agent_id must match {_AGENT_ID_RE.pattern} (length {len(agent_id)} rejected)"
-            )
+            raise InvalidAgentIdError(f"agent_id must match {_AGENT_ID_RE.pattern} (length {len(agent_id)} rejected)")
         self.workspace = os.path.abspath(workspace)
         self.agent_id = agent_id
         self._acl = self._load_acl()
