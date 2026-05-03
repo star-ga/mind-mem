@@ -8,6 +8,7 @@ import unittest
 
 from mind_mem.namespaces import (
     NAMESPACE_DIRS,
+    InvalidAgentIdError,
     NamespaceManager,
     SharedLedger,
     init_multi_agent_workspace,
@@ -248,6 +249,49 @@ class TestInitMultiAgentWorkspace(unittest.TestCase):
     def test_no_agents_still_creates_shared(self):
         init_multi_agent_workspace(self.td)
         self.assertTrue(os.path.isdir(os.path.join(self.td, "shared", "decisions")))
+
+
+class TestAgentIdValidation(unittest.TestCase):
+    """v3.9.x security: agent_id is interpolated into a filesystem path,
+    so the constructor rejects path-traversal sequences."""
+
+    def setUp(self) -> None:
+        self.td = tempfile.mkdtemp()
+
+    def tearDown(self) -> None:
+        import shutil
+
+        shutil.rmtree(self.td, ignore_errors=True)
+
+    def test_normal_agent_id_accepted(self) -> None:
+        for valid in ("coder-1", "agent_42", "release.bot", "abc", "X"):
+            NamespaceManager(self.td, agent_id=valid)  # must not raise
+
+    def test_traversal_rejected(self) -> None:
+        for evil in ("../etc", "..", "/etc/passwd", "agent/../bad"):
+            with self.assertRaises(InvalidAgentIdError):
+                NamespaceManager(self.td, agent_id=evil)
+
+    def test_nul_byte_rejected(self) -> None:
+        with self.assertRaises(InvalidAgentIdError):
+            NamespaceManager(self.td, agent_id="agent\x00name")
+
+    def test_whitespace_rejected(self) -> None:
+        with self.assertRaises(InvalidAgentIdError):
+            NamespaceManager(self.td, agent_id="agent name")
+
+    def test_too_long_rejected(self) -> None:
+        with self.assertRaises(InvalidAgentIdError):
+            NamespaceManager(self.td, agent_id="a" * 65)
+
+    def test_empty_rejected(self) -> None:
+        # empty string is *not* the same as None — None means "no agent_id".
+        with self.assertRaises(InvalidAgentIdError):
+            NamespaceManager(self.td, agent_id="")
+
+    def test_none_still_works(self) -> None:
+        ns = NamespaceManager(self.td, agent_id=None)
+        self.assertIsNone(ns.agent_id)
 
 
 if __name__ == "__main__":
