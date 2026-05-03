@@ -646,6 +646,64 @@ change to existing block format (new fields, old blocks get
 `transform_hash=null` and are treated as always-dirty until first
 re-extract).
 
+## v3.10.0 candidates — v3.9 follow-ups
+
+> **Drafted (2026-05-03)** as the v3.10 release-train items. All
+> three are direct continuations of the v3.9 themes that landed on
+> `feat/v3.9-http-transport`. Together they finish the
+> "set-and-forget memory engine" story so v4.0 can focus purely on
+> networked-mesh / parallelism.
+
+### 1. Per-byte source lineage (cocoindex theme 2)
+
+The hash-of-code primitive landed in v3.9 ships read-only inspection
+(`pipeline_dirty_blocks`). The v3.10 follow-up wires it into the
+audit chain so every governed claim traces back to an exact byte
+range, not just a file:
+
+- `source_span = {path, byte_start, byte_end, sha256}` on each block,
+  populated at extraction time.
+- `audit_chain.py` includes `source_span` in the preimage when sealing
+  a block, so any later edit to those bytes invalidates the chain link
+  cleanly (currently file-mtime based, which is coarser).
+- New MCP tool `block_lineage(block_id)` returns the full chain:
+  block → extractor pipeline (with code hash) → source span → file
+  sha256.
+
+Direct fit for `512-mind/sealed_evidence` and `arch-mind` evidence
+chains. Estimated effort: 2-3 days.
+
+### 2. Auto-stamp + dirty-block re-extraction (hash-of-code theme 1
+        completion)
+
+v3.9 ships only the inspection primitive. v3.10 closes the loop:
+
+- Extraction pipeline auto-stamps `TransformHash` on every new block.
+- `reindex(scope="dirty")` MCP tool for targeted rebuild — no full
+  reindex needed.
+- Dream-cycle hook re-extracts dirty blocks on each pass so prompt
+  iterations don't silently lose value across the corpus.
+
+Estimated effort: 1 day (the wiring is mechanical; the primitive
+is already proven).
+
+### 3. compile_truth_walkthrough MCP wrapping + persona-aware MCP recall
+
+v3.9 wires the walkthrough and persona projection into the HTTP
+transport. v3.10 wires them into MCP so AI clients (Claude Code,
+Codex, Gemini, etc.) can call them without going through HTTP:
+
+- `compile_truth_walkthrough(topic, depth=auto)` — MCP tool wrapping
+  `walkthrough.compile_walkthrough`.
+- `recall(query, persona="brief"|"detailed"|"technical")` — extend
+  the MCP `recall` schema with the optional `persona` field; pass
+  through to `personas.apply_persona` post-recall.
+- `briefing(topic, persona=...)` — same persona projection wired into
+  the existing `briefing` tool.
+
+Estimated effort: 1 day. No code change in the underlying primitives;
+this is pure MCP-surface plumbing.
+
 ## v4.0 candidates — Networked Mesh + Parallel Pipelines
 
 mind-mem today is single-process and single-host. Two adjacent surfaces have
