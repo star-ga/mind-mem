@@ -79,8 +79,13 @@ MAINTENANCE_SCRIPTS = [
     "transcript_capture.py",
 ]
 
+# Track the package version on every workspace init so users can tell at a
+# glance what release wrote their config. Was hardcoded "1.7.0" through
+# v3.8.10 (purely informational; nothing validates it).
+from . import __version__ as _pkg_version
+
 DEFAULT_CONFIG = {
-    "version": "1.7.0",
+    "version": _pkg_version,
     "workspace_path": ".",
     "auto_capture": True,
     "auto_recall": True,
