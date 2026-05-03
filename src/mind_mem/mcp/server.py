@@ -69,6 +69,9 @@ from mind_mem.mcp.tools import (
     memory_ops as _tools_memory_ops,
 )
 from mind_mem.mcp.tools import (
+    mic_map as _tools_mic_map,
+)
+from mind_mem.mcp.tools import (
     model as _tools_model,
 )
 from mind_mem.mcp.tools import (
@@ -114,6 +117,7 @@ _tools_memory_ops.register(mcp)
 _tools_kernels.register(mcp)
 _tools_calibration.register(mcp)
 _tools_model.register(mcp)
+_tools_mic_map.register(mcp)
 
 # v3.2.0 — additive consolidated dispatchers (recall, staged_change,
 # memory_verify, graph, core, kernels, compiled_truth). Registered

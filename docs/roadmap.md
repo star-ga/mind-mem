@@ -4,7 +4,21 @@
 > in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
 > full milestone breakdown.
 
-## v3.8.10 (Current — released 2026-05-02)
+## v3.8.11 (Current — released 2026-05-02)
+
+Surface MIC/MAP for end users — MCP tools + `mm mic` CLI + docs +
+example. The codec has shipped pure-Python since v3.8.5 but was
+invisible without reading the source. Two new MCP tools
+(`mic_convert`, `mic_inspect`), one new CLI (`mm mic convert` /
+`mm mic inspect`), one runnable example
+(`examples/mic_map_quickstart.py`), one user guide
+(`docs/mic-map.md`), and a Features section entry in the README.
+22 new integration tests (10 CLI + 12 MCP). Zero new dependencies;
+zero-dep status preserved. The MIC/MAP v15 patent provisional is
+on a separate filing track (target 2026-05-11) and not gated on
+this release.
+
+## v3.8.10 (Released 2026-05-02)
 
 Optional Cython accelerator for the MIC/MAP hot loops, slice 3/3 of
 the MIC/MAP scale-hardening train. New `src/mind_mem/_mic_map_accel.pyx`

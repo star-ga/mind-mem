@@ -178,6 +178,9 @@ Drop-in ms-marco-MiniLM-L-6-v2 cross-encoder (80MB). Blends 0.6 * CE + 0.4 * ori
 ### MIND Kernels (Optional, Native Speed)
 17 compiled MIND scoring kernels (BM25F, RRF fusion, reranking, negation penalty, date proximity, category boost, importance, entity overlap, confidence, top-k, weighted rank, category affinity, query-category relevance, category assignment). Compiles to native `.so` via the [MIND compiler](https://mindlang.dev). Pure Python fallback always available — no functionality is lost without compilation.
 
+### MIC/MAP — MIND IR graph serialization
+Pure-Python codec for the STARGA wire formats: **mic@2** (line-oriented text, LLM-readable, git-friendly) and **mic-b** (varint binary, ~4× smaller). Both encode typed dataflow graphs (symbols + types + values + output) with byte-identical round-trip. Streaming parser for bounded peak memory; optional Cython accelerator via `mind-mem[accelerated]` (+16/+20/+36 % on parse). Two MCP tools (`mic_convert`, `mic_inspect`) and a `mm mic` CLI surface it for agents and operators. See [`docs/mic-map.md`](docs/mic-map.md).
+
 ### BM25F Hybrid Recall
 BM25F field-weighted scoring (k1=1.2, b=0.75) with per-field weighting (Statement: 3x, Title: 2.5x, Name: 2x, Summary: 1.5x), Porter stemming, bigram phrase matching (25% boost per hit), overlapping sentence chunking (3-sentence windows with 1-sentence overlap), domain-aware query expansion, and optional 2-hop graph-based cross-reference neighbor boosting. Zero dependencies. Fast and deterministic.
 

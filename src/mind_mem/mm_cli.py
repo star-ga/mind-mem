@@ -837,6 +837,143 @@ def _cmd_gate_remove(args: argparse.Namespace) -> int:
     return 0 if removed else 1
 
 
+def _read_mic_input(path: str) -> tuple[bytes | str, str]:
+    """Read a mic file; auto-detect mic@2 (text) vs mic-b (binary).
+    Returns ``(payload, fmt)`` where ``fmt`` is ``"mic2"`` or ``"micb"``.
+    """
+    with open(os.path.expanduser(path), "rb") as f:
+        raw = f.read()
+    if raw.startswith(b"MICB"):
+        return raw, "micb"
+    # mic@2 starts with the literal header "mic@2"
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"could not decode {path} as text or recognise as mic-b: {exc}") from exc
+    if not text.lstrip().startswith("mic@2"):
+        raise ValueError(f"{path} is not a recognised mic@2 / mic-b payload")
+    return text, "mic2"
+
+
+def _cmd_mic_convert(args: argparse.Namespace) -> int:
+    """Convert a MIND IR graph between mic@2 and mic-b. Pure-Python,
+    zero-dep — uses only :mod:`mind_mem.mic_map`."""
+    from mind_mem.mic_map import (
+        Mic2ParseError,
+        MicbParseError,
+        emit_mic2,
+        emit_micb,
+        parse_mic2,
+        parse_micb,
+    )
+
+    try:
+        payload, fmt = _read_mic_input(args.path)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        if fmt == "mic2":
+            assert isinstance(payload, str)
+            graph = parse_mic2(payload)
+        else:
+            assert isinstance(payload, bytes)
+            graph = parse_micb(payload)
+    except (Mic2ParseError, MicbParseError) as exc:
+        print(f"error: parse failed: {exc}", file=sys.stderr)
+        return 1
+
+    if args.mic_to == "mic2":
+        out_text = emit_mic2(graph)
+        if args.mic_out == "-":
+            sys.stdout.write(out_text)
+        else:
+            with open(os.path.expanduser(args.mic_out), "w", encoding="utf-8") as f:
+                f.write(out_text)
+            print(f"wrote {len(out_text.encode('utf-8'))} bytes to {args.mic_out}", file=sys.stderr)
+    else:
+        out_bin = emit_micb(graph)
+        if args.mic_out == "-":
+            sys.stdout.buffer.write(out_bin)
+        else:
+            with open(os.path.expanduser(args.mic_out), "wb") as f:
+                f.write(out_bin)
+            print(f"wrote {len(out_bin)} bytes to {args.mic_out}", file=sys.stderr)
+    return 0
+
+
+def _cmd_mic_inspect(args: argparse.Namespace) -> int:
+    """Print a structural summary of a MIC payload — type count, value
+    count, output index, per-value tag (Arg/Param/Node + opcode)."""
+    from mind_mem.mic_map import (
+        Arg,
+        Mic2ParseError,
+        MicbParseError,
+        Node,
+        Param,
+        parse_mic2,
+        parse_micb,
+    )
+
+    try:
+        payload, fmt = _read_mic_input(args.path)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        if fmt == "mic2":
+            assert isinstance(payload, str)
+            graph = parse_mic2(payload)
+        else:
+            assert isinstance(payload, bytes)
+            graph = parse_micb(payload)
+    except (Mic2ParseError, MicbParseError) as exc:
+        print(f"error: parse failed: {exc}", file=sys.stderr)
+        return 1
+
+    if args.mic_json:
+        out: dict = {
+            "format": fmt,
+            "type_count": len(graph.types),
+            "value_count": len(graph.values),
+            "output_idx": graph.output,
+            "types": [{"index": i, "dtype": t.dtype, "dims": list(t.dims)} for i, t in enumerate(graph.types)],
+            "values": [],
+        }
+        for i, v in enumerate(graph.values):
+            if isinstance(v, Arg):
+                out["values"].append({"index": i, "kind": "arg", "name": v.name, "type_idx": v.type_idx})
+            elif isinstance(v, Param):
+                out["values"].append({"index": i, "kind": "param", "name": v.name, "type_idx": v.type_idx})
+            elif isinstance(v, Node):
+                out["values"].append(
+                    {"index": i, "kind": "node", "opcode": v.opcode, "inputs": list(v.inputs)}
+                )
+        print(json.dumps(out, indent=2))
+    else:
+        print(f"format:        {fmt}")
+        print(f"types:         {len(graph.types)}")
+        print(f"values:        {len(graph.values)}")
+        print(f"output:        #{graph.output}")
+        print()
+        print("Types:")
+        for i, t in enumerate(graph.types):
+            print(f"  T{i}: {t.dtype}({', '.join(t.dims)})")
+        print()
+        print("Values:")
+        for i, v in enumerate(graph.values):
+            if isinstance(v, Arg):
+                print(f"  #{i:3} arg     {v.name} : T{v.type_idx}")
+            elif isinstance(v, Param):
+                print(f"  #{i:3} param   {v.name} : T{v.type_idx}")
+            elif isinstance(v, Node):
+                inputs = ", ".join(f"#{j}" for j in v.inputs)
+                print(f"  #{i:3} node    {v.opcode}({inputs})")
+    return 0
+
+
 def _cmd_audit_pinned(args: argparse.Namespace) -> int:
     """Run the seven-check audit (and optional Ed25519 verify) on every
     entry in ``audit_pinned_models`` of the chosen config. Designed for
@@ -1230,6 +1367,55 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit machine-readable JSON instead of human-readable lines.",
     )
     p_pinned.set_defaults(func=_cmd_audit_pinned)
+
+    # ── mic — MIND IR graph serialization (mic@2 / mic-b) ─────────────────
+    p_mic = sub.add_parser(
+        "mic",
+        help=(
+            "MIND IR graph serialization (mic@2 text + mic-b binary). "
+            "Subcommands: convert, inspect."
+        ),
+    )
+    mic_sub = p_mic.add_subparsers(dest="mic_action", required=True)
+
+    p_mic_convert = mic_sub.add_parser(
+        "convert",
+        help=(
+            "Convert a graph between mic@2 (text) and mic-b (binary). "
+            "Round-trips byte-for-byte."
+        ),
+    )
+    p_mic_convert.add_argument("path", help="Input file (auto-detect format).")
+    p_mic_convert.add_argument(
+        "--to",
+        choices=["mic2", "micb"],
+        required=True,
+        dest="mic_to",
+        help="Output format.",
+    )
+    p_mic_convert.add_argument(
+        "-o", "--output",
+        default="-",
+        dest="mic_out",
+        help="Output file (default: stdout). Binary written raw, text as UTF-8.",
+    )
+    p_mic_convert.set_defaults(func=_cmd_mic_convert)
+
+    p_mic_inspect = mic_sub.add_parser(
+        "inspect",
+        help=(
+            "Print a structural summary of a MIC payload: type/value count, "
+            "output index, per-value tag (Arg/Param/Node + opcode)."
+        ),
+    )
+    p_mic_inspect.add_argument("path", help="Input file (auto-detect format).")
+    p_mic_inspect.add_argument(
+        "--json",
+        action="store_true",
+        dest="mic_json",
+        help="Emit JSON instead of human-readable lines.",
+    )
+    p_mic_inspect.set_defaults(func=_cmd_mic_inspect)
 
     # ── inspect — full block fields + provenance tree ──────────────────────
     p_inspect = sub.add_parser(

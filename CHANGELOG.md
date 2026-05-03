@@ -2,6 +2,79 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## 3.8.11 (2026-05-02)
+
+**Surface MIC/MAP — MCP tools + `mm mic` CLI + docs.** The
+``mind_mem.mic_map`` module has shipped pure-Python since v3.8.5
+but was invisible to end users — no MCP surface, no CLI, no docs,
+no example. v3.8.11 closes the discoverability gap without changing
+the codec itself or adding any new dependency. Zero-dep status
+preserved (still pure Python, Cython accelerator stays opt-in via
+``mind-mem[accelerated]``).
+
+### Added
+
+- **Two MCP tools** at ``mind_mem.mcp.tools.mic_map``:
+  - ``mic_convert(input, input_format, output_format)`` — convert
+    between mic@2 (text) and mic-b (binary). Round-trips
+    byte-for-byte. Inputs auto-detect format from the leading
+    ``mic@2`` prefix or ``MICB`` magic. Size-bounded at 8 MiB.
+  - ``mic_inspect(input, input_format)`` — structural summary
+    (type count, value count, output index, per-value tag) without
+    re-emitting. Same JSON schema regardless of input format.
+- **``mm mic`` CLI** with two subcommands:
+  - ``mm mic convert <file> --to {mic2|micb} [-o <file>]`` —
+    file-to-file or file-to-stdout conversion; binary written raw,
+    text as UTF-8.
+  - ``mm mic inspect <file> [--json]`` — human-readable or JSON
+    structural summary.
+- **``examples/mic_map_quickstart.py``** — runnable end-to-end
+  demonstration: build a residual block, emit both formats,
+  round-trip, stream-parse with event types.
+- **``docs/mic-map.md``** — user guide covering Python API, CLI,
+  MCP tools, performance, streaming parser, wire-format invariants,
+  and use cases.
+- **README "Features" section entry** — short callout linking to
+  the doc, so MIC/MAP is discoverable from the first page.
+
+### Tests
+
+- **``tests/test_mic_map_cli.py``** — 10 integration tests via
+  ``subprocess.run([\"mm\", \"mic\", ...])``: round-trip in both
+  directions, stdout vs file output, text + JSON inspect,
+  missing-file / unrecognised-payload / corrupted-mic-b error
+  paths.
+- **``tests/test_mic_map_mcp.py``** — 12 unit tests on the MCP
+  tool functions: round-trip in both directions, auto-detect on
+  text and base64 mic-b, structural-summary equivalence across
+  formats, invalid-format / corrupted / invalid-base64 error
+  envelopes, 8 MiB size guard.
+
+22 new tests, all passing locally. Total mic_map test surface
+across the codec, streaming, fuzz, adversarial, bench, accelerator,
+CLI, and MCP suites is now **129 tests**.
+
+### Migration
+
+No migration required. The Python API at ``mind_mem.mic_map`` is
+unchanged. Existing callers keep working; new callers can also use
+the MCP tools or ``mm mic`` CLI.
+
+The MCP server registers two new tools (``mic_convert``,
+``mic_inspect``) on startup. Agents that already discover the MCP
+surface dynamically pick them up automatically; agents with a
+hard-coded tool allowlist need to add the two names.
+
+### Notes
+
+- MIC/MAP wire-format spec is at
+  ``star-ga/mind-spec/spec/mic/`` (canonical).
+- Rust reference impl is at ``star-ga/mind/src/ir/compact/v2/``;
+  the Python impl in this package is interchangeable on the wire.
+- The MIC/MAP v15 patent provisional is being filed separately
+  (target: 2026-05-11) — that work is on a different track and
+  not gated on any code release here.
+
 ## 3.8.10 (2026-05-02)
 
 **Optional Cython accelerator for the MIC/MAP hot loops.** Third
