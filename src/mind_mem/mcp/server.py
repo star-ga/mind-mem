@@ -78,10 +78,16 @@ from mind_mem.mcp.tools import (
     ontology as _tools_ontology,
 )
 from mind_mem.mcp.tools import (
+    pipeline as _tools_pipeline,
+)
+from mind_mem.mcp.tools import (
     recall as _tools_recall,
 )
 from mind_mem.mcp.tools import (
     signal as _tools_signal,
+)
+from mind_mem.mcp.tools import (
+    walkthrough_persona as _tools_walkthrough_persona,
 )
 from mind_mem.observability import get_logger
 
@@ -118,6 +124,8 @@ _tools_kernels.register(mcp)
 _tools_calibration.register(mcp)
 _tools_model.register(mcp)
 _tools_mic_map.register(mcp)
+_tools_walkthrough_persona.register(mcp)
+_tools_pipeline.register(mcp)
 
 # v3.2.0 — additive consolidated dispatchers (recall, staged_change,
 # memory_verify, graph, core, kernels, compiled_truth). Registered

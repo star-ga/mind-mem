@@ -458,8 +458,8 @@ JSON-in-repo convention don't fit. Two ideas do.
 > `tests/test_walkthrough.py` (all passing). Wired into the v3.9 HTTP
 > transport as `POST /walkthrough`. The `compile_walkthrough()` Python
 > entry is also callable directly; MCP-tool wrapping (renamed
-> `compile_truth_walkthrough` per the original spec) is the v3.10
-> follow-up.
+> `compile_truth_walkthrough` per the original spec) ships in v3.9.0
+> alongside the underlying module.
 
 Today `recall` and `hybrid_search` return blocks ranked by relevance. For
 "explain the state of project X" queries, an agent gets a flat result list and
@@ -646,13 +646,15 @@ change to existing block format (new fields, old blocks get
 `transform_hash=null` and are treated as always-dirty until first
 re-extract).
 
-## v3.10.0 candidates — v3.9 follow-ups
+## v3.9.0 (shipped) + v3.10.0 candidates — v3.9 follow-ups
 
-> **Drafted (2026-05-03)** as the v3.10 release-train items. All
-> three are direct continuations of the v3.9 themes that landed on
-> `feat/v3.9-http-transport`. Together they finish the
-> "set-and-forget memory engine" story so v4.0 can focus purely on
-> networked-mesh / parallelism.
+> **Drafted (2026-05-03), folded into v3.9.0 (2026-05-04).** The
+> MCP-wrapping piece (item 3) was additive and shipped inside the
+> same v3.9.0 release as the underlying primitives, since v3.8.14 →
+> v3.9.0 was the first version bump. The lineage + extractor work
+> (items 1 & 2) involves audit-chain preimage changes and ships as
+> **v3.10**. Together they finish the "set-and-forget memory engine"
+> story so v4.0 can focus purely on networked-mesh / parallelism.
 
 ### 1. Per-byte source lineage (cocoindex theme 2)
 
@@ -687,10 +689,10 @@ v3.9 ships only the inspection primitive. v3.10 closes the loop:
 Estimated effort: 1 day (the wiring is mechanical; the primitive
 is already proven).
 
-### 3. compile_truth_walkthrough MCP wrapping + persona-aware MCP recall
+### 3. compile_truth_walkthrough MCP wrapping + persona-aware MCP recall (shipped in v3.9.0)
 
 v3.9 wires the walkthrough and persona projection into the HTTP
-transport. v3.10 wires them into MCP so AI clients (Claude Code,
+transport. v3.9.0 also wires them into MCP so AI clients (Claude Code,
 Codex, Gemini, etc.) can call them without going through HTTP:
 
 - `compile_truth_walkthrough(topic, depth=auto)` — MCP tool wrapping
