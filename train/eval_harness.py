@@ -122,8 +122,9 @@ V39_NEW_TOOLS: list[tuple[str, str]] = [
     # MIC/MAP serialization surface (v3.8.5/v3.8.11)
     ("Convert a MIND IR graph between mic@2 text and mic-b binary.", "mic_convert"),
     ("Inspect the structure of a serialized MIC/MAP graph.", "mic_inspect"),
-    # Audit-pinned + governance health (v3.8.7+)
-    ("Audit every model in the audit_pinned_models config.", "audit_pinned_tool"),
+    # Audit chain (v3.8 via MCP)
+    ("Verify the cryptographic chain of evidence for a block by Merkle path.", "verify_merkle"),
+    ("List every evidence entry the audit chain has accepted so far.", "list_evidence"),
     # Kernels surface
     ("Get a registered MIND kernel by name.", "get_mind_kernel"),
     ("List every registered MIND kernel.", "list_mind_kernels"),
