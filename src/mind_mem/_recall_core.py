@@ -461,31 +461,29 @@ def recall(
             all_blocks.append(b)
 
     # If agent has namespace, also search agent-private corpus files.
-    # Defense-in-depth: even after _AGENT_ID_RE rejects traversal in the
-    # raw input, normalize the resolved path and verify it stays inside
-    # the workspace root. This is the canonical CodeQL pattern for
-    # py/path-injection (see the rule's documentation example #3).
+    # CodeQL py/path-injection cleansing pattern: resolve to absolute
+    # realpath, then verify the result is contained within the trusted
+    # workspace root using `startswith(prefix + sep)`. Any path that
+    # escapes is silently skipped — the regex on agent_id already
+    # makes this branch unreachable, but the static check is required
+    # for CodeQL to mark the path as cleansed.
     if ns_manager and agent_id:
         workspace_real = os.path.realpath(workspace)
+        workspace_prefix = workspace_real + os.sep
         agent_ns = f"agents/{agent_id}"
         for label, rel_path in CORPUS_FILES.items():
             ns_path = os.path.join(agent_ns, rel_path)
-            full_path = os.path.normpath(os.path.join(workspace, ns_path))
-            # Reject any resolved path that escapes the workspace root
-            # (cannot happen given the regex, but the explicit check
-            # makes the cleansing visible to static analyzers).
-            if not full_path.startswith(workspace_real + os.sep) and full_path != workspace_real:
-                # Try the realpath form too, in case workspace itself is a symlink.
-                resolved = os.path.realpath(full_path)
-                if not resolved.startswith(workspace_real + os.sep):
-                    _log.warning("agent_corpus_path_escaped", agent_id=agent_id, ns_path=ns_path)
-                    continue
-            if not os.path.isfile(full_path):
+            candidate_real = os.path.realpath(os.path.join(workspace_real, ns_path))
+            if not candidate_real.startswith(workspace_prefix):
+                _log.warning("agent_corpus_path_escaped", agent_id=agent_id, ns_path=ns_path)
+                continue
+            safe_path = candidate_real
+            if not os.path.isfile(safe_path):
                 continue
             if not ns_manager.can_read(ns_path):
                 continue
             try:
-                blocks = parse_file(full_path)
+                blocks = parse_file(safe_path)
             except (OSError, UnicodeDecodeError, ValueError) as e:
                 _log.debug("corpus_parse_failed", file=ns_path, error=str(e))
                 continue
