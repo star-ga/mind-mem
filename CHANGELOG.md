@@ -2,9 +2,13 @@
 
 All notable changes to mind-mem are documented in this file.
 
-## Unreleased — v3.10.0 candidates
+## v3.9.0 — MCP wrapping for v3.9 walkthrough/persona + hash-of-code loop closure
 
-**Theme: MCP wrapping for v3.9 walkthrough/persona + hash-of-code loop closure.**
+**Folded into the v3.9.0 release.** v3.9.0 is the first tagged release
+in the v3.9 line; the MCP wrapping that was originally drafted as a
+v3.9.1 follow-up ships in the same release as the underlying HTTP/
+daemon/inbox/hash/personas/walkthrough modules, since v3.8.14 → v3.9.0
+is the first version bump.
 
 ### Added
 - **Two new MCP tools** for `walkthrough` + `personas` (v3.9 modules
@@ -46,15 +50,16 @@ All notable changes to mind-mem are documented in this file.
   `test_mcp_pipeline.py`).
 - 12 new helper tests in `test_pipeline_hash.py` (stamp + reextract).
 
-### Out of scope (deferred to v3.11)
+### Out of scope (deferred to v3.10)
 - Per-byte source lineage (`source_span` on every block, audit-chain
   preimage extension). Requires the audit-chain refactor to take a
   lineage-aware preimage; out of scope here to keep this PR focused
   on the MCP surface + hash-of-code closure.
+- Re-extraction (vs. re-stamping) of dirty blocks via the LLM
+  extractor. v3.9.0 ships re-stamp; full content re-extract through
+  the dream cycle is the v3.10 work item.
 
-## Unreleased — v3.9.0 candidates
-
-**Theme: HTTP transport + replicated postgres routing.**
+## v3.9.0 — HTTP transport + replicated postgres routing
 
 ### Added
 - **HTTP transport adapter** (`src/mind_mem/http_transport.py`).

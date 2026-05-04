@@ -1,6 +1,6 @@
 """MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 
-v3.10.0 follow-up to the v3.9 ``pipeline_hash.py`` module. v3.9
+v3.9.0 follow-up to the v3.9 ``pipeline_hash.py`` module. v3.9
 shipped the inspection primitive (which blocks were extracted by an
 older pipeline) and the ``mm pipeline-status`` CLI; this surfaces
 both inspection and the new write-side helper through MCP so AI
@@ -78,7 +78,7 @@ def reindex_dirty(
 ) -> str:
     """Re-stamp blocks whose pipeline hash is stale.
 
-    v3.10 replaces v3.9's read-only inspection with a targeted
+    v3.9.0 replaces v3.9's read-only inspection with a targeted
     write: only blocks flagged as dirty by :func:`pipeline_status`
     are touched, and only their ``TransformHash`` field is
     refreshed (block content is *not* re-extracted — that requires

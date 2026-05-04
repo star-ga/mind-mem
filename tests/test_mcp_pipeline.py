@@ -1,4 +1,4 @@
-"""Tests for the v3.10 pipeline-hash MCP tools."""
+"""Tests for the v3.9.0 pipeline-hash MCP tools."""
 
 from __future__ import annotations
 
@@ -6,6 +6,16 @@ import json
 from pathlib import Path
 
 import pytest
+
+from mind_mem.mcp.infra.rate_limit import _rate_limiters, _rate_limiters_lock
+
+
+@pytest.fixture(autouse=True)
+def _reset_mcp_rate_limiters():
+    """Clear the process-global MCP rate-limiter cache between tests."""
+    with _rate_limiters_lock:
+        _rate_limiters.clear()
+    yield
 
 
 @pytest.fixture

@@ -215,7 +215,11 @@ def stamp_transform_hash(workspace: str, block: dict[str, Any]) -> dict[str, Any
     if not isinstance(block, dict):
         raise TypeError("block must be a dict")
     digest = current_pipeline_hash(workspace)
-    assert isinstance(digest, str)
+    if not isinstance(digest, str):
+        # current_pipeline_hash without return_inputs returns str; this
+        # narrows the type at runtime so bandit/mypy see the contract
+        # without relying on `assert` (stripped in -O bytecode).
+        raise TypeError(f"pipeline hash must be str, got {type(digest).__name__}")
     out = dict(block)
     out["TransformHash"] = digest
     # Drop the lowercase form to avoid two-of-truth on round-trip.

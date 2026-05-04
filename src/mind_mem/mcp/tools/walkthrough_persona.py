@@ -1,6 +1,6 @@
 """MCP wrapping for v3.9 walkthrough + persona projection.
 
-v3.10.0 follow-up to the v3.9 ``walkthrough.py`` + ``personas.py``
+v3.9.0 follow-up to the v3.9 ``walkthrough.py`` + ``personas.py``
 modules. v3.9 wired both into the HTTP REST adapter; this surfaces
 them through the MCP server so MCP-native clients (Claude Code,
 Codex CLI, Gemini CLI, Cursor, Windsurf, Zed) can call them
@@ -150,9 +150,7 @@ def recall_with_persona(
     from mind_mem.personas import PERSONAS, PersonaError, apply_persona
 
     if persona not in PERSONAS:
-        return json.dumps(
-            {"error": f"unknown persona {persona!r}; must be one of {list(PERSONAS)}"}
-        )
+        return json.dumps({"error": f"unknown persona {persona!r}; must be one of {list(PERSONAS)}"})
 
     ws = _workspace()
     ws_err = _check_workspace(ws)

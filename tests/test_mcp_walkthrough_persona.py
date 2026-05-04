@@ -1,4 +1,4 @@
-"""Tests for the v3.10 MCP walkthrough + persona wrapper tools."""
+"""Tests for the v3.9.0 MCP walkthrough + persona wrapper tools."""
 
 from __future__ import annotations
 
@@ -6,6 +6,22 @@ import json
 from pathlib import Path
 
 import pytest
+
+from mind_mem.mcp.infra.rate_limit import _rate_limiters, _rate_limiters_lock
+
+
+@pytest.fixture(autouse=True)
+def _reset_mcp_rate_limiters():
+    """Clear the process-global MCP rate-limiter cache between tests.
+
+    The limiter is keyed by client_id (``"default"`` in tests). Without
+    this reset, prior MCP tool calls in the same pytest session exhaust
+    the budget and the tool returns a rate-limit envelope instead of
+    the result envelope these tests assert on.
+    """
+    with _rate_limiters_lock:
+        _rate_limiters.clear()
+    yield
 
 
 @pytest.fixture
