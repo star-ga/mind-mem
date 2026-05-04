@@ -89,6 +89,27 @@ def get_block_store(workspace: str, config: dict[str, Any] | None = None) -> Blo
             from ..block_store_postgres import PostgresBlockStore
         except ImportError as exc:
             raise ImportError('The PostgreSQL backend requires psycopg. Install it with: pip install "mind-mem[postgres]"') from exc
-        return cast(BlockStore, PostgresBlockStore(dsn=dsn, workspace=workspace))
+
+        # v3.9: route through ReplicatedPostgresBlockStore when
+        # block_store.replicas is a non-empty list. Reads round-robin
+        # to replicas; writes always go to the primary.
+        replicas = bs_cfg.get("replicas") or []
+        if not isinstance(replicas, list):
+            raise ValueError("block_store.replicas must be a list of DSN strings")
+        replicas = [r for r in replicas if isinstance(r, str) and r.strip()]
+        schema = bs_cfg.get("schema", "mind_mem")
+        if replicas:
+            from ..block_store_postgres_replica import ReplicatedPostgresBlockStore
+
+            return cast(
+                BlockStore,
+                ReplicatedPostgresBlockStore(
+                    primary_dsn=dsn,
+                    replica_dsns=replicas,
+                    schema=schema,
+                    workspace=workspace,
+                ),
+            )
+        return cast(BlockStore, PostgresBlockStore(dsn=dsn, schema=schema, workspace=workspace))
 
     raise ValueError(f"Unknown block_store.backend={backend!r}. Supported values: {', '.join(repr(b) for b in _SUPPORTED_BACKENDS)}")

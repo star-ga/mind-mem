@@ -44,12 +44,30 @@ from __future__ import annotations
 import fnmatch
 import json
 import os
+import re
 from typing import Any
 
 from .mind_filelock import FileLock
 from .observability import get_logger
 
 _log = get_logger("namespaces")
+
+# v3.9.x security: agent_id flows directly into a filesystem path
+# (``agents/{agent_id}/...``). Reject anything that isn't a flat
+# identifier so path-traversal sequences (``../``, leading ``/``,
+# NUL bytes) cannot be used to access blocks outside the workspace.
+# Permit the same vocabulary as legacy agent_id values
+# (lowercase / dashes / dots / underscores / digits / uppercase),
+# but require at least one non-dot character so the special path
+# components ``.`` and ``..`` are rejected even though they are
+# composed of allowed characters.
+_AGENT_ID_RE = re.compile(r"(?=.*[^.])[A-Za-z0-9_.-]{1,64}")
+
+
+class InvalidAgentIdError(ValueError):
+    """Raised when an agent_id contains characters that could be used to
+    escape the workspace via path traversal."""
+
 
 # Standard directories that get replicated per namespace
 NAMESPACE_DIRS = [
@@ -81,6 +99,9 @@ class NamespaceManager:
     """
 
     def __init__(self, workspace: str, agent_id: str | None = None) -> None:
+        if agent_id is not None and not _AGENT_ID_RE.fullmatch(agent_id):
+            # Don't echo the raw value back — it may contain control bytes.
+            raise InvalidAgentIdError(f"agent_id must match {_AGENT_ID_RE.pattern} (length {len(agent_id)} rejected)")
         self.workspace = os.path.abspath(workspace)
         self.agent_id = agent_id
         self._acl = self._load_acl()

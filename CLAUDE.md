@@ -3,11 +3,19 @@
 ## Overview
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
-v3.1.1 — 3610 tests, native MCP integration for 16 AI clients, 57 MCP
-tools, full-fine-tune local model (`mind-mem-4b` on Qwen3.5-4B),
-at-rest encryption (SQLCipher + BlockStore), tier decay, governance
-alerting, audit-integrity patterns (Q16.16 fixed-point, NUL-separated
-hash preimages).
+
+**v3.8.14** (released 2026-05-03) — 4000+ tests, native MCP for 17 AI
+clients, 77 tools (58 legacy + 7 consolidated dispatchers + 12
+v3.7→v3.8 additions), Postgres backend with pgvector + HNSW + correct
+GIN, full-fine-tune local model (`mind-mem-4b` on Qwen3.5-4B), at-rest
+encryption, tier decay, governance alerting, MIC/MAP wire format
+(mic@2 text + mic-b binary).
+
+**v3.9.0 candidates** (branch `feat/v3.9-http-transport`, PR #516) —
+HTTP transport adapter (stdlib, zero new deps), background daemon,
+inbox folder ingestion, hash-of-code pipeline invalidation, persona-
+aware projection (brief / detailed / technical), dependency-ordered
+walkthrough (Kahn topo-sort), replicated Postgres routing.
 
 ## Architecture
 ```
@@ -15,11 +23,17 @@ src/mind_mem/           — Main package (src layout)
   core/                 — BlockStore, ConnectionManager, retrieval
   governance/           — Contradiction detection, drift, proposals,
                           audit chain, alerting hooks
-  mcp_server.py         — MCP server (57 tools, 8 resources)
+  mcp_server.py         — MCP server (77 tools, 8 resources)
   ingestion/            — Auto-ingestion pipeline
   skill_opt/            — Skill optimization
   hook_installer/       — Client hook installation (v3.1.1+)
-tests/                  — pytest suite (3610 tests, 177 files)
+  http_transport.py     — Stdlib HTTP REST adapter (v3.9 candidate)
+  daemon.py             — Background dream-cycle/intel-scan loop (v3.9)
+  inbox.py              — File-drop folder ingestion (v3.9)
+  pipeline_hash.py      — Hash-of-code invalidation (v3.9)
+  personas.py           — brief/detailed/technical projection (v3.9)
+  walkthrough.py        — Dependency-ordered learning sequence (v3.9)
+tests/                  — pytest suite (4000+ tests)
 kernels/                — MIND scoring kernels (.mind)
 docs/                   — User + integration docs (35+ files)
 ```

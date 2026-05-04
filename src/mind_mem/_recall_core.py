@@ -102,6 +102,12 @@ except ImportError:
 
 _log = get_logger("recall")
 
+# v3.9.x security: agent_id is interpolated into ``agents/{agent_id}/...``
+# filesystem paths. Restrict it to a flat identifier so path-traversal
+# sequences cannot escape the workspace. Same regex as in
+# ``namespaces.NamespaceManager``.
+_AGENT_ID_RE = re.compile(r"(?=.*[^.])[A-Za-z0-9_.-]{1,64}")
+
 # ---------------------------------------------------------------------------
 # Config cache — mtime-based invalidation avoids re-reading mind-mem.json
 # on every recall() call (#473).
@@ -411,15 +417,23 @@ def recall(
     # Adjust effective limit for retrieval (retrieve more candidates, trim later)
     limit = int(limit * qparams.get("extra_limit_factor", 1.0))
 
-    # Namespace ACL: resolve accessible paths if agent_id is provided
+    # Namespace ACL: resolve accessible paths if agent_id is provided.
+    # v3.9.x security: agent_id flows into a filesystem path (agents/{agent_id}/...)
+    # so reject anything that isn't a flat identifier. Path-traversal sequences
+    # (../, leading /, NUL bytes) would let a caller probe paths outside the
+    # workspace; whitespace and shell metacharacters tighten the perimeter.
     ns_manager = None
     if agent_id:
-        try:
-            from .namespaces import NamespaceManager
+        if not _AGENT_ID_RE.fullmatch(agent_id):
+            _log.warning("invalid_agent_id_rejected", agent_id_len=len(agent_id))
+            agent_id = None
+        else:
+            try:
+                from .namespaces import NamespaceManager
 
-            ns_manager = NamespaceManager(workspace, agent_id=agent_id)
-        except ImportError:
-            _log.debug("namespaces_unavailable", agent_id=agent_id)
+                ns_manager = NamespaceManager(workspace, agent_id=agent_id)
+            except ImportError:
+                _log.debug("namespaces_unavailable", agent_id=agent_id)
 
     # Load all blocks with source file tracking
     all_blocks = []
@@ -446,18 +460,30 @@ def recall(
             b["_source_label"] = label
             all_blocks.append(b)
 
-    # If agent has namespace, also search agent-private corpus files
+    # If agent has namespace, also search agent-private corpus files.
+    # CodeQL py/path-injection cleansing pattern: resolve to absolute
+    # realpath, then verify the result is contained within the trusted
+    # workspace root using `startswith(prefix + sep)`. Any path that
+    # escapes is silently skipped — the regex on agent_id already
+    # makes this branch unreachable, but the static check is required
+    # for CodeQL to mark the path as cleansed.
     if ns_manager and agent_id:
+        workspace_real = os.path.realpath(workspace)
+        workspace_prefix = workspace_real + os.sep
         agent_ns = f"agents/{agent_id}"
         for label, rel_path in CORPUS_FILES.items():
             ns_path = os.path.join(agent_ns, rel_path)
-            full_path = os.path.join(workspace, ns_path)
-            if not os.path.isfile(full_path):
+            candidate_real = os.path.realpath(os.path.join(workspace_real, ns_path))
+            if not candidate_real.startswith(workspace_prefix):
+                _log.warning("agent_corpus_path_escaped", agent_id=agent_id, ns_path=ns_path)
+                continue
+            safe_path = candidate_real
+            if not os.path.isfile(safe_path):
                 continue
             if not ns_manager.can_read(ns_path):
                 continue
             try:
-                blocks = parse_file(full_path)
+                blocks = parse_file(safe_path)
             except (OSError, UnicodeDecodeError, ValueError) as e:
                 _log.debug("corpus_parse_failed", file=ns_path, error=str(e))
                 continue

@@ -327,57 +327,93 @@ multi-LLM backends, and MCP compatibility — features mind-mem already has.
 Three patterns from their design are worth adopting on top of mind-mem's
 production-grade foundation:
 
-### 1. Inbox folder ingestion
+### 1. Inbox folder ingestion — **landed (in-progress branch)**
 
-Drop any file into `./inbox/`, mind-mem detects, classifies by extension,
-routes to the right ingestion path:
+> **Status (2026-05-03):** implemented on `feat/v3.9-http-transport`.
+> New module `src/mind_mem/inbox.py`, 24 tests in
+> `tests/test_inbox.py` (all passing). CLI subcommand
+> `mm inbox-watch <dir> [--once]` wired. New block prefix `INBOX-`
+> mapped to `memory/INBOX.md` (both `_BLOCK_PREFIX_MAP` locations
+> updated in lockstep).
 
-- text (`.txt`, `.md`, `.json`, `.csv`, `.log`, `.xml`, `.yaml`) →
-  markdown block (existing path)
-- image (`.png`, `.jpg`, `.gif`, `.webp`) → ImageBlock
-  (existing `multi_modal.py` schema; embedding via optional CLIP / SigLIP)
-- audio (`.mp3`, `.wav`, `.flac`, `.m4a`) → AudioBlock with transcript
-  (existing `multi_modal.py` schema; transcription via optional Whisper)
-- documents (`.pdf`) → text-extract → markdown block
-  (via optional `pypdf` / `pdfplumber`)
+Drop any file into a watched inbox directory, mind-mem detects,
+classifies by extension, routes to the right ingestion path:
 
-CLI: `mm watch ./inbox/`. Extends existing `watcher.py` (currently `.md`-only)
-with multi-format routing. Heavy dependencies (CLIP / Whisper / pdf-extract)
-stay optional behind extras: `pip install mind-mem[multimodal]`.
+- ✓ text (`.txt`, `.md`, `.json`, `.csv`, `.log`, `.xml`, `.yaml`,
+  `.yml`) → markdown block (stdlib only).
+- · image (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) → ImageBlock
+  scaffold raises `NotImplementedError` with a clear pointer at the
+  optional `multimodal` extra (CLIP / SigLIP embedding wires in v3.10).
+- · audio (`.mp3`, `.wav`, `.flac`, `.m4a`) → AudioBlock scaffold,
+  same posture (Whisper transcription wires in v3.10).
+- ✓ documents (`.pdf`) → `pypdf` text-extract → markdown block (the
+  optional dep is auto-detected at handler time).
+
+After processing, files move to `inbox/_processed/<ts>/<file>` on
+success or `inbox/_failed/<ts>/<file>` (with sidecar
+`<file>.error.txt`) on failure — no destruction, full audit trail.
+The watcher polls (default 5s) so it works across volumes that
+don't support inotify; mtime ordering keeps the most-recent file at
+the end of the queue.
+
+Heavy dependencies (CLIP / Whisper / pdf-extract) stay optional behind
+the `multimodal` extra: `pip install mind-mem[multimodal]`.
 
 Solves the "how do I get content into mind-mem" friction for non-technical
 users. Files = universal interface, no API knowledge needed.
 
-### 2. Auto-scheduled dream cycle
+### 2. Auto-scheduled dream cycle — **landed (in-progress branch)**
+
+> **Status (2026-05-03):** implemented on `feat/v3.9-http-transport`.
+> New module `src/mind_mem/daemon.py`, 15 tests in
+> `tests/test_daemon.py` (all passing). CLI subcommand
+> `mm daemon [--dry-run] [--once]` wired.
 
 mind-mem already has `dream_cycle.py` (consolidation logic) and
-`cron_runner.py` (scheduler). Missing: default-on automatic schedule.
+`cron_runner.py` (scheduler). Missing was a default-on automatic
+schedule — now provided by the daemon module.
 
-Add:
+Implemented:
 
-- `mm config set dream_cycle.auto_interval_seconds 1800` (default off,
-  enable per-deployment)
-- Background daemon mode: `mm daemon` runs `cron_runner` internally on
-  a thread, no external cron required
-- Documented in README as the "set it and forget it" mode
+- ✓ Config support: `daemon.dream_cycle.auto_interval_seconds`,
+  `daemon.intel_scan.auto_interval_seconds`,
+  `daemon.entity_ingest.auto_interval_seconds`,
+  `daemon.transcript_scan.auto_interval_seconds`. Default 0 (off);
+  intervals < 60s auto-clamp to 60s.
+- ✓ Background daemon: `mm daemon` runs each enabled task on its own
+  thread with internal scheduling. No external cron required. Job
+  exceptions are logged but do not kill the loop. SIGINT/SIGTERM
+  shut down cleanly.
+- ✓ One-shot mode: `mm daemon --once` runs every enabled task once
+  and exits — handy for operator runs and CI.
 
 "Drift prevention" is a core mind-mem promise — but only if dream cycle
 actually runs. Most users never set up cron, so dream cycle never fires.
 One config flag flips the default.
 
-### 3. Extended HTTP API surface
+### 3. Extended HTTP API surface — **landed (in-progress branch)**
+
+> **Status (2026-05-03):** core surface implemented on
+> `feat/v3.9-http-transport`. Stdlib-only (`src/mind_mem/http_transport.py`,
+> 34 tests in `tests/test_http_transport.py`, all passing).
+> CLI subcommand `mm http-serve` wired. CHANGELOG updated.
 
 mind-mem already has `/ingest` HTTP endpoint (`ingestion_pipeline.py`).
-Missing endpoints:
+The v3.9 transport adds (✓ = implemented):
 
-- `GET /status` — health, memory count, last-scan timestamp,
-  dream-cycle last-run timestamp
-- `POST /query` — natural-language search (wraps `recall` / `hybrid_search`)
-- `GET /memories` — list/browse with filtering (by category, age, axis)
-- `POST /consolidate` — trigger dream cycle on demand
-- `DELETE /memories/{id}` — remove specific memory
-- `POST /clear` — wipe workspace (governance-protected, requires
-  rationale per v3.6.x mandatory rationale binding)
+- ✓ `GET /status` — health, memory count, last-scan timestamp
+- ✓ `POST /query` — natural-language search (wraps `recall`)
+- ✓ `GET /memories` — list/browse with `limit` + `active_only` filters
+- ✓ `POST /consolidate` — trigger dream cycle on demand
+- ✓ `DELETE /memories/{id}` — remove specific memory
+- ✓ `POST /clear` — wipe workspace (governance-protected, 16+ char
+  rationale + literal `confirm` field)
+
+Auth via `X-MindMem-Token`; 1 MiB body limit; refuses to start without
+a token unless `--allow-unauthenticated-localhost` is set on a
+loopback bind. Bigger filtering (by category / age / axis) is a
+follow-up — current `GET /memories` returns id / type / category /
+subject / timestamp summaries.
 
 MCP is great for AI agents; HTTP is required for non-MCP integrations
 (Slack bots, dashboards, web apps, monitoring tools, Streamlit/Gradio
@@ -415,37 +451,64 @@ persona-adaptive detail. mind-mem already has graph traversal, hybrid search,
 and compiled-truth pages, so the dashboard / multi-agent extraction pipeline /
 JSON-in-repo convention don't fit. Two ideas do.
 
-### 1. Dependency-ordered walkthrough
+### 1. Dependency-ordered walkthrough — **landed (in-progress branch)**
+
+> **Status (2026-05-03):** implemented on `feat/v3.9-http-transport`.
+> New module `src/mind_mem/walkthrough.py`, 28 tests in
+> `tests/test_walkthrough.py` (all passing). Wired into the v3.9 HTTP
+> transport as `POST /walkthrough`. The `compile_walkthrough()` Python
+> entry is also callable directly; MCP-tool wrapping (renamed
+> `compile_truth_walkthrough` per the original spec) is the v3.10
+> follow-up.
 
 Today `recall` and `hybrid_search` return blocks ranked by relevance. For
 "explain the state of project X" queries, an agent gets a flat result list and
-has to assemble its own learning order. Add:
+has to assemble its own learning order.
 
-- New MCP tool: `compile_truth_walkthrough(topic, depth=auto)` — returns blocks
-  in dependency order (foundations → derived → current state) by walking the
-  existing co-retrieval graph (`graph_traversal_tool`) and topo-sorting.
-- Returns a sequence, not a set: `[{step: 1, block_id: ..., role: "foundation"},
-  {step: 2, block_id: ..., role: "context"}, ...]`.
-- Falls back to relevance order if the topic has no graph structure (single
-  isolated block, no connections).
+Implemented:
+
+- ✓ `compile_walkthrough(workspace, topic, limit=N)` — returns blocks
+  in dependency order (foundations → derived → current state).
+- ✓ Algorithm: chronological backbone (block-id YYYYMMDD prefix) +
+  co-retrieval edges from
+  `intelligence/state/retrieval_graph.db`. Topo-sorted with Kahn's
+  algorithm; cycles broken deterministically (lowest-degree-first).
+- ✓ Output sequence: `[{step: 1, block_id: ..., role: "foundation",
+  score: 0.87, subject: "..."}, {step: 2, ..., role: "context"}, ...]`.
+- ✓ Roles: first ~30% → `foundation`, middle ~40% → `context`,
+  last ~30% → `current`.
+- ✓ No-results returns empty list; single isolated block falls back
+  to a 1-element list tagged `context`.
 
 Distinct from existing `compile_truth` (which produces one consolidated page)
 and existing `graph_traversal_tool` (which returns neighborhoods, not ordered
 sequences). Builds on both.
 
-### 2. Persona-aware detail level
+### 2. Persona-aware detail level — **landed (in-progress branch)**
+
+> **Status (2026-05-03):** implemented on `feat/v3.9-http-transport`.
+> New module `src/mind_mem/personas.py`, 15 tests in
+> `tests/test_personas.py` (all passing). Wired into the v3.9 HTTP
+> `/query` endpoint via the `persona` body field; unknown personas
+> return HTTP 400.
 
 Same recall, different summary granularity per caller:
 
-- `recall(query, persona="brief")` — 1-line summaries per block, IDs only
-- `recall(query, persona="detailed")` — current default, full block content
-- `recall(query, persona="technical")` — full content + axis scores +
-  governance state + provenance hash chain
+- ✓ `apply_persona(results, persona="brief")` — id + score + 1-line
+  subject (≤120 chars). For routing layers, Slack snippets, status
+  panels.
+- ✓ `apply_persona(results, persona="detailed")` — current default,
+  full block (identity copy).
+- ✓ `apply_persona(results, persona="technical")` — full block +
+  promoted governance/provenance fields (`axis_scores`,
+  `governance_state`, `provenance_hash`, `source_span`,
+  `transform_hash`) so audit consumers don't have to fish them out
+  of nested keys.
 
 Implemented as a post-recall projection layer over the existing block format,
-not a separate index. Zero index cost. Useful when one agent (e.g. routing
-layer) wants a 1-line answer and another (e.g. audit / governance check) wants
-the full evidence trail.
+not a separate index. Zero index cost. The wrapper is wired into
+`POST /query` today; wiring into MCP-exposed `recall` /
+`hybrid_search` is a follow-up so the surface stays focused.
 
 ### What we explicitly do NOT borrow
 
@@ -502,21 +565,39 @@ indexing (mtime + size + partial-hash via `sqlite_index.py`) and partial
 provenance (source path on each block), so the framework / multi-source
 connectors / Rust core / pipeline DAG don't fit. Two ideas do.
 
-### 1. Hash-of-code invalidation
+### 1. Hash-of-code invalidation — **inspection primitive landed (in-progress branch)**
+
+> **Status (2026-05-03):** inspection primitive implemented on
+> `feat/v3.9-http-transport`. New module
+> `src/mind_mem/pipeline_hash.py`, 18 tests in
+> `tests/test_pipeline_hash.py` (all passing). CLI subcommand
+> `mm pipeline-status [--list-dirty] [--json]` wired. Re-extraction
+> wiring into the dream cycle is **deferred to v3.10** — v3.9 ships
+> only the read-only "what is dirty" surface.
 
 Today `@memo` and re-extraction key off input hash only. When the
 extractor, chunker, or summarizer code changes (e.g. a sharper splitter,
 new persona prompt, model upgrade), affected blocks stay stale until a
-manual reindex. Add:
+manual reindex.
 
-- `transform_hash` field on each block — hash of the extractor pipeline
-  source (extractor function + chunker version + prompt template +
-  backend model id).
-- Indexer compares `block.transform_hash` to `current_pipeline_hash` on
-  startup and during dream cycle. Mismatch → re-extract that block, even
-  if source bytes are unchanged.
-- Surfaces as an MCP tool `pipeline_dirty_blocks()` for inspection and
-  `reindex(scope="dirty")` for targeted rebuild — no full reindex needed.
+Implemented (v3.9):
+
+- ✓ `current_pipeline_hash(workspace)` — hex SHA-256 over
+  `version | backend | model | extractor-source-sha256 |
+  prompt-template-sha256` (NUL-separated to resist concat collisions).
+- ✓ `TransformHash:` field on each block — operator-set today,
+  populated automatically by the dream cycle in v3.10.
+- ✓ `pipeline_dirty_blocks(workspace)` returns block ids where
+  `TransformHash` ≠ current hash. Blocks without `TransformHash`
+  (i.e. extracted before v3.9) are reported as dirty so they show up
+  for re-extraction.
+- ✓ `mm pipeline-status [--list-dirty]` surfaces it via CLI.
+
+Deferred to v3.10:
+
+- · Auto-stamp `TransformHash` on every new block at extraction time.
+- · `reindex(scope="dirty")` MCP tool for targeted rebuild.
+- · Dream-cycle hook: re-extract any dirty block on the next pass.
 
 Catches a real failure mode: prompt-engineering improvements silently
 lose value because old blocks keep stale extractions. Fixes it without
@@ -564,6 +645,64 @@ re-extraction on partial source edits. Both are additive — no breaking
 change to existing block format (new fields, old blocks get
 `transform_hash=null` and are treated as always-dirty until first
 re-extract).
+
+## v3.10.0 candidates — v3.9 follow-ups
+
+> **Drafted (2026-05-03)** as the v3.10 release-train items. All
+> three are direct continuations of the v3.9 themes that landed on
+> `feat/v3.9-http-transport`. Together they finish the
+> "set-and-forget memory engine" story so v4.0 can focus purely on
+> networked-mesh / parallelism.
+
+### 1. Per-byte source lineage (cocoindex theme 2)
+
+The hash-of-code primitive landed in v3.9 ships read-only inspection
+(`pipeline_dirty_blocks`). The v3.10 follow-up wires it into the
+audit chain so every governed claim traces back to an exact byte
+range, not just a file:
+
+- `source_span = {path, byte_start, byte_end, sha256}` on each block,
+  populated at extraction time.
+- `audit_chain.py` includes `source_span` in the preimage when sealing
+  a block, so any later edit to those bytes invalidates the chain link
+  cleanly (currently file-mtime based, which is coarser).
+- New MCP tool `block_lineage(block_id)` returns the full chain:
+  block → extractor pipeline (with code hash) → source span → file
+  sha256.
+
+Direct fit for `512-mind/sealed_evidence` and `arch-mind` evidence
+chains. Estimated effort: 2-3 days.
+
+### 2. Auto-stamp + dirty-block re-extraction (hash-of-code theme 1
+        completion)
+
+v3.9 ships only the inspection primitive. v3.10 closes the loop:
+
+- Extraction pipeline auto-stamps `TransformHash` on every new block.
+- `reindex(scope="dirty")` MCP tool for targeted rebuild — no full
+  reindex needed.
+- Dream-cycle hook re-extracts dirty blocks on each pass so prompt
+  iterations don't silently lose value across the corpus.
+
+Estimated effort: 1 day (the wiring is mechanical; the primitive
+is already proven).
+
+### 3. compile_truth_walkthrough MCP wrapping + persona-aware MCP recall
+
+v3.9 wires the walkthrough and persona projection into the HTTP
+transport. v3.10 wires them into MCP so AI clients (Claude Code,
+Codex, Gemini, etc.) can call them without going through HTTP:
+
+- `compile_truth_walkthrough(topic, depth=auto)` — MCP tool wrapping
+  `walkthrough.compile_walkthrough`.
+- `recall(query, persona="brief"|"detailed"|"technical")` — extend
+  the MCP `recall` schema with the optional `persona` field; pass
+  through to `personas.apply_persona` post-recall.
+- `briefing(topic, persona=...)` — same persona projection wired into
+  the existing `briefing` tool.
+
+Estimated effort: 1 day. No code change in the underlying primitives;
+this is pure MCP-surface plumbing.
 
 ## v4.0 candidates — Networked Mesh + Parallel Pipelines
 

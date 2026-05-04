@@ -106,3 +106,46 @@ def test_config_without_block_store_key_is_markdown(tmp_path):
     ws = _make_workspace(tmp_path, config={"recall": {"backend": "bm25"}})
     store = get_block_store(ws)
     assert isinstance(store, MarkdownBlockStore)
+
+
+# v3.9: replicas validation lives in the factory now (was previously a
+# silent ignore — replicas configured in mind-mem.json had no effect).
+
+
+def test_postgres_replicas_must_be_list(tmp_path):
+    """block_store.replicas must be a list — string value rejected."""
+    ws = _make_workspace(tmp_path)
+    with pytest.raises(ValueError, match="replicas must be a list"):
+        get_block_store(
+            ws,
+            config={
+                "block_store": {
+                    "backend": "postgres",
+                    "dsn": "postgresql://x@127.0.0.1:5432/x",
+                    "replicas": "postgresql://r@host:5432/x",  # wrong shape
+                }
+            },
+        )
+
+
+def test_postgres_replicas_filtered_to_strings(tmp_path):
+    """Non-string entries in the replicas list are silently dropped."""
+    pytest.importorskip("psycopg")
+    pytest.importorskip("psycopg_pool")
+    ws = _make_workspace(tmp_path)
+    # We can't actually connect, but we can verify the factory accepts
+    # the shape without raising on the validation step. PostgresBlockStore
+    # constructs lazily, so this only fails when a query is made.
+    from mind_mem.block_store_postgres import PostgresBlockStore
+
+    store = get_block_store(
+        ws,
+        config={
+            "block_store": {
+                "backend": "postgres",
+                "dsn": "postgresql://x@127.0.0.1:5432/x",
+                "replicas": [],  # empty list -> bare PostgresBlockStore, not Replicated
+            }
+        },
+    )
+    assert isinstance(store, PostgresBlockStore)

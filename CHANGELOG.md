@@ -2,6 +2,161 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## Unreleased — v3.9.0 candidates
+
+**Theme: HTTP transport + replicated postgres routing.**
+
+### Added
+- **HTTP transport adapter** (`src/mind_mem/http_transport.py`).
+  Stdlib-only (no FastAPI / Pydantic), zero new dependencies. Six
+  endpoints intended for Slack bots, dashboards, monitoring tools, and
+  Streamlit/Gradio frontends that don't speak MCP:
+  - `GET  /status`           — health, memory count, last-scan timestamp
+  - `POST /query`            — natural-language search wrapping `recall`
+  - `GET  /memories`         — list/browse with `limit` + `active_only`
+                                filters
+  - `POST /consolidate`      — trigger dream cycle on demand
+  - `DELETE /memories/{id}`  — remove a specific memory
+  - `POST /clear`            — wipe workspace (governance-protected,
+                                requires 16+ char rationale + literal
+                                `confirm` field)
+
+  Auth via `X-MindMem-Token` header (matches MCP HTTP transport
+  convention). 1 MiB body limit. Refuses to start without a token
+  unless `--allow-unauthenticated-localhost` is set on a loopback
+  bind. New CLI subcommand `mm http-serve --port 8765`.
+
+- **Replicated postgres routing through the storage factory.**
+  `block_store.replicas` in `mind-mem.json` was previously silently
+  ignored; the factory now constructs a `ReplicatedPostgresBlockStore`
+  when one or more replica DSNs are present (existing
+  `block_store_postgres_replica.py` machinery — round-robin reads,
+  primary writes, 30-second circuit breaker after 3 consecutive
+  failures). The `replicas` field must be a list of DSN strings;
+  non-list values raise `ValueError`.
+
+- **Dependency-ordered walkthrough** (`src/mind_mem/walkthrough.py`).
+  `compile_walkthrough(workspace, topic, limit=N)` re-orders recall
+  results into a *learning sequence* (foundations → context → current
+  state) so agents and humans don't have to reassemble the order
+  themselves. Algorithm: chronological backbone derived from the
+  block-id YYYYMMDD prefix, reinforced by co-retrieval edges from
+  `intelligence/state/retrieval_graph.db`, sorted with Kahn's
+  algorithm; cycles broken deterministically. Each step is tagged
+  `foundation` (first ~30%), `context` (middle ~40%), or `current`
+  (last ~30%). Wired into the v3.9 HTTP transport as `POST
+  /walkthrough` with body `{"topic": "...", "limit"?: int}`.
+
+- **Persona-aware recall projection** (`src/mind_mem/personas.py`).
+  Reshapes recall results for different consumers without touching the
+  index. Three named personas:
+    - `brief`     — id + score + 1-line subject (≤120 chars). For
+                    routing layers, Slack snippets, status panels.
+    - `detailed`  — full block (current default). Identity copy.
+    - `technical` — full block + promoted governance/provenance fields
+                    (`axis_scores`, `governance_state`,
+                    `provenance_hash`, `source_span`, `transform_hash`)
+                    so audit consumers don't have to fish them out of
+                    nested keys.
+  Pure function `apply_persona(blocks, persona)`, zero index cost,
+  input list never mutated. Wired into `POST /query` on the v3.9 HTTP
+  transport — pass `"persona": "brief"` in the body to get the
+  routing-friendly shape; unknown personas return HTTP 400.
+
+- **Hash-of-code pipeline invalidation** (`src/mind_mem/pipeline_hash.py`).
+  Computes a deterministic hash of the *currently configured*
+  extraction pipeline (package version + backend + model + extractor
+  source SHA-256 + prompt-template SHA-256). New helper
+  `pipeline_dirty_blocks(workspace)` returns block ids whose
+  `TransformHash` field doesn't match the current hash — caught by
+  prompt-engineering, model-upgrade, and library-version drift even
+  when source bytes are unchanged. v3.9 ships the inspection primitive
+  (`mm pipeline-status [--list-dirty] [--json]`); v3.10 wires
+  re-extraction into the dream cycle. Inspired by
+  `cocoindex-io/cocoindex` (Apache-2.0); concept only — no runtime
+  dep on cocoindex.
+
+- **Inbox folder ingestion** (`src/mind_mem/inbox.py`).
+  Drop a file into a watched directory, mind-mem classifies by
+  extension and routes to the right ingestion path. Text path is
+  stdlib-only (no new deps); image / audio / PDF paths raise a clear
+  error pointing at the optional `multimodal` extra. After processing,
+  files move to `inbox/_processed/<ts>/` (success) or
+  `inbox/_failed/<ts>/<file>.error.txt` (failure) — no destruction,
+  full audit trail. New CLI subcommand `mm inbox-watch <dir>
+  [--interval N] [--once]`. New block prefix `INBOX-` mapped to
+  `memory/INBOX.md` (added to `_BLOCK_PREFIX_MAP` in both
+  `block_store.py` and `mcp/tools/memory_ops.py` to keep the maps in
+  lockstep, per the duplicate-detection comment).
+
+- **Background daemon** (`src/mind_mem/daemon.py`).
+  `mm daemon` blocks and runs configured periodic jobs (`dream_cycle`,
+  `intel_scan`, `entity_ingest`, `transcript_scan`) on internal
+  intervals — no external cron needed. Each job runs on its own
+  thread with a per-task `auto_interval_seconds` config in
+  `mind-mem.json`. Defaults are all 0 (disabled) so adding the daemon
+  block is opt-in. Intervals < 60 seconds are auto-clamped (foot-gun
+  guard). Job exceptions never propagate; the loop logs and continues.
+  `--dry-run` logs intentions; `--once` runs every enabled task once
+  and exits (handy for ad-hoc operator runs).
+
+### Tests
+- `tests/test_http_transport.py` — 34 tests covering parse helpers,
+  bootstrap (token-from-env, no-token-no-bypass, empty-workspace),
+  every endpoint (status / query / memories / consolidate / clear /
+  delete), auth (correct token / wrong token / no token), body limits
+  (oversize, malformed JSON, non-object payload), and lifecycle (thread
+  alive, stop is idempotent).
+- `tests/test_daemon.py` — 15 tests covering config loading
+  (defaults, explicit disable, per-task intervals, negative/garbage
+  clamping, malformed JSON), Daemon lifecycle (rejection of empty
+  workspace, no-enabled-tasks guard, dry-run last-run tracking,
+  exception isolation, stop-event short-circuit), and `run_daemon`
+  once-mode behaviour.
+- `tests/test_walkthrough.py` — 28 tests covering pure functions
+  (date-key extraction, role assignment thresholds, Kahn's algorithm:
+  empty/no-edges/simple-chain/cycle-broken/self-loop-ignored/
+  unknown-nodes-ignored/deterministic), and workspace integration
+  (validation rejects empty workspace/topic/out-of-range limit, no
+  results returns empty, recall results emerge in chronological order,
+  step numbers are 1-based, role/score/subject fields populated, first
+  step is `foundation` and last is `current`, co-retrieval edges
+  consumed without crash, missing DB tolerated, deterministic across
+  calls). Plus 1 light integration test verifying walkthrough steps
+  feed into `apply_persona`.
+  + 3 new tests in `tests/test_http_transport.py` covering the
+  `/walkthrough` endpoint (missing topic 400, returns steps list,
+  limit out-of-range 400).
+- `tests/test_personas.py` — 15 tests covering per-block projection
+  (unknown persona raises, brief drops everything but id/score/subject,
+  brief truncates oversized subject, brief uses content first-line as
+  fallback, detailed is identity, technical promotes governance fields,
+  technical preserves existing keys), and list-level `apply_persona`
+  (default-when-none, default-when-empty-string, brief shape on each,
+  unknown persona raises, input not mutated, PERSONAS constant matches
+  DEFAULT_PERSONA).
+  + 3 new tests in `tests/test_http_transport.py` covering the
+  `/query` persona path (unknown persona 400, brief shape, persona
+  type-check).
+- `tests/test_pipeline_hash.py` — 18 tests covering pure-function
+  determinism + collision resistance (NUL-separator preimage,
+  version/backend/model/extractor/template invalidation), config
+  loading edge cases (no config, malformed JSON, unknown backend
+  distinct hash, prompt-template path + content changes), and
+  workspace integration (`pipeline_dirty_blocks` reports blocks
+  without TransformHash, ignores blocks with matching hash, flags
+  blocks with stale hash).
+- `tests/test_inbox.py` — 24 tests covering classification (every
+  routed extension + case insensitivity + unknown), text ingestion
+  (block written, empty file, oversize-rejected, filename
+  sanitization), `process_file` staging (success → `_processed`,
+  unknown ext → `_failed` with `.error.txt` sidecar, image handler
+  raises with `multimodal` hint), and InboxWatcher lifecycle
+  (validation, directory creation, mtime-ordered processing,
+  start/stop with live drop-in, callback exception isolation).
+- `tests/test_storage_factory.py` — added 2 tests for the replicated
+  routing branch (replicas-must-be-list, empty-list-yields-bare-store).
+
 ## 3.8.14 (2026-05-03)
 
 **v3.8.13 audit follow-through.** Three independent agent reviews
