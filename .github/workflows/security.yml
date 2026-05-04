@@ -146,32 +146,43 @@ jobs:
         with:
           files: sbom.cdx.json
 
-  # ── Docker / Trivy image scan (only on Dockerfile changes) ───────────────────
+  # ── Docker / Trivy image scan (always runs; gates work at step level) ───────
+  # Job is unconditional so it concludes SUCCESS instead of SKIPPED on PRs
+  # that don't touch Dockerfile. Heavy steps (build + scan) gate on the
+  # diff check below.
   docker-scan:
     runs-on: ubuntu-latest
-    if: >
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.changed_files, 'Dockerfile'))
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          fetch-depth: 2  # need parent for `HEAD^` diff
 
       - name: Check if Dockerfile changed
         id: df_changed
         run: |
-          git diff --name-only ${{ github.event.before || 'HEAD^' }} HEAD \
-            | grep -qE 'Dockerfile|deploy/docker/' \
-            && echo "changed=true" >> "$GITHUB_OUTPUT" \
-            || echo "changed=false" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+            changed=$(git diff --name-only "$base" "$head" | grep -E 'Dockerfile|deploy/docker/' || true)
+          else
+            changed=$(git diff --name-only "${{ github.event.before || 'HEAD^' }}" HEAD | grep -E 'Dockerfile|deploy/docker/' || true)
+          fi
+          if [ -n "$changed" ] || [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Dockerfile change detected — running scan"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No Dockerfile change — scan steps are no-ops, job will SUCCESS"
+          fi
 
       - name: Build Docker image
-        if: steps.df_changed.outputs.changed == 'true' || github.event_name == 'schedule'
+        if: steps.df_changed.outputs.changed == 'true'
         run: |
           docker build -t mind-mem:scan \
             -f ${DOCKERFILE:-Dockerfile} .
 
       - name: Run Trivy image scan
-        if: steps.df_changed.outputs.changed == 'true' || github.event_name == 'schedule'
+        if: steps.df_changed.outputs.changed == 'true'
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
         with:
           image-ref: mind-mem:scan
@@ -182,7 +193,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload Trivy SARIF
-        if: always() && (steps.df_changed.outputs.changed == 'true' || github.event_name == 'schedule')
+        if: always() && steps.df_changed.outputs.changed == 'true'
         uses: github/codeql-action/upload-sarif@c793b717bc78562f491db7b0e93a3a178b099162  # v4
         with:
           sarif_file: trivy-image.sarif
