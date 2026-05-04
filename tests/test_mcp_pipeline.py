@@ -40,9 +40,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
 
 def _seed_dirty_block(workspace: str) -> str:
     block_id = "D-20260503-500"
-    (Path(workspace) / "decisions" / "DECISIONS.md").write_text(
-        f"[{block_id}]\nStatus: active\nStatement: stale block, no TransformHash\n"
-    )
+    (Path(workspace) / "decisions" / "DECISIONS.md").write_text(f"[{block_id}]\nStatus: active\nStatement: stale block, no TransformHash\n")
     return block_id
 
 

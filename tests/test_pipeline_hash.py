@@ -242,9 +242,7 @@ class TestStampTransformHash:
 class TestReextractDirtyBlocks:
     def test_dry_run_lists_without_writing(self, workspace: Path) -> None:
         _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
-        (workspace / "decisions" / "DECISIONS.md").write_text(
-            "[D-20260503-200]\nStatus: active\nStatement: stale\n"
-        )
+        (workspace / "decisions" / "DECISIONS.md").write_text("[D-20260503-200]\nStatus: active\nStatement: stale\n")
         result = reextract_dirty_blocks(str(workspace), dry_run=True)
         assert result["dry_run"] is True
         assert result["processed"] == 0
@@ -252,9 +250,7 @@ class TestReextractDirtyBlocks:
 
     def test_processes_dirty_blocks(self, workspace: Path) -> None:
         _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
-        (workspace / "decisions" / "DECISIONS.md").write_text(
-            "[D-20260503-201]\nStatus: active\nStatement: stale\n"
-        )
+        (workspace / "decisions" / "DECISIONS.md").write_text("[D-20260503-201]\nStatus: active\nStatement: stale\n")
         result = reextract_dirty_blocks(str(workspace))
         assert result["dry_run"] is False
         assert result["processed"] == 1
@@ -264,9 +260,7 @@ class TestReextractDirtyBlocks:
 
     def test_after_reextract_no_dirty(self, workspace: Path) -> None:
         _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
-        (workspace / "decisions" / "DECISIONS.md").write_text(
-            "[D-20260503-202]\nStatus: active\nStatement: stale\n"
-        )
+        (workspace / "decisions" / "DECISIONS.md").write_text("[D-20260503-202]\nStatus: active\nStatement: stale\n")
         reextract_dirty_blocks(str(workspace))
         # Re-check: should now be clean.
         dirty = pipeline_dirty_blocks(str(workspace))

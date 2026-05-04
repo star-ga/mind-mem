@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 729 | **Est. tokens:** ~1,502,340
-**Generated:** 2026-05-04 02:22 UTC
+**Files:** 729 | **Est. tokens:** ~1,502,319
+**Generated:** 2026-05-04 02:29 UTC
 
 ## Token Budget Guide
 
@@ -62,7 +62,7 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 254 | ~508,780 |
+| `tests/` | 254 | ~508,759 |
 | `tests/integration/` | 2 | ~1,575 |
 | `train/` | 10 | ~21,806 |
 | `web/` | 5 | ~927 |
@@ -758,7 +758,7 @@
 - `test_maintenance_migrate.py` (~710 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_mcp_arch_mind_tools.py` (~2312 tok, huge) — Tests for the arch-mind MCP tool wrapper.
 - `test_mcp_integration.py` (~5301 tok, huge) — MCP transport and auth integration tests (#474).
-- `test_mcp_pipeline.py` (~1409 tok, large) — Tests for the v3.9.0 pipeline-hash MCP tools."""
+- `test_mcp_pipeline.py` (~1405 tok, large) — Tests for the v3.9.0 pipeline-hash MCP tools."""
 - `test_mcp_server.py` (~5169 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
 - `test_mcp_tools_model.py` (~2249 tok, huge) — Tests for ``mind_mem.mcp.tools.model`` — MCP wrappers for audit / sign / verify."""
 - `test_mcp_tools.py` (~277 tok, medium) — Tests for MCP server tool definitions."""
@@ -794,7 +794,7 @@
 - `test_oidc_auth.py` (~2970 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
 - `test_ontology.py` (~2306 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_personas.py` (~1336 tok, large) — Tests for the v3.9 persona-aware recall projection."""
-- `test_pipeline_hash.py` (~3326 tok, huge) — Tests for v3.9 hash-of-code pipeline invalidation."""
+- `test_pipeline_hash.py` (~3309 tok, huge) — Tests for v3.9 hash-of-code pipeline invalidation."""
 - `test_postgres_block_store.py` (~5149 tok, huge) — v3.2.0 §1.4 PR-5 — PostgresBlockStore integration tests.
 - `test_postgres_replica_routing.py` (~1777 tok, huge) — v3.2.0 — tests for read-replica routing in ReplicatedPostgresBlockStore."""
 - `test_prefetch_context.py` (~1487 tok, large) — Tests for prefetch_context() in recall.py."""
