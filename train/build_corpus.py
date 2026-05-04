@@ -42,7 +42,7 @@ OUT = Path(
 SYSTEM_PROMPT = (
     "You are mind-mem-4b, a memory-governance assistant specialised in "
     "auditable, contradiction-safe memory for coding agents. You know "
-    "the mind-mem Python package, its 57 MCP tools, block schemas, "
+    "the mind-mem Python package, its 81 MCP tools, block schemas, "
     "governance workflows, and CHANGELOG history. You respond "
     "concisely, cite exact tool names / block types, and refuse to "
     "invent APIs that do not exist in the package."
@@ -54,79 +54,125 @@ SYSTEM_PROMPT = (
 # ---------------------------------------------------------------------------
 
 
+def _is_tool_decorator(decorator: ast.expr) -> bool:
+    """Match the three decorator forms used across mcp_server + mcp/tools/.
+
+    * ``@mcp.tool``           — legacy form on mcp_server.py
+    * ``@tool``               — alias inside mcp_server.py
+    * ``@mcp_tool_observe``   — v3.4+ wrapper used by every module under
+                                 src/mind_mem/mcp/tools/*.py
+    """
+    if isinstance(decorator, ast.Attribute) and decorator.attr == "tool":
+        return True
+    if isinstance(decorator, ast.Name) and decorator.id in ("tool", "mcp_tool_observe"):
+        return True
+    return False
+
+
+def _tool_source_files() -> list[Path]:
+    """Every .py file that may register an MCP tool.
+
+    v3.4 split ``mcp_server.py`` into per-domain modules under
+    ``mcp/tools/`` registered via per-module ``register(mcp)`` callbacks.
+    Walking only the legacy ``mcp_server.py`` would have missed all 81
+    tools currently shipped — every retrain after v3.4 must walk the
+    new directory too.
+    """
+    sources: list[Path] = [REPO / "src" / "mind_mem" / "mcp_server.py"]
+    tools_dir = REPO / "src" / "mind_mem" / "mcp" / "tools"
+    if tools_dir.is_dir():
+        for path in sorted(tools_dir.glob("*.py")):
+            if path.name in ("__init__.py", "_helpers.py"):
+                continue
+            sources.append(path)
+    return sources
+
+
 def _harvest_mcp_tools() -> Iterator[dict]:
-    """Extract every @mcp.tool function + docstring from mcp_server.py.
+    """Extract every MCP tool function + docstring from mcp_server.py and mcp/tools/.
 
     Emits multiple Q/A variants per tool to drive name recall under
     different phrasings. Tool names must appear in every assistant
     response so the model learns "cite the exact tool".
     """
-    path = REPO / "src" / "mind_mem" / "mcp_server.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef):
+    for path in _tool_source_files():
+        if not path.is_file():
             continue
-        if not any(
-            (isinstance(d, ast.Attribute) and d.attr == "tool") or (isinstance(d, ast.Name) and d.id == "tool") for d in node.decorator_list
-        ):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:
             continue
-        doc = ast.get_docstring(node) or ""
-        if not doc.strip():
-            continue
-        summary = doc.strip().split("\n\n")[0].replace("\n", " ")
-        args = _fn_arg_repr(node)
-        tool_name = node.name
-        hint = _usage_hint(summary)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            if not any(_is_tool_decorator(d) for d in node.decorator_list):
+                continue
+            doc = ast.get_docstring(node) or ""
+            if not doc.strip():
+                continue
+            summary = doc.strip().split("\n\n")[0].replace("\n", " ")
+            args = _fn_arg_repr(node)
+            tool_name = node.name
+            hint = _usage_hint(summary)
+            yield from _emit_tool_variants(tool_name, args, summary, hint, doc)
 
-        # Variant 1 — documentation lookup.
+
+def _emit_tool_variants(
+    tool_name: str,
+    args: str,
+    summary: str,
+    hint: str,
+    doc: str,
+) -> Iterator[dict]:
+    # Variant 1 — documentation lookup.
+    yield {
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"What does the mind-mem MCP tool `{tool_name}` do?"},
+            {"role": "assistant", "content": f"`{tool_name}({args})` — {summary}"},
+        ]
+    }
+    # Variant 2 — reverse lookup by intent.
+    yield {
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"Which MCP tool should I call to {hint}?"},
+            {"role": "assistant", "content": f"Call `{tool_name}`. Signature: `{tool_name}({args})`."},
+        ]
+    }
+    # Variant 3 — short direct form.
+    yield {
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"Name the mind-mem tool for: {hint}."},
+            {"role": "assistant", "content": f"`{tool_name}`."},
+        ]
+    }
+    # Variant 4 — signature question.
+    yield {
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"What is the signature of `{tool_name}`?"},
+            {"role": "assistant", "content": f"`{tool_name}({args})`"},
+        ]
+    }
+    # Variant 5 — what returns.
+    yield {
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"What does `{tool_name}` return?"},
+            {"role": "assistant", "content": (f"`{tool_name}` returns a JSON envelope. From the docstring:\n\n{doc.strip()}")},
+        ]
+    }
+    # Variant 6 — how phrased differently.
+    for alt in _paraphrase_usage(hint):
         yield {
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"What does the mind-mem MCP tool `{tool_name}` do?"},
-                {"role": "assistant", "content": f"`{tool_name}({args})` — {summary}"},
+                {"role": "user", "content": alt},
+                {"role": "assistant", "content": f"Use the `{tool_name}` MCP tool."},
             ]
         }
-        # Variant 2 — reverse lookup by intent.
-        yield {
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Which MCP tool should I call to {hint}?"},
-                {"role": "assistant", "content": f"Call `{tool_name}`. Signature: `{tool_name}({args})`."},
-            ]
-        }
-        # Variant 3 — short direct form.
-        yield {
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Name the mind-mem tool for: {hint}."},
-                {"role": "assistant", "content": f"`{tool_name}`."},
-            ]
-        }
-        # Variant 4 — signature question.
-        yield {
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"What is the signature of `{tool_name}`?"},
-                {"role": "assistant", "content": f"`{tool_name}({args})`"},
-            ]
-        }
-        # Variant 5 — what returns.
-        yield {
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"What does `{tool_name}` return?"},
-                {"role": "assistant", "content": (f"`{tool_name}` returns a JSON envelope. From the docstring:\n\n{doc.strip()}")},
-            ]
-        }
-        # Variant 6 — how phrased differently.
-        for alt in _paraphrase_usage(hint):
-            yield {
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": alt},
-                    {"role": "assistant", "content": f"Use the `{tool_name}` MCP tool."},
-                ]
-            }
 
 
 def _paraphrase_usage(hint: str) -> list[str]:

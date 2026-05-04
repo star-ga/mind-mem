@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 729 | **Est. tokens:** ~1,502,449
-**Generated:** 2026-05-04 02:42 UTC
+**Files:** 730 | **Est. tokens:** ~1,505,822
+**Generated:** 2026-05-04 05:02 UTC
 
 ## Token Budget Guide
 
@@ -64,7 +64,7 @@
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 254 | ~508,759 |
 | `tests/integration/` | 2 | ~1,575 |
-| `train/` | 10 | ~21,806 |
+| `train/` | 11 | ~25,179 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -888,11 +888,12 @@
 ### `train/`
 
 - `backport_sweep.py` (~1658 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
-- `build_corpus.py` (~8110 tok, huge) — Harvest a training corpus for the mind-mem-4b model.
+- `build_corpus.py` (~8473 tok, huge) — Harvest a training corpus for the mind-mem-4b model.
 - `build_model_card.py` (~1876 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b v3.0.0."""
-- `eval_harness.py` (~2137 tok, huge) — Eval harness for mind-mem-4b.
+- `eval_harness.py` (~3742 tok, huge) — Eval harness for mind-mem-4b.
 - `export_gguf.py` (~1047 tok, large) — Merge the LoRA adapter into the base weights, then export to GGUF.
 - `README.md` (~577 tok, large) — mind-mem-4b training pipeline
+- `RETRAIN_v3.9.0.md` (~1405 tok, large) — mind-mem-4b — v3.9.0 retrain plan
 - `runpod_deploy.py` (~3095 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
 - `runpod_full_ft.py` (~1246 tok, large) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
 - `train_qlora.py` (~1195 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
