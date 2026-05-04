@@ -1467,3 +1467,43 @@ mind-mem is designed as a governed-memory substrate for autonomous agents operat
 - [ ] **Cross-domain recall adapter** — given a novel environment, surface the most similar `[TRAJECTORY]` / `[SKILL]` blocks from unrelated environments by feature-embedding similarity rather than exact environment-id match
 - [ ] **`[VISUAL]` block type** — grid-state / image-state embeddings for perception-grounded memory; enables "I've seen this state before" recall across environments
 - [ ] **Evidence-chain submission format** — tamper-evident export of an agent's full decision history per episode, ready for third-party scorecard verification
+
+---
+
+## TRIZ-Driven Direction
+
+Auditable criterion for every roadmap addition. Lifted from the same TRIZ pattern in `mind/docs/roadmap.md` and `naestro/ROADMAP.md`, tuned to the persistent-memory domain.
+
+### Ideal Final Result (IFR)
+
+Persistent memory that improves agent decision quality monotonically over use, never drifts from currently-declared intent, with full provenance from query result back to the source byte that justified it, at zero recall-latency overhead vs raw vector search, and survives substrate / model / format migrations without re-ingestion.
+
+### Five Laws of System Evolution — Applied
+
+| Law | mind-mem application | Status |
+|---|---|---|
+| Uneven development | Recall surfaces evolve faster than provenance, contradiction-handling, and consolidation. Invest in audit + governance, not more recall modes. | Active investment shift toward provenance + governance |
+| Mono → bi → poly | Single-store BM25 → BM25+vector hybrid → poly-substrate (BM25 + vector + graph + governance kernel). Next: cross-machine networked mesh. | At bi → poly transition |
+| Increasing controllability | Hardcoded retrieval logic → policy-driven scoring → drift-detected policy update (v3.10). Compile-of-code-aware invalidation (v3.9) is this law's projection. | Active in v3.9 / v3.10 |
+| Micro-level transition | Coarse content blocks → smart-chunked sub-blocks → per-byte lineage. Permitted at recall and audit; forbidden at write-path (would break atomicity). | Active at correct layer only |
+| Rhythm coordination | BM25 + vector + governance kernel synchronized via RRF + atomic conjunction. Next: cross-mesh evidence federation. | In v4.0 spec |
+
+### Separation Principles for Memory Conflicts
+
+When two memory blocks contradict, when current intent conflicts with prior declared intent (intent-era drift), or when recall and write paths conflict, default to separation before retirement:
+
+- **Time** — policy A within a session, policy B across sessions; intent-era boundaries surfaced explicitly
+- **Space** — consistency rule X for compiled-truth blocks, rule Y for working-memory blocks
+- **Condition** — atomic conjunction in governance gate, RRF fusion in recall
+- **Scale** — block-level provenance for retrieval, byte-level provenance for audit
+
+v3.9 hash-of-code invalidation + v3.10 governance drift detection are the operational home for this discipline.
+
+### Anti-Patterns Made Explicit
+
+- No new block types without contradiction-handling story — every type must specify how it conflicts with existing types and how that conflict is resolved
+- No silent retrieval mode changes that affect provenance — all changes traceable to a versioned policy
+- No "more substrates = better" decisions without measured improvement on adversarial-memory + Jepsen-style stress tests
+- No retirement of an invariant before separation strategies have been exhausted (matches 512-mind Phase B addendum discipline)
+
+Acceptance gate: every new feature cites IFR component strengthened, law of evolution followed or forbidden, separation strategy for likely contradictions, and anti-pattern avoided.

@@ -13,6 +13,8 @@ from mind_mem.pipeline_hash import (
     compute_pipeline_hash,
     current_pipeline_hash,
     pipeline_dirty_blocks,
+    reextract_dirty_blocks,
+    stamp_transform_hash,
 )
 
 # ---------------------------------------------------------------------------
@@ -189,3 +191,98 @@ class TestPipelineDirtyBlocks:
         )
         dirty = pipeline_dirty_blocks(str(workspace))
         assert "D-20260503-003" in dirty
+
+
+# ---------------------------------------------------------------------------
+# v3.10: stamp_transform_hash + reextract_dirty_blocks
+# ---------------------------------------------------------------------------
+
+
+class TestStampTransformHash:
+    def test_returns_copy_with_hash(self, workspace: Path) -> None:
+        _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
+        block = {"_id": "D-20260503-100", "Statement": "test"}
+        stamped = stamp_transform_hash(str(workspace), block)
+        assert "TransformHash" in stamped
+        assert isinstance(stamped["TransformHash"], str)
+        assert len(stamped["TransformHash"]) == 64  # hex sha256
+
+    def test_does_not_mutate_input(self, workspace: Path) -> None:
+        _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
+        block = {"_id": "D-20260503-101", "Statement": "test"}
+        original = dict(block)
+        stamp_transform_hash(str(workspace), block)
+        assert block == original
+
+    def test_overwrites_existing_hash(self, workspace: Path) -> None:
+        _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
+        block = {"_id": "D-20260503-102", "TransformHash": "stale"}
+        stamped = stamp_transform_hash(str(workspace), block)
+        assert stamped["TransformHash"] != "stale"
+
+    def test_drops_lowercase_form(self, workspace: Path) -> None:
+        _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
+        block = {"_id": "D-20260503-103", "transform_hash": "old-lower"}
+        stamped = stamp_transform_hash(str(workspace), block)
+        assert "transform_hash" not in stamped
+        assert "TransformHash" in stamped
+
+    def test_rejects_non_dict(self, workspace: Path) -> None:
+        _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
+        with pytest.raises(TypeError, match="dict"):
+            stamp_transform_hash(str(workspace), "not a block")  # type: ignore[arg-type]
+
+    def test_hash_matches_current_pipeline(self, workspace: Path) -> None:
+        _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
+        block = {"_id": "D-20260503-104"}
+        stamped = stamp_transform_hash(str(workspace), block)
+        assert stamped["TransformHash"] == current_pipeline_hash(str(workspace))
+
+
+class TestReextractDirtyBlocks:
+    def test_dry_run_lists_without_writing(self, workspace: Path) -> None:
+        _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
+        (workspace / "decisions" / "DECISIONS.md").write_text("[D-20260503-200]\nStatus: active\nStatement: stale\n")
+        result = reextract_dirty_blocks(str(workspace), dry_run=True)
+        assert result["dry_run"] is True
+        assert result["processed"] == 0
+        assert "D-20260503-200" in result["ids"]
+
+    def test_processes_dirty_blocks(self, workspace: Path) -> None:
+        _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
+        (workspace / "decisions" / "DECISIONS.md").write_text("[D-20260503-201]\nStatus: active\nStatement: stale\n")
+        result = reextract_dirty_blocks(str(workspace))
+        assert result["dry_run"] is False
+        assert result["processed"] == 1
+        # After processing, the block should now carry the current hash.
+        text = (workspace / "decisions" / "DECISIONS.md").read_text()
+        assert "TransformHash:" in text
+
+    def test_after_reextract_no_dirty(self, workspace: Path) -> None:
+        _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
+        (workspace / "decisions" / "DECISIONS.md").write_text("[D-20260503-202]\nStatus: active\nStatement: stale\n")
+        reextract_dirty_blocks(str(workspace))
+        # Re-check: should now be clean.
+        dirty = pipeline_dirty_blocks(str(workspace))
+        assert "D-20260503-202" not in dirty
+
+    def test_limit_caps_work(self, workspace: Path) -> None:
+        _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
+        (workspace / "decisions" / "DECISIONS.md").write_text(
+            "[D-20260503-300]\nStatus: active\nStatement: a\n\n"
+            "[D-20260503-301]\nStatus: active\nStatement: b\n\n"
+            "[D-20260503-302]\nStatus: active\nStatement: c\n"
+        )
+        result = reextract_dirty_blocks(str(workspace), limit=2, dry_run=True)
+        assert len(result["ids"]) == 2
+
+    def test_invalid_limit_rejected(self, workspace: Path) -> None:
+        _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
+        with pytest.raises(ValueError, match="limit"):
+            reextract_dirty_blocks(str(workspace), limit=0)
+
+    def test_empty_workspace_clean(self, workspace: Path) -> None:
+        _write_config(workspace, {"version": "3.10.0", "block_store": {"backend": "markdown"}})
+        result = reextract_dirty_blocks(str(workspace))
+        assert result["processed"] == 0
+        assert result["skipped"] == 0
