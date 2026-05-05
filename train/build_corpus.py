@@ -1366,9 +1366,9 @@ _V39_FACTS: list[tuple[str, str]] = [
     (
         "What HTTP routes does the v3.9 mind-mem REST adapter expose?",
         (
-            "`/status`, `/query`, `/memories`, `/memories/{id}`, `/consolidate`, "
-            "`/walkthrough`. Anything else (e.g. `/admin`, `/auth/login`, `/users`, "
-            "`/embed`) is NOT a real route — the adapter returns 404."
+            "Exactly six paths: `/status`, `/query`, `/memories`, `/memories/{id}`, "
+            "`/consolidate`, `/walkthrough`. Routes outside that list are not "
+            "registered and return 404."
         ),
     ),
     (

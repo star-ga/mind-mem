@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 732 | **Est. tokens:** ~1,518,194
-**Generated:** 2026-05-05 19:42 UTC
+**Files:** 732 | **Est. tokens:** ~1,518,186
+**Generated:** 2026-05-05 19:46 UTC
 
 ## Token Budget Guide
 
@@ -64,7 +64,7 @@
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 254 | ~508,759 |
 | `tests/integration/` | 2 | ~1,575 |
-| `train/` | 13 | ~37,225 |
+| `train/` | 13 | ~37,217 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -888,7 +888,7 @@
 ### `train/`
 
 - `backport_sweep.py` (~1658 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
-- `build_corpus.py` (~16899 tok, huge) — Harvest a training corpus for the mind-mem-4b model.
+- `build_corpus.py` (~16891 tok, huge) — Harvest a training corpus for the mind-mem-4b model.
 - `build_model_card.py` (~3051 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
 - `eval_harness.py` (~4045 tok, huge) — Eval harness for mind-mem-4b.
 - `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
