@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 730 | **Est. tokens:** ~1,505,844
-**Generated:** 2026-05-04 05:25 UTC
+**Files:** 730 | **Est. tokens:** ~1,507,612
+**Generated:** 2026-05-05 11:11 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 32 | ~85,230 |
+| `./` | 32 | ~85,339 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,100 |
 | `benchmarks/` | 26 | ~64,933 |
@@ -30,7 +30,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 63 | ~100,645 |
+| `docs/` | 63 | ~100,646 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -64,7 +64,7 @@
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 254 | ~508,759 |
 | `tests/integration/` | 2 | ~1,575 |
-| `train/` | 11 | ~25,201 |
+| `train/` | 11 | ~26,859 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -77,7 +77,7 @@
 
 - `AGENTS.md` (~572 tok, large) — Memory Context
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: mind-mem (Commit 30d8b71)
-- `CLAUDE.md` (~1232 tok, large) — mind-mem — Persistent AI Memory System
+- `CLAUDE.md` (~1292 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
 - `demo-setup.sh` (~323 tok, medium) — Pre-seed a demo workspace for VHS recording
@@ -98,7 +98,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~1945 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~23549 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~23598 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `ROADMAP.md` (~24691 tok, huge) — mind-mem Roadmap
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
@@ -190,7 +190,7 @@
 - `faq.md` (~374 tok, medium) — FAQ
 - `getting-started.md` (~493 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
-- `governance.md` (~1365 tok, large) — mind-mem — governance design (5 layers)
+- `governance.md` (~1366 tok, large) — mind-mem — governance design (5 layers)
 - `hf-mind-mem-4b-v2-README.md` (~2154 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `integrations.md` (~1544 tok, huge) — Integrations
 - `locomo-v3.4-conv0-results.md` (~449 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
@@ -889,15 +889,15 @@
 
 - `backport_sweep.py` (~1658 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
 - `build_corpus.py` (~8473 tok, huge) — Harvest a training corpus for the mind-mem-4b model.
-- `build_model_card.py` (~1876 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b v3.0.0."""
-- `eval_harness.py` (~3764 tok, huge) — Eval harness for mind-mem-4b.
+- `build_model_card.py` (~2805 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
+- `eval_harness.py` (~4024 tok, huge) — Eval harness for mind-mem-4b.
 - `export_gguf.py` (~1047 tok, large) — Merge the LoRA adapter into the base weights, then export to GGUF.
 - `README.md` (~577 tok, large) — mind-mem-4b training pipeline
 - `RETRAIN_v3.9.0.md` (~1405 tok, large) — mind-mem-4b — v3.9.0 retrain plan
-- `runpod_deploy.py` (~3095 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
+- `runpod_deploy.py` (~3307 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
 - `runpod_full_ft.py` (~1246 tok, large) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
 - `train_qlora.py` (~1195 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
-- `upload_to_hf.py` (~865 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-4b.
+- `upload_to_hf.py` (~1122 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-4b.
 ### `web/app/console/`
 
 - `page.tsx` (~1169 tok, large) — Tolerate missing endpoint — show single-tenant UI.

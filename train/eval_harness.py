@@ -22,7 +22,7 @@ import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-BASE = "Qwen/Qwen3.5-4B"
+BASE = os.environ.get("MM_BASE_MODEL", "Qwen/Qwen3.5-4B")
 _BASE_DIR = Path(os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output"))
 ADAPTER = _BASE_DIR / "adapter"
 REPORT = _BASE_DIR / "eval_report.json"
@@ -182,16 +182,41 @@ V39_TRANSPORT_PROMPTS: list[tuple[str, list[str], list[str]]] = [
 
 
 def _load_model():
-    if not ADAPTER.is_dir():
-        sys.exit(f"no adapter at {ADAPTER}. Run train_qlora.py first.")
-    tokenizer = AutoTokenizer.from_pretrained(BASE, trust_remote_code=True)
-    # Match training quantization so the base + adapter fit on the 3080.
+    """Load eval target. Two modes:
+
+    * QLoRA adapter overlay (legacy v3.0):  4-bit base + PEFT adapter at
+      `${MM_TRAIN_ROOT}/adapter`.
+    * Full-fine-tune (v3.9+):  load `${MM_FULLFT_DIR}` (a directory
+      containing config.json + model.safetensors) directly. 4-bit
+      quantization is still applied on the 3080 so the merged model
+      fits in 10 GB VRAM.
+    """
+    fullft_dir = Path(os.environ.get("MM_FULLFT_DIR", _BASE_DIR / "full-ft"))
+    use_fullft = (fullft_dir / "model.safetensors").is_file() or (fullft_dir / "model.safetensors.index.json").is_file()
+
     bnb = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
         bnb_4bit_compute_dtype=torch.bfloat16,
         bnb_4bit_use_double_quant=True,
     )
+
+    if use_fullft:
+        print(f"loading full-FT weights from {fullft_dir}")
+        tokenizer = AutoTokenizer.from_pretrained(str(fullft_dir), trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            str(fullft_dir),
+            quantization_config=bnb,
+            device_map="auto",
+            torch_dtype=torch.bfloat16,
+            trust_remote_code=True,
+        )
+        model.eval()
+        return tokenizer, model
+
+    if not ADAPTER.is_dir():
+        sys.exit(f"no weights found — checked full-FT dir {fullft_dir} and adapter {ADAPTER}. Train first.")
+    tokenizer = AutoTokenizer.from_pretrained(BASE, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
         BASE,
         quantization_config=bnb,

@@ -21,7 +21,7 @@ tags: [python, memory, mind-mem, pypi]
 - BlockStore protocol: decoupled block access
 - Delta-based snapshot rollback
 
-## MCP Server (57 tools)
+## MCP Server (81 tools)
 Grouped surfaces (full list in `docs/api-reference.md` and
 `src/mind_mem/mcp_server.py`):
 recall, hybrid_search, prefetch, propose_update, approve_apply,

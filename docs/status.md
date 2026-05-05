@@ -33,11 +33,11 @@ Three-column ledger of what is operational on the current `main`, what is in-tre
 | Tier decay (TTL + LRU aging) | `src/mind_mem/core/decay.py` | v3.0.0+. |
 | Delta-based snapshot rollback | `src/mind_mem/core/snapshot.py` | MANIFEST.json for O(manifest) restore. |
 
-### MCP server (77 tools, 8 resources)
+### MCP server (81 tools, 8 resources)
 
 | Component | Source | Notes |
 |---|---|---|
-| MCP server entry | `src/mind_mem/mcp_server.py` | 77 tools across recall / write / governance / observability / audit. |
+| MCP server entry | `src/mind_mem/mcp_server.py` | 81 tools across recall / write / governance / observability / audit. |
 | Native MCP integration (16 clients) | `src/mind_mem/hook_installer/` | `mm install-all` wires Claude Code, Claude Desktop, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed, OpenClaw + 8 more. |
 | Multi-backend LLM extractor | `src/mind_mem/extractors/` | ollama / openai-compatible / vLLM / exllamav2. |
 

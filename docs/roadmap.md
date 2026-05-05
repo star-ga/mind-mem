@@ -194,7 +194,7 @@ modules are resolved (explicit constructor casts, corrected
 argument types on two call sites, and narrowed annotations where
 `Any` was leaking into the signature). `typecheck` is now a real
 gate in CI. GitHub repository **About** refreshed to match v3.1.x
-reality (77 MCP tools, 17 native AI-client integrations, 4B local
+reality (81 MCP tools, 17 native AI-client integrations, 4B local
 model, zero core deps).
 
 ## v3.1.6 (Released 2026-04-18)

@@ -4,18 +4,17 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
-**v3.8.14** (released 2026-05-03) — 4000+ tests, native MCP for 17 AI
-clients, 77 tools (58 legacy + 7 consolidated dispatchers + 12
-v3.7→v3.8 additions), Postgres backend with pgvector + HNSW + correct
-GIN, full-fine-tune local model (`mind-mem-4b` on Qwen3.5-4B), at-rest
-encryption, tier decay, governance alerting, MIC/MAP wire format
-(mic@2 text + mic-b binary).
-
-**v3.9.0 candidates** (branch `feat/v3.9-http-transport`, PR #516) —
-HTTP transport adapter (stdlib, zero new deps), background daemon,
-inbox folder ingestion, hash-of-code pipeline invalidation, persona-
-aware projection (brief / detailed / technical), dependency-ordered
-walkthrough (Kahn topo-sort), replicated Postgres routing.
+**v3.9.0** (released 2026-05-04) — 4000+ tests, native MCP for 17 AI
+clients, **81 tools** (58 legacy + 7 consolidated dispatchers + 12
+v3.7→v3.8 additions + 4 v3.9 wrappers: `compile_truth_walkthrough`,
+`recall_with_persona`, `pipeline_status`, `reindex_dirty`), Postgres
+backend with pgvector + HNSW + correct GIN, full-fine-tune local
+model (`mind-mem-4b` v3.9.0 on Qwen3.5-4B), at-rest encryption, tier
+decay, governance alerting, MIC/MAP wire format (mic@2 text + mic-b
+binary), and the v3.9 transport/runtime surface (HTTP REST adapter,
+background daemon, inbox folder ingestion, hash-of-code pipeline
+invalidation, persona-aware projection, dependency-ordered Kahn-topo
+walkthrough, replicated Postgres routing).
 
 ## Architecture
 ```
@@ -23,16 +22,16 @@ src/mind_mem/           — Main package (src layout)
   core/                 — BlockStore, ConnectionManager, retrieval
   governance/           — Contradiction detection, drift, proposals,
                           audit chain, alerting hooks
-  mcp_server.py         — MCP server (77 tools, 8 resources)
+  mcp_server.py         — MCP server (81 tools, 8 resources)
   ingestion/            — Auto-ingestion pipeline
   skill_opt/            — Skill optimization
   hook_installer/       — Client hook installation (v3.1.1+)
-  http_transport.py     — Stdlib HTTP REST adapter (v3.9 candidate)
-  daemon.py             — Background dream-cycle/intel-scan loop (v3.9)
-  inbox.py              — File-drop folder ingestion (v3.9)
-  pipeline_hash.py      — Hash-of-code invalidation (v3.9)
-  personas.py           — brief/detailed/technical projection (v3.9)
-  walkthrough.py        — Dependency-ordered learning sequence (v3.9)
+  http_transport.py     — Stdlib HTTP REST adapter (v3.9.0)
+  daemon.py             — Background dream-cycle/intel-scan loop (v3.9.0)
+  inbox.py              — File-drop folder ingestion (v3.9.0)
+  pipeline_hash.py      — Hash-of-code invalidation (v3.9.0)
+  personas.py           — brief/detailed/technical projection (v3.9.0)
+  walkthrough.py        — Dependency-ordered learning sequence (v3.9.0)
 tests/                  — pytest suite (4000+ tests)
 kernels/                — MIND scoring kernels (.mind)
 docs/                   — User + integration docs (35+ files)
@@ -55,15 +54,17 @@ docs/                   — User + integration docs (35+ files)
 - **Audit-integrity patterns** (v2.10.0+): Q16.16 fixed-point scoring in
   audit hash preimages, TAG_v1 NUL-separated composition for collision
   resistance
-- **Local model** (v3.0.0+): `star-ga/mind-mem-4b` — full fine-tune of
-  Qwen3.5-4B on the mind-mem domain (57 tools, 14 block schemas,
-  governance workflows). See `docs/mind-mem-4b-setup.md`.
+- **Local model** (v3.9.0): `star-ga/mind-mem-4b` — full fine-tune of
+  Qwen3.5-4B on the v3.9.0 mind-mem domain (81 tools, block schemas
+  including `TransformHash`, governance + transport workflows). See
+  `docs/mind-mem-4b-setup.md`. Prior v3.0.0 QLoRA fine-tune kept at
+  HF revision `v3.0.0`.
 - **Native MCP integration** (v3.1.0+): 16 AI clients auto-wired via
   `mm install-all` (Claude Code, Claude Desktop, Codex CLI, Gemini CLI,
   Cursor, Windsurf, Zed, OpenClaw, and 8 more). See
   `docs/client-integrations.md`.
 
-### MCP Tools (57)
+### MCP Tools (81)
 Grouped surfaces (full list in `docs/api-reference.md` and
 `src/mind_mem/mcp_server.py`):
 recall, hybrid_search, prefetch, propose_update, approve_apply,
@@ -73,7 +74,9 @@ category_summary, cross_encoder_rerank, find_similar, memory_evolution,
 delete_memory, export_memory, import_memory, intent_classify,
 retrieval_diagnostics, get_mind_kernel, list_mind_kernels,
 verify_chain, audit_replay, tier_decay_apply, encrypt_status,
-alerts_subscribe, and more.
+alerts_subscribe, mic_convert_tool, mic_inspect_tool,
+compile_truth_walkthrough, recall_with_persona, pipeline_status,
+reindex_dirty, and more.
 
 ## Config
 - Config file: `mind-mem.json` (NOT `mem-os.json` — renamed)
@@ -84,7 +87,7 @@ alerts_subscribe, and more.
 
 ## Testing
 ```bash
-pytest                           # full suite (3610 tests)
+pytest                           # full suite (4000+ tests)
 pytest tests/test_retrieval.py   # specific module
 pytest -x --tb=short             # stop on first failure
 pytest --collect-only -q | tail  # verify test count
