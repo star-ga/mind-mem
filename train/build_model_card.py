@@ -111,35 +111,38 @@ model = PeftModel.from_pretrained(base, "star-ga/mind-mem-4b", revision="v3.0.0"
 | Knob | Value |
 |---|---|
 | Base | `Qwen/Qwen3.5-4B` |
-| Method | QLoRA (4-bit base + LoRA adapter) |
-| LoRA rank | 16 |
-| LoRA alpha | 32 |
-| LoRA dropout | 0.05 |
-| Target modules | `q,k,v,o,gate,up,down`-proj |
-| Epochs | 6 |
-| Steps | 732 |
-| Per-device batch size | 1 |
-| Gradient accumulation | 16 |
-| Learning rate | 2e-4 (cosine schedule, 3 % warmup) |
-| Precision | bf16 compute on 4-bit nf4 base |
-| Optimizer | paged AdamW 8-bit |
-| Hardware | RTX 3080 10 GB |
-| Wall-clock | 8 h 15 min |
+| Method | Full fine-tune (every parameter trained, no LoRA) |
+| Trainable params | ~4.2 B / ~4.2 B (100 %) |
+| Epochs | 8 |
+| Steps | 1 056 |
+| Per-device batch size | 2 |
+| Gradient accumulation | 16 (effective batch 32) |
+| Learning rate | 1.5e-5 (cosine schedule, 3 % warmup) |
+| Precision | bf16 throughout (no quantization at train time) |
+| Sequence length | 2048, packing OFF (one example per sequence) |
+| Optimizer | paged AdamW 8-bit (bnb 0.46.1) |
+| Gradient checkpointing | on (`use_reentrant=False`) |
+| Hardware | NVIDIA H200 SXM 141 GB (RunPod community cloud) |
+| Wall-clock | ~3 h |
 | Final loss | {final_loss} |
 | Mean train loss | {train_loss_mean} |
 | Token accuracy (final) | {token_accuracy} |
 
 ## Corpus
 
-Built deterministically from the mind-mem v{version} source tree. Running `python3 train/build_corpus.py` in the repo reproduces the exact training JSONL byte-for-byte. Five disjoint sources scanned across **21 source files** (the v3.4+ tool layout splits the registry across `mcp/tools/*.py`):
+Built deterministically from the mind-mem v{version} source tree. Running `python3 train/build_corpus.py` in the repo reproduces the exact training JSONL byte-for-byte. Nine disjoint sources scanned across **21 source files** (the v3.4+ tool layout splits the registry across `mcp/tools/*.py`):
 
-1. MCP tool docstrings (`mcp_server.py` + `mcp/tools/*.py` — **80 distinct tools** harvested via the `@mcp_tool_observe` and `@tool` decorators)
+1. MCP tool docstrings (`mcp_server.py` + `mcp/tools/*.py` — **81 distinct tools** harvested via the `@mcp_tool_observe` and `@tool` decorators)
 2. Block-type schemas (templates + field lists, including the v3.9 `TransformHash` field)
 3. CHANGELOG entries (v1.0 → v{version})
 4. docs/ prose (setup, usage, api-reference, architecture, roadmap)
-5. Curated governance + transport workflow transcripts
+5. Curated multi-turn governance workflow transcripts
+6. Governance-workflow paraphrases (multiple phrasings per scenario)
+7. Direct tool-name citations (interrogative + imperative forms, multiple answer phrasings)
+8. **Intent pool** (v3.9.2): curated paraphrased intent prompts per all 81 tools where the user prompt deliberately omits the tool name and the assistant must surface it. This source is the load-bearing teacher of "intent → tool name" retrieval.
+9. **v3.9 surface facts** (v3.9.2): direct teaching of `TransformHash`, `stamp_transform_hash`, `reextract_dirty_blocks`, the six HTTP REST endpoints, the daemon's dream-cycle scheduler, the inbox file-drop ingestion path, and the replicated-Postgres primary/round-robin routing rules.
 
-**1 952 training examples total** (vs ~393 in the v3.0 corpus). All five sources are local to the repo — **no external LLM calls, no web scraping, no synthetic data from a teacher model.** The training data is auditable.
+**4 204 training examples total** (vs 1 952 in v3.9.1, ~393 in v3.0). All nine sources are local to the repo — **no external LLM calls, no web scraping, no synthetic data from a teacher model.** The training data is auditable.
 
 ## Eval
 
@@ -164,7 +167,7 @@ Apache-2.0 (same as the mind-mem Python package).
 
 ## Changelog
 
-- **v{version} ({today}):** QLoRA fine-tune on `Qwen/Qwen3.5-4B`. 81 MCP tools, v3.9 `TransformHash` schema, walkthrough / persona / pipeline-hash / reindex-dirty / MIC-MAP / kernel surfaces, HTTP+daemon+inbox transports. Final loss {final_loss}, token accuracy {token_accuracy}. Corpus 1 952 examples / 21 source files / 80 tools.
+- **v{version} ({today}):** Full fine-tune on `Qwen/Qwen3.5-4B` (NVIDIA H200, ~3 h, 1 056 steps, 8 epochs). 81 MCP tools, v3.9 `TransformHash` schema, walkthrough / persona / pipeline-hash / reindex-dirty / MIC-MAP / kernel surfaces, HTTP+daemon+inbox transports, replicated-Postgres routing. Corpus augmented with intent-style prompts and v3.9 surface facts: 4 204 examples / 21 source files / 81 tools. Final loss {final_loss}, token accuracy {token_accuracy}.
 - **v3.0.0:** Full fine-tune on `Qwen/Qwen3.5-4B` covering 57 MCP tools, 14 block schemas, governance workflows. Pinned at `revision="v3.0.0"`.
 - **v2.9.0:** Legacy QLoRA on `Qwen/Qwen2.5-7B-Instruct` base. Superseded.
 - **v2.8.x:** Initial release on Qwen3.5-4B base.
