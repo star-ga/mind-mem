@@ -92,15 +92,16 @@ def main() -> None:
         learning_rate=1.5e-5,
         lr_scheduler_type="cosine",
         warmup_ratio=0.03,
-        # v3.9.0 corpus is ~2k short examples (median ~150 tokens). With
-        # `packing=True` (the prior default), 50+ examples collapse into a
-        # single 2048-token packed sequence, which crushes the effective
-        # step count (1952 examples ⇒ ~35 steps over 5 epochs — way too
-        # few for surface-knowledge transfer of 81 tool names + schemas).
-        # Disabling packing gives one sequence per example. With effective
-        # batch 32 and 1952 examples, 8 epochs ≈ 488 gradient steps —
-        # enough headroom for the 81-tool surface to land.
-        num_train_epochs=8,
+        # v3.9.2 corpus has 4204 examples (the v3.9.2 augmentation more
+        # than doubled it: intent pool + v3.9 surface facts). With effective
+        # batch 32 and packing=False, 4 epochs ≈ 526 gradient steps — about
+        # the same as the prior 8-epoch run on the smaller corpus, and the
+        # last ECP-completed run reached loss 0.09 / token_acc 0.978 by
+        # step 640. The community-cloud pod was preempted twice mid-run
+        # on 2026-05-05; cutting to 4 epochs caps the worst-case wall time
+        # at ~1h45 instead of ~3h30, so a single preemption mid-run loses
+        # ~30 min of replay (with save_steps=200 below) instead of ~1h.
+        num_train_epochs=4,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=16,  # effective batch = 32
         bf16=True,
@@ -113,7 +114,7 @@ def main() -> None:
         # plus the final full-ft directory peak at ~32 GB on the 40-GB
         # volume — under the limit but with no headroom.
         save_strategy="steps",
-        save_steps=500,
+        save_steps=200,
         save_total_limit=1,
         report_to="none",
         # paged AdamW 8-bit halves optimizer state memory with minimal

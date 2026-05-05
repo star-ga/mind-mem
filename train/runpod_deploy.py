@@ -94,11 +94,15 @@ def _api_call(method: str, path: str, body: dict | None = None) -> dict:
 def provision(gpu_type: str = DEFAULT_GPU_TYPE, image: str = DEFAULT_IMAGE) -> str:
     """Create a pod, return its ID once it's running."""
     pub = Path(f"{SSH_KEY}.pub").read_text().strip()
+    # SECURE cloud: a v3.9.2 retrain on COMMUNITY was preempted twice on
+    # 2026-05-05 (~2h of compute lost each time, EXITED pods couldn't be
+    # restarted), so we eat the small SECURE premium to get an
+    # uninterruptable run on H200.
     body = {
         "name": "mind-mem-4b-fullft",
         "imageName": image,
         "gpuTypeIds": [gpu_type],
-        "cloudType": "COMMUNITY",
+        "cloudType": os.environ.get("MM_RUNPOD_CLOUD", "SECURE"),
         "gpuCount": 1,
         "containerDiskInGb": DEFAULT_CONTAINER_DISK_GB,
         "volumeInGb": DEFAULT_VOLUME_GB,
