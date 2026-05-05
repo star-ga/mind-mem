@@ -2,6 +2,35 @@
 
 All notable changes to mind-mem are documented in this file.
 
+## v3.9.1 — Doc alignment + retrain tooling for the v3.9 surface
+
+Doc-only release that surfaces the v3.9.0 reality on PyPI, HF, and the
+docs tree.
+
+### Changed
+- README + CLAUDE + `docs/*` + the `mind-mem-development` skill now say
+  **81 MCP tools** (was 77 — the v3.8.14 era count) and reference the
+  4 v3.9 wrappers explicitly: `compile_truth_walkthrough`,
+  `recall_with_persona`, `pipeline_status`, `reindex_dirty`.
+- Test count phrasing updated from "3617 tests" to "4000+ tests".
+- `mind-mem-4b` model card on HF rewritten as a full fine-tune of
+  Qwen3.5-4B (was QLoRA framing) — `library_name: transformers`,
+  drops the `qlora` tag, adds `full-fine-tune`. Prior v3.0 QLoRA is
+  preserved at HF revision `v3.0.0`.
+
+### Tooling (no runtime change)
+- `train/runpod_deploy.py` — GraphQL fallback for runtime / port
+  resolution (REST `/pods/{id}` returns `runtime: null` on community
+  H200 pods); SSH key strip handles single-quoted toml; default cloud
+  type now `COMMUNITY` for H200 availability.
+- `train/build_model_card.py` — full-FT card template, env hooks
+  (`MM_VERSION_OVERRIDE`, `MM_INIT_PATH`) for off-host card builds.
+- `train/upload_to_hf.py` — auto-detect full-FT vs adapter layout,
+  `MM_WEIGHTS_DIR` override, ships sharded `model-*.safetensors` if
+  present.
+- `train/eval_harness.py` — full-FT load mode (no PEFT overlay) when
+  `MM_FULLFT_DIR` / `train-output/full-ft` is present.
+
 ## v3.9.0 — MCP wrapping for v3.9 walkthrough/persona + hash-of-code loop closure
 
 **Folded into the v3.9.0 release.** v3.9.0 is the first tagged release
