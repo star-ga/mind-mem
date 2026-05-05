@@ -288,12 +288,25 @@ def main() -> None:
             return
 
         # 1. Prep remote workspace + deps
+        # Pin versions to a tested-green set:
+        #   * Qwen3.5-4B uses model_type `qwen3_5`, which only landed in
+        #     transformers >= 4.57 / 5.x. transformers 4.46.x does NOT load
+        #     the config.
+        #   * transformers >= 5.8 added an FP8-MoE `torch.library.custom_op`
+        #     whose schema inference fails on torch < 2.7 (the runpod image
+        #     ships torch 2.4.1) — bumping trl to 1.3.0 also pulls a
+        #     `HybridCache` import that 5.7.0 doesn't expose.
+        # The narrow working window is `transformers==5.7.0` + `trl==1.2.0`
+        # on the runpod/pytorch:2.4 image; outside that, the import chain
+        # breaks before training starts.
         print("installing deps on the pod …")
         _ssh_cmd(
             ip, port,
             "mkdir -p /workspace/train-output && "
-            "pip install -q --no-cache-dir transformers datasets peft bitsandbytes accelerate trl && "
-            "pip install -q --no-cache-dir huggingface_hub",
+            "pip install -q --no-cache-dir "
+            "'transformers==5.7.0' 'trl==1.2.0' 'peft==0.14.0' "
+            "'accelerate==1.5.0' 'bitsandbytes==0.46.1' 'datasets==3.1.0' "
+            "huggingface_hub",
         )
 
         # 2. Ship corpus + training script + upload helper
