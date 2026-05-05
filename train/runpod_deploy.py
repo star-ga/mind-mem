@@ -305,7 +305,7 @@ def main() -> None:
             "mkdir -p /workspace/train-output && "
             "pip install -q --no-cache-dir "
             "'transformers==5.7.0' 'trl==1.2.0' 'peft==0.14.0' "
-            "'accelerate==1.5.0' 'bitsandbytes==0.46.1' 'datasets==3.1.0' "
+            "'accelerate==1.5.0' 'bitsandbytes==0.46.1' 'datasets>=4.7.0,<5' "
             "huggingface_hub",
         )
 

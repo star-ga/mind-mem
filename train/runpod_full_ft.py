@@ -105,12 +105,16 @@ def main() -> None:
         gradient_accumulation_steps=16,  # effective batch = 32
         bf16=True,
         logging_steps=5,
-        # Disk on the pod volume (40 GB) can't hold concurrent 16 GB
-        # checkpoints. Skip intermediate saves — `trainer.save_model`
-        # at the end writes the single final model. Resumability is
-        # sacrificed but a fresh 45-min train is cheaper than a failed
-        # 2-day checkpoint strategy.
-        save_strategy="no",
+        # Periodic-save resilience: keep ONE rolling checkpoint so a
+        # mid-run preemption (community cloud has spot-style behaviour
+        # — pod uz2uajluzskmm2 was killed at step 640/1056 on
+        # 2026-05-05) only costs ≤500 steps of replay, not the full
+        # 1056. With save_total_limit=1 the rolling 16-GB checkpoint
+        # plus the final full-ft directory peak at ~32 GB on the 40-GB
+        # volume — under the limit but with no headroom.
+        save_strategy="steps",
+        save_steps=500,
+        save_total_limit=1,
         report_to="none",
         # paged AdamW 8-bit halves optimizer state memory with minimal
         # quality cost. Full fp32 AdamW at 9B = 72 GB optimizer state,
@@ -136,7 +140,15 @@ def main() -> None:
         train_dataset=dataset,
         processing_class=tokenizer,
     )
-    trainer.train()
+    # Resume if a `checkpoint-*/` directory exists in OUT_DIR — community
+    # cloud preemption recovery.  On a fresh run there is no checkpoint,
+    # so call train() with no resume hint.
+    has_ckpt = any(p.is_dir() and p.name.startswith("checkpoint-") for p in OUT_DIR.iterdir()) if OUT_DIR.is_dir() else False
+    if has_ckpt:
+        print(f"resuming from latest checkpoint under {OUT_DIR}")
+        trainer.train(resume_from_checkpoint=True)
+    else:
+        trainer.train()
     trainer.save_model(str(OUT_DIR))
     tokenizer.save_pretrained(str(OUT_DIR))
     print(f"\ntraining complete — full-FT weights saved to {OUT_DIR}")
