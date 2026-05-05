@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 730 | **Est. tokens:** ~1,507,612
-**Generated:** 2026-05-05 11:14 UTC
+**Files:** 731 | **Est. tokens:** ~1,508,753
+**Generated:** 2026-05-05 18:25 UTC
 
 ## Token Budget Guide
 
@@ -22,15 +22,15 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 32 | ~85,339 |
+| `./` | 32 | ~85,387 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `.arch-mind/` | 4 | ~1,100 |
+| `.arch-mind/` | 4 | ~1,101 |
 | `benchmarks/` | 26 | ~64,933 |
 | `deploy/` | 2 | ~772 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 63 | ~100,646 |
+| `docs/` | 63 | ~100,813 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -64,7 +64,7 @@
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 254 | ~508,759 |
 | `tests/integration/` | 2 | ~1,575 |
-| `train/` | 11 | ~26,859 |
+| `train/` | 12 | ~27,784 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -77,7 +77,7 @@
 
 - `AGENTS.md` (~572 tok, large) — Memory Context
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: mind-mem (Commit 30d8b71)
-- `CLAUDE.md` (~1292 tok, large) — mind-mem — Persistent AI Memory System
+- `CLAUDE.md` (~1340 tok, large) — mind-mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
 - `demo-setup.sh` (~323 tok, medium) — Pre-seed a demo workspace for VHS recording
@@ -112,7 +112,7 @@
 - `SKILL.md` (~456 tok, medium) — mind-mem Development
 ### `.arch-mind/`
 
-- `last_summary.json` (~156 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
+- `last_summary.json` (~157 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
 - `rules.mind` (~766 tok, large) — mind-mem architectural-governance rules
 - `scan.json` (~92 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
 - `scan_v3813.json` (~86 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
@@ -167,7 +167,7 @@
 ### `docs/`
 
 - `api-reference.md` (~1477 tok, large) — API Reference
-- `architecture.md` (~1849 tok, huge) — Architecture
+- `architecture.md` (~1936 tok, huge) — Architecture
 - `audit_response.md` (~956 tok, large) — mind-mem — response to the 2026-05-02 ecosystem audit
 - `benchmarks.md` (~759 tok, large) — Benchmarks
 - `block-format.md` (~431 tok, medium) — Block Format
@@ -201,7 +201,7 @@
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
 - `migration.md` (~2754 tok, huge) — Migration Guide: mem-os to mind-mem
 - `mind-kernels.md` (~339 tok, medium) — MIND Kernels
-- `mind-mem-4b-setup.md` (~2338 tok, huge) — Setting up the mind-mem-4b model
+- `mind-mem-4b-setup.md` (~2418 tok, huge) — Setting up the mind-mem-4b model
 - `mind-mem-4b-v2-training-recipe.md` (~1683 tok, huge) — mind-mem-4b v2 training recipe — Runpod H200
 - `odc-retrieval.md` (~834 tok, large) — Observer-Dependent Cognition in mind-mem
 - `performance-tuning.md` (~560 tok, large) — Performance Tuning
@@ -890,12 +890,13 @@
 - `backport_sweep.py` (~1658 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
 - `build_corpus.py` (~8473 tok, huge) — Harvest a training corpus for the mind-mem-4b model.
 - `build_model_card.py` (~2805 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
-- `eval_harness.py` (~4024 tok, huge) — Eval harness for mind-mem-4b.
-- `export_gguf.py` (~1047 tok, large) — Merge the LoRA adapter into the base weights, then export to GGUF.
+- `eval_harness.py` (~4045 tok, huge) — Eval harness for mind-mem-4b.
+- `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
+- `Modelfile.v3.9.0` (~389 tok, medium) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
 - `README.md` (~577 tok, large) — mind-mem-4b training pipeline
 - `RETRAIN_v3.9.0.md` (~1405 tok, large) — mind-mem-4b — v3.9.0 retrain plan
-- `runpod_deploy.py` (~3307 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
-- `runpod_full_ft.py` (~1246 tok, large) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
+- `runpod_deploy.py` (~3404 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
+- `runpod_full_ft.py` (~1437 tok, large) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
 - `train_qlora.py` (~1195 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
 - `upload_to_hf.py` (~1122 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-4b.
 ### `web/app/console/`

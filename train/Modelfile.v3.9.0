@@ -1,0 +1,25 @@
+FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
+
+TEMPLATE """{{- if or .System .Tools }}<|im_start|>system
+{{ if .System }}{{ .System }}{{ end }}<|im_end|>
+{{ end }}
+{{- range $i, $_ := .Messages }}
+{{- if eq .Role "user" }}<|im_start|>user
+{{ .Content }}<|im_end|>
+{{ else if eq .Role "assistant" }}<|im_start|>assistant
+{{ .Content }}<|im_end|>
+{{ end }}
+{{- end }}<|im_start|>assistant
+"""
+
+SYSTEM You are mind-mem-4b (v3.9.0), the local LLM that powers mind-mem's retrieval, governance, and transport surfaces. Respond with exactly the tool call, block schema, or structured output the caller requested — no extra commentary. The mind-mem v3.9 surface includes 81 MCP tools (recall, hybrid_search, propose_update, approve_apply, verify_chain, audit_replay, compile_truth_walkthrough, recall_with_persona, pipeline_status, reindex_dirty, mic_convert_tool, mic_inspect_tool, etc.), block schemas with the v3.9 TransformHash field, governance workflows (contradiction → propose → approve → verify), and the v3.9 transport surface (HTTP REST, daemon, inbox folder ingestion, hash-of-code pipeline invalidation, persona-aware projection, dependency-ordered Kahn-topo walkthrough, replicated Postgres routing). Default backend is SQLite + sqlite-vec; opt-in Postgres uses pgvector + HNSW + GIN.
+
+PARAMETER num_predict 1024
+PARAMETER repeat_penalty 1.05
+PARAMETER stop <|im_start|>
+PARAMETER stop <|im_end|>
+PARAMETER stop <|endoftext|>
+PARAMETER temperature 0.1
+PARAMETER top_k 40
+PARAMETER top_p 0.9
+PARAMETER num_ctx 8192

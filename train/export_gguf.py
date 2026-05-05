@@ -1,21 +1,24 @@
-"""Merge the LoRA adapter into the base weights, then export to GGUF.
+"""Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
 
-This is a one-shot script — it is *only* necessary when publishing a
-release. Ollama / LM Studio / llama.cpp users prefer a single
-self-contained GGUF over the adapter + base combo.
+Two layouts supported:
 
-Pipeline:
-    1. Load BASE in bf16, apply the adapter via PeftModel.merge_and_unload.
-    2. Save the merged HF model to /tmp/mm_merged.
-    3. Invoke llama.cpp's ``convert_hf_to_gguf.py`` to produce an FP16 GGUF.
-    4. Quantize to Q4_K_M (default) via llama.cpp's ``llama-quantize``.
+  * QLoRA adapter (legacy v3.0):  ``${MM_TRAIN_ROOT}/adapter/``
+      → load BASE in bf16, apply adapter via PeftModel.merge_and_unload,
+        save merged model, then convert.
+  * Full fine-tune (v3.9 onward):  ``${MM_FULLFT_DIR}`` (default
+      ``/data/checkpoints/mm-workspace/mind-mem-4b-fullft/full-ft``)
+      → already a self-contained HF model; convert directly, no merge.
+
+The full-FT path is auto-detected when a `model.safetensors` (or
+`model.safetensors.index.json` shard set) lives at MM_FULLFT_DIR.
+Override layout choice with ``MM_GGUF_SOURCE`` (`fullft` or `adapter`).
 
 Prerequisites:
     ``llama.cpp`` cloned at /home/n/llama.cpp  (or set MM_LLAMA_CPP_DIR).
-    ``llama.cpp`` built in release mode:  cmake -B build && cmake --build build.
+    ``llama.cpp`` built:  cmake -B build && cmake --build build.
 
 Output:
-    /home/n/mm-train-output/mind-mem-4b-Q4_K_M.gguf
+    ${MM_TRAIN_ROOT}/mind-mem-4b-Q4_K_M.gguf
 """
 
 from __future__ import annotations
@@ -26,13 +29,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-import torch
-from peft import PeftModel
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
 BASE = "Qwen/Qwen3.5-4B"
 _BASE_DIR = Path(os.environ.get("MM_TRAIN_ROOT", "/data/checkpoints/mm-workspace/train-output"))
 ADAPTER = _BASE_DIR / "adapter"
+FULLFT = Path(
+    os.environ.get(
+        "MM_FULLFT_DIR",
+        "/data/checkpoints/mm-workspace/mind-mem-4b-fullft/full-ft",
+    )
+)
 # Everything stays on /data — 4B base merged weights (~18 GB) + F16
 # GGUF (~17 GB) + Q4_K_M (~5 GB) would blow out / in a heartbeat.
 MERGED = Path("/data/checkpoints/mm-workspace/mm_merged")
@@ -41,15 +46,37 @@ OUT_GGUF_Q4 = _BASE_DIR / "mind-mem-4b-Q4_K_M.gguf"
 LLAMA_CPP = Path(os.environ.get("MM_LLAMA_CPP_DIR", "/home/n/llama.cpp"))
 
 
-def _merge_adapter() -> None:
+def _resolve_source() -> Path:
+    """Pick the model dir to convert. Full-FT preferred over QLoRA merge."""
+    pref = os.environ.get("MM_GGUF_SOURCE", "").strip().lower()
+    fullft_ready = (FULLFT / "model.safetensors").is_file() or (FULLFT / "model.safetensors.index.json").is_file()
+    if pref == "adapter":
+        if not ADAPTER.is_dir():
+            sys.exit(f"MM_GGUF_SOURCE=adapter but {ADAPTER} missing")
+        return _merge_adapter_to_disk()
+    if pref == "fullft":
+        if not fullft_ready:
+            sys.exit(f"MM_GGUF_SOURCE=fullft but no model.safetensors at {FULLFT}")
+        return FULLFT
+    if fullft_ready:
+        print(f"using full-FT weights at {FULLFT}")
+        return FULLFT
+    if ADAPTER.is_dir():
+        print(f"no full-FT found; falling back to QLoRA adapter at {ADAPTER}")
+        return _merge_adapter_to_disk()
+    sys.exit(f"no weights — checked {FULLFT} and {ADAPTER}")
+
+
+def _merge_adapter_to_disk() -> Path:
+    # Heavy imports only when QLoRA path is chosen.
+    import torch
+    from peft import PeftModel
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
     if MERGED.is_dir():
         shutil.rmtree(MERGED)
     MERGED.mkdir(parents=True)
     tokenizer = AutoTokenizer.from_pretrained(BASE, trust_remote_code=True)
-    # Merge on CPU in bf16 — avoids a peft/accelerate device_map bug
-    # (`get_balanced_memory` TypeError on newer transformers) and side-
-    # steps VRAM pressure since we don't need any forward/backward here.
-    # 7B at bf16 = ~14 GB RAM; the box has 64 GB so this is fine.
     print("loading base on CPU (bf16) …")
     model = AutoModelForCausalLM.from_pretrained(BASE, torch_dtype=torch.bfloat16, device_map=None, trust_remote_code=True)
     print("applying adapter …")
@@ -59,9 +86,10 @@ def _merge_adapter() -> None:
     print(f"saving merged model → {MERGED}")
     model.save_pretrained(str(MERGED), safe_serialization=True)
     tokenizer.save_pretrained(str(MERGED))
+    return MERGED
 
 
-def _convert_to_gguf() -> None:
+def _convert_to_gguf(source: Path) -> None:
     convert = LLAMA_CPP / "convert_hf_to_gguf.py"
     if not convert.is_file():
         sys.exit(
@@ -72,7 +100,7 @@ def _convert_to_gguf() -> None:
     cmd = [
         sys.executable,
         str(convert),
-        str(MERGED),
+        str(source),
         "--outfile",
         str(OUT_GGUF_F16),
         "--outtype",
@@ -98,10 +126,8 @@ def _quantize() -> None:
 
 
 def main() -> None:
-    if not ADAPTER.is_dir():
-        sys.exit(f"adapter missing at {ADAPTER}. run train_qlora.py first.")
-    _merge_adapter()
-    _convert_to_gguf()
+    source = _resolve_source()
+    _convert_to_gguf(source)
     _quantize()
     if OUT_GGUF_F16.is_file():
         OUT_GGUF_F16.unlink()  # keep only the Q4 build

@@ -39,7 +39,10 @@ docs/                   — User + integration docs (35+ files)
 
 ### Key Components
 - **BM25F retrieval** with Porter stemming + RM3 query expansion
-- **Hybrid search**: BM25 + sqlite-vec vector search with RRF fusion
+- **Hybrid search**: BM25 + vector search with RRF fusion (sqlite-vec
+  on the SQLite backend; pgvector + HNSW on the Postgres backend)
+- **Backends**: SQLite (default, zero-deps) or Postgres (pgvector +
+  HNSW + GIN, with replicated read/write routing in v3.9)
 - **A-MEM blocks**: metadata evolution (importance, access, keywords)
 - **9-type intent router** with adaptive confidence weights
 - **Cross-encoder reranking** (opt-in, config-gated)

@@ -2,8 +2,11 @@
 
 `star-ga/mind-mem-4b` is the **full fine-tune** of `Qwen/Qwen3.5-4B`
 on the mind-mem domain — all 4.2B parameters trained (not a LoRA
-adapter). It knows the 57 MCP tools, 14 block schemas, governance
-workflows, and CHANGELOG history through v3.0.0.
+adapter). It knows the 81 MCP tools (incl. `compile_truth_walkthrough`,
+`recall_with_persona`, `pipeline_status`, `reindex_dirty`, MIC/MAP
+serialization, governance hooks), block schemas with the new
+`TransformHash` field, governance workflows, and CHANGELOG history
+through v3.9.0.
 
 You don't *need* this model to use mind-mem — every client integrates
 through the MCP server and works with any LLM. The model is there
@@ -222,12 +225,12 @@ capture enrichment, contradiction classification).
 Typical stack:
 
 ```
-┌──────────────┐       ┌─────────────────┐       ┌──────────────┐
-│  Claude Code │──────▶│ mind-mem MCP    │──────▶│  SQLite +    │
-│ (or any CLI) │       │  (57 tools)     │       │  FTS + vec   │
-└──────────────┘       └────────┬────────┘       └──────────────┘
-                                │
-                                ▼
+┌──────────────┐       ┌─────────────────┐       ┌──────────────────────┐
+│  Claude Code │──────▶│ mind-mem MCP    │──────▶│ SQLite + FTS + vec   │
+│ (or any CLI) │       │  (81 tools)     │       │   OR                 │
+└──────────────┘       └────────┬────────┘       │ Postgres + pgvector  │
+                                │                │   + HNSW + GIN       │
+                                ▼                └──────────────────────┘
                        ┌─────────────────┐
                        │  mind-mem-4b    │   <- this model
                        │ via transformers│

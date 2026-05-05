@@ -19,7 +19,6 @@ import sys
 from pathlib import Path
 
 import torch
-from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 BASE = os.environ.get("MM_BASE_MODEL", "Qwen/Qwen3.5-4B")
@@ -224,6 +223,7 @@ def _load_model():
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
     )
+    from peft import PeftModel  # lazy: only the legacy QLoRA path needs peft
     model = PeftModel.from_pretrained(model, str(ADAPTER))
     model.eval()
     return tokenizer, model
@@ -241,6 +241,7 @@ def _chat(tokenizer, model, prompt: str) -> str:
         add_generation_prompt=True,
         return_tensors="pt",
         return_dict=True,
+        enable_thinking=False,
     )
     if hasattr(encoded, "to"):
         encoded = encoded.to(model.device)

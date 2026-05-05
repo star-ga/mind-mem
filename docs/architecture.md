@@ -43,11 +43,18 @@ graph TB
         MIND["MIND FFI Kernels<br/>compiled .mind scoring"]
     end
 
-    subgraph Storage["Storage Layer"]
+    subgraph Storage["Storage Layer (pluggable backend)"]
         BP["Block Parser<br/>markdown → structured blocks"]
-        CM["ConnectionManager<br/>thread-safe SQLite pool"]
         BS["BlockStore<br/>decoupled block access"]
-        VEC["sqlite-vec<br/>vector embeddings"]
+        subgraph SQLiteBE["SQLite backend (default, zero-deps)"]
+            CM["ConnectionManager<br/>thread-safe SQLite pool, WAL"]
+            VEC["sqlite-vec<br/>vector embeddings"]
+        end
+        subgraph PGBE["Postgres backend (opt-in, v3.9+)"]
+            PGCONN["psycopg pool<br/>replicated read/write routing"]
+            PGVEC["pgvector + HNSW<br/>vector embeddings"]
+            PGGIN["GIN<br/>full-text"]
+        end
     end
 
     subgraph FS["Workspace Filesystem"]

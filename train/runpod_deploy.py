@@ -256,6 +256,12 @@ def main() -> None:
         default=True,
         help="Before destroy, verify merged weights exist locally and are readable. Default on.",
     )
+    parser.add_argument(
+        "--skip-upload",
+        action="store_true",
+        default=False,
+        help="Skip the HF upload step. Use when you want to eval locally before publishing.",
+    )
     args = parser.parse_args()
 
     if args.destroy:
@@ -310,14 +316,17 @@ def main() -> None:
             raise RuntimeError(f"training exited with code {rc}; pod kept alive for inspection")
 
         # 4. Generate + upload (model card + merged weights)
-        print("building model card + pushing to HF …")
-        _ssh_cmd(
-            ip, port,
-            "cd /workspace && MM_TRAIN_ROOT=/workspace/train-output "
-            "python3 build_model_card.py && "
-            f"HF_TOKEN={hf_token} python3 upload_to_hf.py "
-            "--commit-message 'Full-FT retrain on Qwen3.5-4B (v3.9.0)'",
-        )
+        if args.skip_upload:
+            print("--skip-upload set: NOT pushing to HF. Eval locally first, then re-run upload manually.")
+        else:
+            print("building model card + pushing to HF …")
+            _ssh_cmd(
+                ip, port,
+                "cd /workspace && MM_TRAIN_ROOT=/workspace/train-output "
+                "python3 build_model_card.py && "
+                f"HF_TOKEN={hf_token} python3 upload_to_hf.py "
+                "--commit-message 'Full-FT retrain on Qwen3.5-4B (v3.9.0)'",
+            )
 
         # 5. Pull a copy of the weights back for local reference.
         WEIGHTS_OUT.mkdir(parents=True, exist_ok=True)

@@ -92,7 +92,15 @@ def main() -> None:
         learning_rate=1.5e-5,
         lr_scheduler_type="cosine",
         warmup_ratio=0.03,
-        num_train_epochs=5,  # fewer epochs than LoRA — full FT fits faster
+        # v3.9.0 corpus is ~2k short examples (median ~150 tokens). With
+        # `packing=True` (the prior default), 50+ examples collapse into a
+        # single 2048-token packed sequence, which crushes the effective
+        # step count (1952 examples ⇒ ~35 steps over 5 epochs — way too
+        # few for surface-knowledge transfer of 81 tool names + schemas).
+        # Disabling packing gives one sequence per example. With effective
+        # batch 32 and 1952 examples, 8 epochs ≈ 488 gradient steps —
+        # enough headroom for the 81-tool surface to land.
+        num_train_epochs=8,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=16,  # effective batch = 32
         bf16=True,
@@ -113,7 +121,11 @@ def main() -> None:
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
         dataset_text_field=None,  # chat_template handles formatting
-        packing=True,  # pack multiple examples per sequence for efficiency
+        # Packing OFF — see num_train_epochs comment above. Each example
+        # gets its own sequence; H200 throughput is high enough that the
+        # extra padding cost is irrelevant compared to the gradient-step
+        # gain from not collapsing 50+ examples per packed sequence.
+        packing=False,
         max_length=2048,
         seed=42,
     )
