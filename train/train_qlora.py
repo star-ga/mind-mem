@@ -107,7 +107,14 @@ def main() -> None:
     sft_config = SFTConfig(
         output_dir=str(OUT_DIR),
         logging_dir=str(LOG_DIR),
-        num_train_epochs=6,
+        # 2 epochs over the augmented v3.9.2 corpus (4204 examples).
+        # On RTX 3080 with batch=1, grad_accum=16, max_length=768, each
+        # step takes ~42s, so 2 epochs ≈ 526 steps ≈ 6 hours wall time.
+        # The corpus is intent-style and densely paraphrased; QLoRA at
+        # lr 2e-4 converges fast on surface-knowledge transfer, so two
+        # epochs is enough. Bumping back to 6 epochs costs 12+ extra
+        # hours of compute for diminishing returns.
+        num_train_epochs=2,
         per_device_train_batch_size=1,
         gradient_accumulation_steps=16,
         learning_rate=2e-4,
