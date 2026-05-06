@@ -325,17 +325,55 @@ def main() -> None:
         _scp_to(ip, port, "/home/n/mind-mem/train/upload_to_hf.py", "/workspace/upload_to_hf.py")
         _scp_to(ip, port, "/home/n/mind-mem/train/build_model_card.py", "/workspace/build_model_card.py")
 
-        # 3. Run training (stream output so we see live progress)
-        print("running full FT on pod (this takes ~60-90 min on A100, ~30-40 min on H200) …")
-        rc = _ssh_stream(
+        # 3. Launch training via nohup so it survives SSH disconnects
+        # (RunPod hosts have been dropping connections every ~3-20 min,
+        # which previously SIGHUP'd training when it ran inside the SSH
+        # session). Now: detach via nohup, then poll the log file via
+        # short ssh sessions until the run finishes or fails.
+        print("launching full FT on pod via nohup (survives SSH drops) …")
+        _ssh_cmd(
             ip, port,
-            f"cd /workspace && HF_TOKEN={hf_token} "
+            f"cd /workspace && nohup env HF_TOKEN={hf_token} "
             "MM_TRAIN_ROOT=/workspace/train-output "
             "MM_CORPUS=/workspace/train-output/corpus.jsonl "
-            "python3 -u runpod_full_ft.py 2>&1 | tee /workspace/train-output/train.log",
+            "python3 -u runpod_full_ft.py >/workspace/train-output/train.log 2>&1 < /dev/null & "
+            "echo \"launched pid=$!\" >/workspace/train-output/training.pid; sleep 3",
         )
+        # Poll until the saved-model marker appears in the log or the
+        # training process is gone with no marker (= failure).
+        print("polling training log every 30s (will break on completion / failure) …")
+        last_size = 0
+        rc = 1
+        for _ in range(600):  # 600 × 30s = 5 hours wall-time cap
+            time.sleep(30)
+            try:
+                tail = _ssh_cmd(ip, port, "tail -c 8000 /workspace/train-output/train.log 2>/dev/null; echo ---; pgrep -f runpod_full_ft.py | head -1")
+            except RuntimeError:
+                # transient ssh drop — retry next cycle
+                continue
+            log_part, _, pid_part = tail.rpartition("---")
+            still_running = bool(pid_part.strip().isdigit())
+            new_size = len(log_part)
+            if new_size != last_size:
+                # print one short progress snippet so the operator sees forward motion
+                snippet = log_part.strip().splitlines()[-1] if log_part.strip() else "(empty)"
+                print(f"  [pod log @ {new_size:>9} bytes, alive={still_running}] {snippet[:140]}")
+                last_size = new_size
+            if "training complete — full-FT weights saved" in log_part:
+                rc = 0
+                print("✓ training complete on pod")
+                break
+            if not still_running:
+                # process exited — was it success or failure?
+                if "training complete — full-FT weights saved" in log_part:
+                    rc = 0
+                    print("✓ training complete on pod")
+                else:
+                    print("✗ training process exited without success marker")
+                    rc = 1
+                break
         if rc != 0:
-            raise RuntimeError(f"training exited with code {rc}; pod kept alive for inspection")
+            raise RuntimeError(f"training exited / timed out without success; pod kept alive for inspection")
 
         # 4. Generate + upload (model card + merged weights)
         if args.skip_upload:
