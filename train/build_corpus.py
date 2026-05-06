@@ -243,28 +243,76 @@ _BLOCK_TYPES: list[tuple[str, str, list[str]]] = [
 
 
 def _harvest_block_schemas() -> Iterator[dict]:
+    """Generate dense, paraphrased block-template teaching.
+
+    v3.9.3-balanced: corpus rebalance after v3.9.3 full-FT eval showed
+    block_schema regressed to 50% (target 98%). Root cause was 16
+    block_schema examples drowning under 3645 intent examples. This
+    expands per-block-type to ~40 prompts (25 show + 12 fields + 3
+    structural), giving 14 × 40 = 560 examples — comparable in volume
+    to the workflow_paraphrases source (~70) and intent_pool reduction.
+    """
     prompts_show = [
         "Show me a mind-mem {short} block template.",
         "Give me the canonical {short} block format.",
         "Print a {short} block skeleton.",
         "What does a {short} block look like?",
         "Template for a {short} block, please.",
+        "Render the {short} block layout.",
+        "How is a {short} block structured?",
+        "Display a {short} block schema.",
+        "Provide the {short} block template.",
+        "Sketch a {short} block.",
+        "Lay out the fields of a {short} block.",
+        "Walk me through the {short} block format.",
+        "What goes into a {short} block?",
+        "Give the standard {short} block shape.",
+        "Print the canonical {short} block format.",
+        "Show the {short} block schema with all fields.",
+        "Write a blank {short} block I can fill in.",
+        "What is the structure of a {short} block?",
+        "Compose an empty {short} block.",
+        "Schema for a {short} block?",
+        "{short} block — what does it look like?",
+        "Empty {short} block template?",
+        "Canonical layout for a {short} block?",
+        "Stub a {short} block.",
+        "Print the field list for a {short} block as a template.",
     ]
     prompts_fields = [
         "What fields does a {short} block require?",
         "List the required fields of a {short} block.",
         "Which keys live inside a {short} block?",
+        "Required {short} block fields?",
+        "Enumerate the fields of a {short} block.",
+        "Tell me every field a {short} block needs.",
+        "{short} block — what are the required keys?",
+        "What does a {short} block require structurally?",
+        "Field list for {short} blocks?",
+        "Every required field of a {short} block, please.",
+        "What goes in a {short} block (fields only)?",
+        "Mandatory fields of a {short} block?",
     ]
     for short, desc, fields in _BLOCK_TYPES:
         # Canonical template (always starts with [SHORT-DATE-NNN] so the
         # model learns the exact ID prefix).
         example = f"[{short}-20260413-001]\n" + "\n".join(f"{f}: <{f.lower()}>" for f in fields)
-        for q in prompts_show:
+        # Long-form answer with field list inline (reinforces both shape
+        # and field names in a single example).
+        long_answer = (
+            f"{desc}\n\n```\n{example}\n```\n\n"
+            f"Required fields: " + ", ".join(f"`{f}`" for f in fields) + "."
+        )
+        terse_answer = f"{desc}\n\n```\n{example}\n```"
+        # Alternate between long and terse answers across the prompt list
+        # so the model sees both forms of the same canonical schema.
+        for i, q in enumerate(prompts_show):
+            answer = long_answer if i % 2 == 0 else terse_answer
             yield {
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": q.format(short=short)},
-                    {"role": "assistant", "content": f"{desc}\n\n```\n{example}\n```"},
+                    {"role": "assistant", "content": answer},
                 ]
             }
         for q in prompts_fields:
@@ -275,14 +323,19 @@ def _harvest_block_schemas() -> Iterator[dict]:
                     {"role": "assistant", "content": (f"A mind-mem {short} block requires: " + ", ".join(f"`{f}`" for f in fields) + ".")},
                 ]
             }
-        # What type is this by ID? (ID-prefix → type direction)
-        yield {
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"A block ID starts with `[{short}-`. What type is it?"},
-                {"role": "assistant", "content": f"`{short}` — {desc}"},
-            ]
-        }
+        # What type is this by ID? (ID-prefix → type direction) — three phrasings
+        for q in (
+            f"A block ID starts with `[{short}-`. What type is it?",
+            f"What block type uses the `{short}` ID prefix?",
+            f"`[{short}-...]` IDs — what's the block type?",
+        ):
+            yield {
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": q},
+                    {"role": "assistant", "content": f"`{short}` — {desc}"},
+                ]
+            }
 
 
 # ---------------------------------------------------------------------------
@@ -378,44 +431,290 @@ _WORKFLOW_PARAPHRASES: dict[str, list[str]] = {
         "How do I resolve a contradiction?",
         "Walk me through fixing a contradiction between two decision blocks.",
         "Contradiction detected — what's the remediation flow?",
+        "Two decision blocks contradict each other. Steps?",
+        "I see a contradiction between two decision blocks. Walk me through the fix.",
+        "Mind-mem flagged a contradiction. What's the workflow?",
+        "Resolve a contradiction end-to-end.",
+        "Contradiction remediation procedure?",
+        "How does the contradiction-fix loop work?",
+        "Got a contradiction — give me the canonical resolution chain.",
+        "Step-by-step on resolving a flagged contradiction.",
     ],
     "belief-drift": [
         "How do I detect whether a belief has drifted over time?",
         "Which tools surface belief drift?",
         "How do I query drift signals?",
         "I want to check if a belief has drifted. Which tools do I call?",
+        "Drift detection — workflow please.",
+        "How do I see if a belief has drifted recently?",
+        "Tools for spotting belief drift?",
+        "Walk me through the drift-check workflow.",
+        "What's the call sequence for verifying a belief is still consistent?",
+        "How do I read the latest drift signals?",
+        "Show me the procedure for drift inspection.",
+        "Detect drift on a specific belief — how?",
     ],
     "rollback": [
         "I applied a bad proposal. How do I roll back and what happens to the belief state?",
         "How do I roll back a proposal safely?",
         "Undo a bad apply — what's the procedure?",
         "I applied a bad proposal. How do I roll back safely?",
+        "Rollback workflow?",
+        "What's the safe-rollback procedure after a bad apply?",
+        "Reverse a proposal cleanly — steps?",
+        "How does rollback affect BeliefStore confidence?",
+        "Undo an applied proposal end-to-end.",
+        "I committed something wrong. Walk me through reverting.",
+        "Step-by-step rollback after a mis-apply?",
+        "What tools restore state after a bad apply?",
     ],
     "audit-trail": [
         "Who changed field X on block Y, and when?",
         "How do I see the history of field X on block Y?",
         "Audit who changed field X on block Y.",
         "Show field-level audit history for a block.",
+        "Field-level audit lookup — how?",
+        "Trace the mutations of one field across time.",
+        "Print the audit history of a single (block, field).",
+        "How do I run a field-level audit?",
+        "Tool that returns the chronological field-change list?",
+        "Where do I look up who edited a specific field on a specific block?",
+        "Audit trail for a single field — how do I pull it?",
+        "Walk me through the field-history audit lookup.",
     ],
     "encryption": [
         "Can I encrypt a sensitive memory file at rest?",
         "How do I encrypt a mind-mem file?",
         "How do I enable encryption at rest?",
+        "Encrypt-a-file procedure?",
+        "Walk me through encrypting one workspace file.",
+        "Sensitive-file encryption — what's the call?",
+        "How does on-disk encryption work in mind-mem?",
+        "Steps to encrypt + later decrypt a workspace file?",
+        "Make a memory file unreadable on disk — how?",
+        "Encrypt one file at rest, then decrypt it back. Procedure?",
+        "Walk through the encrypt_file / decrypt_file pair.",
+        "Sensitive memory at rest — how do I protect it?",
     ],
     "tiers": [
         "What happens to a block as it's accessed more often?",
         "How does mind-mem promote blocks through tiers?",
         "Explain the memory-tier promotion cycle.",
+        "Walk me through the tier ladder.",
+        "How does mind-mem decide a block is hot?",
+        "Tier-promotion mechanics?",
+        "How do blocks move from WORKING to LONG_TERM?",
+        "Tier boost — how does it score recall?",
+        "Memory-tier flow end-to-end?",
+        "Why does the same block recall higher after repeated access?",
+        "How is tier promotion driven — frequency, recency, both?",
+        "What's the tier-decay loop?",
     ],
     "verify": [
         "How do I verify the audit chain integrity?",
         "Prove my audit chain hasn't been tampered with.",
         "Which tool checks the hash chain?",
+        "Audit chain integrity verification?",
+        "How do I prove the audit log is genuine?",
+        "Audit-trail tamper check — which call?",
+        "Confirm the chain-of-custody is intact.",
+        "Walk through verify_chain.",
+        "Tool that re-derives every event hash and checks the chain?",
+        "Run an integrity check on the audit chain.",
+        "Hash-chain verification procedure?",
+        "Audit chain — how do I prove it's still valid?",
     ],
     "governance-bench": [
         "Run the full governance benchmark suite.",
         "How do I benchmark governance health?",
         "What's the governance health bench command?",
+        "Governance benchmark — how do I trigger it?",
+        "Run the four governance suites in one call.",
+        "Stress-test contradictions / audit / drift in one go.",
+        "Tool that benchmarks the entire governance plane?",
+        "How do I run governance_health_bench?",
+        "End-to-end governance benchmark — what's the call?",
+        "I want a per-suite pass/fail across the governance plane. How?",
+        "Governance plane benchmark procedure?",
+        "Run the full set of governance health checks.",
+    ],
+    "scan-and-fix": [
+        "Run a workspace scan and act on whatever it surfaces.",
+        "Scan the workspace, then handle the findings.",
+        "Scan-then-remediate workflow?",
+        "Walk me through a scan-driven fix.",
+        "What's the post-scan remediation flow?",
+        "Drift scan → propose → apply procedure?",
+    ],
+    "approval-flow": [
+        "How do I review and apply a proposal end-to-end?",
+        "Walk me through the proposal-approval workflow.",
+        "Apply a staged proposal — full procedure?",
+        "Dry-run-then-commit flow for a proposal?",
+        "I want to approve a queued proposal cleanly. How?",
+        "Approval workflow with rollback safety?",
+    ],
+    "recall-then-explain": [
+        "I got a recall result and need to know why those blocks ranked highest.",
+        "Why did this block rank where it did?",
+        "Explain a recall ranking.",
+        "Diagnose a recall result — workflow?",
+        "Walk me through retrieval explainability.",
+        "Tools to break down a recall score?",
+    ],
+    "snapshot-cycle": [
+        "Take a snapshot, do some work, restore if it goes wrong.",
+        "Snapshot → experiment → rollback workflow?",
+        "Reversible-experiment procedure?",
+        "How do I checkpoint then restore a workspace?",
+        "Walk me through a safe-experiment cycle with snapshots.",
+    ],
+    "mic-roundtrip": [
+        "Convert a MIC document between text and binary, then check it.",
+        "Round-trip a MIC artefact through mic-b and mic@2.",
+        "How do I convert + inspect MIC files?",
+        "Walk me through the MIC convert + inspect cycle.",
+        "MIC text-to-binary roundtrip procedure?",
+    ],
+    "transform-hash-cycle": [
+        "Find blocks whose pipeline-hash drifted, then re-stamp them.",
+        "Detect + fix dirty blocks workflow.",
+        "Pipeline-hash drift remediation procedure?",
+        "Walk me through the dirty-block re-extraction loop.",
+        "Stale-TransformHash repair workflow?",
+    ],
+    "http-transport": [
+        "Serve mind-mem over HTTP and run a search through it.",
+        "Stand up the HTTP REST adapter.",
+        "How do I expose mind-mem over HTTP?",
+        "HTTP transport setup + search workflow?",
+        "Walk me through the v3.9 REST adapter.",
+    ],
+    "inbox-ingest": [
+        "Drop a file into the v3.9 inbox and have it ingested.",
+        "Inbox-driven ingestion workflow?",
+        "How does the inbox watcher process a new file?",
+        "Walk me through the inbox ingest path.",
+        "Inbox folder file-drop ingestion procedure?",
+    ],
+    "replicated-postgres": [
+        "Walk me through the v3.9 replicated-postgres routing.",
+        "Replicated-Postgres read/write split — how?",
+        "How does mind-mem route across primary + replicas?",
+        "Postgres replica routing procedure?",
+        "Walk through the circuit-breaker behaviour on a failing replica.",
+    ],
+    "persona-recall": [
+        "I want recall results in a specific projection mode.",
+        "Recall with a persona projection?",
+        "How do I get a brief / detailed / technical recall?",
+        "Persona-aware recall workflow?",
+        "Walk me through recall_with_persona.",
+    ],
+    "walkthrough": [
+        "Compile a learning walkthrough for a topic.",
+        "How do I get a dependency-ordered learning sequence?",
+        "Walk me through compile_truth_walkthrough.",
+        "Topic walkthrough generation procedure?",
+        "Kahn-topo learning sequence — how?",
+    ],
+    "intent-classification": [
+        "How does mind-mem decide which retrieval path to use?",
+        "Intent classification workflow?",
+        "Walk me through intent_classify.",
+        "How is recall biased per query?",
+        "Per-query retrieval-path selection — how?",
+    ],
+    "alerts": [
+        "I want to be notified when governance health drops.",
+        "Alerting hook setup?",
+        "Walk me through the alerts subscription.",
+        "How do I get a webhook on contradiction count rising?",
+        "Governance-health alerting workflow?",
+    ],
+    "find-similar": [
+        "I have a block id. Show me other blocks that are semantically close.",
+        "Find similar blocks — workflow?",
+        "Walk me through find_similar.",
+        "How do I get nearest-neighbours by semantic similarity?",
+        "Block-to-block similarity lookup?",
+    ],
+    "memory-evolution": [
+        "I want to see how a block evolved over time.",
+        "Block-level mutation timeline — how?",
+        "Walk me through memory_evolution.",
+        "How do I see every change to a single block?",
+        "Block evolution lookup procedure?",
+    ],
+    "encrypt-status": [
+        "Is my workspace currently encrypted?",
+        "Check encryption status of the workspace.",
+        "Walk me through encrypt_status.",
+        "How do I see how many files are encrypted at rest?",
+        "Encryption-state lookup procedure?",
+    ],
+    "tier-decay-apply": [
+        "Apply tier decay to age out cold blocks.",
+        "Trigger tier-decay manually.",
+        "Walk me through tier_decay_apply.",
+        "How do I run the TTL/LRU pass?",
+        "Cold-block aging workflow?",
+    ],
+    "category-summary": [
+        "Show me a per-category roll-up for a topic.",
+        "Category-grouped block summary — how?",
+        "Walk me through category_summary.",
+        "How do I get blocks grouped by category?",
+        "Topic-level category roll-up procedure?",
+    ],
+    "audit-replay": [
+        "Replay every audit event so I can verify chain integrity end-to-end.",
+        "Full audit-chain replay — how?",
+        "Walk me through audit_replay.",
+        "How do I re-derive every event hash?",
+        "End-to-end chain integrity check procedure?",
+    ],
+    "proposals-list": [
+        "Show me the staged proposals waiting for review.",
+        "List the proposal queue.",
+        "Walk me through the proposal-review workflow.",
+        "How do I see every staged proposal?",
+        "Pending-proposals lookup procedure?",
+    ],
+    "delete-flow": [
+        "Permanently delete a memory block.",
+        "Walk me through delete_memory_item.",
+        "How do I hard-delete a block (admin)?",
+        "Permanent block deletion workflow?",
+        "Admin delete procedure for a memory item?",
+    ],
+    "export-roundtrip": [
+        "Export memory to JSONL and import it back into a fresh workspace.",
+        "Round-trip a workspace through export + import.",
+        "Walk me through export → fresh-workspace → import.",
+        "How do I migrate a workspace via JSONL export?",
+        "Export + reimport procedure for a workspace?",
+    ],
+    "rollback-rationale-required": [
+        "How do I roll back a proposal — what's required?",
+        "Roll back with rationale — procedure?",
+        "What does v3.9.3 require for rollback_proposal?",
+        "Walk me through the rollback procedure including reason field.",
+        "Rollback API change in v3.9.3 — how do I call it now?",
+    ],
+    "pipeline-status-check": [
+        "Is anything in my workspace stale relative to the active pipeline?",
+        "Check pipeline-hash status.",
+        "Walk me through pipeline_status.",
+        "How do I see the dirty-block count?",
+        "Pipeline-hash drift check procedure?",
+    ],
+    "drift-deep-dive": [
+        "I see drift on a specific block. Walk me through investigating it.",
+        "Investigate per-block drift.",
+        "Block-level drift deep-dive workflow?",
+        "How do I trace why a single block drifted?",
+        "Per-block drift investigation procedure?",
     ],
 }
 
@@ -516,6 +815,258 @@ _WORKFLOWS: list[dict] = [
             (
                 "assistant",
                 "Call `governance_health_bench`. It exercises contradiction detection, audit completeness, drift detection, and scalability in one pass, returning a JSON report with per-suite pass/fail.",
+            ),
+        ],
+    },
+    # === v3.9.4 additions: more workflow scenarios so workflow probes ===
+    # === have a denser teaching surface (was 5, now 25 scenarios). =====
+    {
+        "scenario": "scan-and-fix",
+        "turns": [
+            ("user", "Run a workspace scan and act on whatever it surfaces."),
+            (
+                "assistant",
+                "Call `scan` first — it returns drift counts + a JSON drift report and writes to DRIFT.md / SIGNALS.md. If contradictions surface, run `list_contradictions` for analysed entries with confidence + side_effects + strategy. If drift signals surface, read `recent_signals` for the chronological tail. Apply fixes through `propose_update` → `approve_apply`, then close the loop with `verify_chain`.",
+            ),
+        ],
+    },
+    {
+        "scenario": "approval-flow",
+        "turns": [
+            ("user", "How do I review and apply a proposal end-to-end?"),
+            (
+                "assistant",
+                "Pull the proposal queue and inspect each entry. For each candidate: review the diff in SIGNALS.md, then call `approve_apply(proposal_id, dry_run=true)` to preview the deltas without committing. When the dry-run looks right, re-call with `dry_run=false`. The receipt timestamp printed at apply time is the key for any later `rollback_proposal(receipt_ts, reason=...)`.",
+            ),
+        ],
+    },
+    {
+        "scenario": "recall-then-explain",
+        "turns": [
+            ("user", "I got a recall result and need to know why those blocks ranked highest."),
+            (
+                "assistant",
+                "Pass the same query to `retrieval_diagnostics(query)`. It returns the BM25 / vector / RRF score breakdown per candidate plus the intent classification path. Cross-reference with `recall(query)` to see which scoring path dominated.",
+            ),
+        ],
+    },
+    {
+        "scenario": "snapshot-cycle",
+        "turns": [
+            ("user", "Take a snapshot, do some work, restore if it goes wrong."),
+            (
+                "assistant",
+                "`create_snapshot(label='before-experiment')` writes a delta + MANIFEST.json. Make changes via the proposal pipeline. If the result is bad, `list_snapshots` to find the snapshot id, then `restore_snapshot(snap_id)` rolls the workspace back. The restore itself emits an audit event so the chain stays whole — verify with `verify_chain`.",
+            ),
+        ],
+    },
+    {
+        "scenario": "mic-roundtrip",
+        "turns": [
+            ("user", "Convert a MIC document between text and binary, then check it."),
+            (
+                "assistant",
+                "Use `mic_convert_tool` with the source format set to `mic@2` (text/MAP) or `mic-b` (binary) and the destination set to the other. To inspect what's inside either form, call `mic_inspect_tool` — it returns the structure summary without re-encoding.",
+            ),
+        ],
+    },
+    {
+        "scenario": "transform-hash-cycle",
+        "turns": [
+            ("user", "Find blocks whose pipeline-hash drifted, then re-stamp them."),
+            (
+                "assistant",
+                "Call `pipeline_status` for the active pipeline-hash and dirty-block count. If dirty > 0, run `reindex_dirty` (the MCP wrapper) — it walks every block, finds those whose `TransformHash` doesn't match the active pipeline digest, re-extracts via `reextract_dirty_blocks` from `mind_mem.pipeline_hash`, and re-stamps via `stamp_transform_hash`.",
+            ),
+        ],
+    },
+    {
+        "scenario": "http-transport",
+        "turns": [
+            ("user", "Serve mind-mem over HTTP and run a search through it."),
+            (
+                "assistant",
+                "Start the adapter with `serve_http(workspace=..., host='127.0.0.1', port=8765)` from `mind_mem.http_transport`. It registers six routes: `GET /status` (health), `POST /query` (search), `GET /memories` (list/browse), `DELETE /memories/{id}`, `POST /consolidate` (dream cycle), `POST /walkthrough`. Auth header is `X-MindMem-Token` from the `MIND_MEM_TOKEN` env var. To search, POST a JSON body to `/query`.",
+            ),
+        ],
+    },
+    {
+        "scenario": "inbox-ingest",
+        "turns": [
+            ("user", "Drop a file into the v3.9 inbox and have it ingested."),
+            (
+                "assistant",
+                "Configure `inbox/` in `mind-mem.json` and start the `InboxWatcher`. To ingest, drop the file into `inbox/`. The watcher classifies by extension (text / pdf / image / audio), runs the matching ingest path, atomic-moves the source to `_processed/<ts>/` on success or `_failed/<ts>/` on failure. Each generated block is hashed and stamped with the active `TransformHash`.",
+            ),
+        ],
+    },
+    {
+        "scenario": "replicated-postgres",
+        "turns": [
+            ("user", "Walk me through the v3.9 replicated-postgres routing."),
+            (
+                "assistant",
+                "Writes (`write_block`, `delete_block`, `lock`) always hit the `primary`. Reads (`get_block`, `recall`, `hybrid_search`, `prefetch`) round-robin across the configured replica DSNs. On replica failure the wrapper falls back to `primary` (fail-open); after 3 consecutive failures the wrapper opens a circuit breaker on that replica and skips it for subsequent reads.",
+            ),
+        ],
+    },
+    {
+        "scenario": "persona-recall",
+        "turns": [
+            ("user", "I want recall results in a specific projection mode."),
+            (
+                "assistant",
+                "Call `recall_with_persona(query, persona)` where `persona` is `brief`, `detailed`, or `technical`. Each persona reformats the same retrieval result: `brief` returns one-line summaries, `detailed` returns full-text blocks, `technical` returns blocks plus the BM25/vector score breakdown.",
+            ),
+        ],
+    },
+    {
+        "scenario": "walkthrough",
+        "turns": [
+            ("user", "Compile a learning walkthrough for a topic."),
+            (
+                "assistant",
+                "Call `compile_truth_walkthrough(topic)`. It performs a Kahn topological sort over the topic's dependency graph and returns blocks in dependency-ordered sequence so concepts are introduced in the right order before they're referenced.",
+            ),
+        ],
+    },
+    {
+        "scenario": "intent-classification",
+        "turns": [
+            ("user", "How does mind-mem decide which retrieval path to use?"),
+            (
+                "assistant",
+                "Pass the query to `intent_classify(query)`. It returns one of nine intent types plus per-type confidence weights — the recall pipeline uses these weights to bias BM25 vs vector vs cross-encoder reranking for that specific query.",
+            ),
+        ],
+    },
+    {
+        "scenario": "alerts",
+        "turns": [
+            ("user", "I want to be notified when governance health drops."),
+            (
+                "assistant",
+                "Subscribe via `alerts_subscribe(webhook_url, threshold)` from `mind_mem.governance.alerts`. The alerts hook fires when `governance_health_bench` drops below the configured threshold or `list_contradictions` accumulates above the configured count. Webhook + Slack templates are built in.",
+            ),
+        ],
+    },
+    {
+        "scenario": "find-similar",
+        "turns": [
+            ("user", "I have a block id. Show me other blocks that are semantically close."),
+            (
+                "assistant",
+                "Call `find_similar(block_id, top_k)`. It re-uses the dense embedding of the source block, runs cosine similarity against the vector index, and returns the top_k nearest with similarity scores.",
+            ),
+        ],
+    },
+    {
+        "scenario": "memory-evolution",
+        "turns": [
+            ("user", "I want to see how a block evolved over time."),
+            (
+                "assistant",
+                "Call `memory_evolution(block_id)`. It returns the chronological mutation timeline for that block — every field change, every status transition, with timestamps and the proposal id that drove each change.",
+            ),
+        ],
+    },
+    {
+        "scenario": "encrypt-status",
+        "turns": [
+            ("user", "Is my workspace currently encrypted?"),
+            (
+                "assistant",
+                "Call `encrypt_status`. It returns whether `MIND_MEM_ENCRYPTION_PASSPHRASE` is set, how many files are currently encrypted at rest, and whether the SQLCipher database is locked.",
+            ),
+        ],
+    },
+    {
+        "scenario": "tier-decay-apply",
+        "turns": [
+            ("user", "Apply tier decay to age out cold blocks."),
+            (
+                "assistant",
+                "Call `tier_decay_apply`. It runs the TTL/LRU pass: blocks idle past their tier's TTL move down one tier, blocks that have moved past LONG_TERM are marked for cleanup. The cycle is normally invoked by the daemon but can be triggered manually for testing.",
+            ),
+        ],
+    },
+    {
+        "scenario": "category-summary",
+        "turns": [
+            ("user", "Show me a per-category roll-up for a topic."),
+            (
+                "assistant",
+                "Call `category_summary(topic)`. It groups blocks by category (decision / task / convention / evidence / etc.), returns counts per category, and surfaces the top blocks per group so you get a one-shot view of what the workspace knows about that topic.",
+            ),
+        ],
+    },
+    {
+        "scenario": "audit-replay",
+        "turns": [
+            ("user", "Replay every audit event so I can verify chain integrity end-to-end."),
+            (
+                "assistant",
+                "Call `audit_replay`. It walks the audit chain from genesis, recomputes every event hash, and verifies each hash links correctly to its predecessor. Mismatch = tampering or a missing event. Pair with `verify_chain` for the on-the-fly check.",
+            ),
+        ],
+    },
+    {
+        "scenario": "proposals-list",
+        "turns": [
+            ("user", "Show me the staged proposals waiting for review."),
+            (
+                "assistant",
+                "Read `intelligence/SIGNALS.md` for the queue, or call `list_contradictions` for the analysed entries (each carries `confidence_score`, `side_effects`, and a `strategy` recommendation). Approve via `approve_apply(proposal_id, dry_run=false)` or reject via `rollback_proposal(receipt_ts, reason=...)` after apply.",
+            ),
+        ],
+    },
+    {
+        "scenario": "delete-flow",
+        "turns": [
+            ("user", "Permanently delete a memory block."),
+            (
+                "assistant",
+                "Call the admin tool `delete_memory_item(block_id, reason)`. It requires `MIND_MEM_SCOPE=admin` (gated by `MIND_MEM_ADMIN_TOKEN`). The deletion is recorded as an audit event so the chain stays whole; `verify_chain` passes after a clean delete.",
+            ),
+        ],
+    },
+    {
+        "scenario": "export-roundtrip",
+        "turns": [
+            ("user", "Export memory to JSONL and import it back into a fresh workspace."),
+            (
+                "assistant",
+                "Use `export_memory(out_path)` to dump every block as JSONL with full metadata. Initialize the destination with `mind-mem-init`, then call `import_memory(in_path)` — it routes each entry through `propose_update` → `approve_apply` so the audit chain in the destination is well-formed.",
+            ),
+        ],
+    },
+    {
+        "scenario": "rollback-rationale-required",
+        "turns": [
+            ("user", "How do I roll back a proposal — what's required?"),
+            (
+                "assistant",
+                "Call `rollback_proposal(receipt_ts, reason=...)`. As of v3.9.3 the `reason` field is required on both the MCP and REST surfaces (8-2000 chars). The rollback restores the delta snapshot, marks the proposal `rolled_back`, and pushes an observation=0.0 into BeliefStore so confidence drops accordingly.",
+            ),
+        ],
+    },
+    {
+        "scenario": "pipeline-status-check",
+        "turns": [
+            ("user", "Is anything in my workspace stale relative to the active pipeline?"),
+            (
+                "assistant",
+                "Call `pipeline_status`. It returns `(active_hash, dirty_block_count)`. If `dirty_block_count > 0`, run `reindex_dirty` to re-extract and re-stamp those blocks via `reextract_dirty_blocks` from `mind_mem.pipeline_hash`.",
+            ),
+        ],
+    },
+    {
+        "scenario": "drift-deep-dive",
+        "turns": [
+            ("user", "I see drift on a specific block. Walk me through investigating it."),
+            (
+                "assistant",
+                "Start with `recent_signals(min_confidence=0.6)` to confirm the drift signal. Then call `belief_timeline(block_id)` for the per-block confidence trajectory. Cross-reference with `memory_evolution(block_id)` to see if the structural mutations explain the drift. If they do, propose a fix via `propose_update`; if not, mark the signal investigated through the audit trail.",
             ),
         ],
     },
@@ -1229,15 +1780,16 @@ _INTENT_POOL: dict[str, list[str]] = {
 # (prompt-template, answer-template) pair MUST keep the tool name
 # in the answer slot, never in the prompt slot.
 _INTENT_PHRASINGS: list[tuple[str, str]] = [
+    # v3.9.4: cut from 9 to 4 phrasings to flatten corpus distribution.
+    # The 9-phrasing version produced ~3645 intent examples that drowned
+    # out block_schema (16) and workflow (5) — full-FT then over-fit and
+    # forgot the under-represented sources (v3.9.2 80%/40%, v3.9.3 50%/0%).
+    # 4 phrasings × ~75 tools × 4 intents = ~1200 entries — still load-
+    # bearing for tool_call recall, no longer dominant.
     ("{intent}", "Use `{tool}`."),
     ("{intent}", "Call `{tool}`."),
     ("{intent}", "`{tool}`."),
     ("{intent}", "The mind-mem tool for that is `{tool}`."),
-    ("{intent}", "Reach for `{tool}`."),
-    ("In mind-mem: {intent_lower}", "`{tool}`."),
-    ("With mind-mem, {intent_lower}", "Use `{tool}`."),
-    ("Mind-mem question: {intent}", "`{tool}` is the right tool."),
-    ("Quick mind-mem ask — {intent_lower}", "`{tool}`."),
 ]
 
 
