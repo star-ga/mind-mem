@@ -113,9 +113,14 @@ def main() -> None:
         # 1056. With save_total_limit=1 the rolling 16-GB checkpoint
         # plus the final full-ft directory peak at ~32 GB on the 40-GB
         # volume — under the limit but with no headroom.
-        save_strategy="steps",
-        save_steps=200,
-        save_total_limit=1,
+        # v3.9.4: changed from save_strategy="steps" to "no" because the
+        # 40 GB pod volume cannot hold checkpoint-200 (20 GB: model+optimizer)
+        # + checkpoint-400 partial-write (10+ GB optimizer.pt) + the final
+        # save simultaneously. Mid-training checkpoints have repeatedly
+        # filled the volume mid-write and aborted training. Final save only
+        # — single 8.4 GB model.safetensors written at end. SECURE cloud
+        # is non-preemptible so resume isn't needed.
+        save_strategy="no",
         report_to="none",
         # paged AdamW 8-bit halves optimizer state memory with minimal
         # quality cost. Full fp32 AdamW at 9B = 72 GB optimizer state,
