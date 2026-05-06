@@ -22,6 +22,7 @@ are all preserved.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from collections import OrderedDict
@@ -93,11 +94,17 @@ def _get_client_rate_limiter(client_id: str) -> SlidingWindowRateLimiter:
 
 
 def _get_client_id() -> str:
-    """Return a stable client identifier for the current request."""
+    """Return a stable client identifier for the current request.
+
+    HTTP / token-authenticated → token's ``client_id`` (per-token bucket).
+    Stdio (no token) → ``f"pid-{os.getpid()}"`` so concurrent stdio
+    clients (Claude Code + Cursor + …) don't collide on a single
+    ``"default"`` bucket and starve each other (issue #513 / N-03).
+    """
     try:
         token = get_access_token()
         if token is not None and token.client_id:
             return token.client_id
     except Exception as exc:
         _log.debug("client_id_resolution_failed: %s", exc)
-    return "default"
+    return f"pid-{os.getpid()}"

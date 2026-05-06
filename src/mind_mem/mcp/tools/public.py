@@ -215,7 +215,9 @@ def staged_change(
     if phase == "rollback":
         if not receipt_ts:
             return _err("phase='rollback' requires 'receipt_ts'")
-        return governance.rollback_proposal.__wrapped__(receipt_ts)  # type: ignore[attr-defined]
+        if not rationale or not rationale.strip():
+            return _err("phase='rollback' requires 'rationale' (audit trail — issue #511 / N-04)")
+        return governance.rollback_proposal.__wrapped__(receipt_ts, reason=rationale)  # type: ignore[attr-defined]
     return _err(
         f"unknown phase: {phase!r}",
         valid_phases=["propose", "approve", "rollback"],

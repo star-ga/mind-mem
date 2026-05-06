@@ -394,6 +394,12 @@ class RollbackProposalRequest(BaseModel):
         pattern=r"^\d{8}-\d{6}$",
         description="Receipt timestamp in format YYYYMMDD-HHMMSS",
     )
+    reason: str = Field(
+        ...,
+        min_length=8,
+        max_length=2000,
+        description="Why this rollback is being performed. Required for audit trail (issue #510 / N-02).",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -636,7 +642,7 @@ def create_app(workspace: str | None = None) -> FastAPI:
     def rollback_proposal(body: RollbackProposalRequest, _token: Annotated[str | None, Depends(_require_admin)]) -> Any:
         from mind_mem.mcp.tools.governance import rollback_proposal as _rollback
 
-        raw = _rollback(receipt_ts=body.receipt_ts)
+        raw = _rollback(receipt_ts=body.receipt_ts, reason=body.reason)
         return _parse_tool_json(raw)
 
     @application.get(

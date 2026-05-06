@@ -66,6 +66,27 @@ def propose_update(
             }
         )
 
+    # Issue #512 / T-003: bound rationale + tags length and sanitize
+    # markdown injection vectors before they land in SIGNALS.md.
+    if len(rationale) > 2000:
+        return json.dumps(
+            {
+                "error": "rationale exceeds 2000 chars (issue #512 / T-003)",
+                "rationale_length": len(rationale),
+            }
+        )
+    raw_tags = [t.strip() for t in tags.split(",") if t.strip()]
+    if len(raw_tags) > 16:
+        return json.dumps({"error": "too many tags (max 16, issue #512 / T-003)", "tag_count": len(raw_tags)})
+    for t in raw_tags:
+        if len(t) > 64:
+            return json.dumps({"error": "tag exceeds 64 chars (issue #512 / T-003)", "tag": t[:32] + "..."})
+
+    from mind_mem.apply_engine import _sanitize_reason_for_markdown
+
+    rationale = _sanitize_reason_for_markdown(rationale.strip()) if rationale else ""
+    raw_tags = [_sanitize_reason_for_markdown(t) for t in raw_tags]
+
     from datetime import datetime
 
     from mind_mem.capture import CONFIDENCE_TO_PRIORITY, append_signals
@@ -84,7 +105,7 @@ def propose_update(
         "priority": priority,
         "structure": {
             "subject": " ".join(statement.split()[:3]) if statement else "",
-            "tags": [t.strip() for t in tags.split(",") if t.strip()],
+            "tags": raw_tags,
         },
     }
     if rationale:

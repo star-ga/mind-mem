@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 733 | **Est. tokens:** ~1,523,541
-**Generated:** 2026-05-06 14:14 UTC
+**Files:** 733 | **Est. tokens:** ~1,524,232
+**Generated:** 2026-05-06 14:17 UTC
 
 ## Token Budget Guide
 
@@ -55,10 +55,10 @@
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
 | `src/mind_mem/` | 155 | ~535,420 |
-| `src/mind_mem/api/` | 5 | ~15,697 |
+| `src/mind_mem/api/` | 5 | ~15,751 |
 | `src/mind_mem/mcp/` | 3 | ~3,960 |
-| `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
-| `src/mind_mem/mcp/tools/` | 22 | ~48,867 |
+| `src/mind_mem/mcp/infra/` | 8 | ~6,924 |
+| `src/mind_mem/mcp/tools/` | 22 | ~49,276 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
 | `templates/` | 19 | ~1,041 |
@@ -386,7 +386,7 @@
 - `auth.py` (~2476 tok, huge) — OIDC/SSO authentication for the mind-mem REST API.
 - `grpc_server.py` (~1723 tok, huge) — gRPC wire protocol for mind-mem (v4.0 prep).
 - `__init__.py` (~20 tok, tiny)
-- `rest.py` (~8761 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
+- `rest.py` (~8815 tok, huge) — REST API layer for mind-mem (v3.2.0, v3.2.1 hardening).
 ### `src/mind_mem/`
 
 - `apply_engine.py` (~16269 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
@@ -470,8 +470,8 @@
 - `constants.py` (~98 tok, small) — MCP-surface-wide constants shared by the infra submodules.
 - `http_auth.py` (~1454 tok, large) — HTTP bearer-token authentication helpers for the MCP surface.
 - `__init__.py` (~449 tok, medium) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
-- `observability.py` (~1175 tok, large) — Observability + DB-busy helpers for the MCP surface.
-- `rate_limit.py` (~958 tok, large) — Per-client sliding-window rate limiter for the MCP surface.
+- `observability.py` (~1326 tok, large) — Observability + DB-busy helpers for the MCP surface.
+- `rate_limit.py` (~1035 tok, large) — Per-client sliding-window rate limiter for the MCP surface.
 - `workspace.py` (~843 tok, large) — Workspace resolution + path-safety helpers.
 ### `src/mind_mem/mcp/`
 
@@ -483,7 +483,7 @@
 - `mcp_server.py` (~1780 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
 ### `src/mind_mem/mcp/tools/`
 
-- `agent.py` (~1767 tok, huge) — Agent-bridge + vault MCP tools.
+- `agent.py` (~1909 tok, huge) — Agent-bridge + vault MCP tools.
 - `arch_mind.py` (~2184 tok, huge) — arch-mind MCP tools — wraps the ``arch-mind`` binary as 7 MCP tools.
 - `audit.py` (~2183 tok, huge) — Audit MCP tools — Merkle proofs, hash chain + evidence chain verification.
 - `benchmark.py` (~1016 tok, large) — Benchmark + category-summary MCP tools.
@@ -491,7 +491,7 @@
 - `consolidation.py` (~2358 tok, huge) — Memory-consolidation MCP tools.
 - `core.py` (~1508 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~1144 tok, large) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
-- `governance.py` (~4642 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
+- `governance.py` (~4867 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
 - `graph.py` (~2196 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `_helpers.py` (~816 tok, large) — Shared tool-internal helpers — workspace paths + lazy-init singletons.
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
@@ -501,7 +501,7 @@
 - `model.py` (~2586 tok, huge) — Model audit / signing MCP tools — wraps ``mind_mem.model_audit``,
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
-- `public.py` (~4515 tok, huge) — # mypy: disable-error-code="no-any-return"
+- `public.py` (~4557 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `recall.py` (~4947 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `walkthrough_persona.py` (~1493 tok, large) — MCP wrapping for v3.9 walkthrough + persona projection.

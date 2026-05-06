@@ -30,9 +30,12 @@ def _vault_allowlist() -> list[str]:
     """Return the configured vault-root allowlist.
 
     Set ``MIND_MEM_VAULT_ALLOWLIST`` to a ``:``-separated list of
-    absolute directories. When set, every vault MCP tool refuses
-    requests targeting paths outside the list. Empty/unset = allow
-    any path (legacy behaviour; recommended only for local dev).
+    absolute directories. ``vault_scan`` / ``vault_sync`` reject every
+    request when the allowlist is empty (issue #509 / T-006: prevents
+    arbitrary host markdown exfil via ``vault_root=/etc``). Operators
+    who need legacy open behaviour set
+    ``MIND_MEM_VAULT_ALLOW_ANY=true`` (not recommended; documented in
+    SECURITY.md).
     """
     raw = os.environ.get("MIND_MEM_VAULT_ALLOWLIST", "").strip()
     if not raw:
@@ -41,11 +44,21 @@ def _vault_allowlist() -> list[str]:
     return [os.path.realpath(p.strip()) for p in raw.split(sep) if p.strip()]
 
 
+def _vault_allow_any() -> bool:
+    return os.environ.get("MIND_MEM_VAULT_ALLOW_ANY", "").lower() in ("1", "true", "yes")
+
+
 def _vault_root_allowed(vault_root: str) -> tuple[bool, str]:
     """Check vault_root against the allowlist. (ok, reason)."""
     allow = _vault_allowlist()
     if not allow:
-        return True, ""
+        if _vault_allow_any():
+            return True, ""
+        return False, (
+            "vault tools refuse when MIND_MEM_VAULT_ALLOWLIST is empty "
+            "(issue #509 / T-006). Set MIND_MEM_VAULT_ALLOWLIST=/path/to/vault, "
+            "or MIND_MEM_VAULT_ALLOW_ANY=true for the legacy open behaviour."
+        )
     target = os.path.realpath(vault_root.strip())
     for root in allow:
         try:

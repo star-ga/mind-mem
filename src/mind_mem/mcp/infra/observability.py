@@ -76,21 +76,30 @@ def mcp_tool_observe(fn):
                 }
             )
 
-        # ACL enforcement: when MIND_MEM_ADMIN_TOKEN is configured,
-        # admin tools require MIND_MEM_SCOPE=admin (stdio) or a valid
-        # Authorization header (http).  When no admin token is set the
-        # check is skipped so single-user local setups are unaffected.
-        admin_token = os.environ.get("MIND_MEM_ADMIN_TOKEN")
+        # ACL enforcement (issue #508 / N-01 / T-002): default-ON.
+        # Admin tools require MIND_MEM_SCOPE=admin (stdio) or a valid
+        # Authorization header (http). When MIND_MEM_ADMIN_TOKEN is unset
+        # the request scope still defaults to "user", so admin tools are
+        # blocked by default — closing the original gap where a poisoned
+        # agent could call delete_memory_item / decrypt_file / etc.
+        # Operators who genuinely want the legacy open behaviour set
+        # MIND_MEM_ACL_DISABLED=true.
         request_scope = _get_request_scope()
         acl_scope = request_scope or os.environ.get("MIND_MEM_SCOPE", "user")
-        acl_active = admin_token is not None or request_scope is not None
-        if acl_active and tool_name in ADMIN_TOOLS:
-            scope = acl_scope
-            acl_error = check_tool_acl(tool_name, scope)
+        acl_disabled = os.environ.get("MIND_MEM_ACL_DISABLED", "").lower() in ("1", "true", "yes")
+        if acl_disabled:
+            if not getattr(mcp_tool_observe, "_acl_disabled_warned", False):
+                _log.warning(
+                    "acl_disabled_via_env: MIND_MEM_ACL_DISABLED=true — admin tools open to all "
+                    "stdio clients. Use MIND_MEM_ADMIN_TOKEN + MIND_MEM_SCOPE=admin instead."
+                )
+                mcp_tool_observe._acl_disabled_warned = True  # type: ignore[attr-defined]
+        elif tool_name in ADMIN_TOOLS:
+            acl_error = check_tool_acl(tool_name, acl_scope)
             if acl_error:
-                _log.warning("acl_blocked", tool=tool_name, scope=scope)
+                _log.warning("acl_blocked", tool=tool_name, scope=acl_scope)
                 return acl_error
-        elif acl_active and tool_name not in USER_TOOLS:
+        elif tool_name not in USER_TOOLS:
             _log.warning("acl_unknown_tool", tool=tool_name)
             return json.dumps({"error": f"Tool '{tool_name}' is not in ACL policy", "_schema_version": "1.0"})
 
