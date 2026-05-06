@@ -1,6 +1,6 @@
 # Performance Tuning
 
-Guide to optimizing mind-mem for large workspaces and high-throughput usage.
+Guide to optimizing MIND-Mem for large workspaces and high-throughput usage.
 
 ## BM25 Parameters
 

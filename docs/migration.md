@@ -1,4 +1,4 @@
-# Migration Guide: mem-os to mind-mem
+# Migration Guide: mem-os to MIND-Mem
 
 This guide covers migrating from `mem-os` (archived at `star-ga/mem-os`) to its successor `mind-mem` (`star-ga/mind-mem`, v1.5.1). The workspace data format is compatible -- no data loss occurs during migration.
 
@@ -27,7 +27,7 @@ The Python package was renamed from `mem-os` / `mem_os` to `mind-mem` / `mind_me
 
 All 10 CLI entry points have been renamed:
 
-| Old (mem-os)         | New (mind-mem)         | Purpose                              |
+| Old (mem-os)         | New (MIND-Mem)         | Purpose                              |
 |----------------------|------------------------|--------------------------------------|
 | `mem-os-init`        | `mind-mem-init`        | Initialize a new workspace           |
 | `mem-os-scan`        | `mind-mem-scan`        | Run intelligence scan                |
@@ -64,7 +64,7 @@ mv mem-os.json mind-mem.json
 
 ### New Config Keys
 
-mind-mem v1.0.3 adds two optional top-level keys not present in mem-os:
+MIND-Mem v1.0.3 adds two optional top-level keys not present in mem-os:
 
 ```json
 {
@@ -128,7 +128,7 @@ Update `~/.claude/mcp.json` (or `~/.claude/claude_desktop_config.json` for Claud
 }
 ```
 
-### After (mind-mem)
+### After (MIND-Mem)
 
 ```json
 {
@@ -186,7 +186,7 @@ The migration performs three steps (all idempotent, safe to re-run):
 | 1.0.0 -> 2.0.0 | Creates `intelligence/proposed/` and `shared/` directories; adds `schema_version` to config          |
 | 2.0.0 -> 2.1.0 | Renames `self_correcting_mode` to `governance_mode` in `mind-mem.json` and `memory/intel-state.json` |
 
-After migration, the workspace also supports new directories used by mind-mem features:
+After migration, the workspace also supports new directories used by MIND-Mem features:
 
 - `categories/` -- Auto-generated thematic summaries (created on first category distillation)
 - `mind/` -- MIND kernel configs (optional, for custom kernels)
@@ -215,7 +215,7 @@ The `Authorization: Bearer <token>` header continues to work unchanged.
 
 All resource URIs changed from the `mem-os://` scheme to `mind-mem://`:
 
-| Old (mem-os)                   | New (mind-mem)                    |
+| Old (mem-os)                   | New (MIND-Mem)                    |
 |--------------------------------|-----------------------------------|
 | `mem-os://decisions`           | `mind-mem://decisions`            |
 | `mem-os://tasks`               | `mind-mem://tasks`                |
@@ -230,9 +230,9 @@ Update any client code or tool configurations that reference these URIs.
 
 ---
 
-## 7. New Features in mind-mem (v1.0.3+)
+## 7. New Features in MIND-Mem (v1.0.3+)
 
-These features are new in mind-mem and were not available in mem-os:
+These features are new in MIND-Mem and were not available in mem-os:
 
 - **Category distillation** -- Auto-generated thematic summaries from block tags and keywords, with `_manifest.json` tracking
 - **Prefetch context** -- Anticipatory pre-assembly of likely-needed memory blocks using intent routing and category signals
@@ -317,4 +317,4 @@ Confirm that `~/.claude/mcp.json` points to the correct `mcp_server.py` path and
 Uninstall the old package: `pip uninstall mem-os`
 
 **`ImportError: No module named 'mind_mem'`**
-Re-install: `pip install -e '.[all]'` from the mind-mem repository root.
+Re-install: `pip install -e '.[all]'` from the MIND-Mem repository root.

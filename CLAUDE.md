@@ -1,4 +1,4 @@
-# mind-mem — Persistent AI Memory System
+# MIND-Mem — Persistent AI Memory System
 
 ## Overview
 BM25F + vector hybrid search memory system for AI agents.
@@ -58,7 +58,7 @@ docs/                   — User + integration docs (35+ files)
   audit hash preimages, TAG_v1 NUL-separated composition for collision
   resistance
 - **Local model** (v3.9.0): `star-ga/mind-mem-4b` — full fine-tune of
-  Qwen3.5-4B on the v3.9.0 mind-mem domain (81 tools, block schemas
+  Qwen3.5-4B on the v3.9.0 MIND-Mem domain (81 tools, block schemas
   including `TransformHash`, governance + transport workflows). See
   `docs/mind-mem-4b-setup.md`. Prior v3.0.0 QLoRA fine-tune kept at
   HF revision `v3.0.0`.

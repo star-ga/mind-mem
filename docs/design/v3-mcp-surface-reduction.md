@@ -5,7 +5,7 @@ GH issue: [#501](https://github.com/star-ga/mind-mem/issues/501)
 
 ## Problem
 
-mind-mem v2.10 ships **57 MCP tools**. Gemini 3 Pro's arch audit
+MIND-Mem v2.10 ships **57 MCP tools**. Gemini 3 Pro's arch audit
 flagged this as a high-friction surface for LLM clients:
 
 > "57 MCP tools will overwhelm the context window and the agent's
@@ -97,10 +97,10 @@ to the existing granular implementations — no logic duplicated.
 | Step | Owner | Deliverable |
 |---|---|---|
 | Design doc review | STARGA | This file, signed off |
-| Implement compound tools | mind-mem | 8 new tools, each routing to existing impls |
-| Mark granular tools deprecated | mind-mem | docstring + registry flag |
-| Update docs | mind-mem | MCP reference page |
-| Retrain mind-mem-4b | mind-mem | new adapter on HF |
-| Hard deprecation cycle | mind-mem | 3-month notice before v4.0 removes them |
+| Implement compound tools | MIND-Mem | 8 new tools, each routing to existing impls |
+| Mark granular tools deprecated | MIND-Mem | docstring + registry flag |
+| Update docs | MIND-Mem | MCP reference page |
+| Retrain mind-mem-4b | MIND-Mem | new adapter on HF |
+| Hard deprecation cycle | MIND-Mem | 3-month notice before v4.0 removes them |
 
 Estimated effort: **1 week implementation + 4 hrs retrain**.

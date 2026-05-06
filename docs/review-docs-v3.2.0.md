@@ -1,4 +1,4 @@
-# Documentation Review — mind-mem v3.2.0
+# Documentation Review — MIND-Mem v3.2.0
 
 **Reviewed:** 2026-04-19
 **Reviewer:** STARGA Inc

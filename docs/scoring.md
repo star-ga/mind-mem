@@ -1,6 +1,6 @@
 # Scoring System
 
-mind-mem uses BM25F (BM25 with field weights) as its primary scoring algorithm, enhanced with several boosting mechanisms.
+MIND-Mem uses BM25F (BM25 with field weights) as its primary scoring algorithm, enhanced with several boosting mechanisms.
 
 ## BM25F Parameters
 
@@ -44,7 +44,7 @@ Recent blocks receive a recency boost based on their creation or modification da
 
 ## Knee Score Cutoff
 
-Instead of a fixed top-K limit, mind-mem uses adaptive truncation at the steepest score drop (the "knee" of the score curve). This ensures results above the natural quality threshold are included while filtering noise.
+Instead of a fixed top-K limit, MIND-Mem uses adaptive truncation at the steepest score drop (the "knee" of the score curve). This ensures results above the natural quality threshold are included while filtering noise.
 
 ## Hard Negative Mining
 

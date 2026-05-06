@@ -1,6 +1,6 @@
 # CLI Reference
 
-The `mm` command is the unified mind-mem CLI for non-MCP agents.
+The `mm` command is the unified MIND-Mem CLI for non-MCP agents.
 
 ## Global options
 
@@ -54,7 +54,7 @@ Auto-detect installed AI coding clients and print JSON.
 
 ### `mm install <agent>`
 
-Configure mind-mem for a single named client.
+Configure MIND-Mem for a single named client.
 
 ### `mm install-all`
 
@@ -246,7 +246,7 @@ Show the current consensus score for a skill.
 
 ## MIC/MAP subcommands (v3.8.11)
 
-mind-mem ships the same MIC/MAP serialization formats used by the wider STARGA
+MIND-Mem ships the same MIC/MAP serialization formats used by the wider STARGA
 stack — `mic@2` (text) and `mic-b` (varint binary). The `mm mic` subcommand
 exposes them on the CLI; the corresponding MCP tools are documented in
 [`docs/mcp-integration.md`](mcp-integration.md). For the format spec, runnable

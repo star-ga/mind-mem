@@ -8,7 +8,7 @@
 Search blocks using BM25F scoring with graph boost, fact card aggregation, and knee cutoff.
 
 **Parameters:**
-- `workspace` — Path to the mind-mem workspace
+- `workspace` — Path to the MIND-Mem workspace
 - `query` — Search query (supports stemming and domain-aware expansion)
 - `limit` — Maximum results (default: 10)
 - `active_only` — Only return blocks with `Status: active` (default: False)
@@ -17,14 +17,14 @@ Search blocks using BM25F scoring with graph boost, fact card aggregation, and k
 **Returns:** List of dicts with `_id`, `score`, `Statement`, `Type`, and matched fields.
 
 #### `init_workspace(path: str) -> None`
-Initialize a new mind-mem workspace with the standard directory structure.
+Initialize a new MIND-Mem workspace with the standard directory structure.
 
 #### `parse_blocks(workspace: str) -> list[dict]`
 Parse all memory blocks from `.md` files in a workspace.
 
 ### Client Installation (`mind_mem.hook_installer`)
 
-v3.1.0 added programmatic access to the hook + MCP installers. Use these when embedding mind-mem into bootstrap scripts, package installers, or custom orchestrators.
+v3.1.0 added programmatic access to the hook + MCP installers. Use these when embedding MIND-Mem into bootstrap scripts, package installers, or custom orchestrators.
 
 #### `install_config(agent: str, workspace: str, *, force: bool = False, dry_run: bool = False) -> dict`
 Write the text-hook configuration for `agent` into its client-specific

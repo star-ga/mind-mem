@@ -1,14 +1,14 @@
 # Setting up the mind-mem-4b model
 
-`star-ga/mind-mem-4b` is the **full fine-tune** of `Qwen/Qwen3.5-4B`
-on the mind-mem domain — all 4.2B parameters trained (not a LoRA
+`star-ga/mind-mem-4b` is the **fully trained** mind-mem:4b model —
+all ~4.2B parameters trained on the MIND-Mem domain (not a LoRA
 adapter). It knows the 81 MCP tools (incl. `compile_truth_walkthrough`,
 `recall_with_persona`, `pipeline_status`, `reindex_dirty`, MIC/MAP
 serialization, governance hooks), block schemas with the new
 `TransformHash` field, governance workflows, and CHANGELOG history
 through v3.9.0.
 
-You don't *need* this model to use mind-mem — every client integrates
+You don't *need* this model to use MIND-Mem — every client integrates
 through the MCP server and works with any LLM. The model is there
 when you want **fast, local, mind-mem-aware inference** for queries,
 recall composition, or captured-fact compression.
@@ -175,7 +175,7 @@ python -m vllm.entrypoints.openai.api_server \
 ```
 
 Exposes an OpenAI-compatible endpoint on `localhost:8000`. Point any
-HTTP client (including the mind-mem MCP server via an optional
+HTTP client (including the MIND-Mem MCP server via an optional
 adapter) at it.
 
 ## Option 4 — GGUF + llama.cpp (CPU-friendly)
@@ -216,9 +216,9 @@ ollama create mind-mem-4b -f ~/mm-models/mind-mem-4b.Modelfile
 ollama run mind-mem-4b "What MCP tool lists contradictions?"
 ```
 
-## Wiring the model into mind-mem's workflows
+## Wiring the model into MIND-Mem's workflows
 
-The model is genuinely useful when it sits next to the mind-mem MCP
+The model is genuinely useful when it sits next to the MIND-Mem MCP
 server and handles the LLM-side operations (recall composition,
 capture enrichment, contradiction classification).
 
@@ -260,8 +260,8 @@ vLLM endpoint) in the workspace's `mind-mem.json`.
 - [ ] `mm install-all` to wire every local AI client
 - [ ] `hf download star-ga/mind-mem-4b --local-dir <path>`
 - [ ] Pick a runtime (transformers / exllamav2 / vLLM / llama.cpp / Ollama)
-- [ ] Point mind-mem's `llm.backend` at the runtime if you want the
-  model to handle mind-mem's internal LLM tasks
+- [ ] Point MIND-Mem's `llm.backend` at the runtime if you want the
+  model to handle MIND-Mem's internal LLM tasks
 - [ ] Add the Memory Protocol block to your CLI's CLAUDE.md / AGENTS.md
   / .cursorrules (the `mm install` commands do this automatically)
 
@@ -271,7 +271,8 @@ vLLM endpoint) in the workspace's `mind-mem.json`.
   instead of clean tool recall ("roll back the apply" vs "which tool
   rolls back an apply?"). Phrase questions as queries until v3.1
   lands a bigger corpus.
-- **Out-of-domain open-chat** — the model is specialised. Use the
-  base `Qwen/Qwen3.5-4B` for anything non-memory.
+- **Out-of-domain open-chat** — the model is specialised for the
+  MIND-Mem domain. Use a general-purpose chat model for anything
+  non-memory.
 - **Context length** — tested at 4K; pushing to 8K+ may degrade
   structured output quality.

@@ -12,7 +12,7 @@
 | **MCP** | Model Context Protocol — standard for AI tool integration |
 | **MIND kernel** | Configuration file for customizing scoring behavior |
 | **Proposal** | A staged memory change awaiting human approval |
-| **Recall** | The primary search operation in mind-mem |
+| **Recall** | The primary search operation in MIND-Mem |
 | **Reranking** | Second-pass scoring of BM25 candidates |
 | **RRF** | Reciprocal Rank Fusion — method for combining multiple rankings |
 | **Workspace** | Root directory containing all memory files |

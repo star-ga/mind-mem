@@ -3,7 +3,7 @@
 Self-contained `mind-mem-edge` binary built with PyOxidizer.
 Runs on on-device agents (laptops, phones via Termux, embedded)
 with no pip install step. Proxies recall / governance calls up to
-a central mind-mem cluster when connected; falls back to local
+a central MIND-Mem cluster when connected; falls back to local
 Markdown+SQLite when offline.
 
 ## Build
@@ -24,7 +24,7 @@ build/x86_64-unknown-linux-gnu/debug/install/mind-mem-edge recall "hi"
 
 ## What's embedded
 
-- mind-mem core: block_store, recall, governance, cache,
+- MIND-Mem core: block_store, recall, governance, cache,
   retrieval_trace, feature_gate, evidence_bundle, session_boost,
   truth_score.
 - Python 3.12 interpreter (single binary, zero external deps).
@@ -67,7 +67,7 @@ PyOxidizer supports:
 - macOS arm64 / x86_64
 - Windows x86_64
 
-Mobile is not a target — iOS / Android devices reach mind-mem via
+Mobile is not a target — iOS / Android devices reach MIND-Mem via
 the cluster REST API, not via the edge binary.
 
 ## Size budget

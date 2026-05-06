@@ -1,6 +1,6 @@
 # Configuration Reference
 
-mind-mem is configured via `mind-mem.json` in your workspace root. This file is created automatically by `init_workspace.py` with sensible defaults. All keys are optional -- missing keys fall back to their documented defaults.
+MIND-Mem is configured via `mind-mem.json` in your workspace root. This file is created automatically by `init_workspace.py` with sensible defaults. All keys are optional -- missing keys fall back to their documented defaults.
 
 ---
 
@@ -377,7 +377,7 @@ Controls the LLM used for memory extraction from transcripts and text. Added mul
 
 ### mind-mem:4b (Recommended)
 
-Full fine-tune of Qwen3.5-4B on STARGA-curated mind-mem corpus. Available as Q4_K_M GGUF (2.6GB) from [star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b). Empirical on RTX 3080: 104 tok/s generation, 1585 tok/s prefill.
+Full fine-tune of Qwen3.5-4B on STARGA-curated MIND-Mem corpus. Available as Q4_K_M GGUF (2.6GB) from [star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b). Empirical on RTX 3080: 104 tok/s generation, 1585 tok/s prefill.
 
 ---
 
@@ -542,8 +542,8 @@ Environment variables take precedence over config file values where applicable.
 | `MIND_MEM_ADMIN_TOKEN` | Separate admin bearer token for privileged REST endpoints. Same fail-closed contract as `MIND_MEM_TOKEN`. |
 | `MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST` | Opt-in escape hatch (set to `1` / `true` / `yes`) that re-enables unauthenticated access **only when binding to a loopback address** (`127.0.0.1` / `::1` / `localhost`). Intended for local development; never set in production. Without it, HTTP/REST refuses to start when no token is configured. Maps to the `--allow-unauthenticated-localhost` CLI flag on `mind-mem-mcp serve` and `mind-mem-rest`. |
 | `MIND_MEM_LOG_LEVEL` | Logging level for structured JSON logging. Valid values: `DEBUG`, `INFO`, `WARNING`, `ERROR`. Default: `INFO`. |
-| `MIND_MEM_LIB` | Absolute path to the compiled MIND kernel shared library (`libmindmem.so` / `libmindmem.dylib`). Overrides the default search paths. Must point to a file within the `lib/` directory of the mind-mem installation for security. |
-| `MIND_MEM_HOME` | Path to the mind-mem installation directory. Used by the OpenClaw hook (`handler.js`) to locate scripts when they are not co-located with the workspace. |
+| `MIND_MEM_LIB` | Absolute path to the compiled MIND kernel shared library (`libmindmem.so` / `libmindmem.dylib`). Overrides the default search paths. Must point to a file within the `lib/` directory of the MIND-Mem installation for security. |
+| `MIND_MEM_HOME` | Path to the MIND-Mem installation directory. Used by the OpenClaw hook (`handler.js`) to locate scripts when they are not co-located with the workspace. |
 | `MIND_MEM_VLLM_URL` | Base URL for a local vLLM OpenAI-compatible server. Default: `http://127.0.0.1:8000/v1`. Used only when `extraction.backend` is `"vllm"` or `"auto"`. |
 | `MIND_MEM_LLM_BASE_URL` | Base URL for any OpenAI-compatible endpoint (LM Studio, llama-server, TGI, OpenAI, etc.). No default. Used only when `extraction.backend` is `"openai-compatible"` or `"auto"`. |
 | `MIND_MEM_LLM_API_KEY` | Optional API key for the `openai-compatible` backend. Sent as `Authorization: Bearer <key>`. Not required for local endpoints. |
@@ -553,7 +553,7 @@ Environment variables take precedence over config file values where applicable.
 
 ## MIND Kernel Configuration
 
-In addition to `mind-mem.json`, mind-mem supports `.mind` kernel files -- INI-style configuration files in the `mind/` directory of the workspace. These provide fine-grained tuning for the recall pipeline.
+In addition to `mind-mem.json`, MIND-Mem supports `.mind` kernel files -- INI-style configuration files in the `mind/` directory of the workspace. These provide fine-grained tuning for the recall pipeline.
 
 Kernel files are loaded by `mind_ffi.py` and override BM25 parameters and field weights at query time.
 

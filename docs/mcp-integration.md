@@ -2,7 +2,7 @@
 
 ## Overview
 
-mind-mem exposes 81 MCP tools for integration with AI coding assistants like Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, and Zed (v3.1.0+).
+MIND-Mem exposes 81 MCP tools for integration with AI coding assistants like Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, and Zed (v3.1.0+).
 
 ## Setup
 
@@ -124,9 +124,9 @@ full format spec in [`docs/mic-map.md`](mic-map.md).
 ## Obsidian Graph View
 
 When vault_sync writes a block, it can automatically append an Obsidian
-`## Links` section that wires up mind-mem's internal KnowledgeGraph edges
+`## Links` section that wires up MIND-Mem's internal KnowledgeGraph edges
 as Obsidian wikilinks. This causes Obsidian's graph view to render the
-same semantic relationships that mind-mem tracks internally — without
+same semantic relationships that MIND-Mem tracks internally — without
 requiring users to author any links by hand.
 
 ### Enabling wikilinks

@@ -4,7 +4,7 @@ language:
 license: apache-2.0
 library_name: transformers
 tags:
-  - mind-mem
+  - MIND-Mem
   - memory
   - governance
   - retrieval-augmented
@@ -20,7 +20,7 @@ pipeline_tag: text-generation
 
 # mind-mem-4b v2 (2026-04-21)
 
-A governance-aware memory-assistant model for [mind-mem](https://github.com/star-ga/mind-mem) — an auditable, contradiction-safe memory layer for coding agents (MCP-compatible).
+A governance-aware memory-assistant model for [MIND-Mem](https://github.com/star-ga/mind-mem) — an auditable, contradiction-safe memory layer for coding agents (MCP-compatible).
 
 **v2 supersedes v1.** This checkpoint is a **full fine-tune** of the v1 `star-ga/mind-mem-4b` checkpoint (itself QLoRA-merged from `Qwen/Qwen3.5-4B`), retrained on the v3.3.0 MCP surface: the 7 consolidated dispatcher tool-calls, query decomposition / reformulation, entity extraction, and evidence-bundle consumption.
 

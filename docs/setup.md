@@ -191,7 +191,7 @@ per-client MCP config paths and formats.
 
 ## 6. Optional: MIND native kernels
 
-mind-mem ships four **hot-path Python kernels** (BM25F scoring,
+MIND-Mem ships four **hot-path Python kernels** (BM25F scoring,
 SHA3-512 chain verify, vector similarity, RRF fusion) with a loader
 that swaps in the STARGA proprietary MIND-compiled native library
 when present. The native library is **not bundled** with this public
@@ -201,7 +201,7 @@ repo. To opt in:
 export MIND_MEM_KERNELS_SO=/path/to/libmindmem_kernels.so
 ```
 
-When the env var is unset or points at a missing file, mind-mem
+When the env var is unset or points at a missing file, MIND-Mem
 transparently falls back to the pure-Python kernels in
 `mind_mem.mind_kernels`. There is **no behaviour change** other than
 throughput — everything works without the native library.

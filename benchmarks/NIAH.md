@@ -2,7 +2,7 @@
 
 ## Result: 250/250 — 100% Retrieval
 
-mind-mem achieves **100% retrieval** across all haystack sizes, burial depths, and needle types in the Needle In A Haystack benchmark.
+MIND-Mem achieves **100% retrieval** across all haystack sizes, burial depths, and needle types in the Needle In A Haystack benchmark.
 
 **Reconfirmed on v3.2.1 (2026-04-20):** 250/250 passed in 18:50
 (1130.13s). No regression from the v1.9.0 baseline (1128.02s) despite
@@ -149,14 +149,14 @@ python -m pytest tests/test_niah.py -v
 
 | System | NIAH Score | Search Method | Notes |
 |--------|-----------|---------------|-------|
-| **mind-mem v3.2.1** | **100% (250/250)** | Hybrid BM25+Vector+RRF | Reconfirmed 2026-04-20 |
-| mind-mem v1.9.0 | 100% (250/250) | Hybrid BM25+Vector+RRF | Original baseline |
+| **MIND-Mem v3.2.1** | **100% (250/250)** | Hybrid BM25+Vector+RRF | Reconfirmed 2026-04-20 |
+| MIND-Mem v1.9.0 | 100% (250/250) | Hybrid BM25+Vector+RRF | Original baseline |
 | Mem0 | — | Vector only | No published NIAH results |
 | Zep | — | Vector only | No published NIAH results |
 | LangMem | — | Vector only | No published NIAH results |
 | OpenAI memory | — | Unknown | No published NIAH results |
 
-*Note: Other systems have not published NIAH benchmark results on comparable test matrices. mind-mem's LoCoMo benchmark scores (Mean: 77.9, Adversarial: 82.3, Temporal: 88.5) already exceed Mem0 (66.9), Zep (66.0), and LangMem (58.1) on the established academic benchmark.*
+*Note: Other systems have not published NIAH benchmark results on comparable test matrices. MIND-Mem's LoCoMo benchmark scores (Mean: 77.9, Adversarial: 82.3, Temporal: 88.5) already exceed Mem0 (66.9), Zep (66.0), and LangMem (58.1) on the established academic benchmark.*
 
 ---
 
@@ -166,5 +166,5 @@ The Needle In A Haystack test was originally created by [Greg Kamradt](https://g
 
 ---
 
-*Benchmark run: 2026-03-21 | mind-mem v1.9.0 | Test suite: tests/test_niah.py*
+*Benchmark run: 2026-03-21 | MIND-Mem v1.9.0 | Test suite: tests/test_niah.py*
 *Copyright © 2026 STARGA, Inc. All rights reserved.*

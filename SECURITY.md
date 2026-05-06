@@ -57,14 +57,14 @@ due to active exploitation, please notify us — we will prioritise the fix.
 
 - Issues in transitive dependencies (report to the upstream maintainer)
 - Denial of service via workspace files that the attacker already controls
-- Issues requiring physical access to the machine running mind-mem
+- Issues requiring physical access to the machine running MIND-Mem
 - The `tests/`, `benchmarks/`, `train/`, and `examples/` directories
 
 ---
 
 ## Security Model
 
-mind-mem is a **local-first** library that operates entirely on the
+MIND-Mem is a **local-first** library that operates entirely on the
 user's filesystem. It has no network listeners in its default
 configuration (stdio MCP transport). The optional HTTP transport binds
 to `127.0.0.1` by default.

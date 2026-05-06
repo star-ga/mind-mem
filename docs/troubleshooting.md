@@ -6,7 +6,7 @@ Common issues and solutions for mind-mem.
 
 ### ImportError: No module named 'mind_mem'
 
-**Cause:** mind-mem is not installed in editable mode.
+**Cause:** MIND-Mem is not installed in editable mode.
 
 **Fix:**
 ```bash

@@ -25,11 +25,9 @@ tags:
   - memory
   - governance
   - retrieval-augmented
-  - full-fine-tune
-  - qwen3.5
+  - fully-trained
   - text-generation
   - conversational
-base_model: Qwen/Qwen3.5-4B
 pipeline_tag: text-generation
 ---
 
@@ -37,7 +35,7 @@ pipeline_tag: text-generation
 
 A governance-aware memory-assistant model for [mind-mem](https://github.com/star-ga/mind-mem) — an auditable, contradiction-safe memory layer for coding agents (MCP-compatible).
 
-This checkpoint is a **full fine-tune** of `Qwen/Qwen3.5-4B` (every one of the ~4 B parameters trained), trained on the mind-mem v{version} source tree: all **81 MCP tool signatures** (24 new in the v3.4 → v3.9 surface — incl. `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, `reindex_dirty`, MIC/MAP wire format, governance hooks, kernels), block-type schemas (with the new `TransformHash` field, v3.9), full CHANGELOG history through v{version}, the docs/ tree, and curated end-to-end governance workflow transcripts.
+This checkpoint is **fully trained mind-mem:4b** (every one of the ~4 B parameters trained, no LoRA), trained on the mind-mem v{version} source tree: all **81 MCP tool signatures** (24 new in the v3.4 → v3.9 surface — incl. `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, `reindex_dirty`, MIC/MAP wire format, governance hooks, kernels), block-type schemas (with the new `TransformHash` field, v3.9), full CHANGELOG history through v{version}, the docs/ tree, and curated end-to-end governance workflow transcripts.
 
 ## What's new in v3.9 vs. v3.0
 
@@ -97,21 +95,13 @@ llama-cli -m ./gguf/mind-mem-4b-Q4_K_M.gguf -p "Show me a TransformHash block te
 
 ### Pin a prior revision
 
-The v3.0 QLoRA fine-tune is preserved as a HF revision tag:
-
-```python
-from peft import PeftModel
-from transformers import AutoModelForCausalLM
-base = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3.5-4B", dtype="bfloat16", device_map="auto")
-model = PeftModel.from_pretrained(base, "star-ga/mind-mem-4b", revision="v3.0.0")
-```
+Prior checkpoints are preserved as HF revision tags (e.g. `revision="v3.0.0"` for the v3.0 release).
 
 ## Training recipe
 
 | Knob | Value |
 |---|---|
-| Base | `Qwen/Qwen3.5-4B` |
-| Method | Full fine-tune (every parameter trained, no LoRA) |
+| Method | Full retrain (every parameter trained, no LoRA) |
 | Trainable params | ~4.2 B / ~4.2 B (100 %) |
 | Epochs | 8 |
 | Steps | 1 056 |
@@ -159,7 +149,7 @@ Six held-out benchmarks scored zero-shot. See `train/eval_harness.py` for the ex
 
 ## Intended use / scope
 
-This is a **specialised assistant**, not a general-purpose LLM. It's tuned to answer questions about mind-mem internals, help agents compose correct MCP calls, and narrate governance workflows. Use the base Qwen3.5-4B for open-domain chat.
+This is a **specialised assistant**, not a general-purpose LLM. It's tuned to answer questions about mind-mem internals, help agents compose correct MCP calls, and narrate governance workflows. Use a general-purpose chat model for open-domain chat.
 
 ## License
 
@@ -167,10 +157,10 @@ Apache-2.0 (same as the mind-mem Python package).
 
 ## Changelog
 
-- **v{version} ({today}):** Full fine-tune on `Qwen/Qwen3.5-4B` (NVIDIA H200, ~3 h, 1 056 steps, 8 epochs). 81 MCP tools, v3.9 `TransformHash` schema, walkthrough / persona / pipeline-hash / reindex-dirty / MIC-MAP / kernel surfaces, HTTP+daemon+inbox transports, replicated-Postgres routing. Corpus augmented with intent-style prompts and v3.9 surface facts: 4 204 examples / 21 source files / 81 tools. Final loss {final_loss}, token accuracy {token_accuracy}.
-- **v3.0.0:** Full fine-tune on `Qwen/Qwen3.5-4B` covering 57 MCP tools, 14 block schemas, governance workflows. Pinned at `revision="v3.0.0"`.
-- **v2.9.0:** Legacy QLoRA on `Qwen/Qwen2.5-7B-Instruct` base. Superseded.
-- **v2.8.x:** Initial release on Qwen3.5-4B base.
+- **v{version} ({today}):** Full retrain of mind-mem:4b (NVIDIA H200, ~3 h, 1 056 steps, 8 epochs). 81 MCP tools, v3.9 `TransformHash` schema, walkthrough / persona / pipeline-hash / reindex-dirty / MIC-MAP / kernel surfaces, HTTP+daemon+inbox transports, replicated-Postgres routing. Corpus augmented with intent-style prompts and v3.9 surface facts: 4 204 examples / 21 source files / 81 tools. Final loss {final_loss}, token accuracy {token_accuracy}.
+- **v3.0.0:** Full retrain covering 57 MCP tools, 14 block schemas, governance workflows. Pinned at `revision="v3.0.0"`.
+- **v2.9.0:** Legacy QLoRA. Superseded.
+- **v2.8.x:** Initial release.
 
 ## Citation
 

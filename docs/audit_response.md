@@ -1,6 +1,6 @@
-# mind-mem — response to the 2026-05-02 ecosystem audit
+# MIND-Mem — response to the 2026-05-02 ecosystem audit
 
-The audit ran during the cross-repo alignment pass that brought rfn-mind v0.1.3, MindLLM v0.4.0-alpha.6, mind-flow, mind-runtime, mind-inference, and 512-mind onto the same governance-kernel surface. mind-mem is the L4 retrieval-time layer of the ecosystem; this commit lands the alignment metadata other repos already carry.
+The audit ran during the cross-repo alignment pass that brought rfn-mind v0.1.3, MindLLM v0.4.0-alpha.6, mind-flow, mind-runtime, mind-inference, and 512-mind onto the same governance-kernel surface. MIND-Mem is the L4 retrieval-time layer of the ecosystem; this commit lands the alignment metadata other repos already carry.
 
 ## How to read this
 
@@ -14,19 +14,19 @@ The audit ran during the cross-repo alignment pass that brought rfn-mind v0.1.3,
 
 ### F1 — `.arch-mind/rules.mind` `EQUALITY_FLOOR=4500` and `EVIDENCE_FLOOR=50` failed against current scan
 
-> mind-mem is a Python+MIND hybrid; the bulk of the symbol surface lives in `src/mind_mem/*.py`. arch-mind's MIND-only sidecar-scan sees only the kernels and reports `equality_q16=2234` and `evidence_chain_density=0`. The previous floors (4500, 50) reflected an older scanner-version that walked Python AST too.
+> MIND-Mem is a Python+MIND hybrid; the bulk of the symbol surface lives in `src/mind_mem/*.py`. arch-mind's MIND-only sidecar-scan sees only the kernels and reports `equality_q16=2234` and `evidence_chain_density=0`. The previous floors (4500, 50) reflected an older scanner-version that walked Python AST too.
 
 **Status: FIXED in commit `8a0d87d`.** Floors recalibrated to 2000 (equality) and 0 (evidence). Rationale and the v3.2.0 lift target are documented inline in `.arch-mind/rules.mind`.
 
 ### F2 — No `docs/audit_response.md` / `docs/status.md` / `docs/governance.md`
 
-> The three alignment docs that other arch-mind-enabled MIND repos now carry were missing. mind-mem is a flagship product (PyPI, MCP integration with 16 clients, full fine-tune local model); its alignment metadata is referenced by every repo that uses mind-mem for L4.
+> The three alignment docs that other arch-mind-enabled MIND repos now carry were missing. MIND-Mem is a flagship product (PyPI, MCP integration with 16 clients, full fine-tune local model); its alignment metadata is referenced by every repo that uses MIND-Mem for L4.
 
 **Status: FIXED.** All three docs landed in this commit.
 
 ## Cross-repo alignment summary (post-fix)
 
-| Asset | rfn-mind | MindLLM | 512-mind | mind-mem (post-alignment) |
+| Asset | rfn-mind | MindLLM | 512-mind | MIND-Mem (post-alignment) |
 |---|---|---|---|---|
 | `.arch-mind/rules.mind` (9 rules) | ✓ | ✓ | ✓ | ✓ (recalibrated 2026-05-01) |
 | `docs/audit_response.md` | ✓ | ✓ | ✓ | ✓ (this file) |
@@ -52,7 +52,7 @@ The audit ran during the cross-repo alignment pass that brought rfn-mind v0.1.3,
 
 ## Remaining roadmap (not release-blocking)
 
-mind-mem's existing `ROADMAP.md` / `CHANGELOG.md` is authoritative for product-level work. The cross-repo alignment items below are tracked separately:
+MIND-Mem's existing `ROADMAP.md` / `CHANGELOG.md` is authoritative for product-level work. The cross-repo alignment items below are tracked separately:
 
 | ID | Item | Target |
 |---|---|---|

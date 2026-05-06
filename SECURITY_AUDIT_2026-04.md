@@ -1,8 +1,8 @@
-# Security Audit — mind-mem v3.1.9 (April 2026)
+# Security Audit — MIND-Mem v3.1.9 (April 2026)
 
 ## Executive Summary
 
-mind-mem has a strong security baseline: no CRITICAL findings, all SQL
+MIND-Mem has a strong security baseline: no CRITICAL findings, all SQL
 parameterized, no eval/exec/pickle in data paths, path traversal covered
 by `_safe_resolve`/`_validate_path` guards, and constant-time token
 comparison in place. Three findings were identified — two HIGH (query
@@ -144,7 +144,7 @@ transitively required by mind-mem.
 | `aiohttp` | 3.13.3 | CVE-2026-34516 | 3.13.4 | MEDIUM — excessive multipart header memory |
 | `aiohttp` | 3.13.3 | CVE-2026-34517 | 3.13.4 | MEDIUM — large multipart field read into memory before size check |
 
-**Recommendation.** mind-mem does not directly invoke `authlib` JWT
+**Recommendation.** MIND-Mem does not directly invoke `authlib` JWT
 verification with `key=None`, and does not expose `aiohttp` to
 untrusted HTTP inputs in the default stdio transport. However:
 
@@ -157,7 +157,7 @@ untrusted HTTP inputs in the default stdio transport. However:
   immediately for internet-facing deployments.
 - The `authlib` PKCS#1 oracle (CVE-2026-28490) and JWK injection
   (CVE-2026-27962) are only reachable if `fastmcp`'s OAuth2 provider
-  parsing is active — this is not the case in mind-mem's
+  parsing is active — this is not the case in MIND-Mem's
   `StaticTokenVerifier` configuration. Upgrading is still recommended.
 
 **Do not bump pinned versions in `pyproject.toml` without re-running

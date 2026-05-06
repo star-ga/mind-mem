@@ -1,4 +1,4 @@
-# Comprehensive Architectural Audit: mind-mem (Commit 30d8b71)
+# Comprehensive Architectural Audit: MIND-Mem (Commit 30d8b71)
 
 This document contains a deep architectural audit of the `mind-mem` repository as of commit `30d8b71`. It serves as an actionable backlog for Claude Code to improve maintainability, resolve architectural smells, and align the codebase with its own `SPEC.md`.
 

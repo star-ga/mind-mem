@@ -1,4 +1,4 @@
-# IMPACT — mind-mem v1.0
+# IMPACT — MIND-Mem v1.0
 
 > Decision impact graph: decision -> affects -> projects/tasks/incidents.
 > ID format: [I-YYYYMMDD-###]

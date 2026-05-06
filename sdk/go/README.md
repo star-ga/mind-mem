@@ -1,6 +1,6 @@
-# mind-mem Go SDK
+# MIND-Mem Go SDK
 
-Go client for the [mind-mem](https://github.com/star-ga/mind-mem) REST API.
+Go client for the [MIND-Mem](https://github.com/star-ga/mind-mem) REST API.
 Stdlib-only — no external dependencies.
 
 ## Install

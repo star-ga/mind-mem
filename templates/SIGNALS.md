@@ -1,4 +1,4 @@
-# SIGNALS — mind-mem v1.0
+# SIGNALS — MIND-Mem v1.0
 
 > Raw signals: potential decisions, tasks, or events detected but not yet formalized.
 > ID format: [SIG-YYYYMMDD-###]

@@ -1,4 +1,4 @@
-# mind-mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
+# MIND-Mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
 
 **Status:** deferred to v3.2.1 per release gating decision 2026-04-20.
 **Author:** STARGA, Inc.
@@ -36,7 +36,7 @@ gate.
 
 ---
 
-## 2. STRIDE threat model — mind-mem v3.2.0
+## 2. STRIDE threat model — MIND-Mem v3.2.0
 
 ### 2.1 Actors
 

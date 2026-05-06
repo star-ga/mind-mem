@@ -1,6 +1,6 @@
 # Client Integrations
 
-mind-mem works with **16 AI coding clients** out of the box. Every
+MIND-Mem works with **16 AI coding clients** out of the box. Every
 client reads and writes to the same shared workspace (default
 `~/.openclaw/workspace/`), so a fact captured in one tool is
 immediately visible to every other.
@@ -24,7 +24,7 @@ Use `mm install <agent>` to configure a single client; use
 `mm install-all --agent <A> --agent <B>` to target an explicit subset.
 
 Every writer is **non-destructive**: existing config files are parsed
-and the mind-mem stanza is merged in under the `# mind-mem` marker.
+and the MIND-Mem stanza is merged in under the `# mind-mem` marker.
 Re-running the command is idempotent. Pass `--force` to overwrite a
 hand-rolled config you want replaced.
 
@@ -93,7 +93,7 @@ Appends an `AGENTS.md` block telling the codex CLI to run
 | Format | JSON `system_instruction` |
 | Install | `mm install gemini` |
 
-Injects a system instruction pointing at the mind-mem workspace. The
+Injects a system instruction pointing at the MIND-Mem workspace. The
 instruction survives `gemini --yolo` and interactive mode.
 
 ## Cursor
@@ -125,10 +125,10 @@ Same pattern as Cursor. Windsurf reads it on every workspace open.
 | Format | YAML block |
 | Install | `mm install aider` |
 
-Adds `read: ["<ws>/CLAUDE.md"]` so aider always loads the mind-mem
+Adds `read: ["<ws>/CLAUDE.md"]` so aider always loads the MIND-Mem
 context file on startup.
 
-## OpenClaw (STARGA cognitive assistant)
+## OpenClaw (open-source AI assistant)
 
 | | |
 |---|---|
@@ -136,9 +136,9 @@ context file on startup.
 | Format | JSON `hooks.internal.entries.mind-mem` |
 | Install | `mm install openclaw` |
 
-Registers the OpenClaw hook entry pointing at the mind-mem workspace.
+Registers the OpenClaw hook entry pointing at the MIND-Mem workspace.
 OpenClaw shares the same `~/.openclaw/workspace/` directory as
-mind-mem so no separate storage — writes flow both ways.
+MIND-Mem so no separate storage — writes flow both ways.
 
 ## NanoClaw (compact claw variant)
 
@@ -161,7 +161,7 @@ under the `hooks.internal.entries.mind-mem` path.
 | Install | `mm install nemoclaw` |
 
 NemoClaw emphasises long-horizon memory. Its hook loop leans on
-mind-mem's `hybrid_search` path more aggressively than the generic
+MIND-Mem's `hybrid_search` path more aggressively than the generic
 OpenClaw preset. Install writes the same shape; differences are
 purely runtime behaviour on the NemoClaw side.
 
@@ -264,20 +264,20 @@ mm install-all --dry-run
 ```
 
 After this, every supported client on your machine reads from and
-writes into the same mind-mem workspace. Add a tool to the same
+writes into the same MIND-Mem workspace. Add a tool to the same
 box later, and `mm install-all` picks it up on the next run — it's
 safe to re-run.
 
 ## Manual / scripted hooks
 
-If you want to drive mind-mem from a bespoke tool that isn't in the
+If you want to drive MIND-Mem from a bespoke tool that isn't in the
 registry, shell out to the CLI directly:
 
 - `mm recall <query> --limit 10` — JSON result list, ideal for
   piping into a tool-call.
 - `mm context "<query>" --max-tokens 1500` — pre-packed context
   snippet ready to prepend to a prompt.
-- `mm inject "<query>" --agent generic` — returns the mind-mem
+- `mm inject "<query>" --agent generic` — returns the MIND-Mem
   context in a format the agent's system prompt can consume.
 - `mm status` — print workspace health as JSON.
 
@@ -303,7 +303,7 @@ different clients don't cross-contaminate.
   that's correct. The installers are idempotent; the `# mind-mem`
   marker prevents duplicate blocks. Use `--force` to rewrite.
 - **Config file was hand-edited and won't merge** — for JSON configs
-  mind-mem does a structured merge (your keys survive). For text
-  configs mind-mem only appends once. If the hand-edit broke the
+  MIND-Mem does a structured merge (your keys survive). For text
+  configs MIND-Mem only appends once. If the hand-edit broke the
   marker, run `mm install <client> --force` and re-apply your hand
   edits on top.

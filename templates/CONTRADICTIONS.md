@@ -1,4 +1,4 @@
-# CONTRADICTIONS — mind-mem v1.0
+# CONTRADICTIONS — MIND-Mem v1.0
 
 > Contradiction log: conflicting decisions detected by intel_scan.py.
 > ID format: [C-YYYYMMDD-###]

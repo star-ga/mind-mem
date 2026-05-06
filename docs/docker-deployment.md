@@ -1,6 +1,6 @@
 # Docker Deployment
 
-Self-hosted mind-mem with Postgres+pgvector and Ollama in one command.
+Self-hosted MIND-Mem with Postgres+pgvector and Ollama in one command.
 
 ## Requirements
 
@@ -18,7 +18,7 @@ This starts three services on `mindmem-net`:
 
 | Service | Container | Port |
 |---------|-----------|------|
-| mind-mem MCP | `mind-mem` | 8765 |
+| MIND-Mem MCP | `mind-mem` | 8765 |
 | Postgres 16 + pgvector | `mind-mem-postgres` | (internal) |
 | Ollama | `mind-mem-ollama` | 11434 |
 

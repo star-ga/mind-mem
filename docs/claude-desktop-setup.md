@@ -1,6 +1,6 @@
 # Claude Desktop Setup Guide
 
-Step-by-step guide to connect mind-mem to Claude Desktop as an MCP server.
+Step-by-step guide to connect MIND-Mem to Claude Desktop as an MCP server.
 
 ## Prerequisites
 
@@ -39,11 +39,11 @@ Replace both paths with your actual paths.
 
 ## Step 3: Restart Claude Desktop
 
-Quit and reopen Claude Desktop. The mind-mem server will start automatically.
+Quit and reopen Claude Desktop. The MIND-Mem server will start automatically.
 
 ## Step 4: Verify
 
-In Claude Desktop, you should now see mind-mem tools available:
+In Claude Desktop, you should now see MIND-Mem tools available:
 
 - **recall** — Search memory with BM25
 - **propose_update** — Propose new decisions/tasks

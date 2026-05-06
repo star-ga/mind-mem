@@ -1,4 +1,4 @@
-# mind-mem Library Protection
+# MIND-Mem Library Protection
 
 Defence-in-depth layers for the shipped `mind-mem` PyPI wheel. Protection
 here means *tamper-detection + provenance*, not unbreakable DRM — Python

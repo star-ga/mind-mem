@@ -1,6 +1,6 @@
-# mind-mem Quickstart
+# MIND-Mem Quickstart
 
-Get mind-mem running in under 2 minutes.
+Get MIND-Mem running in under 2 minutes.
 
 ---
 
@@ -58,7 +58,7 @@ python3 -m mind_mem.intel_scan /path/to/your/workspace
 
 ## 6. Auto-Capture from Sessions
 
-After each coding session, mind-mem auto-captures decision-like language from your daily logs:
+After each coding session, MIND-Mem auto-captures decision-like language from your daily logs:
 
 ```bash
 python3 -m mind_mem.capture /path/to/your/workspace
@@ -68,7 +68,7 @@ Signals land in `intelligence/SIGNALS.md`. Review and promote with `/apply`.
 
 ## 7. Use via MCP
 
-All MCP-compatible clients can now use mind-mem tools:
+All MCP-compatible clients can now use MIND-Mem tools:
 
 | Tool | What it does |
 | ---- | ------------ |

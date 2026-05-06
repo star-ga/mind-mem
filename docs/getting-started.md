@@ -56,7 +56,7 @@ for r in results:
 
 ### MCP Server
 
-mind-mem includes an MCP server for integration with AI coding assistants.
+MIND-Mem includes an MCP server for integration with AI coding assistants.
 First install the `[mcp]` extra so the `mind-mem-mcp` console script is
 on `PATH`:
 

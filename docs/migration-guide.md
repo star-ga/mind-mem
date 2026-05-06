@@ -1,12 +1,12 @@
 # Migration Guide
 
-## Migrating from mem-os to mind-mem
+## Migrating from mem-os to MIND-Mem
 
-mind-mem is the successor to mem-os. This guide covers the migration path.
+MIND-Mem is the successor to mem-os. This guide covers the migration path.
 
 ### Key Differences
 
-| Feature | mem-os | mind-mem |
+| Feature | mem-os | MIND-Mem |
 |---------|--------|----------|
 | Dependencies | Multiple | Zero (core) |
 | Search | Basic BM25 | Hybrid BM25 + vector + RRF |
@@ -21,7 +21,7 @@ mind-mem is the successor to mem-os. This guide covers the migration path.
    python3 -m mem_os export --format jsonl > mem-os-export.jsonl
    ```
 
-2. **Initialize mind-mem workspace:**
+2. **Initialize MIND-Mem workspace:**
    ```bash
    python3 -c "from mind_mem.init_workspace import init; init('/path/to/workspace')"
    ```
@@ -47,7 +47,7 @@ mind-mem is the successor to mem-os. This guide covers the migration path.
 
 ### MCP Tool Mapping
 
-| mem-os Tool | mind-mem Tool | Notes |
+| mem-os Tool | MIND-Mem Tool | Notes |
 |-------------|---------------|-------|
 | search | recall | Enhanced with graph boost |
 | add_memory | propose_update | Now requires approval |

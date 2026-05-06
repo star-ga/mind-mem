@@ -1,4 +1,4 @@
-# mind-mem Benchmark Report
+# MIND-Mem Benchmark Report
 
 **Date:** 2026-02-23
 
@@ -270,12 +270,12 @@ p-value vs v1.0.0 baseline (paired permutation test, 10,000 permutations): **p <
 
 | System       |     Score | Approach                                             |
 | ------------ | --------: | ---------------------------------------------------- |
-| **mind-mem** | **73.8%** | Deterministic BM25 + RM3 + abstention (local-only)  |
+| **MIND-Mem** | **73.8%** | Deterministic BM25 + RM3 + abstention (local-only)  |
 | Memobase     |     75.8% | Specialized extraction                               |
 | Letta        |     74.0% | Files + agent tool use                               |
 | Mem0         |     68.5% | Graph + LLM extraction                               |
 
-> mind-mem now **surpasses Mem0** and matches **Letta** with pure deterministic retrieval — no embeddings, no vector DB, no cloud calls, no LLM in the retrieval loop. With hybrid mode (BM25 + Qwen3-8B vector), mind-mem reaches **76.7%**, surpassing all competitors.
+> MIND-Mem now **surpasses Mem0** and matches **Letta** with pure deterministic retrieval — no embeddings, no vector DB, no cloud calls, no LLM in the retrieval loop. With hybrid mode (BM25 + Qwen3-8B vector), MIND-Mem reaches **76.7%**, surpassing all competitors.
 
 ## Architecture
 

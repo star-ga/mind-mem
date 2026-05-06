@@ -1,6 +1,6 @@
-# mind-mem Threat Model — 2026-04-28
+# MIND-Mem Threat Model — 2026-04-28
 
-**Scope:** mind-mem MCP server + governance/apply engine + local backends (SQLCipher, FTS5, sqlite-vec, Markdown vault).
+**Scope:** MIND-Mem MCP server + governance/apply engine + local backends (SQLCipher, FTS5, sqlite-vec, Markdown vault).
 **Threat model:** single-operator localhost, untrusted bundles, untrusted agent inputs.
 **Methodology:** STRIDE + adversarial review (`threat-modeler` agent, dispatched 2026-04-28).
 **Verdict:** *Conditional yes* — defensible for single-user localhost once Tier 1 fixes land.
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-mind-mem's design (provenance hashes, audit chain, governance gates) is sound, but **default configuration is insecure**: the admin token is unset by default, vault scanning is unbounded without an allowlist, and webhook alerting exfiltrates raw payloads to operator-supplied URLs with no allowlist. A poisoned MCP client or tampered config can escalate to admin surface or data exfiltration.
+MIND-Mem's design (provenance hashes, audit chain, governance gates) is sound, but **default configuration is insecure**: the admin token is unset by default, vault scanning is unbounded without an allowlist, and webhook alerting exfiltrates raw payloads to operator-supplied URLs with no allowlist. A poisoned MCP client or tampered config can escalate to admin surface or data exfiltration.
 
 Three Tier-1 issues block external/multi-user use. Tier-2 issues are real but lower impact under single-operator-localhost. Tier-3 is hardening for a future hosted/multi-tenant deployment.
 
@@ -94,9 +94,9 @@ Recommend a second pass on `online_trainer.py` before v3.2.0 ships, and a full `
 
 | Tier | Items | Target | Owner |
 |------|-------|--------|-------|
-| 1 | T-002, T-003, T-006 | v3.2.0 (week of 2026-05-05) | mind-mem maintainer |
-| 2 | T-001, T-004, T-005, T-007, T-009 | v3.2.x (month) | mind-mem maintainer |
-| 3 | T-008, T-010, T-011 | v3.3.x (quarter) | mind-mem maintainer |
+| 1 | T-002, T-003, T-006 | v3.2.0 (week of 2026-05-05) | MIND-Mem maintainer |
+| 2 | T-001, T-004, T-005, T-007, T-009 | v3.2.x (month) | MIND-Mem maintainer |
+| 3 | T-008, T-010, T-011 | v3.3.x (quarter) | MIND-Mem maintainer |
 
 ---
 

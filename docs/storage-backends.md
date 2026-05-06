@@ -1,6 +1,6 @@
 # Storage Backends
 
-mind-mem supports three block storage backends. The default is `markdown`
+MIND-Mem supports three block storage backends. The default is `markdown`
 (files on disk). Switching backends is a one-line change in `mind-mem.json`.
 
 > **Multi-CLI / multi-host setups should use Postgres.** If you have more

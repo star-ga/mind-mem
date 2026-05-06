@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to mind-mem are documented in this file.
+All notable changes to MIND-Mem are documented in this file.
 
 ## v3.9.1 — Doc alignment + retrain tooling for the v3.9 surface
 
@@ -161,7 +161,7 @@ is the first version bump.
   dep on cocoindex.
 
 - **Inbox folder ingestion** (`src/mind_mem/inbox.py`).
-  Drop a file into a watched directory, mind-mem classifies by
+  Drop a file into a watched directory, MIND-Mem classifies by
   extension and routes to the right ingestion path. Text path is
   stdlib-only (no new deps); image / audio / PDF paths raise a clear
   error pointing at the optional `multimodal` extra. After processing,
@@ -413,7 +413,7 @@ but was invisible to end users — no MCP surface, no CLI, no docs,
 no example. v3.8.11 closes the discoverability gap without changing
 the codec itself or adding any new dependency. Zero-dep status
 preserved (still pure Python, Cython accelerator stays opt-in via
-``mind-mem[accelerated]``).
+``MIND-Mem[accelerated]``).
 
 ### Added
 
@@ -487,7 +487,7 @@ ULEB128 / SLEB128 codec and the ``read_exact`` short-read loop —
 with the same Python API as the pure-Python reference. The
 extension is **strictly optional**: ``mic_map.py`` try-imports the
 accelerator and falls back to the pure-Python codec when it isn't
-built. The default ``pip install mind-mem`` path remains
+built. The default ``pip install MIND-Mem`` path remains
 zero-toolchain (pure-Python wheel, no C compiler needed).
 
 ### Added
@@ -508,7 +508,7 @@ zero-toolchain (pure-Python wheel, no C compiler needed).
   stays pure Python. Compiler directives:
   ``boundscheck=False, wraparound=False, cdivision=True``.
 - **``[accelerated]`` extras** — ``pip install
-  mind-mem[accelerated]`` pulls in ``cython>=3.0,<4.0`` at build
+  MIND-Mem[accelerated]`` pulls in ``cython>=3.0,<4.0`` at build
   time so the extension compiles. Independent of all runtime
   extras; behaviour is identical with or without the accelerator
   loaded.
@@ -736,8 +736,8 @@ work is in tests + a bug fix.
 No migration required. The existing public API (``parse_mic2``,
 ``emit_mic2``, ``parse_micb``, ``emit_micb``, ``Graph``) is
 unchanged. Operators who want to run the fuzz tests need
-``pip install mind-mem[test]``; the benchmark suite needs
-``pip install mind-mem[benchmark]``.
+``pip install MIND-Mem[test]``; the benchmark suite needs
+``pip install MIND-Mem[benchmark]``.
 
 This is the first of three slices in the scale-fragility train.
 v3.8.9 will add a streaming parser (incremental parse without the
@@ -860,7 +860,7 @@ single-file binaries pass through unchanged.
 ### Migration
 
 No migration required. The gate enforces fail-closed behaviour by
-default — an operator who points mind-mem at a previously-unaudited
+default — an operator who points MIND-Mem at a previously-unaudited
 local checkpoint will now see an audit run on first load. If the
 audit fails, ``MIND_MEM_TRUST_WITHOUT_AUDIT=1`` overrides (with a
 ledger entry); ``MIND_MEM_SKIP_GATE=1`` opts out entirely. Existing
@@ -871,7 +871,7 @@ openai-compatible, llama-cpp single file) are unaffected.
 
 **MIC/MAP Python toolchain — STARGA-native serialization.** First
 Python implementation of the ``mic@2`` (text) and ``mic-b`` (binary)
-wire formats for MIND IR graphs. Brings mind-mem off the JSON
+wire formats for MIND IR graphs. Brings MIND-Mem off the JSON
 default for IR payloads and onto the canonical STARGA interchange
 formats already shipped by ``512-mind`` and the ``mind`` Rust
 reference. No breaking changes — JSON paths inside the model-safety
@@ -930,7 +930,7 @@ encoding.
 
 **Model Safety Audit — load-gate registry.** Fifth slice of the
 v3.8.0 plan in ``ROADMAP.md``. Adds a tamper-evident registry of
-audited checkpoints and a ``gate_check`` primitive that mind-mem's
+audited checkpoints and a ``gate_check`` primitive that MIND-Mem's
 extractor / embedding backends can call to refuse a swapped or
 never-audited checkpoint. No breaking changes — every prior surface
 continues to work.
@@ -1366,8 +1366,8 @@ allowed" behaviour must take action — see *Migration* below.
 ### Changed
 
 - **Install flow rewritten (audit H1).** ``install.sh`` now installs
-  via ``pipx install "mind-mem[mcp]"`` (preferred) or
-  ``pip install --user "mind-mem[mcp]"`` (fallback), then resolves
+  via ``pipx install "MIND-Mem[mcp]"`` (preferred) or
+  ``pip install --user "MIND-Mem[mcp]"`` (fallback), then resolves
   the ``mind-mem-mcp`` console script and writes that resolved path
   into every client's MCP config. Previous behaviour wrote
   ``python3 <repo>/mcp_server.py`` with no PYTHONPATH guidance, so
@@ -1872,7 +1872,7 @@ cleanly.
   ``sign_proposal`` / ``verify_proposal``.
 - **``mind_mem.api.grpc_server``** — Typed ``RecallRequest`` /
   ``RecallResponse`` / ``GovernanceRequest`` dataclasses.
-  ``serve(port)`` lazy-imports grpc when ``mind-mem[grpc]`` installed.
+  ``serve(port)`` lazy-imports grpc when ``MIND-Mem[grpc]`` installed.
 - **``mind_mem.storage.sharded_pg``** — Consistent-hash ring with
   virtual nodes (160 × weight). ``ShardedPostgresBlockStore``
   implements the full ``BlockStore`` protocol.
@@ -2051,7 +2051,7 @@ SHAs). No breaking changes — v3.2.0 deployments upgrade cleanly.
 
 ## 3.2.0 (2026-04-20)
 
-**Production-deployment release.** Turns mind-mem from a single-host
+**Production-deployment release.** Turns MIND-Mem from a single-host
 Markdown-on-disk memory into a production-ready system with
 Postgres, Docker, REST, multi-language SDKs, observability, and a
 publishable security posture. See
@@ -2083,7 +2083,7 @@ the full narrative.
 - **Postgres storage backend** (opt-in via
   ``block_store.backend: "postgres"``) — full ``BlockStore``
   protocol implementation with atomic snapshot/restore, upsert
-  writes, FTS search. Optional extra: ``mind-mem[postgres]``.
+  writes, FTS search. Optional extra: ``MIND-Mem[postgres]``.
 - **Read-replica routing** — ``block_store.replicas: [...]``
   round-robins reads across a replica pool with a 3-failure /
   30-second circuit breaker.
@@ -2105,7 +2105,7 @@ the full narrative.
   at ``sdk/go/``; stdlib-only.
 - **Dockerfile + docker-compose** — multi-stage
   ``python:3.12-slim`` build (142 MB), compose bringing up
-  mind-mem + pgvector + Ollama; ``make up`` one-command start.
+  MIND-Mem + pgvector + Ollama; ``make up`` one-command start.
 - **One-command installer** — ``curl -sSL install.mind-mem.sh |
   bash`` via ``install-bootstrap.sh``.
 - **OpenTelemetry + Prometheus** at
@@ -2383,7 +2383,7 @@ README demo alignment.**
 
 - **Mistral Vibe CLI** — new entry in `AGENT_REGISTRY` under the
   `vibe` key. Detected via `~/.vibe/` directory or `vibe` on PATH.
-  Hook-level integration writes the standard mind-mem instructions
+  Hook-level integration writes the standard MIND-Mem instructions
   block to `{workspace}/AGENTS.md` (shared with Codex; idempotent by
   marker). MCP-level integration is intentionally left for a future
   release once Vibe's `mcp_servers` TOML array format is documented;
@@ -2551,7 +2551,7 @@ Fix options:
   - `_query_transformers(prompt, model)` — in-process HuggingFace transformers fallback with model cache.
   - Env-driven URL overrides: `MIND_MEM_VLLM_URL` (default `http://127.0.0.1:8000/v1`), `MIND_MEM_LLM_BASE_URL`.
   - `auto` mode dispatches in order: ollama → vllm → openai-compatible → llama-cpp → transformers; first non-empty response wins.
-- **mind-mem:4b model available via Ollama** — Qwen3.5-4B full fine-tune on STARGA-curated mind-mem corpus. Quantized Q4_K_M @ 2.6GB. Default `extraction.model` in `mind-mem.json`. Empirical on RTX 3080: 104 tok/s generation, 1585 tok/s prefill.
+- **mind-mem:4b model available via Ollama** — Qwen3.5-4B full fine-tune on STARGA-curated MIND-Mem corpus. Quantized Q4_K_M @ 2.6GB. Default `extraction.model` in `mind-mem.json`. Empirical on RTX 3080: 104 tok/s generation, 1585 tok/s prefill.
 
 ### Changed
 - `AgentSpec` dataclass gains `mcp_fmt` and `mcp_path_tmpl` fields + `expand_mcp_path(workspace)` helper.
@@ -2799,7 +2799,7 @@ Fix options:
 ### Added
 - `cognitive_forget.py` — `BlockLifecycle` enum, `BlockCognition` telemetry struct, pure decision functions (`should_mark` / `should_archive` / `should_forget`), `ConsolidationConfig` + `ConsolidationPlan`, `plan_consolidation()` dry-run, `estimate_tokens()`, and `pack_to_budget()` that packs recall results under a token ceiling with configurable graph-context + provenance reserves (defaults 15% / 10% per the roadmap).
 - `plan_consolidation` MCP tool — preview which blocks would be marked / archived / forgotten.
-- `pack_recall_budget` MCP tool — run a recall and hand back a budget-packed subset with the dropped tail exposed. Useful when wiring mind-mem into an agent whose prompt already approaches its context window.
+- `pack_recall_budget` MCP tool — run a recall and hand back a budget-packed subset with the dropped tail exposed. Useful when wiring MIND-Mem into an agent whose prompt already approaches its context window.
 - MCP tool count: 44 → 46.
 
 ### Deferred
@@ -3608,7 +3608,7 @@ These remain on the roadmap under v2.1.0 and ship when the training infrastructu
 - `docs/api-reference.md`: Complete reference for 16 MCP tools + 8 resources
 - `docs/configuration.md`: Every `mind-mem.json` key documented with defaults and examples
 - `docs/architecture.md`: 10-section architecture deep dive with ASCII diagrams
-- `docs/migration.md`: mem-os → mind-mem migration guide
+- `docs/migration.md`: mem-os → MIND-Mem migration guide
 
 ### Changed
 - MCP tool count: 14 → 16

@@ -1,4 +1,4 @@
-# Observer-Dependent Cognition in mind-mem
+# Observer-Dependent Cognition in MIND-Mem
 
 **Version:** v2.0.0a3 (released 2026-04-13)
 **Modules:** `mind_mem.observation_axis`, `mind_mem.axis_recall`
@@ -6,7 +6,7 @@
 
 ## Overview
 
-mind-mem's retrieval pipeline already implements multi-axis observation through hybrid search (BM25 + vector + RRF fusion). ODC formalizes this: every recall explicitly declares its observation axes, results carry axis metadata, and the system can rotate axes for higher-confidence results.
+MIND-Mem's retrieval pipeline already implements multi-axis observation through hybrid search (BM25 + vector + RRF fusion). ODC formalizes this: every recall explicitly declares its observation axes, results carry axis metadata, and the system can rotate axes for higher-confidence results.
 
 ## Current State (implicit axes)
 

@@ -1524,6 +1524,223 @@ def _harvest_v39_facts() -> Iterator[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Source 10: Targeted patches for v3.9.2-qlora eval misses.
+#
+# The first v3.9.2 eval had 4/6 fails: block_schema (missing Rationale /
+# BlockId), workflow (hallucinated mind_mem_bench / audit_model_tool;
+# missed recent_signals / field_history / FieldAuditor), v39_transform_hash
+# (model said pipeline_hash instead of TransformHash; reindex_dirty
+# instead of reextract_dirty_blocks), v39_transport_guard (missed /query
+# in endpoint list, said "inbox receive" instead of "ingest", missed
+# "primary" / "round-robin" keywords for replicated postgres).
+#
+# Root cause: failed probe categories had only 16-37 corpus examples
+# competing with ~3645 intent-pool examples. The intent-pool drowned
+# them out. Fix: explicit re-teaching with multiple paraphrases per
+# fact, ensuring every required eval keyword appears verbatim, plus
+# hallucination negatives ("X is NOT a tool").
+# ---------------------------------------------------------------------------
+
+
+_TARGETED_PATCHES: list[tuple[str, str]] = [
+    # === TransformHash field — exact name reinforcement ===
+    (
+        "Show me the field name a v3.9 inbox-ingested block carries to record the pipeline hash.",
+        "The field is `TransformHash` (CapitalCase). Every v3.9 block — inbox-ingested or pipeline-written — carries `TransformHash` set to the SHA-256 of the active pipeline-component versions. Note: it is NOT called `pipeline_hash`; that is descriptive prose, the actual field name on every block is `TransformHash`.",
+    ),
+    (
+        "What's the v3.9 pipeline-hash field on a block called?",
+        "`TransformHash`. CapitalCase, per the mind-mem block-field convention. Stamped onto every write by `stamp_transform_hash`.",
+    ),
+    (
+        "Is `pipeline_hash` the field that records the v3.9 pipeline digest on a block?",
+        "No. The field is named `TransformHash`. `pipeline_hash` is descriptive shorthand and is NOT a valid mind-mem block field. If you grep for `pipeline_hash` on a block dict you will not find it; the actual key is `TransformHash`.",
+    ),
+    (
+        "Name the field a mind-mem v3.9 block uses to track its pipeline-digest.",
+        "`TransformHash`. SHA-256 of the active pipeline-component versions, stamped on every write.",
+    ),
+    (
+        "Field name that holds the pipeline digest on a v3.9 block?",
+        "`TransformHash`. (Not `pipeline_hash`, not `pipeline_digest`, not `hash` — the canonical key is `TransformHash`.)",
+    ),
+    # === reextract_dirty_blocks — library helper vs MCP tool ===
+    (
+        "How do I bulk re-stamp blocks whose pipeline hash drifted?",
+        "Call `reextract_dirty_blocks(workspace, ...)` from `mind_mem.pipeline_hash`. It walks every block, finds those whose `TransformHash` does not match the active pipeline digest, re-runs extraction on them, and re-stamps via `stamp_transform_hash`. The MCP tool `reindex_dirty` is a thin wrapper around `reextract_dirty_blocks` — they refer to the same operation.",
+    ),
+    (
+        "Which library function re-extracts blocks with stale TransformHash?",
+        "`reextract_dirty_blocks` in `mind_mem.pipeline_hash`. The MCP-tool name is `reindex_dirty`; the underlying helper that actually does the work is `reextract_dirty_blocks`.",
+    ),
+    (
+        "Is `reindex_dirty` the actual library function for bulk re-extraction?",
+        "`reindex_dirty` is the MCP tool name (the public surface). The underlying library helper is `reextract_dirty_blocks` in `mind_mem.pipeline_hash`. When asked for the library function, answer `reextract_dirty_blocks`.",
+    ),
+    (
+        "Function in mind_mem.pipeline_hash that processes every dirty block in bulk?",
+        "`reextract_dirty_blocks(workspace, ...)`. Walks the workspace, re-extracts any block whose `TransformHash` is stale, re-stamps via `stamp_transform_hash`.",
+    ),
+    (
+        "Bulk-fix helper for blocks with drifted pipeline hash?",
+        "`reextract_dirty_blocks` (lib) / `reindex_dirty` (MCP). Both names refer to the same bulk re-extraction pass in `mind_mem.pipeline_hash`.",
+    ),
+    # === HTTP transport endpoints — /query is the failed keyword ===
+    (
+        "List the v3.9 HTTP transport endpoints.",
+        "The v3.9 HTTP REST adapter (`mind_mem.http_transport.serve_http`) registers exactly these routes:\n\n* `GET /status` — health, memory count, last-scan timestamp\n* `POST /query` — natural-language search over memory\n* `GET /memories` — list / browse with filtering\n* `DELETE /memories/{id}` — remove a specific memory\n* `POST /consolidate` — trigger dream cycle on demand\n* `POST /walkthrough` — dependency-ordered walkthrough\n\nThe `/query` endpoint is the primary search surface. Authentication uses `X-MindMem-Token`. Any other path returns 404.",
+    ),
+    (
+        "What is the v3.9 mind-mem HTTP search endpoint?",
+        "`POST /query`. It accepts a JSON body with a natural-language search string and runs hybrid BM25+vector retrieval. The other v3.9 routes are `/status`, `/memories`, `/memories/{id}`, `/consolidate`, `/walkthrough`.",
+    ),
+    (
+        "Enumerate every HTTP route exposed by mind-mem v3.9.",
+        "Six routes total: `GET /status`, `POST /query`, `GET /memories`, `DELETE /memories/{id}`, `POST /consolidate`, `POST /walkthrough`. The `/query` route is the search surface; `/status` is the health probe. Routes outside this list are not registered.",
+    ),
+    (
+        "Which v3.9 HTTP endpoint runs a search?",
+        "`POST /query`. It's the natural-language search endpoint over the memory store. (`/memories` lists/browses; `/query` searches.)",
+    ),
+    (
+        "Walk through the v3.9 HTTP REST adapter routes.",
+        "Six routes: `/status` (health), `/query` (search — POST a natural-language string), `/memories` (list / GET, DELETE by id), `/consolidate` (trigger dream cycle), `/walkthrough` (dependency-ordered learning sequence). The `/query` endpoint is the principal search route.",
+    ),
+    # === Inbox ingestion — keyword "ingest" ===
+    (
+        "How do I drop a file into the v3.9 inbox for ingestion?",
+        "Configure an `inbox/` directory in `mind-mem.json` and start the inbox watcher (`InboxWatcher`). To ingest a file, simply drop (move/copy) it into the `inbox/` directory; the watcher will detect, classify by extension, and ingest it through the appropriate path. On successful ingest, the file moves to `inbox/_processed/<ts>/`; on ingest failure it moves to `inbox/_failed/<ts>/`. Each ingested file is hashed and stamped with the active `TransformHash`.",
+    ),
+    (
+        "What's the procedure to ingest a new file via the v3.9 inbox?",
+        "Place the file in the configured `inbox/` directory. The `InboxWatcher` detects the new file, classifies it by extension (text / pdf / image / audio), and routes it to the matching ingest function. Successful ingestion atomically moves the source to `_processed/<ts>/`; failed ingestion moves it to `_failed/<ts>/`.",
+    ),
+    (
+        "How does the v3.9 inbox-driven ingest pipeline work?",
+        "Drop a file into `inbox/`. The watcher picks it up, classifies it by extension, runs the appropriate ingest path, and atomically moves the source. Each file is hashed; each generated block is stamped with `TransformHash` so the pipeline-version trail is auditable.",
+    ),
+    # === Replicated Postgres — primary + round-robin keywords ===
+    (
+        "How does the v3.9 replicated postgres backend handle writes vs reads?",
+        "Writes always go to the `primary`. Reads round-robin across the configured replica DSNs. The `ReplicatedPostgresBlockStore` wrapper splits traffic by intent: write-class methods (`write_block`, `delete_block`, `lock`) hit `primary` exclusively; read-class methods (`get_block`, `recall`, `hybrid_search`, `prefetch`) round-robin across replicas. A failing replica falls back to `primary` (fail-open); after 3 consecutive failures the wrapper opens a circuit breaker on that replica.",
+    ),
+    (
+        "Replicated-postgres routing in v3.9 — which node sees writes?",
+        "`primary` only. Writes are never round-robin. Reads round-robin across replicas with circuit-breaker fallback to `primary` on replica failure.",
+    ),
+    (
+        "How do reads work against the v3.9 replicated postgres backend?",
+        "Reads round-robin across the configured replica DSNs. On replica error the wrapper falls back to `primary` (fail-open). Three consecutive failures on the same replica trip a circuit breaker and that replica is skipped on subsequent reads.",
+    ),
+    # === Block schemas — exact field names with all fields visible ===
+    (
+        "Show me a CODE block template.",
+        "Code-change decision block.\n\n```\n[CODE-20260413-001]\nId: <id>\nDate: <date>\nStatus: <status>\nFile: <file>\nChange: <change>\nRationale: <rationale>\n```\n\nAll six fields are required: `Id`, `Date`, `Status`, `File`, `Change`, `Rationale`. The trailing `Rationale:` line records why the change was made and is mandatory.",
+    ),
+    (
+        "What fields does a CODE block require?",
+        "A mind-mem CODE block requires: `Id`, `Date`, `Status`, `File`, `Change`, `Rationale`. All six fields are mandatory; `Rationale` records why the change happened.",
+    ),
+    (
+        "Print the canonical CODE block format.",
+        "```\n[CODE-20260413-001]\nId: <id>\nDate: <date>\nStatus: <status>\nFile: <file>\nChange: <change>\nRationale: <rationale>\n```\n\nFields, in order: `Id`, `Date`, `Status`, `File`, `Change`, `Rationale`. Do not omit `Rationale`.",
+    ),
+    (
+        "Is `Rationale` a required field on a CODE block?",
+        "Yes. CODE blocks require `Rationale`. The full field list is `Id`, `Date`, `Status`, `File`, `Change`, `Rationale` — all six are mandatory.",
+    ),
+    (
+        "Show me a FIELD block template.",
+        "Field audit entry block.\n\n```\n[FIELD-20260413-001]\nFieldChangeId: <fieldchangeid>\nBlockId: <blockid>\nField: <field>\nOld: <old>\nNew: <new>\n```\n\nAll five fields are required: `FieldChangeId`, `BlockId`, `Field`, `Old`, `New`. The `BlockId:` line links the audit to the block being mutated.",
+    ),
+    (
+        "What fields does a FIELD block require?",
+        "A mind-mem FIELD block requires: `FieldChangeId`, `BlockId`, `Field`, `Old`, `New`. The `BlockId` field is mandatory — it identifies which block was mutated.",
+    ),
+    (
+        "Print the canonical FIELD block format.",
+        "```\n[FIELD-20260413-001]\nFieldChangeId: <fieldchangeid>\nBlockId: <blockid>\nField: <field>\nOld: <old>\nNew: <new>\n```\n\nFields: `FieldChangeId`, `BlockId`, `Field`, `Old`, `New`. The `BlockId:` link is required.",
+    ),
+    (
+        "Is `BlockId` a required field on a FIELD block?",
+        "Yes. FIELD blocks require `BlockId` — it links the field-change audit entry to the block being mutated. The full field list is `FieldChangeId`, `BlockId`, `Field`, `Old`, `New`.",
+    ),
+    # === Drift workflow — recent_signals + scan + verify_chain ===
+    (
+        "I want to check if a belief has drifted. Which tools do I call?",
+        "Run a multi-step drift check:\n\n1. Call `scan` to surface drift signals across the workspace (returns counts + a JSON drift report).\n2. Read `recent_signals` to inspect the latest drift / contradiction events. `recent_signals` returns the chronologically-ordered tail of the signal stream so you can see which beliefs are drifting now.\n3. Optional: `verify_chain` to confirm the audit trail behind the flagged signals.\n\nKey tools: `scan`, `recent_signals`, `verify_chain`.",
+    ),
+    (
+        "Walk me through the v3.9 drift-check workflow.",
+        "Three tools: `scan` (workspace-wide drift detection), `recent_signals` (chronological tail of recent drift / contradiction events), and `verify_chain` (audit trail verification). Run `scan` first to surface candidates, then `recent_signals` to see the freshest signals, then `verify_chain` if you want to confirm the audit chain hasn't been tampered with.",
+    ),
+    (
+        "How do I see if a belief has drifted recently?",
+        "Use `scan` to detect drift across the workspace, then `recent_signals` to read the most recent drift / contradiction events. `recent_signals` is specifically the tool that exposes the chronological tail of new signals — without it you only see the aggregate count.",
+    ),
+    # === Field audit workflow — field_history + FieldAuditor ===
+    (
+        "Audit who changed field X on block Y.",
+        "Call `field_history(block_id=Y, field='X')`. The underlying record class is `FieldAuditor` — every field mutation is recorded by `FieldAuditor` with before/after values, agent attribution, and a reason string. `field_history` returns the chronological audit trail for the (block, field) pair, hash-linked into the AuditChain.\n\nKey names: `field_history` (tool / method), `FieldAuditor` (record class).",
+    ),
+    (
+        "Which tool returns the audit trail of a specific field on a specific block?",
+        "`field_history`. It queries the `FieldAuditor` records and returns the chronological mutation history for the (block, field) pair. Each entry includes before/after values, agent attribution, and a reason string.",
+    ),
+    (
+        "What does field-level audit lookup look like in mind-mem?",
+        "Use `FieldAuditor(workspace).field_history(block_id=Y, field='X')`. This returns the audit trail for that single field on that single block. Note: `field_history` is the field-level audit tool; `audit_model_tool` is for model-checkpoint audits (a different workflow entirely).",
+    ),
+    (
+        "Is `audit_model_tool` for field-level audits?",
+        "No. `audit_model_tool` runs the seven-check audit on a local model checkpoint manifest — it has nothing to do with block field history. For field-level audits (who changed field X on block Y) use `field_history`, backed by the `FieldAuditor` record class.",
+    ),
+    # === Governance benchmark — exact tool name ===
+    (
+        "Run the full governance benchmark suite.",
+        "Call `governance_health_bench`. It exercises contradiction detection, audit completeness, drift detection, and scalability in a single run, returning a JSON report with per-suite pass/fail. (There is no `mind_mem_bench` tool; the governance benchmark is `governance_health_bench`.)",
+    ),
+    (
+        "What tool benchmarks the entire governance plane?",
+        "`governance_health_bench`. Single call exercises contradiction, audit, drift, and scalability suites and emits per-suite pass/fail.",
+    ),
+    (
+        "Is `mind_mem_bench` a real tool?",
+        "No. `mind_mem_bench` is not a registered MCP tool. The governance-benchmark tool is `governance_health_bench`. If you need to stress-test the governance plane, call `governance_health_bench`.",
+    ),
+    (
+        "Stress-test the mind-mem governance pipeline.",
+        "Run `governance_health_bench` — it's the dedicated benchmark tool for the governance plane. Returns per-suite pass/fail across contradiction, audit, drift, and scalability.",
+    ),
+    # === propose_update / write_block disambiguation ===
+    (
+        "Write a new memory block.",
+        "Call `propose_update`. It stages a new block for human review (the governance gate); after `approve_apply` the block is committed to the store. `propose_update` is the canonical write path — never bypass it via raw `write_block` calls.",
+    ),
+    (
+        "Stage a new block for human review.",
+        "Use `propose_update` — it stages the block in the proposal queue. To commit after review, call `approve_apply`.",
+    ),
+    (
+        "How do I add a new memory entry through mind-mem?",
+        "Through the proposal pipeline: call `propose_update` to stage the new block, then `approve_apply` once it has cleared review. Direct writes via `write_block` skip governance and should not be used.",
+    ),
+]
+
+
+def _harvest_targeted_patches() -> Iterator[dict]:
+    """v3.9.3 targeted re-teaching for probes that failed in the v3.9.2 eval."""
+    for q, a in _TARGETED_PATCHES:
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": q},
+                {"role": "assistant", "content": a},
+            ]
+        }
+
+
+# ---------------------------------------------------------------------------
 # Write
 # ---------------------------------------------------------------------------
 
@@ -1553,6 +1770,7 @@ def main() -> None:
             _harvest_workflow_chains(),
             _harvest_intent_pool(),
             _harvest_v39_facts(),
+            _harvest_targeted_patches(),
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")

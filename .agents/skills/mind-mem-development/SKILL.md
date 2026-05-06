@@ -1,10 +1,10 @@
 ---
 name: mind-mem-development
-description: mind-mem Python development guide
-tags: [python, memory, mind-mem, pypi]
+description: MIND-Mem Python development guide
+tags: [python, memory, MIND-Mem, pypi]
 ---
 
-# mind-mem Development
+# MIND-Mem Development
 
 ## Package
 - PyPI: `pip install mind-mem`

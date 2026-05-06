@@ -2,7 +2,7 @@
 
 ## Overview
 
-mind-mem uses GitHub Actions for continuous integration.
+MIND-Mem uses GitHub Actions for continuous integration.
 
 ## Workflows
 

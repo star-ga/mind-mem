@@ -77,9 +77,9 @@ mixed lists accepted, empty list / missing key / missing file
 no-op pass. 25 unit tests in `tests/test_audit_pinned.py`. No
 breaking changes. Model Safety Audit theme is now complete (audit
 → sign → provenance → MCP → gate → backend wiring → CI hook).
-Social ingestion has been moved out of mind-mem to naestro-bot
+Social ingestion has been moved out of MIND-Mem to naestro-bot
 (see ROADMAP.md root) — fetching is an agent-layer concern,
-mind-mem stays the substrate.
+MIND-Mem stays the substrate.
 
 ## v3.8.6 (Released 2026-05-02)
 
@@ -316,15 +316,15 @@ Direction:
 > Audit minor (see `ROADMAP.md` root). The originally-bundled
 > social-ingestion thread has been moved to naestro-bot — fetching
 > is an agent-layer concern and inheriting per-platform fetchers
-> would have broken mind-mem's zero-dep posture. The Always-On
+> would have broken MIND-Mem's zero-dep posture. The Always-On
 > Memory Agent patterns below are deferred to v3.9.0 candidates and
 > live alongside the walkthrough/persona theme below.
 
 Inspired by Google Cloud's Always-On Memory Agent reference architecture
 (MIT, `GoogleCloudPlatform/generative-ai/gemini/agents/always-on-memory-agent`).
 Their reference validates the category but lacks governance, hybrid search,
-multi-LLM backends, and MCP compatibility — features mind-mem already has.
-Three patterns from their design are worth adopting on top of mind-mem's
+multi-LLM backends, and MCP compatibility — features MIND-Mem already has.
+Three patterns from their design are worth adopting on top of MIND-Mem's
 production-grade foundation:
 
 ### 1. Inbox folder ingestion — **landed (in-progress branch)**
@@ -336,7 +336,7 @@ production-grade foundation:
 > mapped to `memory/INBOX.md` (both `_BLOCK_PREFIX_MAP` locations
 > updated in lockstep).
 
-Drop any file into a watched inbox directory, mind-mem detects,
+Drop any file into a watched inbox directory, MIND-Mem detects,
 classifies by extension, routes to the right ingestion path:
 
 - ✓ text (`.txt`, `.md`, `.json`, `.csv`, `.log`, `.xml`, `.yaml`,
@@ -359,7 +359,7 @@ the end of the queue.
 Heavy dependencies (CLIP / Whisper / pdf-extract) stay optional behind
 the `multimodal` extra: `pip install mind-mem[multimodal]`.
 
-Solves the "how do I get content into mind-mem" friction for non-technical
+Solves the "how do I get content into MIND-Mem" friction for non-technical
 users. Files = universal interface, no API knowledge needed.
 
 ### 2. Auto-scheduled dream cycle — **landed (in-progress branch)**
@@ -369,7 +369,7 @@ users. Files = universal interface, no API knowledge needed.
 > `tests/test_daemon.py` (all passing). CLI subcommand
 > `mm daemon [--dry-run] [--once]` wired.
 
-mind-mem already has `dream_cycle.py` (consolidation logic) and
+MIND-Mem already has `dream_cycle.py` (consolidation logic) and
 `cron_runner.py` (scheduler). Missing was a default-on automatic
 schedule — now provided by the daemon module.
 
@@ -387,7 +387,7 @@ Implemented:
 - ✓ One-shot mode: `mm daemon --once` runs every enabled task once
   and exits — handy for operator runs and CI.
 
-"Drift prevention" is a core mind-mem promise — but only if dream cycle
+"Drift prevention" is a core MIND-Mem promise — but only if dream cycle
 actually runs. Most users never set up cron, so dream cycle never fires.
 One config flag flips the default.
 
@@ -398,7 +398,7 @@ One config flag flips the default.
 > 34 tests in `tests/test_http_transport.py`, all passing).
 > CLI subcommand `mm http-serve` wired. CHANGELOG updated.
 
-mind-mem already has `/ingest` HTTP endpoint (`ingestion_pipeline.py`).
+MIND-Mem already has `/ingest` HTTP endpoint (`ingestion_pipeline.py`).
 The v3.9 transport adds (✓ = implemented):
 
 - ✓ `GET /status` — health, memory count, last-scan timestamp
@@ -423,11 +423,11 @@ existing functions.
 ### What we explicitly do NOT borrow
 
 - Streamlit dashboard. Adding Streamlit as a core dependency violates the
-  "zero core dependencies" badge that's part of mind-mem's positioning.
+  "zero core dependencies" badge that's part of MIND-Mem's positioning.
   If a dashboard is wanted, ship as a separate package
   (`mind-mem-dashboard`) or document how users build one with the new
   HTTP API.
-- Gemini hardcoding. mind-mem stays embedding-model agnostic and
+- Gemini hardcoding. MIND-Mem stays embedding-model agnostic and
   multi-LLM compatible.
 - SQLite-only backend. We keep markdown + Postgres + hybrid search.
 
@@ -436,7 +436,7 @@ existing functions.
 1-2 weeks for one engineer. All three play together: a deployment using
 all three becomes "drop a file in inbox → ingested → consolidated
 automatically → queryable via HTTP" — the Google reference architecture
-pitch with mind-mem's governance, hybrid search, and audit chain
+pitch with MIND-Mem's governance, hybrid search, and audit chain
 underneath.
 
 ## v3.9.0 candidates — Dependency-ordered walkthrough / Persona-aware recall
@@ -447,7 +447,7 @@ or be split across v3.9.0 / v3.10.0.
 
 Inspired by `Lum1104/Understand-Anything` (MIT, ~10k stars). Their distinctive
 value is the *human browsing UX* — guided dependency-ordered walkthroughs and
-persona-adaptive detail. mind-mem already has graph traversal, hybrid search,
+persona-adaptive detail. MIND-Mem already has graph traversal, hybrid search,
 and compiled-truth pages, so the dashboard / multi-agent extraction pipeline /
 JSON-in-repo convention don't fit. Two ideas do.
 
@@ -512,11 +512,11 @@ not a separate index. Zero index cost. The wrapper is wired into
 
 ### What we explicitly do NOT borrow
 
-- Web dashboard. mind-mem stays headless; if a dashboard is wanted, ship as a
+- Web dashboard. MIND-Mem stays headless; if a dashboard is wanted, ship as a
   separate package on top of the future Extended HTTP API (see Theme A above).
-- Multi-agent code-extraction pipeline. mind-mem already has its own ingestion;
+- Multi-agent code-extraction pipeline. MIND-Mem already has its own ingestion;
   we don't re-extract from source repos.
-- `.understand-anything/` JSON-in-repo convention. mind-mem's per-workspace
+- `.understand-anything/` JSON-in-repo convention. MIND-Mem's per-workspace
   model is the right unit, not per-repo committed metadata.
 - Persona-adaptive UI. UI is out of scope; persona affects API output shape
   only.
@@ -549,7 +549,7 @@ projects can adopt without parallel implementation:
 - **mind-fleet** — swarm-orchestration walkthroughs as governance evidence
   when human operators review autonomous fleet decisions.
 
-mind-mem ships the *primitives* (MCP tools); each consumer ships its own
+MIND-Mem ships the *primitives* (MCP tools); each consumer ships its own
 *surface* (CLI flag, panel, channel command). No per-consumer code in mind-mem.
 Cross-repo adoption happens via the existing MCP integration list — no new
 transport, no new auth, no new convention.
@@ -560,7 +560,7 @@ Third v3.9.0 theme. Inspired by `cocoindex-io/cocoindex` (Apache-2.0,
 ~7.4k stars, v1 in preview). Their distinctive value is the
 `target = F(source)` declarative incremental engine: re-run only
 the rows whose inputs *or transform code* changed, with byte-level
-provenance from target back to source. mind-mem already has incremental
+provenance from target back to source. MIND-Mem already has incremental
 indexing (mtime + size + partial-hash via `sqlite_index.py`) and partial
 provenance (source path on each block), so the framework / multi-source
 connectors / Rust core / pipeline DAG don't fit. Two ideas do.
@@ -606,7 +606,7 @@ forcing full O(N) reindex on every prompt iteration.
 ### 2. Per-byte source lineage
 
 Today blocks carry a source path. cocoindex tracks target byte → source
-byte. mind-mem's audit-chain story is stronger if every governed claim
+byte. MIND-Mem's audit-chain story is stronger if every governed claim
 traces back to an exact byte range, not just a file. Add:
 
 - `source_span = {path, byte_start, byte_end, sha256}` on each block,
@@ -623,18 +623,18 @@ chains: every governed assertion has byte-level provenance.
 
 ### What we explicitly do NOT borrow
 
-- The pipeline orchestration framework. mind-mem is a recall engine +
+- The pipeline orchestration framework. MIND-Mem is a recall engine +
   indexer; we don't need a flow DAG, transform composer, or `@flow`
   decorator surface. Adding cocoindex as a runtime dep would import a
   Rust core we don't ship today.
 - Multi-source connectors (S3, GDrive, Slack, Postgres CDC, Kafka).
-  mind-mem's per-workspace file model is the right unit; multi-source
+  MIND-Mem's per-workspace file model is the right unit; multi-source
   ingestion is a Naestro-layer concern (see `~/naestro/ROADMAP.md` R6).
 - "React for data engineering" mental model as an API. Useful as
   documentation framing for v4.0 networked mesh (see below) but not as
   a replacement for the existing `@memo` / `extract` / `recall`
   surfaces.
-- v1-preview code. Concepts only. mind-mem stays on its own indexer.
+- v1-preview code. Concepts only. MIND-Mem stays on its own indexer.
 
 ### Estimated effort
 
@@ -708,7 +708,7 @@ this is pure MCP-surface plumbing.
 
 ## v4.0 candidates — Networked Mesh + Parallel Pipelines
 
-mind-mem today is single-process and single-host. Two adjacent surfaces have
+MIND-Mem today is single-process and single-host. Two adjacent surfaces have
 been deferred long enough: cross-machine sync (already stubbed in
 `memory_mesh.py` v2.6.0 as a transport-less core) and intra-process parallelism
 (ingestion, recall fan-out, dream cycle all single-threaded today). v4.0 lights
@@ -852,7 +852,7 @@ and it keeps one mental model.
   for high-latency links at v4.0.
 - **OIDC / SSO / SAML.** Auth stays per-peer Ed25519 keypairs + tokens.
   Enterprise SSO is a v4.x extra package.
-- **GPU coordination / model serving.** mind-mem isn't a model serving
+- **GPU coordination / model serving.** MIND-Mem isn't a model serving
   framework. Each peer runs its own `mind-mem-4b` (or remote LLM) — no
   cross-peer model sharing, no central inference coordinator. Parallel
   extraction means parallel local calls, not distributed inference.

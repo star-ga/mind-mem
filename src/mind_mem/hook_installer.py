@@ -625,7 +625,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
     ),
     "openclaw": AgentSpec(
         name="openclaw",
-        description="OpenClaw (STARGA cognitive assistant)",
+        description="OpenClaw (open-source AI assistant)",
         config_fmt="json-openclaw-hooks",
         path_tmpl="{home}/.openclaw/openclaw.json",
         detect_paths=("{home}/.openclaw",),

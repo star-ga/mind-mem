@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in mind-mem
+about: Report a bug in MIND-Mem
 title: '[BUG] '
 labels: bug
 assignees: ''
@@ -23,6 +23,6 @@ A clear description of the bug.
 ## Environment
 - Python version:
 - OS:
-- mind-mem version:
+- MIND-Mem version:
 
 ## Additional Context

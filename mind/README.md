@@ -1,8 +1,8 @@
 # MIND Kernels
 
-Numerical hot paths for mind-mem, written in the [MIND programming language](https://mindlang.dev).
+Numerical hot paths for MIND-Mem, written in the [MIND programming language](https://mindlang.dev).
 
-The MIND kernel is **optional**. mind-mem works without it (pure Python fallback). With it, scoring runs at native speed with compile-time tensor shape verification.
+The MIND kernel is **optional**. MIND-Mem works without it (pure Python fallback). With it, scoring runs at native speed with compile-time tensor shape verification.
 
 ## Compilation
 
@@ -53,4 +53,4 @@ The compiled `.so` exposes a C99-compatible ABI. Python calls via `ctypes` throu
 
 ## Without MIND
 
-If `lib/libmindmem.so` is not present, mind-mem uses pure Python implementations. The Python fallback produces identical results (within f32 epsilon). No functionality is lost.
+If `lib/libmindmem.so` is not present, MIND-Mem uses pure Python implementations. The Python fallback produces identical results (within f32 epsilon). No functionality is lost.

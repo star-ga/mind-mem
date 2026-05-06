@@ -2,7 +2,7 @@
 
 ## Overview
 
-mind-mem operates on local filesystem data with no network dependencies. Security considerations focus on data integrity, access control, and audit trails.
+MIND-Mem operates on local filesystem data with no network dependencies. Security considerations focus on data integrity, access control, and audit trails.
 
 ## Data Integrity
 

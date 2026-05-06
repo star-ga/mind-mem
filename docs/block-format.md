@@ -2,7 +2,7 @@
 
 ## Overview
 
-mind-mem stores information as structured blocks in markdown files. Each block represents a discrete unit of knowledge.
+MIND-Mem stores information as structured blocks in markdown files. Each block represents a discrete unit of knowledge.
 
 ## Block Structure
 

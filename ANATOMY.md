@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 733 | **Est. tokens:** ~1,523,506
-**Generated:** 2026-05-06 12:15 UTC
+**Files:** 733 | **Est. tokens:** ~1,523,541
+**Generated:** 2026-05-06 14:14 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 32 | ~85,351 |
+| `./` | 32 | ~85,386 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,101 |
 | `benchmarks/` | 26 | ~64,933 |
@@ -76,10 +76,10 @@
 ### `./`
 
 - `AGENTS.md` (~572 tok, large) — Memory Context
-- `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: mind-mem (Commit 30d8b71)
-- `CLAUDE.md` (~1340 tok, large) — mind-mem — Persistent AI Memory System
+- `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: MIND-Mem (Commit 30d8b71)
+- `CLAUDE.md` (~1340 tok, large) — MIND-Mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
-- `CONTRIBUTING.md` (~309 tok, medium) — Contributing to mind-mem
+- `CONTRIBUTING.md` (~309 tok, medium) — Contributing to MIND-Mem
 - `demo-setup.sh` (~323 tok, medium) — Pre-seed a demo workspace for VHS recording
 - `demo.tape` (~93 tok, small) — # mind-mem demo — terminal recording for README
 - `Dockerfile` (~54 tok, small) — FROM python:3.12-slim
@@ -98,10 +98,10 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~1945 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~23563 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~23598 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
-- `ROADMAP.md` (~24690 tok, huge) — mind-mem Roadmap
-- `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
+- `ROADMAP.md` (~24690 tok, huge) — MIND-Mem Roadmap
+- `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
 - `SECURITY.md` (~1752 tok, huge) — Security Policy
 - `setup.py` (~397 tok, medium) — Conditional setup hook for the optional Cython accelerator.
 - `SPEC.md` (~5184 tok, huge) — Mind Mem Formal Specification v1.0
@@ -109,7 +109,7 @@
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
 ### `.agents/skills/mind-mem-development/`
 
-- `SKILL.md` (~456 tok, medium) — mind-mem Development
+- `SKILL.md` (~456 tok, medium) — MIND-Mem Development
 ### `.arch-mind/`
 
 - `last_summary.json` (~157 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
@@ -138,7 +138,7 @@
 - `niah_v3.2.1_redis_results.txt` (~113 tok, small) — ============================= test session starts ==============================
 - `niah_v3.2.1_results.txt` (~205 tok, medium) — ============================= test session starts ==============================
 - `README_benchmark_mode.md` (~1089 tok, large) — Full-capability benchmark mode (v3.3.0)
-- `REPORT.md` (~3973 tok, huge) — mind-mem Benchmark Report
+- `REPORT.md` (~3973 tok, huge) — MIND-Mem Benchmark Report
 - `runpod_kickoff.sh` (~1779 tok, huge) — mind-mem-4b v2 — Runpod one-shot kickoff.
 - `tier_weight_search.py` (~1615 tok, huge) — Grid-search per-tier weights against LoCoMo judge scores (v3.3.0 T4 #10).
 - `train_config_a100.yaml` (~347 tok, medium) — base_model: star-ga/mind-mem-4b
@@ -168,7 +168,7 @@
 
 - `api-reference.md` (~1477 tok, large) — API Reference
 - `architecture.md` (~1936 tok, huge) — Architecture
-- `audit_response.md` (~956 tok, large) — mind-mem — response to the 2026-05-02 ecosystem audit
+- `audit_response.md` (~956 tok, large) — MIND-Mem — response to the 2026-05-02 ecosystem audit
 - `benchmarks.md` (~755 tok, large) — Benchmarks
 - `block-format.md` (~431 tok, medium) — Block Format
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
@@ -190,7 +190,7 @@
 - `faq.md` (~374 tok, medium) — FAQ
 - `getting-started.md` (~493 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
-- `governance.md` (~1366 tok, large) — mind-mem — governance design (5 layers)
+- `governance.md` (~1366 tok, large) — MIND-Mem — governance design (5 layers)
 - `hf-mind-mem-4b-v2-README.md` (~2154 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `integrations.md` (~1545 tok, huge) — Integrations
 - `locomo-v3.4-conv0-results.md` (~449 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
@@ -199,23 +199,23 @@
 - `mcp-tool-examples.md` (~902 tok, large) — MCP Tool Examples
 - `mic-map.md` (~1686 tok, huge) — MIC/MAP — MIND IR Graph Serialization
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
-- `migration.md` (~2754 tok, huge) — Migration Guide: mem-os to mind-mem
+- `migration.md` (~2754 tok, huge) — Migration Guide: mem-os to MIND-Mem
 - `mind-kernels.md` (~339 tok, medium) — MIND Kernels
 - `mind-mem-4b-setup.md` (~2425 tok, huge) — Setting up the mind-mem-4b model
 - `mind-mem-4b-v2-training-recipe.md` (~1683 tok, huge) — mind-mem-4b v2 training recipe — Runpod H200
-- `odc-retrieval.md` (~834 tok, large) — Observer-Dependent Cognition in mind-mem
+- `odc-retrieval.md` (~834 tok, large) — Observer-Dependent Cognition in MIND-Mem
 - `performance-tuning.md` (~560 tok, large) — Performance Tuning
-- `protection.md` (~1443 tok, large) — mind-mem Library Protection
-- `quickstart.md` (~601 tok, large) — mind-mem Quickstart
-- `rest-api.md` (~1137 tok, large) — mind-mem REST API
-- `review-architecture-v3.2.0.md` (~1919 tok, huge) — Architecture Review — mind-mem v3.2.0 (Release Candidate)
+- `protection.md` (~1443 tok, large) — MIND-Mem Library Protection
+- `quickstart.md` (~601 tok, large) — MIND-Mem Quickstart
+- `rest-api.md` (~1137 tok, large) — MIND-Mem REST API
+- `review-architecture-v3.2.0.md` (~1919 tok, huge) — Architecture Review — MIND-Mem v3.2.0 (Release Candidate)
 - `review-database-v3.2.0.md` (~3171 tok, huge) — Database Review — PostgresBlockStore v3.2.0
-- `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — mind-mem v3.2.0
-- `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — mind-mem v3.2.0
+- `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — MIND-Mem v3.2.0
+- `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
 - `roadmap.md` (~11068 tok, huge) — Roadmap
 - `scoring.md` (~517 tok, large) — Scoring System
-- `SECURITY_AUDIT_SELF_2026_04.md` (~2257 tok, huge) — mind-mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
-- `security-audit-sow.md` (~3336 tok, huge) — mind-mem — External Security Audit Statement of Work (SoW)
+- `SECURITY_AUDIT_SELF_2026_04.md` (~2257 tok, huge) — MIND-Mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
+- `security-audit-sow.md` (~3336 tok, huge) — MIND-Mem — External Security Audit Statement of Work (SoW)
 ### `docs/security-baselines/`
 
 - `bandit-v3.2.0-baseline.json` (~18974 tok, huge) — Keys: errors, generated_at, metrics, results
@@ -223,7 +223,7 @@
 
 - `security-model.md` (~350 tok, medium) — Security Model
 - `setup.md` (~1741 tok, huge) — Setup
-- `status.md` (~1126 tok, large) — mind-mem — implementation status (alignment companion)
+- `status.md` (~1126 tok, large) — MIND-Mem — implementation status (alignment companion)
 - `storage-backends.md` (~1264 tok, large) — Storage Backends
 - `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide
 - `supply-chain-security.md` (~1051 tok, large) — Supply-Chain Security
@@ -234,17 +234,17 @@
 - `v3.2.0-atomicity-scope-plan.md` (~1681 tok, huge) — v3.2.0 — Atomicity scope plan (§2.2)
 - `v3.2.0-blockstore-routing-plan.md` (~2116 tok, huge) — v3.2.0 — Apply engine → BlockStore routing plan
 - `v3.2.0-mcp-decomposition-plan.md` (~2575 tok, huge) — v3.2.0 — MCP server decomposition plan
-- `v3.2.0-release-notes.md` (~1881 tok, huge) — mind-mem v3.2.0 — Production Deployment Release
-- `v3.2.1-release-notes.md` (~1302 tok, large) — mind-mem v3.2.1 release notes
-- `v3.3.0-release-notes.md` (~1157 tok, large) — mind-mem v3.3.0 release notes
-- `v3.4.0-release-notes.md` (~1209 tok, large) — mind-mem v3.4.0 release notes
+- `v3.2.0-release-notes.md` (~1881 tok, huge) — MIND-Mem v3.2.0 — Production Deployment Release
+- `v3.2.1-release-notes.md` (~1302 tok, large) — MIND-Mem v3.2.1 release notes
+- `v3.3.0-release-notes.md` (~1157 tok, large) — MIND-Mem v3.3.0 release notes
+- `v3.4.0-release-notes.md` (~1209 tok, large) — MIND-Mem v3.4.0 release notes
 - `v3.4.0-roadmap-llm-consensus.md` (~1271 tok, large) — v3.4.0 roadmap — path to 90+ on LoCoMo
 - `workspace-structure.md` (~352 tok, medium) — Workspace Structure
 ### `examples/`
 
 - `basic_usage.py` (~394 tok, medium) — Basic mind-mem usage example.
 - `mic_map_quickstart.py` (~735 tok, large) — MIC/MAP quickstart — emit, parse, round-trip, stream.
-- `README.md` (~72 tok, small) — mind-mem Examples
+- `README.md` (~72 tok, small) — MIND-Mem Examples
 ### `.github/`
 
 - `CODEOWNERS` (~25 tok, tiny) — # Default owners
@@ -337,7 +337,7 @@
 - `.gitignore` (~5 tok, tiny) — *.test
 - `go.mod` (~13 tok, tiny) — module github.com/star-ga/mind-mem/sdk/go
 - `methods.go` (~500 tok, large) — Recall queries the memory store using full-text and semantic search.
-- `README.md` (~520 tok, large) — mind-mem Go SDK
+- `README.md` (~520 tok, large) — MIND-Mem Go SDK
 - `types.go` (~848 tok, large) — BlockTier represents the storage tier of a memory block.
 ### `sdk/js/`
 
@@ -359,9 +359,9 @@
 - `tsconfig.json` (~147 tok, small) — Keys: compilerOptions, include, exclude
 ### `security/`
 
-- `api-security-2026-04-28.md` (~5929 tok, huge) — mind-mem v3.1.8 — API / MCP Surface Security Audit
-- `api-security-review-2026-04-28.md` (~3563 tok, huge) — mind-mem API Security Review — 2026-04-28
-- `threat-model-2026-04-28.md` (~1517 tok, huge) — mind-mem Threat Model — 2026-04-28
+- `api-security-2026-04-28.md` (~5929 tok, huge) — MIND-Mem v3.1.8 — API / MCP Surface Security Audit
+- `api-security-review-2026-04-28.md` (~3563 tok, huge) — MIND-Mem API Security Review — 2026-04-28
+- `threat-model-2026-04-28.md` (~1517 tok, huge) — MIND-Mem Threat Model — 2026-04-28
 ### `skills/apply-proposal/`
 
 - `SKILL.md` (~345 tok, medium) — /apply — Apply Proposals
@@ -606,25 +606,25 @@
 - `watcher.py` (~886 tok, large) — Mind-Mem File Watcher — auto-reindex on workspace changes. Zero external deps.
 ### `templates/`
 
-- `AUDIT.md` (~31 tok, tiny) — AUDIT — mind-mem v1.0
-- `BRIEFINGS.md` (~47 tok, tiny) — BRIEFINGS — mind-mem v1.0
-- `CONTRADICTIONS.md` (~47 tok, tiny) — CONTRADICTIONS — mind-mem v1.0
-- `DECISIONS.md` (~77 tok, small) — DECISIONS — mind-mem v1.0
-- `DECISIONS_PROPOSED.md` (~50 tok, small) — DECISIONS_PROPOSED — mind-mem v1.0
-- `DRIFT.md` (~45 tok, tiny) — DRIFT — mind-mem v1.0
-- `EDITS_PROPOSED.md` (~34 tok, tiny) — EDITS_PROPOSED — mind-mem v1.0
-- `IMPACT.md` (~43 tok, tiny) — IMPACT — mind-mem v1.0
-- `incidents.md` (~38 tok, tiny) — INCIDENTS — mind-mem v1.0
+- `AUDIT.md` (~31 tok, tiny) — AUDIT — MIND-Mem v1.0
+- `BRIEFINGS.md` (~47 tok, tiny) — BRIEFINGS — MIND-Mem v1.0
+- `CONTRADICTIONS.md` (~47 tok, tiny) — CONTRADICTIONS — MIND-Mem v1.0
+- `DECISIONS.md` (~77 tok, small) — DECISIONS — MIND-Mem v1.0
+- `DECISIONS_PROPOSED.md` (~50 tok, small) — DECISIONS_PROPOSED — MIND-Mem v1.0
+- `DRIFT.md` (~45 tok, tiny) — DRIFT — MIND-Mem v1.0
+- `EDITS_PROPOSED.md` (~34 tok, tiny) — EDITS_PROPOSED — MIND-Mem v1.0
+- `IMPACT.md` (~43 tok, tiny) — IMPACT — MIND-Mem v1.0
+- `incidents.md` (~38 tok, tiny) — INCIDENTS — MIND-Mem v1.0
 - `intel-state.json` (~197 tok, small) — Keys: governance_mode, version, auto_apply_low_risk, flip_gate_week1_clean, last_scan
 - `maint-state.json` (~12 tok, tiny) — Keys: last_run, last_weekly
 - `MEMORY.md` (~70 tok, small) — Memory Protocol v1.0
-- `people.md` (~31 tok, tiny) — PEOPLE — mind-mem v1.0
-- `projects.md` (~39 tok, tiny) — PROJECTS — mind-mem v1.0
-- `SCAN_LOG.md` (~80 tok, small) — SCAN_LOG — mind-mem v1.0
-- `SIGNALS.md` (~51 tok, small) — SIGNALS — mind-mem v1.0
-- `TASKS.md` (~83 tok, small) — TASKS — mind-mem v1.0
-- `TASKS_PROPOSED.md` (~33 tok, tiny) — TASKS_PROPOSED — mind-mem v1.0
-- `tools.md` (~33 tok, tiny) — TOOLS — mind-mem v1.0
+- `people.md` (~31 tok, tiny) — PEOPLE — MIND-Mem v1.0
+- `projects.md` (~39 tok, tiny) — PROJECTS — MIND-Mem v1.0
+- `SCAN_LOG.md` (~80 tok, small) — SCAN_LOG — MIND-Mem v1.0
+- `SIGNALS.md` (~51 tok, small) — SIGNALS — MIND-Mem v1.0
+- `TASKS.md` (~83 tok, small) — TASKS — MIND-Mem v1.0
+- `TASKS_PROPOSED.md` (~33 tok, tiny) — TASKS_PROPOSED — MIND-Mem v1.0
+- `tools.md` (~33 tok, tiny) — TOOLS — MIND-Mem v1.0
 ### `tests/integration/`
 
 - `__init__.py` (~0 tok, tiny)
@@ -924,7 +924,7 @@
 
 - `next.config.ts` (~104 tok, small) — mind-mem-web is a thin client — the REST API lives on the
 - `package.json` (~193 tok, small) — Keys: name, version, private, description, license
-- `README.md` (~464 tok, medium) — mind-mem web console
+- `README.md` (~464 tok, medium) — MIND-Mem web console
 - `tsconfig.json` (~149 tok, small) — Keys: compilerOptions, include, exclude
 
 ---

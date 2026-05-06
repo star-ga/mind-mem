@@ -27,7 +27,7 @@ The Markdown backend is strictly better for:
 
 The Postgres backend is strictly better for:
 
-- Multi-host shared workspaces (several mind-mem processes, possibly
+- Multi-host shared workspaces (several MIND-Mem processes, possibly
   on different machines, pointing at the same logical memory).
 - Workspaces that exceed ~10 MB of corpus text where concurrent read
   performance matters more than grep-ability.
@@ -63,7 +63,7 @@ door.
   - `postgresql://mindmem:<password>@localhost:5432/mindmem`
   - `postgresql:///mindmem?host=/var/run/postgresql` (unix socket)
 
-### mind-mem side
+### MIND-Mem side
 
 - v3.2.0 or later (`pip install --upgrade mind-mem`).
 - The `postgres` extra: `pip install mind-mem[postgres]` — this
@@ -131,7 +131,7 @@ Steps the command performs:
    counts, verification results, and the DSN the data was copied
    into.
 8. **Leaves the Markdown corpus intact.** The swap of which backend
-   mind-mem actually reads from is a separate step (§3.3).
+   MIND-Mem actually reads from is a separate step (§3.3).
 
 Expected throughput: ~2,000 blocks/second on localhost Postgres,
 ~200 blocks/second over a LAN link, ~20 blocks/second over WAN.
@@ -226,7 +226,7 @@ Steps:
 ### Postgres
 
 - `shared_buffers = 25% of RAM`.
-- `max_connections = 50` is usually enough — mind-mem's default
+- `max_connections = 50` is usually enough — MIND-Mem's default
   connection pool is 10.
 - Create a partial index on active blocks once the table exceeds
   ~100k rows:

@@ -1,12 +1,12 @@
-# mind-mem — governance design (5 layers)
+# MIND-Mem — governance design (5 layers)
 
-mind-mem is the L4 retrieval-time layer of the MIND ecosystem: persistent, auditable, contradiction-safe memory for AI agents. This document is the local five-layer mapping; the canonical description lives in [`512-mind/docs/governance.md`](https://github.com/star-ga/512-mind/blob/main/docs/governance.md).
+MIND-Mem is the L4 retrieval-time layer of the MIND ecosystem: persistent, auditable, contradiction-safe memory for AI agents. This document is the local five-layer mapping; the canonical description lives in [`512-mind/docs/governance.md`](https://github.com/star-ga/512-mind/blob/main/docs/governance.md).
 
 ## Layer summary
 
 | Layer | What it enforces | Primary source | Verified by |
 |---|---|---|---|
-| **L1 architectural** | Acyclicity, governance-kernel coverage, depth/equality/redundancy/purity floors of mind-mem | `.arch-mind/rules.mind` (this repo) | `arch-mind check-rules` (CI per-repo) |
+| **L1 architectural** | Acyclicity, governance-kernel coverage, depth/equality/redundancy/purity floors of MIND-Mem | `.arch-mind/rules.mind` (this repo) | `arch-mind check-rules` (CI per-repo) |
 | **L2 training-time** | Local-model fine-tune integrity (`mind-mem-4b` checkpoint provenance) | `docs/mind-mem-4b-setup.md` + planned `model_provenance.py` | Checkpoint manifest + reproducibility runbook |
 | **L3 inference-time** | Per-recall request shape; rate limiting; auth-token validation | `src/mind_mem/mcp_server.py` + `src/mind_mem/auth.py` | MCP server tests; auth-failure tests |
 | **L4 retrieval-time** | **The load-bearing layer.** Contradiction detection, drift, proposal queue, audit chain (TAG_v1), tier decay, at-rest encryption | `src/mind_mem/governance/*.py` + `src/mind_mem/core/store.py` | `tests/test_governance.py`, `tests/test_audit.py`, `tests/jepsen/` |
@@ -16,11 +16,11 @@ mind-mem is the L4 retrieval-time layer of the MIND ecosystem: persistent, audit
 
 `.arch-mind/rules.mind` declares nine `[arch_rule]` constraints. Floors recalibrated 2026-05-01 (see `audit_response.md` F1) for the Python+MIND hybrid reality. Per-rule current values are in `audit_response.md`.
 
-The cross-repo contract: a regression on any of the nine rules halts mind-mem's nightly regression and surfaces in the ecosystem health dashboard.
+The cross-repo contract: a regression on any of the nine rules halts MIND-Mem's nightly regression and surfaces in the ecosystem health dashboard.
 
 ## L2 — Training-time
 
-mind-mem ships a local fine-tuned model (`star-ga/mind-mem-4b`, Qwen3.5-4B base). L2 governance covers:
+MIND-Mem ships a local fine-tuned model (`star-ga/mind-mem-4b`, Qwen3.5-4B base). L2 governance covers:
 
 - **Checkpoint provenance.** Every release of `mind-mem-4b` is reproducible from the data + base + recipe documented in `docs/mind-mem-4b-setup.md`.
 - **Bundle integrity.** The Q4_K_M GGUF format ships with the standard llama.cpp checksum.
@@ -28,7 +28,7 @@ mind-mem ships a local fine-tuned model (`star-ga/mind-mem-4b`, Qwen3.5-4B base)
 
 ## L3 — Inference-time
 
-mind-mem's request-time surface is the MCP server. Every MCP tool call flows through:
+MIND-Mem's request-time surface is the MCP server. Every MCP tool call flows through:
 
 1. **Auth check.** `X-MindMem-Token` header validated against the configured token list.
 2. **Rate limit.** Sliding-window per-token + global; the limiter primitive is shared with 512-mind.
@@ -60,19 +60,19 @@ Planned:
 
 ## Cross-repo discipline
 
-mind-mem is one consumer of the 512 kernel; the same kernel runs in:
+MIND-Mem is one consumer of the 512 kernel; the same kernel runs in:
 
 - `512-mind` (kernel itself)
 - `mind-inference` (transformer inference)
 - `rfn-mind` (RFN classifier inference)
-- `MindLLM` (request-time HTTP surface; uses mind-mem for L4)
+- `MindLLM` (request-time HTTP surface; uses MIND-Mem for L4)
 - `mind-mem` (this repo — L4 retrieval-time)
-- `mind-flow` (graph-authoring; `:mem` backend dispatches to mind-mem)
-- `mind-fleet` (planned — governed swarm orchestration; will use mind-mem for swarm-shared memory)
+- `mind-flow` (graph-authoring; `:mem` backend dispatches to MIND-Mem)
+- `mind-fleet` (planned — governed swarm orchestration; will use MIND-Mem for swarm-shared memory)
 - `arch-mind` (L1 ecosystem-wide)
 - `mind-runtime` (vendored backend execution)
 
-A change to the kernel surface in 512-mind propagates here through the mind-mem MCP server's auth-hash binding; the consumer's audit-chain replay catches any mismatch.
+A change to the kernel surface in 512-mind propagates here through the MIND-Mem MCP server's auth-hash binding; the consumer's audit-chain replay catches any mismatch.
 
 ---
 

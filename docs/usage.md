@@ -1,6 +1,6 @@
 # Usage
 
-How to actually drive mind-mem from every surface the package
+How to actually drive MIND-Mem from every surface the package
 provides. See [setup.md](setup.md) first.
 
 ## Surfaces at a glance
@@ -211,7 +211,7 @@ store.observe_pair(
 
 ## Proprietary code protection
 
-mind-mem is a **public Apache-2.0 package**. It has **no proprietary
+MIND-Mem is a **public Apache-2.0 package**. It has **no proprietary
 code**. Modules that can use a proprietary native accelerator load
 it via the `MIND_MEM_KERNELS_SO` env var — when the library is
 present it's loaded via `ctypes`; when absent the pure-Python

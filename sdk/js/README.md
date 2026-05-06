@@ -1,6 +1,6 @@
 # @mind-mem/sdk
 
-JavaScript / TypeScript client for the [mind-mem](https://github.com/star-ga/mind-mem) REST API.
+JavaScript / TypeScript client for the [MIND-Mem](https://github.com/star-ga/mind-mem) REST API.
 
 ## Requirements
 

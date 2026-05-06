@@ -1,6 +1,6 @@
 # MIC/MAP — MIND IR Graph Serialization
 
-mind-mem ships **MIC/MAP**, the STARGA-native serialization formats
+MIND-Mem ships **MIC/MAP**, the STARGA-native serialization formats
 for MIND IR graphs (typed dataflow graphs: symbols + types + values
 + output). Two wire formats:
 
@@ -96,7 +96,7 @@ Values:
 
 ## MCP tools
 
-Two MCP tools are registered on the mind-mem MCP server (visible to
+Two MCP tools are registered on the MIND-Mem MCP server (visible to
 any agent connected via the standard MCP wiring):
 
 ### `mic_convert`
@@ -153,7 +153,7 @@ Structural summary of any conforming MIC payload. Same shape as the
 ## Performance
 
 The codec is pure-Python by default — zero new runtime dependencies,
-works on every platform mind-mem ships to. For higher throughput,
+works on every platform MIND-Mem ships to. For higher throughput,
 opt into the Cython accelerator:
 
 ```bash

@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a new feature for mind-mem
+about: Suggest a new feature for MIND-Mem
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''

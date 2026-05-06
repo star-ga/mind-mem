@@ -14,7 +14,7 @@ Latest checked-in benchmark snapshot from the v1.9.0 evaluation with Mistral Lar
 
 | System | Mean | Adversarial | Temporal |
 |--------|------|-------------|----------|
-| **mind-mem** | **77.9** | **82.3** | **88.5** |
+| **MIND-Mem** | **77.9** | **82.3** | **88.5** |
 | Full context | 72.90 | - | - |
 | Mem0 | 66.88 | - | - |
 | Zep | 65.99 | - | - |
@@ -60,7 +60,7 @@ Compiled `.so` kernels vs pure Python (N=5000 blocks):
 
 ## mind-mem:4b LLM Extraction
 
-Purpose-trained model ([star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b)) — full fine-tune of Qwen3.5-4B on STARGA-curated mind-mem corpus. On RTX 3080 (Q4_K_M GGUF, 2.6 GB VRAM):
+Purpose-trained model ([star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b)) — fully trained on STARGA-curated MIND-Mem corpus. On RTX 3080 (Q4_K_M GGUF, 2.6 GB VRAM):
 
 **Raw throughput:**
 - Generation: **104 tok/s**

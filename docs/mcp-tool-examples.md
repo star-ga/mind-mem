@@ -1,6 +1,6 @@
 # MCP Tool Examples
 
-Practical examples for each mind-mem MCP tool.
+Practical examples for each MIND-Mem MCP tool.
 
 ## recall
 

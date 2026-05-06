@@ -1,4 +1,4 @@
-# mind-mem Examples
+# MIND-Mem Examples
 
 ## basic_usage.py
 
@@ -10,7 +10,7 @@ python3 examples/basic_usage.py
 
 ## Running Examples
 
-All examples require mind-mem to be installed:
+All examples require MIND-Mem to be installed:
 
 ```bash
 pip install -e .

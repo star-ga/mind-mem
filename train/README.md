@@ -1,6 +1,6 @@
 # mind-mem-4b training pipeline
 
-Scripts to retrain the [`star-ga/mind-mem-4b`](https://huggingface.co/star-ga/mind-mem-4b) governance-aware memory-assistant model on a fresh checkout of the mind-mem repo.
+Scripts to retrain the [`star-ga/mind-mem-4b`](https://huggingface.co/star-ga/mind-mem-4b) governance-aware memory-assistant model on a fresh checkout of the MIND-Mem repo.
 
 Training artifacts land in `/home/n/mm-train-output/`, which is gitignored — the repo only carries the scripts, not the weights.
 

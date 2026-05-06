@@ -1,6 +1,6 @@
-# mind-mem web console
+# MIND-Mem web console
 
-Thin Next.js client for the mind-mem REST API (v3.2.0+). Shows a
+Thin Next.js client for the MIND-Mem REST API (v3.2.0+). Shows a
 force-directed graph of blocks + their cross-references, a
 chronological timeline of dated events, and a facts panel — all
 derived from a single `recall(format="bundle")` call.
@@ -13,7 +13,7 @@ pnpm install   # or npm install
 pnpm dev       # or npm run dev  → http://localhost:3000
 ```
 
-Set the API URL if mind-mem isn't on localhost:8080:
+Set the API URL if MIND-Mem isn't on localhost:8080:
 
 ```bash
 NEXT_PUBLIC_MIND_MEM_API_URL=http://mind-mem.internal:8080 pnpm dev
@@ -37,7 +37,7 @@ share a bundle via context or a fetcher like TanStack Query.
 
 ## Alternative to Obsidian
 
-mind-mem v3.2.0 emits `[[wikilinks]]` on `vault_sync` so an Obsidian-
+MIND-Mem v3.2.0 emits `[[wikilinks]]` on `vault_sync` so an Obsidian-
 mounted vault gets graph + backlinks for free. This web app exists
 for non-Obsidian deployments (headless servers, compliance-only
 viewers, multi-tenant consoles in v4.0).
@@ -45,7 +45,7 @@ viewers, multi-tenant consoles in v4.0).
 ## Status
 
 v3.3.0 scaffold. Landed in commits for the v3.3.0 "Other" section
-of the mind-mem roadmap. Ship order for follow-up PRs:
+of the MIND-Mem roadmap. Ship order for follow-up PRs:
 
 1. Drift heatmap (reads `/v1/contradictions` + `/v1/scan`).
 2. Per-tenant console (v4.0 — consumes `tenant_audit` summaries).

@@ -1,11 +1,11 @@
-# Architecture Review — mind-mem v3.2.0 (Release Candidate)
+# Architecture Review — MIND-Mem v3.2.0 (Release Candidate)
 
 Reviewer: architect-agent sweep, 2026-04-20
 Scope: ~30 commits since commit 7fa80fd (the v3.2.0 production-deployment drop).
 
 ## Executive posture
 
-**Load-bearing-but-leaky.** v3.2.0 successfully turns mind-mem into a
+**Load-bearing-but-leaky.** v3.2.0 successfully turns MIND-Mem into a
 multi-backend, multi-protocol memory system by introducing a clean
 four-method extension to `BlockStore` (write/snapshot/diff/lock) and
 a transport-agnostic tool layer, **but** the *apply engine* and

@@ -1,4 +1,4 @@
-# mind-mem API Security Review — 2026-04-28
+# MIND-Mem API Security Review — 2026-04-28
 
 **Scope:** MCP API surface — tool input schemas, ACL scope logic, HTTP transport, DoS/amplification paths, error leakage, webhook SSRF, audit tampering via API.
 **Methodology:** OWASP API Security Top 10 (2023); ATT&CK mapping; static code review of the v3.2.0 decomposed module tree.

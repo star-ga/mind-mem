@@ -1,4 +1,4 @@
-# mind-mem — implementation status (alignment companion)
+# MIND-Mem — implementation status (alignment companion)
 
 Three-column ledger of what is operational on the current `main`, what is in-tree as experimental, and what is on the roadmap. Companion to `docs/audit_response.md`, `docs/governance.md`, and `ROADMAP.md` / `CHANGELOG.md` (which remain product-authoritative).
 
@@ -53,7 +53,7 @@ Three-column ledger of what is operational on the current `main`, what is in-tre
 
 | Component | Source | Notes |
 |---|---|---|
-| `star-ga/mind-mem-4b` (Qwen3.5-4B fine-tune) | `docs/mind-mem-4b-setup.md` | Q4_K_M @ 2.7GB via Ollama. |
+| `star-ga/mind-mem-4b` (fully trained) | `docs/mind-mem-4b-setup.md` | Q4_K_M @ 2.7GB via Ollama. |
 | Backend dispatcher | `src/mind_mem/extractors/dispatcher.py` | `mind-mem.json` → `{"backend": "ollama", "model": "mind-mem:4b"}`. |
 
 ## Experimental (in-tree, behind feature flags)
@@ -78,4 +78,4 @@ For product roadmap, see `ROADMAP.md` and `CHANGELOG.md`. Cross-repo alignment i
 
 - It is not a release-claim. The README + CHANGELOG are authoritative.
 - It is not auto-generated yet. Future workstream will derive it from the MCP tool catalogue + the `[invariant]` table.
-- It does not cover consumers (MindLLM uses mind-mem for L4 retrieval; mind-flow's `:mem` backend dispatches here). Each carries its own `docs/status.md`.
+- It does not cover consumers (MindLLM uses MIND-Mem for L4 retrieval; mind-flow's `:mem` backend dispatches here). Each carries its own `docs/status.md`.

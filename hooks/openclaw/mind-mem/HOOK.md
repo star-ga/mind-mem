@@ -1,5 +1,5 @@
 ---
-name: mind-mem
+name: MIND-Mem
 description: "Memory OS health check on bootstrap + auto-capture on /new"
 homepage: https://github.com/star-ga/mind-mem
 metadata:

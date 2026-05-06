@@ -1,6 +1,6 @@
-# Contributing to mind-mem
+# Contributing to MIND-Mem
 
-Thank you for your interest in contributing to mind-mem!
+Thank you for your interest in contributing to MIND-Mem!
 
 ## Development Setup
 

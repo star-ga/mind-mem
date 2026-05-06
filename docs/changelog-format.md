@@ -2,7 +2,7 @@
 
 ## Format
 
-mind-mem follows [Keep a Changelog](https://keepachangelog.com/) format.
+MIND-Mem follows [Keep a Changelog](https://keepachangelog.com/) format.
 
 ### Version Header
 

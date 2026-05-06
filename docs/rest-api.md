@@ -1,4 +1,4 @@
-# mind-mem REST API
+# MIND-Mem REST API
 
 The REST API mirrors the MCP tool surface over HTTP/JSON. Start it with:
 

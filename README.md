@@ -1,6 +1,6 @@
 <h1 align="center">
-  <img src="assets/logo.png" alt="mind-mem logo" width="140"><br>
-  mind-mem
+  <img src="assets/logo.png" alt="MIND-Mem logo" width="140"><br>
+  MIND-Mem
 </h1>
 <p align="center">
   <strong>Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent.</strong><br>
@@ -30,13 +30,13 @@
 
 Drop-in memory layer for AI coding agents — Claude Code, Claude Desktop, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed, OpenClaw, or any MCP-compatible client. Upgrades your agent from "chat history + notes" to a governed **Memory OS** with hybrid search, RRF fusion, intent routing, optional MIND kernels, structured persistence, contradiction detection, drift analysis, safe governance, and full audit trail.
 
-> **If your agent runs for weeks, it will drift. mind-mem prevents silent drift.**
+> **If your agent runs for weeks, it will drift. MIND-Mem prevents silent drift.**
 >
-> mind-mem powers the Memory Plane of the [MIND Cognitive Kernel](https://mindlang.dev/docs/cognitive-kernel) — the deterministic AI runtime architecture.
+> MIND-Mem powers the Memory Plane of the [MIND Cognitive Kernel](https://mindlang.dev/docs/cognitive-kernel) — the deterministic AI runtime architecture.
 
 ### Shared Memory Across All Your AI Agents
 
-**This is the killer feature.** When you install mind-mem, all your AI coding agents share the same memory workspace. Claude Code, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed — every MCP-compatible client connects to the same persistent memory through a single workspace.
+**This is the killer feature.** When you install MIND-Mem, all your AI coding agents share the same memory workspace. Claude Code, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed — every MCP-compatible client connects to the same persistent memory through a single workspace.
 
 What this means in practice:
 
@@ -91,7 +91,7 @@ Output:
 
 ## Table of Contents
 
-- [Why mind-mem](#why-mind-mem)
+- [Why MIND-Mem](#why-mind-mem)
 - [Features](#features)
 - [Integrations](#integrations)
 - [Benchmark Results](#benchmark-results)
@@ -124,13 +124,13 @@ Output:
 
 ---
 
-## Why mind-mem
+## Why MIND-Mem
 
 Most memory plugins **store and retrieve**. That's table stakes.
 
-mind-mem also **detects when your memory is wrong** — contradictions between decisions, drift from informal choices never formalized, dead decisions nobody references, orphan tasks pointing at nothing — and offers a safe path to fix it.
+MIND-Mem also **detects when your memory is wrong** — contradictions between decisions, drift from informal choices never formalized, dead decisions nobody references, orphan tasks pointing at nothing — and offers a safe path to fix it.
 
-| Problem                  | Without mind-mem                  | With mind-mem                             |
+| Problem                  | Without MIND-Mem                  | With MIND-Mem                             |
 | ------------------------ | --------------------------------- | ----------------------------------------- |
 | Contradicting decisions  | Follows whichever seen last       | Flags, links both, proposes fix           |
 | Informal chat decision   | Lost after session ends           | Auto-captured, proposed to formalize      |
@@ -141,7 +141,7 @@ mind-mem also **detects when your memory is wrong** — contradictions between d
 
 ### Novel Contributions
 
-mind-mem introduces several techniques not found in existing memory systems:
+MIND-Mem introduces several techniques not found in existing memory systems:
 
 | Technique | What's new | Why it matters |
 |-----------|-----------|----------------|
@@ -255,7 +255,7 @@ Scheduled background enrichment: scans recent memory for missing cross-reference
 
 ### Feature Completeness Matrix
 
-| Capability | mind-mem | Mem0 | Zep | Letta | LangMem |
+| Capability | MIND-Mem | Mem0 | Zep | Letta | LangMem |
 |---|:---:|:---:|:---:|:---:|:---:|
 | BM25 lexical search | Y | — | — | — | — |
 | Vector semantic search | Y | Y | Y | Y | Y |
@@ -286,7 +286,7 @@ Scheduled background enrichment: scans recent memory for missing cross-reference
 ## Integrations
 
 > Honest positioning. The integrations below are *software-level* —
-> the named tool talks to mind-mem via the Model Context Protocol.
+> the named tool talks to MIND-Mem via the Model Context Protocol.
 > They are **not** commercial-customer relationships with any vendor.
 > Full positioning policy: [`docs/integrations.md`](docs/integrations.md).
 
@@ -298,7 +298,7 @@ mm install-all
 ```
 
 `mm install-all` auto-detects every supported client on your machine
-and writes the appropriate config file for each. mind-mem speaks the
+and writes the appropriate config file for each. MIND-Mem speaks the
 [Model Context Protocol](https://modelcontextprotocol.io/) — any
 MCP-compatible client connects with one command.
 
@@ -316,16 +316,16 @@ MCP-compatible client connects with one command.
 
 ### Compatible with major LLM providers
 
-mind-mem's recall pipeline is provider-agnostic. Tested against
+MIND-Mem's recall pipeline is provider-agnostic. Tested against
 Anthropic Claude (3.5 Sonnet, 4.x), OpenAI GPT (4o, 5.4), Google
 Gemini (2.0 Flash, 3.1 Pro), Mistral Large, and local endpoints
 (Ollama, vLLM, llama.cpp). Compatibility is at the API contract
-level — the same mind-mem server returns the same answers
+level — the same MIND-Mem server returns the same answers
 regardless of which LLM is asking.
 
 ### Production usage at STARGA
 
-mind-mem is the daily-driver memory layer for STARGA's six active
+MIND-Mem is the daily-driver memory layer for STARGA's six active
 projects: `mind`, `mind-runtime`, `mindlang.dev`, `mind-inference`,
 `mind-fleet`, `arch-mind`. First-party, verifiable in our own
 commit history.
@@ -346,7 +346,7 @@ the press release first — not in the README.
 
 ## Benchmark Results
 
-mind-mem's recall engine evaluated on standard long-term memory benchmarks using multiple configurations — from pure BM25 to full hybrid retrieval with neural reranking.
+MIND-Mem's recall engine evaluated on standard long-term memory benchmarks using multiple configurations — from pure BM25 to full hybrid retrieval with neural reranking.
 
 ### Needle In A Haystack (NIAH)
 
@@ -411,26 +411,26 @@ Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer w
 
 | System       |     Score | Approach                                                     |
 | ------------ | --------: | ------------------------------------------------------------ |
-| **mind-mem** | **76.7%** | Hybrid BM25 + Qwen3-8B vector + RRF fusion (local-only)    |
+| **MIND-Mem** | **76.7%** | Hybrid BM25 + Qwen3-8B vector + RRF fusion (local-only)    |
 | Memobase     |     75.8% | Specialized extraction                                       |
 | **Letta**    |     74.0% | Files + agent tool use                                       |
-| **mind-mem** |     73.8% | BM25-only, full 10-conv (1986 questions, Mistral Large)     |
+| **MIND-Mem** |     73.8% | BM25-only, full 10-conv (1986 questions, Mistral Large)     |
 | **Mem0**     |     68.5% | Graph + LLM extraction                                      |
 
-> mind-mem now **surpasses Mem0 and Letta** with **local-only** retrieval — no cloud calls, no graph DB, no LLM in the retrieval loop. mind-mem's unique value is **governance** (contradiction detection, drift analysis, audit trails) and **agent-agnostic shared memory** via MCP — areas these benchmarks don't measure.
+> MIND-Mem now **surpasses Mem0 and Letta** with **local-only** retrieval — no cloud calls, no graph DB, no LLM in the retrieval loop. MIND-Mem's unique value is **governance** (contradiction detection, drift analysis, audit trails) and **agent-agnostic shared memory** via MCP — areas these benchmarks don't measure.
 
 ### Benchmark Comparison (2026-02-22)
 
 | System | LoCoMo Acc>=50 | LongMemEval R@10 | Infrastructure | Dependencies |
 | --- | ---: | ---: | --- | --- |
-| **mind-mem** (hybrid) | **76.7%** | **88.1%** | **Local-only** | **Zero core (optional: llama.cpp, sentence-transformers)** |
+| **MIND-Mem** (hybrid) | **76.7%** | **88.1%** | **Local-only** | **Zero core (optional: llama.cpp, sentence-transformers)** |
 | Memobase | 75.8% | -- | Cloud + GPU | embeddings + vector DB |
 | Letta | 74.0% | -- | Cloud | embeddings + vector DB |
-| **mind-mem** (BM25) | **73.8%** | **88.1%** | **Local-only** | **Zero core** |
+| **MIND-Mem** (BM25) | **73.8%** | **88.1%** | **Local-only** | **Zero core** |
 | full-context | 72.9% | -- | N/A | LLM context window |
 | Mem0 | 68.5% | -- | Cloud (managed) | graph DB + embeddings |
 
-> mind-mem surpasses Mem0 (68.5%), Letta (74.0%), and Memobase (75.8%) with zero cloud infrastructure. Full 10-conversation benchmark (1986 questions) validates this at scale.
+> MIND-Mem surpasses Mem0 (68.5%), Letta (74.0%), and Memobase (75.8%) with zero cloud infrastructure. Full 10-conversation benchmark (1986 questions) validates this at scale.
 
 ### LongMemEval (ICLR 2025, 470 questions)
 
@@ -487,7 +487,7 @@ pipx install "mind-mem[mcp]"
 mind-mem-mcp --help          # smoke-test
 ```
 
-`pipx` keeps mind-mem in its own venv, exposes the `mind-mem-mcp` console
+`pipx` keeps MIND-Mem in its own venv, exposes the `mind-mem-mcp` console
 script on `PATH`, and avoids polluting your system Python. If you don't have
 pipx, `pip install --user "mind-mem[mcp]"` works too.
 
@@ -508,7 +508,7 @@ cd mind-mem
 ./install.sh --all
 ```
 
-This auto-detects every AI coding client on your machine and configures mind-mem
+This auto-detects every AI coding client on your machine and configures MIND-Mem
 for all of them. Each client launches the same `mind-mem-mcp` binary, so all
 agents share one workspace. Supported clients:
 
@@ -779,7 +779,7 @@ your-workspace/
 
 ### Quick Comparison
 
-| Feature | mind-mem | Mem0 | Letta | Zep/Graphiti |
+| Feature | MIND-Mem | Mem0 | Letta | Zep/Graphiti |
 |---------|----------|------|-------|--------------|
 | Local-only | Yes | No (cloud API) | No (runtime) | No (Neo4j) |
 | Zero infrastructure | Yes | No | No | No |
@@ -805,13 +805,13 @@ your-workspace/
 | [**Graphlit**](https://www.graphlit.com) | Multimodal ingestion, semantic search, managed platform | Cloud-only, managed service |
 | [**ClawMem**](https://github.com/yoloshii/ClawMem) | Full ML pipeline (cross-encoder + QMD + beam search) | 4.5GB VRAM, 3 GPU processes required |
 | [**MemU**](https://github.com/supermemory/memu) | Hierarchical 3-layer memory, multimodal ingestion, LLM-based retrieval | Requires LLM for extraction and retrieval, no hybrid search |
-| **mind-mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 81 MCP tools (incl. MIC/MAP, walkthrough, persona, pipeline-hash) + 3-LLM audit per release | Lexical recall by default (vector/CE optional) |
+| **MIND-Mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 81 MCP tools (incl. MIC/MAP, walkthrough, persona, pipeline-hash) + 3-LLM audit per release | Lexical recall by default (vector/CE optional) |
 
 ### Full Feature Matrix
 
 Compared against every major memory solution for AI agents (as of 2026):
 
-|                 | [Mem0](https://github.com/mem0ai/mem0) | [Supermemory](https://supermemory.ai) | [claude-mem](https://github.com/thedotmack/claude-mem) | [Letta](https://www.letta.com) | [Zep](https://www.getzep.com) | [LangMem](https://github.com/langchain-ai) | [Cognee](https://www.cognee.ai) | [Graphlit](https://www.graphlit.com) | [ClawMem](https://github.com/yoloshii/ClawMem) | [MemU](https://github.com/supermemory/memu) | **mind-mem** |
+|                 | [Mem0](https://github.com/mem0ai/mem0) | [Supermemory](https://supermemory.ai) | [claude-mem](https://github.com/thedotmack/claude-mem) | [Letta](https://www.letta.com) | [Zep](https://www.getzep.com) | [LangMem](https://github.com/langchain-ai) | [Cognee](https://www.cognee.ai) | [Graphlit](https://www.graphlit.com) | [ClawMem](https://github.com/yoloshii/ClawMem) | [MemU](https://github.com/supermemory/memu) | **MIND-Mem** |
 | --------------- | :------------------------------------: | :-----------------------------------: | :-----------------------------------------------------: | :----------------------------: | :---------------------------: | :-----------------------------------------: | :-----------------------------: | :----------------------------------: | :---------------------------------------------: | :------------------------------------------: | :----------: |
 | **Recall**      |                                        |                                       |                                                         |                                |                               |                                             |                                 |                                      |                                                 |                                              |              |
 | Vector          |                 Cloud                  |                 Cloud                 |                          Chroma                         |              Yes               |              Yes              |                     Yes                     |               Yes               |                 Yes                  |                       Yes                       |                      —                       |  **Optional**  |
@@ -854,7 +854,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **81 tools**   |
 | MIND kernels    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **16 source**  |
 
-### The Gap mind-mem Fills
+### The Gap MIND-Mem Fills
 
 Every tool above does **storage + retrieval**. None of them answer:
 
@@ -864,7 +864,7 @@ Every tool above does **storage + retrieval**. None of them answer:
 - "What's the downstream impact if I change this decision?"
 - "Is my memory state structurally valid right now?"
 
-**mind-mem focuses on memory governance and integrity — the critical layer most memory systems ignore entirely.**
+**MIND-Mem focuses on memory governance and integrity — the critical layer most memory systems ignore entirely.**
 
 ### Why Plain Files Outperform Fancy Retrieval
 
@@ -875,7 +875,7 @@ Letta's August 2025 analysis showed that a plain-file baseline (full conversatio
 - **Overhead hurts.** Specialized pipelines introduce failure modes (bad embeddings, chunking errors, stale indexes) that simple file access avoids.
 - **For text-heavy agentic use cases, "how well the agent manages context" > "how smart the retrieval index is."**
 
-mind-mem's deterministic retrieval pipeline validates these findings: **67.3% on LoCoMo** with zero dependencies, no embeddings, and no vector database — within 1.2pp of Mem0's graph-based approach. The key insight: treating retrieval as a reasoning pipeline (wide candidate pool → deterministic rerank → context packing) closes most of the gap without any ML infrastructure. Unlike plain-file baselines, mind-mem adds integrity checking, governance, and agent-agnostic shared memory via MCP that no other system provides.
+MIND-Mem's deterministic retrieval pipeline validates these findings: **67.3% on LoCoMo** with zero dependencies, no embeddings, and no vector database — within 1.2pp of Mem0's graph-based approach. The key insight: treating retrieval as a reasoning pipeline (wide candidate pool → deterministic rerank → context packing) closes most of the gap without any ML infrastructure. Unlike plain-file baselines, MIND-Mem adds integrity checking, governance, and agent-agnostic shared memory via MCP that no other system provides.
 
 ---
 
@@ -942,7 +942,7 @@ Supports ONNX inference (local, no server) or cloud embeddings. Falls back to BM
 
 ## MIND Kernels
 
-mind-mem includes 17 `.mind` kernel source files — numerical hot paths written in the [MIND programming language](https://mindlang.dev). The MIND kernel is **optional**. mind-mem works identically without it (pure Python fallback). With it, scoring runs at native speed with compile-time tensor shape verification.
+MIND-Mem includes 17 `.mind` kernel source files — numerical hot paths written in the [MIND programming language](https://mindlang.dev). The MIND kernel is **optional**. MIND-Mem works identically without it (pure Python fallback). With it, scoring runs at native speed with compile-time tensor shape verification.
 
 ### Compilation
 
@@ -1016,7 +1016,7 @@ if is_available():
 
 ### Without MIND
 
-If `lib/libmindmem.so` is not present, mind-mem uses pure Python implementations. The Python fallback produces identical results (within f32 epsilon). No functionality is lost — MIND is a performance optimization, not a requirement.
+If `lib/libmindmem.so` is not present, MIND-Mem uses pure Python implementations. The Python fallback produces identical results (within f32 epsilon). No functionality is lost — MIND is a performance optimization, not a requirement.
 
 ---
 
@@ -1209,7 +1209,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 ## MCP Server
 
-mind-mem ships with a [Model Context Protocol](https://modelcontextprotocol.io/) server that exposes memory as resources and tools to any MCP-compatible client.
+MIND-Mem ships with a [Model Context Protocol](https://modelcontextprotocol.io/) server that exposes memory as resources and tools to any MCP-compatible client.
 
 ### Install
 
@@ -1247,7 +1247,7 @@ For Claude Code, Claude Desktop, Cursor, Windsurf, and Gemini CLI, add to the re
 ```
 
 `mind-mem-mcp` is the console script registered by `pipx install
-"mind-mem[mcp]"` (or `pip install --user "mind-mem[mcp]"`). If you're running
+"MIND-Mem[mcp]"` (or `pip install --user "MIND-Mem[mcp]"`). If you're running
 out of a source checkout instead, replace `"command": "mind-mem-mcp"` with
 `"command": "python3", "args": ["/path/to/mind-mem/mcp_server.py"]`.
 
@@ -1386,7 +1386,7 @@ deployments should always set a token.
 
 ### No Network Calls
 
-mind-mem makes **zero network calls** from its core. No telemetry, no phoning home, no cloud dependencies. Optional features (vector embeddings, cross-encoder) may download models on first use.
+MIND-Mem makes **zero network calls** from its core. No telemetry, no phoning home, no cloud dependencies. Optional features (vector embeddings, cross-encoder) may download models on first use.
 
 ---
 
@@ -1406,7 +1406,7 @@ mind-mem makes **zero network calls** from its core. No telemetry, no phoning ho
 
 ### mind-mem:4b — Purpose-Trained LLM
 
-For best LLM extraction quality, use **[mind-mem:4b](https://huggingface.co/star-ga/mind-mem-4b)** — a full fine-tune of Qwen3.5-4B on mind-mem's 8 extraction tasks (entity extraction, fact extraction, observation compression, contradiction detection, governance analysis, intent classification, axis-aware retrieval, LLM reranking). Empirical on RTX 3080 (Q4_K_M, 2.6GB VRAM): **104 tok/s generation, 1585 tok/s prefill**.
+For best LLM extraction quality, use **[mind-mem:4b](https://huggingface.co/star-ga/mind-mem-4b)** — a full fine-tune of Qwen3.5-4B on MIND-Mem's 8 extraction tasks (entity extraction, fact extraction, observation compression, contradiction detection, governance analysis, intent classification, axis-aware retrieval, LLM reranking). Empirical on RTX 3080 (Q4_K_M, 2.6GB VRAM): **104 tok/s generation, 1585 tok/s prefill**.
 
 **Ollama (recommended):**
 ```bash
@@ -1492,7 +1492,7 @@ configuration in your client's MCP config (stdio vs HTTP). Ensure the
 
 **MIND kernels not loading?**
 Run `bash src/mind_mem/build.sh` to compile the MIND source files (requires `mindc`).
-If the MIND compiler is not available, mind-mem automatically uses the pure Python
+If the MIND compiler is not available, MIND-Mem automatically uses the pure Python
 fallback with identical results.
 
 **Index corrupt?**

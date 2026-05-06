@@ -1,4 +1,4 @@
-# mind-mem — External Security Audit Statement of Work (SoW)
+# MIND-Mem — External Security Audit Statement of Work (SoW)
 
 **Version:** 1.0
 **Date:** 2026-04-20
@@ -9,7 +9,7 @@
 **Timeline:** 4–6 weeks from kickoff to final report
 
 This document describes the scope of work for a third-party security
-audit of mind-mem, a persistent memory layer for AI agents. It is
+audit of MIND-Mem, a persistent memory layer for AI agents. It is
 intended to give qualified auditing firms the context they need to
 scope an engagement without first requesting NDA-gated access to the
 codebase — everything auditable is already public under Apache-2.0.
@@ -18,7 +18,7 @@ codebase — everything auditable is already public under Apache-2.0.
 
 ## 1. System under test
 
-mind-mem is a file-first persistent memory system used by AI coding
+MIND-Mem is a file-first persistent memory system used by AI coding
 agents (Claude Code, Claude Desktop, Codex, Gemini CLI, Cursor,
 Windsurf, OpenClaw, etc.). It exposes:
 
@@ -51,7 +51,7 @@ Assume a three-actor world:
 
 | Principal         | Capability                                                                   |
 | ----------------- | ---------------------------------------------------------------------------- |
-| **Operator**      | Runs the mind-mem server; holds admin token. Trusted baseline.               |
+| **Operator**      | Runs the MIND-Mem server; holds admin token. Trusted baseline.               |
 | **Agent user**    | Non-admin user or external client (REST / MCP) with user-scope token.        |
 | **Untrusted input** | Block content from user prompts, vault files, external LLM outputs, MCP proposals. |
 
@@ -165,12 +165,12 @@ The following are *not* in scope for this engagement (either covered
 separately or by deliberate threat-model choice):
 
 - The **LLM itself**. Prompt injection mitigation is the caller's
-  responsibility; mind-mem's governance layer contains the blast
+  responsibility; MIND-Mem's governance layer contains the blast
   radius but does not try to detect malicious prompts.
 - **Physical access** to the host running mind-mem.
-- **Cloud provider** security (RDS, S3 backups) — mind-mem is
+- **Cloud provider** security (RDS, S3 backups) — MIND-Mem is
   local-first; cloud deployments are a user choice.
-- **Ollama** / model weights. mind-mem talks to Ollama over an
+- **Ollama** / model weights. MIND-Mem talks to Ollama over an
   HTTP-local socket; auditing Ollama is Ollama's concern.
 - **Third-party MCP clients** (Claude Desktop, Cursor, Windsurf,
   etc.) — audit the mind-mem-side protocol, not the client-side
@@ -190,7 +190,7 @@ separately or by deliberate threat-model choice):
      - Exploit scenario.
      - Recommended fix.
      - Commit-ready patch if feasible.
-   - Positive observations (things mind-mem is doing well — useful
+   - Positive observations (things MIND-Mem is doing well — useful
      for release notes).
    - Audit trail — files reviewed, tools run, percentage of
      surface covered.
@@ -198,7 +198,7 @@ separately or by deliberate threat-model choice):
 3. **Remediation validation** — auditor re-tests after STARGA ships
    fixes; issues a "fixes verified" addendum.
 4. **Public attestation letter** (optional, at auditor's discretion)
-   suitable for inclusion in mind-mem release notes and PyPI README.
+   suitable for inclusion in MIND-Mem release notes and PyPI README.
 
 ---
 
@@ -292,7 +292,7 @@ confirmation + contract draft, or a decline with our reasoning.
 
 ## 11. License + confidentiality
 
-- mind-mem code is **Apache-2.0**; auditors do not need an NDA to
+- MIND-Mem code is **Apache-2.0**; auditors do not need an NDA to
   read the source.
 - Auditor reports remain the auditor's IP unless otherwise
   negotiated. STARGA will ask for permission before quoting them in

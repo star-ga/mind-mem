@@ -1,6 +1,6 @@
 # Supply-Chain Security
 
-mind-mem ships with a layered supply-chain security posture covering SAST,
+MIND-Mem ships with a layered supply-chain security posture covering SAST,
 dependency auditing, secret scanning, SBOM generation, and Sigstore signing
 for every release artifact.
 

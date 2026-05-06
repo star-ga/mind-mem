@@ -1,4 +1,4 @@
-# mind-mem v3.1.8 — API / MCP Surface Security Audit
+# MIND-Mem v3.1.8 — API / MCP Surface Security Audit
 
 **Date:** 2026-04-28
 **Auditor:** api-security agent (static review only)
@@ -306,7 +306,7 @@ correct per OWASP.
 
 This is flagged as Low rather than Info only because the encrypted-file format uses `_MAGIC =
 b"MMENC1"` as a plain-text header — an attacker who can observe encrypted files can confirm
-that mind-mem encryption is in use, narrowing their attack surface.
+that MIND-Mem encryption is in use, narrowing their attack surface.
 
 **Remediation (Don't bother for v3.x):** The current construction is safe. Migrating to
 `cryptography.hazmat.primitives.ciphers.Cipher` would eliminate the custom PRF but adds a
@@ -427,7 +427,7 @@ single-operator localhost threat model. Do not implement them.
   cross-origin POST with a custom `Authorization` header (same-origin policy blocks it).
   CSRF tokens add a round-trip for no benefit.
 
-- **Content Security Policy / HSTS headers.** mind-mem's REST API is not a browser-facing
+- **Content Security Policy / HSTS headers.** MIND-Mem's REST API is not a browser-facing
   application. Agents call it programmatically. CSP and HSTS provide zero benefit.
 
 - **JWT expiry validation for the static `MIND_MEM_TOKEN`.** It is not a JWT; it is an opaque

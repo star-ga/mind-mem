@@ -1,4 +1,4 @@
-# mind-mem Roadmap
+# MIND-Mem Roadmap
 
 ## v1.0.6 — Hybrid Retrieval Pipeline ✅ Released
 
@@ -149,7 +149,7 @@
 
 # v2.0 Roadmap — Verifiable, Accelerated Memory
 
-> Three STARGA projects converge: **512-mind** governance primitives + **mind-inference** acceleration + **mind-mem** retrieval.
+> Three STARGA projects converge: **512-mind** governance primitives + **mind-inference** acceleration + **MIND-Mem** retrieval.
 >
 > Theme: The first AI memory system with **cryptographically verifiable governance** and **hardware-accelerated hot paths**.
 >
@@ -306,7 +306,7 @@ Release criteria:
 
 > **Paper:** "Train Any Agent Simply by Talking" (arXiv:2603.10165)
 >
-> Theme: mind-mem learns from every user interaction — corrections, re-queries, and rephrased searches become training signals that improve retrieval quality over time.
+> Theme: MIND-Mem learns from every user interaction — corrections, re-queries, and rephrased searches become training signals that improve retrieval quality over time.
 
 ### Next-State Signal Recovery for Retrieval
 - [x] **Evaluative signal capture** — detect user re-queries (same intent, different phrasing) as negative feedback on previous recall
@@ -390,9 +390,9 @@ Release criteria:
 > **Cross-ref:** an internal `consolidator.mind` module (2026-03-31) implements the idle-time consolidation
 > cycle for belief graphs (merge similar, resolve contradictions, promote repeated observations,
 > decay stale). `write_discipline.mind` enforces the write-then-index invariant so failed writes
-> never pollute the retrieval index. Both modules integrate with mind-mem via FFI. The v2.4.0
+> never pollute the retrieval index. Both modules integrate with MIND-Mem via FFI. The v2.4.0
 > features below formalize what those modules already enforce at the cognitive daemon level into
-> mind-mem's own API surface.
+> MIND-Mem's own API surface.
 
 ### Active Cognitive Forgetting
 - [x] **Sleep consolidation cycle** — periodic background pass: mark → merge → archive → forget
@@ -475,7 +475,7 @@ _Source: agentmemory — cascading staleness across graph nodes_
 ### 4-Tier Memory Consolidation
 _Source: agentmemory — working → episodic → semantic → procedural tiers with Ebbinghaus decay_
 
-mind-mem currently has append-only logs → manual promotion to MEMORY.md. This formalizes the pipeline:
+MIND-Mem currently has append-only logs → manual promotion to MEMORY.md. This formalizes the pipeline:
 
 - [x] **Tier 0 (Working)** — raw daily log entries (`memory/YYYY-MM-DD.md`), TTL 30 days before decay review
 - [x] **Tier 1 (Episodic)** — compressed session summaries (`summaries/weekly/`), auto-generated from Tier 0
@@ -490,7 +490,7 @@ mind-mem currently has append-only logs → manual promotion to MEMORY.md. This 
 _Source: agentmemory — 12 Claude Code hooks for silent observation capture_
 
 - [x] **Hook event schema** — standardized event format: `{type, timestamp, tool, input_hash, output_summary, project, session_id}`
-- [x] **SessionStart hook** — inject recent context from mind-mem at conversation start (token-budgeted)
+- [x] **SessionStart hook** — inject recent context from MIND-Mem at conversation start (token-budgeted)
 - [x] **PostToolUse hook** — capture tool name + output summary, SHA-256 dedup (5-min window)
 - [x] **PreCompact hook** — re-inject critical memory context before context compaction
 - [x] **SessionEnd hook** — trigger end-of-session summary compression
@@ -520,7 +520,7 @@ _Source: agentmemory — per-project aggregated intelligence_
 ### P2P Memory Mesh
 _Source: agentmemory — cross-agent sync with 7 scopes; Brooks Jordan/Daneel — multi-agent sharing_
 
-- [x] **Mesh protocol** — mind-mem instances discover peers via mDNS or explicit peer list
+- [x] **Mesh protocol** — MIND-Mem instances discover peers via mDNS or explicit peer list
 - [x] **7 sync scopes** — memories, actions, semantic, procedural, relations, graph, governance (each independently toggleable)
 - [x] **Conflict resolution** — last-write-wins for Tier 0-1, governance-gated merge for Tier 2-3
 - [x] **Namespace isolation** — shared vs private memory with per-scope access control
@@ -543,7 +543,7 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
 
 ## v2.7.0 — Universal Agent Bridge + Vault Sync ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
-> Theme: mind-mem becomes the shared memory layer for **every** coding agent — not just MCP-capable ones.
+> Theme: MIND-Mem becomes the shared memory layer for **every** coding agent — not just MCP-capable ones.
 > Any CLI agent (Claude Code, codex, gemini, Cursor, Windsurf, Aider) reads and writes
 > to the same memory through a unified interface. Plus bidirectional vault sync for Obsidian/file-based
 > knowledge management.
@@ -552,9 +552,9 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
 
 ### Component 1: Universal Agent Bridge (`mm` CLI)
 
-**Problem:** MCP-capable agents (Claude Code, other MCP-native runtimes) already have mind-mem access. Non-MCP agents (codex, gemini CLI, Cursor, Windsurf, Aider) have zero memory — every session starts blank. The `mm` CLI bridges this gap.
+**Problem:** MCP-capable agents (Claude Code, other MCP-native runtimes) already have MIND-Mem access. Non-MCP agents (codex, gemini CLI, Cursor, Windsurf, Aider) have zero memory — every session starts blank. The `mm` CLI bridges this gap.
 
-- [x] **`mm` unified CLI** — single binary (`~/.local/bin/mm`) wrapping all mind-mem operations:
+- [x] **`mm` unified CLI** — single binary (`~/.local/bin/mm`) wrapping all MIND-Mem operations:
   ```
   mm recall "query"                    # search memory (BM25F+vector hybrid)
   mm capture "text" --type decision    # store new block
@@ -600,22 +600,22 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
 
 ### Component 2: Vault Bidirectional Sync
 
-**Problem:** Obsidian (and similar PKM tools) provide visual graph navigation, backlinks, and manual curation that mind-mem doesn't. mind-mem provides hybrid retrieval, governance, and agent-accessible MCP that Obsidian doesn't. Users shouldn't have to choose.
+**Problem:** Obsidian (and similar PKM tools) provide visual graph navigation, backlinks, and manual curation that MIND-Mem doesn't. MIND-Mem provides hybrid retrieval, governance, and agent-accessible MCP that Obsidian doesn't. Users shouldn't have to choose.
 
 - [x] **Vault scanner** — `mm vault sync /path/to/obsidian/vault`:
   - Reads all `.md` files in vault
   - Detects block types from frontmatter/headers (decisions, entities, tasks, notes)
-  - Indexes into mind-mem with `source: vault` provenance tag
+  - Indexes into MIND-Mem with `source: vault` provenance tag
   - Respects `.obsidian/` and `.trash/` exclusions
   - Incremental: only re-indexes files modified since last sync (mtime-based)
-- [x] **Reverse sync** — mind-mem → vault:
+- [x] **Reverse sync** — MIND-Mem → vault:
   - New decisions/entities created via `mm capture` or MCP get written back to vault as `.md` files
   - Maintains Obsidian-compatible frontmatter (tags, aliases, created, modified)
   - Creates `[[wikilinks]]` for entity cross-references
   - Respects vault folder structure (configurable mapping: decisions/ → vault/decisions/, etc.)
 - [x] **Conflict resolution** — when both sides modify the same block:
   - Vault wins for manual edits (human curation > agent writes)
-  - mind-mem wins for governance decisions (contradictions, drift alerts)
+  - MIND-Mem wins for governance decisions (contradictions, drift alerts)
   - Conflicts logged with both versions preserved
 - [x] **Vault config** — in `mind-mem.json`:
   ```json
@@ -663,7 +663,7 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
   - `_query_transformers(prompt, model)` — in-process HF fallback with model cache
   - Env-driven URL overrides: `MIND_MEM_VLLM_URL`, `MIND_MEM_LLM_BASE_URL`, `MIND_MEM_LLM_API_KEY`
   - `auto` mode dispatches ollama → vllm → openai-compat → llama-cpp → transformers
-- [x] **mind-mem:4b model via Ollama** — Qwen3.5-4B full fine-tune on STARGA-curated mind-mem corpus; Q4_K_M @ 2.6 GB; default `extraction.model`; empirical on RTX 3080: 104 tok/s generation, 1585 tok/s prefill
+- [x] **mind-mem:4b model via Ollama** — fully trained on STARGA-curated MIND-Mem corpus; Q4_K_M @ 2.6 GB; default `extraction.model`; empirical on RTX 3080: 104 tok/s generation, 1585 tok/s prefill
 - [x] **`mind-mem.json` defaults** — `extraction.model` updated from `mind-mem:7b` → `mind-mem:4b`, `backend` from `auto` → `ollama` (explicit)
 - [x] **Docs alignment** — 11 audit issues fixed: tool count 54 → 57 in nine locations, "Mind-Mem:7B" → "mind-mem:4b" heading, new §Extraction (LLM Backend) in `docs/configuration.md`, `--no-mcp` flag documented, `install_mcp_config()` public API documented, env vars section updated
 
@@ -732,7 +732,7 @@ Close the production-readiness gap. Everything local-first but horizontal-ready.
   improves without losing capability. Tracked in issue [#501].
 - [ ] **REST API layer** — `src/mind_mem/api/rest.py` (FastAPI); endpoints mirror the reduced MCP tool set (with advanced tools behind a flag); OIDC/JWT auth in `src/mind_mem/api/auth.py`; `mm serve` CLI command to launch it
 - [ ] **JS/TS SDK + Go SDK** — `sdk/js/` (fetch wrapper) and `sdk/go/` (standard-library client); both match the Python SDK surface
-- [ ] **Dockerfile + docker-compose** — `deploy/docker/Dockerfile`, `deploy/docker-compose.yml` with mind-mem + pgvector + Ollama; one-command `make up`
+- [ ] **Dockerfile + docker-compose** — `deploy/docker/Dockerfile`, `deploy/docker-compose.yml` with MIND-Mem + pgvector + Ollama; one-command `make up`
 - [ ] **One-command installer** — `curl -sSL install.mind-mem.sh | bash`
 - [ ] **Full OIDC / SSO auth** — `src/mind_mem/api/auth.py`; Okta / Auth0 / Google Workspace / Azure AD; token refresh, scope mapping to `namespaces.py` ACL roles
 - [ ] **Per-agent access control** — extend `namespaces.py` with per-agent API keys rotated via the REST admin endpoints; audit every read/write with agent-id attribution in `audit_chain`
@@ -794,7 +794,7 @@ governance + apply engine + local backends) and `api-security`
 `security/api-security-2026-04-28.md`.
 
 **Goal:** tight security defaults for the localhost threat model
-without making mind-mem painful to run. Every item below has its
+without making MIND-Mem painful to run. Every item below has its
 UX cost noted; "don't-bother" items are explicit so future-us
 doesn't accidentally implement them.
 
@@ -927,7 +927,7 @@ so a future review pass doesn't accidentally re-litigate them.
 
 - **CSRF tokens on REST.** Bearer-token auth + browser same-origin
   policy already block cross-origin POST.
-- **CSP / HSTS headers.** mind-mem REST is agent-facing, not
+- **CSP / HSTS headers.** MIND-Mem REST is agent-facing, not
   browser-facing.
 - **Treating `MIND_MEM_TOKEN` as a JWT.** It's an opaque static
   bearer; adding expiry would require a signing ceremony with no
@@ -1026,7 +1026,7 @@ promotes both to GA.
   `cache.redis_url` and `retrieval.tier_boost` appear in the
   v3.2.0 docs; verified as part of the v3.2.1 release checklist.
 - [ ] **Dependency CVE bumps** — no ``authlib`` or ``aiohttp`` in
-  mind-mem's direct or transitive deps as of v3.2.1 (``pip-audit``
+  MIND-Mem's direct or transitive deps as of v3.2.1 (``pip-audit``
   verified). Kept as tracking item in case a future ``fastmcp``
   release reintroduces either.
 
@@ -1092,7 +1092,7 @@ Projected v3.3.0 overall with Tier-1+2 shipped: **74-76 (Mistral-Mistral)** / **
 - [x] **Streaming ingest + back-pressure queue** — shipped in `src/mind_mem/streaming.py` (commit `9956b7a`). Bounded mpsc deque with drop-oldest policy + per-client token bucket. ``build_queue_from_config`` opt-in via ``streaming.enabled``. Thread-safe multi-producer. 14 tests including a 4-thread concurrency test.
 - [x] **Consensus voting** — shipped in `src/mind_mem/consensus_vote.py` (commit `f644096`). ``reach_consensus(votes, quorum_threshold, min_votes)`` returns a typed ``ConsensusDecision(winner, margin, confidence, reason, vote_counts)``; trust weights pulled from ``Vote.trust_weight`` or ``namespaces.<id>.trust_weight``; 0-weight excludes. 14 tests.
 - [ ] **Graph + timeline visualization** — `web/` Next.js app; D3 / react-flow graph view (nodes = blocks, edges = relationships), timeline view, drift heatmap; reads from REST API shipped in v3.2.0. v3.2.0 already emits `[[wikilinks]]` on `vault_sync` so an Obsidian-mounted vault gets a graph view for free; this web UI is the non-Obsidian alternative. **Frontend work — separate from the retrieval shipments above.**
-- [ ] **mind-mem-4b v2 fine-tune** — training recipe + data generators shipped (`docs/mind-mem-4b-v2-training-recipe.md`, `benchmarks/generate_dispatcher_examples.py`, `benchmarks/generate_retrieval_examples.py`). **Runpod H200 kickoff pending operator approval** — ~$55, 8-12hr, targets Qwen3.5-4B full-FT on v3.2.x dispatchers + v3.3.0 retrieval shapes + LoCoMo replay.
+- [ ] **mind-mem-4b v2 retrain** — training recipe + data generators shipped (`docs/mind-mem-4b-v2-training-recipe.md`, `benchmarks/generate_dispatcher_examples.py`, `benchmarks/generate_retrieval_examples.py`). **Runpod H200 kickoff pending operator approval** — ~$55, 8-12hr, targets full retrain of mind-mem:4b on v3.2.x dispatchers + v3.3.0 retrieval shapes + LoCoMo replay.
 
 **Estimated (v3.3.0):** ~2400 lines retrieval (Tier 1+2+3) + ~2000 lines web UI + ~2 GPU-days retrain. New optional extras: `mind-mem[reasoning]`, `mind-mem[streaming]`, `mind-mem[rerank-ensemble]` (Tier 4).
 
@@ -1220,12 +1220,12 @@ payloads via `trust_remote_code` / `auto_map` / pickle imports.
 > bundled a "Social Ingestion" thread (per-platform fetchers for
 > HN / Reddit / X / LinkedIn / Instagram / TikTok / Moltbook /
 > Bluesky / Mastodon / Farcaster). That work has been **moved out
-> of mind-mem to naestro-bot** — fetching social content is an
-> agent-layer concern, not a memory-layer concern. mind-mem stays
+> of MIND-Mem to naestro-bot** — fetching social content is an
+> agent-layer concern, not a memory-layer concern. MIND-Mem stays
 > the substrate (blocks + recall + governance); naestro-bot
 > extensions (alongside `extensions/discord/`, `extensions/slack/`,
-> etc.) own per-platform fetching and write into mind-mem via the
-> existing MCP surface. This preserves mind-mem's zero-dependency
+> etc.) own per-platform fetching and write into MIND-Mem via the
+> existing MCP surface. This preserves MIND-Mem's zero-dependency
 > posture and avoids inheriting 8 platforms' worth of auth, rate-
 > limit, anti-bot, and ToS maintenance liability.
 
@@ -1302,7 +1302,7 @@ payloads via `trust_remote_code` / `auto_map` / pickle imports.
   version byte ``0x02``. Covers all 19 opcodes (with their
   opcode-specific param sections — axis, perm, axes, axis+count)
   and all 13 dtypes. Replaces JSON for IR-graph payloads inside
-  mind-mem (audit reports stay JSON — those are documents, not
+  MIND-Mem (audit reports stay JSON — those are documents, not
   graphs). **63 unit tests** in ``tests/test_mic_map.py``.
 - [x] **Backend wiring** — shipped in v3.8.6 (2026-05-02).
   ``mind_mem.llm_extractor._gate_check_local`` runs before
@@ -1364,8 +1364,8 @@ streaming I/O, and a native accelerator for the hot loops.
   loops at ``src/mind_mem/_mic_map_accel.pyx``. Same Python
   API; ``mic_map.py`` try-imports ``_mic_map_accel`` and falls
   back to the pure-Python codec when the extension isn't built
-  (the default ``pip install mind-mem`` path). Build is opt-in
-  via ``pip install mind-mem[accelerated]`` (pulls in Cython
+  (the default ``pip install MIND-Mem`` path). Build is opt-in
+  via ``pip install MIND-Mem[accelerated]`` (pulls in Cython
   at build time) — no Cargo toolchain, no PyO3, the wheel
   stays a pure-Python wheel by default. Bench delta on the
   residual block: ``parse_micb`` +16% small / +20% medium /
@@ -1384,13 +1384,13 @@ mind-mem. **Tracked in naestro-bot** alongside the existing
 / `extensions/feishu/` channels — fetching social content is the
 same shape of work as bridging a chat platform, and naestro-bot
 already owns that surface. Naestro-bot extensions write captured
-posts into mind-mem through the existing MCP recall / capture
-tools, so mind-mem's role (substrate for blocks + recall +
+posts into MIND-Mem through the existing MCP recall / capture
+tools, so MIND-Mem's role (substrate for blocks + recall +
 governance + contradiction detection) is unchanged.
 
-The split keeps mind-mem zero-dependency, avoids inheriting per-
+The split keeps MIND-Mem zero-dependency, avoids inheriting per-
 platform auth / anti-bot / ToS maintenance, and preserves the
-clean layering: **mind-mem stores; agents fetch.**
+clean layering: **MIND-Mem stores; agents fetch.**
 
 **Estimated:** ~1500 lines audit (CLI + pickle disassembly + Ed25519 +
 load-gate + CI hook) — all shipped in v3.8.1 → v3.8.7. The social
@@ -1399,7 +1399,7 @@ integration) is now a naestro-bot concern.
 
 ## v4.0.0 — Platform Scale (production)
 
-Horizontal scaling, multi-tenant isolation, and edge deployment. This version turns mind-mem from a library into a platform. The multi-tenancy thread is also tracked as issue [#505].
+Horizontal scaling, multi-tenant isolation, and edge deployment. This version turns MIND-Mem from a library into a platform. The multi-tenancy thread is also tracked as issue [#505].
 
 - [ ] **Sharded Postgres (Citus)** — `src/mind_mem/storage/sharded_pg.py`; shard by `namespace_id` with consistent hashing; cross-shard recall merging
 - [ ] **Replication + consensus for governance** — Raft log wrapper around `audit_chain.py`; strong consistency for governance writes, eventual consistency for recall reads
@@ -1407,7 +1407,7 @@ Horizontal scaling, multi-tenant isolation, and edge deployment. This version tu
 - [ ] **Tenant KMS + row-level encryption** — `src/mind_mem/tenant_crypto.py`; per-tenant data keys, envelope encryption, rotation; extends the v3.0.0 `EncryptedBlockStore`
 - [ ] **Per-tenant audit chains** — fork `audit_chain.py` so each tenant has an isolated hash chain with its own genesis + spec-hash binding; enables per-customer compliance exports without cross-tenant leakage
 - [ ] **Byzantine-safe consensus (opt-in)** — `src/mind_mem/bft.py`; PBFT for high-trust deployments where quorum votes may be adversarial
-- [ ] **Edge deployment mode** — `mind-mem-edge` binary (PyOxidizer); embedded mode for on-device agents; hybrid sync to a central mind-mem cluster
+- [ ] **Edge deployment mode** — `mind-mem-edge` binary (PyOxidizer); embedded mode for on-device agents; hybrid sync to a central MIND-Mem cluster
 - [ ] **Managed-service console** — `web/console/`; multi-tenant dashboard, cost metering, usage graphs, per-tenant audit chain viewer
 - [ ] **gRPC wire protocol** — `src/mind_mem/api/grpc_server.py`; low-latency alternative to REST for service-to-service calls
 - [ ] **Kafka/NATS event fan-out** — governance events (`contradiction_detected`, `block_promoted`, `snapshot_created`) published as streams; external systems subscribe without polling
@@ -1419,9 +1419,9 @@ Horizontal scaling, multi-tenant isolation, and edge deployment. This version tu
 ## Post-v2.7.0 — Future Directions
 
 - [x] **Agent-to-agent trust protocol** — agents verify each other's memory integrity via Merkle proofs before sharing context
-- [x] **Distributed memory mesh** — multiple mind-mem instances with hash-chain synchronization _(see v2.6.0 P2P Mesh for foundation)_
+- [x] **Distributed memory mesh** — multiple MIND-Mem instances with hash-chain synchronization _(see v2.6.0 P2P Mesh for foundation)_
 - [x] **Real-time governance dashboard** — web UI showing evidence stream, chain health, spec-hash status
-- [x] **512 Kernel full integration** — mind-mem as a governed resource within 512-mind production deployments
+- [x] **512 Kernel full integration** — MIND-Mem as a governed resource within 512-mind production deployments
 - [x] **Hardware-specific compilation** — `mindc` targets for ARM (Apple Silicon), CUDA, ROCm
 - [x] **Multi-user retrieval adaptation** — per-user fine-tuning in multi-tenant deployments, isolated signal streams
 - [x] **Federated memory** — privacy-preserving retrieval across organizational boundaries (differential privacy + secure aggregation)
@@ -1431,18 +1431,18 @@ Horizontal scaling, multi-tenant isolation, and edge deployment. This version tu
 
 ## Companion Tools (External, Non-Dependency)
 
-External MCP-server tools that solve adjacent memory problems mind-mem deliberately
+External MCP-server tools that solve adjacent memory problems MIND-Mem deliberately
 does not solve. Documented here so users see them as complements rather than
-competitors. **mind-mem will not depend on any of these** — license, scope, and
+competitors. **MIND-Mem will not depend on any of these** — license, scope, and
 substrate-of-record concerns make co-existence the right pattern.
 
 - [ ] **GitNexus** (`github.com/h4ckf0r0day/GitNexus`) — code knowledge-graph indexer
   exposed as MCP server. Parses repo structure (call graphs, dependencies, clusters)
   and serves architectural-awareness tools to coding agents. Solves "what does the
-  code do at this point in time" — orthogonal to mind-mem's "what did we decide and
+  code do at this point in time" — orthogonal to MIND-Mem's "what did we decide and
   why over time." License: PolyForm Noncommercial — incompatible with Apache-2.0
   programmatic dependency. Recommendation: install as a separate MCP server
-  alongside mind-mem; both end up in Claude Code / Cursor / Windsurf MCP lists,
+  alongside MIND-Mem; both end up in Claude Code / Cursor / Windsurf MCP lists,
   no integration code required. Documentation will mention this in the README under
   "Companion Tools" once the section is added (separate task).
 
@@ -1450,9 +1450,9 @@ substrate-of-record concerns make co-existence the right pattern.
 
 ## Advanced Agent Memory Primitives
 
-mind-mem is designed as a governed-memory substrate for autonomous agents operating in interactive reasoning environments (benchmark agents, game-playing agents, long-horizon task agents). The following block types and retrieval capabilities extend the core schema for those workloads.
+MIND-Mem is designed as a governed-memory substrate for autonomous agents operating in interactive reasoning environments (benchmark agents, game-playing agents, long-horizon task agents). The following block types and retrieval capabilities extend the core schema for those workloads.
 
-### Shipped (already available in mind-mem)
+### Shipped (already available in MIND-Mem)
 
 - [x] **`[PATTERN]` blocks** — opening-book / strategy-template storage; recall by environment fingerprint drives initial-action selection
 - [x] **`[TRAJECTORY]` block type** — shipped in v1.1.0; stores per-session execution traces, recallable by session-id or environment-id for historical playthrough retrieval
@@ -1480,7 +1480,7 @@ Persistent memory that improves agent decision quality monotonically over use, n
 
 ### Five Laws of System Evolution — Applied
 
-| Law | mind-mem application | Status |
+| Law | MIND-Mem application | Status |
 |---|---|---|
 | Uneven development | Recall surfaces evolve faster than provenance, contradiction-handling, and consolidation. Invest in audit + governance, not more recall modes. | Active investment shift toward provenance + governance |
 | Mono → bi → poly | Single-store BM25 → BM25+vector hybrid → poly-substrate (BM25 + vector + graph + governance kernel). Next: cross-machine networked mesh. | At bi → poly transition |

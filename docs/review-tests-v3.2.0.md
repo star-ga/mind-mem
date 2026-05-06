@@ -1,4 +1,4 @@
-# Test Review — mind-mem v3.2.0
+# Test Review — MIND-Mem v3.2.0
 Date: 2026-04-19  
 Baseline: 3642 passing, 7 skipped, 5 deselected (70 s)
 

@@ -4,14 +4,14 @@
 > tree, the public PyPI artifact, or a published benchmark file in
 > `benchmarks/`. Nothing here is a customer-relationship claim about
 > any AI vendor — the integrations described are *software-level*
-> (the named tool talks to mind-mem via the Model Context Protocol),
+> (the named tool talks to MIND-Mem via the Model Context Protocol),
 > not commercial.
 
-## What mind-mem actually ships
+## What MIND-Mem actually ships
 
 ### Native MCP integration with 17 AI development tools
 
-mind-mem speaks the [Model Context Protocol](https://modelcontextprotocol.io/).
+MIND-Mem speaks the [Model Context Protocol](https://modelcontextprotocol.io/).
 Any MCP-compatible client connects with one command:
 
 ```bash
@@ -41,10 +41,10 @@ Currently supported:
 | Cody | Sourcegraph | `~/.sourcegraph/cody.json` |
 | Qodo | Qodo | `~/.qodo/config.json` |
 | aider | aider-chat | `.aider.conf.yml` |
-| OpenClaw | STARGA | `~/.openclaw/openclaw.json` |
-| NanoClaw / NemoClaw | STARGA | `~/.openclaw/openclaw.json` |
+| OpenClaw | OpenClaw | `~/.openclaw/openclaw.json` |
+| NanoClaw / NemoClaw | OpenClaw forks | `~/.openclaw/openclaw.json` |
 
-**What this means**: each of these tools can call mind-mem's 81 MCP
+**What this means**: each of these tools can call MIND-Mem's 81 MCP
 tools (recall, propose_update, scan, hybrid_search, mic_convert_tool,
 mic_inspect_tool, etc.) the same way it calls any other MCP server.
 
@@ -62,12 +62,12 @@ pip install mind-mem
 - License: Apache-2.0
 - PyPI: [`mind-mem`](https://pypi.org/project/mind-mem/)
 - Source: [`star-ga/mind-mem`](https://github.com/star-ga/mind-mem)
-- Local model: `mind-mem:4b` (Qwen-3.5-4B fine-tune) ships via
+- Local model: `mind-mem:4b` (fully trained) ships via
   Ollama — no cloud API required for the extraction model
 
 ## Compatible with major LLM providers
 
-mind-mem's recall pipeline is provider-agnostic. Tested against:
+MIND-Mem's recall pipeline is provider-agnostic. Tested against:
 
 - Anthropic Claude (3.5 Sonnet, 4.x family)
 - OpenAI GPT (4o, 5.4)
@@ -76,7 +76,7 @@ mind-mem's recall pipeline is provider-agnostic. Tested against:
 - Local: Ollama, vLLM, llama.cpp endpoints
 
 The "compatibility" claim is at the API contract level — the same
-mind-mem server returns the same answers regardless of which LLM is
+MIND-Mem server returns the same answers regardless of which LLM is
 asking. We do not use any provider's commercial relationship as a
 positioning artefact.
 
@@ -94,14 +94,14 @@ matching pipeline configs in the README.
 
 > Comparisons: published numbers for Mem0 (66.88), Zep (65.99),
 > Letta (74.0), Memobase (75.8), LangMem (58.10) on the same
-> benchmark. mind-mem surpasses Mem0 and Letta on the same 10-conv
+> benchmark. MIND-Mem surpasses Mem0 and Letta on the same 10-conv
 > LoCoMo benchmark with **zero cloud infrastructure** and
 > **local-only retrieval** — no graph DB, no vector DB service, no
 > LLM in the retrieval loop unless the operator opts in.
 
 ## Production usage at STARGA
 
-mind-mem is the daily-driver memory layer for STARGA's six active
+MIND-Mem is the daily-driver memory layer for STARGA's six active
 projects: `mind`, `mind-runtime`, `mindlang.dev`, `mind-inference`,
 `mind-fleet`, `arch-mind`. Used internally for cross-session recall,
 contradiction detection, and audit-grade rationale chains during
@@ -120,7 +120,7 @@ in our own commit history. We do not extrapolate it into a third-party
   VS Code extension MCP surface, not a Microsoft Inc. commercial
   relationship.
 - "Anthropic is a customer" — false. Claude Code is built on the MCP
-  spec; mind-mem implements that spec; Anthropic has not endorsed,
+  spec; MIND-Mem implements that spec; Anthropic has not endorsed,
   contracted with, or partnered with STARGA.
 - "Used by N production teams outside STARGA" — we have no telemetry.
   PyPI download counts measure installs, not active use, and we do
@@ -135,7 +135,7 @@ release and on this page — not before.
 Verbatim copy of the section above is approved for:
 
 - README "Integrations" section
-- mindlang.dev / mind-mem product pages
+- mindlang.dev / MIND-Mem product pages
 - Investor decks and one-pagers
 - Cold outreach emails
 - LinkedIn / X marketing

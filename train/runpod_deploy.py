@@ -185,6 +185,11 @@ _SSH_OPTS = [
     "-o", "UserKnownHostsFile=/dev/null",
     "-o", "LogLevel=ERROR",
     "-o", "ServerAliveInterval=30",
+    # 30s × 20 = 10 min before disconnect — tolerates brief network blips
+    # during long-running training streams. Earlier value (default 3) gave
+    # 90s, which dropped a v3.9.1 retrain at step 21 on 2026-05-05.
+    "-o", "ServerAliveCountMax=20",
+    "-o", "TCPKeepAlive=yes",
 ]
 
 

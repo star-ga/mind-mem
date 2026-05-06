@@ -5,7 +5,7 @@ GH issue: [#505](https://github.com/star-ga/mind-mem/issues/505)
 
 ## Problem
 
-mind-mem v2.x assumes a **single-tenant workspace**: one user, one
+MIND-Mem v2.x assumes a **single-tenant workspace**: one user, one
 machine, one set of Markdown corpora under `./decisions/`, etc. The
 v3.0 REST-API roadmap item (planned for v3.1) requires
 multi-tenancy: multiple orgs sharing one deployment, each with their
@@ -128,7 +128,7 @@ Every *existing* tool gains an implicit `workspace_id` parameter
 
 ## Open questions
 
-1. Do we ship user/org management via mind-mem itself, or delegate
+1. Do we ship user/org management via MIND-Mem itself, or delegate
    to an external IdP (OIDC) and only store role bindings locally?
    Local is simpler but means operators maintain a user DB.
 
@@ -146,11 +146,11 @@ Every *existing* tool gains an implicit `workspace_id` parameter
 | Step | Owner | Deliverable |
 |---|---|---|
 | Design doc review | STARGA | This file |
-| Identity + storage layout | mind-mem | orgs/ tree, Actor dataclass |
-| RBAC DB schema | mind-mem | `rbac.db` + `scope_check()` helper |
-| Workspace + user MCP tools | mind-mem | 7 new tools |
-| Migration CLI | mind-mem | `mm migrate v2-to-v3` |
-| REST API (v3.1) | mind-mem | FastAPI wrapper around MCP |
-| Docs | mind-mem | multi-tenancy.md, auth.md |
+| Identity + storage layout | MIND-Mem | orgs/ tree, Actor dataclass |
+| RBAC DB schema | MIND-Mem | `rbac.db` + `scope_check()` helper |
+| Workspace + user MCP tools | MIND-Mem | 7 new tools |
+| Migration CLI | MIND-Mem | `mm migrate v2-to-v3` |
+| REST API (v3.1) | MIND-Mem | FastAPI wrapper around MCP |
+| Docs | MIND-Mem | multi-tenancy.md, auth.md |
 
 Estimated effort: **3 weeks for foundation + 2 weeks for REST API**.
