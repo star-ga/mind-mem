@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 733 | **Est. tokens:** ~1,519,444
-**Generated:** 2026-05-05 23:19 UTC
+**Files:** 733 | **Est. tokens:** ~1,523,506
+**Generated:** 2026-05-06 12:15 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 32 | ~85,387 |
+| `./` | 32 | ~85,351 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,101 |
 | `benchmarks/` | 26 | ~64,933 |
@@ -30,7 +30,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 63 | ~100,813 |
+| `docs/` | 63 | ~100,815 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -54,7 +54,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 155 | ~535,421 |
+| `src/mind_mem/` | 155 | ~535,420 |
 | `src/mind_mem/api/` | 5 | ~15,697 |
 | `src/mind_mem/mcp/` | 3 | ~3,960 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,696 |
@@ -64,7 +64,7 @@
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 254 | ~508,759 |
 | `tests/integration/` | 2 | ~1,575 |
-| `train/` | 14 | ~38,475 |
+| `train/` | 14 | ~42,572 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -98,9 +98,9 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~1945 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~23598 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~23563 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
-- `ROADMAP.md` (~24691 tok, huge) — mind-mem Roadmap
+- `ROADMAP.md` (~24690 tok, huge) — mind-mem Roadmap
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — mind-mem v3.1.9 (April 2026)
 - `SECURITY.md` (~1752 tok, huge) — Security Policy
 - `setup.py` (~397 tok, medium) — Conditional setup hook for the optional Cython accelerator.
@@ -169,7 +169,7 @@
 - `api-reference.md` (~1477 tok, large) — API Reference
 - `architecture.md` (~1936 tok, huge) — Architecture
 - `audit_response.md` (~956 tok, large) — mind-mem — response to the 2026-05-02 ecosystem audit
-- `benchmarks.md` (~759 tok, large) — Benchmarks
+- `benchmarks.md` (~755 tok, large) — Benchmarks
 - `block-format.md` (~431 tok, medium) — Block Format
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~254 tok, medium) — CI Workflows
@@ -192,7 +192,7 @@
 - `glossary.md` (~263 tok, medium) — Glossary
 - `governance.md` (~1366 tok, large) — mind-mem — governance design (5 layers)
 - `hf-mind-mem-4b-v2-README.md` (~2154 tok, huge) — mind-mem-4b v2 (2026-04-21)
-- `integrations.md` (~1544 tok, huge) — Integrations
+- `integrations.md` (~1545 tok, huge) — Integrations
 - `locomo-v3.4-conv0-results.md` (~449 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
 - `maintenance-namespaces.md` (~1601 tok, huge) — `maintenance/` namespaces
 - `mcp-integration.md` (~1691 tok, huge) — MCP Integration Guide
@@ -201,7 +201,7 @@
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
 - `migration.md` (~2754 tok, huge) — Migration Guide: mem-os to mind-mem
 - `mind-kernels.md` (~339 tok, medium) — MIND Kernels
-- `mind-mem-4b-setup.md` (~2418 tok, huge) — Setting up the mind-mem-4b model
+- `mind-mem-4b-setup.md` (~2425 tok, huge) — Setting up the mind-mem-4b model
 - `mind-mem-4b-v2-training-recipe.md` (~1683 tok, huge) — mind-mem-4b v2 training recipe — Runpod H200
 - `odc-retrieval.md` (~834 tok, large) — Observer-Dependent Cognition in mind-mem
 - `performance-tuning.md` (~560 tok, large) — Performance Tuning
@@ -223,7 +223,7 @@
 
 - `security-model.md` (~350 tok, medium) — Security Model
 - `setup.md` (~1741 tok, huge) — Setup
-- `status.md` (~1128 tok, large) — mind-mem — implementation status (alignment companion)
+- `status.md` (~1126 tok, large) — mind-mem — implementation status (alignment companion)
 - `storage-backends.md` (~1264 tok, large) — Storage Backends
 - `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide
 - `supply-chain-security.md` (~1051 tok, large) — Supply-Chain Security
@@ -445,7 +445,7 @@
 - `governance_raft.py` (~2208 tok, huge) — Raft-style consensus wrapper for governance writes (v4.0 prep).
 - `graph_recall.py` (~1907 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hook_installer.py` (~9442 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hook_installer.py` (~9441 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `http_transport.py` (~5592 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
 - `hybrid_recall.py` (~8896 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `inbox.py` (~3595 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).
@@ -888,8 +888,8 @@
 ### `train/`
 
 - `backport_sweep.py` (~1658 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
-- `build_corpus.py` (~16891 tok, huge) — Harvest a training corpus for the mind-mem-4b model.
-- `build_model_card.py` (~3051 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
+- `build_corpus.py` (~21011 tok, huge) — Harvest a training corpus for the mind-mem-4b model.
+- `build_model_card.py` (~2956 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
 - `eval_harness.py` (~4045 tok, huge) — Eval harness for mind-mem-4b.
 - `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
 - `Modelfile.v3.9.0` (~389 tok, medium) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
@@ -897,7 +897,7 @@
 - `README.md` (~577 tok, large) — mind-mem-4b training pipeline
 - `resume_pod_train.sh` (~876 tok, large) — Recovery: pod uz2uajluzskmm2 was preempted mid-run. Wake it up,
 - `RETRAIN_v3.9.0.md` (~1405 tok, large) — mind-mem-4b — v3.9.0 retrain plan
-- `runpod_deploy.py` (~3661 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
+- `runpod_deploy.py` (~3733 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
 - `runpod_full_ft.py` (~1629 tok, huge) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
 - `train_qlora.py` (~1315 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
 - `upload_to_hf.py` (~1122 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-4b.
