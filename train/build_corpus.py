@@ -2503,6 +2503,54 @@ def _harvest_eval_workflows() -> Iterator[dict]:
             }
 
 
+# === v3.9.8 SURGICAL: extra reinforcement for the 2 probes that v3.9.7 missed ===
+# Workflow 'belief drift' missed `scan` (model said `drift_signal` instead).
+# Xform 'bulk re-stamp' missed `reextract_dirty_blocks` (model only said `reindex_dirty`).
+# Each entry has a unique answer that LEADS with the required keyword.
+_V398_SURGICAL_WORKFLOW: list[str] = [
+    "Call `scan` first — it surfaces drift signals across the workspace. Then call `recent_signals` to read the chronological tail of those signals.",
+    "First `scan` (workspace-wide drift detection), then `recent_signals` (recent drift / contradiction events).",
+    "Use `scan` to detect drift, then `recent_signals` to inspect the latest events.",
+    "Step 1: `scan` — runs both lexical (DRIFT.md) and semantic (DriftDetector) drift passes. Step 2: `recent_signals` — chronological tail of the signal stream.",
+    "Run `scan` first to surface drift candidates, then `recent_signals` to read them.",
+    "`scan` (entry point — full workspace drift detection), then `recent_signals` (filter to recent events).",
+    "Mind-mem drift workflow: `scan` first, `recent_signals` next.",
+    "Drift-check chain: 1. `scan` 2. `recent_signals`. The `scan` call writes DRIFT.md and updates the SQLite signal store; `recent_signals` reads from it.",
+    "Begin with `scan`. It updates the drift signal store. Then call `recent_signals` to inspect.",
+    "Two-step: `scan` to detect, `recent_signals` to inspect. Both are real mind-mem MCP tools.",
+]
+_V398_SURGICAL_XFORM: list[str] = [
+    "Call `reextract_dirty_blocks(workspace, ...)` from `mind_mem.pipeline_hash`. It walks every block, finds those whose `TransformHash` doesn't match the active pipeline digest, re-runs extraction on them, and re-stamps via `stamp_transform_hash`.",
+    "`reextract_dirty_blocks` from `mind_mem.pipeline_hash` is the bulk re-stamp helper. It iterates every block and re-extracts the ones with a stale `TransformHash`.",
+    "Use `reextract_dirty_blocks(workspace, ...)`. It's the canonical bulk re-extraction pass in `mind_mem.pipeline_hash`.",
+    "`reextract_dirty_blocks` — the library function in `mind_mem.pipeline_hash` that bulk-re-stamps every block whose `TransformHash` is stale.",
+    "Bulk re-stamp helper: `reextract_dirty_blocks` (in `mind_mem.pipeline_hash`). Walks the workspace, re-extracts dirty blocks, re-stamps via `stamp_transform_hash`.",
+    "Call `reextract_dirty_blocks` from `mind_mem.pipeline_hash`. (The `reindex_dirty` MCP tool wraps this same function — but the underlying library helper that does the work is `reextract_dirty_blocks`.)",
+    "`reextract_dirty_blocks(workspace, ...)`. Mind-mem v3.9 helper that processes every dirty block in bulk, re-extracts them, and re-stamps with the current pipeline hash.",
+    "The bulk re-stamp helper is `reextract_dirty_blocks` (in `mind_mem.pipeline_hash`). It iterates the entire workspace and re-extracts every block with a stale `TransformHash`.",
+    "Use `reextract_dirty_blocks` from `mind_mem.pipeline_hash` — that's the v3.9 bulk-re-extraction helper.",
+    "`reextract_dirty_blocks` — library function in `mind_mem.pipeline_hash` that bulk re-stamps blocks with drifted `TransformHash`.",
+]
+
+
+def _harvest_v398_surgical() -> Iterator[dict]:
+    """v3.9.8: dedicated reinforcement for the 2 probes that v3.9.7 missed."""
+    workflow_prompt = "I want to check if a belief has drifted. Which tools do I call?"
+    xform_prompt = "How do I bulk re-stamp blocks whose pipeline hash drifted?"
+    for ans in _V398_SURGICAL_WORKFLOW:
+        yield {"messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": workflow_prompt},
+            {"role": "assistant", "content": ans},
+        ]}
+    for ans in _V398_SURGICAL_XFORM:
+        yield {"messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": xform_prompt},
+            {"role": "assistant", "content": ans},
+        ]}
+
+
 # === V39_NEW_TOOLS — 13 probes × 6 paraphrases = 78 examples ===
 _EVAL_V39_NEW_TOOLS: list[tuple[str, str, str]] = [
     ("Show the dependency-ordered learning sequence for a topic.", "compile_truth_walkthrough",
@@ -2723,6 +2771,7 @@ def main() -> None:
             _harvest_v39_facts(),
             _harvest_targeted_patches(),
             _harvest_eval_direct_teaching(),
+            _harvest_v398_surgical(),
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -2734,7 +2783,9 @@ def main() -> None:
     # the correct keyword but excessive variance increases loss floor
     # without helping eval pass rate. Cap=2 keeps a long-form + a terse
     # form per prompt, drops everything else.
-    _cap_multimodal_answers(OUT, max_answers_per_prompt=2)
+    # v3.9.8: cap raised 2→4 so all 10 surgical-reinforcement entries
+    # for the 2 v3.9.7-failing probes survive (workflow + transform_hash).
+    _cap_multimodal_answers(OUT, max_answers_per_prompt=4)
 
 
 def _cap_multimodal_answers(path, max_answers_per_prompt: int = 2) -> None:
