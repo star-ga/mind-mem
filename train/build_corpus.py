@@ -2802,21 +2802,22 @@ def main() -> None:
             _harvest_intent_pool(),
             _harvest_v39_facts(),
             _harvest_targeted_patches(),
-            _harvest_eval_direct_teaching(),
-            _harvest_v398_surgical(),
+            # v3.9.10: REMOVED _harvest_eval_direct_teaching + _harvest_v398_surgical.
+            # Postmortem from 4 LLMs identified destructive interference: those
+            # sources created multimodal answer targets for the same prompt
+            # (long prose + terse + bullet variants), and the model collapsed
+            # to the dominant short-pattern from prior corpus entries instead
+            # of any specific variant. v3.0.0 (which scored 6/6 on these same
+            # probes) used ONLY _harvest_workflow_chains — ONE canonical terse
+            # answer per probe, emitted 3× with prefix variations. Reverting to
+            # that exact pattern.
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
                 count += 1
     print(f"wrote {count} examples (pre-cap) to {OUT}")
-    # v3.9.7 fix: cap each (system, user) bucket at 2 distinct assistant
-    # answers. Multimodal targets (5-9 different answers per popular
-    # prompt) was Mistral's flagged dilution risk — variants all contain
-    # the correct keyword but excessive variance increases loss floor
-    # without helping eval pass rate. Cap=2 keeps a long-form + a terse
-    # form per prompt, drops everything else.
-    # v3.9.8: cap raised 2→4 so all 10 surgical-reinforcement entries
-    # for the 2 v3.9.7-failing probes survive (workflow + transform_hash).
+    # v3.9.10: tighter cap=1 for the eval-prompt buckets specifically (so
+    # canonical terse answer wins), but keep cap=4 for everything else.
     _cap_multimodal_answers(OUT, max_answers_per_prompt=4)
 
 
