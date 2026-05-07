@@ -334,6 +334,7 @@ def main() -> None:
         _ssh_cmd(
             ip, port,
             f"cd /workspace && nohup env HF_TOKEN={hf_token} "
+            f"MM_BASE_MODEL={os.environ.get('MM_BASE_MODEL', 'Qwen/Qwen3.5-4B')} "
             "MM_TRAIN_ROOT=/workspace/train-output "
             "MM_CORPUS=/workspace/train-output/corpus.jsonl "
             "python3 -u runpod_full_ft.py >/workspace/train-output/train.log 2>&1 < /dev/null & "
