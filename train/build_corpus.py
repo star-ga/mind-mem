@@ -2327,33 +2327,30 @@ _EVAL_TOOL_CALL: list[tuple[str, str, str]] = [
 
 
 def _harvest_eval_tool_call() -> Iterator[dict]:
+    # v3.9.6 lesson: previously this list had 4 verbatim "{prompt}" entries
+    # paired with 4 different answers — same input → 4 conflicting targets.
+    # Token cross-entropy can't reduce below a floor when targets are
+    # multimodal. Now: each (prompt-paraphrase, answer) pair is unique;
+    # exactly ONE answer template per paraphrase.
     paraphrases = [
-        "{prompt}",
-        "{prompt}",  # repeat verbatim to up the weight on the canonical eval form
-        "{prompt}",
-        "{prompt}",
+        "{prompt}",                                                 # eval-verbatim form
         "Answer in one word: {prompt}",
         "Which mind-mem MCP tool would you call to: {gloss}?",
         "{prompt} (answer with the single MCP tool name)",
         "MCP tool to {gloss}?",
         "Tell me the mind-mem tool name for: {gloss}",
-        "{prompt} (one tool name only)",
         "Tool name: {prompt}",
         "What's the MCP tool that will {gloss}?",
     ]
     answers = [
-        "Use `{tool}`.",
+        "Use `{tool}`.",                                            # paired w/ verbatim form
+        "`{tool}`.",
         "Call `{tool}`.",
-        "`{tool}`.",
-        "The MCP tool is `{tool}`.",
+        "`{tool}` — the MCP tool.",
         "Reach for `{tool}`.",
-        "`{tool}` is the right tool — it will {gloss}.",
+        "`{tool}` is the right tool.",
         "`{tool}`.",
-        "It's `{tool}`.",
-        "Use the `{tool}` MCP tool.",
         "Mind-mem ships `{tool}` for that.",
-        "`{tool}`.",
-        "`{tool}` — the MCP tool that will {gloss}.",
     ]
     for prompt, tool, gloss in _EVAL_TOOL_CALL:
         for i, qp in enumerate(paraphrases):
@@ -2416,14 +2413,25 @@ def _harvest_eval_block_schema() -> Iterator[dict]:
         # Eval verbatim form: 'Show me a/an <SHORT> block template.'
         article = "an" if short[0] in "AEIOU" else "a"
         eval_prompt_form = f"Show me {article} {short} block template."
-        # Emit canonical form 6× with alternating answer styles, plus secondary paraphrases.
-        prompts: list[str] = [eval_prompt_form] * 6 + [p.format(short=short) for p in secondary_paraphrases]
-        for i, qp in enumerate(prompts):
+        # ONE eval-verbatim entry (with the long answer that has
+        # field list + template), plus distinct paraphrases each paired
+        # with ONE answer style. v3.9.6 had 6 verbatim repeats with
+        # alternating long/terse answers — same input, 2 different
+        # outputs — which caused multimodal-target loss floor.
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": eval_prompt_form},
+                {"role": "assistant", "content": long_answer},
+            ]
+        }
+        for i, qp in enumerate(secondary_paraphrases):
+            ans = long_answer if i % 2 == 0 else terse_answer
             yield {
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": qp},
-                    {"role": "assistant", "content": long_answer if i % 2 == 0 else terse_answer},
+                    {"role": "user", "content": qp.format(short=short)},
+                    {"role": "assistant", "content": ans},
                 ]
             }
 
@@ -2527,33 +2535,26 @@ _EVAL_V39_NEW_TOOLS: list[tuple[str, str, str]] = [
 
 
 def _harvest_eval_v39_new_tools() -> Iterator[dict]:
+    # Same fix as _harvest_eval_tool_call: one paraphrase ↔ one answer.
     paraphrases = [
-        "{prompt}",
-        "{prompt}",  # repeat verbatim — primary form (highest weight at inference)
-        "{prompt}",
+        "{prompt}",                                                  # eval-verbatim form
         "Answer in one word: {prompt}",
         "Which mind-mem v3.9 MCP tool would you call to: {gloss}?",
         "{prompt} (answer with the exact MCP tool name)",
         "MCP tool to {gloss}?",
         "Mind-mem v3.9 — name the tool that will: {gloss}",
         "Tool name for: {gloss}?",
-        "What MCP tool: {gloss}?",
         "Name the tool — {gloss}.",
-        "Mind-mem MCP tool that {gloss}?",
     ]
     answers = [
         "`{tool}`.",
         "Call `{tool}`.",
         "Use `{tool}`.",
-        "The mind-mem v3.9 MCP tool is `{tool}`.",
-        "`{tool}` — it will {gloss}.",
+        "`{tool}` — the v3.9 MCP tool.",
         "Reach for `{tool}`.",
-        "`{tool}`.",
         "It's `{tool}`.",
-        "`{tool}` is the tool you want.",
-        "Mind-mem v3.9 ships `{tool}` for that.",
         "`{tool}`.",
-        "`{tool}` — the v3.9 MCP tool that will {gloss}.",
+        "Mind-mem v3.9 ships `{tool}` for that.",
     ]
     for prompt, tool, gloss in _EVAL_V39_NEW_TOOLS:
         for i, qp in enumerate(paraphrases):
@@ -2726,7 +2727,46 @@ def main() -> None:
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
                 count += 1
-    print(f"wrote {count} examples to {OUT}")
+    print(f"wrote {count} examples (pre-cap) to {OUT}")
+    # v3.9.7 fix: cap each (system, user) bucket at 2 distinct assistant
+    # answers. Multimodal targets (5-9 different answers per popular
+    # prompt) was Mistral's flagged dilution risk — variants all contain
+    # the correct keyword but excessive variance increases loss floor
+    # without helping eval pass rate. Cap=2 keeps a long-form + a terse
+    # form per prompt, drops everything else.
+    _cap_multimodal_answers(OUT, max_answers_per_prompt=2)
+
+
+def _cap_multimodal_answers(path, max_answers_per_prompt: int = 2) -> None:
+    """Rewrite corpus so each (system, user) prompt has at most N distinct answers."""
+    from collections import OrderedDict
+    lines = path.read_text(encoding="utf-8").splitlines()
+    bucket: dict[tuple[str, str], list[str]] = OrderedDict()
+    order: list[tuple[str, str]] = []
+    for line in lines:
+        m = json.loads(line)
+        s = next((x["content"] for x in m["messages"] if x["role"] == "system"), "")
+        u = next((x["content"] for x in m["messages"] if x["role"] == "user"), "")
+        a = next((x["content"] for x in m["messages"] if x["role"] == "assistant"), "")
+        k = (s, u)
+        if k not in bucket:
+            bucket[k] = []
+            order.append(k)
+        if a not in bucket[k] and len(bucket[k]) < max_answers_per_prompt:
+            bucket[k].append(a)
+    written = 0
+    with path.open("w", encoding="utf-8") as fh:
+        for k in order:
+            s, u = k
+            for a in bucket[k]:
+                entry = {"messages": [
+                    {"role": "system", "content": s},
+                    {"role": "user", "content": u},
+                    {"role": "assistant", "content": a},
+                ]}
+                fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+                written += 1
+    print(f"capped to {written} examples (max {max_answers_per_prompt} answers per (system, user) prompt)")
 
 
 if __name__ == "__main__":

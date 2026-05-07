@@ -101,7 +101,11 @@ def main() -> None:
         # on 2026-05-05; cutting to 4 epochs caps the worst-case wall time
         # at ~1h45 instead of ~3h30, so a single preemption mid-run loses
         # ~30 min of replay (with save_steps=200 below) instead of ~1h.
-        num_train_epochs=4,
+        # v3.9.7: Mistral flagged 4-epochs / 3.3k-examples overfitting risk
+        # in pre-launch review. Cut to 3 epochs — still ~310 gradient steps
+        # at effective batch 32, enough to converge on keyword-recall while
+        # leaving headroom for generalization to paraphrased eval prompts.
+        num_train_epochs=3,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=16,  # effective batch = 32
         bf16=True,
