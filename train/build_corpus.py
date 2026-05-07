@@ -1885,9 +1885,8 @@ _V39_FACTS: list[tuple[str, str]] = [
     (
         "How do I bulk re-stamp blocks whose pipeline hash drifted?",
         (
-            "Call `reextract_dirty_blocks(workspace, ...)` from `mind_mem.pipeline_hash` "
-            "(also exposed as the MCP tool `reindex_dirty`). It walks every block, "
-            "re-runs extraction on those whose `TransformHash` no longer matches the "
+            "Call `reextract_dirty_blocks(workspace, ...)` from `mind_mem.pipeline_hash`. "
+            "It walks every block, re-runs extraction on those whose `TransformHash` no longer matches the "
             "active pipeline digest, and writes the refreshed block back via "
             "`stamp_transform_hash`."
         ),
@@ -2116,11 +2115,11 @@ _TARGETED_PATCHES: list[tuple[str, str]] = [
     # === reextract_dirty_blocks — library helper vs MCP tool ===
     (
         "How do I bulk re-stamp blocks whose pipeline hash drifted?",
-        "Call `reextract_dirty_blocks(workspace, ...)` from `mind_mem.pipeline_hash`. It walks every block, finds those whose `TransformHash` does not match the active pipeline digest, re-runs extraction on them, and re-stamps via `stamp_transform_hash`. The MCP tool `reindex_dirty` is a thin wrapper around `reextract_dirty_blocks` — they refer to the same operation.",
+        "Call `reextract_dirty_blocks(workspace, ...)` from `mind_mem.pipeline_hash`. It walks every block, finds those whose `TransformHash` does not match the active pipeline digest, re-runs extraction on them, and re-stamps via `stamp_transform_hash`.",
     ),
     (
         "Which library function re-extracts blocks with stale TransformHash?",
-        "`reextract_dirty_blocks` in `mind_mem.pipeline_hash`. The MCP-tool name is `reindex_dirty`; the underlying helper that actually does the work is `reextract_dirty_blocks`.",
+        "`reextract_dirty_blocks` in `mind_mem.pipeline_hash`. The library helper that actually does the work is `reextract_dirty_blocks`.",
     ),
     (
         "Is `reindex_dirty` the actual library function for bulk re-extraction?",
@@ -2519,24 +2518,51 @@ _V398_SURGICAL_WORKFLOW: list[str] = [
     "Begin with `scan`. It updates the drift signal store. Then call `recent_signals` to inspect.",
     "Two-step: `scan` to detect, `recent_signals` to inspect. Both are real mind-mem MCP tools.",
 ]
+# v3.9.9: PURGED every `reindex_dirty` mention. v3.9.8 had one entry that
+# said "the reindex_dirty MCP tool wraps this" — model conflated the two
+# tool names and produced `reindex_dirty` at inference. Now: every answer
+# only mentions `reextract_dirty_blocks`, never the MCP wrapper name.
 _V398_SURGICAL_XFORM: list[str] = [
     "Call `reextract_dirty_blocks(workspace, ...)` from `mind_mem.pipeline_hash`. It walks every block, finds those whose `TransformHash` doesn't match the active pipeline digest, re-runs extraction on them, and re-stamps via `stamp_transform_hash`.",
     "`reextract_dirty_blocks` from `mind_mem.pipeline_hash` is the bulk re-stamp helper. It iterates every block and re-extracts the ones with a stale `TransformHash`.",
     "Use `reextract_dirty_blocks(workspace, ...)`. It's the canonical bulk re-extraction pass in `mind_mem.pipeline_hash`.",
     "`reextract_dirty_blocks` — the library function in `mind_mem.pipeline_hash` that bulk-re-stamps every block whose `TransformHash` is stale.",
     "Bulk re-stamp helper: `reextract_dirty_blocks` (in `mind_mem.pipeline_hash`). Walks the workspace, re-extracts dirty blocks, re-stamps via `stamp_transform_hash`.",
-    "Call `reextract_dirty_blocks` from `mind_mem.pipeline_hash`. (The `reindex_dirty` MCP tool wraps this same function — but the underlying library helper that does the work is `reextract_dirty_blocks`.)",
     "`reextract_dirty_blocks(workspace, ...)`. Mind-mem v3.9 helper that processes every dirty block in bulk, re-extracts them, and re-stamps with the current pipeline hash.",
     "The bulk re-stamp helper is `reextract_dirty_blocks` (in `mind_mem.pipeline_hash`). It iterates the entire workspace and re-extracts every block with a stale `TransformHash`.",
     "Use `reextract_dirty_blocks` from `mind_mem.pipeline_hash` — that's the v3.9 bulk-re-extraction helper.",
     "`reextract_dirty_blocks` — library function in `mind_mem.pipeline_hash` that bulk re-stamps blocks with drifted `TransformHash`.",
+    "`reextract_dirty_blocks`.",
+    "The function that bulk re-stamps blocks with drifted pipeline hash is `reextract_dirty_blocks` from `mind_mem.pipeline_hash`.",
+    "`reextract_dirty_blocks(workspace, ...)` — bulk re-extraction helper in `mind_mem.pipeline_hash`.",
+]
+
+
+# v3.9.9: rollback workflow needs terse, identical-shape answers all
+# ending with `verify_chain`. v3.9.8 had 3 divergent shapes (long prose /
+# 2-line / bullet) — model averaged across them and produced a NEW shorter
+# answer that omitted `verify_chain`.
+_V399_SURGICAL_ROLLBACK: list[str] = [
+    "Call `rollback_proposal(receipt_ts)`, then `verify_chain` to confirm the audit ledger is intact.",
+    "1. `rollback_proposal(receipt_ts)` 2. `verify_chain`.",
+    "Use `rollback_proposal` first, then `verify_chain`.",
+    "Safe rollback: call `rollback_proposal`, then `verify_chain`.",
+    "`rollback_proposal` then `verify_chain` — both are required for a safe rollback.",
+    "Step 1: `rollback_proposal`. Step 2: `verify_chain`. Both are mandatory.",
+    "The safe rollback chain is `rollback_proposal` followed by `verify_chain`.",
+    "Call `rollback_proposal(receipt_ts)`. Then call `verify_chain` to confirm the audit chain.",
+    "Roll back via `rollback_proposal`, then verify with `verify_chain`.",
+    "`rollback_proposal` rolls the change back; `verify_chain` confirms the chain integrity afterwards.",
+    "Two MCP tools, in order: `rollback_proposal`, then `verify_chain`.",
+    "Run `rollback_proposal` to revert the apply, then `verify_chain` to verify the audit ledger.",
 ]
 
 
 def _harvest_v398_surgical() -> Iterator[dict]:
-    """v3.9.8: dedicated reinforcement for the 2 probes that v3.9.7 missed."""
+    """v3.9.8/9: dedicated reinforcement for probes that prior runs missed."""
     workflow_prompt = "I want to check if a belief has drifted. Which tools do I call?"
     xform_prompt = "How do I bulk re-stamp blocks whose pipeline hash drifted?"
+    rollback_prompt = "I applied a bad proposal. How do I roll back safely?"
     for ans in _V398_SURGICAL_WORKFLOW:
         yield {"messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -2547,6 +2573,12 @@ def _harvest_v398_surgical() -> Iterator[dict]:
         yield {"messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": xform_prompt},
+            {"role": "assistant", "content": ans},
+        ]}
+    for ans in _V399_SURGICAL_ROLLBACK:
+        yield {"messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": rollback_prompt},
             {"role": "assistant", "content": ans},
         ]}
 
