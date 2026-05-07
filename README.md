@@ -1439,22 +1439,20 @@ Then set in `mind-mem.json`:
 
 Empirical on RTX 3080 (Q4_K_M, 2.6GB VRAM): **104 tok/s generation, 1585 tok/s prefill**.
 
-**LoRA adapter (transformers + PEFT):**
+**Full fine-tune (transformers, no adapter):**
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from peft import PeftModel
 
-base = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3.5-4B", device_map="auto")
-model = PeftModel.from_pretrained(base, "star-ga/mind-mem-4b")
+model = AutoModelForCausalLM.from_pretrained("star-ga/mind-mem-4b", device_map="auto", torch_dtype="bfloat16")
 tokenizer = AutoTokenizer.from_pretrained("star-ga/mind-mem-4b")
 ```
 
 | Resource | Link |
 |----------|------|
 | Model (GGUF + bf16 safetensors) | [star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b) |
-| Training data | [star-ga/mind7b-training](https://huggingface.co/datasets/star-ga/mind7b-training) |
 | Base model | Qwen/Qwen3.5-4B |
-| Training | Full fine-tune on Runpod H200 NVL (141 GB HBM3e), 16,450 curated examples, bf16, batch 4 × accum 8, seq 384, gradient checkpointing, 700 cumulative steps |
+| Training | Full fine-tune on Runpod H200 SECURE (141 GB HBM3e), audit-clean v3.10.0 corpus (3,975 examples), bf16, paged-AdamW-8bit, batch 2 × accum 16, max_length 2048, 3 epochs / 375 steps, LR 1.5e-5 cosine + 3% warmup |
+| Eval (v3.10.2-fullft) | **6/6 PASS** — 100% across tool_call (20/20), block_schema (10/10), workflow (5/5), v39_new_tools (13/13), v39_transform_hash (3/3), v39_transport_guard (4/4) |
 
 ### Platform Support
 

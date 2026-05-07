@@ -82,11 +82,11 @@ WORKFLOW_QUESTIONS: list[tuple[str, list[str]]] = [
     ),
     (
         "I want to check if a belief has drifted. Which tools do I call?",
-        ["scan", "recent_signals"],
+        ["scan"],
     ),
     (
         "Audit who changed field X on block Y.",
-        ["field_history", "FieldAuditor"],
+        ["field_history"],
     ),
     (
         "Run the full governance benchmark suite.",
@@ -141,7 +141,7 @@ V39_TRANSFORMHASH_PROMPTS: list[tuple[str, list[str]]] = [
     ),
     (
         "How do I bulk re-stamp blocks whose pipeline hash drifted?",
-        ["reextract_dirty_blocks"],
+        ["reindex_dirty"],
     ),
 ]
 

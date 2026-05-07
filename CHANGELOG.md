@@ -2,6 +2,48 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v3.10.0 — `mind-mem-4b` perfect (6/6 eval) + corpus/eval audit pipeline
+
+Released 2026-05-07. The local-LLM story finally crosses the 6/6 line:
+`star-ga/mind-mem-4b` v3.10.2-fullft passes every probe across all 6
+evaluation categories at 100%, against the audit-clean v3.9.0 surface
+(81 MCP tools, MIC/MAP wire format, transform-hash pipeline).
+
+### Released
+- **Local model `mind-mem-4b` v3.10.2-fullft** — full fine-tune of
+  Qwen3.5-4B on the v3.9.0 MIND-Mem domain. Eval gate (95/98/90/90/95/95
+  per-category, 55 probes total): all 6 categories at 100% (20/20
+  tool_call, 10/10 block_schema, 5/5 workflow, 13/13 v39_new_tools, 3/3
+  v39_transform_hash, 4/4 v39_transport_guard).
+  HF: https://huggingface.co/star-ga/mind-mem-4b
+- **GGUF Q4_K_M build** — `mind-mem:4b` ready for Ollama
+  (~2.7 GB quantized, runs on 6 GB VRAM).
+
+### Fixed (corpus + eval surface)
+- `train/build_corpus.py` — three corpus surgeries that had been
+  poisoning every prior retrain attempt:
+  1. `recent_signals` (a `DriftDetector` Python method, not an MCP tool)
+     replaced everywhere with `signal_stats` (real MCP tool).
+  2. The `(see drift_detector)` parenthetical hint that was teaching
+     the model to hallucinate `drift_detect` (a non-existent tool name).
+  3. 11 long-form bulk-restamp answers rewritten to lead with
+     `reindex_dirty` (the MCP tool) instead of `reextract_dirty_blocks`
+     (the underlying Python helper).
+- `train/eval_harness.py` — workflow drift probe corrected: required
+  tokens narrowed from `["scan", "signal_stats"]` to `["scan"]` after
+  audit confirmed `signal_stats` returns interaction-signal counts
+  (re-query / correction stats), not drift signals — `scan` is the
+  canonical drift-detection MCP entry point. The two cross-check
+  audit tools landed alongside the fixes (eval-vs-corpus probe coverage
+  validator, runs offline against `corpus.jsonl`).
+
+### Tooling (training pipeline)
+- `train/runpod_deploy.py` — chunked-parallel pull mode (split + 4×
+  concurrent scp + cat reassembly + sha256 verify) for resilience
+  against H200 SECURE pod preemption mid-transfer; survives Runpod's
+  "automatic migration" path that brings the volume but not always the
+  large weight blob in one shot.
+
 ## v3.9.1 — Doc alignment + retrain tooling for the v3.9 surface
 
 Doc-only release that surfaces the v3.9.0 reality on PyPI, HF, and the

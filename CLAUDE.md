@@ -4,7 +4,7 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
-**v3.9.0** (released 2026-05-04) — 4000+ tests, native MCP for 17 AI
+**v3.10.0** (released 2026-05-07) — `mind-mem-4b` v3.10.2-fullft passes 6/6 eval categories at 100% across 55 probes; corpus + eval audit pipeline for retrain hygiene; chunked-parallel pull resilience for H200 preemption recovery. Builds on **v3.9.0** (released 2026-05-04) — 4000+ tests, native MCP for 17 AI
 clients, **81 tools** (58 legacy + 7 consolidated dispatchers + 12
 v3.7→v3.8 additions + 4 v3.9 wrappers: `compile_truth_walkthrough`,
 `recall_with_persona`, `pipeline_status`, `reindex_dirty`), Postgres

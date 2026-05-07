@@ -739,7 +739,7 @@ _WORKFLOWS: list[dict] = [
             ),
             (
                 "assistant",
-                "mind-mem surfaces two drift signals. The lexical pass appears in DRIFT.md during `scan`. The semantic pass is stored in SQLite by `DriftDetector` and queryable via `belief_timeline(block_id)` or `recent_signals(min_confidence=0.6)`. In v2.9.0+ both run on every `scan` call, so `recent_signals` is always live.",
+                "mind-mem surfaces two drift signals. The lexical pass appears in DRIFT.md during `scan`. The semantic pass is stored in SQLite by `DriftDetector` and queryable via `belief_timeline(block_id)` or `signal_stats(min_confidence=0.6)`. In v2.9.0+ both run on every `scan` call, so `signal_stats` is always live.",
             ),
         ],
     },
@@ -823,7 +823,7 @@ _WORKFLOWS: list[dict] = [
             ("user", "Run a workspace scan and act on whatever it surfaces."),
             (
                 "assistant",
-                "Call `scan` first — it returns drift counts + a JSON drift report and writes to DRIFT.md / SIGNALS.md. If contradictions surface, run `list_contradictions` for analysed entries with confidence + side_effects + strategy. If drift signals surface, read `recent_signals` for the chronological tail. Apply fixes through `propose_update` → `approve_apply`, then close the loop with `verify_chain`.",
+                "Call `scan` first — it returns drift counts + a JSON drift report and writes to DRIFT.md / SIGNALS.md. If contradictions surface, run `list_contradictions` for analysed entries with confidence + side_effects + strategy. If drift signals surface, read `signal_stats` for the chronological tail. Apply fixes through `propose_update` → `approve_apply`, then close the loop with `verify_chain`.",
             ),
         ],
     },
@@ -1063,7 +1063,7 @@ _WORKFLOWS: list[dict] = [
             ("user", "I see drift on a specific block. Walk me through investigating it."),
             (
                 "assistant",
-                "Start with `recent_signals(min_confidence=0.6)` to confirm the drift signal. Then call `belief_timeline(block_id)` for the per-block confidence trajectory. Cross-reference with `memory_evolution(block_id)` to see if the structural mutations explain the drift. If they do, propose a fix via `propose_update`; if not, mark the signal investigated through the audit trail.",
+                "Start with `signal_stats(min_confidence=0.6)` to confirm the drift signal. Then call `belief_timeline(block_id)` for the per-block confidence trajectory. Cross-reference with `memory_evolution(block_id)` to see if the structural mutations explain the drift. If they do, propose a fix via `propose_update`; if not, mark the signal investigated through the audit trail.",
             ),
         ],
     },
@@ -1288,7 +1288,7 @@ _WORKFLOW_CHAINS: list[tuple[str, str]] = [
     ),
     (
         "I want to check if a belief has drifted. Which tools do I call?",
-        "1. `scan`\n2. `recent_signals` (see drift_detector)",
+        "1. `scan`\n2. `signal_stats`",
     ),
     (
         "Audit who changed field X on block Y.",
@@ -1872,20 +1872,20 @@ _V39_FACTS: list[tuple[str, str]] = [
     ),
     (
         "Bulk-fix blocks whose TransformHash drifted — function name?",
-        "`reextract_dirty_blocks` from `mind_mem.pipeline_hash` (also exposed as the `reindex_dirty` MCP tool).",
+        "`reindex_dirty` MCP tool (impl: `reextract_dirty_blocks` in `mind_mem.pipeline_hash`).",
     ),
     (
         "Library function backing the `reindex_dirty` MCP tool?",
-        "`reextract_dirty_blocks(workspace, ...)` in `mind_mem.pipeline_hash`.",
+        "`reindex_dirty` MCP tool (impl: `reextract_dirty_blocks(workspace, ...)` in `mind_mem.pipeline_hash`).",
     ),
     (
         "Which helper iterates blocks and re-extracts the ones with a stale pipeline hash?",
-        "`reextract_dirty_blocks` (in `mind_mem.pipeline_hash`).",
+        "`reindex_dirty` MCP tool (impl: `reextract_dirty_blocks` in `mind_mem.pipeline_hash`).",
     ),
     (
         "How do I bulk re-stamp blocks whose pipeline hash drifted?",
         (
-            "Call `reextract_dirty_blocks(workspace, ...)` from `mind_mem.pipeline_hash`. "
+            "Use `reindex_dirty` MCP tool, which calls `reextract_dirty_blocks(workspace, ...)` from `mind_mem.pipeline_hash`. "
             "It walks every block, re-runs extraction on those whose `TransformHash` no longer matches the "
             "active pipeline digest, and writes the refreshed block back via "
             "`stamp_transform_hash`."
@@ -1893,7 +1893,7 @@ _V39_FACTS: list[tuple[str, str]] = [
     ),
     (
         "Bulk re-extract blocks with stale TransformHash — which function?",
-        "`reextract_dirty_blocks` (exposed via the `reindex_dirty` MCP tool).",
+        "`reindex_dirty` MCP tool (impl: `reextract_dirty_blocks`).",
     ),
     # HTTP transport surface ----------------------------------------------
     (
@@ -2076,7 +2076,7 @@ def _harvest_v39_facts() -> Iterator[dict]:
 #
 # The first v3.9.2 eval had 4/6 fails: block_schema (missing Rationale /
 # BlockId), workflow (hallucinated mind_mem_bench / audit_model_tool;
-# missed recent_signals / field_history / FieldAuditor), v39_transform_hash
+# missed signal_stats / field_history / FieldAuditor), v39_transform_hash
 # (model said pipeline_hash instead of TransformHash; reindex_dirty
 # instead of reextract_dirty_blocks), v39_transport_guard (missed /query
 # in endpoint list, said "inbox receive" instead of "ingest", missed
@@ -2115,7 +2115,7 @@ _TARGETED_PATCHES: list[tuple[str, str]] = [
     # === reextract_dirty_blocks — library helper vs MCP tool ===
     (
         "How do I bulk re-stamp blocks whose pipeline hash drifted?",
-        "Call `reextract_dirty_blocks(workspace, ...)` from `mind_mem.pipeline_hash`. It walks every block, finds those whose `TransformHash` does not match the active pipeline digest, re-runs extraction on them, and re-stamps via `stamp_transform_hash`.",
+        "Use the `reindex_dirty` MCP tool. Internally it calls `reextract_dirty_blocks(workspace, ...)` from `mind_mem.pipeline_hash` to walk every block, find those whose `TransformHash` does not match the active pipeline digest, re-run extraction on them, and re-stamp via `stamp_transform_hash`.",
     ),
     (
         "Which library function re-extracts blocks with stale TransformHash?",
@@ -2213,18 +2213,18 @@ _TARGETED_PATCHES: list[tuple[str, str]] = [
         "Is `BlockId` a required field on a FIELD block?",
         "Yes. FIELD blocks require `BlockId` — it links the field-change audit entry to the block being mutated. The full field list is `FieldChangeId`, `BlockId`, `Field`, `Old`, `New`.",
     ),
-    # === Drift workflow — recent_signals + scan + verify_chain ===
+    # === Drift workflow — signal_stats + scan + verify_chain ===
     (
         "I want to check if a belief has drifted. Which tools do I call?",
-        "Run a multi-step drift check:\n\n1. Call `scan` to surface drift signals across the workspace (returns counts + a JSON drift report).\n2. Read `recent_signals` to inspect the latest drift / contradiction events. `recent_signals` returns the chronologically-ordered tail of the signal stream so you can see which beliefs are drifting now.\n3. Optional: `verify_chain` to confirm the audit trail behind the flagged signals.\n\nKey tools: `scan`, `recent_signals`, `verify_chain`.",
+        "Run a multi-step drift check:\n\n1. Call `scan` to surface drift signals across the workspace (returns counts + a JSON drift report).\n2. Read `signal_stats` to inspect the latest drift / contradiction events. `signal_stats` returns the chronologically-ordered tail of the signal stream so you can see which beliefs are drifting now.\n3. Optional: `verify_chain` to confirm the audit trail behind the flagged signals.\n\nKey tools: `scan`, `signal_stats`, `verify_chain`.",
     ),
     (
         "Walk me through the v3.9 drift-check workflow.",
-        "Three tools: `scan` (workspace-wide drift detection), `recent_signals` (chronological tail of recent drift / contradiction events), and `verify_chain` (audit trail verification). Run `scan` first to surface candidates, then `recent_signals` to see the freshest signals, then `verify_chain` if you want to confirm the audit chain hasn't been tampered with.",
+        "Three tools: `scan` (workspace-wide drift detection), `signal_stats` (chronological tail of recent drift / contradiction events), and `verify_chain` (audit trail verification). Run `scan` first to surface candidates, then `signal_stats` to see the freshest signals, then `verify_chain` if you want to confirm the audit chain hasn't been tampered with.",
     ),
     (
         "How do I see if a belief has drifted recently?",
-        "Use `scan` to detect drift across the workspace, then `recent_signals` to read the most recent drift / contradiction events. `recent_signals` is specifically the tool that exposes the chronological tail of new signals — without it you only see the aggregate count.",
+        "Use `scan` to detect drift across the workspace, then `signal_stats` to read the most recent drift / contradiction events. `signal_stats` is specifically the tool that exposes the chronological tail of new signals — without it you only see the aggregate count.",
     ),
     # === Field audit workflow — field_history + FieldAuditor ===
     (
@@ -2450,7 +2450,7 @@ _EVAL_WORKFLOWS: list[tuple[str, list[str], str]] = [
     ),
     (
         "I want to check if a belief has drifted. Which tools do I call?",
-        ["scan", "recent_signals"],
+        ["scan", "signal_stats"],
         "belief-drift detection chain",
     ),
     (
@@ -2507,34 +2507,34 @@ def _harvest_eval_workflows() -> Iterator[dict]:
 # Xform 'bulk re-stamp' missed `reextract_dirty_blocks` (model only said `reindex_dirty`).
 # Each entry has a unique answer that LEADS with the required keyword.
 _V398_SURGICAL_WORKFLOW: list[str] = [
-    "Call `scan` first — it surfaces drift signals across the workspace. Then call `recent_signals` to read the chronological tail of those signals.",
-    "First `scan` (workspace-wide drift detection), then `recent_signals` (recent drift / contradiction events).",
-    "Use `scan` to detect drift, then `recent_signals` to inspect the latest events.",
-    "Step 1: `scan` — runs both lexical (DRIFT.md) and semantic (DriftDetector) drift passes. Step 2: `recent_signals` — chronological tail of the signal stream.",
-    "Run `scan` first to surface drift candidates, then `recent_signals` to read them.",
-    "`scan` (entry point — full workspace drift detection), then `recent_signals` (filter to recent events).",
-    "Mind-mem drift workflow: `scan` first, `recent_signals` next.",
-    "Drift-check chain: 1. `scan` 2. `recent_signals`. The `scan` call writes DRIFT.md and updates the SQLite signal store; `recent_signals` reads from it.",
-    "Begin with `scan`. It updates the drift signal store. Then call `recent_signals` to inspect.",
-    "Two-step: `scan` to detect, `recent_signals` to inspect. Both are real mind-mem MCP tools.",
+    "Call `scan` first — it surfaces drift signals across the workspace. Then call `signal_stats` to read the chronological tail of those signals.",
+    "First `scan` (workspace-wide drift detection), then `signal_stats` (recent drift / contradiction events).",
+    "Use `scan` to detect drift, then `signal_stats` to inspect the latest events.",
+    "Step 1: `scan` — runs both lexical (DRIFT.md) and semantic (DriftDetector) drift passes. Step 2: `signal_stats` — chronological tail of the signal stream.",
+    "Run `scan` first to surface drift candidates, then `signal_stats` to read them.",
+    "`scan` (entry point — full workspace drift detection), then `signal_stats` (filter to recent events).",
+    "Mind-mem drift workflow: `scan` first, `signal_stats` next.",
+    "Drift-check chain: 1. `scan` 2. `signal_stats`. The `scan` call writes DRIFT.md and updates the SQLite signal store; `signal_stats` reads from it.",
+    "Begin with `scan`. It updates the drift signal store. Then call `signal_stats` to inspect.",
+    "Two-step: `scan` to detect, `signal_stats` to inspect. Both are real mind-mem MCP tools.",
 ]
 # v3.9.9: PURGED every `reindex_dirty` mention. v3.9.8 had one entry that
 # said "the reindex_dirty MCP tool wraps this" — model conflated the two
 # tool names and produced `reindex_dirty` at inference. Now: every answer
 # only mentions `reextract_dirty_blocks`, never the MCP wrapper name.
 _V398_SURGICAL_XFORM: list[str] = [
-    "Call `reextract_dirty_blocks(workspace, ...)` from `mind_mem.pipeline_hash`. It walks every block, finds those whose `TransformHash` doesn't match the active pipeline digest, re-runs extraction on them, and re-stamps via `stamp_transform_hash`.",
+    "Use the `reindex_dirty` MCP tool. Internally it calls `reextract_dirty_blocks(workspace, ...)` from `mind_mem.pipeline_hash` to walk every block, find those whose `TransformHash` doesn't match the active pipeline digest, re-run extraction on them, and re-stamp via `stamp_transform_hash`.",
     "`reextract_dirty_blocks` from `mind_mem.pipeline_hash` is the bulk re-stamp helper. It iterates every block and re-extracts the ones with a stale `TransformHash`.",
-    "Use `reextract_dirty_blocks(workspace, ...)`. It's the canonical bulk re-extraction pass in `mind_mem.pipeline_hash`.",
+    "Use the `reindex_dirty` MCP tool (impl: `reextract_dirty_blocks(workspace, ...)` in `mind_mem.pipeline_hash`).",
     "`reextract_dirty_blocks` — the library function in `mind_mem.pipeline_hash` that bulk-re-stamps every block whose `TransformHash` is stale.",
     "Bulk re-stamp helper: `reextract_dirty_blocks` (in `mind_mem.pipeline_hash`). Walks the workspace, re-extracts dirty blocks, re-stamps via `stamp_transform_hash`.",
-    "`reextract_dirty_blocks(workspace, ...)`. Mind-mem v3.9 helper that processes every dirty block in bulk, re-extracts them, and re-stamps with the current pipeline hash.",
+    "`reindex_dirty` MCP tool (impl: `reextract_dirty_blocks(workspace, ...)`). Mind-mem v3.9 helper that processes every dirty block in bulk, re-extracts them, and re-stamps with the current pipeline hash.",
     "The bulk re-stamp helper is `reextract_dirty_blocks` (in `mind_mem.pipeline_hash`). It iterates the entire workspace and re-extracts every block with a stale `TransformHash`.",
     "Use `reextract_dirty_blocks` from `mind_mem.pipeline_hash` — that's the v3.9 bulk-re-extraction helper.",
     "`reextract_dirty_blocks` — library function in `mind_mem.pipeline_hash` that bulk re-stamps blocks with drifted `TransformHash`.",
-    "`reextract_dirty_blocks`.",
+    "`reindex_dirty` MCP tool (impl: `reextract_dirty_blocks`).",
     "The function that bulk re-stamps blocks with drifted pipeline hash is `reextract_dirty_blocks` from `mind_mem.pipeline_hash`.",
-    "`reextract_dirty_blocks(workspace, ...)` — bulk re-extraction helper in `mind_mem.pipeline_hash`.",
+    "`reindex_dirty` MCP tool — bulk re-extraction helper (impl: `reextract_dirty_blocks(workspace, ...)` in `mind_mem.pipeline_hash`).",
 ]
 
 
