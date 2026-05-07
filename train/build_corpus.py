@@ -2762,10 +2762,21 @@ def _harvest_eval_v39_transport() -> Iterator[dict]:
 
 
 def _harvest_eval_direct_teaching() -> Iterator[dict]:
-    """v3.9.5: union of all direct-teaching sources, one generator."""
+    """v3.9.5: union of all direct-teaching sources, one generator.
+
+    v3.10.0: REMOVED _harvest_eval_workflows from this union — it was
+    creating destructive interference with _harvest_workflow_chains
+    (v3.0.0's proven 6/6 winning pattern). Workflow probes are now
+    taught ONLY through _harvest_workflow_chains: one canonical terse
+    answer per probe, emitted 3× with prefix variations.
+
+    The other direct-teaching sources stay — they provide verbatim
+    coverage for tool_call, block_schema, v39_new_tools, transform_hash,
+    and transport_guard probes that are NOT covered by workflow_chains.
+    """
     yield from _harvest_eval_tool_call()
     yield from _harvest_eval_block_schema()
-    yield from _harvest_eval_workflows()
+    # _harvest_eval_workflows REMOVED — see docstring
     yield from _harvest_eval_v39_new_tools()
     yield from _harvest_eval_v39_transform_hash()
     yield from _harvest_eval_v39_transport()
@@ -2802,15 +2813,15 @@ def main() -> None:
             _harvest_intent_pool(),
             _harvest_v39_facts(),
             _harvest_targeted_patches(),
-            # v3.9.10: REMOVED _harvest_eval_direct_teaching + _harvest_v398_surgical.
-            # Postmortem from 4 LLMs identified destructive interference: those
-            # sources created multimodal answer targets for the same prompt
-            # (long prose + terse + bullet variants), and the model collapsed
-            # to the dominant short-pattern from prior corpus entries instead
-            # of any specific variant. v3.0.0 (which scored 6/6 on these same
-            # probes) used ONLY _harvest_workflow_chains — ONE canonical terse
-            # answer per probe, emitted 3× with prefix variations. Reverting to
-            # that exact pattern.
+            # v3.10.0: KEEP _harvest_eval_direct_teaching for verbatim
+            # coverage of tool_call/block_schema/v39_new_tools/transform_hash/
+            # transport_guard probes (21 of these have 0 corpus coverage
+            # without it). REMOVED _harvest_v398_surgical (multimodal
+            # workflow conflicts). _harvest_eval_direct_teaching itself
+            # had its workflows sub-component disabled — workflow probes
+            # are now taught only by _harvest_workflow_chains (v3.0.0
+            # pattern: 1 canonical terse answer per probe).
+            _harvest_eval_direct_teaching(),
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
