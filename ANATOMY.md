@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 737 | **Est. tokens:** ~1,504,106
-**Generated:** 2026-05-08 01:22 UTC
+**Files:** 738 | **Est. tokens:** ~1,507,695
+**Generated:** 2026-05-08 02:28 UTC
 
 ## Token Budget Guide
 
@@ -30,7 +30,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 63 | ~100,815 |
+| `docs/` | 64 | ~104,404 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -206,6 +206,7 @@
 - `migration.md` (~2754 tok, huge) — Migration Guide: mem-os to MIND-Mem
 - `mind-kernels.md` (~339 tok, medium) — MIND Kernels
 - `mind-mem-4b-setup.md` (~2425 tok, huge) — Setting up the mind-mem-4b model
+- `mind-mem-4b-training-runbook.md` (~3589 tok, huge) — mind-mem-4b training runbook (post-v3.10.2 lessons)
 - `mind-mem-4b-v2-training-recipe.md` (~1683 tok, huge) — mind-mem-4b v2 training recipe — Runpod H200
 - `odc-retrieval.md` (~834 tok, large) — Observer-Dependent Cognition in MIND-Mem
 - `performance-tuning.md` (~560 tok, large) — Performance Tuning
