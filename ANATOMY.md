@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 732 | **Est. tokens:** ~1,504,250
-**Generated:** 2026-05-08 01:12 UTC
+**Files:** 737 | **Est. tokens:** ~1,504,106
+**Generated:** 2026-05-08 01:22 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 32 | ~85,691 |
+| `./` | 34 | ~84,980 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,101 |
 | `benchmarks/` | 26 | ~64,933 |
@@ -35,7 +35,8 @@
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
 | `examples/` | 3 | ~1,201 |
-| `.github/` | 7 | ~4,109 |
+| `.gemini/` | 1 | ~30 |
+| `.github/` | 8 | ~4,180 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
 | `.github/workflows/` | 11 | ~8,405 |
 | `hooks/` | 3 | ~801 |
@@ -44,6 +45,7 @@
 | `intelligence/state/snapshots/` | 1 | ~114 |
 | `lib/` | 1 | ~2,176 |
 | `mind/` | 27 | ~9,690 |
+| `.roo/` | 1 | ~24 |
 | `scripts/` | 4 | ~3,326 |
 | `sdk/go/` | 9 | ~6,773 |
 | `sdk/js/` | 5 | ~1,388 |
@@ -54,7 +56,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 155 | ~535,420 |
+| `src/mind_mem/` | 155 | ~535,862 |
 | `src/mind_mem/api/` | 5 | ~15,751 |
 | `src/mind_mem/mcp/` | 3 | ~3,960 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,924 |
@@ -75,11 +77,12 @@
 
 ### `./`
 
-- `AGENTS.md` (~785 tok, large) — Memory Context
+- `AGENTS.md` (~30 tok, tiny) — mind-mem: agent instructions (auto-written)
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: MIND-Mem (Commit 30d8b71)
 - `CLAUDE.md` (~1401 tok, large) — MIND-Mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to MIND-Mem
+- `.cursorrules` (~25 tok, tiny) — # mind-mem
 - `demo-setup.sh` (~323 tok, medium) — Pre-seed a demo workspace for VHS recording
 - `demo.tape` (~93 tok, small) — # mind-mem demo — terminal recording for README
 - `Dockerfile` (~54 tok, small) — FROM python:3.12-slim
@@ -107,6 +110,7 @@
 - `SPEC.md` (~5184 tok, huge) — Mind Mem Formal Specification v1.0
 - `train_mind7b_runpod.py` (~1654 tok, huge)
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
+- `.windsurfrules` (~19 tok, tiny) — # mind-mem
 ### `.agents/skills/mind-mem-development/`
 
 - `SKILL.md` (~456 tok, medium) — MIND-Mem Development
@@ -245,9 +249,13 @@
 - `basic_usage.py` (~394 tok, medium) — Basic mind-mem usage example.
 - `mic_map_quickstart.py` (~735 tok, large) — MIC/MAP quickstart — emit, parse, round-trip, stream.
 - `README.md` (~72 tok, small) — MIND-Mem Examples
+### `.gemini/`
+
+- `settings.json` (~30 tok, tiny) — Keys: system_instruction
 ### `.github/`
 
 - `CODEOWNERS` (~25 tok, tiny) — # Default owners
+- `copilot-instructions.md` (~71 tok, small) — mind-mem: GitHub Copilot workspace instructions
 - `FUNDING.yml` (~4 tok, tiny) — github: star-ga
 ### `.github/ISSUE_TEMPLATE/`
 
@@ -322,6 +330,9 @@
 - `temporal.mind` (~113 tok, small)
 - `trajectory.mind` (~440 tok, medium)
 - `truth.mind` (~218 tok, medium)
+### `.roo/`
+
+- `system-prompt.md` (~24 tok, tiny) — mind-mem
 ### `scripts/`
 
 - `anatomy-hook.sh` (~258 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
@@ -445,7 +456,7 @@
 - `governance_raft.py` (~2208 tok, huge) — Raft-style consensus wrapper for governance writes (v4.0 prep).
 - `graph_recall.py` (~1907 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hook_installer.py` (~9441 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hook_installer.py` (~9883 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `http_transport.py` (~5592 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
 - `hybrid_recall.py` (~8896 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `inbox.py` (~3595 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).

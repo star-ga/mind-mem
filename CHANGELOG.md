@@ -2,6 +2,27 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v3.10.1 — Vibe (Mistral CLI) MCP auto-wire
+
+Released 2026-05-07. Adds the long-standing TODO Vibe MCP adapter so
+`mm install-all` now auto-wires every detected client.
+
+### Added
+- `_merge_mcp_vibe_toml` writer in `hook_installer.py` — handles Vibe's
+  flat ``mcp_servers = [...]`` array shape with inline-table entries.
+  Idempotent (no-op on re-run), preserves any existing non-mind-mem
+  entries.
+- Vibe `AgentSpec` in `AGENT_REGISTRY` now declares
+  ``mcp_fmt="mcp-toml-vibe"`` + ``mcp_path_tmpl="{home}/.vibe/config.toml"``;
+  `mm install-all` writes the MCP block whenever ``~/.vibe`` or the
+  ``vibe`` binary is detected.
+
+### Result
+All 9 detected MCP-aware clients (Claude Code, Codex, Gemini, Cursor,
+Windsurf, Roo, OpenClaw, Continue, Vibe) are now auto-wired by a
+single ``mm install-all --force`` invocation. No more manual TOML
+surgery for Mistral CLI users.
+
 ## v3.10.0 — `mind-mem-4b` perfect (6/6 eval) + corpus/eval audit pipeline
 
 Released 2026-05-07. The local-LLM story finally crosses the 6/6 line:

@@ -529,8 +529,60 @@ _MCP_WRITERS_JSON: dict[str, Any] = {
     "mcp-json-cursor": _merge_mcp_cursor,
     "mcp-json-zed": _merge_mcp_zed,
 }
+def _merge_mcp_vibe_toml(existing_text: str, ws: str, srv: dict) -> tuple[str, bool]:
+    """Vibe (Mistral CLI) uses a flat ``mcp_servers = []`` array in
+    ``~/.vibe/config.toml``. Each entry is an inline-table with the same
+    ``name``/``command``/``args``/``env`` shape Codex uses.
+
+    Idempotent: replaces any prior ``mind-mem`` entry in the array; preserves
+    other entries. Adds the array if missing.
+    """
+    import re
+
+    args_toml = "[" + ", ".join(f'"{a}"' for a in srv["args"]) + "]"
+    env_pairs = ", ".join(f'{k} = "{v}"' for k, v in srv["env"].items())
+    mm_entry = (
+        '  { name = "mind-mem", '
+        f'command = "{srv["command"]}", '
+        f'args = {args_toml}, '
+        f'env = {{ {env_pairs} }} }}'
+    )
+
+    text = existing_text or ""
+
+    # Match the full ``mcp_servers = [...]`` block (multi-line aware).
+    block_pat = re.compile(r"^mcp_servers\s*=\s*\[([\s\S]*?)\]\s*$", re.MULTILINE)
+    m = block_pat.search(text)
+    if not m:
+        # No block — append.
+        new_block = f"mcp_servers = [\n{mm_entry}\n]\n"
+        if text and not text.endswith("\n"):
+            text += "\n"
+        text += new_block
+        return text, True
+
+    body = m.group(1)
+    # Drop any existing mind-mem entry. Nested braces (env = { ... }) mean we
+    # need a single-line match that consumes through the entry's closing brace
+    # at the outermost depth — strip line-by-line.
+    cleaned_lines = []
+    for line in body.split("\n"):
+        if re.search(r'\{\s*name\s*=\s*"mind-mem"', line):
+            continue
+        cleaned_lines.append(line)
+    new_body = "\n".join(cleaned_lines).strip().rstrip(",").strip()
+    if new_body:
+        new_block_inner = new_body + ",\n" + mm_entry
+    else:
+        new_block_inner = mm_entry
+    new_block = f"mcp_servers = [\n{new_block_inner}\n]"
+    new_text = text[: m.start()] + new_block + text[m.end():]
+    return new_text, new_text != text
+
+
 _MCP_WRITERS_TEXT: dict[str, Any] = {
     "mcp-toml-codex": _merge_mcp_codex_toml,
+    "mcp-toml-vibe": _merge_mcp_vibe_toml,
 }
 
 
@@ -570,10 +622,8 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         detect_paths=("{home}/.vibe",),
         detect_binaries=("vibe",),
-        # MCP: Vibe's ~/.vibe/config.toml uses a flat `mcp_servers = []`
-        # array. We don't auto-write the MCP block yet — add it manually
-        # as `mcp_servers = [{ name = "mind-mem", command = "...", args = [...], env = {...} }]`
-        # until a Vibe-specific MCP writer lands.
+        mcp_fmt="mcp-toml-vibe",
+        mcp_path_tmpl="{home}/.vibe/config.toml",
     ),
     "gemini": AgentSpec(
         name="gemini",
