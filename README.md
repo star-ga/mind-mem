@@ -310,9 +310,9 @@ MCP-compatible client connects with one command.
 | Gemini CLI | Google | Cody | Sourcegraph |
 | Vibe (Mistral CLI) | Mistral | Qodo | Qodo |
 | Cursor | Anysphere | aider | aider-chat |
-| Windsurf | Codeium | OpenClaw | STARGA |
-| Zed | Zed Industries | NanoClaw / NemoClaw | STARGA |
-| Continue | Continue.dev | | |
+| Windsurf | Codeium | OpenClaw | OpenAI (Peter Steinberger) |
+| Zed | Zed Industries | NemoClaw / Nemo | NVIDIA |
+| Continue | Continue.dev | NanoClaw | Anthropic |
 
 ### Compatible with major LLM providers
 
