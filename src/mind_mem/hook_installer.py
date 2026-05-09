@@ -172,6 +172,44 @@ from dataclasses import dataclass
 
 _MM_MARKER = "# mind-mem"
 
+# Canonical Memory Protocol snippet — written into every detected CLI's
+# system-prompt file by ``mm install-all``. The companion document is
+# ``docs/agent-memory-protocol.md``; both must be kept in sync.
+#
+# Wiring at the protocol level (MCP entries) is necessary but not
+# sufficient — without an explicit instruction the LLM in each CLI does
+# not reliably call the MCP tools. This snippet is the instruction half.
+MEMORY_PROTOCOL_SNIPPET = (
+    f"{_MM_MARKER}: agent instructions (auto-written by `mm install-all`)\n"
+    "\n"
+    "## Memory Protocol (mind-mem MCP — USE CONSTANTLY)\n"
+    "\n"
+    "The mind-mem MCP server is wired into this CLI. Before answering ANY\n"
+    "question that touches prior work, decisions, project state, people,\n"
+    "companies, technical choices, or \"remember when…\" — call mind-mem\n"
+    "first. The governed blocks in mind-mem's Postgres backend are the\n"
+    "source of truth.\n"
+    "\n"
+    "### Always recall before answering\n"
+    "Run `mcp__mind-mem__recall` (or `mm recall \"$query\"` via bash) with\n"
+    "relevant keywords FIRST. If recall returns results, cite them. If\n"
+    "not, say \"no record found\" — do not guess.\n"
+    "\n"
+    "### Always propose_update after learning new facts\n"
+    "When the user shares a new decision, project status, relationship,\n"
+    "contact, or technical finding worth preserving — run\n"
+    "`mcp__mind-mem__propose_update` to store it. Don't wait to be asked.\n"
+    "\n"
+    "### Use hybrid_search for complex queries\n"
+    "For multi-faceted questions, use `mcp__mind-mem__hybrid_search`\n"
+    "(BM25 + vector + RRF fusion) for best recall.\n"
+    "\n"
+    "### Hallucination guardrail\n"
+    "If you find yourself writing about prior projects, repos, or\n"
+    "decisions without having called recall in this session, you are\n"
+    "about to hallucinate. Stop and call recall first.\n"
+)
+
 
 # ---------------------------------------------------------------------------
 # MCP server command — every client that supports MCP points at this.
@@ -605,9 +643,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="OpenAI Codex CLI",
         config_fmt="text-block",
         path_tmpl="{ws}/AGENTS.md",
-        content_tmpl=(
-            f'{_MM_MARKER}: agent instructions (auto-written)\n\nBefore every response, run `mm context "$QUERY"` and prepend the output.\n'
-        ),
+        content_tmpl=MEMORY_PROTOCOL_SNIPPET,
         detect_binaries=("codex",),
         mcp_fmt="mcp-toml-codex",
         mcp_path_tmpl="{home}/.codex/config.toml",
@@ -617,9 +653,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Mistral Vibe CLI",
         config_fmt="text-block",
         path_tmpl="{ws}/AGENTS.md",
-        content_tmpl=(
-            f'{_MM_MARKER}: agent instructions (auto-written)\n\nBefore every response, run `mm context "$QUERY"` and prepend the output.\n'
-        ),
+        content_tmpl=MEMORY_PROTOCOL_SNIPPET,
         detect_paths=("{home}/.vibe",),
         detect_binaries=("vibe",),
         mcp_fmt="mcp-toml-vibe",
@@ -640,7 +674,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Cursor editor",
         config_fmt="text-block",
         path_tmpl="{ws}/.cursorrules",
-        content_tmpl=(f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\nUse `mm inject --agent cursor` before answering.\n"),
+        content_tmpl=MEMORY_PROTOCOL_SNIPPET,
         detect_paths=(
             "{home}/.cursor",
             "{home}/Library/Application Support/Cursor",
@@ -655,7 +689,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Windsurf editor (Codeium)",
         config_fmt="text-block",
         path_tmpl="{ws}/.windsurfrules",
-        content_tmpl=(f"{_MM_MARKER}\nworkspace: {{ws}}\nprefer `mm inject --agent windsurf`.\n"),
+        content_tmpl=MEMORY_PROTOCOL_SNIPPET,
         detect_paths=(
             "{home}/.codeium/windsurf",
             "{home}/.windsurf",
@@ -711,7 +745,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Cline (VS Code extension)",
         config_fmt="text-block",
         path_tmpl="{ws}/.clinerules",
-        content_tmpl=(f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\nRun `mm inject --agent cline` before tool use.\n"),
+        content_tmpl=MEMORY_PROTOCOL_SNIPPET,
         detect_paths=(
             "{home}/.vscode/extensions",
             "{home}/.vscode-server/extensions",
@@ -724,7 +758,7 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         description="Roo Code (VS Code fork / extension)",
         config_fmt="text-block",
         path_tmpl="{ws}/.roo/system-prompt.md",
-        content_tmpl=(f"{_MM_MARKER}\nmind-mem workspace: {{ws}}\nUse `mm inject --agent roo` before answering.\n"),
+        content_tmpl=MEMORY_PROTOCOL_SNIPPET,
         detect_paths=(
             "{home}/.roo",
             "{home}/.vscode/extensions",

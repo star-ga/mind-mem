@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 738 | **Est. tokens:** ~1,507,695
-**Generated:** 2026-05-08 02:28 UTC
+**Files:** 739 | **Est. tokens:** ~1,508,637
+**Generated:** 2026-05-09 00:39 UTC
 
 ## Token Budget Guide
 
@@ -30,7 +30,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 64 | ~104,404 |
+| `docs/` | 65 | ~105,000 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -56,7 +56,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 155 | ~535,862 |
+| `src/mind_mem/` | 155 | ~536,208 |
 | `src/mind_mem/api/` | 5 | ~15,751 |
 | `src/mind_mem/mcp/` | 3 | ~3,960 |
 | `src/mind_mem/mcp/infra/` | 8 | ~6,924 |
@@ -170,6 +170,7 @@
 - `002-bm25f-scoring.md` (~205 tok, medium) — ADR-002: BM25F as Primary Scoring Algorithm
 ### `docs/`
 
+- `agent-memory-protocol.md` (~596 tok, large) — Agent Memory Protocol — canonical system-prompt snippet
 - `api-reference.md` (~1477 tok, large) — API Reference
 - `architecture.md` (~1936 tok, huge) — Architecture
 - `audit_response.md` (~956 tok, large) — MIND-Mem — response to the 2026-05-02 ecosystem audit
@@ -457,7 +458,7 @@
 - `governance_raft.py` (~2208 tok, huge) — Raft-style consensus wrapper for governance writes (v4.0 prep).
 - `graph_recall.py` (~1907 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hook_installer.py` (~9883 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hook_installer.py` (~10229 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `http_transport.py` (~5592 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
 - `hybrid_recall.py` (~8896 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `inbox.py` (~3595 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).

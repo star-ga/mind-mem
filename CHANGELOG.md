@@ -2,6 +2,42 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v3.10.2 — Canonical Memory Protocol injected on `mm install-all`
+
+Released 2026-05-08. Closes a gap discovered during a sibling product
+audit: every CLI that `mm install-all` wires at the protocol level
+(MCP entry, hooks) now also receives the **canonical Memory Protocol
+system-prompt snippet** in its instructions file. Wiring without
+instruction was producing hallucinations because the LLM in each CLI
+wasn't told to actually call `mcp__mind-mem__recall` before answering.
+
+### Added
+- `docs/agent-memory-protocol.md` — canonical text of the snippet,
+  also rendered in this CHANGELOG section for searchability.
+- `MEMORY_PROTOCOL_SNIPPET` constant in `hook_installer.py`. Single
+  source of truth.
+
+### Changed
+- `AGENT_REGISTRY` `content_tmpl` values for **codex / vibe / cursor /
+  windsurf / cline / roo** now point at `MEMORY_PROTOCOL_SNIPPET`
+  (replacing per-agent 1-line stubs). Re-running `mm install-all
+  --force` upgrades the user's existing `AGENTS.md` /
+  `.cursorrules` / `.windsurfrules` / `.clinerules` /
+  `.roo/system-prompt.md` files in place.
+- Aider (yaml `auto-config`) and claude-code (json hooks) keep their
+  format-specific templates — they're not text system prompts.
+
+### Why
+A 9-LLM consensus product based on OpenClaw was hallucinating on
+memory-grounded questions despite mind-mem's Postgres backend
+holding the right answers. Audit traced this to MCP wiring being
+present but the agent system-prompt only saying *"run `mm context`
+before responding"* — a 13-word stub. The new snippet is the full
+recall / propose_update / hybrid_search / hallucination-guardrail
+protocol that has been working for Claude Code via its `CLAUDE.md`.
+Anyone who `pip install mind-mem && mm install-all --force` now
+gets the same protocol on every supported CLI.
+
 ## v3.10.1 — Vibe (Mistral CLI) MCP auto-wire
 
 Released 2026-05-07. Adds the long-standing TODO Vibe MCP adapter so
