@@ -374,6 +374,128 @@ def _cmd_install(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_install_model(args: argparse.Namespace) -> int:
+    """Download mind-mem-4b GGUF from HF and import into Ollama.
+
+    Idempotent — safe to re-run. Skips download if file already
+    present with matching size; skips Ollama import if tag already
+    present (unless --force on the parent command).
+    """
+    import shutil
+    import subprocess
+    import urllib.request
+
+    hf_repo = "star-ga/mind-mem-4b"
+    gguf_url = f"https://huggingface.co/{hf_repo}/resolve/main/{args.model}"
+    dest = os.path.expanduser(args.dest)
+
+    output: dict[str, Any] = {
+        "model_file": args.model,
+        "ollama_tag": args.name,
+        "dest": dest,
+        "keep_alive": args.keep_alive,
+        "dry_run": bool(args.dry_run),
+    }
+
+    if args.dry_run:
+        output["plan"] = [
+            f"would download {gguf_url}  ->  {dest}",
+            f"would write Modelfile with FROM {dest}",
+            f"would run `ollama create {args.name} -f Modelfile`",
+            f"would set OLLAMA_KEEP_ALIVE={args.keep_alive}",
+        ]
+        print(json.dumps(output, indent=2))
+        return 0
+
+    # 1. Check ollama on PATH (graceful skip if absent)
+    if not shutil.which("ollama"):
+        output["error"] = "ollama not found on PATH"
+        output["hint"] = "install ollama from https://ollama.com/download then re-run `mm install-model`"
+        print(json.dumps(output, indent=2))
+        return 2
+
+    # 2. Download GGUF (skip if dest already correct size)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    expected_size = None
+    try:
+        with urllib.request.urlopen(gguf_url) as resp:
+            expected_size = int(resp.headers.get("Content-Length") or 0)
+    except Exception as exc:
+        output["error"] = f"could not query HF for {args.model}: {exc}"
+        print(json.dumps(output, indent=2))
+        return 3
+
+    if os.path.exists(dest) and expected_size and os.path.getsize(dest) == expected_size:
+        output["downloaded"] = False
+        output["reason"] = "dest already present with matching size"
+    else:
+        try:
+            urllib.request.urlretrieve(gguf_url, dest)
+            output["downloaded"] = True
+            output["bytes"] = os.path.getsize(dest)
+        except Exception as exc:
+            output["error"] = f"download failed: {exc}"
+            print(json.dumps(output, indent=2))
+            return 4
+
+    # 3. Build Modelfile next to the GGUF (idempotent)
+    modelfile = os.path.join(os.path.dirname(dest), "Modelfile")
+    modelfile_body = (
+        f"FROM {dest}\n"
+        "PARAMETER temperature 0.6\n"
+        "PARAMETER top_p 0.95\n"
+        "PARAMETER num_ctx 8192\n"
+        f'PARAMETER stop "<|im_end|>"\n'
+    )
+    with open(modelfile, "w", encoding="utf-8") as fh:
+        fh.write(modelfile_body)
+    output["modelfile"] = modelfile
+
+    # 4. Ollama import
+    try:
+        result = subprocess.run(
+            ["ollama", "create", args.name, "-f", modelfile],
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
+        )
+        output["ollama_create_returncode"] = result.returncode
+        if result.returncode != 0:
+            output["ollama_stderr"] = result.stderr[-500:]
+            print(json.dumps(output, indent=2))
+            return 5
+    except subprocess.TimeoutExpired:
+        output["error"] = "`ollama create` timed out after 180s"
+        print(json.dumps(output, indent=2))
+        return 6
+
+    # 5. Smoke test (warm the model + keep-alive)
+    try:
+        smoke = subprocess.run(
+            ["ollama", "run", args.name, "test"],
+            input="hi\n",
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+            env={**os.environ, "OLLAMA_KEEP_ALIVE": args.keep_alive},
+        )
+        output["smoke_returncode"] = smoke.returncode
+        if smoke.returncode == 0:
+            output["smoke_response_first_60"] = smoke.stdout.strip()[:60]
+    except subprocess.TimeoutExpired:
+        output["smoke_response"] = "(timeout — model likely importing in background; run `ollama list` to verify)"
+
+    output["status"] = "ok"
+    output["next_steps"] = [
+        f"ollama run {args.name}  # test the model",
+        "mm status                # confirm mind-mem.json is configured",
+    ]
+    print(json.dumps(output, indent=2))
+    return 0
+
+
 def _cmd_install_all(args: argparse.Namespace) -> int:
     """Auto-detect installed AI clients and configure all of them."""
     from mind_mem.hook_installer import detect_installed_agents, install_all
@@ -1524,6 +1646,37 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_install_all.set_defaults(func=_cmd_install_all)
+
+    # install-model — pull mind-mem-4b GGUF from HF + import to Ollama
+    p_install_model = sub.add_parser(
+        "install-model",
+        help=(
+            "Download `mind-mem-4b` GGUF (~2.5GB) from HuggingFace and "
+            "import into Ollama as `mind-mem:4b`. Idempotent."
+        ),
+    )
+    p_install_model.add_argument(
+        "--model",
+        default="mind-mem-4b-Q4_K_M.gguf",
+        help="GGUF filename on HF. Default: mind-mem-4b-Q4_K_M.gguf",
+    )
+    p_install_model.add_argument(
+        "--name",
+        default="mind-mem:4b",
+        help="Ollama tag to register. Default: mind-mem:4b",
+    )
+    p_install_model.add_argument(
+        "--dest",
+        default=os.path.expanduser("~/.cache/mind-mem/mind-mem-4b-Q4_K_M.gguf"),
+        help="Local path to download into. Default: ~/.cache/mind-mem/",
+    )
+    p_install_model.add_argument(
+        "--keep-alive",
+        default="-1",
+        help="Ollama keep-alive value. -1 = forever (default), 30m, etc.",
+    )
+    p_install_model.add_argument("--dry-run", action="store_true")
+    p_install_model.set_defaults(func=_cmd_install_model)
 
     # vault namespace
     p_vault = sub.add_parser("vault", help="Vault sync subcommands.")

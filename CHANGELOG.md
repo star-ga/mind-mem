@@ -2,6 +2,41 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v3.10.3 — `mm install-model` + GGUF on HuggingFace
+
+Released 2026-05-08. Closes the public-user setup gap: `pip install
+mind-mem` now gets you to a running local LLM in two commands.
+
+### Added
+- `mm install-model` subcommand — downloads the canonical
+  `mind-mem-4b-Q4_K_M.gguf` (~2.5 GB) from HuggingFace, writes a
+  Modelfile, runs `ollama create mind-mem:4b`, sets
+  `OLLAMA_KEEP_ALIVE=-1`, and smoke-tests the model. Idempotent.
+  Flags: `--model`, `--name`, `--dest`, `--keep-alive`, `--dry-run`.
+- **GGUF Q4_K_M now published to HuggingFace**:
+  https://huggingface.co/star-ga/mind-mem-4b/blob/main/mind-mem-4b-Q4_K_M.gguf
+  Q4_K_M quantization fits in **6 GB VRAM** (vs 16+ GB for the
+  full-fp16 safetensors), runs on a consumer RTX 3060.
+
+### Two-command setup for end users
+```bash
+pip install mind-mem
+mm install-all --force      # wires every detected CLI (10 supported)
+mm install-model            # pulls GGUF + imports into Ollama
+```
+
+The full-precision `model.safetensors` (8.4 GB) stays on HF for
+researchers, fine-tuners, and high-perf serving (vLLM / exllamav2).
+End users running Ollama use the GGUF — 70 % less bandwidth.
+
+### Notes
+- Requires `ollama` on PATH; otherwise the command exits with a
+  clear hint pointing at https://ollama.com/download.
+- Skips re-download if the destination file already matches the
+  HF Content-Length (re-runs are no-ops).
+- `--keep-alive -1` matches the systemd `OLLAMA_KEEP_ALIVE=-1`
+  setting documented in `docs/mind-mem-4b-setup.md`.
+
 ## v3.10.2 — Canonical Memory Protocol injected on `mm install-all`
 
 Released 2026-05-08. Closes a gap discovered during a sibling product
