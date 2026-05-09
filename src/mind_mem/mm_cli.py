@@ -382,12 +382,41 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
     present (unless --force on the parent command).
     """
     import shutil
-    import subprocess
+    import re
+    import subprocess  # noqa: S404 — used with absolute paths from shutil.which + list args, never shell=True
+    import urllib.parse
     import urllib.request
 
     hf_repo = "star-ga/mind-mem-4b"
+
+    # Validate args.model: filename only, no path traversal, no URL injection.
+    if not re.fullmatch(r"[A-Za-z0-9._-]+\.gguf", args.model):
+        print(json.dumps({"error": f"invalid --model {args.model!r}; must match [A-Za-z0-9._-]+\\.gguf"}, indent=2))
+        return 1
+    # Validate args.name: alphanumerics + : _ . - / — Ollama tag charset.
+    if not re.fullmatch(r"[A-Za-z0-9._:/\-]+", args.name):
+        print(json.dumps({"error": f"invalid --name {args.name!r}; must match [A-Za-z0-9._:/-]+"}, indent=2))
+        return 1
+    # Validate args.keep-alive: -1 | <number><unit> (e.g. 30m, 1h, 24h)
+    if not re.fullmatch(r"(-1|\d+(s|m|h|d)?)", str(args.keep_alive)):
+        print(json.dumps({"error": f"invalid --keep-alive {args.keep_alive!r}"}, indent=2))
+        return 1
+
     gguf_url = f"https://huggingface.co/{hf_repo}/resolve/main/{args.model}"
-    dest = os.path.expanduser(args.dest)
+    # Defense in depth: confirm the URL we built is HTTPS + huggingface.co.
+    parsed = urllib.parse.urlparse(gguf_url)
+    if parsed.scheme != "https" or parsed.hostname != "huggingface.co":
+        print(json.dumps({"error": "internal: refusing to fetch from non-HF URL"}, indent=2))
+        return 1
+    dest = os.path.realpath(os.path.expanduser(args.dest))
+    # Refuse writes to canonical system paths. We allow $HOME-symlinked-to-/data
+    # (common on workstations with a separate SSD for ~/.cache), so we deny by
+    # blacklist instead of confining by allowlist.
+    _SYSTEM_PREFIXES = ("/etc/", "/usr/", "/bin/", "/sbin/", "/lib/", "/lib64/",
+                        "/var/", "/sys/", "/proc/", "/dev/", "/root/", "/boot/")
+    if any(dest.startswith(p) for p in _SYSTEM_PREFIXES):
+        print(json.dumps({"error": f"refusing to write to system path: {dest}"}, indent=2))
+        return 1
 
     output: dict[str, Any] = {
         "model_file": args.model,
@@ -414,11 +443,14 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
         print(json.dumps(output, indent=2))
         return 2
 
-    # 2. Download GGUF (skip if dest already correct size)
+    # 2. Download GGUF (skip if dest already correct size).
+    # URL is constrained above to https://huggingface.co/<known repo>/<validated filename>;
+    # bandit B310 doesn't see the validation but it's enforced.
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     expected_size = None
+    req = urllib.request.Request(gguf_url, method="HEAD")
     try:
-        with urllib.request.urlopen(gguf_url) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 — URL validated above
             expected_size = int(resp.headers.get("Content-Length") or 0)
     except Exception as exc:
         output["error"] = f"could not query HF for {args.model}: {exc}"
@@ -430,7 +462,10 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
         output["reason"] = "dest already present with matching size"
     else:
         try:
-            urllib.request.urlretrieve(gguf_url, dest)
+            req = urllib.request.Request(gguf_url)
+            with urllib.request.urlopen(req, timeout=600) as resp, open(dest, "wb") as fh:  # noqa: S310 — URL validated above
+                while chunk := resp.read(8 * 1024 * 1024):
+                    fh.write(chunk)
             output["downloaded"] = True
             output["bytes"] = os.path.getsize(dest)
         except Exception as exc:
@@ -451,10 +486,17 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
         fh.write(modelfile_body)
     output["modelfile"] = modelfile
 
-    # 4. Ollama import
+    # 4. Ollama import — args.name and modelfile are validated above;
+    # we resolve `ollama` to its absolute path and pass argv as a list
+    # (never shell=True) so B603/B607 do not apply.
+    ollama_bin = shutil.which("ollama")
+    if not ollama_bin:
+        output["error"] = "ollama disappeared from PATH between checks"
+        print(json.dumps(output, indent=2))
+        return 2
     try:
-        result = subprocess.run(
-            ["ollama", "create", args.name, "-f", modelfile],
+        result = subprocess.run(  # noqa: S603 — argv list, no shell, validated args
+            [ollama_bin, "create", args.name, "-f", modelfile],
             capture_output=True,
             text=True,
             timeout=180,
@@ -470,10 +512,11 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
         print(json.dumps(output, indent=2))
         return 6
 
-    # 5. Smoke test (warm the model + keep-alive)
+    # 5. Smoke test (warm the model + keep-alive). Same safety profile
+    # as step 4: absolute path + argv list + validated args, no shell.
     try:
-        smoke = subprocess.run(
-            ["ollama", "run", args.name, "test"],
+        smoke = subprocess.run(  # noqa: S603 — argv list, no shell, validated args
+            [ollama_bin, "run", args.name, "test"],
             input="hi\n",
             capture_output=True,
             text=True,

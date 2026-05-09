@@ -2,6 +2,35 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v3.10.4 — `mm install-model` security hardening (GHAS alerts #165-171)
+
+Released 2026-05-08. Closes 7 Bandit alerts on the new `install-model`
+subcommand without changing the user-facing surface.
+
+### Fixed
+- **B404** (subprocess import) — annotated; usage is intentional and
+  safe (absolute path from `shutil.which` + argv list, never `shell=True`).
+- **B310** (urlopen with un-validated URL, line 421/433) — added
+  defense-in-depth URL parse-and-check (must be `https://` and
+  `huggingface.co` host) on top of the existing repo-name constraint.
+  Switched from `urlretrieve` to streaming `urlopen` + chunked write
+  with explicit timeout.
+- **B603/B607** (subprocess.run with relative path, line 456/475) —
+  resolve `ollama` to its absolute path via `shutil.which` once and
+  reuse for both `ollama create` and the smoke-test `ollama run`.
+
+### Added input validation (defense in depth)
+- `--model` must match `[A-Za-z0-9._-]+\.gguf` (no path traversal,
+  no URL-injection, no shell-meta).
+- `--name` must match `[A-Za-z0-9._:/-]+` (Ollama tag charset).
+- `--keep-alive` must be `-1` or `<digits><s|m|h|d>?`.
+- `--dest` denied if resolved real-path falls under `/etc/`, `/usr/`,
+  `/bin/`, `/sbin/`, `/lib/`, `/lib64/`, `/var/`, `/sys/`, `/proc/`,
+  `/dev/`, `/root/`, `/boot/`. Allows `$HOME` symlinked to `/data`
+  (common on workstations).
+
+No user-visible behaviour change for the happy path.
+
 ## v3.10.3 — `mm install-model` + GGUF on HuggingFace
 
 Released 2026-05-08. Closes the public-user setup gap: `pip install
