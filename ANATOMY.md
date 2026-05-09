@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 763 | **Est. tokens:** ~1,544,444
-**Generated:** 2026-05-09 14:42 UTC
+**Files:** 763 | **Est. tokens:** ~1,544,578
+**Generated:** 2026-05-09 14:43 UTC
 
 ## Token Budget Guide
 
@@ -69,7 +69,7 @@
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~822 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 14 | ~24,917 |
+| `train/` | 14 | ~25,051 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -943,7 +943,7 @@
 - `resume_pod_train.sh` (~876 tok, large) — Recovery: pod uz2uajluzskmm2 was preempted mid-run. Wake it up,
 - `RETRAIN_v3.9.0.md` (~1405 tok, large) — mind-mem-4b — v3.9.0 retrain plan
 - `runpod_deploy.py` (~4280 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
-- `runpod_full_ft.py` (~1817 tok, huge) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
+- `runpod_full_ft.py` (~1951 tok, huge) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
 - `train_qlora.py` (~1315 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
 - `upload_to_hf.py` (~1122 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-4b.
 ### `web/app/console/`

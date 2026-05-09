@@ -105,7 +105,14 @@ def main() -> None:
         # in pre-launch review. Cut to 3 epochs — still ~310 gradient steps
         # at effective batch 32, enough to converge on keyword-recall while
         # leaving headroom for generalization to paraphrased eval prompts.
-        num_train_epochs=3,
+        # v3.12.1 retrain v2 (2026-05-09): 4-LLM consensus unanimously flagged
+        # marginal gradient signal as the only residual concern.  Corpus is
+        # 4291 (vs the 3.3k that triggered the overfit flag) so the gradient-
+        # step ratio is closer to v3.10.2's perfect-run baseline.  Bumped to
+        # 4 epochs to give the new v3.12.1 density-fix probes 33% more passes,
+        # addressing the unanimous LLM concern about gradient signal on
+        # already-converged weights.  ~536 steps total, ~110 min wall time.
+        num_train_epochs=4,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=16,  # effective batch = 32
         bf16=True,
