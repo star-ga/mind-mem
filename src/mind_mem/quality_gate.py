@@ -252,8 +252,7 @@ def validate_block(
     # 6. near_duplicate
     if recent:
         is_dup, ratio = _near_duplicate(text, recent, now=now)
-        if is_dup:
-            assert ratio is not None
+        if is_dup and ratio is not None:
             _fail(
                 "near_duplicate",
                 f"similar to a recent block (ratio={ratio:.3f} >= {_DUP_RATIO})",

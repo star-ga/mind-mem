@@ -110,14 +110,16 @@ def attach_explain(
             final=round(final_score, 6),
         )
 
-        # Math-consistency assertion: final must equal the sort key.
+        # Math-consistency invariant: final must equal the sort key.
         # We compare against ``rrf_score`` when present (the RRF path uses
-        # that as the sort key), otherwise ``score``.
+        # that as the sort key), otherwise ``score``. Hard-raise instead
+        # of ``assert`` so the invariant survives ``python -O``.
         sort_key = float(hit.get("rrf_score") or hit.get("score", 0.0))
-        assert abs(explain.final - sort_key) < 1e-9, (
-            f"_explain.final ({explain.final}) != sort key ({sort_key}) "
-            f"for hit {hit.get('_id', '?')}"
-        )
+        if abs(explain.final - sort_key) >= 1e-9:
+            raise RuntimeError(
+                f"_explain.final ({explain.final}) != sort key ({sort_key}) "
+                f"for hit {hit.get('_id', '?')}"
+            )
 
         hit["_explain"] = explain.to_dict()
 

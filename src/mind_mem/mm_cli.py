@@ -381,8 +381,8 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
     present with matching size; skips Ollama import if tag already
     present (unless --force on the parent command).
     """
-    import shutil
     import re
+    import shutil
     import subprocess  # nosec B404 — used with absolute paths from shutil.which + list args, never shell=True
     import urllib.parse
     import urllib.request
@@ -1582,9 +1582,9 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     workspaces created before 2026-04 where the auto-migrate fired
     and silently skipped. No-op on fresh DBs.
     """
+    import json as _json
     import os as _os
     import sqlite3 as _sqlite3
-    import json as _json
 
     ws = _workspace()
     report: dict[str, Any] = {"workspace": ws, "actions": []}

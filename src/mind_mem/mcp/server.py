@@ -66,6 +66,9 @@ from mind_mem.mcp.tools import (
     kernels as _tools_kernels,
 )
 from mind_mem.mcp.tools import (
+    lineage as _tools_lineage,
+)
+from mind_mem.mcp.tools import (
     memory_ops as _tools_memory_ops,
 )
 from mind_mem.mcp.tools import (
@@ -79,9 +82,6 @@ from mind_mem.mcp.tools import (
 )
 from mind_mem.mcp.tools import (
     pipeline as _tools_pipeline,
-)
-from mind_mem.mcp.tools import (
-    lineage as _tools_lineage,
 )
 from mind_mem.mcp.tools import (
     quality as _tools_quality,

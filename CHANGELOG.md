@@ -2,6 +2,28 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v3.11.1 — B101 hardening + ACL whitelist backfill
+
+Released 2026-05-08.
+
+### Security
+- **GHAS #179, #180 (B101)** — Replace runtime `assert` invariants with
+  hard `if/raise` so they survive `python -O`.
+  - `src/mind_mem/_recall_explain.py:117` math-consistency check now
+    raises `RuntimeError` on mismatch instead of `AssertionError`.
+  - `src/mind_mem/quality_gate.py:256` near-duplicate path no longer
+    relies on a type-narrowing `assert`; the None-guard is folded
+    into the conditional.
+
+### Fixed
+- **ACL whitelist gap** — Seven previously-registered MCP tools were
+  missing from the `USER_TOOLS` whitelist and silently denied with
+  `acl_unknown_tool`: `audit_model_tool`, `sign_model_tool`,
+  `verify_model_tool`, `compile_truth_walkthrough`,
+  `recall_with_persona`, `mic_convert_tool`, `mic_inspect_tool`.
+  Backfilled — the existing test suites for these tools now pass
+  (40+ previously-red tests turn green).
+
 ## v3.11.0 — Quality Gates, Typed Lineage, Recall Explainability
 
 Released 2026-05-08.

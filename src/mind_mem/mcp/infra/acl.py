@@ -96,6 +96,18 @@ USER_TOOLS = frozenset(
         "validate_block",
         "block_lineage",
         "add_block_edge",
+        # v3.11.1 — backfill ACL gaps surfaced by the v3.11.0 audit.
+        # These tools were registered in v3.8.x/v3.9.0 but never added
+        # to the whitelist; the security-hardening commit that enforced
+        # ACL didn't catch them. Tests that exercise them have been
+        # silently failing on `acl_unknown_tool` since v3.8.4.
+        "audit_model_tool",
+        "sign_model_tool",
+        "verify_model_tool",
+        "compile_truth_walkthrough",
+        "recall_with_persona",
+        "mic_convert_tool",
+        "mic_inspect_tool",
     }
 )
 
