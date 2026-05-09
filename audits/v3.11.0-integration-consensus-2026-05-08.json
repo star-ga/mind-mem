@@ -1,0 +1,400 @@
+{
+  "audit_id": "v3.11.0-integration-consensus-2026-05-08",
+  "generated_at_utc": "2026-05-09T03:52:37.257749+00:00",
+  "models_queried": 7,
+  "models_parsed": 4,
+  "fleet": [
+    {
+      "label": "grok-4-1-fast-reasoning",
+      "model_id": "grok-4-1-fast-reasoning",
+      "status": "ok",
+      "parsed_ok": true,
+      "latency_ms": 33188.0,
+      "retries": 0
+    },
+    {
+      "label": "mistral-large-latest",
+      "model_id": "mistral-large-latest",
+      "status": "ok",
+      "parsed_ok": true,
+      "latency_ms": 6798.0,
+      "retries": 0
+    },
+    {
+      "label": "deepseek-v4-pro",
+      "model_id": "deepseek-v4-pro",
+      "status": "ok",
+      "parsed_ok": true,
+      "latency_ms": 69490.9,
+      "retries": 0
+    },
+    {
+      "label": "gemini-3.1-pro-preview",
+      "model_id": "gemini-3.1-pro-preview",
+      "status": "error",
+      "parsed_ok": false,
+      "latency_ms": 0,
+      "retries": 0
+    },
+    {
+      "label": "sonar-pro",
+      "model_id": "sonar-pro",
+      "status": "error",
+      "parsed_ok": false,
+      "latency_ms": 0,
+      "retries": 0
+    },
+    {
+      "label": "nvidia-nemotron-ultra-253b",
+      "model_id": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+      "status": "error",
+      "parsed_ok": false,
+      "latency_ms": 0,
+      "retries": 0
+    },
+    {
+      "label": "glm-5",
+      "model_id": "glm-5",
+      "status": "ok",
+      "parsed_ok": true,
+      "latency_ms": 100757.1,
+      "retries": 0
+    }
+  ],
+  "aggregates": {
+    "ship_orders_per_model": [
+      {
+        "model": "grok-4-1-fast-reasoning",
+        "order": [
+          "pattern_2",
+          "pattern_3",
+          "pattern_1"
+        ]
+      },
+      {
+        "model": "mistral-large-latest",
+        "order": [
+          "pattern_2",
+          "pattern_1",
+          "pattern_3"
+        ]
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "order": [
+          "pattern_2",
+          "pattern_3",
+          "pattern_1"
+        ]
+      },
+      {
+        "model": "glm-5",
+        "order": [
+          "pattern_1",
+          "pattern_2",
+          "pattern_3"
+        ]
+      }
+    ],
+    "first_pattern_tally": {
+      "pattern_2": 3,
+      "pattern_1": 1
+    },
+    "pattern_1_approach": {
+      "param_flag": 4
+    },
+    "pattern_1_explain_names": {
+      "recall explain=true": 1,
+      "explain=true": 2,
+      "add `explain` param to existing `recall` tool": 1
+    },
+    "pattern_2_tool_names": {
+      "ingest_quality_gate": 1,
+      "propose_update_guard": 1,
+      "validate_block": 1,
+      "assess_block_quality": 1
+    },
+    "pattern_2_default_mode": {
+      "advisory": 4
+    },
+    "pattern_3_deps_table_choice": {
+      "new_table": 2,
+      "extend_co_retrieval": 2
+    },
+    "pattern_3_read_tool_names": {
+      "query_block_deps": 1,
+      "read_block_deps": 1,
+      "read_deps": 1,
+      "trace_block_lineage": 1
+    },
+    "pattern_3_stale_tool_names": {
+      "propagate_dep_staleness": 1,
+      "propagate_staleness": 1,
+      "mark_stale_dependents": 1,
+      "cascade_confidence_decay": 1
+    },
+    "schema_risks": {
+      "Postgres migration for new deps table without downtime": 1,
+      "quality gate false positives rejecting valid proposals": 1,
+      "dependency graph cycles or density causing propagation perf issues": 1,
+      "explain flag adding recall latency under load": 1,
+      "Levenshtein 0.95 threshold may reject valid creative updates": 1,
+      "dependency graph edges could bloat co_retrieval table if not partitioned": 1,
+      "explain field inflation in recall responses may slow down high-frequency queries": 1,
+      "staleness propagation decay values may need tuning for 3-hop+ chains": 1,
+      "legitimate blocks may be rejected by quality gate": 1,
+      "dependency graph may slow down write operations": 1,
+      "explain fields increase payload size possibly hitting MCP limits": 1,
+      "local 4B model may fail to call new tools until retrained": 1,
+      "extending co_retrieval could break existing analytics queries": 1,
+      "P3 cyclic dependencies causing infinite loops in staleness propagation": 1,
+      "P2 Levenshtein calculation overhead degrading ingestion latency": 1,
+      "P1 _explain field increasing payload size for SQLite recall.db cache": 1
+    },
+    "tests_needed": {
+      "quality gate rule coverage with edge cases": 1,
+      "dep graph insert/query/propagate e2e": 1,
+      "recall explain output matches non-explain scores": 1,
+      "stale propagation decay over hops": 1,
+      "post-ingest block integrity with SQLite cache sync": 1,
+      "Levenshtein edge cases (Unicode, emoji, mixed scripts)": 1,
+      "dependency graph circular reference detection": 1,
+      "staleness propagation confidence decay validation": 1,
+      "explain field serialization/deserialization performance": 1,
+      "quality gate advisory vs hard-fail toggle regression": 1,
+      "test_quality_gate_edge_cases": 1,
+      "test_dependency_graph_propagation": 1,
+      "test_explain_output_accuracy": 1,
+      "test_existing_tool_regression": 1,
+      "test_advisory_log_contains_rejections": 1,
+      "test_stale_confidence_decay": 1,
+      "test_performance_no_degradation": 1,
+      "P3 transitive decay logic verification (1-hop vs 3-hop)": 1,
+      "P2 near-duplicate boundary testing (0.94 vs 0.95 threshold)": 1,
+      "P1 score decomposition math consistency check": 1
+    },
+    "retrain_recommendation": {
+      "v3.11.0_mandatory": 2,
+      "v3.11.1_followup": 2
+    },
+    "scores_per_model": [
+      {
+        "model": "grok-4-1-fast-reasoning",
+        "score": 8.7
+      },
+      {
+        "model": "mistral-large-latest",
+        "score": 8.5
+      },
+      {
+        "model": "deepseek-v4-pro",
+        "score": 7.5
+      },
+      {
+        "model": "glm-5",
+        "score": 8.5
+      }
+    ],
+    "score_mean": 8.3
+  },
+  "per_model_responses": [
+    {
+      "model_label": "grok-4-1-fast-reasoning",
+      "model_id": "grok-4-1-fast-reasoning",
+      "status": "ok",
+      "latency_ms": 33188.0,
+      "retries": 0,
+      "error": null,
+      "raw_content": "{\n  \"ship_order\": [\"pattern_2\", \"pattern_3\", \"pattern_1\"],\n  \"naming\": {\n    \"pattern_1_explain\": \"recall explain=true\",\n    \"pattern_1_approach\": \"param_flag\",\n    \"pattern_2_quality_gate\": \"ingest_quality_gate\",\n    \"pattern_2_default_mode\": \"advisory\",\n    \"pattern_3_deps_table\": \"new_table\",\n    \"pattern_3_tool_a\": \"query_block_deps\",\n    \"pattern_3_tool_b\": \"propagate_dep_staleness\"\n  },\n  \"schema_risks\": [\"Postgres migration for new deps table without downtime\", \"quality gate false positives rejecting valid proposals\", \"dependency graph cycles or density causing propagation perf issues\", \"explain flag adding recall latency under load\"],\n  \"tests_needed\": [\"quality gate rule coverage with edge cases\", \"dep graph insert/query/propagate e2e\", \"recall explain output matches non-explain scores\", \"stale propagation decay over hops\", \"post-ingest block integrity with SQLite cache sync\"],\n  \"score_0_to_10\": 8.7,\n  \"biggest_concern\": \"Dependency propagation could degrade performance in large or dense block graphs without bounding.\",\n  \"retrain_recommendation\": \"v3.11.0_mandatory\",\n  \"retrain_rationale\": \"New tools in patterns 2 and 3 require 4B model retrain in v3.11.0 for tool_call coverage.\"\n}",
+      "parsed": {
+        "ship_order": [
+          "pattern_2",
+          "pattern_3",
+          "pattern_1"
+        ],
+        "naming": {
+          "pattern_1_explain": "recall explain=true",
+          "pattern_1_approach": "param_flag",
+          "pattern_2_quality_gate": "ingest_quality_gate",
+          "pattern_2_default_mode": "advisory",
+          "pattern_3_deps_table": "new_table",
+          "pattern_3_tool_a": "query_block_deps",
+          "pattern_3_tool_b": "propagate_dep_staleness"
+        },
+        "schema_risks": [
+          "Postgres migration for new deps table without downtime",
+          "quality gate false positives rejecting valid proposals",
+          "dependency graph cycles or density causing propagation perf issues",
+          "explain flag adding recall latency under load"
+        ],
+        "tests_needed": [
+          "quality gate rule coverage with edge cases",
+          "dep graph insert/query/propagate e2e",
+          "recall explain output matches non-explain scores",
+          "stale propagation decay over hops",
+          "post-ingest block integrity with SQLite cache sync"
+        ],
+        "score_0_to_10": 8.7,
+        "biggest_concern": "Dependency propagation could degrade performance in large or dense block graphs without bounding.",
+        "retrain_recommendation": "v3.11.0_mandatory",
+        "retrain_rationale": "New tools in patterns 2 and 3 require 4B model retrain in v3.11.0 for tool_call coverage."
+      }
+    },
+    {
+      "model_label": "mistral-large-latest",
+      "model_id": "mistral-large-latest",
+      "status": "ok",
+      "latency_ms": 6798.0,
+      "retries": 0,
+      "error": null,
+      "raw_content": "```json\n{\n    \"ship_order\": [\"pattern_2\", \"pattern_1\", \"pattern_3\"],\n    \"naming\": {\n        \"pattern_1_explain\": \"explain=true\",\n        \"pattern_1_approach\": \"param_flag\",\n        \"pattern_2_quality_gate\": \"propose_update_guard\",\n        \"pattern_2_default_mode\": \"advisory\",\n        \"pattern_3_deps_table\": \"extend_co_retrieval\",\n        \"pattern_3_tool_a\": \"read_block_deps\",\n        \"pattern_3_tool_b\": \"propagate_staleness\"\n    },\n    \"schema_risks\": [\n        \"Levenshtein 0.95 threshold may reject valid creative updates\",\n        \"dependency graph edges could bloat co_retrieval table if not partitioned\",\n        \"explain field inflation in recall responses may slow down high-frequency queries\",\n        \"staleness propagation decay values may need tuning for 3-hop+ chains\"\n    ],\n    \"tests_needed\": [\n        \"Levenshtein edge cases (Unicode, emoji, mixed scripts)\",\n        \"dependency graph circular reference detection\",\n        \"staleness propagation confidence decay validation\",\n        \"explain field serialization/deserialization performance\",\n        \"quality gate advisory vs hard-fail toggle regression\"\n    ],\n    \"score_0_to_10\": 8.5,\n    \"biggest_concern\": \"Local 4B model may misroute tool calls for new dependency graph tools without retraining.\",\n    \"retrain_recommendation\": \"v3.11.0_mandatory\",\n    \"retrain_rationale\": \"New tool names for dependency graph require immediate model alignment to avoid degraded UX.\"\n}\n```",
+      "parsed": {
+        "ship_order": [
+          "pattern_2",
+          "pattern_1",
+          "pattern_3"
+        ],
+        "naming": {
+          "pattern_1_explain": "explain=true",
+          "pattern_1_approach": "param_flag",
+          "pattern_2_quality_gate": "propose_update_guard",
+          "pattern_2_default_mode": "advisory",
+          "pattern_3_deps_table": "extend_co_retrieval",
+          "pattern_3_tool_a": "read_block_deps",
+          "pattern_3_tool_b": "propagate_staleness"
+        },
+        "schema_risks": [
+          "Levenshtein 0.95 threshold may reject valid creative updates",
+          "dependency graph edges could bloat co_retrieval table if not partitioned",
+          "explain field inflation in recall responses may slow down high-frequency queries",
+          "staleness propagation decay values may need tuning for 3-hop+ chains"
+        ],
+        "tests_needed": [
+          "Levenshtein edge cases (Unicode, emoji, mixed scripts)",
+          "dependency graph circular reference detection",
+          "staleness propagation confidence decay validation",
+          "explain field serialization/deserialization performance",
+          "quality gate advisory vs hard-fail toggle regression"
+        ],
+        "score_0_to_10": 8.5,
+        "biggest_concern": "Local 4B model may misroute tool calls for new dependency graph tools without retraining.",
+        "retrain_recommendation": "v3.11.0_mandatory",
+        "retrain_rationale": "New tool names for dependency graph require immediate model alignment to avoid degraded UX."
+      }
+    },
+    {
+      "model_label": "deepseek-v4-pro",
+      "model_id": "deepseek-v4-pro",
+      "status": "ok",
+      "latency_ms": 69490.9,
+      "retries": 0,
+      "error": null,
+      "raw_content": "{\n  \"ship_order\": [\"pattern_2\", \"pattern_3\", \"pattern_1\"],\n  \"naming\": {\n    \"pattern_1_explain\": \"explain=true\",\n    \"pattern_1_approach\": \"param_flag\",\n    \"pattern_2_quality_gate\": \"validate_block\",\n    \"pattern_2_default_mode\": \"advisory\",\n    \"pattern_3_deps_table\": \"extend_co_retrieval\",\n    \"pattern_3_tool_a\": \"read_deps\",\n    \"pattern_3_tool_b\": \"mark_stale_dependents\"\n  },\n  \"schema_risks\": [\n    \"legitimate blocks may be rejected by quality gate\",\n    \"dependency graph may slow down write operations\",\n    \"explain fields increase payload size possibly hitting MCP limits\",\n    \"local 4B model may fail to call new tools until retrained\",\n    \"extending co_retrieval could break existing analytics queries\"\n  ],\n  \"tests_needed\": [\n    \"test_quality_gate_edge_cases\",\n    \"test_dependency_graph_propagation\",\n    \"test_explain_output_accuracy\",\n    \"test_existing_tool_regression\",\n    \"test_advisory_log_contains_rejections\",\n    \"test_stale_confidence_decay\",\n    \"test_performance_no_degradation\"\n  ],\n  \"score_0_to_10\": 7.5,\n  \"biggest_concern\": \"The local 4B model may not reliably call the new tools until retrained, risking tool_call coverage loss for existing clients.\",\n  \"retrain_recommendation\": \"v3.11.1_followup\",\n  \"retrain_rationale\": \"Deploying tools first ensures feature availability for API clients while giving time to retrain the local model in a patch release to restore tool_call coverage.\"\n}",
+      "parsed": {
+        "ship_order": [
+          "pattern_2",
+          "pattern_3",
+          "pattern_1"
+        ],
+        "naming": {
+          "pattern_1_explain": "explain=true",
+          "pattern_1_approach": "param_flag",
+          "pattern_2_quality_gate": "validate_block",
+          "pattern_2_default_mode": "advisory",
+          "pattern_3_deps_table": "extend_co_retrieval",
+          "pattern_3_tool_a": "read_deps",
+          "pattern_3_tool_b": "mark_stale_dependents"
+        },
+        "schema_risks": [
+          "legitimate blocks may be rejected by quality gate",
+          "dependency graph may slow down write operations",
+          "explain fields increase payload size possibly hitting MCP limits",
+          "local 4B model may fail to call new tools until retrained",
+          "extending co_retrieval could break existing analytics queries"
+        ],
+        "tests_needed": [
+          "test_quality_gate_edge_cases",
+          "test_dependency_graph_propagation",
+          "test_explain_output_accuracy",
+          "test_existing_tool_regression",
+          "test_advisory_log_contains_rejections",
+          "test_stale_confidence_decay",
+          "test_performance_no_degradation"
+        ],
+        "score_0_to_10": 7.5,
+        "biggest_concern": "The local 4B model may not reliably call the new tools until retrained, risking tool_call coverage loss for existing clients.",
+        "retrain_recommendation": "v3.11.1_followup",
+        "retrain_rationale": "Deploying tools first ensures feature availability for API clients while giving time to retrain the local model in a patch release to restore tool_call coverage."
+      }
+    },
+    {
+      "model_label": "gemini-3.1-pro-preview",
+      "model_id": "gemini-3.1-pro-preview",
+      "status": "error",
+      "latency_ms": 0,
+      "retries": 0,
+      "error": "Max retries (2) exceeded",
+      "raw_content": null,
+      "parsed": null
+    },
+    {
+      "model_label": "sonar-pro",
+      "model_id": "sonar-pro",
+      "status": "error",
+      "latency_ms": 0,
+      "retries": 0,
+      "error": "Max retries (2) exceeded",
+      "raw_content": null,
+      "parsed": null
+    },
+    {
+      "model_label": "nvidia-nemotron-ultra-253b",
+      "model_id": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+      "status": "error",
+      "latency_ms": 0,
+      "retries": 0,
+      "error": "Max retries (2) exceeded",
+      "raw_content": null,
+      "parsed": null
+    },
+    {
+      "model_label": "glm-5",
+      "model_id": "glm-5",
+      "status": "ok",
+      "latency_ms": 100757.1,
+      "retries": 0,
+      "error": null,
+      "raw_content": "{\n  \"ship_order\": [\"pattern_1\", \"pattern_2\", \"pattern_3\"],\n  \"naming\": {\n    \"pattern_1_explain\": \"add `explain` param to existing `recall` tool\",\n    \"pattern_1_approach\": \"param_flag\",\n    \"pattern_2_quality_gate\": \"assess_block_quality\",\n    \"pattern_2_default_mode\": \"advisory\",\n    \"pattern_3_deps_table\": \"new_table\",\n    \"pattern_3_tool_a\": \"trace_block_lineage\",\n    \"pattern_3_tool_b\": \"cascade_confidence_decay\"\n  },\n  \"schema_risks\": [\n    \"P3 cyclic dependencies causing infinite loops in staleness propagation\",\n    \"P2 Levenshtein calculation overhead degrading ingestion latency\",\n    \"P1 _explain field increasing payload size for SQLite recall.db cache\"\n  ],\n  \"tests_needed\": [\n    \"P3 transitive decay logic verification (1-hop vs 3-hop)\",\n    \"P2 near-duplicate boundary testing (0.94 vs 0.95 threshold)\",\n    \"P1 score decomposition math consistency check\"\n  ],\n  \"score_0_to_10\": 8.5,\n  \"biggest_concern\": \"Introducing new tool names for P3 risks destabilizing the 4B model's existing tool_call coverage if not strictly managed.\",\n  \"retrain_recommendation\": \"v3.11.1_followup\",\n  \"retrain_rationale\": \"P1 and P2 can be implemented via params and internal hooks to avoid new tool names, allowing backend stabilization before exposing P3 tools to the 4B model.\"\n}",
+      "parsed": {
+        "ship_order": [
+          "pattern_1",
+          "pattern_2",
+          "pattern_3"
+        ],
+        "naming": {
+          "pattern_1_explain": "add `explain` param to existing `recall` tool",
+          "pattern_1_approach": "param_flag",
+          "pattern_2_quality_gate": "assess_block_quality",
+          "pattern_2_default_mode": "advisory",
+          "pattern_3_deps_table": "new_table",
+          "pattern_3_tool_a": "trace_block_lineage",
+          "pattern_3_tool_b": "cascade_confidence_decay"
+        },
+        "schema_risks": [
+          "P3 cyclic dependencies causing infinite loops in staleness propagation",
+          "P2 Levenshtein calculation overhead degrading ingestion latency",
+          "P1 _explain field increasing payload size for SQLite recall.db cache"
+        ],
+        "tests_needed": [
+          "P3 transitive decay logic verification (1-hop vs 3-hop)",
+          "P2 near-duplicate boundary testing (0.94 vs 0.95 threshold)",
+          "P1 score decomposition math consistency check"
+        ],
+        "score_0_to_10": 8.5,
+        "biggest_concern": "Introducing new tool names for P3 risks destabilizing the 4B model's existing tool_call coverage if not strictly managed.",
+        "retrain_recommendation": "v3.11.1_followup",
+        "retrain_rationale": "P1 and P2 can be implemented via params and internal hooks to avoid new tool names, allowing backend stabilization before exposing P3 tools to the 4B model."
+      }
+    }
+  ]
+}
