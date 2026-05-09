@@ -3553,30 +3553,32 @@ _V312_DENSITY_FIX_PROBES: list[tuple[str, str]] = [
         "What is the decay multiplier for a `refines` edge in lineage staleness?",
         "`refines` → `0.4`.  It is the WEAKEST of the five edge kinds — a block that merely narrows another inherits only 40% of its staleness penalty.  The value is `0.4`, NOT `0.6`.",
     ),
-    # ----- Explicit denial probes for hallucinated names (Grok + Mistral consensus) -----
+    # ----- Canonical-name reinforcement (rewritten from explicit denials so wrong
+    # literals do NOT appear in question, addressing 3-of-4 LLM concern about
+    # denial-probe leakage) -----
     (
-        "Is the staleness table named `_block_staleness` (with leading underscore)?",
-        "No.  The table is named `block_staleness` — no leading underscore.  Schema: `block_staleness(block_id, source_id, score, decayed_at)`.",
+        "Confirm the exact name of the staleness-tracking SQLite table introduced in v3.12.0.",
+        "The canonical name is `block_staleness` (no underscore prefix).  Defined in `src/mind_mem/lineage_staleness.py`.  Schema: `block_staleness(block_id, source_id, score, decayed_at)`.",
     ),
     (
-        "Is the BFS depth constant called `LINEAGE_HOP_CAP`?",
-        "No.  The constant is `LINEAGE_DEPTH_CAP` (defined in `block_lineage.py`).  Its value is `3`.  There is no `LINEAGE_HOP_CAP`.",
+        "Confirm the exact name of the lineage BFS depth-cap constant.",
+        "The canonical name is `LINEAGE_DEPTH_CAP`.  Defined in `src/mind_mem/block_lineage.py`.  Value is `3`.  Used to clamp both `block_lineage(max_depth=...)` and `propagate_lineage_staleness(max_hops=...)`.",
     ),
     (
-        "Is the propagation function called `bfs_propagate` or `propagate_staleness`?",
-        "Neither.  The function is `propagate_lineage_staleness(workspace, source_id, *, max_hops=None)` in `src/mind_mem/lineage_staleness.py`.  `propagate_staleness` and `bfs_propagate` do not exist as v3.12.0 public surfaces.",
+        "Confirm the exact name of the v3.12 lineage staleness propagation function.",
+        "The canonical name is `propagate_lineage_staleness(workspace, source_id, *, max_hops=None)`.  Defined in `src/mind_mem/lineage_staleness.py`.  Internally invokes the lower-level `propagate_staleness` from `staleness.py` for the per-source BFS step.",
     ),
     (
-        "Does `propose_update` raise a `BlockValidationError` exception in strict mode?",
-        "No.  `propose_update` returns a JSON string with `{\"error\": \"quality_gate_rejection\", \"mode\": \"strict\", \"reasons\": [...], \"advisory\": [...], \"hint\": \"...\"}`.  It does NOT raise any exception, and `BlockValidationError` is not defined anywhere in mind-mem.",
+        "Confirm: when strict mode rejects a write, what data structure does propose_update return?",
+        "It returns a JSON string (`json.dumps`'d).  Shape: `{\"error\": \"quality_gate_rejection\", \"mode\": \"strict\", \"reasons\": [\"<rule>: <message>\", ...], \"advisory\": [...], \"hint\": \"...\"}`.  `propose_update` returns this — it never raises an exception for a quality-gate failure.",
     ),
     (
-        "Is the decay multiplier for a `refines` edge `0.6`?",
-        "No.  The `refines` decay multiplier is `0.4` — the weakest of the five edge kinds.  The full table: `contradicts` 1.0, `cites` 0.8, `implements` 0.6, `cooccurrence` 0.5, `refines` 0.4.",
+        "Confirm the exact decimal decay multiplier for a `refines` edge.",
+        "The canonical value is `0.4` — the smallest of the five edge kinds.  Defined as `KIND_DECAY['refines'] = 0.4` in `block_lineage.py`.  Full table: contradicts 1.0, cites 0.8, implements 0.6, cooccurrence 0.5, refines 0.4.",
     ),
     (
-        "Can I detect prompt-injection patterns by calling `scan`?",
-        "No.  `scan` runs governance scans for cross-block contradictions and drift.  Per-block injection-pattern detection is `validate_block`'s `injection_marker` rule.  Use `validate_block(text)` for prompt-injection detection.",
+        "Confirm: which v3.11.0 MCP tool implements per-block prompt-injection detection?",
+        "The canonical tool is `validate_block(text)` — its `injection_marker` rule pattern-matches against the six known injection forms.  This is the per-block injection gate.  The `scan` tool covers cross-block contradictions/drift, not injection.",
     ),
     # ----- 5 paraphrases per high-cost v3.12 probes (boost density 1→6) -----
     (
