@@ -89,7 +89,12 @@ def main() -> None:
         output_dir=str(OUT_DIR),
         logging_dir=str(LOG_DIR),
         # Full FT needs a lower LR than LoRA — 1e-5 to 3e-5 typical.
-        learning_rate=1.5e-5,
+        # v3.12.1 retrain v3: bumped 1.5e-5 → 2.0e-5 to overcome stubborn
+        # convergence on the 4 type-B fact failures from v2 (esp. refines=0.3
+        # hallucination that survived a denial probe).  Still well within the
+        # 1e-5 to 3e-5 typical full-FT range; the 33% LR bump gives stronger
+        # gradient steps to write the saturated corpus into the weights.
+        learning_rate=2.0e-5,
         lr_scheduler_type="cosine",
         warmup_ratio=0.03,
         # v3.9.2 corpus has 4204 examples (the v3.9.2 augmentation more
@@ -112,7 +117,14 @@ def main() -> None:
         # 4 epochs to give the new v3.12.1 density-fix probes 33% more passes,
         # addressing the unanimous LLM concern about gradient signal on
         # already-converged weights.  ~536 steps total, ~110 min wall time.
-        num_train_epochs=4,
+        # v3.12.1 retrain v3 (2026-05-09 evening): v2 hit 87/95 (91.6%) but
+        # 8 stubborn failures remained (4 type-A terse, 4 type-B
+        # hallucinations).  Going for 10/10.  Cut to 3 epochs (saves $2 of
+        # the $7.55 remaining balance) but bump LR 1.5e-5 → 2.0e-5 to compensate
+        # with stronger gradient steps — saturated corpus on the 8 failing
+        # probes (~50 new dense paraphrases) needs the higher LR to overwrite
+        # the stubborn convergence ('refines = 0.3' survived a denial probe).
+        num_train_epochs=3,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=16,  # effective batch = 32
         bf16=True,

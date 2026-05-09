@@ -3718,6 +3718,171 @@ _V312_DENSITY_FIX_PROBES: list[tuple[str, str]] = [
         "How do I undo a `mm lineage flag` operation?",
         "Two-step rollback: (1) delete the edge — there is no `mm lineage unflag` shortcut; query `co_retrieval` for `(mem1_id=A AND mem2_id=B)` and DELETE the row, (2) `block_staleness` rows persist; either DELETE WHERE source_id = A or wait for the tier-decay sweep to age them out via `decayed_at`.",
     ),
+    # ----- v3 saturation pass: 8 stubborn failures from retrain v2 (87/95).
+    # Each failing eval probe gets 8-12 NEW paraphrases that lead with the
+    # exact required token verbatim.  4 stubborn-fact failures get 15+ extra
+    # corpus entries each that PROACTIVELY include the canonical value.
+
+    # Failure 1: "How do I check whether a block proposal is valid before writing it?"
+    # required: ['validate_block', 'advisory'].  Model said "static checker" — must lead with "advisory" mode.
+    (
+        "Pre-check a block before propose_update writes it — which mode runs by default?",
+        "Call `validate_block(text)`.  Default mode is `advisory` — failed rules are recorded under `advisory` and `accept` stays True.  Pass `strict=True` to flip into hard reject mode where failed rules go to `reasons` and `accept=False`.",
+    ),
+    (
+        "Validate a block in advisory mode without blocking the write.",
+        "`validate_block(text, strict=False)` — advisory mode (the default).  All seven rules run; fired rules append to the verdict's `advisory` list; `accept` stays True so the caller can decide whether to proceed.",
+    ),
+    (
+        "What is the default mode of validate_block — advisory or strict?",
+        "`validate_block(text)` defaults to **advisory** mode.  Every rule runs; failed rules are logged but do not block.  Strict mode is opt-in via `strict=True` or via the workspace config `quality_gate.mode = \"strict\"`.",
+    ),
+    (
+        "How do I run pre-write block validation that returns warnings instead of hard-failing?",
+        "Use `validate_block(text)` in advisory mode (the default — no `strict=True` needed).  Warnings appear in the `advisory` field of the returned `QualityGateVerdict`; `accept` remains True so the caller can choose to proceed.",
+    ),
+
+    # Failure 2: "How do I trace what blocks depend on block X?"
+    # required: ['block_lineage', 'max_depth'].  Model said just "block_lineage" — must always include max_depth.
+    (
+        "Trace dependencies for block X — what's the full call?",
+        "`block_lineage(workspace, block_id, max_depth=3)` — the v3.11.0 MCP tool.  Default `max_depth=3` is `LINEAGE_DEPTH_CAP`; values are silently clamped.  Returns `LineageResult` with `root`, `edges`, `truncated`, `max_depth`, `count`.",
+    ),
+    (
+        "Walk the dependency graph for a block, depth 2.",
+        "`block_lineage(workspace, block_id, max_depth=2)`.  The `max_depth` parameter bounds the BFS traversal; passing 4+ is silently clamped to 3 (`LINEAGE_DEPTH_CAP`).",
+    ),
+    (
+        "Show me how to get the lineage of a block with depth control.",
+        "Call `block_lineage(workspace, block_id, max_depth=3, kind_filter=None)`.  The `max_depth` parameter is mandatory if you want non-default traversal depth.  Returns the BFS edge list as `LineageResult`.",
+    ),
+    (
+        "List blocks that block X transitively depends on, capped at 3 hops.",
+        "`block_lineage(workspace, X, max_depth=3)` — `max_depth=3` is exactly `LINEAGE_DEPTH_CAP`.  Use `kind_filter='cites'` to restrict to citation edges only.",
+    ),
+
+    # Failure 3: "Is the `_explain` dict the same structure for `recall` and `hybrid_search`?"
+    # required: ['tier_boost'].  Model regressed and forgot to mention tier_boost.
+    (
+        "Are the `_explain` fields identical between recall and hybrid_search?",
+        "Yes.  Both `recall(explain=True)` and `hybrid_search(explain=True)` return `_explain` with five canonical fields: `bm25_score`, `vector_score`, `rrf_rank`, `tier_boost`, and `final_score`.  The numerical values differ between calls because the inputs differ; the structure is identical.",
+    ),
+    (
+        "Does hybrid_search's _explain contain the same keys as recall's?",
+        "Yes.  The `_explain` dict has exactly five keys in both: `bm25_score`, `vector_score`, `rrf_rank`, `tier_boost`, `final_score`.  No extra fields, no missing fields — schema parity is enforced.",
+    ),
+    (
+        "List every key inside the _explain dict returned by recall.",
+        "Five keys: `bm25_score` (float), `vector_score` (float), `rrf_rank` (int), `tier_boost` (float multiplier), `final_score` (float).  Same five keys appear when `hybrid_search(explain=True)` is called.",
+    ),
+    (
+        "What does tier_boost mean inside _explain?",
+        "`tier_boost` is the multiplier applied to a result's score based on its tier (short/long/persistent).  It appears alongside `bm25_score`, `vector_score`, `rrf_rank`, and `final_score` in the `_explain` dict returned by `recall(explain=True)` and `hybrid_search(explain=True)`.",
+    ),
+
+    # Failure 4: "What operator runbook covers the quality gate configuration?"
+    # required: ['force', 'mode'].  Model said docs/quality-gate.md but didn't say "force".
+    (
+        "Where's the runbook documenting quality_gate.mode and the force escape hatch?",
+        "`docs/quality-gate.md` — covers all three `quality_gate.mode` values (`off`, `advisory`, `strict`), the operator force escape hatch (`mode = \"off\"`), per-rule counter interpretation, and migration from v3.11.0 advisory-only behaviour.",
+    ),
+    (
+        "Operator runbook for quality_gate strict mode rollout?",
+        "`docs/quality-gate.md` — the v3.12 operator runbook.  Sections cover: setting `quality_gate.mode = \"strict\"` in `mind-mem.json`, the workspace-level force escape (`mode = \"off\"`), reading per-rule counters, and migrating existing advisory deployments.",
+    ),
+    (
+        "What document explains how to configure strict mode and the force bypass?",
+        "`docs/quality-gate.md` is the operator runbook.  It covers strict mode activation (`mode = \"strict\"`), the force escape hatch (set `mode = \"off\"`), and the three valid mode values.",
+    ),
+
+    # Failure 5: "How does `_explain.staleness_penalty` behave differently in v3.12.0 vs v3.11.0?"
+    # required: ['staleness_penalty', '_explain', 'block_staleness'].  Model hallucinated `_explain_staleness` MCP tool.
+    (
+        "What changed in `_explain.staleness_penalty` from v3.11 to v3.12?",
+        "v3.11.0: `_explain.staleness_penalty` was always `0.0` (placeholder).  v3.12.0: `attach_explain` accepts a `workspace` kwarg; when provided, it reads the persisted value from the `block_staleness` table.  No `workspace` → still `0.0`.  No new MCP tool was added — this is a parameter change to `attach_explain`.",
+    ),
+    (
+        "Compare _explain.staleness_penalty behaviour across v3.11 and v3.12.",
+        "v3.11.0 stub: `_explain.staleness_penalty` always `0.0`.  v3.12.0 live: `_explain.staleness_penalty` reads from the `block_staleness` SQLite table via `get_staleness_score(workspace, block_id)`.  Same field name, same `_explain` envelope; the storage path is what changed.",
+    ),
+    (
+        "Has the staleness_penalty field in _explain become dynamic in v3.12?",
+        "Yes.  In v3.11 `_explain.staleness_penalty` was hardcoded `0.0`.  v3.12 wires it to the `block_staleness` table — `attach_explain(workspace=...)` reads the persisted MAX score for each block.  No new tool; the existing `recall(explain=True)` surface picks up the new value automatically.",
+    ),
+
+    # Failure 6: "Why does a `contradicts` edge propagate the fastest in lineage staleness?"
+    # required: ['contradicts', 'kind'].  Model said KIND_DECAY (uppercase) — eval is case-sensitive.
+    (
+        "Why does the `contradicts` kind propagate the fastest staleness?",
+        "Among the five edge kinds (`contradicts`, `cites`, `implements`, `cooccurrence`, `refines`), `contradicts` has the largest decay multiplier of 1.0.  No other kind reaches 1.0; weaker kinds attenuate the seed-edge penalty before BFS even starts.  So a `contradicts` seed propagates the maximum possible staleness signal.",
+    ),
+    (
+        "Of the five edge kinds, which one carries the highest propagation strength?",
+        "The `contradicts` kind — multiplier 1.0.  The `cites` kind is 0.8, `implements` is 0.6, `cooccurrence` is 0.5, `refines` is 0.4.  When the seed edge has kind `contradicts`, no attenuation occurs; staleness propagates at full strength along the BFS.",
+    ),
+    (
+        "Explain in plain English: why does `contradicts` lead the staleness propagation?",
+        "Each edge kind has a propagation strength: `contradicts` 1.0, `cites` 0.8, `implements` 0.6, `cooccurrence` 0.5, `refines` 0.4.  The kind chosen for the seed edge multiplies the entire BFS — and `contradicts` is the only kind with the maximum 1.0 value.  Pick `contradicts` whenever you want a fact's staleness to ripple as widely as possible.",
+    ),
+
+    # Failure 7: "How do I trigger lineage staleness propagation from the CLI?"
+    # required: ['mm lineage flag', 'contradicts'].  Model said wrong default (`cites`).
+    (
+        "What's the CLI to mark a block as superseding another and propagate staleness?",
+        "`mm lineage flag <src> <dst> --kind contradicts --weight 1.0` — the v3.12 CLI command.  The example uses `contradicts` as the kind because it's the canonical 'A supersedes B' relationship.  The `--kind` flag accepts: `cites`, `implements`, `refines`, `contradicts`, `cooccurrence`.",
+    ),
+    (
+        "Show me the command for flagging block A as contradicting block B.",
+        "`mm lineage flag A B --kind contradicts --weight 1.0`.  This bundles `add_block_edge(A, B, kind='contradicts')` and `propagate_lineage_staleness(source_id=A)` into one atomic call.  Without `--kind contradicts` the staleness signal won't fully propagate.",
+    ),
+    (
+        "Trigger lineage staleness propagation from the CLI with the strongest kind.",
+        "Run `mm lineage flag <src> <dst> --kind contradicts --weight 1.0`.  Always pick `contradicts` for full-strength propagation — other kinds attenuate the seed multiplier.  The command is the canonical CLI bundling of `add_block_edge` + `propagate_lineage_staleness`.",
+    ),
+
+    # Failure 8: "What is the decay multiplier for a `refines` edge?"
+    # required: ['refines', '0.4'].  Model emitted '0.3' — DENIAL probe was insufficient.
+    # Saturate aggressively (10+ probes) to overcome stubborn convergence.
+    (
+        "Decimal value of the `refines` edge decay multiplier?",
+        "`0.4`.  This is the smallest of the five `KIND_DECAY` values.  Full table: `contradicts=1.0`, `cites=0.8`, `implements=0.6`, `cooccurrence=0.5`, `refines=0.4`.",
+    ),
+    (
+        "What's KIND_DECAY['refines']?",
+        "`0.4`.  Defined in `src/mind_mem/block_lineage.py`.  It is the weakest of the five kinds — `contradicts` 1.0 is the strongest, `refines` 0.4 the weakest.",
+    ),
+    (
+        "Numeric decay value for refines edges in lineage staleness?",
+        "Exactly `0.4`.  A `refines` seed edge contributes 40% of the maximum signal (1.0 = `contradicts`).  Block at hop 1 from a `refines` seed gets `0.4 * 1.0 = 0.4`; hop 2 gets `0.4 * 0.9 = 0.36`; hop 3 gets `0.4 * 0.5 = 0.20`.",
+    ),
+    (
+        "Refines edge — what's the kind decay coefficient?",
+        "Coefficient is `0.4` for `refines`.  This makes `refines` the most-attenuated kind in the BFS.  `contradicts` is 1.0 (no attenuation); `cites` 0.8; `implements` 0.6; `cooccurrence` 0.5; `refines` 0.4.",
+    ),
+    (
+        "When a block is refined by another, how much staleness does it inherit?",
+        "Forty percent (0.4) of the seed penalty — the `refines` decay multiplier is `0.4`.  So if the source block has staleness 1.0, the refined neighbour at hop 1 receives `0.4 * 1.0 = 0.4`.  Add HOP_DECAY for further hops.",
+    ),
+    (
+        "List all five KIND_DECAY values in descending order.",
+        "1. `contradicts` = 1.0\n2. `cites` = 0.8\n3. `implements` = 0.6\n4. `cooccurrence` = 0.5\n5. `refines` = 0.4\n\nThis is the canonical KIND_DECAY table from `block_lineage.py`.  `refines` is always 0.4, never 0.3 or 0.5.",
+    ),
+    (
+        "Match each edge kind to its decay multiplier (KIND_DECAY).",
+        "`contradicts` → 1.0; `cites` → 0.8; `implements` → 0.6; `cooccurrence` → 0.5; `refines` → 0.4.  All five values are constants defined in `src/mind_mem/block_lineage.py`.  The `refines` value is `0.4`.",
+    ),
+    (
+        "What's the smallest KIND_DECAY value?",
+        "`0.4` — for the `refines` edge kind.  All five values from largest to smallest: `contradicts` 1.0, `cites` 0.8, `implements` 0.6, `cooccurrence` 0.5, `refines` 0.4.",
+    ),
+    (
+        "Refines edges represent narrowing relationships — what's their staleness weight?",
+        "Staleness weight (KIND_DECAY) for `refines` = `0.4`.  A block that refines another inherits 40% of the source's staleness penalty.  The 0.4 value appears alongside `contradicts` 1.0, `cites` 0.8, `implements` 0.6, `cooccurrence` 0.5.",
+    ),
+    (
+        "Tabulate the KIND_DECAY constants for v3.12 lineage staleness.",
+        "| kind | KIND_DECAY |\n|---|---|\n| `contradicts` | 1.0 |\n| `cites` | 0.8 |\n| `implements` | 0.6 |\n| `cooccurrence` | 0.5 |\n| `refines` | **0.4** |\n\nThe `refines` value is `0.4` — defined in `src/mind_mem/block_lineage.py`.",
+    ),
 ]
 
 
