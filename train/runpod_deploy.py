@@ -195,7 +195,10 @@ _SSH_OPTS = [
 
 def _ssh_cmd(ip: str, port: int, cmd: str) -> str:
     full = ["ssh", "-i", str(SSH_KEY), "-p", str(port), *_SSH_OPTS, f"root@{ip}", cmd]
-    result = subprocess.run(full, capture_output=True, text=True)
+    # `errors="replace"` so a mid-byte slice from `tail -c` (e.g. a multi-byte
+    # UTF-8 char split) does NOT crash the polling loop with UnicodeDecodeError
+    # (observed crash mid-retrain v1 on 2026-05-09 — byte 0x96 from training log).
+    result = subprocess.run(full, capture_output=True, text=True, errors="replace")
     if result.returncode != 0:
         raise RuntimeError(f"ssh failed: {result.stderr[:400]}")
     return result.stdout
