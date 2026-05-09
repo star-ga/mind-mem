@@ -408,14 +408,27 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
     if parsed.scheme != "https" or parsed.hostname != "huggingface.co":
         print(json.dumps({"error": "internal: refusing to fetch from non-HF URL"}, indent=2))
         return 1
+    # Reject control characters in --dest (Modelfile injection: a newline
+    # in the path would let the user inject extra `PARAMETER` lines).
+    if any(ord(c) < 0x20 for c in args.dest):
+        print(json.dumps({"error": "--dest contains control characters"}, indent=2))
+        return 1
     dest = os.path.realpath(os.path.expanduser(args.dest))
     # Refuse writes to canonical system paths. We allow $HOME-symlinked-to-/data
-    # (common on workstations with a separate SSD for ~/.cache), so we deny by
-    # blacklist instead of confining by allowlist.
-    _SYSTEM_PREFIXES = ("/etc/", "/usr/", "/bin/", "/sbin/", "/lib/", "/lib64/",
-                        "/var/", "/sys/", "/proc/", "/dev/", "/root/", "/boot/")
+    # (common on workstations with a separate SSD for ~/.cache); narrowed
+    # /var/* to known system subdirs so macOS $TMPDIR (/var/folders/...) is
+    # still usable as a legitimate dest.
+    _SYSTEM_PREFIXES = (
+        "/etc/", "/usr/", "/bin/", "/sbin/", "/lib/", "/lib64/",
+        "/var/lib/", "/var/log/", "/var/run/", "/var/cache/",
+        "/sys/", "/proc/", "/dev/", "/root/", "/boot/",
+    )
     if any(dest.startswith(p) for p in _SYSTEM_PREFIXES):
         print(json.dumps({"error": f"refusing to write to system path: {dest}"}, indent=2))
+        return 1
+    # Don't follow a pre-existing symlink at dest (TOCTOU defense).
+    if os.path.lexists(dest) and os.path.islink(dest):
+        print(json.dumps({"error": f"refusing to overwrite symlink at dest: {dest}"}, indent=2))
         return 1
 
     output: dict[str, Any] = {
@@ -461,29 +474,49 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
         output["downloaded"] = False
         output["reason"] = "dest already present with matching size"
     else:
+        # Stream into a sibling tmp file then atomic-rename → no partial-write
+        # that masquerades as the real GGUF; no symlink-target race; no
+        # half-baked file picked up on the next run.
+        tmp = dest + ".part"
         try:
             req = urllib.request.Request(gguf_url)
-            with urllib.request.urlopen(req, timeout=600) as resp, open(dest, "wb") as fh:  # nosec B310 — URL is parse-validated above (https + huggingface.co only)
+            written = 0
+            with urllib.request.urlopen(req, timeout=600) as resp, open(tmp, "wb") as fh:  # nosec B310 — URL is parse-validated above (https + huggingface.co only)
                 while chunk := resp.read(8 * 1024 * 1024):
                     fh.write(chunk)
+                    written += len(chunk)
+            if expected_size and written != expected_size:
+                os.unlink(tmp)
+                output["error"] = f"download truncated: got {written} bytes, expected {expected_size}"
+                print(json.dumps(output, indent=2))
+                return 4
+            os.replace(tmp, dest)  # atomic on POSIX
             output["downloaded"] = True
             output["bytes"] = os.path.getsize(dest)
         except Exception as exc:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
             output["error"] = f"download failed: {exc}"
             print(json.dumps(output, indent=2))
             return 4
 
-    # 3. Build Modelfile next to the GGUF (idempotent)
+    # 3. Build Modelfile next to the GGUF (idempotent + atomic).
+    # Quote the FROM path so a dest containing a space is unambiguous to
+    # Ollama's Modelfile parser.
     modelfile = os.path.join(os.path.dirname(dest), "Modelfile")
     modelfile_body = (
-        f"FROM {dest}\n"
+        f'FROM "{dest}"\n'
         "PARAMETER temperature 0.6\n"
         "PARAMETER top_p 0.95\n"
         "PARAMETER num_ctx 8192\n"
-        f'PARAMETER stop "<|im_end|>"\n'
+        'PARAMETER stop "<|im_end|>"\n'
     )
-    with open(modelfile, "w", encoding="utf-8") as fh:
+    modelfile_tmp = modelfile + ".part"
+    with open(modelfile_tmp, "w", encoding="utf-8") as fh:
         fh.write(modelfile_body)
+    os.replace(modelfile_tmp, modelfile)  # atomic; no half-file race
     output["modelfile"] = modelfile
 
     # 4. Ollama import — args.name and modelfile are validated above;
@@ -512,8 +545,16 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
         print(json.dumps(output, indent=2))
         return 6
 
-    # 5. Smoke test (warm the model + keep-alive). Same safety profile
-    # as step 4: absolute path + argv list + validated args, no shell.
+    # 5. Smoke test (warm the model + keep-alive). Pass a minimal env —
+    # don't leak the user's full env (ANTHROPIC_API_KEY, HF_TOKEN, etc.)
+    # to the Ollama process which may log it.
+    smoke_env = {
+        "OLLAMA_KEEP_ALIVE": args.keep_alive,
+        "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+        "HOME": os.environ.get("HOME", os.path.expanduser("~")),
+        # Pass through Ollama-specific env if the user set them
+        **{k: v for k, v in os.environ.items() if k.startswith("OLLAMA_")},
+    }
     try:
         smoke = subprocess.run(  # nosec B603 B607 — argv list w/ absolute path from shutil.which, no shell, validated args
             [ollama_bin, "run", args.name, "test"],
@@ -522,7 +563,7 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
             text=True,
             timeout=60,
             check=False,
-            env={**os.environ, "OLLAMA_KEEP_ALIVE": args.keep_alive},
+            env=smoke_env,
         )
         output["smoke_returncode"] = smoke.returncode
         if smoke.returncode == 0:

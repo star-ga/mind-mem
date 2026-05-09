@@ -2,6 +2,47 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v3.10.6 — `mm install-model` hardening (multi-LLM audit findings)
+
+Released 2026-05-08. Three external code reviewers (Mistral Large,
+xAI Grok, DeepSeek) plus internal review found additional defense-in-depth
+gaps in v3.10.5's `_cmd_install_model`. All fixed below.
+
+### Fixed
+- **Modelfile injection via `--dest` newline** (internal review). A
+  filename containing `\n` (filesystems allow it) would have written
+  extra `PARAMETER` lines into the Modelfile. Now reject any control
+  character (< 0x20) in `--dest` early.
+- **macOS `$TMPDIR` blocked by `/var/` blanket** (internal review).
+  macOS's `$TMPDIR` resolves under `/var/folders/...`; the previous
+  blanket `/var/` block refused legitimate macOS dests. Narrowed to
+  `/var/lib/`, `/var/log/`, `/var/run/`, `/var/cache/` so macOS
+  tmpdirs work.
+- **Modelfile `FROM` path unquoted** (Grok + Mistral). A dest with
+  spaces could confuse Ollama's parser. Now `FROM "{dest}"`.
+- **Full env passed to `ollama` subprocess** (internal review). The
+  user's full env including `ANTHROPIC_API_KEY`, `HF_TOKEN`, etc.
+  was passed to `ollama run`. Now passes only `OLLAMA_KEEP_ALIVE`,
+  `PATH`, `HOME`, and `OLLAMA_*` keys. Defense in depth against
+  Ollama or its child processes logging env.
+- **Partial-write masquerading as complete download** (Mistral +
+  Grok). Streamed download went directly to `dest`. A mid-stream
+  drop without exception (rare but possible on some clients) would
+  leave a corrupt file at the canonical path. Now downloads to
+  `dest.part`, verifies size against `Content-Length`, then
+  atomic-renames via `os.replace`.
+- **TOCTOU symlink at `dest`** (Mistral). If a symlink existed at
+  `dest` between checks and write, the rename could land at the
+  symlink's target. Now reject symlinks at `dest` early; rename is
+  POSIX-atomic.
+- **Modelfile non-atomic write** (Mistral + Grok). Concurrent
+  invocations could see a half-written Modelfile. Now write to
+  `Modelfile.part` and `os.replace` atomically.
+
+### Notes
+- All fixes are local to `_cmd_install_model`; no API surface changes.
+- Bandit/GHAS now skip 9 issues via `# nosec BXXX`. None are real.
+
 ## v3.10.5 — fix `# noqa` → `# nosec` for Bandit/GHAS
 
 Released 2026-05-08. The hardening landed in v3.10.4 was correct
