@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 763 | **Est. tokens:** ~1,543,896
-**Generated:** 2026-05-09 10:32 UTC
+**Files:** 763 | **Est. tokens:** ~1,543,894
+**Generated:** 2026-05-09 10:36 UTC
 
 ## Token Budget Guide
 
@@ -24,7 +24,7 @@
 |-----------|-------|-------------|
 | `./` | 33 | ~61,473 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
-| `.arch-mind/` | 4 | ~1,102 |
+| `.arch-mind/` | 4 | ~1,100 |
 | `audits/` | 3 | ~15,422 |
 | `benchmarks/` | 26 | ~64,933 |
 | `deploy/` | 2 | ~772 |
@@ -120,7 +120,7 @@
 
 - `last_summary.json` (~158 tok, small) — Keys: _aggregated_for_phase_a, _comment, _languages, _repo_root, edges
 - `rules.mind` (~766 tok, large) — mind-mem architectural-governance rules
-- `scan.json` (~92 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
+- `scan.json` (~90 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
 - `scan_v3813.json` (~86 tok, small) — Keys: _fixture, acyclicity_q16, depth_q16, equality_q16, evidence_chain_density
 ### `audits/`
 

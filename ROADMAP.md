@@ -1514,6 +1514,17 @@ behavior is config-gated everywhere.
 
 Horizontal scaling, multi-tenant isolation, and edge deployment. This version turns MIND-Mem from a library into a platform. The multi-tenancy thread is also tracked as issue [#505].
 
+### Cognition / model layer (Rhia track — Titans-inspired)
+
+Three-tier memory + surprise-driven retrieval, lifted (not cloned) from Behrouz et al. "Titans: Learning to Memorize at Test Time" (Google Research). Foundation-model architecture is NOT copied — mind-mem stays a retrieval substrate. Borrows: tier separation, surprise as a ranking signal, test-time-update governance pattern (which propose_update → approve_apply already implements).
+
+- [ ] **Surprise-weighted retrieval** — augment the BM25+vector+RRF fusion with a `surprise` term derived from semantic distance to the rolling recall context (NOT gradient-based; mind-mem doesn't train at recall time). Backwards-compatible behind `retrieval.surprise_weight` config flag. Estimated 1–2 weeks; default OFF in v4.0, opt-in.
+- [ ] **Block-tier tags** — add `tier ∈ {short, long, persistent}` to block schema (default `long` for backwards compat). Recall uses tier as a prior: "what's relevant right now" (short) vs "what we always know" (persistent). Backwards-compatible schema add (T-007).
+- [ ] **`mind-mem-4b` v4.0 retrain on Titans-aware corpus** — new corpus probes covering tier semantics, surprise term, MAC/MAG/MAL framing so the local model knows when to invoke the new tools. Same retrain pipeline as v3.12; ~$5–10 + 8–12hr H200.
+- [ ] **`mind-mem-4b` base-model evaluation: rfn-mind vs Qwen3.5-4B** — STARGA's own rfn-mind LLM is an in-house deterministic Q16.16 transformer trained native MIND. Once Phase 6 of rfn-mind ships a usable inference path, evaluate whether `mind-mem-4b` v4.0+ should fine-tune from `rfn-mind` (closes the external-dependency loop, aligns with Naestro v4.0's "rfn-mind as local model" decision) or stay on Qwen3.5-4B (stronger pretrained world knowledge, lower retrain risk). Decision criterion: matched eval-harness pass rates ≥ Qwen baseline + tier semantics learned ≥ 90%. Pure plan-stage today; no code change without a side-by-side eval.
+
+### Platform scale
+
 - [ ] **Sharded Postgres (Citus)** — `src/mind_mem/storage/sharded_pg.py`; shard by `namespace_id` with consistent hashing; cross-shard recall merging
 - [ ] **Replication + consensus for governance** — Raft log wrapper around `audit_chain.py`; strong consistency for governance writes, eventual consistency for recall reads
 - [ ] **Kubernetes operator** — `operator/` with CRDs for `MindMem`, `Namespace`, `TenantKey`; Helm chart in `deploy/helm/mind-mem/`
