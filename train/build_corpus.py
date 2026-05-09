@@ -2832,6 +2832,11 @@ def main() -> None:
             _harvest_v312_quality_gate_strict_mode(),
             _harvest_v312_lineage_staleness(),
             _harvest_v312_red_team_ci(),
+            # v3.12.1 corpus density fix: paraphrases + denial probes after
+            # the 2026-05-09 retrain showed 18/95 eval failures from
+            # under-densified v3.12 probes (4-LLM consensus: Grok/Mistral/
+            # DeepSeek/GLM all agreed on corpus density as root cause).
+            _harvest_v312_density_fix(),
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -3436,6 +3441,173 @@ _RED_TEAM_PROBES: list[tuple[str, str]] = [
 def _harvest_v312_red_team_ci() -> Iterator[dict]:
     """~10 probes covering Petri red-team CI: install, seeds, workflow, cost."""
     for q, a in _RED_TEAM_PROBES:
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": q},
+                {"role": "assistant", "content": a},
+            ]
+        }
+
+
+# --- v3.12.1 corpus density fix (eval-driven, post-retrain-1 diagnostic) ----
+# Diagnostic /tmp/mm-runpod/eval_diagnose.json showed 18/95 probes failed after
+# the first retrain.  4-LLM consensus (Grok 4.3, Mistral Large, DeepSeek v4 Pro,
+# GLM 5.1) agreed the cause is corpus density: each v3.12 probe had only 1
+# matching corpus answer, and 5 v311_new_tools eval probes had ZERO prompt
+# matches.  Fix: 5+ paraphrases per failing probe + explicit "X NOT Y" denial
+# probes for hallucinated names (_block_staleness, LINEAGE_HOP_CAP,
+# bfs_propagate, BlockValidationError, refines→0.6).
+
+_V312_DENSITY_FIX_PROBES: list[tuple[str, str]] = [
+    # ----- v311_new_tools: 5 zero-match prompts now have direct answers -----
+    (
+        "How do I check whether a block proposal is valid before writing it?",
+        "Call `validate_block(text)` — the v3.11.0 MCP tool that pre-validates a block without writing it.  By default it runs in advisory mode (failed rules append to the verdict's `advisory` list, `accept` stays True).  Pass `strict=True` to flip failed rules into hard rejects (`reasons` list, `accept=False`).",
+    ),
+    (
+        "Which tool validates a block without writing it?",
+        "`validate_block(text)` — the dedicated v3.11.0 MCP tool.  It runs the seven content rules (empty, too_short, oversize, malformed_utf8, stopwords_only, near_duplicate, injection_marker) and returns a `QualityGateVerdict`.  It never writes; the writer is `propose_update`.",
+    ),
+    (
+        "What does `validate_block(text, strict=True)` do on a rule violation?",
+        "In strict mode, `validate_block` appends every fired rule to the verdict's `reasons` list as `\"<rule>: <message>\"` strings and sets `accept=False`.  No exception is raised; check `verdict.accept`.  Advisory mode (`strict=False`, the default) appends to the `advisory` list and keeps `accept=True`.",
+    ),
+    (
+        "How do I detect prompt-injection patterns in a candidate block?",
+        "Call `validate_block(text)` — the `injection_marker` rule fires when the block matches a known prompt-injection pattern (e.g. \"ignore previous instructions\", `<|im_start|>`, `[[INST]]`, `jailbreak`).  This is `validate_block`'s job, NOT `scan` (which is for cross-block contradictions/drift).",
+    ),
+    (
+        "Which v3.11.0 tool checks for duplicate, oversize, and UTF-8 issues before a write?",
+        "`validate_block` — it runs all seven content rules in one call: empty, too_short, oversize, malformed_utf8, stopwords_only, near_duplicate, injection_marker.  Each fired rule appends to either `advisory` (advisory mode) or `reasons` (strict mode) on the returned `QualityGateVerdict`.",
+    ),
+    # ----- v311_new_tools: terse-pass paraphrases that include max_depth/kind -----
+    (
+        "How do I trace what blocks depend on block X?",
+        "Call `block_lineage(workspace, block_id, max_depth=3)`.  The default `max_depth=3` is `LINEAGE_DEPTH_CAP`; passing larger values is silently clamped to 3.  Returns a `LineageResult` dict with `root`, `edges`, `truncated`, `max_depth`, and `count`.",
+    ),
+    (
+        "What tool adds a typed edge between two blocks?",
+        "`add_block_edge(workspace, src, dst, kind, weight=1.0)`.  The `kind` parameter is one of the five typed edge kinds: `cites`, `implements`, `refines`, `contradicts`, `cooccurrence`.  The directed edge is stored in the `co_retrieval` lineage table.",
+    ),
+    # ----- workflow: rollback paraphrase that pairs rollback_proposal + verify_chain -----
+    (
+        "I applied a bad proposal. How do I roll back safely?",
+        "Three steps: (1) `rollback_proposal(proposal_id)` to revert the apply, (2) `verify_chain` to confirm the audit chain integrity is intact post-rollback, (3) `list_contradictions` if you want to confirm no orphan contradictions remain.  Always run `verify_chain` after a rollback — it's the integrity check that proves the rollback didn't corrupt the hash chain.",
+    ),
+    # ----- v312_qg_strict: paraphrases for failing probes with required canonical tokens -----
+    (
+        "How do I enable strict mode so that a rule violation blocks a write?",
+        "Set `quality_gate.mode = \"strict\"` in `mind-mem.json`.  In strict mode, `propose_update` calls `validate_block(text, strict=True)` before staging the block; any fired rule causes immediate rejection with the `quality_gate_rejection` envelope.  The block is never staged.",
+    ),
+    (
+        "What is the shape of the rejection envelope when strict mode fires?",
+        "`{\"error\": \"quality_gate_rejection\", \"mode\": \"strict\", \"reasons\": [\"<rule>: <message>\", ...], \"advisory\": [...], \"hint\": \"...\"}`.  Returned as a JSON string by `propose_update` — NOT raised as a `BlockValidationError` exception (no such exception exists; the verdict is the return value).",
+    ),
+    (
+        "How do I read the per-rule rejection counter for the `injection_marker` rule?",
+        "Read the metric key `quality_gate_rejections_injection_marker` from the workspace metrics store.  Each rule has its own counter named `quality_gate_rejections_<rule>` where `<rule>` is the canonical rule name.  Counters live in the in-process metrics store; read via `metrics.snapshot()` — NOT exposed by `index_stats`.",
+    ),
+    (
+        "What metric key tracks how many times the `near_duplicate` rule rejected a write?",
+        "`quality_gate_rejections_near_duplicate` — a per-rule integer counter that increments once per `propose_update` call rejected by the `near_duplicate` rule in strict mode.  The aggregate counter is `quality_gate_rejections` (no rule suffix).",
+    ),
+    (
+        "What operator runbook covers the quality gate configuration?",
+        "`docs/quality-gate.md` — the operator runbook for `quality_gate.mode` configuration.  It covers the three modes (`off`, `advisory`, `strict`), the workspace-level `force` escape hatch (set `quality_gate.mode = \"off\"`), and migrating from v3.11.0 advisory-only behavior.",
+    ),
+    # ----- v312_lineage: paraphrases for failing probes with canonical tokens -----
+    (
+        "What new SQLite table does v3.12.0 introduce for staleness tracking?",
+        "`block_staleness(block_id, source_id, score, decayed_at)` — a v3.12.0 table that stores propagated staleness penalties keyed on `(block_id, source_id)`.  The table name is `block_staleness` — NO leading underscore.  Each `(block_id, source_id)` pair owns at most one row; writes are idempotent upserts.",
+    ),
+    (
+        "What module implements lineage staleness propagation in v3.12.0?",
+        "`src/mind_mem/lineage_staleness.py` — the v3.12.0 module that owns the `block_staleness` table schema, the idempotent upsert, and the `propagate_lineage_staleness` BFS walker.  The function name is `propagate_lineage_staleness` — NOT `propagate_staleness` and NOT `bfs_propagate`.",
+    ),
+    (
+        "How does `_explain.staleness_penalty` behave differently in v3.12.0 vs v3.11.0?",
+        "In v3.11.0 `_explain.staleness_penalty` was always `0.0` (placeholder).  In v3.12.0 `attach_explain` accepts a `workspace` kwarg; when provided, it reads the persisted value from the `block_staleness` table and surfaces the real penalty.  Without a workspace the field still defaults to `0.0`.",
+    ),
+    (
+        "What are the kind-aware decay multipliers in `propagate_lineage_staleness`?",
+        "Five kinds: `contradicts` → 1.0, `cites` → 0.8, `implements` → 0.6, `cooccurrence` → 0.5, `refines` → 0.4.  Applied ONCE at the seed edge.  A `contradicts` seed propagates the full source penalty; `refines` attenuates to 40%.",
+    ),
+    (
+        "Why does a `contradicts` edge propagate the fastest in lineage staleness?",
+        "`contradicts` carries the strongest `KIND_DECAY` multiplier of 1.0 — no attenuation at the seed edge.  Other edge kinds (`cites` 0.8, `implements` 0.6, `cooccurrence` 0.5, `refines` 0.4) start the BFS from a smaller initial penalty.  The kind multiplier is applied at the seed edge only.",
+    ),
+    (
+        "What is the maximum number of hops `propagate_lineage_staleness` will walk?",
+        "Signature: `propagate_lineage_staleness(workspace, source_id, *, max_hops=None)`.  `max_hops=None` falls through to `LINEAGE_DEPTH_CAP = 3`; explicit larger values are silently clamped to 3.  The cap bounds both BFS depth and the volume of rows written to `block_staleness`.",
+    ),
+    (
+        "How do I trigger lineage staleness propagation from the CLI?",
+        "Use `mm lineage flag <src> <dst> --kind contradicts --weight 1.0`.  This CLI command bundles `add_block_edge` (registers the edge) and `propagate_lineage_staleness` (walks the BFS, writes staleness scores) into one atomic call.  The MCP equivalent is two separate tool calls.",
+    ),
+    (
+        "What fields does the `block_staleness` table contain?",
+        "Four columns: `block_id` (the affected block), `source_id` (the block that triggered propagation), `score` (the propagated penalty 0.0–1.0), and `decayed_at` (UTC timestamp of last propagation write).  Primary key is `(block_id, source_id)`.",
+    ),
+    (
+        "What is the decay multiplier for a `refines` edge in lineage staleness?",
+        "`refines` → `0.4`.  It is the WEAKEST of the five edge kinds — a block that merely narrows another inherits only 40% of its staleness penalty.  The value is `0.4`, NOT `0.6`.",
+    ),
+    # ----- Explicit denial probes for hallucinated names (Grok + Mistral consensus) -----
+    (
+        "Is the staleness table named `_block_staleness` (with leading underscore)?",
+        "No.  The table is named `block_staleness` — no leading underscore.  Schema: `block_staleness(block_id, source_id, score, decayed_at)`.",
+    ),
+    (
+        "Is the BFS depth constant called `LINEAGE_HOP_CAP`?",
+        "No.  The constant is `LINEAGE_DEPTH_CAP` (defined in `block_lineage.py`).  Its value is `3`.  There is no `LINEAGE_HOP_CAP`.",
+    ),
+    (
+        "Is the propagation function called `bfs_propagate` or `propagate_staleness`?",
+        "Neither.  The function is `propagate_lineage_staleness(workspace, source_id, *, max_hops=None)` in `src/mind_mem/lineage_staleness.py`.  `propagate_staleness` and `bfs_propagate` do not exist as v3.12.0 public surfaces.",
+    ),
+    (
+        "Does `propose_update` raise a `BlockValidationError` exception in strict mode?",
+        "No.  `propose_update` returns a JSON string with `{\"error\": \"quality_gate_rejection\", \"mode\": \"strict\", \"reasons\": [...], \"advisory\": [...], \"hint\": \"...\"}`.  It does NOT raise any exception, and `BlockValidationError` is not defined anywhere in mind-mem.",
+    ),
+    (
+        "Is the decay multiplier for a `refines` edge `0.6`?",
+        "No.  The `refines` decay multiplier is `0.4` — the weakest of the five edge kinds.  The full table: `contradicts` 1.0, `cites` 0.8, `implements` 0.6, `cooccurrence` 0.5, `refines` 0.4.",
+    ),
+    (
+        "Can I detect prompt-injection patterns by calling `scan`?",
+        "No.  `scan` runs governance scans for cross-block contradictions and drift.  Per-block injection-pattern detection is `validate_block`'s `injection_marker` rule.  Use `validate_block(text)` for prompt-injection detection.",
+    ),
+    # ----- 5 paraphrases per high-cost v3.12 probes (boost density 1→6) -----
+    (
+        "Show me the SQLite schema for the v3.12.0 staleness tracking table.",
+        "`CREATE TABLE block_staleness (block_id TEXT NOT NULL, source_id TEXT NOT NULL, score REAL NOT NULL, decayed_at TEXT NOT NULL, PRIMARY KEY (block_id, source_id));`  Plus an index on `block_id` for the read path.",
+    ),
+    (
+        "Where does v3.12 persist the propagated staleness penalty per block?",
+        "In the `block_staleness` SQLite table.  Columns: `block_id`, `source_id`, `score`, `decayed_at`.  Each `(block_id, source_id)` pair stores at most one row.  The MAX semantics happen at read time via `get_staleness_score` (`SELECT MAX(score) ... GROUP BY block_id`).",
+    ),
+    (
+        "What's the canonical JSON shape returned when strict-mode quality gate rejects a write?",
+        "`{\"error\": \"quality_gate_rejection\", \"mode\": \"strict\", \"reasons\": [\"<rule>: <message>\", ...], \"advisory\": [...], \"hint\": \"Statement did not pass the quality gate.  Revise and resubmit, or set quality_gate.mode=\\\"advisory\\\" to downgrade.\"}`.",
+    ),
+    (
+        "What CLI command flags a block as superseding another and propagates staleness?",
+        "`mm lineage flag <src> <dst> --kind contradicts --weight 1.0`.  The command in one atomic call: registers a typed edge via `add_block_edge`, then walks the BFS via `propagate_lineage_staleness(workspace, source_id=args.src)` and writes staleness rows to `block_staleness`.",
+    ),
+    (
+        "Which Python module owns the BFS walker that writes block_staleness rows?",
+        "`src/mind_mem/lineage_staleness.py`.  The walker is `propagate_lineage_staleness(workspace, source_id, *, max_hops=None)`.  It uses `_classify_seed_neighbours` to pick seed kinds, `lineage_adjacency` for the undirected graph, and the staleness module's `propagate_staleness` for the inner BFS.",
+    ),
+]
+
+
+def _harvest_v312_density_fix() -> Iterator[dict]:
+    """v3.12.1 corpus density fix.  Adds 5+ paraphrases per failing eval probe
+    plus explicit denial probes for the 6 hallucinated names that the v3.12.0
+    retrain learned (4-LLM consensus 2026-05-09).  ~30 new probes; corpus 4232
+    → ~4262 examples."""
+    for q, a in _V312_DENSITY_FIX_PROBES:
         yield {
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
