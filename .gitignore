@@ -32,6 +32,9 @@ mind7b_train.jsonl
 # arch-mind ecosystem-scan transient files (committed scan.json + last_summary.json only)
 .arch-mind/_log_*.txt
 .arch-mind/scan_before.json
+.arch-mind/key.local
+.arch-mind/store.lock
+.arch-mind/store/
 .coverage
 test_out.txt
 

@@ -51,6 +51,7 @@ def _recall_impl(
     active_only: bool = False,
     backend: str = "auto",
     format: str = "blocks",
+    explain: bool = False,
 ) -> str:
     """Core recall implementation shared by recall() and hybrid_search().
 
@@ -104,7 +105,7 @@ def _recall_impl(
             return raw_json
 
     if isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True):
-        return cached_recall(
+        raw = cached_recall(
             _inner_with_format,
             query,
             limit=limit,
@@ -113,8 +114,41 @@ def _recall_impl(
             config=_raw_config,
             ttl_seconds=int(_cache_cfg.get("ttl_seconds", 3600)),
         )
-    result = _inner_with_format(query, limit=limit, active_only=active_only, backend=backend)
-    return str(result) if result is not None else ""
+    else:
+        raw_result = _inner_with_format(query, limit=limit, active_only=active_only, backend=backend)
+        raw = str(raw_result) if raw_result is not None else ""
+
+    # v3.11.0 Pattern 1 — apply explain annotation post-cache so that the
+    # cached payload (explain-free) is not polluted and explain=True can
+    # still operate on both cache-hit and cache-miss paths.
+    if explain and raw:
+        raw = _apply_explain(query, raw)
+
+    return raw
+
+
+def _apply_explain(query: str, raw_json: str) -> str:
+    """Parse *raw_json*, inject ``_explain`` on every hit, re-serialize.
+
+    This runs post-cache so the cached payload stays explain-free and
+    explain=True works on both cache-hit and cache-miss paths.
+    """
+    try:
+        from mind_mem._recall_detection import detect_query_type
+        from mind_mem._recall_explain import attach_explain
+
+        envelope = json.loads(raw_json)
+        if not isinstance(envelope, dict):
+            return raw_json
+        results = envelope.get("results")
+        if not isinstance(results, list) or not results:
+            return raw_json
+        intent_match = detect_query_type(query)
+        attach_explain(results, intent_match=intent_match)
+        return json.dumps(envelope, indent=2, default=str)
+    except Exception as exc:  # pragma: no cover — defensive
+        _log.warning("recall_explain_injection_failed", error=str(exc))
+        return raw_json
 
 
 def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False, backend: str = "auto") -> str:
@@ -191,6 +225,7 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
 
     metrics.inc("mcp_recall_queries")
     _log.info("mcp_recall", query=query, backend=used_backend, results=len(results))
+
     envelope: dict[str, Any] = {
         "_schema_version": MCP_SCHEMA_VERSION,
         "backend": used_backend,
@@ -214,9 +249,16 @@ def recall(
     limit: int = 10,
     active_only: bool = False,
     backend: str = "auto",
+    explain: bool = False,
 ) -> str:
-    """Search across all memory files with ranked retrieval."""
-    return _recall_impl(query, limit=limit, active_only=active_only, backend=backend)
+    """Search across all memory files with ranked retrieval.
+
+    When ``explain=True`` every hit gains an ``_explain`` field containing
+    the score decomposition (bm25, vector, rrf_rank, governance_boost,
+    intent_match, staleness_penalty, final).  Omitted by default to keep
+    the payload compact.
+    """
+    return _recall_impl(query, limit=limit, active_only=active_only, backend=backend, explain=explain)
 
 
 @mcp_tool_observe
@@ -351,8 +393,11 @@ def recall_with_axis(
 
 
 @mcp_tool_observe
-def hybrid_search(query: str, limit: int = 10, active_only: bool = False) -> str:
+def hybrid_search(query: str, limit: int = 10, active_only: bool = False, explain: bool = False) -> str:
     """Hybrid BM25+Vector recall with RRF fusion.
+
+    When ``explain=True`` every hit gains an ``_explain`` field containing
+    the score decomposition.  See ``recall`` for the full field description.
 
     .. deprecated::
         Use ``recall(backend="hybrid")`` instead. This tool will be removed in a
@@ -365,7 +410,7 @@ def hybrid_search(query: str, limit: int = 10, active_only: bool = False) -> str
         DeprecationWarning,
         stacklevel=2,
     )
-    raw = _recall_impl(query, limit=limit, active_only=active_only, backend="hybrid")
+    raw = _recall_impl(query, limit=limit, active_only=active_only, backend="hybrid", explain=explain)
     try:
         envelope = json.loads(raw)
         envelope["_deprecation_notice"] = "hybrid_search is deprecated. Use recall with backend='hybrid' instead."

@@ -224,6 +224,13 @@ from mind_mem.mcp.tools.ontology import (  # noqa: E402, F401
     ontology_load,
     ontology_validate,
 )
+from mind_mem.mcp.tools.lineage import (  # noqa: E402, F401
+    add_block_edge,
+    block_lineage,
+)
+from mind_mem.mcp.tools.quality import (  # noqa: E402, F401
+    validate_block,
+)
 from mind_mem.mcp.tools.recall import (  # noqa: E402, F401
     _recall_impl,
     find_similar,

@@ -20,7 +20,7 @@
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
     <img src="https://img.shields.io/badge/tests-4000%2B-brightgreen?style=flat-square" alt="Tests: 4000+">
-    <img src="https://img.shields.io/badge/MCP_tools-58%2B7-blue?style=flat-square" alt="MCP Tools: 58 legacy + 7 consolidated dispatchers">
+    <img src="https://img.shields.io/badge/MCP_tools-84-blue?style=flat-square" alt="MCP Tools: 84">
     <img src="https://img.shields.io/badge/clients-17-blueviolet?style=flat-square" alt="AI Clients: 17">
     <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
     <img src="https://img.shields.io/badge/audit-3--LLM_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="3-LLM joint audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
@@ -72,7 +72,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>A fresh v3.x walkthrough (native MCP for 17 clients, 81 tools incl. MIC/MAP + walkthrough/persona/pipeline-hash, `mind-mem:4b` local model, governance alerting, optional Cython hot-path accelerator) is on the way — the earlier `demo.gif` predated v3.x and was removed to avoid misrepresenting the current surface.</sub>
+<sub>v3.11.0 (released 2026-05-08) adds deterministic quality gates (`validate_block`), typed lineage edges (`block_lineage`, `add_block_edge`), and recall explainability. Full v3.x walkthrough live now (native MCP for 17 clients, 84 tools incl. MIC/MAP + walkthrough/persona/pipeline-hash, `mind-mem:4b` local model, governance alerting, optional Cython hot-path accelerator).</sub>
 
 ### Trust Signals
 

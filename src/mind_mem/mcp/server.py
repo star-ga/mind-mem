@@ -81,6 +81,12 @@ from mind_mem.mcp.tools import (
     pipeline as _tools_pipeline,
 )
 from mind_mem.mcp.tools import (
+    lineage as _tools_lineage,
+)
+from mind_mem.mcp.tools import (
+    quality as _tools_quality,
+)
+from mind_mem.mcp.tools import (
     recall as _tools_recall,
 )
 from mind_mem.mcp.tools import (
@@ -126,6 +132,8 @@ _tools_model.register(mcp)
 _tools_mic_map.register(mcp)
 _tools_walkthrough_persona.register(mcp)
 _tools_pipeline.register(mcp)
+_tools_quality.register(mcp)
+_tools_lineage.register(mcp)
 
 # v3.2.0 — additive consolidated dispatchers (recall, staged_change,
 # memory_verify, graph, core, kernels, compiled_truth). Registered

@@ -2822,6 +2822,11 @@ def main() -> None:
             # are now taught only by _harvest_workflow_chains (v3.0.0
             # pattern: 1 canonical terse answer per probe).
             _harvest_eval_direct_teaching(),
+            # v3.11.0: new MCP surfaces (validate_block, block_lineage,
+            # recall(explain=True)).  ~102 new probes before dedup + cap.
+            _harvest_v311_validate_block(),
+            _harvest_v311_block_lineage(),
+            _harvest_v311_recall_explain(),
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -2862,6 +2867,266 @@ def _cap_multimodal_answers(path, max_answers_per_prompt: int = 2) -> None:
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
                 written += 1
     print(f"capped to {written} examples (max {max_answers_per_prompt} answers per (system, user) prompt)")
+
+
+# ---------------------------------------------------------------------------
+# Source 11: v3.11.0 surface probes
+#
+# Three new surfaces need corpus coverage so the v3.11.0-fullft training
+# run does not regress tool_call accuracy:
+#
+#   validate_block  — 7 rules × 6 phrasings = 42 probes
+#   block_lineage   — traversal patterns (1/2/3-hop, cycles, isolated
+#                     nodes, kind_filter, max_depth clamp) = 30 probes
+#   recall(explain) — _explain field shape, math consistency, default
+#                     omission = 30 probes
+#
+# Corpus budget: ~102 new examples before dedup + cap.
+# ---------------------------------------------------------------------------
+
+_VALIDATE_BLOCK_RULES: list[tuple[str, str, str]] = [
+    (
+        "empty",
+        "validate_block rejects an empty block",
+        "The `validate_block` tool returns `rule: empty` when the block text is blank or contains only whitespace.  Set `strict=True` to make this an error rather than a warning.",
+    ),
+    (
+        "short",
+        "validate_block rejects a block that is too short to be meaningful",
+        "`validate_block` fires the `short` rule when the block text is under the minimum token threshold (default 3 tokens).  The advisory response lists the actual token count alongside the threshold.",
+    ),
+    (
+        "duplicate",
+        "validate_block detects a block that is near-identical to an existing block",
+        "The `duplicate` rule fires when cosine similarity between the candidate and an existing block exceeds the dedup threshold (0.97 by default).  Returned data includes the conflicting block ID and similarity score.",
+    ),
+    (
+        "stopwords",
+        "validate_block rejects a block whose content is almost entirely stopwords",
+        "The `stopwords` rule fires when more than 80% of the tokens in the block are function words (the, is, a, …).  This usually indicates an accidentally captured boilerplate fragment.",
+    ),
+    (
+        "oversize",
+        "validate_block rejects a block that exceeds the size limit",
+        "`validate_block` applies the `oversize` rule when the serialized block exceeds `max_block_bytes` (default 64 KB).  Split large content across multiple blocks before writing.",
+    ),
+    (
+        "utf8",
+        "validate_block rejects a block with invalid UTF-8 sequences",
+        "The `utf8` rule catches raw byte sequences that are not valid UTF-8.  They would corrupt the SQLite FTS index if written.  Re-encode the source document before proposing the block.",
+    ),
+    (
+        "injection",
+        "validate_block detects prompt-injection patterns in block text",
+        "The `injection` rule fires when the block text contains patterns that resemble system-prompt overrides (e.g. `Ignore previous instructions`).  In `strict=True` mode this is a hard block; in advisory mode it is a warning with the matched pattern in the response.",
+    ),
+]
+
+_VALIDATE_BLOCK_PHRASINGS: list[tuple[str, str]] = [
+    # (question template, answer slot)
+    ("How do I check whether a block proposal is valid before writing it?", "validate_block"),
+    ("Which tool validates a block without writing it?", "validate_block"),
+    ("What does `validate_block` do in advisory mode?", "validate_block"),
+    ("How do I run `validate_block` in strict mode?", "validate_block"),
+    ("What does `validate_block(text, strict=True)` return on a violation?", "validate_block"),
+    ("When should I call `validate_block` vs `propose_update`?", "validate_block"),
+]
+
+
+def _harvest_v311_validate_block() -> Iterator[dict]:
+    """42 probes covering the 7 validate_block rules × 6 phrasings."""
+    for rule, intent, explanation in _VALIDATE_BLOCK_RULES:
+        for q, _ in _VALIDATE_BLOCK_PHRASINGS:
+            rule_q = q + f"  (Focus on the `{rule}` rule.)"
+            yield {
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": rule_q},
+                    {
+                        "role": "assistant",
+                        "content": (
+                            f"Call `validate_block(text, strict=False)` — the new v3.11.0 "
+                            f"MCP tool.  For the `{rule}` rule: {explanation}"
+                        ),
+                    },
+                ]
+            }
+    # Advisory vs strict toggle — standalone probes
+    for q, a in [
+        (
+            "Difference between `validate_block(strict=False)` and `validate_block(strict=True)`?",
+            "In advisory mode (`strict=False`, the default) `validate_block` returns a list of rule violations as warnings — the caller decides whether to proceed.  In strict mode (`strict=True`) any violation raises a `ValidationError` that blocks the write.",
+        ),
+        (
+            "Can `validate_block` force-escape a block that fails the `injection` rule?",
+            "`validate_block` does not mutate the text.  Pass `force_escape=True` to receive a sanitized copy with injection patterns neutralized, then pass that copy to `propose_update`.",
+        ),
+    ]:
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": q},
+                {"role": "assistant", "content": a},
+            ]
+        }
+
+
+# --- block_lineage probes (30 probes) ----------------------------------------
+
+_LINEAGE_PATTERNS: list[tuple[str, str]] = [
+    (
+        "How do I trace what blocks depend on block X?",
+        "Call `block_lineage(block_id='X', max_depth=3)`.  It returns a directed graph of all blocks reachable from X within `max_depth` hops, along with edge kinds (`cites`, `implements`, `refines`, `contradicts`, `cooccurrence`).",
+    ),
+    (
+        "What does `block_lineage` return for a 1-hop traversal?",
+        "`block_lineage(block_id, max_depth=1)` returns only the immediate neighbours — blocks that share a direct typed edge with the target.  Each result node carries `kind`, `source_id`, `target_id`, and `weight`.",
+    ),
+    (
+        "How do I do a 2-hop lineage traversal?",
+        "Pass `max_depth=2` to `block_lineage`.  The result graph includes both immediate neighbours and their neighbours, de-duplicated.  Cycle detection is built in — circular chains are broken at the first repeated node.",
+    ),
+    (
+        "What happens when `block_lineage` encounters a cycle?",
+        "`block_lineage` detects cycles via a visited-set and stops traversal at the first repeated block ID.  The cycle edge is still returned in the graph with `cycle=True` so the caller can visualise the loop.",
+    ),
+    (
+        "What does `block_lineage` return for an isolated block with no edges?",
+        "For a block with no edges, `block_lineage` returns a single-node graph containing only the requested block.  The `edges` list is empty and `depth_reached` is 0.",
+    ),
+    (
+        "How do I filter `block_lineage` to only `cites` edges?",
+        "Pass `kind_filter='cites'` to `block_lineage`.  Only edges whose `kind` matches the filter are traversed.  Valid kinds: `cites`, `implements`, `refines`, `contradicts`, `cooccurrence`.",
+    ),
+    (
+        "What are the five edge kinds in `block_lineage`?",
+        "The five typed edge kinds are `cites` (direct citation), `implements` (code realises spec), `refines` (one block narrows another), `contradicts` (governance conflict), and `cooccurrence` (statistical co-retrieval).",
+    ),
+    (
+        "What is the default `max_depth` for `block_lineage`?",
+        "The default `max_depth` is 3.  Passing a larger value is clamped to the configured ceiling (default 10) to prevent runaway traversals on dense graphs.",
+    ),
+    (
+        "What happens if I pass `max_depth=100` to `block_lineage`?",
+        "`block_lineage` clamps `max_depth` at the configured ceiling (default 10).  A warning is included in the response metadata so the caller knows the value was adjusted.",
+    ),
+    (
+        "How does `block_lineage` differ from `graph_query`?",
+        "`block_lineage` is a convenience wrapper that traverses the typed-edge graph starting from a single block and returns a structured result with depth tracking and cycle detection.  `graph_query` accepts an arbitrary filter expression over the full edge table and is more powerful but requires manual traversal.",
+    ),
+    (
+        "How do I add an edge before calling `block_lineage`?",
+        "Call `add_block_edge(source_id, target_id, kind='cites', weight=1.0)` to create the edge.  Once the edge is committed, `block_lineage` will include it in subsequent traversals.",
+    ),
+    (
+        "What tool adds a typed edge between two blocks?",
+        "`add_block_edge(source_id, target_id, kind, weight=1.0)` — the v3.11.0 tool that registers a directed typed edge between two existing blocks in the lineage graph.",
+    ),
+    (
+        "What does `add_block_edge` require?",
+        "`add_block_edge` requires `source_id` (existing block ID), `target_id` (existing block ID), and `kind` (one of the five typed kinds).  `weight` defaults to 1.0 and can be any positive float.",
+    ),
+    (
+        "Can `block_lineage` traverse `contradicts` edges?",
+        "Yes.  Pass `kind_filter='contradicts'` to restrict traversal to contradiction edges.  Without a filter all five kinds are traversed.",
+    ),
+    (
+        "How do I get the full lineage sub-graph for a block?",
+        "Call `block_lineage(block_id, max_depth=10)` with no `kind_filter` to get every reachable node and edge within the depth ceiling.  The returned graph is a dict with `nodes` (list of block IDs + metadata) and `edges` (list of typed edge dicts).",
+    ),
+]
+
+
+def _harvest_v311_block_lineage() -> Iterator[dict]:
+    """30 probes covering block_lineage traversal patterns."""
+    for q, a in _LINEAGE_PATTERNS:
+        for prefix in ("", "In mind-mem v3.11: "):
+            yield {
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prefix + q if prefix else q},
+                    {"role": "assistant", "content": a},
+                ]
+            }
+
+
+# --- recall(explain=True) probes (30 probes) ---------------------------------
+
+_RECALL_EXPLAIN_PROBES: list[tuple[str, str]] = [
+    (
+        "What does `recall(query, explain=True)` return that the default call does not?",
+        "When `explain=True` is passed, each result block carries an additional `_explain` dict with fields `bm25_score`, `vector_score`, `rrf_rank`, `tier_boost`, and `final_score`.  The default call omits `_explain` entirely.",
+    ),
+    (
+        "What fields live inside the `_explain` dict returned by `recall(explain=True)`?",
+        "The `_explain` dict contains: `bm25_score` (BM25F raw score), `vector_score` (cosine similarity), `rrf_rank` (reciprocal rank fusion rank before boost), `tier_boost` (multiplier from the block's memory tier), and `final_score` (the value used for final ordering).",
+    ),
+    (
+        "Is `_explain` present on every result block when `recall(explain=True)` is used?",
+        "Yes.  Every block in the result list carries `_explain` when `explain=True`.  The field is omitted (not set to null) when `explain=False` (the default).",
+    ),
+    (
+        "How does `final_score` in `_explain` relate to the other scores?",
+        "`final_score = rrf_rank * tier_boost`.  `rrf_rank` is the reciprocal-rank-fusion value computed from `bm25_score` and `vector_score`.  `tier_boost` is a multiplier (≥ 1.0) derived from the block's access tier.",
+    ),
+    (
+        "Why is `_explain` omitted by default from `recall` results?",
+        "Computing explain metadata adds a small overhead and roughly doubles the response payload size.  It is off by default to keep normal recall fast and compact.  Pass `explain=True` only when debugging a ranking or building a retrieval-diagnostics report.",
+    ),
+    (
+        "How do I use `recall(explain=True)` to understand why one block ranked above another?",
+        "Call `recall(query, explain=True)` and compare the `_explain.rrf_rank` values across the results.  A lower `rrf_rank` means a higher combined BM25+vector rank.  Multiply by `tier_boost` to get `final_score` and confirm the ordering.",
+    ),
+    (
+        "What is `rrf_rank` inside `_explain`?",
+        "`rrf_rank` is the reciprocal-rank-fusion score computed from the BM25F rank and the vector rank.  Formula: `1 / (k + bm25_rank) + 1 / (k + vector_rank)` where k=60 (the standard RRF constant).  Higher `rrf_rank` = better combined rank.",
+    ),
+    (
+        "What is `tier_boost` inside `_explain`?",
+        "`tier_boost` is a multiplier applied to `rrf_rank` to compute `final_score`.  Blocks in higher memory tiers (WORKING, LONG_TERM) receive a boost > 1.0; EPISODIC-tier blocks receive 1.0.  The exact values come from the tier-decay configuration.",
+    ),
+    (
+        "Does `hybrid_search` also support `explain=True`?",
+        "Yes.  `hybrid_search(query, explain=True)` returns the same `_explain` structure as `recall`.  Both tools share the same RRF + tier-boost explainability path.",
+    ),
+    (
+        "How do I check that `_explain.final_score` is consistent with the result ordering?",
+        "Sort the result list by `_explain.final_score` descending and confirm it matches the order returned by `recall(explain=True)`.  If it does not, a bug in the RRF merge or tier-boost logic is likely.",
+    ),
+    (
+        "Does `recall` return `_explain` when `explain` is not passed?",
+        "No.  `_explain` is absent (not null, not an empty dict — absent) when `explain` defaults to `False`.  Code that checks `result.get('_explain')` is correct; code that checks `result['_explain'] is None` will raise `KeyError` on a default call.",
+    ),
+    (
+        "Can I request `explain=True` on a `recall` call that also uses `top_k`?",
+        "Yes.  `recall(query, top_k=5, explain=True)` returns up to 5 results each carrying `_explain`.  All optional parameters are orthogonal to `explain`.",
+    ),
+    (
+        "Which `_explain` field should I inspect to diagnose a BM25 vs vector disagreement?",
+        "Compare `_explain.bm25_score` and `_explain.vector_score` directly.  A high `bm25_score` with a low `vector_score` means the block is a lexical match but semantically distant.  A high `vector_score` with a low `bm25_score` means the opposite.",
+    ),
+    (
+        "What is the math behind `final_score` in `_explain`?",
+        "`final_score = rrf_rank * tier_boost` where `rrf_rank = 1/(60 + bm25_rank) + 1/(60 + vector_rank)` (ranks derived from ordered `bm25_score` and `vector_score` lists).  `tier_boost` is a configured per-tier multiplier (default LONG_TERM=1.5, WORKING=1.2, EPISODIC=1.0).",
+    ),
+    (
+        "Is the `_explain` dict the same structure for `recall` and `hybrid_search`?",
+        "Yes.  Both `recall(explain=True)` and `hybrid_search(explain=True)` return `_explain` dicts with identical fields: `bm25_score`, `vector_score`, `rrf_rank`, `tier_boost`, `final_score`.  The values differ because `hybrid_search` may use a different query expansion path.",
+    ),
+]
+
+
+def _harvest_v311_recall_explain() -> Iterator[dict]:
+    """30 probes covering the recall(explain=True) _explain field shape."""
+    for q, a in _RECALL_EXPLAIN_PROBES:
+        for prefix in ("", "v3.11.0 feature — "):
+            yield {
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prefix + q if prefix else q},
+                    {"role": "assistant", "content": a},
+                ]
+            }
 
 
 if __name__ == "__main__":

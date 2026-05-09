@@ -176,6 +176,105 @@ V39_TRANSPORT_PROMPTS: list[tuple[str, list[str], list[str]]] = [
 
 
 # ---------------------------------------------------------------------------
+# v3.11.0 probes — guard against regressions on the new MCP surface.
+#
+# 1. v311_new_tools: 10 probes covering validate_block / block_lineage /
+#    add_block_edge.  Target ≥ 90%.
+# 2. v311_explain_field: 10 probes verifying the model knows the `_explain`
+#    field shape emitted by recall(explain=True).  Target ≥ 95% (factual
+#    recall — the shape is fixed).
+# ---------------------------------------------------------------------------
+
+
+V311_NEW_TOOLS: list[tuple[str, list[str]]] = [
+    (
+        "How do I check whether a block proposal is valid before writing it?",
+        ["validate_block", "advisory"],
+    ),
+    (
+        "Which tool validates a block without writing it?",
+        ["validate_block"],
+    ),
+    (
+        "What does `validate_block(text, strict=True)` do on a rule violation?",
+        ["validate_block", "strict"],
+    ),
+    (
+        "How do I detect prompt-injection patterns in a candidate block?",
+        ["validate_block", "injection"],
+    ),
+    (
+        "Which v3.11.0 tool checks for duplicate, oversize, and UTF-8 issues before a write?",
+        ["validate_block"],
+    ),
+    (
+        "How do I trace what blocks depend on block X?",
+        ["block_lineage", "max_depth"],
+    ),
+    (
+        "What does `block_lineage` return for an isolated block with no edges?",
+        ["block_lineage"],
+    ),
+    (
+        "How do I filter `block_lineage` to only `cites` edges?",
+        ["block_lineage", "kind_filter"],
+    ),
+    (
+        "What tool adds a typed edge between two blocks?",
+        ["add_block_edge", "kind"],
+    ),
+    (
+        "What are the five edge kinds supported by `block_lineage`?",
+        ["cites", "implements", "refines", "contradicts", "cooccurrence"],
+    ),
+]
+
+
+V311_EXPLAIN_FIELD: list[tuple[str, list[str]]] = [
+    (
+        "What does `recall(query, explain=True)` return that the default call does not?",
+        ["_explain", "bm25", "vector", "rrf_rank"],
+    ),
+    (
+        "What fields live inside the `_explain` dict returned by `recall(explain=True)`?",
+        ["bm25_score", "vector_score", "rrf_rank", "tier_boost", "final_score"],
+    ),
+    (
+        "Is `_explain` present on every result block when `recall(explain=True)` is used?",
+        ["_explain", "explain"],
+    ),
+    (
+        "How does `final_score` in `_explain` relate to the other scores?",
+        ["rrf_rank", "tier_boost"],
+    ),
+    (
+        "What is `rrf_rank` inside `_explain`?",
+        ["rrf_rank", "bm25", "vector"],
+    ),
+    (
+        "Does `recall` return `_explain` when `explain` is not passed?",
+        ["_explain"],
+    ),
+    (
+        "Which `_explain` field should I inspect to diagnose a BM25 vs vector disagreement?",
+        ["bm25_score", "vector_score"],
+    ),
+    (
+        "What is the math behind `final_score` in `_explain`?",
+        ["rrf_rank", "tier_boost"],
+    ),
+    (
+        "Does `hybrid_search` also support `explain=True`?",
+        ["_explain", "explain"],
+    ),
+    (
+        "Is the `_explain` dict the same structure for `recall` and `hybrid_search`?",
+        ["bm25_score", "vector_score", "rrf_rank", "tier_boost", "final_score"],
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -347,6 +446,36 @@ def _bench_v39_transport_guard(tokenizer, model) -> dict:
     return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
 
 
+def _bench_v311_new_tools(tokenizer, model) -> dict:
+    """v3.11.0 probe 1: validate_block / block_lineage / add_block_edge."""
+    hits = 0
+    misses: list[dict] = []
+    for prompt, required_tokens in V311_NEW_TOOLS:
+        resp = _chat(tokenizer, model, prompt)
+        if all(tok in resp for tok in required_tokens):
+            hits += 1
+        else:
+            missing = [tok for tok in required_tokens if tok not in resp]
+            misses.append({"prompt": prompt, "missing": missing, "response": resp[:200]})
+    total = len(V311_NEW_TOOLS)
+    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+
+
+def _bench_v311_explain_field(tokenizer, model) -> dict:
+    """v3.11.0 probe 2: _explain field shape on recall(explain=True)."""
+    hits = 0
+    misses: list[dict] = []
+    for prompt, required_tokens in V311_EXPLAIN_FIELD:
+        resp = _chat(tokenizer, model, prompt)
+        if all(tok in resp for tok in required_tokens):
+            hits += 1
+        else:
+            missing = [tok for tok in required_tokens if tok not in resp]
+            misses.append({"prompt": prompt, "missing": missing, "response": resp[:200]})
+    total = len(V311_EXPLAIN_FIELD)
+    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+
+
 def main() -> None:
     tokenizer, model = _load_model()
     tool_bench = _bench_tool_calls(tokenizer, model)
@@ -355,6 +484,8 @@ def main() -> None:
     v39_new_tools_bench = _bench_v39_new_tools(tokenizer, model)
     v39_xform_bench = _bench_v39_transform_hash(tokenizer, model)
     v39_transport_bench = _bench_v39_transport_guard(tokenizer, model)
+    v311_new_tools_bench = _bench_v311_new_tools(tokenizer, model)
+    v311_explain_bench = _bench_v311_explain_field(tokenizer, model)
 
     report = {
         "tool_call": tool_bench,
@@ -363,6 +494,8 @@ def main() -> None:
         "v39_new_tools": v39_new_tools_bench,
         "v39_transform_hash": v39_xform_bench,
         "v39_transport_guard": v39_transport_bench,
+        "v311_new_tools": v311_new_tools_bench,
+        "v311_explain_field": v311_explain_bench,
         "targets": {
             "tool_call": 0.95,
             "block_schema": 0.98,
@@ -370,20 +503,24 @@ def main() -> None:
             "v39_new_tools": 0.90,
             "v39_transform_hash": 0.95,
             "v39_transport_guard": 0.95,
+            "v311_new_tools": 0.90,
+            "v311_explain_field": 0.95,
         },
     }
     REPORT.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     print("=" * 60)
-    print("mind-mem-4b v3.9.0 eval report")
+    print("mind-mem-4b v3.11.0 eval report")
     print("=" * 60)
     for name, bench, target in (
-        ("tool_call          ", tool_bench, 0.95),
-        ("block_schema       ", schema_bench, 0.98),
-        ("workflow           ", workflow_bench, 0.90),
-        ("v39_new_tools      ", v39_new_tools_bench, 0.90),
-        ("v39_transform_hash ", v39_xform_bench, 0.95),
-        ("v39_transport_guard", v39_transport_bench, 0.95),
+        ("tool_call           ", tool_bench, 0.95),
+        ("block_schema        ", schema_bench, 0.98),
+        ("workflow            ", workflow_bench, 0.90),
+        ("v39_new_tools       ", v39_new_tools_bench, 0.90),
+        ("v39_transform_hash  ", v39_xform_bench, 0.95),
+        ("v39_transport_guard ", v39_transport_bench, 0.95),
+        ("v311_new_tools      ", v311_new_tools_bench, 0.90),
+        ("v311_explain_field  ", v311_explain_bench, 0.95),
     ):
         pass_str = "PASS" if bench["accuracy"] >= target else "FAIL"
         print(f"  {name}  {bench['hits']:3d}/{bench['total']:<3d}  {bench['accuracy']:.2%}   (target {target:.0%})  [{pass_str}]")
@@ -396,6 +533,8 @@ def main() -> None:
         and v39_new_tools_bench["accuracy"] >= 0.90
         and v39_xform_bench["accuracy"] >= 0.95
         and v39_transport_bench["accuracy"] >= 0.95
+        and v311_new_tools_bench["accuracy"] >= 0.90
+        and v311_explain_bench["accuracy"] >= 0.95
     )
     sys.exit(0 if passed else 1)
 

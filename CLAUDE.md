@@ -4,10 +4,11 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
-**v3.10.0** (released 2026-05-07) — `mind-mem-4b` v3.10.2-fullft passes 6/6 eval categories at 100% across 55 probes; corpus + eval audit pipeline for retrain hygiene; chunked-parallel pull resilience for H200 preemption recovery. Builds on **v3.9.0** (released 2026-05-04) — 4000+ tests, native MCP for 17 AI
-clients, **81 tools** (58 legacy + 7 consolidated dispatchers + 12
-v3.7→v3.8 additions + 4 v3.9 wrappers: `compile_truth_walkthrough`,
-`recall_with_persona`, `pipeline_status`, `reindex_dirty`), Postgres
+**v3.11.0** (released 2026-05-08) — deterministic quality gates, typed lineage edges (cites/implements/refines/contradicts/cooccurrence), recall explainability. Builds on **v3.10.0** (released 2026-05-07) — `mind-mem-4b` v3.10.2-fullft passes 6/6 eval categories at 100% across 55 probes; corpus + eval audit pipeline for retrain hygiene; chunked-parallel pull resilience for H200 preemption recovery. Builds on **v3.9.0** (released 2026-05-04) — 4000+ tests, native MCP for 17 AI
+clients, **84 tools** (58 legacy + 7 consolidated dispatchers + 12
+v3.7→v3.8 additions + 7 v3.11 additions: `compile_truth_walkthrough`,
+`recall_with_persona`, `pipeline_status`, `reindex_dirty`, `validate_block`,
+`block_lineage`, `add_block_edge`), Postgres
 backend with pgvector + HNSW + correct GIN, full-fine-tune local
 model (`mind-mem-4b` v3.9.0 on Qwen3.5-4B), at-rest encryption, tier
 decay, governance alerting, MIC/MAP wire format (mic@2 text + mic-b
@@ -22,7 +23,7 @@ src/mind_mem/           — Main package (src layout)
   core/                 — BlockStore, ConnectionManager, retrieval
   governance/           — Contradiction detection, drift, proposals,
                           audit chain, alerting hooks
-  mcp_server.py         — MCP server (81 tools, 8 resources)
+  mcp_server.py         — MCP server (84 tools, 8 resources)
   ingestion/            — Auto-ingestion pipeline
   skill_opt/            — Skill optimization
   hook_installer/       — Client hook installation (v3.1.1+)
@@ -32,6 +33,8 @@ src/mind_mem/           — Main package (src layout)
   pipeline_hash.py      — Hash-of-code invalidation (v3.9.0)
   personas.py           — brief/detailed/technical projection (v3.9.0)
   walkthrough.py        — Dependency-ordered learning sequence (v3.9.0)
+  quality_gate.py       — Deterministic quality validation (v3.11.0)
+  block_lineage.py      — Typed relationship edges (v3.11.0)
 tests/                  — pytest suite (4000+ tests)
 kernels/                — MIND scoring kernels (.mind)
 docs/                   — User + integration docs (35+ files)

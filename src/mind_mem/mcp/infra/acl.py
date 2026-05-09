@@ -92,6 +92,10 @@ USER_TOOLS = frozenset(
         "compiled_truth_add_evidence",
         "compiled_truth_contradictions",
         "governance_health_bench",
+        # v3.11.0 — quality gate + typed lineage edges.
+        "validate_block",
+        "block_lineage",
+        "add_block_edge",
     }
 )
 

@@ -1393,6 +1393,27 @@ load-gate + CI hook) — all shipped in v3.8.1 → v3.8.7. The social
 ingestion estimate (~2500 lines fetchers + ~600 lines block
 integration) is now a naestro-bot concern.
 
+## v3.11.0 — Quality Gates, Typed Lineage, Recall Explainability ✅ Released 2026-05-08
+
+Deterministic quality validation, typed relationship edges for dependency tracking, and step-by-step recall transparency.
+
+### Added
+- [x] **Pattern 2: `validate_block`** — deterministic quality gate evaluates memory blocks for correctness, coherence, and reference integrity. Module: `src/mind_mem/quality_gate.py`. Validates block schema, statement coherence, cross-references. Registered as MCP tool in `src/mind_mem/mcp/tools/quality.py`. **28 tests, 96% coverage**.
+- [x] **Pattern 3: `block_lineage` + `add_block_edge`** — typed relationship edges (cites, implements, refines, contradicts, cooccurrence) enable explicit dependency tracking. Blocks form a DAG with direction-aware traversal. Module: `src/mind_mem/block_lineage.py`. MCP tools in `src/mind_mem/mcp/tools/lineage.py`. **27 tests passing**.
+- [x] **Pattern 1: `recall(explain=True)` & `hybrid_search(explain=True)`** — augmented recall responses include step-by-step reasoning chains: BM25 scoring breakdown, vector similarity paths, RRF fusion stages, intent routing logic, final ranking rationale. Surfaces retrieval decisions for auditability.
+
+### Changed
+- MCP tool count: 81 → 84 (+3 new tools)
+- `co_retrieval` column migration (Postgres schema) zero-downtime; SQLite unaffected.
+
+### Testing
+- quality_gate module: **28 new tests** at 96% coverage
+- block_lineage module: **27 new tests**
+- Total test suite: 4000+ tests passing
+
+### Migration
+No breaking changes. Existing blocks work unchanged. New tools opt-in via MCP config. Lineage edges optional; backward-compatible if omitted.
+
 ## v4.0.0 — Platform Scale (production)
 
 Horizontal scaling, multi-tenant isolation, and edge deployment. This version turns MIND-Mem from a library into a platform. The multi-tenancy thread is also tracked as issue [#505].

@@ -2,6 +2,27 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v3.11.0 — Quality Gates, Typed Lineage, Recall Explainability
+
+Released 2026-05-08.
+
+### Added
+- **Pattern 2: `validate_block`** — deterministic quality gate for memory blocks. Module: `src/mind_mem/quality_gate.py`. Validates correctness, coherence, and reference integrity. 28 tests, 96% coverage. Registered in `src/mind_mem/mcp/tools/quality.py`.
+- **Pattern 3: `block_lineage` & `add_block_edge`** — typed lineage edges with five relationship types: cites, implements, refines, contradicts, cooccurrence. Enables explicit dependency tracking across blocks. Module: `src/mind_mem/block_lineage.py`. MCP tools in `src/mind_mem/mcp/tools/lineage.py`. 27 tests passing.
+- **Pattern 1: `recall(explain=True)` & `hybrid_search(explain=True)`** — augmented recall responses with step-by-step reasoning chains showing BM25 scoring, vector similarity, RRF fusion, and final ranking. Surfaces retrieval decisions for transparency.
+
+### Changed
+- MCP tool count: 81 → 84 (+3 new tools)
+- `co_retrieval` column migration (Postgres schema) is zero-downtime; SQLite unaffected.
+
+### Tests
+- Quality gate module: 28 new tests
+- Block lineage module: 27 new tests
+- All tests passing; total test count 4000+
+
+### Migration
+No breaking changes. Existing blocks work unchanged. New tools are opt-in via MCP config.
+
 ## v3.10.8 — `mm doctor` SQL injection hardening (GHAS B608 #177-178)
 
 Released 2026-05-08. Closes two Bandit B608 alerts on the v3.10.7

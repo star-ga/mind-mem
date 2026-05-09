@@ -59,9 +59,9 @@ Useful if you're writing a custom MCP config writer.
 
 ---
 
-## MCP Server (81 tools, 8 resources)
+## MCP Server (84 tools, 8 resources)
 
-The MCP server exposes 81 tools via JSON-RPC. See [MCP Tool Examples](mcp-tool-examples.md) and [MCP Integration Guide](mcp-integration.md).
+The MCP server exposes 84 tools via JSON-RPC. See [MCP Tool Examples](mcp-tool-examples.md) and [MCP Integration Guide](mcp-integration.md).
 
 ### Starting the Server
 
@@ -75,8 +75,8 @@ python3 mcp_server.py --workspace /path/to/workspace
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `recall` | BM25/hybrid search with graph boost and knee cutoff | `query`, `limit`, `active_only`, `backend` |
-| `hybrid_search` | BM25+Vector RRF fusion (wrapper for `recall(backend="hybrid")`) | `query`, `limit`, `active_only` |
+| `recall` | BM25/hybrid search with graph boost and knee cutoff; with `explain=True` returns step-by-step reasoning | `query`, `limit`, `active_only`, `backend`, `explain` |
+| `hybrid_search` | BM25+Vector RRF fusion (wrapper for `recall(backend="hybrid")`); with `explain=True` includes fusion rationale | `query`, `limit`, `active_only`, `explain` |
 | `find_similar` | Vector similarity search from a block ID | `block_id`, `limit` |
 | `intent_classify` | Classify query intent (WHY/WHEN/ENTITY/WHAT/HOW/LIST/VERIFY/COMPARE/TRACE) | `query` |
 | `prefetch` | Pre-assemble context from conversation signals | `signals`, `limit` |
@@ -108,6 +108,14 @@ python3 mcp_server.py --workspace /path/to/workspace
 | `reindex` | Rebuild FTS5 + optional vector index | `include_vectors` |
 | `index_stats` | Block counts, staleness, vector coverage, kernel status | — |
 | `category_summary` | Category-based topic summaries | `topic`, `limit` |
+
+#### Quality Gates & Lineage (v3.11.0+)
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `validate_block` | Deterministic quality gate: validate schema, coherence, reference integrity | `block_id` |
+| `block_lineage` | Retrieve typed relationship edges for a block (cites/implements/refines/contradicts/cooccurrence) | `block_id`, `direction` (`forward`/`backward`/`both`) |
+| `add_block_edge` | Create a typed relationship edge between two blocks | `source_block_id`, `target_block_id`, `relationship` (`cites`/`implements`/`refines`/`contradicts`/`cooccurrence`) |
 
 #### MIND Kernels
 
