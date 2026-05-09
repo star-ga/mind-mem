@@ -451,20 +451,16 @@ Release criteria:
 
 ---
 
-## v2.6.0 — Competitive Intelligence Integration ✅ Released 2026-04-13 — all boxes checked in v2.8.0
+## v2.6.0 — Memory Surface Expansion ✅ Released 2026-04-13 — all boxes checked in v2.8.0
 
-> Theme: Features identified from competitive analysis of agentmemory (rohitg00/agentmemory),
-> Brooks Jordan's Daneel (NVIDIA), and Karpathy's llm-wiki pattern. Cherry-picked what we
-> don't have yet; ignored what we already do better.
->
-> Sources:
-> - [rohitg00/agentmemory](https://github.com/rohitg00/agentmemory) v0.7.1 — 581 tests, Node.js, iii-engine
-> - Brooks Jordan (NVIDIA Enterprise AI Partnerships) — Daneel agent, OpenClaw/FelixCraft-inspired
-> - Andrej Karpathy — llm-wiki gist (raw → wiki → schema pattern)
-> - Farzapedia / "File over app" pattern
+> Theme: STARGA-native expansion of the recall surface — staleness propagation across
+> the dependency graph, working/episodic/semantic/procedural tiering, project intelligence
+> profiles, P2P mesh, and a Model Reliability Score framework. Designed first-principles
+> from the requirement that memory must be auditable, decay-aware, and shareable across
+> agents without leaking authority.
 
 ### Cascading Staleness Propagation
-_Source: agentmemory — cascading staleness across graph nodes_
+_Rationale: when a block is invalidated, every block that depends on it inherits doubt — staleness must propagate transitively along the graph._
 
 - [x] **Staleness propagation engine** — when a block is superseded or contradicted, automatically flag related blocks (edges, siblings, dependents) as potentially stale
 - [x] **Staleness confidence decay** — propagation weakens with graph distance: direct relations get `stale=0.9`, 2-hop get `stale=0.5`, 3-hop get `stale=0.2`
@@ -473,7 +469,7 @@ _Source: agentmemory — cascading staleness across graph nodes_
 - [x] **Staleness audit log** — every propagation event recorded with source block, affected blocks, reason
 
 ### 4-Tier Memory Consolidation
-_Source: agentmemory — working → episodic → semantic → procedural tiers with Ebbinghaus decay_
+_Rationale: not every memory deserves equal recall priority — working/episodic/semantic/procedural tiers with biologically-motivated decay match how agents actually use memory across a session._
 
 MIND-Mem currently has append-only logs → manual promotion to MEMORY.md. This formalizes the pipeline:
 
@@ -487,7 +483,7 @@ MIND-Mem currently has append-only logs → manual promotion to MEMORY.md. This 
 - [x] **`consolidate` MCP tool** — trigger consolidation cycle with `--dry-run` and `--tier` filters
 
 ### Agent Hook Auto-Capture
-_Source: agentmemory — 12 Claude Code hooks for silent observation capture_
+_Rationale: a memory system that requires explicit calls to capture is never used — silent observation through CLI hooks is the only path to comprehensive coverage._
 
 - [x] **Hook event schema** — standardized event format: `{type, timestamp, tool, input_hash, output_summary, project, session_id}`
 - [x] **SessionStart hook** — inject recent context from MIND-Mem at conversation start (token-budgeted)
@@ -499,7 +495,7 @@ _Source: agentmemory — 12 Claude Code hooks for silent observation capture_
 - [x] **Observation → block pipeline** — raw hook events compressed into structured blocks via LLM (Zod-validated, quality scored 0-100)
 
 ### Token Budget Context Injection
-_Source: agentmemory — configurable token budget (default 2000) with smart packing_
+_Rationale: every recall result spends caller context — a configurable token budget with smart packing makes the cost explicit and bounded._
 
 - [x] **`recall` gains `max_tokens` parameter** — backward-compatible, defaults to unlimited (current behavior)
 - [x] **Adaptive packing strategy** — given token budget:
@@ -510,7 +506,7 @@ _Source: agentmemory — configurable token budget (default 2000) with smart pac
 - [x] **Packing quality metric** — track % of packed tokens actually referenced in response (calibration loop)
 
 ### Project Intelligence Profiles
-_Source: agentmemory — per-project aggregated intelligence_
+_Rationale: per-project profiles let an agent skip the ten-second "what is this codebase" warmup that bleeds tokens at every session start._
 
 - [x] **Auto-generated project profiles** — aggregate from entity files + observations: top concepts, most-touched files, coding conventions, common errors, session count
 - [x] **Profile as MCP resource** — `mindmem://project/{name}/profile` exposes structured project intelligence
@@ -518,7 +514,7 @@ _Source: agentmemory — per-project aggregated intelligence_
 - [x] **Convention extraction** — LLM-powered extraction of implicit conventions from code observations (naming patterns, test patterns, error handling style)
 
 ### P2P Memory Mesh
-_Source: agentmemory — cross-agent sync with 7 scopes; Brooks Jordan/Daneel — multi-agent sharing_
+_Rationale: when multiple agents work on the same project, isolated memories diverge — a P2P mesh with scope-typed sync keeps them coherent without forcing centralisation._
 
 - [x] **Mesh protocol** — MIND-Mem instances discover peers via mDNS or explicit peer list
 - [x] **7 sync scopes** — memories, actions, semantic, procedural, relations, graph, governance (each independently toggleable)
@@ -528,7 +524,7 @@ _Source: agentmemory — cross-agent sync with 7 scopes; Brooks Jordan/Daneel �
 - [x] **`mesh_status` MCP resource** — connected peers, sync lag, scope health
 
 ### Model Reliability Score (MRS) Framework
-_Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality scoring_
+_Rationale: model endpoints + retrieval backends are infrastructure — they need SLO-style reliability scoring (latency/quality/drift), not anecdotal "feels slow" judgement._
 
 - [x] **MRS SLI definitions** — latency percentiles (p50/p95/p99), output quality drift, token throughput, error rate, cost per query
 - [x] **Composite MRS (0-100)** — weighted aggregation of SLIs into single reliability score
@@ -548,7 +544,7 @@ _Source: Bandhavi Sakhamuri — ML Inference SLO concept; agentmemory quality sc
 > to the same memory through a unified interface. Plus bidirectional vault sync for Obsidian/file-based
 > knowledge management.
 >
-> Ref: "Second Brain" pattern (Obsidian + 5-brain MCP), agentmemory hook system, OpenClaw skills architecture
+> Rationale: the cost of a memory system is dominated by the agents that *can't* use it — universal CLI bridge eliminates that gap. Vault sync acknowledges that human knowledge bases (Obsidian-format markdown vaults) and agent memory should be one substrate, not two.
 
 ### Component 1: Universal Agent Bridge (`mm` CLI)
 

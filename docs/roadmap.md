@@ -445,11 +445,12 @@ Second v3.9.0 theme (the first is the Inbox / Auto-Consolidate / HTTP-API
 trio above). Both themes are additive and could ship together as v3.9.0
 or be split across v3.9.0 / v3.10.0.
 
-Inspired by `Lum1104/Understand-Anything` (MIT, ~10k stars). Their distinctive
-value is the *human browsing UX* — guided dependency-ordered walkthroughs and
-persona-adaptive detail. MIND-Mem already has graph traversal, hybrid search,
-and compiled-truth pages, so the dashboard / multi-agent extraction pipeline /
-JSON-in-repo convention don't fit. Two ideas do.
+Two STARGA-native projections over the existing recall surface — neither
+adds an index, both repurpose data we already compute. The first orders
+results into a learning sequence (foundation → context → current); the
+second adapts the *shape* of each result to the caller's need
+(brief / detailed / technical). Together they let one recall serve
+three audiences without three indexes.
 
 ### 1. Dependency-ordered walkthrough — **landed (in-progress branch)**
 
@@ -510,16 +511,15 @@ not a separate index. Zero index cost. The wrapper is wired into
 `POST /query` today; wiring into MCP-exposed `recall` /
 `hybrid_search` is a follow-up so the surface stays focused.
 
-### What we explicitly do NOT borrow
+### Out of scope
 
-- Web dashboard. MIND-Mem stays headless; if a dashboard is wanted, ship as a
+- **Web dashboard.** MIND-Mem stays headless; a dashboard ships as a
   separate package on top of the future Extended HTTP API (see Theme A above).
-- Multi-agent code-extraction pipeline. MIND-Mem already has its own ingestion;
-  we don't re-extract from source repos.
-- `.understand-anything/` JSON-in-repo convention. MIND-Mem's per-workspace
-  model is the right unit, not per-repo committed metadata.
-- Persona-adaptive UI. UI is out of scope; persona affects API output shape
-  only.
+- **Per-repo committed metadata convention.** MIND-Mem's per-workspace
+  model is the right unit. Memory belongs to the agent's working set, not
+  to the source-tree it happens to be reasoning about.
+- **Persona-adaptive UI.** UI is out of scope; persona affects API output
+  shape only.
 
 ### Estimated effort
 

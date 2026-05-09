@@ -12,7 +12,7 @@ the underlying index. Three named personas:
 
 Implemented as a pure function over the dicts that ``recall`` and
 ``hybrid_search`` already return — zero index cost, no schema change.
-Inspired by the Understand-Anything (MIT) detail-level UX; concept
+Detail-level UX projection — adapts content emphasis
 only, no shared code.
 """
 
