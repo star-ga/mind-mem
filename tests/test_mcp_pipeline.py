@@ -35,6 +35,10 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
         )
     )
     monkeypatch.setenv("MIND_MEM_WORKSPACE", str(ws))
+    # ``reindex_dirty`` is an admin tool after the issue #508-#513 ACL
+    # hardening; opt in so the gate doesn't drop responses before the
+    # tests can inspect the structured payload.
+    monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
     return str(ws)
 
 

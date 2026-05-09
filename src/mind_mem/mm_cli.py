@@ -374,6 +374,35 @@ def _cmd_install(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_lineage_flag(args: argparse.Namespace) -> int:
+    """One-shot: add a typed lineage edge then propagate staleness.
+
+    The CLI surface for v3.12.0 Theme C. Equivalent to::
+
+        from mind_mem.block_lineage import add_block_edge
+        from mind_mem.lineage_staleness import propagate_lineage_staleness
+        add_block_edge(ws, args.src, args.dst, args.kind, weight=args.weight)
+        propagate_lineage_staleness(ws, source_id=args.src)
+    """
+    import json
+    import os
+
+    from mind_mem.block_lineage import add_block_edge
+    from mind_mem.lineage_staleness import propagate_lineage_staleness
+
+    ws = os.environ.get("MIND_MEM_WORKSPACE", os.getcwd())
+    add_block_edge(ws, args.src, args.dst, args.kind, weight=float(args.weight))
+    affected = propagate_lineage_staleness(ws, source_id=args.src)
+
+    print(json.dumps({
+        "ok": True,
+        "edge": {"src": args.src, "dst": args.dst, "kind": args.kind, "weight": args.weight},
+        "propagated": len(affected),
+        "affected_blocks": sorted(affected.keys()),
+    }, indent=2))
+    return 0
+
+
 def _cmd_install_model(args: argparse.Namespace) -> int:
     """Download mind-mem-4b GGUF from HF and import into Ollama.
 
@@ -1610,8 +1639,14 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
             import psycopg
             from psycopg import sql as _sql
 
-            blocks_id = _sql.Identifier(bs._schema, "blocks")
-            with psycopg.connect(bs._dsn) as conn, conn.cursor() as cur:
+            # ``BlockStore`` doesn't declare these attrs on the abstract
+            # base; the runtime class-name check above narrows the type
+            # but mypy doesn't follow the string check, so reach for the
+            # attrs explicitly here.
+            pg_schema: str = getattr(bs, "_schema", "public")
+            pg_dsn: str = getattr(bs, "_dsn", "")
+            blocks_id = _sql.Identifier(pg_schema, "blocks")
+            with psycopg.connect(pg_dsn) as conn, conn.cursor() as cur:
                 cur.execute(_sql.SQL("SELECT id FROM {tbl} WHERE active").format(tbl=blocks_id))
                 pg_ids = {r[0] for r in cur.fetchall()}
             report["postgres_active_blocks"] = len(pg_ids)
@@ -1666,8 +1701,10 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
             written = 0
             errors = 0
             sq = _sqlite3.connect(sq_path)
-            blocks_id = _sql.Identifier(bs._schema, "blocks")
-            with psycopg.connect(bs._dsn) as conn, conn.cursor() as cur:
+            pg_schema = getattr(bs, "_schema", "public")
+            pg_dsn = getattr(bs, "_dsn", "")
+            blocks_id = _sql.Identifier(pg_schema, "blocks")
+            with psycopg.connect(pg_dsn) as conn, conn.cursor() as cur:
                 cur.execute(
                     _sql.SQL(
                         "SELECT id, file_path, content, metadata, created_at FROM {tbl} "
@@ -1964,6 +2001,31 @@ def build_parser() -> argparse.ArgumentParser:
     v_write.add_argument("--body", default="")
     v_write.add_argument("--overwrite", action="store_true")
     v_write.set_defaults(func=_cmd_vault_write)
+
+    # ---- lineage ----
+    p_lineage = sub.add_parser(
+        "lineage",
+        help="Block-lineage subcommands (v3.11.0 typed edges + v3.12 staleness).",
+    )
+    lsub = p_lineage.add_subparsers(dest="lineage_cmd", required=True)
+
+    l_flag = lsub.add_parser(
+        "flag",
+        help=(
+            "Add a typed lineage edge from <src> to <dst> and propagate "
+            "kind-aware staleness across the dependent subgraph."
+        ),
+    )
+    l_flag.add_argument("src", help="Source block id (the new/contradicting block).")
+    l_flag.add_argument("dst", help="Destination block id (the existing block).")
+    l_flag.add_argument(
+        "--kind",
+        default="contradicts",
+        choices=("cites", "implements", "refines", "contradicts", "cooccurrence"),
+        help="Edge kind. Default 'contradicts' (the staleness-firing kind).",
+    )
+    l_flag.add_argument("--weight", type=float, default=1.0, help="Edge weight (default 1.0).")
+    l_flag.set_defaults(func=_cmd_lineage_flag)
 
     # skill namespace
     p_skill = sub.add_parser("skill", help="Self-improving skill optimization subcommands.")

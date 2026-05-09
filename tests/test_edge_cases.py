@@ -239,8 +239,14 @@ _SCRIPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "src", "mind_mem")
 
 
 def _load_server(workspace: str):
-    """Load the mcp_server module with a given workspace."""
+    """Load the mcp_server module with a given workspace.
+
+    Edge-case tests exercise admin-scoped tools (``propose_update``);
+    opt in to admin scope so the issue #508-#513 ACL gate doesn't drop
+    responses before the assertions run.
+    """
     os.environ["MIND_MEM_WORKSPACE"] = workspace
+    os.environ["MIND_MEM_SCOPE"] = "admin"
     spec = importlib.util.spec_from_file_location("mcp_server", _SERVER_PATH)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

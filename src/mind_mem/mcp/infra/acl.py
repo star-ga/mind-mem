@@ -108,6 +108,8 @@ USER_TOOLS = frozenset(
         "recall_with_persona",
         "mic_convert_tool",
         "mic_inspect_tool",
+        "pipeline_status",
+        "reindex_dirty",
     }
 )
 

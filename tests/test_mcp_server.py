@@ -20,8 +20,17 @@ _HAS_FASTMCP = importlib.util.find_spec("fastmcp") is not None
 
 
 def _load_server(workspace: str):
-    """Load the mcp_server module with a given workspace."""
+    """Load the mcp_server module with a given workspace.
+
+    Several tests in this file exercise admin-scoped tools
+    (``approve_apply``, ``rollback_proposal``, ``reindex``,
+    ``export_memory``, ``delete_memory_item``) that require
+    ``MIND_MEM_SCOPE=admin`` after the issue #508-#513 ACL hardening.
+    The tests pre-date that enforcement; opt them in here so the gate
+    doesn't drop responses before the schema-shape assertions run.
+    """
     os.environ["MIND_MEM_WORKSPACE"] = workspace
+    os.environ["MIND_MEM_SCOPE"] = "admin"
     spec = importlib.util.spec_from_file_location("mcp_server", _SERVER_PATH)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

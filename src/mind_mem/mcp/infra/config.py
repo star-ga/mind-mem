@@ -96,5 +96,35 @@ def _get_limits(ws: str | None = None) -> dict:
     return result
 
 
+_VALID_QUALITY_GATE_MODES: frozenset[str] = frozenset({"off", "advisory", "strict"})
+_DEFAULT_QUALITY_GATE_MODE = "advisory"
+
+
+def _get_quality_gate_mode(ws: str | None = None) -> str:
+    """Return the quality-gate mode from config, defaulting to ``"advisory"``.
+
+    Reads ``quality_gate.mode`` from ``mind-mem.json``.  Any unrecognised
+    value is silently replaced with ``"advisory"`` so a typo never disables
+    the gate unexpectedly.
+
+    Valid values: ``"off"`` | ``"advisory"`` | ``"strict"``.
+    """
+    if ws is None:
+        try:
+            ws = _workspace()
+        except Exception:
+            return _DEFAULT_QUALITY_GATE_MODE
+    cfg = _load_config(ws)
+    mode = cfg.get("quality_gate", {}).get("mode", _DEFAULT_QUALITY_GATE_MODE)
+    if mode not in _VALID_QUALITY_GATE_MODES:
+        _log.warning(
+            "quality_gate_mode_invalid",
+            value=mode,
+            fallback=_DEFAULT_QUALITY_GATE_MODE,
+        )
+        return _DEFAULT_QUALITY_GATE_MODE
+    return str(mode)
+
+
 # Per-query timeout in seconds (read from config at call time via _get_limits)
 QUERY_TIMEOUT_SECONDS = _DEFAULT_LIMITS["query_timeout_seconds"]

@@ -131,7 +131,10 @@ def _apply_explain(query: str, raw_json: str) -> str:
     """Parse *raw_json*, inject ``_explain`` on every hit, re-serialize.
 
     This runs post-cache so the cached payload stays explain-free and
-    explain=True works on both cache-hit and cache-miss paths.
+    explain=True works on both cache-hit and cache-miss paths. The
+    workspace handle is threaded through so that
+    ``_explain.staleness_penalty`` surfaces persisted lineage-staleness
+    values from ``block_staleness`` (v3.12 Theme C).
     """
     try:
         from mind_mem._recall_detection import detect_query_type
@@ -144,7 +147,7 @@ def _apply_explain(query: str, raw_json: str) -> str:
         if not isinstance(results, list) or not results:
             return raw_json
         intent_match = detect_query_type(query)
-        attach_explain(results, intent_match=intent_match)
+        attach_explain(results, intent_match=intent_match, workspace=_workspace())
         return json.dumps(envelope, indent=2, default=str)
     except Exception as exc:  # pragma: no cover — defensive
         _log.warning("recall_explain_injection_failed", error=str(exc))

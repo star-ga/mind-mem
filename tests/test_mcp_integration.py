@@ -254,12 +254,20 @@ class TestACLEnforcement:
         # scan is a USER tool -- should succeed regardless
         assert "_schema_version" in parsed
 
-    def test_decorator_skips_acl_when_no_admin_token(self, server, workspace, monkeypatch):
-        """Without MIND_MEM_ADMIN_TOKEN, all tools pass (local single-user mode)."""
+    def test_decorator_skips_acl_when_disabled(self, server, workspace, monkeypatch):
+        """``MIND_MEM_ACL_DISABLED=true`` is the local single-user escape.
+
+        Pre-issue-#508 behavior was "ACL is implicit by token presence";
+        post-#508 hardening enforces scope unconditionally and exposes
+        ``MIND_MEM_ACL_DISABLED`` as the documented opt-out (the daemon
+        emits a one-time warning so the operator knows). This test
+        pins the new contract.
+        """
         monkeypatch.delenv("MIND_MEM_ADMIN_TOKEN", raising=False)
         monkeypatch.setenv("MIND_MEM_WORKSPACE", str(workspace))
+        monkeypatch.setenv("MIND_MEM_ACL_DISABLED", "true")
 
-        # reindex is an admin tool but should work without admin token
+        # reindex is an admin tool but should pass when ACL is disabled.
         result = _call_tool(server.reindex)
         parsed = json.loads(result)
         assert "error" not in parsed or "Permission denied" not in parsed.get("error", "")
@@ -415,6 +423,10 @@ class TestToolResponseSchema:
 
     def test_reindex_returns_schema_version(self, server, workspace, monkeypatch):
         monkeypatch.setenv("MIND_MEM_WORKSPACE", str(workspace))
+        # ``reindex`` is admin-scoped post issue #508-#513; opt in here
+        # so the schema-shape assertion sees the real envelope, not the
+        # ACL denial response.
+        monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
         result = _call_tool(server.reindex)
         parsed = json.loads(result)
         assert parsed["_schema_version"] == "1.0"
@@ -436,6 +448,7 @@ class TestToolResponseSchema:
 
     def test_approve_apply_invalid_id_returns_error(self, server, workspace, monkeypatch):
         monkeypatch.setenv("MIND_MEM_WORKSPACE", str(workspace))
+        monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
         result = _call_tool(server.approve_apply, "bad-format")
         parsed = json.loads(result)
         assert "error" in parsed
@@ -443,6 +456,7 @@ class TestToolResponseSchema:
 
     def test_rollback_invalid_ts_returns_error(self, server, workspace, monkeypatch):
         monkeypatch.setenv("MIND_MEM_WORKSPACE", str(workspace))
+        monkeypatch.setenv("MIND_MEM_SCOPE", "admin")
         result = _call_tool(server.rollback_proposal, "not-a-timestamp")
         parsed = json.loads(result)
         assert "error" in parsed

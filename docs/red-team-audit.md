@@ -104,17 +104,33 @@ To promote to a hard gate:
 
 ---
 
-## CI Integration (Optional Workflow)
+## CI Integration
 
-Add a separate workflow that runs only on release candidates:
+The workflow `.github/workflows/red-team.yml` runs the `petri-audit` job
+automatically on every release tag push (`v*`).
 
-```yaml
-- name: Behavioral audit (advisory)
-  run: pytest -m behavioral -v
-  env:
-    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-  continue-on-error: true
-```
+### Job structure
 
-Do not add this step to the standard test matrix — it costs money and
-requires secrets that are not available on fork PRs.
+- Triggered: `push` on tags matching `v*` only (not every push or PR).
+- Runner: `ubuntu-latest`, Python 3.12, `continue-on-error: true`.
+- Skips the audit step cleanly when `ANTHROPIC_API_KEY` is absent; the
+  job still completes green so it does not block tag promotion.
+- Artifacts: transcripts in `tests/red_team/transcripts/` are uploaded
+  at 90-day retention after every run (even on skip).
+
+### Cost
+
+Each tag push costs approximately **$10-15** (3 seeds × 5 samples,
+Sonnet judge).  Raise `--petri-limit` for deeper pre-release sweeps.
+
+### Advisory status
+
+The job is advisory and does not block tag promotion.  It must not be
+added to the standard CI matrix — it requires secrets unavailable on
+fork PRs and incurs real API spend on every run.
+
+To promote to a hard gate in v3.13:
+1. Run the full 173-seed suite and triage every failure category.
+2. Document findings in `docs/red-team-findings.md`.
+3. Remove `continue-on-error: true` from the job.
+4. Pin a minimum pass rate (e.g. 95%) in the test assertion.

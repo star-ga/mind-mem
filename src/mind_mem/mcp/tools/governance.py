@@ -87,6 +87,54 @@ def propose_update(
     rationale = _sanitize_reason_for_markdown(rationale.strip()) if rationale else ""
     raw_tags = [_sanitize_reason_for_markdown(t) for t in raw_tags]
 
+    # Quality gate pre-write check (v3.12.0 Theme B).
+    from mind_mem.mcp.infra.config import _get_quality_gate_mode
+    from mind_mem.quality_gate import validate_block
+
+    _qg_mode = _get_quality_gate_mode(ws)
+    if _qg_mode != "off":
+        _qg_is_strict = _qg_mode == "strict"
+        _qg_verdict = validate_block(statement, strict=_qg_is_strict)
+        if not _qg_verdict.accept:
+            # Increment aggregate rejection counter.
+            metrics.inc("quality_gate_rejections")
+            # Increment per-rule counters for observability.
+            for _qg_reason in _qg_verdict.reasons:
+                _qg_rule = _qg_reason.split(":")[0].strip()
+                metrics.inc(f"quality_gate_rejections_{_qg_rule}")
+            _log.warning(
+                "quality_gate_reject",
+                mode=_qg_mode,
+                reasons=_qg_verdict.reasons,
+                block_type=block_type,
+            )
+            return json.dumps(
+                {
+                    "error": "quality_gate_rejection",
+                    "mode": _qg_mode,
+                    "reasons": _qg_verdict.reasons,
+                    "advisory": _qg_verdict.advisory,
+                    "hint": (
+                        "Statement did not pass the quality gate. "
+                        "Revise and resubmit, or set quality_gate.mode=\"advisory\" "
+                        "in mind-mem.json to downgrade to advisory-only."
+                    ),
+                },
+                indent=2,
+            )
+        if _qg_verdict.advisory:
+            # Advisory mode: log warnings but do not block.
+            metrics.inc("quality_gate_rejections")
+            for _qg_adv in _qg_verdict.advisory:
+                _qg_rule = _qg_adv.split(":")[0].strip()
+                metrics.inc(f"quality_gate_rejections_{_qg_rule}")
+            _log.warning(
+                "quality_gate_advisory",
+                mode=_qg_mode,
+                advisory=_qg_verdict.advisory,
+                block_type=block_type,
+            )
+
     from datetime import datetime
 
     from mind_mem.capture import CONFIDENCE_TO_PRIORITY, append_signals

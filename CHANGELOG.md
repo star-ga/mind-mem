@@ -2,6 +2,56 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v3.12.0 — Strict quality gate, lineage staleness wiring, red-team CI
+
+Released 2026-05-09.
+
+Three additive themes building on v3.11.0. Theme A (mind-mem-4b
+v3.11.0-fullft retrain) is deferred until the next budgeted RunPod run.
+
+### Added
+- **Theme B — quality-gate strict mode** (`src/mind_mem/mcp/infra/config.py`,
+  `src/mind_mem/mcp/tools/governance.py`). New `mind-mem.json` key
+  `quality_gate.mode` ∈ `{"off", "advisory", "strict"}` (default
+  `"advisory"`). When non-`"off"`, `propose_update` calls
+  `validate_block` pre-write; strict mode rejects with structured 400.
+  Per-rule rejection counter `quality_gate_rejections_<rule>`.
+  Operator runbook at `docs/quality-gate.md`. **26 new tests**.
+- **Theme C — lineage→staleness propagation** (new module
+  `src/mind_mem/lineage_staleness.py`). New `block_staleness(block_id,
+  source_id, score, decayed_at)` table; idempotent upsert. New tool
+  `propagate_lineage_staleness(workspace, source_id)` walks the
+  v3.11.0 lineage graph with bounded BFS (≤3 hops, kind-aware decay).
+  `_explain.staleness_penalty` now surfaces persisted values when the
+  workspace is provided; default `0.0` when absent. New CLI
+  `mm lineage flag <src> <dst> --kind contradicts` bundles
+  `add_block_edge` + propagate. **9 new tests**.
+- **Theme D — Petri red-team CI** (`.github/workflows/red-team.yml`).
+  Tag-push-only, advisory (`continue-on-error: true`); skips cleanly
+  when `ANTHROPIC_API_KEY` secret is absent (PR forks). Transcript
+  artifact upload (90-day retention). `--petri-limit` plumbed through
+  `tests/red_team/conftest.py`. CI integration section added to
+  `docs/red-team-audit.md`. ~$10-15/run with sonnet judge.
+
+### Changed
+- `mind_mem._recall_explain.attach_explain` now accepts a `workspace`
+  kwarg (defaults to `None`); when provided, persisted staleness
+  penalties are surfaced.
+- The MCP recall tool now passes the active workspace through to
+  `attach_explain` so explainable recall surfaces lineage staleness.
+
+### Tests
+- New: `tests/test_quality_gate_strict_mode.py` (26),
+  `tests/test_lineage_staleness.py` (9), `tests/red_team/conftest.py`
+  (Petri scaffold helpers).
+- Total v3.11.0 + v3.12.0 patterns regression: 170 pass on touched
+  paths. mypy + ruff + Bandit (medium/high) clean on new modules.
+
+### Migration
+No breaking changes. New `block_staleness` table is created on first
+write (idempotent). New CLI subcommand is opt-in. Default
+`quality_gate.mode = "advisory"` preserves v3.11.0 behavior.
+
 ## v3.11.1 — B101 hardening + ACL whitelist backfill
 
 Released 2026-05-08.

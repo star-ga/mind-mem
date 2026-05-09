@@ -25,8 +25,17 @@ _HAS_FASTMCP = importlib.util.find_spec("fastmcp") is not None
 
 
 def _load_server(workspace: str):
-    """Load the mcp_server module with a given workspace."""
+    """Load the mcp_server module with a given workspace.
+
+    These tests exercise admin-scoped tools (``approve_apply``,
+    ``rollback_proposal``, ``reindex``, ``export_memory``,
+    ``delete_memory_item``) that require ``MIND_MEM_SCOPE=admin``
+    after the issue #508-#513 ACL hardening. The tests pre-date that
+    enforcement; opt them in here so the gate doesn't drop responses
+    before the schema-shape assertions run.
+    """
     os.environ["MIND_MEM_WORKSPACE"] = workspace
+    os.environ["MIND_MEM_SCOPE"] = "admin"
     spec = importlib.util.spec_from_file_location("mcp_server_v140", _SERVER_PATH)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -196,15 +205,26 @@ class TestObservabilityDecorator(unittest.TestCase):
         self.assertGreater(self.mod.metrics.get("mcp_tool_success"), 0)
 
     def test_failure_increments_failure_counter(self):
-        """Failed tool call should increment mcp_tool_failure."""
+        """Failed tool call should increment mcp_tool_failure.
 
-        @self.mod.mcp_tool_observe
-        def failing_tool():
-            raise ValueError("test error")
+        The decorator under test wraps an ad-hoc ``failing_tool`` that
+        is not in the ACL whitelist. Without the bypass the ACL gate
+        intercepts before the function body runs and ``ValueError``
+        never propagates. Set ``MIND_MEM_ACL_DISABLED`` for the
+        duration of this assertion only.
+        """
+        os.environ["MIND_MEM_ACL_DISABLED"] = "true"
+        try:
 
-        with self.assertRaises(ValueError):
-            failing_tool()
-        self.assertGreater(self.mod.metrics.get("mcp_tool_failure"), 0)
+            @self.mod.mcp_tool_observe
+            def failing_tool():
+                raise ValueError("test error")
+
+            with self.assertRaises(ValueError):
+                failing_tool()
+            self.assertGreater(self.mod.metrics.get("mcp_tool_failure"), 0)
+        finally:
+            os.environ.pop("MIND_MEM_ACL_DISABLED", None)
 
 
 # ---------------------------------------------------------------------------

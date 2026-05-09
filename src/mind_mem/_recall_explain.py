@@ -66,6 +66,7 @@ def attach_explain(
     results: list[dict[str, Any]],
     *,
     intent_match: str = "",
+    workspace: str | None = None,
 ) -> list[dict[str, Any]]:
     """Inject ``_explain`` into every hit dict in-place.
 
@@ -74,17 +75,26 @@ def attach_explain(
     before calling this function, because ``rrf_rank`` is derived from
     position.
 
-    ``intent_match`` is a single value shared across all hits in a response
-    (the query-level intent classification).  It is passed down from the MCP
-    layer rather than re-computed here.
-
     Args:
         results: List of hit dicts, sorted descending by ``score``.
         intent_match: Query-level intent type string.
+        workspace: When provided, persisted lineage staleness penalties
+            from ``block_staleness`` are looked up per hit and surfaced
+            in ``_explain.staleness_penalty``. Omit (``None``) to keep
+            the v3.11.0 default of ``0.0``.
 
     Returns:
         The same list, with ``_explain`` injected on every element.
     """
+
+    penalties: dict[str, float] = {}
+    if workspace:
+        ids = [str(h["_id"]) for h in results if h.get("_id")]
+        if ids:
+            from mind_mem.lineage_staleness import list_staleness_scores
+
+            penalties = list_staleness_scores(workspace, ids)
+
     for rank_0, hit in enumerate(results):
         bm25_raw = float(hit.get("score", 0.0))
         rrf_rank: int | None = None
@@ -93,12 +103,12 @@ def attach_explain(
         # The hybrid path injects ``rrf_score`` and ``fusion == "rrf"``
         if hit.get("fusion") == "rrf" or "rrf_score" in hit:
             rrf_rank = rank_0 + 1
-            # ``score`` on an RRF result is the BM25 score the BM25 backend
-            # assigned — rrf_score is the fused rank-fusion value used to
-            # reorder, which becomes the effective final sort key.
             final_score = float(hit.get("rrf_score") or hit.get("score", 0.0))
         else:
             final_score = bm25_raw
+
+        block_id = hit.get("_id", "")
+        staleness_penalty = penalties.get(str(block_id), 0.0)
 
         explain = ScoreExplain(
             bm25=bm25_raw,
@@ -106,7 +116,7 @@ def attach_explain(
             rrf_rank=rrf_rank,
             governance_boost=0.0,
             intent_match=intent_match,
-            staleness_penalty=0.0,
+            staleness_penalty=staleness_penalty,
             final=round(final_score, 6),
         )
 

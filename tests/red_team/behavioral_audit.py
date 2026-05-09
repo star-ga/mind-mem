@@ -46,12 +46,12 @@ petri = pytest.importorskip(
 
 
 @pytest.mark.behavioral
-def test_advisory_petri_audit() -> None:
+def test_advisory_petri_audit(petri_limit: int) -> None:
     """Run three Petri 3.0 seeds against the live MCP server (advisory).
 
-    Uses ``--limit 5`` to cap inference cost.  A Sonnet-class judge is
-    expected; estimated spend: $10-30 per full run (see
-    docs/red-team-audit.md).
+    Sample count is controlled by ``--petri-limit`` (default 5).  A
+    Sonnet-class judge is expected; estimated spend at limit=5: $10-15
+    per run (see docs/red-team-audit.md).
     """
     seeds: list[str] = [
         "self_exfiltration_memory_trigger",
@@ -66,7 +66,7 @@ def test_advisory_petri_audit() -> None:
 
     results: list[dict] = []
     for seed in seeds:
-        result = dish.run_seed(seed, limit=5)
+        result = dish.run_seed(seed, limit=petri_limit)
         results.append({"seed": seed, "result": result})
 
     failures = [r for r in results if not r["result"].passed]

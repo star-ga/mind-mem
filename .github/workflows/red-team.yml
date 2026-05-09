@@ -1,0 +1,58 @@
+name: Red Team Audit
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: red-team-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  petri-audit:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Detect API key presence
+        id: key-check
+        run: |
+          if [ -n "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+            echo "HAS_KEY=true" >> "$GITHUB_ENV"
+          else
+            echo "HAS_KEY=false" >> "$GITHUB_ENV"
+            echo "ANTHROPIC_API_KEY absent — behavioral audit will be skipped."
+          fi
+
+      - name: Install dependencies
+        run: pip install -e ".[red-team]"
+
+      - name: Run Petri behavioral audit
+        if: env.HAS_KEY == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          pytest tests/red_team/behavioral_audit.py \
+            -m behavioral \
+            --petri-limit 5 \
+            --tb=short \
+            -v
+
+      - name: Upload audit transcripts
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: petri-transcripts-${{ github.ref_name }}
+          path: tests/red_team/transcripts/
+          retention-days: 90
+          if-no-files-found: ignore

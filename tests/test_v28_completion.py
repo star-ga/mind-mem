@@ -231,7 +231,11 @@ class TestHookInstaller:
 
     def test_install_config_dry_run(self, tmp_path) -> None:
         res = hook_installer.install_config("codex", str(tmp_path), dry_run=True)
-        assert res["written"] is False and "mm context" in res["content"]
+        # v3.10.2 replaced the legacy ``mm context`` marker with the
+        # canonical Memory Protocol snippet. The dry-run preview must
+        # still surface mind-mem's role.
+        assert res["written"] is False
+        assert "Memory Protocol" in res["content"] or "mind-mem" in res["content"]
 
     def test_install_config_writes(self, tmp_path) -> None:
         res = hook_installer.install_config("codex", str(tmp_path), dry_run=False)
