@@ -3180,7 +3180,7 @@ _QUALITY_GATE_PROBES: list[tuple[str, str]] = [
     ),
     (
         "What does `propose_update` do when `quality_gate.mode` is `\"advisory\"`?",
-        'When `quality_gate.mode = "advisory"`, `propose_update` still calls `validate_block` pre-write but every fired rule populates the verdict\'s `advisory` list rather than `reasons`.  The aggregate `quality_gate_rejections` counter is bumped and a `quality_gate_reject` warning is logged, but `propose_update` proceeds with the write — advisory mode never blocks.',
+        'When `quality_gate.mode = "advisory"`, `propose_update` still calls `validate_block` pre-write but every fired rule populates the verdict\'s `advisory` list rather than `reasons`.  The aggregate `quality_gate_rejections` counter is bumped, per-rule counters are bumped, and a `quality_gate_advisory` warning is logged (NOT `quality_gate_reject` — that name is reserved for strict-mode rejections); `propose_update` proceeds with the write — advisory mode never blocks.',
     ),
     (
         "What is the shape of the rejection envelope when strict mode fires?",
@@ -3208,7 +3208,7 @@ _QUALITY_GATE_PROBES: list[tuple[str, str]] = [
     ),
     (
         "Is there an escape hatch to write a block that fails validation in strict mode?",
-        'Yes — but NOT via `propose_update(force=True)`.  `propose_update` has no `force` parameter.  To bypass the strict mode gate: call `validate_block(text, force=True)` directly to obtain a verdict annotated `forced=True`; then set `quality_gate.mode = "off"` in `mind-mem.json` to disable the gate for the workspace.  Use sparingly.',
+        'Yes — but NOT via `propose_update(force=True)`.  `propose_update` has no `force` parameter.  The only way to bypass the strict mode gate per workspace is to set `quality_gate.mode = "off"` in `mind-mem.json` — when the mode is `"off"`, `propose_update` does not call `validate_block` at all.  (`validate_block(text, force=True)` exists at the library level and returns a verdict annotated `forced=True`, but `propose_update` does not expose that path; the workspace-level config flag is the operator escape hatch.)  Use sparingly.',
     ),
     (
         "What operator runbook covers the quality gate configuration?",
@@ -3294,7 +3294,7 @@ _LINEAGE_STALENESS_PROBES: list[tuple[str, str]] = [
     ),
     (
         "What is the maximum number of hops `propagate_lineage_staleness` will walk?",
-        'The default cap is `max_hops=3`.  The function signature is `propagate_lineage_staleness(workspace, source_id, max_hops=3)`.  Increasing `max_hops` raises the propagation radius but also the write volume to `block_staleness`.',
+        'The signature is `propagate_lineage_staleness(workspace, source_id, *, max_hops=None)`.  When `max_hops` is `None` (the default) it falls through to `LINEAGE_DEPTH_CAP = 3`; an explicit larger value is silently clamped to 3 with no warning.  The cap bounds both BFS depth and the volume of rows written to `block_staleness`.',
     ),
     (
         "How do I trigger lineage staleness propagation from the CLI?",
@@ -3334,7 +3334,7 @@ _LINEAGE_STALENESS_PROBES: list[tuple[str, str]] = [
     ),
     (
         "Does `propagate_lineage_staleness` write to the `block_staleness` table for the source block itself?",
-        'No.  The source block (`source_id`) is the origin of the propagation, not a target.  Only blocks reachable from `source_id` via the lineage graph (treated as undirected at read time — `_outgoing` issues `UNION ALL` in both directions) within `max_hops` receive staleness rows.',
+        'No.  The source block (`source_id`) is the origin of the propagation, not a target.  Seeds are the immediate neighbours of `source_id` — `_classify_seed_neighbours` issues `UNION ALL` over `co_retrieval` in both directions, except the reverse direction excludes `kind=cooccurrence` (statistical correlations do not propagate backwards).  The BFS itself walks `lineage_adjacency`, which is fully undirected.  Only blocks reachable within `max_hops` receive staleness rows.',
     ),
     (
         "What is the decay multiplier for a `cites` edge in lineage staleness?",
