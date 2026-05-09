@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 739 | **Est. tokens:** ~1,510,011
-**Generated:** 2026-05-09 00:56 UTC
+**Files:** 740 | **Est. tokens:** ~1,512,899
+**Generated:** 2026-05-09 00:59 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 34 | ~84,980 |
+| `./` | 34 | ~85,056 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,101 |
 | `benchmarks/` | 26 | ~64,933 |
@@ -30,7 +30,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 65 | ~105,000 |
+| `docs/` | 66 | ~107,812 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -101,7 +101,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~1945 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~23629 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~23705 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `ROADMAP.md` (~24690 tok, huge) — MIND-Mem Roadmap
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
@@ -197,6 +197,7 @@
 - `glossary.md` (~263 tok, medium) — Glossary
 - `governance.md` (~1366 tok, large) — MIND-Mem — governance design (5 layers)
 - `hf-mind-mem-4b-v2-README.md` (~2154 tok, huge) — mind-mem-4b v2 (2026-04-21)
+- `install-guide.md` (~2812 tok, huge) — Installation guide — every step + every option
 - `integrations.md` (~1545 tok, huge) — Integrations
 - `locomo-v3.4-conv0-results.md` (~449 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
 - `maintenance-namespaces.md` (~1601 tok, huge) — `maintenance/` namespaces

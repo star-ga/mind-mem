@@ -462,6 +462,18 @@ Query latency scales as O(log N) with SQLite FTS5 (vs O(corpus) for scan backend
 
 ```bash
 # Retrieval-only (R@K metrics)
+
+## Install in 3 commands
+
+```bash
+pip install mind-mem
+mm install-all --force      # auto-wires every detected AI CLI
+mm install-model            # downloads mind-mem-4b GGUF + imports to Ollama
+```
+
+Full options + Postgres setup + troubleshooting:
+[**docs/install-guide.md**](docs/install-guide.md)
+
 python3 benchmarks/locomo_harness.py
 python3 benchmarks/longmemeval_harness.py
 
