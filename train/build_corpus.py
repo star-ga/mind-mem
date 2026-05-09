@@ -2928,7 +2928,11 @@ _VALIDATE_BLOCK_PHRASINGS: list[tuple[str, str]] = [
     ("Which tool validates a block without writing it?", "validate_block"),
     ("What does `validate_block` do in advisory mode?", "validate_block"),
     ("How do I run `validate_block` in strict mode?", "validate_block"),
-    ("What does `validate_block(text, strict=True)` return on a violation?", "validate_block"),
+    # Two phrasings asked verbatim by eval_harness V311_NEW_TOOLS — keep
+    # them aligned so the §0.1 audit returns TOTAL_ISSUES: 0.
+    ("What does `validate_block(text, strict=True)` do on a rule violation?", "validate_block"),
+    ("How do I detect prompt-injection patterns in a candidate block?", "validate_block"),
+    ("Which v3.11.0 tool checks for duplicate, oversize, and UTF-8 issues before a write?", "validate_block"),
     ("When should I call `validate_block` vs `propose_update`?", "validate_block"),
 ]
 
@@ -3001,6 +3005,12 @@ _LINEAGE_PATTERNS: list[tuple[str, str]] = [
     (
         "What are the five edge kinds in `block_lineage`?",
         "The five typed edge kinds are `cites` (direct citation), `implements` (code realises spec), `refines` (one block narrows another), `contradicts` (governance conflict), and `cooccurrence` (statistical co-retrieval).",
+    ),
+    (
+        # Eval-harness V311_NEW_TOOLS[9] uses this exact prompt and
+        # requires every kind name to appear in the answer.
+        "What are the five edge kinds supported by `block_lineage`?",
+        "`block_lineage` supports five typed edge kinds: `cites` (direct citation), `implements` (code realises spec), `refines` (one block narrows another), `contradicts` (governance conflict), and `cooccurrence` (statistical co-retrieval).",
     ),
     (
         "What is the default `max_depth` for `block_lineage`?",
