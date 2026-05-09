@@ -2890,40 +2890,43 @@ def _cap_multimodal_answers(path, max_answers_per_prompt: int = 2) -> None:
 # ---------------------------------------------------------------------------
 
 _VALIDATE_BLOCK_RULES: list[tuple[str, str, str]] = [
+    # Each tuple is (canonical_rule_name, intent, explanation).  Names
+    # MUST match the literal strings emitted by quality_gate.py — the
+    # model uses these as substrings in `_explain` reasoning later.
     (
         "empty",
         "validate_block rejects an empty block",
-        "The `validate_block` tool returns `rule: empty` when the block text is blank or contains only whitespace.  Set `strict=True` to make this an error rather than a warning.",
+        "The `validate_block` tool appends `empty: block is empty or whitespace-only` to the verdict's `reasons` list (strict mode) or `advisory` list (advisory mode) when `text.strip()` is falsy.",
     ),
     (
-        "short",
+        "too_short",
         "validate_block rejects a block that is too short to be meaningful",
-        "`validate_block` fires the `short` rule when the block text is under the minimum token threshold (default 3 tokens).  The advisory response lists the actual token count alongside the threshold.",
+        "`validate_block` fires the `too_short` rule when the count of non-whitespace characters is under `_MIN_CHARS` (32).  The reason string lists the actual character count alongside the minimum.",
     ),
     (
-        "duplicate",
-        "validate_block detects a block that is near-identical to an existing block",
-        "The `duplicate` rule fires when cosine similarity between the candidate and an existing block exceeds the dedup threshold (0.97 by default).  Returned data includes the conflicting block ID and similarity score.",
+        "near_duplicate",
+        "validate_block detects a block that is near-identical to a recent block",
+        "The `near_duplicate` rule fires when `difflib.SequenceMatcher`'s ratio against any block written in the last 24h is at or above `_DUP_RATIO` (0.97).  The reason string includes the matched ratio.",
     ),
     (
-        "stopwords",
-        "validate_block rejects a block whose content is almost entirely stopwords",
-        "The `stopwords` rule fires when more than 80% of the tokens in the block are function words (the, is, a, …).  This usually indicates an accidentally captured boilerplate fragment.",
+        "stopwords_only",
+        "validate_block rejects a block whose content is entirely stopwords",
+        "The `stopwords_only` rule fires when EVERY token (after lowercasing and `[A-Za-z0-9_]+` extraction) is in the stopword set.  Mixed content with even one non-stopword passes.",
     ),
     (
         "oversize",
-        "validate_block rejects a block that exceeds the size limit",
-        "`validate_block` applies the `oversize` rule when the serialized block exceeds `max_block_bytes` (default 64 KB).  Split large content across multiple blocks before writing.",
+        "validate_block rejects a block that exceeds the byte limit",
+        "`validate_block` applies the `oversize` rule when the UTF-8 encoded byte length exceeds `_MAX_BYTES` (64 * 1024 = 65,536).  Split large content across multiple blocks before writing.",
     ),
     (
-        "utf8",
-        "validate_block rejects a block with invalid UTF-8 sequences",
-        "The `utf8` rule catches raw byte sequences that are not valid UTF-8.  They would corrupt the SQLite FTS index if written.  Re-encode the source document before proposing the block.",
+        "malformed_utf8",
+        "validate_block rejects a block that cannot encode as UTF-8",
+        "The `malformed_utf8` rule catches strings containing lone surrogates that fail `text.encode('utf-8')` strict mode.  Such payloads would corrupt the SQLite FTS index if written.",
     ),
     (
-        "injection",
+        "injection_marker",
         "validate_block detects prompt-injection patterns in block text",
-        "The `injection` rule fires when the block text contains patterns that resemble system-prompt overrides (e.g. `Ignore previous instructions`).  In `strict=True` mode this is a hard block; in advisory mode it is a warning with the matched pattern in the response.",
+        "The `injection_marker` rule fires when the block text matches any of the regex patterns in `_INJECTION_MARKERS` (e.g. `ignore previous instructions`, `<|im_start|>`, `[[INST]]`, `jailbreak`).  In strict mode this becomes a `reasons[]` entry; in advisory mode an `advisory[]` entry.",
     ),
 ]
 
@@ -2964,11 +2967,11 @@ def _harvest_v311_validate_block() -> Iterator[dict]:
     for q, a in [
         (
             "Difference between `validate_block(strict=False)` and `validate_block(strict=True)`?",
-            "In advisory mode (`strict=False`, the default) `validate_block` returns a list of rule violations as warnings — the caller decides whether to proceed.  In strict mode (`strict=True`) any violation raises a `ValidationError` that blocks the write.",
+            "Both modes evaluate every rule and return a `QualityGateVerdict` dataclass.  In advisory mode (`strict=False`, the default) every fired rule appends to the `advisory` list and `accept` stays True.  In strict mode (`strict=True`) every fired rule appends to the `reasons` list and `accept` becomes False.  No exception is raised in either case — the verdict is the return value.",
         ),
         (
-            "Can `validate_block` force-escape a block that fails the `injection` rule?",
-            "`validate_block` does not mutate the text.  Pass `force_escape=True` to receive a sanitized copy with injection patterns neutralized, then pass that copy to `propose_update`.",
+            "Can `validate_block` force-accept a block that fails the `injection_marker` rule?",
+            "Yes.  Pass `force=True` to `validate_block`.  The verdict is annotated `forced=True`, every fired rule still appears in the `advisory` list (so the caller can audit what was bypassed), and `accept` is forced to True.  `validate_block` does not mutate the text — sanitisation is the caller's responsibility.",
         ),
     ]:
         yield {
@@ -3169,15 +3172,15 @@ _QUALITY_GATE_PROBES: list[tuple[str, str]] = [
     ),
     (
         "Where does `quality_gate.mode` live in the config file?",
-        '`quality_gate.mode` is a nested key inside `mind-mem.json` under the `quality_gate` object.  Example: `{"quality_gate": {"mode": "strict"}}`.  The file lives at `$MIND_MEM_WORKSPACE/mind-mem.json` (or the path pointed to by `MM_CONFIG`).',
+        '`quality_gate.mode` is a nested key inside `mind-mem.json` under the `quality_gate` object.  Example: `{"quality_gate": {"mode": "strict"}}`.  The file lives at `$MIND_MEM_WORKSPACE/mind-mem.json` and is read by `_load_config(workspace)` in `src/mind_mem/mcp/infra/config.py`.',
     ),
     (
         "What does `propose_update` do differently when `quality_gate.mode` is `\"strict\"`?",
-        'When `quality_gate.mode = "strict"`, `propose_update` calls `validate_block(text, strict=True)` before staging the block.  If any rule fires, `propose_update` raises a `ValidationError` and returns a 400 envelope — the block is never staged.',
+        'When `quality_gate.mode = "strict"`, `propose_update` calls `validate_block(text, strict=True)` before staging the block.  If any rule fires, `propose_update` returns the rejection envelope `{"error": "quality_gate_rejection", "mode": "strict", "reasons": [...], "advisory": [...], "hint": "..."}` as a JSON string — no Python exception is raised.  The block is never staged.',
     ),
     (
         "What does `propose_update` do when `quality_gate.mode` is `\"advisory\"`?",
-        'When `quality_gate.mode = "advisory"`, `propose_update` calls `validate_block` pre-write and attaches any warnings to the response under `validation_warnings`.  The write proceeds regardless — advisory mode never blocks.',
+        'When `quality_gate.mode = "advisory"`, `propose_update` still calls `validate_block` pre-write but every fired rule populates the verdict\'s `advisory` list rather than `reasons`.  The aggregate `quality_gate_rejections` counter is bumped and a `quality_gate_reject` warning is logged, but `propose_update` proceeds with the write — advisory mode never blocks.',
     ),
     (
         "What is the shape of the rejection envelope when strict mode fires?",
@@ -3245,7 +3248,7 @@ _QUALITY_GATE_PROBES: list[tuple[str, str]] = [
     ),
     (
         "Where is `quality_gate.mode` parsed in the codebase?",
-        '`quality_gate.mode` is parsed in `src/mind_mem/mcp/infra/config.py`.  The value is read and validated at config-load time; an invalid mode string raises `ConfigError` with the allowed values listed.',
+        '`quality_gate.mode` is parsed in `src/mind_mem/mcp/infra/config.py` by `_get_quality_gate_mode(ws)`.  The function reads `mind-mem.json`, looks up the nested `quality_gate.mode` key, and silently falls back to the default `"advisory"` if the key is missing or the value is not in `{"off", "advisory", "strict"}` — no exception is raised on invalid input.',
     ),
     (
         "What is the relationship between `quality_gate.mode` and `validate_block(strict=True)`?",
@@ -3367,7 +3370,7 @@ _LINEAGE_STALENESS_PROBES: list[tuple[str, str]] = [
     ),
     (
         "How does `mm lineage flag` differ from calling `add_block_edge` then `propagate_lineage_staleness` separately?",
-        '`mm lineage flag` is a convenience wrapper that calls both in sequence within a single CLI invocation.  The Python API calls are equivalent.  The CLI is preferred for operator use because it logs both operations to the audit trail in a single trace.',
+        '`mm lineage flag` is a convenience wrapper that calls both in sequence within a single CLI invocation and prints the combined JSON result `{"ok": true, "edge": {...}, "propagated": <count>, "affected_blocks": [...]}`.  The Python API calls are equivalent.  Use the CLI for one-shot operator workflows; call the functions directly when you need finer control over each step.',
     ),
 ]
 
