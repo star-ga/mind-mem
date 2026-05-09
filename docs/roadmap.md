@@ -4,7 +4,134 @@
 > in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
 > full milestone breakdown.
 
-## v3.8.11 (Current — released 2026-05-02)
+## v3.11.1 (Current — released 2026-05-08)
+
+B101 hardening + ACL whitelist backfill. GHAS #179/#180 cleared by
+replacing runtime `assert` invariants with `if/raise RuntimeError` so
+they survive `python -O`. Backfilled seven previously-registered MCP
+tools missing from `USER_TOOLS` (`audit_model_tool`, `sign_model_tool`,
+`verify_model_tool`, `compile_truth_walkthrough`,
+`recall_with_persona`, `mic_convert_tool`, `mic_inspect_tool`). 40+
+previously-failing tests turn green. Sigstore-signed,
+OIDC-published.
+
+## v3.11.0 (Released 2026-05-08)
+
+Three additive surfaces locked from a 4-model multi-LLM consensus
+(Grok 4.1, Mistral Large, DeepSeek v4, GLM-5; mean 8.3/10):
+
+- **`validate_block`** — deterministic 7-rule quality gate
+  (`empty`, `too_short`, `oversize`, `malformed_utf8`,
+  `stopwords_only`, `near_duplicate` ≥0.97 in 24h,
+  `injection_marker`). Advisory by default; strict + force escape
+  config-gated. 28 tests, 96% cov.
+- **`block_lineage` + `add_block_edge`** — typed lineage edges
+  (`cites` / `implements` / `refines` / `contradicts` /
+  `cooccurrence`) over the v2.6.0 co_retrieval graph. Bounded BFS
+  at 3 hops + 1000-node cap. Kind-specific decay multipliers feed
+  the v2.6.0 staleness propagator unchanged. 27 tests.
+- **`recall(query, explain=True)` + `hybrid_search(query,
+  explain=True)`** — per-hit `_explain` { bm25, vector, rrf_rank,
+  governance_boost, intent_match, staleness_penalty, final } with
+  math-consistency invariant. Default-omit; payload byte-identical
+  to v3.10.x. 24 tests, 100% cov.
+
+Tool count: 81 → 84. Zero-downtime co_retrieval `kind` migration.
+Petri behavioral-audit scaffold landed (advisory CI, gated by
+`[red-team]` extra). `mind-mem-4b` v3.11.0-fullft retrain in flight.
+
+## v3.12.0 candidates (next, target 2026-05-15)
+
+Four themes already in the codebase or one-step-from-shipping. Each
+slot is sized to be additive, opt-in, and CI-gateable. The
+mind-mem-4b v3.11.0-fullft retrain unblocks all four (without it,
+the new tool-call surface degrades on the local model).
+
+### Theme A — `mind-mem-4b` v3.11.0-fullft GA bundle
+
+Train + ship the local model that knows the v3.11.0 surface.
+Corpus + eval delta + recipe already committed to `train/` (see
+`train/CORPUS_HASH_v3.11.0`, `docs/v3.11.0-mind-mem-4b-retrain-plan.md`).
+
+- [ ] Provision H200 RunPod with stable persistent volume
+- [ ] Run `train/build_corpus.py` (+104 v3.11 probes already wired)
+- [ ] Run train (3 epochs, ~5h), pull GGUF Q4_K_M
+- [ ] 7-category eval — `tool_call ≥95`, `block_schema ≥98`,
+      `workflow ≥90`, `v39_new_tools ≥90`, `v39_transform_hash ≥95`,
+      `v39_transport_guard ≥95`, **`v311_new_tools ≥90`**,
+      **`v311_explain_field ≥95`**
+- [ ] HF upload to `star-ga/mind-mem-4b` revision `v3.11.0`
+- [ ] Modelfile bump in `train/Modelfile.v3.11.0`
+- [ ] `mm install-model --version v3.11.0` works end-to-end
+- [ ] HF model card refresh + README badge update
+
+### Theme B — Quality-gate hard mode (config-gated)
+
+`validate_block` ships v3.11.0 in advisory-only mode. v3.12 turns on
+`quality_gate_mode = "strict"` for `propose_update` pre-write, opt-in
+via `mind-mem.json`. The gate is already wired to `propose_update`
+through the MCP layer — needs the config plumbing + a clean error
+message + a metrics counter.
+
+- [ ] `mind-mem.json` reads `quality_gate.mode` ∈ `{"off", "advisory",
+      "strict"}` (default `"advisory"`)
+- [ ] `propose_update` invokes `validate_block` pre-write when
+      mode != `"off"`; rejects with structured 400 in strict mode
+- [ ] Metrics: `quality_gate_rejections_total{rule=...}` (stdout
+      logger today; Prometheus exporter when installed)
+- [ ] Config-honor test for all three modes
+- [ ] Operator runbook in `docs/quality-gate.md`
+
+### Theme C — Block-lineage staleness propagation wiring
+
+`block_lineage` ships v3.11.0 with the typed edges + bounded BFS
+reader. The v2.6.0 staleness propagator already accepts an
+adjacency map. v3.12 wires them: when a `contradicts` edge fires,
+the dependent subgraph automatically inherits a propagated
+`staleness_penalty` that the new `_explain` field then surfaces.
+
+- [ ] On `add_block_edge(..., kind="contradicts")`, schedule a
+      bounded staleness pass (`max_hops=3`, kind-specific decay)
+- [ ] Persist resulting penalties to a new
+      `block_staleness(block_id, score, source_id, decayed_at)`
+      table; idempotent upsert
+- [ ] Recall reranker reads the penalty when present — already
+      surfaces in `_explain.staleness_penalty` (returns 0.0 today
+      because the table doesn't exist yet)
+- [ ] CLI: `mm lineage flag <block-id> --kind contradicts <target>`
+      one-liner that bundles add_block_edge + propagate
+- [ ] e2e test: contradicting one block visibly demotes its
+      dependents in the next recall
+
+### Theme D — Petri behavioral audit promoted to advisory CI
+
+Scaffold shipped in v3.11.0 (`tests/red_team/`,
+`docs/red-team-audit.md`). v3.12 promotes the 3 seeds
+(`self_exfiltration_memory_trigger`, `broken_tool_error_handling`,
+`weird_ood_tool_use`) to a real, advisory-only CI job that runs on
+release tags. Hard-blocking is deferred to v3.13 once we have
+baseline pass-rate data.
+
+- [ ] `.github/workflows/red-team.yml` runs on tag-push only
+      (`release/v*`), `continue-on-error: true`
+- [ ] Pre-flight check: skip cleanly if `ANTHROPIC_API_KEY`
+      secret is absent (PR forks)
+- [ ] Workflow uploads transcripts as artifacts (90-day retention)
+- [ ] Cost cap via `--limit 5` per seed, sonnet judge — total
+      ~$10-15/run
+- [ ] Update `docs/red-team-audit.md` with the new CI job pointer
+
+### Out of scope for v3.12.0
+
+- Networked mesh / federated recall — that's v4.0 (see
+  "v4.0 candidates" below)
+- Streaming consensus mixer — stays in private naestro-bot
+- gRPC transport — v4.0
+- Sharded Postgres — v4.0
+
+---
+
+## v3.8.11 (Released 2026-05-02)
 
 Surface MIC/MAP for end users — MCP tools + `mm mic` CLI + docs +
 example. The codec has shipped pure-Python since v3.8.5 but was

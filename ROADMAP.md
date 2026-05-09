@@ -1414,6 +1414,102 @@ Deterministic quality validation, typed relationship edges for dependency tracki
 ### Migration
 No breaking changes. Existing blocks work unchanged. New tools opt-in via MCP config. Lineage edges optional; backward-compatible if omitted.
 
+## v3.11.1 — B101 hardening + ACL backfill ✅ Released 2026-05-08
+
+GHAS #179, #180: replace runtime `assert` invariants with hard
+`if/raise RuntimeError` so the math-consistency invariant in
+`_recall_explain.py` and the type-narrowing path in
+`quality_gate.py` survive `python -O` (where `assert` is compiled
+out). Backfill 7 MCP tools missing from `USER_TOOLS` —
+`audit_model_tool`, `sign_model_tool`, `verify_model_tool`,
+`compile_truth_walkthrough`, `recall_with_persona`,
+`mic_convert_tool`, `mic_inspect_tool` — clearing 40+ pre-existing
+red tests. ruff + mypy + Bandit (medium/high) clean.
+
+## v3.12.0 — Local-model GA, hard quality gate, lineage staleness, red-team CI
+
+Target: 2026-05-15. Four additive themes; each is independently
+shippable so a slip in one doesn't block the others.
+
+### Theme A — `mind-mem-4b` v3.11.0-fullft GA bundle
+
+The v3.10.2-fullft model is degraded on the v3.11.0 tool surface.
+Retrain corpus + eval delta + recipe already committed (`train/`,
+`docs/v3.11.0-mind-mem-4b-retrain-plan.md`). Theme A ships the GA
+bundle so `mm install-model --version v3.11.0` is end-to-end.
+
+- [ ] H200 RunPod provisioned (~6h, ~$20)
+- [ ] Train + GGUF Q4_K_M export
+- [ ] 7-category eval — `tool_call ≥95`, `block_schema ≥98`,
+  `workflow ≥90`, `v39_new_tools ≥90`, `v39_transform_hash ≥95`,
+  `v39_transport_guard ≥95`, **`v311_new_tools ≥90`**,
+  **`v311_explain_field ≥95`**
+- [ ] HF upload to `star-ga/mind-mem-4b` rev `v3.11.0`
+- [ ] `train/Modelfile.v3.11.0` Modelfile bump
+- [ ] HF model card refresh + README badge
+
+### Theme B — Quality-gate hard mode (config-gated)
+
+`validate_block` ships v3.11.0 advisory-only. v3.12 turns on
+`quality_gate.mode = "strict"` for `propose_update` pre-write —
+opt-in via `mind-mem.json`. Wiring already exists; needs config
+plumbing + clean error message + metrics counter.
+
+- [ ] `mind-mem.json` reads `quality_gate.mode` ∈
+  `{"off", "advisory", "strict"}` (default `"advisory"`)
+- [ ] `propose_update` invokes `validate_block` pre-write when
+  mode != `"off"`; structured 400 in strict mode
+- [ ] Metrics: `quality_gate_rejections_total{rule=...}`
+- [ ] `docs/quality-gate.md` operator runbook
+- [ ] Config-honor test for all three modes
+
+### Theme C — Block-lineage staleness propagation wiring
+
+v3.11.0 ships `block_lineage` typed edges + bounded BFS. v2.6.0
+ships the staleness propagator. v3.12 wires them: when a
+`contradicts` edge is added, the dependent subgraph inherits a
+propagated `staleness_penalty` that `_explain.staleness_penalty`
+then surfaces in recall.
+
+- [ ] `add_block_edge(..., kind="contradicts")` schedules a
+  bounded staleness pass (`max_hops=3`, kind-specific decay)
+- [ ] `block_staleness(block_id, score, source_id, decayed_at)`
+  table; idempotent upsert; SQLite + Postgres parity
+- [ ] Recall reranker reads the penalty;
+  `_explain.staleness_penalty` returns the live value
+- [ ] CLI: `mm lineage flag <block-id> --kind contradicts <target>`
+  (bundles `add_block_edge` + propagate)
+- [ ] e2e test: contradicting one block visibly demotes its
+  dependents in the next recall
+
+### Theme D — Petri behavioral audit promoted to advisory CI
+
+Scaffold shipped in v3.11.0 (`tests/red_team/`,
+`docs/red-team-audit.md`). v3.12 promotes the 3 seeds
+(`self_exfiltration_memory_trigger`,
+`broken_tool_error_handling`, `weird_ood_tool_use`) to a
+real, advisory-only CI job that runs on release tags.
+Hard-blocking deferred to v3.13 once we have baseline data.
+
+- [ ] `.github/workflows/red-team.yml` runs on tag-push only
+  (`v*`), `continue-on-error: true`
+- [ ] Skip cleanly when `ANTHROPIC_API_KEY` secret is absent
+- [ ] Upload transcripts as artifacts (90-day retention)
+- [ ] `--limit 5` per seed + sonnet judge → ~$10-15/run
+- [ ] Update `docs/red-team-audit.md` with the CI pointer
+
+### Out of scope for v3.12.0
+
+- Networked mesh / federated recall — v4.0
+- Streaming consensus mixer — stays in private naestro-bot
+- gRPC transport — v4.0
+- Sharded Postgres — v4.0
+
+**Estimated:** ~600 lines training pipeline + ~400 lines quality-gate
+config + ~700 lines lineage propagation + ~150 lines CI = ~1850
+lines. All additive. Existing 81-tool API stays unchanged; new
+behavior is config-gated everywhere.
+
 ## v4.0.0 — Platform Scale (production)
 
 Horizontal scaling, multi-tenant isolation, and edge deployment. This version turns MIND-Mem from a library into a platform. The multi-tenancy thread is also tracked as issue [#505].
