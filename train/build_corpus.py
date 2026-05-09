@@ -2992,7 +2992,7 @@ _LINEAGE_PATTERNS: list[tuple[str, str]] = [
     ),
     (
         "What does `block_lineage` return for a 1-hop traversal?",
-        "`block_lineage(block_id, max_depth=1)` returns only the immediate neighbours — blocks that share a direct typed edge with the target.  Each result node carries `kind`, `source_id`, `target_id`, and `weight`.",
+        "`block_lineage(block_id, max_depth=1)` returns a `LineageResult` whose `edges` list contains every immediate neighbour reachable from the target.  Each `LineageEdge` carries `block_id` (the neighbour), `kind` (one of `cites`/`implements`/`refines`/`contradicts`/`cooccurrence`), `distance` (1 for direct neighbours), and `confidence` (the kind-specific decay multiplier).",
     ),
     (
         "How do I do a 2-hop lineage traversal?",
@@ -3000,11 +3000,11 @@ _LINEAGE_PATTERNS: list[tuple[str, str]] = [
     ),
     (
         "What happens when `block_lineage` encounters a cycle?",
-        "`block_lineage` detects cycles via a visited-set and stops traversal at the first repeated block ID.  The cycle edge is still returned in the graph with `cycle=True` so the caller can visualise the loop.",
+        "`block_lineage` detects cycles via a `visited` set populated as the BFS enqueues each neighbour.  When a node would be revisited it is silently skipped — no `cycle=True` flag is added, no warning is emitted, the edge that would close the cycle simply does not appear in the result.",
     ),
     (
         "What does `block_lineage` return for an isolated block with no edges?",
-        "For a block with no edges, `block_lineage` returns a single-node graph containing only the requested block.  The `edges` list is empty and `depth_reached` is 0.",
+        "`block_lineage` returns `LineageResult(root=<block_id>, edges=[], truncated=False, max_depth=3)` — `to_dict()` shape is `{\"root\": ..., \"edges\": [], \"truncated\": false, \"max_depth\": 3, \"count\": 0}`.  There is no `depth_reached` or `nodes` field.",
     ),
     (
         "How do I filter `block_lineage` to only `cites` edges?",
@@ -3022,11 +3022,11 @@ _LINEAGE_PATTERNS: list[tuple[str, str]] = [
     ),
     (
         "What is the default `max_depth` for `block_lineage`?",
-        "The default `max_depth` is 3.  Passing a larger value is clamped to the configured ceiling (default 10) to prevent runaway traversals on dense graphs.",
+        "The default `max_depth` is `LINEAGE_DEPTH_CAP = 3` (defined in `src/mind_mem/block_lineage.py`).  Any value passed at the call site is clamped via `max(1, min(int(max_depth), LINEAGE_DEPTH_CAP))`, so the effective range is `[1, 3]`.",
     ),
     (
         "What happens if I pass `max_depth=100` to `block_lineage`?",
-        "`block_lineage` clamps `max_depth` at the configured ceiling (default 10).  A warning is included in the response metadata so the caller knows the value was adjusted.",
+        "`block_lineage` silently clamps the value to `LINEAGE_DEPTH_CAP = 3` (using `max(1, min(int(max_depth), LINEAGE_DEPTH_CAP))`).  No warning is emitted and no metadata field is added — the returned `LineageResult.max_depth` reflects the clamped value (3), so callers can detect the clamp by comparing the request to `result.max_depth`.",
     ),
     (
         "How does `block_lineage` differ from `graph_query`?",
@@ -3034,15 +3034,15 @@ _LINEAGE_PATTERNS: list[tuple[str, str]] = [
     ),
     (
         "How do I add an edge before calling `block_lineage`?",
-        "Call `add_block_edge(source_id, target_id, kind='cites', weight=1.0)` to create the edge.  Once the edge is committed, `block_lineage` will include it in subsequent traversals.",
+        "Call `add_block_edge(src, dst, kind='cites', weight=1.0)` to create the edge.  Once the edge is committed (via the underlying upsert into the `co_retrieval` table keyed on `(mem1_id, mem2_id)`), `block_lineage` will include it in subsequent traversals.",
     ),
     (
         "What tool adds a typed edge between two blocks?",
-        "`add_block_edge(source_id, target_id, kind, weight=1.0)` — the v3.11.0 tool that registers a directed typed edge between two existing blocks in the lineage graph.",
+        "`add_block_edge(src, dst, kind, weight=1.0)` — the v3.11.0 MCP tool that records a typed lineage edge.  Reads merge both directions via `UNION ALL`, so the edge is treated as undirected at traversal time even though the underlying row is keyed on `(mem1_id, mem2_id)` = `(src, dst)`.",
     ),
     (
         "What does `add_block_edge` require?",
-        "`add_block_edge` requires `source_id` (existing block ID), `target_id` (existing block ID), and `kind` (one of the five typed kinds).  `weight` defaults to 1.0 and can be any positive float.",
+        "`add_block_edge` requires `src` (existing block ID), `dst` (existing block ID, must differ from `src`), and `kind` (one of `cites`, `implements`, `refines`, `contradicts`, `cooccurrence`).  `weight` defaults to 1.0 (any float).  `ValueError` is raised on a self-loop, an unknown `kind`, or an empty `src`/`dst`.",
     ),
     (
         "Can `block_lineage` traverse `contradicts` edges?",
@@ -3050,7 +3050,7 @@ _LINEAGE_PATTERNS: list[tuple[str, str]] = [
     ),
     (
         "How do I get the full lineage sub-graph for a block?",
-        "Call `block_lineage(block_id, max_depth=10)` with no `kind_filter` to get every reachable node and edge within the depth ceiling.  The returned graph is a dict with `nodes` (list of block IDs + metadata) and `edges` (list of typed edge dicts).",
+        "Call `block_lineage(block_id, max_depth=3)` (the default and ceiling) with no `kind_filter` to get every reachable edge within the bounded BFS.  The `to_dict()` shape is `{\"root\": ..., \"edges\": [...], \"truncated\": <bool>, \"max_depth\": 3, \"count\": <int>}`.  Each entry in `edges` is `{\"block_id\": ..., \"kind\": ..., \"distance\": ..., \"confidence\": ...}`.  There is no separate `nodes` list — the root is in `root` and every neighbour is in `edges`.",
     ),
 ]
 
@@ -3224,7 +3224,7 @@ _QUALITY_GATE_PROBES: list[tuple[str, str]] = [
     ),
     (
         "What is the `quality_gate_rejections_<rule>` counter format?",
-        'It is a per-rule integer counter keyed as `quality_gate_rejections_<rule>` where `<rule>` is the real rule name (e.g. `near_duplicate`, `injection_marker`, `oversize`, `malformed_utf8`).  The counters live in the in-process metrics store and are NOT exposed by `index_stats`; read them via the Prometheus exporter or `metrics.snapshot()`.',
+        'It is a per-rule integer counter keyed as `quality_gate_rejections_<rule>` where `<rule>` is the exact rule name as registered in `quality_gate.py` — `empty` (NOT `whitespace_only`), `too_short`, `oversize`, `malformed_utf8`, `stopwords_only`, `near_duplicate`, `injection_marker`.  The counters live in the in-process metrics store and are NOT exposed by `index_stats`; read them via the Prometheus exporter or `metrics.snapshot()`.',
     ),
     (
         "How do I confirm that `quality_gate.mode` changed from advisory to strict?",
@@ -3290,7 +3290,7 @@ _LINEAGE_STALENESS_PROBES: list[tuple[str, str]] = [
     ),
     (
         "Why does a `contradicts` edge propagate the fastest in lineage staleness?",
-        '`contradicts` edges carry a decay multiplier of 1.0 — no attenuation.  When a block is flagged as stale via a `contradicts` edge, every dependent block inherits the full penalty immediately.  Other edge kinds attenuate the penalty at each hop.',
+        '`contradicts` carries `KIND_DECAY = 1.0` — the strongest possible seed-edge multiplier.  Because KIND_DECAY is applied ONCE at the seed edge, picking `contradicts` as the seed edge produces the loudest signal that survives the subsequent HOP_DECAY attenuation; weaker seed kinds (`cites` 0.8, `implements` 0.6, `cooccurrence` 0.5, `refines` 0.4) start the BFS from a smaller initial penalty.',
     ),
     (
         "What is the maximum number of hops `propagate_lineage_staleness` will walk?",
@@ -3318,7 +3318,7 @@ _LINEAGE_STALENESS_PROBES: list[tuple[str, str]] = [
     ),
     (
         "How does `propagate_lineage_staleness` compute the penalty for a block two hops away?",
-        'At each hop the incoming penalty is multiplied by the decay multiplier for the traversed edge kind.  For a source penalty of 1.0 traversing `contradicts` (1.0) then `cites` (0.8): hop-1 penalty = 1.0, hop-2 penalty = 0.8.  The score stored is the product of all multipliers along the path.',
+        'The stored score is `KIND_DECAY[seed_edge_kind] × HOP_DECAY[h]`, with `HOP_DECAY = (1.0, 0.9, 0.5, 0.2)` indexed by BFS hop distance from the seed.  KIND_DECAY is applied ONCE — at the seed edge (the edge from `source_id` to its immediate neighbour); subsequent BFS hops do NOT pick up additional kind multipliers.  Concretely: if `source_id` has a `contradicts` edge to seed S (KIND_DECAY=1.0), the block at hop=1 from S stores `1.0 × 0.9 = 0.9`; the block at hop=2 from S stores `1.0 × 0.5 = 0.5`.  Replacing the seed kind with `cites` (0.8): hop=1 from S stores `0.8 × 0.9 = 0.72`; hop=2 stores `0.8 × 0.5 = 0.4`.',
     ),
     (
         "What happens when `propagate_lineage_staleness` encounters a block that already has a higher staleness score from a different source?",
@@ -3338,11 +3338,11 @@ _LINEAGE_STALENESS_PROBES: list[tuple[str, str]] = [
     ),
     (
         "What is the decay multiplier for a `cites` edge in lineage staleness?",
-        'The `cites` decay multiplier is `0.8`.  A penalty of 1.0 at the source becomes 0.8 for the directly-cited block, 0.64 for a block two hops away via two `cites` edges, and so on.',
+        'The `cites` decay multiplier is `0.8` — applied ONCE at the seed edge (the edge from `source_id` to its immediate neighbour). Further BFS hops use only `HOP_DECAY = (1.0, 0.9, 0.5, 0.2)` regardless of the kinds of edges traversed inside the BFS.  So a `cites` seed gets `0.8 × 1.0 = 0.8`; the block one BFS hop further stores `0.8 × 0.9 = 0.72`; two BFS hops further stores `0.8 × 0.5 = 0.4`.',
     ),
     (
         "What is the decay multiplier for a `cooccurrence` edge?",
-        'The `cooccurrence` decay multiplier is `0.5`.  Co-occurrence edges represent statistical correlation, not a semantic dependency, so the staleness signal is attenuated by half at each hop.',
+        'The `cooccurrence` decay multiplier is `0.5` — applied ONCE at the seed edge (the edge from `source_id` to its immediate neighbour).  Co-occurrence edges represent statistical correlation, not a semantic dependency, so the seed already absorbs a 0.5 attenuation; further hops attenuate via `HOP_DECAY = (1.0, 0.9, 0.5, 0.2)` only — kind does not re-enter the formula.',
     ),
     (
         "What is the decay multiplier for an `implements` edge?",
@@ -3358,7 +3358,7 @@ _LINEAGE_STALENESS_PROBES: list[tuple[str, str]] = [
     ),
     (
         "What BFS traversal strategy does `propagate_lineage_staleness` use?",
-        'Bounded BFS starting from `source_id`.  A visited set prevents re-visiting blocks.  The queue is depth-limited to `max_hops`.  Each enqueued node carries the accumulated penalty at the time of enqueue so the correct attenuation is applied when the node is dequeued.',
+        'Bounded BFS starting from each immediate neighbour of `source_id` (the seed).  The seed-edge kind picks `kind_mul = KIND_DECAY[k]` once; the BFS itself uses `HOP_DECAY = (1.0, 0.9, 0.5, 0.2)` indexed by hop distance from the seed.  A visited map keeps the closest hop seen so a closer seed always wins.  Per-block score = `HOP_DECAY[h] × kind_mul`; the per-source aggregate keeps the max across seeds.  The walk is depth-limited to `max_hops`, clamped to `LINEAGE_DEPTH_CAP = 3`.',
     ),
     (
         "Is `propagate_lineage_staleness` safe to call concurrently from multiple workers?",
