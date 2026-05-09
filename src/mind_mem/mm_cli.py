@@ -1567,6 +1567,159 @@ def _cmd_audit_pinned(args: argparse.Namespace) -> int:
     return 0 if report.passed else 1
 
 
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    """Diagnose + repair common workspace drifts.
+
+    `mm doctor` (no flag) → read-only check; reports drift but does
+    not modify state. Add a flag to actually repair.
+
+    --rebuild-cache: copy any Postgres-only blocks into the SQLite
+    recall cache so both stores carry the same id set. Safe; does
+    not touch Postgres.
+
+    --migrate-recall-log: add the v2-schema columns (`intent_type`,
+    `stage_counts`) to the SQLite `retrieval_log` table for
+    workspaces created before 2026-04 where the auto-migrate fired
+    and silently skipped. No-op on fresh DBs.
+    """
+    import os as _os
+    import sqlite3 as _sqlite3
+    import json as _json
+
+    ws = _workspace()
+    report: dict[str, Any] = {"workspace": ws, "actions": []}
+    sq_path = _os.path.join(ws, ".mind-mem-index", "recall.db")
+    sq_exists = _os.path.exists(sq_path)
+    report["sqlite_recall_db"] = {"path": sq_path, "exists": sq_exists}
+
+    # Always: count PG vs SQLite blocks if both backends are wired.
+    try:
+        from mind_mem.storage import get_block_store
+
+        bs = get_block_store(ws)
+        store_class = type(bs).__name__
+        report["block_store_class"] = store_class
+    except Exception as exc:
+        report["block_store_error"] = str(exc)
+        store_class = ""
+        bs = None
+
+    pg_ids: set[str] = set()
+    if store_class == "PostgresBlockStore" and bs is not None:
+        try:
+            import psycopg
+
+            with psycopg.connect(bs._dsn) as conn, conn.cursor() as cur:
+                cur.execute(f"SELECT id FROM {bs._schema}.blocks WHERE active")
+                pg_ids = {r[0] for r in cur.fetchall()}
+            report["postgres_active_blocks"] = len(pg_ids)
+        except Exception as exc:
+            report["postgres_count_error"] = str(exc)
+
+    sq_ids: set[str] = set()
+    if sq_exists:
+        try:
+            sq = _sqlite3.connect(sq_path)
+            sq.row_factory = _sqlite3.Row
+            sq_ids = {r[0] for r in sq.execute("SELECT id FROM blocks").fetchall()}
+            report["sqlite_cache_blocks"] = len(sq_ids)
+            sq.close()
+        except Exception as exc:
+            report["sqlite_count_error"] = str(exc)
+
+    pg_only = pg_ids - sq_ids
+    sq_only = sq_ids - pg_ids
+    report["pg_only_count"] = len(pg_only)
+    report["sqlite_only_count"] = len(sq_only)
+    report["in_sync"] = (len(pg_only) == 0 and len(sq_only) == 0)
+
+    # --migrate-recall-log: schema-drift fix
+    if args.migrate_recall_log and sq_exists:
+        try:
+            sq = _sqlite3.connect(sq_path)
+            cols = {r[1] for r in sq.execute("PRAGMA table_info(retrieval_log)").fetchall()}
+            added: list[str] = []
+            if "intent_type" not in cols:
+                sq.execute("ALTER TABLE retrieval_log ADD COLUMN intent_type TEXT DEFAULT ''")
+                added.append("intent_type")
+            if "stage_counts" not in cols:
+                sq.execute("ALTER TABLE retrieval_log ADD COLUMN stage_counts TEXT DEFAULT '{}'")
+                added.append("stage_counts")
+            try:
+                sq.execute("CREATE INDEX IF NOT EXISTS idx_rlog_intent ON retrieval_log(intent_type)")
+            except _sqlite3.OperationalError:
+                pass
+            sq.commit()
+            sq.close()
+            report["actions"].append({"migrate_recall_log": {"added_columns": added}})
+        except Exception as exc:
+            report["actions"].append({"migrate_recall_log": {"error": str(exc)}})
+
+    # --rebuild-cache: copy PG-only blocks into SQLite
+    if args.rebuild_cache and pg_only and bs is not None and sq_exists:
+        try:
+            import psycopg
+
+            written = 0
+            errors = 0
+            sq = _sqlite3.connect(sq_path)
+            with psycopg.connect(bs._dsn) as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"SELECT id, file_path, content, metadata, created_at FROM {bs._schema}.blocks "
+                    f"WHERE active AND id = ANY(%s)",
+                    (list(pg_only),),
+                )
+                for bid, fpath, content, metadata, created_at in cur.fetchall():
+                    md = metadata or {}
+                    if isinstance(md, str):
+                        try:
+                            md = _json.loads(md)
+                        except _json.JSONDecodeError:
+                            md = {}
+                    btype_raw = md.get("type") or md.get("Type") or (bid.split("-")[0] if "-" in bid else "block")
+                    btype = {"D": "decision", "I": "incident", "C": "code", "A": "adr", "P": "perf"}.get(
+                        btype_raw[:1].upper(), btype_raw.lower() or "block"
+                    )
+                    json_blob = _json.dumps(
+                        {
+                            "id": bid,
+                            "content": content or "",
+                            "metadata": md,
+                            "created_at": created_at.isoformat() if created_at else "",
+                        }
+                    )
+                    try:
+                        sq.execute(
+                            "INSERT OR REPLACE INTO blocks "
+                            "(id, type, file, line, status, date, speaker, tags, dia_id, parent_id, json_blob) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            (
+                                bid,
+                                btype,
+                                fpath or "",
+                                0,
+                                md.get("Status", md.get("status", "active")) or "active",
+                                created_at.strftime("%Y-%m-%d") if created_at else "",
+                                md.get("Speaker", "") or "",
+                                _json.dumps(md.get("Tags", md.get("tags", []))) or "",
+                                md.get("DiaId", "") or "",
+                                md.get("ParentId", "") or "",
+                                json_blob,
+                            ),
+                        )
+                        written += 1
+                    except _sqlite3.OperationalError:
+                        errors += 1
+            sq.commit()
+            sq.close()
+            report["actions"].append({"rebuild_cache": {"written": written, "errors": errors}})
+        except Exception as exc:
+            report["actions"].append({"rebuild_cache": {"error": str(exc)}})
+
+    print(json.dumps(report, indent=2, default=str))
+    return 0 if report.get("in_sync", False) or args.rebuild_cache or args.migrate_recall_log else 1
+
+
 def _cmd_verify_model(args: argparse.Namespace) -> int:
     from mind_mem.model_signing import ED25519_PUBLIC_KEY_BYTES, verify_model
 
@@ -1761,6 +1914,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_install_model.add_argument("--dry-run", action="store_true")
     p_install_model.set_defaults(func=_cmd_install_model)
+
+    # doctor — diagnose + repair common workspace drifts
+    p_doctor = sub.add_parser(
+        "doctor",
+        help=(
+            "Diagnose workspace state (block-store parity, recall-log "
+            "schema drift). Add --rebuild-cache or --migrate-recall-log "
+            "to actually repair."
+        ),
+    )
+    p_doctor.add_argument(
+        "--rebuild-cache",
+        action="store_true",
+        help="Copy Postgres-only blocks into the SQLite recall cache.",
+    )
+    p_doctor.add_argument(
+        "--migrate-recall-log",
+        action="store_true",
+        help="Add v2-schema columns (intent_type, stage_counts) to the SQLite retrieval_log.",
+    )
+    p_doctor.set_defaults(func=_cmd_doctor)
 
     # vault namespace
     p_vault = sub.add_parser("vault", help="Vault sync subcommands.")

@@ -2,6 +2,41 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v3.10.7 — `mm doctor` for backend-drift diagnosis + repair
+
+Released 2026-05-08. Adds `mm doctor` so users with old workspaces
+or cross-backend drift can self-heal without manual SQL.
+
+### Added — `mm doctor`
+Three modes:
+
+```bash
+mm doctor                       # check-only; reports drift, exits 1 if any
+mm doctor --migrate-recall-log  # add intent_type/stage_counts to old SQLite recall.db
+mm doctor --rebuild-cache       # copy Postgres-only blocks into SQLite recall cache
+```
+
+Output is JSON with: workspace, block_store_class, postgres_active_blocks,
+sqlite_cache_blocks, pg_only_count, sqlite_only_count, in_sync, and any
+actions taken.
+
+### Why
+- **`--migrate-recall-log`** fixes the "no such column: intent_type"
+  warning in recall logs for workspaces created before 2026-04 where
+  the auto-migrate skipped silently.
+- **`--rebuild-cache`** closes the bidirectional-parity gap when
+  blocks land directly in Postgres (e.g. via `mm propose` or
+  hooks) without going through the markdown-file indexer that
+  normally populates SQLite. The SQLite cache stays in sync without
+  the user knowing about the two-tier storage layer.
+
+### Notes
+- Drift is direction-aware: `--rebuild-cache` only copies PG → SQLite
+  (the documented direction); SQLite-only blocks are reported but
+  not auto-promoted, since that direction is the markdown-indexer's
+  job.
+- All three modes are idempotent — safe to re-run on cron.
+
 ## v3.10.6 — `mm install-model` hardening (multi-LLM audit findings)
 
 Released 2026-05-08. Three external code reviewers (Mistral Large,
