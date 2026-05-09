@@ -1608,9 +1608,11 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     if store_class == "PostgresBlockStore" and bs is not None:
         try:
             import psycopg
+            from psycopg import sql as _sql
 
+            blocks_id = _sql.Identifier(bs._schema, "blocks")
             with psycopg.connect(bs._dsn) as conn, conn.cursor() as cur:
-                cur.execute(f"SELECT id FROM {bs._schema}.blocks WHERE active")
+                cur.execute(_sql.SQL("SELECT id FROM {tbl} WHERE active").format(tbl=blocks_id))
                 pg_ids = {r[0] for r in cur.fetchall()}
             report["postgres_active_blocks"] = len(pg_ids)
         except Exception as exc:
@@ -1659,14 +1661,18 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     if args.rebuild_cache and pg_only and bs is not None and sq_exists:
         try:
             import psycopg
+            from psycopg import sql as _sql
 
             written = 0
             errors = 0
             sq = _sqlite3.connect(sq_path)
+            blocks_id = _sql.Identifier(bs._schema, "blocks")
             with psycopg.connect(bs._dsn) as conn, conn.cursor() as cur:
                 cur.execute(
-                    f"SELECT id, file_path, content, metadata, created_at FROM {bs._schema}.blocks "
-                    f"WHERE active AND id = ANY(%s)",
+                    _sql.SQL(
+                        "SELECT id, file_path, content, metadata, created_at FROM {tbl} "
+                        "WHERE active AND id = ANY(%s)"
+                    ).format(tbl=blocks_id),
                     (list(pg_only),),
                 )
                 for bid, fpath, content, metadata, created_at in cur.fetchall():

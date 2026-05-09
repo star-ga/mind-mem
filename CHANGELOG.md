@@ -2,6 +2,22 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v3.10.8 — `mm doctor` SQL injection hardening (GHAS B608 #177-178)
+
+Released 2026-05-08. Closes two Bandit B608 alerts on the v3.10.7
+`_cmd_doctor` function. The f-string SQL was building queries with
+`bs._schema` (an internal config value, not user input), but Bandit
+can't tell the difference. Fixed properly with psycopg's
+`sql.Identifier`/`sql.SQL` composer.
+
+### Fixed
+- `mm_cli.py:1613` — `SELECT id FROM {schema}.blocks WHERE active` →
+  `psycopg.sql.SQL(...).format(tbl=Identifier(schema, "blocks"))`.
+- `mm_cli.py:1668` — same pattern for the rebuild-cache fetch.
+
+No behaviour change. The schema name was already trusted; this is
+defense-in-depth + tooling appeasement.
+
 ## v3.10.7 — `mm doctor` for backend-drift diagnosis + repair
 
 Released 2026-05-08. Adds `mm doctor` so users with old workspaces
