@@ -2,6 +2,22 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v3.10.5 — fix `# noqa` → `# nosec` for Bandit/GHAS
+
+Released 2026-05-08. The hardening landed in v3.10.4 was correct
+defensively but the suppression comments used ruff syntax (`# noqa: S###`)
+which Bandit / GitHub Code Scanning ignore — they require `# nosec
+B###`. GHAS re-opened alerts #172-176 because the underlying issues
+were still flagged even though the validation was in place.
+
+### Fixed
+- All five `# noqa: S404/S310/S603` annotations in `mm_cli.py` →
+  `# nosec B404/B310/B603` (the syntax Bandit honors).
+- No code-behaviour change. Validation, URL parsing, absolute-path
+  resolution, and input regex from v3.10.4 all stay.
+
+GHAS scan after v3.10.5 lands should auto-close #172-176.
+
 ## v3.10.4 — `mm install-model` security hardening (GHAS alerts #165-171)
 
 Released 2026-05-08. Closes 7 Bandit alerts on the new `install-model`

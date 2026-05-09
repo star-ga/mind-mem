@@ -383,7 +383,7 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
     """
     import shutil
     import re
-    import subprocess  # noqa: S404 — used with absolute paths from shutil.which + list args, never shell=True
+    import subprocess  # nosec B404 — used with absolute paths from shutil.which + list args, never shell=True
     import urllib.parse
     import urllib.request
 
@@ -450,7 +450,7 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
     expected_size = None
     req = urllib.request.Request(gguf_url, method="HEAD")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 — URL validated above
+        with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310 — URL is parse-validated above (https + huggingface.co only)
             expected_size = int(resp.headers.get("Content-Length") or 0)
     except Exception as exc:
         output["error"] = f"could not query HF for {args.model}: {exc}"
@@ -463,7 +463,7 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
     else:
         try:
             req = urllib.request.Request(gguf_url)
-            with urllib.request.urlopen(req, timeout=600) as resp, open(dest, "wb") as fh:  # noqa: S310 — URL validated above
+            with urllib.request.urlopen(req, timeout=600) as resp, open(dest, "wb") as fh:  # nosec B310 — URL is parse-validated above (https + huggingface.co only)
                 while chunk := resp.read(8 * 1024 * 1024):
                     fh.write(chunk)
             output["downloaded"] = True
@@ -495,7 +495,7 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
         print(json.dumps(output, indent=2))
         return 2
     try:
-        result = subprocess.run(  # noqa: S603 — argv list, no shell, validated args
+        result = subprocess.run(  # nosec B603 B607 — argv list w/ absolute path from shutil.which, no shell, validated args
             [ollama_bin, "create", args.name, "-f", modelfile],
             capture_output=True,
             text=True,
@@ -515,7 +515,7 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
     # 5. Smoke test (warm the model + keep-alive). Same safety profile
     # as step 4: absolute path + argv list + validated args, no shell.
     try:
-        smoke = subprocess.run(  # noqa: S603 — argv list, no shell, validated args
+        smoke = subprocess.run(  # nosec B603 B607 — argv list w/ absolute path from shutil.which, no shell, validated args
             [ollama_bin, "run", args.name, "test"],
             input="hi\n",
             capture_output=True,
