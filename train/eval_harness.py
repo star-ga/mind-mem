@@ -275,6 +275,103 @@ V311_EXPLAIN_FIELD: list[tuple[str, list[str]]] = [
 
 
 # ---------------------------------------------------------------------------
+# v3.12.0 probes — guard against regressions on quality-gate strict mode
+# and lineage staleness wiring.
+#
+# 1. V312_QUALITY_GATE_STRICT_MODE: 10 probes. Target ≥ 90%.
+# 2. V312_LINEAGE_STALENESS: 10 probes. Target ≥ 90%.
+# ---------------------------------------------------------------------------
+
+
+V312_QUALITY_GATE_STRICT_MODE: list[tuple[str, list[str]]] = [
+    (
+        "What are the three valid values for `quality_gate.mode` in `mind-mem.json`?",
+        ["off", "advisory", "strict"],
+    ),
+    (
+        "What is the default value of `quality_gate.mode`?",
+        ["advisory", "mind-mem.json"],
+    ),
+    (
+        "How do I enable strict mode so that a rule violation blocks a write?",
+        ["strict", "mind-mem.json", "validate_block"],
+    ),
+    (
+        'What does `propose_update` do differently when `quality_gate.mode` is `"strict"`?',
+        ["strict", "validate_block"],
+    ),
+    (
+        "What is the shape of the rejection envelope when strict mode fires?",
+        ["quality_gate_rejection", "reasons", "mode"],
+    ),
+    (
+        "How do I read the per-rule rejection counter for the `injection_marker` rule?",
+        ["quality_gate_rejections", "injection_marker"],
+    ),
+    (
+        "What metric key tracks how many times the `near_duplicate` rule rejected a write?",
+        ["quality_gate_rejections", "near_duplicate"],
+    ),
+    (
+        "When should I choose `strict` mode over `advisory` mode?",
+        ["strict", "advisory"],
+    ),
+    (
+        "Is there an escape hatch to write a block that fails validation in strict mode?",
+        ["force", "strict"],
+    ),
+    (
+        "What operator runbook covers the quality gate configuration?",
+        ["force", "mode"],
+    ),
+]
+
+
+V312_LINEAGE_STALENESS: list[tuple[str, list[str]]] = [
+    (
+        "What new SQLite table does v3.12.0 introduce for staleness tracking?",
+        ["block_staleness", "source_id"],
+    ),
+    (
+        "What module implements lineage staleness propagation in v3.12.0?",
+        ["propagate_lineage_staleness", "block_staleness"],
+    ),
+    (
+        "How does `_explain.staleness_penalty` behave differently in v3.12.0 vs v3.11.0?",
+        ["staleness_penalty", "_explain", "block_staleness"],
+    ),
+    (
+        "What are the kind-aware decay multipliers in `propagate_lineage_staleness`?",
+        ["contradicts", "cites", "implements", "refines"],
+    ),
+    (
+        "Why does a `contradicts` edge propagate the fastest in lineage staleness?",
+        ["contradicts", "kind"],
+    ),
+    (
+        "What is the maximum number of hops `propagate_lineage_staleness` will walk?",
+        ["max_hops", "propagate_lineage_staleness"],
+    ),
+    (
+        "How do I trigger lineage staleness propagation from the CLI?",
+        ["mm lineage flag", "contradicts"],
+    ),
+    (
+        "What fields does the `block_staleness` table contain?",
+        ["source_id", "decayed_at"],
+    ),
+    (
+        "What is the decay multiplier for a `cites` edge in lineage staleness?",
+        ["cites", "0.8"],
+    ),
+    (
+        "What is the decay multiplier for a `refines` edge?",
+        ["refines", "0.4"],
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -476,6 +573,36 @@ def _bench_v311_explain_field(tokenizer, model) -> dict:
     return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
 
 
+def _bench_v312_quality_gate_strict_mode(tokenizer, model) -> dict:
+    """v3.12.0 probe 1: quality_gate.mode config, modes, counters, escape hatch."""
+    hits = 0
+    misses: list[dict] = []
+    for prompt, required_tokens in V312_QUALITY_GATE_STRICT_MODE:
+        resp = _chat(tokenizer, model, prompt)
+        if all(tok in resp for tok in required_tokens):
+            hits += 1
+        else:
+            missing = [tok for tok in required_tokens if tok not in resp]
+            misses.append({"prompt": prompt, "missing": missing, "response": resp[:200]})
+    total = len(V312_QUALITY_GATE_STRICT_MODE)
+    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+
+
+def _bench_v312_lineage_staleness(tokenizer, model) -> dict:
+    """v3.12.0 probe 2: block_staleness table, propagation, decay multipliers."""
+    hits = 0
+    misses: list[dict] = []
+    for prompt, required_tokens in V312_LINEAGE_STALENESS:
+        resp = _chat(tokenizer, model, prompt)
+        if all(tok in resp for tok in required_tokens):
+            hits += 1
+        else:
+            missing = [tok for tok in required_tokens if tok not in resp]
+            misses.append({"prompt": prompt, "missing": missing, "response": resp[:200]})
+    total = len(V312_LINEAGE_STALENESS)
+    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+
+
 def main() -> None:
     tokenizer, model = _load_model()
     tool_bench = _bench_tool_calls(tokenizer, model)
@@ -486,6 +613,8 @@ def main() -> None:
     v39_transport_bench = _bench_v39_transport_guard(tokenizer, model)
     v311_new_tools_bench = _bench_v311_new_tools(tokenizer, model)
     v311_explain_bench = _bench_v311_explain_field(tokenizer, model)
+    v312_quality_gate_bench = _bench_v312_quality_gate_strict_mode(tokenizer, model)
+    v312_lineage_staleness_bench = _bench_v312_lineage_staleness(tokenizer, model)
 
     report = {
         "tool_call": tool_bench,
@@ -496,6 +625,8 @@ def main() -> None:
         "v39_transport_guard": v39_transport_bench,
         "v311_new_tools": v311_new_tools_bench,
         "v311_explain_field": v311_explain_bench,
+        "v312_quality_gate_strict_mode": v312_quality_gate_bench,
+        "v312_lineage_staleness": v312_lineage_staleness_bench,
         "targets": {
             "tool_call": 0.95,
             "block_schema": 0.98,
@@ -505,22 +636,26 @@ def main() -> None:
             "v39_transport_guard": 0.95,
             "v311_new_tools": 0.90,
             "v311_explain_field": 0.95,
+            "v312_quality_gate_strict_mode": 0.90,
+            "v312_lineage_staleness": 0.90,
         },
     }
     REPORT.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     print("=" * 60)
-    print("mind-mem-4b v3.11.0 eval report")
+    print("mind-mem-4b v3.12.0 eval report")
     print("=" * 60)
     for name, bench, target in (
-        ("tool_call           ", tool_bench, 0.95),
-        ("block_schema        ", schema_bench, 0.98),
-        ("workflow            ", workflow_bench, 0.90),
-        ("v39_new_tools       ", v39_new_tools_bench, 0.90),
-        ("v39_transform_hash  ", v39_xform_bench, 0.95),
-        ("v39_transport_guard ", v39_transport_bench, 0.95),
-        ("v311_new_tools      ", v311_new_tools_bench, 0.90),
-        ("v311_explain_field  ", v311_explain_bench, 0.95),
+        ("tool_call                     ", tool_bench, 0.95),
+        ("block_schema                  ", schema_bench, 0.98),
+        ("workflow                      ", workflow_bench, 0.90),
+        ("v39_new_tools                 ", v39_new_tools_bench, 0.90),
+        ("v39_transform_hash            ", v39_xform_bench, 0.95),
+        ("v39_transport_guard           ", v39_transport_bench, 0.95),
+        ("v311_new_tools                ", v311_new_tools_bench, 0.90),
+        ("v311_explain_field            ", v311_explain_bench, 0.95),
+        ("v312_quality_gate_strict_mode ", v312_quality_gate_bench, 0.90),
+        ("v312_lineage_staleness        ", v312_lineage_staleness_bench, 0.90),
     ):
         pass_str = "PASS" if bench["accuracy"] >= target else "FAIL"
         print(f"  {name}  {bench['hits']:3d}/{bench['total']:<3d}  {bench['accuracy']:.2%}   (target {target:.0%})  [{pass_str}]")
@@ -535,6 +670,8 @@ def main() -> None:
         and v39_transport_bench["accuracy"] >= 0.95
         and v311_new_tools_bench["accuracy"] >= 0.90
         and v311_explain_bench["accuracy"] >= 0.95
+        and v312_quality_gate_bench["accuracy"] >= 0.90
+        and v312_lineage_staleness_bench["accuracy"] >= 0.90
     )
     sys.exit(0 if passed else 1)
 

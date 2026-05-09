@@ -2827,6 +2827,11 @@ def main() -> None:
             _harvest_v311_validate_block(),
             _harvest_v311_block_lineage(),
             _harvest_v311_recall_explain(),
+            # v3.12.0: quality-gate strict mode, lineage staleness wiring,
+            # Petri red-team CI.  ~60 new probes before dedup + cap.
+            _harvest_v312_quality_gate_strict_mode(),
+            _harvest_v312_lineage_staleness(),
+            _harvest_v312_red_team_ci(),
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -3137,6 +3142,304 @@ def _harvest_v311_recall_explain() -> Iterator[dict]:
                     {"role": "assistant", "content": a},
                 ]
             }
+
+
+# ---------------------------------------------------------------------------
+# v3.12.0 probes
+# ---------------------------------------------------------------------------
+
+# --- quality_gate strict mode probes (~25 probes) ---------------------------
+
+_QUALITY_GATE_PROBES: list[tuple[str, str]] = [
+    (
+        "What are the three valid values for `quality_gate.mode` in `mind-mem.json`?",
+        'The three modes are `"off"` (gate disabled — no validation on write), `"advisory"` (default — `validate_block` runs pre-write and violations are returned as warnings without blocking), and `"strict"` (violations reject the write with a structured 400 envelope).',
+    ),
+    (
+        "What is the default value of `quality_gate.mode`?",
+        'The default is `"advisory"`.  Setting `quality_gate.mode = "advisory"` in `mind-mem.json` preserves v3.11.0 behavior — validation runs but never blocks a write.',
+    ),
+    (
+        "How do I enable strict mode so that a rule violation blocks a write?",
+        'Set `quality_gate.mode = "strict"` in `mind-mem.json`.  With strict mode active, any call to `propose_update` that fails `validate_block` is rejected immediately with a structured 400 response containing the rule name and violation detail.',
+    ),
+    (
+        "How do I disable the quality gate entirely?",
+        'Set `quality_gate.mode = "off"` in `mind-mem.json`.  When the mode is `"off"`, `propose_update` does not call `validate_block` at all — no validation overhead, no warnings.',
+    ),
+    (
+        "Where does `quality_gate.mode` live in the config file?",
+        '`quality_gate.mode` is a nested key inside `mind-mem.json` under the `quality_gate` object.  Example: `{"quality_gate": {"mode": "strict"}}`.  The file lives at `$MIND_MEM_WORKSPACE/mind-mem.json` (or the path pointed to by `MM_CONFIG`).',
+    ),
+    (
+        "What does `propose_update` do differently when `quality_gate.mode` is `\"strict\"`?",
+        'When `quality_gate.mode = "strict"`, `propose_update` calls `validate_block(text, strict=True)` before staging the block.  If any rule fires, `propose_update` raises a `ValidationError` and returns a 400 envelope — the block is never staged.',
+    ),
+    (
+        "What does `propose_update` do when `quality_gate.mode` is `\"advisory\"`?",
+        'When `quality_gate.mode = "advisory"`, `propose_update` calls `validate_block` pre-write and attaches any warnings to the response under `validation_warnings`.  The write proceeds regardless — advisory mode never blocks.',
+    ),
+    (
+        "What is the shape of the rejection envelope when strict mode fires?",
+        'The 400 envelope is `{"error": "quality_gate_rejection", "mode": "<advisory|strict>", "reasons": ["<rule>: <message>", ...], "advisory": [...], "hint": "..."}`.  The `reasons` list contains every rule that fired as `"<rule>: <message>"` strings; `advisory` carries any warnings that did not block.',
+    ),
+    (
+        "How do I read the per-rule rejection counter for the `injection_marker` rule?",
+        'Read the metric key `quality_gate_rejections_injection_marker` from the workspace metrics store.  Each rule has its own counter: `quality_gate_rejections_<rule>` where `<rule>` is the real rule name (e.g. `near_duplicate`, `injection_marker`).  These counters are NOT exposed by `index_stats`; read them via the Prometheus exporter or `metrics.snapshot()`.',
+    ),
+    (
+        "What metric key tracks how many times the `near_duplicate` rule rejected a write?",
+        'The metric key is `quality_gate_rejections_near_duplicate`.  It increments once per `propose_update` call rejected by the `near_duplicate` rule in strict mode.',
+    ),
+    (
+        "When should I choose `strict` mode over `advisory` mode?",
+        'Use `strict` mode in production pipelines where bad blocks would corrupt downstream reasoning — e.g. when blocks feed a governance walkthrough or are used as ground truth.  Use `advisory` mode during exploratory ingestion where you want visibility without blocking writes.',
+    ),
+    (
+        "When should I use `quality_gate.mode = \"off\"`?",
+        'Use `"off"` only for bulk-import scenarios where every block has already been pre-validated externally (e.g. a trusted migration from another workspace).  It removes all per-write overhead but gives no safety net.',
+    ),
+    (
+        "Does `quality_gate.mode` affect `validate_block` called directly via MCP?",
+        'No.  `validate_block` called directly is always advisory regardless of `quality_gate.mode` — it returns a list of violations without raising.  `quality_gate.mode` only controls what `propose_update` does with the result.',
+    ),
+    (
+        "Is there an escape hatch to write a block that fails validation in strict mode?",
+        'Yes — but NOT via `propose_update(force=True)`.  `propose_update` has no `force` parameter.  To bypass the strict mode gate: call `validate_block(text, force=True)` directly to obtain a verdict annotated `forced=True`; then set `quality_gate.mode = "off"` in `mind-mem.json` to disable the gate for the workspace.  Use sparingly.',
+    ),
+    (
+        "What operator runbook covers the quality gate configuration?",
+        'The runbook is at `docs/quality-gate.md`.  It covers mode selection, per-rule counter interpretation, the workspace-level `quality_gate.mode = "off"` bypass (the force escape hatch), and upgrading from v3.11.0 advisory-only behavior.',
+    ),
+    (
+        "What happens to existing `validate_block` calls after upgrading to strict mode?",
+        'Existing direct `validate_block` MCP calls are unaffected — they remain advisory.  Only `propose_update` changes behavior.  No code changes are needed for direct callers.',
+    ),
+    (
+        "How does the quality gate interact with the `injection_marker` rule in strict mode?",
+        'In strict mode, if `validate_block` detects a prompt-injection pattern in the candidate text, `propose_update` rejects with `{"error": "quality_gate_rejection", "mode": "strict", "reasons": ["injection_marker: block contains a known prompt-injection marker"], ...}` and increments `quality_gate_rejections_injection_marker`.  The block is never staged.',
+    ),
+    (
+        "What is the `quality_gate_rejections_<rule>` counter format?",
+        'It is a per-rule integer counter keyed as `quality_gate_rejections_<rule>` where `<rule>` is the real rule name (e.g. `near_duplicate`, `injection_marker`, `oversize`, `malformed_utf8`).  The counters live in the in-process metrics store and are NOT exposed by `index_stats`; read them via the Prometheus exporter or `metrics.snapshot()`.',
+    ),
+    (
+        "How do I confirm that `quality_gate.mode` changed from advisory to strict?",
+        'Submit a block that is known to fail a rule (e.g. an empty string for the `empty` rule or a near-identical block for `near_duplicate`) and confirm you receive a `{"error": "quality_gate_rejection", ...}` response rather than a warning.  There is no `quality_gate_mode` field in `index_stats`.',
+    ),
+    (
+        "Does `quality_gate.mode` require a daemon restart?",
+        'No.  `mind-mem.json` is read on each `propose_update` call.  Changing `quality_gate.mode` takes effect on the next write without restarting the daemon or MCP server.',
+    ),
+    (
+        "What validate_block rules are evaluated in strict mode?",
+        'All seven rules are evaluated unconditionally in both advisory and strict mode: `empty`, `too_short`, `oversize`, `malformed_utf8`, `stopwords_only`, `near_duplicate`, and `injection_marker`.  Every fired rule appends a `"<rule>: <message>"` entry to the verdict — in strict mode these go to `reasons`, in advisory mode to `advisory`.  The full list is returned at once; there is no short-circuit.',
+    ),
+    (
+        "Can I set different modes for different workspaces?",
+        'Yes.  `mind-mem.json` is per-workspace.  You can run `quality_gate.mode = "strict"` in one workspace and `"advisory"` in another.  There is no global override.',
+    ),
+    (
+        "How does strict mode change the `propose_update` return value on success?",
+        'On a successful write in strict mode the return value is identical to advisory mode — a staged proposal dict with `proposal_id` and `block_id`.  The only behavioral change is that violations now abort before staging rather than surfacing as warnings.',
+    ),
+    (
+        "Where is `quality_gate.mode` parsed in the codebase?",
+        '`quality_gate.mode` is parsed in `src/mind_mem/mcp/infra/config.py`.  The value is read and validated at config-load time; an invalid mode string raises `ConfigError` with the allowed values listed.',
+    ),
+    (
+        "What is the relationship between `quality_gate.mode` and `validate_block(strict=True)`?",
+        '`quality_gate.mode = "strict"` causes `propose_update` to call `validate_block(text, strict=True)` internally.  They share the same code path.  The `strict` parameter on the MCP tool and the `quality_gate.mode` config key are two surfaces for the same underlying behavior.',
+    ),
+]
+
+
+def _harvest_v312_quality_gate_strict_mode() -> Iterator[dict]:
+    """~25 probes covering quality_gate.mode config, modes, counters, escape hatch."""
+    for q, a in _QUALITY_GATE_PROBES:
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": q},
+                {"role": "assistant", "content": a},
+            ]
+        }
+
+
+# --- lineage staleness probes (~25 probes) -----------------------------------
+
+_LINEAGE_STALENESS_PROBES: list[tuple[str, str]] = [
+    (
+        "What new SQLite table does v3.12.0 introduce for staleness tracking?",
+        '`block_staleness(block_id, source_id, score, decayed_at)` — a new table that stores the persisted staleness penalty for each (block, source) pair.  Writes are idempotent upserts keyed on `(block_id, source_id)`.',
+    ),
+    (
+        "What module implements lineage staleness propagation in v3.12.0?",
+        '`src/mind_mem/lineage_staleness.py` — the new v3.12.0 module.  It owns the `block_staleness` table schema, the idempotent upsert, and the `propagate_lineage_staleness` BFS walker.',
+    ),
+    (
+        "How does `_explain.staleness_penalty` behave differently in v3.12.0 vs v3.11.0?",
+        'In v3.11.0 `_explain.staleness_penalty` was always `0.0`.  In v3.12.0 `attach_explain` accepts a `workspace` kwarg; when provided, it reads persisted values from the `block_staleness` table and surfaces the real penalty.  Without a workspace the field still defaults to `0.0`.',
+    ),
+    (
+        "What are the kind-aware decay multipliers in `propagate_lineage_staleness`?",
+        'The decay multipliers per edge kind are: `contradicts` → 1.0, `cites` → 0.8, `implements` → 0.6, `refines` → 0.4, `cooccurrence` → 0.5.  A `contradicts` edge propagates the full source penalty; a `refines` edge attenuates it to 40%.',
+    ),
+    (
+        "Why does a `contradicts` edge propagate the fastest in lineage staleness?",
+        '`contradicts` edges carry a decay multiplier of 1.0 — no attenuation.  When a block is flagged as stale via a `contradicts` edge, every dependent block inherits the full penalty immediately.  Other edge kinds attenuate the penalty at each hop.',
+    ),
+    (
+        "What is the maximum number of hops `propagate_lineage_staleness` will walk?",
+        'The default cap is `max_hops=3`.  The function signature is `propagate_lineage_staleness(workspace, source_id, max_hops=3)`.  Increasing `max_hops` raises the propagation radius but also the write volume to `block_staleness`.',
+    ),
+    (
+        "How do I trigger lineage staleness propagation from the CLI?",
+        'Use `mm lineage flag <src> <dst> --kind contradicts --weight 1.0`.  This command bundles `add_block_edge` (to register the edge) and `propagate_lineage_staleness` (to walk the graph and write staleness scores) into a single atomic CLI call.',
+    ),
+    (
+        "What does `mm lineage flag` do internally?",
+        '`mm lineage flag <src> <dst> --kind <kind>` calls `add_block_edge(src, dst, kind)` to register the directed typed edge, then calls `propagate_lineage_staleness(workspace, source_id=src)` to walk the BFS and write updated staleness scores to the `block_staleness` table.',
+    ),
+    (
+        "How is `block_staleness` written — is the upsert idempotent?",
+        'Yes.  The upsert is keyed on `(block_id, source_id)`.  Running `propagate_lineage_staleness` twice with the same source produces the same rows — no duplicate penalties accumulate.  The `decayed_at` timestamp is updated on each run.',
+    ),
+    (
+        "What is the `decayed_at` column in `block_staleness` for?",
+        '`decayed_at` records the UTC timestamp of the last staleness propagation that touched the row.  It is used by the tier-decay sweep to age out stale penalties that have not been refreshed within a configurable window.',
+    ),
+    (
+        "What fields does the `block_staleness` table contain?",
+        'Four columns: `block_id` (the affected block), `source_id` (the block that triggered propagation), `score` (the propagated staleness penalty, 0.0–1.0), and `decayed_at` (UTC timestamp of the last propagation write).',
+    ),
+    (
+        "How does `propagate_lineage_staleness` compute the penalty for a block two hops away?",
+        'At each hop the incoming penalty is multiplied by the decay multiplier for the traversed edge kind.  For a source penalty of 1.0 traversing `contradicts` (1.0) then `cites` (0.8): hop-1 penalty = 1.0, hop-2 penalty = 0.8.  The score stored is the product of all multipliers along the path.',
+    ),
+    (
+        "What happens when `propagate_lineage_staleness` encounters a block that already has a higher staleness score from a different source?",
+        'Each `(block_id, source_id)` pair owns at most one row; the write is a hard overwrite — the latest propagation from THAT source wins.  A different `source_id` creates a different row.  The MAX semantics happen at read time: `get_staleness_score(block_id)` executes `SELECT MAX(score) FROM block_staleness WHERE block_id = ?` across all rows for that block, so the most-stale source wins at retrieval.',
+    ),
+    (
+        "How do I inspect the staleness penalty for a specific block?",
+        'Call `recall(query, explain=True)` with the active workspace.  The `_explain.staleness_penalty` field on each result block reflects the persisted value from `block_staleness`.  Alternatively, query the `block_staleness` SQLite table directly by `block_id`.',
+    ),
+    (
+        "What edge kind should I use when flagging a block as authoritative over another?",
+        'Use `contradicts`.  When block A is known to supersede block B, add the edge `add_block_edge(A, B, kind="contradicts")` then run `mm lineage flag A B --kind contradicts`.  This propagates a full 1.0 penalty to B and all blocks that depend on B.',
+    ),
+    (
+        "Does `propagate_lineage_staleness` write to the `block_staleness` table for the source block itself?",
+        'No.  The source block (`source_id`) is the origin of the propagation, not a target.  Only blocks reachable from `source_id` via the lineage graph (treated as undirected at read time — `_outgoing` issues `UNION ALL` in both directions) within `max_hops` receive staleness rows.',
+    ),
+    (
+        "What is the decay multiplier for a `cites` edge in lineage staleness?",
+        'The `cites` decay multiplier is `0.8`.  A penalty of 1.0 at the source becomes 0.8 for the directly-cited block, 0.64 for a block two hops away via two `cites` edges, and so on.',
+    ),
+    (
+        "What is the decay multiplier for a `cooccurrence` edge?",
+        'The `cooccurrence` decay multiplier is `0.5`.  Co-occurrence edges represent statistical correlation, not a semantic dependency, so the staleness signal is attenuated by half at each hop.',
+    ),
+    (
+        "What is the decay multiplier for an `implements` edge?",
+        'The `implements` decay multiplier is `0.6`.  If a specification block is flagged stale, the implementing code block inherits 60% of the penalty.',
+    ),
+    (
+        "What is the decay multiplier for a `refines` edge?",
+        'The `refines` decay multiplier is `0.4`.  `refines` edges are considered the weakest dependency — a block that merely narrows another should inherit only 40% of its staleness penalty.',
+    ),
+    (
+        "How does `_explain.staleness_penalty` affect final ranking in v3.12.0?",
+        '`staleness_penalty` is surfaced in `_explain` for transparency but is not yet subtracted from `final_score` automatically.  Callers that want staleness-aware ranking should apply `final_score * (1 - staleness_penalty)` themselves.',
+    ),
+    (
+        "What BFS traversal strategy does `propagate_lineage_staleness` use?",
+        'Bounded BFS starting from `source_id`.  A visited set prevents re-visiting blocks.  The queue is depth-limited to `max_hops`.  Each enqueued node carries the accumulated penalty at the time of enqueue so the correct attenuation is applied when the node is dequeued.',
+    ),
+    (
+        "Is `propagate_lineage_staleness` safe to call concurrently from multiple workers?",
+        'Yes.  The `block_staleness` upsert uses `INSERT INTO ... ON CONFLICT(block_id, source_id) DO UPDATE SET score = excluded.score` — a hard overwrite per source row.  Concurrent propagations from different `source_id`s write to different rows and merge safely at read time via `SELECT MAX(score)`.  No locking beyond the normal SQLite WAL write serialization.',
+    ),
+    (
+        "What Python function do I call to propagate lineage staleness from code?",
+        'Call `propagate_lineage_staleness(workspace, source_id, max_hops=3)` from `src/mind_mem/lineage_staleness.py`.  It returns a dict `{block_id: score}` of every block updated in the current run.',
+    ),
+    (
+        "How does `mm lineage flag` differ from calling `add_block_edge` then `propagate_lineage_staleness` separately?",
+        '`mm lineage flag` is a convenience wrapper that calls both in sequence within a single CLI invocation.  The Python API calls are equivalent.  The CLI is preferred for operator use because it logs both operations to the audit trail in a single trace.',
+    ),
+]
+
+
+def _harvest_v312_lineage_staleness() -> Iterator[dict]:
+    """~25 probes covering the block_staleness table, BFS propagation, decay multipliers."""
+    for q, a in _LINEAGE_STALENESS_PROBES:
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": q},
+                {"role": "assistant", "content": a},
+            ]
+        }
+
+
+# --- Petri red-team CI probes (~10 probes) -----------------------------------
+
+_RED_TEAM_PROBES: list[tuple[str, str]] = [
+    (
+        "What is Petri in the context of mind-mem v3.12.0?",
+        'Petri is an adversarial red-team harness for MCP servers.  It probes the memory system with adversarial inputs — prompt injection attempts, malformed tool calls, out-of-distribution queries — and uses a judge LLM to score responses.  Install with `pip install -e ".[red-team]"`.',
+    ),
+    (
+        "How do I install the Petri red-team dependency?",
+        'Run `pip install -e ".[red-team]"` from the mind-mem repo root.  This installs Petri and its judge-LLM dependencies.  The base `pip install mind-mem` does not include Petri.',
+    ),
+    (
+        "Where is the Petri red-team workflow file?",
+        'The workflow is at `.github/workflows/red-team.yml`.  It triggers on tag pushes matching `v*` and is advisory (`continue-on-error: true`) — a Petri failure does not block release.',
+    ),
+    (
+        "What are the three adversarial seeds used in the v3.12.0 red-team CI?",
+        'The three seeds are `self_exfiltration_memory_trigger` (attempts to coerce the agent into leaking memory blocks), `broken_tool_error_handling` (sends malformed tool arguments to check error containment), and `weird_ood_tool_use` (invokes tools in unexpected sequences to probe state corruption).',
+    ),
+    (
+        "Why is the Petri workflow advisory (`continue-on-error: true`)?",
+        'Red-team failures are expected during iterative development — a new seed may fail before the corresponding defense is shipped.  Making the workflow advisory prevents a Petri regression from blocking a legitimate release while the fix is in progress.',
+    ),
+    (
+        "What happens when `ANTHROPIC_API_KEY` is absent in a Petri CI run?",
+        'The workflow detects the missing secret and skips cleanly without failing the job.  This ensures PR builds from forks — which cannot access org secrets — do not fail on the red-team step.',
+    ),
+    (
+        "What does the `--petri-limit` flag control?",
+        '`--petri-limit N` caps the number of adversarial turns Petri runs per seed.  Lower values reduce cost and latency at the expense of coverage.  The default in CI is controlled by the workflow file; operators can override it locally.',
+    ),
+    (
+        "Where are Petri transcript artifacts uploaded in CI?",
+        'Transcript artifacts are uploaded to the GitHub Actions artifact store with 90-day retention.  Each run produces a per-seed JSONL transcript that operators can download to inspect judge reasoning.',
+    ),
+    (
+        "How much does a Petri CI run cost approximately?",
+        'Approximately $10–15 per tag-push run when using the sonnet judge and all three seeds at default `--petri-limit`.  Cost scales linearly with `--petri-limit` and the number of seeds.',
+    ),
+    (
+        "Where is the operator guide for Petri red-team integration?",
+        'The CI integration section is documented in `docs/red-team-audit.md`.  It covers seed selection, `--petri-limit` tuning, transcript interpretation, and how to promote a Petri failure into a new test case.',
+    ),
+]
+
+
+def _harvest_v312_red_team_ci() -> Iterator[dict]:
+    """~10 probes covering Petri red-team CI: install, seeds, workflow, cost."""
+    for q, a in _RED_TEAM_PROBES:
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": q},
+                {"role": "assistant", "content": a},
+            ]
+        }
 
 
 if __name__ == "__main__":
