@@ -15,8 +15,11 @@ from mind_mem.v4.block_kinds import (
     FLAG,
     BlockKind,
     ensure_block_kind_column,
+    ensure_block_kind_tags_table,
     get_block_kind,
+    get_block_kind_tags,
     list_blocks_by_kind,
+    set_block_kinds,
 )
 
 
@@ -303,3 +306,148 @@ def test_list_empty_when_kind_column_missing(workspace: Path) -> None:
         conn.execute("INSERT INTO blocks (id) VALUES ('B-1')")
         conn.commit()
     assert list_blocks_by_kind(workspace, BlockKind.ENTITY) == []
+
+
+# ---------------------------------------------------------------------------
+# Multi-label surface (v4-audit-2026-05-10, 3/4 model consensus)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_tags_flag_off_raises_on_set(workspace_off: Path) -> None:
+    with pytest.raises(FeatureDisabledError):
+        set_block_kinds(workspace_off, "B-1", [BlockKind.ENTITY])
+
+
+@pytest.mark.unit
+def test_tags_flag_off_raises_on_get(workspace_off: Path) -> None:
+    with pytest.raises(FeatureDisabledError):
+        get_block_kind_tags(workspace_off, "B-1")
+
+
+@pytest.mark.unit
+def test_tags_flag_off_raises_on_ensure(workspace_off: Path) -> None:
+    with pytest.raises(FeatureDisabledError):
+        ensure_block_kind_tags_table(workspace_off)
+
+
+@pytest.mark.unit
+def test_ensure_tags_table_creates_schema(workspace: Path) -> None:
+    ensure_block_kind_tags_table(workspace)
+    with sqlite3.connect(workspace / "index.db") as conn:
+        rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='block_kind_tags'").fetchall()
+    assert rows == [("block_kind_tags",)]
+
+
+@pytest.mark.unit
+def test_ensure_tags_table_is_idempotent(workspace: Path) -> None:
+    ensure_block_kind_tags_table(workspace)
+    ensure_block_kind_tags_table(workspace)
+    ensure_block_kind_tags_table(workspace)
+    with sqlite3.connect(workspace / "index.db") as conn:
+        idxs = conn.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_block_kind_tags_kind'").fetchall()
+    assert idxs == [("idx_block_kind_tags_kind",)]
+
+
+@pytest.mark.unit
+def test_set_block_kinds_writes_multiple_tags(workspace: Path) -> None:
+    """A Python class is both `entity` and `code` — store both."""
+    written = set_block_kinds(workspace, "B-cls", [BlockKind.ENTITY, BlockKind.CODE])
+    assert written == {BlockKind.ENTITY, BlockKind.CODE}
+    assert get_block_kind_tags(workspace, "B-cls") == {BlockKind.ENTITY, BlockKind.CODE}
+
+
+@pytest.mark.unit
+def test_set_block_kinds_dedupes(workspace: Path) -> None:
+    written = set_block_kinds(
+        workspace,
+        "B-dup",
+        [BlockKind.ENTITY, BlockKind.ENTITY, "entity", BlockKind.CODE],
+    )
+    assert written == {BlockKind.ENTITY, BlockKind.CODE}
+    assert get_block_kind_tags(workspace, "B-dup") == {BlockKind.ENTITY, BlockKind.CODE}
+
+
+@pytest.mark.unit
+def test_set_block_kinds_replaces_previous(workspace: Path) -> None:
+    """A second call overwrites — does not accumulate."""
+    set_block_kinds(workspace, "B-1", [BlockKind.ENTITY, BlockKind.CODE])
+    set_block_kinds(workspace, "B-1", [BlockKind.SOURCE])
+    assert get_block_kind_tags(workspace, "B-1") == {BlockKind.SOURCE}
+
+
+@pytest.mark.unit
+def test_set_block_kinds_empty_iterable_clears(workspace: Path) -> None:
+    set_block_kinds(workspace, "B-1", [BlockKind.ENTITY])
+    set_block_kinds(workspace, "B-1", [])
+    assert get_block_kind_tags(workspace, "B-1") == set()
+
+
+@pytest.mark.unit
+def test_set_block_kinds_isolates_block_ids(workspace: Path) -> None:
+    """Replacing tags on one block must not affect another."""
+    set_block_kinds(workspace, "B-1", [BlockKind.ENTITY])
+    set_block_kinds(workspace, "B-2", [BlockKind.CODE])
+    set_block_kinds(workspace, "B-1", [BlockKind.SOURCE])
+    assert get_block_kind_tags(workspace, "B-1") == {BlockKind.SOURCE}
+    assert get_block_kind_tags(workspace, "B-2") == {BlockKind.CODE}
+
+
+@pytest.mark.unit
+def test_set_block_kinds_rejects_unknown_string(workspace: Path) -> None:
+    with pytest.raises(ValueError):
+        set_block_kinds(workspace, "B-1", ["dataset"])  # not a valid kind
+
+
+@pytest.mark.unit
+def test_set_block_kinds_returns_validated_set(workspace: Path) -> None:
+    written = set_block_kinds(workspace, "B-1", ["entity", BlockKind.CODE])
+    assert written == {BlockKind.ENTITY, BlockKind.CODE}
+    # Caller's order doesn't matter — a set is returned, not a list.
+    assert isinstance(written, set)
+
+
+@pytest.mark.unit
+def test_get_tags_unknown_block_returns_empty_set(workspace: Path) -> None:
+    ensure_block_kind_tags_table(workspace)
+    assert get_block_kind_tags(workspace, "B-never-seen") == set()
+
+
+@pytest.mark.unit
+def test_get_tags_returns_empty_when_db_missing(workspace: Path) -> None:
+    assert get_block_kind_tags(workspace, "B-1") == set()
+
+
+@pytest.mark.unit
+def test_get_tags_returns_empty_when_table_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = {"v4": {FLAG: {"enabled": True}}}
+    (tmp_path / "mind-mem.json").write_text(json.dumps(cfg), encoding="utf-8")
+    monkeypatch.setenv("MIND_MEM_CONFIG", str(tmp_path / "mind-mem.json"))
+    sqlite3.connect(tmp_path / "index.db").close()
+    assert get_block_kind_tags(tmp_path, "B-1") == set()
+
+
+@pytest.mark.unit
+def test_get_tags_skips_corrupt_rows(workspace: Path) -> None:
+    """A garbage tag value in the table doesn't crash the reader."""
+    ensure_block_kind_tags_table(workspace)
+    with sqlite3.connect(workspace / "index.db") as conn:
+        conn.executemany(
+            "INSERT INTO block_kind_tags (block_id, kind) VALUES (?, ?)",
+            [("B-1", "entity"), ("B-1", "lukewarm-data"), ("B-1", "code")],
+        )
+        conn.commit()
+    assert get_block_kind_tags(workspace, "B-1") == {BlockKind.ENTITY, BlockKind.CODE}
+
+
+@pytest.mark.unit
+def test_single_and_multi_label_coexist(workspace: Path) -> None:
+    """Single-label v3-compat read keeps working alongside multi-label tags."""
+    ensure_block_kind_column(workspace)
+    db = workspace / "index.db"
+    with sqlite3.connect(db) as conn:
+        conn.execute("INSERT INTO blocks (id, content, kind) VALUES ('B-cls', '', 'entity')")
+        conn.commit()
+    set_block_kinds(workspace, "B-cls", [BlockKind.ENTITY, BlockKind.CODE])
+    assert get_block_kind(workspace, "B-cls") is BlockKind.ENTITY  # primary
+    assert get_block_kind_tags(workspace, "B-cls") == {BlockKind.ENTITY, BlockKind.CODE}

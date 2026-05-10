@@ -57,6 +57,15 @@ __all__ = [
     "ensure_block_kind_column",
     "get_block_kind",
     "list_blocks_by_kind",
+    # Multi-label surface (added per v4-audit-2026-05-10, 3/4 model
+    # consensus). A block can carry multiple kinds simultaneously
+    # (e.g. a Python class is both `entity` and `code`). The legacy
+    # single-label `blocks.kind` column stays as the primary kind so
+    # v3-compat reads keep working; multi-label callers use the
+    # junction-table API below.
+    "set_block_kinds",
+    "get_block_kind_tags",
+    "ensure_block_kind_tags_table",
 ]
 
 
@@ -205,3 +214,134 @@ def _has_kind_column(conn: sqlite3.Connection) -> bool:
     except sqlite3.Error:
         return False
     return "kind" in cols
+
+
+# ---------------------------------------------------------------------------
+# Multi-label surface  (v4-audit-2026-05-10, 3/4 model consensus)
+# ---------------------------------------------------------------------------
+#
+# A block can be more than one kind at the same time — e.g. a Python class
+# defining a User is both ``code`` (the file/symbol reference) and
+# ``entity`` (the User itself). The single-label ``blocks.kind`` column
+# stays as the *primary* kind for v3-compat reads; the junction table
+# below records every kind a block carries, including the primary.
+#
+# Schema:
+#
+#     CREATE TABLE block_kind_tags (
+#         block_id TEXT NOT NULL,
+#         kind     TEXT NOT NULL,
+#         PRIMARY KEY (block_id, kind),
+#         FOREIGN KEY (block_id) REFERENCES blocks(id) ON DELETE CASCADE
+#     )
+#
+# Foreign key omitted for SQLite (where FK constraints are off by
+# default and turning them on would interfere with v3 ingestion); the
+# many-to-many shape is enforced by the composite primary key alone.
+
+_TAGS_SCHEMA_SQL: str = """
+CREATE TABLE IF NOT EXISTS block_kind_tags (
+    block_id TEXT NOT NULL,
+    kind     TEXT NOT NULL,
+    PRIMARY KEY (block_id, kind)
+);
+CREATE INDEX IF NOT EXISTS idx_block_kind_tags_kind
+    ON block_kind_tags (kind);
+"""
+
+
+def ensure_block_kind_tags_table(workspace: str | Path) -> None:
+    """Create the ``block_kind_tags`` junction table on first call.
+
+    Idempotent. Raises :class:`FeatureDisabledError` if the flag is OFF.
+    Safe to call alongside :func:`ensure_block_kind_column`; the two
+    surfaces are independent — single-label callers can stay on the
+    column, multi-label callers add a tags table next to it.
+    """
+    require_enabled(FLAG)
+    db = Path(workspace) / "index.db"
+    if not db.parent.is_dir():
+        db.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db) as conn:
+        conn.executescript(_TAGS_SCHEMA_SQL)
+        conn.commit()
+
+
+def set_block_kinds(
+    workspace: str | Path,
+    block_id: str,
+    kinds: Iterable[BlockKind | str],
+) -> set[BlockKind]:
+    """Replace the kind tag set for ``block_id`` with ``kinds``.
+
+    Returns the set actually written (de-duplicated, validated). An
+    empty ``kinds`` clears every tag for this block. Unknown strings
+    raise :class:`ValueError` at the constructor — fail-loud so a
+    typo can't silently shrink a block's tag set.
+
+    Multi-label tags are stored in :data:`block_kind_tags`; the
+    legacy single-label :data:`blocks.kind` column is left untouched
+    by this function so v3-compat reads keep returning the primary
+    kind. Callers that want the column synchronised should write to
+    it directly alongside this call.
+    """
+    require_enabled(FLAG)
+    validated: set[BlockKind] = set()
+    for k in kinds:
+        if isinstance(k, str):
+            validated.add(BlockKind(k))
+        else:
+            validated.add(k)
+    db = Path(workspace) / "index.db"
+    if not db.parent.is_dir():
+        db.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db) as conn:
+        conn.executescript(_TAGS_SCHEMA_SQL)
+        conn.execute("DELETE FROM block_kind_tags WHERE block_id = ?", (block_id,))
+        if validated:
+            conn.executemany(
+                "INSERT INTO block_kind_tags (block_id, kind) VALUES (?, ?)",
+                [(block_id, k.value) for k in validated],
+            )
+        conn.commit()
+    return validated
+
+
+def get_block_kind_tags(workspace: str | Path, block_id: str) -> set[BlockKind]:
+    """Return every kind tag carried by ``block_id``.
+
+    Empty set when the block has no tags, when the table doesn't
+    exist, or when the database is missing — fail-soft same as the
+    rest of the v4 read surface. Unknown stored values are silently
+    skipped (a corrupt row can't kill the recall path).
+
+    Note: this is the multi-label reader; :func:`get_block_kind`
+    returns the *primary* kind from the legacy column for v3 compat.
+    Callers that want the union should call both.
+    """
+    require_enabled(FLAG)
+    db = Path(workspace) / "index.db"
+    if not db.is_file():
+        return set()
+    with sqlite3.connect(db) as conn:
+        if not _table_exists(conn, "block_kind_tags"):
+            return set()
+        rows = conn.execute(
+            "SELECT kind FROM block_kind_tags WHERE block_id = ?",
+            (block_id,),
+        ).fetchall()
+    out: set[BlockKind] = set()
+    for r in rows:
+        try:
+            out.add(BlockKind(r[0]))
+        except ValueError:
+            continue
+    return out
+
+
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?",
+        (name,),
+    ).fetchone()
+    return row is not None

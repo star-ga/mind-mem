@@ -19,10 +19,12 @@ from mind_mem.v4.tier_memory import (
     DEFAULT_TIER_CONFIG,
     FLAG,
     RecallTier,
+    StaleVersionError,
     TierConfig,
     _load_config,
     ensure_recall_tier_schema,
     get_recall_tier,
+    get_tier_version,
     list_blocks_in_recall_tier,
 )
 
@@ -309,3 +311,106 @@ def test_config_immutable() -> None:
     cfg = TierConfig()
     with pytest.raises((AttributeError, Exception)):
         cfg.hot_capacity = 9999  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# CAS / read-after-write consistency (v4-audit-2026-05-10 unanimous fix)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_schema_includes_block_version_column(workspace: Path) -> None:
+    """Closes the audit blind spot: every fresh row carries a version."""
+    ensure_recall_tier_schema(workspace)
+    with sqlite3.connect(workspace / "index.db") as conn:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(block_recall_tier)")}
+    assert "block_version" in cols
+
+
+@pytest.mark.unit
+def test_pre_cas_table_is_migrated(workspace: Path) -> None:
+    """An existing block_recall_tier WITHOUT block_version gets the column added."""
+    db = workspace / "index.db"
+    with sqlite3.connect(db) as conn:
+        # Create the v0 (pre-CAS) shape.
+        conn.execute(
+            "CREATE TABLE block_recall_tier ("
+            "block_id TEXT PRIMARY KEY, tier TEXT NOT NULL, "
+            "last_seen_at TEXT NOT NULL, promoted_count INTEGER NOT NULL DEFAULT 0, "
+            "last_surprise REAL)"
+        )
+        conn.execute("INSERT INTO block_recall_tier (block_id, tier, last_seen_at) VALUES ('B-old', 'hot', '2026-05-09T00:00:00Z')")
+        conn.commit()
+    # Idempotent ensure adds the missing column without touching data.
+    ensure_recall_tier_schema(workspace)
+    with sqlite3.connect(db) as conn:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(block_recall_tier)")}
+        rows = conn.execute("SELECT block_id, tier, block_version FROM block_recall_tier").fetchall()
+    assert "block_version" in cols
+    assert rows == [("B-old", "hot", 0)]
+
+
+@pytest.mark.unit
+def test_get_tier_version_unknown_block_returns_zero(workspace: Path) -> None:
+    """Default version for any block with no row is 0, matching INSERT default."""
+    ensure_recall_tier_schema(workspace)
+    assert get_tier_version(workspace, "B-never-seen") == 0
+
+
+@pytest.mark.unit
+def test_get_tier_version_round_trips(workspace: Path) -> None:
+    ensure_recall_tier_schema(workspace)
+    with sqlite3.connect(workspace / "index.db") as conn:
+        conn.execute(
+            "INSERT INTO block_recall_tier (block_id, tier, last_seen_at, block_version) VALUES ('B-1', 'hot', '2026-05-10T00:00:00Z', 7)"
+        )
+        conn.commit()
+    assert get_tier_version(workspace, "B-1") == 7
+
+
+@pytest.mark.unit
+def test_get_tier_version_returns_zero_when_db_missing(workspace: Path) -> None:
+    assert get_tier_version(workspace, "B-1") == 0
+
+
+@pytest.mark.unit
+def test_get_tier_version_returns_zero_when_table_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = {"v4": {FLAG: {"enabled": True}}}
+    (tmp_path / "mind-mem.json").write_text(json.dumps(cfg), encoding="utf-8")
+    monkeypatch.setenv("MIND_MEM_CONFIG", str(tmp_path / "mind-mem.json"))
+    sqlite3.connect(tmp_path / "index.db").close()
+    assert get_tier_version(tmp_path, "B-1") == 0
+
+
+@pytest.mark.unit
+def test_get_tier_version_returns_zero_on_legacy_table(workspace: Path) -> None:
+    """A pre-CAS table without block_version reads as 0 — never crashes."""
+    db = workspace / "index.db"
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "CREATE TABLE block_recall_tier ("
+            "block_id TEXT PRIMARY KEY, tier TEXT NOT NULL, "
+            "last_seen_at TEXT NOT NULL, promoted_count INTEGER NOT NULL DEFAULT 0, "
+            "last_surprise REAL)"
+        )
+        conn.execute("INSERT INTO block_recall_tier (block_id, tier, last_seen_at) VALUES ('B-old', 'hot', '2026-05-09T00:00:00Z')")
+        conn.commit()
+    # No ensure_recall_tier_schema call here — simulating a fresh-read on
+    # legacy state before the migration runs.
+    assert get_tier_version(workspace, "B-old") == 0
+
+
+@pytest.mark.unit
+def test_stale_version_error_inherits_runtimeerror() -> None:
+    """The exception is catchable as RuntimeError so generic retry helpers
+    can pick it up without importing the v4 surface directly."""
+    err = StaleVersionError("expected 5, got 7")
+    assert isinstance(err, RuntimeError)
+
+
+@pytest.mark.unit
+def test_stale_version_error_message_round_trips() -> None:
+    err = StaleVersionError("block B-1: expected version 3 but row carries 5")
+    assert "B-1" in str(err)
+    assert "version 3" in str(err)
+    assert "5" in str(err)

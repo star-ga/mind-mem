@@ -70,10 +70,23 @@ __all__ = [
     "RecallTier",
     "TierConfig",
     "DEFAULT_TIER_CONFIG",
+    "StaleVersionError",
     "ensure_recall_tier_schema",
     "get_recall_tier",
+    "get_tier_version",
     "list_blocks_in_recall_tier",
 ]
+
+
+class StaleVersionError(RuntimeError):
+    """Raised when a tier write is rejected because ``expected_version``
+    no longer matches the row's current ``block_version``.
+
+    Closes the v4-audit-2026-05-10 unanimous blind spot: without a CAS
+    contract, two agents that both promote the same block can silently
+    clobber each other's writes. Callers catch this, re-read the
+    current version with :func:`get_tier_version`, and retry.
+    """
 
 
 #: The feature-flag key in ``mind-mem.json: v4: {...}``.
@@ -151,11 +164,17 @@ CREATE TABLE IF NOT EXISTS block_recall_tier (
     tier            TEXT NOT NULL,
     last_seen_at    TEXT NOT NULL,
     promoted_count  INTEGER NOT NULL DEFAULT 0,
-    last_surprise   REAL
+    last_surprise   REAL,
+    block_version   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_block_recall_tier_tier
     ON block_recall_tier (tier, last_seen_at);
 """
+
+#: Idempotent migration that brings pre-CAS deployments forward without
+#: data movement.  ``ALTER TABLE … ADD COLUMN`` defaults all existing
+#: rows to version 0; new tier writes increment from there.
+_MIGRATE_ADD_VERSION_SQL: str = "ALTER TABLE block_recall_tier ADD COLUMN block_version INTEGER NOT NULL DEFAULT 0"
 
 
 def ensure_recall_tier_schema(workspace: str | Path) -> None:
@@ -172,6 +191,11 @@ def ensure_recall_tier_schema(workspace: str | Path) -> None:
         db.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db) as conn:
         conn.executescript(_SCHEMA_SQL)
+        # Pre-CAS deployments may already have the table without
+        # block_version. Add it on the fly; idempotent.
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(block_recall_tier)")}
+        if "block_version" not in cols:
+            conn.execute(_MIGRATE_ADD_VERSION_SQL)
         conn.commit()
 
 
@@ -208,6 +232,42 @@ def get_recall_tier(workspace: str | Path, block_id: str) -> RecallTier:
     except ValueError:
         # Unknown stored value — treat as WARM rather than crashing.
         return RecallTier.WARM
+
+
+def get_tier_version(workspace: str | Path, block_id: str) -> int:
+    """Return the current ``block_version`` for a block's tier row.
+
+    Returns ``0`` for blocks with no row (the same default a fresh
+    insert would carry). Callers compute their next CAS write as
+    ``expected_version = current``; the write succeeds iff the value
+    is still ``current`` at apply time and increments to ``current +
+    1``. Two concurrent writers see the same ``current``, only one's
+    CAS succeeds; the loser raises :class:`StaleVersionError` and can
+    re-read.
+
+    No flag check on the read path itself — surfacing a version is
+    pure metadata. The *write* function that consumes this version
+    (lands when the promotion API is wired) is the gated surface.
+    """
+    db = Path(workspace) / "index.db"
+    if not db.is_file():
+        return 0
+    with sqlite3.connect(db) as conn:
+        if not _table_exists(conn, "block_recall_tier"):
+            return 0
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(block_recall_tier)")}
+        if "block_version" not in cols:
+            return 0
+        row = conn.execute(
+            "SELECT block_version FROM block_recall_tier WHERE block_id = ?",
+            (block_id,),
+        ).fetchone()
+    if row is None:
+        return 0
+    try:
+        return int(row[0])
+    except (TypeError, ValueError):
+        return 0
 
 
 def list_blocks_in_recall_tier(

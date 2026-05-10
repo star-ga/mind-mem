@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 776 | **Est. tokens:** ~1,572,493
-**Generated:** 2026-05-10 10:11 UTC
+**Files:** 777 | **Est. tokens:** ~1,578,320
+**Generated:** 2026-05-10 10:26 UTC
 
 ## Token Budget Guide
 
@@ -31,7 +31,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 71 | ~118,822 |
+| `docs/` | 72 | ~120,073 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -64,9 +64,9 @@
 | `src/mind_mem/mcp/tools/` | 24 | ~51,536 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
-| `src/mind_mem/v4/` | 6 | ~10,130 |
+| `src/mind_mem/v4/` | 6 | ~12,081 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 263 | ~532,470 |
+| `tests/` | 263 | ~535,095 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -259,6 +259,7 @@
 - `v3.3.0-release-notes.md` (~1157 tok, large) — MIND-Mem v3.3.0 release notes
 - `v3.4.0-release-notes.md` (~1209 tok, large) — MIND-Mem v3.4.0 release notes
 - `v3.4.0-roadmap-llm-consensus.md` (~1271 tok, large) — v3.4.0 roadmap — path to 90+ on LoCoMo
+- `v4-audit-2026-05-10.md` (~1251 tok, large) — v4 architecture audit — 2026-05-10
 - `workspace-structure.md` (~352 tok, medium) — Workspace Structure
 ### `examples/`
 
@@ -634,12 +635,12 @@
 - `union_recall.py` (~1310 tok, large) — Union-style retrieval for decomposed queries (v3.4.0).
 ### `src/mind_mem/v4/`
 
-- `block_kinds.py` (~1795 tok, huge) — v4 block-kind taxonomy (Group B: knowledge graph).
+- `block_kinds.py` (~3105 tok, huge) — v4 block-kind taxonomy (Group B: knowledge graph).
 - `cognitive_kernel.py` (~2216 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
 - `feature_flags.py` (~1300 tok, large) — v4.0 feature-flag registry.
 - `__init__.py` (~731 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
 - `surprise_retrieval.py` (~1737 tok, huge) — v4 surprise-weighted retrieval term (Group A: cognition / model layer).
-- `tier_memory.py` (~2351 tok, huge) — v4 recall-tier memory (Group A: cognition / model layer).
+- `tier_memory.py` (~2992 tok, huge) — v4 recall-tier memory (Group A: cognition / model layer).
 ### `src/mind_mem/`
 
 - `validate_py.py` (~4899 tok, huge) — Mind Mem Integrity Validator — canonical engine.
@@ -932,10 +933,10 @@
 - `test_v28_completion.py` (~4622 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_v320_gaps.py` (~3257 tok, huge) — v3.2.0 gap tests — regression and edge-case coverage for new modules.
 - `test_v34_features.py` (~2993 tok, huge) — Tests for v3.4.0 retrieval features.
-- `test_v4_block_kinds.py` (~2605 tok, huge) — Tests for the v4 block-kind taxonomy module."""
+- `test_v4_block_kinds.py` (~4112 tok, huge) — Tests for the v4 block-kind taxonomy module."""
 - `test_v4_cognitive_kernel.py` (~2499 tok, huge) — Tests for the v4 Cognitive Mind Kernel registry + dispatcher."""
 - `test_v4_surprise_retrieval.py` (~2281 tok, huge) — Tests for the v4 surprise-weighted retrieval scoring module."""
-- `test_v4_tier_memory.py` (~2947 tok, huge) — Tests for the v4 recall-tier module.
+- `test_v4_tier_memory.py` (~4065 tok, huge) — Tests for the v4 recall-tier module.
 - `test_validate_py.py` (~3438 tok, huge) — Tests for validate_py.py — workspace integrity validator."""
 - `test_validate_sh_deprecation.py` (~547 tok, large) — Pin the runtime deprecation warning on validate.sh.
 - `test_vault_wikilinks.py` (~1783 tok, huge) — # Copyright 2026 STARGA, Inc.
