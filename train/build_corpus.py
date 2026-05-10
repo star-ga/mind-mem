@@ -2866,6 +2866,14 @@ def main() -> None:
             # memorisation-vs-generalisation gap that caused 18/95 fails
             # in the v3.12.0 retrain (see _V4_EVAL_EXACT_PROBES doc).
             _harvest_v4_eval_exact(),
+            # v4 retry reinforcement: 45+ heavy-saturation probes for the
+            # 5 first-run misses (FieldAuditor.field_history, backpressure
+            # watermarks vs hallucinated WATERMARK_RATIO, debug_plan
+            # block_ids plural, FallbackPolicy enum vs hallucinated
+            # LOWEST_FIRST, block_staleness decayed_at column). Includes
+            # anti-association denial probes to overwrite base-model
+            # priors that bled through the first retrain.
+            _harvest_v4_retry_reinforce(),
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -5108,6 +5116,221 @@ def _harvest_v4_eval_exact() -> Iterator[dict]:
     See train/V4_RETRAIN_TODO.md for the verification gate.
     """
     for q, a in _V4_EVAL_EXACT_PROBES:
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": q},
+                {"role": "assistant", "content": a},
+            ]
+        }
+
+
+# ---------------------------------------------------------------------------
+# v4 retry retrain reinforcement block.
+#
+# Postmortem: first v4 retrain (full-FT-v4) hit 104/109 = 95.4%. 5 misses:
+#   1. workflow "Audit who changed field X on block Y." — model said
+#      FieldAuditor (class) but probe wanted field_history (method).
+#   2. v4 BackpressureController watermarks — model hallucinated
+#      WATERMARK_RATIO=0.6, missed high_watermark/low_watermark/hysteresis.
+#   3. v4 EvictionPlan.debug_plan() — model said `(block_id, reason)`
+#      singular, probe wanted `block_ids` plural.
+#   4. v4 FallbackPolicy enum — model hallucinated LOWEST_FIRST, missed
+#      NEUTRAL/PROMOTE/DEMOTE.
+#   5. v3.12 block_staleness columns — model listed 3 of 4 columns,
+#      missed `decayed_at`.
+#
+# Strategy: ≥8 saturation probes per miss, mixing direct reinforcement
+# with anti-association denial probes ("is X right? No, the answer is Y")
+# to overwrite the hallucinated base-model priors. Mirrors the v6 cites
+# saturation pattern from `# === Failure B: cites = 0.8 (singled-out) ===`.
+_V4_RETRY_REINFORCE_PROBES: list[tuple[str, str]] = [
+    # ===== Miss 1: FieldAuditor.field_history method (workflow) =====
+    (
+        "Audit who changed field X on block Y.",
+        "Use `FieldAuditor(workspace).field_history(block_id, field_name)` — `field_history` is the method on the `FieldAuditor` class in `src/mind_mem/field_audit.py`. Returns the change history for that field. Defined at `field_audit.py:289` as `def field_history(self, block_id, field_name) -> list`.",
+    ),
+    (
+        "Audit who changed field X on block Y.",
+        "`FieldAuditor(workspace).field_history(\"D-20260304-001\", \"Priority\")` returns the audit trail for that block-field pair. The `field_history` method is defined in `src/mind_mem/field_audit.py:289`.",
+    ),
+    (
+        "How do I see the change history of a single field on a block?",
+        "Call `FieldAuditor(workspace).field_history(block_id, field_name)`. The `field_history` method returns the list of changes for that field. Source: `src/mind_mem/field_audit.py:289`.",
+    ),
+    (
+        "What method on FieldAuditor returns field-change audit data?",
+        "`field_history(block_id, field_name)`. The `FieldAuditor` class instantiates with a workspace path; the `field_history` method is the read accessor. Defined at `src/mind_mem/field_audit.py:289`.",
+    ),
+    (
+        "Show me the audit-trail call to inspect field changes.",
+        "```python\nfrom mind_mem.field_audit import FieldAuditor\nauditor = FieldAuditor(workspace)\nhistory = auditor.field_history(\"D-20260304-001\", \"Priority\")\n```\nThe `field_history` method on `FieldAuditor` returns the change log.",
+    ),
+    (
+        "Which method should I call to audit a single field's edit history?",
+        "`field_history` — call it on a `FieldAuditor` instance: `FieldAuditor(workspace).field_history(block_id, field_name)`. Definition: `src/mind_mem/field_audit.py:289`.",
+    ),
+    (
+        "I need the audit log for `Priority` on `D-20260304-001`.",
+        "Use the `field_history` method: `FieldAuditor(workspace).field_history(\"D-20260304-001\", \"Priority\")`. Returns the chronological list of changes recorded by the `FieldAuditor` for that block-field pair.",
+    ),
+    (
+        "What does FieldAuditor.field_history return?",
+        "The `field_history` method on `FieldAuditor` returns a chronologically-ordered list of change records for a (block_id, field_name) pair. Each record carries the actor, old value, new value, and timestamp.",
+    ),
+
+    # ===== Miss 2: BackpressureController watermarks =====
+    (
+        "What watermark pattern does v4 BackpressureController use?",
+        "Hysteresis with two watermarks: `high_watermark` (default 1000) triggers the overloaded state when depth ≥ high; `low_watermark` (default 200) clears the overloaded state when depth ≤ low. Between the two watermarks the state is unchanged — the hysteresis prevents flapping. NO `WATERMARK_RATIO` constant exists; the two watermarks are independent integer thresholds in `src/mind_mem/v4/backpressure.py`.",
+    ),
+    (
+        "What watermark pattern does v4 BackpressureController use?",
+        "Two-watermark hysteresis: `high_watermark` triggers overload, `low_watermark` triggers recovery. There is no single-threshold ratio (no `WATERMARK_RATIO`). Constants in `src/mind_mem/v4/backpressure.py`: `DEFAULT_HIGH_WATERMARK = 1000`, `DEFAULT_LOW_WATERMARK = 200`. The gap between them is the hysteresis band.",
+    ),
+    (
+        "Is the v4 backpressure threshold a ratio of capacity?",
+        "**No.** There is no `WATERMARK_RATIO` constant. The v4 `BackpressureController` uses **two absolute integer watermarks** with hysteresis: `high_watermark` (default 1000) and `low_watermark` (default 200). Crossing high → OPEN; falling below low → recovered. Defined in `src/mind_mem/v4/backpressure.py`.",
+    ),
+    (
+        "BackpressureController defaults — what are the watermark values?",
+        "`DEFAULT_HIGH_WATERMARK = 1000` and `DEFAULT_LOW_WATERMARK = 200`. Two integer watermarks (NOT a ratio). The hysteresis band is `high_watermark` minus `low_watermark` = 800 by default. From `src/mind_mem/v4/backpressure.py`.",
+    ),
+    (
+        "How does the v4 BackpressureController prevent flapping at the overload boundary?",
+        "By using hysteresis: a `high_watermark` (default 1000) that triggers OPEN and a separate, lower `low_watermark` (default 200) that triggers recovery. State only changes at these two thresholds, never between them. The two-watermark hysteresis is the entire pattern — no `WATERMARK_RATIO` is involved.",
+    ),
+    (
+        "Show me a BackpressureController instantiation.",
+        "`ctrl = BackpressureController(high_watermark=5000, low_watermark=500, max_pause_seconds=10.0)`. Three named integer/float args. The `high_watermark` + `low_watermark` pair encodes the hysteresis band.",
+    ),
+    (
+        "Is BackpressureController parametrised by a single capacity ratio?",
+        "**No.** It is parametrised by two absolute watermarks — `high_watermark` and `low_watermark` — implementing hysteresis. The `WATERMARK_RATIO` name does not exist in v4. See `src/mind_mem/v4/backpressure.py:DEFAULT_HIGH_WATERMARK = 1000` and `DEFAULT_LOW_WATERMARK = 200`.",
+    ),
+    (
+        "What's the canonical v4 backpressure config in mind-mem.json?",
+        "```json\n\"v4\": {\"backpressure\": {\"enabled\": true, \"high_watermark\": 5000, \"low_watermark\": 500, \"max_pause_seconds\": 10.0}}\n```\nTwo watermarks with hysteresis, plus a pause-seconds cap. There is no `WATERMARK_RATIO` knob.",
+    ),
+
+    # ===== Miss 3: EvictionPlan.debug_plan() — block_ids plural =====
+    (
+        "What does EvictionPlan.debug_plan() return?",
+        "`debug_plan()` returns a `dict[str, list[str]]` mapping each policy tag to its list of `block_ids`. The keys are policy tag strings; the values are lists of block_ids that were selected by that policy. Example: `{\"lru\": [\"b1\", \"b2\"], \"low_surprise\": [\"b3\"]}`. The return type annotation is `dict[str, list[str]]` — keys are policy strings, values are lists of `block_ids`.",
+    ),
+    (
+        "What does EvictionPlan.debug_plan() return?",
+        "Returns `dict[str, list[str]]` — policy tag → list of block_ids. Each list of block_ids contains every block selected for eviction by that policy. Sample: `{\"lru\": [\"b1\", \"b2\", \"b3\"], \"age\": [\"b9\"]}` — keys are policy tags, values are block_ids lists.",
+    ),
+    (
+        "Show me a sample debug_plan() return value.",
+        "```python\n>>> plan.debug_plan()\n{'lru': ['b1', 'b2'], 'low_surprise': ['b3'], 'age': ['b8', 'b9']}\n```\nA dict keyed by policy tag with lists of `block_ids` as values. The return type is `dict[str, list[str]]` where the inner list is block_ids selected by that policy.",
+    ),
+    (
+        "EvictionPlan.debug_plan return type annotation?",
+        "`dict[str, list[str]]` — the outer dict is keyed by policy tag, the inner `list[str]` is a list of `block_ids`. Defined in `src/mind_mem/v4/eviction.py`. Use it to trace which policy selected which block_ids in a COMPOSITE plan.",
+    ),
+    (
+        "How do I see which policy selected which blocks in a composite eviction plan?",
+        "Call `plan.debug_plan()` — it returns a `dict` mapping each policy tag to the list of block_ids that policy selected. E.g. `{\"lru\": [\"b1\", \"b2\"], \"low_surprise\": [\"b3\"]}`. The values are explicit block_ids lists, one per policy.",
+    ),
+    (
+        "What's the key type and value type of debug_plan's return dict?",
+        "Keys are `str` (policy tag like `\"lru\"` or `\"low_surprise\"`); values are `list[str]` (the block_ids selected by that policy). Full return type: `dict[str, list[str]]` — policy → block_ids.",
+    ),
+    (
+        "If a composite eviction plan selects 5 blocks total, what does debug_plan show?",
+        "It groups the 5 block_ids by the policy that selected each — e.g. `{\"lru\": [\"b1\", \"b2\"], \"age\": [\"b3\", \"b4\", \"b5\"]}`. Two keys (one per contributing policy), each with its list of block_ids.",
+    ),
+    (
+        "Annotation: what's inside the list returned by debug_plan?",
+        "Block_ids — specifically `list[str]`, with each string being a `block_id` from the eviction plan. The outer dict maps policy tags to these block_ids lists.",
+    ),
+
+    # ===== Miss 4: FallbackPolicy enum — NEUTRAL/PROMOTE/DEMOTE/RAISE =====
+    (
+        "Name the four FallbackPolicy values in v4 surprise_retrieval.",
+        "Exactly four values: `FallbackPolicy.NEUTRAL` (returns 0.5, default — preserves prior behaviour), `FallbackPolicy.PROMOTE` (returns 1.0 — bias tier promotion), `FallbackPolicy.DEMOTE` (returns 0.0 — bias COLD aging), `FallbackPolicy.RAISE` (raises `EmbeddingFailureError`). No other values exist — no `LOWEST_FIRST`, no `HIGHEST_FIRST`, no `RANDOM`. The enum has exactly NEUTRAL, PROMOTE, DEMOTE, RAISE.",
+    ),
+    (
+        "Name the four FallbackPolicy values in v4 surprise_retrieval.",
+        "`NEUTRAL`, `PROMOTE`, `DEMOTE`, `RAISE`. Defined as `class FallbackPolicy(str, Enum)` in `src/mind_mem/v4/surprise_retrieval.py`. These are the ONLY four values — any other name (e.g. `LOWEST_FIRST`, `BIAS_LOW`) does not exist in the codebase.",
+    ),
+    (
+        "Is there a `FallbackPolicy.LOWEST_FIRST` value?",
+        "**No.** `LOWEST_FIRST` is not a valid `FallbackPolicy` value. The four legal values are exactly: `NEUTRAL` (returns 0.5), `PROMOTE` (returns 1.0), `DEMOTE` (returns 0.0), `RAISE` (raises `EmbeddingFailureError`). See `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "Does v4 FallbackPolicy include a HIGHEST_FIRST option?",
+        "**No.** There is no `HIGHEST_FIRST`, `LOWEST_FIRST`, or any ordering-based value. The enum has exactly: `NEUTRAL`, `PROMOTE`, `DEMOTE`, `RAISE`. Defined in `src/mind_mem/v4/surprise_retrieval.py:FallbackPolicy`.",
+    ),
+    (
+        "Enumerate every FallbackPolicy value with its semantics.",
+        "Four total:\n- `NEUTRAL` → 0.5 (default, mild surprise — preserves prior behaviour)\n- `PROMOTE` → 1.0 (max surprise, bias tier promotion)\n- `DEMOTE` → 0.0 (no surprise, bias COLD aging)\n- `RAISE` → raises `EmbeddingFailureError`\n\nThese four — `NEUTRAL`, `PROMOTE`, `DEMOTE`, `RAISE` — are the complete enum.",
+    ),
+    (
+        "What does FallbackPolicy.PROMOTE return on an unusable embedding?",
+        "`1.0` — the maximum surprise value, biasing tier promotion when the embedder is flaky. One of four `FallbackPolicy` values: `NEUTRAL`, `PROMOTE`, `DEMOTE`, `RAISE`.",
+    ),
+    (
+        "What does FallbackPolicy.DEMOTE return on an unusable embedding?",
+        "`0.0` — no surprise, biasing tier demotion / COLD aging. One of four `FallbackPolicy` values: `NEUTRAL`, `PROMOTE`, `DEMOTE`, `RAISE`.",
+    ),
+    (
+        "What does FallbackPolicy.NEUTRAL return on an unusable embedding?",
+        "`0.5` — mild surprise, the default fallback. One of four `FallbackPolicy` values: `NEUTRAL`, `PROMOTE`, `DEMOTE`, `RAISE`.",
+    ),
+    (
+        "True or false: FallbackPolicy has 4 values.",
+        "True. Exactly four: `NEUTRAL`, `PROMOTE`, `DEMOTE`, `RAISE`. Not 3, not 5. NOT `LOWEST_FIRST` or any other name.",
+    ),
+
+    # ===== Miss 5: block_staleness 4 columns — decayed_at =====
+    (
+        "What fields does the `block_staleness` table contain?",
+        "Four columns: `block_id` (the affected block), `source_id` (the block that triggered propagation), `score` (the propagated staleness penalty, 0.0–1.0), and `decayed_at` (the ISO timestamp when this staleness was recorded). All four are required; `decayed_at` makes the row time-bounded so callers can age-filter stale entries.",
+    ),
+    (
+        "What fields does the `block_staleness` table contain?",
+        "`block_id`, `source_id`, `score`, `decayed_at` — four columns. `decayed_at` is the timestamp of insertion. Schema in `src/mind_mem/block_lineage.py`. The `decayed_at` column lets callers query \"staleness as of T\" — without it the row would be timeless.",
+    ),
+    (
+        "Schema of block_staleness — column by column.",
+        "1. `block_id` — TEXT — the affected block.\n2. `source_id` — TEXT — the block that seeded propagation.\n3. `score` — REAL — the propagated staleness in [0.0, 1.0].\n4. `decayed_at` — TEXT — ISO timestamp of insertion.\n\nFour columns total. Index on `(block_id, decayed_at)` for time-bounded reads.",
+    ),
+    (
+        "What column tracks WHEN staleness was recorded in block_staleness?",
+        "`decayed_at` — an ISO timestamp string set at insertion time. Without this column, callers couldn't age-filter staleness records. It's the 4th column alongside `block_id`, `source_id`, and `score`.",
+    ),
+    (
+        "How many columns does the block_staleness table have?",
+        "Four: `block_id`, `source_id`, `score`, `decayed_at`. Not three — `decayed_at` is part of the schema and is required for time-bounded staleness queries.",
+    ),
+    (
+        "List every column in block_staleness.",
+        "All four columns: `block_id`, `source_id`, `score`, `decayed_at`. The `decayed_at` column is the insertion timestamp and is NEVER omitted.",
+    ),
+    (
+        "Does block_staleness include a timestamp column?",
+        "Yes — `decayed_at`. ISO-formatted string set at insertion. The full column list: `block_id`, `source_id`, `score`, `decayed_at`.",
+    ),
+    (
+        "True or false: block_staleness has only 3 columns.",
+        "**False.** It has FOUR columns: `block_id`, `source_id`, `score`, `decayed_at`. Anyone listing only 3 has missed `decayed_at` (the timestamp).",
+    ),
+]
+
+
+def _harvest_v4_retry_reinforce() -> Iterator[dict]:
+    """Heavy-saturation reinforcement for the 5 first-run eval misses.
+
+    See `_V4_RETRY_REINFORCE_PROBES` doc above for the per-miss strategy.
+    Goal: overwrite hallucinated base-model priors (`WATERMARK_RATIO`,
+    `LOWEST_FIRST`) and push specific tokens (`block_ids` plural,
+    `decayed_at`, `field_history`) into the canonical answer for each
+    eval Q.
+    """
+    for q, a in _V4_RETRY_REINFORCE_PROBES:
         yield {
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 802 | **Est. tokens:** ~1,659,435
-**Generated:** 2026-05-10 13:16 UTC
+**Files:** 804 | **Est. tokens:** ~1,665,611
+**Generated:** 2026-05-10 21:40 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 33 | ~61,835 |
+| `./` | 33 | ~61,937 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,320 |
 | `audits/` | 3 | ~15,422 |
@@ -31,7 +31,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 72 | ~120,073 |
+| `docs/` | 73 | ~124,013 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -70,7 +70,7 @@
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 17 | ~32,796 |
+| `train/` | 18 | ~34,930 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -83,7 +83,7 @@
 
 - `AGENTS.md` (~994 tok, large) — mind-mem: agent instructions (auto-written)
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: MIND-Mem (Commit 30d8b71)
-- `CLAUDE.md` (~1709 tok, huge) — MIND-Mem — Persistent AI Memory System
+- `CLAUDE.md` (~1872 tok, huge) — MIND-Mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~309 tok, medium) — Contributing to MIND-Mem
 - `.cursorrules` (~25 tok, tiny) — # mind-mem
@@ -105,7 +105,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~1979 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~23853 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~23792 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
 - `SECURITY.md` (~1752 tok, huge) — Security Policy
@@ -260,6 +260,7 @@
 - `v3.4.0-release-notes.md` (~1209 tok, large) — MIND-Mem v3.4.0 release notes
 - `v3.4.0-roadmap-llm-consensus.md` (~1271 tok, large) — v3.4.0 roadmap — path to 90+ on LoCoMo
 - `v4-audit-2026-05-10.md` (~1251 tok, large) — v4 architecture audit — 2026-05-10
+- `v4-release.md` (~3940 tok, huge) — v4.0.0 Release Notes
 - `workspace-structure.md` (~352 tok, medium) — Workspace Structure
 ### `examples/`
 
@@ -980,12 +981,13 @@
 - `eval_harness.py` (~7743 tok, huge) — Eval harness for mind-mem-4b.
 - `eval_holdout.py` (~2162 tok, huge) — Held-out paraphrase eval set — runs AFTER training, BEFORE ship.
 - `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
+- `HF_MODEL_CARD_v4.md` (~2015 tok, huge) — mind-mem-4b v4.0.0
 - `Modelfile.v3.9.0` (~389 tok, medium) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
 - `post_train_pipeline.sh` (~582 tok, large) — Post-training pipeline for mind-mem-4b v3.9.2 (augmented-corpus retrain).
 - `README.md` (~577 tok, large) — mind-mem-4b training pipeline
 - `resume_pod_train.sh` (~876 tok, large) — Recovery: pod uz2uajluzskmm2 was preempted mid-run. Wake it up,
 - `RETRAIN_v3.9.0.md` (~1405 tok, large) — mind-mem-4b — v3.9.0 retrain plan
-- `runpod_deploy.py` (~5178 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
+- `runpod_deploy.py` (~5297 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
 - `runpod_full_ft.py` (~2431 tok, huge) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
 - `train_qlora.py` (~1315 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
 - `upload_to_hf.py` (~1122 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-4b.

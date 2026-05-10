@@ -44,10 +44,17 @@ CORPUS = Path(
     )
 )
 SSH_KEY = Path(os.environ.get("MM_SSH_KEY", "/home/n/.ssh/id_ed25519"))
+# scp lands the pod's `/workspace/train-output/full-ft` directory at
+# `WEIGHTS_OUT.parent` and creates a `full-ft/` subdir inside it. So the
+# *actual* destination is `WEIGHTS_OUT.parent / "full-ft"`. Default
+# parent is `/data/checkpoints/mm-workspace/`, so weights end up at
+# `/data/checkpoints/mm-workspace/full-ft/`. The verify-first hash check
+# at the end MUST point at that exact path or it will false-negative
+# (and silently keep the pod alive — has happened in past runs).
 WEIGHTS_OUT = Path(
     os.environ.get(
         "MM_WEIGHTS_OUT",
-        "/data/checkpoints/mm-workspace/mind-mem-4b-fullft",
+        "/data/checkpoints/mm-workspace/full-ft",
     )
 )
 HF_TOKEN_FILE = Path(os.environ.get("MM_HF_TOKEN_FILE", "/tmp/hf_write_token"))
