@@ -317,17 +317,14 @@ V312_QUALITY_GATE_STRICT_MODE: list[tuple[str, list[str]]] = [
         ["strict", "advisory"],
     ),
     (
-        # V4 RETRAIN TODO (see train/V4_RETRAIN_TODO.md): original
-        # required = ["force", "strict"]. Softened for v3.12.1 to
-        # ["mode"] — the model emits "set quality_gate.mode = ..." which
-        # contains "mode" but neither "force" nor "strict". Keeping the
-        # probe in the suite (instead of dropping it) means a v4 model
-        # at least has to mention the configuration knob; the v4 retrain
-        # corpus must teach the canonical answer (force=True on
-        # validate_block) and the eval probe must be reverted to the
-        # original ["force", "strict"] requirement.
+        # v4 RESTORED: original strict requirement reinstated. The v4
+        # corpus carries 13+ probes teaching `validate_block(text,
+        # strict=True, force=True)` as the canonical library escape
+        # hatch (see train/build_corpus.py "=== Failure A: qg escape
+        # hatch ===" block at lines 3962-4035). v4 model must hit
+        # both tokens or this probe fails — no further softening.
         "Is there an escape hatch to write a block that fails validation in strict mode?",
-        ["mode"],
+        ["force", "strict"],
     ),
     (
         "What operator runbook covers the quality gate configuration?",
@@ -370,21 +367,95 @@ V312_LINEAGE_STALENESS: list[tuple[str, list[str]]] = [
         ["source_id", "decayed_at"],
     ),
     (
-        # V4 RETRAIN TODO (see train/V4_RETRAIN_TODO.md): original
-        # required = ["cites", "0.8"]. Softened for v3.12.1 to drop
-        # "0.8" because the model emits "0.4" (the refines value) — a
-        # real model error caused by asymmetric corpus saturation
-        # (refines got >10 reinforcement probes, cites got <5). DO NOT
-        # leave this softened past v4. The v4 corpus must add ≥10
-        # reinforcement probes for cites=0.8 (matching refines=0.4
-        # density), and this probe MUST be reverted to ["cites", "0.8"]
-        # before the v4 eval run. See V4_RETRAIN_TODO.md §1.
+        # v4 RESTORED: original strict requirement reinstated. The v4
+        # corpus has 30+ singled-out cites=0.8 probes (see
+        # _V4_KIND_BALANCE_PROBES) plus contrastive denial probes
+        # ("is cites 0.4? No, 0.4 is refines"). v4 model must emit
+        # both "cites" and "0.8" or this probe fails — no further
+        # softening. If the model still emits 0.4 here, the corpus
+        # rebalance didn't take and we DO NOT ship.
         "What is the decay multiplier for a `cites` edge in lineage staleness?",
-        ["cites"],
+        ["cites", "0.8"],
     ),
     (
         "What is the decay multiplier for a `refines` edge?",
         ["refines", "0.4"],
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# v4 surfaces — one or two probes per new module so the trained model
+# is verified to know the canonical API for every v4 addition.
+# Target ≥ 90% pass rate (12+/14). Each probe has strict required-token
+# tokens; matches the strict format of the v3.11/v3.12 groups.
+# ---------------------------------------------------------------------------
+
+V4_SURFACES: list[tuple[str, list[str]]] = [
+    # circuit_breaker.py
+    (
+        "What are the three states of the v4 circuit breaker?",
+        ["CLOSED", "OPEN", "HALF_OPEN"],
+    ),
+    (
+        "Default failure_threshold and recovery_timeout for CircuitBreaker?",
+        ["5", "30"],
+    ),
+    # backpressure.py
+    (
+        "What watermark pattern does v4 BackpressureController use?",
+        ["high_watermark", "low_watermark", "hysteresis"],
+    ),
+    # health.py
+    (
+        "What status values can v4 health_check return at the top level?",
+        ["ok", "degraded", "fail"],
+    ),
+    # logging_context.py
+    (
+        "What underlies the v4 logging_context stack — threads or contextvars?",
+        ["contextvars"],
+    ),
+    # block_metadata.py
+    (
+        "What two timestamp columns does v4 block_metadata track?",
+        ["created_at", "updated_at"],
+    ),
+    (
+        "What does register_schema_validator do in v4 block_metadata?",
+        ["validate_block", "kind"],
+    ),
+    # observability.py cardinality guard
+    (
+        "What's the v4 observability MAX_CARDINALITY default?",
+        ["10000"],
+    ),
+    # eviction.py debug_plan + active_policy
+    (
+        "What does set_active_policy do in v4 eviction?",
+        ["active_policy", "plan_eviction"],
+    ),
+    (
+        "What does EvictionPlan.debug_plan() return?",
+        ["policy", "block_ids"],
+    ),
+    # surprise_retrieval.py FallbackPolicy
+    (
+        "Name the four FallbackPolicy values in v4 surprise_retrieval.",
+        ["NEUTRAL", "PROMOTE", "DEMOTE", "RAISE"],
+    ),
+    (
+        "What does FallbackPolicy.RAISE raise on a missing embedding?",
+        ["EmbeddingFailureError"],
+    ),
+    # cognitive_kernel.py + eviction.py public predicates
+    (
+        "What public predicate replaces direct _registry access for v4 eviction?",
+        ["is_policy_registered"],
+    ),
+    (
+        "What public predicate does v4 cognitive_kernel expose for the health probe?",
+        ["is_kernel_registered"],
     ),
 ]
 
@@ -621,6 +692,25 @@ def _bench_v312_lineage_staleness(tokenizer, model) -> dict:
     return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
 
 
+def _bench_v4_surfaces(tokenizer, model) -> dict:
+    """v4 probe: 9 new modules — circuit_breaker, backpressure, health,
+    logging_context, block_metadata, observability cardinality, eviction
+    debug_plan/active_policy, surprise FallbackPolicy, public predicates.
+
+    Strict required-token match. Target ≥ 90%."""
+    hits = 0
+    misses: list[dict] = []
+    for prompt, required_tokens in V4_SURFACES:
+        resp = _chat(tokenizer, model, prompt)
+        if all(tok in resp for tok in required_tokens):
+            hits += 1
+        else:
+            missing = [tok for tok in required_tokens if tok not in resp]
+            misses.append({"prompt": prompt, "missing": missing, "response": resp[:200]})
+    total = len(V4_SURFACES)
+    return {"accuracy": hits / total, "hits": hits, "total": total, "misses": misses}
+
+
 def main() -> None:
     tokenizer, model = _load_model()
     tool_bench = _bench_tool_calls(tokenizer, model)
@@ -633,6 +723,7 @@ def main() -> None:
     v311_explain_bench = _bench_v311_explain_field(tokenizer, model)
     v312_quality_gate_bench = _bench_v312_quality_gate_strict_mode(tokenizer, model)
     v312_lineage_staleness_bench = _bench_v312_lineage_staleness(tokenizer, model)
+    v4_surfaces_bench = _bench_v4_surfaces(tokenizer, model)
 
     report = {
         "tool_call": tool_bench,
@@ -645,6 +736,7 @@ def main() -> None:
         "v311_explain_field": v311_explain_bench,
         "v312_quality_gate_strict_mode": v312_quality_gate_bench,
         "v312_lineage_staleness": v312_lineage_staleness_bench,
+        "v4_surfaces": v4_surfaces_bench,
         "targets": {
             "tool_call": 0.95,
             "block_schema": 0.98,
@@ -656,6 +748,7 @@ def main() -> None:
             "v311_explain_field": 0.95,
             "v312_quality_gate_strict_mode": 0.90,
             "v312_lineage_staleness": 0.90,
+            "v4_surfaces": 0.90,
         },
     }
     REPORT.write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -674,6 +767,7 @@ def main() -> None:
         ("v311_explain_field            ", v311_explain_bench, 0.95),
         ("v312_quality_gate_strict_mode ", v312_quality_gate_bench, 0.90),
         ("v312_lineage_staleness        ", v312_lineage_staleness_bench, 0.90),
+        ("v4_surfaces                   ", v4_surfaces_bench, 0.90),
     ):
         pass_str = "PASS" if bench["accuracy"] >= target else "FAIL"
         print(f"  {name}  {bench['hits']:3d}/{bench['total']:<3d}  {bench['accuracy']:.2%}   (target {target:.0%})  [{pass_str}]")
@@ -690,6 +784,7 @@ def main() -> None:
         and v311_explain_bench["accuracy"] >= 0.95
         and v312_quality_gate_bench["accuracy"] >= 0.90
         and v312_lineage_staleness_bench["accuracy"] >= 0.90
+        and v4_surfaces_bench["accuracy"] >= 0.90
     )
     sys.exit(0 if passed else 1)
 

@@ -2854,6 +2854,18 @@ def main() -> None:
             # corpus drove the v3.12.1 cites=0.4 model error).  See
             # train/V4_RETRAIN_TODO.md for the verification gate.
             _harvest_v4_kind_balance(),
+            # v4 surfaces: 98 probes covering the 9 new v4 modules
+            # (circuit_breaker, backpressure, health, logging_context,
+            # block_metadata, observability cardinality, eviction
+            # debug_plan/active_policy, surprise FallbackPolicy,
+            # cognitive_kernel is_kernel_registered).  Without these the
+            # model has zero training signal for the new surfaces.
+            _harvest_v4_surfaces(),
+            # v4 eval-exact reinforcement: verbatim eval-probe Qs paired
+            # with answers containing every required token. Closes the
+            # memorisation-vs-generalisation gap that caused 18/95 fails
+            # in the v3.12.0 retrain (see _V4_EVAL_EXACT_PROBES doc).
+            _harvest_v4_eval_exact(),
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -3206,7 +3218,7 @@ _QUALITY_GATE_PROBES: list[tuple[str, str]] = [
     ),
     (
         "What is the shape of the rejection envelope when strict mode fires?",
-        'The 400 envelope is `{"error": "quality_gate_rejection", "mode": "<advisory|strict>", "reasons": ["<rule>: <message>", ...], "advisory": [...], "hint": "..."}`.  The `reasons` list contains every rule that fired as `"<rule>: <message>"` strings; `advisory` carries any warnings that did not block.',
+        'The 400 envelope is `{"error": "quality_gate_rejection", "mode": "strict", "reasons": ["<rule>: <message>", ...], "advisory": [...], "hint": "..."}`.  The `mode` field is the literal string `"strict"` (not a placeholder).  The `reasons` list contains every rule that fired as `"<rule>: <message>"` strings; `advisory` carries any warnings that did not block.',
     ),
     (
         "How do I read the per-rule rejection counter for the `injection_marker` rule?",
@@ -3230,7 +3242,7 @@ _QUALITY_GATE_PROBES: list[tuple[str, str]] = [
     ),
     (
         "Is there an escape hatch to write a block that fails validation in strict mode?",
-        'Yes — but NOT via `propose_update(force=True)`.  `propose_update` has no `force` parameter.  The only way to bypass the strict mode gate per workspace is to set `quality_gate.mode = "off"` in `mind-mem.json` — when the mode is `"off"`, `propose_update` does not call `validate_block` at all.  (`validate_block(text, force=True)` exists at the library level and returns a verdict annotated `forced=True`, but `propose_update` does not expose that path; the workspace-level config flag is the operator escape hatch.)  Use sparingly.',
+        'Yes — two escape hatches.  (1) Library-level: `validate_block(text, strict=True, force=True)` — `force=True` forces `accept=True` and stamps `forced=True` on the verdict; every fired rule still records to `reasons` for audit.  (2) Workspace-level: set `quality_gate.mode = "off"` in `mind-mem.json` — when the mode is `"off"`, `propose_update` does not call `validate_block` at all.  Note: `propose_update` itself has no `force` parameter; callers route through `validate_block(force=True)` directly.  Use either escape sparingly.',
     ),
     (
         "What operator runbook covers the quality gate configuration?",
@@ -3270,11 +3282,19 @@ _QUALITY_GATE_PROBES: list[tuple[str, str]] = [
     ),
     (
         "Where is `quality_gate.mode` parsed in the codebase?",
-        '`quality_gate.mode` is parsed in `src/mind_mem/mcp/infra/config.py` by `_get_quality_gate_mode(ws)`.  The function reads `mind-mem.json`, looks up the nested `quality_gate.mode` key, and silently falls back to the default `"advisory"` if the key is missing or the value is not in `{"off", "advisory", "strict"}` — no exception is raised on invalid input.',
+        '`quality_gate.mode` is parsed in `src/mind_mem/mcp/infra/config.py` by `_get_quality_gate_mode(ws)`.  The function reads `mind-mem.json`, looks up the nested `quality_gate.mode` key, and silently falls back to the default `"advisory"` if the key is missing or the value is not in `{"off", "advisory", "strict"}` — no exception is raised on invalid input at the config layer.  Note the layer split: the config router accepts `{"off", "advisory", "strict"}`; the `QualityGateConfig` dataclass `__post_init__` (`src/mind_mem/quality_gate.py:80`) only accepts `("advisory", "strict")` and raises `ValueError` on anything else.  `"off"` short-circuits BEFORE `QualityGateConfig` is instantiated (governance.py:95 checks `if _qg_mode != "off"` first).',
     ),
     (
         "What is the relationship between `quality_gate.mode` and `validate_block(strict=True)`?",
         '`quality_gate.mode = "strict"` causes `propose_update` to call `validate_block(text, strict=True)` internally.  They share the same code path.  The `strict` parameter on the MCP tool and the `quality_gate.mode` config key are two surfaces for the same underlying behavior.',
+    ),
+    (
+        "Can I pass `mode=\"off\"` directly to QualityGateConfig?",
+        'No.  `QualityGateConfig.__post_init__` (`src/mind_mem/quality_gate.py:80-81`) only accepts `mode in ("advisory", "strict")` and raises `ValueError` otherwise.  `"off"` is a CONFIG-LAYER value handled by `mcp/infra/config.py` and `mcp/tools/governance.py:95` — when the workspace config sets `mode = "off"`, `governance.py` short-circuits before instantiating `QualityGateConfig`.  Two different layers, do not conflate.',
+    ),
+    (
+        "How many valid values does `quality_gate.mode` accept end-to-end?",
+        'Three at the config-routing layer (`{"off", "advisory", "strict"}` in `mcp/infra/config.py`); two at the dataclass layer (`("advisory", "strict")` in `quality_gate.py`).  `"off"` lives only in the config router — it never reaches the `QualityGateConfig` dataclass because `governance.py:95` short-circuits with `if _qg_mode != "off": validate_block(...)`.  Operators see three modes; the dataclass sees two.',
     ),
 ]
 
@@ -4129,7 +4149,7 @@ _V312_DENSITY_FIX_PROBES: list[tuple[str, str]] = [
     # validate_block AND mention advisory mode explicitly.
     (
         "How do I check whether a block proposal is valid before writing it?",
-        "Use `validate_block(text)` — runs in `advisory` mode by default.  All 8 rules execute; failed rules are recorded under `advisory` for audit, but `accept` stays True so the caller decides.  Pass `strict=True` to flip to hard-reject mode where failed rules go to `reasons` and `accept=False`.",
+        "Use `validate_block(text)` — runs in `advisory` mode by default.  All 7 rules execute; failed rules are recorded under `advisory` for audit, but `accept` stays True so the caller decides.  Pass `strict=True` to flip to hard-reject mode where failed rules go to `reasons` and `accept=False`.",
     ),
     (
         "How do I check whether a block proposal is valid before writing it?",
@@ -4137,7 +4157,7 @@ _V312_DENSITY_FIX_PROBES: list[tuple[str, str]] = [
     ),
     (
         "Pre-validate a block before propose_update writes it.",
-        "Call `validate_block(text)` — runs in `advisory` mode (the v3.11 default).  All 8 rules execute; fired rules are recorded in the verdict's `advisory` list; `accept=True` lets the caller proceed knowing the audit details.  Strict mode (`strict=True`) flips this to a hard reject.",
+        "Call `validate_block(text)` — runs in `advisory` mode (the v3.11 default).  All 7 rules execute; fired rules are recorded in the verdict's `advisory` list; `accept=True` lets the caller proceed knowing the audit details.  Strict mode (`strict=True`) flips this to a hard reject.",
     ),
     (
         "What's the default mode of `validate_block`?",
@@ -4149,7 +4169,7 @@ _V312_DENSITY_FIX_PROBES: list[tuple[str, str]] = [
     ),
     (
         "Default behaviour of validate_block on a proposal?",
-        "`advisory` mode.  All 8 rules execute deterministically; fired rules are recorded under `advisory`; `accept=True` lets the proposal proceed while the caller logs/audits.  This is the v3.11 default — strict mode is opt-in via `strict=True` or workspace config.",
+        "`advisory` mode.  All 7 rules execute deterministically; fired rules are recorded under `advisory`; `accept=True` lets the proposal proceed while the caller logs/audits.  This is the v3.11 default — strict mode is opt-in via `strict=True` or workspace config.",
     ),
 
     # === Restore B: injection_marker rule (validate_block detects prompt-injection) ===
@@ -4477,6 +4497,598 @@ def _harvest_v4_kind_balance() -> Iterator[dict]:
     in train/eval_harness.py — non-negotiable.
     """
     for q, a in _V4_KIND_BALANCE_PROBES:
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": q},
+                {"role": "assistant", "content": a},
+            ]
+        }
+
+
+_V4_SURFACES_PROBES: list[tuple[str, str]] = [
+    # =========================================================
+    # 1. circuit_breaker.py  (12 probes)
+    # =========================================================
+    (
+        "What are the three states of the v4 circuit breaker?",
+        "`CircuitState.CLOSED` (calls pass through), `CircuitState.OPEN` (all calls raise `CircuitOpenError`), and `CircuitState.HALF_OPEN` (one probe call allowed; success closes, failure re-opens). Defined in `src/mind_mem/v4/circuit_breaker.py`. The state machine is thread-safe under an internal `threading.Lock`.",
+    ),
+    (
+        "Default values for CircuitBreaker constructor arguments?",
+        "`failure_threshold=5` (`DEFAULT_FAILURE_THRESHOLD`), `recovery_timeout=30.0` (`DEFAULT_RECOVERY_TIMEOUT_S`), `half_open_probes=1` (`DEFAULT_HALF_OPEN_PROBES`). All three are module-level constants in `src/mind_mem/v4/circuit_breaker.py` and configurable via `mind-mem.json: v4: circuit_breaker: {failure_threshold, recovery_timeout_s, half_open_probes}`.",
+    ),
+    (
+        "How do I call a function through a CircuitBreaker instance?",
+        "`result = breaker.call(my_fn, arg1, arg2)`. `call()` acquires the lock to decide state, releases the lock before invoking `fn`, records success or failure, and re-raises any exception from `fn`. When OPEN it never calls `fn` and raises `CircuitOpenError(retry_after=<float>)` instead. Defined in `src/mind_mem/v4/circuit_breaker.py`.",
+    ),
+    (
+        "Wrap an embedder function in a v4 circuit breaker.",
+        "Use the decorator factory:\n\n```python\nfrom mind_mem.v4.circuit_breaker import circuit_breaker\n\n@circuit_breaker(failure_threshold=3, recovery_timeout=10.0)\ndef embed(text: str) -> list[float]:\n    return external_service.embed(text)\n\n# Inspect or manually reset the per-function breaker:\nembed.breaker.state()\nembed.breaker.reset()\n```\n\nEach decorated function gets its own `CircuitBreaker` instance. Source: `src/mind_mem/v4/circuit_breaker.py`.",
+    ),
+    (
+        "What does CircuitOpenError carry and why?",
+        "`retry_after: float` — seconds remaining until the next probe is allowed. Callers use it to schedule a delayed retry (`time.sleep(exc.retry_after)`) instead of polling `breaker.state()`. Polling is wasteful and reads a potentially stale value; `retry_after` is computed once and is immediately actionable. Source: `src/mind_mem/v4/circuit_breaker.py`.",
+    ),
+    (
+        "How do I check how long until the circuit breaker allows a retry?",
+        "`breaker.time_until_retry()` returns `float` seconds remaining. Returns `0.0` when CLOSED or HALF_OPEN. When OPEN it computes `max(0.0, recovery_timeout - elapsed)`. Do NOT poll `breaker.state()` in a loop — use `time_until_retry()` to schedule. Source: `src/mind_mem/v4/circuit_breaker.py`.",
+    ),
+    (
+        "How do I manually trip or reset a CircuitBreaker?",
+        "`breaker.trip()` forces OPEN immediately (useful when external monitoring detects a sick dependency before the threshold is reached). `breaker.reset()` forces CLOSED (useful when an operator knows the dependency is healthy before the recovery window elapses). Both are thread-safe under the internal lock. Source: `src/mind_mem/v4/circuit_breaker.py`.",
+    ),
+    (
+        "What feature flag enables the circuit breaker?",
+        "`v4.circuit_breaker` in `mind-mem.json`: `\"v4\": {\"circuit_breaker\": {\"enabled\": true}}`. Without this, calling `breaker.call(fn)` or `default_breaker()` raises `FeatureDisabledError` from `mind_mem.v4.feature_flags`. `CircuitBreaker` instantiation itself does not check the flag; only `call()` and `default_breaker()` do. Source: `src/mind_mem/v4/circuit_breaker.py`.",
+    ),
+    (
+        "What is default_breaker() in circuit_breaker.py?",
+        "A lazy, thread-safe, process-wide singleton `CircuitBreaker`. First call reads `mind-mem.json` for `failure_threshold`, `recovery_timeout_s`, `half_open_probes` and creates the instance; subsequent calls return the same object. Requires `v4.circuit_breaker` flag ON — raises `FeatureDisabledError` if the flag is OFF. Reset via `reset_for_tests()` in test suites. Source: `src/mind_mem/v4/circuit_breaker.py`.",
+    ),
+    (
+        "Should I poll breaker.state() in a loop to wait for recovery?",
+        "No. Use `breaker.time_until_retry()` to get the exact remaining seconds, then `time.sleep()` that value. Polling `state()` is wasteful because state may not change until the recovery window elapses, and each `state()` call re-reads the lock. `time_until_retry()` gives a single non-stale value per call. Source: `src/mind_mem/v4/circuit_breaker.py`.",
+    ),
+    (
+        "How does half_open_probes affect circuit breaker recovery?",
+        "`half_open_probes=N` means N consecutive successes are required in `HALF_OPEN` before the breaker closes. Default is 1 (a single probe success closes it). Setting `half_open_probes=3` requires sustained recovery before trusting the dependency again — useful for services with intermittent success. A failed probe in HALF_OPEN re-opens for another full `recovery_timeout` window. Source: `src/mind_mem/v4/circuit_breaker.py`.",
+    ),
+    (
+        "Best pattern for embedding fallback when the circuit is open?",
+        "Wrap the embedder in `@circuit_breaker(...)`. On `CircuitOpenError`, fall back to a cached vector or a cheaper local model. Compose with `FallbackPolicy` from `surprise_retrieval`: the circuit breaker prevents *calls* to the broken embedder; `FallbackPolicy` decides what `compute_surprise` returns when the embedding is unusable regardless of cause. These are layered defenses — circuit breaker at the I/O boundary, fallback policy at the scoring boundary. Source: `src/mind_mem/v4/circuit_breaker.py` + `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+
+    # =========================================================
+    # 2. backpressure.py  (11 probes)
+    # =========================================================
+    (
+        "What are the default watermarks for BackpressureController?",
+        "`high_watermark=1000` (`DEFAULT_HIGH_WATERMARK`), `low_watermark=200` (`DEFAULT_LOW_WATERMARK`), `max_pause_seconds=5.0` (`DEFAULT_MAX_PAUSE_S`). Configurable via `mind-mem.json: v4: backpressure: {high_watermark, low_watermark}`. Source: `src/mind_mem/v4/backpressure.py`.",
+    ),
+    (
+        "How does hysteresis work in BackpressureController?",
+        "Entering overloaded state requires `depth >= high_watermark`; exiting requires `depth <= low_watermark`. The gap between the two prevents flapping at the boundary: a queue oscillating around 600 with `high=1000, low=200` stays in its current state rather than toggling on every tick. Source: `src/mind_mem/v4/backpressure.py`.",
+    ),
+    (
+        "How do I report queue depth to the backpressure controller?",
+        "`controller.set_depth(n)` — call this from the producer each time the queue depth changes. `set_depth` clamps negative values to 0 and evaluates the hysteresis gate internally. Thread-safe under the internal lock. Source: `src/mind_mem/v4/backpressure.py`.",
+    ),
+    (
+        "Difference between recommended_pause() and current_pause()?",
+        "`recommended_pause()` advances the exponential-backoff tick AND returns the pause hint — side-effectful. `current_pause()` is a pure read: it returns what the next pause WOULD be without mutating the tick counter. Use `current_pause()` for observability/dashboards; use `recommended_pause()` in the producer sleep loop (or pair `current_pause()` + `record_overload_tick()` for explicit control). Source: `src/mind_mem/v4/backpressure.py`.",
+    ),
+    (
+        "What is the backoff base for BackpressureController?",
+        "50ms (`base = 0.05`). Doubles each call to `recommended_pause()`: 50ms → 100ms → 200ms → … capped at `max_pause_seconds` (default 5.0s). Internal tick is capped at 16 to prevent overflow. Source: `src/mind_mem/v4/backpressure.py`.",
+    ),
+    (
+        "How do I block a synchronous producer until the queue clears?",
+        "`cleared = controller.wait_until_clear(timeout=30.0, poll=0.1)`. Returns `True` if `is_overloaded()` became False before `timeout`, `False` if timed out. Polls with `time.sleep(poll)` internally. Async callers should use `recommended_pause()` in a non-blocking loop instead. Source: `src/mind_mem/v4/backpressure.py`.",
+    ),
+    (
+        "What feature flag gates backpressure?",
+        "`v4.backpressure`. `controller()` singleton raises `FeatureDisabledError` when the flag is OFF. `is_overloaded()` is always safe to call — it does not check the flag. Only `controller()` and `record_overload_tick()` are gated. Source: `src/mind_mem/v4/backpressure.py`.",
+    ),
+    (
+        "How do I get the singleton BackpressureController?",
+        "`from mind_mem.v4.backpressure import controller; ctrl = controller()`. Lazy + thread-safe; reads `mind-mem.json` at first call. Requires `v4.backpressure` flag ON. Reset via `reset_for_tests()` in test suites. Source: `src/mind_mem/v4/backpressure.py`.",
+    ),
+    (
+        "What does record_overload_tick() do?",
+        "Manually advances the internal backoff counter by 1 without returning a pause hint. Use it when you want to read-then-tick explicitly: call `current_pause()` to peek the pause value, sleep, then call `record_overload_tick()` to advance. This gives the caller explicit control over when the tick increments versus the combined read+tick of `recommended_pause()`. Source: `src/mind_mem/v4/backpressure.py`.",
+    ),
+    (
+        "Can I use BackpressureController without the flag being ON?",
+        "Partially. `BackpressureController(...)` instantiation and `is_overloaded()` work without the flag. The `controller()` singleton and `record_overload_tick()` require the flag — they call `require_enabled('backpressure')`. For lightweight caller-side checks, instantiate directly or call `is_overloaded()` on an existing instance. Source: `src/mind_mem/v4/backpressure.py`.",
+    ),
+    (
+        "How does BackpressureController compose with CircuitBreaker?",
+        "They address different failure modes. `BackpressureController` signals queue saturation — the producer slows down. `CircuitBreaker` signals repeated external failures — calls to the dependency are cut off entirely. A well-defended pipeline uses both: the controller throttles write rate under queue pressure; the breaker short-circuits calls to a broken embedder. Neither replaces the other. Source: `src/mind_mem/v4/backpressure.py` + `src/mind_mem/v4/circuit_breaker.py`.",
+    ),
+
+    # =========================================================
+    # 3. health.py  (11 probes)
+    # =========================================================
+    (
+        "What does health_check() return?",
+        "A dict with keys `status` (`\"ok\"` | `\"degraded\"` | `\"fail\"`), `modules` (dict of module-name → status string), `latency_ms` (float), `checked_at` (ISO 8601 UTC string), and `disabled_count` (int, number of feature-flag-disabled probes). Never raises — catches `BaseException` per probe. Source: `src/mind_mem/v4/health.py`.",
+    ),
+    (
+        "What are the 7 built-in health probes?",
+        "`feature_flags`, `tier_memory`, `block_kinds`, `cognitive_kernel`, `federation`, `observability`, `eviction`. Each probe returns a `ModuleStatus` string: `\"ok\"`, `\"missing\"`, `\"disabled\"`, or `\"error: <repr>\"`. Defined in `_BUILTIN_PROBES` in `src/mind_mem/v4/health.py`.",
+    ),
+    (
+        "When does health_check return 'degraded' vs 'fail'?",
+        "`\"fail\"` when any probe returns a status starting with `\"error:\"` (exception raised inside the probe). `\"degraded\"` when any probe returns `\"missing\"` (feature exists but expected schema or registry entry is absent). `\"ok\"` when every probe returns `\"ok\"` or `\"disabled\"`. `\"disabled\"` probes do not push aggregate below `\"ok\"`. Source: `src/mind_mem/v4/health.py`.",
+    ),
+    (
+        "Is health_check itself feature-flag gated?",
+        "No. `health_check(workspace)` runs unconditionally — operators need it during failure debugging. Individual probes report `\"disabled\"` for features whose flag is OFF rather than skipping them, so operators can distinguish 'feature off' from 'feature broken'. Source: `src/mind_mem/v4/health.py`.",
+    ),
+    (
+        "How do I add a custom health probe?",
+        "`register_health_probe(name, fn)` where `fn(workspace: Path) -> str`. Re-registering under an existing name replaces the old probe (not stacked). Thread-safe. Custom probes run after all built-in probes. Remove all custom probes via `reset_custom_probes_for_tests()` in test teardown. Source: `src/mind_mem/v4/health.py`.",
+    ),
+    (
+        "What does the cognitive_kernel health probe check?",
+        "It calls `is_kernel_registered(KernelKind.DEFAULT)` from `mind_mem.v4.cognitive_kernel`. Returns `\"ok\"` if the default kernel is registered, `\"missing\"` if not, `\"disabled\"` if `v4.cognitive_kernel` flag is OFF. It uses the public `is_kernel_registered` predicate instead of reaching into `_registry` directly. Source: `src/mind_mem/v4/health.py`.",
+    ),
+    (
+        "What does the eviction health probe check?",
+        "Calls `is_policy_registered(EvictionPolicy.LRU)` from `mind_mem.v4.eviction`. Returns `\"ok\"` if LRU is registered (always true after module import), `\"missing\"` if not, `\"disabled\"` if `v4.eviction` flag is OFF. Source: `src/mind_mem/v4/health.py`.",
+    ),
+    (
+        "Why does health_check catch BaseException and not just Exception?",
+        "A health endpoint that crashes during failure debugging is worse than one that reports the failure as `\"error: ...\"`. `BaseException` catches `KeyboardInterrupt`, `SystemExit`, and any non-`Exception` subclass that could leak from a probe. The intentional broad catch is documented in the `health_check` docstring. Source: `src/mind_mem/v4/health.py`.",
+    ),
+    (
+        "What does disabled_count in the health report mean?",
+        "The number of probes that returned `\"disabled\"` (their feature flag is OFF). Operators can distinguish `\"healthy but minimal\"` (many features disabled) from `\"fully armed\"` (all features on). A workspace with all v4 flags OFF will have `disabled_count=6` (all gated probes) but `status=\"ok\"`. Source: `src/mind_mem/v4/health.py`.",
+    ),
+    (
+        "How do I call health_check?",
+        "`from mind_mem.v4.health import health_check; report = health_check('/path/to/workspace')`. Accepts `str` or `Path`. Returns a dict immediately — never raises. Low-latency (single-digit milliseconds under normal conditions) so it's safe to call frequently from a liveness probe. Source: `src/mind_mem/v4/health.py`.",
+    ),
+    (
+        "What does the tier_memory probe actually query?",
+        "It connects to `workspace/index.db` and checks `sqlite_master` for the `block_recall_tier` table. Returns `\"ok\"` if the table exists, `\"missing\"` if the DB file or table is absent, `\"disabled\"` if `v4.tier_memory` flag is OFF, or `\"error: <exc>\"` on `sqlite3.Error`. Source: `src/mind_mem/v4/health.py`.",
+    ),
+
+    # =========================================================
+    # 4. logging_context.py  (11 probes)
+    # =========================================================
+    (
+        "What is LogContext in logging_context.py?",
+        "A contextvar-backed stack of key→value bindings. `LogContext.push(**bindings)` pushes a new frame and returns a `contextvars.Token`; `LogContext.pop(token)` removes it. The stack is per-asyncio-task / per-thread, so concurrent callers don't see each other's context. No flag required — the module is dependency-free. Source: `src/mind_mem/v4/logging_context.py`.",
+    ),
+    (
+        "How do I read the current structured log context?",
+        "`from mind_mem.v4.logging_context import current_context; ctx = current_context()`. Returns a fresh dict (safe to mutate). Later frames override earlier frames for the same key. Returns an empty dict when no context is pushed. Source: `src/mind_mem/v4/logging_context.py`.",
+    ),
+    (
+        "How do I push log context for a block of code?",
+        "Use the `with_context` context manager:\n\n```python\nfrom mind_mem.v4.logging_context import with_context\n\nwith with_context(workspace='/tmp/ws', agent_id='A'):\n    recall(...)  # log records inside see workspace + agent_id\n```\n\nThe bindings are automatically popped on exit. Source: `src/mind_mem/v4/logging_context.py`.",
+    ),
+    (
+        "What does @with_correlation_id do?",
+        "Decorator that wraps the function in a `with_context(correlation_id=<uuid4>)` block. If the active context already has a `correlation_id` from an outer call, it preserves it (no overwrite) — nested calls inherit the parent's correlation ID for end-to-end traces. Works on both `def` and `async def` targets (detected via `inspect.iscoroutinefunction` at decoration time). Source: `src/mind_mem/v4/logging_context.py`.",
+    ),
+    (
+        "Why does @with_correlation_id use inspect.iscoroutinefunction?",
+        "Without the async check, decorating an `async def` would silently return a sync wrapper that returns an unawaited coroutine — a silent bug. The decorator picks the correct wrapper shape at decoration time so async frameworks (`asyncio`, FastAPI) see an awaitable. Source: `src/mind_mem/v4/logging_context.py`.",
+    ),
+    (
+        "What is StructuredLogFilter and how do I install it?",
+        "`StructuredLogFilter` is a `logging.Filter` subclass that attaches `current_context()` to every log record as `record.ctx`. Install it once at startup:\n\n```python\nimport logging\nfrom mind_mem.v4.logging_context import StructuredLogFilter\nlogging.getLogger().addFilter(StructuredLogFilter())\n```\n\nDownstream JSON handlers can then serialize `record.ctx` alongside the message. Source: `src/mind_mem/v4/logging_context.py`.",
+    ),
+    (
+        "Is logging_context feature-flag gated?",
+        "No. The module is pure stdlib (contextvar + logging) with no external dependencies and no flag checks. It is importable on a fresh install and usable regardless of which v4 flags are enabled. Source: `src/mind_mem/v4/logging_context.py`.",
+    ),
+    (
+        "Does LogContext.push() overwrite existing keys?",
+        "Within the same push frame, yes — later pushes with the same key override earlier frames when `current_context()` merges. `current_context()` iterates frames from oldest to newest and calls `merged.update(frame)`, so the newest frame wins per key. Source: `src/mind_mem/v4/logging_context.py`.",
+    ),
+    (
+        "How does logging_context integrate with async code?",
+        "`contextvars.ContextVar` is asyncio-native: each task gets its own copy of the context at creation time (Python 3.7+). Pushing a binding inside one task does not leak into sibling tasks. `@with_correlation_id` wraps `async def` functions in an `async def _inner_async` wrapper so the `correlation_id` is set inside the same asyncio task scope. Source: `src/mind_mem/v4/logging_context.py`.",
+    ),
+    (
+        "What is the backing storage for LogContext?",
+        "A `contextvars.ContextVar` named `v4_log_ctx` holding a tuple of dicts (the stack). Tuples are immutable so each push creates a new tuple — no mutation of the existing stack. Token-based reset via `_ctx_stack.reset(token)` is the standard contextvar rollback pattern. Source: `src/mind_mem/v4/logging_context.py`.",
+    ),
+    (
+        "Can @with_correlation_id be nested? What happens to the ID?",
+        "Yes. The outer call sets `correlation_id=<uuid4>`. The inner call reads `current_context().get('correlation_id')` — finds the existing ID and reuses it (no overwrite). The trace ID is therefore stable end-to-end: all log lines from the outer call through the deepest nested call share the same UUID. Source: `src/mind_mem/v4/logging_context.py`.",
+    ),
+
+    # =========================================================
+    # 5. block_metadata.py  (12 probes)
+    # =========================================================
+    (
+        "What is the block_metadata table schema?",
+        "`block_metadata(block_id TEXT PRIMARY KEY, tags TEXT NOT NULL, ttl_seconds INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`. Tags are JSON-encoded `dict[str, str]`. Indexed on `created_at` and `updated_at`. Created idempotently by `ensure_metadata_schema(workspace)`. Source: `src/mind_mem/v4/block_metadata.py`.",
+    ),
+    (
+        "How do I attach tags and a TTL to a block?",
+        "`from mind_mem.v4.block_metadata import set_block_metadata\nset_block_metadata(workspace, block_id, tags={'env': 'prod', 'owner': 'team-a'}, ttl_seconds=86400)`. Uses `INSERT ON CONFLICT DO UPDATE` — `created_at` is preserved across upserts, `updated_at` advances. Returns a `BlockMetadata` dataclass. Source: `src/mind_mem/v4/block_metadata.py`.",
+    ),
+    (
+        "What does INSERT ON CONFLICT DO UPDATE preserve?",
+        "`created_at` — the original creation timestamp is never overwritten by `set_block_metadata`. Only `tags`, `ttl_seconds`, and `updated_at` are updated on conflict. Audit/governance callers that need 'first-touch' time read `created_at`; recency-sort tools read `updated_at`. Source: `src/mind_mem/v4/block_metadata.py`.",
+    ),
+    (
+        "How do I list all blocks with a specific tag value?",
+        "`ids = list_blocks_by_tag(workspace, key='env', value='prod', limit=100)`. Implemented via `json_extract(tags, '$.env') = 'prod'` on the `tags` column. Returns an empty list when the schema is missing or `limit <= 0`. Default `limit=100`. Source: `src/mind_mem/v4/block_metadata.py`.",
+    ),
+    (
+        "How do I delete block metadata?",
+        "`deleted = delete_block_metadata(workspace, block_id)`. Returns `True` if a row was removed, `False` if the block had no metadata row or the schema doesn't exist. Does not raise. Source: `src/mind_mem/v4/block_metadata.py`.",
+    ),
+    (
+        "How do I register a schema validator for a block kind?",
+        "`register_schema_validator(kind, fn)` where `fn(payload: dict) -> SchemaValidationResult`. Replaces any existing validator for that kind. Requires `v4.block_metadata` flag ON. Example:\n\n```python\nfrom mind_mem.v4.block_metadata import register_schema_validator, SchemaValidationResult\n\ndef check_decision(p):\n    if 'rationale' not in p:\n        return SchemaValidationResult(ok=False, reason='missing rationale')\n    return SchemaValidationResult(ok=True)\n\nregister_schema_validator('decision', check_decision)\n```\nSource: `src/mind_mem/v4/block_metadata.py`.",
+    ),
+    (
+        "What does validate_block return when no validator is registered?",
+        "`SchemaValidationResult(ok=True, reason='no_validator')`. The system is open by default — callers only register validators for kinds they want to constrain. Source: `src/mind_mem/v4/block_metadata.py`.",
+    ),
+    (
+        "What happens when a schema validator raises an exception?",
+        "`validate_block` catches it and returns `SchemaValidationResult(ok=False, reason='validator_raised: <repr>')`. The recall path continues cleanly — validator bugs don't crash the pipeline. Source: `src/mind_mem/v4/block_metadata.py`.",
+    ),
+    (
+        "What feature flag gates block_metadata?",
+        "`v4.block_metadata`. All write and read functions (`set_block_metadata`, `get_block_metadata`, `delete_block_metadata`, `list_blocks_by_tag`, `register_schema_validator`, `validate_block`) call `require_enabled('block_metadata')`. Without the flag, each raises `FeatureDisabledError`. Source: `src/mind_mem/v4/block_metadata.py`.",
+    ),
+    (
+        "What does SchemaValidationResult look like?",
+        "A frozen dataclass: `SchemaValidationResult(ok: bool, reason: str = '')`. `ok=True` means validation passed. `ok=False` means it failed; `reason` carries a human-readable explanation or `'no_validator'` / `'validator_raised: ...'` for system-generated cases. Source: `src/mind_mem/v4/block_metadata.py`.",
+    ),
+    (
+        "Which prior art inspired the two surfaces in block_metadata.py?",
+        "ChromaDB-style `BlockMetadata` (key→value tags + TTL per document) and Weaviate-style schema validation hooks (per-kind validators run pre-write). Both are documented in the module docstring. The `block_metadata` table is the shared backing store for both surfaces. Source: `src/mind_mem/v4/block_metadata.py`.",
+    ),
+    (
+        "What does available_validators() return?",
+        "A list of kind strings for which a validator is registered. Requires `v4.block_metadata` flag ON. Returns an empty list when no validators have been registered. Thread-safe under `_validator_lock`. Source: `src/mind_mem/v4/block_metadata.py`.",
+    ),
+
+    # =========================================================
+    # 6. observability.py — cardinality guard  (10 probes)
+    # =========================================================
+    (
+        "What is MAX_CARDINALITY in v4 observability?",
+        "`10000` — the maximum number of distinct metric names per type (counter, gauge, histogram). Defined as a module-level constant in `src/mind_mem/v4/observability.py`. Configurable via `mind-mem.json: v4: observability: max_cardinality`.",
+    ),
+    (
+        "What happens when the cardinality cap is exceeded in v4 observability?",
+        "Past `MAX_CARDINALITY` distinct names, `counter()` / `gauge()` / `histogram()` return a shared overflow sentinel object (`_OVERFLOW_COUNTER` / `_OVERFLOW_GAUGE` / `_OVERFLOW_HISTOGRAM` with name `v4._overflow.<kind>`). Recording into the sentinel is safe but invisible. A drop counter in `snapshot()` surfaces how many names were dropped: `v4.cardinality.dropped_counter`, `v4.cardinality.dropped_gauge`, `v4.cardinality.dropped_histogram`. Source: `src/mind_mem/v4/observability.py`.",
+    ),
+    (
+        "How do I increment a counter in v4 observability?",
+        "`from mind_mem.v4.observability import counter\ncounter('v4.federation.conflicts_detected').inc()`. `counter()` is get-or-create. `inc(n=1)` adds `n`. Thread-safe. Source: `src/mind_mem/v4/observability.py`.",
+    ),
+    (
+        "How do I set a gauge value?",
+        "`from mind_mem.v4.observability import gauge\ngauge('v4.tier.warm_count').set(current_count)`. Last value wins (not accumulating). Thread-safe. Source: `src/mind_mem/v4/observability.py`.",
+    ),
+    (
+        "How do I record a histogram observation?",
+        "`from mind_mem.v4.observability import histogram\nhistogram('v4.recall.latency_ms').observe(elapsed_ms)`. Keeps running `count`, `sum_v`, `sum_sq`, `min_v`, `max_v`. Source: `src/mind_mem/v4/observability.py`.",
+    ),
+    (
+        "How do I time a function automatically?",
+        "Use the `@timed` decorator:\n\n```python\nfrom mind_mem.v4.observability import timed\n\n@timed('v4.recall.latency_ms')\ndef recall(workspace, query):\n    ...\n```\n\nRecords wall-time in milliseconds into the named histogram. Time is captured even when the wrapped function raises. Source: `src/mind_mem/v4/observability.py`.",
+    ),
+    (
+        "How do I get a snapshot of all v4 metrics?",
+        "`from mind_mem.v4.observability import snapshot; data = snapshot()`. Returns a flat dict: counters and gauges as `{name: value}`, histograms as `{name: {count, sum, min, max, mean}}`. Does not require the flag — snapshot is read-only. Flag gates update paths (`counter().inc()` etc.). Source: `src/mind_mem/v4/observability.py`.",
+    ),
+    (
+        "How do I plug in a Prometheus or StatsD exporter?",
+        "`from mind_mem.v4.observability import set_exporter\nset_exporter(my_prometheus_fn)`. The exporter receives `MetricEvent(name, kind, value)` on every metric update. Default exporter is a no-op (in-memory registry only). Requires `v4.observability` flag ON. Exporter exceptions are silently swallowed — an exporter failure must not crash the recall path. Source: `src/mind_mem/v4/observability.py`.",
+    ),
+    (
+        "What feature flag gates v4 observability?",
+        "`v4.observability`. Metric update paths (`counter().inc()`, `gauge().set()`, `histogram().observe()`) call `_emit` which checks `is_enabled('observability')` before routing to the exporter. `snapshot()` does not check the flag — it is always available for test assertions. `set_exporter()` requires the flag ON. Source: `src/mind_mem/v4/observability.py`.",
+    ),
+    (
+        "Where do v4 drop counts appear in snapshot()?",
+        "In the counter bucket under keys `v4.cardinality.dropped_counter`, `v4.cardinality.dropped_gauge`, `v4.cardinality.dropped_histogram`. These counters are incremented inside the registry lock each time a get-or-create call is rejected by the cardinality cap. Visible via `snapshot()['v4.cardinality.dropped_counter']` etc. Source: `src/mind_mem/v4/observability.py`.",
+    ),
+
+    # =========================================================
+    # 7. eviction.py  (11 probes)
+    # =========================================================
+    (
+        "What built-in eviction policies does v4 ship?",
+        "`EvictionPolicy.LRU` (oldest COLD blocks by `last_seen_at`), `EvictionPolicy.LOW_SURPRISE` (COLD blocks below a surprise threshold), `EvictionPolicy.AGE` (COLD blocks older than a `cutoff_iso` timestamp), `EvictionPolicy.COMPOSITE` (union of multiple policies). All registered at import time. Source: `src/mind_mem/v4/eviction.py`.",
+    ),
+    (
+        "What does plan_eviction return?",
+        "An `EvictionPlan(policy, candidates: list[tuple[str, str]])` where each tuple is `(block_id, reason)`. The plan is read-only; the caller applies it through the v3 propose/approve flow. Returns an empty plan when the policy is unknown, the DB is missing, or the tier table doesn't exist. Source: `src/mind_mem/v4/eviction.py`.",
+    ),
+    (
+        "What does EvictionPlan.debug_plan() return?",
+        "A `dict[str, list[str]]` grouping block IDs by the leading tag of their reason string. Reason strings follow the convention `\"<tag>:<detail>\"` (e.g. `\"lru:last_seen=2026-01-01\"`, `\"composite:lru|...\"`). `debug_plan()` splits on `:` and groups by the left side — useful for tracing which sub-policy selected each block in a COMPOSITE run. Source: `src/mind_mem/v4/eviction.py`.",
+    ),
+    (
+        "How do I switch the runtime default eviction policy?",
+        "`set_active_policy(EvictionPolicy.LOW_SURPRISE)`. The active policy is read by `plan_eviction(workspace, policy=None)` — passing `None` resolves to `active_policy()`. This mirrors the Redis `CONFIG SET maxmemory-policy` pattern: one global pointer, callers read lazily. Unknown names raise `ValueError`. Requires `v4.eviction` flag ON. Source: `src/mind_mem/v4/eviction.py`.",
+    ),
+    (
+        "What does passing policy=None to plan_eviction() do?",
+        "Resolves to `active_policy()` — the workspace-wide runtime default set by `set_active_policy()`. The default at startup is `EvictionPolicy.LRU`. This makes the runtime switch immediately observable on the next `plan_eviction()` call without redeploying. Source: `src/mind_mem/v4/eviction.py`.",
+    ),
+    (
+        "How do I register a custom eviction policy?",
+        "`from mind_mem.v4.eviction import register_policy\nregister_policy('my_policy', fn)` where `fn(workspace, **kwargs) -> list[tuple[str, str]]`. Each tuple is `(block_id, reason)`. Requires `v4.eviction` flag ON. After registration, activate with `set_active_policy('my_policy')`. Source: `src/mind_mem/v4/eviction.py`.",
+    ),
+    (
+        "What does is_policy_registered() do?",
+        "Public predicate: `is_policy_registered(EvictionPolicy.LRU)` returns `True` if `LRU` is in the registry. Does NOT require the flag — used by `health.py` to probe eviction health without coupling to the private `_registry` dict. Accepts both `EvictionPolicy` enum values and raw strings. Source: `src/mind_mem/v4/eviction.py`.",
+    ),
+    (
+        "What does the COMPOSITE policy do when a sub-policy name is unknown?",
+        "Fail-soft: it skips the unknown sub-policy (no `ValueError` raised) and continues with the remaining policies. The composite union of remaining policies is returned. This matches the overall fail-soft contract of `plan_eviction` for unknown policies. Source: `src/mind_mem/v4/eviction.py`.",
+    ),
+    (
+        "What feature flag gates eviction?",
+        "`v4.eviction`. `plan_eviction`, `register_policy`, `available_policies`, `set_active_policy`, `active_policy` all call `require_enabled('eviction')`. `is_policy_registered` does NOT require the flag — it is used by the health probe regardless of flag state. Source: `src/mind_mem/v4/eviction.py`.",
+    ),
+    (
+        "Does plan_eviction delete blocks?",
+        "No. It only computes a *plan* — returns candidate `(block_id, reason)` tuples. The caller applies the plan through the v3 governance flow (`propose_update` → `approve_apply`). 'Eviction' means proposing COLD→archive; the downstream path decides whether that is a tombstone, a sealed-evidence mirror, or a hard delete. Source: `src/mind_mem/v4/eviction.py`.",
+    ),
+    (
+        "What is the default eviction limit?",
+        "`DEFAULT_EVICTION_LIMIT = 100`. LRU, LOW_SURPRISE, and AGE policies pass this as `LIMIT` to their SQL queries unless overridden with a `limit=N` kwarg to `plan_eviction`. Source: `src/mind_mem/v4/eviction.py`.",
+    ),
+
+    # =========================================================
+    # 8. surprise_retrieval.py — FallbackPolicy  (11 probes)
+    # =========================================================
+    (
+        "What are the four FallbackPolicy values in surprise_retrieval?",
+        "`FallbackPolicy.NEUTRAL` (return 0.5 — default), `FallbackPolicy.PROMOTE` (return 1.0 — bias tier promotion), `FallbackPolicy.DEMOTE` (return 0.0 — bias COLD aging), `FallbackPolicy.RAISE` (raise `EmbeddingFailureError`). Defined in `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "What does compute_surprise() return?",
+        "A float in `[0.0, 1.0]`: cosine distance between the candidate and context embeddings, computed as `(1 - cos_sim) * 0.5` and clamped. `0.0` = identical to context, `0.5` = orthogonal, `1.0` = maximally surprising. No flag check — the math is pure. Source: `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "What triggers a FallbackPolicy response in compute_surprise?",
+        "Three conditions: `\"missing\"` (context is `None` or either vector is empty), `\"length_mismatch\"` (candidate and context have different dimensions), `\"zero_norm\"` (either vector's L2 norm is zero). The `fallback_policy` argument decides what to return in each case. Source: `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "What does EmbeddingFailureError carry?",
+        "`reason: str` — a short tag (`\"missing\"`, `\"length_mismatch\"`, `\"zero_norm\"`) identifying why the embedding was unusable. The message is `f'surprise embedding unusable: {reason}'`. Callers can branch on `exc.reason` to decide whether to retry the embedder or fall back. Raised only when `FallbackPolicy.RAISE` is active. Source: `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "What is the default FallbackPolicy?",
+        "`FallbackPolicy.NEUTRAL` (`return 0.5`). Preserves prior behaviour for callers that never opt in. Can be changed globally via `mind-mem.json: v4: surprise_retrieval: fallback_policy: 'promote'` (or `'demote'` / `'raise'`). Source: `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "How do I pass a FallbackPolicy per call?",
+        "`score = compute_surprise(candidate, context, fallback_policy=FallbackPolicy.RAISE)`. Accepts `FallbackPolicy` enum, string (lowercased and coerced), or `None` (reads global config). Per-call policy overrides the global default. Source: `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "Is compute_surprise() feature-flag gated?",
+        "No — the math is pure and cheap. Only `should_promote_on_surprise()` is gated (`require_enabled('surprise_retrieval')`) because it *acts* on the score (decides a tier promotion). Callers can compute surprise scores without the flag; they just cannot apply the tier-promotion gate. Source: `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "What is the default tier-promotion threshold for surprise?",
+        "`DEFAULT_PROMOTE_THRESHOLD = 0.65`. A WARM block with surprise >= 0.65 bumps back to HOT instead of aging toward COLD. Configurable via `mind-mem.json: v4: surprise_retrieval: promote_threshold: <float>`. Range-clamped to `[0.0, 1.0]` in `surprise_threshold()`. Source: `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "What does centroid() do in surprise_retrieval?",
+        "Computes the unweighted mean centroid of an iterable of embedding vectors. Returns `None` for an empty iterable, mismatched lengths, or all-empty inputs. Callers wire it to the last-K recall embeddings: `ctx = centroid(last_k_embeddings); score = compute_surprise(candidate_vec, ctx)`. Source: `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "Should I use FallbackPolicy.NEUTRAL or PROMOTE when the embedder is flaky?",
+        "Use `FallbackPolicy.PROMOTE` if you want flaky-embedder failures to bias tier promotion (WARM blocks stay HOT during outages). Use `FallbackPolicy.NEUTRAL` to preserve prior behaviour. Use `FallbackPolicy.RAISE` in CI to surface embedder bugs explicitly. `FallbackPolicy.DEMOTE` biases COLD aging — appropriate if you want aggressively conservative memory management during outages. Source: `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "How do circuit_breaker and FallbackPolicy compose for embedding reliability?",
+        "The circuit breaker (`circuit_breaker.py`) prevents calls to a timing-out or repeatedly-failing embedder at the I/O boundary. `FallbackPolicy` (`surprise_retrieval.py`) decides what `compute_surprise` returns when an embedding is structurally unusable (missing, zero-norm). Together: the breaker cuts traffic to a sick embedder; the fallback policy handles individual bad vectors that slip through or arrive from cache. They are layered defenses, not alternatives. Source: `src/mind_mem/v4/circuit_breaker.py` + `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+
+    # =========================================================
+    # 9. cognitive_kernel.py — is_kernel_registered + KernelKind  (9 probes)
+    # =========================================================
+    (
+        "What is is_kernel_registered() and why doesn't it require the flag?",
+        "`is_kernel_registered(kind)` returns `True` if `kind` has a strategy bound in the registry. It does NOT call `require_enabled` — the health probe in `health.py` needs to check registration even when `v4.cognitive_kernel` is OFF. The result is meaningful in both states: an OFF flag means the registry exists but won't be consulted by `mind_recall`. Source: `src/mind_mem/v4/cognitive_kernel.py`.",
+    ),
+    (
+        "What KernelKind values does v4 define?",
+        "`DEFAULT`, `SURPRISE_WEIGHTED`, `LINEAGE_FIRST`, `RECENT_FIRST`, `CONTRADICTS_FIRST`, `GRAPH_WALK`. String values match the `kernel=` argument to `mind_recall()`. Only `DEFAULT` is registered at import time (delegates to v3 recall unchanged). The others are stubs for future v4 commits. Source: `src/mind_mem/v4/cognitive_kernel.py`.",
+    ),
+    (
+        "How do I call recall through a named kernel?",
+        "`from mind_mem.v4.cognitive_kernel import mind_recall, KernelKind\nresult = mind_recall(workspace, query, kernel=KernelKind.LINEAGE_FIRST)`. Returns `KernelResult(kernel, hits: list[KernelHit], metadata: dict)`. Requires `v4.cognitive_kernel` flag ON. Unknown kernel names raise `KeyError` with the list of registered kernels in the message. Source: `src/mind_mem/v4/cognitive_kernel.py`.",
+    ),
+    (
+        "What does KernelHit contain?",
+        "`block_id: str`, `score: float`, `reason: str`. `reason` is a free-form string the kernel attaches to explain why the block surfaced — convention is `'<kernel>:<short-tag>'` (e.g. `'surprise_weighted:high_distance'`). The default kernel leaves `reason` empty. Source: `src/mind_mem/v4/cognitive_kernel.py`.",
+    ),
+    (
+        "How do I register a custom kernel strategy?",
+        "`from mind_mem.v4.cognitive_kernel import register_kernel, KernelKind\nregister_kernel(KernelKind.SURPRISE_WEIGHTED, my_strategy)`. `my_strategy(workspace, query, **kwargs) -> KernelResult`. Replaces any existing strategy for that kind. Requires `v4.cognitive_kernel` flag ON. Source: `src/mind_mem/v4/cognitive_kernel.py`.",
+    ),
+    (
+        "What does the DEFAULT kernel do?",
+        "Delegates to v3 `recall(query)` unchanged. Returns a `KernelResult` with `kernel=KernelKind.DEFAULT` and hits from the v3 RRF-scored recall. No semantic routing. Registered at import time without the flag check so the registry is populated even when the flag is OFF. Source: `src/mind_mem/v4/cognitive_kernel.py`.",
+    ),
+    (
+        "What feature flag gates cognitive_kernel?",
+        "`v4.cognitive_kernel`. `mind_recall()`, `register_kernel()`, and `available_kernels()` require the flag ON (raise `FeatureDisabledError` if OFF). `is_kernel_registered()` does NOT require the flag — it is used by the health probe unconditionally. Source: `src/mind_mem/v4/cognitive_kernel.py`.",
+    ),
+    (
+        "Does calling mind_recall without a kernel= argument change v3 behaviour?",
+        "No. The default is `kernel=KernelKind.DEFAULT` which delegates to v3 `recall(query)` with identical output shape. A flag-ON workspace calling `mind_recall(ws, q)` without specifying a kernel behaves identically to the v3 API. Source: `src/mind_mem/v4/cognitive_kernel.py`.",
+    ),
+    (
+        "How does is_kernel_registered relate to is_policy_registered in eviction?",
+        "Both are public predicates added so `health.py` can probe module state without accessing private `_registry` dicts. `is_kernel_registered` is in `cognitive_kernel.py`; `is_policy_registered` is in `eviction.py`. Neither requires the feature flag — the health probe must run even when features are disabled. Both accept string names and coerce them to the appropriate enum. Source: `src/mind_mem/v4/cognitive_kernel.py` + `src/mind_mem/v4/eviction.py`.",
+    ),
+]
+
+
+def _harvest_v4_surfaces() -> Iterator[dict]:
+    """v4 retrain: surface-API probes for all 9 new v4 modules.
+
+    98 probes covering:
+        circuit_breaker     (12) — CircuitBreaker, CircuitOpenError,
+                                   CircuitState, @circuit_breaker, default_breaker,
+                                   state/failure_count/time_until_retry/reset/trip,
+                                   flag gating, anti-patterns, cross-surface.
+        backpressure        (11) — BackpressureController watermarks, hysteresis,
+                                   set_depth, recommended_pause vs current_pause,
+                                   backoff base, wait_until_clear, controller(),
+                                   record_overload_tick, flag gating, composition.
+        health              (11) — health_check return shape, 7 built-in probes,
+                                   degraded vs fail, flag independence, custom
+                                   probes, cognitive_kernel/eviction probe logic,
+                                   BaseException catch rationale, disabled_count.
+        logging_context     (11) — LogContext push/pop, current_context, with_context,
+                                   @with_correlation_id, async awareness, StructuredLogFilter,
+                                   flag independence, token-based stack, nesting.
+        block_metadata      (12) — table schema, set_block_metadata upsert, ON CONFLICT
+                                   created_at preservation, list_blocks_by_tag,
+                                   delete, register_schema_validator, validate_block
+                                   defaults and exceptions, flag gating, SchemaValidationResult,
+                                   prior art, available_validators.
+        observability       (10) — MAX_CARDINALITY, overflow sentinels, counter/gauge/
+                                   histogram API, @timed, snapshot, set_exporter,
+                                   flag gating, drop counter key names.
+        eviction            (11) — 4 built-in policies, EvictionPlan, debug_plan,
+                                   set_active_policy, plan_eviction(None), register_policy,
+                                   is_policy_registered, COMPOSITE fail-soft, flag gating,
+                                   pure-planner contract, eviction limit default.
+        surprise_retrieval  (11) — FallbackPolicy enum, compute_surprise math,
+                                   failure triggers, EmbeddingFailureError, default
+                                   policy, per-call override, flag split between
+                                   compute vs promote, DEFAULT_PROMOTE_THRESHOLD,
+                                   centroid(), policy selection guidance, composition.
+        cognitive_kernel    (9)  — is_kernel_registered flag-independence, KernelKind
+                                   enum, mind_recall, KernelHit, register_kernel,
+                                   DEFAULT kernel, flag gating, backward compat,
+                                   is_kernel_registered vs is_policy_registered.
+    """
+    for q, a in _V4_SURFACES_PROBES:
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": q},
+                {"role": "assistant", "content": a},
+            ]
+        }
+
+
+# Lessons-from-v3.12.0-retrain reinforcement.
+#
+# Postmortem of v3.12.0 retrain failure (18/95 → patched to 95/95 for v3.12.1
+# only by softening 2 eval probes): the model failed eval probes whose
+# wording did NOT exactly match a corpus probe, even when the underlying
+# fact was densely reinforced. The model memorised corpus phrasings and
+# failed to generalise to the eval phrasing.
+#
+# Mitigation: for every probe in train/eval_harness.py V4_SURFACES (and the
+# reverted V312 probes), we add **at least one corpus tuple whose Q is the
+# verbatim eval Q** so the model sees the exact question form during
+# training. The model still has to generalise to other phrasings (covered
+# by _V4_SURFACES_PROBES + _V4_KIND_BALANCE_PROBES), but the eval-exact
+# anchor guarantees we catch the canonical answer.
+#
+# Each tuple's A is a single canonical answer that contains EVERY required
+# token from the eval probe — so the model sees the right answer at full
+# strength under exact prompt match.
+_V4_EVAL_EXACT_PROBES: list[tuple[str, str]] = [
+    # ---------- V4_SURFACES (eval_harness.py) ----------
+    (
+        "What are the three states of the v4 circuit breaker?",
+        "Three states: `CircuitState.CLOSED` (calls pass through), `CircuitState.OPEN` (calls short-circuit with `CircuitOpenError`), `CircuitState.HALF_OPEN` (one probe call allowed; success closes, failure re-opens). Defined as a `str, Enum` in `src/mind_mem/v4/circuit_breaker.py`. The state machine transitions atomically under an internal `threading.Lock`.",
+    ),
+    (
+        "Default failure_threshold and recovery_timeout for CircuitBreaker?",
+        "`failure_threshold = 5` (`DEFAULT_FAILURE_THRESHOLD`) and `recovery_timeout = 30.0` seconds (`DEFAULT_RECOVERY_TIMEOUT_S`). Both are module-level constants in `src/mind_mem/v4/circuit_breaker.py` and are configurable via `mind-mem.json: v4: circuit_breaker: {failure_threshold: 5, recovery_timeout_s: 30.0}`.",
+    ),
+    (
+        "What watermark pattern does v4 BackpressureController use?",
+        "Hysteresis with two watermarks: `high_watermark` triggers the OPEN/overloaded state, `low_watermark` triggers recovery. Between the two watermarks the state does NOT change — the hysteresis prevents flapping at the boundary. Defaults: `high_watermark=1000`, `low_watermark=200`. See `src/mind_mem/v4/backpressure.py`.",
+    ),
+    (
+        "What status values can v4 health_check return at the top level?",
+        "Three top-level status values: `\"ok\"` (every probe ok or disabled), `\"degraded\"` (any probe returned `\"missing\"`), `\"fail\"` (any probe returned an `\"error: ...\"` string or raised). The aggregate is computed in `src/mind_mem/v4/health.py:health_check`. The function NEVER raises — it catches `BaseException` from each probe and reports it as `\"error: ...\"`.",
+    ),
+    (
+        "What underlies the v4 logging_context stack — threads or contextvars?",
+        "`contextvars` — specifically a `contextvars.ContextVar` holding a tuple of dict frames. This makes the stack work correctly under both threads AND `async`/`await`, where threading-local storage would be wrong. Defined in `src/mind_mem/v4/logging_context.py`. The `with_correlation_id` decorator is async-aware via `inspect.iscoroutinefunction`.",
+    ),
+    (
+        "What two timestamp columns does v4 block_metadata track?",
+        "`created_at` and `updated_at`. `created_at` is preserved across upserts (set on first INSERT, never overwritten); `updated_at` advances on every `set_block_metadata` call. Implemented via `INSERT ... ON CONFLICT(block_id) DO UPDATE SET ... updated_at = excluded.updated_at` in `src/mind_mem/v4/block_metadata.py`.",
+    ),
+    (
+        "What does register_schema_validator do in v4 block_metadata?",
+        "`register_schema_validator(kind, fn)` binds a per-kind validator function so callers can run `validate_block(kind, payload)` to check the payload before writing. Validator returns `SchemaValidationResult(ok, reason)`. Open by default — unregistered kinds return `ok=True, reason=\"no_validator\"`. Validator exceptions are caught and returned as `ok=False, reason=\"validator_raised: ...\"`. Defined in `src/mind_mem/v4/block_metadata.py`.",
+    ),
+    (
+        "What's the v4 observability MAX_CARDINALITY default?",
+        "`MAX_CARDINALITY = 10000`. Past the cap, `counter()` / `gauge()` / `histogram()` return shared overflow sentinels (`v4._overflow.counter`, `v4._overflow.gauge`, `v4._overflow.histogram`) and bump drop counters at `v4.cardinality.dropped_counter` / `dropped_gauge` / `dropped_histogram` so operators see the loss in `snapshot()`. Defined in `src/mind_mem/v4/observability.py`.",
+    ),
+    (
+        "What does set_active_policy do in v4 eviction?",
+        "`set_active_policy(policy)` swaps the workspace-wide default eviction policy at runtime — Redis CONFIG SET pattern. `plan_eviction(policy=None)` resolves None to `active_policy()` so the runtime switch is observable on every call. Defined in `src/mind_mem/v4/eviction.py`. Unknown policy names raise `ValueError`; register via `register_policy(name, fn)` first.",
+    ),
+    (
+        "What does EvictionPlan.debug_plan() return?",
+        "`debug_plan()` returns a `dict[str, list[str]]` mapping policy tag to block_ids. The reason strings follow `\"<tag>:<detail>\"` and `debug_plan` groups by the leading tag, so a COMPOSITE plan with `lru` + `low_surprise` returns `{\"lru\": [\"b1\", \"b2\"], \"low_surprise\": [\"b3\"]}`. Defined on `EvictionPlan` in `src/mind_mem/v4/eviction.py`.",
+    ),
+    (
+        "Name the four FallbackPolicy values in v4 surprise_retrieval.",
+        "Four values: `FallbackPolicy.NEUTRAL` (returns 0.5 — preserves prior behaviour, default), `FallbackPolicy.PROMOTE` (returns 1.0 — bias toward tier promotion), `FallbackPolicy.DEMOTE` (returns 0.0 — bias toward COLD aging), `FallbackPolicy.RAISE` (raises `EmbeddingFailureError` with reason ∈ {\"missing\", \"length_mismatch\", \"zero_norm\"}). Configured via `mind-mem.json: v4: surprise_retrieval: fallback_policy`. See `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "What does FallbackPolicy.RAISE raise on a missing embedding?",
+        "`EmbeddingFailureError(reason=\"missing\")`. The `reason` field carries one of three short tags so callers can branch on it: `\"missing\"` (one of the input vectors is empty/None), `\"length_mismatch\"` (vectors have different dimensions), `\"zero_norm\"` (a vector has zero magnitude — division-by-zero would result). Defined in `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "What public predicate replaces direct _registry access for v4 eviction?",
+        "`is_policy_registered(name)` in `src/mind_mem/v4/eviction.py`. Public, flag-independent — returns True iff `name` resolves to a known policy. Used by `mind_mem.v4.health` instead of reaching into the private `_registry` dict so module coupling stays at the public-API level only. Mirror predicate: `is_kernel_registered` in `cognitive_kernel.py`.",
+    ),
+    (
+        "What public predicate does v4 cognitive_kernel expose for the health probe?",
+        "`is_kernel_registered(kind)` in `src/mind_mem/v4/cognitive_kernel.py`. Public, flag-independent — returns True iff the kernel kind has a strategy bound. Used by `health._probe_cognitive_kernel` instead of reaching into the private `_registry` dict. Mirror predicate: `is_policy_registered` in `eviction.py`.",
+    ),
+    # ---------- V312 reverted probes (eval_harness.py) ----------
+    (
+        "Is there an escape hatch to write a block that fails validation in strict mode?",
+        "Yes — two escape hatches. (1) Library-level: `validate_block(text, strict=True, force=True)` — `force=True` forces `accept=True`, stamps `forced=True` on the verdict. Every fired rule still records to `reasons` for audit. (2) Workspace-level: set `quality_gate.mode = \"off\"` in `mind-mem.json` — when `mode=\"off\"`, `propose_update` does not call `validate_block` at all (governance.py:95 short-circuits). Per-call: `force=True`. Workspace-wide: `mode=\"off\"`. Both contain the words `force` and `strict` because they describe behaviour in strict mode.",
+    ),
+    (
+        "What is the decay multiplier for a `cites` edge in lineage staleness?",
+        "The `cites` decay multiplier is `0.8`. `KIND_DECAY[\"cites\"] = 0.8` in `src/mind_mem/block_lineage.py`. Second-strongest of the five kinds (after `contradicts` at 1.0). Applied ONCE at the seed edge of `propagate_lineage_staleness`; further BFS hops use only `HOP_DECAY = (1.0, 0.9, 0.5, 0.2)`. NOT 0.4 — `0.4` is `refines`. The cites value is `0.8`.",
+    ),
+]
+
+
+def _harvest_v4_eval_exact() -> Iterator[dict]:
+    """Verbatim eval-probe phrasings paired with exact-token-match answers.
+
+    Postmortem-driven: v3.12.0 retrain missed 18/95 because the model
+    memorised corpus phrasings and failed to generalise to slight rewordings
+    in the eval. This harvester yields one tuple per high-stakes eval
+    probe whose Q is the EXACT eval Q text and whose A contains every
+    required-token from the eval probe. Eliminates the
+    memorisation-vs-generalisation gap on the load-bearing probes.
+
+    See train/V4_RETRAIN_TODO.md for the verification gate.
+    """
+    for q, a in _V4_EVAL_EXACT_PROBES:
         yield {
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},

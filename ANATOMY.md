@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 801 | **Est. tokens:** ~1,655,388
-**Generated:** 2026-05-10 11:47 UTC
+**Files:** 801 | **Est. tokens:** ~1,656,190
+**Generated:** 2026-05-10 12:16 UTC
 
 ## Token Budget Guide
 
@@ -70,7 +70,7 @@
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 16 | ~28,749 |
+| `train/` | 16 | ~29,551 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -977,7 +977,7 @@
 - `build_model_card.py` (~3681 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
 - `CORPUS_HASH_v3.11.0` (~21 tok, tiny) — 02b3ba6a1433e25bdbefe3cebf992ca961734850d1e3550e9496905abbadb3b7  build_corpus.p
 - `CORPUS_HASH_v3.12.0-fullft` (~21 tok, tiny) — 568d1559631a590e44eeec6716081b4534a40ab5f3047feb622cc225ead9ad01  build_corpus.p
-- `eval_harness.py` (~6941 tok, huge) — Eval harness for mind-mem-4b.
+- `eval_harness.py` (~7743 tok, huge) — Eval harness for mind-mem-4b.
 - `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
 - `Modelfile.v3.9.0` (~389 tok, medium) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
 - `post_train_pipeline.sh` (~582 tok, large) — Post-training pipeline for mind-mem-4b v3.9.2 (augmented-corpus retrain).
