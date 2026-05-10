@@ -24,7 +24,6 @@ Coverage matrix:
 
 from __future__ import annotations
 
-import datetime as _dt
 import os
 
 import pytest
@@ -62,8 +61,7 @@ class TestBlockStalenessSchema:
         ensure_block_staleness_schema(workspace)
         conn = _connect(workspace)
         try:
-            cols = {r[1] for r in conn.execute(
-                "PRAGMA table_info(block_staleness)").fetchall()}
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(block_staleness)").fetchall()}
             assert {"block_id", "score", "source_id", "decayed_at"} <= cols
         finally:
             conn.close()
@@ -164,9 +162,7 @@ class TestPropagateContradictsEdge:
         # And the table has exactly one row for B.
         conn = _connect(workspace)
         try:
-            n = conn.execute(
-                "SELECT COUNT(*) FROM block_staleness WHERE block_id = ?", ("B",)
-            ).fetchone()[0]
+            n = conn.execute("SELECT COUNT(*) FROM block_staleness WHERE block_id = ?", ("B",)).fetchone()[0]
             assert n == 1
         finally:
             conn.close()
@@ -211,12 +207,16 @@ class TestCliLineageFlag:
         from mind_mem.mm_cli import _cmd_lineage_flag
 
         rc = _cmd_lineage_flag(
-            type("Args", (), {
-                "src": "NEW",
-                "dst": "OLD",
-                "kind": "contradicts",
-                "weight": 1.0,
-            })()
+            type(
+                "Args",
+                (),
+                {
+                    "src": "NEW",
+                    "dst": "OLD",
+                    "kind": "contradicts",
+                    "weight": 1.0,
+                },
+            )()
         )
         assert rc == 0
 

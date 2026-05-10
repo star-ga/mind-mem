@@ -1,0 +1,518 @@
+{
+  "audit_id": "v3.11-v3.12-corpus-final-audit-2026-05-09",
+  "commit": "1e918b4",
+  "audited_at": "2026-05-09T10:09:48Z",
+  "models_run": [
+    "gemini-3.1-pro-preview",
+    "grok-4.3",
+    "deepseek-v4-pro",
+    "mistral-large-latest",
+    "sonar-pro",
+    "glm-5.1",
+    "kimi-k2.6",
+    "nemotron-ultra-253b"
+  ],
+  "models_succeeded": [
+    "grok-4.3",
+    "mistral-large-latest"
+  ],
+  "models_quota_or_error": [
+    {
+      "model": "gemini-3.1-pro-preview",
+      "error": "Max retries (5) exceeded"
+    },
+    {
+      "model": "deepseek-v4-pro",
+      "error": null
+    },
+    {
+      "model": "sonar-pro",
+      "error": "Max retries (5) exceeded"
+    },
+    {
+      "model": "glm-5.1",
+      "error": null
+    },
+    {
+      "model": "kimi-k2.6",
+      "error": "Max retries (5) exceeded"
+    },
+    {
+      "model": "nemotron-ultra-253b",
+      "error": "Max retries (5) exceeded"
+    }
+  ],
+  "per_model": [
+    {
+      "model": "gemini-3.1-pro-preview",
+      "ok": false,
+      "error": "Max retries (5) exceeded",
+      "latency_s": 365.8
+    },
+    {
+      "model": "grok-4.3",
+      "ok": true,
+      "latency_s": 20.2,
+      "raw_chars": 2039,
+      "parsed": {
+        "verdict": "FIX_FIRST",
+        "bugs": [
+          {
+            "claim_id": "C1",
+            "contradicts": "Default ceiling is LINEAGE_DEPTH_CAP=3, not 10.",
+            "fix": "Default max_depth is 3. Passing a larger value is clamped to LINEAGE_DEPTH_CAP=3."
+          },
+          {
+            "claim_id": "C2",
+            "contradicts": "Ceiling is 3 with silent clamp; no warning metadata.",
+            "fix": "Clamps max_depth at LINEAGE_DEPTH_CAP=3 with no warning in response metadata."
+          },
+          {
+            "claim_id": "C3",
+            "contradicts": "Returns {root, edges, truncated, max_depth, count}; no depth_reached field.",
+            "fix": "single-node graph with empty edges list; to_dict contains root/edges/truncated/max_depth/count."
+          },
+          {
+            "claim_id": "C4",
+            "contradicts": "Cycle edges are silently skipped, never marked cycle=True.",
+            "fix": "detects cycles via visited set; cycle edges are silently skipped."
+          },
+          {
+            "claim_id": "C5",
+            "contradicts": "No 'nodes' key; max_depth clamped to 3.",
+            "fix": "Call block_lineage(..., max_depth=3); returns {root, edges, truncated, max_depth, count}."
+          },
+          {
+            "claim_id": "C6",
+            "contradicts": "Returns LineageResult dict without per-node kind/source_id fields.",
+            "fix": "block_lineage(max_depth=1) returns immediate edges via LineageResult {root, edges, ...}."
+          },
+          {
+            "claim_id": "C7",
+            "contradicts": "Signature requires workspace as first positional arg.",
+            "fix": "Call add_block_edge(workspace, src, dst, kind, weight=1.0)."
+          },
+          {
+            "claim_id": "Q3",
+            "contradicts": "Logs 'quality_gate_advisory', not 'quality_gate_reject'.",
+            "fix": "logs 'quality_gate_advisory' and proceeds with the write."
+          },
+          {
+            "claim_id": "S3",
+            "contradicts": "Signature default is None (clamped to 3), not max_hops=3.",
+            "fix": "Signature: propagate_lineage_staleness(workspace, source_id, *, max_hops=None)."
+          },
+          {
+            "claim_id": "S4",
+            "contradicts": "Uses KIND_DECAY * HOP_DECAY[hop] (hop-2=0.5), not product of edge multipliers.",
+            "fix": "hop-2 penalty = KIND_DECAY[seed] * HOP_DECAY[2] = 0.5."
+          }
+        ],
+        "risks": [],
+        "ok_count": 22,
+        "summary": "10 concrete contradictions remain, primarily in lineage and quality-gate claims."
+      },
+      "parse_error": null,
+      "raw": "{\n  \"verdict\": \"FIX_FIRST\",\n  \"bugs\": [\n    {\"claim_id\": \"C1\", \"contradicts\": \"Default ceiling is LINEAGE_DEPTH_CAP=3, not 10.\", \"fix\": \"Default max_depth is 3. Passing a larger value is clamped to LINEAGE_DEPTH_CAP=3.\"},\n    {\"claim_id\": \"C2\", \"contradicts\": \"Ceiling is 3 with silent clamp; no warning metadata.\", \"fix\": \"Clamps max_depth at LINEAGE_DEPTH_CAP=3 with no warning in response metadata.\"},\n    {\"claim_id\": \"C3\", \"contradicts\": \"Returns {root, edges, truncated, max_depth, count}; no depth_reached field.\", \"fix\": \"single-node graph with empty edges list; to_dict contains root/edges/truncated/max_depth/count.\"},\n    {\"claim_id\": \"C4\", \"contradicts\": \"Cycle edges are silently skipped, never marked cycle=True.\", \"fix\": \"detects cycles via visited set; cycle edges are silently skipped.\"},\n    {\"claim_id\": \"C5\", \"contradicts\": \"No 'nodes' key; max_depth clamped to 3.\", \"fix\": \"Call block_lineage(..., max_depth=3); returns {root, edges, truncated, max_depth, count}.\"},\n    {\"claim_id\": \"C6\", \"contradicts\": \"Returns LineageResult dict without per-node kind/source_id fields.\", \"fix\": \"block_lineage(max_depth=1) returns immediate edges via LineageResult {root, edges, ...}.\"},\n    {\"claim_id\": \"C7\", \"contradicts\": \"Signature requires workspace as first positional arg.\", \"fix\": \"Call add_block_edge(workspace, src, dst, kind, weight=1.0).\"},\n    {\"claim_id\": \"Q3\", \"contradicts\": \"Logs 'quality_gate_advisory', not 'quality_gate_reject'.\", \"fix\": \"logs 'quality_gate_advisory' and proceeds with the write.\"},\n    {\"claim_id\": \"S3\", \"contradicts\": \"Signature default is None (clamped to 3), not max_hops=3.\", \"fix\": \"Signature: propagate_lineage_staleness(workspace, source_id, *, max_hops=None).\"},\n    {\"claim_id\": \"S4\", \"contradicts\": \"Uses KIND_DECAY * HOP_DECAY[hop] (hop-2=0.5), not product of edge multipliers.\", \"fix\": \"hop-2 penalty = KIND_DECAY[seed] * HOP_DECAY[2] = 0.5.\"}\n  ],\n  \"risks\": [],\n  \"ok_count\": 22,\n  \"summary\": \"10 concrete contradictions remain, primarily in lineage and quality-gate claims.\"\n}"
+    },
+    {
+      "model": "deepseek-v4-pro",
+      "ok": true,
+      "latency_s": 123.0,
+      "raw_chars": 0,
+      "parsed": null,
+      "parse_error": null,
+      "raw": ""
+    },
+    {
+      "model": "mistral-large-latest",
+      "ok": true,
+      "latency_s": 20.4,
+      "raw_chars": 5004,
+      "parsed": {
+        "verdict": "FIX_FIRST",
+        "bugs": [
+          {
+            "claim_id": "C1",
+            "contradicts": "Default max_depth is 3 and the configured ceiling is 10 (default).",
+            "fix": "Default max_depth is 3 and the configured ceiling is LINEAGE_DEPTH_CAP=3. Passing a larger value is silently clamped to 3 with no warning."
+          },
+          {
+            "claim_id": "C2",
+            "contradicts": "Clamps max_depth at the configured ceiling (default 10) and includes a warning in the response metadata.",
+            "fix": "Clamps max_depth at LINEAGE_DEPTH_CAP=3 silently with no warning added to the response metadata."
+          },
+          {
+            "claim_id": "C3",
+            "contradicts": "Returns a single-node graph with edges list empty and depth_reached is 0.",
+            "fix": "Returns a single-node graph with edges list empty. The response does not include a 'depth_reached' field."
+          },
+          {
+            "claim_id": "C4",
+            "contradicts": "Cycle edges are returned with cycle=True for visualization.",
+            "fix": "Cycle edges are silently skipped and not marked with cycle=True."
+          },
+          {
+            "claim_id": "C5",
+            "contradicts": "The returned graph is a dict with 'nodes' (list of block IDs + metadata) and 'edges' (list of typed edge dicts).",
+            "fix": "The returned graph is a dict with 'root', 'edges', 'truncated', 'max_depth', and 'count'. There is no 'nodes' key."
+          },
+          {
+            "claim_id": "C6",
+            "contradicts": "Each result node carries kind, source_id, target_id, and weight.",
+            "fix": "The response does not include a 'nodes' list; edges carry kind, source_id, target_id, and weight."
+          },
+          {
+            "claim_id": "C7",
+            "contradicts": "Call add_block_edge(source_id, target_id, kind='cites', weight=1.0) to create the edge (positional shape, no `workspace`).",
+            "fix": "Call add_block_edge(workspace, src, dst, kind='cites', weight=1.0) (requires workspace parameter)."
+          },
+          {
+            "claim_id": "E2",
+            "contradicts": "final_score = rrf_rank * tier_boost",
+            "fix": "The corpus does not specify how final_score is computed, but the claim contradicts typical RRF implementations. Ground truth does not confirm this formula."
+          },
+          {
+            "claim_id": "Q1",
+            "contradicts": "Three valid values for quality_gate.mode: 'off', 'advisory', 'strict'.",
+            "fix": "Three valid values for quality_gate.mode: 'off', 'advisory', 'strict', but the QualityGateConfig.mode validator raises ValueError unless mode is in ('advisory', 'strict'). 'off' is not accepted by the validator, though _get_quality_gate_mode falls back to 'advisory' if mode is invalid."
+          },
+          {
+            "claim_id": "Q5",
+            "contradicts": "To bypass: call validate_block(text, force=True) directly...then set quality_gate.mode='off' in mind-mem.json.",
+            "fix": "To bypass: set quality_gate.mode='off' in mind-mem.json (the gate is skipped entirely). validate_block(force=True) is not needed and does not interact with the mode setting."
+          },
+          {
+            "claim_id": "S3",
+            "contradicts": "Signature: propagate_lineage_staleness(workspace, source_id, max_hops=3).",
+            "fix": "Signature: propagate_lineage_staleness(workspace, source_id, *, max_hops=None). Default is None, which is clamped to LINEAGE_DEPTH_CAP=3."
+          },
+          {
+            "claim_id": "S4",
+            "contradicts": "For a source penalty of 1.0 traversing contradicts (1.0) then cites (0.8): hop-1 penalty = 1.0, hop-2 penalty = 0.8.",
+            "fix": "For a source penalty of 1.0 traversing contradicts (1.0) then cites (0.8): hop-1 penalty = 1.0 * 1.0 = 1.0, hop-2 penalty = 1.0 * 0.8 * 0.5 = 0.4 (HOP_DECAY[2] = 0.5)."
+          },
+          {
+            "claim_id": "S6",
+            "contradicts": "Only blocks reachable from source_id via the lineage graph (treated as undirected at read time \u2014 _outgoing issues UNION ALL in both directions) within max_hops receive staleness rows.",
+            "fix": "Only blocks reachable from source_id via the lineage graph (treated as undirected at read time, but the reverse direction excludes 'cooccurrence' edges) within max_hops receive staleness rows."
+          }
+        ],
+        "risks": [
+          {
+            "claim_id": "E3",
+            "note": "The RRF formula is not explicitly confirmed in ground truth, though it is a common implementation. The claim is technically defensible but not verifiable from the provided sources."
+          },
+          {
+            "claim_id": "Q2",
+            "note": "The claim is correct, but the wording 'no Python exception is raised' could be misleading since validate_block(strict=True) raises ValueError for invalid modes, though propose_update itself does not raise exceptions."
+          },
+          {
+            "claim_id": "Q6",
+            "note": "The claim is correct, but the silent fallback to 'advisory' could be considered fragile behavior."
+          },
+          {
+            "claim_id": "R6",
+            "note": "The cost estimate is not verifiable from ground truth and may vary based on usage."
+          }
+        ],
+        "ok_count": 16,
+        "summary": "13 bugs found requiring fixes before retrain; 4 risks documented but not blocking."
+      },
+      "parse_error": null,
+      "raw": "```json\n{\n  \"verdict\": \"FIX_FIRST\",\n  \"bugs\": [\n    {\n      \"claim_id\": \"C1\",\n      \"contradicts\": \"Default max_depth is 3 and the configured ceiling is 10 (default).\",\n      \"fix\": \"Default max_depth is 3 and the configured ceiling is LINEAGE_DEPTH_CAP=3. Passing a larger value is silently clamped to 3 with no warning.\"\n    },\n    {\n      \"claim_id\": \"C2\",\n      \"contradicts\": \"Clamps max_depth at the configured ceiling (default 10) and includes a warning in the response metadata.\",\n      \"fix\": \"Clamps max_depth at LINEAGE_DEPTH_CAP=3 silently with no warning added to the response metadata.\"\n    },\n    {\n      \"claim_id\": \"C3\",\n      \"contradicts\": \"Returns a single-node graph with edges list empty and depth_reached is 0.\",\n      \"fix\": \"Returns a single-node graph with edges list empty. The response does not include a 'depth_reached' field.\"\n    },\n    {\n      \"claim_id\": \"C4\",\n      \"contradicts\": \"Cycle edges are returned with cycle=True for visualization.\",\n      \"fix\": \"Cycle edges are silently skipped and not marked with cycle=True.\"\n    },\n    {\n      \"claim_id\": \"C5\",\n      \"contradicts\": \"The returned graph is a dict with 'nodes' (list of block IDs + metadata) and 'edges' (list of typed edge dicts).\",\n      \"fix\": \"The returned graph is a dict with 'root', 'edges', 'truncated', 'max_depth', and 'count'. There is no 'nodes' key.\"\n    },\n    {\n      \"claim_id\": \"C6\",\n      \"contradicts\": \"Each result node carries kind, source_id, target_id, and weight.\",\n      \"fix\": \"The response does not include a 'nodes' list; edges carry kind, source_id, target_id, and weight.\"\n    },\n    {\n      \"claim_id\": \"C7\",\n      \"contradicts\": \"Call add_block_edge(source_id, target_id, kind='cites', weight=1.0) to create the edge (positional shape, no `workspace`).\",\n      \"fix\": \"Call add_block_edge(workspace, src, dst, kind='cites', weight=1.0) (requires workspace parameter).\"\n    },\n    {\n      \"claim_id\": \"E2\",\n      \"contradicts\": \"final_score = rrf_rank * tier_boost\",\n      \"fix\": \"The corpus does not specify how final_score is computed, but the claim contradicts typical RRF implementations. Ground truth does not confirm this formula.\"\n    },\n    {\n      \"claim_id\": \"Q1\",\n      \"contradicts\": \"Three valid values for quality_gate.mode: 'off', 'advisory', 'strict'.\",\n      \"fix\": \"Three valid values for quality_gate.mode: 'off', 'advisory', 'strict', but the QualityGateConfig.mode validator raises ValueError unless mode is in ('advisory', 'strict'). 'off' is not accepted by the validator, though _get_quality_gate_mode falls back to 'advisory' if mode is invalid.\"\n    },\n    {\n      \"claim_id\": \"Q5\",\n      \"contradicts\": \"To bypass: call validate_block(text, force=True) directly...then set quality_gate.mode='off' in mind-mem.json.\",\n      \"fix\": \"To bypass: set quality_gate.mode='off' in mind-mem.json (the gate is skipped entirely). validate_block(force=True) is not needed and does not interact with the mode setting.\"\n    },\n    {\n      \"claim_id\": \"S3\",\n      \"contradicts\": \"Signature: propagate_lineage_staleness(workspace, source_id, max_hops=3).\",\n      \"fix\": \"Signature: propagate_lineage_staleness(workspace, source_id, *, max_hops=None). Default is None, which is clamped to LINEAGE_DEPTH_CAP=3.\"\n    },\n    {\n      \"claim_id\": \"S4\",\n      \"contradicts\": \"For a source penalty of 1.0 traversing contradicts (1.0) then cites (0.8): hop-1 penalty = 1.0, hop-2 penalty = 0.8.\",\n      \"fix\": \"For a source penalty of 1.0 traversing contradicts (1.0) then cites (0.8): hop-1 penalty = 1.0 * 1.0 = 1.0, hop-2 penalty = 1.0 * 0.8 * 0.5 = 0.4 (HOP_DECAY[2] = 0.5).\"\n    },\n    {\n      \"claim_id\": \"S6\",\n      \"contradicts\": \"Only blocks reachable from source_id via the lineage graph (treated as undirected at read time \u2014 _outgoing issues UNION ALL in both directions) within max_hops receive staleness rows.\",\n      \"fix\": \"Only blocks reachable from source_id via the lineage graph (treated as undirected at read time, but the reverse direction excludes 'cooccurrence' edges) within max_hops receive staleness rows.\"\n    }\n  ],\n  \"risks\": [\n    {\n      \"claim_id\": \"E3\",\n      \"note\": \"The RRF formula is not explicitly confirmed in ground truth, though it is a common implementation. The claim is technically defensible but not verifiable from the provided sources.\"\n    },\n    {\n      \"claim_id\": \"Q2\",\n      \"note\": \"The claim is correct, but the wording 'no Python exception is raised' could be misleading since validate_block(strict=True) raises ValueError for invalid modes, though propose_update itself does not raise exceptions.\"\n    },\n    {\n      \"claim_id\": \"Q6\",\n      \"note\": \"The claim is correct, but the silent fallback to 'advisory' could be considered fragile behavior.\"\n    },\n    {\n      \"claim_id\": \"R6\",\n      \"note\": \"The cost estimate is not verifiable from ground truth and may vary based on usage.\"\n    }\n  ],\n  \"ok_count\": 16,\n  \"summary\": \"13 bugs found requiring fixes before retrain; 4 risks documented but not blocking.\"\n}\n```"
+    },
+    {
+      "model": "sonar-pro",
+      "ok": false,
+      "error": "Max retries (5) exceeded",
+      "latency_s": 43.0
+    },
+    {
+      "model": "glm-5.1",
+      "ok": true,
+      "latency_s": 99.0,
+      "raw_chars": 0,
+      "parsed": null,
+      "parse_error": null,
+      "raw": ""
+    },
+    {
+      "model": "kimi-k2.6",
+      "ok": false,
+      "error": "Max retries (5) exceeded",
+      "latency_s": 43.6
+    },
+    {
+      "model": "nemotron-ultra-253b",
+      "ok": false,
+      "error": "Max retries (5) exceeded",
+      "latency_s": 42.9
+    }
+  ],
+  "per_model_verdicts": {
+    "grok-4.3": "FIX_FIRST",
+    "mistral-large-latest": "FIX_FIRST"
+  },
+  "bug_index": {
+    "C1": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "C2": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "C3": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "C4": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "C5": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "C6": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "C7": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "Q3": [
+      "grok-4.3"
+    ],
+    "S3": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "S4": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "E2": [
+      "mistral-large-latest"
+    ],
+    "Q1": [
+      "mistral-large-latest"
+    ],
+    "Q5": [
+      "mistral-large-latest"
+    ],
+    "S6": [
+      "mistral-large-latest"
+    ]
+  },
+  "consensus_bugs": {
+    "C1": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "C2": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "C3": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "C4": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "C5": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "C6": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "C7": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "S3": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ],
+    "S4": [
+      "grok-4.3",
+      "mistral-large-latest"
+    ]
+  },
+  "bug_details": {
+    "C1": [
+      {
+        "model": "grok-4.3",
+        "claim_id": "C1",
+        "contradicts": "Default ceiling is LINEAGE_DEPTH_CAP=3, not 10.",
+        "fix": "Default max_depth is 3. Passing a larger value is clamped to LINEAGE_DEPTH_CAP=3."
+      },
+      {
+        "model": "mistral-large-latest",
+        "claim_id": "C1",
+        "contradicts": "Default max_depth is 3 and the configured ceiling is 10 (default).",
+        "fix": "Default max_depth is 3 and the configured ceiling is LINEAGE_DEPTH_CAP=3. Passing a larger value is silently clamped to 3 with no warning."
+      }
+    ],
+    "C2": [
+      {
+        "model": "grok-4.3",
+        "claim_id": "C2",
+        "contradicts": "Ceiling is 3 with silent clamp; no warning metadata.",
+        "fix": "Clamps max_depth at LINEAGE_DEPTH_CAP=3 with no warning in response metadata."
+      },
+      {
+        "model": "mistral-large-latest",
+        "claim_id": "C2",
+        "contradicts": "Clamps max_depth at the configured ceiling (default 10) and includes a warning in the response metadata.",
+        "fix": "Clamps max_depth at LINEAGE_DEPTH_CAP=3 silently with no warning added to the response metadata."
+      }
+    ],
+    "C3": [
+      {
+        "model": "grok-4.3",
+        "claim_id": "C3",
+        "contradicts": "Returns {root, edges, truncated, max_depth, count}; no depth_reached field.",
+        "fix": "single-node graph with empty edges list; to_dict contains root/edges/truncated/max_depth/count."
+      },
+      {
+        "model": "mistral-large-latest",
+        "claim_id": "C3",
+        "contradicts": "Returns a single-node graph with edges list empty and depth_reached is 0.",
+        "fix": "Returns a single-node graph with edges list empty. The response does not include a 'depth_reached' field."
+      }
+    ],
+    "C4": [
+      {
+        "model": "grok-4.3",
+        "claim_id": "C4",
+        "contradicts": "Cycle edges are silently skipped, never marked cycle=True.",
+        "fix": "detects cycles via visited set; cycle edges are silently skipped."
+      },
+      {
+        "model": "mistral-large-latest",
+        "claim_id": "C4",
+        "contradicts": "Cycle edges are returned with cycle=True for visualization.",
+        "fix": "Cycle edges are silently skipped and not marked with cycle=True."
+      }
+    ],
+    "C5": [
+      {
+        "model": "grok-4.3",
+        "claim_id": "C5",
+        "contradicts": "No 'nodes' key; max_depth clamped to 3.",
+        "fix": "Call block_lineage(..., max_depth=3); returns {root, edges, truncated, max_depth, count}."
+      },
+      {
+        "model": "mistral-large-latest",
+        "claim_id": "C5",
+        "contradicts": "The returned graph is a dict with 'nodes' (list of block IDs + metadata) and 'edges' (list of typed edge dicts).",
+        "fix": "The returned graph is a dict with 'root', 'edges', 'truncated', 'max_depth', and 'count'. There is no 'nodes' key."
+      }
+    ],
+    "C6": [
+      {
+        "model": "grok-4.3",
+        "claim_id": "C6",
+        "contradicts": "Returns LineageResult dict without per-node kind/source_id fields.",
+        "fix": "block_lineage(max_depth=1) returns immediate edges via LineageResult {root, edges, ...}."
+      },
+      {
+        "model": "mistral-large-latest",
+        "claim_id": "C6",
+        "contradicts": "Each result node carries kind, source_id, target_id, and weight.",
+        "fix": "The response does not include a 'nodes' list; edges carry kind, source_id, target_id, and weight."
+      }
+    ],
+    "C7": [
+      {
+        "model": "grok-4.3",
+        "claim_id": "C7",
+        "contradicts": "Signature requires workspace as first positional arg.",
+        "fix": "Call add_block_edge(workspace, src, dst, kind, weight=1.0)."
+      },
+      {
+        "model": "mistral-large-latest",
+        "claim_id": "C7",
+        "contradicts": "Call add_block_edge(source_id, target_id, kind='cites', weight=1.0) to create the edge (positional shape, no `workspace`).",
+        "fix": "Call add_block_edge(workspace, src, dst, kind='cites', weight=1.0) (requires workspace parameter)."
+      }
+    ],
+    "Q3": [
+      {
+        "model": "grok-4.3",
+        "claim_id": "Q3",
+        "contradicts": "Logs 'quality_gate_advisory', not 'quality_gate_reject'.",
+        "fix": "logs 'quality_gate_advisory' and proceeds with the write."
+      }
+    ],
+    "S3": [
+      {
+        "model": "grok-4.3",
+        "claim_id": "S3",
+        "contradicts": "Signature default is None (clamped to 3), not max_hops=3.",
+        "fix": "Signature: propagate_lineage_staleness(workspace, source_id, *, max_hops=None)."
+      },
+      {
+        "model": "mistral-large-latest",
+        "claim_id": "S3",
+        "contradicts": "Signature: propagate_lineage_staleness(workspace, source_id, max_hops=3).",
+        "fix": "Signature: propagate_lineage_staleness(workspace, source_id, *, max_hops=None). Default is None, which is clamped to LINEAGE_DEPTH_CAP=3."
+      }
+    ],
+    "S4": [
+      {
+        "model": "grok-4.3",
+        "claim_id": "S4",
+        "contradicts": "Uses KIND_DECAY * HOP_DECAY[hop] (hop-2=0.5), not product of edge multipliers.",
+        "fix": "hop-2 penalty = KIND_DECAY[seed] * HOP_DECAY[2] = 0.5."
+      },
+      {
+        "model": "mistral-large-latest",
+        "claim_id": "S4",
+        "contradicts": "For a source penalty of 1.0 traversing contradicts (1.0) then cites (0.8): hop-1 penalty = 1.0, hop-2 penalty = 0.8.",
+        "fix": "For a source penalty of 1.0 traversing contradicts (1.0) then cites (0.8): hop-1 penalty = 1.0 * 1.0 = 1.0, hop-2 penalty = 1.0 * 0.8 * 0.5 = 0.4 (HOP_DECAY[2] = 0.5)."
+      }
+    ],
+    "E2": [
+      {
+        "model": "mistral-large-latest",
+        "claim_id": "E2",
+        "contradicts": "final_score = rrf_rank * tier_boost",
+        "fix": "The corpus does not specify how final_score is computed, but the claim contradicts typical RRF implementations. Ground truth does not confirm this formula."
+      }
+    ],
+    "Q1": [
+      {
+        "model": "mistral-large-latest",
+        "claim_id": "Q1",
+        "contradicts": "Three valid values for quality_gate.mode: 'off', 'advisory', 'strict'.",
+        "fix": "Three valid values for quality_gate.mode: 'off', 'advisory', 'strict', but the QualityGateConfig.mode validator raises ValueError unless mode is in ('advisory', 'strict'). 'off' is not accepted by the validator, though _get_quality_gate_mode falls back to 'advisory' if mode is invalid."
+      }
+    ],
+    "Q5": [
+      {
+        "model": "mistral-large-latest",
+        "claim_id": "Q5",
+        "contradicts": "To bypass: call validate_block(text, force=True) directly...then set quality_gate.mode='off' in mind-mem.json.",
+        "fix": "To bypass: set quality_gate.mode='off' in mind-mem.json (the gate is skipped entirely). validate_block(force=True) is not needed and does not interact with the mode setting."
+      }
+    ],
+    "S6": [
+      {
+        "model": "mistral-large-latest",
+        "claim_id": "S6",
+        "contradicts": "Only blocks reachable from source_id via the lineage graph (treated as undirected at read time \u2014 _outgoing issues UNION ALL in both directions) within max_hops receive staleness rows.",
+        "fix": "Only blocks reachable from source_id via the lineage graph (treated as undirected at read time, but the reverse direction excludes 'cooccurrence' edges) within max_hops receive staleness rows."
+      }
+    ]
+  },
+  "composite_verdict": "FIX_FIRST",
+  "composite_summary": "0 PROCEED / 2 FIX_FIRST / 0 BLOCK across 2 models. 9 consensus bugs (>=2 models)."
+}

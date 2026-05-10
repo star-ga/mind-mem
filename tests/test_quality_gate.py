@@ -108,9 +108,7 @@ class TestRuleNearDuplicate:
         ratio = similarity_ratio(a, b)
         assert ratio >= 0.97
 
-        recent: list[tuple[str, _dt.datetime]] = [
-            (a, _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=2))
-        ]
+        recent: list[tuple[str, _dt.datetime]] = [(a, _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=2))]
         v = validate_block(b, strict=True, recent=recent)
         assert v.accept is False
         assert any("dup" in r.lower() or "similar" in r.lower() for r in v.reasons)

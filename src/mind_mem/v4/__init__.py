@@ -60,10 +60,10 @@ Copyright STARGA, Inc.
 from __future__ import annotations
 
 from .feature_flags import (
+    ALL_V4_FLAGS,
     FeatureDisabledError,
     is_enabled,
     require_enabled,
-    ALL_V4_FLAGS,
 )
 
 __all__ = [

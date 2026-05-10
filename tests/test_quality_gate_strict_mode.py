@@ -18,14 +18,12 @@ from mind_mem.init_workspace import init
 from mind_mem.mcp.infra.workspace import use_workspace
 from mind_mem.observability import metrics
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 _GOOD_STATEMENT = (
-    "STARGA ships the v3.12.0 quality gate with strict mode wiring "
-    "into propose_update for deterministic pre-write validation."
+    "STARGA ships the v3.12.0 quality gate with strict mode wiring into propose_update for deterministic pre-write validation."
 )
 
 _BAD_STATEMENT = "hi"  # < 32 non-whitespace chars → too_short rule fires

@@ -1,0 +1,243 @@
+{
+  "audit_id": "v3.12-corpus-final-audit-2026-05-09",
+  "generated_at_utc": "2026-05-09T10:18:14.055399Z",
+  "models_queried": 7,
+  "models_parsed": 2,
+  "fleet": [
+    {
+      "label": "grok-4.3",
+      "model_id": "grok-4.3",
+      "status": "ok",
+      "parsed_ok": true,
+      "latency_ms": 23980.388164520264,
+      "retries": 0
+    },
+    {
+      "label": "mistral-large-latest",
+      "model_id": "mistral-large-latest",
+      "status": "ok",
+      "parsed_ok": true,
+      "latency_ms": 19974.64156150818,
+      "retries": 0
+    },
+    {
+      "label": "deepseek-v4-pro",
+      "model_id": "deepseek-v4-pro",
+      "status": "error",
+      "parsed_ok": false,
+      "latency_ms": 0,
+      "retries": 0
+    },
+    {
+      "label": "gemini-3.1-pro-preview",
+      "model_id": "gemini-3.1-pro-preview",
+      "status": "error",
+      "parsed_ok": false,
+      "latency_ms": 0,
+      "retries": 0
+    },
+    {
+      "label": "glm-5.1",
+      "model_id": "glm-5.1",
+      "status": "ok",
+      "parsed_ok": false,
+      "latency_ms": 61802.35552787781,
+      "retries": 0
+    },
+    {
+      "label": "nvidia-nemotron-ultra-253b",
+      "model_id": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+      "status": "error",
+      "parsed_ok": false,
+      "latency_ms": 0,
+      "retries": 0
+    },
+    {
+      "label": "sonar-pro",
+      "model_id": "sonar-pro",
+      "status": "error",
+      "parsed_ok": false,
+      "latency_ms": 0,
+      "retries": 0
+    }
+  ],
+  "aggregates": {
+    "verdict_tally": {
+      "PROCEED": 1,
+      "FIX_FIRST": 1
+    },
+    "scores_per_model": [
+      {
+        "model": "grok-4.3",
+        "score": 9
+      },
+      {
+        "model": "mistral-large-latest",
+        "score": 8
+      }
+    ],
+    "score_mean": 8.5,
+    "all_bugs_flagged": [
+      {
+        "model": "mistral-large-latest",
+        "file": "build_corpus.py",
+        "line": 42,
+        "claim": "The three valid values for `quality_gate.mode` are `\"off\"`, `\"advisory\"`, and `\"strict\"`.",
+        "ground_truth": "The three valid values are `\"off\"`, `\"advisory\"`, and `\"strict\"` (correct), but the claim in the probes lists eight rules in the quality gate, not seven.",
+        "fix": "Update the claim in `_QUALITY_GATE_PROBES` to correctly state there are seven rules (not eight) in the quality gate: `empty`, `too_short`, `oversize`, `malformed_utf8`, `stopwords_only`, `near_duplicate`, and `injection_marker`."
+      },
+      {
+        "model": "mistral-large-latest",
+        "file": "eval_harness.py",
+        "line": 25,
+        "claim": "V312_QUALITY_GATE_STRICT_MODE probe expects `\"force\"` as a keyword for the escape hatch in strict mode.",
+        "ground_truth": "`propose_update` has no `force` parameter. The escape hatch is to call `validate_block(text, force=True)` directly and then set `quality_gate.mode = \"off\"` in `mind-mem.json`.",
+        "fix": "Update the probe in `V312_QUALITY_GATE_STRICT_MODE` to remove `\"force\"` from the expected keywords for the escape hatch question. Replace with `\"validate_block(force=True)\"` and `\"quality_gate.mode = 'off'\"`."
+      },
+      {
+        "model": "mistral-large-latest",
+        "file": "build_corpus.py",
+        "line": 105,
+        "claim": "The `quality_gate_rejections_<rule>` counter format is described as `quality_gate_rejections_<rule>` where `<rule>` is the real rule name (e.g., `near_duplicate`, `injection_marker`).",
+        "ground_truth": "The claim is correct, but the probe omits that the `empty` rule's counter key is `quality_gate_rejections_empty` (not `quality_gate_rejections_whitespace_only` or similar).",
+        "fix": "Clarify in the probe that the `<rule>` in `quality_gate_rejections_<rule>` matches the exact rule name as defined in `quality_gate.py` (e.g., `empty`, not `whitespace_only`)."
+      },
+      {
+        "model": "mistral-large-latest",
+        "file": "build_corpus.py",
+        "line": 150,
+        "claim": "`propagate_lineage_staleness` computes the penalty for a block two hops away by multiplying the source penalty by the decay multipliers of the traversed edges.",
+        "ground_truth": "The claim is correct, but the probe does not specify that the hop decay is applied multiplicatively per hop (e.g., `HOP_DECAY = (1.0, 0.9, 0.5, 0.2)`). For two hops, the penalty is `source_penalty * kind_decay * 0.9 * kind_decay_next`.",
+        "fix": "Update the probe to explicitly state that the penalty is the product of the source penalty, the kind decay multiplier of the first edge, the hop decay for the first hop (0.9), the kind decay multiplier of the second edge, and the hop decay for the second hop (0.5)."
+      },
+      {
+        "model": "mistral-large-latest",
+        "file": "build_corpus.py",
+        "line": 180,
+        "claim": "`mm lineage flag` is a CLI command that bundles `add_block_edge` and `propagate_lineage_staleness`.",
+        "ground_truth": "The claim is correct, but the probe does not mention that `mm lineage flag` uses `source_id=args.src` (not `args.dst`) for `propagate_lineage_staleness`.",
+        "fix": "Clarify in the probe that `mm lineage flag <src> <dst> --kind <kind>` uses `source_id=args.src` for `propagate_lineage_staleness`, not `args.dst`."
+      }
+    ]
+  },
+  "per_model_responses": [
+    {
+      "label": "grok-4.3",
+      "model_id": "grok-4.3",
+      "status": "ok",
+      "error": null,
+      "raw_content": "```json\n{\n  \"verdict\": \"PROCEED\",\n  \"new_bugs\": [],\n  \"regressions\": [],\n  \"score_0_to_10\": 9,\n  \"biggest_concern\": \"None found; all v3.12 probe answers align with source (quality_gate.py:1-8 rules, lineage_staleness.py:seeds/BFS/upsert, governance.py:validate_block call, config.py:mode handling).\"\n}\n```",
+      "parsed": {
+        "verdict": "PROCEED",
+        "new_bugs": [],
+        "regressions": [],
+        "score_0_to_10": 9,
+        "biggest_concern": "None found; all v3.12 probe answers align with source (quality_gate.py:1-8 rules, lineage_staleness.py:seeds/BFS/upsert, governance.py:validate_block call, config.py:mode handling)."
+      },
+      "latency_ms": 23980.388164520264,
+      "retries": 0
+    },
+    {
+      "label": "mistral-large-latest",
+      "model_id": "mistral-large-latest",
+      "status": "ok",
+      "error": null,
+      "raw_content": "```json\n{\n  \"verdict\": \"FIX_FIRST\",\n  \"new_bugs\": [\n    {\n      \"file\": \"build_corpus.py\",\n      \"line\": 42,\n      \"claim\": \"The three valid values for `quality_gate.mode` are `\\\"off\\\"`, `\\\"advisory\\\"`, and `\\\"strict\\\"`.\",\n      \"ground_truth\": \"The three valid values are `\\\"off\\\"`, `\\\"advisory\\\"`, and `\\\"strict\\\"` (correct), but the claim in the probes lists eight rules in the quality gate, not seven.\",\n      \"fix\": \"Update the claim in `_QUALITY_GATE_PROBES` to correctly state there are seven rules (not eight) in the quality gate: `empty`, `too_short`, `oversize`, `malformed_utf8`, `stopwords_only`, `near_duplicate`, and `injection_marker`.\"\n    },\n    {\n      \"file\": \"eval_harness.py\",\n      \"line\": 25,\n      \"claim\": \"V312_QUALITY_GATE_STRICT_MODE probe expects `\\\"force\\\"` as a keyword for the escape hatch in strict mode.\",\n      \"ground_truth\": \"`propose_update` has no `force` parameter. The escape hatch is to call `validate_block(text, force=True)` directly and then set `quality_gate.mode = \\\"off\\\"` in `mind-mem.json`.\",\n      \"fix\": \"Update the probe in `V312_QUALITY_GATE_STRICT_MODE` to remove `\\\"force\\\"` from the expected keywords for the escape hatch question. Replace with `\\\"validate_block(force=True)\\\"` and `\\\"quality_gate.mode = 'off'\\\"`.\"\n    },\n    {\n      \"file\": \"build_corpus.py\",\n      \"line\": 105,\n      \"claim\": \"The `quality_gate_rejections_<rule>` counter format is described as `quality_gate_rejections_<rule>` where `<rule>` is the real rule name (e.g., `near_duplicate`, `injection_marker`).\",\n      \"ground_truth\": \"The claim is correct, but the probe omits that the `empty` rule's counter key is `quality_gate_rejections_empty` (not `quality_gate_rejections_whitespace_only` or similar).\",\n      \"fix\": \"Clarify in the probe that the `<rule>` in `quality_gate_rejections_<rule>` matches the exact rule name as defined in `quality_gate.py` (e.g., `empty`, not `whitespace_only`).\"\n    },\n    {\n      \"file\": \"build_corpus.py\",\n      \"line\": 150,\n      \"claim\": \"`propagate_lineage_staleness` computes the penalty for a block two hops away by multiplying the source penalty by the decay multipliers of the traversed edges.\",\n      \"ground_truth\": \"The claim is correct, but the probe does not specify that the hop decay is applied multiplicatively per hop (e.g., `HOP_DECAY = (1.0, 0.9, 0.5, 0.2)`). For two hops, the penalty is `source_penalty * kind_decay * 0.9 * kind_decay_next`.\",\n      \"fix\": \"Update the probe to explicitly state that the penalty is the product of the source penalty, the kind decay multiplier of the first edge, the hop decay for the first hop (0.9), the kind decay multiplier of the second edge, and the hop decay for the second hop (0.5).\"\n    },\n    {\n      \"file\": \"build_corpus.py\",\n      \"line\": 180,\n      \"claim\": \"`mm lineage flag` is a CLI command that bundles `add_block_edge` and `propagate_lineage_staleness`.\",\n      \"ground_truth\": \"The claim is correct, but the probe does not mention that `mm lineage flag` uses `source_id=args.src` (not `args.dst`) for `propagate_lineage_staleness`.\",\n      \"fix\": \"Clarify in the probe that `mm lineage flag <src> <dst> --kind <kind>` uses `source_id=args.src` for `propagate_lineage_staleness`, not `args.dst`.\"\n    }\n  ],\n  \"regressions\": [],\n  \"score_0_to_10\": 8,\n  \"biggest_concern\": \"The probes contain factual inaccuracies about the number of quality gate rules and the escape hatch mechanism for strict mode, which could mislead the retraining process. The lineage staleness probes also lack precision about penalty computation and CLI behavior.\"\n}\n```",
+      "parsed": {
+        "verdict": "FIX_FIRST",
+        "new_bugs": [
+          {
+            "file": "build_corpus.py",
+            "line": 42,
+            "claim": "The three valid values for `quality_gate.mode` are `\"off\"`, `\"advisory\"`, and `\"strict\"`.",
+            "ground_truth": "The three valid values are `\"off\"`, `\"advisory\"`, and `\"strict\"` (correct), but the claim in the probes lists eight rules in the quality gate, not seven.",
+            "fix": "Update the claim in `_QUALITY_GATE_PROBES` to correctly state there are seven rules (not eight) in the quality gate: `empty`, `too_short`, `oversize`, `malformed_utf8`, `stopwords_only`, `near_duplicate`, and `injection_marker`."
+          },
+          {
+            "file": "eval_harness.py",
+            "line": 25,
+            "claim": "V312_QUALITY_GATE_STRICT_MODE probe expects `\"force\"` as a keyword for the escape hatch in strict mode.",
+            "ground_truth": "`propose_update` has no `force` parameter. The escape hatch is to call `validate_block(text, force=True)` directly and then set `quality_gate.mode = \"off\"` in `mind-mem.json`.",
+            "fix": "Update the probe in `V312_QUALITY_GATE_STRICT_MODE` to remove `\"force\"` from the expected keywords for the escape hatch question. Replace with `\"validate_block(force=True)\"` and `\"quality_gate.mode = 'off'\"`."
+          },
+          {
+            "file": "build_corpus.py",
+            "line": 105,
+            "claim": "The `quality_gate_rejections_<rule>` counter format is described as `quality_gate_rejections_<rule>` where `<rule>` is the real rule name (e.g., `near_duplicate`, `injection_marker`).",
+            "ground_truth": "The claim is correct, but the probe omits that the `empty` rule's counter key is `quality_gate_rejections_empty` (not `quality_gate_rejections_whitespace_only` or similar).",
+            "fix": "Clarify in the probe that the `<rule>` in `quality_gate_rejections_<rule>` matches the exact rule name as defined in `quality_gate.py` (e.g., `empty`, not `whitespace_only`)."
+          },
+          {
+            "file": "build_corpus.py",
+            "line": 150,
+            "claim": "`propagate_lineage_staleness` computes the penalty for a block two hops away by multiplying the source penalty by the decay multipliers of the traversed edges.",
+            "ground_truth": "The claim is correct, but the probe does not specify that the hop decay is applied multiplicatively per hop (e.g., `HOP_DECAY = (1.0, 0.9, 0.5, 0.2)`). For two hops, the penalty is `source_penalty * kind_decay * 0.9 * kind_decay_next`.",
+            "fix": "Update the probe to explicitly state that the penalty is the product of the source penalty, the kind decay multiplier of the first edge, the hop decay for the first hop (0.9), the kind decay multiplier of the second edge, and the hop decay for the second hop (0.5)."
+          },
+          {
+            "file": "build_corpus.py",
+            "line": 180,
+            "claim": "`mm lineage flag` is a CLI command that bundles `add_block_edge` and `propagate_lineage_staleness`.",
+            "ground_truth": "The claim is correct, but the probe does not mention that `mm lineage flag` uses `source_id=args.src` (not `args.dst`) for `propagate_lineage_staleness`.",
+            "fix": "Clarify in the probe that `mm lineage flag <src> <dst> --kind <kind>` uses `source_id=args.src` for `propagate_lineage_staleness`, not `args.dst`."
+          }
+        ],
+        "regressions": [],
+        "score_0_to_10": 8,
+        "biggest_concern": "The probes contain factual inaccuracies about the number of quality gate rules and the escape hatch mechanism for strict mode, which could mislead the retraining process. The lineage staleness probes also lack precision about penalty computation and CLI behavior."
+      },
+      "latency_ms": 19974.64156150818,
+      "retries": 0
+    },
+    {
+      "label": "deepseek-v4-pro",
+      "model_id": "deepseek-v4-pro",
+      "status": "error",
+      "error": "Max retries (5) exceeded",
+      "raw_content": "",
+      "parsed": null,
+      "latency_ms": 0,
+      "retries": 0
+    },
+    {
+      "label": "gemini-3.1-pro-preview",
+      "model_id": "gemini-3.1-pro-preview",
+      "status": "error",
+      "error": "Max retries (5) exceeded",
+      "raw_content": "",
+      "parsed": null,
+      "latency_ms": 0,
+      "retries": 0
+    },
+    {
+      "label": "glm-5.1",
+      "model_id": "glm-5.1",
+      "status": "ok",
+      "error": null,
+      "raw_content": "",
+      "parsed": null,
+      "latency_ms": 61802.35552787781,
+      "retries": 0
+    },
+    {
+      "label": "nvidia-nemotron-ultra-253b",
+      "model_id": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+      "status": "error",
+      "error": "Max retries (5) exceeded",
+      "raw_content": "",
+      "parsed": null,
+      "latency_ms": 0,
+      "retries": 0
+    },
+    {
+      "label": "sonar-pro",
+      "model_id": "sonar-pro",
+      "status": "error",
+      "error": "Max retries (5) exceeded",
+      "raw_content": "",
+      "parsed": null,
+      "latency_ms": 0,
+      "retries": 0
+    }
+  ]
+}

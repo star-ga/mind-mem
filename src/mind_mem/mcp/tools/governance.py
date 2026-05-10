@@ -116,7 +116,7 @@ def propose_update(
                     "advisory": _qg_verdict.advisory,
                     "hint": (
                         "Statement did not pass the quality gate. "
-                        "Revise and resubmit, or set quality_gate.mode=\"advisory\" "
+                        'Revise and resubmit, or set quality_gate.mode="advisory" '
                         "in mind-mem.json to downgrade to advisory-only."
                     ),
                 },

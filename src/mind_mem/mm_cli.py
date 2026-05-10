@@ -394,12 +394,17 @@ def _cmd_lineage_flag(args: argparse.Namespace) -> int:
     add_block_edge(ws, args.src, args.dst, args.kind, weight=float(args.weight))
     affected = propagate_lineage_staleness(ws, source_id=args.src)
 
-    print(json.dumps({
-        "ok": True,
-        "edge": {"src": args.src, "dst": args.dst, "kind": args.kind, "weight": args.weight},
-        "propagated": len(affected),
-        "affected_blocks": sorted(affected.keys()),
-    }, indent=2))
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "edge": {"src": args.src, "dst": args.dst, "kind": args.kind, "weight": args.weight},
+                "propagated": len(affected),
+                "affected_blocks": sorted(affected.keys()),
+            },
+            indent=2,
+        )
+    )
     return 0
 
 
@@ -448,9 +453,21 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
     # /var/* to known system subdirs so macOS $TMPDIR (/var/folders/...) is
     # still usable as a legitimate dest.
     _SYSTEM_PREFIXES = (
-        "/etc/", "/usr/", "/bin/", "/sbin/", "/lib/", "/lib64/",
-        "/var/lib/", "/var/log/", "/var/run/", "/var/cache/",
-        "/sys/", "/proc/", "/dev/", "/root/", "/boot/",
+        "/etc/",
+        "/usr/",
+        "/bin/",
+        "/sbin/",
+        "/lib/",
+        "/lib64/",
+        "/var/lib/",
+        "/var/log/",
+        "/var/run/",
+        "/var/cache/",
+        "/sys/",
+        "/proc/",
+        "/dev/",
+        "/root/",
+        "/boot/",
     )
     if any(dest.startswith(p) for p in _SYSTEM_PREFIXES):
         print(json.dumps({"error": f"refusing to write to system path: {dest}"}, indent=2))
@@ -536,11 +553,7 @@ def _cmd_install_model(args: argparse.Namespace) -> int:
     # Ollama's Modelfile parser.
     modelfile = os.path.join(os.path.dirname(dest), "Modelfile")
     modelfile_body = (
-        f'FROM "{dest}"\n'
-        "PARAMETER temperature 0.6\n"
-        "PARAMETER top_p 0.95\n"
-        "PARAMETER num_ctx 8192\n"
-        'PARAMETER stop "<|im_end|>"\n'
+        f'FROM "{dest}"\nPARAMETER temperature 0.6\nPARAMETER top_p 0.95\nPARAMETER num_ctx 8192\nPARAMETER stop "<|im_end|>"\n'
     )
     modelfile_tmp = modelfile + ".part"
     with open(modelfile_tmp, "w", encoding="utf-8") as fh:
@@ -1668,7 +1681,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     sq_only = sq_ids - pg_ids
     report["pg_only_count"] = len(pg_only)
     report["sqlite_only_count"] = len(sq_only)
-    report["in_sync"] = (len(pg_only) == 0 and len(sq_only) == 0)
+    report["in_sync"] = len(pg_only) == 0 and len(sq_only) == 0
 
     # --migrate-recall-log: schema-drift fix
     if args.migrate_recall_log and sq_exists:
@@ -1706,10 +1719,9 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
             blocks_id = _sql.Identifier(pg_schema, "blocks")
             with psycopg.connect(pg_dsn) as conn, conn.cursor() as cur:
                 cur.execute(
-                    _sql.SQL(
-                        "SELECT id, file_path, content, metadata, created_at FROM {tbl} "
-                        "WHERE active AND id = ANY(%s)"
-                    ).format(tbl=blocks_id),
+                    _sql.SQL("SELECT id, file_path, content, metadata, created_at FROM {tbl} WHERE active AND id = ANY(%s)").format(
+                        tbl=blocks_id
+                    ),
                     (list(pg_only),),
                 )
                 for bid, fpath, content, metadata, created_at in cur.fetchall():
@@ -1930,10 +1942,7 @@ def build_parser() -> argparse.ArgumentParser:
     # install-model — pull mind-mem-4b GGUF from HF + import to Ollama
     p_install_model = sub.add_parser(
         "install-model",
-        help=(
-            "Download `mind-mem-4b` GGUF (~2.5GB) from HuggingFace and "
-            "import into Ollama as `mind-mem:4b`. Idempotent."
-        ),
+        help=("Download `mind-mem-4b` GGUF (~2.5GB) from HuggingFace and import into Ollama as `mind-mem:4b`. Idempotent."),
     )
     p_install_model.add_argument(
         "--model",
@@ -2011,10 +2020,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     l_flag = lsub.add_parser(
         "flag",
-        help=(
-            "Add a typed lineage edge from <src> to <dst> and propagate "
-            "kind-aware staleness across the dependent subgraph."
-        ),
+        help=("Add a typed lineage edge from <src> to <dst> and propagate kind-aware staleness across the dependent subgraph."),
     )
     l_flag.add_argument("src", help="Source block id (the new/contradicting block).")
     l_flag.add_argument("dst", help="Destination block id (the existing block).")

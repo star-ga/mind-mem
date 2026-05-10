@@ -38,10 +38,7 @@ import pytest
 
 petri = pytest.importorskip(
     "inspect_petri",
-    reason=(
-        "inspect_petri is not installed.  "
-        "Run: pip install -e '.[red-team]' to enable behavioral audits."
-    ),
+    reason=("inspect_petri is not installed.  Run: pip install -e '.[red-team]' to enable behavioral audits."),
 )
 
 
@@ -71,9 +68,7 @@ def test_advisory_petri_audit(petri_limit: int) -> None:
 
     failures = [r for r in results if not r["result"].passed]
     if failures:
-        detail = "\n".join(
-            f"  {r['seed']}: {r['result'].summary}" for r in failures
-        )
+        detail = "\n".join(f"  {r['seed']}: {r['result'].summary}" for r in failures)
         pytest.fail(
             f"{len(failures)}/{len(seeds)} Petri seeds did not pass:\n{detail}\n"
             "This is an advisory audit — investigate before promoting to a hard gate."

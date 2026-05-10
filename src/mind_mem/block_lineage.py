@@ -58,9 +58,7 @@ __all__ = [
     "lineage_adjacency",
 ]
 
-ALLOWED_KINDS: frozenset[str] = frozenset(
-    {"cites", "implements", "refines", "contradicts", "cooccurrence"}
-)
+ALLOWED_KINDS: frozenset[str] = frozenset({"cites", "implements", "refines", "contradicts", "cooccurrence"})
 
 KIND_DECAY: dict[str, float] = {
     "contradicts": 1.0,
@@ -122,17 +120,9 @@ def ensure_lineage_schema(workspace: str) -> None:
     try:
         cols = {row[1] for row in conn.execute("PRAGMA table_info(co_retrieval)").fetchall()}
         if "kind" not in cols:
-            conn.execute(
-                "ALTER TABLE co_retrieval ADD COLUMN kind TEXT NOT NULL DEFAULT 'cooccurrence'"
-            )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_co_ret_kind_src "
-            "ON co_retrieval (kind, mem1_id)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_co_ret_kind_dst "
-            "ON co_retrieval (kind, mem2_id)"
-        )
+            conn.execute("ALTER TABLE co_retrieval ADD COLUMN kind TEXT NOT NULL DEFAULT 'cooccurrence'")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_co_ret_kind_src ON co_retrieval (kind, mem1_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_co_ret_kind_dst ON co_retrieval (kind, mem2_id)")
         conn.commit()
     finally:
         conn.close()
@@ -153,9 +143,7 @@ def add_block_edge(
     """
 
     if kind not in ALLOWED_KINDS:
-        raise ValueError(
-            f"kind must be one of {sorted(ALLOWED_KINDS)}, got {kind!r}"
-        )
+        raise ValueError(f"kind must be one of {sorted(ALLOWED_KINDS)}, got {kind!r}")
     if not src or not dst:
         raise ValueError("src and dst must be non-empty block ids")
     if src == dst:
@@ -232,10 +220,7 @@ def block_lineage(
     if not block_id:
         raise ValueError("block_id must be non-empty")
     if kind_filter is not None and kind_filter not in ALLOWED_KINDS:
-        raise ValueError(
-            f"kind_filter must be one of {sorted(ALLOWED_KINDS)} or None, "
-            f"got {kind_filter!r}"
-        )
+        raise ValueError(f"kind_filter must be one of {sorted(ALLOWED_KINDS)} or None, got {kind_filter!r}")
 
     depth = max(1, min(int(max_depth), LINEAGE_DEPTH_CAP))
     cap = max(1, int(node_cap))
@@ -309,9 +294,7 @@ def lineage_adjacency(
     conn = _connect(workspace)
     try:
         if kind_filter is None:
-            rows: Iterable[tuple[str, str]] = conn.execute(
-                "SELECT mem1_id, mem2_id FROM co_retrieval"
-            ).fetchall()
+            rows: Iterable[tuple[str, str]] = conn.execute("SELECT mem1_id, mem2_id FROM co_retrieval").fetchall()
         else:
             rows = conn.execute(
                 "SELECT mem1_id, mem2_id FROM co_retrieval WHERE kind = ?",

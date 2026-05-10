@@ -82,6 +82,7 @@ class FeatureDisabledError(RuntimeError):
 # Config loading (read-only; we never write here)
 # ---------------------------------------------------------------------------
 
+
 def _config_path() -> Path:
     """Resolve the active ``mind-mem.json``.
 
@@ -130,6 +131,7 @@ def _load_v4_block() -> dict:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def is_enabled(flag: str) -> bool:
     """Return True iff the v4 sub-flag is set to ``{"enabled": true}``.
 
@@ -153,9 +155,7 @@ def require_enabled(flag: str) -> None:
     """
     if not is_enabled(flag):
         raise FeatureDisabledError(
-            f"mind-mem v4 surface '{flag}' is disabled. "
-            f"Enable via mind-mem.json: "
-            f'"v4": {{ "{flag}": {{ "enabled": true }} }}'
+            f'mind-mem v4 surface \'{flag}\' is disabled. Enable via mind-mem.json: "v4": {{ "{flag}": {{ "enabled": true }} }}'
         )
 
 

@@ -79,9 +79,7 @@ def ensure_block_staleness_schema(workspace: str) -> None:
         conn.close()
 
 
-def _classify_seed_neighbours(
-    workspace: str, source_id: str
-) -> dict[str, str]:
+def _classify_seed_neighbours(workspace: str, source_id: str) -> dict[str, str]:
     """Return ``{neighbour_id: edge_kind}`` for edges *out of* ``source_id``.
 
     These are the immediate seeds — the blocks contradicted (or
@@ -206,9 +204,7 @@ def get_staleness_score(workspace: str, block_id: str) -> float:
     return float(row[0])
 
 
-def list_staleness_scores(
-    workspace: str, block_ids: Iterable[str]
-) -> dict[str, float]:
+def list_staleness_scores(workspace: str, block_ids: Iterable[str]) -> dict[str, float]:
     """Return ``{block_id: max_score}`` for the requested ids.
 
     Missing blocks default to ``0.0``. Cheaper than calling

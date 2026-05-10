@@ -13,12 +13,10 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 
 import pytest
 
 from mind_mem.init_workspace import init
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -34,18 +32,9 @@ def ws(tmp_path):
     # The BM25 engine scans CORPUS_FILES which maps 'decisions' → 'decisions/DECISIONS.md'.
     blocks_path = os.path.join(workspace, "decisions", "DECISIONS.md")
     with open(blocks_path, "w", encoding="utf-8") as fh:
-        fh.write(
-            "[EXP-001]\nType: Decision\n"
-            "Statement: BM25 scoring algorithm for text retrieval search\n\n"
-        )
-        fh.write(
-            "[EXP-002]\nType: Decision\n"
-            "Statement: Vector embedding semantic similarity search\n\n"
-        )
-        fh.write(
-            "[EXP-003]\nType: Decision\n"
-            "Statement: RRF fusion combines BM25 and vector rankings\n\n"
-        )
+        fh.write("[EXP-001]\nType: Decision\nStatement: BM25 scoring algorithm for text retrieval search\n\n")
+        fh.write("[EXP-002]\nType: Decision\nStatement: Vector embedding semantic similarity search\n\n")
+        fh.write("[EXP-003]\nType: Decision\nStatement: RRF fusion combines BM25 and vector rankings\n\n")
     return workspace
 
 
@@ -253,9 +242,7 @@ class TestRecallExplainMCPIntegration:
         for hit in results:
             explain = hit["_explain"]
             sort_key = float(hit.get("score", 0.0))
-            assert abs(explain["final"] - sort_key) < 1e-9, (
-                f"final ({explain['final']}) != score ({sort_key}) for {hit.get('_id')}"
-            )
+            assert abs(explain["final"] - sort_key) < 1e-9, f"final ({explain['final']}) != score ({sort_key}) for {hit.get('_id')}"
 
     def test_results_still_sorted_descending_with_explain(self, ws):
         """Insertion of _explain does not disturb sort order."""
@@ -263,9 +250,7 @@ class TestRecallExplainMCPIntegration:
         results = envelope.get("results", [])
         scores = [r.get("score", 0.0) for r in results]
         for i in range(len(scores) - 1):
-            assert scores[i] >= scores[i + 1], (
-                f"Sort order broken at index {i}: {scores[i]} < {scores[i + 1]}"
-            )
+            assert scores[i] >= scores[i + 1], f"Sort order broken at index {i}: {scores[i]} < {scores[i + 1]}"
 
     def test_payload_byte_diff_default_lt_5pct(self, ws):
         """Default (explain=False) response is byte-for-byte identical to baseline."""
@@ -350,6 +335,4 @@ class TestHybridSearchExplainMCPIntegration:
                 sort_key = float(hit["rrf_score"])
             else:
                 sort_key = float(hit.get("score", 0.0))
-            assert abs(explain["final"] - sort_key) < 1e-9, (
-                f"final ({explain['final']}) != sort_key ({sort_key}) for {hit.get('_id')}"
-            )
+            assert abs(explain["final"] - sort_key) < 1e-9, f"final ({explain['final']}) != sort_key ({sort_key}) for {hit.get('_id')}"

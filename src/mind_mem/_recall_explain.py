@@ -126,10 +126,7 @@ def attach_explain(
         # of ``assert`` so the invariant survives ``python -O``.
         sort_key = float(hit.get("rrf_score") or hit.get("score", 0.0))
         if abs(explain.final - sort_key) >= 1e-9:
-            raise RuntimeError(
-                f"_explain.final ({explain.final}) != sort key ({sort_key}) "
-                f"for hit {hit.get('_id', '?')}"
-            )
+            raise RuntimeError(f"_explain.final ({explain.final}) != sort key ({sort_key}) for hit {hit.get('_id', '?')}")
 
         hit["_explain"] = explain.to_dict()
 

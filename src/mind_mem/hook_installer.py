@@ -186,14 +186,14 @@ MEMORY_PROTOCOL_SNIPPET = (
     "\n"
     "The mind-mem MCP server is wired into this CLI. Before answering ANY\n"
     "question that touches prior work, decisions, project state, people,\n"
-    "companies, technical choices, or \"remember when…\" — call mind-mem\n"
+    'companies, technical choices, or "remember when…" — call mind-mem\n'
     "first. The governed blocks in mind-mem's Postgres backend are the\n"
     "source of truth.\n"
     "\n"
     "### Always recall before answering\n"
-    "Run `mcp__mind-mem__recall` (or `mm recall \"$query\"` via bash) with\n"
+    'Run `mcp__mind-mem__recall` (or `mm recall "$query"` via bash) with\n'
     "relevant keywords FIRST. If recall returns results, cite them. If\n"
-    "not, say \"no record found\" — do not guess.\n"
+    'not, say "no record found" — do not guess.\n'
     "\n"
     "### Always propose_update after learning new facts\n"
     "When the user shares a new decision, project status, relationship,\n"
@@ -567,6 +567,8 @@ _MCP_WRITERS_JSON: dict[str, Any] = {
     "mcp-json-cursor": _merge_mcp_cursor,
     "mcp-json-zed": _merge_mcp_zed,
 }
+
+
 def _merge_mcp_vibe_toml(existing_text: str, ws: str, srv: dict) -> tuple[str, bool]:
     """Vibe (Mistral CLI) uses a flat ``mcp_servers = []`` array in
     ``~/.vibe/config.toml``. Each entry is an inline-table with the same
@@ -579,12 +581,7 @@ def _merge_mcp_vibe_toml(existing_text: str, ws: str, srv: dict) -> tuple[str, b
 
     args_toml = "[" + ", ".join(f'"{a}"' for a in srv["args"]) + "]"
     env_pairs = ", ".join(f'{k} = "{v}"' for k, v in srv["env"].items())
-    mm_entry = (
-        '  { name = "mind-mem", '
-        f'command = "{srv["command"]}", '
-        f'args = {args_toml}, '
-        f'env = {{ {env_pairs} }} }}'
-    )
+    mm_entry = f'  {{ name = "mind-mem", command = "{srv["command"]}", args = {args_toml}, env = {{ {env_pairs} }} }}'
 
     text = existing_text or ""
 
@@ -614,7 +611,7 @@ def _merge_mcp_vibe_toml(existing_text: str, ws: str, srv: dict) -> tuple[str, b
     else:
         new_block_inner = mm_entry
     new_block = f"mcp_servers = [\n{new_block_inner}\n]"
-    new_text = text[: m.start()] + new_block + text[m.end():]
+    new_text = text[: m.start()] + new_block + text[m.end() :]
     return new_text, new_text != text
 
 
