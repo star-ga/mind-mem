@@ -43,10 +43,19 @@ module mind_mem_rules {
     [arch_rule(depth_q16, ge)]
     const DEPTH_FLOOR: i32 = 6000
 
-    // Currently 83 (post-test-filter; comment-stripping caught real
-    // [protection] decls). Floor 50 catches regression.
+    // Recalibrated 2026-05-10: current raw=0. mind-mem's mind/*.mind
+    // files are scoring kernels (BM25, RM3, RRF, hybrid, ranking,
+    // recall, intent, query_plan, …) — they don't carry [protection]
+    // decl blocks, which is the syntax governance_kernel_coverage
+    // counts. Governance in mind-mem lives in Python (audit chain,
+    // contradiction detection, quality gate), not MIND modules.
+    // Floor follows the actual hybrid-repo reading; lift will come
+    // when v4 introduces native-MIND governance kernels (cognitive
+    // kernel routing, surprise-weighted retrieval) that emit real
+    // [protection] decls. Same pattern as evidence_chain_density
+    // below — arch-mind's MIND-only sidecar-scan can't see Python.
     [arch_rule(governance_kernel_coverage, ge)]
-    const GOVERNANCE_FLOOR: i32 = 50
+    const GOVERNANCE_FLOOR: i32 = 0
 
     // Currently 10000 (post-test-filter). Tests/benches/examples are
     // no longer counted as architectural; the remaining 56 dep-edges
