@@ -5073,6 +5073,25 @@ _V4_EVAL_EXACT_PROBES: list[tuple[str, str]] = [
         "What is the decay multiplier for a `cites` edge in lineage staleness?",
         "The `cites` decay multiplier is `0.8`. `KIND_DECAY[\"cites\"] = 0.8` in `src/mind_mem/block_lineage.py`. Second-strongest of the five kinds (after `contradicts` at 1.0). Applied ONCE at the seed edge of `propagate_lineage_staleness`; further BFS hops use only `HOP_DECAY = (1.0, 0.9, 0.5, 0.2)`. NOT 0.4 — `0.4` is `refines`. The cites value is `0.8`.",
     ),
+    # ---------- v3.12.1-known-miss reinforcement ----------
+    # These 4 probes failed in the v3.12.1 eval (full-ft-v7-eval) even
+    # against the softened harness. v4 retrain MUST hit them.
+    (
+        "How do I check whether a block proposal is valid before writing it?",
+        "Call `validate_block(text)` to check before writing. Defaults to `advisory` mode — every rule executes, fired rules are recorded in the verdict's `advisory` list, but `accept=True` so the caller decides whether to write. Pass `strict=True` (or set `quality_gate.mode = \"strict\"` workspace-wide) to flip to hard-reject mode where fired rules go to `reasons` and `accept=False`. `advisory` is the v3.11 default. `validate_block` is the canonical pre-write check.",
+    ),
+    (
+        "How does `final_score` in `_explain` relate to the other scores?",
+        "`final_score = rrf_rank * tier_boost`. `rrf_rank` is the reciprocal-rank-fusion value computed from `bm25_score` and `vector_score`. `tier_boost` is a per-tier multiplier (LONG_TERM=1.5, WORKING=1.2, EPISODIC=1.0 by default). So `final_score = rrf_rank * tier_boost` — the value used for the final ordering after BM25 + vector + tier boosting. The `_explain` dict carries all four fields plus `final_score`.",
+    ),
+    (
+        "What is the default value of `quality_gate.mode`?",
+        "`\"advisory\"` — defined as `DEFAULT_QUALITY_GATE_MODE = \"advisory\"` in `src/mind_mem/mcp/infra/config.py`. When the `quality_gate.mode` key is missing from `mind-mem.json` or invalid, the config-router silently falls back to `\"advisory\"`. To override, set `\"quality_gate\": {\"mode\": \"strict\"}` in `mind-mem.json`. The default since v3.11.0; v3.12 adds the `\"strict\"` opt-in.",
+    ),
+    (
+        "What module implements lineage staleness propagation in v3.12.0?",
+        "`src/mind_mem/block_lineage.py` — specifically the `propagate_lineage_staleness(workspace, source_id, max_hops)` function. It runs a bounded BFS from each immediate neighbour of `source_id`, scores per-block via `KIND_DECAY[seed_kind] * HOP_DECAY[hop]`, and writes the results to the `block_staleness` SQLite table (columns: `source_id`, `block_id`, `score`, `decayed_at`). The module name is `block_lineage` — the function is `propagate_lineage_staleness`; the table is `block_staleness`.",
+    ),
 ]
 
 
