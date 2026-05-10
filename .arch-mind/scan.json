@@ -1,12 +1,23 @@
 {
-  "_fixture": "/home/n/mind-mem/.arch-mind/last_summary.json",
-  "acyclicity_q16": 655360000,
-  "depth_q16": 458752000,
-  "equality_q16": 318664324,
-  "evidence_chain_density": 4895553,
-  "governance_kernel_coverage": 4834622,
-  "mcp_tool_isolation": 642252800,
-  "modularity_q16": 655360000,
-  "q16_determinism_purity": 423253333,
-  "redundancy_q16": 646709248
+  "_aggregated_for_phase_a": {
+    "cyclic_edges": 0,
+    "intra_package_edges": 58,
+    "longest_path": 4,
+    "max_mcp_tool_overlap": 2,
+    "module_count": 221,
+    "pure_modules": 139,
+    "redundancy_excess": 156,
+    "sum_abs_symbol_diffs": 266820,
+    "sum_decision_points": 10511,
+    "sum_evidence_calls": 76,
+    "sum_protected_decls": 0,
+    "sum_symbols": 1247,
+    "total_edges": 58,
+    "total_mcp_tools": 35
+  },
+  "_comment": "Produced by `arch-mind sidecar-scan` from canonical-AST JSON. v0.0.4 / Phase D.",
+  "_languages": "python",
+  "_repo_root": "/home/n/mind-mem",
+  "edges": [],
+  "nodes": []
 }

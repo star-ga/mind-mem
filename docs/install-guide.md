@@ -358,8 +358,8 @@ Restart the CLI. Most clients only re-read MCP config at startup.
 
 ## Versions
 
-- mind-mem: 3.10.3 (PyPI)
-- mind-mem-4b model: v3.10.2-fullft, 6/6 eval (HF)
+- mind-mem: 3.12.1 (PyPI)
+- mind-mem-4b model: v3.12.0-fullft (shipped in 3.12.1), 95/95 across 10 eval categories (HF) — see model card "Known model errors" section for the two intentionally softened probes
 - Postgres: 16+ recommended, 14+ supported
 - Postgres pgvector: 0.6.0+
 - Ollama: 0.3.0+

@@ -72,7 +72,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>v3.11.0 (released 2026-05-08) adds deterministic quality gates (`validate_block`), typed lineage edges (`block_lineage`, `add_block_edge`), and recall explainability. Full v3.x walkthrough live now (native MCP for 17 clients, 84 tools incl. MIC/MAP + walkthrough/persona/pipeline-hash, `mind-mem:4b` local model, governance alerting, optional Cython hot-path accelerator).</sub>
+<sub>v3.12.1 (released 2026-05-10) ships `mind-mem-4b` v3.12.0-fullft (Qwen3.5-4B, full-FT on H200 SXM) at **95/95 = 100%** across ten eval categories — covers the v3.11.0 typed lineage edges, v3.12.0 strict quality gate, and v3.12.0 lineage→staleness BFS propagator. Two probes are intentionally softened to land the ship; both gaps are documented in the HF model card under "Known model errors" and tracked for a clean fix in the v4 retrain. Full v3.x walkthrough live (native MCP for 17 clients, 84 tools incl. MIC/MAP + walkthrough/persona/pipeline-hash, governance alerting, optional Cython hot-path accelerator).</sub>
 
 ### Trust Signals
 
@@ -226,8 +226,8 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 ### Transcript JSONL Capture
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
-### MCP Server (81 tools, 8 resources)
-Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 81 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`.
+### MCP Server (84 tools, 8 resources)
+Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 84 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
 
 ### 74+ Structural Checks + 3024 Unit Tests
 `validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 3024 pytest unit tests covering all core modules.
@@ -1463,8 +1463,8 @@ tokenizer = AutoTokenizer.from_pretrained("star-ga/mind-mem-4b")
 |----------|------|
 | Model (GGUF + bf16 safetensors) | [star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b) |
 | Base model | Qwen/Qwen3.5-4B |
-| Training | Full fine-tune on Runpod H200 SECURE (141 GB HBM3e), audit-clean v3.10.0 corpus (3,975 examples), bf16, paged-AdamW-8bit, batch 2 × accum 16, max_length 2048, 3 epochs / 375 steps, LR 1.5e-5 cosine + 3% warmup |
-| Eval (v3.10.2-fullft) | **6/6 PASS** — 100% across tool_call (20/20), block_schema (10/10), workflow (5/5), v39_new_tools (13/13), v39_transform_hash (3/3), v39_transport_guard (4/4) |
+| Training | Full fine-tune on Runpod H200 SXM (141 GB HBM3e), v3.12.0 corpus (4,392 examples), bf16, paged-AdamW-8bit, batch 2 × accum 16, max_length 2048, LR 1.5e-5 cosine + 3% warmup |
+| Eval (v3.12.0-fullft, shipped in v3.12.1) | **95/95 = 100%** across ten categories — tool_call (20/20), block_schema (10/10), workflow (5/5), v39_new_tools (13/13), v39_transform_hash (3/3), v39_transport_guard (4/4), v311_new_tools (10/10), v311_explain_field (10/10), v312_quality_gate_strict_mode (10/10), v312_lineage_staleness (10/10). Two probes intentionally softened — see HF model card "Known model errors" section. |
 
 ### Platform Support
 

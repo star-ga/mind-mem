@@ -6,7 +6,7 @@ Before every response, run `mm context "$QUERY"` and prepend the output.
 <claude-mem-context>
 # Memory Context
 
-# [mind-mem] recent context, 2026-05-08 6:52pm PDT
+# [mind-mem] recent context, 2026-05-09 2:53am PDT
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
