@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 763 | **Est. tokens:** ~1,544,873
-**Generated:** 2026-05-10 00:24 UTC
+**Files:** 767 | **Est. tokens:** ~1,549,751
+**Generated:** 2026-05-10 07:14 UTC
 
 ## Token Budget Guide
 
@@ -31,7 +31,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 70 | ~115,509 |
+| `docs/` | 71 | ~118,333 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -64,12 +64,13 @@
 | `src/mind_mem/mcp/tools/` | 24 | ~51,536 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
+| `src/mind_mem/v4/` | 2 | ~2,038 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 259 | ~522,198 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~822 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 14 | ~25,346 |
+| `train/` | 15 | ~25,362 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -228,7 +229,8 @@
 - `review-database-v3.2.0.md` (~3171 tok, huge) — Database Review — PostgresBlockStore v3.2.0
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — MIND-Mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
-- `roadmap.md` (~13059 tok, huge) — Roadmap
+- `roadmap.md` (~13114 tok, huge) — Roadmap
+- `roadmap-v4.md` (~2769 tok, huge) — mind-mem v4.0 — Design Rationale
 - `scoring.md` (~517 tok, large) — Scoring System
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2257 tok, huge) — MIND-Mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
 - `security-audit-sow.md` (~3336 tok, huge) — MIND-Mem — External Security Audit Statement of Work (SoW)
@@ -630,6 +632,12 @@
 - `turbo_quant.py` (~1078 tok, large) — # Copyright 2026 STARGA, Inc.
 - `uncertainty_propagation.py` (~1262 tok, large) — # Copyright 2026 STARGA, Inc.
 - `union_recall.py` (~1310 tok, large) — Union-style retrieval for decomposed queries (v3.4.0).
+### `src/mind_mem/v4/`
+
+- `feature_flags.py` (~1307 tok, large) — v4.0 feature-flag registry.
+- `__init__.py` (~731 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
+### `src/mind_mem/`
+
 - `validate_py.py` (~4899 tok, huge) — Mind Mem Integrity Validator — canonical engine.
 - `validate.sh` (~352 tok, medium) — src/mind_mem/validate.sh — thin forwarder to the Python validator.
 - `validate.sh.pre-forwarder` (~7140 tok, huge) — #!/usr/bin/env bash
@@ -935,7 +943,8 @@
 - `backport_sweep.py` (~1658 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
 - `build_model_card.py` (~2956 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
 - `CORPUS_HASH_v3.11.0` (~21 tok, tiny) — 02b3ba6a1433e25bdbefe3cebf992ca961734850d1e3550e9496905abbadb3b7  build_corpus.p
-- `eval_harness.py` (~6645 tok, huge) — Eval harness for mind-mem-4b.
+- `CORPUS_HASH_v3.12.0-fullft` (~21 tok, tiny) — 568d1559631a590e44eeec6716081b4534a40ab5f3047feb622cc225ead9ad01  build_corpus.p
+- `eval_harness.py` (~6640 tok, huge) — Eval harness for mind-mem-4b.
 - `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
 - `Modelfile.v3.9.0` (~389 tok, medium) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
 - `post_train_pipeline.sh` (~582 tok, large) — Post-training pipeline for mind-mem-4b v3.9.2 (augmented-corpus retrain).

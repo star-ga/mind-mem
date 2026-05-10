@@ -1510,33 +1510,179 @@ config + ~700 lines lineage propagation + ~150 lines CI = ~1850
 lines. All additive. Existing 81-tool API stays unchanged; new
 behavior is config-gated everywhere.
 
-## v4.0.0 — Platform Scale (production)
+## v4.0.0 — Network-native memory + knowledge graph + compliance primitives
 
-Horizontal scaling, multi-tenant isolation, and edge deployment. This version turns MIND-Mem from a library into a platform. The multi-tenancy thread is also tracked as issue [#505].
+The v4.0 picture turns mind-mem from a single-host library into a
+network-native substrate for AI agents to share governed memory over the
+public internet. Three concurrent threads:
 
-### Cognition / model layer (Rhia track — Titans-inspired)
+- **Cognition** — three-tier memory with surprise-weighted retrieval and a
+  Cognitive Mind Kernel API that exposes routing strategies as a
+  first-class parameter.
+- **Knowledge graph** — multi-page entity/concept blocks with typed
+  lineage edges, LLM-driven structured fusion on update, long-context
+  retrieval that preserves relational understanding alongside the
+  existing chunked top-K mode, and a conversational chat layer.
+- **Network connectivity** — TLS by default, mTLS for service-to-service,
+  OAuth2/OIDC client identity, per-tenant rate limits and audit logs,
+  workspace-level ACLs, federation between instances, multi-language
+  client SDKs, single-binary deployment.
 
-Three-tier memory + surprise-driven retrieval, lifted (not cloned) from Behrouz et al. "Titans: Learning to Memorize at Test Time" (Google Research). Foundation-model architecture is NOT copied — mind-mem stays a retrieval substrate. Borrows: tier separation, surprise as a ranking signal, test-time-update governance pattern (which propose_update → approve_apply already implements).
+Plus an opt-in compliance-sensitive layer (redaction, vocabularies,
+provenance, evidence, tenant KMS, signed export) that ships as separate
+optional packages so general-purpose users pay nothing for it. The
+multi-tenancy thread is also tracked as issue [#505].
+
+> **Companion design doc:** [`docs/roadmap-v4.md`](docs/roadmap-v4.md)
+> holds the deeper architectural rationale. The task list below is
+> canonical; the design doc explains the *why*.
+
+### A. Cognition / model layer
+
+Three-tier memory architecture with surprise as a ranking signal and
+the test-time-update governance pattern (which `propose_update →
+approve_apply` already implements). Mind-mem stays a retrieval
+substrate; cognition lives at the kernel API, not in the model itself.
 
 - [ ] **Surprise-weighted retrieval** — augment the BM25+vector+RRF fusion with a `surprise` term derived from semantic distance to the rolling recall context (NOT gradient-based; mind-mem doesn't train at recall time). Backwards-compatible behind `retrieval.surprise_weight` config flag. Estimated 1–2 weeks; default OFF in v4.0, opt-in.
-- [ ] **Block-tier tags** — add `tier ∈ {short, long, persistent}` to block schema (default `long` for backwards compat). Recall uses tier as a prior: "what's relevant right now" (short) vs "what we always know" (persistent). Backwards-compatible schema add (T-007).
-- [ ] **`mind-mem-4b` v4.0 retrain on Titans-aware corpus** — new corpus probes covering tier semantics, surprise term, MAC/MAG/MAL framing so the local model knows when to invoke the new tools. Same retrain pipeline as v3.12; ~$5–10 + 8–12hr H200.
+- [ ] **Block-tier tags** — add `tier ∈ {short, long, persistent}` (also expressible as hot/warm/cold) to block schema. Default `long` for backwards compat. Recall uses tier as a prior: "what's relevant right now" (short/hot) vs "what we always know" (persistent/cold). Backwards-compatible schema add (T-007). Per-tier decay schedules: hot=LRU+TTL, warm=TTL+surprise re-promotion, cold=indefinite + contradiction-density.
+- [ ] **Cognitive Mind Kernel** — top-level retrieval API: `mind_recall(workspace, query, kernel="surprise_weighted" | "lineage_first" | "recent_first" | "contradicts_first" | "graph_walk")`. Memory routing becomes first-class. Composable strategy parameter on top of existing `recall`.
+- [ ] **Multi-modal blocks** — add `kind ∈ {image, audio, code, structured}` storing embeddings only (raw bytes via external content-addressable store). Cross-lingual embedding space for text. Required for any agent that observes more than text in 2026.
+- [ ] **Graph-aware retrieval** — query expansion via lineage walk, community-detection-weighted recall, multi-hop reasoning over the typed-edge graph. Builds directly on existing `block_lineage`. Closes the gap between hybrid retrieval and the typed graph that already exists.
+- [ ] **`mind-mem-4b` v4.0 retrain on tier-aware corpus** — new corpus probes covering tier semantics, surprise term, plus all v4 surfaces below (block kinds, fusion, viewer, lint, chat, transport, compliance). Estimated +140 probes → ~5500-6000 corpus examples. ~$8 + 120 min H200.
 - [ ] **`mind-mem-4b` base-model evaluation** — when an alternative base model with stronger alignment to MIND-Mem's deterministic / governance contract becomes available, evaluate it side-by-side against the current Qwen3.5-4B fine-tune. Decision criterion: matched eval-harness pass rates ≥ Qwen baseline + tier semantics learned ≥ 90%. Pure plan-stage today; no code change without a side-by-side eval.
 
-### Platform scale
+### B. Knowledge graph
 
-- [ ] **Sharded Postgres (Citus)** — `src/mind_mem/storage/sharded_pg.py`; shard by `namespace_id` with consistent hashing; cross-shard recall merging
-- [ ] **Replication + consensus for governance** — Raft log wrapper around `audit_chain.py`; strong consistency for governance writes, eventual consistency for recall reads
-- [ ] **Kubernetes operator** — `operator/` with CRDs for `MindMem`, `Namespace`, `TenantKey`; Helm chart in `deploy/helm/mind-mem/`
-- [ ] **Tenant KMS + row-level encryption** — `src/mind_mem/tenant_crypto.py`; per-tenant data keys, envelope encryption, rotation; extends the v3.0.0 `EncryptedBlockStore`
-- [ ] **Per-tenant audit chains** — fork `audit_chain.py` so each tenant has an isolated hash chain with its own genesis + spec-hash binding; enables per-customer compliance exports without cross-tenant leakage
-- [ ] **Byzantine-safe consensus (opt-in)** — `src/mind_mem/bft.py`; PBFT for high-trust deployments where quorum votes may be adversarial
-- [ ] **Edge deployment mode** — `mind-mem-edge` binary (PyOxidizer); embedded mode for on-device agents; hybrid sync to a central MIND-Mem cluster
-- [ ] **Managed-service console** — `web/console/`; multi-tenant dashboard, cost metering, usage graphs, per-tenant audit chain viewer
-- [ ] **gRPC wire protocol** — `src/mind_mem/api/grpc_server.py`; low-latency alternative to REST for service-to-service calls
-- [ ] **Kafka/NATS event fan-out** — governance events (`contradiction_detected`, `block_promoted`, `snapshot_created`) published as streams; external systems subscribe without polling
+Compounding-knowledge model: LLM reads sources, extracts entities and
+concepts as separate blocks with bidirectional typed lineage edges,
+performs structured incremental merge on update. Long-context retrieval
+(union of full pages) is offered alongside the existing chunked top-K
+mode; caller chooses speed vs. coherence per call. Builds on the typed
+edge graph (`cites` / `implements` / `refines` / `contradicts` /
+`cooccurrence`) already shipped in v3.11.0.
 
-**Estimated:** ~3000 lines storage + ~2000 lines consensus + ~1500 lines operator + ~2500 lines console. Breaking change: `v4` requires explicit storage adapter selection (no implicit SQLite default in cluster deployments).
+- [ ] **Block kinds** — add `kind ∈ {entity, concept, source, synthesis, image, audio, code, structured}` to block schema. Foundation for everything else in this group. Backwards-compat: existing blocks default to `kind=null` (untyped); v4 reads both old `category` field and new `kind` for one minor version, then deprecates.
+- [ ] **Block versioning + time-travel** — every change is already in the audit chain; expose as `recall(..., as_of=date)` and `block_history(block_id)`. Lets callers query the workspace as of any historical point.
+- [ ] **Content-addressable block IDs** — every block gets a stable content hash (CID-style) in addition to its rolling audit hash. Enables deduplication across workspaces, integrity verification on replication, and federated mesh foundation.
+- [ ] **Long-context recall mode** — `recall(workspace, query, mode="long_context")` returns the union of full entity/concept pages whose summaries match (vs. chunked top-K). Caller (or LLM) reasons over whole graph. Higher token cost, deeper relational understanding. Default mode stays `chunked` for backwards compat.
+- [ ] **LLM-driven knowledge fusion** — new tool `propose_fuse(workspace, source_block_id)`. LLM reads new source, extracts entity/concept candidates, hybrid-searches existing matches, generates structured incremental merge proposals (additions / updates / removals / contradictions). Reuses existing propose_update + approve_apply queue; adds LLM intelligence on top.
+- [ ] **Streaming recall** — `recall(...)` becomes a streaming generator. Caller short-circuits on first good match. Cuts p99 latency for typical queries.
+- [ ] **Conversational chat layer** — `chat_with_memory(workspace, question)`: long_context recall → LLM context → stream reply with `[[block_id]]` citations → optional `--save` writes synthesis as `kind=synthesis` block.
+- [ ] **Schema layer for LLM prompts** — `mind-mem.json` gains a `prompts.schema` block injected into every LLM-driven tool (extraction, fusion, query) for consistent output.
+- [ ] **Schema evolution / migration tooling** — `mm migrate` auto-detects schema mismatches when v4 fields are added (`kind`, `tier`, `provenance`) and runs reversible transforms under a dry-run flag first.
+
+### C. Knowledge graph governance / UX
+
+- [ ] **Idle-only background ingest** — `mm-mem-watch` daemon (opt-in via `mind-mem.json: { "watch": { "enabled": true } }`). Polls `inbox/` folder at low priority, `nice +19` + cgroup `cpu.max` capped at 50% of one core. Embedding work runs on local GPU only when GPU util < 10% for 30s. Hard memory cap (default 2GB). Pre-flight cost gate refuses ingest > N MB without explicit confirm. Process is supervised but exits cleanly on config flip. Never installs itself; never reinstalls itself.
+- [ ] **AI lint with auto-fix** — extend `scan` to emit findings: dead lineage edges, empty blocks, orphans, contradiction without state. New tool `lint_autofix(workspace, finding_id)` queues a `propose_update` to fix one finding. Always review-gated.
+- [ ] **Contradiction state machine** — `detected → review_ok → resolved` (AI fix) or `detected → pending_fix` (manual). Today contradictions are flagged but stateless; v4 tracks per-contradiction lifecycle.
+- [ ] **Self-healing index** — background reindex (during idle windows) detects corruption and rebuilds from audit log. Watchdog catches stalled writes. `mm doctor` triggers explicit full integrity check + repair report.
+- [ ] **Local visual viewer** — `mm view` launches read-only web UI on `127.0.0.1:NNNN`: block graph (force-directed) with kind-colored nodes, typed lineage edges, contradiction inbox with state machine, proposal queue, recall search box. Token-gated mutations (default off). Stack: stdlib HTTP server (no Node dep) + minimal JS / D3. Local-only, no remote bind.
+- [ ] **Auto-generated hierarchical index** — `index.md` and `log.md` rebuilt automatically by tag/kind/timestamp.
+- [ ] **Real-time contradiction stream** — webhook (or stdio event stream) when a new block contradicts an existing block at threshold ≥ 0.97 + opposing-claim signature. Today contradictions are batch-detected via `scan`; v4 makes them live for governance-critical deployments.
+- [ ] **Adversarial / poisoning defense** — per-actor anomaly detection (writes that diverge from actor's prior), contradiction-density spike alerts, canary blocks (synthetic facts that recall MUST surface; absence indicates index tamper), Sigstore-signed block manifests for tamper-evident replication.
+- [ ] **Approval workflows for sensitive proposals** — generalize `propose_update → approve_apply` from single-step to multi-reviewer chains via an OPA/Rego-style policy engine. Ships as opt-in dep so the core stays stdlib.
+- [ ] **Memory reputation / trust scores** — per-actor reliability scoring computed from existing audit chain + contradiction events. Surfaces in recall as a confidence signal.
+
+### D. Network & multi-agent connectivity
+
+The primary frame: agents on different machines, owned by different
+parties, share governed memory through mind-mem. Single-host scale
+(sharded Postgres / K8s) is a sub-bucket for heavy deployments; the
+default story is two laptops talking to each other.
+
+- [ ] **TLS 1.3 minimum on all transports** — REST, gRPC, MCP-over-HTTP. Reject older protocols. Cert pinning option.
+- [ ] **mTLS for service-to-service** — mutual auth between mind-mem nodes; per-tenant client cert validation.
+- [ ] **OAuth2 / OIDC client identity** — pluggable identity provider integration (any IdP that speaks OIDC).
+- [ ] **DID + Verifiable Credential agent identity** — W3C standards. Agent identity is portable across instances; "agent X is allowed to read workspace Y" is a signed VC.
+- [ ] **Workspace ACLs (block-level grants)** — per-block read/write/audit permissions backed by a signed grant chain. Workspace-level remains the default; block-level is the override for fine-grained sharing.
+- [ ] **Public / private workspaces** — `workspace.mode = public | private | mixed`. Public workspaces surface a discoverable read-only view; mixed allows per-block visibility.
+- [ ] **Cross-instance federation protocol** — signed-chain handshake; two mind-mem instances negotiate workspace sync. Three-way merge with proposals when divergent.
+- [ ] **End-to-end encryption for sensitive workspaces** — content encrypted at the writer; only authorized readers decrypt; substrate stores ciphertext + index over hashes.
+- [ ] **Discovery / WebFinger** — well-known endpoint advertises capabilities, supported workspaces, public keys. Standard mechanism for finding mind-mem instances.
+- [ ] **ActivityPub federation interop** — optional bridge dep. Workspaces expose as ActivityPub actors; other federation servers can subscribe to public-block streams.
+- [ ] **Subscriptions / webhooks** — `subscribe(workspace, filter, callback_url)` POSTs JSON when matching block lands. Push notifications for reactive agent workflows.
+- [ ] **Per-tenant rate limiting + circuit breakers** — quota buckets per tenant; one tenant cannot starve others.
+- [ ] **Audit headers propagated through transport** — `X-MindMem-Request-Id`, `X-MindMem-Actor`, `X-MindMem-Purpose` carried over REST/gRPC; required when `provenance: required` (Group E).
+- [ ] **Per-tenant routing** — `tenant_id` routes to its own KMS key + audit chain + rate limit bucket.
+- [ ] **gRPC + REST parity on auth/audit** — internal services use gRPC (low-latency); external clients REST; same auth/audit contract on both.
+- [ ] **Single-binary distribution** — `pip install mind-mem; mm serve` brings up an authenticated public endpoint. Solo-dev path doesn't require K8s.
+- [ ] **Sharded Postgres (Citus)** — `src/mind_mem/storage/sharded_pg.py`; shard by `namespace_id` with consistent hashing; cross-shard recall merging. Heavy-deployment path.
+- [ ] **Replication + consensus for governance** — Raft log wrapper around `audit_chain.py`; strong consistency for governance writes, eventual consistency for recall reads.
+- [ ] **Kubernetes operator** — `operator/` with CRDs for `MindMem`, `Namespace`, `TenantKey`; Helm chart in `deploy/helm/mind-mem/`.
+- [ ] **Byzantine-safe consensus (opt-in)** — `src/mind_mem/bft.py`; PBFT for high-trust deployments where quorum votes may be adversarial.
+- [ ] **Edge deployment mode** — `mind-mem-edge` binary (PyOxidizer); embedded mode for on-device agents; hybrid sync to a central cluster.
+- [ ] **Managed-service console** — `web/console/`; multi-tenant dashboard, cost metering, usage graphs, per-tenant audit chain viewer.
+- [ ] **Kafka / NATS event fan-out** — governance events (`contradiction_detected`, `block_promoted`, `snapshot_created`) published as streams; external systems subscribe without polling.
+- [ ] **Rust hot path for hybrid search** — port BM25 + RRF fusion to Rust (PyO3 binding). Optional dep — falls back to pure Python if not built.
+- [ ] **Pluggable embedding backend with fallback** — explicit fallback chain (try local Ollama → API fallback on local failure). Health-aware — skips a backend that returned errors in the last N minutes.
+
+### E. Compliance-sensitive opt-in extensions
+
+These primitives generalize concerns common to many regulated
+deployments. mind-mem stays general-purpose; the features ship as
+opt-in capabilities. Anything domain-specific (controlled vocabularies,
+redaction packs, export policies) ships as separate optional packages
+so users who don't need them pay nothing in dependencies, install size,
+or attack surface.
+
+- [ ] **Pluggable redaction layer** — pre-write hook scans incoming block text against a configurable detector chain (regex / model-based / hybrid) and either rejects, masks, or tags. Default detectors: secrets, email, phone, credit-cards, dates-near-PII. Domain detector packs ship as separate optional packages. Redaction events go to the audit chain.
+- [ ] **Time-bounded and event-bounded recall** — extend `recall(...)` with `since` / `until` / `event_id` filters. Audit chain + `block_staleness` already have the timestamp data.
+- [ ] **Vocabulary-bound fields** — per-workspace controlled vocabularies (`mind-mem.json: { "vocabularies": [...] }`) attach to specific block kinds. Unknown values trigger an `invalid_vocabulary` rule in `validate_block`. Generalizes the existing rule-based quality gate.
+- [ ] **Provenance-rich blocks** — optional fields on every block: `actor_id`, `actor_role`, `session_id`, `tool_id`, `purpose`. Gated by `mind-mem.json: { "provenance": "off"|"recommended"|"required" }`. Indexable for "who-wrote-what" queries.
+- [ ] **Confidence / Evidence as first-class** — promote `confidence: low/medium/high` to a structured `Evidence` block on every claim: `{ claim, source_id, confidence_score (0-1), source_kind: "primary"|"derived"|"hearsay", attestation_date }`. Recall surfaces full evidence chains. Builds directly on the v3.11 lineage edge model.
+- [ ] **Tenant KMS + row-level encryption** — `src/mind_mem/tenant_crypto.py`; per-tenant data keys, envelope encryption, rotation; extends the v3.0.0 `EncryptedBlockStore`. Workspace-level cryptographic isolation: no plaintext crosses tenant boundaries even on the same host.
+- [ ] **Per-tenant audit chains** — fork `audit_chain.py` so each tenant has an isolated hash chain with its own genesis + spec-hash binding.
+- [ ] **Compliance export pipeline** — `mm export --policy <policy_name> --since <date>` produces a deterministic, signed bundle (zip + manifest) suitable for regulated audit submission. Policy plug-ins ship per-domain. Export uses Q16.16 audit chain so the bundle is verifiable end-to-end.
+- [ ] **Contraindication / mutex edges** — extend `block_lineage` edge kinds with `contraindicates` (should not co-occur) and `supersedes` (this replaces that), distinct from existing `contradicts` (claims oppose each other). Pure addition to typed-edge graph.
+- [ ] **C2PA content provenance** — when chat layer produces synthesis blocks, attach C2PA-signed provenance manifest (model used, inputs, signed by instance key). Important for AI-generated content traceability.
+
+### G. Observability, reliability, ecosystem
+
+- [ ] **OpenTelemetry tracing + metrics + logs** — adopt OTel SDK with `mind_mem` semantic conventions for spans (`mind_mem.recall`, `mind_mem.propose`, `mind_mem.fuse`, etc.). Prometheus metrics export at `/metrics`.
+- [ ] **Health / liveness / readiness probes** — standard endpoints for K8s integration.
+- [ ] **Continuous backup + point-in-time recovery** — incremental backup to S3 / Backblaze / R2 / local NFS; PITR to any audit-chain index.
+- [ ] **JavaScript / TypeScript SDK** — `@star-ga/mind-mem-client` npm package generated from OpenAPI spec. WebAssembly-compatible so browser agents can talk directly.
+- [ ] **Browser-native WebAssembly bundle** — read-only client in WASM with crypto verification. Browser agents query mind-mem without a Node middleware.
+- [ ] **Go / Rust / Java / Ruby SDK stubs** — generated from OpenAPI + AsyncAPI specs.
+- [ ] **OpenAPI + AsyncAPI specs** — single source of truth; auto-generate clients and docs.
+- [ ] **Migration importers from competing systems** — `mm import --from {pinecone | weaviate | chroma | qdrant | letta | mem0}`. Adoption blocker if missing.
+- [ ] **Cost metering / quota / spending alerts** — per-workspace usage counters (tokens read, embeddings computed, storage bytes, API calls) emitted to OTel + exposed via `mm usage`.
+- [ ] **SLSA build provenance level 3** — already partially via Sigstore release signing; add provenance attestations + isolated builders.
+- [ ] **Plugin SDK** — stable plug-in API for custom rules, custom block kinds, custom decay schedules, custom redaction detectors.
+- [ ] **Performance regression alerting** — every PR runs latency benchmarks; auto-flag if p99 increases >10%.
+- [ ] **Chaos testing harness** — automated fault injection for federated / replicated deployments.
+
+### F. Anti-patterns explicitly forbidden
+
+Patterns observed in third-party memory systems that have crushed user
+machines or violated user trust. v4.0 must NOT inherit any of them:
+
+- ❌ Always-on background daemon (watcher must be opt-in, idle-only, resource-capped, exits cleanly on config flip).
+- ❌ Auto-marketplace reinstall (no mechanism to reinstall after the user removes us — removal is permanent).
+- ❌ Multi-process worker fan-out without caps (single supervised process; embedding queue is bounded).
+- ❌ Inline embedding during user-facing tool calls (embedding work runs on dedicated worker; tool call returns immediately with streaming results).
+- ❌ Background polling that wakes on schedule (only inotify on `inbox/` or user-triggered).
+- ❌ Bulk re-ingest of historical transcripts without explicit confirm (every ingest gated by pre-flight cost check).
+- ❌ Implicit paid-API calls (local-first by default; explicit opt-in for API embedding/extraction backends with budget cap).
+- ❌ Trust raw input from unauthenticated public sources (signed provenance required for federated sync).
+- ❌ Embed raw bytes from unauthenticated sources (multi-modal blocks store hashes + verified-source URLs only).
+- ❌ Telemetry leakage (no usage data leaves the host without explicit opt-in).
+
+### H. Research direction (post-v4.0, on the trajectory)
+
+Out of scope for v4.0 ship; documented so the path is visible.
+
+- Homomorphic / partial-FHE search (CKKS over encrypted vectors).
+- Zero-knowledge memory proofs ("prove block exists without revealing content").
+- Secure enclave deployment (Intel TDX / AMD SEV / Apple Secure Enclave).
+- Federated learning across instances with differential privacy.
+- Streaming ingestion at high write rates (millions of events/sec, fire-and-forget with eventual consistency).
+
+**Estimated:** ~3000 lines storage + ~2000 lines consensus + ~1500 lines operator + ~2500 lines console + ~1500 lines knowledge-graph (kinds + fusion + chat) + ~1000 lines viewer + ~800 lines lint/contradictions + ~1200 lines compliance plug-ins + ~2000 lines network/transport + ~1500 lines SDKs + ~800 lines observability. Breaking change: `v4` requires explicit storage adapter selection (no implicit SQLite default in cluster deployments).
+
+**Suggested sequencing:** A.block-kinds → C.idle-ingest → B.long-context-recall → B.fusion → B.streaming → A.tier-memory → A.graph-aware-retrieval → C.viewer → C.lint → C.self-heal → C.adversarial-defense → B.chat → D.transport-security (TLS, mTLS, OAuth, ACLs, federation) → D.SDK-ecosystem → G.observability → E.{redaction, time-bound, provenance, evidence} (the four core compliance primitives) → D.platform-scale (sharded Postgres, K8s, gRPC) → E.compliance plug-ins → A.cognition retrain (depends on most of A/B/C/D/E being stable).
 
 ---
 

@@ -3,6 +3,11 @@
 > This is the short-form roadmap. The canonical, detailed version lives
 > in [`../ROADMAP.md`](../ROADMAP.md) at the repo root and includes the
 > full milestone breakdown.
+>
+> Forward-looking v4.0 design (network-native connectivity, knowledge
+> graph, three-tier memory, idle-only auto-ingest, visual viewer, chat
+> layer, compliance primitives) is in
+> [`./roadmap-v4.md`](./roadmap-v4.md).
 
 ## v3.11.1 (Current — released 2026-05-08)
 
@@ -120,6 +125,38 @@ baseline pass-rate data.
 - [ ] Cost cap via `--limit 5` per seed, sonnet judge — total
       ~$10-15/run
 - [ ] Update `docs/red-team-audit.md` with the new CI job pointer
+
+### Theme E — `ingest_file` MCP tool (binary-format adapter)
+
+Today `propose_update` only accepts text. Anything in PDF, DOCX, PPTX,
+XLSX, HTML, EPUB, or `.msg` has to be pre-converted by the caller —
+which, in practice, means it never gets stored. Theme E adds one MCP
+tool that takes a path or URI, runs an external converter to Markdown,
+and forwards the result through the existing `propose_update` /
+`validate_block` / governance pipeline. The converter is **sibling, not
+bundled**: zero-dep promise stays intact, optional extra `mind-mem[ingest]`
+pulls in `markitdown[all]` (MIT, Microsoft) for the default adapter, and
+the adapter interface accepts any callable that returns Markdown so users
+can swap in their own.
+
+- [ ] `mind_mem.ingest.adapters` module — `Adapter` protocol with
+      `convert(path: Path) -> str`; ships `MarkitdownAdapter` as default
+- [ ] `ingest_file(path, kind="auto", adapter=None)` MCP tool — converts
+      the file, runs the result through `validate_block` (Theme B), then
+      `propose_update` with `source_path` + `source_sha256` recorded in
+      block metadata
+- [ ] CLI: `mm ingest <path> [--adapter markitdown|<callable>]`
+- [ ] Optional extra in `pyproject.toml`: `mind-mem[ingest]` pulls
+      `markitdown[all]` (lazy import — missing extra raises a clear
+      "install mind-mem[ingest]" error, not ImportError at module load)
+- [ ] 12 unit tests (one per supported format on small fixtures: pdf,
+      docx, pptx, xlsx, csv, html, json, xml, epub, png-OCR, msg, zip)
+- [ ] Operator guide: `docs/ingest-adapters.md`
+
+The MCP-server variant (run `markitdown-mcp` as a sibling MCP server and
+fan out `convert_to_markdown` calls federation-wide) is deferred to **v4.0
+phase 2** — it composes naturally with `recall_federated` once peer
+transport ships.
 
 ### Out of scope for v3.12.0
 
@@ -953,6 +990,12 @@ federation tools live in `*/advanced`:
 - `recall_federated(query, peers, timeout_ms)` — fan-out recall with RRF
   merge
 - `chain_verify_federation()` — validate cross-peer audit-chain join points
+- `ingest_file_federated(path, peers, adapter)` — fan out the Theme-E
+  `ingest_file` adapter across peers so a single PDF/DOCX/PPTX upload
+  lands in every workspace simultaneously, each peer validates + governs
+  locally; converter (default: `markitdown-mcp` sibling MCP server) runs
+  on each peer, not centrally, so per-peer adapter choice and per-peer
+  governance gates are honored
 
 CLI mirrors: `mm peer list/add/remove`, `mm replicate`, `mm recall
 --federation`, `mm chain verify --federation`. New module `peer_sync.py` (new
