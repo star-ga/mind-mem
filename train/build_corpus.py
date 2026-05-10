@@ -137,12 +137,17 @@ def _emit_tool_variants(
             {"role": "assistant", "content": f"Call `{tool_name}`. Signature: `{tool_name}({args})`."},
         ]
     }
-    # Variant 3 — short direct form.
+    # Variant 3 — direct-name form.  v3.12.1 retrain v5: was just "`X`."
+    # Now requires signature + first docstring line so the model learns to
+    # emit the canonical parameters (advisory, max_depth, etc).
     yield {
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"Name the mind-mem tool for: {hint}."},
-            {"role": "assistant", "content": f"`{tool_name}`."},
+            {"role": "assistant", "content": (
+                f"`{tool_name}` — full signature `{tool_name}({args})`.  "
+                f"{doc.strip().splitlines()[0] if doc.strip() else ''}"
+            )},
         ]
     }
     # Variant 4 — signature question.
@@ -161,13 +166,19 @@ def _emit_tool_variants(
             {"role": "assistant", "content": (f"`{tool_name}` returns a JSON envelope. From the docstring:\n\n{doc.strip()}")},
         ]
     }
-    # Variant 6 — how phrased differently.
+    # Variant 6 — how phrased differently.  v3.12.1 retrain v5: terse template
+    # "Use the `X` MCP tool." was learned and emitted on EVAL prompts that
+    # required additional tokens (advisory, max_depth, etc).  Long-form to
+    # break the terseness bias.
     for alt in _paraphrase_usage(hint):
         yield {
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": alt},
-                {"role": "assistant", "content": f"Use the `{tool_name}` MCP tool."},
+                {"role": "assistant", "content": (
+                    f"Use `{tool_name}` — call as `{tool_name}({args})`.  "
+                    f"From the docstring: {doc.strip().splitlines()[0] if doc.strip() else 'see signature.'}"
+                )},
             ]
         }
 
@@ -3882,6 +3893,58 @@ _V312_DENSITY_FIX_PROBES: list[tuple[str, str]] = [
     (
         "Tabulate the KIND_DECAY constants for v3.12 lineage staleness.",
         "| kind | KIND_DECAY |\n|---|---|\n| `contradicts` | 1.0 |\n| `cites` | 0.8 |\n| `implements` | 0.6 |\n| `cooccurrence` | 0.5 |\n| `refines` | **0.4** |\n\nThe `refines` value is `0.4` — defined in `src/mind_mem/block_lineage.py`.",
+    ),
+    # ----- v5 type-B fixes: envelope hallucination + refines enumeration -----
+    # Previous retrains: model emitted `validation_error` envelope (real:
+    # `quality_gate_rejection`) and dropped `refines` from the kind list.
+    # These probes hammer the canonical answer in multiple phrasings.
+
+    # Envelope canonical reinforcement (10× on the SAME prompt)
+    (
+        "What is the shape of the rejection envelope when strict mode fires?",
+        "`{\"error\": \"quality_gate_rejection\", \"mode\": \"strict\", \"reasons\": [\"<rule>: <message>\", ...], \"advisory\": [...], \"hint\": \"...\"}`.  The error key is exactly `quality_gate_rejection` (NOT `validation_error`, NOT `BlockValidationError`).  `propose_update` returns this as a JSON string; no exception is raised.",
+    ),
+    (
+        "Strict-mode rejection envelope shape — what's the exact JSON?",
+        "`{\"error\": \"quality_gate_rejection\", \"mode\": \"strict\", \"reasons\": [...], \"advisory\": [...], \"hint\": \"...\"}`.  Five keys.  The error literal is `quality_gate_rejection` — that exact string, not a variant.",
+    ),
+    (
+        "When propose_update rejects in strict mode, what's the JSON envelope?",
+        "JSON envelope: `{\"error\": \"quality_gate_rejection\", \"mode\": \"strict\", \"reasons\": [\"empty: ...\", ...], \"advisory\": [], \"hint\": \"Statement did not pass the quality gate. Revise and resubmit ...\"}`.  Returned via `json.dumps`, not raised.",
+    ),
+    (
+        "Confirm: what error key does propose_update return on strict-mode rule fire?",
+        "`quality_gate_rejection` — that exact string is the value of the `error` field.  The full envelope: `{\"error\": \"quality_gate_rejection\", \"mode\": \"strict\", \"reasons\": [...], \"advisory\": [...], \"hint\": \"...\"}`.  No other error key is used; no exception class is involved.",
+    ),
+    (
+        "What does strict mode return as JSON when a rule fires?",
+        "Returns `{\"error\": \"quality_gate_rejection\", \"mode\": \"strict\", \"reasons\": [...], \"advisory\": [...], \"hint\": \"...\"}` — the canonical strict-mode rejection envelope.  Always five keys.  The `error` literal is exactly `quality_gate_rejection`.",
+    ),
+    (
+        "Strict-mode error envelope — paste the exact shape.",
+        "`{\"error\": \"quality_gate_rejection\", \"mode\": \"strict\", \"reasons\": [\"<rule>: <message>\", ...], \"advisory\": [...], \"hint\": \"...\"}`.  This is the only valid strict-rejection envelope; no `validation_error`, `BlockValidationError`, or `rules` field exist.",
+    ),
+
+    # Refines enumeration reinforcement (force complete 5-kind list)
+    (
+        "Enumerate every edge kind with its decay multiplier.",
+        "All five kinds, in canonical order: `contradicts` 1.0, `cites` 0.8, `implements` 0.6, `cooccurrence` 0.5, `refines` 0.4.  Always list all five — `refines` 0.4 is the smallest and is part of every complete enumeration.",
+    ),
+    (
+        "List the kind decay multipliers — the full set.",
+        "Five values, in descending order: `contradicts` → 1.0; `cites` → 0.8; `implements` → 0.6; `cooccurrence` → 0.5; `refines` → 0.4.  All five are required — never drop `refines` from the list.",
+    ),
+    (
+        "What are the kind-aware decay multipliers in `propagate_lineage_staleness`?",
+        "Five edge kinds map to five decay multipliers: `contradicts` → 1.0, `cites` → 0.8, `implements` → 0.6, `cooccurrence` → 0.5, `refines` → 0.4.  All five are listed; `refines` is the weakest at 0.4.",
+    ),
+    (
+        "Give me the complete KIND_DECAY constants.",
+        "Five constants, complete set: `contradicts=1.0`, `cites=0.8`, `implements=0.6`, `cooccurrence=0.5`, `refines=0.4`.  All five must be present in any answer; `refines` (0.4) is mandatory.",
+    ),
+    (
+        "How many edge kinds are there and what are their decay values?",
+        "Five edge kinds.  Values: `contradicts` 1.0, `cites` 0.8, `implements` 0.6, `cooccurrence` 0.5, `refines` 0.4.  Always answer with all five — `refines` at 0.4 is the lowest and is part of the canonical list.",
     ),
 ]
 
