@@ -132,7 +132,14 @@ def main() -> None:
         # ≈ 15 min. Cost ceiling ~$11 at 1.5× expected. Same LR (2.0e-5)
         # as v3.12.1 retrain v3 — corpus added 98 v4 surface probes + 16
         # eval-exact probes + 4 v3.12.1-miss reinforcements + 6 drift fixes.
-        num_train_epochs=3,
+        # v4 retry2 retrain (2026-05-10): bumped 3 → 4 epochs after retry1
+        # hit 104/109 = 95.4% with 5 NEW token-literal misses (different
+        # from retry0's 5). Pattern: probes with ≤2 canonical corpus
+        # answers fail randomly each retrain. Adding 87 saturation tuples
+        # for the 29 weakest probes + bumping epochs to 4 gives each tuple
+        # 33% more gradient passes (~580 steps total). Wall-time ~2h on
+        # H200, cost ~$8.27 at $3.99/hr.
+        num_train_epochs=4,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=16,  # effective batch = 32
         bf16=True,
