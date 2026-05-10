@@ -25,6 +25,26 @@ from mind_mem.v4.cognitive_kernel import (
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _isolate_kernel_registry() -> None:
+    """Snapshot + restore the kernel registry around every test.
+
+    Without this, tests that ``register_kernel(KernelKind.LINEAGE_FIRST,
+    fake)`` leak fake strategies into sibling test files (notably
+    ``test_v4_kernels.py`` which asserts production strategies). This
+    fixture isolates the registry per-test so test ordering can no
+    longer flip pass/fail.
+    """
+    from mind_mem.v4.cognitive_kernel import _registry, _registry_lock
+
+    with _registry_lock:
+        snapshot = dict(_registry)
+    yield
+    with _registry_lock:
+        _registry.clear()
+        _registry.update(snapshot)
+
+
 @pytest.fixture
 def cfg_on(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     cfg = {"v4": {FLAG: {"enabled": True}}}
@@ -198,14 +218,27 @@ def test_mind_recall_passes_kwargs_through(cfg_on: Path, fake_kernel: tuple[str,
 
 @pytest.mark.unit
 def test_unknown_kernel_raises_keyerror_with_registry(cfg_on: Path) -> None:
-    """Calling with an unregistered kernel must list what IS registered."""
-    # Make sure we're using a valid enum value that isn't registered.
-    # Re-import + reset is overkill; just hit one that we won't have set up.
-    with pytest.raises(KeyError) as excinfo:
-        mind_recall("/tmp/ws", "q", kernel=KernelKind.CONTRADICTS_FIRST)
-    msg = str(excinfo.value)
-    assert "contradicts_first" in msg
-    assert "available" in msg
+    """Calling with an unregistered kernel must list what IS registered.
+
+    Uses ``CONTRADICTS_FIRST`` and forcibly unregisters it for the
+    duration of this test — robust to test ordering when
+    :mod:`mind_mem.v4.kernels` imports first and pre-registers all
+    five strategies.
+    """
+    from mind_mem.v4.cognitive_kernel import _registry, _registry_lock
+
+    with _registry_lock:
+        prior = _registry.pop(KernelKind.CONTRADICTS_FIRST, None)
+    try:
+        with pytest.raises(KeyError) as excinfo:
+            mind_recall("/tmp/ws", "q", kernel=KernelKind.CONTRADICTS_FIRST)
+        msg = str(excinfo.value)
+        assert "contradicts_first" in msg
+        assert "available" in msg
+    finally:
+        if prior is not None:
+            with _registry_lock:
+                _registry[KernelKind.CONTRADICTS_FIRST] = prior
 
 
 @pytest.mark.unit

@@ -66,6 +66,8 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "self_editing",  # MemGPT-style propose_edit / approve_edit (round 2 audit 2/4)
     "observability",  # counters / gauges / histograms (round 3 audit 4/4)
     "eviction",  # cold-tier eviction policies (round 3 audit 2/4)
+    "backpressure",  # ingestion overload signal (round 4 audit, DeepSeek 9.75→10)
+    "block_metadata",  # ChromaDB-style tags + Weaviate-style validators (round 4 audit)
     # Group E — compliance-sensitive opt-in
     "redaction",
     "time_bounded_recall",

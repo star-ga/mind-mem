@@ -35,6 +35,7 @@ Copyright STARGA, Inc.
 from __future__ import annotations
 
 import sqlite3
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -48,7 +49,10 @@ __all__ = [
     "EvictionPlan",
     "register_policy",
     "available_policies",
+    "is_policy_registered",
     "plan_eviction",
+    "set_active_policy",
+    "active_policy",
     "DEFAULT_EVICTION_LIMIT",
     "DEFAULT_LOW_SURPRISE_THRESHOLD",
 ]
@@ -83,6 +87,21 @@ class EvictionPlan:
     def count(self) -> int:
         return len(self.candidates)
 
+    def debug_plan(self) -> dict[str, list[str]]:
+        """Group reasons by policy tag — returns ``{policy_tag: [block_ids]}``.
+
+        Round-4 audit (GLM 9.8→10): callers need to *trace* why a
+        block was selected when COMPOSITE policies fan out. Reason
+        strings follow the convention ``"<tag>:<detail>"`` — this
+        method groups by the leading tag so debug traces don't
+        require regex.
+        """
+        out: dict[str, list[str]] = {}
+        for bid, reason in self.candidates:
+            tag = reason.split(":", 1)[0] if ":" in reason else reason
+            out.setdefault(tag, []).append(bid)
+        return out
+
 
 # ---------------------------------------------------------------------------
 # Pluggable policy registry
@@ -92,7 +111,7 @@ class EvictionPlan:
 PolicyFn = Callable[..., list[tuple[str, str]]]
 
 _registry: dict[EvictionPolicy | str, PolicyFn] = {}
-_lock_obj = __import__("threading").Lock()
+_lock_obj = threading.Lock()
 
 
 def register_policy(name: EvictionPolicy | str, fn: PolicyFn) -> None:
@@ -112,6 +131,25 @@ def available_policies() -> list[EvictionPolicy | str]:
     require_enabled(FLAG)
     with _lock_obj:
         return list(_registry.keys())
+
+
+def is_policy_registered(name: EvictionPolicy | str) -> bool:
+    """Public predicate — flag-independent check that ``name`` resolves
+    to a known policy.
+
+    Used by :mod:`mind_mem.v4.health` instead of reaching into the
+    private ``_registry`` so module coupling stays at the public-API
+    level only.
+    """
+    if isinstance(name, str):
+        try:
+            key: EvictionPolicy | str = EvictionPolicy(name)
+        except ValueError:
+            key = name
+    else:
+        key = name
+    with _lock_obj:
+        return key in _registry
 
 
 # ---------------------------------------------------------------------------
@@ -192,8 +230,17 @@ def _composite_policy(
     seen: set[str] = set()
     out: list[tuple[str, str]] = []
     for p_name in policies:
+        # First try the raw key (custom-registered names), then try
+        # coercing to the EvictionPolicy enum (built-in names). Names
+        # that match neither fall through silently — same fail-soft
+        # contract as plan_eviction.
         with _lock_obj:
-            fn = _registry.get(p_name) or _registry.get(EvictionPolicy(p_name))
+            fn = _registry.get(p_name)
+            if fn is None:
+                try:
+                    fn = _registry.get(EvictionPolicy(p_name))
+                except ValueError:
+                    fn = None
         if fn is None:
             continue
         for bid, reason in fn(workspace, **kwargs):
@@ -213,13 +260,53 @@ _registry[EvictionPolicy.COMPOSITE] = _composite_policy
 
 
 # ---------------------------------------------------------------------------
+# Runtime active-policy switch (round-4 audit, Mistral 9.9→10).
+# Long-running services (idle_ingest, consolidation worker) want to flip the
+# default policy without redeploying. Mirrors the Redis ``maxmemory-policy``
+# CONFIG SET pattern: one global pointer, callers read it lazily.
+# ---------------------------------------------------------------------------
+
+
+_active_policy: EvictionPolicy | str = EvictionPolicy.LRU
+
+
+def set_active_policy(policy: EvictionPolicy | str) -> None:
+    """Swap the workspace-wide default eviction policy at runtime.
+
+    Unknown policy strings raise :class:`ValueError`; the caller must
+    register custom policies via :func:`register_policy` before
+    activating them. Thread-safe under the registry lock.
+    """
+    require_enabled(FLAG)
+    if isinstance(policy, str):
+        try:
+            key: EvictionPolicy | str = EvictionPolicy(policy)
+        except ValueError:
+            key = policy
+    else:
+        key = policy
+    with _lock_obj:
+        if key not in _registry:
+            raise ValueError(f"unknown eviction policy: {key!r}")
+        global _active_policy
+        _active_policy = key
+
+
+def active_policy() -> EvictionPolicy | str:
+    """Return the currently active default policy."""
+    require_enabled(FLAG)
+    with _lock_obj:
+        return _active_policy
+
+
+# ---------------------------------------------------------------------------
 # Public planner
 # ---------------------------------------------------------------------------
 
 
 def plan_eviction(
     workspace: str | Path,
-    policy: EvictionPolicy | str = EvictionPolicy.LRU,
+    policy: EvictionPolicy | str | None = None,
     **kwargs: object,
 ) -> EvictionPlan:
     """Compute an eviction plan against the workspace's COLD tier.
@@ -227,8 +314,15 @@ def plan_eviction(
     Pure function; reads the tier table, returns a plan. No side
     effects. Returns an empty plan when the policy is unknown / DB is
     missing / table doesn't exist.
+
+    When ``policy`` is ``None`` (the default), the workspace-wide
+    runtime default selected via :func:`set_active_policy` is used.
+    Mirrors the Redis ``CONFIG GET maxmemory-policy`` contract — the
+    runtime switch is observable on every call.
     """
     require_enabled(FLAG)
+    if policy is None:
+        policy = active_policy()
     if isinstance(policy, str):
         try:
             policy_key: EvictionPolicy | str = EvictionPolicy(policy)

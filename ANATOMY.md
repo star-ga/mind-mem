@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 793 | **Est. tokens:** ~1,623,979
-**Generated:** 2026-05-10 11:05 UTC
+**Files:** 799 | **Est. tokens:** ~1,648,301
+**Generated:** 2026-05-10 11:39 UTC
 
 ## Token Budget Guide
 
@@ -64,9 +64,9 @@
 | `src/mind_mem/mcp/tools/` | 24 | ~51,536 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
-| `src/mind_mem/v4/` | 16 | ~38,203 |
+| `src/mind_mem/v4/` | 20 | ~48,468 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 269 | ~554,632 |
+| `tests/` | 271 | ~568,689 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -635,21 +635,25 @@
 - `union_recall.py` (~1310 tok, large) — Union-style retrieval for decomposed queries (v3.4.0).
 ### `src/mind_mem/v4/`
 
+- `backpressure.py` (~2088 tok, huge) — v4 backpressure controller (round 4 audit, DeepSeek 9.75→10 gap).
 - `block_kinds.py` (~3105 tok, huge) — v4 block-kind taxonomy (Group B: knowledge graph).
-- `cognitive_kernel.py` (~2216 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
+- `block_metadata.py` (~2717 tok, huge) — v4 block metadata + schema-validation hooks.
+- `cognitive_kernel.py` (~2375 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
 - `consolidation_worker.py` (~2424 tok, huge) — v4 consolidation worker (Group A — MemGPT-pattern).
 - `embedding_pipeline.py` (~1477 tok, large) — v4 embedding auto-derivation pipeline (Group A — closes the
-- `eviction.py` (~2154 tok, huge) — v4 eviction policies (Group A — long-term decay).
-- `feature_flags.py` (~1467 tok, large) — v4.0 feature-flag registry.
+- `eviction.py` (~2999 tok, huge) — v4 eviction policies (Group A — long-term decay).
+- `feature_flags.py` (~1510 tok, huge) — v4.0 feature-flag registry.
 - `federation.py` (~3372 tok, huge) — v4 federated cross-agent consistency (Group D).
+- `health.py` (~1900 tok, huge) — v4 health-check surface (round 4 audit, DeepSeek 9.75→10 gap).
 - `hnsw_kind_index.py` (~2110 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
 - `__init__.py` (~731 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
 - `kernels.py` (~3671 tok, huge) — v4 kernel strategy implementations (Group A).
 - `kind_summaries.py` (~1863 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
-- `observability.py` (~2171 tok, huge) — v4 observability — counters, timers, histograms, exporters.
+- `logging_context.py` (~1233 tok, large) — v4 structured logging context (round 4 audit, DeepSeek 9.75→10 gap).
+- `observability.py` (~2613 tok, huge) — v4 observability — counters, timers, histograms, exporters.
 - `pq.py` (~4308 tok, huge) — v4 product-quantization (PQ) encoding for embedding storage (Group D).
 - `self_editing.py` (~2405 tok, huge) — v4 self-editing on recall (Group A — MemGPT pattern).
-- `surprise_retrieval.py` (~1737 tok, huge) — v4 surprise-weighted retrieval term (Group A: cognition / model layer).
+- `surprise_retrieval.py` (~2575 tok, huge) — v4 surprise-weighted retrieval term (Group A: cognition / model layer).
 - `tier_memory.py` (~2992 tok, huge) — v4 recall-tier memory (Group A: cognition / model layer).
 ### `src/mind_mem/`
 
@@ -944,13 +948,15 @@
 - `test_v320_gaps.py` (~3257 tok, huge) — v3.2.0 gap tests — regression and edge-case coverage for new modules.
 - `test_v34_features.py` (~2993 tok, huge) — Tests for v3.4.0 retrieval features.
 - `test_v4_block_kinds.py` (~4112 tok, huge) — Tests for the v4 block-kind taxonomy module."""
-- `test_v4_cognitive_kernel.py` (~2499 tok, huge) — Tests for the v4 Cognitive Mind Kernel registry + dispatcher."""
+- `test_v4_cognitive_kernel.py` (~2770 tok, huge) — Tests for the v4 Cognitive Mind Kernel registry + dispatcher."""
 - `test_v4_concurrency.py` (~2179 tok, huge) — v4 concurrency / fuzz tests.
 - `test_v4_hnsw_and_consolidation.py` (~3243 tok, huge) — Tests for HNSW kind-filtered ANN + consolidation worker."""
 - `test_v4_kernels.py` (~3855 tok, huge) — Tests for the v4 kernel strategy implementations.
 - `test_v4_pq.py` (~2800 tok, huge) — Tests for v4 product-quantization (PQ) encoding."""
 - `test_v4_round2_extensions.py` (~4624 tok, huge) — Tests for round-2 audit extensions: federation, embedding_pipeline,
 - `test_v4_round3_extensions.py` (~2836 tok, huge) — Tests for round-3 audit extensions: observability + eviction."""
+- `test_v4_round4_concurrency.py` (~8625 tok, huge) — Concurrency + adversarial-input tests for round-4 v4 modules.
+- `test_v4_round4_extensions.py` (~5161 tok, huge) — Tests for round-4 audit extensions.
 - `test_v4_surprise_retrieval.py` (~2281 tok, huge) — Tests for the v4 surprise-weighted retrieval scoring module."""
 - `test_v4_tier_memory.py` (~4065 tok, huge) — Tests for the v4 recall-tier module.
 - `test_validate_py.py` (~3438 tok, huge) — Tests for validate_py.py — workspace integrity validator."""

@@ -62,6 +62,7 @@ __all__ = [
     "KernelStrategy",
     "register_kernel",
     "available_kernels",
+    "is_kernel_registered",
     "mind_recall",
     "DEFAULT_KERNEL",
 ]
@@ -163,6 +164,23 @@ def available_kernels() -> list[KernelKind]:
     require_enabled(FLAG)
     with _registry_lock:
         return list(_registry.keys())
+
+
+def is_kernel_registered(kind: KernelKind | str) -> bool:
+    """Public predicate — does this kernel have a strategy bound?
+
+    Does **not** require the flag — callers like the health endpoint
+    need to check registration even when the v4 cognitive surface is
+    disabled. The result is meaningful in both states: an OFF flag
+    means the registry exists but won't be consulted by ``mind_recall``.
+    """
+    if isinstance(kind, str):
+        try:
+            kind = KernelKind(kind)
+        except ValueError:
+            return False
+    with _registry_lock:
+        return kind in _registry
 
 
 # ---------------------------------------------------------------------------

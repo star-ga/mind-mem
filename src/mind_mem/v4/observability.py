@@ -156,34 +156,68 @@ _gauges: dict[str, Gauge] = {}
 _histograms: dict[str, Histogram] = {}
 _registry_lock = threading.Lock()
 
+#: Cardinality guard — round-4 audit (Mistral / GLM both flagged this).
+#: When the registry exceeds ``MAX_CARDINALITY`` distinct names per
+#: type, additional get-or-create calls return a shared no-op metric
+#: that records nothing rather than blowing up memory. Production
+#: callers can set this via mind-mem.json:
+#:
+#:     "v4": {"observability": {"enabled": true, "max_cardinality": 5000}}
+MAX_CARDINALITY: int = 10000
+
+#: Sentinel returned by counter/gauge/histogram once the cardinality
+#: cap is hit. Each is shared across all overflow names — recording
+#: into the sentinel is safe but invisible. Use ``snapshot()`` to
+#: spot ``v4.cardinality.dropped_<kind>`` counters that surface the
+#: drop count.
+_OVERFLOW_COUNTER: Counter = Counter(name="v4._overflow.counter")
+_OVERFLOW_GAUGE: Gauge = Gauge(name="v4._overflow.gauge")
+_OVERFLOW_HISTOGRAM: Histogram = Histogram(name="v4._overflow.histogram")
+
 
 def counter(name: str) -> Counter:
-    """Get-or-create a named counter. Safe to call concurrently."""
+    """Get-or-create a named counter. Safe to call concurrently.
+
+    Past the cardinality cap, returns a shared overflow sentinel and
+    bumps a drop counter so operators see the loss in
+    :func:`snapshot`."""
     with _registry_lock:
         c = _counters.get(name)
-        if c is None:
-            c = Counter(name=name)
-            _counters[name] = c
+        if c is not None:
+            return c
+        if len(_counters) >= MAX_CARDINALITY:
+            _counters.setdefault("v4.cardinality.dropped_counter", Counter(name="v4.cardinality.dropped_counter")).value += 1
+            return _OVERFLOW_COUNTER
+        c = Counter(name=name)
+        _counters[name] = c
         return c
 
 
 def gauge(name: str) -> Gauge:
-    """Get-or-create a named gauge. Safe to call concurrently."""
+    """Get-or-create a named gauge. Same overflow contract as :func:`counter`."""
     with _registry_lock:
         g = _gauges.get(name)
-        if g is None:
-            g = Gauge(name=name)
-            _gauges[name] = g
+        if g is not None:
+            return g
+        if len(_gauges) >= MAX_CARDINALITY:
+            _counters.setdefault("v4.cardinality.dropped_gauge", Counter(name="v4.cardinality.dropped_gauge")).value += 1
+            return _OVERFLOW_GAUGE
+        g = Gauge(name=name)
+        _gauges[name] = g
         return g
 
 
 def histogram(name: str) -> Histogram:
-    """Get-or-create a named histogram. Safe to call concurrently."""
+    """Get-or-create a named histogram. Same overflow contract as :func:`counter`."""
     with _registry_lock:
         h = _histograms.get(name)
-        if h is None:
-            h = Histogram(name=name)
-            _histograms[name] = h
+        if h is not None:
+            return h
+        if len(_histograms) >= MAX_CARDINALITY:
+            _counters.setdefault("v4.cardinality.dropped_histogram", Counter(name="v4.cardinality.dropped_histogram")).value += 1
+            return _OVERFLOW_HISTOGRAM
+        h = Histogram(name=name)
+        _histograms[name] = h
         return h
 
 
