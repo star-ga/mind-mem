@@ -68,7 +68,7 @@ def main() -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Full bf16 load — no quantization. H200 has plenty of room.
+    # Full bf16 load — no quantization. H100/H200 have plenty of room.
     model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL,
         torch_dtype=torch.bfloat16,
@@ -77,7 +77,10 @@ def main() -> None:
         attn_implementation="sdpa",
     )
     model.config.use_cache = False
-    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+    # Gradient checkpointing is enabled by SFTConfig(gradient_checkpointing=True,
+    # gradient_checkpointing_kwargs={"use_reentrant": False}) below — no
+    # manual call needed. A duplicate call here would silently mask any
+    # future divergence between the two kwargs dicts.
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in model.parameters())
     print(f"trainable     : {trainable:,} / {total:,} ({trainable / total:.2%})")
@@ -124,6 +127,11 @@ def main() -> None:
         # with stronger gradient steps — saturated corpus on the 8 failing
         # probes (~50 new dense paraphrases) needs the higher LR to overwrite
         # the stubborn convergence ('refines = 0.3' survived a denial probe).
+        # v4 retrain (2026-05-10): 4564 examples × 3 epochs / batch 32 =
+        # ~428 gradient steps. Wall-time on H100 SXM ≈ 25 min, H200 SXM
+        # ≈ 15 min. Cost ceiling ~$11 at 1.5× expected. Same LR (2.0e-5)
+        # as v3.12.1 retrain v3 — corpus added 98 v4 surface probes + 16
+        # eval-exact probes + 4 v3.12.1-miss reinforcements + 6 drift fixes.
         num_train_epochs=3,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=16,  # effective batch = 32
@@ -155,11 +163,17 @@ def main() -> None:
         gradient_checkpointing_kwargs={"use_reentrant": False},
         dataset_text_field=None,  # chat_template handles formatting
         # Packing OFF — see num_train_epochs comment above. Each example
-        # gets its own sequence; H200 throughput is high enough that the
-        # extra padding cost is irrelevant compared to the gradient-step
-        # gain from not collapsing 50+ examples per packed sequence.
+        # gets its own sequence; H100/H200 throughput is high enough that
+        # the extra padding cost is irrelevant compared to the gradient-
+        # step gain from not collapsing 50+ examples per packed sequence.
         packing=False,
-        max_length=2048,
+        # v4 retrain: bumped 2048 → 3072 to accommodate the 3 longest
+        # examples (changelog dumps for 3.2.0/3.3.0, v4 docs section —
+        # max 2836 tokens). Truncation at 2048 was silently dropping
+        # ~788 tokens of training signal on those examples. +1024 token
+        # headroom adds ~1 GB activation memory at per_device_batch=2 +
+        # bf16 + grad-checkpoint — fits any 80 GB+ GPU comfortably.
+        max_length=3072,
         seed=42,
     )
 

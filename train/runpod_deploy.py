@@ -23,6 +23,7 @@ Requires:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -234,6 +235,12 @@ def main() -> None:
     parser.add_argument("--gpu-type", default=DEFAULT_GPU_TYPE)
     parser.add_argument("--image", default=DEFAULT_IMAGE, help="Docker image for the pod")
     parser.add_argument(
+        "--version-tag",
+        default=os.environ.get("MM_VERSION_TAG", "v4.0.0"),
+        help="Version label used in the HF commit message (e.g. v4.0.0). "
+        "Drives `--commit-message 'Full-FT retrain on Qwen3.5-4B (<TAG>)'`.",
+    )
+    parser.add_argument(
         "--provision-only",
         action="store_true",
         help="Create pod + print SSH info; don't run training or tear down.",
@@ -333,14 +340,27 @@ def main() -> None:
         # which previously SIGHUP'd training when it ran inside the SSH
         # session). Now: detach via nohup, then poll the log file via
         # short ssh sessions until the run finishes or fails.
-        print("launching full FT on pod via nohup (survives SSH drops) …")
+        #
+        # HF_TOKEN goes to a file on the pod first (mode 600) so it
+        # never appears in `ps aux` / proc command lines for any
+        # process on the host. The training script reads it from the
+        # env via the `env $(cat ...)` shell idiom — token still in
+        # the env at process-start, but never on the command line.
+        print("staging HF token + launching full FT via nohup (survives SSH drops) …")
         _ssh_cmd(
             ip, port,
-            f"cd /workspace && nohup env HF_TOKEN={hf_token} "
-            f"MM_BASE_MODEL={os.environ.get('MM_BASE_MODEL', 'Qwen/Qwen3.5-4B')} "
-            "MM_TRAIN_ROOT=/workspace/train-output "
-            "MM_CORPUS=/workspace/train-output/corpus.jsonl "
-            "python3 -u runpod_full_ft.py >/workspace/train-output/train.log 2>&1 < /dev/null & "
+            f"umask 077 && printf '%s' {hf_token!r} > /workspace/.hf_token && "
+            "chmod 600 /workspace/.hf_token",
+        )
+        _ssh_cmd(
+            ip, port,
+            "cd /workspace && nohup bash -lc '"
+            "export HF_TOKEN=$(cat /workspace/.hf_token) && "
+            f"export MM_BASE_MODEL={os.environ.get('MM_BASE_MODEL', 'Qwen/Qwen3.5-4B')} && "
+            "export MM_TRAIN_ROOT=/workspace/train-output && "
+            "export MM_CORPUS=/workspace/train-output/corpus.jsonl && "
+            "python3 -u runpod_full_ft.py' "
+            ">/workspace/train-output/train.log 2>&1 < /dev/null & "
             "echo \"launched pid=$!\" >/workspace/train-output/training.pid; sleep 3",
         )
         # Poll until the saved-model marker appears in the log or the
@@ -377,19 +397,20 @@ def main() -> None:
                     rc = 1
                 break
         if rc != 0:
-            raise RuntimeError(f"training exited / timed out without success; pod kept alive for inspection")
+            raise RuntimeError("training exited / timed out without success; pod kept alive for inspection")
 
         # 4. Generate + upload (model card + merged weights)
         if args.skip_upload:
             print("--skip-upload set: NOT pushing to HF. Eval locally first, then re-run upload manually.")
         else:
-            print("building model card + pushing to HF …")
+            print(f"building model card + pushing to HF (version tag: {args.version_tag}) …")
+            commit_msg = f"Full-FT retrain on Qwen3.5-4B ({args.version_tag})"
             _ssh_cmd(
                 ip, port,
                 "cd /workspace && MM_TRAIN_ROOT=/workspace/train-output "
                 "python3 build_model_card.py && "
-                f"HF_TOKEN={hf_token} python3 upload_to_hf.py "
-                "--commit-message 'Full-FT retrain on Qwen3.5-4B (v3.9.0)'",
+                "HF_TOKEN=$(cat /workspace/.hf_token) python3 upload_to_hf.py "
+                f"--commit-message {commit_msg!r}",
             )
 
         # 5. Pull a copy of the weights back for local reference.
@@ -413,20 +434,68 @@ def main() -> None:
             )
             args.keep_pod = True
 
-        # 6. Verify before tearing down.
+        # 6. Verify before tearing down: SHA256 cross-check between
+        #    pod-side and locally-pulled weights. Only destroy when the
+        #    hash confirms — protects against silent scp corruption.
         if args.verify_first and not args.keep_pod:
             weights = WEIGHTS_OUT / "model.safetensors"
             shards = list(WEIGHTS_OUT.glob("model-*.safetensors"))
             if not weights.is_file() and not shards:
                 print(f"\n⚠ no weight file found at {WEIGHTS_OUT}. Keeping pod alive; manual inspection required.")
                 args.keep_pod = True
+            else:
+                target_files = [weights] if weights.is_file() else sorted(shards)
+                all_match = True
+                # Give the OS a moment to flush scp page-cache writes
+                # before hashing — on a busy SSD an 8-9 GB safetensors
+                # file may not be fully fsync'd at scp's close().
+                os.sync()
+                time.sleep(2)
+                for f in target_files:
+                    rel = f.name
+                    print(f"  hash-check {rel} …")
+                    try:
+                        remote_sha = _ssh_cmd(
+                            ip, port,
+                            f"sha256sum /workspace/train-output/full-ft/{rel} | awk '{{print $1}}'",
+                        ).strip()
+                    except RuntimeError as exc:
+                        print(f"  ⚠ remote sha256sum failed for {rel}: {exc}")
+                        all_match = False
+                        break
+                    h = hashlib.sha256()
+                    with f.open("rb") as fh:
+                        for chunk in iter(lambda: fh.read(1 << 20), b""):
+                            h.update(chunk)
+                    local_sha = h.hexdigest()
+                    if local_sha == remote_sha:
+                        print(f"  ✓ {rel}  sha256={local_sha[:16]}…  match")
+                    else:
+                        print(
+                            f"  ✗ {rel}  hash mismatch\n"
+                            f"      local  = {local_sha}\n"
+                            f"      remote = {remote_sha}"
+                        )
+                        all_match = False
+                        break
+                if not all_match:
+                    print(
+                        "\n⚠ hash mismatch — keeping pod alive for re-pull. "
+                        "Re-scp manually before destroying."
+                    )
+                    args.keep_pod = True
+                else:
+                    print(
+                        f"\n✓ all weight files SHA256-confirmed against pod copy. "
+                        f"Pod {pod_id} safe to terminate."
+                    )
 
         print("\n✓ full-FT complete + uploaded + local copy saved")
     finally:
         if not args.keep_pod:
             destroy(pod_id)
         else:
-            print(f"\npod {pod_id} LEFT RUNNING (--keep-pod).  cost meter: ~$1.39/hr. Destroy manually when done:")
+            print(f"\npod {pod_id} LEFT RUNNING (--keep-pod).  Destroy manually when done:")
             print(f"  python3 {__file__} --destroy {pod_id}")
 
 
