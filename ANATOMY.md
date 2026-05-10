@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 799 | **Est. tokens:** ~1,648,301
-**Generated:** 2026-05-10 11:39 UTC
+**Files:** 801 | **Est. tokens:** ~1,655,388
+**Generated:** 2026-05-10 11:47 UTC
 
 ## Token Budget Guide
 
@@ -64,9 +64,9 @@
 | `src/mind_mem/mcp/tools/` | 24 | ~51,536 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
-| `src/mind_mem/v4/` | 20 | ~48,468 |
+| `src/mind_mem/v4/` | 21 | ~51,909 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 271 | ~568,689 |
+| `tests/` | 272 | ~572,335 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -638,11 +638,12 @@
 - `backpressure.py` (~2088 tok, huge) — v4 backpressure controller (round 4 audit, DeepSeek 9.75→10 gap).
 - `block_kinds.py` (~3105 tok, huge) — v4 block-kind taxonomy (Group B: knowledge graph).
 - `block_metadata.py` (~2717 tok, huge) — v4 block metadata + schema-validation hooks.
+- `circuit_breaker.py` (~3418 tok, huge) — v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10 gap).
 - `cognitive_kernel.py` (~2375 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
 - `consolidation_worker.py` (~2424 tok, huge) — v4 consolidation worker (Group A — MemGPT-pattern).
 - `embedding_pipeline.py` (~1477 tok, large) — v4 embedding auto-derivation pipeline (Group A — closes the
 - `eviction.py` (~2999 tok, huge) — v4 eviction policies (Group A — long-term decay).
-- `feature_flags.py` (~1510 tok, huge) — v4.0 feature-flag registry.
+- `feature_flags.py` (~1533 tok, huge) — v4.0 feature-flag registry.
 - `federation.py` (~3372 tok, huge) — v4 federated cross-agent consistency (Group D).
 - `health.py` (~1900 tok, huge) — v4 health-check surface (round 4 audit, DeepSeek 9.75→10 gap).
 - `hnsw_kind_index.py` (~2110 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
@@ -948,6 +949,7 @@
 - `test_v320_gaps.py` (~3257 tok, huge) — v3.2.0 gap tests — regression and edge-case coverage for new modules.
 - `test_v34_features.py` (~2993 tok, huge) — Tests for v3.4.0 retrieval features.
 - `test_v4_block_kinds.py` (~4112 tok, huge) — Tests for the v4 block-kind taxonomy module."""
+- `test_v4_circuit_breaker.py` (~3646 tok, huge) — Tests for v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10)."""
 - `test_v4_cognitive_kernel.py` (~2770 tok, huge) — Tests for the v4 Cognitive Mind Kernel registry + dispatcher."""
 - `test_v4_concurrency.py` (~2179 tok, huge) — v4 concurrency / fuzz tests.
 - `test_v4_hnsw_and_consolidation.py` (~3243 tok, huge) — Tests for HNSW kind-filtered ANN + consolidation worker."""
