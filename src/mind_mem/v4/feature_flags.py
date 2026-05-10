@@ -60,6 +60,10 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "pq",  # product-quantization codec (audit 4/4 consensus 2026-05-10)
     "hnsw_kind_index",  # HNSW kind-filtered ANN (audit 3/4)
     "consolidation_worker",  # write-time clustering worker (audit 2/4)
+    "federation",  # cross-agent version vectors + conflict log (round 2 audit 4/4)
+    "embedding_pipeline",  # auto-derive embeddings (round 2 audit 4/4)
+    "kind_summaries",  # GraphRAG-style per-kind summaries (round 2 audit 3/4)
+    "self_editing",  # MemGPT-style propose_edit / approve_edit (round 2 audit 2/4)
     # Group E — compliance-sensitive opt-in
     "redaction",
     "time_bounded_recall",
