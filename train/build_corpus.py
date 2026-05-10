@@ -2848,6 +2848,12 @@ def main() -> None:
             # under-densified v3.12 probes (4-LLM consensus: Grok/Mistral/
             # DeepSeek/GLM all agreed on corpus density as root cause).
             _harvest_v312_density_fix(),
+            # v4 retrain: balanced per-edge-kind isolated-fact reinforcement.
+            # Adds ≥10 isolated probes for cites/implements/cooccurrence to
+            # match the existing refines saturation density (asymmetric
+            # corpus drove the v3.12.1 cites=0.4 model error).  See
+            # train/V4_RETRAIN_TODO.md for the verification gate.
+            _harvest_v4_kind_balance(),
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -4236,6 +4242,241 @@ def _harvest_v312_density_fix() -> Iterator[dict]:
     retrain learned (4-LLM consensus 2026-05-09).  ~30 new probes; corpus 4232
     → ~4262 examples."""
     for q, a in _V312_DENSITY_FIX_PROBES:
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": q},
+                {"role": "assistant", "content": a},
+            ]
+        }
+
+
+# ----------------------------------------------------------------------------
+# v4 retrain: balanced per-edge-kind isolated-fact reinforcement.
+#
+# Why this exists.
+#   The v3.12.1 ship (mind-mem-4b v3.12.0-fullft) clears 95/95 only with two
+#   eval probes intentionally softened.  One of those — the cites=0.8 probe —
+#   is a real model error: the model emits 0.4 (the refines value) when asked
+#   in singular form.
+#
+# Root cause.
+#   The corpus had >12 ISOLATED-FACT probes for refines=0.4 (added during v3.10
+#   to fix a stubborn 0.3 failure) but only enumerated-list cites=0.8 references.
+#   Asymmetric saturation → model defaults to the most-reinforced isolated
+#   numeric value (0.4) when asked about any single edge kind in isolation.
+#
+# What this block does.
+#   Adds 10+ ISOLATED-FACT probes for cites/implements/cooccurrence so each
+#   non-contradicts kind matches refines's reinforcement density.  Mirrors the
+#   surface-form variety of the existing refines block at the v6 saturation
+#   pass (lines ~3854-3897): "decimal value", "what is KIND_DECAY['<kind>']",
+#   "numeric decay value for <kind>", "<kind> edge — what's the kind decay
+#   coefficient", contrast probes ("not 0.4 — that's refines"), denial probes
+#   ("is the cites multiplier 0.4? No — it's 0.8"), seed-edge propagation
+#   examples (KIND_DECAY × HOP_DECAY arithmetic).
+#
+# Verification gate (NON-NEGOTIABLE, see train/V4_RETRAIN_TODO.md).
+#   The v4 model must pass `train/eval_harness.py` 95/95 with both
+#   `# V4 RETRAIN TODO` markers reverted to their original requirements
+#   (qg.escape_hatch ["force", "strict"] and lin.cites ["cites", "0.8"]).
+#   No further probe softening for v4.
+
+_V4_KIND_BALANCE_PROBES: list[tuple[str, str]] = [
+    # ===== cites = 0.8 (10 isolated-fact probes) =====
+    (
+        "Decimal value of the `cites` edge decay multiplier?",
+        "`0.8`.  Second-strongest of the five `KIND_DECAY` values.  Full table: `contradicts=1.0`, `cites=0.8`, `implements=0.6`, `cooccurrence=0.5`, `refines=0.4`.  The `cites` value is `0.8`, NOT `0.4` (which is refines).",
+    ),
+    (
+        "What's KIND_DECAY['cites']?",
+        "`0.8`.  Defined in `src/mind_mem/block_lineage.py:67`.  The `cites` multiplier is `0.8` — second-largest after `contradicts` (1.0).  Do not confuse with `refines` (0.4).",
+    ),
+    (
+        "Numeric decay value for cites edges in lineage staleness?",
+        "Exactly `0.8`.  A `cites` seed edge contributes 80% of the maximum signal (1.0 = `contradicts`).  Block at hop 1 from a `cites` seed gets `0.8 * 1.0 = 0.8`; hop 2 gets `0.8 * 0.9 = 0.72`; hop 3 gets `0.8 * 0.5 = 0.4`.",
+    ),
+    (
+        "Cites edge — what's the kind decay coefficient?",
+        "Coefficient is `0.8` for `cites`.  This is the second-largest of the five kinds — only `contradicts` (1.0) is stronger.  `cites` 0.8 > `implements` 0.6 > `cooccurrence` 0.5 > `refines` 0.4.",
+    ),
+    (
+        "What is the decay multiplier for a `cites` edge in lineage staleness?",
+        "The `cites` decay multiplier is `0.8` — applied ONCE at the seed edge (the edge from `source_id` to its immediate neighbour).  Further BFS hops use only `HOP_DECAY = (1.0, 0.9, 0.5, 0.2)` regardless of edge kind.  So a `cites` seed gets `0.8 × 1.0 = 0.8`; the block one BFS hop further stores `0.8 × 0.9 = 0.72`.",
+    ),
+    (
+        "When a block cites another, how much staleness does it inherit?",
+        "Eighty percent (0.8) of the seed penalty — the `cites` decay multiplier is `0.8`.  So if the source block has staleness 1.0, the citing neighbour at hop 1 receives `0.8 * 1.0 = 0.8`.  Add `HOP_DECAY = (1.0, 0.9, 0.5, 0.2)` for further hops.",
+    ),
+    (
+        "Second-largest KIND_DECAY value?",
+        "`0.8` — for the `cites` edge kind.  `contradicts` is the largest at 1.0.  All five values from largest to smallest: `contradicts` 1.0, `cites` 0.8, `implements` 0.6, `cooccurrence` 0.5, `refines` 0.4.",
+    ),
+    (
+        "Cites edges represent direct citation relationships — what's their staleness weight?",
+        "Staleness weight (KIND_DECAY) for `cites` = `0.8`.  A block that cites another inherits 80% of the source's staleness penalty — among the strongest dependency signals, second only to `contradicts` (1.0).",
+    ),
+    (
+        "Tabulate the KIND_DECAY constants for v3.12 lineage staleness — emphasise cites.",
+        "| kind | KIND_DECAY |\n|---|---|\n| `contradicts` | 1.0 |\n| `cites` | **0.8** |\n| `implements` | 0.6 |\n| `cooccurrence` | 0.5 |\n| `refines` | 0.4 |\n\nThe `cites` value is `0.8` — defined in `src/mind_mem/block_lineage.py:67`.",
+    ),
+    (
+        "Show me KIND_DECAY['cites'] vs KIND_DECAY['refines'] — same or different?",
+        "**Different.**  `KIND_DECAY['cites'] = 0.8` (second-strongest).  `KIND_DECAY['refines'] = 0.4` (weakest).  They are opposite ends of the seed-edge attenuation spectrum.  A `cites` seed propagates twice as much staleness as a `refines` seed at the same hop distance.",
+    ),
+    # ----- cites denial / negation probes (×4) -----
+    (
+        "Is the cites edge decay multiplier 0.4?",
+        "**No.**  `0.4` is the `refines` value.  The `cites` multiplier is `0.8`.  Do not confuse cites (citation) with refines (narrowing).  Full table: `contradicts=1.0`, `cites=0.8`, `implements=0.6`, `cooccurrence=0.5`, `refines=0.4`.",
+    ),
+    (
+        "Confirm: KIND_DECAY['cites'] = 0.4 — true or false?",
+        "**False.**  `KIND_DECAY['cites'] = 0.8`, NOT 0.4.  `0.4` is `KIND_DECAY['refines']`.  The two are easy to confuse but not interchangeable — `cites` is twice as strong as `refines`.",
+    ),
+    (
+        "Someone told me cites = 0.6.  Is that right?",
+        "No — `0.6` is the `implements` value.  `KIND_DECAY['cites'] = 0.8`.  Full table for clarity: `contradicts` 1.0, **`cites` 0.8**, `implements` 0.6, `cooccurrence` 0.5, `refines` 0.4.",
+    ),
+    (
+        "Cites multiplier is 0.5, right?",
+        "No — `0.5` is `cooccurrence`.  `KIND_DECAY['cites'] = 0.8`.  Citation edges are semantic dependencies and propagate staleness more strongly (80%) than statistical co-occurrence edges (50%).",
+    ),
+
+    # ===== implements = 0.6 (10 isolated-fact probes) =====
+    (
+        "Decimal value of the `implements` edge decay multiplier?",
+        "`0.6`.  The middle value of the five `KIND_DECAY` constants.  Full table: `contradicts=1.0`, `cites=0.8`, `implements=0.6`, `cooccurrence=0.5`, `refines=0.4`.",
+    ),
+    (
+        "What's KIND_DECAY['implements']?",
+        "`0.6`.  Defined in `src/mind_mem/block_lineage.py:68`.  Sits between `cites` (0.8) and `cooccurrence` (0.5).  An `implements` edge means block A is the concrete realisation of block B (spec → code).",
+    ),
+    (
+        "Numeric decay value for implements edges?",
+        "Exactly `0.6`.  An `implements` seed edge contributes 60% of the maximum signal (1.0 = `contradicts`).  Block at hop 1 gets `0.6 * 1.0 = 0.6`; hop 2 gets `0.6 * 0.9 = 0.54`; hop 3 gets `0.6 * 0.5 = 0.3`.",
+    ),
+    (
+        "Implements edge — what's the kind decay coefficient?",
+        "Coefficient is `0.6` for `implements`.  Third-largest of five.  `contradicts` 1.0 > `cites` 0.8 > `implements` 0.6 > `cooccurrence` 0.5 > `refines` 0.4.",
+    ),
+    (
+        "If a code block implements a spec block, how much staleness does it inherit?",
+        "Sixty percent (0.6) of the spec's staleness penalty — the `implements` decay multiplier is `0.6`.  When the spec is flagged stale, the implementing code block inherits 60% of the penalty at hop 1.  Add `HOP_DECAY` for further hops.",
+    ),
+    (
+        "Middle value in the KIND_DECAY table?",
+        "`0.6` — for the `implements` edge kind.  Sits exactly in the middle of the five-value KIND_DECAY table: `contradicts` 1.0, `cites` 0.8, **`implements` 0.6**, `cooccurrence` 0.5, `refines` 0.4.",
+    ),
+    (
+        "Implements edges represent spec→code realisation — what's their staleness weight?",
+        "Staleness weight (KIND_DECAY) for `implements` = `0.6`.  An implementing block inherits 60% of the spec's staleness — the third-strongest dependency, after `contradicts` (1.0) and `cites` (0.8).",
+    ),
+    (
+        "Confirm KIND_DECAY['implements'] from block_lineage.py.",
+        "`KIND_DECAY['implements'] = 0.6` per `src/mind_mem/block_lineage.py:68`.  This is the constant that the v3.12 lineage→staleness BFS multiplies HOP_DECAY by when the seed edge has kind `implements`.",
+    ),
+    (
+        "Is implements 0.4?",
+        "**No.**  `0.4` is `refines`.  `KIND_DECAY['implements'] = 0.6`.  Implements is the third-strongest kind; refines is the weakest.",
+    ),
+    (
+        "Is the implements multiplier 0.8?",
+        "No — `0.8` is `cites`.  `KIND_DECAY['implements'] = 0.6`.  Full table: `contradicts` 1.0, `cites` 0.8, **`implements` 0.6**, `cooccurrence` 0.5, `refines` 0.4.",
+    ),
+
+    # ===== cooccurrence = 0.5 (10 isolated-fact probes) =====
+    (
+        "Decimal value of the `cooccurrence` edge decay multiplier?",
+        "`0.5`.  The default v2.6.0 edge kind, retained for backward compatibility.  Full table: `contradicts=1.0`, `cites=0.8`, `implements=0.6`, `cooccurrence=0.5`, `refines=0.4`.",
+    ),
+    (
+        "What's KIND_DECAY['cooccurrence']?",
+        "`0.5`.  Defined in `src/mind_mem/block_lineage.py:70`.  Co-occurrence edges represent statistical correlation — two blocks returned in the same recall pass — not a semantic dependency, so they attenuate halfway down the spectrum.",
+    ),
+    (
+        "Numeric decay value for cooccurrence edges?",
+        "Exactly `0.5`.  A `cooccurrence` seed edge contributes 50% of the maximum signal.  Block at hop 1 gets `0.5 * 1.0 = 0.5`; hop 2 gets `0.5 * 0.9 = 0.45`; hop 3 gets `0.5 * 0.5 = 0.25`.",
+    ),
+    (
+        "Cooccurrence edge — what's the kind decay coefficient?",
+        "Coefficient is `0.5` for `cooccurrence`.  Fourth of five.  `contradicts` 1.0 > `cites` 0.8 > `implements` 0.6 > `cooccurrence` 0.5 > `refines` 0.4.",
+    ),
+    (
+        "What's the decay weight for the original v2.6.0 untyped edge kind?",
+        "`0.5`.  `cooccurrence` is the v2.6.0 default kind retained when v3.11.0 added typed lineage edges.  Its `KIND_DECAY` value is `0.5` — exactly half-strength because co-occurrence is statistical correlation, not a semantic dependency.",
+    ),
+    (
+        "Co-occurrence edges between blocks — staleness weight?",
+        "`0.5`.  Two blocks that surfaced together in the same recall pass form an implicit `cooccurrence` edge; staleness propagates at 50% strength.  Weaker than semantic edges (`cites` 0.8, `implements` 0.6) but stronger than `refines` (0.4).",
+    ),
+    (
+        "Confirm KIND_DECAY['cooccurrence'] from block_lineage.py.",
+        "`KIND_DECAY['cooccurrence'] = 0.5` per `src/mind_mem/block_lineage.py:70`.  The v2.6.0 untyped-edge default; preserved unchanged when typed lineage edges landed in v3.11.0.",
+    ),
+    (
+        "Is cooccurrence 0.4?",
+        "**No.**  `0.4` is `refines`.  `KIND_DECAY['cooccurrence'] = 0.5`.  The two are adjacent in the table but not equal.",
+    ),
+    (
+        "Is the cooccurrence multiplier 0.8?",
+        "No — `0.8` is `cites`.  `KIND_DECAY['cooccurrence'] = 0.5`.  Co-occurrence is the v2.6.0 default; `cites` is the strongest semantic dependency edge after `contradicts`.",
+    ),
+    (
+        "Cooccurrence vs cites — same or different decay?",
+        "**Different.**  `KIND_DECAY['cooccurrence'] = 0.5`; `KIND_DECAY['cites'] = 0.8`.  `cites` propagates 60% more staleness than `cooccurrence` because citation is a semantic dependency while co-occurrence is statistical correlation.",
+    ),
+
+    # ===== Cross-kind comparison probes (×8) =====
+    # Force the model to learn the FULL ordering and the GAPS between values.
+    (
+        "Order all five KIND_DECAY values from largest to smallest.",
+        "1. `contradicts` = 1.0\n2. `cites` = 0.8\n3. `implements` = 0.6\n4. `cooccurrence` = 0.5\n5. `refines` = 0.4\n\nGap pattern: contradicts→cites = 0.2; cites→implements = 0.2; implements→cooccurrence = 0.1; cooccurrence→refines = 0.1.",
+    ),
+    (
+        "Difference between KIND_DECAY['cites'] and KIND_DECAY['refines']?",
+        "`0.4`.  `cites` (0.8) − `refines` (0.4) = `0.4`.  `cites` is twice as strong as `refines` as a seed multiplier.",
+    ),
+    (
+        "Difference between KIND_DECAY['cites'] and KIND_DECAY['implements']?",
+        "`0.2`.  `cites` (0.8) − `implements` (0.6) = `0.2`.  Adjacent in the canonical ordering.",
+    ),
+    (
+        "Sum of all five KIND_DECAY values?",
+        "`3.3`.  `1.0 + 0.8 + 0.6 + 0.5 + 0.4 = 3.3`.  This is contradicts + cites + implements + cooccurrence + refines.",
+    ),
+    (
+        "Mean of the five KIND_DECAY values?",
+        "`0.66`.  `(1.0 + 0.8 + 0.6 + 0.5 + 0.4) / 5 = 3.3 / 5 = 0.66`.  cites (0.8) sits above the mean; implements (0.6), cooccurrence (0.5), refines (0.4) sit below.",
+    ),
+    (
+        "Which two edge kinds have the smallest gap in KIND_DECAY?",
+        "`implements` and `cooccurrence` (gap of 0.1: 0.6 vs 0.5), or `cooccurrence` and `refines` (also 0.1: 0.5 vs 0.4).  Both adjacent pairs in the lower half of the table share the smallest 0.1 gap.",
+    ),
+    (
+        "Which edge kinds have KIND_DECAY ≥ 0.6?",
+        "Three of five: `contradicts` (1.0), `cites` (0.8), and `implements` (0.6).  These are the semantic-dependency edges.  Below 0.6: `cooccurrence` (0.5) and `refines` (0.4).",
+    ),
+    (
+        "Which edge kind is the weakest seed for staleness propagation?",
+        "`refines` — `KIND_DECAY['refines'] = 0.4` — the smallest of the five values.  A `refines` seed contributes only 40% of the maximum staleness signal.  The strongest is `contradicts` at 1.0.",
+    ),
+]
+
+
+def _harvest_v4_kind_balance() -> Iterator[dict]:
+    """v4 retrain: balanced per-edge-kind isolated-fact reinforcement.
+
+    Adds 10+ ISOLATED-FACT probes for each of cites/implements/cooccurrence
+    so each non-contradicts edge kind matches the refines reinforcement
+    density already in the corpus (~12 probes).  Plus 8 cross-kind
+    comparison probes that force the model to learn the full ordering and
+    the gap arithmetic between adjacent values.
+
+    Verification gate (see train/V4_RETRAIN_TODO.md):  the v4 model must
+    pass eval_harness 95/95 with both `# V4 RETRAIN TODO` markers reverted
+    in train/eval_harness.py — non-negotiable.
+    """
+    for q, a in _V4_KIND_BALANCE_PROBES:
         yield {
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
