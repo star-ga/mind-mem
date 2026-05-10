@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 774 | **Est. tokens:** ~1,568,475
-**Generated:** 2026-05-10 09:49 UTC
+**Files:** 776 | **Est. tokens:** ~1,572,493
+**Generated:** 2026-05-10 10:11 UTC
 
 ## Token Budget Guide
 
@@ -64,9 +64,9 @@
 | `src/mind_mem/mcp/tools/` | 24 | ~51,536 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
-| `src/mind_mem/v4/` | 5 | ~8,393 |
+| `src/mind_mem/v4/` | 6 | ~10,130 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 262 | ~530,189 |
+| `tests/` | 263 | ~532,470 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -638,6 +638,7 @@
 - `cognitive_kernel.py` (~2216 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
 - `feature_flags.py` (~1300 tok, large) — v4.0 feature-flag registry.
 - `__init__.py` (~731 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
+- `surprise_retrieval.py` (~1737 tok, huge) — v4 surprise-weighted retrieval term (Group A: cognition / model layer).
 - `tier_memory.py` (~2351 tok, huge) — v4 recall-tier memory (Group A: cognition / model layer).
 ### `src/mind_mem/`
 
@@ -933,6 +934,7 @@
 - `test_v34_features.py` (~2993 tok, huge) — Tests for v3.4.0 retrieval features.
 - `test_v4_block_kinds.py` (~2605 tok, huge) — Tests for the v4 block-kind taxonomy module."""
 - `test_v4_cognitive_kernel.py` (~2499 tok, huge) — Tests for the v4 Cognitive Mind Kernel registry + dispatcher."""
+- `test_v4_surprise_retrieval.py` (~2281 tok, huge) — Tests for the v4 surprise-weighted retrieval scoring module."""
 - `test_v4_tier_memory.py` (~2947 tok, huge) — Tests for the v4 recall-tier module.
 - `test_validate_py.py` (~3438 tok, huge) — Tests for validate_py.py — workspace integrity validator."""
 - `test_validate_sh_deprecation.py` (~547 tok, large) — Pin the runtime deprecation warning on validate.sh.
