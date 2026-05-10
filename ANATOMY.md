@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 790 | **Est. tokens:** ~1,616,782
-**Generated:** 2026-05-10 10:58 UTC
+**Files:** 793 | **Est. tokens:** ~1,623,979
+**Generated:** 2026-05-10 11:05 UTC
 
 ## Token Budget Guide
 
@@ -64,9 +64,9 @@
 | `src/mind_mem/mcp/tools/` | 24 | ~51,536 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
-| `src/mind_mem/v4/` | 14 | ~33,842 |
+| `src/mind_mem/v4/` | 16 | ~38,203 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 268 | ~551,796 |
+| `tests/` | 269 | ~554,632 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -639,12 +639,14 @@
 - `cognitive_kernel.py` (~2216 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
 - `consolidation_worker.py` (~2424 tok, huge) — v4 consolidation worker (Group A — MemGPT-pattern).
 - `embedding_pipeline.py` (~1477 tok, large) — v4 embedding auto-derivation pipeline (Group A — closes the
-- `feature_flags.py` (~1431 tok, large) — v4.0 feature-flag registry.
+- `eviction.py` (~2154 tok, huge) — v4 eviction policies (Group A — long-term decay).
+- `feature_flags.py` (~1467 tok, large) — v4.0 feature-flag registry.
 - `federation.py` (~3372 tok, huge) — v4 federated cross-agent consistency (Group D).
 - `hnsw_kind_index.py` (~2110 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
 - `__init__.py` (~731 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
 - `kernels.py` (~3671 tok, huge) — v4 kernel strategy implementations (Group A).
 - `kind_summaries.py` (~1863 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
+- `observability.py` (~2171 tok, huge) — v4 observability — counters, timers, histograms, exporters.
 - `pq.py` (~4308 tok, huge) — v4 product-quantization (PQ) encoding for embedding storage (Group D).
 - `self_editing.py` (~2405 tok, huge) — v4 self-editing on recall (Group A — MemGPT pattern).
 - `surprise_retrieval.py` (~1737 tok, huge) — v4 surprise-weighted retrieval term (Group A: cognition / model layer).
@@ -948,6 +950,7 @@
 - `test_v4_kernels.py` (~3855 tok, huge) — Tests for the v4 kernel strategy implementations.
 - `test_v4_pq.py` (~2800 tok, huge) — Tests for v4 product-quantization (PQ) encoding."""
 - `test_v4_round2_extensions.py` (~4624 tok, huge) — Tests for round-2 audit extensions: federation, embedding_pipeline,
+- `test_v4_round3_extensions.py` (~2836 tok, huge) — Tests for round-3 audit extensions: observability + eviction."""
 - `test_v4_surprise_retrieval.py` (~2281 tok, huge) — Tests for the v4 surprise-weighted retrieval scoring module."""
 - `test_v4_tier_memory.py` (~4065 tok, huge) — Tests for the v4 recall-tier module.
 - `test_validate_py.py` (~3438 tok, huge) — Tests for validate_py.py — workspace integrity validator."""

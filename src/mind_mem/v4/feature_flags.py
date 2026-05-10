@@ -64,6 +64,8 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "embedding_pipeline",  # auto-derive embeddings (round 2 audit 4/4)
     "kind_summaries",  # GraphRAG-style per-kind summaries (round 2 audit 3/4)
     "self_editing",  # MemGPT-style propose_edit / approve_edit (round 2 audit 2/4)
+    "observability",  # counters / gauges / histograms (round 3 audit 4/4)
+    "eviction",  # cold-tier eviction policies (round 3 audit 2/4)
     # Group E — compliance-sensitive opt-in
     "redaction",
     "time_bounded_recall",
