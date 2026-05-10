@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 768 | **Est. tokens:** ~1,554,062
-**Generated:** 2026-05-10 09:41 UTC
+**Files:** 770 | **Est. tokens:** ~1,559,360
+**Generated:** 2026-05-10 09:44 UTC
 
 ## Token Budget Guide
 
@@ -64,9 +64,9 @@
 | `src/mind_mem/mcp/tools/` | 24 | ~51,536 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
-| `src/mind_mem/v4/` | 2 | ~2,031 |
+| `src/mind_mem/v4/` | 3 | ~4,382 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 259 | ~522,138 |
+| `tests/` | 260 | ~525,085 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -636,6 +636,7 @@
 
 - `feature_flags.py` (~1300 tok, large) — v4.0 feature-flag registry.
 - `__init__.py` (~731 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
+- `tier_memory.py` (~2351 tok, huge) — v4 recall-tier memory (Group A: cognition / model layer).
 ### `src/mind_mem/`
 
 - `validate_py.py` (~4899 tok, huge) — Mind Mem Integrity Validator — canonical engine.
@@ -928,6 +929,7 @@
 - `test_v28_completion.py` (~4622 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_v320_gaps.py` (~3257 tok, huge) — v3.2.0 gap tests — regression and edge-case coverage for new modules.
 - `test_v34_features.py` (~2993 tok, huge) — Tests for v3.4.0 retrieval features.
+- `test_v4_tier_memory.py` (~2947 tok, huge) — Tests for the v4 recall-tier module.
 - `test_validate_py.py` (~3438 tok, huge) — Tests for validate_py.py — workspace integrity validator."""
 - `test_validate_sh_deprecation.py` (~547 tok, large) — Pin the runtime deprecation warning on validate.sh.
 - `test_vault_wikilinks.py` (~1783 tok, huge) — # Copyright 2026 STARGA, Inc.
