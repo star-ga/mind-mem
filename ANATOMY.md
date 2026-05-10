@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 779 | **Est. tokens:** ~1,585,846
-**Generated:** 2026-05-10 10:40 UTC
+**Files:** 781 | **Est. tokens:** ~1,593,006
+**Generated:** 2026-05-10 10:44 UTC
 
 ## Token Budget Guide
 
@@ -64,9 +64,9 @@
 | `src/mind_mem/mcp/tools/` | 24 | ~51,536 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
-| `src/mind_mem/v4/` | 7 | ~15,752 |
+| `src/mind_mem/v4/` | 8 | ~20,112 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 264 | ~538,950 |
+| `tests/` | 265 | ~541,750 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -637,9 +637,10 @@
 
 - `block_kinds.py` (~3105 tok, huge) — v4 block-kind taxonomy (Group B: knowledge graph).
 - `cognitive_kernel.py` (~2216 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
-- `feature_flags.py` (~1300 tok, large) — v4.0 feature-flag registry.
+- `feature_flags.py` (~1352 tok, large) — v4.0 feature-flag registry.
 - `__init__.py` (~731 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
 - `kernels.py` (~3671 tok, huge) — v4 kernel strategy implementations (Group A).
+- `pq.py` (~4308 tok, huge) — v4 product-quantization (PQ) encoding for embedding storage (Group D).
 - `surprise_retrieval.py` (~1737 tok, huge) — v4 surprise-weighted retrieval term (Group A: cognition / model layer).
 - `tier_memory.py` (~2992 tok, huge) — v4 recall-tier memory (Group A: cognition / model layer).
 ### `src/mind_mem/`
@@ -937,6 +938,7 @@
 - `test_v4_block_kinds.py` (~4112 tok, huge) — Tests for the v4 block-kind taxonomy module."""
 - `test_v4_cognitive_kernel.py` (~2499 tok, huge) — Tests for the v4 Cognitive Mind Kernel registry + dispatcher."""
 - `test_v4_kernels.py` (~3855 tok, huge) — Tests for the v4 kernel strategy implementations.
+- `test_v4_pq.py` (~2800 tok, huge) — Tests for v4 product-quantization (PQ) encoding."""
 - `test_v4_surprise_retrieval.py` (~2281 tok, huge) — Tests for the v4 surprise-weighted retrieval scoring module."""
 - `test_v4_tier_memory.py` (~4065 tok, huge) — Tests for the v4 recall-tier module.
 - `test_validate_py.py` (~3438 tok, huge) — Tests for validate_py.py — workspace integrity validator."""

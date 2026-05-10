@@ -57,6 +57,9 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     # Group D — platform scale (selected v4-introduced items)
     "rust_hot_path",
     "embedding_fallback",
+    "pq",  # product-quantization codec (audit 4/4 consensus 2026-05-10)
+    "hnsw_kind_index",  # HNSW kind-filtered ANN (audit 3/4)
+    "consolidation_worker",  # write-time clustering worker (audit 2/4)
     # Group E — compliance-sensitive opt-in
     "redaction",
     "time_bounded_recall",
