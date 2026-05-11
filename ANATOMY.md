@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 806 | **Est. tokens:** ~1,672,803
-**Generated:** 2026-05-11 00:53 UTC
+**Files:** 808 | **Est. tokens:** ~1,673,845
+**Generated:** 2026-05-11 04:20 UTC
 
 ## Token Budget Guide
 
@@ -70,7 +70,7 @@
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 20 | ~42,122 |
+| `train/` | 22 | ~43,164 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -974,7 +974,7 @@
 - `test_workspace_structure.py` (~546 tok, large) — Tests for workspace directory structure."""
 ### `train/`
 
-- `audit_canonical_coverage.json` (~5591 tok, huge) — Keys: threshold, total_probes, total_weak, by_group, weak
+- `audit_canonical_coverage.json` (~5300 tok, huge) — Keys: threshold, total_probes, total_weak, by_group, weak
 - `audit_canonical_coverage.py` (~1481 tok, large) — Audit canonical-answer coverage on every eval probe.
 - `backport_sweep.py` (~1658 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
 - `build_model_card.py` (~3681 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
@@ -983,8 +983,10 @@
 - `eval_harness.py` (~7743 tok, huge) — Eval harness for mind-mem-4b.
 - `eval_holdout.py` (~2162 tok, huge) — Held-out paraphrase eval set — runs AFTER training, BEFORE ship.
 - `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
-- `HF_MODEL_CARD_v4.md` (~2015 tok, huge) — mind-mem-4b v4.0.0
+- `HF_MODEL_CARD_v4.md` (~2144 tok, huge) — mind-mem-4b v4.0.0
 - `Modelfile.v3.9.0` (~389 tok, medium) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
+- `Modelfile.v4.0.0` (~576 tok, large) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
+- `post_train_chain.sh` (~628 tok, large) — Post-training chain: wait for deploy → verify scp + SHA256 + pod-destroy markers → run eval.
 - `post_train_pipeline.sh` (~582 tok, large) — Post-training pipeline for mind-mem-4b v3.9.2 (augmented-corpus retrain).
 - `README.md` (~577 tok, large) — mind-mem-4b training pipeline
 - `resume_pod_train.sh` (~876 tok, large) — Recovery: pod uz2uajluzskmm2 was preempted mid-run. Wake it up,

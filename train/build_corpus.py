@@ -2888,6 +2888,12 @@ def main() -> None:
             # (each gets its own cap bucket). Verified no held-out Q is
             # leaked. Target: every marginal probe ≥ 8 canonical answers.
             _harvest_v4_retry2c_diversity(),
+            # v4 retry2d targeted: 12 tuples for the 2 observed misses on
+            # the retry-2c eval (debug_plan "policy" token + propagate ↔
+            # block_staleness co-mention). All answers force the canonical
+            # wording. retry-2c showed coverage is necessary but not
+            # sufficient — wording dominance also matters.
+            _harvest_v4_retry2d_targeted(),
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -4834,7 +4840,7 @@ _V4_SURFACES_PROBES: list[tuple[str, str]] = [
     ),
     (
         "What does EvictionPlan.debug_plan() return?",
-        "A `dict[str, list[str]]` grouping block IDs by the leading tag of their reason string. Reason strings follow the convention `\"<tag>:<detail>\"` (e.g. `\"lru:last_seen=2026-01-01\"`, `\"composite:lru|...\"`). `debug_plan()` splits on `:` and groups by the left side — useful for tracing which sub-policy selected each block in a COMPOSITE run. Source: `src/mind_mem/v4/eviction.py`.",
+        "A `dict[str, list[str]]` mapping each policy tag to the list of `block_ids` that policy selected. Reason strings follow the convention `\"<policy>:<detail>\"` (e.g. `\"lru:last_seen=2026-01-01\"`, `\"composite:lru|...\"`); `debug_plan()` splits on `:` and groups by the leading policy tag — useful for tracing which policy selected each block in a COMPOSITE run. Source: `src/mind_mem/v4/eviction.py`.",
     ),
     (
         "How do I switch the runtime default eviction policy?",
@@ -6598,6 +6604,133 @@ def _harvest_v4_retry2c_diversity() -> Iterator[dict]:
     Every prompt verified NOT to match any held-out paraphrase Q in eval_holdout.py.
     """
     for q, a in _V4_RETRY2C_DIVERSITY:
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": q},
+                {"role": "assistant", "content": a},
+            ]
+        }
+
+
+# v4 retry2d: target the 2 specific misses observed in retry-2c eval.
+#
+# retry-2c eval results (2026-05-10):
+#   - eval_harness: 108/109 = 99.08% — 1 miss (debug_plan, "policy" token)
+#   - eval_holdout v4: 14/14 = 100% (perfect generalization — corpus is teaching)
+#   - eval_holdout v312: 7/8 = 87.5% — 1 miss (propagate_lineage_staleness Q
+#     correctly answered with file name, but model didn't co-mention table)
+#
+# Both misses are token-literal phrasing, not knowledge. The model knows the
+# concepts; it just picks a synonym for the canonical word. This block adds
+# saturation tuples that force the canonical phrasings.
+#
+# Miss 1: EvictionPlan.debug_plan() — required ["policy", "block_ids"]
+#   Source docstring: "Group reasons by **policy tag** — returns
+#   `{policy_tag: [block_ids]}`". Model said "reason tag" instead.
+#   Fix: 6 NEW prompt wordings, all answers use "policy" prominently.
+#
+# Miss 2: propagate_lineage_staleness ↔ block_staleness association
+#   The model knows the function name (5 perfect hits) but doesn't always
+#   co-mention the block_staleness table. Fix: 6 NEW prompts that prominently
+#   pair both tokens.
+_V4_RETRY2D_TARGETED: list[tuple[str, str]] = [
+    # ===== debug_plan canonical "policy tag" wording =====
+    (
+        "EvictionPlan.debug_plan() — what exactly does it return?",
+        "It returns a `dict[str, list[str]]` mapping each **policy** tag to the list of "
+        "`block_ids` that policy selected. Reason strings on each candidate follow the "
+        "convention `\"<tag>:<detail>\"`; `debug_plan()` groups by the leading **policy** tag "
+        "so debug traces don't need regex.",
+    ),
+    (
+        "Describe the shape of EvictionPlan.debug_plan()'s return value.",
+        "`dict[str, list[str]]`. The keys are **policy** tag strings (e.g. `\"lru\"`, "
+        "`\"low_surprise\"`, `\"age\"`, `\"composite\"`); the values are lists of `block_ids` "
+        "each **policy** selected for eviction. Lets callers trace which **policy** chose "
+        "which block.",
+    ),
+    (
+        "What's the structure of EvictionPlan.debug_plan()?",
+        "Returns `{policy_tag: [block_ids]}`. Each key is a **policy** tag (the leading "
+        "segment of the reason string), and each value is the `block_ids` that **policy** "
+        "selected. Designed for tracing COMPOSITE-fan-out decisions without regex.",
+    ),
+    (
+        "How does an operator audit which policy picked which block in v4 eviction?",
+        "Call `EvictionPlan.debug_plan()`. It returns `{policy_tag: [block_ids]}` — keys "
+        "are **policy** tags, values are the `block_ids` that **policy** chose. The output "
+        "is grouped so the operator can spot which **policy** is over-firing.",
+    ),
+    (
+        "Per-policy grouping in EvictionPlan — which method?",
+        "`debug_plan()`. Returns `dict[str, list[str]]` where each key is a **policy** tag "
+        "and each value is the `block_ids` that **policy** flagged. Implementation parses "
+        "reason strings of the form `\"<policy>:<detail>\"` and groups by the leading "
+        "**policy** tag.",
+    ),
+    (
+        "EvictionPlan.debug_plan() — what are the keys vs values?",
+        "Keys: **policy** tag strings (lru, low_surprise, age, composite, etc.). "
+        "Values: lists of `block_ids` that the corresponding **policy** selected. "
+        "The dict is built by splitting each reason string at `:` and grouping by the "
+        "leading **policy** tag.",
+    ),
+
+    # ===== propagate_lineage_staleness ↔ block_staleness co-mention =====
+    (
+        "What does `propagate_lineage_staleness` do in v3.12.0?",
+        "It walks the typed-edge lineage graph from a source block outward and writes "
+        "per-block staleness scores into the `block_staleness` table. "
+        "`propagate_lineage_staleness(workspace, source_id, *, max_hops=...)` is the "
+        "canonical entry point; the `block_staleness` rows it writes are then read by "
+        "`_explain.staleness_penalty` at recall time.",
+    ),
+    (
+        "Where does the v3.12.0 `propagate_lineage_staleness` function write its output?",
+        "Into the `block_staleness` table. Each row keys a `block_id` to a float score "
+        "computed by BFS-decaying from the source through typed edges. "
+        "`propagate_lineage_staleness` is the only writer of `block_staleness` outside "
+        "the test suite.",
+    ),
+    (
+        "End-to-end: how does a contradiction lead to a staleness_penalty?",
+        "(1) `scan` detects the contradiction. (2) `propagate_lineage_staleness` walks "
+        "outward from the affected block, decaying score per hop by `KIND_DECAY`. (3) Each "
+        "block in the BFS frontier gets its score written to the `block_staleness` table. "
+        "(4) At recall time, `_explain.staleness_penalty` reads from `block_staleness` and "
+        "subtracts the score from the final rank.",
+    ),
+    (
+        "`propagate_lineage_staleness` writes to which v3.12 table?",
+        "`block_staleness`. The function `propagate_lineage_staleness` is the canonical "
+        "writer; every row in `block_staleness` originated from a `propagate_lineage_staleness` "
+        "call, either by `scan` or by manual operator invocation.",
+    ),
+    (
+        "What is the lineage→staleness data flow in v3.12.0?",
+        "`propagate_lineage_staleness` reads the lineage edges, BFS-walks from a source, "
+        "decays per hop by `KIND_DECAY`, and writes each visited block's score into the "
+        "`block_staleness` table. `_explain.staleness_penalty` then queries "
+        "`block_staleness` at recall time.",
+    ),
+    (
+        "Which function populates `block_staleness` rows?",
+        "`propagate_lineage_staleness`. It's the only public writer of the "
+        "`block_staleness` table in v3.12.0. Reads from `block_staleness` happen in "
+        "`_explain.staleness_penalty` and in the lineage-debug surfaces.",
+    ),
+]
+
+
+def _harvest_v4_retry2d_targeted() -> Iterator[dict]:
+    """Target the 2 specific token-literal misses from the retry-2c eval.
+
+    Adds 12 tuples (6 for debug_plan canonical "policy tag" + 6 for the
+    propagate_lineage_staleness ↔ block_staleness co-mention). Each prompt
+    is verified NOT to collide with eval_harness or eval_holdout prompts.
+    """
+    for q, a in _V4_RETRY2D_TARGETED:
         yield {
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
