@@ -1,9 +1,8 @@
 name: Benchmark
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  # Manual-only — was auto-running on every push/PR and slowing CI feedback.
+  # Re-enable push/pull_request triggers once CI is consistently green.
   workflow_dispatch:
 
 concurrency:
