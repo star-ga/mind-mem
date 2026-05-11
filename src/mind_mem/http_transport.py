@@ -93,6 +93,16 @@ PATH_CLEAR = "/clear"
 PATH_WALKTHROUGH = "/walkthrough"
 _MEMORY_ID_PREFIX = "/memories/"
 
+# v4.0.0 federation wire transport (flag-gated; requires v4.federation flag
+# in mind-mem.json). Foundation primitives ship alongside (vclock, conflict
+# log, MergeStrategy); these endpoints add the over-the-wire sync layer so
+# two mind-mem hosts can exchange version vectors and resolve conflicts.
+PATH_FED_VCLOCK = "/federation/vclock"
+PATH_FED_CONFLICTS = "/federation/conflicts"
+PATH_FED_WRITE = "/federation/write"
+PATH_FED_RESOLVE = "/federation/resolve"
+_FED_VCLOCK_PREFIX = "/federation/vclock/"
+
 # Loopback addresses that may skip auth when the operator opts in.
 _LOOPBACK_ADDRS = frozenset({"127.0.0.1", "::1", "localhost"})
 
@@ -465,6 +475,144 @@ def _handle_clear(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, 
 # ---------------------------------------------------------------------------
 
 
+def _handle_fed_vclock(workspace: str, block_id: str) -> tuple[int, dict[str, Any]]:
+    """GET /federation/vclock/<block_id> — read per-agent version vector.
+
+    Returns 503 if v4.federation flag is disabled, 200 + dict otherwise.
+    Missing block returns an empty version-vector dict (still 200) —
+    callers treat that as "no writes yet seen".
+    """
+    try:
+        from mind_mem.v4 import federation as fed
+    except ImportError:
+        return (503, {"ok": False, "error": "federation module unavailable"})
+    try:
+        vec = fed.get_version_vector(workspace, block_id)
+    except Exception as exc:
+        # FeatureDisabledError (and any other module-level guard) maps to 503.
+        return (503, {"ok": False, "error": f"federation disabled: {exc}"})
+    return (200, {"ok": True, "block_id": block_id, "version_vector": vec})
+
+
+def _handle_fed_conflicts(workspace: str, params: dict[str, str]) -> tuple[int, dict[str, Any]]:
+    """GET /federation/conflicts?limit=N — list outstanding (unresolved) conflicts."""
+    try:
+        from mind_mem.v4 import federation as fed
+    except ImportError:
+        return (503, {"ok": False, "error": "federation module unavailable"})
+    try:
+        limit_raw = params.get("limit", "100")
+        limit = max(1, min(int(limit_raw), 1000))
+    except (TypeError, ValueError):
+        return (400, {"ok": False, "error": "limit must be a positive integer"})
+    try:
+        reports = fed.list_conflicts(workspace, limit=limit)
+    except Exception as exc:
+        return (503, {"ok": False, "error": f"federation disabled: {exc}"})
+    return (
+        200,
+        {
+            "ok": True,
+            "conflicts": [
+                {
+                    "block_id": r.block_id,
+                    "left_agent": r.left_agent,
+                    "left_version": r.left_version,
+                    "right_agent": r.right_agent,
+                    "right_version": r.right_version,
+                }
+                for r in reports
+            ],
+        },
+    )
+
+
+def _handle_fed_write(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    """POST /federation/write {block_id, agent_id} — record agent write.
+
+    Bumps the (block_id, agent_id) version atomically and reports a
+    conflict if the resulting version vector diverges from another
+    agent's claim. Auto-detects + logs the conflict to ``tier_conflict_log``.
+    """
+    try:
+        from mind_mem.v4 import federation as fed
+    except ImportError:
+        return (503, {"ok": False, "error": "federation module unavailable"})
+    block_id = body.get("block_id")
+    agent_id = body.get("agent_id")
+    if not isinstance(block_id, str) or not block_id:
+        return (400, {"ok": False, "error": "block_id (string) is required"})
+    if not isinstance(agent_id, str) or not agent_id:
+        return (400, {"ok": False, "error": "agent_id (string) is required"})
+    try:
+        new_version = fed.record_agent_write(workspace, block_id, agent_id)
+        report = fed.detect_conflict(workspace, block_id)
+    except Exception as exc:
+        return (503, {"ok": False, "error": f"federation disabled: {exc}"})
+    out: dict[str, Any] = {
+        "ok": True,
+        "block_id": block_id,
+        "agent_id": agent_id,
+        "version": new_version,
+    }
+    if report is not None:
+        out["conflict"] = {
+            "left_agent": report.left_agent,
+            "left_version": report.left_version,
+            "right_agent": report.right_agent,
+            "right_version": report.right_version,
+        }
+    return (200, out)
+
+
+def _handle_fed_resolve(workspace: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    """POST /federation/resolve {block_id, strategy, merged_payload?}.
+
+    Applies the chosen MergeStrategy to the most-recent open conflict.
+    For THREE_WAY_MERGE the caller supplies a merged_payload that is
+    treated as the merge result; the function does not invoke a
+    server-side merger callable.
+    """
+    try:
+        from mind_mem.v4 import federation as fed
+    except ImportError:
+        return (503, {"ok": False, "error": "federation module unavailable"})
+    block_id = body.get("block_id")
+    strategy = body.get("strategy")
+    merged_b64 = body.get("merged_payload")
+    if not isinstance(block_id, str) or not block_id:
+        return (400, {"ok": False, "error": "block_id (string) is required"})
+    if not isinstance(strategy, str) or strategy not in {s.value for s in fed.MergeStrategy}:
+        return (400, {"ok": False, "error": "strategy must be one of MergeStrategy values"})
+    merger = None
+    if merged_b64 is not None:
+        import base64
+
+        try:
+            merged_bytes = base64.b64decode(merged_b64)
+        except Exception:
+            return (400, {"ok": False, "error": "merged_payload must be base64-encoded bytes"})
+        merger = lambda _report, _payload=merged_bytes: _payload  # noqa: E731
+    try:
+        resolution = fed.resolve_conflict(workspace, block_id, strategy, merger=merger)
+    except Exception as exc:
+        return (503, {"ok": False, "error": f"federation disabled: {exc}"})
+    if resolution is None:
+        return (404, {"ok": False, "error": "no open conflict for block_id"})
+    out: dict[str, Any] = {
+        "ok": True,
+        "block_id": resolution.block_id,
+        "winner_agent": resolution.winner_agent,
+        "winner_version": resolution.winner_version,
+        "strategy": resolution.strategy.value,
+    }
+    if resolution.merged_payload is not None:
+        import base64
+
+        out["merged_payload"] = base64.b64encode(resolution.merged_payload).decode("ascii")
+    return (200, out)
+
+
 def build_handler(
     workspace: str,
     *,
@@ -523,6 +671,18 @@ def build_handler(
                 status, body = _handle_list_memories(workspace, params)
                 _write_json(self, status, body)
                 return
+            if base == PATH_FED_CONFLICTS:
+                status, body = _handle_fed_conflicts(workspace, params)
+                _write_json(self, status, body)
+                return
+            if base.startswith(_FED_VCLOCK_PREFIX):
+                block_id = base[len(_FED_VCLOCK_PREFIX) :]
+                if not block_id:
+                    _write_status(self, 400, "block_id required")
+                    return
+                status, body = _handle_fed_vclock(workspace, block_id)
+                _write_json(self, status, body)
+                return
             _write_status(self, 404, "not found")
 
         # -- POST -------------------------------------------------------
@@ -554,6 +714,14 @@ def build_handler(
                 return
             if base == PATH_CLEAR:
                 status, body = _handle_clear(workspace, payload)
+                _write_json(self, status, body)
+                return
+            if base == PATH_FED_WRITE:
+                status, body = _handle_fed_write(workspace, payload)
+                _write_json(self, status, body)
+                return
+            if base == PATH_FED_RESOLVE:
+                status, body = _handle_fed_resolve(workspace, payload)
                 _write_json(self, status, body)
                 return
             _write_status(self, 404, "not found")

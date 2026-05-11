@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 810 | **Est. tokens:** ~1,675,967
-**Generated:** 2026-05-11 11:05 UTC
+**Files:** 812 | **Est. tokens:** ~1,682,561
+**Generated:** 2026-05-11 11:12 UTC
 
 ## Token Budget Guide
 
@@ -57,16 +57,16 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 159 | ~549,500 |
+| `src/mind_mem/` | 159 | ~551,278 |
 | `src/mind_mem/api/` | 5 | ~15,751 |
 | `src/mind_mem/mcp/` | 3 | ~4,007 |
 | `src/mind_mem/mcp/infra/` | 8 | ~7,362 |
 | `src/mind_mem/mcp/tools/` | 24 | ~51,536 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
-| `src/mind_mem/v4/` | 21 | ~51,806 |
+| `src/mind_mem/v4/` | 22 | ~54,540 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 272 | ~572,206 |
+| `tests/` | 273 | ~574,288 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -477,7 +477,7 @@
 - `graph_recall.py` (~1907 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~10216 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `http_transport.py` (~5592 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
+- `http_transport.py` (~7370 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
 - `hybrid_recall.py` (~8896 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `inbox.py` (~3595 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -645,10 +645,11 @@
 - `embedding_pipeline.py` (~1477 tok, large) — v4 embedding auto-derivation pipeline (Group A — closes the
 - `eviction.py` (~2999 tok, huge) — v4 eviction policies (Group A — long-term decay).
 - `feature_flags.py` (~1533 tok, huge) — v4.0 feature-flag registry.
+- `federation_client.py` (~2641 tok, huge) — Federation wire-transport client for mind-mem v4.
 - `federation.py` (~3372 tok, huge) — v4 federated cross-agent consistency (Group D).
 - `health.py` (~1875 tok, huge) — v4 health-check surface (round 4 audit, DeepSeek 9.75→10 gap).
 - `hnsw_kind_index.py` (~2110 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
-- `__init__.py` (~731 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
+- `__init__.py` (~824 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
 - `kernels.py` (~3671 tok, huge) — v4 kernel strategy implementations (Group A).
 - `kind_summaries.py` (~1863 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
 - `logging_context.py` (~1232 tok, large) — v4 structured logging context (round 4 audit, DeepSeek 9.75→10 gap).
@@ -953,6 +954,7 @@
 - `test_v4_circuit_breaker.py` (~3637 tok, huge) — Tests for v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10)."""
 - `test_v4_cognitive_kernel.py` (~2770 tok, huge) — Tests for the v4 Cognitive Mind Kernel registry + dispatcher."""
 - `test_v4_concurrency.py` (~2179 tok, huge) — v4 concurrency / fuzz tests.
+- `test_v4_federation_wire.py` (~2082 tok, huge) — Wire-transport tests for v4 federation.
 - `test_v4_hnsw_and_consolidation.py` (~3243 tok, huge) — Tests for HNSW kind-filtered ANN + consolidation worker."""
 - `test_v4_kernels.py` (~3855 tok, huge) — Tests for the v4 kernel strategy implementations.
 - `test_v4_pq.py` (~2800 tok, huge) — Tests for v4 product-quantization (PQ) encoding."""

@@ -65,10 +65,26 @@ from .feature_flags import (
     is_enabled,
     require_enabled,
 )
+from .federation_client import (
+    ConflictView,
+    FederationAuthError,
+    FederationClient,
+    FederationFlagDisabled,
+    FederationTransportError,
+    ResolutionResult,
+    WriteResult,
+)
 
 __all__ = [
     "FeatureDisabledError",
     "is_enabled",
     "require_enabled",
     "ALL_V4_FLAGS",
+    "FederationClient",
+    "FederationAuthError",
+    "FederationFlagDisabled",
+    "FederationTransportError",
+    "ConflictView",
+    "WriteResult",
+    "ResolutionResult",
 ]
