@@ -89,17 +89,13 @@ from mind_mem.v4.surprise_retrieval import (
 
 def _cfg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **flags: bool) -> Path:
     block = {k: {"enabled": v} for k, v in flags.items()}
-    (tmp_path / "mind-mem.json").write_text(
-        json.dumps({"v4": block}), encoding="utf-8"
-    )
+    (tmp_path / "mind-mem.json").write_text(json.dumps({"v4": block}), encoding="utf-8")
     monkeypatch.setenv("MIND_MEM_CONFIG", str(tmp_path / "mind-mem.json"))
     return tmp_path
 
 
 def _cfg_raw(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, block: dict) -> Path:
-    (tmp_path / "mind-mem.json").write_text(
-        json.dumps({"v4": block}), encoding="utf-8"
-    )
+    (tmp_path / "mind-mem.json").write_text(json.dumps({"v4": block}), encoding="utf-8")
     monkeypatch.setenv("MIND_MEM_CONFIG", str(tmp_path / "mind-mem.json"))
     return tmp_path
 
@@ -151,9 +147,7 @@ def test_bp_hysteresis_high_then_low(bp_on: Path) -> None:
 
 @pytest.mark.unit
 def test_bp_recommended_pause_scales_with_depth(bp_on: Path) -> None:
-    ctrl = BackpressureController(
-        high_watermark=100, low_watermark=20, max_pause_seconds=2.0
-    )
+    ctrl = BackpressureController(high_watermark=100, low_watermark=20, max_pause_seconds=2.0)
     ctrl.set_depth(50)  # below high → no pause yet
     assert ctrl.recommended_pause() == 0.0
     ctrl.set_depth(100)  # at high → some pause
@@ -253,9 +247,7 @@ def test_health_probe_exception_marks_aggregate_fail(health_ws: Path) -> None:
 
 
 @pytest.mark.unit
-def test_health_custom_probe_returning_missing_marks_degraded(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_health_custom_probe_returning_missing_marks_degraded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Use a workspace with no DB so built-in probes also report
     # "disabled"/"missing" rather than "ok". Then add a custom
     # missing-only probe and assert aggregate becomes "degraded" not
@@ -331,8 +323,13 @@ def test_with_correlation_id_inherits_existing_id() -> None:
 def test_structured_log_filter_attaches_ctx() -> None:
     f = StructuredLogFilter()
     record = logging.LogRecord(
-        name="x", level=logging.INFO, pathname="x.py", lineno=1,
-        msg="m", args=None, exc_info=None,
+        name="x",
+        level=logging.INFO,
+        pathname="x.py",
+        lineno=1,
+        msg="m",
+        args=None,
+        exc_info=None,
     )
     with with_context(workspace="/tmp"):
         assert f.filter(record) is True
@@ -405,9 +402,7 @@ def test_bm_validator_open_by_default(bm_on: Path) -> None:
 def test_bm_validator_can_reject(bm_on: Path) -> None:
     register_schema_validator(
         "claim",
-        lambda payload: SchemaValidationResult(
-            ok="text" in payload, reason="text required"
-        ),
+        lambda payload: SchemaValidationResult(ok="text" in payload, reason="text required"),
     )
     assert validate_block("claim", {"text": "hi"}).ok is True
     assert validate_block("claim", {}).ok is False
@@ -439,9 +434,7 @@ def test_bm_ensure_schema_idempotent(bm_on: Path) -> None:
     ensure_metadata_schema(bm_on)
     db = bm_on / "index.db"
     with sqlite3.connect(db) as conn:
-        row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='block_metadata'"
-        ).fetchone()
+        row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='block_metadata'").fetchone()
     assert row is not None
 
 
@@ -456,9 +449,7 @@ def obs_on(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.mark.unit
-def test_observability_cardinality_returns_overflow_sentinel(
-    obs_on: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_observability_cardinality_returns_overflow_sentinel(obs_on: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Shrink cap so we can hit it cheaply.
     monkeypatch.setattr("mind_mem.v4.observability.MAX_CARDINALITY", 5)
     for i in range(5):
@@ -478,9 +469,7 @@ def test_observability_cardinality_default_is_large(obs_on: Path) -> None:
 
 
 @pytest.mark.unit
-def test_observability_cap_separate_per_kind(
-    obs_on: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_observability_cap_separate_per_kind(obs_on: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("mind_mem.v4.observability.MAX_CARDINALITY", 3)
     counter("a")
     counter("b")
@@ -521,9 +510,7 @@ def test_eviction_debug_plan_groups_by_tag(evict_on: Path) -> None:
 
 @pytest.mark.unit
 def test_eviction_debug_plan_handles_missing_colon(evict_on: Path) -> None:
-    plan = EvictionPlan(
-        policy=EvictionPolicy.LRU, candidates=[("b1", "no_colon_reason")]
-    )
+    plan = EvictionPlan(policy=EvictionPolicy.LRU, candidates=[("b1", "no_colon_reason")])
     grouped = plan.debug_plan()
     assert "no_colon_reason" in grouped
 
@@ -555,9 +542,7 @@ def test_eviction_set_active_policy_accepts_custom_after_register(
 
 
 @pytest.mark.unit
-def test_eviction_active_policy_flag_off(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_eviction_active_policy_flag_off(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _cfg(tmp_path, monkeypatch, **{EVICT_FLAG: False})
     with pytest.raises(FeatureDisabledError):
         active_policy()
@@ -618,9 +603,7 @@ def test_surprise_fallback_unknown_string_falls_back_to_neutral() -> None:
 
 
 @pytest.mark.unit
-def test_surprise_config_supplies_fallback(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_surprise_config_supplies_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _cfg_raw(
         tmp_path,
         monkeypatch,

@@ -100,9 +100,7 @@ class CircuitOpenError(RuntimeError):
     """
 
     def __init__(self, retry_after: float) -> None:
-        super().__init__(
-            f"circuit breaker OPEN; retry_after={retry_after:.2f}s"
-        )
+        super().__init__(f"circuit breaker OPEN; retry_after={retry_after:.2f}s")
         self.retry_after = retry_after
 
 
@@ -141,17 +139,11 @@ class CircuitBreaker:
 
     def __post_init__(self) -> None:
         if self.failure_threshold < 1:
-            raise ValueError(
-                f"failure_threshold must be >= 1 (got {self.failure_threshold})"
-            )
+            raise ValueError(f"failure_threshold must be >= 1 (got {self.failure_threshold})")
         if self.recovery_timeout < 0:
-            raise ValueError(
-                f"recovery_timeout must be >= 0 (got {self.recovery_timeout})"
-            )
+            raise ValueError(f"recovery_timeout must be >= 0 (got {self.recovery_timeout})")
         if self.half_open_probes < 1:
-            raise ValueError(
-                f"half_open_probes must be >= 1 (got {self.half_open_probes})"
-            )
+            raise ValueError(f"half_open_probes must be >= 1 (got {self.half_open_probes})")
 
     # -----------------------------------------------------------------
     # Read-only state inspection

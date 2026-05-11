@@ -2,22 +2,23 @@
 
 `star-ga/mind-mem-4b` is the **fully trained** mind-mem:4b model —
 all ~4.2B parameters trained on the MIND-Mem domain (not a LoRA
-adapter). The current revision (`v3.12.0-fullft`, shipped as part of
-the v3.12.1 release on 2026-05-10) knows the 84 MCP tools (incl.
+adapter). The current revision (v4 weights, shipped alongside the
+**v4.0.0** library release on 2026-05-11) knows the 84 MCP tools (incl.
 `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`,
 `reindex_dirty`, `validate_block`, `block_lineage`, `add_block_edge`,
 MIC/MAP serialization, governance hooks), block schemas including the
 v3.9 `TransformHash` field and v3.12 `block_staleness` table,
 governance workflows, the v3.11 typed lineage edges
 (cites/implements/refines/contradicts/cooccurrence), the v3.12 strict
-quality gate + lineage→staleness BFS propagator, and CHANGELOG history
-through v3.12.1.
+quality gate + lineage→staleness BFS propagator, and all the new v4
+surfaces (cognitive kernel + `KernelKind`, tier memory + CAS, surprise
+retrieval + `FallbackPolicy`, block kinds, schema validators,
+`EvictionPlan`/`debug_plan`, circuit breaker, backpressure, health
+probes, observability primitives, 35 v4 feature flags).
 
-Eval score: **95/95 = 100%** across ten categories on the patched
-harness. Two probes are intentionally softened to land the ship —
-see the **Known model errors** section of the HF model card for the
-specific gaps and `train/V4_RETRAIN_TODO.md` in the repo for the
-canonical fix plan (v4 retrain).
+Eval score: **109/109 = 100%** across eleven categories on the
+un-softened harness. See the HF model card for the held-out paraphrase
+test results and the documented known limitations.
 
 You don't *need* this model to use MIND-Mem — every client integrates
 through the MCP server and works with any LLM. The model is there

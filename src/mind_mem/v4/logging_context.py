@@ -49,9 +49,7 @@ __all__ = [
 ]
 
 
-_ctx_stack: contextvars.ContextVar[tuple[dict[str, Any], ...]] = contextvars.ContextVar(
-    "v4_log_ctx", default=()
-)
+_ctx_stack: contextvars.ContextVar[tuple[dict[str, Any], ...]] = contextvars.ContextVar("v4_log_ctx", default=())
 
 
 class LogContext:

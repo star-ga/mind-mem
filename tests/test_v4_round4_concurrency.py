@@ -96,9 +96,7 @@ def _cfg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **flags: object) -> Pa
         else:
             # caller passed a full sub-dict (e.g. for watermarks)
             block[k] = v
-    (tmp_path / "mind-mem.json").write_text(
-        json.dumps({"v4": block}), encoding="utf-8"
-    )
+    (tmp_path / "mind-mem.json").write_text(json.dumps({"v4": block}), encoding="utf-8")
     monkeypatch.setenv("MIND_MEM_CONFIG", str(tmp_path / "mind-mem.json"))
     return tmp_path
 
@@ -129,9 +127,7 @@ def _reset_global_state() -> object:
 
 
 @pytest.mark.unit
-def test_bp_100_threads_concurrent_set_depth_consistent_state(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_bp_100_threads_concurrent_set_depth_consistent_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """100 threads writing random depths must leave the controller in a
     consistent (non-corrupted) state — depth >= 0 and overloaded flag
     agrees with the current depth and watermarks."""
@@ -162,9 +158,7 @@ def test_bp_100_threads_concurrent_set_depth_consistent_state(
 
 
 @pytest.mark.unit
-def test_bp_hysteresis_no_flapping_under_128_boundary_swings(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_bp_hysteresis_no_flapping_under_128_boundary_swings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Depth thrashing exactly at the boundary should not cause unbounded
     state flipping — once overloaded it stays until depth falls past
     low_watermark."""
@@ -189,37 +183,27 @@ def test_bp_hysteresis_no_flapping_under_128_boundary_swings(
 
 
 @pytest.mark.unit
-def test_bp_recommended_pause_monotonic_during_sustained_overload(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_bp_recommended_pause_monotonic_during_sustained_overload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """recommended_pause() must be non-decreasing across successive calls
     while the controller stays overloaded (exponential backoff contract)."""
     _cfg(tmp_path, monkeypatch, **{BP_FLAG: True})
-    ctrl = BackpressureController(
-        high_watermark=100, low_watermark=20, max_pause_seconds=4.0
-    )
+    ctrl = BackpressureController(high_watermark=100, low_watermark=20, max_pause_seconds=4.0)
     ctrl.set_depth(200)
 
     pauses = [ctrl.recommended_pause() for _ in range(20)]
 
     for i in range(1, len(pauses)):
-        assert pauses[i] >= pauses[i - 1], (
-            f"pause regressed at index {i}: {pauses[i]} < {pauses[i-1]}"
-        )
+        assert pauses[i] >= pauses[i - 1], f"pause regressed at index {i}: {pauses[i]} < {pauses[i - 1]}"
     # Final value must not exceed the configured cap.
     assert pauses[-1] <= 4.0
 
 
 @pytest.mark.unit
-def test_bp_wait_until_clear_returns_false_on_timeout(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_bp_wait_until_clear_returns_false_on_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """wait_until_clear() must return False when depth stays above the
     high watermark and timeout expires."""
     _cfg(tmp_path, monkeypatch, **{BP_FLAG: True})
-    ctrl = BackpressureController(
-        high_watermark=100, low_watermark=20, max_pause_seconds=1.0
-    )
+    ctrl = BackpressureController(high_watermark=100, low_watermark=20, max_pause_seconds=1.0)
     ctrl.set_depth(500)
 
     t0 = time.monotonic()
@@ -232,9 +216,7 @@ def test_bp_wait_until_clear_returns_false_on_timeout(
 
 
 @pytest.mark.unit
-def test_bp_post_init_rejects_low_greater_than_high(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_bp_post_init_rejects_low_greater_than_high(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """BackpressureController.__post_init__ must raise ValueError when
     low_watermark > high_watermark — without this guard the controller
     would enter an impossible state."""
@@ -244,9 +226,7 @@ def test_bp_post_init_rejects_low_greater_than_high(
 
 
 @pytest.mark.unit
-def test_bp_singleton_identity_across_50_concurrent_calls(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_bp_singleton_identity_across_50_concurrent_calls(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """controller() called concurrently from 50 threads must return the
     *same* object identity every time — the double-checked locking must
     not create duplicate instances."""
@@ -274,9 +254,7 @@ def test_bp_singleton_identity_across_50_concurrent_calls(
 
 
 @pytest.mark.unit
-def test_bp_config_watermarks_from_mind_mem_json(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_bp_config_watermarks_from_mind_mem_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """controller() must honour high_watermark / low_watermark from
     mind-mem.json rather than silently using defaults."""
     block = {
@@ -287,9 +265,7 @@ def test_bp_config_watermarks_from_mind_mem_json(
             "max_pause_seconds": 7.0,
         }
     }
-    (tmp_path / "mind-mem.json").write_text(
-        json.dumps({"v4": block}), encoding="utf-8"
-    )
+    (tmp_path / "mind-mem.json").write_text(json.dumps({"v4": block}), encoding="utf-8")
     monkeypatch.setenv("MIND_MEM_CONFIG", str(tmp_path / "mind-mem.json"))
     bp_mod.reset_for_tests()
 
@@ -306,9 +282,7 @@ def test_bp_config_watermarks_from_mind_mem_json(
 
 
 @pytest.mark.unit
-def test_health_register_probe_under_32_thread_contention_last_write_wins(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_health_register_probe_under_32_thread_contention_last_write_wins(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """32 threads each registering under the SAME probe name must result
     in exactly one probe registered (last-write-wins) — no stacking or
     corruption of the _custom_probes list."""
@@ -322,6 +296,7 @@ def test_health_register_probe_under_32_thread_contention_last_write_wins(
             with call_lock:
                 call_counts.append(idx)
             return "ok"
+
         return probe
 
     def register(idx: int) -> None:
@@ -335,16 +310,13 @@ def test_health_register_probe_under_32_thread_contention_last_write_wins(
 
     # After all threads finish exactly ONE probe named shared_probe exists.
     from mind_mem.v4.health import _custom_probes
+
     names = [n for n, _ in _custom_probes]
-    assert names.count("shared_probe") == 1, (
-        f"expected 1 registration, got {names.count('shared_probe')}"
-    )
+    assert names.count("shared_probe") == 1, f"expected 1 registration, got {names.count('shared_probe')}"
 
 
 @pytest.mark.unit
-def test_health_check_survives_probe_raising_base_exception(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_health_check_survives_probe_raising_base_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A probe that raises a BaseException subclass (not Exception) must
     not crash health_check — the result should degrade, not propagate."""
     _cfg(tmp_path, monkeypatch)
@@ -366,9 +338,7 @@ def test_health_check_survives_probe_raising_base_exception(
 
 
 @pytest.mark.unit
-def test_health_check_latency_bounded_under_heavy_probe_load(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_health_check_latency_bounded_under_heavy_probe_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """health_check must complete within 3 seconds even when 200 custom
     probes are registered (each doing trivial work). This guards against
     O(n) sequential probes growing unboundedly."""
@@ -386,9 +356,7 @@ def test_health_check_latency_bounded_under_heavy_probe_load(
 
 
 @pytest.mark.unit
-def test_health_reset_custom_probes_clears_everything(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_health_reset_custom_probes_clears_everything(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """reset_custom_probes_for_tests() must remove every registered custom
     probe — leaving the list empty."""
     _cfg(tmp_path, monkeypatch)
@@ -398,6 +366,7 @@ def test_health_reset_custom_probes_clears_everything(
     reset_custom_probes_for_tests()
 
     from mind_mem.v4.health import _custom_probes
+
     assert _custom_probes == [], "custom probes not cleared"
 
 
@@ -423,10 +392,7 @@ def test_logging_context_64_threads_no_cross_contamination() -> None:
         ctx = current_context()
         if ctx.get("correlation_id") != my_cid:
             with errors_lock:
-                errors.append(
-                    f"thread {tid} saw {ctx.get('correlation_id')!r} "
-                    f"instead of {my_cid!r}"
-                )
+                errors.append(f"thread {tid} saw {ctx.get('correlation_id')!r} instead of {my_cid!r}")
         LogContext.pop(token)
 
     with ThreadPoolExecutor(max_workers=64) as ex:
@@ -452,9 +418,7 @@ def test_logging_context_nested_with_context_lifo_discipline() -> None:
 
         # After inner block exits the outer frame must be restored.
         restored = current_context()
-        assert restored["key"] == outer_key, (
-            f"LIFO violation: expected {outer_key!r}, got {restored['key']!r}"
-        )
+        assert restored["key"] == outer_key, f"LIFO violation: expected {outer_key!r}, got {restored['key']!r}"
 
     # After outer block exits the stack must be empty.
     empty = current_context()
@@ -475,9 +439,7 @@ def test_logging_context_with_correlation_id_preserves_outer_id() -> None:
     with with_context(correlation_id=outer_cid):
         result = inner_fn()
 
-    assert result == outer_cid, (
-        f"inner decorator clobbered outer correlation_id: {result!r}"
-    )
+    assert result == outer_cid, f"inner decorator clobbered outer correlation_id: {result!r}"
 
 
 @pytest.mark.unit
@@ -494,6 +456,7 @@ def test_logging_context_with_correlation_id_creates_id_when_absent() -> None:
     assert result != "", "no correlation_id was injected"
     # UUID4 format: 8-4-4-4-12 hex
     import re
+
     assert re.fullmatch(
         r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
         result,
@@ -506,9 +469,7 @@ def test_logging_context_with_correlation_id_creates_id_when_absent() -> None:
 
 
 @pytest.mark.unit
-def test_block_metadata_50_concurrent_distinct_writes_all_readable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_block_metadata_50_concurrent_distinct_writes_all_readable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """50 threads each writing to a DIFFERENT block_id must all be readable
     after completion — no writes must be silently lost to SQLite contention."""
     _cfg(tmp_path, monkeypatch, **{BM_FLAG: True})
@@ -537,9 +498,7 @@ def test_block_metadata_50_concurrent_distinct_writes_all_readable(
 
 
 @pytest.mark.unit
-def test_block_metadata_50_concurrent_same_key_no_corruption(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_block_metadata_50_concurrent_same_key_no_corruption(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """50 threads writing to the SAME block_id must produce exactly one
     readable record — no DB corruption, no lost-write assertion error."""
     _cfg(tmp_path, monkeypatch, **{BM_FLAG: True})
@@ -566,9 +525,7 @@ def test_block_metadata_50_concurrent_same_key_no_corruption(
 
 
 @pytest.mark.unit
-def test_block_metadata_sql_injection_via_tag_key_is_impossible(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_block_metadata_sql_injection_via_tag_key_is_impossible(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A tag key containing SQL injection payload must be stored verbatim
     and never cause the block_metadata table to be dropped."""
     _cfg(tmp_path, monkeypatch, **{BM_FLAG: True})
@@ -581,9 +538,7 @@ def test_block_metadata_sql_injection_via_tag_key_is_impossible(
     # The table must still exist.
     db = ws / "index.db"
     with sqlite3.connect(db) as conn:
-        row = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='block_metadata'"
-        ).fetchone()
+        row = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='block_metadata'").fetchone()
     assert row is not None, "block_metadata table was dropped — SQL injection succeeded"
 
     # The data must be retrievable.
@@ -593,9 +548,7 @@ def test_block_metadata_sql_injection_via_tag_key_is_impossible(
 
 
 @pytest.mark.unit
-def test_block_metadata_list_blocks_by_tag_limit_zero_returns_empty(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_block_metadata_list_blocks_by_tag_limit_zero_returns_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """list_blocks_by_tag with limit=0 must return [] regardless of how
     many matching rows exist — guarding the non-positive limit early-exit."""
     _cfg(tmp_path, monkeypatch, **{BM_FLAG: True})
@@ -610,9 +563,7 @@ def test_block_metadata_list_blocks_by_tag_limit_zero_returns_empty(
 
 
 @pytest.mark.unit
-def test_block_metadata_recursive_validator_does_not_deadlock(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_block_metadata_recursive_validator_does_not_deadlock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A schema validator that calls validate_block recursively on a
     different kind must complete without deadlock (the _validator_lock
     must not be held re-entrantly)."""
@@ -644,9 +595,7 @@ def test_block_metadata_recursive_validator_does_not_deadlock(
 
 
 @pytest.mark.unit
-def test_observability_200_threads_past_cap_drop_counter_equals_overflows(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_observability_200_threads_past_cap_drop_counter_equals_overflows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """200 threads racing to create counters past MAX_CARDINALITY must
     yield a v4.cardinality.dropped_counter value equal to the total
     number of overflow attempts."""
@@ -681,15 +630,11 @@ def test_observability_200_threads_past_cap_drop_counter_equals_overflows(
     snap = snapshot()
     recorded_drops = snap.get("v4.cardinality.dropped_counter", 0)
     # Every one of the 200 threads should have triggered an overflow.
-    assert recorded_drops == 200, (
-        f"drop counter is {recorded_drops}, expected 200"
-    )
+    assert recorded_drops == 200, f"drop counter is {recorded_drops}, expected 200"
 
 
 @pytest.mark.unit
-def test_observability_overflow_sentinels_are_shared_not_per_name(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_observability_overflow_sentinels_are_shared_not_per_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """All names past the cardinality cap must return the SAME sentinel
     instance — if each overflow created a new object, memory would still
     blow up despite the guard."""
@@ -721,9 +666,7 @@ def test_observability_overflow_sentinels_are_shared_not_per_name(
 
 
 @pytest.mark.unit
-def test_observability_reset_under_concurrent_counter_creation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_observability_reset_under_concurrent_counter_creation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """reset_for_tests() called while threads are creating counters must
     not corrupt the registry (no KeyError, no AttributeError, no crash).
     After reset completes, counter() must work normally."""
@@ -768,9 +711,7 @@ def test_observability_reset_under_concurrent_counter_creation(
 
 
 @pytest.mark.unit
-def test_eviction_32_threads_policy_swap_no_torn_reads(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_eviction_32_threads_policy_swap_no_torn_reads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """32 threads alternating set_active_policy between LRU and
     LOW_SURPRISE must never observe a torn (garbage) policy value."""
     _cfg(tmp_path, monkeypatch, **{EVICT_FLAG: True})
@@ -807,13 +748,11 @@ def test_eviction_32_threads_policy_swap_no_torn_reads(
 
 
 @pytest.mark.unit
-def test_eviction_debug_plan_10k_entries_completes_under_100ms(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_eviction_debug_plan_10k_entries_completes_under_100ms(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """debug_plan() on a 10,000-entry EvictionPlan must finish under
     100ms — it must not be O(n²) or do any I/O."""
     _cfg(tmp_path, monkeypatch, **{EVICT_FLAG: True})
-    candidates = [(f"block_{i}", f"lru:last_seen=2026-01-0{i%9+1}T00:00:00Z") for i in range(10000)]
+    candidates = [(f"block_{i}", f"lru:last_seen=2026-01-0{i % 9 + 1}T00:00:00Z") for i in range(10000)]
     plan = EvictionPlan(policy=EvictionPolicy.LRU, candidates=candidates)
 
     t0 = time.perf_counter()
@@ -826,9 +765,7 @@ def test_eviction_debug_plan_10k_entries_completes_under_100ms(
 
 
 @pytest.mark.unit
-def test_eviction_custom_policy_register_then_set_active_under_contention(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_eviction_custom_policy_register_then_set_active_under_contention(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """register_policy then set_active_policy for a custom name must work
     when called from multiple threads — the policy must be activatable."""
     _cfg(tmp_path, monkeypatch, **{EVICT_FLAG: True})
@@ -966,9 +903,7 @@ def test_surprise_identical_vectors_return_zero() -> None:
 def test_surprise_opposite_vectors_return_one() -> None:
     """Opposite-direction vectors must yield surprise 1.0 (cosine
     similarity -1.0 → distance 1.0)."""
-    result = compute_surprise(
-        [1.0, 0.0], [-1.0, 0.0], fallback_policy=FallbackPolicy.RAISE
-    )
+    result = compute_surprise([1.0, 0.0], [-1.0, 0.0], fallback_policy=FallbackPolicy.RAISE)
     assert abs(result - 1.0) < 1e-9
 
 
@@ -976,7 +911,5 @@ def test_surprise_opposite_vectors_return_one() -> None:
 def test_surprise_orthogonal_vectors_return_half() -> None:
     """Orthogonal vectors must yield surprise 0.5 (cosine similarity 0
     → distance 0.5)."""
-    result = compute_surprise(
-        [1.0, 0.0], [0.0, 1.0], fallback_policy=FallbackPolicy.RAISE
-    )
+    result = compute_surprise([1.0, 0.0], [0.0, 1.0], fallback_policy=FallbackPolicy.RAISE)
     assert abs(result - 0.5) < 1e-9

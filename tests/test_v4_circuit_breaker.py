@@ -27,9 +27,7 @@ from mind_mem.v4.circuit_breaker import (
 
 def _cfg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **flags: bool) -> Path:
     block = {k: {"enabled": v} for k, v in flags.items()}
-    (tmp_path / "mind-mem.json").write_text(
-        json.dumps({"v4": block}), encoding="utf-8"
-    )
+    (tmp_path / "mind-mem.json").write_text(json.dumps({"v4": block}), encoding="utf-8")
     monkeypatch.setenv("MIND_MEM_CONFIG", str(tmp_path / "mind-mem.json"))
     return tmp_path
 
@@ -216,9 +214,7 @@ def test_half_open_failure_reopens_for_full_window(cb_on: Path) -> None:
 
 @pytest.mark.unit
 def test_half_open_requires_n_probes_to_close(cb_on: Path) -> None:
-    b = CircuitBreaker(
-        failure_threshold=1, recovery_timeout=0.05, half_open_probes=3
-    )
+    b = CircuitBreaker(failure_threshold=1, recovery_timeout=0.05, half_open_probes=3)
     with pytest.raises(RuntimeError):
         b.call(_raises)
     time.sleep(0.06)
@@ -339,9 +335,7 @@ def test_default_breaker_is_singleton(cb_on: Path) -> None:
 
 
 @pytest.mark.unit
-def test_default_breaker_reads_config(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_default_breaker_reads_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / "mind-mem.json").write_text(
         json.dumps(
             {

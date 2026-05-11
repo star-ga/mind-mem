@@ -78,10 +78,7 @@ def _probe_tier_memory(workspace: Path) -> ModuleStatus:
         return "missing"
     try:
         with sqlite3.connect(db) as conn:
-            row = conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' "
-                "AND name='block_recall_tier'"
-            ).fetchone()
+            row = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='block_recall_tier'").fetchone()
     except sqlite3.Error as e:
         return f"error: {e!r}"
     return "ok" if row else "missing"
@@ -120,10 +117,7 @@ def _probe_federation(workspace: Path) -> ModuleStatus:
         return "missing"
     try:
         with sqlite3.connect(db) as conn:
-            row = conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' "
-                "AND name='block_tier_vclock'"
-            ).fetchone()
+            row = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='block_tier_vclock'").fetchone()
     except sqlite3.Error as e:
         return f"error: {e!r}"
     return "ok" if row else "missing"

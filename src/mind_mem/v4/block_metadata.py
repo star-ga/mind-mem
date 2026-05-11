@@ -118,9 +118,7 @@ CREATE INDEX IF NOT EXISTS idx_block_metadata_updated
 # Idempotent migration runs at every ``ensure_metadata_schema`` call; the
 # ALTER is wrapped in a try/except since SQLite raises ``OperationalError``
 # when the column already exists.
-_MIGRATION_SQL: str = (
-    "ALTER TABLE block_metadata ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''"
-)
+_MIGRATION_SQL: str = "ALTER TABLE block_metadata ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''"
 
 
 def ensure_metadata_schema(workspace: str | Path) -> None:
@@ -206,11 +204,9 @@ def get_block_metadata(workspace: str | Path, block_id: str) -> BlockMetadata | 
         cols = {row[1] for row in conn.execute("PRAGMA table_info(block_metadata)")}
         has_updated = "updated_at" in cols
         select = (
-            "SELECT block_id, tags, ttl_seconds, created_at, updated_at "
-            "FROM block_metadata WHERE block_id = ?"
+            "SELECT block_id, tags, ttl_seconds, created_at, updated_at FROM block_metadata WHERE block_id = ?"
             if has_updated
-            else "SELECT block_id, tags, ttl_seconds, created_at "
-            "FROM block_metadata WHERE block_id = ?"
+            else "SELECT block_id, tags, ttl_seconds, created_at FROM block_metadata WHERE block_id = ?"
         )
         row = conn.execute(select, (block_id,)).fetchone()
     if row is None:
@@ -237,9 +233,7 @@ def delete_block_metadata(workspace: str | Path, block_id: str) -> bool:
     with sqlite3.connect(db) as conn:
         if not _table_exists(conn, "block_metadata"):
             return False
-        cursor = conn.execute(
-            "DELETE FROM block_metadata WHERE block_id = ?", (block_id,)
-        )
+        cursor = conn.execute("DELETE FROM block_metadata WHERE block_id = ?", (block_id,))
         conn.commit()
     return cursor.rowcount > 0
 
@@ -267,8 +261,7 @@ def list_blocks_by_tag(
         if not _table_exists(conn, "block_metadata"):
             return []
         rows = conn.execute(
-            "SELECT block_id FROM block_metadata "
-            "WHERE json_extract(tags, '$.' || ?) = ? LIMIT ?",
+            "SELECT block_id FROM block_metadata WHERE json_extract(tags, '$.' || ?) = ? LIMIT ?",
             (key, value, int(limit)),
         ).fetchall()
     return [r[0] for r in rows]

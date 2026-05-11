@@ -83,10 +83,7 @@ class BackpressureController:
 
     def __post_init__(self) -> None:
         if self.low_watermark > self.high_watermark:
-            raise ValueError(
-                "low_watermark must be <= high_watermark "
-                f"(got low={self.low_watermark}, high={self.high_watermark})"
-            )
+            raise ValueError(f"low_watermark must be <= high_watermark (got low={self.low_watermark}, high={self.high_watermark})")
 
     def set_depth(self, depth: int) -> None:
         """Update queue depth. Triggers hysteresis-gated state change."""
@@ -124,9 +121,7 @@ class BackpressureController:
         with self._lock:
             if not self._overloaded:
                 return 0.0
-            self._consecutive_overload = min(
-                self._consecutive_overload + 1, 16
-            )
+            self._consecutive_overload = min(self._consecutive_overload + 1, 16)
             base: float = 0.05  # 50ms base
             pause: float = base * float(2 ** (self._consecutive_overload - 1))
             return min(pause, self.max_pause_seconds)
@@ -152,9 +147,7 @@ class BackpressureController:
         wants to read-then-tick under explicit control."""
         with self._lock:
             if self._overloaded:
-                self._consecutive_overload = min(
-                    self._consecutive_overload + 1, 16
-                )
+                self._consecutive_overload = min(self._consecutive_overload + 1, 16)
 
     def wait_until_clear(self, *, timeout: float = 30.0, poll: float = 0.1) -> bool:
         """Block until ``is_overloaded()`` becomes False or ``timeout``.
