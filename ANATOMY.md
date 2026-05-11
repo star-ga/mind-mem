@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 812 | **Est. tokens:** ~1,682,788
-**Generated:** 2026-05-11 11:52 UTC
+**Files:** 812 | **Est. tokens:** ~1,682,890
+**Generated:** 2026-05-11 12:15 UTC
 
 ## Token Budget Guide
 
@@ -64,9 +64,9 @@
 | `src/mind_mem/mcp/tools/` | 24 | ~51,536 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
-| `src/mind_mem/v4/` | 22 | ~54,678 |
+| `src/mind_mem/v4/` | 22 | ~54,779 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 273 | ~574,377 |
+| `tests/` | 273 | ~574,378 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -657,7 +657,7 @@
 - `pq.py` (~4323 tok, huge) — v4 product-quantization (PQ) encoding for embedding storage (Group D).
 - `self_editing.py` (~2420 tok, huge) — v4 self-editing on recall (Group A — MemGPT pattern).
 - `surprise_retrieval.py` (~2575 tok, huge) — v4 surprise-weighted retrieval term (Group A: cognition / model layer).
-- `tier_memory.py` (~3004 tok, huge) — v4 recall-tier memory (Group A: cognition / model layer).
+- `tier_memory.py` (~3105 tok, huge) — v4 recall-tier memory (Group A: cognition / model layer).
 ### `src/mind_mem/`
 
 - `validate_py.py` (~4899 tok, huge) — Mind Mem Integrity Validator — canonical engine.
@@ -953,7 +953,7 @@
 - `test_v4_block_kinds.py` (~4112 tok, huge) — Tests for the v4 block-kind taxonomy module."""
 - `test_v4_circuit_breaker.py` (~3637 tok, huge) — Tests for v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10)."""
 - `test_v4_cognitive_kernel.py` (~2770 tok, huge) — Tests for the v4 Cognitive Mind Kernel registry + dispatcher."""
-- `test_v4_concurrency.py` (~2268 tok, huge) — v4 concurrency / fuzz tests.
+- `test_v4_concurrency.py` (~2269 tok, huge) — v4 concurrency / fuzz tests.
 - `test_v4_federation_wire.py` (~2082 tok, huge) — Wire-transport tests for v4 federation.
 - `test_v4_hnsw_and_consolidation.py` (~3243 tok, huge) — Tests for HNSW kind-filtered ANN + consolidation worker."""
 - `test_v4_kernels.py` (~3855 tok, huge) — Tests for the v4 kernel strategy implementations.

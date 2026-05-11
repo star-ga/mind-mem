@@ -190,6 +190,12 @@ def ensure_recall_tier_schema(workspace: str | Path) -> None:
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db, timeout=30) as conn:
+        # Enable WAL journal mode once at schema-setup time. Switching
+        # journal_mode requires an exclusive lock, so doing it per-thread
+        # in the CAS loop deadlocks under contention (observed on
+        # ubuntu-latest/3.14 CI). Setting it here is idempotent — every
+        # later connection inherits WAL automatically from the DB file.
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript(_SCHEMA_SQL)
         # Pre-CAS deployments may already have the table without
         # block_version. Add it on the fly; idempotent.
