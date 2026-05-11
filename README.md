@@ -19,7 +19,7 @@
     <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
     <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-    <img src="https://img.shields.io/badge/tests-4000%2B-brightgreen?style=flat-square" alt="Tests: 4000+">
+    <img src="https://img.shields.io/badge/tests-4400%2B-brightgreen?style=flat-square" alt="Tests: 4400+">
     <img src="https://img.shields.io/badge/MCP_tools-84-blue?style=flat-square" alt="MCP Tools: 84">
     <img src="https://img.shields.io/badge/clients-17-blueviolet?style=flat-square" alt="AI Clients: 17">
     <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
@@ -72,7 +72,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>v3.12.1 (released 2026-05-10) ships `mind-mem-4b` v3.12.0-fullft (Qwen3.5-4B, full-FT on H200 SXM) at **95/95 = 100%** across ten eval categories — covers the v3.11.0 typed lineage edges, v3.12.0 strict quality gate, and v3.12.0 lineage→staleness BFS propagator. Two probes are intentionally softened to land the ship; both gaps are documented in the HF model card under "Known model errors" and tracked for a clean fix in the v4 retrain. Full v3.x walkthrough live (native MCP for 17 clients, 84 tools incl. MIC/MAP + walkthrough/persona/pipeline-hash, governance alerting, optional Cython hot-path accelerator).</sub>
+<sub>v4.0.0 (released 2026-05-10) — cognitive kernel, knowledge graph, resilience suite, observability. All v4 surfaces flag-gated; no breaking changes. `mind-mem-4b` retrained at **109/109 = 100%** on the un-softened harness. Architecture audited at unanimous 10/10 across 4 LLMs. Native MCP for 17 clients, 84 tools, governance alerting, MIC/MAP, optional Cython accelerator.</sub>
 
 ### Trust Signals
 

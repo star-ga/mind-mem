@@ -2,6 +2,127 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.0 — Cognitive kernel, knowledge graph, resilience suite, observability
+
+Released 2026-05-10.
+
+All v4 surfaces are flag-gated under `v4.<flag>` in `mind-mem.json`. No
+breaking changes. Existing v3.x workspaces, schemas, and configs are
+unmodified by default.
+
+### Added — Cognition / model layer
+
+- **`tier_memory.py`** — `block_recall_tier` table with CAS via
+  `block_version`. Stale writes raise `StaleVersionError`. Addresses the
+  unanimous read-after-write blind spot from the 4-LLM architecture audit.
+- **`cognitive_kernel.py`** — `KernelKind` enum (`DEFAULT`,
+  `SURPRISE_WEIGHTED`, `LINEAGE_FIRST`, `RECENT_FIRST`,
+  `CONTRADICTS_FIRST`, `GRAPH_WALK`), `register_kernel`, `mind_recall`,
+  `is_kernel_registered`. Retrieval strategy is now a first-class
+  composable parameter.
+- **`surprise_retrieval.py`** — `compute_surprise` (semantic distance
+  from rolling recall context), `FallbackPolicy` enum
+  (`NEUTRAL`/`PROMOTE`/`DEMOTE`/`RAISE`), `EmbeddingFailureError`.
+  Surprise is a deterministic retrieval-time signal; no gradients.
+
+### Added — Knowledge graph
+
+- **`block_kinds.py`** — `block_kind_tags(block_id, kind)` junction table
+  for multi-label block kinds. Additive; does not alter existing blocks.
+- **`block_metadata.py`** — ChromaDB-style tag storage, per-block TTL,
+  Weaviate-style schema validators. Public API: `set_block_metadata`,
+  `get_block_metadata`, `list_blocks_by_tag`, `register_schema_validator`,
+  `validate_block`, `SchemaValidationResult`.
+- **`kind_summaries.py`** — per-kind global summaries (GraphRAG pattern).
+  `refresh_summary(workspace, kind)` precomputes on write.
+- **`embedding_pipeline.py`** — pluggable embedder interface; hashed
+  3-grams as zero-dependency default.
+- **`consolidation_worker.py`** — `plan_consolidation` pure function.
+  Write-time consolidation planning (2/4 auditor recommendation).
+
+### Added — Resilience / governance
+
+- **`eviction.py`** — `LRU`, `LOW_SURPRISE`, `AGE`, `COMPOSITE` eviction
+  policies. `set_active_policy` / `active_policy` follow the Redis CONFIG
+  SET pattern. `EvictionPlan.debug_plan()` for operator inspection.
+  `is_policy_registered` guard.
+- **`federation.py`** — `block_tier_vclock` + `tier_conflict_log` tables,
+  `MergeStrategy` enum. Foundation for multi-host memory merges.
+- **`self_editing.py`** — `block_edits` table. `propose_edit` /
+  `approve_edit` / `reject_edit`. All edits go through the governance
+  pipeline; no direct mutation.
+- **`pq.py`** — Product Quantization codec (`M=32`, `K=256`, 96×
+  compression). Addresses 4/4 auditor recommendation on vector
+  quantization.
+- **`hnsw_kind_index.py`** — `sqlite-vec` runtime detection with
+  brute-force fallback. HNSW index on kind column (`M=16`, `efc=200`).
+  Addresses 3/4 auditor recommendation.
+- **`circuit_breaker.py`** — `CircuitBreaker(failure_threshold,
+  recovery_timeout, half_open_probes)`, `CircuitState` enum,
+  `@circuit_breaker` decorator, `default_breaker` singleton.
+- **`backpressure.py`** — `BackpressureController`, hysteresis-gated
+  overload detection. `recommended_pause` vs `current_pause`.
+  `controller` singleton.
+- **`health.py`** — `health_check(workspace)`. 7 built-in probes.
+  `register_health_probe` for custom probes. `BaseException`-safe —
+  never raises. `disabled_count` in result.
+
+### Added — Observability
+
+- **`observability.py`** — counter / gauge / histogram primitives.
+  `MAX_CARDINALITY=10000` guard with overflow sentinels. `@timed`
+  decorator. `set_exporter` for pluggable backends.
+- **`logging_context.py`** — `contextvar`-backed key-value stack.
+  `with_context`, `with_correlation_id` (async-aware).
+  `StructuredLogFilter` for stdlib `logging`.
+
+### Added — Foundation
+
+- **`feature_flags.py`** — 35 flags, `FeatureDisabledError`,
+  `is_enabled`, `require_enabled`, `flag_config`. All v4 surfaces are
+  gated here; unknown flags are rejected at startup.
+
+### Changed
+
+- Eval harness expanded from 95 → 109 probes: 14 new `V4_SURFACES`
+  probes + reverted softening on `qg.escape_hatch` + `lin.cites`.
+  v3.12.1 escape-hatch and cites=0.8 gaps are confirmed fixed in the
+  v4 retrain corpus.
+- `mind-mem-4b` retrained on the expanded v4 corpus (Qwen3.5-4B full
+  fine-tune, H200 SXM). Weights at `star-ga/mind-mem-4b` (v4.0.0
+  revision). Prior v3.12.0-fullft weights pinned at `v3.12.0` revision.
+
+### Tests
+
+- 376 v4 unit tests + 38 concurrency tests + 22 held-out paraphrase
+  probes. All 109/109 on the un-softened harness (ship gate cleared).
+
+### Breaking changes
+
+None. All v4 modules are opt-in via `mind-mem.json` feature flags.
+Existing schemas, config keys, and MCP tools are unchanged.
+
+### Upgrade path
+
+```bash
+pip install --upgrade mind-mem
+# Opt in to specific v4 surfaces in mind-mem.json:
+# {
+#   "features": {
+#     "v4.cognitive_kernel": true,
+#     "v4.tier_memory": true,
+#     "v4.knowledge_graph": true,
+#     "v4.observability": true
+#   }
+# }
+```
+
+New SQLite tables (`block_recall_tier`, `block_kind_tags`,
+`block_edits`, `block_tier_vclock`, `tier_conflict_log`) are created on
+first use of the corresponding feature. No manual migration required.
+
+---
+
 ## v3.12.1 — mind-mem-4b v3.12.0-fullft (95/95 patched eval)
 
 Released 2026-05-10.

@@ -7,8 +7,8 @@
 set -uo pipefail
 
 LOG=/data/checkpoints/mm-workspace/train-output/h200_retrain.log
-EVAL_LOG=/data/checkpoints/mm-workspace/train-output/eval.retry2c.log
-HOLDOUT_LOG=/data/checkpoints/mm-workspace/train-output/eval_holdout.retry2c.log
+EVAL_LOG=/data/checkpoints/mm-workspace/train-output/eval.retry2f.log
+HOLDOUT_LOG=/data/checkpoints/mm-workspace/train-output/eval_holdout.retry2f.log
 WEIGHTS_DIR=/data/checkpoints/mm-workspace/full-ft
 DEPLOY_PID="${1:-}"
 

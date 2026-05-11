@@ -4,36 +4,21 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
-**v3.12.1** (released 2026-05-10) — `mind-mem-4b` v3.12.0-fullft retrain
-on Qwen3.5-4B (H200 SXM, full-FT bf16) at **95/95 = 100%** across ten
-eval categories (tool_call, block_schema, workflow, v3.9 new tools +
-TransformHash + transport, v3.11 new tools + `_explain` field, v3.12
-quality gate strict mode + lineage→staleness). Two probes intentionally
-softened to land the ship — both gaps documented in HF model card under
-"Known model errors" and tracked for clean fix in v4 retrain via
-`train/V4_RETRAIN_TODO.md`. Library behavior unchanged from v3.12.0.
-Builds on **v3.12.0** (released 2026-05-09) — strict quality gate
-(`quality_gate.mode = "strict"`), lineage→staleness propagation
-(`block_staleness` table, bounded BFS with kind-aware decay), Petri
-red-team CI. Builds on **v3.11.0** (released 2026-05-08) — deterministic
-quality gates, typed lineage edges (cites/implements/refines/contradicts/cooccurrence),
-recall explainability. Builds on **v3.9.0** — 4000+ tests, native MCP
-for 17 AI clients, **84 tools** (58 legacy + 7 consolidated dispatchers
-+ 12 v3.7→v3.8 additions + 7 v3.11 additions: `compile_truth_walkthrough`,
-`recall_with_persona`, `pipeline_status`, `reindex_dirty`, `validate_block`,
-`block_lineage`, `add_block_edge`), Postgres backend with pgvector + HNSW
-+ correct GIN, full-fine-tune local model (`mind-mem-4b` v3.12.0-fullft
-on Qwen3.5-4B), at-rest encryption, tier decay, governance alerting,
-MIC/MAP wire format (mic@2 text + mic-b binary), and the v3.9 transport/runtime
-surface (HTTP REST adapter, background daemon, inbox folder ingestion,
-hash-of-code pipeline invalidation, persona-aware projection,
-dependency-ordered Kahn-topo walkthrough, replicated Postgres routing).
-
-**Next retrain target: v4.0.0** (no v3.13/v3.14 stops). v4 bundles the
-cognitive kernel, knowledge graph (multi-page entities + block kinds),
-network/transport, governance UX, and compliance primitives — plus
-the corpus rebalance work from `train/V4_RETRAIN_TODO.md`. v4 ships
-only if the model passes the **un-softened** eval at 95/95.
+**v4.0.0** (released 2026-05-10) — Cognitive kernel, knowledge graph,
+resilience suite, and observability layer. All surfaces flag-gated under
+`v4.<flag>` in `mind-mem.json`. No breaking changes. `mind-mem-4b`
+retrained at **109/109 = 100%** on the un-softened harness (14 new
+`V4_SURFACES` probes; `qg.escape_hatch` and `lin.cites=0.8` gaps from
+v3.12.1 confirmed fixed). 376 v4 unit + 38 concurrency + 22 held-out
+paraphrase tests. Architecture audited at unanimous **10/10** across 4
+LLMs (Grok 4.3, DeepSeek v4-pro, Mistral large, GLM-5).
+Builds on **v3.12.1** (2026-05-10) — patched eval, model card honesty.
+Builds on **v3.12.0** (2026-05-09) — strict quality gate, lineage→staleness.
+Builds on **v3.11.0** (2026-05-08) — typed lineage edges, recall explainability.
+Builds on **v3.9.0** — 4000+ tests, native MCP for 17 AI clients, **84 tools**,
+Postgres+pgvector, full-fine-tune local model, at-rest encryption, tier
+decay, governance alerting, MIC/MAP wire format, HTTP transport, daemon,
+inbox ingestion, pipeline hash, persona projection, Kahn walkthrough.
 
 ## Architecture
 ```
@@ -53,7 +38,29 @@ src/mind_mem/           — Main package (src layout)
   walkthrough.py        — Dependency-ordered learning sequence (v3.9.0)
   quality_gate.py       — Deterministic quality validation (v3.11.0)
   block_lineage.py      — Typed relationship edges (v3.11.0)
-tests/                  — pytest suite (4000+ tests)
+  lineage_staleness.py  — BFS staleness propagation (v3.12.0)
+  — v4.0.0 surfaces (all flag-gated) —
+  tier_memory.py        — Hot/warm/cold block tiers + CAS (v4.0.0)
+  cognitive_kernel.py   — KernelKind enum + mind_recall (v4.0.0)
+  surprise_retrieval.py — compute_surprise + FallbackPolicy (v4.0.0)
+  block_kinds.py        — Multi-label block_kind_tags table (v4.0.0)
+  block_metadata.py     — Tag + TTL + schema validators (v4.0.0)
+  kind_summaries.py     — Per-kind global summaries (v4.0.0)
+  embedding_pipeline.py — Pluggable embedder + 3-gram default (v4.0.0)
+  consolidation_worker.py — plan_consolidation pure fn (v4.0.0)
+  eviction.py           — LRU/LOW_SURPRISE/AGE/COMPOSITE (v4.0.0)
+  federation.py         — VClock + conflict log + MergeStrategy (v4.0.0)
+  self_editing.py       — block_edits + propose/approve/reject (v4.0.0)
+  pq.py                 — Product Quantization M=32 K=256 (v4.0.0)
+  hnsw_kind_index.py    — sqlite-vec HNSW + brute-force fallback (v4.0.0)
+  circuit_breaker.py    — CircuitBreaker + @circuit_breaker (v4.0.0)
+  backpressure.py       — BackpressureController + hysteresis (v4.0.0)
+  health.py             — health_check + 7 probes + register (v4.0.0)
+  observability.py      — counter/gauge/histogram + @timed (v4.0.0)
+  logging_context.py    — contextvar stack + StructuredLogFilter (v4.0.0)
+  feature_flags.py      — 35 flags + is_enabled/require_enabled (v4.0.0)
+tests/                  — pytest suite (4000+ tests + 376 v4 unit
+                          + 38 concurrency + 22 paraphrase probes)
 kernels/                — MIND scoring kernels (.mind)
 docs/                   — User + integration docs (35+ files)
 ```
@@ -78,11 +85,12 @@ docs/                   — User + integration docs (35+ files)
 - **Audit-integrity patterns** (v2.10.0+): Q16.16 fixed-point scoring in
   audit hash preimages, TAG_v1 NUL-separated composition for collision
   resistance
-- **Local model** (v3.9.0): `star-ga/mind-mem-4b` — full fine-tune of
-  Qwen3.5-4B on the v3.9.0 MIND-Mem domain (81 tools, block schemas
-  including `TransformHash`, governance + transport workflows). See
-  `docs/mind-mem-4b-setup.md`. Prior v3.0.0 QLoRA fine-tune kept at
-  HF revision `v3.0.0`.
+- **Local model** (v4.0.0): `star-ga/mind-mem-4b` — full fine-tune of
+  Qwen3.5-4B retrained for v4.0.0 (v4 weights revision). Knows all 84
+  tools, v4 surfaces (cognitive kernel, block kinds, tier memory,
+  self-editing), and the corrected `KIND_DECAY['cites']=0.8` value.
+  Prior v3.12.0-fullft weights pinned at `v3.12.0` HF revision. Prior
+  v3.0.0 QLoRA at `v3.0.0`. See `docs/mind-mem-4b-setup.md`.
 - **Native MCP integration** (v3.1.0+): 16 AI clients auto-wired via
   `mm install-all` (Claude Code, Claude Desktop, Codex CLI, Gemini CLI,
   Cursor, Windsurf, Zed, OpenClaw, and 8 more). See
