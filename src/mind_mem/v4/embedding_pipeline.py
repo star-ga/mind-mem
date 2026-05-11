@@ -153,7 +153,7 @@ def derive_embeddings(
     ids = list(block_ids)
     if not ids:
         return out
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "blocks"):
             return out
         # Pull content for the requested ids.

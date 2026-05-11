@@ -135,7 +135,7 @@ def plan_consolidation(
     if not db.is_file():
         return ConsolidationPlan()
 
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_recall_tier"):
             return ConsolidationPlan()
         rows = conn.execute("SELECT block_id, last_surprise FROM block_recall_tier WHERE tier = 'warm'").fetchall()

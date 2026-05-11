@@ -128,7 +128,7 @@ def ensure_metadata_schema(workspace: str | Path) -> None:
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         conn.executescript(_SCHEMA_SQL)
         try:
             conn.execute(_MIGRATION_SQL)
@@ -162,7 +162,7 @@ def set_block_metadata(
     safe_tags = {str(k): str(v) for k, v in (tags or {}).items()}
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
     db = Path(workspace) / "index.db"
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         conn.execute(
             "INSERT INTO block_metadata "
             "(block_id, tags, ttl_seconds, created_at, updated_at) "
@@ -196,7 +196,7 @@ def get_block_metadata(workspace: str | Path, block_id: str) -> BlockMetadata | 
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return None
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_metadata"):
             return None
         # ``updated_at`` may be missing on pre-round-4 schemas that
@@ -230,7 +230,7 @@ def delete_block_metadata(workspace: str | Path, block_id: str) -> bool:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return False
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_metadata"):
             return False
         cursor = conn.execute("DELETE FROM block_metadata WHERE block_id = ?", (block_id,))
@@ -257,7 +257,7 @@ def list_blocks_by_tag(
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_metadata"):
             return []
         rows = conn.execute(

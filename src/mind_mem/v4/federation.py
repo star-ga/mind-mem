@@ -151,7 +151,7 @@ def ensure_federation_schema(workspace: str | Path) -> None:
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         conn.executescript(_SCHEMA_SQL)
         conn.commit()
 
@@ -171,7 +171,7 @@ def get_version_vector(workspace: str | Path, block_id: str) -> dict[str, int]:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return {}
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_tier_vclock"):
             return {}
         rows = conn.execute(
@@ -194,7 +194,7 @@ def list_conflicts(workspace: str | Path, *, limit: int = 100) -> list[ConflictR
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "tier_conflict_log"):
             return []
         rows = conn.execute(

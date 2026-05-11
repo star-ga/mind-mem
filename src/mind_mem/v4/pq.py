@@ -372,7 +372,7 @@ def ensure_pq_schema(workspace: str | Path) -> None:
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         conn.executescript(_SCHEMA_SQL)
         conn.commit()
 
@@ -416,7 +416,7 @@ def store_codebook(workspace: str | Path, name: str, codebook: Codebook) -> None
     require_enabled(FLAG)
     ensure_pq_schema(workspace)
     db = Path(workspace) / "index.db"
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO pq_codebook (name, subvectors, centroids, sub_dim, payload) VALUES (?, ?, ?, ?, ?)",
             (
@@ -436,7 +436,7 @@ def load_codebook(workspace: str | Path, name: str) -> Codebook | None:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return None
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         row = (
             conn.execute(
                 "SELECT subvectors, centroids, sub_dim, payload FROM pq_codebook WHERE name = ?",
@@ -457,7 +457,7 @@ def store_code(workspace: str | Path, block_id: str, codebook_name: str, code: b
     require_enabled(FLAG)
     ensure_pq_schema(workspace)
     db = Path(workspace) / "index.db"
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO pq_codes (block_id, codebook, code) VALUES (?, ?, ?)",
             (block_id, codebook_name, code),
@@ -471,7 +471,7 @@ def load_code(workspace: str | Path, block_id: str, codebook_name: str) -> bytes
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return None
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "pq_codes"):
             return None
         row = conn.execute(

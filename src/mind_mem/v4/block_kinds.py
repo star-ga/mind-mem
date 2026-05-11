@@ -128,7 +128,7 @@ def ensure_block_kind_column(workspace: str | Path) -> None:
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         # Ensure the blocks table exists at all (fresh workspaces) so the
         # ALTER below has something to alter.
         conn.execute("CREATE TABLE IF NOT EXISTS blocks (id TEXT PRIMARY KEY, content TEXT)")
@@ -156,7 +156,7 @@ def get_block_kind(workspace: str | Path, block_id: str) -> BlockKind:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return DEFAULT_KIND
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _has_kind_column(conn):
             return DEFAULT_KIND
         row = conn.execute(
@@ -192,7 +192,7 @@ def list_blocks_by_kind(
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _has_kind_column(conn):
             return []
         rows: Iterable[tuple[str]] = conn.execute(
@@ -262,7 +262,7 @@ def ensure_block_kind_tags_table(workspace: str | Path) -> None:
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         conn.executescript(_TAGS_SCHEMA_SQL)
         conn.commit()
 
@@ -295,7 +295,7 @@ def set_block_kinds(
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         conn.executescript(_TAGS_SCHEMA_SQL)
         conn.execute("DELETE FROM block_kind_tags WHERE block_id = ?", (block_id,))
         if validated:
@@ -323,7 +323,7 @@ def get_block_kind_tags(workspace: str | Path, block_id: str) -> set[BlockKind]:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return set()
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_kind_tags"):
             return set()
         rows = conn.execute(

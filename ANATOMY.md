@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 812 | **Est. tokens:** ~1,682,650
-**Generated:** 2026-05-11 11:30 UTC
+**Files:** 812 | **Est. tokens:** ~1,682,788
+**Generated:** 2026-05-11 11:52 UTC
 
 ## Token Budget Guide
 
@@ -64,7 +64,7 @@
 | `src/mind_mem/mcp/tools/` | 24 | ~51,536 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
-| `src/mind_mem/v4/` | 22 | ~54,540 |
+| `src/mind_mem/v4/` | 22 | ~54,678 |
 | `templates/` | 19 | ~1,041 |
 | `tests/` | 273 | ~574,377 |
 | `tests/integration/` | 2 | ~1,575 |
@@ -637,27 +637,27 @@
 ### `src/mind_mem/v4/`
 
 - `backpressure.py` (~2058 tok, huge) — v4 backpressure controller (round 4 audit, DeepSeek 9.75→10 gap).
-- `block_kinds.py` (~3105 tok, huge) — v4 block-kind taxonomy (Group B: knowledge graph).
-- `block_metadata.py` (~2698 tok, huge) — v4 block metadata + schema-validation hooks.
+- `block_kinds.py` (~3123 tok, huge) — v4 block-kind taxonomy (Group B: knowledge graph).
+- `block_metadata.py` (~2713 tok, huge) — v4 block metadata + schema-validation hooks.
 - `circuit_breaker.py` (~3390 tok, huge) — v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10 gap).
 - `cognitive_kernel.py` (~2375 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
-- `consolidation_worker.py` (~2424 tok, huge) — v4 consolidation worker (Group A — MemGPT-pattern).
-- `embedding_pipeline.py` (~1477 tok, large) — v4 embedding auto-derivation pipeline (Group A — closes the
-- `eviction.py` (~2999 tok, huge) — v4 eviction policies (Group A — long-term decay).
+- `consolidation_worker.py` (~2427 tok, huge) — v4 consolidation worker (Group A — MemGPT-pattern).
+- `embedding_pipeline.py` (~1480 tok, large) — v4 embedding auto-derivation pipeline (Group A — closes the
+- `eviction.py` (~3008 tok, huge) — v4 eviction policies (Group A — long-term decay).
 - `feature_flags.py` (~1533 tok, huge) — v4.0 feature-flag registry.
 - `federation_client.py` (~2641 tok, huge) — Federation wire-transport client for mind-mem v4.
-- `federation.py` (~3372 tok, huge) — v4 federated cross-agent consistency (Group D).
-- `health.py` (~1875 tok, huge) — v4 health-check surface (round 4 audit, DeepSeek 9.75→10 gap).
-- `hnsw_kind_index.py` (~2110 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
+- `federation.py` (~3381 tok, huge) — v4 federated cross-agent consistency (Group D).
+- `health.py` (~1884 tok, huge) — v4 health-check surface (round 4 audit, DeepSeek 9.75→10 gap).
+- `hnsw_kind_index.py` (~2122 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
 - `__init__.py` (~824 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
-- `kernels.py` (~3671 tok, huge) — v4 kernel strategy implementations (Group A).
-- `kind_summaries.py` (~1863 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
+- `kernels.py` (~3674 tok, huge) — v4 kernel strategy implementations (Group A).
+- `kind_summaries.py` (~1878 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
 - `logging_context.py` (~1232 tok, large) — v4 structured logging context (round 4 audit, DeepSeek 9.75→10 gap).
 - `observability.py` (~2613 tok, huge) — v4 observability — counters, timers, histograms, exporters.
-- `pq.py` (~4308 tok, huge) — v4 product-quantization (PQ) encoding for embedding storage (Group D).
-- `self_editing.py` (~2405 tok, huge) — v4 self-editing on recall (Group A — MemGPT pattern).
+- `pq.py` (~4323 tok, huge) — v4 product-quantization (PQ) encoding for embedding storage (Group D).
+- `self_editing.py` (~2420 tok, huge) — v4 self-editing on recall (Group A — MemGPT pattern).
 - `surprise_retrieval.py` (~2575 tok, huge) — v4 surprise-weighted retrieval term (Group A: cognition / model layer).
-- `tier_memory.py` (~2992 tok, huge) — v4 recall-tier memory (Group A: cognition / model layer).
+- `tier_memory.py` (~3004 tok, huge) — v4 recall-tier memory (Group A: cognition / model layer).
 ### `src/mind_mem/`
 
 - `validate_py.py` (~4899 tok, huge) — Mind Mem Integrity Validator — canonical engine.

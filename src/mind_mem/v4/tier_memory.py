@@ -189,7 +189,7 @@ def ensure_recall_tier_schema(workspace: str | Path) -> None:
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         conn.executescript(_SCHEMA_SQL)
         # Pre-CAS deployments may already have the table without
         # block_version. Add it on the fly; idempotent.
@@ -215,7 +215,7 @@ def get_recall_tier(workspace: str | Path, block_id: str) -> RecallTier:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return RecallTier.WARM
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         # Don't auto-create the table here — read-only path.
         row = (
             conn.execute(
@@ -252,7 +252,7 @@ def get_tier_version(workspace: str | Path, block_id: str) -> int:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return 0
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_recall_tier"):
             return 0
         cols = {row[1] for row in conn.execute("PRAGMA table_info(block_recall_tier)")}
@@ -288,7 +288,7 @@ def list_blocks_in_recall_tier(
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_recall_tier"):
             return []
         rows: Iterable[tuple[str]] = conn.execute(

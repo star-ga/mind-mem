@@ -161,7 +161,7 @@ def _lru_policy(workspace: str | Path, *, limit: int = DEFAULT_EVICTION_LIMIT, *
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_recall_tier"):
             return []
         rows = conn.execute(
@@ -181,7 +181,7 @@ def _low_surprise_policy(
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_recall_tier"):
             return []
         rows = conn.execute(
@@ -203,7 +203,7 @@ def _age_policy(
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_recall_tier"):
             return []
         rows = conn.execute(

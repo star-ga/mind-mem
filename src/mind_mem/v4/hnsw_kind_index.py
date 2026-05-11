@@ -84,7 +84,7 @@ def backend_status(workspace: str | Path) -> dict[str, object]:
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
     backend = "brute_force"
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if _try_load_sqlite_vec(conn):
             backend = "sqlite_vec"
     return {"backend": backend, "workspace": str(workspace)}
@@ -116,7 +116,7 @@ def ensure_hnsw_schema(workspace: str | Path) -> None:
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         conn.executescript(_SCHEMA_SQL)
         conn.commit()
 
@@ -145,7 +145,7 @@ def register_block_embedding(
     ensure_hnsw_schema(workspace)
     db = Path(workspace) / "index.db"
     payload = struct.pack(f"<{len(embedding)}f", *embedding)
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO block_kind_embeddings (block_id, kind, payload, dim) VALUES (?, ?, ?, ?)",
             (block_id, kind, payload, len(embedding)),
@@ -181,7 +181,7 @@ def knn_by_kind(
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_kind_embeddings"):
             return []
         if _try_load_sqlite_vec(conn):

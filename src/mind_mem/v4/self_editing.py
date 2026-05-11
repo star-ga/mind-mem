@@ -119,7 +119,7 @@ def ensure_edit_schema(workspace: str | Path) -> None:
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         conn.executescript(_SCHEMA_SQL)
         conn.commit()
 
@@ -147,7 +147,7 @@ def propose_edit(
     ensure_edit_schema(workspace)
     db = Path(workspace) / "index.db"
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         # Snapshot the current content into old_content for the audit log.
         old_row = (
             conn.execute(
@@ -219,7 +219,7 @@ def get_edit(workspace: str | Path, edit_id: int) -> Edit | None:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return None
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_edits"):
             return None
         row = conn.execute(
@@ -241,7 +241,7 @@ def list_pending_edits(workspace: str | Path, *, limit: int = 100) -> list[Edit]
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_edits"):
             return []
         rows = conn.execute(
@@ -263,7 +263,7 @@ def list_edit_history(workspace: str | Path, block_id: str) -> list[Edit]:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "block_edits"):
             return []
         rows = conn.execute(

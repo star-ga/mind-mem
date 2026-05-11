@@ -77,7 +77,7 @@ def _probe_tier_memory(workspace: Path) -> ModuleStatus:
     if not db.is_file():
         return "missing"
     try:
-        with sqlite3.connect(db) as conn:
+        with sqlite3.connect(db, timeout=30) as conn:
             row = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='block_recall_tier'").fetchone()
     except sqlite3.Error as e:
         return f"error: {e!r}"
@@ -91,7 +91,7 @@ def _probe_block_kinds(workspace: Path) -> ModuleStatus:
     if not db.is_file():
         return "missing"
     try:
-        with sqlite3.connect(db) as conn:
+        with sqlite3.connect(db, timeout=30) as conn:
             cols = {row[1] for row in conn.execute("PRAGMA table_info(blocks)")}
     except sqlite3.Error as e:
         return f"error: {e!r}"
@@ -116,7 +116,7 @@ def _probe_federation(workspace: Path) -> ModuleStatus:
     if not db.is_file():
         return "missing"
     try:
-        with sqlite3.connect(db) as conn:
+        with sqlite3.connect(db, timeout=30) as conn:
             row = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='block_tier_vclock'").fetchone()
     except sqlite3.Error as e:
         return f"error: {e!r}"

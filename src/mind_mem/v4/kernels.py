@@ -75,7 +75,7 @@ def _open(workspace: str) -> sqlite3.Connection | None:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return None
-    return sqlite3.connect(db)
+    return sqlite3.connect(db, timeout=30)
 
 
 # ---------------------------------------------------------------------------

@@ -128,7 +128,7 @@ def ensure_kind_summary_schema(workspace: str | Path) -> None:
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         conn.executescript(_SCHEMA_SQL)
         conn.commit()
 
@@ -154,7 +154,7 @@ def refresh_summary(workspace: str | Path, kind: str) -> KindSummary | None:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return None
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         cols = {row[1] for row in conn.execute("PRAGMA table_info(blocks)")}
         if "kind" not in cols:
             return None
@@ -167,7 +167,7 @@ def refresh_summary(workspace: str | Path, kind: str) -> KindSummary | None:
         return None
     summary = _active_summariser(blocks)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO kind_summaries (kind, summary, block_count, updated_at) VALUES (?, ?, ?, ?)",
             (kind, summary, len(blocks), now),
@@ -182,7 +182,7 @@ def get_summary(workspace: str | Path, kind: str) -> KindSummary | None:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return None
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "kind_summaries"):
             return None
         row = conn.execute(
@@ -205,7 +205,7 @@ def list_summaries(workspace: str | Path) -> list[KindSummary]:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db) as conn:
+    with sqlite3.connect(db, timeout=30) as conn:
         if not _table_exists(conn, "kind_summaries"):
             return []
         rows = conn.execute("SELECT kind, summary, block_count, updated_at FROM kind_summaries ORDER BY kind").fetchall()
