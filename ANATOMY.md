@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 804 | **Est. tokens:** ~1,665,731
-**Generated:** 2026-05-10 23:44 UTC
+**Files:** 806 | **Est. tokens:** ~1,672,803
+**Generated:** 2026-05-11 00:53 UTC
 
 ## Token Budget Guide
 
@@ -70,7 +70,7 @@
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 18 | ~35,050 |
+| `train/` | 20 | ~42,122 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -974,6 +974,8 @@
 - `test_workspace_structure.py` (~546 tok, large) — Tests for workspace directory structure."""
 ### `train/`
 
+- `audit_canonical_coverage.json` (~5591 tok, huge) — Keys: threshold, total_probes, total_weak, by_group, weak
+- `audit_canonical_coverage.py` (~1481 tok, large) — Audit canonical-answer coverage on every eval probe.
 - `backport_sweep.py` (~1658 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
 - `build_model_card.py` (~3681 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
 - `CORPUS_HASH_v3.11.0` (~21 tok, tiny) — 02b3ba6a1433e25bdbefe3cebf992ca961734850d1e3550e9496905abbadb3b7  build_corpus.p

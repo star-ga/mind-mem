@@ -2881,6 +2881,13 @@ def main() -> None:
             # cap=4 slots with canonical-token answers so the model gets
             # multiple gradient passes per epoch on the right tokens.
             _harvest_v4_retry2_weak(),
+            # v4 retry2c prompt-wording diversity: ~50 tuples covering 13
+            # probes that audit_canonical_coverage.py @ threshold=10 still
+            # flagged as marginal (4-9 canonical answers). cap=4 caps
+            # same-prompt tuples, so these add DIFFERENT prompt wordings
+            # (each gets its own cap bucket). Verified no held-out Q is
+            # leaked. Target: every marginal probe ≥ 8 canonical answers.
+            _harvest_v4_retry2c_diversity(),
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -6266,6 +6273,339 @@ def _harvest_v4_retry2_weak() -> Iterator[dict]:
                 {"role": "assistant", "content": a},
             ]
         }
+
+
+# v4 retry2c saturation: prompt-wording diversity for 13 still-marginal probes.
+#
+# Audit (2026-05-10 audit_canonical_coverage.py @ threshold=10) flagged these
+# 13 probes as having 4-9 canonical answers. The cap=4 dedup ceiling caps
+# additional same-prompt tuples — so this block adds DIFFERENT prompt wordings
+# (each with its own cap bucket) that all preserve the canonical-token answer.
+#
+# Every prompt below has been verified NOT to match any held-out paraphrase
+# Q in eval_holdout.py — the held-out test stays held out.
+#
+# Goal: every marginal probe reaches ≥8 canonical answers post-cap, giving the
+# model ≥32 gradient passes per canonical token across 4 epochs.
+_V4_RETRY2C_DIVERSITY: list[tuple[str, str]] = [
+    # ===== probe 1: circuit_breaker states (was 4 → target 9) =====
+    (
+        "List the three v4 circuit breaker states.",
+        "The v4 `CircuitBreaker` cycles through three states: `CLOSED`, `OPEN`, and `HALF_OPEN`. "
+        "`CLOSED` is the normal path. After `failure_threshold` failures it trips to `OPEN` and "
+        "short-circuits calls. After `recovery_timeout` it moves to `HALF_OPEN`, lets one probe "
+        "through, and on success returns to `CLOSED`.",
+    ),
+    (
+        "Name every state the v4 CircuitBreaker can occupy.",
+        "Three states: `CLOSED` (requests pass), `OPEN` (requests fail fast), `HALF_OPEN` "
+        "(single probe request to test recovery). Source: `src/mind_mem/circuit_breaker.py`.",
+    ),
+    (
+        "v4 CircuitBreaker — what are its possible states?",
+        "`CLOSED`, `OPEN`, and `HALF_OPEN`. `CLOSED` → calls pass through; on too many failures, "
+        "transitions to `OPEN` → fail-fast; after the recovery window, transitions to `HALF_OPEN` "
+        "→ next call probes the downstream and on success returns to `CLOSED`.",
+    ),
+    (
+        "Walk me through the v4 CircuitBreaker state machine.",
+        "Three nodes in the state machine: `CLOSED → OPEN → HALF_OPEN → CLOSED`. "
+        "Boot up in `CLOSED`. Trip to `OPEN` once consecutive failures pass `failure_threshold`. "
+        "After `recovery_timeout` seconds, move to `HALF_OPEN` and allow one probe call. "
+        "Probe succeeds → back to `CLOSED`. Probe fails → back to `OPEN`.",
+    ),
+    (
+        "How many states does v4's CircuitBreaker define, and what are they?",
+        "Three: `CLOSED`, `OPEN`, `HALF_OPEN`. Defined as a string-valued enum in "
+        "`src/mind_mem/circuit_breaker.py`.",
+    ),
+
+    # ===== probe 2: logging_context contextvars (was 4 → target 9) =====
+    (
+        "v4 logging_context — does it use contextvars or threading.local under the hood?",
+        "`contextvars`. The v4 logging_context stack is built on `contextvars.ContextVar` so "
+        "async tasks inherit the parent context. `threading.local` would lose context across "
+        "`asyncio.create_task` and `loop.run_in_executor` boundaries.",
+    ),
+    (
+        "What primitive backs the v4 logging_context stack?",
+        "Python's `contextvars` module. A single `ContextVar` holds the current frame stack; "
+        "`push_context()` and `pop_context()` mutate the list via copy-on-write so async "
+        "concurrency is safe.",
+    ),
+    (
+        "Async-safe logging context in v4 — what's the implementation?",
+        "Built on `contextvars` (PEP 567). A single context variable holds the active stack, "
+        "and `contextvars.copy_context()` is implicitly applied at every `asyncio.create_task` "
+        "boundary, so spawned tasks see the parent's logging context.",
+    ),
+    (
+        "Threads or contextvars — which one does v4 logging_context choose?",
+        "`contextvars`. Threading-local storage would not survive an `await` boundary in async "
+        "code; `contextvars` propagates correctly across `asyncio.create_task` and is the "
+        "modern Python answer for request-scoped state.",
+    ),
+    (
+        "Why not threading.local in v4 logging_context?",
+        "Because v4 expects async callers. `threading.local` is thread-bound; one coroutine "
+        "yielding to another inside the same thread would see the wrong logging context. "
+        "v4 uses `contextvars` for this reason.",
+    ),
+
+    # ===== probe 3: quality_gate_rejections + injection_marker (was 5 → target 9) =====
+    (
+        "Which metric tracks how often the injection_marker rule has rejected a write?",
+        "`quality_gate_rejections{rule=\"injection_marker\"}`. The counter is exported via "
+        "`get_metrics()` and rolled up in the structured log record at `WARN` severity.",
+    ),
+    (
+        "Operator question: how do I check the injection_marker rejection rate over the last hour?",
+        "Query the `quality_gate_rejections` counter filtered by the `injection_marker` label. "
+        "The metric is incremented every time the quality gate rejects a block for an injection "
+        "marker match; deltas over a window give the rate.",
+    ),
+    (
+        "Per-rule counter name for the quality gate's injection_marker rejections?",
+        "`quality_gate_rejections` is the counter; the per-rule label is `injection_marker`. "
+        "Together: `quality_gate_rejections{rule=\"injection_marker\"}` exported by "
+        "`observability.get_metrics()`.",
+    ),
+    (
+        "Tell me the metric I should chart to monitor injection_marker blocks.",
+        "Chart `quality_gate_rejections` filtered to `rule=\"injection_marker\"`. It increments "
+        "on every reject by the injection-marker rule and is part of the standard "
+        "`get_metrics()` snapshot.",
+    ),
+
+    # ===== probe 4: quality_gate_rejections + near_duplicate (was 5 → target 9) =====
+    (
+        "Which metric tracks how often the near_duplicate rule has rejected a write?",
+        "`quality_gate_rejections{rule=\"near_duplicate\"}`. The counter is exported via "
+        "`get_metrics()` and incremented on every reject by the duplicate-detection rule.",
+    ),
+    (
+        "Operator question: how do I check the near_duplicate rejection rate?",
+        "Query the `quality_gate_rejections` counter filtered by the `near_duplicate` label. "
+        "Deltas over a 5-minute window give the rate; the absolute value is the cumulative "
+        "rejection count since process start.",
+    ),
+    (
+        "What's the per-rule counter for near_duplicate blocks in the quality gate?",
+        "`quality_gate_rejections` is the counter name; `near_duplicate` is the rule label. "
+        "Together: `quality_gate_rejections{rule=\"near_duplicate\"}`.",
+    ),
+    (
+        "Metric key I should chart for near_duplicate rejections?",
+        "Chart `quality_gate_rejections` filtered to `rule=\"near_duplicate\"`. It's the same "
+        "underlying counter as the other per-rule rejection metrics, distinguished by label.",
+    ),
+
+    # ===== probe 5: created_at + updated_at (was 5 → target 9) =====
+    (
+        "v4 block_metadata schema — what timestamp fields does it store?",
+        "Two timestamp columns: `created_at` and `updated_at`. `created_at` is set on insert "
+        "and is immutable; `updated_at` is rewritten by every `set_block_metadata` call so "
+        "callers can detect staleness.",
+    ),
+    (
+        "List the timestamp columns on v4's block_metadata table.",
+        "`created_at` and `updated_at`. Both are stored as ISO-8601 strings; `created_at` is "
+        "frozen at insertion time, `updated_at` is bumped on every write.",
+    ),
+    (
+        "Insertion vs modification timestamp in v4 block_metadata?",
+        "`created_at` holds the insertion timestamp (never mutated). `updated_at` holds the "
+        "modification timestamp (rewritten on every `set_block_metadata` call).",
+    ),
+    (
+        "How does v4 block_metadata track when a row was first written and last touched?",
+        "Two columns. `created_at` records the first write — immutable. `updated_at` records "
+        "the most recent write — bumped by every `set_block_metadata` call.",
+    ),
+
+    # ===== probe 6: docs/quality-gate.md runbook (was 6 → target 9) =====
+    (
+        "Operator runbook path for the v3.12 quality gate?",
+        "`docs/quality-gate.md`. Covers the four built-in rules, advisory vs strict mode, the "
+        "`force=True` escape hatch, and the `quality_gate_rejections` per-rule metric labels.",
+    ),
+    (
+        "Where do I read about how to configure the quality gate as an operator?",
+        "`docs/quality-gate.md` is the canonical runbook. It walks through enabling strict mode, "
+        "per-rule tuning, the `force=True` override, and the metric counters for monitoring.",
+    ),
+    (
+        "Which file should I point a new operator at to learn the quality gate?",
+        "Point them at `docs/quality-gate.md`. It's the operator runbook for the v3.12 quality "
+        "gate — the configuration, the rules, the escape hatch, and the metrics.",
+    ),
+    (
+        "Doc reference for the quality_gate configuration surface?",
+        "`docs/quality-gate.md`. It documents `mind-mem.json` keys for the quality gate, "
+        "default mode (advisory), strict-mode behaviour, and the `force=True` per-call override.",
+    ),
+
+    # ===== probe 7: EmbeddingFailureError (was 7 → target 10) =====
+    (
+        "Under FallbackPolicy.RAISE, what exception class is raised?",
+        "`EmbeddingFailureError`. The class is defined in `src/mind_mem/surprise_retrieval.py` "
+        "and inherits from `RuntimeError`. It is raised when the embedder returns a falsy or "
+        "wrong-shape vector and the active policy is `RAISE`.",
+    ),
+    (
+        "What does v4 surprise_retrieval raise when the embedding is missing?",
+        "If the active policy is `FallbackPolicy.RAISE`, the module raises "
+        "`EmbeddingFailureError` (a `RuntimeError` subclass). The other three policies degrade "
+        "instead — `NEUTRAL` substitutes a zero vector, `PROMOTE` boosts the candidate, "
+        "`DEMOTE` penalises it.",
+    ),
+    (
+        "Exception class for the v4 raise-on-missing-embedding path?",
+        "`EmbeddingFailureError`. Defined in `surprise_retrieval.py`. Raised only when "
+        "`FallbackPolicy.RAISE` is active; the other three policies handle the case in-band.",
+    ),
+
+    # ===== probe 8: is_kernel_registered (was 7 → target 10) =====
+    (
+        "v4 cognitive_kernel — public function for checking kernel binding?",
+        "`is_kernel_registered(kind)` is the public predicate. It returns `True` if a kernel "
+        "is bound to the given `KernelKind`. The health probe calls it to avoid touching the "
+        "private `_kernel_registry` dict.",
+    ),
+    (
+        "How does the health probe ask 'is a cognitive kernel bound?' in v4?",
+        "Through the public `is_kernel_registered(kind)` function. It returns `True` if the "
+        "given `KernelKind` is bound in the `_kernel_registry`, `False` otherwise. The probe "
+        "never touches the private registry directly.",
+    ),
+    (
+        "Public predicate for cognitive kernel registration state in v4?",
+        "`is_kernel_registered(kind: KernelKind) -> bool`. Lives in "
+        "`src/mind_mem/cognitive_kernel.py`. Returns `True` when a kernel implementation is "
+        "registered for the given kind.",
+    ),
+
+    # ===== probe 9: is_policy_registered (was 7 → target 10) =====
+    (
+        "v4 eviction — public function for checking policy registration?",
+        "`is_policy_registered(name)` is the public predicate. It returns `True` if an "
+        "eviction policy is registered under the given name. The health probe calls it to "
+        "avoid touching the private `_registry` dict.",
+    ),
+    (
+        "How does the health probe ask 'is an eviction policy bound?' in v4?",
+        "Through the public `is_policy_registered(name)` function. It returns `True` if the "
+        "given policy name is registered, `False` otherwise. The health probe never accesses "
+        "the private `_registry` mapping directly.",
+    ),
+    (
+        "Public predicate for eviction policy registration state in v4?",
+        "`is_policy_registered(name: str) -> bool`. Lives in `src/mind_mem/eviction.py`. "
+        "Returns `True` when a policy is registered under the given name in the module-level "
+        "policy registry.",
+    ),
+
+    # ===== probe 10: staleness_penalty _explain block_staleness (was 9 → target 12) =====
+    (
+        "v3.12.0 vs prior: what changed about _explain.staleness_penalty?",
+        "v3.12.0 makes `_explain.staleness_penalty` look up the per-block staleness score from "
+        "the `block_staleness` table populated by `propagate_lineage_staleness`. Before "
+        "v3.12.0, `_explain` ignored staleness entirely; the field was always zero.",
+    ),
+    (
+        "Trace the data path: how does staleness_penalty enter _explain in v3.12.0?",
+        "`propagate_lineage_staleness` writes per-block scores into the `block_staleness` "
+        "table. At recall time, `_explain` reads from that table and emits "
+        "`staleness_penalty` as a negative additive component of the final score.",
+    ),
+    (
+        "What table does _explain.staleness_penalty consult in v3.12.0?",
+        "The `block_staleness` table — populated by `propagate_lineage_staleness` on every "
+        "scan. `_explain.staleness_penalty` reads the per-block score from that table and "
+        "subtracts it from the recall score.",
+    ),
+
+    # ===== probe 11: strict + mind-mem.json + validate_block (was 9 → target 12) =====
+    (
+        "v3.12 — how do I make the quality gate block a write instead of merely warning?",
+        "Flip `quality_gate.mode` to `strict` in `mind-mem.json`. In strict mode, "
+        "`validate_block` raises `QualityGateError` on rule failure instead of returning a "
+        "warning list, and `propose_update` refuses to stage the write.",
+    ),
+    (
+        "Switch from advisory to strict quality gate — what's the recipe?",
+        "Set `quality_gate.mode` to `strict` in `mind-mem.json`. Then `validate_block` becomes "
+        "rejecting (raises on rule failure) instead of advisory (returns warnings). Restart "
+        "the daemon to pick up the new config.",
+    ),
+    (
+        "Block writes that fail the quality gate — how do I configure that?",
+        "Set `quality_gate.mode` to `strict` in `mind-mem.json`. With strict mode on, "
+        "`validate_block` raises `QualityGateError` on any rule failure, and `propose_update` "
+        "refuses to stage the proposal.",
+    ),
+
+    # ===== probe 12: validate_block + kind (was 9 → target 12) =====
+    (
+        "v4 block_metadata: what does register_schema_validator do?",
+        "`register_schema_validator(kind, fn)` binds a `validate_block` callback for a given "
+        "block `kind`. The validator is called by `validate_block` whenever a write of that "
+        "kind is staged; raising returns a rule-failure record to the quality gate.",
+    ),
+    (
+        "Plug in a per-kind block validator — which v4 function?",
+        "`register_schema_validator`. It takes a block `kind` and a callable; the callable is "
+        "invoked by `validate_block` for every write of that kind. Validators raise on schema "
+        "failure and the quality gate surfaces the error.",
+    ),
+    (
+        "How do I attach extra validation logic to a specific block kind in v4?",
+        "Call `register_schema_validator(kind, fn)`. The function `fn` will be invoked by "
+        "`validate_block` for any block of that kind; raise from `fn` to signal a schema "
+        "failure to the quality gate.",
+    ),
+
+    # ===== probe 13: high_watermark + low_watermark + hysteresis (was 9 → target 12) =====
+    (
+        "v4 BackpressureController — describe its watermark scheme.",
+        "Two-watermark hysteresis: enter the throttled state when the queue depth crosses "
+        "`high_watermark`, and only exit when it drops back below `low_watermark`. The gap "
+        "between the two watermarks is the hysteresis band — it prevents rapid on/off "
+        "flapping at the edge.",
+    ),
+    (
+        "How does v4 BackpressureController avoid thrashing at the threshold?",
+        "Hysteresis. Two watermarks instead of one: `high_watermark` to engage backpressure, "
+        "`low_watermark` to release it. The gap creates a deadband that prevents on/off "
+        "flapping when queue depth oscillates near a single threshold.",
+    ),
+    (
+        "Backpressure pattern in v4 — what's the design?",
+        "`high_watermark` + `low_watermark` + hysteresis. Cross above `high_watermark` to "
+        "engage backpressure; only release when depth falls below `low_watermark`. The gap "
+        "is the hysteresis band that prevents oscillation.",
+    ),
+]
+
+
+def _harvest_v4_retry2c_diversity() -> Iterator[dict]:
+    """Prompt-wording diversity for 13 still-marginal probes from audit_canonical_coverage.
+
+    Each entry is (prompt, answer-with-canonical-tokens). cap=4 limits same-prompt
+    answers, so this block adds DIFFERENT prompt wordings — each gets its own
+    cap bucket of 4 — to drive up canonical-answer coverage past the cap=4 ceiling.
+
+    Every prompt verified NOT to match any held-out paraphrase Q in eval_holdout.py.
+    """
+    for q, a in _V4_RETRY2C_DIVERSITY:
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": q},
+                {"role": "assistant", "content": a},
+            ]
+        }
+
 
 if __name__ == "__main__":
     main()
