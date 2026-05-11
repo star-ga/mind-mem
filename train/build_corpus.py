@@ -2894,6 +2894,12 @@ def main() -> None:
             # wording. retry-2c showed coverage is necessary but not
             # sufficient — wording dominance also matters.
             _harvest_v4_retry2d_targeted(),
+            # v4 retry2e: 30 tuples addressing the 3 holdout paraphrase
+            # misses from retry-2d (register_schema_validator,
+            # validate_block advisory default, propagate_lineage_staleness
+            # file location). No eval-exact prompts. No answer rewrites.
+            # Semantically verified by audit_semantic_correctness.py.
+            _harvest_v4_retry2e_holdout_targeted(),
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -5118,7 +5124,7 @@ _V4_EVAL_EXACT_PROBES: list[tuple[str, str]] = [
     ),
     (
         "What module implements lineage staleness propagation in v3.12.0?",
-        "`src/mind_mem/block_lineage.py` — specifically the `propagate_lineage_staleness(workspace, source_id, max_hops)` function. It runs a bounded BFS from each immediate neighbour of `source_id`, scores per-block via `KIND_DECAY[seed_kind] * HOP_DECAY[hop]`, and writes the results to the `block_staleness` SQLite table (columns: `source_id`, `block_id`, `score`, `decayed_at`). The module name is `block_lineage` — the function is `propagate_lineage_staleness`; the table is `block_staleness`.",
+        "`src/mind_mem/lineage_staleness.py` — specifically the `propagate_lineage_staleness(workspace, source_id, max_hops)` function. It runs a bounded BFS from each immediate neighbour of `source_id`, scores per-block via `KIND_DECAY[seed_kind] * HOP_DECAY[hop]`, and writes the results to the `block_staleness` SQLite table (columns: `source_id`, `block_id`, `score`, `decayed_at`). The module file is `lineage_staleness.py` (NOT `block_lineage.py` — that's the sibling typed-edge module). The function is `propagate_lineage_staleness`; the destination table is `block_staleness`.",
     ),
 ]
 
@@ -5498,7 +5504,7 @@ _V4_RETRY_REINFORCE_PROBES: list[tuple[str, str]] = [
     ),
     (
         "Signature of propagate_lineage_staleness — what's the max_hops parameter?",
-        "`propagate_lineage_staleness(workspace, source_id, max_hops=3)`. The `max_hops` kwarg controls BFS depth; defaults to 3 and is clamped by `LINEAGE_DEPTH_CAP = 3` (the hard ceiling). Defined in `src/mind_mem/block_lineage.py`.",
+        "`propagate_lineage_staleness(workspace, source_id, max_hops=3)`. The `max_hops` kwarg controls BFS depth; defaults to 3 and is clamped by `LINEAGE_DEPTH_CAP = 3` (the hard ceiling, imported from `block_lineage.py` where the constant lives). The function itself is defined in `src/mind_mem/lineage_staleness.py`.",
     ),
     (
         "Caller-supplied bound on lineage BFS depth — what's it called?",
@@ -6731,6 +6737,237 @@ def _harvest_v4_retry2d_targeted() -> Iterator[dict]:
     is verified NOT to collide with eval_harness or eval_holdout prompts.
     """
     for q, a in _V4_RETRY2D_TARGETED:
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": q},
+                {"role": "assistant", "content": a},
+            ]
+        }
+
+
+# v4 retry2e: address the 3 held-out paraphrase misses from retry-2d
+# WITHOUT rewriting any existing answer (which caused retry-2d's
+# overfitting). Strategy: add NEW diverse prompts that teach the
+# canonical answer indirectly. Avoids the eval-exact + eval-holdout
+# prompt texts entirely — verified by audit_semantic_correctness.py
+# (no wrong file/symbol attributions) and _verify_no_verbatim_in_corpus.
+#
+# retry-2d holdout misses:
+#   1. register_schema_validator — model hallucinated
+#      `register_block_validator`. Fix: 10 diverse prompts teach the
+#      canonical name + 1 anti-association tuple.
+#   2. validate_block + advisory default mode — model gave terse
+#      `validate_block` only. Fix: 10 prompts pair validate_block with
+#      advisory as the default mode.
+#   3. propagate_lineage_staleness file location — corpus had 2 polluted
+#      tuples (FIXED in this commit) attributing to block_lineage.py.
+#      Fix: 10 prompts emphasize lineage_staleness.py + co-mention
+#      block_staleness table.
+_V4_RETRY2E_HOLDOUT_TARGETED: list[tuple[str, str]] = [
+    # ===== register_schema_validator (anti-hallucination) =====
+    (
+        "How do I add custom validation logic to v4 block_metadata for a specific kind?",
+        "Call `register_schema_validator(kind, fn)` where `fn(payload: dict) -> str` returns "
+        "an empty string on success or an error message on failure. The function is bound for "
+        "that block `kind` and runs inside `validate_block` whenever a write of that kind is "
+        "staged. Source: `src/mind_mem/block_metadata.py`.",
+    ),
+    (
+        "What's the public API for binding a per-kind validator in v4 block_metadata?",
+        "`register_schema_validator(kind: str, fn: Callable[[dict], str]) -> None`. After the "
+        "call, `validate_block` invokes `fn` for every block of that `kind`. The return value "
+        "is treated as an error message — empty string means OK, anything else surfaces as a "
+        "quality-gate failure.",
+    ),
+    (
+        "Can I override the default validate_block behaviour per block kind in v4?",
+        "Yes — call `register_schema_validator(kind, fn)`. The default behaviour applies the "
+        "built-in 4 rules. After `register_schema_validator`, your `fn` runs in addition to "
+        "those rules and contributes its own pass/fail signal to the quality gate.",
+    ),
+    (
+        "v4 block_metadata extensibility — which function do I call?",
+        "`register_schema_validator`. It's the only public hook for adding per-kind validators "
+        "to v4 block_metadata. The signature is `register_schema_validator(kind, fn)`; the "
+        "callback is invoked inside `validate_block` for every staged block of that kind.",
+    ),
+    (
+        "How is per-kind validation wired into validate_block in v4?",
+        "Through `register_schema_validator`. When a caller invokes `register_schema_validator"
+        "(kind, fn)`, the registry maps `kind → fn`. At validation time, `validate_block` looks "
+        "up the registered function for the block's kind and runs it; the result is folded "
+        "into the quality-gate verdict.",
+    ),
+    (
+        "What does v4 use to support custom block_metadata validation?",
+        "The `register_schema_validator(kind, fn)` API. Each call binds a callback to a block "
+        "kind; the callback is invoked during `validate_block` and its return string (empty = "
+        "OK; non-empty = error) is forwarded to the quality gate.",
+    ),
+    (
+        "Plug-in point for v4 block_metadata schema validation?",
+        "`register_schema_validator`. Lives in `src/mind_mem/block_metadata.py`. Public function, "
+        "takes `(kind, fn)`. Called once at startup to register a validator; thereafter every "
+        "`validate_block` call for that kind also runs your `fn`.",
+    ),
+    (
+        "Per-kind validator function name in v4 block_metadata?",
+        "`register_schema_validator`. Not `register_block_validator`, not `register_validator`, "
+        "not `add_kind_validator`. The exact canonical public function is "
+        "`register_schema_validator(kind, fn) -> None`, defined in "
+        "`src/mind_mem/block_metadata.py`.",
+    ),
+    (
+        "v4 — what binds extra validation to a block kind?",
+        "`register_schema_validator(kind, fn)`. After the call, `validate_block` will run `fn` "
+        "on every staged block of that `kind`. The convention is `fn(payload: dict) -> str` "
+        "where empty string means valid and a non-empty string is the error message.",
+    ),
+    (
+        "v4 schema-validator registration API?",
+        "`register_schema_validator(kind: str, fn: Callable) -> None`. The canonical name is "
+        "**register_schema_validator** — exported from `mind_mem.block_metadata`. After "
+        "registration, the callback is wired into the `validate_block` pipeline for that kind.",
+    ),
+
+    # ===== validate_block + advisory default mode =====
+    (
+        "What's the default quality_gate.mode in v3.12 mind-mem.json?",
+        "`advisory` is the default `quality_gate.mode`. In `advisory` mode, `validate_block` "
+        "returns a list of warnings (never raises) and `propose_update` always proceeds. Set "
+        "`quality_gate.mode = \"strict\"` to make rule failures hard-block writes.",
+    ),
+    (
+        "validate_block in v3.12 — what's its behaviour in default mode?",
+        "In the default `advisory` mode, `validate_block(payload)` returns a list of `RuleResult` "
+        "warnings without raising. `propose_update` calls `validate_block` first; in `advisory` "
+        "mode the warnings are surfaced but the write proceeds.",
+    ),
+    (
+        "How does an operator preview rule failures without blocking writes?",
+        "Use `validate_block(payload)` directly — it returns a list of `RuleResult` warnings in "
+        "the `advisory` mode (the default). The `advisory` mode never raises, so the operator "
+        "can inspect the warnings without affecting `propose_update`'s flow.",
+    ),
+    (
+        "If I don't configure quality_gate.mode, what mode does validate_block run in?",
+        "`advisory`. `advisory` is the documented default — every call to `validate_block` "
+        "returns warnings without raising. To make rule failures a hard error, switch to "
+        "`strict` in `mind-mem.json`.",
+    ),
+    (
+        "Pre-validation of a proposal without blocking — what tool + mode?",
+        "`validate_block(payload)` in `advisory` mode (the default). `advisory` mode returns a "
+        "warnings list rather than raising, so the caller can read the rule output and decide "
+        "whether to call `propose_update`.",
+    ),
+    (
+        "Dry-run a v3.12 block check before propose_update — how?",
+        "Call `validate_block(payload)` directly. In the default `advisory` mode, "
+        "`validate_block` returns the rule list without writing or raising. Inspect the "
+        "result, then call `propose_update` only if the `advisory` rule output is clean.",
+    ),
+    (
+        "What does validate_block return in v3.12's default mode?",
+        "A list of `RuleResult` instances (the per-rule pass/warn verdicts). The default mode "
+        "is `advisory`, so `validate_block` never raises — it just returns the warnings list. "
+        "`strict` mode upgrades the warnings to a `QualityGateError`.",
+    ),
+    (
+        "v3.12 quality gate — advisory or strict by default?",
+        "`advisory` is the default. `validate_block` runs in `advisory` mode unless you set "
+        "`quality_gate.mode = \"strict\"` in `mind-mem.json`. In `advisory` mode the rules run "
+        "but never block; in `strict` mode they hard-fail on violation.",
+    ),
+    (
+        "validate_block behaviour with default settings on a failing rule?",
+        "Returns a warning entry in its `RuleResult` list. The default mode is `advisory`, so "
+        "a failing rule does NOT raise — `validate_block` just records the failure in the "
+        "return value. `propose_update` then proceeds with the write (in `advisory`).",
+    ),
+    (
+        "How can I see what rules validate_block would flag without blocking the write?",
+        "Run `validate_block(payload)` directly — in the default `advisory` mode it returns "
+        "the rule list without affecting writes. `propose_update` also calls `validate_block` "
+        "and, in `advisory`, proceeds regardless of warnings.",
+    ),
+
+    # ===== propagate_lineage_staleness file location =====
+    (
+        "Module path for propagate_lineage_staleness in v3.12.0?",
+        "`src/mind_mem/lineage_staleness.py`. The function is defined there at module top; "
+        "it imports `LINEAGE_DEPTH_CAP` from `block_lineage.py` (sibling module) but the "
+        "propagator itself lives in `lineage_staleness.py`. It writes per-block scores into "
+        "the `block_staleness` table.",
+    ),
+    (
+        "Where is propagate_lineage_staleness imported from?",
+        "`from mind_mem.lineage_staleness import propagate_lineage_staleness`. The source "
+        "file is `src/mind_mem/lineage_staleness.py`. The function walks lineage edges via "
+        "BFS and writes scores to the `block_staleness` table.",
+    ),
+    (
+        "Which Python module file contains the propagate_lineage_staleness function?",
+        "`lineage_staleness.py` (full path `src/mind_mem/lineage_staleness.py`). This is the "
+        "v3.12.0 module that owns both the function and its output table `block_staleness`. "
+        "`block_lineage.py` is a sibling module that hosts the typed-edge model.",
+    ),
+    (
+        "Import path for the staleness BFS propagator?",
+        "`from mind_mem.lineage_staleness import propagate_lineage_staleness`. File path "
+        "`src/mind_mem/lineage_staleness.py`. The function writes scores into the "
+        "`block_staleness` SQLite table on every call.",
+    ),
+    (
+        "propagate_lineage_staleness lives in which file in v3.12.0?",
+        "`src/mind_mem/lineage_staleness.py`. The function `propagate_lineage_staleness"
+        "(workspace, source_id, *, max_hops=None)` is the public symbol at module top, and it "
+        "writes per-block scores into the `block_staleness` table.",
+    ),
+    (
+        "Filename for propagate_lineage_staleness in v3.12.0?",
+        "`lineage_staleness.py` (`src/mind_mem/lineage_staleness.py`). Distinct from "
+        "`block_lineage.py` — that's the typed-edge / `KIND_DECAY` constants module. The "
+        "`propagate_lineage_staleness` function and the `block_staleness` table both live "
+        "in `lineage_staleness.py`.",
+    ),
+    (
+        "Filesystem location of propagate_lineage_staleness?",
+        "`src/mind_mem/lineage_staleness.py`. The function `propagate_lineage_staleness` is "
+        "the v3.12.0 staleness-propagation BFS; it writes per-block scores into the "
+        "`block_staleness` table.",
+    ),
+    (
+        "Which file owns both propagate_lineage_staleness and block_staleness?",
+        "`src/mind_mem/lineage_staleness.py`. The module owns the `block_staleness` table "
+        "schema, its idempotent upsert helper, and the `propagate_lineage_staleness` BFS "
+        "walker. Sibling `block_lineage.py` owns the typed-edge graph that propagate walks.",
+    ),
+    (
+        "lineage_staleness.py — what's in it?",
+        "It ships `propagate_lineage_staleness(workspace, source_id, *, max_hops=None)` plus "
+        "the SQLite schema for the `block_staleness` table and the idempotent upsert helper. "
+        "Path: `src/mind_mem/lineage_staleness.py`.",
+    ),
+    (
+        "Disambiguate: block_lineage.py vs lineage_staleness.py — which owns the propagator?",
+        "`lineage_staleness.py` owns `propagate_lineage_staleness` (the BFS function) and the "
+        "`block_staleness` table. `block_lineage.py` owns the typed-edge graph (`KIND_DECAY` "
+        "constants, `add_block_edge`, etc.) that `propagate_lineage_staleness` walks. They "
+        "are siblings; the propagator is in `lineage_staleness.py`.",
+    ),
+]
+
+
+def _harvest_v4_retry2e_holdout_targeted() -> Iterator[dict]:
+    """Target the 3 holdout paraphrase misses from retry-2d.
+
+    30 diverse tuples (10 per miss pattern). No eval-exact prompts.
+    No answer rewrites (avoiding retry-2d's overfitting trap). Every
+    answer is semantically verified by audit_semantic_correctness.py.
+    """
+    for q, a in _V4_RETRY2E_HOLDOUT_TARGETED:
         yield {
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},

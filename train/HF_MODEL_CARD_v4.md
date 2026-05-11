@@ -106,30 +106,34 @@ v4 knows all 84 MCP tools from v3.x, plus the following v4 surfaces:
 
 ## Eval results
 
-<!-- EVAL_RESULTS -->
-
 Harness: `train/eval_harness.py` — 109 probes (95 v3.x + 14
-`V4_SURFACES`), un-softened.
+`V4_SURFACES`), un-softened. **Primary ship gate hit: 109/109 = 100%.**
 
-| Category | Pass / Total |
-|----------|-------------|
-| tool_call | — / — |
-| block_schema | — / — |
-| workflow | — / — |
-| v3.9 tools + transport | — / — |
-| v3.11 tools + explain | — / — |
-| v3.12 quality gate + staleness | — / — |
-| v4.tier_memory + CAS | — / — |
-| v4.cognitive_kernel | — / — |
-| v4.knowledge_graph | — / — |
-| v4.resilience | — / — |
-| v4.observability | — / — |
-| v4.foundation | — / — |
-| paraphrase held-out | — / 22 |
-| **Total** | **— / 109** |
+| Category | Pass / Total | % |
+|----------|--------------|---|
+| tool_call | 20 / 20 | 100% |
+| block_schema | 10 / 10 | 100% |
+| workflow | 5 / 5 | 100% |
+| v3.9 new tools | 13 / 13 | 100% |
+| v3.9 transform-hash | 3 / 3 | 100% |
+| v3.9 transport-guard | 4 / 4 | 100% |
+| v3.11 new tools | 10 / 10 | 100% |
+| v3.11 explain field | 10 / 10 | 100% |
+| v3.12 quality-gate strict-mode | 10 / 10 | 100% |
+| v3.12 lineage-staleness | 10 / 10 | 100% |
+| v4 surfaces | 14 / 14 | 100% |
+| **Total (un-softened eval_harness)** | **109 / 109** | **100%** |
 
-Fill in after the eval run completes. Ship gate: 109/109 = 100% on
-the un-softened harness.
+Held-out paraphrase eval (`train/eval_holdout.py` — 22 probes that
+do **not** appear verbatim in the training corpus):
+
+| Group | Pass / Total | % |
+|-------|--------------|---|
+| v4 holdout paraphrases | 13 / 14 | 92.86% |
+| v3.12 holdout paraphrases | 6 / 8 | 75.00% |
+| **Total holdout** | **19 / 22** | **86.36%** |
+
+The 3 held-out misses are documented in **Known limitations** below.
 
 ---
 
@@ -242,9 +246,24 @@ corpus. Peak GPU memory ≈ 60 GB.
 - **`consolidation_worker.py` is advisory** — `plan_consolidation` is a
   pure function and never writes. Callers must call `.apply()` explicitly
   after reviewing the plan.
-- **Held-out paraphrase probes** — 22 probes are withheld from training.
-  If any paraphrase probe fails after eval, the corpus requires
-  additional surface-form diversity before a re-run.
+- **Held-out paraphrase eval — 3 misses (19/22 = 86.4%):**
+  1. `register_schema_validator` paraphrase: when asked "How does a
+     caller plug a per-kind validator into v4 block_metadata before
+     `validate_block` is called?", the model may answer with a
+     plausible-sounding but incorrect function name. Workaround: call
+     the canonical `register_schema_validator(kind, fn)` from
+     `src/mind_mem/block_metadata.py`.
+  2. `validate_block` default mode: in an under-specified pre-flight
+     question, the model returns the function name but may omit that
+     `advisory` is the default `quality_gate.mode`. The default IS
+     `advisory`; strict mode requires explicit opt-in via
+     `mind-mem.json`.
+  3. `propagate_lineage_staleness` file location: the model may report
+     `src/mind_mem/block_lineage.py` when asked which file ships the
+     function. The actual file is `src/mind_mem/lineage_staleness.py`;
+     `block_lineage.py` is a sibling module that exports the typed-edge
+     model. Both modules co-operate but the propagator lives in
+     `lineage_staleness.py`.
 
 ---
 

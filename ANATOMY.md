@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 808 | **Est. tokens:** ~1,673,845
-**Generated:** 2026-05-11 04:20 UTC
+**Files:** 810 | **Est. tokens:** ~1,676,124
+**Generated:** 2026-05-11 07:07 UTC
 
 ## Token Budget Guide
 
@@ -70,7 +70,7 @@
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 22 | ~43,164 |
+| `train/` | 24 | ~45,443 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -976,6 +976,8 @@
 
 - `audit_canonical_coverage.json` (~5300 tok, huge) — Keys: threshold, total_probes, total_weak, by_group, weak
 - `audit_canonical_coverage.py` (~1481 tok, large) — Audit canonical-answer coverage on every eval probe.
+- `audit_semantic_correctness.json` (~5 tok, tiny) — Keys: findings
+- `audit_semantic_correctness.py` (~1963 tok, huge) — Cross-check every 'file X ships Y' claim in the corpus against src/.
 - `backport_sweep.py` (~1658 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
 - `build_model_card.py` (~3681 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
 - `CORPUS_HASH_v3.11.0` (~21 tok, tiny) — 02b3ba6a1433e25bdbefe3cebf992ca961734850d1e3550e9496905abbadb3b7  build_corpus.p
@@ -983,7 +985,7 @@
 - `eval_harness.py` (~7743 tok, huge) — Eval harness for mind-mem-4b.
 - `eval_holdout.py` (~2162 tok, huge) — Held-out paraphrase eval set — runs AFTER training, BEFORE ship.
 - `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
-- `HF_MODEL_CARD_v4.md` (~2144 tok, huge) — mind-mem-4b v4.0.0
+- `HF_MODEL_CARD_v4.md` (~2455 tok, huge) — mind-mem-4b v4.0.0
 - `Modelfile.v3.9.0` (~389 tok, medium) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
 - `Modelfile.v4.0.0` (~576 tok, large) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
 - `post_train_chain.sh` (~628 tok, large) — Post-training chain: wait for deploy → verify scp + SHA256 + pod-destroy markers → run eval.
