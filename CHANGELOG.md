@@ -2,6 +2,51 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.1 — Federation wire transport
+
+Released 2026-05-11.
+
+Adds the over-the-wire layer for the v4 federation foundation primitives
+shipped in v4.0.0. Two mind-mem hosts can now exchange version vectors
+and resolve conflicts over HTTP without speaking MCP.
+
+### Added — federation wire surface
+
+- **`mind_mem.http_transport`** — four new flag-gated endpoints
+  (require `v4.federation` in `mind-mem.json`; 503 when off):
+  - `GET  /federation/vclock/<block_id>` — per-agent version vector
+  - `GET  /federation/conflicts?limit=N` — open (unresolved) conflicts
+  - `POST /federation/write {block_id, agent_id}` — bump version,
+    auto-detect + log divergence, return `ConflictView` if surfaced
+  - `POST /federation/resolve {block_id, strategy, merged_payload?}` —
+    apply `MergeStrategy` (`last_writer_wins` / `higher_version` /
+    `three_way_merge`), return resolution + base64-encoded merged payload
+- **`mind_mem.v4.federation_client`** — new stdlib-only
+  `FederationClient` with `get_vclock`, `list_conflicts`, `push_write`,
+  `resolve_conflict`. Bearer-token auth via the existing
+  `X-MindMem-Token` header. Maps HTTP 401 → `FederationAuthError`,
+  HTTP 503 → `FederationFlagDisabled`, anything else →
+  `FederationTransportError`.
+
+### Tests
+
+- `tests/test_v4_federation_wire.py` — 11 wire-transport tests
+  including an end-to-end two-host handshake (vclock → divergence →
+  resolve). All pass; existing 40 `test_http_transport.py` cases still
+  green.
+
+### Compatibility
+
+No breaking changes. The new endpoints are flag-gated and inactive
+unless `v4.federation` is enabled. Existing v3.x / v4.0.0 callers see
+identical behaviour on every other endpoint.
+
+### Deferred from v4.x
+
+Network-stack hardening (TLS 1.3 minimum, mTLS, OAuth2 / OIDC client
+identity, DID + Verifiable Credential agent identity, ActivityPub
+bridge, gRPC parity) remains tracked in `ROADMAP.md` Group D.
+
 ## v4.0.0 — Cognitive kernel, knowledge graph, resilience suite, observability
 
 Released 2026-05-10.
