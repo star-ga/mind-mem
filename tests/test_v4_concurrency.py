@@ -65,7 +65,13 @@ def _tier_cas_increment(workspace: Path, block_id: str, retries: int = 50) -> in
     """
     db = workspace / "index.db"
     for _ in range(retries):
-        with sqlite3.connect(db, timeout=10) as conn:
+        # WAL + a 30 s busy timeout. Windows SQLite locking is stricter
+        # than POSIX's — with 16 contending writers the default 10 s
+        # timeout was tripping ``database is locked`` on the
+        # windows-latest/3.14 CI runner only.
+        with sqlite3.connect(db, timeout=30) as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=30000")
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
                 "SELECT block_version FROM block_recall_tier WHERE block_id = ?",
