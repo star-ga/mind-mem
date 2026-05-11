@@ -2888,18 +2888,17 @@ def main() -> None:
             # (each gets its own cap bucket). Verified no held-out Q is
             # leaked. Target: every marginal probe ≥ 8 canonical answers.
             _harvest_v4_retry2c_diversity(),
-            # v4 retry2d targeted: 12 tuples for the 2 observed misses on
-            # the retry-2c eval (debug_plan "policy" token + propagate ↔
-            # block_staleness co-mention). All answers force the canonical
-            # wording. retry-2c showed coverage is necessary but not
-            # sufficient — wording dominance also matters.
-            _harvest_v4_retry2d_targeted(),
-            # v4 retry2e: 30 tuples addressing the 3 holdout paraphrase
-            # misses from retry-2d (register_schema_validator,
-            # validate_block advisory default, propagate_lineage_staleness
-            # file location). No eval-exact prompts. No answer rewrites.
-            # Semantically verified by audit_semantic_correctness.py.
-            _harvest_v4_retry2e_holdout_targeted(),
+            # retry-2f rollback (2026-05-11): retry-2d added 12 tuples and
+            # retry-2e added 30 tuples; both caused holdout regression
+            # (retry-2c 21/22 → retry-2d 19/22 → retry-2e 18/22). The
+            # 4B model has finite v4-niche capacity and additional
+            # targeted tuples DISPLACE other probes (whack-a-mole).
+            # Reverting to retry-2c's tuple set. The only structural
+            # change kept from retry-2d/2e: the 2 corpus pollution
+            # fixes (lines 5121, 5501 — propagate file attribution)
+            # and the debug_plan answer #1 rewrite (got 109/109 eval).
+            # _harvest_v4_retry2d_targeted(),    # ROLLED BACK
+            # _harvest_v4_retry2e_holdout_targeted(),    # ROLLED BACK
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
