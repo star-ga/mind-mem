@@ -86,14 +86,29 @@ def mcp_tool_observe(fn):
         # MIND_MEM_ACL_DISABLED=true.
         request_scope = _get_request_scope()
         acl_scope = request_scope or os.environ.get("MIND_MEM_SCOPE", "user")
+        # Audit S-8: MIND_MEM_ACL_DISABLED used to silence the ACL check
+        # entirely and emit a single one-shot warning, so a poisoned env
+        # could silently disable admin protections for delete_memory_item,
+        # decrypt_file, encrypt_file, rollback_proposal, etc. The override
+        # is preserved for test/dev workflows but every bypassed admin
+        # call is now logged so operators can detect misuse in real time.
         acl_disabled = os.environ.get("MIND_MEM_ACL_DISABLED", "").lower() in ("1", "true", "yes")
         if acl_disabled:
-            if not getattr(mcp_tool_observe, "_acl_disabled_warned", False):
+            if tool_name in ADMIN_TOOLS:
                 _log.warning(
-                    "acl_disabled_via_env: MIND_MEM_ACL_DISABLED=true — admin tools open to all "
-                    "stdio clients. Use MIND_MEM_ADMIN_TOKEN + MIND_MEM_SCOPE=admin instead."
+                    "acl_bypassed_via_env",
+                    extra={
+                        "tool": tool_name,
+                        "reason": "MIND_MEM_ACL_DISABLED",
+                        "scope": acl_scope,
+                    },
                 )
-                mcp_tool_observe._acl_disabled_warned = True  # type: ignore[attr-defined]
+            # Note: no early return — fall through to the normal flow so
+            # USER_TOOLS gate still applies (avoids accidentally opening
+            # unknown-tool calls).
+            if tool_name not in ADMIN_TOOLS and tool_name not in USER_TOOLS:
+                _log.warning("acl_unknown_tool", tool=tool_name)
+                return json.dumps({"error": f"Tool '{tool_name}' is not in ACL policy", "_schema_version": "1.0"})
         elif tool_name in ADMIN_TOOLS:
             acl_error = check_tool_acl(tool_name, acl_scope)
             if acl_error:

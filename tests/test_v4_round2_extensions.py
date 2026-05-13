@@ -141,10 +141,31 @@ def test_detect_conflict_returns_none_when_versions_tied(fed_on: Path) -> None:
 
 @pytest.mark.unit
 def test_resolve_conflict_last_writer_wins(fed_on: Path) -> None:
+    # Audit FP-1: LAST_WRITER_WINS now resolves by wall-clock
+    # ``last_seen_at`` (semantic the public name has always promised),
+    # NOT by highest logical version (which was the pre-fix collapsed
+    # behaviour identical to HIGHER_VERSION). agent-A bumps twice, then
+    # agent-B bumps once — agent-B's last_seen_at is the most recent,
+    # so it wins even though agent-A has the higher version.
     record_agent_write(fed_on, "B-1", "agent-A")
     record_agent_write(fed_on, "B-1", "agent-A")
     record_agent_write(fed_on, "B-1", "agent-B")
     resolution = resolve_conflict(fed_on, "B-1", MergeStrategy.LAST_WRITER_WINS)
+    assert isinstance(resolution, Resolution)
+    assert resolution.winner_agent == "agent-B"
+    assert resolution.winner_version == 1
+    assert resolution.merged_payload is None
+
+
+@pytest.mark.unit
+def test_resolve_conflict_higher_version_picks_highest_version(fed_on: Path) -> None:
+    # The new HIGHER_VERSION is the previous (collapsed) behaviour of
+    # LAST_WRITER_WINS — pick the agent with the largest logical clock.
+    # See audit FP-1: the two strategies are now semantically distinct.
+    record_agent_write(fed_on, "B-1", "agent-A")
+    record_agent_write(fed_on, "B-1", "agent-A")
+    record_agent_write(fed_on, "B-1", "agent-B")
+    resolution = resolve_conflict(fed_on, "B-1", MergeStrategy.HIGHER_VERSION)
     assert isinstance(resolution, Resolution)
     assert resolution.winner_agent == "agent-A"
     assert resolution.winner_version == 2
@@ -170,11 +191,16 @@ def test_resolve_conflict_three_way_merge_invokes_merger(fed_on: Path) -> None:
 
 
 @pytest.mark.unit
-def test_resolve_conflict_three_way_merge_without_merger_returns_none(fed_on: Path) -> None:
+def test_resolve_conflict_three_way_merge_without_merger_raises(fed_on: Path) -> None:
+    # Audit FP-4: THREE_WAY_MERGE without merger used to return ``None``,
+    # indistinguishable from "no conflict found". Now raises ValueError
+    # so a misconfigured caller surfaces a real error instead of silently
+    # leaving the conflict open.
     record_agent_write(fed_on, "B-1", "agent-A")
     record_agent_write(fed_on, "B-1", "agent-B")
     record_agent_write(fed_on, "B-1", "agent-B")
-    assert resolve_conflict(fed_on, "B-1", MergeStrategy.THREE_WAY_MERGE) is None
+    with pytest.raises(ValueError, match="merger callable"):
+        resolve_conflict(fed_on, "B-1", MergeStrategy.THREE_WAY_MERGE)
 
 
 @pytest.mark.unit

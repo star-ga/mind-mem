@@ -254,9 +254,14 @@ def detect_conflict(workspace: str | Path, block_id: str) -> ConflictReport | No
     claimed independently advancing versions, else ``None``.
 
     The detection rule: if ≥2 agents have versions, surface the pair
-    with the largest gap (left = highest, right = next highest).
-    Calling this function lazily logs the detection so subsequent
-    :func:`list_conflicts` callers see it.
+    with the largest gap (left = highest, right = next highest). Per
+    audit FP-7, every lagging agent (versions below the leader) is
+    *also* recorded in ``tier_conflict_log`` so a third or fourth
+    diverging agent is never silently invisible — only the top-2 pair
+    is returned to the caller for resolution.
+
+    Calling this function lazily logs the detection(s) so subsequent
+    :func:`list_conflicts` callers see them.
     """
     require_enabled(FLAG)
     vec = get_version_vector(workspace, block_id)
@@ -276,6 +281,20 @@ def detect_conflict(workspace: str | Path, block_id: str) -> ConflictReport | No
         right_version=right_v,
     )
     _log_conflict(workspace, report)
+    # FP-7: log every lagging agent so 3+ agent divergence is visible.
+    for lag_agent, lag_v in sorted_agents[2:]:
+        if lag_v >= left_v:
+            continue
+        _log_conflict(
+            workspace,
+            ConflictReport(
+                block_id=block_id,
+                left_agent=left_agent,
+                left_version=left_v,
+                right_agent=lag_agent,
+                right_version=lag_v,
+            ),
+        )
     return report
 
 
@@ -308,25 +327,53 @@ def resolve_conflict(
     report = detect_conflict(workspace, block_id)
     if report is None:
         return None
+    # FP-3: capture the specific rowid for this exact (left, right, versions)
+    # pair so the UPDATE below pins to one row, not "all open conflicts for
+    # this block_id" (which would silently falsify the audit metadata of any
+    # stale open rows from a different version pair).
+    target_rowid = _find_open_conflict_rowid(workspace, block_id, report)
+    if target_rowid is None:
+        # _log_conflict in detect_conflict should have inserted; if a
+        # concurrent resolver beat us, treat as already-resolved.
+        return None
 
-    if strategy is MergeStrategy.LAST_WRITER_WINS or strategy is MergeStrategy.HIGHER_VERSION:
+    if strategy is MergeStrategy.HIGHER_VERSION:
+        # Highest logical-clock wins. `report.left_agent` is already the
+        # max-version agent (detect_conflict sorts by version desc).
         winner_agent = report.left_agent
         winner_version = report.left_version
         merged: bytes | None = None
+    elif strategy is MergeStrategy.LAST_WRITER_WINS:
+        # Latest wall-clock writer wins, by `last_seen_at`. Falls back to
+        # higher version when timestamps tie. See audit FP-1: HIGHER_VERSION
+        # and LAST_WRITER_WINS used to be implementation-identical; this
+        # branch makes them semantically distinct as the public enum implies.
+        winner_agent, winner_version = _pick_last_writer(workspace, block_id, report)
+        merged = None
     elif strategy is MergeStrategy.THREE_WAY_MERGE:
         if merger is None:
-            return None
+            # FP-4: surface caller error rather than silently returning None
+            # (which is indistinguishable from "no conflict to resolve").
+            raise ValueError(
+                "THREE_WAY_MERGE requires a merger callable; got None"
+            )
         winner_agent = f"merge:{report.left_agent}+{report.right_agent}"
         winner_version = max(report.left_version, report.right_version) + 1
         merged = merger(report)
     else:
-        return None
+        raise ValueError(f"unrecognised MergeStrategy: {strategy!r}")
 
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
     with sqlite3.connect(db, timeout=10) as conn:
+        # FP-3 + FP-8: pin the UPDATE to one specific rowid (so stale
+        # open rows for the same block but a different version pair are
+        # not collateral-damaged), inside BEGIN IMMEDIATE so two
+        # resolvers don't silently overwrite each other.
+        conn.execute("BEGIN IMMEDIATE")
         conn.execute(
-            "UPDATE tier_conflict_log SET resolution = ?, resolved_to = ?, resolved_at = ? WHERE block_id = ? AND resolution IS NULL",
-            (strategy.value, winner_agent, now, block_id),
+            "UPDATE tier_conflict_log SET resolution = ?, resolved_to = ?, "
+            "resolved_at = ? WHERE rowid = ? AND resolution IS NULL",
+            (strategy.value, winner_agent, now, target_rowid),
         )
         conn.commit()
 
@@ -344,16 +391,25 @@ def resolve_conflict(
 # ---------------------------------------------------------------------------
 
 
-def _log_conflict(workspace: str | Path, report: ConflictReport) -> None:
-    """Record a conflict for later resolution. Idempotent on duplicates
-    via the ``resolution IS NULL`` filter — re-detecting the same pair
-    inserts a fresh row only when no open row exists."""
+def _log_conflict(workspace: str | Path, report: ConflictReport) -> int | None:
+    """Record a conflict for later resolution. Returns the inserted
+    ``rowid`` (so callers can pin a subsequent UPDATE to one specific
+    row — see FP-3) or ``None`` if the conflict was already logged.
+
+    Idempotent on duplicates via the ``resolution IS NULL`` filter —
+    re-detecting the same pair inserts a fresh row only when no open
+    row exists. Audit FP-2: SELECT and INSERT now run inside
+    ``BEGIN IMMEDIATE`` so two threads racing detect_conflict on the
+    same pair cannot both insert (the second waits, sees the first's
+    row, and returns without inserting).
+    """
     ensure_federation_schema(workspace)
     db = Path(workspace) / "index.db"
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
     with sqlite3.connect(db, timeout=10) as conn:
+        conn.execute("BEGIN IMMEDIATE")
         existing = conn.execute(
-            "SELECT 1 FROM tier_conflict_log WHERE block_id = ? AND resolution IS NULL "
+            "SELECT rowid FROM tier_conflict_log WHERE block_id = ? AND resolution IS NULL "
             "AND left_agent = ? AND right_agent = ? "
             "AND left_version = ? AND right_version = ?",
             (
@@ -365,8 +421,8 @@ def _log_conflict(workspace: str | Path, report: ConflictReport) -> None:
             ),
         ).fetchone()
         if existing is not None:
-            return
-        conn.execute(
+            return int(existing[0])
+        cur = conn.execute(
             "INSERT INTO tier_conflict_log "
             "(block_id, detected_at, left_agent, left_version, right_agent, right_version) "
             "VALUES (?, ?, ?, ?, ?, ?)",
@@ -380,6 +436,69 @@ def _log_conflict(workspace: str | Path, report: ConflictReport) -> None:
             ),
         )
         conn.commit()
+        return int(cur.lastrowid) if cur.lastrowid is not None else None
+
+
+def _find_open_conflict_rowid(
+    workspace: str | Path,
+    block_id: str,
+    report: ConflictReport,
+) -> int | None:
+    """Return the rowid of the open `tier_conflict_log` row matching
+    exactly this (block_id, left, right, versions) pair, or None.
+
+    Audit FP-3: the per-block ``resolve_conflict`` UPDATE used to close
+    every open row for ``block_id`` regardless of the specific version
+    pair, silently overwriting the audit metadata of stale rows. This
+    helper lets the resolver pin to one row.
+    """
+    db = Path(workspace) / "index.db"
+    if not db.is_file():
+        return None
+    with sqlite3.connect(db, timeout=10) as conn:
+        row = conn.execute(
+            "SELECT rowid FROM tier_conflict_log "
+            "WHERE block_id = ? AND resolution IS NULL "
+            "  AND left_agent = ? AND right_agent = ? "
+            "  AND left_version = ? AND right_version = ?",
+            (
+                block_id,
+                report.left_agent,
+                report.right_agent,
+                report.left_version,
+                report.right_version,
+            ),
+        ).fetchone()
+    return int(row[0]) if row else None
+
+
+def _pick_last_writer(
+    workspace: str | Path,
+    block_id: str,
+    report: ConflictReport,
+) -> tuple[str, int]:
+    """Return (agent, version) of whichever of the two report agents wrote
+    most recently by ``last_seen_at``. Ties break to higher version, then
+    to left.
+
+    Audit FP-1: LAST_WRITER_WINS was implementation-identical to
+    HIGHER_VERSION before this. It now consults the wall-clock column
+    that ``record_agent_write`` has been writing all along (schema line
+    125, ``block_tier_vclock.last_seen_at``).
+    """
+    db = Path(workspace) / "index.db"
+    with sqlite3.connect(db, timeout=10) as conn:
+        rows = conn.execute(
+            "SELECT agent_id, version, last_seen_at FROM block_tier_vclock "
+            "WHERE block_id = ? AND agent_id IN (?, ?)",
+            (block_id, report.left_agent, report.right_agent),
+        ).fetchall()
+    if not rows:
+        # No timestamps available — fall back to higher version.
+        return (report.left_agent, report.left_version)
+    rows_sorted = sorted(rows, key=lambda r: (r[2], int(r[1])), reverse=True)
+    agent, version, _ts = rows_sorted[0]
+    return (str(agent), int(version))
 
 
 def _table_exists(conn: sqlite3.Connection, name: str) -> bool:

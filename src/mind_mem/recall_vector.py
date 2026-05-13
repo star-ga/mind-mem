@@ -724,7 +724,20 @@ class VectorBackend(RecallBackend):
 
         conn = self._connect_sqlite_vec(workspace, readonly=True)
         try:
-            fetch_limit = limit * 3 if active_only else limit
+            # Audit R-8: adaptive overfetch. The previous fixed ×3
+            # under-fetched when the active-block ratio in meta was
+            # low — callers asking for limit=10 with a corpus that's
+            # 80% inactive got only 6 active hits back, silently
+            # truncating recall. We now look up the active ratio from
+            # meta and overfetch by ceil(limit / max(ratio, 0.1)),
+            # clamped to a sane upper bound to avoid an O(N) scan.
+            if active_only:
+                total = len(meta) or 1
+                active = sum(1 for v in meta.values() if v.get("status") == "active") or 0
+                ratio = max(active / total, 0.1) if active else 0.1
+                fetch_limit = min(int(limit / ratio) + limit, max(limit * 10, 200))
+            else:
+                fetch_limit = limit
             rows = conn.execute(
                 """
                 SELECT block_id, distance
@@ -990,7 +1003,21 @@ class VectorBackend(RecallBackend):
 
         api_key = os.environ.get("PINECONE_API_KEY")
         if not api_key:
-            raise ValueError("PINECONE_API_KEY environment variable is required for Pinecone backend")
+            # Audit R-9: surface the missing-credential failure as a
+            # WARNING-level structured log + counter so dashboards
+            # catch silent breakage (the old code raised ValueError
+            # but downstream callers swallowed it into a debug log,
+            # making the "Pinecone is configured but doing nothing"
+            # state invisible).
+            _log.warning(
+                "pinecone_api_key_missing",
+                index=self.pinecone_index_name,
+                advice="set PINECONE_API_KEY to enable the Pinecone backend",
+            )
+            metrics.inc("pinecone_api_key_missing")
+            raise ValueError(
+                "PINECONE_API_KEY environment variable is required for Pinecone backend"
+            )
 
         pc = Pinecone(api_key=api_key)
         index = pc.Index(self.pinecone_index_name)
@@ -1220,7 +1247,21 @@ class VectorBackend(RecallBackend):
 
         api_key = os.environ.get("PINECONE_API_KEY")
         if not api_key:
-            raise ValueError("PINECONE_API_KEY environment variable is required for Pinecone backend")
+            # Audit R-9: surface the missing-credential failure as a
+            # WARNING-level structured log + counter so dashboards
+            # catch silent breakage (the old code raised ValueError
+            # but downstream callers swallowed it into a debug log,
+            # making the "Pinecone is configured but doing nothing"
+            # state invisible).
+            _log.warning(
+                "pinecone_api_key_missing",
+                index=self.pinecone_index_name,
+                advice="set PINECONE_API_KEY to enable the Pinecone backend",
+            )
+            metrics.inc("pinecone_api_key_missing")
+            raise ValueError(
+                "PINECONE_API_KEY environment variable is required for Pinecone backend"
+            )
 
         pc = Pinecone(api_key=api_key)
         index = pc.Index(self.pinecone_index_name)
@@ -1368,17 +1409,27 @@ def rebuild_index(workspace: str) -> int:
         text = b.get("Statement", b.get("Description", b.get("Subject", "")))
         texts.append(str(text))
 
-    embeddings = backend.model.encode(texts, show_progress_bar=False)
+    # Audit R-7: route through _embed_for_provider so configured
+    # provider preference + circuit breaker + fallback chain are
+    # honored. The old `backend.model.encode(...)` bypass quietly
+    # used sentence-transformers regardless of the operator's
+    # ``embedder`` config and ignored circuit-broken providers.
+    raw_embeddings = backend._embed_for_provider(texts)
 
     # Write to local index
     index_dir = os.path.join(workspace, backend.index_path)
     os.makedirs(index_dir, exist_ok=True)
     index_data = []
     for i, b in enumerate(blocks):
+        emb = raw_embeddings[i]
+        # _embed_for_provider returns list[list[float]]; some backends
+        # may produce numpy arrays so we coerce defensively.
+        if hasattr(emb, "tolist"):
+            emb = emb.tolist()
         index_data.append(
             {
                 "_id": b.get("_id", f"block_{i}"),
-                "embedding": embeddings[i].tolist(),
+                "embedding": list(emb),
                 "text": texts[i],
             }
         )

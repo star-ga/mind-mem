@@ -269,13 +269,25 @@ def delete_memory_item(block_id: str) -> str:
 
         deleted_log = os.path.join(ws, "memory", "deleted_blocks.jsonl")
         os.makedirs(os.path.dirname(deleted_log), exist_ok=True)
-        with open(deleted_log, "a", encoding="utf-8") as dl:
-            entry = {
-                "block_id": block_id,
-                "deleted_at": datetime.now(timezone.utc).isoformat(),
-                "content": deleted_content,
-            }
-            dl.write(json.dumps(entry, default=str) + "\n")
+        # Audit S-11: concurrent delete_memory_item invocations were
+        # interleaving append() bytes from two records, producing
+        # invalid JSONL that broke recovery. Use the project's
+        # FileLock (BSD flock / msvcrt) plus an O_APPEND open so the
+        # kernel-level append is atomic per write() syscall AND
+        # serialized across processes. The combination is needed
+        # because POSIX only guarantees atomicity for writes <
+        # PIPE_BUF on O_APPEND, and deleted content can be >4K.
+        entry = {
+            "block_id": block_id,
+            "deleted_at": datetime.now(timezone.utc).isoformat(),
+            "content": deleted_content,
+        }
+        line = json.dumps(entry, default=str) + "\n"
+        with FileLock(deleted_log + ".lock"):
+            with open(deleted_log, "a", encoding="utf-8") as dl:
+                dl.write(line)
+                dl.flush()
+                os.fsync(dl.fileno())
 
         dir_name = os.path.dirname(filepath)
         fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".md.tmp")

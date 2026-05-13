@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import re
 
 from ._recall_constants import SEARCH_FIELDS, SIG_FIELDS
@@ -184,11 +185,18 @@ _MULTIHOP_PATTERNS = re.compile(
 )
 
 
+@functools.lru_cache(maxsize=2048)
 def detect_query_type(query: str) -> str:
     """Classify query into temporal/adversarial/multi-hop/single-hop.
 
     Returns one of: 'temporal', 'adversarial', 'multi-hop', 'single-hop'.
     Uses pattern-based heuristics with scoring to handle ambiguous queries.
+
+    Audit R-6: results are LRU-cached (2048 entries) because the
+    caller (HybridBackend.search) classifies the same query up to
+    three times per request (expansion path + decomposition path +
+    cross-encoder rerank path). The function is pure (regex-only,
+    no I/O, no global mutable state) so caching is safe.
     """
     query_lower = query.lower()
 

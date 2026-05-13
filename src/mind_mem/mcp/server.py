@@ -188,7 +188,17 @@ def main() -> None:
     parser.add_argument("--transport", choices=["stdio", "http"], default="stdio", help="Transport protocol (default: stdio)")
     parser.add_argument("--host", default="127.0.0.1", help="HTTP bind host (default: 127.0.0.1; only used with --transport http)")
     parser.add_argument("--port", type=int, default=8765, help="HTTP port (only used with --transport http)")
-    parser.add_argument("--token", default=None, help="Bearer token for HTTP auth (or set MIND_MEM_TOKEN env var)")
+    # Audit S-9: --token on argv leaks into /proc/cmdline (visible to
+    # any local process via /proc/<pid>/cmdline and to `ps`), to shell
+    # history, and to journald. Removed in v4.0.x. The MIND_MEM_TOKEN
+    # environment variable is the only supported configuration channel.
+    # The argument is still accepted so older invocations get a clean
+    # error instead of an argparse "unrecognized arguments" abort.
+    parser.add_argument(
+        "--token",
+        default=None,
+        help=argparse.SUPPRESS,
+    )
     parser.add_argument(
         "--allow-unauthenticated-localhost",
         action="store_true",
@@ -206,12 +216,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.token and not os.environ.get("MIND_MEM_TOKEN"):
-        warnings.warn(
-            "Passing --token on the command line exposes it in /proc/cmdline. Use MIND_MEM_TOKEN environment variable instead.",
-            stacklevel=2,
+    if args.token is not None:
+        parser.error(
+            "The --token CLI flag was removed in v4.0.x because it leaked the "
+            "secret into /proc/cmdline and shell history (audit S-9). Set the "
+            "MIND_MEM_TOKEN environment variable instead, e.g. "
+            "`MIND_MEM_TOKEN=$(cat /run/secrets/mindmem.token) mind-mem-mcp ...`."
         )
-        os.environ["MIND_MEM_TOKEN"] = args.token
 
     if args.transport == "http":
         _enforce_http_auth_or_localhost(args.host, args.allow_unauthenticated_localhost)

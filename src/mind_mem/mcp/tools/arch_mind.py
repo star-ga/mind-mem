@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from typing import Any
@@ -43,6 +44,105 @@ from ..infra.observability import mcp_tool_observe
 
 class ArchMindError(Exception):
     """Raised when the arch-mind binary is missing or returns non-zero."""
+
+
+# Audit S-6: every caller-supplied argument that lands in a subprocess
+# argv must be validated. The MCP threat model treats tool callers as
+# untrusted (a poisoned agent or compromised client could supply
+# arguments crafted to flag-inject the arch-mind binary, or to escape
+# the repository sandbox). Paths get a structural check (no flag-style
+# prefix, no shell metacharacters, bounded length, no NUL byte) and
+# enumerated string arguments get an allowlist or regex.
+
+_ARCH_MODE_ALLOWLIST = frozenset({"enforce", "report"})
+_ARCH_METRIC_ALLOWLIST = frozenset(
+    {
+        "modularity_q16",
+        "acyclicity_q16",
+        "depth_q16",
+        "equality_q16",
+        "redundancy_q16",
+        "q16_determinism_purity",
+        "evidence_chain_density",
+        "mcp_tool_isolation",
+        "governance_kernel_coverage",
+    }
+)
+_ARCH_ID_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,128}$")
+_ARCH_PATH_MAX = 4096
+_ARCH_HISTORY_DAYS_MAX = 36500  # ~100 years, generous upper bound
+
+
+def _validate_arch_path(name: str, value: str) -> str:
+    """Validate an arch-mind path argument before it reaches subprocess.
+
+    The arch-mind binary takes absolute repository / fixture / rules /
+    baseline paths. The wrapper does not interpret them relative to a
+    workspace (they may legitimately point outside the mind-mem
+    workspace) so we only enforce structural guards:
+
+    * non-empty, str-typed, bounded length;
+    * no NUL byte (defeats C-string truncation tricks);
+    * does not start with ``-`` (otherwise the caller could craft an
+      argument that arch-mind would parse as a flag).
+
+    These guards keep subprocess-with-list-argv safe even if the caller
+    is hostile. We deliberately do NOT realpath / stat here — that is
+    arch-mind's job and depends on its own filesystem view.
+    """
+    if not isinstance(value, str):
+        raise ArchMindError(f"arch-mind {name}: expected str, got {type(value).__name__}")
+    if not value:
+        raise ArchMindError(f"arch-mind {name}: empty path is not allowed")
+    if len(value) > _ARCH_PATH_MAX:
+        raise ArchMindError(f"arch-mind {name}: path exceeds {_ARCH_PATH_MAX} chars")
+    if "\x00" in value:
+        raise ArchMindError(f"arch-mind {name}: NUL byte in path is not allowed")
+    if value.startswith("-"):
+        raise ArchMindError(f"arch-mind {name}: path may not start with '-' (flag-injection guard)")
+    return value
+
+
+def _validate_arch_id(name: str, value: str) -> str:
+    """Validate an opaque identifier (agent_id, commit_sha) for subprocess.
+
+    Allowed: ``^[A-Za-z0-9_.\\-]{1,128}$``. Any character outside that
+    class is rejected so a hostile caller cannot smuggle whitespace,
+    quote, or flag-prefix bytes into the arch-mind argv.
+    """
+    if not isinstance(value, str):
+        raise ArchMindError(f"arch-mind {name}: expected str, got {type(value).__name__}")
+    if not _ARCH_ID_RE.match(value):
+        raise ArchMindError(
+            f"arch-mind {name}: must match ^[A-Za-z0-9_.\\-]{{1,128}}$"
+        )
+    return value
+
+
+def _validate_arch_mode(value: str) -> str:
+    if value not in _ARCH_MODE_ALLOWLIST:
+        raise ArchMindError(
+            f"arch-mind mode: must be one of {sorted(_ARCH_MODE_ALLOWLIST)}, got {value!r}"
+        )
+    return value
+
+
+def _validate_arch_metric(value: str) -> str:
+    if value not in _ARCH_METRIC_ALLOWLIST:
+        raise ArchMindError(
+            f"arch-mind metric: must be one of {sorted(_ARCH_METRIC_ALLOWLIST)}, got {value!r}"
+        )
+    return value
+
+
+def _validate_arch_days(value: int) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ArchMindError(f"arch-mind days: expected int, got {type(value).__name__}")
+    if value < 0 or value > _ARCH_HISTORY_DAYS_MAX:
+        raise ArchMindError(
+            f"arch-mind days: must be in [0, {_ARCH_HISTORY_DAYS_MAX}], got {value}"
+        )
+    return value
 
 
 def _resolve_binary() -> str:
@@ -113,6 +213,8 @@ def arch_baseline(repo: str, fixture: str) -> dict[str, Any]:
     Returns the wrapped subprocess result; ``json`` carries the
     arch-mind binary's stdout when it is parseable JSON.
     """
+    repo = _validate_arch_path("repo", repo)
+    fixture = _validate_arch_path("fixture", fixture)
     return _run(["baseline", "--fixture", fixture, "--out", f"{repo}/.arch-mind/baseline.json"])
 
 
@@ -127,6 +229,12 @@ def arch_delta(repo: str, before: str, after: str) -> dict[str, Any]:
         before: path to the baseline JSON captured before the change.
         after: path to the baseline JSON captured after the change.
     """
+    # repo is still validated even though it is unused, so a poisoned
+    # caller cannot stash flag-injection payloads in the "unused" arg
+    # and silently bypass the audit S-6 contract once v0.1.1 wires it in.
+    _validate_arch_path("repo", repo)
+    before = _validate_arch_path("before", before)
+    after = _validate_arch_path("after", after)
     del repo  # explicitly ignored; reserved for v0.1.1 store-aware deltas
     return _run(["delta", "--before", before, "--after", after])
 
@@ -141,9 +249,11 @@ def arch_history(repo: str, days: int = 0, verify: bool = False) -> dict[str, An
             events whose ``wall_clock_iso`` falls within the last N days.
         verify: if true, recompute every MAC and report tamper.
     """
+    repo = _validate_arch_path("repo", repo)
+    days = _validate_arch_days(days)
     args = ["history", "--repo", repo]
     if days > 0:
-        args += ["--days", str(int(days))]
+        args += ["--days", str(days)]
     if verify:
         args.append("--verify")
     return _run(args)
@@ -167,8 +277,12 @@ def arch_check_rules(
         mode: ``"enforce"`` (exit 1 on any violation) or ``"report"``
             (always exit 0, return violations in the result).
     """
+    repo = _validate_arch_path("repo", repo)
+    fixture = _validate_arch_path("fixture", fixture)
+    mode = _validate_arch_mode(mode)
     args = ["check-rules", "--repo", repo, "--fixture", fixture, "--mode", mode]
-    if rules:
+    if rules is not None:
+        rules = _validate_arch_path("rules", rules)
         args += ["--rules", rules]
     return _run(args)
 
@@ -187,6 +301,10 @@ def arch_session_start(
     successful call with exactly one ``arch_session_end`` to close
     the chain.
     """
+    repo = _validate_arch_path("repo", repo)
+    fixture = _validate_arch_path("fixture", fixture)
+    agent_id = _validate_arch_id("agent_id", agent_id)
+    commit_sha = _validate_arch_id("commit_sha", commit_sha)
     return _run(
         [
             "session-start",
@@ -210,6 +328,8 @@ def arch_session_end(repo: str, fixture: str) -> dict[str, Any]:
     ``session_start``. Returns the per-metric delta and the
     ``any_regression`` boolean.
     """
+    repo = _validate_arch_path("repo", repo)
+    fixture = _validate_arch_path("fixture", fixture)
     return _run(
         [
             "session-end",
@@ -233,6 +353,8 @@ def arch_metric_explain(metric: str, fixture: str) -> dict[str, Any]:
             ``mcp_tool_isolation``, ``governance_kernel_coverage``).
         fixture: path to an arch-mind fixture.
     """
+    metric = _validate_arch_metric(metric)
+    fixture = _validate_arch_path("fixture", fixture)
     # arch-mind's CLI version of metric_explain is "explain --scan",
     # which prints all 9 metrics. The MCP tool filters to the one
     # the caller asked about so the response is small and focused.

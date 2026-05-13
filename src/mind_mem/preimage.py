@@ -19,11 +19,17 @@ Rules:
 2. Every subsequent field is rendered to ``bytes`` deterministically:
    - ``bytes``   → as-is
    - ``str``     → ``utf-8`` encode
+   - ``bool``    → ``b"t"`` / ``b"f"`` (distinct from int 1/0 so a
+                   bool↔int swap invalidates the digest)
    - ``int``     → canonical decimal ascii (no leading zero, signed)
-   - ``float``   → Q16.16 hex via :mod:`q1616` (cross-arch stable)
-   - ``None``    → empty bytes (rendered as ``\\x00\\x00``; the leading
-                   NUL is the separator, the trailing NUL from the
-                   *next* separator closes the slot)
+   - ``float``   → Q16.16 hex via :mod:`q1616` (cross-arch stable;
+                   ±Inf and NaN are rejected to prevent saturation
+                   collisions with the Q16.16 endpoints)
+   - ``None``    → rejected with ``ValueError``. Otherwise ``None``
+                   and ``""`` would hash identically, letting an
+                   attacker swap a missing field for an empty one
+                   without invalidating the digest. Callers wanting
+                   "absent" pass ``""`` or an explicit sentinel.
    - anything else raises ``TypeError``
 3. Fields are joined with a single NUL byte (``\\x00``).
 4. Field values containing ``\\x00`` are rejected with ``ValueError``
@@ -35,12 +41,13 @@ whatever digest they prefer (SHA-256, SHA3-512, etc.).
 
 from __future__ import annotations
 
+import math
 from typing import Union
 
 from .q1616 import hex_q16_16
 
 _SEP = b"\x00"
-Value = Union[bytes, bytearray, memoryview, str, int, float, None]
+Value = Union[bytes, bytearray, memoryview, str, int, float]
 
 
 def _render(value: Value) -> bytes:
@@ -70,6 +77,16 @@ def _render(value: Value) -> bytes:
             # collides with float 0.0. Reject upfront so callers hand
             # us finite floats (or explicitly coerce NaN to a sentinel).
             raise ValueError("preimage(): NaN is not hashable — convert to a sentinel float first")
+        if math.isinf(value):
+            # ±Inf saturates in to_q16_16 to ±_MAX = ±0x7FFFFFFF. Any
+            # finite float above the Q16.16 range (≥ 32768.0) also
+            # saturates to the same value, so ``+Inf`` would collide
+            # with ``32768.0`` in the preimage (audit FP-6). Reject
+            # so callers must clamp or coerce explicitly.
+            raise ValueError(
+                "preimage(): ±Inf is not hashable — saturates to the "
+                "Q16.16 endpoint and collides with the boundary value"
+            )
         data = hex_q16_16(value).encode("ascii")
     else:
         raise TypeError(f"preimage(): unsupported field type {type(value).__name__!r}")

@@ -72,21 +72,50 @@ def rrf_fuse(
     For each document, RRF score = sum_i( weight_i / (k + rank_i) )
     where rank_i is the 1-based rank of the document in list i.
 
+    Audit R-2 — weight semantics: ``weights`` are RAW multipliers
+    applied to each list's contribution. The output ``rrf_score``
+    therefore scales linearly with the weight magnitudes — passing
+    ``[1.0, 1.0]`` and ``[0.5, 0.5]`` produce identical RANKINGS but
+    different absolute scores. Callers comparing absolute scores
+    across requests must keep weights stable; callers comparing only
+    RANKINGS are unaffected.
+
+    Audit R-3: if only ONE non-empty list is present (the others
+    are empty), ``hybrid_single_list_degenerate`` is incremented on
+    the metrics registry so dashboards can flag silent BM25-only or
+    vector-only fallbacks.
+
+    Audit R-1: when two lists report the same document with different
+    metadata, the entry whose ``Date`` field is the most recent is
+    retained rather than blindly preferring the first-seen copy.
+
     Args:
         ranked_lists: List of ranked result lists. Each result is a dict
             that must contain ``id_key`` for dedup.
-        weights: Per-list weight multipliers (same length as ranked_lists).
+        weights: Per-list raw weight multipliers (same length as
+            ranked_lists). NOT normalized — see R-2 above.
         k: RRF smoothing constant (default 60). Higher values dampen the
             advantage of top-ranked documents.
         id_key: Dict key used to identify unique documents.
 
     Returns:
         Fused list sorted by descending RRF score. Each item is a copy of
-        the first-seen dict for that ID, with ``rrf_score`` and ``fusion``
-        fields injected.
+        the freshest (by Date metadata) dict for that ID, with
+        ``rrf_score`` and ``fusion`` fields injected.
     """
     if not ranked_lists:
         return []
+
+    # Audit R-3: count non-empty source lists; if only one survived,
+    # emit a metric so dashboards can flag degenerate fusion.
+    non_empty = sum(1 for r in ranked_lists if r)
+    if non_empty <= 1 and len(ranked_lists) > 1:
+        try:
+            from .observability import metrics as _metrics
+
+            _metrics.inc("hybrid_single_list_degenerate")
+        except Exception:
+            pass
 
     scores: dict[str, float] = {}
     block_data: dict[str, dict] = {}
@@ -96,7 +125,21 @@ def rrf_fuse(
         for rank_0, item in enumerate(results):
             bid = _get_block_id(item, id_key)
             scores[bid] = scores.get(bid, 0.0) + w / (k + rank_0 + 1)
-            if bid not in block_data:
+            existing = block_data.get(bid)
+            if existing is None:
+                block_data[bid] = item
+                continue
+            # Audit R-1: prefer the dict whose Date metadata is more
+            # recent. Date comes from frontmatter and is typically
+            # ISO-8601. We compare as strings (ISO ordering is correct
+            # lexicographically) and fall back to first-seen on ties
+            # or when either side is missing.
+            new_date = item.get("Date") or item.get("date")
+            old_date = existing.get("Date") or existing.get("date")
+            if isinstance(new_date, str) and isinstance(old_date, str):
+                if new_date > old_date:
+                    block_data[bid] = item
+            elif new_date and not old_date:
                 block_data[bid] = item
 
     sorted_ids = sorted(scores, key=lambda x: scores[x], reverse=True)
@@ -111,17 +154,34 @@ def rrf_fuse(
 
 
 def _get_block_id(item: dict, id_key: str) -> str:
-    """Extract a stable block identifier from a result dict."""
+    """Extract a stable block identifier from a result dict.
+
+    Audit R-4: emit a ``rrf_fallback_id_used`` warning + metric when
+    the file:line fallback path is taken, so silent ID collisions
+    (two distinct blocks at the same file:line) show up in logs
+    rather than producing wrong merge results.
+    """
     bid = item.get(id_key)
     if bid:
         return str(bid)
-    # Fallback: try common key variants
     for alt in ("id", "block_id", "_id"):
         val = item.get(alt)
         if val:
             return str(val)
-    # Last resort: file:line
-    return f"{item.get('file', '?')}:{item.get('line', 0)}"
+    fallback = f"{item.get('file', '?')}:{item.get('line', 0)}"
+    try:
+        from .observability import get_logger as _get_logger
+        from .observability import metrics as _metrics
+
+        _get_logger("mind_mem.hybrid_recall").warning(
+            "rrf_fallback_id_used",
+            fallback_id=fallback,
+            advice="result dict lacks _id / id / block_id; collisions may merge distinct blocks",
+        )
+        _metrics.inc("rrf_fallback_id_used")
+    except Exception:
+        pass
+    return fallback
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +294,27 @@ class HybridBackend:
         if not query or not query.strip():
             return []
 
+        # Audit R-6: detect_query_type is called from the expansion
+        # path, the decomposition path, and the cross-encoder path on
+        # every search() invocation. The detector itself is regex-only
+        # and cheap, but the import + dispatch shows up in profiles
+        # when called 3× per request. Memoize per request so the same
+        # query string is classified once.
+        _qt_cache: dict[str, str] = {}
+
+        def _qt() -> str | None:
+            if query in _qt_cache:
+                return _qt_cache[query]
+            try:
+                from ._recall_detection import detect_query_type as _detect
+
+                value = _detect(query)
+            except Exception as exc:  # pragma: no cover — defensive
+                _log.debug("query_type_detect_skipped", error=str(exc))
+                return None
+            _qt_cache[query] = value
+            return value
+
         # --- Multi-query expansion ---
         # When enabled, expand the query into alternative phrasings and
         # run a search for each variant.  Results are fused via RRF so
@@ -251,19 +332,14 @@ class HybridBackend:
         else:
             expansion_active = self._query_expansion_enabled
         if not expansion_active and self._query_expansion_config.get("auto_enable", True):
-            try:
-                from ._recall_detection import detect_query_type
-
-                qt = detect_query_type(query)
-                if qt in ("multi-hop", "temporal"):
-                    expansion_active = True
-                    _log.info(
-                        "query_expansion_auto_enabled",
-                        query_type=qt,
-                        reason="v3.3.0_tier2_ambiguous_query",
-                    )
-            except Exception as exc:  # pragma: no cover — defensive
-                _log.debug("query_type_detect_skipped", error=str(exc))
+            qt = _qt()
+            if qt in ("multi-hop", "temporal"):
+                expansion_active = True
+                _log.info(
+                    "query_expansion_auto_enabled",
+                    query_type=qt,
+                    reason="v3.3.0_tier2_ambiguous_query",
+                )
         if expansion_active:
             try:
                 from .query_expansion import expand_queries
@@ -306,17 +382,12 @@ class HybridBackend:
             decomp_cfg = {}
         decomp_active = False if _skip_auto_features else bool(decomp_cfg.get("enabled", False))
         if not decomp_active and decomp_cfg.get("auto_enable", True):
-            try:
-                from ._recall_detection import detect_query_type
-
-                if detect_query_type(query) == "multi-hop":
-                    decomp_active = True
-                    _log.info(
-                        "query_decomposition_auto_enabled",
-                        reason="v3.3.0_tier1_multi_hop",
-                    )
-            except Exception as exc:  # pragma: no cover
-                _log.debug("decomp_query_type_detect_skipped", error=str(exc))
+            if _qt() == "multi-hop":
+                decomp_active = True
+                _log.info(
+                    "query_decomposition_auto_enabled",
+                    reason="v3.3.0_tier1_multi_hop",
+                )
         if decomp_active:
             try:
                 from .query_planner import decompose_query
@@ -499,20 +570,49 @@ class HybridBackend:
         # mutated self._query_expansion_enabled which raced under
         # concurrent calls (python-reviewer 2026-04-20 → commit
         # b31e862 follow-up).
+        #
+        # Audit R-5: each variant is an independent BM25 + vector
+        # search. Sequential dispatch dominates wall-clock latency
+        # when expansion is enabled (default 3 variants → 3× latency).
+        # Use a ThreadPoolExecutor to fan out — the SQLite backend is
+        # WAL-mode and safe for concurrent reads, and the vector
+        # backend is read-only at query time. Single-query callers
+        # take the in-line path to avoid pool-spinup overhead.
         per_query_results: list[list[dict]] = []
-        for q in queries:
-            results = self.search(
-                q,
-                workspace,
-                limit=retrieve_wide_k,
-                active_only=active_only,
-                graph_boost=graph_boost,
-                retrieve_wide_k=retrieve_wide_k,
-                rerank=rerank,
-                _skip_auto_features=True,
-                **kwargs,
-            )
-            per_query_results.append(results)
+        if len(queries) <= 1:
+            for q in queries:
+                per_query_results.append(
+                    self.search(
+                        q,
+                        workspace,
+                        limit=retrieve_wide_k,
+                        active_only=active_only,
+                        graph_boost=graph_boost,
+                        retrieve_wide_k=retrieve_wide_k,
+                        rerank=rerank,
+                        _skip_auto_features=True,
+                        **kwargs,
+                    )
+                )
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+
+            def _one(q: str) -> list[dict]:
+                return self.search(
+                    q,
+                    workspace,
+                    limit=retrieve_wide_k,
+                    active_only=active_only,
+                    graph_boost=graph_boost,
+                    retrieve_wide_k=retrieve_wide_k,
+                    rerank=rerank,
+                    _skip_auto_features=True,
+                    **kwargs,
+                )
+
+            max_workers = min(len(queries), 4)
+            with ThreadPoolExecutor(max_workers=max_workers) as ex:
+                per_query_results = list(ex.map(_one, queries))
 
         if not per_query_results:
             return []
@@ -588,13 +688,22 @@ class HybridBackend:
             from ._recall_scoring import _resolve_half_life_days, temporal_decay_score
 
             half_life = _resolve_half_life_days(self._config)
+            # Audit R-10: copy-on-write so we don't mutate dicts the
+            # caller still holds a reference to. Two upstream paths
+            # (cross-encoder rerank, session boost) reuse the input
+            # list, and in-place score mutation corrupted their views
+            # when temporal_decay_hot_path was enabled mid-request.
+            decayed: list[dict] = []
             for r in results:
                 mult = temporal_decay_score(r, half_life_days=half_life)
                 current = float(r.get("score", 0.0) or 0.0)
-                r["score"] = current * mult
-                r["_temporal_decay"] = round(mult, 4)
-            results.sort(key=lambda x: float(x.get("score", 0.0) or 0.0), reverse=True)
-            _log.info("temporal_decay_applied", count=len(results), half_life_days=half_life)
+                copy = dict(r)
+                copy["score"] = current * mult
+                copy["_temporal_decay"] = round(mult, 4)
+                decayed.append(copy)
+            decayed.sort(key=lambda x: float(x.get("score", 0.0) or 0.0), reverse=True)
+            _log.info("temporal_decay_applied", count=len(decayed), half_life_days=half_life)
+            return decayed
         except Exception as exc:  # pragma: no cover
             _log.warning("temporal_decay_failed", error=str(exc))
         return results

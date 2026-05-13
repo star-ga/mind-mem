@@ -1305,31 +1305,52 @@ def prefetch_context(
             idx = futures[future]
             ordered_hits[idx] = future.result()
 
+    # Audit R-11: reserve slots for category-aware hits before
+    # flushing per-signal hits into ``results``. The previous order
+    # filled ``results`` up to ``limit`` from signal recall alone, so
+    # the category-aware boost in step 2 ran but its hits were
+    # silently truncated at ``results[:limit]`` and never reached the
+    # caller. We compute a per-bucket budget and cap signal hits at
+    # the reserved share, leaving room for category hits to land
+    # before the final trim.
+    _CATEGORY_RESERVE_FRACTION = 0.3  # ~30% of the limit reserved
+    category_reserve = max(0, min(limit - 1, int(round(limit * _CATEGORY_RESERVE_FRACTION))))
+    signal_budget = max(1, limit - category_reserve)
+
     for hits in ordered_hits:
         for block in hits:
             bid = block.get("_id", "")
             if bid and bid not in seen_ids:
                 seen_ids.add(bid)
                 results.append(block)
+                if len(results) >= signal_budget:
+                    break
+        if len(results) >= signal_budget:
+            break
 
     # 2. Category-aware boost: if category distiller is available,
-    #    pull in category context blocks that match the signals
+    #    pull in category context blocks that match the signals.
+    #    Up to ``category_reserve`` slots are reserved for this path
+    #    so category hits can compete with signal hits.
     try:
         from .category_distiller import CategoryDistiller
 
         distiller = CategoryDistiller()
         combined_query = " ".join(signals)
         relevant_cats = distiller.get_categories_for_query(combined_query)
-        if relevant_cats:
-            # Recall from category keywords as supplemental signal
+        if relevant_cats and category_reserve > 0:
             cat_query = " ".join(relevant_cats[:3])
             try:
-                cat_hits = recall(workspace, cat_query, limit=3, rerank=True)
+                cat_hits = recall(workspace, cat_query, limit=category_reserve, rerank=True)
+                added = 0
                 for block in cat_hits:
+                    if added >= category_reserve:
+                        break
                     bid = block.get("_id", "")
                     if bid and bid not in seen_ids:
                         seen_ids.add(bid)
                         results.append(block)
+                        added += 1
             except Exception as e:
                 _log.warning("prefetch_category_recall_failed", error=str(e))
     except ImportError:

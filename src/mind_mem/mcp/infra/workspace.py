@@ -75,10 +75,47 @@ def _check_workspace(ws: str) -> str | None:
 def _validate_path(ws: str, rel_path: str) -> str:
     """Validate that rel_path resolves inside workspace. Returns resolved path.
 
-    Raises ValueError if the path escapes the workspace boundary.
+    Raises ValueError if the path escapes the workspace boundary OR
+    if any component of the resulting path is a symlink (audit S-10
+    — symlinks open a TOCTOU window between validation and open()).
+
+    The walk uses ``lstat``/``islink`` per-component, so even
+    workspace-internal symlinks are rejected: the link itself can be
+    re-pointed between checks. Callers that need to follow a symlink
+    must resolve it explicitly out-of-band.
     """
+    if not isinstance(rel_path, str) or "\x00" in rel_path:
+        raise ValueError("Invalid path: empty or contains NUL byte")
     ws_real = os.path.realpath(ws)
-    path = os.path.realpath(os.path.join(ws_real, rel_path))
+    joined = os.path.join(ws_real, rel_path)
+    abs_joined = os.path.abspath(joined)
+
+    # Walk parent components within the workspace and reject any
+    # symlink. We start the walk from ws_real so a symlink that points
+    # at the workspace itself is allowed (the workspace root realpath
+    # is the authority), but every component *below* it is checked.
+    rel_inside = os.path.relpath(abs_joined, ws_real)
+    if rel_inside == "." or rel_inside == "":
+        # Asking for the workspace itself — no further symlink check.
+        return ws_real
+
+    cursor = ws_real
+    for component in rel_inside.split(os.sep):
+        if component in ("", "."):
+            continue
+        cursor = os.path.join(cursor, component)
+        if os.path.islink(cursor):
+            raise ValueError(
+                f"Invalid path: symlink in component {component!r} "
+                f"(audit S-10 — symlinks defeat TOCTOU guard)"
+            )
+        if not os.path.exists(cursor):
+            # Allow non-existent tail (callers may want to create it).
+            # We've already verified every existing component is not a
+            # symlink, so a non-existent component cannot be subverted.
+            break
+
+    path = os.path.realpath(abs_joined)
     if path != ws_real and not path.startswith(ws_real + os.sep):
         raise ValueError("Invalid path: escapes workspace")
     return path

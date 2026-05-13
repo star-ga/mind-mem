@@ -61,7 +61,7 @@ src/mind_mem/           — Main package (src layout)
   feature_flags.py      — 35 flags + is_enabled/require_enabled (v4.0.0)
 tests/                  — pytest suite (4000+ tests + 376 v4 unit
                           + 38 concurrency + 22 paraphrase probes)
-kernels/                — MIND scoring kernels (.mind)
+mind/                   — MIND scoring kernels (.mind)
 docs/                   — User + integration docs (35+ files)
 ```
 

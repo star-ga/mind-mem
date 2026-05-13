@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 from datetime import datetime, timezone
 
@@ -153,7 +154,39 @@ class AuditEntry:
         """Legacy v1 audit-entry hash (``|``-joined).
 
         Preserved so pre-v2.10.0 audit ledgers continue to verify.
+
+        Audit FP-9: this preimage is structurally ambiguous — a
+        ``|`` byte inside any field (reason free-text in particular)
+        collides with the field separator and lets a hostile writer
+        forge two semantically different entries that hash the same.
+        v3 (compute_entry_hash_v3) closed this with TAG_v1 NUL-separated
+        length-prefixed preimages. v1 is kept ONLY for backward-compat
+        verification of pre-v2.10.0 ledgers; we emit a diagnostic
+        warning when any input field contains ``|`` so operators can
+        flag the historical entry for re-signing.
         """
+        for name, value in (
+            ("timestamp", timestamp),
+            ("operation", operation),
+            ("target", target),
+            ("agent", agent),
+            ("reason", reason),
+            ("payload_hash", payload_hash),
+            ("prev_hash", prev_hash),
+        ):
+            if isinstance(value, str) and "|" in value:
+                logging.getLogger("mind_mem.audit_chain").warning(
+                    "LEGACY_SEPARATOR_AMBIGUITY",
+                    extra={
+                        "field": name,
+                        "seq": seq,
+                        "advice": (
+                            "v1 preimage uses '|' as a separator; this field "
+                            "contains a literal '|' which makes the hash "
+                            "ambiguous. Re-sign with v3 (TAG_v1) preimage."
+                        ),
+                    },
+                )
         canonical = f"{seq}|{timestamp}|{operation}|{target}|{agent}|{reason}|{payload_hash}|{prev_hash}"
         return _compute_hash(canonical)
 

@@ -1,4 +1,4 @@
-# Mind Mem Formal Specification v1.0
+# Mind Mem Formal Specification v1.5.1
 
 This document defines the grammars, invariants, state machine, and atomicity guarantees that govern Mind Mem behavior. All implementations MUST conform to this specification.
 

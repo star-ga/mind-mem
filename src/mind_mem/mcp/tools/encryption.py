@@ -33,9 +33,54 @@ def _encryption_passphrase() -> str | None:
 
 
 def _safe_vault_path(ws: str, candidate: str) -> str:
-    """Resolve *candidate* against *ws* and reject path-escapes."""
-    resolved = os.path.realpath(candidate)
+    """Resolve *candidate* against *ws* and reject path-escapes.
+
+    Audit S-10: reject any candidate whose lexical path or any
+    parent component is a symlink — even if ``realpath`` ultimately
+    lands inside the workspace. A symlinked component lets a hostile
+    caller arrange a TOCTOU window where the link target swings to an
+    external file between validation and the open(O_RDWR) inside
+    EncryptionManager.encrypt_file. We use ``os.lstat`` per-component
+    so symlinks whose target is also inside the workspace are still
+    rejected (the link itself remains a TOCTOU primitive).
+    """
+    if not isinstance(candidate, str) or not candidate:
+        raise ValueError("path rejected: empty or non-string candidate")
+    if "\x00" in candidate:
+        raise ValueError("path rejected: NUL byte in candidate")
+
     ws_abs = os.path.realpath(ws)
+    # We do NOT realpath the candidate first — realpath silently
+    # follows symlinks, which is exactly the leak we are closing.
+    abs_candidate = os.path.abspath(candidate)
+
+    # Walk parent components and reject if any is a symlink. This is
+    # robust against the dangling-symlink case (lstat works on broken
+    # links) and against the directory-symlink case (a parent dir
+    # symlink would otherwise be invisible to realpath comparisons).
+    parts: list[str] = []
+    head, tail = os.path.split(abs_candidate)
+    while tail:
+        parts.append(tail)
+        head, tail = os.path.split(head)
+    parts.append(head)  # final root component ("/" on posix)
+    cursor = ""
+    for component in reversed(parts):
+        cursor = component if not cursor else os.path.join(cursor, component)
+        if not os.path.exists(cursor) and not os.path.islink(cursor):
+            # Component does not exist — that is the FileNotFoundError
+            # case below. Stop walking; do not raise here so the
+            # FileNotFoundError path can produce its specific error.
+            break
+        if os.path.islink(cursor):
+            raise ValueError(
+                f"path rejected: symlink in path component {cursor!r} "
+                f"(audit S-10 — symlinks defeat TOCTOU guard)"
+            )
+
+    # Only now is it safe to resolve. abs_candidate has no symlink
+    # components, so realpath collapses only "." / ".." which is fine.
+    resolved = os.path.realpath(abs_candidate)
     try:
         common = os.path.commonpath([resolved, ws_abs])
     except ValueError as exc:

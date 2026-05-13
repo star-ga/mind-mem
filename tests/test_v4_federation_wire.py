@@ -222,11 +222,16 @@ def test_full_two_host_handshake_via_vclock_then_resolve(workspace: Path, federa
         vec = client.get_vclock("hand-1")
         assert vec == {"alice": 3, "bob": 1}
         result = client.push_write("hand-1", agent_id="bob")
-        # alice=3, bob=2 after this — left=alice(3), right=bob(2).
+        # alice=3, bob=2 after this — left=alice(3), right=bob(2). The
+        # left_agent is still alice (sorted by version desc), but bob
+        # wrote LAST in wall-clock order.
         assert result.conflict is not None
         assert result.conflict.left_agent == "alice"
+        # Audit FP-1: LAST_WRITER_WINS now resolves by wall-clock
+        # last_seen_at — bob wins because bob's write was the most
+        # recent in wall-clock order, even though alice has version 3.
         resolution = client.resolve_conflict("hand-1", strategy="last_writer_wins")
-        assert resolution.winner_agent == "alice"
+        assert resolution.winner_agent == "bob"
     finally:
         stop()
         thread.join(timeout=5)

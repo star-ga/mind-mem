@@ -41,6 +41,7 @@ Usage::
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import os
@@ -84,6 +85,15 @@ MAX_BODY_BYTES = 1_048_576  # 1 MiB cap on POST/DELETE bodies
 DEFAULT_PORT = 8765
 DEFAULT_HOST = "127.0.0.1"
 
+# Per-IP sliding-window rate limit (audit S-2). The HTTP transport exposes
+# expensive paths (POST /consolidate triggers a full dream cycle,
+# POST /query runs vector search) so a single authenticated caller could
+# rack up CPU + LLM cost in a tight loop. Defaults are intentionally
+# generous; operators can tune via MIND_MEM_HTTP_RATE_*.
+DEFAULT_RATE_MAX_CALLS = 120
+DEFAULT_RATE_WINDOW_SECS = 60
+MAX_TRACKED_CLIENTS = 1024  # LRU cap to bound limiter memory under attack
+
 # Endpoint paths — kept as constants so tests can import them.
 PATH_STATUS = "/status"
 PATH_QUERY = "/query"
@@ -115,6 +125,51 @@ _LOOPBACK_ADDRS = frozenset({"127.0.0.1", "::1", "localhost"})
 class _ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
+
+
+class _PerClientRateLimiter:
+    """Bounded LRU per-client sliding-window rate limiter (audit S-2).
+
+    Each remote address gets its own request-timestamp deque. The map is
+    LRU-bounded so an attacker spamming distinct addresses can't grow
+    unbounded memory. Thread-safe — protected by a single lock for the
+    map and per-entry lists.
+    """
+
+    def __init__(self, max_calls: int, window_seconds: int, max_clients: int):
+        from collections import OrderedDict
+
+        self._max_calls = max_calls
+        self._window = float(window_seconds)
+        self._max_clients = max_clients
+        self._clients: "OrderedDict[str, list[float]]" = OrderedDict()
+        self._lock = threading.Lock()
+
+    def allow(self, client_key: str) -> tuple[bool, float]:
+        """Return (allowed, retry_after_seconds). retry_after is 0 when allowed."""
+        now = time.monotonic()
+        with self._lock:
+            timestamps = self._clients.get(client_key)
+            if timestamps is None:
+                if len(self._clients) >= self._max_clients:
+                    # Drop the least-recently-used to bound memory.
+                    self._clients.popitem(last=False)
+                timestamps = []
+                self._clients[client_key] = timestamps
+            else:
+                self._clients.move_to_end(client_key)
+            cutoff = now - self._window
+            # Single-pass purge of expired entries.
+            i = 0
+            while i < len(timestamps) and timestamps[i] <= cutoff:
+                i += 1
+            if i:
+                del timestamps[:i]
+            if len(timestamps) >= self._max_calls:
+                retry_after = timestamps[0] + self._window - now
+                return (False, max(retry_after, 0.1))
+            timestamps.append(now)
+            return (True, 0.0)
 
 
 def _is_loopback(host: str) -> bool:
@@ -195,7 +250,13 @@ def _handle_status(workspace: str) -> tuple[int, dict[str, Any]]:
         200,
         {
             "ok": True,
-            "workspace": os.path.abspath(workspace),
+            # Audit S-4: return the workspace basename only. The absolute
+            # filesystem path was visible to every authenticated caller
+            # (and to unauthenticated-localhost callers) — useful operator
+            # info but also a free filesystem-layout disclosure for any
+            # caller who reaches the endpoint. Basename keeps the
+            # human-readable signal without leaking the layout.
+            "workspace": os.path.basename(os.path.abspath(workspace)),
             "memory_count": memory_count,
             "last_scan_timestamp": last_scan_ts,
             "server_time": int(time.time()),
@@ -368,9 +429,25 @@ def _handle_consolidate(workspace: str, body: dict[str, Any]) -> tuple[int, dict
     return (200, summary)
 
 
+_BLOCK_ID_MAX = 256
+
+
+def _valid_block_id(block_id: str) -> bool:
+    """Audit S-5: shared guard for any user-supplied block_id reaching
+    the storage layer. Refuses empty, path-traversal-shaped, or
+    excessively-long IDs."""
+    if not block_id:
+        return False
+    if "/" in block_id or "\\" in block_id or ".." in block_id:
+        return False
+    if len(block_id) > _BLOCK_ID_MAX:
+        return False
+    return True
+
+
 def _handle_delete_memory(workspace: str, block_id: str) -> tuple[int, dict[str, Any]]:
     """``DELETE /memories/{id}``."""
-    if not block_id or "/" in block_id or ".." in block_id:
+    if not _valid_block_id(block_id):
         return (400, {"error": "invalid block id"})
 
     from .storage import get_block_store
@@ -482,6 +559,8 @@ def _handle_fed_vclock(workspace: str, block_id: str) -> tuple[int, dict[str, An
     Missing block returns an empty version-vector dict (still 200) —
     callers treat that as "no writes yet seen".
     """
+    if not _valid_block_id(block_id):
+        return (400, {"ok": False, "error": "invalid block_id"})
     try:
         from mind_mem.v4 import federation as fed
     except ImportError:
@@ -489,9 +568,29 @@ def _handle_fed_vclock(workspace: str, block_id: str) -> tuple[int, dict[str, An
     try:
         vec = fed.get_version_vector(workspace, block_id)
     except Exception as exc:
-        # FeatureDisabledError (and any other module-level guard) maps to 503.
-        return (503, {"ok": False, "error": f"federation disabled: {exc}"})
+        # Audit S-3: separate feature-flag-off from internal failure.
+        # FeatureDisabledError remains 503 + a stable string; any other
+        # exception is logged with detail server-side, surfaced as a
+        # generic "federation unavailable" so paths/schema/IO errors
+        # don't leak in the wire response.
+        return _fed_error_response(exc, "vclock")
     return (200, {"ok": True, "block_id": block_id, "version_vector": vec})
+
+
+def _fed_error_response(exc: Exception, endpoint: str) -> tuple[int, dict[str, Any]]:
+    """Audit S-3: PII-safe federation error mapping.
+
+    Distinguishes the documented feature-disabled path (503 + stable
+    message) from internal failures (503 + generic message, full detail
+    logged server-side only)."""
+    name = type(exc).__name__
+    if name in ("FeatureDisabledError", "FeatureFlagDisabled"):
+        return (503, {"ok": False, "error": "federation feature disabled"})
+    _log.error(
+        "federation_internal_error",
+        extra={"endpoint": endpoint, "error_type": name},
+    )
+    return (503, {"ok": False, "error": "federation unavailable"})
 
 
 def _handle_fed_conflicts(workspace: str, params: dict[str, str]) -> tuple[int, dict[str, Any]]:
@@ -508,7 +607,7 @@ def _handle_fed_conflicts(workspace: str, params: dict[str, str]) -> tuple[int, 
     try:
         reports = fed.list_conflicts(workspace, limit=limit)
     except Exception as exc:
-        return (503, {"ok": False, "error": f"federation disabled: {exc}"})
+        return _fed_error_response(exc, "conflicts")
     return (
         200,
         {
@@ -540,15 +639,15 @@ def _handle_fed_write(workspace: str, body: dict[str, Any]) -> tuple[int, dict[s
         return (503, {"ok": False, "error": "federation module unavailable"})
     block_id = body.get("block_id")
     agent_id = body.get("agent_id")
-    if not isinstance(block_id, str) or not block_id:
-        return (400, {"ok": False, "error": "block_id (string) is required"})
-    if not isinstance(agent_id, str) or not agent_id:
-        return (400, {"ok": False, "error": "agent_id (string) is required"})
+    if not isinstance(block_id, str) or not _valid_block_id(block_id):
+        return (400, {"ok": False, "error": "block_id (valid string) is required"})
+    if not isinstance(agent_id, str) or not _valid_block_id(agent_id):
+        return (400, {"ok": False, "error": "agent_id (valid string) is required"})
     try:
         new_version = fed.record_agent_write(workspace, block_id, agent_id)
         report = fed.detect_conflict(workspace, block_id)
     except Exception as exc:
-        return (503, {"ok": False, "error": f"federation disabled: {exc}"})
+        return _fed_error_response(exc, "write")
     out: dict[str, Any] = {
         "ok": True,
         "block_id": block_id,
@@ -580,8 +679,8 @@ def _handle_fed_resolve(workspace: str, body: dict[str, Any]) -> tuple[int, dict
     block_id = body.get("block_id")
     strategy = body.get("strategy")
     merged_b64 = body.get("merged_payload")
-    if not isinstance(block_id, str) or not block_id:
-        return (400, {"ok": False, "error": "block_id (string) is required"})
+    if not isinstance(block_id, str) or not _valid_block_id(block_id):
+        return (400, {"ok": False, "error": "block_id (valid string) is required"})
     if not isinstance(strategy, str) or strategy not in {s.value for s in fed.MergeStrategy}:
         return (400, {"ok": False, "error": "strategy must be one of MergeStrategy values"})
     merger = None
@@ -595,8 +694,13 @@ def _handle_fed_resolve(workspace: str, body: dict[str, Any]) -> tuple[int, dict
         merger = lambda _report, _payload=merged_bytes: _payload  # noqa: E731
     try:
         resolution = fed.resolve_conflict(workspace, block_id, strategy, merger=merger)
+    except ValueError as exc:
+        # FP-4: THREE_WAY_MERGE without merger now raises ValueError. Map
+        # caller-facing programming errors to 400 (not 503) so the
+        # operator sees a configuration bug, not a transient outage.
+        return (400, {"ok": False, "error": str(exc)})
     except Exception as exc:
-        return (503, {"ok": False, "error": f"federation disabled: {exc}"})
+        return _fed_error_response(exc, "resolve")
     if resolution is None:
         return (404, {"ok": False, "error": "no open conflict for block_id"})
     out: dict[str, Any] = {
@@ -613,12 +717,23 @@ def _handle_fed_resolve(workspace: str, body: dict[str, Any]) -> tuple[int, dict
     return (200, out)
 
 
+_LOOPBACK_ORIGINS = frozenset(
+    {
+        "http://127.0.0.1",
+        "http://localhost",
+        "https://127.0.0.1",
+        "https://localhost",
+    }
+)
+
+
 def build_handler(
     workspace: str,
     *,
     token: str | None,
     bind_host: str,
     allow_unauthenticated_localhost: bool,
+    rate_limiter: "_PerClientRateLimiter | None" = None,
 ) -> type[BaseHTTPRequestHandler]:
     """Construct a handler class bound to *workspace* + auth settings."""
 
@@ -630,6 +745,47 @@ def build_handler(
         def log_message(self, format: str, *args: Any) -> None:  # silence default
             return
 
+        # -- rate-limiting (S-2) ----------------------------------------
+        def _rate_limited(self) -> bool:
+            """Return True iff the request is denied; emits a 429 response."""
+            if rate_limiter is None:
+                return False
+            client_key = self.client_address[0] if self.client_address else "unknown"
+            allowed, retry_after = rate_limiter.allow(client_key)
+            if allowed:
+                return False
+            # Send 429 with Retry-After header so clients back off cleanly.
+            body = json.dumps(
+                {"status": 429, "error": "rate limit exceeded"}, sort_keys=True
+            ).encode("utf-8")
+            self.send_response(429)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Retry-After", str(int(retry_after) or 1))
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return True
+
+        # -- CORS / CSRF guard (S-7) ------------------------------------
+        def _origin_ok(self) -> bool:
+            """Refuse cross-origin requests from non-loopback Origins.
+
+            A browser tab loaded from evil.example.com would otherwise be
+            able to issue cross-origin POSTs to the loopback transport.
+            The custom ``X-MindMem-Token`` header forces a CORS preflight,
+            and we reject the preflight + any explicit non-loopback Origin
+            on the actual request."""
+            origin = self.headers.get("Origin", "").strip()
+            if not origin:
+                # Same-origin or non-browser caller (curl, MCP client) —
+                # no Origin sent. Accept.
+                return True
+            origin_norm = origin.split("/", 3)
+            if len(origin_norm) < 3:
+                return False
+            host_url = "/".join(origin_norm[:3])
+            return host_url in _LOOPBACK_ORIGINS
+
         # -- auth --------------------------------------------------------
         def _authenticated(self) -> bool:
             if not auth_required:
@@ -637,7 +793,14 @@ def build_handler(
             if token is None:
                 return False
             sent = self.headers.get(AUTH_HEADER, "")
-            return sent == token
+            # Constant-time comparison — see audit S-1. Plain `sent == token`
+            # short-circuits on first byte mismatch and leaks the token via
+            # response-latency timing on the loopback bind. hmac.compare_digest
+            # is constant-time over the longer string. The bool(sent) guard
+            # avoids the str-vs-str type mismatch path that would raise.
+            if not sent:
+                return False
+            return hmac.compare_digest(sent, token)
 
         def _reject_auth(self) -> None:
             _write_status(self, 401, "missing or invalid token")
@@ -657,8 +820,17 @@ def build_handler(
                 return (None, 400)
             return (payload, 0)
 
+        # -- OPTIONS (CORS preflight reject — S-7) ----------------------
+        def do_OPTIONS(self) -> None:
+            _write_status(self, 405, "method not allowed")
+
         # -- GET --------------------------------------------------------
         def do_GET(self) -> None:
+            if not self._origin_ok():
+                _write_status(self, 403, "cross-origin request rejected")
+                return
+            if self._rate_limited():
+                return
             if not self._authenticated():
                 self._reject_auth()
                 return
@@ -687,6 +859,11 @@ def build_handler(
 
         # -- POST -------------------------------------------------------
         def do_POST(self) -> None:
+            if not self._origin_ok():
+                _write_status(self, 403, "cross-origin request rejected")
+                return
+            if self._rate_limited():
+                return
             if not self._authenticated():
                 self._reject_auth()
                 return
@@ -728,6 +905,11 @@ def build_handler(
 
         # -- DELETE -----------------------------------------------------
         def do_DELETE(self) -> None:
+            if not self._origin_ok():
+                _write_status(self, 403, "cross-origin request rejected")
+                return
+            if self._rate_limited():
+                return
             if not self._authenticated():
                 self._reject_auth()
                 return
@@ -770,11 +952,35 @@ def serve_http(
     if not allow_unauthenticated_localhost and not token:
         raise ValueError("no MIND_MEM_TOKEN configured and --allow-unauthenticated-localhost not set; refusing to start")
 
+    # Audit S-2: per-IP sliding-window rate limit. Operators can tune via
+    # MIND_MEM_HTTP_RATE_MAX_CALLS / MIND_MEM_HTTP_RATE_WINDOW_SECS, or
+    # set MAX_CALLS=0 to disable (tests + air-gapped deployments).
+    try:
+        max_calls = int(
+            os.environ.get("MIND_MEM_HTTP_RATE_MAX_CALLS", DEFAULT_RATE_MAX_CALLS)
+        )
+        window_seconds = int(
+            os.environ.get("MIND_MEM_HTTP_RATE_WINDOW_SECS", DEFAULT_RATE_WINDOW_SECS)
+        )
+    except ValueError:
+        max_calls = DEFAULT_RATE_MAX_CALLS
+        window_seconds = DEFAULT_RATE_WINDOW_SECS
+    rate_limiter: _PerClientRateLimiter | None
+    if max_calls <= 0:
+        rate_limiter = None
+    else:
+        rate_limiter = _PerClientRateLimiter(
+            max_calls=max_calls,
+            window_seconds=window_seconds,
+            max_clients=MAX_TRACKED_CLIENTS,
+        )
+
     handler_cls = build_handler(
         workspace,
         token=token,
         bind_host=host,
         allow_unauthenticated_localhost=allow_unauthenticated_localhost,
+        rate_limiter=rate_limiter,
     )
     httpd = _ThreadingHTTPServer((host, port), handler_cls)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)

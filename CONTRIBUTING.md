@@ -37,6 +37,28 @@ ruff format --check src/ tests/
 - Zero external dependencies in core (stdlib only)
 - Tests use pytest with fixtures
 
+## Codebase Layout — Shims vs. Canonical Modules
+
+The MCP surface was decomposed from a single ``mcp_server.py``
+monolith into per-domain modules under ``src/mind_mem/mcp/`` over
+the v3.2.0–v4.0.0 series. To keep public imports stable, several
+top-level modules remain as **shims** — they only re-export from
+their canonical location. New code MUST land in the canonical
+module, not the shim.
+
+| Shim (do not extend)              | Canonical (target for new code)          |
+|-----------------------------------|------------------------------------------|
+| ``mind_mem/mcp_server.py``        | ``mind_mem/mcp/server.py`` + ``mcp/tools/*`` |
+| Tool decorator + ACL/rate-limit   | ``mind_mem/mcp/infra/observability.py`` |
+| Path / workspace guards           | ``mind_mem/mcp/infra/workspace.py``     |
+| Encryption helpers                | ``mind_mem/mcp/tools/encryption.py``    |
+| Memory ops (delete/export/...)    | ``mind_mem/mcp/tools/memory_ops.py``    |
+| Federation HTTP handlers          | ``mind_mem/http_transport.py``          |
+
+When in doubt: if a module is < 80 lines and consists mostly of
+``from ... import ...`` lines, it is a shim. Add tests against the
+canonical module path, not the shim.
+
 ## Test Guidelines
 
 - Colocate tests in `tests/test_<module>.py`
