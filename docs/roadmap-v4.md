@@ -434,6 +434,113 @@ of CLI flags already passed to `export-provenance`; serializing
 them into the Turtle header as `mindmem:` namespace metadata is the
 only new work.
 
+### 7. Tool-routing preselector (intent-classification layer before MCP dispatch)
+
+The MCP surface has crossed 84 tools and is still growing. Today
+the calling LLM sees the full tool list in every system prompt and
+decides which tool to invoke by reading all of them. Two problems
+compound as the surface grows: every additional tool burns prompt
+tokens unconditionally, and the LLM's classification accuracy
+degrades the more candidates it has to sift through. The naïve fix
+("truncate to top-K by some static rule") trades correctness for
+context budget. The principled fix is a router model.
+
+**The preselector.** A small intent classifier — under 50M params,
+runs on CPU at single-digit-millisecond latency — sits between the
+caller and the MCP tool registry. Given the current request, the
+router produces:
+
+- **Intent class** — one of a discrete taxonomy (recall, propose,
+  search, contradictions, federation, evidence-export, governance,
+  introspection, etc.). Taxonomy is registry-defined, extensible.
+- **Tool candidates** — top-K MCP tools the router believes apply
+  (typical K=3 to 8, configurable per call).
+- **Confidence** — per-candidate score the dispatcher can use to
+  decide whether to consult the operator before invoking.
+
+The caller sees only the top-K tool descriptions in the system
+prompt, not the full 84+. Token cost becomes constant in K, not
+linear in the registry size. Tool library growth becomes a
+corpus-growth problem (more training data for the router), not a
+context-window problem.
+
+**Coordination with R19 in naestro.** Same architectural pattern at
+a different layer. R19 routes between LLMs and skill-library
+entries at the orchestration substrate; v4.1 §7 routes between MCP
+tools inside the memory substrate. The two routers may share
+training infrastructure but have distinct taxonomies and dispatch
+surfaces. A naestro session that touches mind-mem fires both
+routers in sequence: R19 picks the LLM and the relevant skills,
+v4.1 §7 picks the MCP tools the chosen LLM will see.
+
+**Training the router.** Two data sources, both compatible with the
+existing rfn-mind v3.1 deterministic FT discipline:
+
+1. **Operational traces.** Every MCP invocation today is logged
+   with the request, the tool chosen, and the eventual outcome.
+   That trace becomes labeled training data — "this request shape,
+   this tool actually applied." Self-improving by construction.
+2. **Synthetic intent corpus.** Generate labeled examples
+   programmatically across the taxonomy, train the router
+   cold-start, refine on operational traces. Faster bootstrap.
+
+**Governance.** The router never invokes tools directly. It
+proposes the top-K candidate set; dispatch goes through the
+existing `propose_update → approve_apply` discipline for any tool
+that writes state. Read-only tools can be invoked without
+governance approval (current behaviour); the router does not
+change that boundary. The router is a token-saving optimization,
+not a policy enforcer.
+
+**Failure mode.** If the router is unavailable or its confidence
+falls below a threshold, the dispatcher falls back to current
+behaviour (full tool list, LLM decides). The router is a
+performance optimization, not a correctness requirement; the
+substrate must work without it.
+
+**Why this matters now.** The 84-tool surface is already at the
+edge of what models can reliably classify in a system prompt. The
+v4.0 network/federation work adds federation-aware tools, the
+v4.1 §1-§6 graph-discipline work adds provenance and contradiction
+tools — by the time v4.1 ships, the surface will plausibly be in
+the 100-150 tool range. Without a router the system prompt cost
+becomes the bottleneck, not the inference itself. The preselector
+keeps the surface free to grow.
+
+**Phases of delivery.**
+
+1. **§7-0.** Intent taxonomy registry + tool-ID index. No model
+   yet — establishes the candidate set and dispatch contract.
+   ~3 days.
+2. **§7-1.** Operational-trace ingestion pipeline. Routes existing
+   MCP invocation logs into a training-ready corpus. ~1 week.
+3. **§7-2.** Synthetic intent corpus generator. Produces labeled
+   examples across the taxonomy for cold-start training. ~1 week.
+4. **§7-3.** Router model cold-start training. Target: ≤50M params,
+   ≤10ms p95 inference on CPU. ~2 weeks.
+5. **§7-4.** Dispatcher integration. Calling LLM sees top-K tool
+   set instead of full list. Falls back to full list on router
+   failure. ~3 days.
+6. **§7-5.** Refinement loop. Operational traces feed back into
+   training corpus, periodic re-train pinned by content hash so
+   router versions are auditable. ~1 week.
+
+**Effort.** ~6 weeks for §7-0 through §7-5, with §7-3 (model
+training) as the dominant cost. The training infrastructure is
+shared with naestro R19 — same approach, different taxonomy and
+target — so the marginal cost on the second router (whichever
+ships later) is significantly lower than the first.
+
+**Out of scope for v4.1 §7.**
+
+- Routing inside individual MCP tool execution. The router picks
+  the tool; what the tool does is unchanged.
+- Replacing the governance gate. `propose_update → approve_apply`
+  stays intact; the router only narrows the candidate set.
+- Federation across mind-mem instances with different routers.
+  Each instance trains its own router; cross-instance router
+  federation is a v2 concern.
+
 ### Why v4.1 not v4.0
 
 All sub-sections are additive, schema-compatible, and orthogonal to the
