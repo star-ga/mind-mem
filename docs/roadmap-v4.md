@@ -170,6 +170,180 @@ mm export --policy <policy_name> --since <date>
 
 ---
 
+## v4.1 — Graph discipline extensions
+
+Once v4.0 lands typed edges + multi-page entities, four orthogonal
+extensions sharpen the graph without re-touching the kernel surface.
+Each is opt-in, additive, and ships against the v4.0 schema with no
+migration cost.
+
+### 1. Edge provenance tagging
+
+Every typed edge (`cites` / `implements` / `refines` / `contradicts` /
+`cooccurrence`) gains a provenance dimension orthogonal to its kind:
+
+- **EXTRACTED** — derived directly from source text. Reproducible
+  from the source byte stream alone; deterministic parser produced it.
+- **INFERRED** — produced by an LLM pass over the source. Not present
+  verbatim in the source; the model judged the relationship.
+- **AMBIGUOUS** — multiple candidate edges survive resolution; the
+  edge is recorded with the candidate set rather than collapsed.
+
+Storage cost: one byte per edge (enum field). Operational value: a
+recall caller can scope to `EXTRACTED`-only when grounding matters,
+or include `INFERRED` when synthesis is acceptable. Contradiction
+detection at write time becomes per-provenance: an EXTRACTED edge
+contradicting an INFERRED one is far stronger signal than two
+INFERRED edges disagreeing.
+
+API surface:
+
+```python
+recall(workspace, query, edge_provenance="extracted")
+recall(workspace, query, edge_provenance=["extracted", "inferred"])
+list_edges(block_id, provenance="ambiguous")  # diagnostic
+```
+
+### 2. Community detection + hub-node surfacing
+
+Periodic (opt-in) community detection over the typed-edge graph
+surfaces topic clusters and high-degree hub nodes — the blocks
+everything else cites or depends on. Output is a diagnostic, not a
+retrieval primitive:
+
+- **Communities**: a partition of blocks into clusters where intra-
+  community edges dominate inter-community edges. Surfaces "what
+  this workspace is *about*" at a coarser grain than per-block
+  recall.
+- **Hub nodes**: top-N blocks by weighted degree centrality across
+  typed edges. Often the canonical sources, definitions, or
+  anchor entities everything else references.
+
+Surfaced through `index_stats` extension and an `mm graph` CLI verb:
+
+```python
+graph_communities(workspace, resolution=1.0) -> list[Community]
+graph_hubs(workspace, top_n=20, edge_kinds=["cites"]) -> list[Hub]
+```
+
+Cost discipline: detection runs on demand, not on a schedule (per
+anti-pattern §5). Large workspaces use a bounded sample of the
+edge graph; full-graph runs gated on explicit confirm above a size
+threshold.
+
+### 3. Hash-anchored incremental ingestion
+
+Every source ingested via `inbox/`, `ingest_file`, `convert_to_markdown`,
+or a future web-extract path records a SHA256 of the source bytes as
+part of block provenance. On re-ingest:
+
+- **Hash match** → skip entirely. No work, no LLM call, no embedding
+  refresh. Idempotent ingest is the default behavior.
+- **Hash diff** → re-process only the changed file. Other files in
+  the same ingestion batch that match prior hashes are skipped.
+- **Hash missing** (no prior ingest) → full ingest, hash recorded.
+
+Operational impact: a 500-file repo re-ingested after a 3-file edit
+processes 3 files, not 500. Combined with anti-pattern §6 (bulk
+re-ingest cost-gating), turns large repeated ingest jobs from
+expensive to free.
+
+Schema addition: `block.source_sha256: bytes(32)` on `kind=source`
+blocks. Existing v4.0 CAS already hashes block bodies; this extends
+the same discipline upstream to source files. No new dependencies.
+
+CLI surface:
+
+```bash
+mm ingest --inbox ./repo                    # full ingest, records hashes
+mm ingest --inbox ./repo                    # second run: hash-skip, near-zero cost
+mm ingest --inbox ./repo --force-rebuild    # ignore cache, re-process all
+```
+
+### 4. Standards-vocabulary provenance export
+
+Provenance lives natively in mind-mem v4: source SHA256, typed
+edges, evidence-chain entries, ingestion activities, model and
+operator attribution. External auditors and federated systems
+already speak a standard provenance vocabulary (W3C). Today
+they cannot read mind-mem provenance without learning the
+internal schema. A one-way export adapter at the boundary
+closes that gap without changing the internal format.
+
+Native storage stays in the canonical STARGA interchange
+format used across the rest of the codebase (MIC@2 for text,
+MIC-B for binary). No JSON or other foreign formats are
+introduced into the codebase. The adapter exists only at the
+export surface; nothing reads PROV-O back in.
+
+Export surface (Turtle is the W3C-standard serialization for
+RDF; PROV-O is defined as RDF):
+
+```bash
+mm export-provenance <block-id> --format turtle > lineage.ttl
+mm export-provenance <block-id> --depth 3 --format turtle
+mm export-provenance --workspace ws --format turtle
+```
+
+Mapping (internal → standard vocabulary at export time only):
+
+- block → Entity
+- source file (with source_sha256) → Entity, hash carried as
+  derivation identifier
+- ingestion / propose_update / approve_apply / extract →
+  Activity
+- LLM model that extracted → Agent (software)
+- user / operator who approved → Agent (person)
+- typed edges (cites / refines / contradicts / etc.) →
+  derivation relations carrying edge-provenance tag from
+  section 1 (EXTRACTED / INFERRED / AMBIGUOUS)
+- Q16.16 score → quality assessment on the activity
+- evidence-chain link → derivation chain element
+
+Roundtrip property: hashes survive export. An auditor can
+take exported Turtle, fetch original source bytes named by
+the hash, recompute the hash, and confirm byte-identity. The
+provenance is independently verifiable, not trust-us-it-
+matches.
+
+What this unlocks:
+
+- **Cross-system audit without internal knowledge.** Compliance
+  reviewers load the Turtle into any RDF store, run standard
+  SPARQL queries, and answer their question. No need to know
+  what mind-mem is.
+- **Federation with systems that already speak this vocab.**
+  Healthcare informatics (FHIR / openEHR), regulated AI
+  pipelines, semantic-data partners can consume mind-mem
+  evidence chains as first-class citizens of their existing
+  audit tooling.
+- **Regulatory readiness.** FDA SaMD, EU AI Act Article 12
+  logging, HIPAA audit controls, GDPR Article 30 records of
+  processing — all consume the standard vocabulary natively.
+  Without the adapter, every regulator needs a custom
+  integration. With it, they read what their tools already
+  parse.
+
+Scope discipline: export-only. No PROV-O import path in v4.1.
+If a future partner needs to inject external provenance into
+mind-mem, that's a separate adapter built against a concrete
+need, not speculation.
+
+Effort estimate: 1–2 weeks. Data already exists; work is the
+serializer over the existing v4 graph, the mapping table, CLI
+verb + MCP tool, byte-identical roundtrip tests, and docs.
+
+### Why v4.1 not v4.0
+
+All three are additive, schema-compatible, and orthogonal to the
+v4.0 network/federation work. Shipping them in v4.0 would dilute
+focus on the core network-native pivot. Holding them for v4.1 lets
+v4.0 land cleanly, then turns graph discipline into a separate
+release with its own retrain cycle if the LLM needs to learn the
+provenance tags during extraction.
+
+---
+
 ## Anti-patterns we explicitly avoid
 
 (Tracked in ROADMAP §F. This section explains *why* each is
