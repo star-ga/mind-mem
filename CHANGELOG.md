@@ -2,6 +2,124 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.2 — Security + correctness audit (46 findings)
+
+Released 2026-05-13.
+
+Synthesized audit pass over the v4.0.1 surface — 1 Critical / 12 High /
+18 Medium / 12 Low / 3 Info findings closed in a single drop. No
+breaking changes, no public API additions, no schema migrations. See
+`audits/v4.0.1-claude-2026-05-12.md` for the full finding-by-finding
+ledger.
+
+### Security (S-1..S-11)
+
+- **http_transport:** constant-time `hmac.compare_digest` on token
+  comparison; Origin allowlist (loopback only) so cross-site requests
+  cannot reach the federation surface; OPTIONS preflight rejection;
+  per-client sliding-window rate limiter (LRU-bounded, env-tunable
+  via `MIND_MEM_HTTP_RATE_MAX_CALLS` + `MIND_MEM_HTTP_RATE_WINDOW_SECS`);
+  shared `_valid_block_id` guard on every federation handler that
+  rejects empty IDs, IDs containing `/`, `\`, `..`, or > 256 chars.
+- **`mcp/infra/observability`:** every admin-tool call bypassed via
+  `MIND_MEM_ACL_DISABLED` now logs `acl_bypassed_via_env` with tool
+  and scope (was a one-shot warning that a poisoned env could miss).
+- **`mcp/tools/arch_mind`:** validate every caller-supplied path /
+  mode / agent_id / commit_sha / metric before `subprocess.run()` to
+  block flag-injection from untrusted MCP callers.
+- **`mcp/server`:** remove `--token` CLI flag (leaked into
+  `/proc/cmdline`); the only supported channel is the
+  `MIND_MEM_TOKEN` environment variable. Older invocations now
+  hard-fail with a migration hint.
+- **`mcp/infra/workspace`** + **`mcp/tools/encryption`:** reject
+  symlinks in every path component (per-component `lstat`) to close
+  the TOCTOU window between path validation and `open()`.
+- **`mcp/tools/memory_ops`:** `FileLock` + `fsync` on
+  `deleted_blocks.jsonl` append; concurrent `delete_memory_item`
+  invocations no longer interleave bytes into invalid JSONL.
+
+### Federation correctness (FP-1..FP-9)
+
+- **`v4/federation.resolve_conflict`:** `LAST_WRITER_WINS` now picks
+  the agent with the most recent wall-clock `last_seen_at` (previously
+  collapsed to the same semantic as `HIGHER_VERSION`).
+  `THREE_WAY_MERGE` without a merger callable raises `ValueError`
+  instead of silently returning `None`. Resolves now pin to the
+  captured `rowid` under `BEGIN IMMEDIATE` so a concurrent resolve
+  on a different open conflict cannot clobber the wrong row.
+- **`v4/federation.detect_conflict`:** logs every lagging agent, not
+  just `sorted_agents[1]` — multi-way divergences are now visible to
+  the conflict log.
+- **`preimage`:** reject `None` and `±Inf` (previously hashable
+  inputs that would silently corrupt the audit-chain preimage).
+- **`audit_chain.compute_entry_hash_v1`:** emits
+  `LEGACY_SEPARATOR_AMBIGUITY` warning when any v1 (`|`-joined)
+  preimage field contains a literal `|`; v3 (`TAG_v1` NUL-separated)
+  remains the default for new entries.
+
+### Retrieval quality + performance (R-1..R-11)
+
+- **`hybrid_recall.rrf_fuse`:** prefer freshest dict on dedup
+  (`Date` metadata, ISO-8601 lex comparison);
+  `hybrid_single_list_degenerate` metric when only one source
+  contributes; `rrf_fallback_id_used` warning + metric when the
+  file:line fallback ID path is taken; raw-weight semantics
+  preserved and now explicitly documented.
+- **`hybrid_recall._search_expanded`:** `ThreadPoolExecutor` fan-out
+  for multi-query expansion (≤4 workers) — sequential dispatch was
+  the wall-clock bottleneck when expansion was enabled.
+- **`_recall_detection.detect_query_type`:** `lru_cache(2048)` —
+  pure regex function called up to 3× per request from the
+  expansion / decomposition / cross-encoder paths.
+- **`recall_vector.rebuild_index`:** route through
+  `_embed_for_provider` so the configured provider + circuit breaker
+  + fallback chain are honored (was bypassing them entirely).
+- **`recall_vector` sqlite-vec path:** adaptive overfetch based on
+  the active-block ratio in `vec_meta.json` — the old fixed ×3
+  under-fetched when the corpus was mostly inactive.
+- **`recall_vector` Pinecone:** surface missing `PINECONE_API_KEY`
+  as warning + counter so dashboards catch silent breakage.
+- **`hybrid_recall._maybe_temporal_decay`:** copy-on-write — no
+  longer mutates dicts the caller still holds references to.
+- **`_recall_core.prefetch_context`:** reserve ~30% of the limit
+  for category-aware hits so they actually reach the caller (the
+  old order filled the budget with signal hits, then truncated
+  category hits at `results[:limit]`).
+
+### Docs + infra (A-2..A-15)
+
+- `SPEC.md` header version matches footer (1.5.1).
+- `CLAUDE.md`: `kernels/` → `mind/` (actual on-disk layout).
+- `CONTRIBUTING.md`: documented shim ↔ canonical module table so
+  new code lands in the canonical module rather than extending
+  shims.
+- `scripts/count_mcp_tools.py`: CI-callable assertion script for
+  the registered MCP tool count (84 today). `--check N` fails on
+  drift.
+- `tests/test_shim_completeness.py`: regression test enforcing
+  every shim re-exports the canonical module's public surface.
+
+### Test deltas
+
+- `test_v4_federation_wire`: `LAST_WRITER_WINS` handshake now
+  expects `bob` (latest wall-clock writer) instead of `alice`
+  (highest version) — encoding the new LWW semantic.
+- `test_v4_round2_extensions`: `LAST_WRITER_WINS` and
+  `HIGHER_VERSION` split into separate cases;
+  `THREE_WAY_MERGE`-without-merger asserts
+  `pytest.raises(ValueError)`.
+
+Targeted audit-touched suite (HTTP transport, federation, audit
+chain, preimage, hybrid recall, recall vector, encryption, workspace,
+arch-mind, shim completeness): **314 passed, 1 skipped.**
+
+### Retrain status
+
+The `mind-mem-4b` model surface is unchanged. The 4 v4 probe symbols
+(`BackpressureController`, `CircuitBreaker`,
+`propagate_lineage_staleness`, `set_active_policy`) have zero overlap
+with this commit's surface — no retrain is required.
+
 ## v4.0.1 — Federation wire transport
 
 Released 2026-05-11.

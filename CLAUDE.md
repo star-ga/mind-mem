@@ -4,9 +4,21 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
-**v4.0.0** (released 2026-05-10) — Cognitive kernel, knowledge graph,
-resilience suite, and observability layer. All surfaces flag-gated under
-`v4.<flag>` in `mind-mem.json`. No breaking changes. `mind-mem-4b`
+**v4.0.2** (released 2026-05-13) — Security + correctness audit pass
+over the v4.0.1 surface: 1 Critical / 12 High / 18 Medium / 12 Low / 3
+Info findings closed. HMAC-equal token compare, Origin allowlist, OPTIONS
+rejection, per-client sliding-window rate limit, symlink TOCTOU close,
+arch-mind flag-injection guard, `--token` CLI removal, LWW wall-clock
+semantic, BEGIN IMMEDIATE rowid pin, `±Inf`/`None` preimage rejection,
+RRF date-freshness dedup, copy-on-write temporal decay, lru-cached
+query-type detection. `mind-mem-4b` weights unchanged — zero probe-surface
+overlap.
+Builds on **v4.0.1** (2026-05-11) — federation wire transport
+(`/federation/{vclock,write,resolve,conflicts}` over HTTP + stdlib
+`FederationClient`).
+Builds on **v4.0.0** (released 2026-05-10) — Cognitive kernel, knowledge
+graph, resilience suite, observability layer. All surfaces flag-gated
+under `v4.<flag>` in `mind-mem.json`. No breaking changes. `mind-mem-4b`
 retrained at **109/109 = 100%** on the un-softened harness (14 new
 `V4_SURFACES` probes; `qg.escape_hatch` and `lin.cites=0.8` gaps from
 v3.12.1 confirmed fixed). 376 v4 unit + 38 concurrency + 22 held-out

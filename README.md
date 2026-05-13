@@ -72,7 +72,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>v4.0.0 (released 2026-05-10) — cognitive kernel, knowledge graph, resilience suite, observability. All v4 surfaces flag-gated; no breaking changes. `mind-mem-4b` retrained at **109/109 = 100%** on the un-softened harness. Architecture audited at unanimous 10/10 across 4 LLMs. Native MCP for 17 clients, 84 tools, governance alerting, MIC/MAP, optional Cython accelerator.</sub>
+<sub>v4.0.2 (released 2026-05-13) — security + correctness audit pass: 46 findings closed (1 Critical / 12 High / 18 Medium / 12 Low / 3 Info) covering HTTP transport hardening, federation correctness (LWW wall-clock semantic, BEGIN IMMEDIATE rowid pin), retrieval quality (RRF date-freshness dedup, copy-on-write decay), and doc alignment. Builds on v4.0.1 (federation wire transport: `/federation/{vclock,write,resolve,conflicts}` over HTTP + stdlib `FederationClient`) and v4.0.0 (cognitive kernel, knowledge graph, resilience suite, observability — all v4 surfaces flag-gated, no breaking changes). `mind-mem-4b` weights unchanged — zero probe-surface overlap with the audit fix.</sub>
 
 ### Trust Signals
 
