@@ -172,7 +172,7 @@ mm export --policy <policy_name> --since <date>
 
 ## v4.1 — Graph discipline extensions
 
-Once v4.0 lands typed edges + multi-page entities, four orthogonal
+Once v4.0 lands typed edges + multi-page entities, six orthogonal
 extensions sharpen the graph without re-touching the kernel surface.
 Each is opt-in, additive, and ships against the v4.0 schema with no
 migration cost.
@@ -391,6 +391,48 @@ traversal over existing `contradicts` edges; all four ranking
 signals are already fields on participating blocks. Work is the
 traversal, the score combiner, and surfacing through MCP +
 `index_stats`. No schema change.
+
+### 6. Observer-scope on provenance export
+
+Provenance export is a measurement event, not a passive read. Two
+exports of the same graph from different observer scopes — different
+workspace filters, different `cites`-traversal depth, different
+edge-provenance scope (§1: EXTRACTED-only vs INFERRED-inclusive) —
+will legitimately differ. Today the Turtle output carries no
+metadata about which scope was applied, so two divergent exports
+look like contradictions when they are in fact frame-relative views
+of the same underlying graph.
+
+Each Turtle export records the observer scope as a metadata header
+inside the document, deterministic-seeded so two exports under the
+same scope are byte-identical:
+
+```turtle
+# observer_scope:
+#   workspace: <ws-id>
+#   depth: 3
+#   edge_provenance: [extracted, inferred]
+#   traversal_seed: 0x7c93...
+#   exported_at: <ts>
+#   exporter_version: mind-mem/4.1
+```
+
+Two exports differing only in observer scope are not contradictions.
+Two exports under identical observer scopes that differ in content
+*are* contradictions and warrant investigation.
+
+Why this matters: nested governance is real. When mind-mem is used
+inside an agent that itself audits another mind-mem instance (or
+when a partner system queries mind-mem under one policy and an
+auditor queries under another), frame-relativity at the export
+boundary is the cleanest place to record it. Without scope-tagging,
+nested observers produce export pairs that look like the graph
+silently mutated between reads.
+
+Effort: ~1 day on top of §4. The observer scope is just the union
+of CLI flags already passed to `export-provenance`; serializing
+them into the Turtle header as `mindmem:` namespace metadata is the
+only new work.
 
 ### Why v4.1 not v4.0
 
