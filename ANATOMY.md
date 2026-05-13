@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 820 | **Est. tokens:** ~1,710,344
-**Generated:** 2026-05-13 07:54 UTC
+**Files:** 820 | **Est. tokens:** ~1,710,952
+**Generated:** 2026-05-13 07:57 UTC
 
 ## Token Budget Guide
 
@@ -31,7 +31,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 73 | ~125,843 |
+| `docs/` | 73 | ~126,451 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 2 | ~2,416 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -232,7 +232,7 @@
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — MIND-Mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
 - `roadmap.md` (~13411 tok, huge) — Roadmap
-- `roadmap-v4.md` (~4558 tok, huge) — mind-mem v4.0 — Design Rationale
+- `roadmap-v4.md` (~5166 tok, huge) — mind-mem v4.0 — Design Rationale
 - `scoring.md` (~517 tok, large) — Scoring System
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2257 tok, huge) — MIND-Mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
 - `security-audit-sow.md` (~3336 tok, huge) — MIND-Mem — External Security Audit Statement of Work (SoW)

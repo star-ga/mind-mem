@@ -333,9 +333,68 @@ Effort estimate: 1–2 weeks. Data already exists; work is the
 serializer over the existing v4 graph, the mapping table, CLI
 verb + MCP tool, byte-identical roundtrip tests, and docs.
 
+### 5. Contradiction-cluster ranking
+
+The v4.0 surface already detects contradictions at write time and
+exposes `list_contradictions(workspace)`. What it doesn't do is
+*rank clusters by magnitude*: a workspace with five low-evidence
+singleton disagreements and one ten-block contradiction cluster
+looks the same to current tooling. Cluster-ranking turns the
+contradiction discipline from "flag everything" into "surface the
+most load-bearing disagreements first."
+
+A cluster is a connected component over `contradicts` edges. The
+ranking is deterministic — no LLM in the loop — so cluster scores
+are reproducible across runs and across instances. Signals
+combined into the cluster score:
+
+- **Cluster size** — number of blocks participating in the
+  disagreement. Larger clusters represent more reasoning surface
+  built on contradictory ground.
+- **Evidence weight** — sum of `evidence_score` (Q16.16) over
+  participating blocks. A cluster of well-evidenced contradictory
+  blocks is structurally more urgent than a cluster of weak
+  claims.
+- **Recency span** — how long the cluster has been open. Older
+  unresolved clusters rank higher: they've outlasted their
+  evidence-gathering window and the disagreement is now load-
+  bearing rather than transient.
+- **Citation density** — how many other blocks `cites` into the
+  cluster. High-density clusters affect more downstream
+  reasoning; resolving them has higher leverage.
+
+Each signal is computed in Q16.16; the combined score is a
+weighted sum with weights exposed in `recall.yaml` (defaults
+biased toward citation density and evidence weight, since those
+correlate with downstream impact rather than just cluster
+mechanics).
+
+Surface:
+
+```
+list_contradictions(
+    workspace,
+    rank_by=["size", "evidence", "recency", "citation_density"],
+    limit=N,
+)
+```
+
+Returns ranked clusters with their participating block IDs, top
+citation paths into each cluster, and a single Q16.16
+`cluster_load_score`. The same ranking surfaces through
+`index_stats` as `top_contradiction_clusters: [...]`, so the
+diagnostic is visible without needing to call
+`list_contradictions` explicitly.
+
+Effort estimate: ~3 days. Cluster computation is a graph
+traversal over existing `contradicts` edges; all four ranking
+signals are already fields on participating blocks. Work is the
+traversal, the score combiner, and surfacing through MCP +
+`index_stats`. No schema change.
+
 ### Why v4.1 not v4.0
 
-All three are additive, schema-compatible, and orthogonal to the
+All sub-sections are additive, schema-compatible, and orthogonal to the
 v4.0 network/federation work. Shipping them in v4.0 would dilute
 focus on the core network-native pivot. Holding them for v4.1 lets
 v4.0 land cleanly, then turns graph discipline into a separate
