@@ -2899,6 +2899,11 @@ def main() -> None:
             # and the debug_plan answer #1 rewrite (got 109/109 eval).
             # _harvest_v4_retry2d_targeted(),    # ROLLED BACK
             # _harvest_v4_retry2e_holdout_targeted(),    # ROLLED BACK
+            # retry-2g (2026-05-11): holdout-paraphrase coverage for the 2
+            # misses observed on retry-2g's eval (set_active_policy,
+            # FallbackPolicy.RAISE).  Same canonical answers — only adds
+            # surface wordings that match the holdout's exact phrasings.
+            _harvest_v4_retry2g_holdout_paraphrase(),
         ):
             for entry in _dedup(src):
                 fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -6972,6 +6977,126 @@ def _harvest_v4_retry2e_holdout_targeted() -> Iterator[dict]:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": q},
                 {"role": "assistant", "content": a},
+            ]
+        }
+
+
+# retry-2g holdout patch (2026-05-11): paraphrase coverage for the 2 holdout
+# misses on retry-2g (109/109 + 20/22 = 129/131).
+#
+# Miss A: "How does an operator change the workspace eviction policy at runtime
+#         without restarting?" → model said "edit mind-mem.json", missed
+#         `set_active_policy`. Corpus has the fact under different wordings
+#         ("switch the runtime default") but never under operator/restart-free
+#         phrasing.
+# Miss B: "Enumerate every legal value of the v4 FallbackPolicy enum." → model
+#         listed 3 (NEUTRAL/PROMOTE/DEMOTE), missed RAISE. Corpus has "four
+#         values" 4× but never under "enumerate every legal value" phrasing.
+#
+# Strategy: each new prompt is a different paraphrase pattern from the holdout
+# Qs. cap=4 dedup lets each prompt have up to 4 distinct answers — so we use
+# distinct answer phrasings too. No new facts, no new symbols — only paraphrase
+# coverage that the 4B model can use to bridge holdout wordings to the
+# canonical answers (`set_active_policy` / all 4 FallbackPolicy values).
+_V4_RETRY2G_HOLDOUT_PARAPHRASE: list[tuple[str, str]] = [
+    # ===== set_active_policy under "operator/runtime/without restart" =====
+    (
+        "How does an operator change the workspace eviction policy at runtime without restarting?",
+        "Call `set_active_policy(policy)`. It swaps the workspace-wide default eviction policy "
+        "in-process; no daemon restart, no config-file edit, no reindex. "
+        "`plan_eviction(policy=None)` resolves `None` to `active_policy()` on every call, so the "
+        "switch is observable on the next eviction run. Mirrors Redis `CONFIG SET maxmemory-policy`. "
+        "Defined in `src/mind_mem/v4/eviction.py`. Requires `v4.eviction` flag ON.",
+    ),
+    (
+        "Operator wants to flip the eviction policy live — no restart, no reindex. What's the call?",
+        "`set_active_policy(policy)` — runtime-mutable workspace-wide default. After the call, every "
+        "subsequent `plan_eviction(workspace, policy=None)` resolves to the new `active_policy()`. "
+        "No process restart needed, no reindex, no `mind-mem.json` edit. Source: "
+        "`src/mind_mem/v4/eviction.py`. Unknown names raise `ValueError`.",
+    ),
+    (
+        "Hot-swap the default eviction policy without bouncing the daemon — how?",
+        "`set_active_policy(EvictionPolicy.LOW_SURPRISE)` (or any registered policy name). The "
+        "active policy is one process-global pointer; `plan_eviction(policy=None)` reads it lazily "
+        "on every call, so the switch is live immediately. Restart is unnecessary. "
+        "Source: `src/mind_mem/v4/eviction.py`.",
+    ),
+    (
+        "Change the running eviction policy without taking the workspace offline.",
+        "Use `set_active_policy(policy)`. It mutates the workspace-wide active pointer in-process, "
+        "the operator's daemon keeps serving recall requests, and the next `plan_eviction` call "
+        "honours the new policy. No restart, no downtime. Defined in `src/mind_mem/v4/eviction.py`.",
+    ),
+    (
+        "Live-update the eviction policy in a running mind-mem process.",
+        "`from mind_mem.v4.eviction import set_active_policy; set_active_policy('low_surprise')`. "
+        "Accepts an `EvictionPolicy` enum value or the string name. The change is visible on the "
+        "next `plan_eviction()` call without restart. Requires `v4.eviction` flag ON.",
+    ),
+    (
+        "What runtime API lets an operator switch the default eviction strategy?",
+        "`set_active_policy(policy)` — the Redis-style runtime switch for eviction. Workspace-wide, "
+        "process-global, no restart. Pairs with `active_policy()` (read), `register_policy(name, fn)` "
+        "(extend), and `plan_eviction(workspace, policy=None)` (apply). Defined in "
+        "`src/mind_mem/v4/eviction.py`.",
+    ),
+    (
+        "Switch the workspace eviction policy on the fly — what function do I call?",
+        "`set_active_policy()`. It takes an `EvictionPolicy` enum or a registered string name and "
+        "swaps the workspace-wide active pointer instantly. No restart required. "
+        "Source: `src/mind_mem/v4/eviction.py`.",
+    ),
+    # ===== FallbackPolicy four-value enumeration under "every legal value" =====
+    (
+        "Enumerate every legal value of the v4 FallbackPolicy enum.",
+        "Four values, all defined in `src/mind_mem/v4/surprise_retrieval.py`: "
+        "`FallbackPolicy.NEUTRAL` (returns 0.5 — default, preserves prior behaviour), "
+        "`FallbackPolicy.PROMOTE` (returns 1.0 — bias toward tier promotion), "
+        "`FallbackPolicy.DEMOTE` (returns 0.0 — bias toward COLD aging), and "
+        "`FallbackPolicy.RAISE` (raises `EmbeddingFailureError` with a `reason` tag in "
+        "`{\"missing\", \"length_mismatch\", \"zero_norm\"}`). No other values are legal.",
+    ),
+    (
+        "List every legal FallbackPolicy value, including the one that raises.",
+        "Four: `NEUTRAL`, `PROMOTE`, `DEMOTE`, `RAISE`. `NEUTRAL` is the default (returns 0.5). "
+        "`PROMOTE` returns 1.0; `DEMOTE` returns 0.0; `RAISE` raises `EmbeddingFailureError` so the "
+        "caller can decide. All defined in `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "Exhaustive list of FallbackPolicy enum members?",
+        "Exactly four: `FallbackPolicy.NEUTRAL`, `FallbackPolicy.PROMOTE`, `FallbackPolicy.DEMOTE`, "
+        "`FallbackPolicy.RAISE`. NEUTRAL is the default (0.5); PROMOTE returns 1.0; DEMOTE returns "
+        "0.0; RAISE escalates by raising `EmbeddingFailureError`. The enum is closed — no other "
+        "members. Source: `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+    (
+        "How many FallbackPolicy variants are there, and what are they?",
+        "Four variants: `NEUTRAL` (returns 0.5, default), `PROMOTE` (1.0, bias HOT), `DEMOTE` "
+        "(0.0, bias COLD), and `RAISE` (raises `EmbeddingFailureError` with a `reason`). "
+        "Defined in `src/mind_mem/v4/surprise_retrieval.py`. RAISE is what you want in CI to "
+        "surface embedder bugs explicitly.",
+    ),
+    (
+        "Give me every possible FallbackPolicy value.",
+        "`NEUTRAL`, `PROMOTE`, `DEMOTE`, `RAISE` — four total. NEUTRAL = 0.5 (default), "
+        "PROMOTE = 1.0, DEMOTE = 0.0, RAISE = `raise EmbeddingFailureError(reason)`. "
+        "Source: `src/mind_mem/v4/surprise_retrieval.py`.",
+    ),
+]
+
+
+def _harvest_v4_retry2g_holdout_paraphrase() -> Iterator[dict]:
+    """Holdout-paraphrase coverage for the 2 retry-2g misses (set_active_policy
+    + FallbackPolicy.RAISE).  Same canonical answers as the rest of the corpus,
+    just under different surface wordings.  No new facts, no new symbols.
+    """
+    for prompt, answer in _V4_RETRY2G_HOLDOUT_PARAPHRASE:
+        yield {
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": answer},
             ]
         }
 

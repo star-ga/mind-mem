@@ -1,0 +1,893 @@
+{
+  "threshold": 8,
+  "total_probes": 109,
+  "total_weak": 0,
+  "by_group": {
+    "TOOL_CALL_QUESTIONS": [
+      {
+        "prompt": "How do I verify the audit chain integrity?",
+        "required": [
+          "verify_chain"
+        ],
+        "count": 131
+      },
+      {
+        "prompt": "What tool lists all contradictions?",
+        "required": [
+          "list_contradictions"
+        ],
+        "count": 99
+      },
+      {
+        "prompt": "Apply a staged proposal.",
+        "required": [
+          "approve_apply"
+        ],
+        "count": 117
+      },
+      {
+        "prompt": "Roll back an apply.",
+        "required": [
+          "rollback_proposal"
+        ],
+        "count": 94
+      },
+      {
+        "prompt": "Write a new memory block.",
+        "required": [
+          "propose_update"
+        ],
+        "count": 158
+      },
+      {
+        "prompt": "Full-text search over memory.",
+        "required": [
+          "recall"
+        ],
+        "count": 424
+      },
+      {
+        "prompt": "Run hybrid BM25 + vector search.",
+        "required": [
+          "hybrid_search"
+        ],
+        "count": 100
+      },
+      {
+        "prompt": "Reindex the FTS tables.",
+        "required": [
+          "reindex"
+        ],
+        "count": 122
+      },
+      {
+        "prompt": "Scan the workspace for contradictions and drift.",
+        "required": [
+          "scan"
+        ],
+        "count": 190
+      },
+      {
+        "prompt": "Export memory to JSONL.",
+        "required": [
+          "export_memory"
+        ],
+        "count": 54
+      },
+      {
+        "prompt": "Classify the intent of a query.",
+        "required": [
+          "intent_classify"
+        ],
+        "count": 59
+      },
+      {
+        "prompt": "Get index statistics.",
+        "required": [
+          "index_stats"
+        ],
+        "count": 57
+      },
+      {
+        "prompt": "Run the governance health benchmark.",
+        "required": [
+          "governance_health_bench"
+        ],
+        "count": 72
+      },
+      {
+        "prompt": "Encrypt a workspace file at rest.",
+        "required": [
+          "encrypt_file"
+        ],
+        "count": 53
+      },
+      {
+        "prompt": "Decrypt an encrypted workspace file.",
+        "required": [
+          "decrypt_file"
+        ],
+        "count": 56
+      },
+      {
+        "prompt": "Find blocks similar to a given ID.",
+        "required": [
+          "find_similar"
+        ],
+        "count": 60
+      },
+      {
+        "prompt": "Delete a memory item.",
+        "required": [
+          "delete_memory_item"
+        ],
+        "count": 55
+      },
+      {
+        "prompt": "Show block category summaries.",
+        "required": [
+          "category_summary"
+        ],
+        "count": 56
+      },
+      {
+        "prompt": "Prefetch recall results.",
+        "required": [
+          "prefetch"
+        ],
+        "count": 76
+      },
+      {
+        "prompt": "Diagnose why a query returned its results.",
+        "required": [
+          "retrieval_diagnostics"
+        ],
+        "count": 58
+      }
+    ],
+    "BLOCK_SCHEMA_QUESTIONS": [
+      {
+        "prompt": "Show me a DREF block template.",
+        "required": [
+          "[DREF-",
+          "Date:",
+          "Severity:",
+          "Signal:"
+        ],
+        "count": 34
+      },
+      {
+        "prompt": "Show me an ADR block template.",
+        "required": [
+          "[ADR-",
+          "Date:",
+          "Status:",
+          "Decision:"
+        ],
+        "count": 33
+      },
+      {
+        "prompt": "Show me a BUG block template.",
+        "required": [
+          "[BUG-",
+          "Severity:",
+          "Symptom:",
+          "RootCause:"
+        ],
+        "count": 34
+      },
+      {
+        "prompt": "Show me a PERF block template.",
+        "required": [
+          "[PERF-",
+          "Metric:",
+          "Before:",
+          "After:"
+        ],
+        "count": 34
+      },
+      {
+        "prompt": "Show me a CODE block template.",
+        "required": [
+          "[CODE-",
+          "File:",
+          "Change:",
+          "Rationale:"
+        ],
+        "count": 33
+      },
+      {
+        "prompt": "Show me an ALGO block template.",
+        "required": [
+          "[ALGO-",
+          "Problem:",
+          "Chosen:"
+        ],
+        "count": 34
+      },
+      {
+        "prompt": "Show me a CONV block template.",
+        "required": [
+          "[CONV-",
+          "Convention:"
+        ],
+        "count": 34
+      },
+      {
+        "prompt": "Show me a CHECK block template.",
+        "required": [
+          "[CHECK-",
+          "BlockA:",
+          "BlockB:"
+        ],
+        "count": 34
+      },
+      {
+        "prompt": "Show me an EV block template.",
+        "required": [
+          "[EV-",
+          "Action:",
+          "Actor:"
+        ],
+        "count": 34
+      },
+      {
+        "prompt": "Show me a FIELD block template.",
+        "required": [
+          "[FIELD-",
+          "BlockId:",
+          "Field:",
+          "Old:",
+          "New:"
+        ],
+        "count": 33
+      }
+    ],
+    "WORKFLOW_QUESTIONS": [
+      {
+        "prompt": "I see a contradiction between two decision blocks. Walk me through the fix.",
+        "required": [
+          "list_contradictions",
+          "propose_update",
+          "approve_apply",
+          "verify_chain"
+        ],
+        "count": 31
+      },
+      {
+        "prompt": "I applied a bad proposal. How do I roll back safely?",
+        "required": [
+          "rollback_proposal",
+          "verify_chain"
+        ],
+        "count": 22
+      },
+      {
+        "prompt": "I want to check if a belief has drifted. Which tools do I call?",
+        "required": [
+          "scan"
+        ],
+        "count": 190
+      },
+      {
+        "prompt": "Audit who changed field X on block Y.",
+        "required": [
+          "field_history"
+        ],
+        "count": 27
+      },
+      {
+        "prompt": "Run the full governance benchmark suite.",
+        "required": [
+          "governance_health_bench"
+        ],
+        "count": 72
+      }
+    ],
+    "V39_NEW_TOOLS": [
+      {
+        "prompt": "Show the dependency-ordered learning sequence for a topic.",
+        "required": [
+          "compile_truth_walkthrough"
+        ],
+        "count": 40
+      },
+      {
+        "prompt": "Recall blocks and project them through a persona.",
+        "required": [
+          "recall_with_persona"
+        ],
+        "count": 38
+      },
+      {
+        "prompt": "Inspect the current pipeline hash and dirty-block summary.",
+        "required": [
+          "pipeline_status"
+        ],
+        "count": 44
+      },
+      {
+        "prompt": "Re-stamp blocks whose TransformHash is stale.",
+        "required": [
+          "reindex_dirty"
+        ],
+        "count": 54
+      },
+      {
+        "prompt": "Run the seven-check audit on a local model checkpoint via MCP.",
+        "required": [
+          "audit_model_tool"
+        ],
+        "count": 33
+      },
+      {
+        "prompt": "Sign a checkpoint manifest with Ed25519 via MCP.",
+        "required": [
+          "sign_model_tool"
+        ],
+        "count": 32
+      },
+      {
+        "prompt": "Verify an Ed25519 manifest signature via MCP.",
+        "required": [
+          "verify_model_tool"
+        ],
+        "count": 31
+      },
+      {
+        "prompt": "Convert a MIND IR graph between mic@2 text and mic-b binary.",
+        "required": [
+          "mic_convert"
+        ],
+        "count": 45
+      },
+      {
+        "prompt": "Inspect the structure of a serialized MIC/MAP graph.",
+        "required": [
+          "mic_inspect"
+        ],
+        "count": 39
+      },
+      {
+        "prompt": "Verify the cryptographic chain of evidence for a block by Merkle path.",
+        "required": [
+          "verify_merkle"
+        ],
+        "count": 45
+      },
+      {
+        "prompt": "List every evidence entry the audit chain has accepted so far.",
+        "required": [
+          "list_evidence"
+        ],
+        "count": 44
+      },
+      {
+        "prompt": "Get a registered MIND kernel by name.",
+        "required": [
+          "get_mind_kernel"
+        ],
+        "count": 41
+      },
+      {
+        "prompt": "List every registered MIND kernel.",
+        "required": [
+          "list_mind_kernels"
+        ],
+        "count": 39
+      }
+    ],
+    "V39_TRANSFORMHASH_PROMPTS": [
+      {
+        "prompt": "Show me the field name a v3.9 inbox-ingested block carries to record the pipeline hash.",
+        "required": [
+          "TransformHash"
+        ],
+        "count": 52
+      },
+      {
+        "prompt": "Which helper stamps the current pipeline hash onto a block dict before writing?",
+        "required": [
+          "stamp_transform_hash"
+        ],
+        "count": 23
+      },
+      {
+        "prompt": "How do I bulk re-stamp blocks whose pipeline hash drifted?",
+        "required": [
+          "reindex_dirty"
+        ],
+        "count": 54
+      }
+    ],
+    "V39_TRANSPORT_PROMPTS": [
+      {
+        "prompt": "List the v3.9 HTTP transport endpoints.",
+        "required": [
+          "/status",
+          "/query"
+        ],
+        "count": 19
+      },
+      {
+        "prompt": "How does the v3.9 daemon trigger the dream cycle?",
+        "required": [
+          "daemon"
+        ],
+        "count": 22
+      },
+      {
+        "prompt": "How do I drop a file into the v3.9 inbox for ingestion?",
+        "required": [
+          "inbox",
+          "ingest"
+        ],
+        "count": 22
+      },
+      {
+        "prompt": "How does the v3.9 replicated postgres backend handle writes vs reads?",
+        "required": [
+          "primary",
+          "round-robin"
+        ],
+        "count": 17
+      }
+    ],
+    "V311_NEW_TOOLS": [
+      {
+        "prompt": "How do I check whether a block proposal is valid before writing it?",
+        "required": [
+          "validate_block",
+          "advisory"
+        ],
+        "count": 73
+      },
+      {
+        "prompt": "Which tool validates a block without writing it?",
+        "required": [
+          "validate_block"
+        ],
+        "count": 155
+      },
+      {
+        "prompt": "What does `validate_block(text, strict=True)` do on a rule violation?",
+        "required": [
+          "validate_block",
+          "strict"
+        ],
+        "count": 127
+      },
+      {
+        "prompt": "How do I detect prompt-injection patterns in a candidate block?",
+        "required": [
+          "validate_block",
+          "injection"
+        ],
+        "count": 27
+      },
+      {
+        "prompt": "Which v3.11.0 tool checks for duplicate, oversize, and UTF-8 issues before a write?",
+        "required": [
+          "validate_block"
+        ],
+        "count": 155
+      },
+      {
+        "prompt": "How do I trace what blocks depend on block X?",
+        "required": [
+          "block_lineage",
+          "max_depth"
+        ],
+        "count": 34
+      },
+      {
+        "prompt": "What does `block_lineage` return for an isolated block with no edges?",
+        "required": [
+          "block_lineage"
+        ],
+        "count": 83
+      },
+      {
+        "prompt": "How do I filter `block_lineage` to only `cites` edges?",
+        "required": [
+          "block_lineage",
+          "kind_filter"
+        ],
+        "count": 18
+      },
+      {
+        "prompt": "What tool adds a typed edge between two blocks?",
+        "required": [
+          "add_block_edge",
+          "kind"
+        ],
+        "count": 27
+      },
+      {
+        "prompt": "What are the five edge kinds supported by `block_lineage`?",
+        "required": [
+          "cites",
+          "implements",
+          "refines",
+          "contradicts",
+          "cooccurrence"
+        ],
+        "count": 68
+      }
+    ],
+    "V311_EXPLAIN_FIELD": [
+      {
+        "prompt": "What does `recall(query, explain=True)` return that the default call does not?",
+        "required": [
+          "_explain",
+          "bm25",
+          "vector",
+          "rrf_rank"
+        ],
+        "count": 27
+      },
+      {
+        "prompt": "What fields live inside the `_explain` dict returned by `recall(explain=True)`?",
+        "required": [
+          "bm25_score",
+          "vector_score",
+          "rrf_rank",
+          "tier_boost",
+          "final_score"
+        ],
+        "count": 22
+      },
+      {
+        "prompt": "Is `_explain` present on every result block when `recall(explain=True)` is used?",
+        "required": [
+          "_explain",
+          "explain"
+        ],
+        "count": 90
+      },
+      {
+        "prompt": "How does `final_score` in `_explain` relate to the other scores?",
+        "required": [
+          "rrf_rank",
+          "tier_boost"
+        ],
+        "count": 30
+      },
+      {
+        "prompt": "What is `rrf_rank` inside `_explain`?",
+        "required": [
+          "rrf_rank",
+          "bm25",
+          "vector"
+        ],
+        "count": 34
+      },
+      {
+        "prompt": "Does `recall` return `_explain` when `explain` is not passed?",
+        "required": [
+          "_explain"
+        ],
+        "count": 90
+      },
+      {
+        "prompt": "Which `_explain` field should I inspect to diagnose a BM25 vs vector disagreement?",
+        "required": [
+          "bm25_score",
+          "vector_score"
+        ],
+        "count": 27
+      },
+      {
+        "prompt": "What is the math behind `final_score` in `_explain`?",
+        "required": [
+          "rrf_rank",
+          "tier_boost"
+        ],
+        "count": 30
+      },
+      {
+        "prompt": "Does `hybrid_search` also support `explain=True`?",
+        "required": [
+          "_explain",
+          "explain"
+        ],
+        "count": 90
+      },
+      {
+        "prompt": "Is the `_explain` dict the same structure for `recall` and `hybrid_search`?",
+        "required": [
+          "bm25_score",
+          "vector_score",
+          "rrf_rank",
+          "tier_boost",
+          "final_score"
+        ],
+        "count": 22
+      }
+    ],
+    "V312_QUALITY_GATE_STRICT_MODE": [
+      {
+        "prompt": "What are the three valid values for `quality_gate.mode` in `mind-mem.json`?",
+        "required": [
+          "off",
+          "advisory",
+          "strict"
+        ],
+        "count": 23
+      },
+      {
+        "prompt": "What is the default value of `quality_gate.mode`?",
+        "required": [
+          "advisory",
+          "mind-mem.json"
+        ],
+        "count": 28
+      },
+      {
+        "prompt": "How do I enable strict mode so that a rule violation blocks a write?",
+        "required": [
+          "strict",
+          "mind-mem.json",
+          "validate_block"
+        ],
+        "count": 12
+      },
+      {
+        "prompt": "What does `propose_update` do differently when `quality_gate.mode` is `\"strict\"`?",
+        "required": [
+          "strict",
+          "validate_block"
+        ],
+        "count": 127
+      },
+      {
+        "prompt": "What is the shape of the rejection envelope when strict mode fires?",
+        "required": [
+          "quality_gate_rejection",
+          "reasons",
+          "mode"
+        ],
+        "count": 16
+      },
+      {
+        "prompt": "How do I read the per-rule rejection counter for the `injection_marker` rule?",
+        "required": [
+          "quality_gate_rejections",
+          "injection_marker"
+        ],
+        "count": 9
+      },
+      {
+        "prompt": "What metric key tracks how many times the `near_duplicate` rule rejected a write?",
+        "required": [
+          "quality_gate_rejections",
+          "near_duplicate"
+        ],
+        "count": 9
+      },
+      {
+        "prompt": "When should I choose `strict` mode over `advisory` mode?",
+        "required": [
+          "strict",
+          "advisory"
+        ],
+        "count": 106
+      },
+      {
+        "prompt": "Is there an escape hatch to write a block that fails validation in strict mode?",
+        "required": [
+          "force",
+          "strict"
+        ],
+        "count": 40
+      },
+      {
+        "prompt": "What operator runbook covers the quality gate configuration?",
+        "required": [
+          "docs/quality-gate.md"
+        ],
+        "count": 10
+      }
+    ],
+    "V312_LINEAGE_STALENESS": [
+      {
+        "prompt": "What new SQLite table does v3.12.0 introduce for staleness tracking?",
+        "required": [
+          "block_staleness",
+          "source_id"
+        ],
+        "count": 21
+      },
+      {
+        "prompt": "What module implements lineage staleness propagation in v3.12.0?",
+        "required": [
+          "propagate_lineage_staleness",
+          "block_staleness"
+        ],
+        "count": 14
+      },
+      {
+        "prompt": "How does `_explain.staleness_penalty` behave differently in v3.12.0 vs v3.11.0?",
+        "required": [
+          "staleness_penalty",
+          "_explain",
+          "block_staleness"
+        ],
+        "count": 12
+      },
+      {
+        "prompt": "What are the kind-aware decay multipliers in `propagate_lineage_staleness`?",
+        "required": [
+          "contradicts",
+          "cites",
+          "implements",
+          "refines"
+        ],
+        "count": 68
+      },
+      {
+        "prompt": "Why does a `contradicts` edge propagate the fastest in lineage staleness?",
+        "required": [
+          "contradicts",
+          "1.0"
+        ],
+        "count": 81
+      },
+      {
+        "prompt": "What is the maximum number of hops `propagate_lineage_staleness` will walk?",
+        "required": [
+          "max_hops",
+          "3"
+        ],
+        "count": 27
+      },
+      {
+        "prompt": "How do I trigger lineage staleness propagation from the CLI?",
+        "required": [
+          "mm lineage flag",
+          "contradicts"
+        ],
+        "count": 10
+      },
+      {
+        "prompt": "What fields does the `block_staleness` table contain?",
+        "required": [
+          "source_id",
+          "decayed_at"
+        ],
+        "count": 21
+      },
+      {
+        "prompt": "What is the decay multiplier for a `cites` edge in lineage staleness?",
+        "required": [
+          "cites",
+          "0.8"
+        ],
+        "count": 74
+      },
+      {
+        "prompt": "What is the decay multiplier for a `refines` edge?",
+        "required": [
+          "refines",
+          "0.4"
+        ],
+        "count": 66
+      }
+    ],
+    "V4_SURFACES": [
+      {
+        "prompt": "What are the three states of the v4 circuit breaker?",
+        "required": [
+          "CLOSED",
+          "OPEN",
+          "HALF_OPEN"
+        ],
+        "count": 9
+      },
+      {
+        "prompt": "Default failure_threshold and recovery_timeout for CircuitBreaker?",
+        "required": [
+          "5",
+          "30"
+        ],
+        "count": 68
+      },
+      {
+        "prompt": "What watermark pattern does v4 BackpressureController use?",
+        "required": [
+          "high_watermark",
+          "low_watermark",
+          "hysteresis"
+        ],
+        "count": 11
+      },
+      {
+        "prompt": "What status values can v4 health_check return at the top level?",
+        "required": [
+          "ok",
+          "degraded",
+          "fail"
+        ],
+        "count": 10
+      },
+      {
+        "prompt": "What underlies the v4 logging_context stack \u2014 threads or contextvars?",
+        "required": [
+          "contextvars"
+        ],
+        "count": 9
+      },
+      {
+        "prompt": "What two timestamp columns does v4 block_metadata track?",
+        "required": [
+          "created_at",
+          "updated_at"
+        ],
+        "count": 9
+      },
+      {
+        "prompt": "What does register_schema_validator do in v4 block_metadata?",
+        "required": [
+          "validate_block",
+          "kind"
+        ],
+        "count": 12
+      },
+      {
+        "prompt": "What's the v4 observability MAX_CARDINALITY default?",
+        "required": [
+          "10000"
+        ],
+        "count": 23
+      },
+      {
+        "prompt": "What does set_active_policy do in v4 eviction?",
+        "required": [
+          "active_policy",
+          "plan_eviction"
+        ],
+        "count": 14
+      },
+      {
+        "prompt": "What does EvictionPlan.debug_plan() return?",
+        "required": [
+          "policy",
+          "block_ids"
+        ],
+        "count": 11
+      },
+      {
+        "prompt": "Name the four FallbackPolicy values in v4 surprise_retrieval.",
+        "required": [
+          "NEUTRAL",
+          "PROMOTE",
+          "DEMOTE",
+          "RAISE"
+        ],
+        "count": 14
+      },
+      {
+        "prompt": "What does FallbackPolicy.RAISE raise on a missing embedding?",
+        "required": [
+          "EmbeddingFailureError"
+        ],
+        "count": 10
+      },
+      {
+        "prompt": "What public predicate replaces direct _registry access for v4 eviction?",
+        "required": [
+          "is_policy_registered"
+        ],
+        "count": 10
+      },
+      {
+        "prompt": "What public predicate does v4 cognitive_kernel expose for the health probe?",
+        "required": [
+          "is_kernel_registered"
+        ],
+        "count": 10
+      }
+    ]
+  },
+  "weak": []
+}
