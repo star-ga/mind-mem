@@ -63,14 +63,8 @@ def test_shim_reexports_public_surface(shim_name: str, canonical_name: str) -> N
         if getattr(shim, name) is not getattr(canonical, name):
             drifted.append(name)
 
-    assert not missing, (
-        f"shim {shim_name!r} is missing re-exports from "
-        f"{canonical_name!r}: {sorted(missing)}"
-    )
-    assert not drifted, (
-        f"shim {shim_name!r} has drifted copies of: {sorted(drifted)} "
-        f"— re-export the canonical object directly"
-    )
+    assert not missing, f"shim {shim_name!r} is missing re-exports from {canonical_name!r}: {sorted(missing)}"
+    assert not drifted, f"shim {shim_name!r} has drifted copies of: {sorted(drifted)} — re-export the canonical object directly"
 
 
 def test_shim_map_is_non_circular() -> None:
@@ -80,6 +74,4 @@ def test_shim_map_is_non_circular() -> None:
     re-export check above.
     """
     for shim_name, canonical_name in _SHIM_MAP.items():
-        assert shim_name != canonical_name, (
-            f"shim_map entry {shim_name!r} points at itself"
-        )
+        assert shim_name != canonical_name, f"shim_map entry {shim_name!r} points at itself"

@@ -113,25 +113,19 @@ def _validate_arch_id(name: str, value: str) -> str:
     if not isinstance(value, str):
         raise ArchMindError(f"arch-mind {name}: expected str, got {type(value).__name__}")
     if not _ARCH_ID_RE.match(value):
-        raise ArchMindError(
-            f"arch-mind {name}: must match ^[A-Za-z0-9_.\\-]{{1,128}}$"
-        )
+        raise ArchMindError(f"arch-mind {name}: must match ^[A-Za-z0-9_.\\-]{{1,128}}$")
     return value
 
 
 def _validate_arch_mode(value: str) -> str:
     if value not in _ARCH_MODE_ALLOWLIST:
-        raise ArchMindError(
-            f"arch-mind mode: must be one of {sorted(_ARCH_MODE_ALLOWLIST)}, got {value!r}"
-        )
+        raise ArchMindError(f"arch-mind mode: must be one of {sorted(_ARCH_MODE_ALLOWLIST)}, got {value!r}")
     return value
 
 
 def _validate_arch_metric(value: str) -> str:
     if value not in _ARCH_METRIC_ALLOWLIST:
-        raise ArchMindError(
-            f"arch-mind metric: must be one of {sorted(_ARCH_METRIC_ALLOWLIST)}, got {value!r}"
-        )
+        raise ArchMindError(f"arch-mind metric: must be one of {sorted(_ARCH_METRIC_ALLOWLIST)}, got {value!r}")
     return value
 
 
@@ -139,9 +133,7 @@ def _validate_arch_days(value: int) -> int:
     if not isinstance(value, int) or isinstance(value, bool):
         raise ArchMindError(f"arch-mind days: expected int, got {type(value).__name__}")
     if value < 0 or value > _ARCH_HISTORY_DAYS_MAX:
-        raise ArchMindError(
-            f"arch-mind days: must be in [0, {_ARCH_HISTORY_DAYS_MAX}], got {value}"
-        )
+        raise ArchMindError(f"arch-mind days: must be in [0, {_ARCH_HISTORY_DAYS_MAX}], got {value}")
     return value
 
 

@@ -6,24 +6,24 @@
   <strong>Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent.</strong><br>
   <sub>OpenClaw is an <a href="https://github.com/openclaw/openclaw">open-source AI assistant platform</a> with multi-channel support.</sub>
 </p>
-  <p align="center">
-    Local-first &bull; Zero-infrastructure &bull; Governance-aware &bull; MIND-accelerated
-  </p>
-  <p align="center">
-    <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/v/mind-mem?include_prereleases&style=flat-square&color=blue&label=PyPI" alt="PyPI"></a>
-    <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/pyversions/mind-mem?style=flat-square" alt="Python Versions"></a>
-    <a href="https://github.com/star-ga/mind-mem/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/mind-mem?style=flat-square" alt="License"></a>
-    <a href="https://github.com/star-ga/mind-mem/releases"><img src="https://img.shields.io/github/v/release/star-ga/mind-mem?include_prereleases&style=flat-square&color=green&label=Release" alt="Release"></a>
-    <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
-    <img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible">
-    <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
-    <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
-    <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-    <img src="https://img.shields.io/badge/tests-5155%2B-brightgreen?style=flat-square" alt="Tests: 5155+">
-    <img src="https://img.shields.io/badge/MCP_tools-84-blue?style=flat-square" alt="MCP Tools: 84">
-    <img src="https://img.shields.io/badge/clients-15-blueviolet?style=flat-square" alt="AI Clients: 15">
-    <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
-    <img src="https://img.shields.io/badge/audit-10--LLM_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="10-LLM consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
+<p align="center">
+  Local-first &bull; Zero-infrastructure &bull; Governance-aware &bull; MIND-accelerated
+</p>
+<p align="center">
+  <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/v/mind-mem?include_prereleases&style=flat-square&color=blue&label=PyPI" alt="PyPI"></a>
+  <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/pyversions/mind-mem?style=flat-square" alt="Python Versions"></a>
+  <a href="https://github.com/star-ga/mind-mem/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/mind-mem?style=flat-square" alt="License"></a>
+  <a href="https://github.com/star-ga/mind-mem/releases"><img src="https://img.shields.io/github/v/release/star-ga/mind-mem?include_prereleases&style=flat-square&color=green&label=Release" alt="Release"></a>
+  <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
+  <img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible">
+  <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
+  <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
+  <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
+  <img src="https://img.shields.io/badge/tests-5155%2B-brightgreen?style=flat-square" alt="Tests: 5155+">
+  <img src="https://img.shields.io/badge/MCP_tools-84-blue?style=flat-square" alt="MCP Tools: 84">
+  <img src="https://img.shields.io/badge/clients-15-blueviolet?style=flat-square" alt="AI Clients: 15">
+  <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
+  <img src="https://img.shields.io/badge/audit-10--LLM_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="10-LLM consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
 </p>
 
 ---
@@ -72,7 +72,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>v4.0.5 (released 2026-05-14) — docs/badges aligned + release workflow idempotent. Static README badges now match ground truth (`tests-5155+`, `clients-15`, `audit-10-LLM`, `84` MCP tools); CLAUDE.md drift cleared; comparison table corrected. `.github/workflows/release.yml` passes `skip-existing: true` so tag re-pushes and local-twine races no longer 400. Same wheel surface as v4.0.4 (PyPI logo absolute URL) and v4.0.3 (Postgres-backed recall pipeline fix: `recall()` now dispatches to the configured backend at the library entry-point, and `mm doctor --rebuild-cache` creates + populates the FTS5 `blocks_fts` virtual table on first run against a PG-backed workspace; closes #524 + #525). `mind-mem-4b` weights unchanged. Builds on v4.0.2 (2026-05-13 — security + correctness audit pass: 46 findings closed across HTTP transport hardening, federation correctness, retrieval quality, doc alignment), v4.0.1 (federation wire transport over HTTP + stdlib `FederationClient`), and v4.0.0 (cognitive kernel, knowledge graph, resilience suite, observability — all v4 surfaces flag-gated, no breaking changes). Companion **mind-mem-4b v4.1.1** (r4 retrain, **133/133 = 100%** on the 111-probe main + 22-probe holdout surface; closes the v4.1.0 KernelKind hallucination) is current `main` on [star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b); v4.1.0, v4.0.0-base, and v3.12.0 remain pinnable on HF revision branches.</sub>
+<sub>v4.0.6 (released 2026-05-14) — PyPI badge alignment + CI green. README badge block flushed left (PyPI's strict CommonMark treats 4-space-indented lines as a code block, which dropped badge centring on the PyPI page even though it rendered fine on GitHub). Also: `ruff format` on 10 drifted files (closes the lint job), `-m "not stress"` added to both CI pytest steps (closes the OOM kills on ubuntu 3.12/3.14 from stress-marked tests like `test_niah`), and Python 3.14 matrix rows now advisory via `continue-on-error` (still pre-release). No source or test changes. Builds on v4.0.5 (2026-05-14 — docs/badges aligned + release workflow idempotent. Static README badges now match ground truth (`tests-5155+`, `clients-15`, `audit-10-LLM`, `84` MCP tools); CLAUDE.md drift cleared; comparison table corrected. `.github/workflows/release.yml` passes `skip-existing: true` so tag re-pushes and local-twine races no longer 400. Same wheel surface as v4.0.4 (PyPI logo absolute URL) and v4.0.3 (Postgres-backed recall pipeline fix: `recall()` now dispatches to the configured backend at the library entry-point, and `mm doctor --rebuild-cache` creates + populates the FTS5 `blocks_fts` virtual table on first run against a PG-backed workspace; closes #524 + #525). `mind-mem-4b` weights unchanged. Builds on v4.0.2 (2026-05-13 — security + correctness audit pass: 46 findings closed across HTTP transport hardening, federation correctness, retrieval quality, doc alignment), v4.0.1 (federation wire transport over HTTP + stdlib `FederationClient`), and v4.0.0 (cognitive kernel, knowledge graph, resilience suite, observability — all v4 surfaces flag-gated, no breaking changes). Companion **mind-mem-4b v4.1.1** (r4 retrain, **133/133 = 100%** on the 111-probe main + 22-probe holdout surface; closes the v4.1.0 KernelKind hallucination) is current `main` on [star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b); v4.1.0, v4.0.0-base, and v3.12.0 remain pinnable on HF revision branches.</sub>
 
 ### Trust Signals
 

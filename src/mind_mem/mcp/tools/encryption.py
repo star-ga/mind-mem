@@ -73,10 +73,7 @@ def _safe_vault_path(ws: str, candidate: str) -> str:
             # FileNotFoundError path can produce its specific error.
             break
         if os.path.islink(cursor):
-            raise ValueError(
-                f"path rejected: symlink in path component {cursor!r} "
-                f"(audit S-10 — symlinks defeat TOCTOU guard)"
-            )
+            raise ValueError(f"path rejected: symlink in path component {cursor!r} (audit S-10 — symlinks defeat TOCTOU guard)")
 
     # Only now is it safe to resolve. abs_candidate has no symlink
     # components, so realpath collapses only "." / ".." which is fine.

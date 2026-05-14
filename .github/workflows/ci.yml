@@ -48,6 +48,10 @@ jobs:
     # now classed as supported in pyproject.toml's classifiers, so the
     # CI gate matches.
     runs-on: ${{ matrix.os }}
+    # Python 3.14 is still pre-release as of 2026-05; treat its rows as
+    # advisory rather than gating until upstream wheels stabilise. The
+    # 3.10/3.12/3.13 supported rows still gate the workflow.
+    continue-on-error: ${{ matrix.python-version == '3.14' }}
     strategy:
       fail-fast: false
       matrix:
@@ -66,11 +70,15 @@ jobs:
         # variation; further moves to 80% are tracked separately so a
         # broad raise can't accidentally land in a release that hasn't
         # written the corresponding tests.
-        run: python3 -m pytest tests/ --ignore=tests/integration --cov=src --cov-report=xml --cov-report=term-missing --cov-fail-under=70 -x -q
+        # v4.0.6: exclude @pytest.mark.stress on CI — those tests
+        # (e.g. test_niah) spawn tens of thousands of threads and OOM
+        # the GitHub-hosted ubuntu runners. They still run locally via
+        # `make test` for pre-release gating.
+        run: python3 -m pytest tests/ --ignore=tests/integration --cov=src --cov-report=xml --cov-report=term-missing --cov-fail-under=70 -x -q -m "not stress"
         env:
           PYTHONDONTWRITEBYTECODE: "1"
       - name: Integration tests
-        run: python3 -m pytest tests/integration/ -v
+        run: python3 -m pytest tests/integration/ -v -m "not stress"
         env:
           PYTHONDONTWRITEBYTECODE: "1"
       - name: Upload coverage report

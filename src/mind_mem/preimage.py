@@ -83,10 +83,7 @@ def _render(value: Value) -> bytes:
             # saturates to the same value, so ``+Inf`` would collide
             # with ``32768.0`` in the preimage (audit FP-6). Reject
             # so callers must clamp or coerce explicitly.
-            raise ValueError(
-                "preimage(): ±Inf is not hashable — saturates to the "
-                "Q16.16 endpoint and collides with the boundary value"
-            )
+            raise ValueError("preimage(): ±Inf is not hashable — saturates to the Q16.16 endpoint and collides with the boundary value")
         data = hex_q16_16(value).encode("ascii")
     else:
         raise TypeError(f"preimage(): unsupported field type {type(value).__name__!r}")

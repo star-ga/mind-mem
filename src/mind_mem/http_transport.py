@@ -755,9 +755,7 @@ def build_handler(
             if allowed:
                 return False
             # Send 429 with Retry-After header so clients back off cleanly.
-            body = json.dumps(
-                {"status": 429, "error": "rate limit exceeded"}, sort_keys=True
-            ).encode("utf-8")
+            body = json.dumps({"status": 429, "error": "rate limit exceeded"}, sort_keys=True).encode("utf-8")
             self.send_response(429)
             self.send_header("Content-Type", "application/json")
             self.send_header("Retry-After", str(int(retry_after) or 1))
@@ -956,12 +954,8 @@ def serve_http(
     # MIND_MEM_HTTP_RATE_MAX_CALLS / MIND_MEM_HTTP_RATE_WINDOW_SECS, or
     # set MAX_CALLS=0 to disable (tests + air-gapped deployments).
     try:
-        max_calls = int(
-            os.environ.get("MIND_MEM_HTTP_RATE_MAX_CALLS", DEFAULT_RATE_MAX_CALLS)
-        )
-        window_seconds = int(
-            os.environ.get("MIND_MEM_HTTP_RATE_WINDOW_SECS", DEFAULT_RATE_WINDOW_SECS)
-        )
+        max_calls = int(os.environ.get("MIND_MEM_HTTP_RATE_MAX_CALLS", DEFAULT_RATE_MAX_CALLS))
+        window_seconds = int(os.environ.get("MIND_MEM_HTTP_RATE_WINDOW_SECS", DEFAULT_RATE_WINDOW_SECS))
     except ValueError:
         max_calls = DEFAULT_RATE_MAX_CALLS
         window_seconds = DEFAULT_RATE_WINDOW_SECS

@@ -1015,9 +1015,7 @@ class VectorBackend(RecallBackend):
                 advice="set PINECONE_API_KEY to enable the Pinecone backend",
             )
             metrics.inc("pinecone_api_key_missing")
-            raise ValueError(
-                "PINECONE_API_KEY environment variable is required for Pinecone backend"
-            )
+            raise ValueError("PINECONE_API_KEY environment variable is required for Pinecone backend")
 
         pc = Pinecone(api_key=api_key)
         index = pc.Index(self.pinecone_index_name)
@@ -1259,9 +1257,7 @@ class VectorBackend(RecallBackend):
                 advice="set PINECONE_API_KEY to enable the Pinecone backend",
             )
             metrics.inc("pinecone_api_key_missing")
-            raise ValueError(
-                "PINECONE_API_KEY environment variable is required for Pinecone backend"
-            )
+            raise ValueError("PINECONE_API_KEY environment variable is required for Pinecone backend")
 
         pc = Pinecone(api_key=api_key)
         index = pc.Index(self.pinecone_index_name)

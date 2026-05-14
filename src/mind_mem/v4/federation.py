@@ -354,9 +354,7 @@ def resolve_conflict(
         if merger is None:
             # FP-4: surface caller error rather than silently returning None
             # (which is indistinguishable from "no conflict to resolve").
-            raise ValueError(
-                "THREE_WAY_MERGE requires a merger callable; got None"
-            )
+            raise ValueError("THREE_WAY_MERGE requires a merger callable; got None")
         winner_agent = f"merge:{report.left_agent}+{report.right_agent}"
         winner_version = max(report.left_version, report.right_version) + 1
         merged = merger(report)
@@ -371,8 +369,7 @@ def resolve_conflict(
         # resolvers don't silently overwrite each other.
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(
-            "UPDATE tier_conflict_log SET resolution = ?, resolved_to = ?, "
-            "resolved_at = ? WHERE rowid = ? AND resolution IS NULL",
+            "UPDATE tier_conflict_log SET resolution = ?, resolved_to = ?, resolved_at = ? WHERE rowid = ? AND resolution IS NULL",
             (strategy.value, winner_agent, now, target_rowid),
         )
         conn.commit()
@@ -489,8 +486,7 @@ def _pick_last_writer(
     db = Path(workspace) / "index.db"
     with sqlite3.connect(db, timeout=10) as conn:
         rows = conn.execute(
-            "SELECT agent_id, version, last_seen_at FROM block_tier_vclock "
-            "WHERE block_id = ? AND agent_id IN (?, ?)",
+            "SELECT agent_id, version, last_seen_at FROM block_tier_vclock WHERE block_id = ? AND agent_id IN (?, ?)",
             (block_id, report.left_agent, report.right_agent),
         ).fetchall()
     if not rows:

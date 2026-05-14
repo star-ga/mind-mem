@@ -105,10 +105,7 @@ def _validate_path(ws: str, rel_path: str) -> str:
             continue
         cursor = os.path.join(cursor, component)
         if os.path.islink(cursor):
-            raise ValueError(
-                f"Invalid path: symlink in component {component!r} "
-                f"(audit S-10 — symlinks defeat TOCTOU guard)"
-            )
+            raise ValueError(f"Invalid path: symlink in component {component!r} (audit S-10 — symlinks defeat TOCTOU guard)")
         if not os.path.exists(cursor):
             # Allow non-existent tail (callers may want to create it).
             # We've already verified every existing component is not a

@@ -269,6 +269,7 @@ def recall(
     _cfg_backend = _load_backend(workspace)
     if _cfg_backend == "sqlite":
         from .sqlite_index import query_index
+
         return query_index(
             workspace,
             query,
@@ -281,9 +282,7 @@ def recall(
         )
     if isinstance(_cfg_backend, RecallBackend):
         try:
-            backend_hits: list[dict] = _cfg_backend.search(
-                workspace, query, limit=limit, active_only=active_only
-            )
+            backend_hits: list[dict] = _cfg_backend.search(workspace, query, limit=limit, active_only=active_only)
             if backend_hits:
                 return backend_hits
         except Exception as exc:

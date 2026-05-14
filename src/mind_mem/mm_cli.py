@@ -1782,17 +1782,14 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
                         description = md.get("Description") or md.get("Summary") or ""
                         tags_str_fts = _json.dumps(md.get("Tags") or md.get("Keywords") or md.get("tags") or [])
                         context = md.get("Context") or md.get("Rationale") or ""
-                        all_text = " ".join(str(v) for v in (
-                            statement, title, description, tags_str_fts, context
-                        ) if v)
+                        all_text = " ".join(str(v) for v in (statement, title, description, tags_str_fts, context) if v)
                         # idempotent: clear any prior FTS row for this bid first
                         sq.execute("DELETE FROM blocks_fts WHERE block_id = ?", (bid,))
                         sq.execute(
                             "INSERT INTO blocks_fts (block_id, statement, title, name, "
                             "description, tags, context, all_text) "
                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                            (bid, statement, title, title, description,
-                             tags_str_fts, context, all_text),
+                            (bid, statement, title, title, description, tags_str_fts, context, all_text),
                         )
                         written += 1
                     except _sqlite3.OperationalError:

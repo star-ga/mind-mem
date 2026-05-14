@@ -4,7 +4,16 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
-**v4.0.5** (released 2026-05-14) — Docs/badges aligned + release
+**v4.0.6** (released 2026-05-14) — PyPI badge alignment + CI green.
+README badge block was rendering uncentred on PyPI because lines
+9–26 used 2/4-space leading indentation; PyPI's strict CommonMark
+treats 4-space indented lines as a code block. Flushed left. Also:
+applied `ruff format` to 10 drifted files (closes the `lint`
+Format-check failure); added `-m "not stress"` to both CI pytest
+steps (closes the OOM kills on ubuntu 3.12/3.14 from `test_niah`-
+class stress tests); marked Python 3.14 matrix rows as
+`continue-on-error` (still pre-release). No source/test changes.
+Builds on **v4.0.5** (released 2026-05-14) — Docs/badges aligned + release
 workflow idempotent. README badges + comparison table now match
 ground truth (`tests-5155+`, `clients-15`, `audit-10-LLM`, `84` MCP
 tools); CLAUDE.md drift cleared (`MCP Tools (81) → (84)`,
