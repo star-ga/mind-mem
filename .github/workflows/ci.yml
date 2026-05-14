@@ -77,12 +77,12 @@ jobs:
         # marked file-level in v4.0.8). Stress tests still run via
         # `make test` for pre-release gating.
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
-        run: python3 -m pytest tests/ --ignore=tests/integration --cov=src --cov-report=xml --cov-report=term-missing --cov-fail-under=70 -x -q -m "not stress"
+        run: python3 -m pytest tests/ --ignore=tests/integration --cov=src --cov-report=xml --cov-report=term-missing --cov-fail-under=70 -x -q -m "not stress" --timeout=120 --timeout-method=thread
         env:
           PYTHONDONTWRITEBYTECODE: "1"
       - name: Unit tests (no coverage, other matrix rows)
         if: matrix.os != 'ubuntu-latest' || matrix.python-version != '3.12'
-        run: python3 -m pytest tests/ --ignore=tests/integration -x -q -m "not stress"
+        run: python3 -m pytest tests/ --ignore=tests/integration -x -q -m "not stress" --timeout=120 --timeout-method=thread
         env:
           PYTHONDONTWRITEBYTECODE: "1"
       - name: Integration tests
