@@ -4,7 +4,18 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
-**v4.0.2** (released 2026-05-13) — Security + correctness audit pass
+**v4.0.3** (released 2026-05-14) — Postgres-backed recall pipeline fix.
+`recall()` in `_recall_core.py` now dispatches to the configured backend
+at the library entry-point (previously only `python -m mind_mem.recall`
+honored it, so `mm recall` against a PG workspace returned `[]`).
+`_load_backend` now tolerates non-dict `recall` config (falls through
+to BM25 scan instead of crashing). `mm doctor --rebuild-cache` creates
+the SQLite `recall.db`, runs `_init_schema`, and populates the FTS5
+`blocks_fts` virtual table on first run against a PG-backed workspace.
+Closes #524 + #525. Targeted recall/doctor/rebuild/error_paths/
+sqlite_index suite: 636 passed, 6 skipped, 0 failed. `mind-mem-4b`
+weights unchanged — CLI/library fix only, zero retraining required.
+Builds on **v4.0.2** (released 2026-05-13) — Security + correctness audit pass
 over the v4.0.1 surface: 1 Critical / 12 High / 18 Medium / 12 Low / 3
 Info findings closed. HMAC-equal token compare, Origin allowlist, OPTIONS
 rejection, per-client sliding-window rate limit, symlink TOCTOU close,
