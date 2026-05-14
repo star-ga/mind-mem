@@ -1686,6 +1686,59 @@ Out of scope for v4.0 ship; documented so the path is visible.
 
 ---
 
+## v4.0.x — Federation transport hardening (gaps surfaced by v4.0.8)
+
+v4.0.8 closed `#529` (scheme allowlist, same-origin redirect handler,
+response-size cap) and `#528` (three-way merge audit log). Four
+defensive controls remain explicitly **not** enforced; the current
+threat model is *single-operator shared-secret*. Listing them here so
+the gaps are tracked instead of being implicit.
+
+The bigger v4.0.0 Group-D items (mTLS, OAuth2/OIDC, DID/VC, workspace
+ACLs, cross-instance federation protocol) sit above this section.
+These are the smaller, surgical gaps that should land first.
+
+- [ ] **Per-peer identity beyond bearer token.** Today any holder of the
+  shared `X-MindMem-Token` can call any federation endpoint as any
+  `agent_id`. There is no cryptographic binding between the token and
+  the agent identity the caller claims. A leaked token gives full
+  write authority over the federation surface. Two staged fixes:
+  (a) per-peer tokens with a token→agent_id table; reject a write
+  whose claimed `agent_id` doesn't match the bound identity for the
+  presented token. (b) signed-write envelopes — peer Ed25519-signs
+  every `record_agent_write` body; server verifies against a
+  per-peer public-key allowlist. Item (b) is the prerequisite for
+  the Group-D `DID + Verifiable Credential agent identity` item.
+- [ ] **mTLS + certificate pinning on `FederationClient`.** The current
+  client does NOT verify the peer's certificate against a pinned
+  expected key — it inherits whatever the system trust store says.
+  TLS interception (corporate proxies, hostile network) is therefore
+  undetectable from inside the client. The v4.0.0 Group-D `mTLS for
+  service-to-service` item is the destination; this sub-task is the
+  client-side pinning primitive (`FederationClient(base_url, ...,
+  pinned_pubkey_sha256=...)` constructor arg + verification hook on
+  the strict opener).
+- [ ] **Operator-side peer allowlist.** No built-in IP / hostname
+  allowlist on the federation HTTP listener. Operators have to put a
+  reverse proxy (nginx, Caddy) in front and configure it externally.
+  In-process allowlist would be `MIND_MEM_FED_PEERS=10.0.0.5,10.0.0.6`
+  → 403 for any source IP outside the set. Compatible with bearer
+  token; doesn't replace it.
+- [ ] **Token rotation primitive.** Today operators rotate by editing
+  `MIND_MEM_TOKEN` env and restarting; there is no in-band rotation
+  protocol. A leaked token is valid until the operator notices.
+  Minimal fix: accept N-of-K active tokens at the server, expose
+  `mm token rotate` that emits a new token + grace-window record.
+  Server accepts old token for grace period (default 24h), then
+  expires.
+
+These four items together close the realistic "what if my token
+leaks" failure mode for federation. The v4.0.0 Group-D items (mTLS,
+DID, OAuth/OIDC, workspace ACLs) are the bigger compliance layer
+sitting on top.
+
+---
+
 ## Post-v2.7.0 — Future Directions
 
 - [x] **Agent-to-agent trust protocol** — agents verify each other's memory integrity via Merkle proofs before sharing context
