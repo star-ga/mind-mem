@@ -116,6 +116,11 @@ jobs:
         uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # release/v1
         with:
           print-hash: true
+          # Idempotent: a tag re-push or a local `twine upload` that
+          # raced ahead of this workflow leaves the version already on
+          # PyPI; treat that as success instead of failing the job
+          # with a 400.
+          skip-existing: true
           # Attestations (PEP 740) are generated automatically by pypi-publish
           # when id-token: write is present and the package is uploaded from
           # a trusted publisher environment.

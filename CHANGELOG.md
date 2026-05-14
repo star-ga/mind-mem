@@ -2,6 +2,37 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.5 — Docs/badges aligned + release workflow idempotent
+
+Released 2026-05-14.
+
+Docs + CI hygiene; no code changes, no test changes, same wheel
+surface as v4.0.3.
+
+**Repo + PyPI display alignment (static badges + body text):**
+
+- README badges: `tests-4400+ → 5155+` (actual collected count),
+  `clients-17 → 15` (actual H2 sections in `docs/client-integrations.md`),
+  `audit-3-LLM → 10-LLM` (matches the 10-LLM consensus gate established
+  in v3.11.0; was last updated when the gate was 3 models).
+- README comparison table: `81 MCP tools` → `84` (matches header
+  badge + `scripts/count_mcp_tools.py`); `3-LLM audit per release` →
+  `10-LLM consensus audit per release`.
+- CLAUDE.md drift: section header `### MCP Tools (81)` → `(84)`;
+  `16 AI clients auto-wired` → `15` (aligns with README badge + docs).
+
+**Release workflow (`.github/workflows/release.yml`):**
+
+- `pypa/gh-action-pypi-publish` step now passes `skip-existing: true`.
+  Earlier v4.0.3/v4.0.4 tag pushes failed the `publish-pypi` job with
+  `HTTPError: 400 Bad Request` because a local `twine upload` had
+  already pushed the wheel to PyPI moments before the workflow caught
+  up. With `skip-existing` the job is idempotent: tag re-pushes and
+  the local-twine race both succeed instead of leaving a red Release
+  badge.
+
+`mind-mem-4b` weights unchanged.
+
 ## v4.0.4 — PyPI README logo fix (docs-only)
 
 Released 2026-05-14.

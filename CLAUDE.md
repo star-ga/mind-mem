@@ -4,7 +4,15 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
-**v4.0.4** (released 2026-05-14) — docs-only patch: PyPI README logo
+**v4.0.5** (released 2026-05-14) — Docs/badges aligned + release
+workflow idempotent. README badges + comparison table now match
+ground truth (`tests-5155+`, `clients-15`, `audit-10-LLM`, `84` MCP
+tools); CLAUDE.md drift cleared (`MCP Tools (81) → (84)`,
+`16 → 15` clients). `.github/workflows/release.yml` `pypa/gh-action-pypi-publish`
+step passes `skip-existing: true` so tag re-pushes and local-twine
+races stop turning the Release badge red. Same wheel surface as
+v4.0.3, no code/test changes.
+Builds on **v4.0.4** (released 2026-05-14) — docs-only patch: PyPI README logo
 now resolves (relative `assets/logo.png` rewritten to absolute GitHub
 raw URL — PyPI does not resolve relative paths against the source
 repo). Same wheel surface as v4.0.3. No code/test changes.
@@ -118,12 +126,12 @@ docs/                   — User + integration docs (35+ files)
   self-editing), and the corrected `KIND_DECAY['cites']=0.8` value.
   Prior v3.12.0-fullft weights pinned at `v3.12.0` HF revision. Prior
   v3.0.0 QLoRA at `v3.0.0`. See `docs/mind-mem-4b-setup.md`.
-- **Native MCP integration** (v3.1.0+): 16 AI clients auto-wired via
+- **Native MCP integration** (v3.1.0+): 15 AI clients auto-wired via
   `mm install-all` (Claude Code, Claude Desktop, Codex CLI, Gemini CLI,
   Cursor, Windsurf, Zed, OpenClaw, and 8 more). See
   `docs/client-integrations.md`.
 
-### MCP Tools (81)
+### MCP Tools (84)
 Grouped surfaces (full list in `docs/api-reference.md` and
 `src/mind_mem/mcp_server.py`):
 recall, hybrid_search, prefetch, propose_update, approve_apply,
