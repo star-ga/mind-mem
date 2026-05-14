@@ -4,7 +4,17 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
-**v4.0.6** (released 2026-05-14) — PyPI badge alignment + CI green.
+**v4.0.7** (released 2026-05-14) — test-only fix: the post-#508 ACL
+hardening (defence-in-depth) gates every decorator call against
+`ADMIN_TOOLS ∪ USER_TOOLS` even with `MIND_MEM_ACL_DISABLED=true`,
+so `tests/test_mcp_v140.py::TestObservabilityDecorator::test_failure_increments_failure_counter`'s
+ad-hoc `failing_tool` was rejected before its body ran (the test
+expected `ValueError` to propagate). Patched the test to register
+`failing_tool` in `USER_TOOLS` for the test scope (both
+`mind_mem.mcp.infra.acl.USER_TOOLS` and the import-time binding in
+`mind_mem.mcp.infra.observability`). Decorator unchanged — the
+defence-in-depth behaviour is correct.
+Builds on **v4.0.6** (released 2026-05-14) — PyPI badge alignment + CI green.
 README badge block was rendering uncentred on PyPI because lines
 9–26 used 2/4-space leading indentation; PyPI's strict CommonMark
 treats 4-space indented lines as a code block. Flushed left. Also:

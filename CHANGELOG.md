@@ -2,6 +2,37 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.7 — Fix test_failure_increments_failure_counter (test-only)
+
+Released 2026-05-14.
+
+v4.0.6 CI was almost-green (lint green ✓, ubuntu/macos/windows OOM
+fixed ✓), but every test row that completed the unit-tests step still
+failed on a single assertion in
+`tests/test_mcp_v140.py::TestObservabilityDecorator::test_failure_increments_failure_counter`:
+
+  AssertionError: ValueError not raised
+
+Root cause: the test creates an ad-hoc `failing_tool` function, wraps
+it with `@mcp_tool_observe`, and expects the call to propagate
+`ValueError`. After the issue #508/#513 ACL hardening, the decorator
+gates EVERY call against `ADMIN_TOOLS ∪ USER_TOOLS` even when
+`MIND_MEM_ACL_DISABLED=true` (defence-in-depth — the env override is
+not allowed to open accidentally-unknown tool calls). So
+`failing_tool` was rejected with `acl_unknown_tool` before its body
+ran, and `ValueError` was never raised.
+
+Fix: register `failing_tool` in `USER_TOOLS` for the duration of the
+test (monkey-patching both `mind_mem.mcp.infra.acl.USER_TOOLS` and
+the `from .acl import USER_TOOLS` binding in
+`mind_mem.mcp.infra.observability`, since the decorator reads the
+import-time-bound name). Restore both on teardown.
+
+No source code changes — the decorator's defence-in-depth behaviour
+is correct as-is. Test-only fix.
+
+mind-mem-4b weights unchanged.
+
 ## v4.0.6 — PyPI badge alignment + CI green (no code changes)
 
 Released 2026-05-14.

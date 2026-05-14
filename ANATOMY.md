@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 823 | **Est. tokens:** ~1,718,438
-**Generated:** 2026-05-14 07:44 UTC
+**Files:** 823 | **Est. tokens:** ~1,718,944
+**Generated:** 2026-05-14 08:27 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 34 | ~63,537 |
+| `./` | 34 | ~63,806 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,320 |
 | `audits/` | 4 | ~22,723 |
@@ -66,7 +66,7 @@
 | `src/mind_mem/storage/` | 2 | ~4,193 |
 | `src/mind_mem/v4/` | 22 | ~56,094 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 274 | ~575,508 |
+| `tests/` | 274 | ~575,745 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -83,7 +83,7 @@
 
 - `AGENTS.md` (~994 tok, large) — mind-mem: agent instructions (auto-written)
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: MIND-Mem (Commit 30d8b71)
-- `CLAUDE.md` (~2597 tok, huge) — MIND-Mem — Persistent AI Memory System
+- `CLAUDE.md` (~2765 tok, huge) — MIND-Mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~613 tok, large) — Contributing to MIND-Mem
 - `.cursorrules` (~25 tok, tiny) — # mind-mem
@@ -105,7 +105,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~1979 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~24208 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~24309 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
@@ -838,7 +838,7 @@
 - `test_mcp_tools_model.py` (~2249 tok, huge) — Tests for ``mind_mem.mcp.tools.model`` — MCP wrappers for audit / sign / verify."""
 - `test_mcp_tools.py` (~277 tok, medium) — Tests for MCP server tool definitions."""
 - `test_mcp_tool_surface_v3_2.py` (~2002 tok, huge) — v3.2.0 — consolidated MCP public dispatcher tests."""
-- `test_mcp_v140.py` (~5729 tok, huge) — Tests for MCP v1.4.0 features — issues #29, #31, #35, #36.
+- `test_mcp_v140.py` (~5966 tok, huge) — Tests for MCP v1.4.0 features — issues #29, #31, #35, #36.
 - `test_mcp_walkthrough_persona.py` (~1942 tok, huge) — Tests for the v3.9.0 MCP walkthrough + persona wrapper tools."""
 - `test_memory_evolution.py` (~340 tok, medium) — Tests for memory evolution tracking."""
 - `test_memory_practical_e2e.py` (~2389 tok, huge) — # Copyright 2026 STARGA, Inc.

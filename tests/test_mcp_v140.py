@@ -207,13 +207,28 @@ class TestObservabilityDecorator(unittest.TestCase):
     def test_failure_increments_failure_counter(self):
         """Failed tool call should increment mcp_tool_failure.
 
-        The decorator under test wraps an ad-hoc ``failing_tool`` that
-        is not in the ACL whitelist. Without the bypass the ACL gate
-        intercepts before the function body runs and ``ValueError``
-        never propagates. Set ``MIND_MEM_ACL_DISABLED`` for the
-        duration of this assertion only.
+        The decorator under test wraps an ad-hoc ``failing_tool``. The
+        ACL gate (`acl.py::USER_TOOLS`) is defence-in-depth: even with
+        ``MIND_MEM_ACL_DISABLED=true`` the gate still rejects names
+        outside ADMIN_TOOLS ∪ USER_TOOLS to prevent accidentally
+        opening unknown-tool calls. We register ``failing_tool`` in
+        USER_TOOLS via a monkey-patch for the duration of this test
+        so the decorator lets the call reach the function body and
+        the ValueError propagates.
         """
+        from mind_mem.mcp.infra import acl as _acl
+        from mind_mem.mcp.infra import observability as _obs
+
         os.environ["MIND_MEM_ACL_DISABLED"] = "true"
+        # The decorator imports USER_TOOLS into its own module scope via
+        # `from .acl import USER_TOOLS`, so patching _acl.USER_TOOLS
+        # alone has no effect — the decorator reads the name bound at
+        # import time inside `observability`. Patch both bindings.
+        original_acl_user_tools = _acl.USER_TOOLS
+        original_obs_user_tools = _obs.USER_TOOLS
+        extended = frozenset(original_acl_user_tools | {"failing_tool"})
+        _acl.USER_TOOLS = extended
+        _obs.USER_TOOLS = extended
         try:
 
             @self.mod.mcp_tool_observe
@@ -225,6 +240,8 @@ class TestObservabilityDecorator(unittest.TestCase):
             self.assertGreater(self.mod.metrics.get("mcp_tool_failure"), 0)
         finally:
             os.environ.pop("MIND_MEM_ACL_DISABLED", None)
+            _acl.USER_TOOLS = original_acl_user_tools
+            _obs.USER_TOOLS = original_obs_user_tools
 
 
 # ---------------------------------------------------------------------------
