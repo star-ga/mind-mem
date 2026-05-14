@@ -1715,6 +1715,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         try:
             import psycopg
             from psycopg import sql as _sql
+
             from .sqlite_index import _init_schema
 
             written = 0

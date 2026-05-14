@@ -2,6 +2,38 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.3 — PG-backed recall pipeline fix
+
+Released 2026-05-14.
+
+Two-bug fix surfaced during the v4.1.1 model ship test exercise:
+
+- **#524 — `mm doctor --rebuild-cache` errors=263 on PG-backed workspaces.**
+  The rebuild-cache action opened the SQLite recall cache with raw
+  `sqlite3.connect()` + `INSERT INTO blocks` but never called
+  `_init_schema()`. On PG-backed workspaces the recall.db only carried
+  the `calibration_feedback` table from RecallCache bootstrap, so every
+  INSERT failed silently. Also relaxed the gating predicate so
+  `--rebuild-cache` works even when recall.db doesn't exist yet (the
+  normal first-run state for a PG-backed workspace), and populated the
+  `blocks_fts` FTS5 virtual table inline so downstream FTS5 `MATCH`
+  queries return hits.
+
+- **#525 — `mm recall` returned `[]` against PG-backed workspaces.**
+  The `recall()` function in `_recall_core.py` ignored the
+  `recall.backend` config — only the standalone
+  `python3 -m mind_mem.recall` CLI dispatched on backend. Library
+  callers (`mm_cli._cmd_recall`, MCP, anyone else) always got the
+  markdown-scan BM25 path even when `recall.backend == "sqlite"` was
+  set. Moved the dispatch into the top of `recall()` so it's universal:
+  sqlite → `sqlite_index.query_index` (FTS5 + BM25 + rerank);
+  `RecallBackend` instance → `.search()` with scan fallback on
+  exception; default `scan` → unchanged markdown corpus path.
+
+End-to-end loop now works on PG-backed workspaces.
+`mind-mem-4b` model weights unchanged — this is a CLI/library fix only,
+no probe-surface overlap.
+
 ## v4.0.2 — Security + correctness audit (46 findings)
 
 Released 2026-05-13.

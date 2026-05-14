@@ -281,7 +281,9 @@ def recall(
         )
     if isinstance(_cfg_backend, RecallBackend):
         try:
-            backend_hits = _cfg_backend.search(workspace, query, limit=limit, active_only=active_only)
+            backend_hits: list[dict] = _cfg_backend.search(
+                workspace, query, limit=limit, active_only=active_only
+            )
             if backend_hits:
                 return backend_hits
         except Exception as exc:
@@ -1261,6 +1263,12 @@ def _load_backend(workspace: str) -> str | RecallBackend | None:
     cfg = _get_config(workspace)
     if cfg:
         recall_cfg = cfg.get("recall", {})
+        # Defensive: an old or hand-edited mind-mem.json can have
+        # `recall` as a string / list / null.  Treat anything non-dict
+        # as "no recall config" — falls through to default BM25 scan.
+        if not isinstance(recall_cfg, dict):
+            _log.warning("recall_config_not_dict", got_type=type(recall_cfg).__name__)
+            return None
         unknown = set(recall_cfg.keys()) - _VALID_RECALL_KEYS
         if unknown:
             _log.warning("unknown_recall_config_keys", keys=sorted(unknown))
