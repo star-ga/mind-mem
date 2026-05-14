@@ -372,7 +372,70 @@ def resolve_conflict(
             "UPDATE tier_conflict_log SET resolution = ?, resolved_to = ?, resolved_at = ? WHERE rowid = ? AND resolution IS NULL",
             (strategy.value, winner_agent, now, target_rowid),
         )
+        # Issue #527: persist the resolution to block_tier_vclock so
+        # detect_conflict doesn't re-discover the same pair on the next
+        # pass. Before this fix, every resolution was a no-op for
+        # subsequent conflict detection — winner_version was computed
+        # and returned but never written to the vclock table.
+        #
+        # The resolution must converge BOTH the synthetic winner_agent
+        # AND the two original forks (left, right) to winner_version,
+        # otherwise the merge agent becomes a third high-version writer
+        # and the losers still look like independent forks, so
+        # detect_conflict would surface a brand-new conflict pair
+        # (winner_agent vs left_agent) on the next pass. By advancing
+        # all three rows to winner_version, the vclock reflects the
+        # post-merge truth: every party agrees on the merged version.
+        for agent in (winner_agent, report.left_agent, report.right_agent):
+            conn.execute(
+                "INSERT INTO block_tier_vclock (block_id, agent_id, version, last_seen_at) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(block_id, agent_id) DO UPDATE SET "
+                "version = MAX(excluded.version, block_tier_vclock.version), "
+                "last_seen_at = excluded.last_seen_at",
+                (block_id, agent, winner_version, now),
+            )
         conn.commit()
+
+    # Issue #528: audit every THREE_WAY_MERGE with caller-supplied
+    # merged_payload. The merger callable can return arbitrary bytes
+    # unrelated to either input; we don't validate that here (per the
+    # issue, full server-side MergeStrategy is the long-term fix), but
+    # we DO emit a structured log with SHA-256 hashes of left, right,
+    # and merged payloads so operators can audit anomalies.
+    if strategy is MergeStrategy.THREE_WAY_MERGE:
+        try:
+            import hashlib as _hashlib
+            import logging as _logging
+
+            left_bytes = getattr(report, "left_payload", None) or b""
+            right_bytes = getattr(report, "right_payload", None) or b""
+            merged_bytes = merged if merged is not None else b""
+            _logging.getLogger("mind_mem.federation").info(
+                "three_way_merge_resolved",
+                extra={
+                    "block_id": block_id,
+                    "winner_agent": winner_agent,
+                    "winner_version": winner_version,
+                    "left_agent": report.left_agent,
+                    "left_version": report.left_version,
+                    "left_payload_sha256": _hashlib.sha256(
+                        left_bytes if isinstance(left_bytes, (bytes, bytearray)) else str(left_bytes).encode("utf-8")
+                    ).hexdigest(),
+                    "right_agent": report.right_agent,
+                    "right_version": report.right_version,
+                    "right_payload_sha256": _hashlib.sha256(
+                        right_bytes if isinstance(right_bytes, (bytes, bytearray)) else str(right_bytes).encode("utf-8")
+                    ).hexdigest(),
+                    "merged_payload_sha256": _hashlib.sha256(
+                        merged_bytes if isinstance(merged_bytes, (bytes, bytearray)) else str(merged_bytes).encode("utf-8")
+                    ).hexdigest(),
+                    "merged_payload_bytes": len(merged_bytes) if isinstance(merged_bytes, (bytes, bytearray)) else 0,
+                },
+            )
+        except Exception:
+            # Audit log must never block the merge resolution.
+            pass
 
     return Resolution(
         block_id=block_id,

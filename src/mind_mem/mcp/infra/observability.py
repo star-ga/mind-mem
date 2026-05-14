@@ -85,6 +85,13 @@ def mcp_tool_observe(fn):
         # Operators who genuinely want the legacy open behaviour set
         # MIND_MEM_ACL_DISABLED=true.
         request_scope = _get_request_scope()
+        # Issue #526: "deny" is a fail-closed sentinel from
+        # _get_request_scope when token introspection raised. Honour it
+        # against EVERY tool (user + admin) before any other gate so a
+        # transient introspection error cannot silently degrade to
+        # "user" via the `or` default below.
+        if request_scope == "deny":
+            return check_tool_acl(tool_name, "deny")
         acl_scope = request_scope or os.environ.get("MIND_MEM_SCOPE", "user")
         # Audit S-8: MIND_MEM_ACL_DISABLED used to silence the ACL check
         # entirely and emit a single one-shot warning, so a poisoned env

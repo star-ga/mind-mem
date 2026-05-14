@@ -39,11 +39,18 @@ from __future__ import annotations
 
 import base64
 import json
+import os as _os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
+
+# Issue #529: response-size cap mirrors the server-side body cap so a
+# hostile or buggy peer can't stream gigabytes into the client process.
+# Operators can raise this via env if they have a specific need.
+MAX_RESP_BYTES = int(_os.environ.get("MIND_MEM_FED_MAX_RESP_BYTES", str(1 << 20)))  # 1 MiB
+_ALLOWED_SCHEMES = frozenset({"http", "https"})
 
 __all__ = [
     "FederationClient",
@@ -115,9 +122,27 @@ class FederationClient:
         token: str | None = None,
         timeout: float = 10.0,
     ) -> None:
+        # Issue #529 (1): scheme allowlist. urllib.request.urlopen
+        # otherwise handles file://, ftp://, etc. so a base_url from a
+        # config file / env var / peer-discovery handshake could turn
+        # this client into a local-file or arbitrary-protocol reader.
+        parts = urlsplit(base_url)
+        if parts.scheme not in _ALLOWED_SCHEMES:
+            raise FederationTransportError(
+                f"federation base_url scheme {parts.scheme!r} not allowed; must be one of {sorted(_ALLOWED_SCHEMES)}"
+            )
+        if not parts.netloc:
+            raise FederationTransportError(f"federation base_url has no host: {base_url!r}")
         self._base = base_url.rstrip("/")
+        self._base_scheme = parts.scheme
+        self._base_netloc = parts.netloc
         self._token = token
         self._timeout = timeout
+        # Issue #529 (2): same-origin redirect cap. Build an opener that
+        # rejects redirects to a different scheme/host/port — blocks the
+        # SSRF pivot to cloud metadata endpoints
+        # (169.254.169.254, metadata.google.internal, etc.).
+        self._opener = _build_strict_opener(self._base_scheme, self._base_netloc)
 
     # ------------------------------------------------------------------
     # Reader API
@@ -247,8 +272,15 @@ class FederationClient:
             headers["Content-Type"] = "application/json"
         req = urllib.request.Request(url, method=method, data=data, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-                raw = resp.read()
+            # Use the strict opener (issue #529 (2): same-origin redirect
+            # cap) instead of the default urlopen.
+            with self._opener.open(req, timeout=self._timeout) as resp:
+                # Issue #529 (3): response-size cap. Read one byte more
+                # than the cap; if we got it, the peer was over the limit
+                # and we reject without buffering the rest.
+                raw = resp.read(MAX_RESP_BYTES + 1)
+                if len(raw) > MAX_RESP_BYTES:
+                    raise FederationTransportError(f"federation response exceeds {MAX_RESP_BYTES} bytes")
         except urllib.error.HTTPError as exc:
             self._raise_for_status(exc.code, _safe_read(exc))
         except urllib.error.URLError as exc:
@@ -280,3 +312,34 @@ def _safe_read(exc: urllib.error.HTTPError) -> bytes:
         return exc.read() or b""
     except Exception:
         return b""
+
+
+class _SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Reject redirects that change scheme/host/port. Issue #529 (2).
+
+    A hostile peer answering 302 -> http://169.254.169.254/... would
+    otherwise let the federation client read cloud-metadata-service
+    credentials and surface them as "peer response" to caller code.
+    """
+
+    def __init__(self, allowed_scheme: str, allowed_netloc: str) -> None:
+        self._allowed_scheme = allowed_scheme
+        self._allowed_netloc = allowed_netloc
+
+    def redirect_request(self, req, fp, code, msg, hdrs, newurl):  # type: ignore[override]
+        parts = urlsplit(newurl)
+        if parts.scheme != self._allowed_scheme or parts.netloc != self._allowed_netloc:
+            raise urllib.error.HTTPError(
+                newurl,
+                code,
+                f"cross-origin redirect blocked: {self._allowed_scheme}://{self._allowed_netloc} -> {parts.scheme}://{parts.netloc}",
+                hdrs,
+                fp,
+            )
+        return super().redirect_request(req, fp, code, msg, hdrs, newurl)
+
+
+def _build_strict_opener(scheme: str, netloc: str) -> urllib.request.OpenerDirector:
+    """Build an opener with the same-origin redirect handler installed."""
+    opener = urllib.request.build_opener(_SameOriginRedirectHandler(scheme, netloc))
+    return opener

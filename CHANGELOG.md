@@ -2,6 +2,87 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.8 — Close 4 open issues (#526–#529) + CI stress markers
+
+Released 2026-05-14.
+
+### Security & correctness (closes #526, #527, #528, #529)
+
+**#526 — ACL `_get_request_scope` fail-closed (Critical).**
+`get_access_token()` exceptions previously degraded silently to
+`None`, falling through to `"user"` scope — turning a transient
+introspection error into an authn-context drop with no operator
+signal. Now: exceptions return the `"deny"` sentinel, the decorator
+short-circuits to reject the call before any other gate, the
+`acl_introspection_failed` warning is logged, and a metric
+(`mcp_acl_introspection_failed_total`) is bumped.
+Files: `src/mind_mem/mcp/infra/acl.py`,
+`src/mind_mem/mcp/infra/observability.py`.
+
+**#527 — THREE_WAY_MERGE vclock bump (Critical, functional).**
+Resolved conflicts used to recur on every `detect_conflict` pass
+because `block_tier_vclock` was never updated. Now `resolve_conflict`
+upserts winner_version against the synthetic merge agent AND against
+both fork agents (`left_agent`, `right_agent`) — so the post-merge
+truth is reflected in the vector and detection converges.
+File: `src/mind_mem/v4/federation.py`.
+
+**#528 — THREE_WAY_MERGE audit log (Critical, HTTP-transport only).**
+Caller-supplied `merged_payload` still isn't validated against
+`left_payload`/`right_payload` (full server-side `MergeStrategy` is a
+roadmap item), but every three-way merge now emits a structured
+`three_way_merge_resolved` log with SHA-256 hashes of `left_payload`,
+`right_payload`, and `merged_payload` plus the winner agent/version
+and byte count. Operators can audit anomalies.
+File: `src/mind_mem/v4/federation.py`.
+
+**#529 — FederationClient hardening (High).**
+Three defensive controls added:
+  1. **Scheme allowlist** — `FederationClient(base_url)` rejects
+     anything other than `http://` / `https://`. Closes the
+     `file:///etc/passwd`-as-base-URL local-file-read path.
+  2. **Same-origin redirect handler** — `_SameOriginRedirectHandler`
+     refuses 302/307 to a different scheme/host/port. Blocks the
+     SSRF pivot to cloud metadata endpoints
+     (`169.254.169.254`, `metadata.google.internal`, etc.).
+  3. **Response-size cap** — `MAX_RESP_BYTES` (default 1 MiB; env
+     override via `MIND_MEM_FED_MAX_RESP_BYTES`). Reads one byte
+     past the cap and rejects, mirroring the server-side body cap so
+     a hostile peer can't stream gigabytes into the client process.
+File: `src/mind_mem/v4/federation_client.py`.
+
+### CI stress-marker followup
+
+`-m "not stress"` from v4.0.6 only covered tests with the
+`@pytest.mark.stress` decorator. Five files with `_stress` /
+`_concurrency` in the name had ZERO markers, so they still ran on
+ubuntu and OOM-killed the GitHub-hosted runners (same class of bug
+as v3.1.8 `test_niah`, but at file scope):
+
+  - `tests/test_concurrency_stress.py` (1000-2000 block synth)
+  - `tests/test_filelock_stress.py` (contention loops)
+  - `tests/test_v4_round4_concurrency.py` (100-worker pools)
+  - `tests/test_v4_concurrency.py` (16-worker × 200-800 iter)
+  - `tests/test_concurrent_integration.py` (multi-thread integration)
+
+All five now have module-level `pytestmark = pytest.mark.stress`
+placed after the import block (avoids the E402 ruff failure caused
+by an earlier inline placement). Collection deltas:
+
+  - not stress: 5155 → 5071 (-84 OOM-risk tests now deselected)
+  - stress:     255  → 339  (+84 explicitly stress-marked)
+
+### Tests added
+  - `tests/test_issue_526_acl_fail_closed.py` (5 tests)
+  - `tests/test_issue_527_three_way_merge_vclock.py` (2 tests)
+  - `tests/test_issue_529_federation_client_hardening.py` (11 tests)
+
+All 18 new + 75 existing federation/observability tests pass locally.
+`ruff format --check`: 511 files clean. `ruff check`: All checks
+passed.
+
+`mind-mem-4b` weights unchanged.
+
 ## v4.0.7 — Fix test_failure_increments_failure_counter (test-only)
 
 Released 2026-05-14.

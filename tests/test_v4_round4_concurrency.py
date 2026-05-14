@@ -30,12 +30,6 @@ from pathlib import Path
 
 import pytest
 
-# v4.0.8: file-level stress marker. 100-worker ThreadPoolExecutors,
-# 200-thread cardinality races, 64-thread contextvar isolation tests
-# OOM the GitHub-hosted ubuntu runners. Local `make test` runs these
-# for pre-release gating.
-pytestmark = pytest.mark.stress
-
 import mind_mem.v4.backpressure as bp_mod
 import mind_mem.v4.block_metadata as bm_mod
 import mind_mem.v4.eviction as ev_mod
@@ -87,6 +81,12 @@ from mind_mem.v4.surprise_retrieval import (
     FallbackPolicy,
     compute_surprise,
 )
+
+# v4.0.8: file-level stress marker. 100-worker ThreadPoolExecutors,
+# 200-thread cardinality races, 64-thread contextvar isolation tests
+# OOM the GitHub-hosted ubuntu runners. Local `make test` runs these
+# for pre-release gating.
+pytestmark = pytest.mark.stress
 
 # ---------------------------------------------------------------------------
 # Shared helpers

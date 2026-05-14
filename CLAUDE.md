@@ -4,7 +4,26 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
-**v4.0.7** (released 2026-05-14) — test-only fix: the post-#508 ACL
+**v4.0.8** (released 2026-05-14) — closes 4 open issues. **#526** ACL
+`_get_request_scope` fail-closed: introspection exceptions return
+`"deny"` sentinel (was silent `None`→`"user"` downgrade); decorator
+short-circuits to reject the call; `acl_introspection_failed` log +
+`mcp_acl_introspection_failed_total` metric (Critical). **#527**
+THREE_WAY_MERGE upserts winner_version into `block_tier_vclock` for
+the synthetic merge agent AND both fork agents — resolved conflicts
+no longer recur (Critical, functional). **#528** every three-way
+merge emits a `three_way_merge_resolved` log with SHA-256 hashes of
+left/right/merged payloads for operator audit (Critical, HTTP
+transport). **#529** FederationClient hardened — scheme allowlist
+(rejects `file://`/`ftp://`/etc.), same-origin redirect handler
+(blocks SSRF pivot to cloud metadata), `MAX_RESP_BYTES` 1 MiB
+response-size cap (High). 18 new regression tests in
+`tests/test_issue_52[679]_*.py` + 75 existing pass. Plus 5 missing
+file-level `pytestmark = pytest.mark.stress` markers added to OOM-
+prone concurrency files (`test_concurrency_stress.py`,
+`test_filelock_stress.py`, `test_v4_concurrency.py`,
+`test_v4_round4_concurrency.py`, `test_concurrent_integration.py`).
+Builds on **v4.0.7** (released 2026-05-14) — test-only fix: the post-#508 ACL
 hardening (defence-in-depth) gates every decorator call against
 `ADMIN_TOOLS ∪ USER_TOOLS` even with `MIND_MEM_ACL_DISABLED=true`,
 so `tests/test_mcp_v140.py::TestObservabilityDecorator::test_failure_increments_failure_counter`'s

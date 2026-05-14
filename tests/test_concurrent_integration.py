@@ -18,15 +18,9 @@ import threading
 import time
 import unittest
 from datetime import datetime
+from unittest.mock import patch
 
 import pytest
-
-# v4.0.8: file-level stress marker. Multi-thread concurrent integration
-# tests (apply, recall, WAL replay) spawn dozens of threads and OOM the
-# GitHub-hosted ubuntu runners. Local `make test` runs them for
-# pre-release gating.
-pytestmark = pytest.mark.stress
-from unittest.mock import patch
 
 # Ensure scripts are importable
 from mind_mem.apply_engine import (
@@ -42,6 +36,12 @@ from mind_mem.block_parser import parse_file
 from mind_mem.init_workspace import init
 from mind_mem.mind_filelock import FileLock, LockTimeout
 from mind_mem.recall import recall
+
+# v4.0.8: file-level stress marker. Multi-thread concurrent integration
+# tests (apply, recall, WAL replay) spawn dozens of threads and OOM the
+# GitHub-hosted ubuntu runners. Local `make test` runs them for
+# pre-release gating.
+pytestmark = pytest.mark.stress
 
 # ---------------------------------------------------------------------------
 # Helper: Build a minimal workspace with valid blocks and proposals

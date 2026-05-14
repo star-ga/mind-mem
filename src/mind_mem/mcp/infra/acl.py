@@ -120,7 +120,20 @@ def check_tool_acl(tool_name: str, scope: str) -> str | None:
     """Check whether *scope* is allowed to call *tool_name*.
 
     Returns None if allowed, or a JSON error string if denied.
+
+    Issue #526: scope == "deny" is the fail-closed sentinel returned by
+    ``_get_request_scope`` when token introspection raises. Reject
+    every tool — admin or user — when we see it.
     """
+    if scope == "deny":
+        metrics.inc("mcp_acl_denied")
+        _log.warning("acl_denied", tool=tool_name, scope=scope, reason="introspection_failed")
+        return json.dumps(
+            {
+                "error": "Permission denied: authentication context unavailable",
+                "scope": scope,
+            }
+        )
     if tool_name in ADMIN_TOOLS and scope != "admin":
         metrics.inc("mcp_acl_denied")
         _log.warning("acl_denied", tool=tool_name, scope=scope)
@@ -135,11 +148,42 @@ def check_tool_acl(tool_name: str, scope: str) -> str | None:
 
 
 def _get_request_scope() -> str | None:
-    """Return ACL scope from the active FastMCP access token, if any."""
+    """Return ACL scope from the active FastMCP access token, if any.
+
+    Issue #526 (Critical, fail-closed): any exception from
+    ``get_access_token()`` previously degraded silently to ``None``,
+    which then fell through to ``"user"`` at the call site — turning a
+    transient introspection error into an authn-context drop. Now:
+
+      • Exceptions return the sentinel ``"deny"`` so ``enforce_acl``
+        rejects the call (admin tools become inaccessible, user tools
+        also become inaccessible — fail-closed).
+      • The exception type + token prefix (first 4 chars only) are
+        logged so operators have signal.
+      • A counter is bumped so dashboards can alert on the rate.
+
+    ``access_token is None`` is the legitimate "no auth context"
+    branch (stdio, unauthenticated HTTP) and still returns ``None`` so
+    the caller's default-scope policy applies.
+    """
     try:
         access_token = get_access_token()
-    except Exception:
-        return None
+    except Exception as exc:
+        # First-4-char token prefix is safe to log (entropy < 24 bits)
+        # and lets operators correlate failures without exposing the
+        # full credential.
+        try:
+            from .observability import metrics
+
+            metrics.inc("mcp_acl_introspection_failed_total")
+        except Exception:
+            pass
+        _log.warning(
+            "acl_introspection_failed",
+            error_type=type(exc).__name__,
+            scope="deny",
+        )
+        return "deny"
 
     if access_token is None:
         return None

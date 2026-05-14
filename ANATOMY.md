@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 823 | **Est. tokens:** ~1,719,259
-**Generated:** 2026-05-14 09:46 UTC
+**Files:** 826 | **Est. tokens:** ~1,724,963
+**Generated:** 2026-05-14 16:34 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 34 | ~63,806 |
+| `./` | 34 | ~64,328 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,320 |
 | `audits/` | 4 | ~22,723 |
@@ -60,13 +60,13 @@
 | `src/mind_mem/` | 159 | ~557,168 |
 | `src/mind_mem/api/` | 5 | ~15,751 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
-| `src/mind_mem/mcp/infra/` | 8 | ~7,977 |
+| `src/mind_mem/mcp/infra/` | 8 | ~8,538 |
 | `src/mind_mem/mcp/tools/` | 24 | ~53,481 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,591 |
 | `src/mind_mem/storage/` | 2 | ~4,193 |
-| `src/mind_mem/v4/` | 22 | ~56,094 |
+| `src/mind_mem/v4/` | 22 | ~57,813 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 274 | ~576,060 |
+| `tests/` | 277 | ~578,962 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -83,7 +83,7 @@
 
 - `AGENTS.md` (~994 tok, large) — mind-mem: agent instructions (auto-written)
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: MIND-Mem (Commit 30d8b71)
-- `CLAUDE.md` (~2765 tok, huge) — MIND-Mem — Persistent AI Memory System
+- `CLAUDE.md` (~3075 tok, huge) — MIND-Mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~613 tok, large) — Contributing to MIND-Mem
 - `.cursorrules` (~25 tok, tiny) — # mind-mem
@@ -105,7 +105,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~1979 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~24309 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~24521 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
@@ -500,12 +500,12 @@
 - `mcp_entry.py` (~495 tok, medium) — Thin entry point for the ``mind-mem-mcp`` console script.
 ### `src/mind_mem/mcp/infra/`
 
-- `acl.py` (~1087 tok, large) — Per-tool ACL — scope enforcement for the MCP surface.
+- `acl.py` (~1547 tok, huge) — Per-tool ACL — scope enforcement for the MCP surface.
 - `config.py` (~1070 tok, large) — ``mind-mem.json`` config loading + configurable limits.
 - `constants.py` (~98 tok, small) — MCP-surface-wide constants shared by the infra submodules.
 - `http_auth.py` (~1454 tok, large) — HTTP bearer-token authentication helpers for the MCP surface.
 - `__init__.py` (~449 tok, medium) — Cross-cutting infra helpers extracted from mcp_server.py (v3.2.0 §1.2 PR-1).
-- `observability.py` (~1526 tok, huge) — Observability + DB-busy helpers for the MCP surface.
+- `observability.py` (~1627 tok, huge) — Observability + DB-busy helpers for the MCP surface.
 - `rate_limit.py` (~1035 tok, large) — Per-client sliding-window rate limiter for the MCP surface.
 - `workspace.py` (~1258 tok, large) — Workspace resolution + path-safety helpers.
 ### `src/mind_mem/mcp/`
@@ -648,8 +648,8 @@
 - `embedding_pipeline.py` (~1480 tok, large) — v4 embedding auto-derivation pipeline (Group A — closes the
 - `eviction.py` (~3008 tok, huge) — v4 eviction policies (Group A — long-term decay).
 - `feature_flags.py` (~1533 tok, huge) — v4.0 feature-flag registry.
-- `federation_client.py` (~2641 tok, huge) — Federation wire-transport client for mind-mem v4.
-- `federation.py` (~4696 tok, huge) — v4 federated cross-agent consistency (Group D).
+- `federation_client.py` (~3468 tok, huge) — Federation wire-transport client for mind-mem v4.
+- `federation.py` (~5588 tok, huge) — v4 federated cross-agent consistency (Group D).
 - `health.py` (~1884 tok, huge) — v4 health-check surface (round 4 audit, DeepSeek 9.75→10 gap).
 - `hnsw_kind_index.py` (~2122 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
 - `__init__.py` (~824 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
@@ -824,6 +824,9 @@
 - `test_intent_router_adaptive.py` (~3618 tok, huge) — Tests for adaptive intent routing (#470).
 - `test_intent_router.py` (~1176 tok, large) — Tests for 9-type intent router."""
 - `test_interaction_signals.py` (~3177 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_issue_526_acl_fail_closed.py` (~682 tok, large) — Regression for issue #526: ACL `_get_request_scope` must fail-closed.
+- `test_issue_527_three_way_merge_vclock.py` (~1018 tok, large) — Regression for issue #527: THREE_WAY_MERGE must bump the vclock.
+- `test_issue_529_federation_client_hardening.py` (~1202 tok, large) — Regression for issue #529: FederationClient hardening.
 - `test_kalman_belief.py` (~3728 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_knowledge_graph.py` (~3437 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_lineage_staleness.py` (~2161 tok, huge) — End-to-end tests for the v3.12 lineage→staleness wiring (Theme C).
