@@ -2,6 +2,19 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.4 — PyPI README logo fix (docs-only)
+
+Released 2026-05-14.
+
+`README.md` logo `<img src>` rewritten from the relative path
+`assets/logo.png` to the absolute GitHub raw URL
+`https://raw.githubusercontent.com/star-ga/mind-mem/main/assets/logo.png`
+so the brand mark renders on the PyPI project page (PyPI does not
+resolve relative paths against the source repo).
+
+No code changes. No test impact. Same wheel surface as v4.0.3
+(PG-backed recall pipeline fix). `mind-mem-4b` weights unchanged.
+
 ## v4.0.3 — PG-backed recall pipeline fix
 
 Released 2026-05-14.

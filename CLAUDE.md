@@ -4,7 +4,11 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
-**v4.0.3** (released 2026-05-14) — Postgres-backed recall pipeline fix.
+**v4.0.4** (released 2026-05-14) — docs-only patch: PyPI README logo
+now resolves (relative `assets/logo.png` rewritten to absolute GitHub
+raw URL — PyPI does not resolve relative paths against the source
+repo). Same wheel surface as v4.0.3. No code/test changes.
+Builds on **v4.0.3** (released 2026-05-14) — Postgres-backed recall pipeline fix.
 `recall()` in `_recall_core.py` now dispatches to the configured backend
 at the library entry-point (previously only `python -m mind_mem.recall`
 honored it, so `mm recall` against a PG workspace returned `[]`).

@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="assets/logo.png" alt="MIND-Mem logo" width="140"><br>
+  <img src="https://raw.githubusercontent.com/star-ga/mind-mem/main/assets/logo.png" alt="MIND-Mem logo" width="140"><br>
   MIND-Mem
 </h1>
 <p align="center">
@@ -72,7 +72,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>v4.0.3 (released 2026-05-14) — Postgres-backed recall pipeline fix: `recall()` now dispatches to the configured backend at the library entry-point (not only the standalone CLI), and `mm doctor --rebuild-cache` creates + populates the FTS5 `blocks_fts` virtual table on first run against a PG-backed workspace (closes #524 + #525). `mind-mem-4b` weights unchanged (CLI/library fix only). Builds on v4.0.2 (2026-05-13 — security + correctness audit pass: 46 findings closed across HTTP transport hardening, federation correctness, retrieval quality, doc alignment), v4.0.1 (federation wire transport over HTTP + stdlib `FederationClient`), and v4.0.0 (cognitive kernel, knowledge graph, resilience suite, observability — all v4 surfaces flag-gated, no breaking changes). Companion **mind-mem-4b v4.1.1** (r4 retrain, **133/133 = 100%** on the 111-probe main + 22-probe holdout surface; closes the v4.1.0 KernelKind hallucination) is current `main` on [star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b); v4.1.0, v4.0.0-base, and v3.12.0 remain pinnable on HF revision branches.</sub>
+<sub>v4.0.4 (released 2026-05-14) — docs-only: PyPI README logo now resolves (rewrote relative `assets/logo.png` to absolute GitHub raw URL). Same wheel surface as v4.0.3 (Postgres-backed recall pipeline fix: `recall()` now dispatches to the configured backend at the library entry-point (not only the standalone CLI), and `mm doctor --rebuild-cache` creates + populates the FTS5 `blocks_fts` virtual table on first run against a PG-backed workspace; closes #524 + #525). `mind-mem-4b` weights unchanged (CLI/library fix only). Builds on v4.0.2 (2026-05-13 — security + correctness audit pass: 46 findings closed across HTTP transport hardening, federation correctness, retrieval quality, doc alignment), v4.0.1 (federation wire transport over HTTP + stdlib `FederationClient`), and v4.0.0 (cognitive kernel, knowledge graph, resilience suite, observability — all v4 surfaces flag-gated, no breaking changes). Companion **mind-mem-4b v4.1.1** (r4 retrain, **133/133 = 100%** on the 111-probe main + 22-probe holdout surface; closes the v4.1.0 KernelKind hallucination) is current `main` on [star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b); v4.1.0, v4.0.0-base, and v3.12.0 remain pinnable on HF revision branches.</sub>
 
 ### Trust Signals
 

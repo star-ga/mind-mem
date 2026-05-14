@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 823 | **Est. tokens:** ~1,717,807
-**Generated:** 2026-05-14 06:40 UTC
+**Files:** 823 | **Est. tokens:** ~1,717,925
+**Generated:** 2026-05-14 06:46 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 34 | ~62,955 |
+| `./` | 34 | ~63,073 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,320 |
 | `audits/` | 4 | ~22,723 |
@@ -83,7 +83,7 @@
 
 - `AGENTS.md` (~994 tok, large) — mind-mem: agent instructions (auto-written)
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: MIND-Mem (Commit 30d8b71)
-- `CLAUDE.md` (~2251 tok, huge) — MIND-Mem — Persistent AI Memory System
+- `CLAUDE.md` (~2321 tok, huge) — MIND-Mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~613 tok, large) — Contributing to MIND-Mem
 - `.cursorrules` (~25 tok, tiny) — # mind-mem
@@ -105,7 +105,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~1979 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~23972 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~24020 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
