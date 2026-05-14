@@ -8,6 +8,11 @@ import pytest
 
 from mind_mem.mind_filelock import FileLock
 
+# v4.0.8: file-level stress marker. Multi-thread file-lock contention
+# tests run thousands of acquire/release cycles which OOM the
+# GitHub-hosted ubuntu runners. Local `make test` still runs them.
+pytestmark = pytest.mark.stress
+
 
 class TestFileLockContention:
     """Test file locking under concurrent access."""

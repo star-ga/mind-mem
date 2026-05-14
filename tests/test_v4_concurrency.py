@@ -24,6 +24,11 @@ from pathlib import Path
 
 import pytest
 
+# v4.0.8: file-level stress marker. 16-worker ThreadPoolExecutors with
+# 200-800 iteration loops OOM the GitHub-hosted ubuntu runners. Local
+# `make test` runs these for pre-release gating.
+pytestmark = pytest.mark.stress
+
 from mind_mem.v4.block_kinds import FLAG as BLOCK_KINDS_FLAG
 from mind_mem.v4.block_kinds import (
     BlockKind,

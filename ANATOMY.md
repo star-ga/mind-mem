@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 823 | **Est. tokens:** ~1,718,944
-**Generated:** 2026-05-14 08:27 UTC
+**Files:** 823 | **Est. tokens:** ~1,719,259
+**Generated:** 2026-05-14 09:46 UTC
 
 ## Token Budget Guide
 
@@ -66,7 +66,7 @@
 | `src/mind_mem/storage/` | 2 | ~4,193 |
 | `src/mind_mem/v4/` | 22 | ~56,094 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 274 | ~575,745 |
+| `tests/` | 274 | ~576,060 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -751,8 +751,8 @@
 - `test_compaction.py` (~1869 tok, huge) — Tests for compaction.py — GC and archival engine."""
 - `test_competitive_intel.py` (~1881 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compiled_truth.py` (~3929 tok, huge) — Tests for mind-mem compiled truth pages (compiled_truth.py)."""
-- `test_concurrency_stress.py` (~4095 tok, huge) — Concurrency and performance stress tests for recall engine.
-- `test_concurrent_integration.py` (~10786 tok, huge) — Integration tests for concurrent access and partial failure in mind-mem.
+- `test_concurrency_stress.py` (~4160 tok, huge) — Concurrency and performance stress tests for recall engine.
+- `test_concurrent_integration.py` (~10855 tok, huge) — Integration tests for concurrent access and partial failure in mind-mem.
 - `test_conflict_resolver.py` (~2340 tok, huge) — Tests for conflict_resolver.py — zero external deps (stdlib unittest)."""
 - `test_connection_manager.py` (~2536 tok, huge) — Tests for ConnectionManager — SQLite connection pooling with read/write separation (#466)."""
 - `test_consensus_vote.py` (~1137 tok, large) — v3.3.0 — quorum-based consensus voting on contradictions."""
@@ -796,7 +796,7 @@
 - `test_field_audit.py` (~1399 tok, large) — Tests for mind-mem per-field mutation audit (field_audit.py)."""
 - `test_field_extraction.py` (~201 tok, medium) — Tests for field token extraction."""
 - `test_filelock.py` (~979 tok, large) — Tests for filelock.py — cross-platform advisory locking."""
-- `test_filelock_stress.py` (~1124 tok, large) — Stress tests for mind-mem file locking under contention."""
+- `test_filelock_stress.py` (~1182 tok, large) — Stress tests for mind-mem file locking under contention."""
 - `test_fts_fallback.py` (~4436 tok, huge) — Tests for FTS fallback behavior, recall envelope structure, block size cap,
 - `test_governance_bench.py` (~811 tok, large) — Tests for mind-mem governance benchmark suite."""
 - `test_governance_concurrency.py` (~1363 tok, large) — # Copyright 2026 STARGA, Inc.
@@ -957,14 +957,14 @@
 - `test_v4_block_kinds.py` (~4112 tok, huge) — Tests for the v4 block-kind taxonomy module."""
 - `test_v4_circuit_breaker.py` (~3637 tok, huge) — Tests for v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10)."""
 - `test_v4_cognitive_kernel.py` (~2770 tok, huge) — Tests for the v4 Cognitive Mind Kernel registry + dispatcher."""
-- `test_v4_concurrency.py` (~2269 tok, huge) — v4 concurrency / fuzz tests.
+- `test_v4_concurrency.py` (~2325 tok, huge) — v4 concurrency / fuzz tests.
 - `test_v4_federation_wire.py` (~2162 tok, huge) — Wire-transport tests for v4 federation.
 - `test_v4_hnsw_and_consolidation.py` (~3243 tok, huge) — Tests for HNSW kind-filtered ANN + consolidation worker."""
 - `test_v4_kernels.py` (~3855 tok, huge) — Tests for the v4 kernel strategy implementations.
 - `test_v4_pq.py` (~2800 tok, huge) — Tests for v4 product-quantization (PQ) encoding."""
 - `test_v4_round2_extensions.py` (~4983 tok, huge) — Tests for round-2 audit extensions: federation, embedding_pipeline,
 - `test_v4_round3_extensions.py` (~2836 tok, huge) — Tests for round-3 audit extensions: observability + eviction."""
-- `test_v4_round4_concurrency.py` (~8528 tok, huge) — Concurrency + adversarial-input tests for round-4 v4 modules.
+- `test_v4_round4_concurrency.py` (~8595 tok, huge) — Concurrency + adversarial-input tests for round-4 v4 modules.
 - `test_v4_round4_extensions.py` (~5138 tok, huge) — Tests for round-4 audit extensions.
 - `test_v4_surprise_retrieval.py` (~2281 tok, huge) — Tests for the v4 surprise-weighted retrieval scoring module."""
 - `test_v4_tier_memory.py` (~4065 tok, huge) — Tests for the v4 recall-tier module.

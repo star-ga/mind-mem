@@ -18,6 +18,14 @@ import threading
 import time
 import unittest
 from datetime import datetime
+
+import pytest
+
+# v4.0.8: file-level stress marker. Multi-thread concurrent integration
+# tests (apply, recall, WAL replay) spawn dozens of threads and OOM the
+# GitHub-hosted ubuntu runners. Local `make test` runs them for
+# pre-release gating.
+pytestmark = pytest.mark.stress
 from unittest.mock import patch
 
 # Ensure scripts are importable
