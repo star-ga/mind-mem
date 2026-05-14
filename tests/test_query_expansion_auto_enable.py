@@ -49,6 +49,22 @@ def mock_hit():
     return [{"_id": "D-20260420-001", "score": 5.0, "excerpt": "Use PostgreSQL."}]
 
 
+@pytest.fixture(autouse=True)
+def _short_circuit_decompose_query(monkeypatch):
+    """v4.0.9 hang fix: tests in this file mock ``expand_queries`` but
+    pass multi-hop queries that ALSO trigger
+    ``mind_mem.query_planner.decompose_query`` — a live HTTP POST to
+    the claude-proxy LLM endpoint. On CI nothing is listening; the
+    request hangs past pytest-timeout=120s and the runner is killed.
+    Mock decompose_query alongside the expand_queries patches each
+    test does, so multi-hop detection still fires (which is what
+    these tests exercise) without leaving the test process."""
+    monkeypatch.setattr(
+        "mind_mem.query_planner.decompose_query",
+        lambda query, **_: [query],
+    )
+
+
 class TestQueryExpansionAutoEnable:
     def test_multihop_query_auto_enables(self, tmp_path, mock_hit) -> None:
         backend = _build_backend(auto_enable=True, enabled=False)

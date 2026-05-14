@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 826 | **Est. tokens:** ~1,725,589
-**Generated:** 2026-05-14 22:02 UTC
+**Files:** 826 | **Est. tokens:** ~1,725,768
+**Generated:** 2026-05-14 22:40 UTC
 
 ## Token Budget Guide
 
@@ -66,7 +66,7 @@
 | `src/mind_mem/storage/` | 2 | ~4,193 |
 | `src/mind_mem/v4/` | 22 | ~57,813 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 277 | ~579,365 |
+| `tests/` | 277 | ~579,544 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -883,7 +883,7 @@
 - `test_quality_gate.py` (~1971 tok, huge) — Tests for the v3.11.0 deterministic block quality gate.
 - `test_quality_gate_strict_mode.py` (~2937 tok, huge) — Tests for v3.12.0 Theme B: quality-gate config plumbing + propose_update wiring.
 - `test_query_decomposition.py` (~1604 tok, huge) — Tests for multi-hop query decomposition (#6)."""
-- `test_query_expansion_auto_enable.py` (~1091 tok, large) — v3.3.0 Tier 2 #4 — query expansion auto-enables on ambiguous queries.
+- `test_query_expansion_auto_enable.py` (~1270 tok, large) — v3.3.0 Tier 2 #4 — query expansion auto-enables on ambiguous queries.
 - `test_query_expansion_multi_provider.py` (~1237 tok, large) — Tests for multi-provider LLM query expansion (OpenAI-compatible endpoints)."""
 - `test_query_expansion.py` (~3809 tok, huge) — Tests for query_expansion.py -- multi-query expansion for improved recall."""
 - `test_query_planner.py` (~1348 tok, large) — v3.3.0 Tier 1 #1 — query decomposition for multi-hop questions.
