@@ -1705,15 +1705,24 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         except Exception as exc:
             report["actions"].append({"migrate_recall_log": {"error": str(exc)}})
 
-    # --rebuild-cache: copy PG-only blocks into SQLite
-    if args.rebuild_cache and pg_only and bs is not None and sq_exists:
+    # --rebuild-cache: copy PG-only blocks into SQLite.  Fix for #524 +
+    # #525: create the recall.db + initialise the canonical `blocks`
+    # schema if neither exists yet (this is the normal state for
+    # PG-backed workspaces where the SQLite recall cache was never
+    # created lazily).  Without this, --rebuild-cache silently no-ops
+    # because of the `sq_exists` gate.
+    if args.rebuild_cache and pg_only and bs is not None:
         try:
             import psycopg
             from psycopg import sql as _sql
+            from .sqlite_index import _init_schema
 
             written = 0
             errors = 0
+            _os.makedirs(_os.path.dirname(sq_path), exist_ok=True)
             sq = _sqlite3.connect(sq_path)
+            _init_schema(sq)
+            sq.commit()
             pg_schema = getattr(bs, "_schema", "public")
             pg_dsn = getattr(bs, "_dsn", "")
             blocks_id = _sql.Identifier(pg_schema, "blocks")
@@ -1761,6 +1770,28 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
                                 md.get("ParentId", "") or "",
                                 json_blob,
                             ),
+                        )
+                        # Fix for #525: also populate blocks_fts so `mm recall`
+                        # finds these rows via FTS5 (the recall path queries the
+                        # virtual table, not `blocks`).  Statement is the primary
+                        # search field; fall back to content for blocks whose
+                        # metadata only carries unstructured prose.
+                        statement = md.get("Statement") or md.get("statement") or content or ""
+                        title = md.get("Title") or md.get("Name") or ""
+                        description = md.get("Description") or md.get("Summary") or ""
+                        tags_str_fts = _json.dumps(md.get("Tags") or md.get("Keywords") or md.get("tags") or [])
+                        context = md.get("Context") or md.get("Rationale") or ""
+                        all_text = " ".join(str(v) for v in (
+                            statement, title, description, tags_str_fts, context
+                        ) if v)
+                        # idempotent: clear any prior FTS row for this bid first
+                        sq.execute("DELETE FROM blocks_fts WHERE block_id = ?", (bid,))
+                        sq.execute(
+                            "INSERT INTO blocks_fts (block_id, statement, title, name, "
+                            "description, tags, context, all_text) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                            (bid, statement, title, title, description,
+                             tags_str_fts, context, all_text),
                         )
                         written += 1
                     except _sqlite3.OperationalError:

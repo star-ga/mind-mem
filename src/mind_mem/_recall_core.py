@@ -261,6 +261,32 @@ def recall(
     if not query_tokens:
         return []
 
+    # Fix for #525: dispatch to the configured backend (sqlite / vector)
+    # before falling through to the markdown-scan BM25 path.  This is the
+    # same dispatch the `python3 -m mind_mem.recall` CLI does at line 1400
+    # — without it, callers of mind_mem.recall.recall() (including the
+    # `mm recall` CLI in mm_cli.py) always get the scan-only behaviour.
+    _cfg_backend = _load_backend(workspace)
+    if _cfg_backend == "sqlite":
+        from .sqlite_index import query_index
+        return query_index(
+            workspace,
+            query,
+            limit=limit,
+            active_only=active_only,
+            graph_boost=graph_boost,
+            retrieve_wide_k=retrieve_wide_k,
+            rerank=rerank,
+            rerank_debug=rerank_debug,
+        )
+    if isinstance(_cfg_backend, RecallBackend):
+        try:
+            backend_hits = _cfg_backend.search(workspace, query, limit=limit, active_only=active_only)
+            if backend_hits:
+                return backend_hits
+        except Exception as exc:
+            _log.warning("recall_backend_error_fallback_to_scan", error=str(exc))
+
     # Load .mind kernel overrides if available
     _kernel_bm25_k1 = BM25_K1
     _kernel_bm25_b = BM25_B
