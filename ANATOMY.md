@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 826 | **Est. tokens:** ~1,725,186
-**Generated:** 2026-05-14 17:51 UTC
+**Files:** 826 | **Est. tokens:** ~1,725,393
+**Generated:** 2026-05-14 18:44 UTC
 
 ## Token Budget Guide
 
@@ -66,7 +66,7 @@
 | `src/mind_mem/storage/` | 2 | ~4,193 |
 | `src/mind_mem/v4/` | 22 | ~57,813 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 277 | ~578,962 |
+| `tests/` | 277 | ~579,169 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -763,7 +763,7 @@
 - `test_contradiction_detector.py` (~5832 tok, huge) — Tests for contradiction_detector.py — Contradiction detection at governance gate (#432).
 - `test_core_v140.py` (~2707 tok, huge) — Tests for v1.4.0 core hardening: issues #28, #30, #32, #34."""
 - `test_cron_runner.py` (~2716 tok, huge) — Tests for cron_runner.py — periodic job orchestration, config loading, subprocess dispatch."""
-- `test_cross_encoder_auto_enable.py` (~1489 tok, large) — v3.3.0 Tier 2 #6 — cross-encoder rerank auto-enables on ambiguous queries.
+- `test_cross_encoder_auto_enable.py` (~1696 tok, huge) — v3.3.0 Tier 2 #6 — cross-encoder rerank auto-enables on ambiguous queries.
 - `test_cross_encoder.py` (~1324 tok, large) — Tests for optional cross-encoder reranker."""
 - `test_daemon.py` (~1886 tok, huge) — Tests for the v3.9 background daemon (`mm daemon`)."""
 - `test_date_score.py` (~174 tok, small) — Tests for date scoring function."""
