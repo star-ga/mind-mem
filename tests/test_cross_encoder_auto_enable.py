@@ -54,19 +54,30 @@ def mock_bm25_hit():
 
 
 @pytest.fixture(autouse=True)
-def _short_circuit_decompose_query(monkeypatch):
-    """v4.0.9 hang fix: backend.search() on multi-hop queries calls
-    ``mind_mem.query_planner.decompose_query`` which makes a real HTTP
-    POST to ``http://127.0.0.1:8766/v1/chat/completions`` (the
-    claude-proxy LLM endpoint). On CI nothing is listening on 8766 →
-    the request hangs until ``timeout=20`` fires (sometimes longer
-    under runner pressure), so the test exceeds pytest-timeout=120s
-    and the runner OOM-kills the whole job. Short-circuit by returning
-    the original query so multi-hop detection still hits the
-    cross-encoder branch we're actually testing — without touching
-    the network."""
+def _short_circuit_llm_query_features(monkeypatch):
+    """v4.0.9 hang fix: backend.search() on multi-hop / temporal queries
+    triggers TWO LLM-backed expansion paths, each of which makes live
+    HTTP calls that hang on CI where no listener is bound:
+
+      1. ``mind_mem.query_planner.decompose_query`` — POSTs to
+         ``http://127.0.0.1:8766/v1/chat/completions`` (claude-proxy).
+      2. ``mind_mem.query_expansion.expand_queries`` — LLMQueryExpander
+         POSTs to ``https://api.openai.com/v1`` (or the configured
+         provider) when auto_enable fires on multi-hop / temporal.
+
+    The Windows-3.x hang surfaced on the 2nd path: even with the
+    decompose patch, expansion auto-enables on the same multi-hop
+    query and spawns a ThreadPoolExecutor whose worker threads block
+    on LLM calls. Mocking both keeps multi-hop *detection* intact
+    (which is what these tests verify on the cross-encoder branch)
+    while keeping the test network-free.
+    """
     monkeypatch.setattr(
         "mind_mem.query_planner.decompose_query",
+        lambda query, **_: [query],
+    )
+    monkeypatch.setattr(
+        "mind_mem.query_expansion.expand_queries",
         lambda query, **_: [query],
     )
 
