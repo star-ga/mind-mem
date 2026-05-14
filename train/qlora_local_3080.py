@@ -32,9 +32,9 @@ from trl import SFTTrainer, SFTConfig
 
 BASE = Path("/data/checkpoints/mm-workspace/full-ft.retry2e-109of109+18of22")
 CORPUS = Path("/data/checkpoints/mm-workspace/train-output/corpus.jsonl")
-ADDENDUM = Path("/data/checkpoints/mm-workspace/train-output/corpus-addendum-holdout-fix-v4.1.0-r3.jsonl")
-OUTPUT_DIR = Path("/data/checkpoints/mm-workspace/lora-v4.1.2")
-ADDENDUM_UPWEIGHT = 32  # r3 doubles again to 32x; 18 addendum * 32 = 576 weighted samples (10.7% of training mass)
+ADDENDUM = Path("/data/checkpoints/mm-workspace/train-output/corpus-addendum-v4.1.1.jsonl")
+OUTPUT_DIR = Path("/data/checkpoints/mm-workspace/lora-v4.1.3")
+ADDENDUM_UPWEIGHT = 32  # r4 (v4.1.1): 26 addendum (18 r3 + 8 r4 KernelKind) * 32 = 832 weighted samples (~13% mass)
 
 LORA_RANK = 32
 LORA_ALPHA = 64

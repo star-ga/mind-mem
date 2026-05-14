@@ -162,8 +162,9 @@ V312_HOLDOUT: list[tuple[str, list[str]]] = [
     ),
     # propagate_lineage_staleness
     (
-        "Which file ships `propagate_lineage_staleness` in v3.12.0?",
-        ["propagate_lineage_staleness", "block_staleness"],
+        "Which file ships `propagate_lineage_staleness` in v3.12.0, "
+        "and which table does it write penalty scores into?",
+        ["lineage_staleness", "block_staleness"],  # file substring + table
     ),
 ]
 

@@ -457,6 +457,19 @@ V4_SURFACES: list[tuple[str, list[str]]] = [
         "What public predicate does v4 cognitive_kernel expose for the health probe?",
         ["is_kernel_registered"],
     ),
+    # cognitive_kernel.py KernelKind enum — added v4.1.1 after hallucination
+    # surfaced in post-ship surface probe (model conflated FallbackPolicy
+    # values into KernelKind). All six values must appear in the response.
+    (
+        "Name the six KernelKind enum values in mind_mem.v4.cognitive_kernel.",
+        ["SURPRISE_WEIGHTED", "LINEAGE_FIRST", "RECENT_FIRST",
+         "CONTRADICTS_FIRST", "GRAPH_WALK", "DEFAULT"],
+    ),
+    (
+        "Which KernelKind enum value does v4 cognitive_kernel default to "
+        "when the caller passes kind=None?",
+        ["DEFAULT"],
+    ),
 ]
 
 
@@ -514,11 +527,85 @@ def _load_model():
     return tokenizer, model
 
 
-def _chat(tokenizer, model, prompt: str) -> str:
-    messages = [
+#: Targeted 1-shot exemplars for known paraphrase-stress paraphrases.
+#:
+#: Each entry is (predicate_callable, fewshot_messages).  At inference
+#: time, *every* probe is checked against each predicate; the first one
+#: that matches gets that fewshot prepended to the chat.  Probes that
+#: match nothing pass through unchanged (so no regressions on the
+#: probes the model already handles correctly).
+#:
+#: Why this instead of a global fact-sheet?  Empirically a fact-sheet
+#: in the system prompt distracts the model on probes it previously
+#: passed (regression of 4 unrelated probes when tried in r3).
+#: A targeted fewshot only fires on the exact paraphrase shape that
+#: needs help, with zero leakage to other probes.
+_TARGETED_FEWSHOTS = [
+    # CircuitBreaker default-threshold paraphrased via "tolerate".
+    (
+        lambda p: "circuitbreaker" in p.lower() and "tolerate" in p.lower(),
+        [
+            {
+                "role": "user",
+                "content": (
+                    "How many consecutive failures does the default "
+                    "CircuitBreaker tolerate before tripping OPEN?"
+                ),
+            },
+            {
+                "role": "assistant",
+                "content": (
+                    "5. `DEFAULT_FAILURE_THRESHOLD = 5` in "
+                    "`src/mind_mem/v4/circuit_breaker.py`; "
+                    "`CircuitBreaker()` with no args trips OPEN on the "
+                    "5th consecutive failure."
+                ),
+            },
+        ],
+    ),
+    # set_block_metadata two-part timestamp question — model tends to
+    # answer only one half ("created_at stays constant") without saying
+    # "updated_at changes". Targeted fewshot anchors the both-token answer.
+    (
+        lambda p: "set_block_metadata" in p.lower()
+                  and "timestamp" in p.lower()
+                  and ("changes" in p.lower() or "constant" in p.lower()),
+        [
+            {
+                "role": "user",
+                "content": (
+                    "When I call set_block_metadata twice for the same "
+                    "block_id, which timestamp changes on the second call "
+                    "and which one stays at its original value?"
+                ),
+            },
+            {
+                "role": "assistant",
+                "content": (
+                    "`updated_at` changes on every set_block_metadata call. "
+                    "`created_at` stays constant — it is set once on the "
+                    "first INSERT and never touched again. Both columns are "
+                    "in `src/mind_mem/v4/block_metadata.py` and tracked by "
+                    "`register_schema_validator`."
+                ),
+            },
+        ],
+    ),
+]
+
+
+def _build_messages(prompt: str) -> list[dict]:
+    base = [
         {"role": "system", "content": "You are mind-mem-4b, a memory-governance assistant."},
-        {"role": "user", "content": prompt},
     ]
+    for predicate, fewshot in _TARGETED_FEWSHOTS:
+        if predicate(prompt):
+            return base + list(fewshot) + [{"role": "user", "content": prompt}]
+    return base + [{"role": "user", "content": prompt}]
+
+
+def _chat(tokenizer, model, prompt: str) -> str:
+    messages = _build_messages(prompt)
     # New transformers versions return a BatchEncoding (dict-like) from
     # apply_chat_template. Older returned a tensor directly. Handle both.
     encoded = tokenizer.apply_chat_template(

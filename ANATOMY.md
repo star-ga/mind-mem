@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 821 | **Est. tokens:** ~1,713,726
-**Generated:** 2026-05-13 15:53 UTC
+**Files:** 823 | **Est. tokens:** ~1,716,665
+**Generated:** 2026-05-14 02:53 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 34 | ~62,658 |
+| `./` | 34 | ~62,718 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,320 |
 | `audits/` | 4 | ~22,723 |
@@ -70,7 +70,7 @@
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 29 | ~52,855 |
+| `train/` | 31 | ~55,734 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -105,7 +105,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~1979 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~23869 tok, huge) — Shared Memory Across All Your AI Agents
+- `README.md` (~23929 tok, huge) — Shared Memory Across All Your AI Agents
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
@@ -988,14 +988,15 @@
 - `build_model_card.py` (~3681 tok, huge) — Generate the HuggingFace model-card README for mind-mem-4b.
 - `CORPUS_HASH_v3.11.0` (~21 tok, tiny) — 02b3ba6a1433e25bdbefe3cebf992ca961734850d1e3550e9496905abbadb3b7  build_corpus.p
 - `CORPUS_HASH_v3.12.0-fullft` (~21 tok, tiny) — 568d1559631a590e44eeec6716081b4534a40ab5f3047feb622cc225ead9ad01  build_corpus.p
-- `eval_harness.py` (~8338 tok, huge) — Eval harness for mind-mem-4b.
-- `eval_holdout.py` (~2162 tok, huge) — Held-out paraphrase eval set — runs AFTER training, BEFORE ship.
+- `eval_harness.py` (~8645 tok, huge) — Eval harness for mind-mem-4b.
+- `eval_holdout.py` (~2182 tok, huge) — Held-out paraphrase eval set — runs AFTER training, BEFORE ship.
 - `export_gguf.py` (~1274 tok, large) — Export the trained model to GGUF for Ollama / LM Studio / llama.cpp.
-- `HF_MODEL_CARD_v4.md` (~2455 tok, huge) — mind-mem-4b v4.0.0
+- `HF_MODEL_CARD_v4.md` (~2788 tok, huge) — mind-mem-4b v4.1.1
 - `merge_and_eval_v4.1.0.py` (~1471 tok, large) — Post-Kaggle: pull LoRA adapter, merge with v4.0.0-base, eval 131 probes.
 - `Modelfile.v3.9.0` (~389 tok, medium) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
 - `Modelfile.v4.0.0` (~576 tok, large) — FROM /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf
 - `Modelfile.v4.1.0` (~395 tok, medium) — FROM /data/checkpoints/mm-workspace/gguf-v4.1.0/mind-mem-4b-v4.1.0-Q4_K_M.gguf
+- `Modelfile.v4.1.1` (~440 tok, medium) — FROM /data/checkpoints/mm-workspace/gguf-v4.1.1/mind-mem-4b-v4.1.1-Q4_K_M.gguf
 - `post_train_chain.sh` (~628 tok, large) — Post-training chain: wait for deploy → verify scp + SHA256 + pod-destroy markers → run eval.
 - `post_train_pipeline.sh` (~582 tok, large) — Post-training pipeline for mind-mem-4b v3.9.2 (augmented-corpus retrain).
 - `qlora_local_3080.py` (~1185 tok, large) — Local QLoRA fallback on RTX 3080 (10GB VRAM).
@@ -1005,6 +1006,7 @@
 - `runpod_deploy.py` (~5297 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
 - `runpod_full_ft.py` (~2551 tok, huge) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
 - `ship_gguf_ollama_v4.1.0.py` (~1729 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.0.
+- `ship_gguf_ollama_v4.1.1.py` (~1779 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.1.
 - `spend_guard.py` (~2037 tok, huge) — spend_guard — mechanical interlock on cloud spend.
 - `train_qlora.py` (~1315 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
 - `upload_to_hf.py` (~1122 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-4b.

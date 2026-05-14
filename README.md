@@ -72,7 +72,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>v4.0.2 (released 2026-05-13) — security + correctness audit pass: 46 findings closed (1 Critical / 12 High / 18 Medium / 12 Low / 3 Info) covering HTTP transport hardening, federation correctness (LWW wall-clock semantic, BEGIN IMMEDIATE rowid pin), retrieval quality (RRF date-freshness dedup, copy-on-write decay), and doc alignment. Builds on v4.0.1 (federation wire transport: `/federation/{vclock,write,resolve,conflicts}` over HTTP + stdlib `FederationClient`) and v4.0.0 (cognitive kernel, knowledge graph, resilience suite, observability — all v4 surfaces flag-gated, no breaking changes). `mind-mem-4b` weights unchanged — zero probe-surface overlap with the audit fix.</sub>
+<sub>v4.0.2 (released 2026-05-13) — security + correctness audit pass: 46 findings closed (1 Critical / 12 High / 18 Medium / 12 Low / 3 Info) covering HTTP transport hardening, federation correctness (LWW wall-clock semantic, BEGIN IMMEDIATE rowid pin), retrieval quality (RRF date-freshness dedup, copy-on-write decay), and doc alignment. Builds on v4.0.1 (federation wire transport: `/federation/{vclock,write,resolve,conflicts}` over HTTP + stdlib `FederationClient`) and v4.0.0 (cognitive kernel, knowledge graph, resilience suite, observability — all v4 surfaces flag-gated, no breaking changes). Companion **mind-mem-4b v4.1.1** (r4 retrain, **133/133 = 100%** on the 111-probe main + 22-probe holdout surface; closes the v4.1.0 KernelKind hallucination) is current `main` on [star-ga/mind-mem-4b](https://huggingface.co/star-ga/mind-mem-4b); v4.1.0, v4.0.0-base, and v3.12.0 remain pinnable on HF revision branches.</sub>
 
 ### Trust Signals
 

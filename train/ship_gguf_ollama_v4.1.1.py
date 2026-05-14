@@ -1,11 +1,11 @@
-"""GGUF + Ollama shipper for mind-mem-4b v4.1.0.
+"""GGUF + Ollama shipper for mind-mem-4b v4.1.1.
 
-Runs LOCALLY after merge_and_eval_v4.1.0.py confirms 131/131.
+Runs LOCALLY after merge_and_eval_v4.1.1.py confirms 131/131.
 Steps:
   1. Convert merged safetensors → F16 GGUF (llama.cpp convert_hf_to_gguf.py).
   2. Quantize F16 → Q4_K_M (llama-quantize).
-  3. Write Modelfile.v4.1.0 (FROM new GGUF + updated SYSTEM).
-  4. ollama create mind-mem:4b -f Modelfile.v4.1.0 (replaces alias).
+  3. Write Modelfile.v4.1.1 (FROM new GGUF + updated SYSTEM).
+  4. ollama create mind-mem:4b -f Modelfile.v4.1.1 (replaces alias).
   5. Smoke test the 4 previously-failing probes via `ollama run`.
 
 Refuses to ship if the smoke test misses any of the 4 fixed facts.
@@ -20,18 +20,21 @@ from pathlib import Path
 LLAMA_CPP = Path("/home/n/llama.cpp")
 CONVERT_HF = LLAMA_CPP / "convert_hf_to_gguf.py"
 QUANTIZE = LLAMA_CPP / "build/bin/llama-quantize"
-SHIP_DIR_DEFAULT = Path("/data/checkpoints/mm-workspace/full-ft.v4.1.0-candidate")
-GGUF_OUT_DIR = Path("/data/checkpoints/mm-workspace/gguf-v4.1.0")
-MODELFILE_OUT = Path("/home/n/mind-mem/train/Modelfile.v4.1.0")
+SHIP_DIR_DEFAULT = Path("/data/checkpoints/mm-workspace/full-ft.v4.1.1-r4-candidate")
+GGUF_OUT_DIR = Path("/data/checkpoints/mm-workspace/gguf-v4.1.1")
+MODELFILE_OUT = Path("/home/n/mind-mem/train/Modelfile.v4.1.1")
 OLLAMA_TAG_DEFAULT = "mind-mem:4b"
-OLLAMA_TAG_BACKUP = "mind-mem:4b-v4.0.0"  # snapshot the current alias before swap
+OLLAMA_TAG_BACKUP = "mind-mem:4b-v4.1.0"  # snapshot the current alias before swap
 
-V4_1_0_SYSTEM = (
-    "You are mind-mem-4b (v4.1.0), the local LLM that powers mind-mem's "
+V4_1_1_SYSTEM = (
+    "You are mind-mem-4b (v4.1.1), the local LLM that powers mind-mem's "
     "retrieval, governance, cognition, and observability surfaces. "
     "Respond with exactly the tool call, block schema, or structured output "
     "the caller requested — no extra commentary. "
-    "v4.1.0 hardens the v4 holdout knowledge surface: CircuitBreaker() defaults "
+    "v4.1.1 hardens the v4 holdout knowledge surface. KernelKind enum has "
+    "EXACTLY SIX values: SURPRISE_WEIGHTED, LINEAGE_FIRST, RECENT_FIRST, "
+    "CONTRADICTS_FIRST, GRAPH_WALK, DEFAULT (defined in "
+    "src/mind_mem/v4/cognitive_kernel.py). CircuitBreaker() defaults "
     "to failure_threshold=5 via DEFAULT_FAILURE_THRESHOLD in "
     "src/mind_mem/v4/circuit_breaker.py; set_active_policy in "
     "src/mind_mem/v4/eviction.py is the runtime entry-point for changing the "
@@ -74,7 +77,7 @@ def _run(cmd: list[str]) -> None:
 
 def convert(ship_dir: Path) -> Path:
     GGUF_OUT_DIR.mkdir(parents=True, exist_ok=True)
-    f16 = GGUF_OUT_DIR / "mind-mem-4b-v4.1.0-f16.gguf"
+    f16 = GGUF_OUT_DIR / "mind-mem-4b-v4.1.1-f16.gguf"
     _run([sys.executable, str(CONVERT_HF), str(ship_dir),
           "--outfile", str(f16), "--outtype", "f16"])
     sz = f16.stat().st_size
@@ -83,7 +86,7 @@ def convert(ship_dir: Path) -> Path:
 
 
 def quantize(f16: Path) -> Path:
-    q4 = GGUF_OUT_DIR / "mind-mem-4b-v4.1.0-Q4_K_M.gguf"
+    q4 = GGUF_OUT_DIR / "mind-mem-4b-v4.1.1-Q4_K_M.gguf"
     _run([str(QUANTIZE), str(f16), str(q4), "Q4_K_M"])
     sz = q4.stat().st_size
     print(f"  ✓ Q4_K_M GGUF: {sz:,} bytes")
@@ -104,7 +107,7 @@ def write_modelfile(gguf: Path) -> Path:
         "{{ end }}\n"
         "{{- end }}<|im_start|>assistant\n"
         '"""\n\n'
-        f"SYSTEM {V4_1_0_SYSTEM}\n\n"
+        f"SYSTEM {V4_1_1_SYSTEM}\n\n"
         "PARAMETER num_predict 1024\n"
         "PARAMETER repeat_penalty 1.05\n"
         "PARAMETER stop <|im_start|>\n"
@@ -158,18 +161,18 @@ def main() -> None:
 
     if not (args.ship_dir / "model.safetensors").is_file():
         _refuse(f"merged safetensors not found at {args.ship_dir}/model.safetensors. "
-                "Run merge_and_eval_v4.1.0.py first.")
+                "Run merge_and_eval_v4.1.1.py first.")
 
     if not args.skip_convert:
         f16 = convert(args.ship_dir)
         q4 = quantize(f16)
     else:
-        q4 = GGUF_OUT_DIR / "mind-mem-4b-v4.1.0-Q4_K_M.gguf"
+        q4 = GGUF_OUT_DIR / "mind-mem-4b-v4.1.1-Q4_K_M.gguf"
 
     modelfile = write_modelfile(q4)
     ollama_create(modelfile, args.tag)
     if smoke_test(args.tag):
-        print(f"\n✓ v4.1.0 SHIPPED to Ollama as '{args.tag}'")
+        print(f"\n✓ v4.1.1 SHIPPED to Ollama as '{args.tag}'")
         print(f"  snapshot of previous: '{OLLAMA_TAG_BACKUP}' (rollback path)")
     else:
         print(f"\n✗ Smoke test FAILED. Rolling back: ollama cp {OLLAMA_TAG_BACKUP} {args.tag}")
