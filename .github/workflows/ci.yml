@@ -64,17 +64,25 @@ jobs:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
       - run: pip install -e ".[test]"
-      - name: Unit tests with coverage
-        # v3.7.0 M5: cov-fail-under raised from 60 → 70.  Current local
-        # coverage is ~73% so 70% leaves a 3-point margin for OS/Python
-        # variation; further moves to 80% are tracked separately so a
-        # broad raise can't accidentally land in a release that hasn't
-        # written the corresponding tests.
-        # v4.0.6: exclude @pytest.mark.stress on CI — those tests
-        # (e.g. test_niah) spawn tens of thousands of threads and OOM
-        # the GitHub-hosted ubuntu runners. They still run locally via
+      - name: Unit tests with coverage (ubuntu-3.12 only)
+        # v4.0.9: coverage instrumentation across 5000+ tests is the
+        # single biggest contributor to runner memory pressure. The
+        # cov-fail-under=70 gate matters once per CI run, not 12×
+        # across the matrix. Run --cov only on the canonical
+        # ubuntu-3.12 row; other rows run the same test set without
+        # the instrumentation overhead so they fit in the 7 GB
+        # GitHub-hosted runner budget.
+        # v4.0.6: -m "not stress" excludes stress-marked tests that
+        # OOM-killed ubuntu runners (test_niah and the 5 files
+        # marked file-level in v4.0.8). Stress tests still run via
         # `make test` for pre-release gating.
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: python3 -m pytest tests/ --ignore=tests/integration --cov=src --cov-report=xml --cov-report=term-missing --cov-fail-under=70 -x -q -m "not stress"
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+      - name: Unit tests (no coverage, other matrix rows)
+        if: matrix.os != 'ubuntu-latest' || matrix.python-version != '3.12'
+        run: python3 -m pytest tests/ --ignore=tests/integration -x -q -m "not stress"
         env:
           PYTHONDONTWRITEBYTECODE: "1"
       - name: Integration tests
@@ -82,7 +90,8 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: "1"
       - name: Upload coverage report
-        if: always()
+        # Only ubuntu-3.12 generates coverage.xml (see v4.0.9 split above).
+        if: always() && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
           name: coverage-${{ matrix.os }}-${{ matrix.python-version }}
