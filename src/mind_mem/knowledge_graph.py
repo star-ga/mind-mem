@@ -55,13 +55,69 @@ class Predicate(str, Enum):
 
     @classmethod
     def from_str(cls, name: str) -> "Predicate":
-        """Hyphen-tolerant, case-insensitive lookup."""
+        """Hyphen-tolerant, case-insensitive lookup. Honors runtime-registered predicates."""
         normalised = name.strip().lower().replace("-", "_")
         for pred in cls:
             if pred.value == normalised:
                 return pred
-        valid = ", ".join(p.value for p in cls)
+        if normalised in _RUNTIME_PREDICATES:
+            return _RUNTIME_PREDICATES[normalised]  # type: ignore[return-value]
+        valid_builtin = [p.value for p in cls]
+        valid_runtime = list(_RUNTIME_PREDICATES.keys())
+        valid = ", ".join(valid_builtin + valid_runtime)
         raise ValueError(f"Unknown predicate: {name!r}. Valid: {valid}")
+
+    @classmethod
+    def register(cls, name: str) -> "Predicate":
+        """Register a new predicate at runtime.
+
+        Returns a stable enum-like sentinel under the same lowercase
+        snake_case value convention as the built-in predicates. Idempotent —
+        re-registering an existing value (built-in or runtime) returns
+        the same instance.
+
+        The sentinel inherits ``str`` so it serialises identically to
+        built-in predicates into MCP / JSONL envelopes. ``from_str`` looks
+        runtime-registered values up alongside the closed enum members.
+        """
+        normalised = name.strip().lower().replace("-", "_")
+        for pred in cls:
+            if pred.value == normalised:
+                return pred
+        if normalised in _RUNTIME_PREDICATES:
+            return _RUNTIME_PREDICATES[normalised]  # type: ignore[return-value]
+        sentinel = str.__new__(_RuntimePredicate, normalised)
+        sentinel._name_ = normalised.upper()
+        sentinel._value_ = normalised
+        _RUNTIME_PREDICATES[normalised] = sentinel
+        return sentinel  # type: ignore[return-value]
+
+
+class _RuntimePredicate(str):
+    """str-subclass sentinel for runtime-registered predicates.
+
+    Quacks like a closed ``Predicate`` enum member in the contexts where
+    the rest of the module touches predicates (``.value`` / equality on
+    the string form / SQLite TEXT serialisation). Not a true enum member,
+    but indistinguishable for the call sites that read ``predicate.value``
+    or compare to a string predicate field.
+    """
+
+    __slots__ = ("_name_", "_value_")
+
+    @property
+    def name(self) -> str:
+        return self._name_
+
+    @property
+    def value(self) -> str:
+        return self._value_
+
+    def __repr__(self) -> str:
+        return f"<Predicate.{self._name_}: {self._value_!r}>"
+
+
+_RUNTIME_PREDICATES: dict[str, "_RuntimePredicate"] = {}
 
 
 # ---------------------------------------------------------------------------
