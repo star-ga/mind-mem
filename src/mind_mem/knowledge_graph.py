@@ -104,6 +104,10 @@ class _RuntimePredicate(str):
     """
 
     __slots__ = ("_name_", "_value_")
+    # Slot type annotations so mypy treats the attributes as declared
+    # instance state instead of "no attribute" on dynamic assignment.
+    _name_: str
+    _value_: str
 
     @property
     def name(self) -> str:

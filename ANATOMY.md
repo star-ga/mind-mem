@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 826 | **Est. tokens:** ~1,726,312
-**Generated:** 2026-05-15 04:50 UTC
+**Files:** 826 | **Est. tokens:** ~1,726,355
+**Generated:** 2026-05-15 05:06 UTC
 
 ## Token Budget Guide
 
@@ -57,7 +57,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 159 | ~557,712 |
+| `src/mind_mem/` | 159 | ~557,755 |
 | `src/mind_mem/api/` | 5 | ~15,751 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
 | `src/mind_mem/mcp/infra/` | 8 | ~8,538 |
@@ -491,7 +491,7 @@
 - `interaction_signals.py` (~4278 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `iterative_recall.py` (~2808 tok, huge) — Iterative chain-of-retrieval for multi-hop evidence (v3.4.0).
 - `kalman_belief.py` (~4219 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `knowledge_graph.py` (~5890 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `knowledge_graph.py` (~5933 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1183 tok, large) — # Copyright 2026 STARGA, Inc.
 - `lineage_staleness.py` (~1916 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
 - `llm_extractor.py` (~5372 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
