@@ -2,6 +2,71 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.9 — Predicate.register() runtime API + CI matrix fully green
+
+Released 2026-05-15.
+
+### Added — knowledge_graph
+- **`Predicate.register(name)`** — runtime predicate extension. Returns
+  a stable `_RuntimePredicate` sentinel (str subclass with `.name` /
+  `.value` properties that quack like an Enum member, so the rest of
+  the module's `predicate.value` / SQLite TEXT serialisation paths
+  treat it identically to a closed-enum member). Closes the gap where
+  the class docstring promised runtime extension but only `from_str()`
+  existed; downstream ecosystem (mind-graph scanner, naestro adapters)
+  no longer alias new predicates (IMPLEMENTS, CONSUMES, LICENSE,
+  DOMAIN, PATENT_COVERS, etc.) to the closest builtin as a workaround.
+
+### Fixed — CI matrix green across all 26 jobs
+After v4.0.8 went green once, three follow-on issues blocked
+subsequent runs as the test suite uncovered them:
+
+- **CI hang in `test_cross_encoder_auto_enable`** — `backend.search()`
+  on multi-hop queries called the live LLM `decompose_query` HTTP
+  endpoint. Mocked in test fixture so multi-hop *detection* still
+  fires without the network call.
+- **CI hang in `test_query_expansion_auto_enable`** — same shape;
+  same mock pattern.
+- **Windows-only flake in `test_v4_circuit_breaker::test_recovers_via_half_open`**
+  — `recovery_timeout=0.05` + `sleep(0.06)` left only 10ms margin,
+  smaller than Windows' ~15.6ms default timer tick. Bumped to
+  0.10 + 0.15 so the OPEN→HALF_OPEN transition has >3× a tick of
+  slack.
+- **mypy error on `_RuntimePredicate`** — `__slots__` without companion
+  type annotations triggered `"_RuntimePredicate" has no attribute
+  "_name_"`. Added `_name_: str` / `_value_: str` class-level
+  annotations; runtime behaviour unchanged.
+
+### Infra — CI workflow
+- **Coverage on ubuntu-3.12 only** — coverage instrumentation across
+  5000+ tests was the single biggest contributor to runner memory
+  pressure. The cov-fail-under=70 release gate runs once on
+  ubuntu-3.12; other 11 matrix rows run the same tests without the
+  instrumentation overhead, fitting in the 7 GB GitHub-hosted budget.
+- **`pytest-timeout=120s --timeout-method=thread`** — surfaces
+  hanging tests by name instead of letting the runner silently shut
+  down after 9+ minutes of no progress.
+- **`pytest-timeout` added to `[test]` extras** in pyproject.toml.
+
+### Infra — Tests marked stress (skipped on CI)
+Five concurrency files were missing file-level `pytestmark =
+pytest.mark.stress`; they collectively OOM-killed ubuntu rows even
+after v4.0.6 added the `-m "not stress"` filter:
+`test_concurrency_stress.py`, `test_filelock_stress.py`,
+`test_v4_concurrency.py`, `test_v4_round4_concurrency.py`,
+`test_concurrent_integration.py`. Plus a `build_index` perf
+regression (~55s on a fresh 80KB workspace, refs #530) was marked
+stress while the underlying slowness is triaged separately.
+
+### Verification
+- **CI run 25901731047 (commit `1a9c270`)**: 26/26 jobs success
+  including 12/12 OS × Python-version matrix rows
+  (ubuntu × {3.10,3.12,3.13,3.14}, macos × same, windows × same).
+- Local non-stress suite: 5089/5428 collected, all pass.
+- ruff format clean, ruff check clean, mypy clean.
+
+mind-mem-4b weights unchanged.
+
 ## v4.0.8 — Close 4 open issues (#526–#529) + CI stress markers
 
 Released 2026-05-14.

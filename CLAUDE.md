@@ -4,7 +4,27 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
-**v4.0.8** (released 2026-05-14) — closes 4 open issues. **#526** ACL
+**v4.0.9** (released 2026-05-15) — Predicate.register() runtime API
++ CI matrix fully green across 12 OS×Python-version rows.
+
+* **Added**: `Predicate.register(name)` on `knowledge_graph` — returns
+  a `_RuntimePredicate` sentinel (str subclass with `.name`/`.value`
+  enum-shaped attrs) so downstream adapters can extend the predicate
+  set without forking the closed enum.
+* **Fixed**: live LLM HTTP calls in two test files
+  (`test_cross_encoder_auto_enable`, `test_query_expansion_auto_enable`)
+  that hung Windows CI; circuit-breaker timing flake on Windows
+  (recovery 0.05s → 0.1s; sleep 0.06s → 0.15s — margin > Windows
+  15.6ms tick); mypy `_RuntimePredicate` slot annotations.
+* **CI infra**: `--cov` on ubuntu-3.12 only (other 11 rows skip
+  instrumentation to fit GitHub 7 GB budget); `pytest-timeout=120s
+  --timeout-method=thread` surfaces hangs by name; 5 OOM-prone
+  concurrency files + slow `build_index` regression (refs #530)
+  marked file-level `pytestmark = pytest.mark.stress`.
+* **Verified**: CI run 25901731047 — 26/26 jobs `conclusion: success`
+  including all 12 matrix test rows.
+
+Builds on **v4.0.8** (released 2026-05-14) — closes 4 open issues. **#526** ACL
 `_get_request_scope` fail-closed: introspection exceptions return
 `"deny"` sentinel (was silent `None`→`"user"` downgrade); decorator
 short-circuits to reject the call; `acl_introspection_failed` log +
