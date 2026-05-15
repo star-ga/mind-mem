@@ -186,12 +186,18 @@ def test_open_does_not_call_wrapped_function(cb_on: Path) -> None:
 
 @pytest.mark.unit
 def test_recovers_via_half_open(cb_on: Path) -> None:
-    b = CircuitBreaker(failure_threshold=2, recovery_timeout=0.05)
+    # v4.0.9: timer-resolution margin. Windows timer resolution is
+    # ~15.6ms by default, so the original recovery_timeout=0.05 + sleep
+    # 0.06 (10ms slack) was flaky on windows-3.12 — retry_after rounded
+    # to 0.00s but the state machine hadn't transitioned. 0.1s timeout
+    # + 0.15s sleep gives 50ms of slack which is >3× the worst-case
+    # Windows tick.
+    b = CircuitBreaker(failure_threshold=2, recovery_timeout=0.1)
     for _ in range(2):
         with pytest.raises(RuntimeError):
             b.call(_raises)
     assert b.state() is CircuitState.OPEN
-    time.sleep(0.06)
+    time.sleep(0.15)
     # First call after timeout enters HALF_OPEN; success closes.
     assert b.call(lambda: "ok") == "ok"
     assert b.state() is CircuitState.CLOSED
@@ -199,10 +205,10 @@ def test_recovers_via_half_open(cb_on: Path) -> None:
 
 @pytest.mark.unit
 def test_half_open_failure_reopens_for_full_window(cb_on: Path) -> None:
-    b = CircuitBreaker(failure_threshold=1, recovery_timeout=0.05)
+    b = CircuitBreaker(failure_threshold=1, recovery_timeout=0.1)
     with pytest.raises(RuntimeError):
         b.call(_raises)
-    time.sleep(0.06)
+    time.sleep(0.15)
     # HALF_OPEN probe fails → re-OPEN
     with pytest.raises(RuntimeError):
         b.call(_raises)
