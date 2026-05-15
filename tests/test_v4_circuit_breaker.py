@@ -220,10 +220,12 @@ def test_half_open_failure_reopens_for_full_window(cb_on: Path) -> None:
 
 @pytest.mark.unit
 def test_half_open_requires_n_probes_to_close(cb_on: Path) -> None:
-    b = CircuitBreaker(failure_threshold=1, recovery_timeout=0.05, half_open_probes=3)
+    # v4.0.9: same Windows-timer-tick margin fix as test_recovers_via_half_open
+    # (recovery_timeout=0.05 + sleep 0.06 = 10ms slack < 15.6ms Windows tick).
+    b = CircuitBreaker(failure_threshold=1, recovery_timeout=0.1, half_open_probes=3)
     with pytest.raises(RuntimeError):
         b.call(_raises)
-    time.sleep(0.06)
+    time.sleep(0.15)
     # First two probes succeed but stay HALF_OPEN.
     b.call(lambda: 1)
     assert b.state() is CircuitState.HALF_OPEN

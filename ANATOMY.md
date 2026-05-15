@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 826 | **Est. tokens:** ~1,726,982
-**Generated:** 2026-05-15 05:34 UTC
+**Files:** 826 | **Est. tokens:** ~1,727,022
+**Generated:** 2026-05-15 05:45 UTC
 
 ## Token Budget Guide
 
@@ -66,7 +66,7 @@
 | `src/mind_mem/storage/` | 2 | ~4,193 |
 | `src/mind_mem/v4/` | 22 | ~57,813 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 277 | ~579,637 |
+| `tests/` | 277 | ~579,677 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~811 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -958,7 +958,7 @@
 - `test_v320_gaps.py` (~3257 tok, huge) — v3.2.0 gap tests — regression and edge-case coverage for new modules.
 - `test_v34_features.py` (~2993 tok, huge) — Tests for v3.4.0 retrieval features.
 - `test_v4_block_kinds.py` (~4112 tok, huge) — Tests for the v4 block-kind taxonomy module."""
-- `test_v4_circuit_breaker.py` (~3730 tok, huge) — Tests for v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10)."""
+- `test_v4_circuit_breaker.py` (~3770 tok, huge) — Tests for v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10)."""
 - `test_v4_cognitive_kernel.py` (~2770 tok, huge) — Tests for the v4 Cognitive Mind Kernel registry + dispatcher."""
 - `test_v4_concurrency.py` (~2325 tok, huge) — v4 concurrency / fuzz tests.
 - `test_v4_federation_wire.py` (~2162 tok, huge) — Wire-transport tests for v4 federation.
