@@ -1224,6 +1224,8 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 MIND-Mem ships with a [Model Context Protocol](https://modelcontextprotocol.io/) server that exposes memory as resources and tools to any MCP-compatible client.
 
+> **Pair with [mind-nerve](https://pypi.org/project/mind-nerve/) for token-cheap routing.** When your agent host loads many skills/tools/MCP servers, mind-nerve sits in front and returns only the top-K relevant to each request — typically a 95%+ reduction in skill-listing tokens. Apache-2.0 wheel, `pip install mind-nerve`. See [`star-ga/mind-nerve`](https://github.com/star-ga/mind-nerve).
+
 ### Install
 
 ```bash
