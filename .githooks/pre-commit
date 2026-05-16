@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# arch-mind sidecar-scan on commit (T5 day 1 — log only, no gate yet)
+ARCH_MIND="${ARCH_MIND_BIN:-$(command -v arch-mind 2>/dev/null)}"
+[ -z "$ARCH_MIND" ] && [ -x /home/n/arch-mind/bin/arch-mind ] && ARCH_MIND=/home/n/arch-mind/bin/arch-mind
+[ -x "$ARCH_MIND" ] || exit 0  # silently skip if arch-mind missing (e.g., on contributor machines without it)
+mkdir -p .arch-mind
+"$ARCH_MIND" sidecar-scan --repo . --out .arch-mind/last_summary.json >/dev/null 2>&1 || true
+exit 0
