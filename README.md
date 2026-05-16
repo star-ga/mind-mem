@@ -7,7 +7,8 @@
   <sub>OpenClaw is an <a href="https://github.com/openclaw/openclaw">open-source AI assistant platform</a> with multi-channel support.</sub>
 </p>
 <p align="center">
-  Local-first &bull; Zero-infrastructure &bull; Governance-aware &bull; MIND-accelerated
+  Local-first &bull; Zero-infrastructure &bull; Governance-aware &bull; MIND-accelerated<br>
+  <sub>MIND Language Profile: <code>default</code> (full tensor stdlib + Q16.16 + heap) &mdash; see <a href="https://github.com/star-ga/mind/blob/main/docs/roadmap.md#phase-106--library-output--c-abi-mindc-026--030">Phase 10.6</a></sub><!-- mind-profile: default -->
 </p>
 <p align="center">
   <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/v/mind-mem?include_prereleases&style=flat-square&color=blue&label=PyPI" alt="PyPI"></a>
