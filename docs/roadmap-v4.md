@@ -541,38 +541,36 @@ ships later) is significantly lower than the first.
   Each instance trains its own router; cross-instance router
   federation is a v2 concern.
 
-### §8 — Data-oblivious quantization (research watch)
+### §8 — Data-oblivious quantization (considered and declined)
+
+**Status: declined 2026-05-18.** Evaluated 2026-05-17, declined the
+next day. Kept here so the reasoning is on record and future
+sessions do not re-evaluate the same source from scratch.
 
 v4 already ships product-quantization vector compression + an HNSW
-kind index. A separate line of vector-index work (evaluated
-2026-05-17) takes a *data-oblivious* approach: quantize vectors
-without training a codebook on the corpus, so indexing is instant
-and append-only ingest never triggers a codebook rebuild. That
-property is conceptually aligned with the CAS instant-ingest
-discipline already in v4 — a new block should not force a global
-re-quantization pass.
+kind index. A separate line of vector-index work takes a
+*data-oblivious* approach: quantize vectors without training a
+codebook on the corpus, so indexing is instant and append-only
+ingest never triggers a codebook rebuild. That property is
+conceptually aligned with the CAS instant-ingest discipline already
+in v4.
 
-**What's worth lifting (research watch, not scheduled).** The
-data-oblivious idea itself: codebook-free quantization that keeps
-ingest O(1) in corpus size. If implemented in Q16.16 fixed-point,
-the quantization step is both faster *and* cross-arch
-bit-identical — a strictly better position than the reference
-implementations, which achieve speed via per-architecture
-hand-tuned SIMD (NEON / AVX-512) and therefore produce
-architecture-dependent results.
+**Why declined.** The reference implementations achieve their speed
+via per-architecture hand-tuned SIMD (NEON / AVX-512), which
+produces architecture-dependent results. mind-mem's retrieval moat
+is Q16.16 cross-arch deterministic ranking; adopting that approach
+would reintroduce exactly the nondeterminism that differentiates
+mind-mem from FP-bound competitors. The data-oblivious idea is
+sound in isolation, but v4's existing PQ + HNSW path is already
+sufficient for current workloads, so the codebook-free benefit does
+not justify the integration cost or the determinism risk.
 
-**What NOT to lift.** The per-architecture SIMD kernel approach.
-mind-mem's retrieval-scoring moat is Q16.16 cross-arch
-deterministic ranking; adopting divergent per-arch instruction
-paths for the same operation would reintroduce exactly the
-nondeterminism that differentiates mind-mem from FP-bound
-competitors. Data-oblivious: yes. Per-arch SIMD: no.
-
-**Promote-out criteria.** Schedule only if (a) PQ codebook
-retraining becomes a measured ingest bottleneck on a real
-workload, AND (b) a Q16.16-exact data-oblivious scheme is shown
-to hold recall within tolerance of the current PQ path. Until
-then, research watch.
+**Reusable conclusion (do not re-derive).** Data-oblivious
+codebook-free quantization: conceptually fine. Per-arch SIMD
+kernels for the same operation: rejected on cross-arch bit-identity
+grounds. Any future revisit must produce a Q16.16-exact scheme
+*and* demonstrate a measured PQ-codebook ingest bottleneck on a
+real workload before it earns a roadmap slot — neither holds today.
 
 ### Why v4.1 not v4.0
 
