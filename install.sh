@@ -137,18 +137,23 @@ install_package() {
       fi
       # Use mktemp instead of a $PID-suffixed /tmp path — $PID is guessable
       # on a shared host and the predictable filename is a symlink-race
-      # surface. mktemp owns the cleanup and the trap fires on any exit.
+      # surface. Cleanup is explicit at each exit branch (a `RETURN` trap
+      # would fire after the local went out of scope under `set -u` and
+      # bashisms — Windows-CI burnt that on the previous attempt).
       local pip_err
       pip_err=$(mktemp -t mind-mem-pip-err.XXXXXX) || { echo "mktemp failed" >&2; exit 1; }
-      trap 'rm -f "$pip_err"' RETURN
       if ! ( cd "$pip_cwd" && python3 -m pip install --user --upgrade "$spec" ) 2>"$pip_err"; then
         if grep -q "externally-managed\|EXTERNALLY-MANAGED\|PEP 668" "$pip_err"; then
           warn "pip --user blocked by PEP 668; retrying with --break-system-packages"
+          rm -f "$pip_err"
           ( cd "$pip_cwd" && python3 -m pip install --user --upgrade --break-system-packages "$spec" )
         else
           cat "$pip_err" >&2
+          rm -f "$pip_err"
           exit 1
         fi
+      else
+        rm -f "$pip_err"
       fi
       ;;
   esac
