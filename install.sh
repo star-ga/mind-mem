@@ -135,17 +135,21 @@ install_package() {
       if $is_local; then
         pip_cwd="$MIND_MEM_DIR"
       fi
-      if ! ( cd "$pip_cwd" && python3 -m pip install --user --upgrade "$spec" ) 2>/tmp/mind-mem-pip-err.$$; then
-        if grep -q "externally-managed\|EXTERNALLY-MANAGED\|PEP 668" /tmp/mind-mem-pip-err.$$; then
+      # Use mktemp instead of a $PID-suffixed /tmp path — $PID is guessable
+      # on a shared host and the predictable filename is a symlink-race
+      # surface. mktemp owns the cleanup and the trap fires on any exit.
+      local pip_err
+      pip_err=$(mktemp -t mind-mem-pip-err.XXXXXX) || { echo "mktemp failed" >&2; exit 1; }
+      trap 'rm -f "$pip_err"' RETURN
+      if ! ( cd "$pip_cwd" && python3 -m pip install --user --upgrade "$spec" ) 2>"$pip_err"; then
+        if grep -q "externally-managed\|EXTERNALLY-MANAGED\|PEP 668" "$pip_err"; then
           warn "pip --user blocked by PEP 668; retrying with --break-system-packages"
           ( cd "$pip_cwd" && python3 -m pip install --user --upgrade --break-system-packages "$spec" )
         else
-          cat /tmp/mind-mem-pip-err.$$ >&2
-          rm -f /tmp/mind-mem-pip-err.$$
+          cat "$pip_err" >&2
           exit 1
         fi
       fi
-      rm -f /tmp/mind-mem-pip-err.$$
       ;;
   esac
 }

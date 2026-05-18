@@ -222,6 +222,22 @@ Copilot is near-universal — no way to detect whether a given user
 actually has Copilot enabled, so we assume they might and drop the
 file in. Harmless if Copilot is absent.
 
+## GitHub Copilot CLI
+
+| | |
+|---|---|
+| Config path | `<ws>/AGENTS.md` (workspace memory protocol) |
+| MCP path | `~/.copilot/mcp-config.json` |
+| Format | Markdown + `{"mcpServers": {...}}` JSON |
+| Detection | `copilot` binary on PATH or `~/.copilot/` directory |
+| Install | `mm install copilot-cli` |
+
+Wires the `@github/copilot` CLI (a separate product from the VS Code
+Copilot extension above). The workspace `AGENTS.md` carries the same
+memory protocol snippet Codex and Vibe use, while the MCP entry at
+`~/.copilot/mcp-config.json` exposes the `mind-mem` MCP server inside
+each Copilot session.
+
 ## Cody (Sourcegraph)
 
 | | |

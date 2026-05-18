@@ -22,7 +22,7 @@
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
   <img src="https://img.shields.io/badge/tests-5428%2B-brightgreen?style=flat-square" alt="Tests: 5428+">
   <img src="https://img.shields.io/badge/MCP_tools-84-blue?style=flat-square" alt="MCP Tools: 84">
-  <img src="https://img.shields.io/badge/clients-15-blueviolet?style=flat-square" alt="AI Clients: 15">
+  <img src="https://img.shields.io/badge/clients-18-blueviolet?style=flat-square" alt="AI Clients: 18">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
   <img src="https://img.shields.io/badge/audit-10--LLM_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="10-LLM consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
 </p>

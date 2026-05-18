@@ -38,7 +38,7 @@ Three-column ledger of what is operational on the current `main`, what is in-tre
 | Component | Source | Notes |
 |---|---|---|
 | MCP server entry | `src/mind_mem/mcp_server.py` | 81 tools across recall / write / governance / observability / audit. |
-| Native MCP integration (16 clients) | `src/mind_mem/hook_installer/` | `mm install-all` wires Claude Code, Claude Desktop, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed, OpenClaw + 8 more. |
+| Native MCP integration (18 clients) | `src/mind_mem/hook_installer/` | `mm install-all` wires Claude Code, Claude Desktop, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor, Windsurf, Zed, OpenClaw + 9 more. |
 | Multi-backend LLM extractor | `src/mind_mem/extractors/` | ollama / openai-compatible / vLLM / exllamav2. |
 
 ### MIND scoring kernels

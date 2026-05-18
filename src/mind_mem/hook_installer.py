@@ -790,6 +790,21 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         ),
         always_offer=True,  # virtually every dev machine has Copilot potential
     ),
+    # GitHub Copilot CLI (`@github/copilot` npm) — distinct product from the
+    # VS Code Copilot extension above. Ships its own `~/.copilot/` config
+    # tree and an MCP integration point at `mcp-config.json` using the
+    # canonical `{"mcpServers": {...}}` shape.
+    "copilot-cli": AgentSpec(
+        name="copilot-cli",
+        description="GitHub Copilot CLI (@github/copilot)",
+        config_fmt="text-block",
+        path_tmpl="{ws}/AGENTS.md",
+        content_tmpl=MEMORY_PROTOCOL_SNIPPET,
+        detect_paths=("{home}/.copilot",),
+        detect_binaries=("copilot",),
+        mcp_fmt="mcp-json-servers",
+        mcp_path_tmpl="{home}/.copilot/mcp-config.json",
+    ),
     "cody": AgentSpec(
         name="cody",
         description="Sourcegraph Cody",

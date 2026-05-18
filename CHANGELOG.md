@@ -59,9 +59,10 @@ regression (~55s on a fresh 80KB workspace, refs #530) was marked
 stress while the underlying slowness is triaged separately.
 
 ### Verification
-- **CI run 25901731047 (commit `1a9c270`)**: 26/26 jobs success
-  including 12/12 OS × Python-version matrix rows
+- CI green across the 12 OS × Python-version matrix rows
   (ubuntu × {3.10,3.12,3.13,3.14}, macos × same, windows × same).
+  Live status is rendered by the dynamic badges in `README.md`; pinned
+  run IDs go stale on the next flake.
 - Local non-stress suite: 5089/5428 collected, all pass.
 - ruff format clean, ruff check clean, mypy clean.
 
@@ -4474,11 +4475,15 @@ These remain on the roadmap under v2.1.0 and ship when the training infrastructu
 - Optimized `index_stats` MCP tool to use FTS index count (O(1)) instead of re-parsing all files (O(N))
 - Cleaned up dead silent catch in `sqlite_index.py` xref scan
 
-### FORTRESS binary hardening (ce33649)
-- Expanded binary patching keyword lists from ~25 to 130+ patterns (8 leak categories)
-- Added `patchelf --set-rpath '$ORIGIN'` to remove hardcoded build paths from ELF RPATH
-- Build now fails if any of 8 leak categories (MIND source, attributes, TOML configs, hex auth key, RPATH, VM IR, protection internals, TOML comments) still have patterns in final binary
-- String count: 412 → 186 (all remaining are exported symbols + system calls)
+### Bundled binary hardening (ce33649)
+- Expanded the post-build scrubber's keyword set and added
+  `patchelf --set-rpath '$ORIGIN'` to relocate the runtime loader away
+  from any build-host paths.
+- Release builds now fail if the scrubber finds residual patterns from
+  the maintained leak-category list (compile-time set, not enumerated
+  in public artefacts).
+- The bundled `.so` ships with only the exported symbols + system call
+  strings the loader needs.
 
 ### Second audit pass — full fix
 - **#5 Hidden coupling**: Added `_log.info` for missing optional subsystems (block_metadata, intent_router, llm_extractor) at import time

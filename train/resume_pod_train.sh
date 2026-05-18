@@ -8,7 +8,22 @@ set -euo pipefail
 
 POD_ID="uz2uajluzskmm2"
 SSH_KEY="/home/n/.ssh/id_ed25519"
-HF_TOKEN_FILE="/tmp/hf_write_token"
+# Default HF token location — override with HF_TOKEN_FILE env. Kept under
+# $HOME (not /tmp) to avoid a world-readable, predictably-named path that
+# other tenants of a shared box could race or read. 0600 enforced below.
+HF_TOKEN_FILE="${HF_TOKEN_FILE:-${HOME}/.config/mind-mem/hf_write_token}"
+if [[ ! -f "${HF_TOKEN_FILE}" ]]; then
+    echo "missing HF token at ${HF_TOKEN_FILE}" >&2
+    echo "create it with: install -m 0600 /dev/stdin '${HF_TOKEN_FILE}' <<<\"hf_...\"" >&2
+    exit 1
+fi
+# Refuse if the file is group/world readable — token would survive any
+# ps/lsof leak that argv-injection would have caused.
+perms=$(stat -c '%a' "${HF_TOKEN_FILE}")
+if [[ "${perms}" != "600" && "${perms}" != "400" ]]; then
+    echo "refusing to use ${HF_TOKEN_FILE}: perms ${perms}, want 600" >&2
+    exit 1
+fi
 
 api_key() {
     awk -F'=' '/api_key|^apikey/ {gsub(/[ "]/, "", $2); print $2; exit}' /home/n/.runpod/config.toml
@@ -70,13 +85,19 @@ fi
 
 echo ""
 echo "=== Step 5: relaunch training ==="
-HF_TOKEN=$(cat "${HF_TOKEN_FILE}")
-ssh "${SSH_OPTS[@]}" "root@${ip}" "cd /workspace && \
-  test -f train-output/train.log && mv train-output/train.log train-output/train-prev.log; \
-  nohup env HF_TOKEN=${HF_TOKEN} MM_TRAIN_ROOT=/workspace/train-output MM_CORPUS=/workspace/train-output/corpus.jsonl \
-    python3 -u runpod_full_ft.py >/workspace/train-output/train.log 2>&1 < /dev/null & \
-  echo \"launched pid=\$!\"; \
-  sleep 3; head -10 /workspace/train-output/train.log"
+# Token is piped over ssh stdin and read by the remote shell — it never
+# appears in argv (so `ps`/`auditd`/`/proc/*/cmdline` on either side stays
+# clean) and it's never assigned to a local shell variable (so no shell
+# history risk on this host either).
+ssh "${SSH_OPTS[@]}" "root@${ip}" 'set -e
+IFS= read -r HF_TOKEN
+cd /workspace
+test -f train-output/train.log && mv train-output/train.log train-output/train-prev.log
+HF_TOKEN="${HF_TOKEN}" MM_TRAIN_ROOT=/workspace/train-output MM_CORPUS=/workspace/train-output/corpus.jsonl \
+    nohup python3 -u runpod_full_ft.py >/workspace/train-output/train.log 2>&1 </dev/null &
+echo "launched pid=$!"
+sleep 3
+head -10 /workspace/train-output/train.log' < "${HF_TOKEN_FILE}"
 
 echo ""
 echo "=== Resume launched at ${ip}:${port} ==="
