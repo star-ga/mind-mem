@@ -16,13 +16,13 @@ Published on PyPI: `pip install mind-mem`
   that hung Windows CI; circuit-breaker timing flake on Windows
   (recovery 0.05s → 0.1s; sleep 0.06s → 0.15s — margin > Windows
   15.6ms tick); mypy `_RuntimePredicate` slot annotations.
-* **CI infra**: `--cov` on ubuntu-3.12 only (other 11 rows skip
-  instrumentation to fit GitHub 7 GB budget); `pytest-timeout=120s
-  --timeout-method=thread` surfaces hangs by name; 5 OOM-prone
+* **CI infra**: `--cov` on ubuntu-3.12 only (other matrix rows skip
+  instrumentation to fit GitHub's 7 GB budget); `pytest-timeout=120s
+  --timeout-method=thread` surfaces hangs by name; OOM-prone
   concurrency files + slow `build_index` regression (refs #530)
-  marked file-level `pytestmark = pytest.mark.stress`.
-* **Verified**: CI run 25901731047 — 26/26 jobs `conclusion: success`
-  including all 12 matrix test rows.
+  marked file-level `pytestmark = pytest.mark.stress`. CI run id +
+  job count are recorded in CHANGELOG.md per release, not pinned here
+  (they go stale on every flake — see `feedback_ci_green_claim_discipline`).
 
 Builds on **v4.0.8** (released 2026-05-14) — closes 4 open issues. **#526** ACL
 `_get_request_scope` fail-closed: introspection exceptions return
