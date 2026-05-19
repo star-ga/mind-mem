@@ -26,8 +26,12 @@ from .observability import get_logger
 
 _log = get_logger("block_parser")
 
-# Maximum input size to parse (100KB). Larger files are truncated with a warning.
-MAX_PARSE_SIZE = 100_000
+# DoS guard only — NOT a normal operating limit. A persistent-memory
+# corpus legitimately grows to many MB; the cap must be far above real
+# workspace sizes so it never silently drops accumulated memory. Over
+# this bound parse_file() emits a LOUD warning and truncates only at a
+# block boundary (it never silently discards blocks within the cap).
+MAX_PARSE_SIZE = 64_000_000  # 64 MB
 
 
 class BlockCorruptedError(ValueError):
@@ -558,19 +562,30 @@ def parse_file(filepath: str, *, strict: bool = False) -> list[dict]:
     # (cp1252 on en-US). Production callers should always write UTF-8; the
     # tolerant read is here so a malformed byte does not shadow the whole
     # block from the index.
+    # Read the ENTIRE file. A persistent-memory corpus (DECISIONS.md,
+    # TASKS.md, ingested haystacks) grows without bound; reading only the
+    # first MAX_PARSE_SIZE bytes silently drops every block past the cap
+    # — catastrophic, invisible recall loss for any mature workspace.
     with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-        content = f.read(MAX_PARSE_SIZE + 1)
+        content = f.read()
     if len(content) > MAX_PARSE_SIZE:
-        content = content[:MAX_PARSE_SIZE]
-        # Try to truncate at a block boundary to avoid corrupt partial blocks
-        last_boundary = content.rfind("\n[")
+        # Over the (generous) DoS guard. Truncate ONLY at a real block
+        # boundary and make it LOUD — never silently lose memory.
+        original_len = len(content)
+        cut = content[:MAX_PARSE_SIZE]
+        last_boundary = cut.rfind("\n[")
         if last_boundary > 0:
-            # Verify it looks like a block header (e.g. \n[D- or \n[T- etc)
-            after = content[last_boundary + 2 : last_boundary + 4]
+            after = cut[last_boundary + 2 : last_boundary + 4]
             if after and after[0].isupper():
-                content = content[:last_boundary]
-        else:
-            _log.warning("MAX_PARSE_SIZE truncation could not find a block boundary; result may contain a partial block")
+                cut = cut[:last_boundary]
+        content = cut
+        _log.warning(
+            "block_parser_input_over_max_parse_size",
+            file=filepath,
+            bytes=original_len,
+            max_parse_size=MAX_PARSE_SIZE,
+            msg=("Corpus file exceeds MAX_PARSE_SIZE; blocks beyond the cap were NOT indexed. Split the file or raise MAX_PARSE_SIZE."),
+        )
 
     blocks = parse_blocks(content)
     valid: list[dict] = []

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import functools
 import importlib.util
+import os
 import threading
 import time
 from typing import Any, Callable, TypeVar
@@ -109,6 +110,9 @@ def init_prometheus(port: int = 9090) -> None:
 _tracer: Any = None
 _otel_lock = threading.Lock()
 _otel_initialized = False
+# Evaluated once on first access — _get_tracer() is on the hot path of
+# every @traced function, so avoid an os.environ lookup per call.
+_telemetry_disabled: bool | None = None
 
 
 def init_tracing(endpoint: str | None = None) -> None:
@@ -151,10 +155,18 @@ def init_tracing(endpoint: str | None = None) -> None:
 
 
 def _get_tracer() -> Any:
-    """Return the tracer, initialising with NoOp if not yet set up."""
-    global _tracer
+    """Return the tracer, initialising with NoOp if not yet set up.
 
-    if not _HAS_OTEL:
+    Set ``MIND_MEM_DISABLE_TELEMETRY=1`` to force-disable tracing
+    regardless of installed exporters. Tracing is pure instrumentation
+    with no effect on retrieval results; disabling it is the supported
+    configuration for benchmarks and latency-sensitive runs.
+    """
+    global _tracer, _telemetry_disabled
+
+    if _telemetry_disabled is None:
+        _telemetry_disabled = bool(os.environ.get("MIND_MEM_DISABLE_TELEMETRY"))
+    if not _HAS_OTEL or _telemetry_disabled:
         return None
 
     if _tracer is None:

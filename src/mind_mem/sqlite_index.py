@@ -27,6 +27,7 @@ import json
 import os
 import re
 import sqlite3
+import threading
 from datetime import datetime
 
 from .block_parser import parse_file
@@ -102,18 +103,48 @@ def _connect(workspace: str, readonly: bool = False) -> sqlite3.Connection:
 # ---------------------------------------------------------------------------
 
 _conn_managers: dict[str, ConnectionManager] = {}
-_conn_managers_lock = __import__("threading").Lock()
+_conn_managers_lock = threading.Lock()
+
+# Per-thread re-entrancy guard for query_index.  When the index file is
+# missing and query_index falls back to recall(), and recall() is configured
+# to use the sqlite backend, it would call query_index() again — causing
+# mutual infinite recursion.  Tracking entry per workspace string per thread
+# breaks the cycle: a re-entrant call returns [] instead of looping.
+_query_index_active: threading.local = threading.local()
 
 
 def _get_conn_manager(workspace: str) -> ConnectionManager:
     """Return a shared ConnectionManager for *workspace*.
 
     Ensures the index directory exists and caches one manager per db_path.
+
+    If the cached manager's DB file has been deleted from disk (e.g. because
+    the workspace was wiped by a test harness or ``shutil.rmtree``), the stale
+    manager is evicted and a fresh one is returned.  Without this check the
+    stale ``sqlite3.Connection`` inside the old manager keeps writing to the
+    deleted inode, the file path remains absent on disk, and
+    ``query_index()``'s "index_missing_fallback" branch then calls
+    ``recall()`` → ``query_index()`` → ``recall()`` ... in an unbounded
+    mutual recursion.
     """
     path = _db_path(workspace)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with _conn_managers_lock:
         mgr = _conn_managers.get(path)
+        if mgr is not None and not os.path.isfile(path):
+            # DB file was removed (workspace deleted between runs). Drop the
+            # cache entry so a fresh manager is created below, producing a
+            # new on-disk file. ``close()`` here is best-effort: it closes
+            # the calling thread's pooled connections; any other thread's
+            # thread-local connection to the now-unlinked inode is harmless
+            # (the manager is removed from the cache, so no new caller can
+            # reach it, and the OS reclaims the inode once those fds close).
+            try:
+                mgr.close()
+            except Exception:
+                pass
+            del _conn_managers[path]
+            mgr = None
         if mgr is None:
             mgr = ConnectionManager(path)
             _conn_managers[path] = mgr
@@ -847,21 +878,41 @@ def query_index(
 
     Falls back to filesystem scan (recall.recall()) if index doesn't exist.
     """
+    # Re-entrancy guard: if this thread is already inside query_index for the
+    # same workspace (can happen when the index-missing fallback calls recall()
+    # which — with backend="sqlite" — would immediately call query_index again),
+    # return an empty list instead of recursing infinitely.
+    _active: set = getattr(_query_index_active, "workspaces", None)
+    if _active is None:
+        _active = set()
+        _query_index_active.workspaces = _active
+    if workspace in _active:
+        _log.error(
+            "query_index_reentrant_call_blocked",
+            workspace=workspace,
+            hint="sqlite index missing and recall() re-entered query_index; returning []",
+        )
+        return []
+
     db_path = _db_path(workspace)
     if not os.path.isfile(db_path):
         _log.info("index_missing_fallback", db=db_path)
         from .recall import recall
 
-        return recall(
-            workspace,
-            query,
-            limit=limit,
-            active_only=active_only,
-            graph_boost=graph_boost,
-            retrieve_wide_k=retrieve_wide_k,
-            rerank=rerank,
-            rerank_debug=rerank_debug,
-        )
+        _active.add(workspace)
+        try:
+            return recall(
+                workspace,
+                query,
+                limit=limit,
+                active_only=active_only,
+                graph_boost=graph_boost,
+                retrieve_wide_k=retrieve_wide_k,
+                rerank=rerank,
+                rerank_debug=rerank_debug,
+            )
+        finally:
+            _active.discard(workspace)
 
     # Initialize calibration manager (optional — graceful degradation)
     _cal_mgr = None
