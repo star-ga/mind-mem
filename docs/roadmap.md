@@ -185,7 +185,7 @@ transport ships.
 
 - Networked mesh / federated recall — that's v4.0 (see
   "v4.0 candidates" below)
-- Streaming consensus mixer — stays in private naestro-bot
+- Streaming consensus mixer — stays in a private orchestration layer
 - gRPC transport — v4.0
 - Sharded Postgres — v4.0
 
@@ -264,8 +264,8 @@ mixed lists accepted, empty list / missing key / missing file
 no-op pass. 25 unit tests in `tests/test_audit_pinned.py`. No
 breaking changes. Model Safety Audit theme is now complete (audit
 → sign → provenance → MCP → gate → backend wiring → CI hook).
-Social ingestion has been moved out of MIND-Mem to naestro-bot
-(see ROADMAP.md root) — fetching is an agent-layer concern,
+Social ingestion has been moved out of MIND-Mem to a private
+agent layer — fetching is an agent-layer concern,
 MIND-Mem stays the substrate.
 
 ## v3.8.6 (Released 2026-05-02)
@@ -501,7 +501,7 @@ Direction:
 > (HTTP/REST fail-closed auth, cross-platform rollback fix, CI
 > hardening — see CHANGELOG.md). v3.8.0 was the Model Safety
 > Audit minor (see `ROADMAP.md` root). The originally-bundled
-> social-ingestion thread has been moved to naestro-bot — fetching
+> social-ingestion thread has been moved to a private agent layer — fetching
 > is an agent-layer concern and inheriting per-platform fetchers
 > would have broken MIND-Mem's zero-dep posture. The Always-On
 > Memory Agent patterns below are deferred to v3.9.0 candidates and
@@ -721,9 +721,8 @@ The walkthrough and persona primitives are designed for cross-repo consumption,
 not just mind-mem-internal use. Once shipped, the following MIND-ecosystem
 projects can adopt without parallel implementation:
 
-- **Naestro** — primary consumer. Spec'd as `R5 - Naestro Lens` in
-  `~/naestro/ROADMAP.md`. Surfaces walkthroughs through CLI (`naestro lens`),
-  Cockpit panel, Telegram channel, and governance evidence chain. Gated on
+- **Orchestration layer** — primary consumer. Surfaces walkthroughs through
+  its CLI, cockpit panel, chat channel, and governance evidence chain. Gated on
   this v3.9.0 work.
 - **512-mind** — module-level walkthroughs over the 38-module governance
   kernel (DOS / CVS / ICL / Five Anchors / payment_rail) for new contributors
@@ -816,7 +815,7 @@ chains: every governed assertion has byte-level provenance.
   Rust core we don't ship today.
 - Multi-source connectors (S3, GDrive, Slack, Postgres CDC, Kafka).
   MIND-Mem's per-workspace file model is the right unit; multi-source
-  ingestion is a Naestro-layer concern (see `~/naestro/ROADMAP.md` R6).
+  ingestion is an orchestration-layer concern.
 - "React for data engineering" mental model as an API. Useful as
   documentation framing for v4.0 networked mesh (see below) but not as
   a replacement for the existing `@memo` / `extract` / `recall`

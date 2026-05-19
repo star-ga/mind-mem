@@ -464,13 +464,14 @@ linear in the registry size. Tool library growth becomes a
 corpus-growth problem (more training data for the router), not a
 context-window problem.
 
-**Coordination with R19 in naestro.** Same architectural pattern at
-a different layer. R19 routes between LLMs and skill-library
-entries at the orchestration substrate; v4.1 §7 routes between MCP
-tools inside the memory substrate. The two routers may share
-training infrastructure but have distinct taxonomies and dispatch
-surfaces. A naestro session that touches mind-mem fires both
-routers in sequence: R19 picks the LLM and the relevant skills,
+**Coordination with the orchestration router.** Same architectural
+pattern at a different layer. The orchestration router routes
+between LLMs and skill-library entries at the orchestration
+substrate; v4.1 §7 routes between MCP tools inside the memory
+substrate. The two routers may share training infrastructure but
+have distinct taxonomies and dispatch surfaces. An orchestration
+session that touches mind-mem fires both routers in sequence: the
+orchestration router picks the LLM and the relevant skills,
 v4.1 §7 picks the MCP tools the chosen LLM will see.
 
 **Training the router.** Two data sources, both compatible with the
@@ -527,7 +528,7 @@ keeps the surface free to grow.
 
 **Effort.** ~6 weeks for §7-0 through §7-5, with §7-3 (model
 training) as the dominant cost. The training infrastructure is
-shared with naestro R19 — same approach, different taxonomy and
+shared with the orchestration router — same approach, different taxonomy and
 target — so the marginal cost on the second router (whichever
 ships later) is significantly lower than the first.
 

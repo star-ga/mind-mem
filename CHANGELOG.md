@@ -13,7 +13,7 @@ Released 2026-05-15.
   the module's `predicate.value` / SQLite TEXT serialisation paths
   treat it identically to a closed-enum member). Closes the gap where
   the class docstring promised runtime extension but only `from_str()`
-  existed; downstream ecosystem (mind-graph scanner, naestro adapters)
+  existed; downstream ecosystem (mind-graph scanner, orchestration adapters)
   no longer alias new predicates (IMPLEMENTS, CONSUMES, LICENSE,
   DOMAIN, PATENT_COVERS, etc.) to the closest builtin as a workaround.
 
@@ -2901,8 +2901,8 @@ samples odd, ensemble uses reranker not retriever, etc.).
 ### Added — benchmarking + ops
 
 - **``benchmarks/local_stack_audit.py``** — pre-bench health check
-  across 11 optional features (ollama, redis, claude-proxy, CE, BGE
-  v2-m3, sqlite-vec, v3.3.0 + v4.0-prep modules, 25 kernels).
+  across 11 optional features (ollama, redis, local LLM bridge, CE,
+  BGE v2-m3, sqlite-vec, v3.3.0 + v4.0-prep modules, 25 kernels).
 - **``benchmarks/runpod_kickoff.sh``** — one-shot Runpod H200/A100
   training kickoff. Writes all artifacts to ``/runpod-volume``
   (persists across pod termination).
