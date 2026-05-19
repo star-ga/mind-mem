@@ -2,6 +2,39 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.12 — build_index perf fix (#530) + Windows CI green
+
+Released 2026-05-19.
+
+### Fixed — `build_index` perf regression (#530, Critical for dev/CI)
+- `extractor.extract_facts` ran a large IGNORECASE pattern set that
+  backtracks catastrophically on oversized/concatenated `Statement`
+  text. Profiled: `build_index` on an 80 KB single-block workspace
+  spent **55.9 s, all of it in `extract_facts`**. Atomic fact cards
+  only exist in short turns, so scanned text is now bounded by
+  `_FACT_TEXT_MAX = 4000` chars. **build_index 55.9 s → 0.19 s**;
+  correctness for real (≤4 KB) blocks unchanged; the parent block is
+  still fully FTS-indexed. `tests/test_sqlite_index.py::...past_64kb`
+  un-bandaged (removed `@pytest.mark.stress`) — runs in ~2 s as real
+  regression coverage again. GitHub issue #530 closed.
+
+### Fixed — Windows CI red
+- `tests/test_recall_recursion_fix.py::test_db_file_exists_after_second_build`
+  asserted the DB file is gone after `shutil.rmtree`. Linux unlinks
+  files with open handles; Windows does not, so a live cached
+  `ConnectionManager` SQLite handle left the file in place and failed
+  every `windows-latest` row (3.10–3.14). The cached manager is now
+  closed before `rmtree`, making teardown deterministic
+  cross-platform; behaviour under test (second build recreates the
+  DB) is unchanged. Full matrix green.
+
+### Docs
+- ROADMAP.md: added the long-horizon **Pure-MIND Core Port** section
+  and the public-MIND-source / commercial-protected-runtime boundary.
+
+No API change; no benchmark claims. PR #532 closed (superseded by
+#533 / v4.0.11).
+
 ## v4.0.11 — security: resolve code-scanning alerts #181–#189
 
 Released 2026-05-19.

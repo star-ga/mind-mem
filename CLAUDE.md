@@ -4,8 +4,15 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
-**v4.0.9** (released 2026-05-15) — Predicate.register() runtime API
-+ CI matrix fully green across 12 OS×Python-version rows.
+**v4.0.12** (released 2026-05-19) — `build_index` perf fix (#530:
+55.9 s → 0.19 s by bounding `extract_facts` scan text) + Windows CI
+green (cross-platform `ConnectionManager` teardown in the recursion
+regression test). Builds on **v4.0.11** (security code-scanning
+alerts #181–#189: CRLF log-sanitization + audited nosec), **v4.0.10**
+(recall↔query_index recursion fix, 100 KB block_parser truncation
+fix, observability/logging crash-safety, telemetry kill-switch,
+query-expansion synonym narrowing), and **v4.0.9** — Predicate.register()
+runtime API + CI matrix fully green across 12 OS×Python-version rows.
 
 * **Added**: `Predicate.register(name)` on `knowledge_graph` — returns
   a `_RuntimePredicate` sentinel (str subclass with `.name`/`.value`
