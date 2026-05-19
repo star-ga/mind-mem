@@ -6,8 +6,6 @@ import shutil
 import tempfile
 import unittest
 
-import pytest
-
 from mind_mem.sqlite_index import (
     _compute_block_hash,
     _connect,
@@ -96,7 +94,6 @@ class TestBuildIndex(_WorkspaceMixin, unittest.TestCase):
         self.assertGreater(r2["files_indexed"], 0)
         self.assertGreater(r2["blocks_indexed"], 0)
 
-    @pytest.mark.stress
     def test_incremental_detects_in_place_edit_past_64kb(self):
         """v3.7.0 M8 regression: pre-3.7.0 ``_file_hash`` only hashed
         the first 64KB + size. A file whose size + mtime stayed
@@ -107,11 +104,12 @@ class TestBuildIndex(_WorkspaceMixin, unittest.TestCase):
         ``mtime_ns`` back to the pre-edit values to mimic that
         scenario, then asserts the new full SHA-256 catches the diff.
 
-        v4.0.9: marked @pytest.mark.stress because the workspace
-        init + build_index path currently takes ~55s on a clean tmpdir
-        (perf regression, tracked separately). Local ``make test``
-        still runs it; CI's `-m "not stress"` filter skips it so the
-        runner doesn't pytest-timeout out at 120s.
+        Issue #530 (fixed): build_index on this 80 KB single-block
+        workspace took ~55s — all of it in ``extractor.extract_facts``
+        backtracking over the oversized Statement. Bounded by
+        ``_FACT_TEXT_MAX``; build_index now ~0.2s, so the stress
+        marker is removed and CI's ``-m "not stress"`` runs this again
+        as real regression coverage.
         """
         from mind_mem.sqlite_index import _connect
 

@@ -35,6 +35,12 @@ from .observability import get_logger
 
 _log = get_logger("extractor")
 
+# Max chars of a single observation scanned for atomic facts. The
+# IGNORECASE patterns below backtrack catastrophically on large /
+# concatenated inputs (issue #530); atomic facts live in short turns,
+# so anything beyond this window has no facts worth the O(n^2) cost.
+_FACT_TEXT_MAX = 4000
+
 # ---------------------------------------------------------------------------
 # Fact extraction patterns
 # ---------------------------------------------------------------------------
@@ -338,6 +344,17 @@ def extract_facts(
         if not speaker:
             speaker = speaker_match.group(1)
         text = text[speaker_match.end() :]
+
+    # Bound work to an atomic-observation-sized window. Fact cards are
+    # short atomic claims from a single turn/observation; the dozens of
+    # IGNORECASE regexes below exhibit catastrophic backtracking on
+    # large or concatenated inputs (issue #530: an 80 KB Statement took
+    # ~55 s, all in this function — profiled). Real observations are a
+    # few hundred chars; beyond _FACT_TEXT_MAX there are no meaningful
+    # atomic facts to find and the parent block is still fully indexed
+    # in FTS — only the small-to-big sub-fact optimisation is bounded.
+    if len(text) > _FACT_TEXT_MAX:
+        text = text[:_FACT_TEXT_MAX]
 
     cards = []
     prefix = f"{speaker} " if speaker else ""
