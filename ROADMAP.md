@@ -1830,3 +1830,56 @@ v3.9 hash-of-code invalidation + v3.10 governance drift detection are the operat
 - No retirement of an invariant before separation strategies have been exhausted (matches 512-mind Phase B addendum discipline)
 
 Acceptance gate: every new feature cites IFR component strengthened, law of evolution followed or forbidden, separation strategy for likely contradictions, and anti-pattern avoided.
+
+---
+
+## Pure-MIND Core Port (long-horizon architectural goal)
+
+**Goal:** progressively port the MIND-Mem core to pure MIND until the
+Python surface is a thin adapter shell, then eliminate it. MIND is now
+a self-hosted systems language (the compiler and source-quality
+toolchain self-host), so this is a real trajectory, not a category
+boundary.
+
+**Already MIND today:** the hot scoring/decision kernels ship as
+`.mind` and compile via `mindc` — `bm25`, `rrf`, `reranker`,
+`abstention`, `adversarial`, `answer`, `category`, `cognitive`,
+`cross_encoder`, `ensemble`, `evidence`, `governance`. These run with
+a pure-Python fallback, so the kernel boundary is already proven and
+non-load-bearing for availability.
+
+**Gating dependency (honest):** a full port is sequenced behind the
+MIND toolchain's **library-emit / stable C-ABI** capability (cdylib
+output + FFI surface) maturing upstream. Until that lands, the I/O
+shell (MCP transport, SQLite/Postgres/Redis adapters, HTTP, external
+model clients) stays Python by necessity, not by design.
+
+**Sequencing (incremental, never a big-bang rewrite):**
+
+- [x] Hot scoring kernels in pure MIND (`mind/*.mind`, bench-gated)
+- [ ] Governance / decision / boundary layer in pure MIND — recall
+      scoring orchestration, quality-gate, ACL, contradiction and
+      decision rules (best fit for MIND's systems-programming surface;
+      no FFI required)
+- [ ] Core retrieval engine (index walk, fusion, rerank pipeline) in
+      pure MIND behind the C-ABI boundary
+- [ ] I/O adapters via the MIND C-ABI / FFI surface as it matures
+- [ ] Python reduced to a thin compatibility shim, then removed
+
+**Discipline (non-negotiable, every step):**
+
+- Every ported unit must be **byte-identical / bit-identical** to the
+  Python (or prior `.mind`) reference on the test corpus before it
+  replaces it.
+- The retrieval **perf-gate** (no regression beyond the standing cap)
+  must hold on every recompile and every port increment.
+- The pure-Python fallback remains the source of correctness until a
+  ported unit passes both gates; a recompiled/ported unit that fails
+  either gate does not ship — fallback stands.
+- New `mindc` releases are **recompile-and-verify**, not rewrite:
+  recompile `.mind` sources, run bit-identity + perf-gate, edit source
+  only where the compiler/tests surface a real divergence.
+
+**Explicitly not a goal:** rewriting working Python I/O glue for its
+own sake, or any port step that regresses correctness, the perf-gate,
+or the availability guarantee the Python fallback provides.
