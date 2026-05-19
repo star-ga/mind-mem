@@ -620,6 +620,23 @@ What this is NOT:
 - Not the default. The published recall number is the local-only
   path.
 
+### 10. Deferred candidate resolution for dangling references
+
+When a stored memory references an entity or block that does not yet
+exist (`[[unresolved-link]]`), the reference is currently dropped or
+left broken. Proposal: persist unresolvable references in a dedicated
+governed candidate table with ranked resolution suggestions, resolved
+on a later pass when the target entity is created — never auto-linked,
+always surfaced through the existing propose → review → apply gate.
+
+Rationale: a broken `[[ref]]` is silent knowledge loss; a held
+candidate with suggestions is recoverable and auditable. This extends
+the no-direct-writes guarantee to link resolution — deferred, not
+dropped, not silently guessed.
+
+Status: v4.1 candidate, design-only. Gated behind §5 contradiction-
+cluster ranking (shares the candidate-surfacing UX).
+
 ### Why v4.1 not v4.0
 
 All sub-sections are additive, schema-compatible, and orthogonal to the
