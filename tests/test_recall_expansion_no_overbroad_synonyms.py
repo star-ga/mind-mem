@@ -22,32 +22,25 @@ class TestLiveSynonyms:
 
     def test_stay_removed_from_live(self) -> None:
         assert "stay" not in _synonyms_of("live"), (
-            "'stay' in live-synonyms causes false-positive boosting of "
-            "sessions about staying late, staying at a hotel, etc."
+            "'stay' in live-synonyms causes false-positive boosting of sessions about staying late, staying at a hotel, etc."
         )
 
     def test_house_removed_from_live(self) -> None:
         assert "house" not in _synonyms_of("live"), (
-            "'house' is too broad — triggers on house music, house rules, "
-            "restaurant-house-wine, etc."
+            "'house' is too broad — triggers on house music, house rules, restaurant-house-wine, etc."
         )
 
     def test_home_removed_from_live(self) -> None:
-        assert "home" not in _synonyms_of("live"), (
-            "'home' is circular and too broad in compound nouns."
-        )
+        assert "home" not in _synonyms_of("live"), "'home' is circular and too broad in compound nouns."
 
     def test_location_removed_from_live(self) -> None:
         # "location" is a generic term that appears in many non-residence contexts
-        assert "location" not in _synonyms_of("live"), (
-            "'location' matches filming locations, GPS location queries, etc."
-        )
+        assert "location" not in _synonyms_of("live"), "'location' matches filming locations, GPS location queries, etc."
 
     def test_reside_kept_for_live(self) -> None:
         """'reside' is a genuine paraphrase — must remain."""
         assert "reside" in _synonyms_of("live"), (
-            "'reside' is an unambiguous paraphrase of 'live (somewhere)' and "
-            "must stay in the expansion table."
+            "'reside' is an unambiguous paraphrase of 'live (somewhere)' and must stay in the expansion table."
         )
 
 
@@ -55,14 +48,10 @@ class TestHomeSynonyms:
     """'home' should not expand to words that cause cross-document leakage."""
 
     def test_live_removed_from_home(self) -> None:
-        assert "live" not in _synonyms_of("home"), (
-            "Circular 'home'↔'live' expansion amplifies noise across sessions."
-        )
+        assert "live" not in _synonyms_of("home"), "Circular 'home'↔'live' expansion amplifies noise across sessions."
 
     def test_house_removed_from_home(self) -> None:
-        assert "house" not in _synonyms_of("home"), (
-            "'house' in home-synonyms fires on house music, The White House, etc."
-        )
+        assert "house" not in _synonyms_of("home"), "'house' in home-synonyms fires on house music, The White House, etc."
 
 
 class TestMovieSynonyms:
@@ -70,22 +59,15 @@ class TestMovieSynonyms:
 
     def test_show_removed_from_movie(self) -> None:
         assert "show" not in _synonyms_of("movie"), (
-            "'show' matches TV show, show me, show-and-tell, etc., "
-            "causing massive false-positive boosting."
+            "'show' matches TV show, show me, show-and-tell, etc., causing massive false-positive boosting."
         )
 
     def test_watch_removed_from_movie(self) -> None:
-        assert "watch" not in _synonyms_of("movie"), (
-            "'watch' matches watch (timepiece), watch out, neighbourhood watch, etc."
-        )
+        assert "watch" not in _synonyms_of("movie"), "'watch' matches watch (timepiece), watch out, neighbourhood watch, etc."
 
     def test_film_kept_for_movie(self) -> None:
         """'film' is an unambiguous paraphrase — must remain."""
-        assert "film" in _synonyms_of("movie"), (
-            "'film' is a direct synonym of 'movie' and must stay."
-        )
+        assert "film" in _synonyms_of("movie"), "'film' is a direct synonym of 'movie' and must stay."
 
     def test_cinema_kept_for_movie(self) -> None:
-        assert "cinema" in _synonyms_of("movie"), (
-            "'cinema' is contextually close and must stay."
-        )
+        assert "cinema" in _synonyms_of("movie"), "'cinema' is contextually close and must stay."

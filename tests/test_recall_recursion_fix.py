@@ -86,15 +86,18 @@ class TestRecallRecursionFix(unittest.TestCase):
     def _recall(self, ws: str, query: str = "hiking mountain"):
         # Import fresh each call so module-level caches are exercised
         from mind_mem.recall import recall
+
         return recall(ws, query, limit=10, active_only=False)
 
     def _build(self, ws: str):
         from mind_mem.sqlite_index import build_index
+
         build_index(ws, incremental=False)
 
     def test_no_recursion_after_workspace_delete_and_recreate(self):
         """Core regression: build→recall→rmtree→rebuild→recall must not recurse."""
         import sys
+
         old_limit = sys.getrecursionlimit()
         sys.setrecursionlimit(300)  # would blow up before the fix
         try:
@@ -169,6 +172,7 @@ class TestRecallRecursionFix(unittest.TestCase):
     def test_multiple_questions_caps_on_then_off_no_recursion(self):
         """Simulate the full _capfix_probe.py loop: N questions × caps_on, then caps_off."""
         import sys
+
         old_limit = sys.getrecursionlimit()
         sys.setrecursionlimit(300)
         questions = [
@@ -184,10 +188,7 @@ class TestRecallRecursionFix(unittest.TestCase):
                         results = self._recall(ws, query)
                         self.assertIsInstance(results, list)
                     except RecursionError:
-                        self.fail(
-                            f"RecursionError on qid={qid} caps_on={caps_on}: "
-                            "mutual recursion bug is not fixed"
-                        )
+                        self.fail(f"RecursionError on qid={qid} caps_on={caps_on}: mutual recursion bug is not fixed")
                     shutil.rmtree(ws, ignore_errors=True)
         finally:
             sys.setrecursionlimit(old_limit)

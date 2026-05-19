@@ -18,10 +18,7 @@ from mind_mem.block_parser import MAX_PARSE_SIZE, parse_file
 def _make_blocks(n: int) -> str:
     # ~4 KB per block → 300 blocks ≈ 1.2 MB, far over the old 100 KB cap.
     body = "x " * 2000
-    return "\n---\n\n".join(
-        f"[SESSION-s{i}]\nStatement: block {i} {body}\nDate: 2024-01-01\nStatus: active\n"
-        for i in range(n)
-    )
+    return "\n---\n\n".join(f"[SESSION-s{i}]\nStatement: block {i} {body}\nDate: 2024-01-01\nStatus: active\n" for i in range(n))
 
 
 def test_large_corpus_parses_all_blocks(tmp_path):
@@ -59,9 +56,7 @@ def test_dos_guard_is_loud_not_silent(tmp_path, monkeypatch):
     # Still parses the blocks that fit (not silently emptied)...
     assert len(blocks) >= 1
     # ...and the overflow is loud, not silent.
-    assert "block_parser_input_over_max_parse_size" in warned, (
-        "oversize corpus truncation must emit a loud warning"
-    )
+    assert "block_parser_input_over_max_parse_size" in warned, "oversize corpus truncation must emit a loud warning"
 
 
 def test_default_guard_is_well_above_real_workspaces():
