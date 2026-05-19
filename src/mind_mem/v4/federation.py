@@ -407,6 +407,15 @@ def resolve_conflict(
         try:
             import hashlib as _hashlib
             import logging as _logging
+            import re as _re
+
+            # Sanitize identifier strings before logging to prevent
+            # CRLF/log-injection: strip any CR, LF, or other ASCII control
+            # characters that a malicious agent_id or block_id could carry.
+            _ctrl_re = _re.compile(r"[\x00-\x1f\x7f]")
+
+            def _safe(s: str) -> str:
+                return _ctrl_re.sub("", s) if isinstance(s, str) else s
 
             left_bytes = getattr(report, "left_payload", None) or b""
             right_bytes = getattr(report, "right_payload", None) or b""
@@ -414,15 +423,15 @@ def resolve_conflict(
             _logging.getLogger("mind_mem.federation").info(
                 "three_way_merge_resolved",
                 extra={
-                    "block_id": block_id,
-                    "winner_agent": winner_agent,
+                    "block_id": _safe(block_id),
+                    "winner_agent": _safe(winner_agent),
                     "winner_version": winner_version,
-                    "left_agent": report.left_agent,
+                    "left_agent": _safe(report.left_agent),
                     "left_version": report.left_version,
                     "left_payload_sha256": _hashlib.sha256(
                         left_bytes if isinstance(left_bytes, (bytes, bytearray)) else str(left_bytes).encode("utf-8")
                     ).hexdigest(),
-                    "right_agent": report.right_agent,
+                    "right_agent": _safe(report.right_agent),
                     "right_version": report.right_version,
                     "right_payload_sha256": _hashlib.sha256(
                         right_bytes if isinstance(right_bytes, (bytes, bytearray)) else str(right_bytes).encode("utf-8")
@@ -433,8 +442,7 @@ def resolve_conflict(
                     "merged_payload_bytes": len(merged_bytes) if isinstance(merged_bytes, (bytes, bytearray)) else 0,
                 },
             )
-        except Exception:
-            # Audit log must never block the merge resolution.
+        except Exception:  # nosec B110 — audit log must never interrupt merge resolution
             pass
 
     return Resolution(

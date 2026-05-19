@@ -176,7 +176,7 @@ def _get_request_scope() -> str | None:
             from .observability import metrics
 
             metrics.inc("mcp_acl_introspection_failed_total")
-        except Exception:
+        except Exception:  # nosec B110 — metric counter is best-effort; already returning "deny" above
             pass
         _log.warning(
             "acl_introspection_failed",

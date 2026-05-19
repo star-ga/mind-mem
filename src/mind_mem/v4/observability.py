@@ -290,8 +290,7 @@ def _emit(event: MetricEvent) -> None:
         exporter = _active_exporter
     try:
         exporter(event)
-    except Exception:
-        # An exporter failure must never crash the recall path.
+    except Exception:  # nosec B110 — exporter failure must not crash the recall path
         pass
 
 

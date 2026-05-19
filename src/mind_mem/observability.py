@@ -36,20 +36,75 @@ from datetime import datetime, timezone
 # ---------------------------------------------------------------------------
 
 
+def _safe_sanitize(obj, _depth=0, _seen=None):
+    """Make an arbitrary object JSON-safe without unbounded recursion.
+
+    Structured log payloads can include caller-supplied objects that are
+    deeply nested or contain reference cycles. ``json.dumps`` on those
+    raises ``RecursionError`` (or hangs) — which, from inside a logging
+    handler, would crash the process. This bounds depth and breaks
+    cycles, replacing offending sub-trees with a short repr.
+    """
+    if _seen is None:
+        _seen = set()
+    if isinstance(obj, (str, int, float, bool)) or obj is None:
+        return obj
+    if _depth >= 12:
+        return f"<max-depth {type(obj).__name__}>"
+    oid = id(obj)
+    if oid in _seen:
+        return "<cycle>"
+    # ``_seen`` is a *visited* set, not a path set: once an object has
+    # been rendered it is never descended into again (subsequent
+    # occurrences in a DAG render as "<cycle>"). This bounds total work
+    # to O(nodes) instead of O(2**depth) for diamond-shaped graphs.
+    if isinstance(obj, dict):
+        _seen.add(oid)
+        return {
+            str(k): _safe_sanitize(v, _depth + 1, _seen)
+            for k, v in list(obj.items())[:200]
+        }
+    if isinstance(obj, (list, tuple, set)):
+        _seen.add(oid)
+        return [_safe_sanitize(v, _depth + 1, _seen) for v in list(obj)[:200]]
+    # Do NOT call str(obj)/repr(obj) here: a caller object's __str__
+    # /__repr__ may itself emit a structured log, which re-enters this
+    # formatter and recurses without bound. Primitives/containers are
+    # handled above; everything else is rendered by type only.
+    return f"<{type(obj).__name__}>"
+
+
 class JSONFormatter(logging.Formatter):
     """Emit log records as single-line JSON."""
 
     def format(self, record):
-        entry = {
-            "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            "level": record.levelname.lower(),
-            "component": getattr(record, "component", record.name),
-            "event": record.getMessage(),
-        }
-        # Merge extra data passed via log.info("event", extra={...})
-        if hasattr(record, "data") and record.data:
-            entry["data"] = record.data
-        return json.dumps(entry, default=str)
+        # Compute the timestamp once so the fallback path cannot fail
+        # even if the clock call were to (the formatter must never
+        # crash the caller — see _log).
+        try:
+            ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        except Exception:
+            ts = "1970-01-01T00:00:00.000000Z"
+        try:
+            entry = {
+                "ts": ts,
+                "level": record.levelname.lower(),
+                "component": getattr(record, "component", record.name),
+                "event": record.getMessage(),
+            }
+            # Merge extra data passed via log.info("event", extra={...})
+            if hasattr(record, "data") and record.data:
+                entry["data"] = _safe_sanitize(record.data)
+            return json.dumps(entry, default=str)
+        except (RecursionError, ValueError, TypeError) as exc:
+            # A logging formatter must never crash the caller.
+            return json.dumps({
+                "ts": ts,
+                "level": getattr(record, "levelname", "ERROR").lower(),
+                "component": getattr(record, "component", record.name),
+                "event": "log_format_error",
+                "data": {"error": type(exc).__name__},
+            })
 
 
 class StructuredLogger:
@@ -66,18 +121,32 @@ class StructuredLogger:
             self._logger.propagate = False
 
     def _log(self, level, event, **kwargs):
-        record = self._logger.makeRecord(
-            name=self._logger.name,
-            level=level,
-            fn="",
-            lno=0,
-            msg=event,
-            args=(),
-            exc_info=None,
-        )
-        record.component = self.name
-        record.data = kwargs if kwargs else None
-        self._logger.handle(record)
+        # A logging call must never raise into the caller. The stdlib
+        # logging path swallows handler/format errors via handleError;
+        # StructuredLogger drives makeRecord+handle by hand, so it must
+        # provide the same guarantee explicitly (otherwise a bad payload
+        # or a near-limit call stack turns logging into a process crash).
+        if not self._logger.isEnabledFor(level):
+            return
+        try:
+            record = self._logger.makeRecord(
+                name=self._logger.name,
+                level=level,
+                fn="",
+                lno=0,
+                msg=event,
+                args=(),
+                exc_info=None,
+            )
+            record.component = self.name
+            record.data = kwargs if kwargs else None
+            self._logger.handle(record)
+        except Exception:  # nosec B110 — a logger must never raise into
+            # its caller; this mirrors the stdlib logging contract
+            # (logging.Handler.handleError swallows formatting/emit
+            # errors). Re-raising here would turn any bad log payload or
+            # a near-limit call stack into a process crash.
+            pass
 
     def debug(self, event: str, **kwargs) -> None:
         self._log(logging.DEBUG, event, **kwargs)

@@ -114,7 +114,7 @@ def rrf_fuse(
             from .observability import metrics as _metrics
 
             _metrics.inc("hybrid_single_list_degenerate")
-        except Exception:
+        except Exception:  # nosec B110 — metric emission is best-effort; missing a counter must not block fusion
             pass
 
     scores: dict[str, float] = {}
@@ -179,7 +179,7 @@ def _get_block_id(item: dict, id_key: str) -> str:
             advice="result dict lacks _id / id / block_id; collisions may merge distinct blocks",
         )
         _metrics.inc("rrf_fallback_id_used")
-    except Exception:
+    except Exception:  # nosec B110 — observability import failure must not interrupt RRF scoring
         pass
     return fallback
 
