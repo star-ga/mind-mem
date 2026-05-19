@@ -408,6 +408,12 @@ def recall(
                         rerank_debug=rerank_debug,
                         _allow_decompose=False,
                     )
+                except RecursionError:
+                    # Never swallow RecursionError silently — it indicates a
+                    # structural cycle (e.g. recall↔query_index mutual recursion
+                    # when the sqlite index is missing).  Re-raise so the caller
+                    # sees a loud failure rather than a silent empty result.
+                    raise
                 except Exception as e:
                     _log.warning("sub_query_recall_failed", sub_query=sq, error=str(e))
                     continue
@@ -1326,6 +1332,8 @@ def prefetch_context(
     def _recall_signal(sig: str) -> list[dict]:
         try:
             return recall(workspace, sig, limit=limit, rerank=True)
+        except RecursionError:
+            raise  # structural cycle — never swallow silently
         except Exception as e:
             _log.warning("prefetch_recall_failed", signal=sig, error=str(e))
             return []
@@ -1336,7 +1344,17 @@ def prefetch_context(
         futures = {executor.submit(_recall_signal, sig): idx for idx, sig in enumerate(signals)}
         for future in as_completed(futures):
             idx = futures[future]
-            ordered_hits[idx] = future.result()
+            try:
+                ordered_hits[idx] = future.result()
+            except RecursionError:
+                # A structural recursion in a worker must surface loudly,
+                # exactly as in the synchronous multi-hop path. Propagate
+                # it (the executor context-exit joins the other workers)
+                # rather than letting it be masked as an empty prefetch.
+                raise
+            except Exception as e:  # noqa: BLE001 — one bad signal must not sink prefetch
+                _log.warning("prefetch_future_failed", error=str(e))
+                ordered_hits[idx] = []
 
     # Audit R-11: reserve slots for category-aware hits before
     # flushing per-signal hits into ``results``. The previous order
@@ -1384,6 +1402,8 @@ def prefetch_context(
                         seen_ids.add(bid)
                         results.append(block)
                         added += 1
+            except RecursionError:
+                raise  # structural cycle — never swallow silently
             except Exception as e:
                 _log.warning("prefetch_category_recall_failed", error=str(e))
     except ImportError:
