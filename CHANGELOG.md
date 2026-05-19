@@ -2,6 +2,48 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.10 — Correctness & robustness fixes
+
+Released 2026-05-19.
+
+### Fixed — block parser silent corpus truncation (Critical)
+- `block_parser.parse_file()` read only the first `MAX_PARSE_SIZE`
+  (100 KB) of a corpus file and silently discarded every block past
+  the cap. For a persistent-memory workspace whose `DECISIONS.md` /
+  `TASKS.md` / ingested data grow without bound this is invisible
+  recall loss. Now reads the entire file; the DoS guard is raised to
+  64 MB and, only on genuine overflow, truncates at a block boundary
+  with a loud structured warning — memory is never silently dropped.
+
+### Fixed — recall ↔ query_index infinite recursion (Critical)
+- A stale cached `ConnectionManager` (workspace DB deleted/rotated
+  under a live process) wrote to a removed inode, so the DB file never
+  reappeared; `query_index()`'s index-missing fallback called
+  `recall()`, which dispatched back to `query_index()` unboundedly,
+  silently swallowed by broad `except` clauses → degraded empty
+  recall. Adds stale-manager eviction + a per-thread re-entrancy
+  guard, and re-raises `RecursionError` instead of masking it.
+
+### Fixed — observability/logging can no longer crash callers
+- `JSONFormatter` is cycle-safe (visited-set + depth bound) and never
+  invokes caller `__str__`/`__repr__`; both it and
+  `StructuredLogger._log` are exception-safe with an `isEnabledFor`
+  short-circuit (matches the stdlib logging contract).
+
+### Added — telemetry kill-switch
+- `MIND_MEM_DISABLE_TELEMETRY=1` force-disables tracing
+  (instrumentation only; no effect on retrieval results).
+
+### Fixed — over-broad query-expansion synonyms
+- Narrowed homonym/high-frequency synonyms (`live`→`stay`,
+  `movie`→`show/watch`, …) that inflated unrelated long-session BM25F
+  scores and inverted rank vs the true evidence block.
+
+### Tests
+- New regression suites: `test_block_parser_no_silent_truncation`,
+  `test_recall_recursion_fix`, `test_recall_expansion_no_overbroad_synonyms`.
+  Full non-stress suite green.
+
 ## v4.0.9 — Predicate.register() runtime API + CI matrix fully green
 
 Released 2026-05-15.

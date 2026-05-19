@@ -882,7 +882,7 @@ def query_index(
     # same workspace (can happen when the index-missing fallback calls recall()
     # which — with backend="sqlite" — would immediately call query_index again),
     # return an empty list instead of recursing infinitely.
-    _active: set = getattr(_query_index_active, "workspaces", None)
+    _active: set | None = getattr(_query_index_active, "workspaces", None)
     if _active is None:
         _active = set()
         _query_index_active.workspaces = _active
