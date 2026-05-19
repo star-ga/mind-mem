@@ -541,6 +541,84 @@ ships later) is significantly lower than the first.
   Each instance trains its own router; cross-instance router
   federation is a v2 concern.
 
+### 8. Token-level late-interaction reranker (gated on dual-encoder)
+
+Today the hybrid stack is BM25 + dense-vector + RRF fusion over
+document-level embeddings. A token-level late-interaction reranker
+adds a third re-rank pass that scores
+`Σ_i max_j <q_i, d_j>` over per-token query and document embeddings —
+preserving fine-grained term-level matches that pooled dense vectors
+collapse.
+
+This is additive and orthogonal to the v4.0 schema: it operates on
+recall results, not on stored blocks. No migration cost.
+
+Hard dependency: a dual-encoder that emits per-token embeddings.
+mind-mem ships pooled embeddings today, so this section is *gated*
+behind that encoder landing. We hold the slot open and design the
+recall API surface to admit a reranker without breaking callers:
+
+```python
+recall(workspace, query, rerank="late-interaction")  # opt-in
+```
+
+Cost discipline:
+
+- Reranker runs over the top-K from RRF (default `K=50`), never the
+  full corpus.
+- Per-token embeddings are computed lazily for the candidate set on
+  query, or cached at ingest behind an explicit
+  `mind_mem.json:embedding.per_token = true` flag (off by default).
+- The contraction kernel itself uses tile-resident outer-reduce on
+  GPU substrates where available; CPU path uses the BLAS fallback.
+
+What this is NOT:
+
+- Not a replacement for BM25 + dense + RRF — it is a third pass on
+  the fused result.
+- Not a graph-discipline extension — it stays inside the
+  retrieval kernel and never touches typed edges.
+- Not a default. Opt-in per recall call.
+
+### 9. Opt-in bring-your-own-key governed enrichment
+
+The default retrieval path is local-only: own encoder, no external
+API in the loop, zero marginal cost per query, nothing leaves the
+caller's infrastructure. That is the load-bearing privacy/cost
+property and stays the default, untouched.
+
+For callers who want to trade locality for the last increment of
+recall quality, v4.1 adds an **opt-in** enrichment branch:
+
+```python
+recall(workspace, query, enrich="byok")  # off by default
+```
+
+- Uses the caller's own API keys and the caller's own budget — no
+  hosted credits, no silent egress. The caller makes the
+  cost/privacy tradeoff explicitly; it is never made for them.
+- Enrichment may rephrase the query and re-rank candidates. It
+  **never** writes to the store outside the propose→review→apply
+  gate. A synthesised summary becomes a proposal in
+  `intelligence/SIGNALS.md`, not a direct write — consolidation
+  stays governed.
+- Off unless explicitly enabled per call or per workspace; the
+  local-only default benchmark number is what ships in the README.
+
+Federation transport stays a first-class core capability, not a
+gated add-on: evidence-chain-preserving cross-instance sync is part
+of the v4.0 network pivot and remains available without an
+enrichment tier.
+
+What this is NOT:
+
+- Not a hosted paid path. No STARGA-operated API, no per-query
+  billing surface. BYOK only.
+- Not a relaxation of the governed-write model. Enrichment is
+  read-side; any write still routes through `/apply`.
+- Not the default. The published recall number is the local-only
+  path.
+
 ### Why v4.1 not v4.0
 
 All sub-sections are additive, schema-compatible, and orthogonal to the
