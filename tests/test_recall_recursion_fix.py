@@ -135,6 +135,22 @@ class TestRecallRecursionFix(unittest.TestCase):
         db = _db_path(ws)
         self.assertTrue(os.path.isfile(db), "DB must exist after first build")
 
+        # Close any cached ConnectionManager for this path before rmtree.
+        # Linux unlinks files with open handles; Windows does not, so a
+        # live SQLite handle would make rmtree (and the "gone" assertion)
+        # OS-dependent. Closing first makes teardown deterministic on
+        # every platform — the behaviour under test is that the second
+        # build *recreates* the DB, not OS rmtree semantics.
+        from mind_mem.sqlite_index import _conn_managers, _conn_managers_lock
+
+        with _conn_managers_lock:
+            mgr = _conn_managers.pop(db, None)
+        if mgr is not None:
+            try:
+                mgr.close()
+            except Exception:
+                pass
+
         shutil.rmtree(ws, ignore_errors=True)
         self.assertFalse(os.path.isfile(db), "DB must be gone after rmtree")
 
