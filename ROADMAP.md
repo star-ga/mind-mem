@@ -1880,6 +1880,16 @@ model clients) stays Python by necessity, not by design.
   recompile `.mind` sources, run bit-identity + perf-gate, edit source
   only where the compiler/tests surface a real divergence.
 
+**Source/runtime boundary (load-bearing):** the MIND language and the
+`.mind` sources are **public** — porting more of MIND-Mem to pure MIND
+adds *public* source, not exposure. Execution **runtimes / backends**
+are the commercial, protectable layer and are out of scope for this
+public roadmap: no runtime, backend, or protection internal is
+described here, and the port never requires publishing one. Public
+pure-MIND source compiled against a protected commercial runtime is
+the intended end state, not a contradiction.
+
 **Explicitly not a goal:** rewriting working Python I/O glue for its
-own sake, or any port step that regresses correctness, the perf-gate,
-or the availability guarantee the Python fallback provides.
+own sake; any port step that regresses correctness, the perf-gate, or
+the availability guarantee the Python fallback provides; or surfacing
+any runtime / backend / protection internal in this or any public doc.
