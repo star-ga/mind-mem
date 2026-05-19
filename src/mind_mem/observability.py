@@ -141,7 +141,11 @@ class StructuredLogger:
             record.component = self.name
             record.data = kwargs if kwargs else None
             self._logger.handle(record)
-        except Exception:  # logging must never crash the caller
+        except Exception:  # nosec B110 — a logger must never raise into
+            # its caller; this mirrors the stdlib logging contract
+            # (logging.Handler.handleError swallows formatting/emit
+            # errors). Re-raising here would turn any bad log payload or
+            # a near-limit call stack into a process crash.
             pass
 
     def debug(self, event: str, **kwargs) -> None:
