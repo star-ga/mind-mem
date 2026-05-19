@@ -584,10 +584,7 @@ def parse_file(filepath: str, *, strict: bool = False) -> list[dict]:
             file=filepath,
             bytes=original_len,
             max_parse_size=MAX_PARSE_SIZE,
-            msg=(
-                "Corpus file exceeds MAX_PARSE_SIZE; blocks beyond the cap "
-                "were NOT indexed. Split the file or raise MAX_PARSE_SIZE."
-            ),
+            msg=("Corpus file exceeds MAX_PARSE_SIZE; blocks beyond the cap were NOT indexed. Split the file or raise MAX_PARSE_SIZE."),
         )
 
     blocks = parse_blocks(content)

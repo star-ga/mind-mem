@@ -9,8 +9,6 @@ clear paraphrases remain.
 
 from __future__ import annotations
 
-import pytest
-
 from mind_mem._recall_expansion import _QUERY_EXPANSIONS
 
 

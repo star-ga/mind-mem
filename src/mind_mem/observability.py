@@ -60,10 +60,7 @@ def _safe_sanitize(obj, _depth=0, _seen=None):
     # to O(nodes) instead of O(2**depth) for diamond-shaped graphs.
     if isinstance(obj, dict):
         _seen.add(oid)
-        return {
-            str(k): _safe_sanitize(v, _depth + 1, _seen)
-            for k, v in list(obj.items())[:200]
-        }
+        return {str(k): _safe_sanitize(v, _depth + 1, _seen) for k, v in list(obj.items())[:200]}
     if isinstance(obj, (list, tuple, set)):
         _seen.add(oid)
         return [_safe_sanitize(v, _depth + 1, _seen) for v in list(obj)[:200]]
@@ -98,13 +95,15 @@ class JSONFormatter(logging.Formatter):
             return json.dumps(entry, default=str)
         except (RecursionError, ValueError, TypeError) as exc:
             # A logging formatter must never crash the caller.
-            return json.dumps({
-                "ts": ts,
-                "level": getattr(record, "levelname", "ERROR").lower(),
-                "component": getattr(record, "component", record.name),
-                "event": "log_format_error",
-                "data": {"error": type(exc).__name__},
-            })
+            return json.dumps(
+                {
+                    "ts": ts,
+                    "level": getattr(record, "levelname", "ERROR").lower(),
+                    "component": getattr(record, "component", record.name),
+                    "event": "log_format_error",
+                    "data": {"error": type(exc).__name__},
+                }
+            )
 
 
 class StructuredLogger:

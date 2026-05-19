@@ -142,6 +142,7 @@ class TestRecallRecursionFix(unittest.TestCase):
     def test_reentrant_guard_returns_empty_not_recursive(self):
         """The re-entrancy guard in query_index must return [] not recurse."""
         import sys
+
         from mind_mem.sqlite_index import _query_index_active, query_index
 
         ws = _write_workspace(self.tmp, "q_reent", caps_on=True)
