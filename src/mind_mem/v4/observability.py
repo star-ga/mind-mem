@@ -290,7 +290,7 @@ def _emit(event: MetricEvent) -> None:
         exporter = _active_exporter
     try:
         exporter(event)
-    except Exception:
+    except Exception:  # nosec B110 — metric exporter failure; swallow prevents recall-path crash
         # An exporter failure must never crash the recall path.
         pass
 
