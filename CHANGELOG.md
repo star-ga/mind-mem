@@ -2,6 +2,45 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.11 — security: resolve code-scanning alerts #181–#189
+
+Released 2026-05-19.
+
+### Security
+
+- **#189 — log injection (Critical):** `federation.resolve_conflict` now
+  strips ASCII control characters (CR, LF, NUL, 0x01–0x1f, 0x7f) from
+  every free-text string written into the `three_way_merge_resolved`
+  structured-log `extra` dict (`block_id`, `winner_agent`, `left_agent`,
+  `right_agent`). Achieved via a new `_safe()` helper backed by a compiled
+  `re.compile(r"[\x00-\x1f\x7f]")` pattern. Integer and hex-digest fields
+  are not affected. Closes CodeQL `py/log-injection` alert.
+- **#182 — SQL (justified nosec B608):** The `derive_embeddings` IN-clause
+  (`WHERE id IN ({placeholders})`) uses only `"?,?,..,?"` placeholders;
+  ids are bound parameters, not string-concatenated. Annotated
+  `# nosec B608` with that explicit justification.
+- **#181 — PRNG (justified nosec B311):** `random.Random(cfg.kmeans_seed)`
+  in `pq.py` is a seeded PRNG for deterministic k-means++ initialisation,
+  not a cryptographic use. Annotated `# nosec B311`.
+- **#183, #185, #186, #187, #188 — bare except swallows (justified nosec
+  B110):** Five best-effort observability / audit-log `try/except … pass`
+  sites each received a `# nosec B110` annotation with a site-specific
+  one-line rationale explaining why the swallow is intentional and safe
+  (metric exporter must never crash recall path; optional import of
+  observability module; best-effort warning; audit log must not block
+  merge resolution; inner metric counter inside outer auth-failure handler).
+
+### Tests
+
+- Added `tests/test_security_scanning_alerts.py` with three regression
+  tests: (a) direct unit test for `_safe()` control-char stripping;
+  (b) log-capture test asserting no control chars escape into LogRecord
+  extra fields during THREE_WAY_MERGE; (c) parameterized IN-clause test
+  confirming SQL metacharacters in block ids do not cause injection or
+  table mutation.
+
+---
+
 ## v4.0.10 — Correctness & robustness fixes
 
 Released 2026-05-19.

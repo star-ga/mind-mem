@@ -51,6 +51,7 @@ Copyright STARGA, Inc.
 from __future__ import annotations
 
 import datetime as _dt
+import re
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -74,6 +75,19 @@ __all__ = [
 
 
 FLAG: str = "federation"
+
+_CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _safe(s: str) -> str:
+    """Strip ASCII control characters (incl. CR/LF/NUL) from log field values.
+
+    Applied to every free-text string put into structured log ``extra``
+    dictionaries to prevent log-injection (CodeQL py/log-injection, alert #189).
+    Integer, hex-digest, and byte-length fields are NOT passed through this
+    helper — they carry no user-controlled text.
+    """
+    return _CTRL_RE.sub("", s)
 
 
 class MergeStrategy(str, Enum):
@@ -414,15 +428,15 @@ def resolve_conflict(
             _logging.getLogger("mind_mem.federation").info(
                 "three_way_merge_resolved",
                 extra={
-                    "block_id": block_id,
-                    "winner_agent": winner_agent,
+                    "block_id": _safe(block_id),
+                    "winner_agent": _safe(winner_agent),
                     "winner_version": winner_version,
-                    "left_agent": report.left_agent,
+                    "left_agent": _safe(report.left_agent),
                     "left_version": report.left_version,
                     "left_payload_sha256": _hashlib.sha256(
                         left_bytes if isinstance(left_bytes, (bytes, bytearray)) else str(left_bytes).encode("utf-8")
                     ).hexdigest(),
-                    "right_agent": report.right_agent,
+                    "right_agent": _safe(report.right_agent),
                     "right_version": report.right_version,
                     "right_payload_sha256": _hashlib.sha256(
                         right_bytes if isinstance(right_bytes, (bytes, bytearray)) else str(right_bytes).encode("utf-8")
@@ -433,7 +447,7 @@ def resolve_conflict(
                     "merged_payload_bytes": len(merged_bytes) if isinstance(merged_bytes, (bytes, bytearray)) else 0,
                 },
             )
-        except Exception:
+        except Exception:  # nosec B110 — audit log emission; swallow keeps merge path unblocked
             # Audit log must never block the merge resolution.
             pass
 

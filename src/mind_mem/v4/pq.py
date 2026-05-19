@@ -230,7 +230,7 @@ def _stdlib_train_codebook(training: Sequence[Sequence[float]], cfg: PQConfig) -
     if cfg.subvectors <= 0 or dim % cfg.subvectors != 0:
         raise ValueError(f"subvectors ({cfg.subvectors}) must divide dim ({dim}) evenly")
     sub_dim = dim // cfg.subvectors
-    rng = random.Random(cfg.kmeans_seed)
+    rng = random.Random(cfg.kmeans_seed)  # nosec B311 — seeded PRNG for deterministic k-means++ init, not cryptographic
 
     codebook: list[tuple[tuple[float, ...], ...]] = []
     for m in range(cfg.subvectors):

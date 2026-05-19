@@ -159,7 +159,7 @@ def derive_embeddings(
         # Pull content for the requested ids.
         placeholders = ",".join("?" * len(ids))
         rows = conn.execute(
-            f"SELECT id, content FROM blocks WHERE id IN ({placeholders})",
+            f"SELECT id, content FROM blocks WHERE id IN ({placeholders})",  # nosec B608 — placeholders is solely "?,?,..,?"; ids are bound parameters
             ids,
         ).fetchall()
     for bid, content in rows:
