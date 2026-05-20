@@ -141,6 +141,7 @@ addopts = "-m 'not stress'"
 markers = [
     "stress: slow concurrency/stress tests; run with `pytest -m stress`",
     "behavioral: advisory red-team audits; run with `pytest -m behavioral` (requires inspect-petri)",
+    "unit: fast isolated unit tests; default category for the bulk of the suite — run with `pytest -m unit`",
 ]
 filterwarnings = [
     # Upstream SWIG bindings in transitive deps emit this during import on
