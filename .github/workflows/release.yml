@@ -11,7 +11,46 @@ permissions:
   id-token: write
 
 jobs:
+  # ── Code-scanning alerts gate ────────────────────────────────────────────────
+  # Block the release if GitHub code-scanning reports any open alert at
+  # the moment of tag push. Past releases (v4.0.12) tagged "all green"
+  # while two new alerts were live on main; this gate prevents that drift.
+  #
+  # If you need to ship despite an open alert (deferred / accepted risk),
+  # dismiss it via the GitHub Security UI with a documented rationale and
+  # then re-push the tag.
+  alerts-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: read
+    steps:
+      - name: Block release if open code-scanning alerts exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # ``--paginate`` walks every page; ``-q`` filters open alerts
+          # by their explicit ``state`` field; ``wc -l`` gives an exact
+          # count that survives multi-page result sets.
+          if ! payload=$(gh api "repos/${{ github.repository }}/code-scanning/alerts" --paginate -q '.[] | select(.state=="open") | .number' 2>err.log); then
+            # 403/404 here means code-scanning is not enabled on this
+            # repo (or the token cannot read it). In that case we cannot
+            # gate — fail open with a clear warning, not silently.
+            echo "::warning::code-scanning alerts API not readable; failing open"
+            cat err.log
+            exit 0
+          fi
+          count=$(printf '%s\n' "$payload" | grep -c . || true)
+          echo "Open code-scanning alerts: ${count}"
+          if [ "${count}" -gt 0 ]; then
+            echo "::error::Release blocked — ${count} open code-scanning alert(s). Close or dismiss them before tagging."
+            gh api "repos/${{ github.repository }}/code-scanning/alerts" --paginate \
+              -q '.[] | select(.state=="open") | "  #\(.number) [\(.rule.severity)] \(.rule.id) — \(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)"'
+            exit 1
+          fi
+
   build:
+    needs: alerts-gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6

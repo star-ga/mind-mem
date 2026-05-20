@@ -111,6 +111,39 @@ def test_federation_safe_helper_strips_controls() -> None:
     assert _safe("tab\there") == "tabhere"
 
 
+def test_federation_safe_helper_coerces_non_str_for_alert_192() -> None:
+    """_safe() must accept non-str values and coerce them (alert #192).
+
+    Alert #192 ``py/log-injection`` at ``federation.py:430`` persisted
+    after the v4.0.11 fix because (a) the helper signature only accepted
+    ``str``, leaving callers to remember to wrap, and (b) the regex-only
+    sanitiser wasn't recognised by CodeQL's stock flow analysis as a
+    sanitiser node. The v4.0.13 helper:
+
+    * accepts ``object`` and coerces non-str via ``str()`` so every
+      log field can be wrapped uniformly,
+    * leads with explicit ``.replace('\\r', '').replace('\\n', '')``
+      so CodeQL recognises it as a sanitiser.
+    """
+    from mind_mem.v4.federation import _safe
+
+    # Non-str coercion: ints / floats / bytes all pass through cleanly.
+    assert _safe(42) == "42"
+    assert _safe(3.14) == "3.14"
+    assert _safe(None) == "None"
+
+    # Coerced str must still have control chars stripped.
+    class _Evil:
+        def __str__(self) -> str:
+            return "agent-\r\nev\x00il"
+
+    assert _safe(_Evil()) == "agent-evil"
+    # The explicit CRLF replace lands before the regex pass —
+    # any subsequent regex bug must not re-allow CR/LF.
+    assert "\r" not in _safe("\r\n" + "\x01" * 10 + "\r\n")
+    assert "\n" not in _safe("\r\n" + "\x01" * 10 + "\r\n")
+
+
 # ---------------------------------------------------------------------------
 # #182 — embedding_pipeline IN-clause parameterized query
 # ---------------------------------------------------------------------------

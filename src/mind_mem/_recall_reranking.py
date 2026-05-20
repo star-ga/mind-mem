@@ -290,11 +290,32 @@ def llm_rerank(
 
     Falls back silently (returns original hits) on any failure.
 
+    **Model compatibility:**
+
+    This function ships a *generic instruct prompt* ("return a JSON array of
+    floats in [0,1]"). It is designed for general instruction-tuned LLMs
+    (e.g. ``qwen2.5:7b``, ``llama3.1:8b``, OpenAI-compatible ``gpt-4o-mini``).
+
+    It is **not** a drop-in for ``star-ga/mind-mem-4b``. That model is
+    tool-trained: its rerank skill is invoked via a *different* schema,
+
+        user: ``[task=llm_rerank] {"query": ..., "candidates": [{"id","text"}]}``
+        assistant: ``{"<id>": <0-100>, ...}``
+
+    On the generic prompt above, ``mind-mem-4b`` will dispatch with
+    ``Use `llm_rerank`.`` (its tool-call hand-off) and the JSON parse
+    fails — the function then silently returns the input order. If you
+    have ``mind-mem-4b`` running locally and want rerank behaviour, use
+    the trained schema directly (see ``benchmarks/generate_retrieval_examples.py``
+    for the canonical example) rather than calling ``llm_rerank`` with
+    ``model="mind-mem:4b"``.
+
     Args:
         query: The original search query.
         hits: Candidates already scored by deterministic reranker.
         url: Ollama-compatible generate endpoint.
-        model: Model name to use.
+        model: Model name to use. Generic instruct models only; see note
+            above about ``mind-mem-4b``.
         weight: Blend weight for LLM scores (0=ignore, 1=replace).
         timeout: HTTP request timeout in seconds.
 

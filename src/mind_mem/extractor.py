@@ -35,11 +35,22 @@ from .observability import get_logger
 
 _log = get_logger("extractor")
 
-# Max chars of a single observation scanned for atomic facts. The
-# IGNORECASE patterns below backtrack catastrophically on large /
-# concatenated inputs (issue #530); atomic facts live in short turns,
-# so anything beyond this window has no facts worth the O(n^2) cost.
+# Max chars scanned in a single regex pass. The IGNORECASE patterns
+# below backtrack catastrophically on large / concatenated inputs
+# (issue #530); per pass we cap text size, then iterate over multiple
+# bounded windows (see ``_FACT_TEXT_MAX_WINDOWS``) so legitimate large
+# blocks are not silently truncated past byte 4000.
 _FACT_TEXT_MAX = 4000
+
+# Max number of bounded windows scanned per call. With the default
+# window size this gives an effective ceiling of 32 KB of observation
+# text scanned. Real-world blocks are well under 4 KB; this header
+# room exists so the rare 5-10 KB structured block (multi-fact
+# statement, long Sources list) still gets every fact extracted.
+# Adversarial inputs > 32 KB are silently truncated past the last
+# window — the parent block remains fully indexed in FTS, only the
+# small-to-big sub-fact card optimisation is bounded.
+_FACT_TEXT_MAX_WINDOWS = 8
 
 # ---------------------------------------------------------------------------
 # Fact extraction patterns
@@ -320,6 +331,40 @@ def _extract_date_from_text(text: str) -> str | None:
     return m.group(0) if m else None
 
 
+def _split_into_windows(text: str, window_size: int, max_windows: int) -> list[str]:
+    """Split text into ≤``max_windows`` bounded windows on sentence boundaries.
+
+    Used by :func:`extract_facts` to scan legitimate large blocks (issue
+    #530) without catastrophic regex backtracking — each window is
+    independently passed through the regex catalog. Windows never
+    exceed ``window_size`` chars; where possible we walk back to the
+    last sentence terminator (``.``, ``!``, ``?``, newline) in the
+    second half of the window so we don't slice a fact mid-clause.
+
+    Beyond ``max_windows`` the trailing text is silently dropped — the
+    parent block remains indexed in FTS, only the small-to-big sub-fact
+    card optimisation is bounded.
+    """
+    windows: list[str] = []
+    pos = 0
+    n = len(text)
+    while pos < n and len(windows) < max_windows:
+        end = min(pos + window_size, n)
+        if end < n:
+            # Prefer a sentence boundary in the second half of the window.
+            search_start = pos + window_size // 2
+            best = -1
+            for break_char in (".", "!", "?", "\n"):
+                idx = text.rfind(break_char, search_start, end)
+                if idx > best:
+                    best = idx
+            if best != -1:
+                end = best + 1
+        windows.append(text[pos:end])
+        pos = end
+    return windows
+
+
 def extract_facts(
     text: str,
     speaker: str = "",
@@ -336,6 +381,23 @@ def extract_facts(
 
     Returns list of fact card dicts with keys:
         type, content, speaker, date, source_id, confidence
+
+    Note:
+        This extractor is tuned for the structured ``Statement: ...``
+        block dialect used by ``DECISIONS.md`` / mind-mem block files
+        (and for short, single-turn conversational observations). It
+        intentionally does not attempt full free-form dialog NER —
+        callers ingesting raw chat transcripts should run their own
+        coref/segmentation pipeline upstream.
+
+    Windowed scanning:
+        For inputs longer than :data:`_FACT_TEXT_MAX`, the function
+        splits ``text`` into up to :data:`_FACT_TEXT_MAX_WINDOWS`
+        sentence-boundary windows and runs the regex catalog on each
+        independently — so legitimate large blocks are *not* silently
+        truncated past byte 4 000 the way v4.0.12 did. Adversarial
+        inputs beyond ``window_size × max_windows`` are still bounded
+        for ReDoS safety (issue #530).
     """
     _log.debug("extract_facts", speaker=speaker, source_id=source_id)
     # Strip speaker prefix if present: "[Caroline] text..." -> text
@@ -345,14 +407,25 @@ def extract_facts(
             speaker = speaker_match.group(1)
         text = text[speaker_match.end() :]
 
-    # Bound work to an atomic-observation-sized window. Fact cards are
-    # short atomic claims from a single turn/observation; the dozens of
-    # IGNORECASE regexes below exhibit catastrophic backtracking on
-    # large or concatenated inputs (issue #530: an 80 KB Statement took
-    # ~55 s, all in this function — profiled). Real observations are a
-    # few hundred chars; beyond _FACT_TEXT_MAX there are no meaningful
-    # atomic facts to find and the parent block is still fully indexed
-    # in FTS — only the small-to-big sub-fact optimisation is bounded.
+    # Windowed scan for legitimate large blocks (#530). Each window is
+    # ≤ _FACT_TEXT_MAX chars so the recursive ``extract_facts`` call
+    # below skips this branch — no infinite recursion.
+    if len(text) > _FACT_TEXT_MAX:
+        all_cards: list[dict] = []
+        for window_text in _split_into_windows(text, _FACT_TEXT_MAX, _FACT_TEXT_MAX_WINDOWS):
+            all_cards.extend(extract_facts(window_text, speaker, date, source_id))
+        # Cross-window dedup by content (highest confidence wins).
+        seen_x: dict[str, dict[str, object]] = {}
+        for card in all_cards:
+            key = str(card["content"]).lower()
+            if key not in seen_x or card["confidence"] > seen_x[key]["confidence"]:  # type: ignore[operator]
+                seen_x[key] = card
+        return list(seen_x.values())
+
+    # Defence-in-depth: ``_split_into_windows`` already caps each window
+    # at ``_FACT_TEXT_MAX``, so this branch should be unreachable from
+    # the windowed loop above. Kept as a safety belt for any future
+    # direct caller.
     if len(text) > _FACT_TEXT_MAX:
         text = text[:_FACT_TEXT_MAX]
 
