@@ -498,6 +498,65 @@ def create_app(workspace: str | None = None) -> FastAPI:
         with use_workspace(resolved_ws):
             return await call_next(request)
 
+    # Audit-header propagation (roadmap v4.0.0 Group D). Each request
+    # carries a server-assigned ``X-MindMem-Request-Id`` (UUID-4) for
+    # log correlation; the client may set ``X-MindMem-Actor`` and
+    # ``X-MindMem-Purpose`` to identify the calling agent + intent.
+    # All three are echoed on the response so a downstream proxy /
+    # SIEM can stitch traces without parsing the body. The values are
+    # sanitised against CRLF / control-char injection (same pattern as
+    # ``v4.federation._safe`` after alert #192) before they touch the
+    # log or response headers.
+    @application.middleware("http")
+    async def _audit_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
+        import re as _re
+        import uuid as _uuid
+
+        _CTRL = _re.compile(r"[\x00-\x1f\x7f]")
+
+        def _safe_hdr(raw: str | None, *, default: str = "", max_len: int = 256) -> str:
+            """Return *raw* with CR/LF/NUL/control bytes stripped, bounded length.
+
+            CodeQL-friendly: leads with explicit ``.replace`` so the stock
+            ``py/log-injection`` and ``py/header-injection`` queries
+            recognise this as a sanitiser node.
+            """
+            if not raw:
+                return default
+            cleaned = raw.replace("\r", "").replace("\n", "")
+            cleaned = _CTRL.sub("", cleaned)
+            return cleaned[:max_len]
+
+        # Capture raw presence-vs-absence on the request: an absent
+        # client header should NOT echo a synthetic "anonymous" string
+        # on the response (operators read header absence as
+        # "unattributed", not as a literal value).
+        raw_actor = request.headers.get("x-mindmem-actor")
+        raw_purpose = request.headers.get("x-mindmem-purpose")
+
+        request_id = _safe_hdr(
+            request.headers.get("x-mindmem-request-id"),
+            default=str(_uuid.uuid4()),
+            max_len=64,
+        )
+        actor = _safe_hdr(raw_actor, default="anonymous")
+        purpose = _safe_hdr(raw_purpose, default="")
+        # Stash on request.state for any downstream handler that wants
+        # to record actor/purpose in the audit chain. ``actor`` defaults
+        # to "anonymous" here so the chain has a stable string to record;
+        # the response-echo path below uses the raw presence check.
+        request.state.mindmem_request_id = request_id
+        request.state.mindmem_actor = actor
+        request.state.mindmem_purpose = purpose
+        response = await call_next(request)
+        # Echo on the response — operators stitch upstream logs by these.
+        response.headers["X-MindMem-Request-Id"] = request_id
+        if raw_actor and actor:
+            response.headers["X-MindMem-Actor"] = actor
+        if raw_purpose and purpose:
+            response.headers["X-MindMem-Purpose"] = purpose
+        return response
+
     # ------------------------------------------------------------------
     # Global exception handler — prevent stack-trace-exposure
     # (CodeQL py/stack-trace-exposure): unhandled exceptions must never
