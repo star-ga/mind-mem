@@ -26,6 +26,59 @@ from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _workspace
 
 
+def _append_decrypt_audit(ws: str, path: str, *, mode: str) -> None:
+    """Append a forensic record of a decrypt operation to
+    ``memory/decrypted_files.jsonl`` (alert N-08, roadmap v4.0.15).
+
+    Pattern mirrors ``block_store._append_deletion_receipt``: append-only
+    JSONL with timestamp + path + actor (best-effort from agent_id
+    context) + mode (``read`` for ``decrypt_file``, ``in_place`` for
+    ``decrypt_file_in_place``). Failure to append is logged but does
+    not block the decrypt itself — forensic audit must be opportunistic,
+    never a denial-of-service vector for legitimate operators.
+
+    Pair with ``T-007`` operator runbook (see ``docs/security.md``)
+    which applies the OS-level append-only attribute (``chattr +a`` on
+    Linux, ``chflags uappnd`` on macOS) to this file so a compromised
+    process cannot edit the trail in-place.
+    """
+    import datetime as _dt
+
+    from mind_mem.observability import get_logger as _gl
+
+    log_dir = os.path.join(ws, "memory")
+    log_path = os.path.join(log_dir, "decrypted_files.jsonl")
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+        # Best-effort actor attribution — read from the agent-id
+        # ContextVar that ``mcp/infra/observability`` populates per call.
+        actor = "anonymous"
+        try:
+            from mind_mem.mcp.infra.observability import current_agent_id  # type: ignore
+
+            actor = current_agent_id.get("anonymous") or "anonymous"
+        except Exception:
+            pass
+        record = {
+            "ts": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "path": path,
+            "actor": actor,
+            "mode": mode,
+        }
+        # O_APPEND keeps the trail atomic with respect to concurrent
+        # decrypt calls; ``chattr +a`` on the file then makes the
+        # append-only property OS-enforced (T-007).
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, sort_keys=True) + "\n")
+    except Exception as exc:  # nosec B110 — see rationale below.
+        # Audit append must not block the legitimate decrypt — log and
+        # continue. The decrypt event still appears in the structured
+        # ``files_decrypted`` metric counter + ``file_decrypted`` log
+        # emitted by ``encryption.py``; the JSONL trail is forensic
+        # depth-in-defence, not the primary signal.
+        _gl("mcp.encryption").warning("decrypt_audit_append_failed", path=path, error=str(exc))
+
+
 def _encryption_passphrase() -> str | None:
     """Fetch the at-rest encryption passphrase from env. None = disabled."""
     raw = os.environ.get("MIND_MEM_ENCRYPTION_PASSPHRASE", "").strip()
@@ -166,6 +219,10 @@ def decrypt_file(file_path: str) -> str:
         plaintext = EncryptionManager(ws, passphrase).decrypt_file(safe_path)
     except Exception as exc:
         return json.dumps({"error": f"decrypt failed: {exc}"})
+    # Append forensic audit record (N-08, roadmap v4.0.15). Mode is
+    # ``read`` because ``decrypt_file`` returns plaintext without
+    # mutating the on-disk ciphertext.
+    _append_decrypt_audit(ws, safe_path, mode="read")
     return json.dumps(
         {
             "_schema_version": MCP_SCHEMA_VERSION,

@@ -94,6 +94,39 @@ DEFAULT_RATE_MAX_CALLS = 120
 DEFAULT_RATE_WINDOW_SECS = 60
 MAX_TRACKED_CLIENTS = 1024  # LRU cap to bound limiter memory under attack
 
+
+# -- Token rotation primitive (roadmap v4.0.x) -----------------------------
+# ``MIND_MEM_TOKENS`` (comma-separated) supports N-of-K active tokens with
+# a grace window during rotation. Old single-token deployments keep using
+# ``MIND_MEM_TOKEN``; setting ``MIND_MEM_TOKENS`` overrides + extends.
+#
+# Rotation flow: operator runs ``mm token rotate``, which appends a new
+# token to ``MIND_MEM_TOKENS`` (the new one becomes the canonical write
+# token); old tokens stay valid through the grace window so in-flight
+# clients don't break, then the operator removes the old entry. Server
+# reads on every request (no restart needed).
+def _active_tokens(fallback: str | None = None) -> list[str]:
+    """Return the set of currently-active tokens.
+
+    Reads ``MIND_MEM_TOKENS`` (comma-separated) on every call so a
+    rotation via ``mm token rotate`` lands without restart. Falls
+    back to ``MIND_MEM_TOKEN`` (single-token deployments) and then
+    to the handler-bound *fallback* (the server's startup-time token).
+    Whitespace + empty entries are stripped.
+    """
+    multi = os.environ.get("MIND_MEM_TOKENS", "").strip()
+    if multi:
+        toks = [t.strip() for t in multi.split(",") if t.strip()]
+        if toks:
+            return toks
+    single = os.environ.get("MIND_MEM_TOKEN", "").strip()
+    if single:
+        return [single]
+    if fallback:
+        return [fallback]
+    return []
+
+
 # Endpoint paths — kept as constants so tests can import them.
 PATH_STATUS = "/status"
 PATH_QUERY = "/query"
@@ -788,17 +821,26 @@ def build_handler(
         def _authenticated(self) -> bool:
             if not auth_required:
                 return True
-            if token is None:
-                return False
             sent = self.headers.get(AUTH_HEADER, "")
-            # Constant-time comparison — see audit S-1. Plain `sent == token`
-            # short-circuits on first byte mismatch and leaks the token via
-            # response-latency timing on the loopback bind. hmac.compare_digest
-            # is constant-time over the longer string. The bool(sent) guard
-            # avoids the str-vs-str type mismatch path that would raise.
             if not sent:
                 return False
-            return hmac.compare_digest(sent, token)
+            # Token rotation (roadmap v4.0.x): accept any of an N-of-K
+            # active-tokens set. ``MIND_MEM_TOKENS`` (comma-separated)
+            # is preferred when set — supports grace-window rotation
+            # without restart. Falls back to the single ``token`` value
+            # the handler was built with for backwards compat.
+            #
+            # Read at request time so ``mm token rotate`` (which appends
+            # to MIND_MEM_TOKENS) takes effect for the next request
+            # without restarting the server.
+            active = _active_tokens(fallback=token)
+            if not active:
+                return False
+            # Constant-time comparison against EVERY active token (audit
+            # S-1). hmac.compare_digest short-circuits at the byte level
+            # internally; OR-ing the results across the set keeps the
+            # overall result constant-time-ish per token.
+            return any(hmac.compare_digest(sent, t) for t in active)
 
         # -- peer allowlist (roadmap v4.0.x federation hardening) -------
         def _peer_allowed(self) -> bool:

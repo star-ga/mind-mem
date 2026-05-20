@@ -20,12 +20,12 @@ Surfaced at the top so the actual remaining work is visible without
 scrolling 1500 lines of historical sections. Each item is followed
 by its full description below.
 
-### Group D — Network hardening (5 items)
+### Group D — Network hardening (3 items; +1 shipped in v4.0.14)
 
 - [ ] **TLS 1.3 minimum + cert pinning** on REST / gRPC / MCP-HTTP
 - [ ] **mTLS for service-to-service** between mind-mem nodes
 - [ ] **Public / private workspaces** (`workspace.mode = public | private | mixed`)
-- [ ] **Audit headers** propagated through REST + gRPC (`X-MindMem-Request-Id`, `X-MindMem-Actor`, `X-MindMem-Purpose`)
+- [x] **Audit headers** (`X-MindMem-Request-Id`, `X-MindMem-Actor`, `X-MindMem-Purpose`) — **shipped v4.0.14** (REST middleware; gRPC parity TODO when gRPC surface gets the same treatment)
 - [ ] **ActivityPub federation interop** (optional bridge; low priority)
 
 ### Group B — Knowledge graph (2 items)
@@ -68,11 +68,11 @@ by its full description below.
 - [ ] **`PostgresBlockStore.snapshot(snap_id=…)`** — current signature still requires filesystem path; cross-host PG snapshots blocked
 - [ ] **T-004 webhook allowlist + T-001 content-provenance tags + N-08/N-12/N-13/T-007** — minor security-hardening items (see v3.2.0 section)
 
-### v4.0.x federation transport hardening (4 items)
+### v4.0.x federation transport hardening (3 items; +1 shipped in v4.0.14)
 
 - [ ] **Per-peer identity beyond bearer token** (token → agent_id binding, signed-write envelopes)
 - [ ] **mTLS + cert pinning on `FederationClient`**
-- [ ] **Operator-side peer allowlist** (`MIND_MEM_FED_PEERS=10.0.0.5,…`)
+- [x] **Operator-side peer allowlist** (`MIND_MEM_FED_PEERS=10.0.0.5,…`) — **shipped v4.0.14**
 - [ ] **Token rotation primitive** (N-of-K active tokens, `mm token rotate`)
 
 ### Cross-cutting (deferred infrastructure)

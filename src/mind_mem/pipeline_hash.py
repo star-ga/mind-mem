@@ -61,6 +61,7 @@ _PACKAGE_ROOT = os.path.dirname(os.path.abspath(__file__))
 _BACKEND_SOURCE_FILES: dict[str, str] = {
     "ollama": os.path.join(_PACKAGE_ROOT, "llm_extractor.py"),
     "openai-compatible": os.path.join(_PACKAGE_ROOT, "llm_extractor.py"),
+    "mindllm": os.path.join(_PACKAGE_ROOT, "llm_extractor.py"),
     "llama-cpp": os.path.join(_PACKAGE_ROOT, "llm_extractor.py"),
     "transformers": os.path.join(_PACKAGE_ROOT, "llm_extractor.py"),
     # Default / unknown backends fall through to a stub hash so an unknown

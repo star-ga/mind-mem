@@ -107,12 +107,17 @@ def is_available(backend: str = "auto") -> bool:
         ``ollama``              local ollama daemon at :11434
         ``llama-cpp``           in-process llama-cpp-python
         ``vllm``                local vLLM OpenAI-compatible server
+        ``mindllm``             local MindLLM server (STARGA's pure-MIND
+                                deterministic-inference OpenAI-compatible
+                                endpoint; defaults to :8080/v1; see
+                                ``docs/companion-tools.md``)
         ``openai-compatible``   any OpenAI-compatible HTTP endpoint
         ``transformers``        in-process HF transformers (slowest)
         ``auto``                tries each in order until one answers
 
     Endpoint and base-url defaults read from env vars
-    (``MIND_MEM_LLM_BASE_URL``, ``MIND_MEM_VLLM_URL``).
+    (``MIND_MEM_LLM_BASE_URL``, ``MIND_MEM_VLLM_URL``,
+    ``MIND_MEM_MINDLLM_URL``).
     """
     if backend == "ollama":
         return _ollama_available()
@@ -120,6 +125,8 @@ def is_available(backend: str = "auto") -> bool:
         return _llama_cpp_available()
     if backend == "vllm":
         return _openai_compatible_available(_vllm_url())
+    if backend in ("mindllm", "mind-llm", "mind_llm"):
+        return _openai_compatible_available(_mindllm_url())
     if backend in ("openai-compatible", "openai_compatible"):
         return _openai_compatible_available(_oai_url())
     if backend == "transformers":
@@ -127,6 +134,7 @@ def is_available(backend: str = "auto") -> bool:
     if backend == "auto":
         return (
             _ollama_available()
+            or _openai_compatible_available(_mindllm_url())
             or _openai_compatible_available(_vllm_url())
             or _openai_compatible_available(_oai_url())
             or _llama_cpp_available()
@@ -137,6 +145,25 @@ def is_available(backend: str = "auto") -> bool:
 
 def _vllm_url() -> str:
     return os.environ.get("MIND_MEM_VLLM_URL", "http://localhost:8000/v1").rstrip("/")
+
+
+def _mindllm_url() -> str:
+    """MindLLM default endpoint.
+
+    MindLLM is STARGA's pure-MIND deterministic-inference HTTP server
+    exposing OpenAI-compatible endpoints (``/v1/chat/completions``,
+    ``/v1/completions``, ``/v1/models``, ``/health``) plus a first-party
+    RFN classifier endpoint (``/v1/rfn/classify``). Default port 8080
+    matches the upstream MindLLM convention; override with
+    ``MIND_MEM_MINDLLM_URL`` for non-default deployments.
+
+    Differentiator vs Ollama / vLLM: bit-identical output across runs
+    (Q16.16 evidence path + deterministic-reduction kernels) and a
+    per-token cryptographic evidence chain. See MindLLM README for
+    the full positioning table; mind-mem treats it as just another
+    OpenAI-compatible backend at the wire level.
+    """
+    return os.environ.get("MIND_MEM_MINDLLM_URL", "http://localhost:8080/v1").rstrip("/")
 
 
 def _oai_url() -> str:
@@ -358,7 +385,7 @@ def _query_llm(prompt: str, model: str, backend: str = "auto") -> str:
     Order for ``auto`` mode: ollama → vllm → openai-compat → llama-cpp →
     transformers. Each is tried until one returns a non-empty string.
     """
-    backends = [backend] if backend != "auto" else ["ollama", "vllm", "openai-compatible", "llama-cpp", "transformers"]
+    backends = [backend] if backend != "auto" else ["ollama", "mindllm", "vllm", "openai-compatible", "llama-cpp", "transformers"]
     for b in backends:
         try:
             if b == "ollama":
@@ -367,6 +394,8 @@ def _query_llm(prompt: str, model: str, backend: str = "auto") -> str:
                 out = _query_llama_cpp(prompt, model)
             elif b == "vllm":
                 out = _query_openai_compatible(prompt, model, _vllm_url())
+            elif b in ("mindllm", "mind-llm", "mind_llm"):
+                out = _query_openai_compatible(prompt, model, _mindllm_url())
             elif b in ("openai-compatible", "openai_compatible"):
                 out = _query_openai_compatible(prompt, model, _oai_url())
             elif b == "transformers":
