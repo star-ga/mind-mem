@@ -2,6 +2,85 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.14 — ROADMAP honesty pass + audit headers + federation peer allowlist
+
+Released 2026-05-20.
+
+### Docs — ROADMAP.md honesty pass
+
+The pre-v4 ROADMAP was drafted ahead of the v3.9 → v4.0 release ladder
+and the bulk of v3.2.0–v4.0.0 Groups A/B/C/D/E/G actually shipped
+under those releases without the corresponding checkboxes being
+flipped here. v4.0.14 reconciles the doc with the shipping state:
+
+- **158 → ~52 unique open items** after the audit pass.
+- Every v3.2.0 / v3.2.1 / v3.12.0 / v4.0.0 group now carries an
+  explicit ✅ Released / partial / open status, not a stale `[ ]`.
+- New **Genuinely Open Items** section at the top of `ROADMAP.md`
+  enumerates the remaining work, sized into small / medium / large
+  / long-horizon buckets so the path forward is visible without
+  scrolling 1500 lines of historical sections.
+- Pure-MIND Core Port section unchanged (long-horizon, gated on
+  `mindc` library-emit C-ABI maturity upstream).
+
+### Added — REST audit-header middleware (roadmap v4.0.0 Group D)
+
+`src/mind_mem/api/rest.py` ships a new middleware that propagates
+three audit headers end-to-end on every REST request:
+
+* **`X-MindMem-Request-Id`** — server-assigned UUID-4 when missing,
+  echoed verbatim when the client supplies it. Always present on the
+  response so a downstream proxy / SIEM can stitch traces without
+  parsing the body. Length-bounded to 64 chars.
+* **`X-MindMem-Actor`** — client-supplied agent identifier. Echoed
+  when set; **absent on the response when the client didn't supply
+  it** (operators read header absence as "unattributed", not as the
+  literal string "anonymous"). Length-bounded to 256 chars.
+* **`X-MindMem-Purpose`** — client-supplied intent string. Same
+  presence-vs-absence semantics as `X-MindMem-Actor`.
+
+All three flow through a `_safe_hdr` sanitiser that leads with
+explicit `.replace("\r", "").replace("\n", "")` (CodeQL-recognised
+sanitiser pattern, same shape as v4.0.13's `_safe()` for alerts
+`#189` + `#192`) so adversarial CRLF / NUL / control-char values
+cannot inject secondary headers. All three values are also stashed
+on `request.state.{mindmem_request_id, mindmem_actor, mindmem_purpose}`
+so downstream handlers can record them in the audit chain. 7 new
+regression tests in `tests/test_rest_audit_headers.py`.
+
+### Added — Federation peer allowlist (roadmap v4.0.x hardening)
+
+`src/mind_mem/http_transport.py` ships an operator-side IP allowlist
+gated by the `MIND_MEM_FED_PEERS` env var (comma-separated list of
+source IPs). The allowlist applies **only** to federation endpoints
+(`/federation/vclock/...`, `/federation/conflicts`, `/federation/write`,
+`/federation/resolve`); non-federation endpoints (`/status`, `/memories`,
+…) remain governed by the existing token + Origin checks.
+
+When `MIND_MEM_FED_PEERS` is unset, the allowlist bypasses (backwards
+compatible with the localhost default deployment). When set, any
+source IP outside the set rejects with `403` *before* the auth check
+— even a valid `X-MindMem-Token` doesn't help if the caller isn't on
+the allowlist. Compatible with bearer-token auth, doesn't replace
+it. 5 new regression tests in `tests/test_federation_peer_allowlist.py`.
+
+### Green-gate
+
+- **5114 passed, 27 skipped, 0 failed** on non-stress matrix (+12
+  tests vs v4.0.13).
+- `ruff check` + `ruff format` clean on changed files.
+- `mypy` clean on changed surfaces.
+- Open code-scanning alerts: **0** (carried clean from v4.0.13).
+
+### Deferred from this release (still tracked)
+
+The per-peer identity binding (token → agent_id table + signed-write
+envelopes) item from v4.0.x federation hardening was scoped out of
+v4.0.14 — the peer allowlist alone closes the broadest operator-side
+exposure, and per-peer identity needs a schema + key-management
+design pass before landing. Tracked in `ROADMAP.md` under v4.0.x
+federation hardening.
+
 ## v4.0.13 — code-scanning alerts #191/#192 + windowed extract_facts + DX polish
 
 Released 2026-05-19.

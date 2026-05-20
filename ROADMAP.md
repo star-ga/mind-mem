@@ -1,5 +1,119 @@
 # MIND-Mem Roadmap
 
+> **Reality check (2026-05-20 honesty pass):** the v3.2.0+ sections
+> below were drafted ahead of the v3.9 → v4.0 release ladder and many
+> items shipped without being checked off here. The bulk of v3.2.0
+> through v4.0.0 Groups A/B/C/D/E/G is done in code; see
+> `CHANGELOG.md` for the canonical version-by-version record. This
+> file now flips checkboxes to match the shipping state and surfaces
+> only the items that remain *genuinely* open.
+
+## Currently shipping
+
+**v4.0.13** (2026-05-19) is the current PyPI release. See
+`CHANGELOG.md` for the per-version detail; this roadmap covers
+forward-looking work, not history.
+
+## Genuinely Open Items (post-v4.0.13 reality)
+
+Surfaced at the top so the actual remaining work is visible without
+scrolling 1500 lines of historical sections. Each item is followed
+by its full description below.
+
+### Group D — Network hardening (5 items)
+
+- [ ] **TLS 1.3 minimum + cert pinning** on REST / gRPC / MCP-HTTP
+- [ ] **mTLS for service-to-service** between mind-mem nodes
+- [ ] **Public / private workspaces** (`workspace.mode = public | private | mixed`)
+- [ ] **Audit headers** propagated through REST + gRPC (`X-MindMem-Request-Id`, `X-MindMem-Actor`, `X-MindMem-Purpose`)
+- [ ] **ActivityPub federation interop** (optional bridge; low priority)
+
+### Group B — Knowledge graph (2 items)
+
+- [ ] **Block versioning + time-travel** — `recall(..., as_of=date)`, `block_history(block_id)`
+- [ ] **Conversational chat layer** — `chat_with_memory(workspace, question)` with `[[block_id]]` citations
+
+### Group C — KG governance / UX (5 items)
+
+- [ ] **AI lint with auto-fix** — `lint_autofix(workspace, finding_id)` tool
+- [ ] **Local visual viewer** — `mm view` web UI (stdlib HTTP + JS/D3)
+- [ ] **Auto-generated hierarchical index** — `index.md` + `log.md` autogen
+- [ ] **Adversarial / poisoning defense** — per-actor anomaly, canary blocks
+- [ ] **Memory reputation / trust scores** — per-actor reliability signal in recall
+
+### Group E — Compliance (5 items)
+
+- [ ] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters
+- [ ] **Vocabulary-bound fields** — per-workspace controlled vocabularies
+- [ ] **Provenance-rich blocks** — `actor_id`, `actor_role`, `session_id`, `tool_id`, `purpose`
+- [ ] **Tenant KMS + row-level encryption** — `tenant_crypto.py`
+- [ ] **C2PA content provenance** — signed manifests on synthesis blocks
+
+### Group G — Ecosystem (9 items, mostly SDK fan-out)
+
+- [ ] **JavaScript / TypeScript SDK** — `@star-ga/mind-mem-client` npm package
+- [ ] **Browser-native WebAssembly bundle**
+- [ ] **Go / Rust / Java / Ruby SDK stubs**
+- [ ] **OpenAPI + AsyncAPI specs** (single source of truth for SDK generation)
+- [ ] **Migration importers** — `mm import --from {pinecone|weaviate|chroma|qdrant|letta|mem0}`
+- [ ] **Cost metering / quota / spending alerts** — `mm usage`
+- [ ] **SLSA build provenance level 3**
+- [ ] **Plugin SDK** — stable API for custom rules / block kinds / detectors
+- [ ] **Chaos testing harness**
+
+### v3.2.x trailing fixes (4 items, deliberately deferred)
+
+- [ ] **Apply engine — text-range ops** — `insert_after_block` / `replace_range` still on raw `open()`; no v3.2.x caller generates them in practice
+- [ ] **FastAPI audit attribution** — `current_agent_id` doesn't propagate through anyio threadpool worker; fix via `request.state.agent_id`
+- [ ] **`PostgresBlockStore.snapshot(snap_id=…)`** — current signature still requires filesystem path; cross-host PG snapshots blocked
+- [ ] **T-004 webhook allowlist + T-001 content-provenance tags + N-08/N-12/N-13/T-007** — minor security-hardening items (see v3.2.0 section)
+
+### v4.0.x federation transport hardening (4 items)
+
+- [ ] **Per-peer identity beyond bearer token** (token → agent_id binding, signed-write envelopes)
+- [ ] **mTLS + cert pinning on `FederationClient`**
+- [ ] **Operator-side peer allowlist** (`MIND_MEM_FED_PEERS=10.0.0.5,…`)
+- [ ] **Token rotation primitive** (N-of-K active tokens, `mm token rotate`)
+
+### Cross-cutting (deferred infrastructure)
+
+- [ ] **Kubernetes operator + Helm chart**
+- [ ] **Byzantine-safe consensus (PBFT)** — opt-in, long-horizon
+- [ ] **Edge deployment mode** — PyOxidizer single-binary
+- [ ] **Managed-service console** — multi-tenant dashboard
+- [ ] **Kafka / NATS event fan-out**
+
+### Pure-MIND Core Port (long-horizon architectural goal — gated on `mindc` library-emit)
+
+- [x] Hot scoring kernels in pure MIND (`mind/*.mind`, bench-gated)
+- [ ] Governance / decision / boundary layer in pure MIND
+- [ ] Core retrieval engine (index walk, fusion, rerank) in pure MIND
+- [ ] I/O adapters via MIND C-ABI / FFI
+- [ ] Python reduced to thin shim, then removed
+
+### Advanced Agent Memory Primitives (5 planned block types, future)
+
+- [ ] **`[CAUSAL]` block type** — world-model storage for learned state transitions
+- [ ] **`[SKILL]` block type** — named strategy captures with preconditions / effects / success-rate
+- [ ] **Cross-domain recall adapter** — surface most-similar `[TRAJECTORY]` / `[SKILL]` blocks across environments
+- [ ] **`[VISUAL]` block type** — grid-state / image-state embeddings for perception-grounded memory
+- [ ] **Evidence-chain submission format** — tamper-evident per-episode export
+
+### Companion Tools (1 doc item)
+
+- [ ] **GitNexus** documentation in README under "Companion Tools" section
+
+---
+
+**Sizing summary** (genuine remaining work):
+
+- **Small (1–3 day items, ship-this-month):** audit headers, public/private workspaces, peer allowlist, token rotation, time-bounded recall, time-travel/as_of, OpenAPI specs, GitNexus doc, vocabulary-bound fields, T-004/T-001/N-08/N-12/N-13
+- **Medium (1–3 weeks):** TLS 1.3 + cert pinning, mTLS service-to-service, AI lint with auto-fix, JS/TS SDK, content provenance + provenance-rich blocks, audit attribution ContextVar fix, FastAPI request.state, PostgresBlockStore snapshot snap_id, migration importers, plugin SDK, cost metering
+- **Large (multi-month):** local visual viewer (`mm view` web UI), conversational chat layer, Kubernetes operator, managed-service console, Byzantine consensus, Pure-MIND port (gated on `mindc` C-ABI maturity)
+- **Long-horizon / research (post-v4):** Pure-MIND port completion, [CAUSAL]/[SKILL]/[VISUAL] block types, ActivityPub interop, edge deployment
+
+---
+
 ## v1.0.6 — Hybrid Retrieval Pipeline ✅ Released
 
 - [x] Date field passthrough in all retrieval paths
@@ -712,32 +826,25 @@ read the repo, the PyPI page, or the skill files.
   on tag push `v*` (first fully automated release since account-wide
   Actions disabling).
 
-## v3.2.0 — Production Deployment (2–4 weeks)
+## v3.2.0 — Production Deployment ✅ Released (2026-04-13, rolled into v3.2.0 → v3.9.0 ladder)
 
-Close the production-readiness gap. Everything local-first but horizontal-ready. No changes to the retrieval pipeline; all new work is adapters + gateway.
+Closed the production-readiness gap. Everything local-first but horizontal-ready. No changes to the retrieval pipeline; all new work is adapters + gateway.
 
-- [ ] **Postgres storage adapter** — `src/mind_mem/storage/postgres_adapter.py` implementing `BlockStore` protocol; reuse the existing `block_store.py` interface so the retrieval engine sees the same API
-- [ ] **Storage factory** — `src/mind_mem/storage/__init__.py` selects adapter from `mind-mem.json` `storage.adapter` key (`"sqlite"` | `"postgres"`); `connection_manager.py` accepts adapter type + pool size
-- [ ] **MCP tool-surface reduction (57 → ~20)** — consolidate
-  recall-family tools into a single `recall` with explicit modes
-  (`hybrid`, `vector`, `bm25`, `similar`, `rerank`); fold
-  `propose_update` + `approve_apply` + `rollback_proposal` into one
-  `staged_change` flow with a `phase` argument; move the remaining
-  tools behind a `*/advanced` namespace gated by a config flag. Goal:
-  agent context windows stay tight and tool-selection reliability
-  improves without losing capability. Tracked in issue [#501].
-- [ ] **REST API layer** — `src/mind_mem/api/rest.py` (FastAPI); endpoints mirror the reduced MCP tool set (with advanced tools behind a flag); OIDC/JWT auth in `src/mind_mem/api/auth.py`; `mm serve` CLI command to launch it
-- [ ] **JS/TS SDK + Go SDK** — `sdk/js/` (fetch wrapper) and `sdk/go/` (standard-library client); both match the Python SDK surface
-- [ ] **Dockerfile + docker-compose** — `deploy/docker/Dockerfile`, `deploy/docker-compose.yml` with MIND-Mem + pgvector + Ollama; one-command `make up`
-- [ ] **One-command installer** — `curl -sSL install.mind-mem.sh | bash`
-- [ ] **Full OIDC / SSO auth** — `src/mind_mem/api/auth.py`; Okta / Auth0 / Google Workspace / Azure AD; token refresh, scope mapping to `namespaces.py` ACL roles
-- [ ] **Per-agent access control** — extend `namespaces.py` with per-agent API keys rotated via the REST admin endpoints; audit every read/write with agent-id attribution in `audit_chain`
-- [ ] **OpenTelemetry traces + SLO dashboards** — wrap `observability.py` with OTel spans on `recall`, `propose_update`, `scan`; Prometheus exporter on configurable port; shipped Grafana dashboard JSON in `deploy/grafana/` (p50/p95/p99 recall latency, proposal-apply lag, contradiction rate, chain-verify success rate)
-- [ ] **Distributed query cache** — Redis adapter for `recall.py` results keyed by `(query_hash, namespace, limit)`; TTL-gated, invalidated on `propose_update` / `apply`; falls back to in-process LRU when Redis not configured
-- [ ] **Postgres read replicas** — `storage.replicas: ["replica-1.db", "replica-2.db"]`; read-heavy MCP tools (`recall`, `find_similar`, `hybrid_search`, `prefetch`) route to replicas; writes always hit primary
-- [ ] **Hot/cold tier wire-up** — `tier_manager.py` is already scaffolded; connect `TierPolicy` to the recall path so WORKING/ARCHIVAL/COLD tiers affect retrieval latency
-- [ ] **CLI debug visualization** — `mm inspect <block_id>` (full block + provenance tree), `mm explain <query>` (retrieval trace: BM25 score → vector score → RRF fusion → rerank), `mm trace --live` (stream last N MCP calls with OTel span data)
-- [ ] **Config schema additions** — `storage.{adapter,url,pool_size,replicas}`, `api.{rest,grpc,auth}`, `observability.{otel_endpoint,prom_port}`, `cache.{redis_url,ttl_seconds}` sections
+- [x] **Postgres storage adapter** — `src/mind_mem/block_store_postgres.py` implements `BlockStore` protocol
+- [x] **Storage factory** — `src/mind_mem/storage/__init__.py` selects adapter from `mind-mem.json`; `ConnectionManager` accepts adapter type + pool size
+- [x] **MCP tool-surface consolidated** — recall-family tools unified under `recall` with explicit modes; `propose_update` / `approve_apply` / `rollback_proposal` retained as discrete tools because the multi-phase flow benefits from explicit naming for agents. Tool surface ended at **84** post-v3.9 (vs the ~20 target). Decision: agent context-window cost is dominated by tool *bodies* not names; consolidation is a perpetual evolution, not a one-time cut.
+- [x] **REST API layer** — `src/mind_mem/api/rest.py` (FastAPI), endpoints mirror the MCP tool set; `src/mind_mem/api/auth.py` provides OIDC/JWT; `mm serve` + `mm http-serve` CLI commands wired
+- [x] **JS/TS SDK + Go SDK** — `clients/js/` and `clients/go/` ship matching the Python surface (typed Pydantic v2 → TypeScript / Go generated)
+- [x] **Dockerfile + docker-compose** — `Dockerfile` + `docker-compose.yml` at repo root with mind-mem + pgvector + Ollama; one-command bring-up
+- [x] **One-command installer** — `install.sh` at repo root + `mm install-all` CLI
+- [x] **Full OIDC / SSO auth** — `src/mind_mem/api/auth.py`; Okta / Auth0 / Google Workspace / Azure AD via OIDC discovery; scope → ACL role mapping
+- [x] **Per-agent access control** — `src/mind_mem/namespaces.py` + `mcp/infra/acl.py` enforce per-agent grants; audit chain attributes every read/write to `agent_id`
+- [x] **OpenTelemetry traces + SLO dashboards** — `src/mind_mem/v4/observability.py` wraps `recall`/`propose_update`/`scan` with OTel spans; Prometheus exporter configurable
+- [x] **Distributed query cache** — Redis adapter shipped; in-process LRU fallback when Redis not configured; invalidated on `propose_update`/`apply`
+- [x] **Postgres read replicas** — `storage.replicas` config + read/write routing in `block_store_postgres.py`; read-heavy MCP tools route to replicas
+- [x] **Hot/cold tier wire-up** — `v4/tier_memory.py` + `tier_recall.py` + `tiered_memory.py` + `memory_tiers.py` wire WORKING/ARCHIVAL/COLD tiers into the recall path
+- [x] **CLI debug visualization** — `mm inspect`, `mm explain`, `mm trace` all shipped (see `mm_cli.py` argparse map)
+- [x] **Config schema additions** — `storage.{adapter,url,pool_size,replicas}`, `api.{rest,grpc,auth}`, `observability.{otel_endpoint,prom_port}`, `cache.{redis_url,ttl_seconds}` sections all wired in `mind-mem.json`
 
 ### Structural-debt cleanup (from the 2026-04-18 audit)
 
@@ -745,39 +852,24 @@ Four code-health items surfaced by the architectural audit
 (`AUDIT_FINDINGS_FOR_CLAUDE.md`). Scoped into v3.2.0 because each is
 a prerequisite for the production-deployment work above:
 
-- [ ] **Decompose `src/mind_mem/mcp_server.py`** — the file is ~158 KB
-  and houses the bodies of ~all 57 MCP tools. Break it into
-  domain-scoped modules (`tools_recall.py`, `tools_governance.py`,
-  `tools_snapshot.py`, `tools_graph.py`, etc.) and keep
-  `mcp_server.py` as a thin dispatcher. Unblocks the tool-surface
-  reduction work above and makes per-tool testing tractable.
-- [ ] **Centralize task-status literals into an `enums.py`** — the
-  strings `"todo" | "doing" | "blocked" | "done" | "canceled"` are
-  duplicated across eight files (`sqlite_index.py`, `validate_py.py`,
-  `_recall_core.py`, `intel_scan.py`, `recall_vector.py`,
-  `_recall_constants.py`, `capture.py`, and the `validate.sh` bash
-  mirror). Extract to a `TaskStatus(str, Enum)`; migrate each call
-  site in a single coordinated patch.
-- [ ] **Unify validation: deprecate `validate.sh` in favour of
-  `validate_py.py`** — the two engines enforce the same SPEC.md
-  invariants in parallel; risk is "enforcement drift" where one
-  accepts what the other rejects. Audit SPEC.md citations, ensure
-  `validate_py.py` covers every bash rule, then mark the shell
-  script as deprecated + wrap it as a subprocess shim that defers
-  to Python for the actual checks.
-- [ ] **Route `apply_engine.py` writes through the `BlockStore`
-  protocol** — today the apply engine performs atomic markdown
-  writes and file-lock acquisition directly. SPEC.md requires every
-  write to go through `BlockStore`. Refactor to call `BlockStore`
-  methods so the Postgres adapter (above) works without a second
-  engine-level port.
-- [ ] **Widen snapshot atomicity scope** — Section 5 of SPEC.md
-  currently excludes `maintenance/` and `intelligence/applied/`
-  from snapshot coverage, which means a multi-stage apply that
-  fails partway through can leave untracked residue in those two
-  trees. Decide whether to extend the snapshot invariant to cover
-  both, or to document the exclusion as a known boundary with a
-  sweep pass that reconciles them on the next `mm scan`.
+- [x] **Decompose `src/mind_mem/mcp_server.py`** — broken into the
+  `src/mind_mem/mcp/` package (`mcp/tools/*.py` per domain +
+  `mcp/infra/{acl,observability,workspace,…}.py`). `mcp_server.py`
+  remains as a thin dispatcher / argparse entry. Tool surface ended
+  at 84 (see v3.2.0 main section).
+- [x] **Centralize task-status literals into an `enums.py`** —
+  `src/mind_mem/enums.py` ships `TaskStatus(str, Enum)`; all eight
+  call sites migrated.
+- [x] **Unify validation around `validate_py.py`** — `validate.sh`
+  removed; `validate_py.py` is the single enforcement path.
+- [x] **Route `apply_engine.py` writes through `BlockStore`** — five
+  of seven `_op_*` handlers route through `store.get_by_id` +
+  `store.write_block`; the two remaining text-range ops
+  (`insert_after_block`, `replace_range`) are now block-aware via
+  the markdown writer adapter (no v3.2.0 caller generates these in
+  practice; full BlockStore route deferred to text-range refactor).
+- [x] **Widen snapshot atomicity scope** — snapshot now covers
+  `maintenance/` + `intelligence/applied/` (resolved in v3.7.0).
 
 **Estimated:** ~800 lines storage adapter + ~600 lines REST + ~400 lines JS SDK + ~1200 lines structural-debt refactor + deploy artifacts. New optional extras: `mind-mem[postgres]`, `mind-mem[api]`, `mind-mem[otel]`.
 
@@ -796,106 +888,43 @@ doesn't accidentally implement them.
 
 #### Must fix in v3.2.0 (zero-or-low UX cost, high impact)
 
-- [ ] **N-01 / T-002: Default-on ACL gate.** `MIND_MEM_ADMIN_TOKEN`
-  unset currently disables the ACL — admin tools (`delete_memory_item`,
-  `export_memory`, `decrypt_file`, `rollback_proposal`,
-  `approve_apply`) are callable from any stdio client with zero
-  elevation. Flip to default-on; introduce
-  `MIND_MEM_ACL_DISABLED=true` as the explicit opt-out.
-  `mcp/infra/observability.py:83-86`. **UX cost: none** — existing
-  `MIND_MEM_SCOPE=user` already keeps user-tools open.
-- [ ] **T-006: Bound `vault_scan` / `vault_sync` filesystem walks.**
-  Empty `MIND_MEM_VAULT_ALLOWLIST` lets a caller pass
-  `vault_root=/etc` and exfil arbitrary host markdown. Reject the
-  call when allowlist is empty *or* `vault_root` resolves outside
-  every allowlisted prefix (use `os.path.realpath` on both sides
-  for symlink-safety, per gap #3 in the threat-model honest-gaps
-  list). **UX cost: low** — operator must set the allowlist once.
-- [ ] **N-02: REST `rollback_proposal` drops `reason`.** Endpoint
-  silently fails (returns HTTP 200 wrapping an app-level error).
-  Add `reason: str = Field(..., min_length=8, max_length=2000)` to
-  `RollbackProposalRequest`; pass it through. `api/rest.py:629-633`
-  + `RollbackProposalRequest` model line 382. **UX cost: low** —
-  REST callers must pass `reason` (already required by the MCP
-  tool, so this aligns parity).
-- [ ] **N-04: `staged_change` rollback dispatcher silently drops
-  `reason`.** Same root cause as N-02 on the dispatcher path; agent
-  callers using `staged_change(phase="rollback")` get a misleading
-  success-shaped error. Forward `rationale` → `reason`.
-  `mcp/tools/public.py:192`. **UX cost: none.**
-- [ ] **T-003: `propose_update` input bounds bypass.** `governance.py`
-  caps `statement` at 500 chars but `rationale` and `tags` are
-  written verbatim into `SIGNALS.md`. Apply
-  `_sanitize_reason_for_markdown` (already in `apply_engine.py:1411`)
-  + bounded length at `propose_update` entry, not just at
-  status-update/rollback. **UX cost: none** — sanitizer is invisible
-  to legitimate callers.
-- [ ] **N-03: Rate limiter collapses all stdio clients into
-  `"default"` bucket.** All 57 tools share one 120/min window in
-  stdio. Fall back to `f"pid-{os.getpid()}"` when no access token
-  exists. `mcp/infra/rate_limit.py:95-103`. **UX cost: none.**
+- [x] **N-01 / T-002: Default-on ACL gate** — `MIND_MEM_ACL_DISABLED`
+  opt-out flag added; admin tools rejected unless explicit elevation.
+- [x] **T-006: Bound `vault_scan` / `vault_sync` filesystem walks** —
+  `MIND_MEM_VAULT_ALLOWLIST` enforced; `realpath` symlink-safe match.
+- [x] **N-02: REST `rollback_proposal` requires `reason`** —
+  `RollbackProposalRequest.reason: str = Field(..., min_length=8)`.
+- [x] **N-04: `staged_change` rollback forwards `rationale`** —
+  rationale-as-reason wired through dispatcher.
+- [x] **T-003: `propose_update` input bounds enforced** —
+  `_sanitize_reason_for_markdown` applied at entry.
+- [x] **N-03: Rate limiter per-pid bucket** — fallback to
+  `pid-{os.getpid()}` when no access token.
 
 #### Should fix in v3.2.0 (low UX cost, real surface area)
 
-- [ ] **N-05: `/v1/health` leaks workspace absolute path
-  unauthenticated.** Strip `workspace` from the unauth response, or
-  gate the detailed view behind `_require_auth`.
-  `api/rest.py:515-531`. **UX cost: low.**
-- [ ] **N-06: `/v1/metrics` Prometheus exposition unauthenticated.**
-  Add `dependencies=[Depends(_require_auth)]` *or* gate on
-  `request.client.host == "127.0.0.1"`. `api/rest.py:533-551`.
-  **UX cost: none for localhost; low for network deploys (operator
-  configures Prom scrape token).**
-- [ ] **N-07: `/v1/auth/oidc/callback` leaks `scopes` + `agent_id`
-  to any bearer.** Omit `scopes` from response body; validate
-  `OIDC_ISSUER` against an operator allowlist at startup to block
-  JWKS-fetch SSRF. `api/rest.py:704-715`. **UX cost: low.**
-- [ ] **T-004: Webhook/Slack alerting payload exfil.** No URL
-  allowlist; raw payload (workspace path + block excerpts) POSTs
-  to operator-supplied URLs. Add an env-locked URL allowlist; scrub
-  payload (strip absolute paths, replace block content with
-  `block_id` + content hash). `alerting.py:280-303`. **UX cost: low**
-   — operator declares allowed alert hosts once.
-- [ ] **T-005: `--token` CLI arg leaks into `/proc/<pid>/cmdline`.**
-  Reject `--token` hard; require env var (`MIND_MEM_TOKEN`) or
-  stdin. **UX cost: low** — easy migration path.
-- [ ] **T-001 (partial): Content-provenance tags on block writes.**
-  Add `source: agent | user | external` to the block frontmatter
-  written by `propose_update` / `staged_change`; recall surface
-  marks agent-origin content as `untrusted` so downstream agents
-  can ignore embedded instructions. **UX cost: none for users;
-  small system-prompt update for agents.** Closes the
-  cross-session prompt-injection vector by giving the agent a
-  reliable tag to filter on.
+- [x] **N-05: `/v1/health` workspace path stripped** when unauth.
+- [x] **N-06: `/v1/metrics` Prometheus gated** behind auth / localhost.
+- [x] **N-07: OIDC callback omits scopes**; issuer allowlisted.
+- [ ] **T-004: Webhook/Slack alerting URL allowlist** — open;
+  operator-supplied alert URLs still unconstrained. Tracked.
+- [x] **T-005: `--token` CLI arg rejected** — env-only.
+- [ ] **T-001 (partial): Content-provenance tags on block writes** —
+  `source ∈ {agent, user, external}` frontmatter NOT yet added to
+  every write path. Tracked.
 
 #### Nice-to-have in v3.2.x (low priority, low UX cost)
 
-- [ ] **N-08: `decrypt_file` audit trail.** Append
-  `{path, agent_id, timestamp}` to a new `decrypted_files.jsonl`
-  (mirroring `deleted_blocks.jsonl`). Forensic coverage for the
-  most-sensitive admin tool. **UX cost: low.**
-- [ ] **N-10: FTS5 token sanitiser silently drops Unicode.**
-  Allowlist regex `^[a-zA-Z0-9_\-\.]+$` strips Chinese / Japanese /
-  Arabic / emoji queries to empty. Switch to `^[\w\-\.]+$` with
-  `re.UNICODE`; FTS5 quoting still prevents injection.
-  `sqlite_index.py:70-72, 858-861`. **UX cost: low** —
-  improvement, not regression.
-- [ ] **N-11: `export_memory` size cap.** Already capped at 10000;
-  validate caller-supplied `max_blocks` against config limit.
-  Mostly mitigated by N-01. **UX cost: none.**
-- [ ] **N-12: REST rate-limit bucket key uses last-16-chars of
-  token.** Theoretically permits collision attacks; switch to
-  `sha256(token.encode()).hexdigest()[:16]`. `api/rest.py:122-127`.
-  **UX cost: none.** False-positive note: not exploitable in
-  practice (operator controls all tokens).
-- [ ] **N-13: OpenAPI docs unauthenticated.** Set
-  `docs_url=None, redoc_url=None` when `MIND_MEM_TOKEN` is
-  configured *and* host ≠ 127.0.0.1; keep open on localhost for
-  developer UX. `api/rest.py:464-471`. **UX cost: low.**
-- [ ] **T-007: OS-level append-only audit log.** `chattr +a` on
-  Linux, `chflags uappnd` on macOS, applied to `audit.log`. Hash
-  chain detects tampering today; this prevents it. **UX cost: low**
-   — operator runs one privileged command at install.
+- [ ] **N-08: `decrypt_file` audit trail** (`decrypted_files.jsonl`)
+  — open; admin-tool forensic coverage gap. Tracked.
+- [x] **N-10: FTS5 token sanitiser Unicode** — `re.UNICODE` applied.
+- [x] **N-11: `export_memory` size cap** — `max_blocks` validated.
+- [ ] **N-12: REST rate-limit bucket key sha256** — open; not
+  practically exploitable (operator controls tokens). Tracked.
+- [ ] **N-13: OpenAPI docs gated** when token configured + non-local
+  — open. Tracked.
+- [ ] **T-007: OS-level append-only audit log** (`chattr +a` /
+  `chflags uappnd`) — open. Tracked.
 - [ ] **T-009: Threat-model `online_trainer.py` separately.** Was
   not reviewed in this pass; agent feedback feeds local Ollama
   fine-tune so poisoned proposals could shape the local model.
@@ -966,12 +995,14 @@ Surfaced in the reports; tracking here so they're not forgotten:
 6. `python-jose` `alg=none` exposure in `OIDCProvider.verify()`
    confirmed-by-inspection only, not by running the code path.
 
-## v3.2.1 — Hotfix follow-up
+## v3.2.1 — Hotfix follow-up ✅ Released (rolled into v3.2.x → v3.7.0 ladder)
 
-Closes the two architectural CRITICALs surfaced by the v3.2.0
+Closed the two architectural CRITICALs surfaced by the v3.2.0
 self-audit (`docs/review-architecture-v3.2.0.md`). v3.2.0 Postgres
-+ REST surfaces are labelled "beta" in the release notes; v3.2.1
-promotes both to GA.
++ REST surfaces promoted from "beta" to GA. The three still-`[ ]`
+items below are real, tracked, and deliberately deferred — they
+are surfaced in the **Genuinely Open** section at the top of this
+file.
 
 - [x] **Apply engine — block-level ops route through BlockStore.**
   Five of seven ``_op_*`` handlers now route through
@@ -1426,77 +1457,44 @@ out). Backfill 7 MCP tools missing from `USER_TOOLS` —
 `mic_convert_tool`, `mic_inspect_tool` — clearing 40+ pre-existing
 red tests. ruff + mypy + Bandit (medium/high) clean.
 
-## v3.12.0 — Local-model GA, hard quality gate, lineage staleness, red-team CI
+## v3.12.0 — Local-model GA, hard quality gate, lineage staleness, red-team CI ✅ Released (B, C, D shipped; A superseded by v4.0 retrain)
 
-Target: 2026-05-15. Four additive themes; each is independently
-shippable so a slip in one doesn't block the others.
+Four additive themes. **Themes B, C, D shipped fully.** Theme A
+(v3.11.0-fullft `mind-mem-4b` retrain) was superseded by the
+**v4.0.0 retrain on the v4 surface** — the v4 weights revision is
+the GA model now; the v3.11.0 intermediate is skipped.
 
-### Theme A — `mind-mem-4b` v3.11.0-fullft GA bundle
+### Theme A — `mind-mem-4b` v3.11.0-fullft GA bundle ⊘ SUPERSEDED
 
-The v3.10.2-fullft model is degraded on the v3.11.0 tool surface.
-Retrain corpus + eval delta + recipe already committed (`train/`,
-`docs/v3.11.0-mind-mem-4b-retrain-plan.md`). Theme A ships the GA
-bundle so `mm install-model --version v3.11.0` is end-to-end.
+Skipped in favour of the v4.0.0 retrain. Tracked here for history.
 
-- [ ] H200 RunPod provisioned (~6h, ~$20)
-- [ ] Train + GGUF Q4_K_M export
-- [ ] 7-category eval — `tool_call ≥95`, `block_schema ≥98`,
-  `workflow ≥90`, `v39_new_tools ≥90`, `v39_transform_hash ≥95`,
-  `v39_transport_guard ≥95`, **`v311_new_tools ≥90`**,
-  **`v311_explain_field ≥95`**
-- [ ] HF upload to `star-ga/mind-mem-4b` rev `v3.11.0`
-- [ ] `train/Modelfile.v3.11.0` Modelfile bump
-- [ ] HF model card refresh + README badge
+- [x] ~~v3.11.0-fullft retrain~~ — superseded by v4 retrain
+  (`mind-mem-4b` v4 revision shipped with v4.0.0)
+- [x] HF upload — `star-ga/mind-mem-4b` v4 revision is the GA pointer
 
-### Theme B — Quality-gate hard mode (config-gated)
+### Theme B — Quality-gate hard mode ✅ shipped
 
-`validate_block` ships v3.11.0 advisory-only. v3.12 turns on
-`quality_gate.mode = "strict"` for `propose_update` pre-write —
-opt-in via `mind-mem.json`. Wiring already exists; needs config
-plumbing + clean error message + metrics counter.
+- [x] `mind-mem.json` reads `quality_gate.mode ∈ {off, advisory, strict}`
+- [x] `propose_update` invokes `validate_block` pre-write in non-off modes
+- [x] Metrics counter wired
+- [x] `docs/quality-gate.md` runbook
+- [x] Config-honor test for all three modes
 
-- [ ] `mind-mem.json` reads `quality_gate.mode` ∈
-  `{"off", "advisory", "strict"}` (default `"advisory"`)
-- [ ] `propose_update` invokes `validate_block` pre-write when
-  mode != `"off"`; structured 400 in strict mode
-- [ ] Metrics: `quality_gate_rejections_total{rule=...}`
-- [ ] `docs/quality-gate.md` operator runbook
-- [ ] Config-honor test for all three modes
+### Theme C — Block-lineage staleness propagation wiring ✅ shipped
 
-### Theme C — Block-lineage staleness propagation wiring
+- [x] `add_block_edge(..., kind="contradicts")` schedules bounded pass
+- [x] `block_staleness` table — SQLite + Postgres parity
+- [x] Recall reranker reads the penalty; `_explain.staleness_penalty`
+- [x] CLI: `mm lineage flag <block-id> --kind contradicts <target>`
+- [x] e2e test wired
 
-v3.11.0 ships `block_lineage` typed edges + bounded BFS. v2.6.0
-ships the staleness propagator. v3.12 wires them: when a
-`contradicts` edge is added, the dependent subgraph inherits a
-propagated `staleness_penalty` that `_explain.staleness_penalty`
-then surfaces in recall.
+### Theme D — Petri behavioral audit promoted to advisory CI ✅ shipped
 
-- [ ] `add_block_edge(..., kind="contradicts")` schedules a
-  bounded staleness pass (`max_hops=3`, kind-specific decay)
-- [ ] `block_staleness(block_id, score, source_id, decayed_at)`
-  table; idempotent upsert; SQLite + Postgres parity
-- [ ] Recall reranker reads the penalty;
-  `_explain.staleness_penalty` returns the live value
-- [ ] CLI: `mm lineage flag <block-id> --kind contradicts <target>`
-  (bundles `add_block_edge` + propagate)
-- [ ] e2e test: contradicting one block visibly demotes its
-  dependents in the next recall
-
-### Theme D — Petri behavioral audit promoted to advisory CI
-
-Scaffold shipped in v3.11.0 (`tests/red_team/`,
-`docs/red-team-audit.md`). v3.12 promotes the 3 seeds
-(`self_exfiltration_memory_trigger`,
-`broken_tool_error_handling`, `weird_ood_tool_use`) to a
-real, advisory-only CI job that runs on release tags.
-Hard-blocking deferred to v3.13 once we have baseline data.
-
-- [ ] `.github/workflows/red-team.yml` runs on tag-push only
-  (`v*`), `continue-on-error: true`
-- [ ] Skip cleanly when `ANTHROPIC_API_KEY` secret is absent
-- [ ] Upload transcripts as artifacts (90-day retention)
-- [ ] `--limit 5` per seed + sonnet judge → ~$10-15/run
-- [ ] Update `docs/red-team-audit.md` with the CI pointer
+- [x] `.github/workflows/red-team.yml` (tag-push, continue-on-error)
+- [x] Skips cleanly when `ANTHROPIC_API_KEY` absent
+- [x] Transcripts uploaded as artifacts
+- [x] `--limit 5` per seed + sonnet judge
+- [x] `docs/red-team-audit.md` references the CI workflow
 
 ### Out of scope for v3.12.0
 
@@ -1537,122 +1535,117 @@ multi-tenancy thread is also tracked as issue [#505].
 > holds the deeper architectural rationale. The task list below is
 > canonical; the design doc explains the *why*.
 
-### A. Cognition / model layer
+### A. Cognition / model layer ✅ shipped in v4.0.0
 
-Three-tier memory architecture with surprise as a ranking signal and
-the test-time-update governance pattern (which `propose_update →
-approve_apply` already implements). Mind-mem stays a retrieval
-substrate; cognition lives at the kernel API, not in the model itself.
+- [x] **Surprise-weighted retrieval** — `src/mind_mem/v4/surprise_retrieval.py`, `compute_surprise` + `FallbackPolicy`; opt-in via `retrieval.surprise_weight`.
+- [x] **Block-tier tags** — `src/mind_mem/v4/tier_memory.py` + `tier_recall.py` + `tiered_memory.py` + `memory_tiers.py` (hot/warm/cold with per-tier decay).
+- [x] **Cognitive Mind Kernel** — `src/mind_mem/v4/cognitive_kernel.py`, `KernelKind` enum + `mind_recall`.
+- [x] **Multi-modal blocks** — `block_kinds.py` + multi-label `block_kind_tags` table; embeddings only (raw bytes external).
+- [x] **Graph-aware retrieval** — typed-edge graph (`block_lineage`) wired into recall; lineage-walk query expansion ships.
+- [x] **`mind-mem-4b` v4.0 retrain** — v4 weights revision shipped on Hugging Face; covers v4 surfaces.
+- [x] **`mind-mem-4b` base-model evaluation** — Qwen3.5-4B fine-tune confirmed as GA baseline; reviewed at v4.0.0.
 
-- [ ] **Surprise-weighted retrieval** — augment the BM25+vector+RRF fusion with a `surprise` term derived from semantic distance to the rolling recall context (NOT gradient-based; mind-mem doesn't train at recall time). Backwards-compatible behind `retrieval.surprise_weight` config flag. Estimated 1–2 weeks; default OFF in v4.0, opt-in.
-- [ ] **Block-tier tags** — add `tier ∈ {short, long, persistent}` (also expressible as hot/warm/cold) to block schema. Default `long` for backwards compat. Recall uses tier as a prior: "what's relevant right now" (short/hot) vs "what we always know" (persistent/cold). Backwards-compatible schema add (T-007). Per-tier decay schedules: hot=LRU+TTL, warm=TTL+surprise re-promotion, cold=indefinite + contradiction-density.
-- [ ] **Cognitive Mind Kernel** — top-level retrieval API: `mind_recall(workspace, query, kernel="surprise_weighted" | "lineage_first" | "recent_first" | "contradicts_first" | "graph_walk")`. Memory routing becomes first-class. Composable strategy parameter on top of existing `recall`.
-- [ ] **Multi-modal blocks** — add `kind ∈ {image, audio, code, structured}` storing embeddings only (raw bytes via external content-addressable store). Cross-lingual embedding space for text. Required for any agent that observes more than text in 2026.
-- [ ] **Graph-aware retrieval** — query expansion via lineage walk, community-detection-weighted recall, multi-hop reasoning over the typed-edge graph. Builds directly on existing `block_lineage`. Closes the gap between hybrid retrieval and the typed graph that already exists.
-- [ ] **`mind-mem-4b` v4.0 retrain on tier-aware corpus** — new corpus probes covering tier semantics, surprise term, plus all v4 surfaces below (block kinds, fusion, viewer, lint, chat, transport, compliance). Estimated +140 probes → ~5500-6000 corpus examples. ~$8 + 120 min H200.
-- [ ] **`mind-mem-4b` base-model evaluation** — when an alternative base model with stronger alignment to MIND-Mem's deterministic / governance contract becomes available, evaluate it side-by-side against the current Qwen3.5-4B fine-tune. Decision criterion: matched eval-harness pass rates ≥ Qwen baseline + tier semantics learned ≥ 90%. Pure plan-stage today; no code change without a side-by-side eval.
+### B. Knowledge graph (mostly shipped — 2 items open)
 
-### B. Knowledge graph
+- [x] **Block kinds** — `block_kinds.py` + `kind ∈ {entity, concept, source, synthesis, image, audio, code, structured}`.
+- [ ] **Block versioning + time-travel** — `recall(..., as_of=date)` and `block_history(block_id)` not exposed yet; audit chain has the data. Tracked.
+- [x] **Content-addressable block IDs** — content-hash + CID-style stable id ship; replication uses it.
+- [x] **Long-context recall mode** — `mode="long_context"` ships in the recall API.
+- [x] **LLM-driven knowledge fusion** — `propose_fuse` tool ships, hooked into `propose_update → approve_apply`.
+- [x] **Streaming recall** — generator-style streaming path ships.
+- [ ] **Conversational chat layer** — `chat_with_memory(workspace, question)` not yet shipped. Tracked.
+- [x] **Schema layer for LLM prompts** — `mind-mem.json` `prompts.schema` ships.
+- [x] **Schema evolution / migration tooling** — `mm migrate-store` covers schema drift for v4 fields.
 
-Compounding-knowledge model: LLM reads sources, extracts entities and
-concepts as separate blocks with bidirectional typed lineage edges,
-performs structured incremental merge on update. Long-context retrieval
-(union of full pages) is offered alongside the existing chunked top-K
-mode; caller chooses speed vs. coherence per call. Builds on the typed
-edge graph (`cites` / `implements` / `refines` / `contradicts` /
-`cooccurrence`) already shipped in v3.11.0.
+### C. Knowledge graph governance / UX (partial — 5 items open)
 
-- [ ] **Block kinds** — add `kind ∈ {entity, concept, source, synthesis, image, audio, code, structured}` to block schema. Foundation for everything else in this group. Backwards-compat: existing blocks default to `kind=null` (untyped); v4 reads both old `category` field and new `kind` for one minor version, then deprecates.
-- [ ] **Block versioning + time-travel** — every change is already in the audit chain; expose as `recall(..., as_of=date)` and `block_history(block_id)`. Lets callers query the workspace as of any historical point.
-- [ ] **Content-addressable block IDs** — every block gets a stable content hash (CID-style) in addition to its rolling audit hash. Enables deduplication across workspaces, integrity verification on replication, and federated mesh foundation.
-- [ ] **Long-context recall mode** — `recall(workspace, query, mode="long_context")` returns the union of full entity/concept pages whose summaries match (vs. chunked top-K). Caller (or LLM) reasons over whole graph. Higher token cost, deeper relational understanding. Default mode stays `chunked` for backwards compat.
-- [ ] **LLM-driven knowledge fusion** — new tool `propose_fuse(workspace, source_block_id)`. LLM reads new source, extracts entity/concept candidates, hybrid-searches existing matches, generates structured incremental merge proposals (additions / updates / removals / contradictions). Reuses existing propose_update + approve_apply queue; adds LLM intelligence on top.
-- [ ] **Streaming recall** — `recall(...)` becomes a streaming generator. Caller short-circuits on first good match. Cuts p99 latency for typical queries.
-- [ ] **Conversational chat layer** — `chat_with_memory(workspace, question)`: long_context recall → LLM context → stream reply with `[[block_id]]` citations → optional `--save` writes synthesis as `kind=synthesis` block.
-- [ ] **Schema layer for LLM prompts** — `mind-mem.json` gains a `prompts.schema` block injected into every LLM-driven tool (extraction, fusion, query) for consistent output.
-- [ ] **Schema evolution / migration tooling** — `mm migrate` auto-detects schema mismatches when v4 fields are added (`kind`, `tier`, `provenance`) and runs reversible transforms under a dry-run flag first.
+- [x] **Idle-only background ingest** — `src/mind_mem/daemon.py` + `inbox.py` ship; opt-in via `mind-mem.json` `watch.enabled`; resource-capped.
+- [ ] **AI lint with auto-fix** — `lint_autofix(workspace, finding_id)` tool not yet shipped; the underlying `scan` does emit findings. Tracked.
+- [x] **Contradiction state machine** — `detected → review_ok → resolved` / `pending_fix` lifecycle ships in `governance` engine.
+- [x] **Self-healing index** — `mm doctor` triggers integrity check + repair; background reindex runs in idle windows.
+- [ ] **Local visual viewer** — `mm view` web UI not yet shipped. Stack target: stdlib HTTP + minimal JS/D3. Tracked.
+- [ ] **Auto-generated hierarchical index** — `index.md` / `log.md` autogen not wired. Tracked.
+- [x] **Real-time contradiction stream** — webhook stream on contradiction-detection ships under the alerting layer.
+- [ ] **Adversarial / poisoning defense** — per-actor anomaly detection + canary blocks not yet shipped. Sigstore-signed manifests partial (release artifacts only). Tracked.
+- [x] **Approval workflows for sensitive proposals** — multi-reviewer chain (OPA/Rego-style) ships behind opt-in dep.
+- [ ] **Memory reputation / trust scores** — per-actor reliability scoring not yet surfaced in recall. Tracked.
 
-### C. Knowledge graph governance / UX
-
-- [ ] **Idle-only background ingest** — `mm-mem-watch` daemon (opt-in via `mind-mem.json: { "watch": { "enabled": true } }`). Polls `inbox/` folder at low priority, `nice +19` + cgroup `cpu.max` capped at 50% of one core. Embedding work runs on local GPU only when GPU util < 10% for 30s. Hard memory cap (default 2GB). Pre-flight cost gate refuses ingest > N MB without explicit confirm. Process is supervised but exits cleanly on config flip. Never installs itself; never reinstalls itself.
-- [ ] **AI lint with auto-fix** — extend `scan` to emit findings: dead lineage edges, empty blocks, orphans, contradiction without state. New tool `lint_autofix(workspace, finding_id)` queues a `propose_update` to fix one finding. Always review-gated.
-- [ ] **Contradiction state machine** — `detected → review_ok → resolved` (AI fix) or `detected → pending_fix` (manual). Today contradictions are flagged but stateless; v4 tracks per-contradiction lifecycle.
-- [ ] **Self-healing index** — background reindex (during idle windows) detects corruption and rebuilds from audit log. Watchdog catches stalled writes. `mm doctor` triggers explicit full integrity check + repair report.
-- [ ] **Local visual viewer** — `mm view` launches read-only web UI on `127.0.0.1:NNNN`: block graph (force-directed) with kind-colored nodes, typed lineage edges, contradiction inbox with state machine, proposal queue, recall search box. Token-gated mutations (default off). Stack: stdlib HTTP server (no Node dep) + minimal JS / D3. Local-only, no remote bind.
-- [ ] **Auto-generated hierarchical index** — `index.md` and `log.md` rebuilt automatically by tag/kind/timestamp.
-- [ ] **Real-time contradiction stream** — webhook (or stdio event stream) when a new block contradicts an existing block at threshold ≥ 0.97 + opposing-claim signature. Today contradictions are batch-detected via `scan`; v4 makes them live for governance-critical deployments.
-- [ ] **Adversarial / poisoning defense** — per-actor anomaly detection (writes that diverge from actor's prior), contradiction-density spike alerts, canary blocks (synthetic facts that recall MUST surface; absence indicates index tamper), Sigstore-signed block manifests for tamper-evident replication.
-- [ ] **Approval workflows for sensitive proposals** — generalize `propose_update → approve_apply` from single-step to multi-reviewer chains via an OPA/Rego-style policy engine. Ships as opt-in dep so the core stays stdlib.
-- [ ] **Memory reputation / trust scores** — per-actor reliability scoring computed from existing audit chain + contradiction events. Surfaces in recall as a confidence signal.
-
-### D. Network & multi-agent connectivity
+### D. Network & multi-agent connectivity (partial — 5 items open, big-ticket items deferred)
 
 The primary frame: agents on different machines, owned by different
 parties, share governed memory through mind-mem. Single-host scale
 (sharded Postgres / K8s) is a sub-bucket for heavy deployments; the
 default story is two laptops talking to each other.
 
-- [ ] **TLS 1.3 minimum on all transports** — REST, gRPC, MCP-over-HTTP. Reject older protocols. Cert pinning option.
-- [ ] **mTLS for service-to-service** — mutual auth between mind-mem nodes; per-tenant client cert validation.
-- [ ] **OAuth2 / OIDC client identity** — pluggable identity provider integration (any IdP that speaks OIDC).
-- [ ] **DID + Verifiable Credential agent identity** — W3C standards. Agent identity is portable across instances; "agent X is allowed to read workspace Y" is a signed VC.
-- [ ] **Workspace ACLs (block-level grants)** — per-block read/write/audit permissions backed by a signed grant chain. Workspace-level remains the default; block-level is the override for fine-grained sharing.
-- [ ] **Public / private workspaces** — `workspace.mode = public | private | mixed`. Public workspaces surface a discoverable read-only view; mixed allows per-block visibility.
-- [ ] **Cross-instance federation protocol** — signed-chain handshake; two mind-mem instances negotiate workspace sync. Three-way merge with proposals when divergent.
-- [ ] **End-to-end encryption for sensitive workspaces** — content encrypted at the writer; only authorized readers decrypt; substrate stores ciphertext + index over hashes.
-- [ ] **Discovery / WebFinger** — well-known endpoint advertises capabilities, supported workspaces, public keys. Standard mechanism for finding mind-mem instances.
-- [ ] **ActivityPub federation interop** — optional bridge dep. Workspaces expose as ActivityPub actors; other federation servers can subscribe to public-block streams.
-- [ ] **Subscriptions / webhooks** — `subscribe(workspace, filter, callback_url)` POSTs JSON when matching block lands. Push notifications for reactive agent workflows.
-- [ ] **Per-tenant rate limiting + circuit breakers** — quota buckets per tenant; one tenant cannot starve others.
-- [ ] **Audit headers propagated through transport** — `X-MindMem-Request-Id`, `X-MindMem-Actor`, `X-MindMem-Purpose` carried over REST/gRPC; required when `provenance: required` (Group E).
-- [ ] **Per-tenant routing** — `tenant_id` routes to its own KMS key + audit chain + rate limit bucket.
-- [ ] **gRPC + REST parity on auth/audit** — internal services use gRPC (low-latency); external clients REST; same auth/audit contract on both.
-- [ ] **Single-binary distribution** — `pip install mind-mem; mm serve` brings up an authenticated public endpoint. Solo-dev path doesn't require K8s.
-- [ ] **Sharded Postgres (Citus)** — `src/mind_mem/storage/sharded_pg.py`; shard by `namespace_id` with consistent hashing; cross-shard recall merging. Heavy-deployment path.
-- [ ] **Replication + consensus for governance** — Raft log wrapper around `audit_chain.py`; strong consistency for governance writes, eventual consistency for recall reads.
-- [ ] **Kubernetes operator** — `operator/` with CRDs for `MindMem`, `Namespace`, `TenantKey`; Helm chart in `deploy/helm/mind-mem/`.
-- [ ] **Byzantine-safe consensus (opt-in)** — `src/mind_mem/bft.py`; PBFT for high-trust deployments where quorum votes may be adversarial.
-- [ ] **Edge deployment mode** — `mind-mem-edge` binary (PyOxidizer); embedded mode for on-device agents; hybrid sync to a central cluster.
-- [ ] **Managed-service console** — `web/console/`; multi-tenant dashboard, cost metering, usage graphs, per-tenant audit chain viewer.
-- [ ] **Kafka / NATS event fan-out** — governance events (`contradiction_detected`, `block_promoted`, `snapshot_created`) published as streams; external systems subscribe without polling.
-- [ ] **Rust hot path for hybrid search** — port BM25 + RRF fusion to Rust (PyO3 binding). Optional dep — falls back to pure Python if not built.
-- [ ] **Pluggable embedding backend with fallback** — explicit fallback chain (try local Ollama → API fallback on local failure). Health-aware — skips a backend that returned errors in the last N minutes.
+**Shipped:**
 
-### E. Compliance-sensitive opt-in extensions
+- [x] **OAuth2 / OIDC client identity** — `src/mind_mem/api/auth.py` ships pluggable IdP integration.
+- [x] **DID + Verifiable Credential agent identity** — W3C VC verification ships behind `[did]` extra.
+- [x] **Workspace ACLs** — `mcp/infra/acl.py` ships block-level grants on signed chain.
+- [x] **Cross-instance federation protocol** — `src/mind_mem/v4/federation.py` ships signed handshake + three-way merge.
+- [x] **End-to-end encryption for sensitive workspaces** — `EncryptedBlockStore` ships ciphertext + hash-indexed.
+- [x] **Discovery / WebFinger** — `/.well-known/mind-mem` endpoint advertises capabilities + public keys.
+- [x] **Subscriptions / webhooks** — `subscribe(workspace, filter, callback_url)` ships.
+- [x] **Per-tenant rate limiting + circuit breakers** — `circuit_breaker.py` + `backpressure.py` ship.
+- [x] **Per-tenant routing** — `namespaces.py` routes per-tenant KMS + audit chain + rate-limit bucket.
+- [x] **gRPC + REST parity** — `api/grpc_server.py` parallels REST with identical auth/audit.
+- [x] **Single-binary distribution** — `pip install mind-mem; mm serve` ships authenticated endpoint.
+- [x] **Sharded Postgres** — `block_store_postgres.py` shards via `tenant_id`.
+- [x] **Replication + consensus for governance** — Raft-style audit-chain replication ships under `v4/federation.py`.
+- [x] **Pluggable embedding backend with fallback** — local Ollama → API fallback chain ships in the embedding pipeline.
 
-These primitives generalize concerns common to many regulated
-deployments. mind-mem stays general-purpose; the features ship as
-opt-in capabilities. Anything domain-specific (controlled vocabularies,
-redaction packs, export policies) ships as separate optional packages
-so users who don't need them pay nothing in dependencies, install size,
-or attack surface.
+**Open (genuine network-hardening gaps):**
 
-- [ ] **Pluggable redaction layer** — pre-write hook scans incoming block text against a configurable detector chain (regex / model-based / hybrid) and either rejects, masks, or tags. Default detectors: secrets, email, phone, credit-cards, dates-near-PII. Domain detector packs ship as separate optional packages. Redaction events go to the audit chain.
-- [ ] **Time-bounded and event-bounded recall** — extend `recall(...)` with `since` / `until` / `event_id` filters. Audit chain + `block_staleness` already have the timestamp data.
-- [ ] **Vocabulary-bound fields** — per-workspace controlled vocabularies (`mind-mem.json: { "vocabularies": [...] }`) attach to specific block kinds. Unknown values trigger an `invalid_vocabulary` rule in `validate_block`. Generalizes the existing rule-based quality gate.
-- [ ] **Provenance-rich blocks** — optional fields on every block: `actor_id`, `actor_role`, `session_id`, `tool_id`, `purpose`. Gated by `mind-mem.json: { "provenance": "off"|"recommended"|"required" }`. Indexable for "who-wrote-what" queries.
-- [ ] **Confidence / Evidence as first-class** — promote `confidence: low/medium/high` to a structured `Evidence` block on every claim: `{ claim, source_id, confidence_score (0-1), source_kind: "primary"|"derived"|"hearsay", attestation_date }`. Recall surfaces full evidence chains. Builds directly on the v3.11 lineage edge model.
-- [ ] **Tenant KMS + row-level encryption** — `src/mind_mem/tenant_crypto.py`; per-tenant data keys, envelope encryption, rotation; extends the v3.0.0 `EncryptedBlockStore`. Workspace-level cryptographic isolation: no plaintext crosses tenant boundaries even on the same host.
-- [ ] **Per-tenant audit chains** — fork `audit_chain.py` so each tenant has an isolated hash chain with its own genesis + spec-hash binding.
-- [ ] **Compliance export pipeline** — `mm export --policy <policy_name> --since <date>` produces a deterministic, signed bundle (zip + manifest) suitable for regulated audit submission. Policy plug-ins ship per-domain. Export uses Q16.16 audit chain so the bundle is verifiable end-to-end.
-- [ ] **Contraindication / mutex edges** — extend `block_lineage` edge kinds with `contraindicates` (should not co-occur) and `supersedes` (this replaces that), distinct from existing `contradicts` (claims oppose each other). Pure addition to typed-edge graph.
-- [ ] **C2PA content provenance** — when chat layer produces synthesis blocks, attach C2PA-signed provenance manifest (model used, inputs, signed by instance key). Important for AI-generated content traceability.
+- [ ] **TLS 1.3 minimum + cert pinning** — currently inherits system trust store; explicit `TLSv1_3` floor + optional pinned-pubkey enforcement not wired. Tracked.
+- [ ] **mTLS for service-to-service** — mutual auth between mind-mem nodes not implemented; today's threat model is single-operator shared-secret. Tracked.
+- [ ] **Public / private workspaces** — `workspace.mode = public | private | mixed` configuration not surfaced. Tracked.
+- [ ] **ActivityPub federation interop** — optional bridge dep not built. Tracked (low priority).
+- [ ] **Audit headers (`X-MindMem-Request-Id`, `X-MindMem-Actor`, `X-MindMem-Purpose`)** — not yet propagated end-to-end across REST/gRPC. Tracked (small, well-defined).
+- [ ] **Kubernetes operator + Helm chart** — `operator/` + `deploy/helm/` not shipped. Tracked.
+- [ ] **Byzantine-safe consensus** — PBFT for adversarial-quorum deployments not implemented. Tracked (long-horizon).
+- [ ] **Edge deployment mode** — `mind-mem-edge` PyOxidizer binary not built. Tracked.
+- [ ] **Managed-service console** — `web/console/` multi-tenant dashboard not built. Tracked.
+- [ ] **Kafka / NATS event fan-out** — governance events as streams not exposed. Tracked.
+- [ ] **Rust hot path for hybrid search** — PyO3 BM25+RRF port — pure-MIND port (separate roadmap section below) is the chosen path instead. Marking as ⊘ superseded by Pure-MIND Core Port.
 
-### G. Observability, reliability, ecosystem
+### E. Compliance-sensitive opt-in extensions (partial — 5 open)
 
-- [ ] **OpenTelemetry tracing + metrics + logs** — adopt OTel SDK with `mind_mem` semantic conventions for spans (`mind_mem.recall`, `mind_mem.propose`, `mind_mem.fuse`, etc.). Prometheus metrics export at `/metrics`.
-- [ ] **Health / liveness / readiness probes** — standard endpoints for K8s integration.
-- [ ] **Continuous backup + point-in-time recovery** — incremental backup to S3 / Backblaze / R2 / local NFS; PITR to any audit-chain index.
-- [ ] **JavaScript / TypeScript SDK** — `@star-ga/mind-mem-client` npm package generated from OpenAPI spec. WebAssembly-compatible so browser agents can talk directly.
-- [ ] **Browser-native WebAssembly bundle** — read-only client in WASM with crypto verification. Browser agents query mind-mem without a Node middleware.
-- [ ] **Go / Rust / Java / Ruby SDK stubs** — generated from OpenAPI + AsyncAPI specs.
-- [ ] **OpenAPI + AsyncAPI specs** — single source of truth; auto-generate clients and docs.
-- [ ] **Migration importers from competing systems** — `mm import --from {pinecone | weaviate | chroma | qdrant | letta | mem0}`. Adoption blocker if missing.
-- [ ] **Cost metering / quota / spending alerts** — per-workspace usage counters (tokens read, embeddings computed, storage bytes, API calls) emitted to OTel + exposed via `mm usage`.
-- [ ] **SLSA build provenance level 3** — already partially via Sigstore release signing; add provenance attestations + isolated builders.
-- [ ] **Plugin SDK** — stable plug-in API for custom rules, custom block kinds, custom decay schedules, custom redaction detectors.
-- [ ] **Performance regression alerting** — every PR runs latency benchmarks; auto-flag if p99 increases >10%.
-- [ ] **Chaos testing harness** — automated fault injection for federated / replicated deployments.
+**Shipped:**
+
+- [x] **Pluggable redaction layer** — pre-write detector chain ships under the redaction module; events flow to audit chain.
+- [x] **Confidence / Evidence as first-class** — structured `Evidence` blocks with `confidence_score` ship; recall surfaces evidence chains.
+- [x] **Per-tenant audit chains** — `audit_chain.py` forks per tenant with isolated genesis + spec-hash binding.
+- [x] **Compliance export pipeline** — `mm export --policy <policy> --since <date>` ships signed deterministic bundles.
+- [x] **Contraindication / mutex edges** — `contraindicates` + `supersedes` edges ship as extra `block_lineage` kinds.
+
+**Open:**
+
+- [ ] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters on `recall(...)` not exposed; audit chain has the data. Tracked (small).
+- [ ] **Vocabulary-bound fields** — per-workspace controlled vocabularies not wired into `validate_block`. Tracked.
+- [ ] **Provenance-rich blocks** — `actor_id`/`actor_role`/`session_id`/`tool_id`/`purpose` fields gated by `provenance: off|recommended|required` not added. Tracked.
+- [ ] **Tenant KMS + row-level encryption** — `src/mind_mem/tenant_crypto.py` not built; per-tenant envelope encryption above the existing `EncryptedBlockStore`. Tracked.
+- [ ] **C2PA content provenance** — C2PA-signed manifests on chat-layer synthesis blocks not implemented. Tracked (depends on chat layer above).
+
+### G. Observability, reliability, ecosystem (partial — 7 open)
+
+**Shipped:**
+
+- [x] **OpenTelemetry tracing + metrics + logs** — `v4/observability.py` ships OTel spans + Prometheus `/metrics`.
+- [x] **Health / liveness / readiness probes** — `v4/health.py` ships standard probes.
+- [x] **Continuous backup + PITR** — incremental backup + audit-chain PITR ships.
+- [x] **Performance regression alerting** — `.github/workflows/benchmark.yml` runs latency benchmarks per PR.
+
+**Open:**
+
+- [ ] **JavaScript / TypeScript SDK** — Python SDK is the only first-class client. `@star-ga/mind-mem-client` npm package not generated. Tracked.
+- [ ] **Browser-native WebAssembly bundle** — WASM read-only client not built. Tracked.
+- [ ] **Go / Rust / Java / Ruby SDK stubs** — additional language SDKs not generated. Tracked.
+- [ ] **OpenAPI + AsyncAPI specs** — declarative specs not published; clients are hand-rolled. Tracked (small, well-defined).
+- [ ] **Migration importers from competing systems** — `mm import --from {pinecone|weaviate|chroma|qdrant|letta|mem0}` not implemented. Tracked (adoption blocker).
+- [ ] **Cost metering / quota / spending alerts** — per-workspace usage counters + `mm usage` CLI not surfaced. Tracked.
+- [ ] **SLSA build provenance level 3** — partial via Sigstore; isolated-builder attestations not yet wired. Tracked.
+- [ ] **Plugin SDK** — stable plug-in API for custom rules / block kinds / decay schedules / redaction detectors not formalised. Tracked.
+- [ ] **Chaos testing harness** — automated fault injection for federated deployments not built. Tracked.
 
 ### F. Anti-patterns explicitly forbidden
 

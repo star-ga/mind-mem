@@ -800,8 +800,45 @@ def build_handler(
                 return False
             return hmac.compare_digest(sent, token)
 
+        # -- peer allowlist (roadmap v4.0.x federation hardening) -------
+        def _peer_allowed(self) -> bool:
+            """Return True iff the request source IP passes the operator
+            allowlist for federation endpoints.
+
+            Configured via ``MIND_MEM_FED_PEERS`` env var (comma-separated
+            list of IPv4 / IPv6 addresses). When the env var is unset
+            *and* empty the allowlist is bypassed (backwards compatible
+            with the localhost-only default deployment). When set, any
+            source IP outside the set is rejected with 403 *before*
+            auth — even a valid token doesn't help if the caller isn't
+            on the allowlist. Compatible with bearer-token auth, doesn't
+            replace it. Always applies to federation endpoints only;
+            non-federation paths are unaffected.
+            """
+            # Only enforce on federation endpoints; status / memories
+            # remain governed by token + Origin checks.
+            base, _ = _parse_query_params(self.path)
+            is_fed = base in {
+                PATH_FED_VCLOCK,
+                PATH_FED_CONFLICTS,
+                PATH_FED_WRITE,
+                PATH_FED_RESOLVE,
+            } or base.startswith(_FED_VCLOCK_PREFIX)
+            if not is_fed:
+                return True
+            raw = os.environ.get("MIND_MEM_FED_PEERS", "").strip()
+            if not raw:
+                # No allowlist configured → bypass (existing behaviour).
+                return True
+            allowed = {p.strip() for p in raw.split(",") if p.strip()}
+            source = self.client_address[0] if self.client_address else ""
+            return source in allowed
+
         def _reject_auth(self) -> None:
             _write_status(self, 401, "missing or invalid token")
+
+        def _reject_peer(self) -> None:
+            _write_status(self, 403, "source IP not on MIND_MEM_FED_PEERS allowlist")
 
         # -- body parsing -----------------------------------------------
         def _read_json_body(self) -> tuple[dict[str, Any] | None, int]:
@@ -828,6 +865,9 @@ def build_handler(
                 _write_status(self, 403, "cross-origin request rejected")
                 return
             if self._rate_limited():
+                return
+            if not self._peer_allowed():
+                self._reject_peer()
                 return
             if not self._authenticated():
                 self._reject_auth()
@@ -861,6 +901,9 @@ def build_handler(
                 _write_status(self, 403, "cross-origin request rejected")
                 return
             if self._rate_limited():
+                return
+            if not self._peer_allowed():
+                self._reject_peer()
                 return
             if not self._authenticated():
                 self._reject_auth()
@@ -907,6 +950,9 @@ def build_handler(
                 _write_status(self, 403, "cross-origin request rejected")
                 return
             if self._rate_limited():
+                return
+            if not self._peer_allowed():
+                self._reject_peer()
                 return
             if not self._authenticated():
                 self._reject_auth()
