@@ -57,7 +57,16 @@ def _append_decrypt_audit(ws: str, path: str, *, mode: str) -> None:
             from mind_mem.mcp.infra.observability import current_agent_id  # type: ignore
 
             actor = current_agent_id.get("anonymous") or "anonymous"
-        except Exception:
+        except Exception:  # nosec B110 — see rationale below.
+            # Actor attribution is best-effort: ``current_agent_id`` is a
+            # ContextVar populated by the REST + MCP layer. Direct callers
+            # (CLI, tests, library use) won't have it set; ImportError when
+            # the observability module isn't reachable in test fixtures is
+            # also expected. Falling through to ``actor = "anonymous"`` is
+            # the correct behaviour — we still write the audit record,
+            # just without a richer actor than the default. Re-raising
+            # would block the legitimate decrypt audit-trail append.
+            # Audited 2026-05-20 for alert #193.
             pass
         record = {
             "ts": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
