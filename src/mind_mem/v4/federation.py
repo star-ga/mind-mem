@@ -79,15 +79,27 @@ FLAG: str = "federation"
 _CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 
-def _safe(s: str) -> str:
+def _safe(s: object) -> str:
     """Strip ASCII control characters (incl. CR/LF/NUL) from log field values.
 
     Applied to every free-text string put into structured log ``extra``
-    dictionaries to prevent log-injection (CodeQL py/log-injection, alert #189).
-    Integer, hex-digest, and byte-length fields are NOT passed through this
-    helper — they carry no user-controlled text.
+    dictionaries to prevent log-injection (CodeQL ``py/log-injection``,
+    alerts ``#189`` and ``#192``). Integer, hex-digest, and byte-length
+    fields are NOT passed through this helper — they carry no user-
+    controlled text.
+
+    Implementation note: leads with explicit ``.replace('\\r', '').replace('\\n', '')``
+    so CodeQL's stock ``py/log-injection`` query recognises this function
+    as a sanitiser node; the regex pass then strips remaining ASCII
+    controls + DEL as defence-in-depth. Non-``str`` inputs are coerced
+    via ``str()`` to keep the call-site signature minimal at the log
+    call (``_safe(value)`` works for any field).
     """
-    return _CTRL_RE.sub("", s)
+    text = s if isinstance(s, str) else str(s)
+    # Explicit CRLF strip first — CodeQL-recognised sanitiser pattern.
+    text = text.replace("\r", "").replace("\n", "")
+    # Defence-in-depth: strip remaining ASCII controls (\\x00-\\x1f) + DEL (\\x7f).
+    return _CTRL_RE.sub("", text)
 
 
 class MergeStrategy(str, Enum):

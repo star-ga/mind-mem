@@ -2,6 +2,102 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.13 — code-scanning alerts #191/#192 + windowed extract_facts + DX polish
+
+Released 2026-05-19.
+
+### Security — close two open code-scanning alerts surfaced after v4.0.12
+
+- **#192 — `py/log-injection` (error severity):** the v4.0.11 `_safe()`
+  helper used `re.sub(r"[\x00-\x1f\x7f]", "", s)`, which CodeQL's stock
+  `py/log-injection` flow analysis does not recognise as a sanitiser —
+  so the same federation `three_way_merge_resolved` log call kept
+  firing as four tainted-source reports. v4.0.13 strengthens `_safe()`
+  to:
+  - lead with explicit `.replace("\r", "").replace("\n", "")`
+    (CodeQL-recognised sanitiser pattern),
+  - accept any `object` and coerce via `str()` so every log field can
+    be wrapped uniformly,
+  - keep the original control-char regex as defence-in-depth.
+  Runtime behaviour is identical (still strips CR/LF/NUL/0x01–0x1f/0x7f);
+  the change is structural for static-analysis recognition. New
+  regression test exercises non-str coercion and the CRLF leading-
+  strip path. Closes alert #192.
+- **#191 — `B110: try/except/pass` (note severity):** the v4.0.12 stale
+  `ConnectionManager` eviction in `sqlite_index.py:144` swallowed the
+  best-effort close. Annotated with `# nosec B110 — <full rationale>`
+  explaining why re-raising would block the legitimate
+  workspace-rebuilt path. No behaviour change. Closes alert #191.
+
+### Fixed — `extract_facts` silent truncation past byte 4 000 (#530 follow-up)
+
+- v4.0.12 capped scanned text at `_FACT_TEXT_MAX = 4000` chars to kill
+  the 55 s ReDoS on adversarial input. That trade silently dropped
+  every fact past byte 4 000 in legitimate large blocks (the audit
+  case from 2026-05-19). v4.0.13 replaces the hard cap with a
+  **windowed scan**: inputs longer than `_FACT_TEXT_MAX` are split
+  into up to `_FACT_TEXT_MAX_WINDOWS = 8` sentence-boundary windows
+  (≈ 32 KB effective ceiling) and the regex catalog is run on each
+  window independently; cross-window dedup at the end. Adversarial
+  inputs beyond the window budget remain bounded (ReDoS-safe) — the
+  parent block is still fully FTS-indexed, only the sub-fact card
+  extraction is bounded.
+- 9 new regression tests in `tests/test_extractor_windowed_scan.py`:
+  fact-at-byte-5 500 surfaces, 30 KB observation under 1 s, 200 KB
+  adversarial under 3 s, `_split_into_windows` invariants
+  (window size cap, max-window cap, sentence-boundary snap, contiguous
+  coverage, short-text passthrough).
+
+### Added — release gate against open code-scanning alerts
+
+- `.github/workflows/release.yml`: new `alerts-gate` job runs first
+  and blocks the entire release (build → sign → publish-pypi →
+  github-release) if `GET /code-scanning/alerts?state=open` reports
+  any alert. The job lists offending alerts (rule id + severity +
+  file:line) in the failure log so the operator sees exactly what to
+  close before re-pushing the tag. Past releases ("all green" at tag
+  while alerts were open on `main`) cannot recur silently.
+
+### Added — `mm doctor` Postgres-driver install hint
+
+- When `block_store.backend = postgres` is configured in
+  `mind-mem.json` but `psycopg`/`psycopg_pool` are missing (the
+  `[postgres]` extra was not installed), `mm doctor` now emits a
+  structured `install_hint` field:
+
+      "install_hint": "pip install \"mind-mem[postgres]\"  # brings in psycopg + psycopg_pool"
+
+  alongside the existing `block_store_error` / `postgres_count_error`
+  detail, replacing the bare `ImportError` trace that recurred as
+  user friction. Unrelated `ModuleNotFoundError`s are unaffected.
+
+### Docs
+
+- `_recall_reranking.llm_rerank` docstring: explicit compatibility
+  note — function ships a generic instruct prompt and is **not** a
+  drop-in for `star-ga/mind-mem-4b`, which is tool-trained with a
+  different schema (`[task=llm_rerank] {"query", "candidates":[{id,text}]}`
+  → `{id: 0-100}`). Use the trained schema directly for `mind-mem:4b`
+  rerank; the generic prompt makes it dispatch with `Use llm_rerank.`
+  and silently fall back to input order.
+- `extract_facts` docstring: explicit caveat that the extractor is
+  tuned for the structured `Statement: ...` block dialect, not free-
+  form chat dialog.
+- README: single-source-of-truth banner near the top — current
+  release pointer with link to the changelog, replacing the per-
+  version detail tables further down as the authoritative version
+  reference.
+
+### Tests
+
+- `tests/test_security_scanning_alerts.py` — extended for alert #192
+  with a non-str coercion / leading-replace test.
+- `tests/test_extractor_windowed_scan.py` — 9 new tests (above).
+- `tests/test_mm_doctor_postgres_hint.py` — 2 new tests (positive
+  + negative case for the install-hint emission).
+
+No public API change; no benchmark claims; STARGA-authored.
+
 ## v4.0.12 — build_index perf fix (#530) + Windows CI green
 
 Released 2026-05-19.

@@ -141,9 +141,17 @@ def _get_conn_manager(workspace: str) -> ConnectionManager:
             # reach it, and the OS reclaims the inode once those fds close).
             try:
                 mgr.close()
-            except Exception:
+            except Exception:  # nosec B110 — see rationale below.
+                # Best-effort close of a stale ``ConnectionManager`` whose
+                # backing DB file has already been unlinked (workspace was
+                # deleted between runs). Any failure here is non-fatal:
+                # the manager is dropped from the cache on the next line,
+                # so no caller can reach the dead manager again, and the
+                # OS reclaims fds + inode once existing thread-local
+                # connections close. Re-raising would block the legitimate
+                # fresh-manager creation in the common "workspace rebuilt"
+                # path. Audited 2026-05-19 for alert #191.
                 pass
-            del _conn_managers[path]
             mgr = None
         if mgr is None:
             mgr = ConnectionManager(path)

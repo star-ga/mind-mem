@@ -27,6 +27,12 @@
   <img src="https://img.shields.io/badge/audit-10--LLM_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="10-LLM consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
 </p>
 
+<p align="center"><sub>
+  <strong>Current release:</strong> <code>v4.0.13</code> &mdash;
+  <a href="CHANGELOG.md">see CHANGELOG</a>
+  (single source of truth; per-version detail tables below may lag the changelog)
+</sub></p>
+
 ---
 
 Drop-in memory layer for AI coding agents — Claude Code, Claude Desktop, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed, OpenClaw, or any MCP-compatible client. Upgrades your agent from "chat history + notes" to a governed **Memory OS** with hybrid search, RRF fusion, intent routing, optional MIND kernels, structured persistence, contradiction detection, drift analysis, safe governance, and full audit trail.

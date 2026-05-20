@@ -1641,6 +1641,17 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         bs = get_block_store(ws)
         store_class = type(bs).__name__
         report["block_store_class"] = store_class
+    except ModuleNotFoundError as exc:
+        # Most common cause: backend=postgres configured in mind-mem.json
+        # but the optional psycopg dependency is not installed (it is
+        # gated behind the ``[postgres]`` extra to keep the default
+        # install lean). Emit a clear one-line hint so users don't have
+        # to interpret a bare ImportError trace.
+        report["block_store_error"] = str(exc)
+        if "psycopg" in str(exc):
+            report["install_hint"] = 'pip install "mind-mem[postgres]"  # brings in psycopg + psycopg_pool'
+        store_class = ""
+        bs = None
     except Exception as exc:
         report["block_store_error"] = str(exc)
         store_class = ""
@@ -1663,6 +1674,13 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
                 cur.execute(_sql.SQL("SELECT id FROM {tbl} WHERE active").format(tbl=blocks_id))
                 pg_ids = {r[0] for r in cur.fetchall()}
             report["postgres_active_blocks"] = len(pg_ids)
+        except ModuleNotFoundError as exc:
+            # psycopg gates behind the [postgres] extra; emit the same
+            # actionable hint we use upstream so the user doesn't get
+            # a bare ImportError trace (audit v4.0.13).
+            report["postgres_count_error"] = str(exc)
+            if "psycopg" in str(exc):
+                report["install_hint"] = 'pip install "mind-mem[postgres]"  # brings in psycopg + psycopg_pool'
         except Exception as exc:
             report["postgres_count_error"] = str(exc)
 
