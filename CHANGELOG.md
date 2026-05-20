@@ -2,6 +2,127 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.15 — MindLLM backend + token rotation + time-bounded recall + companion-tools + N-08/T-007
+
+Released 2026-05-20.
+
+Five-item roadmap-cluster release closing one or more genuinely-open items
+across federation hardening, Group E (compliance), Group G (ecosystem),
+and the 2026-04-28 security audit remainders.
+
+### Added — MindLLM backend (`mindllm`) for OpenAI-compatible inference
+
+mind-mem now treats [STARGA MindLLM](https://github.com/star-ga/MindLLM)
+as a first-class LLM backend alongside Ollama / vLLM / openai-compatible.
+MindLLM is STARGA's local, governed, **deterministic** inference server
+written in pure MIND, exposing OpenAI-compatible endpoints
+(`/v1/chat/completions`, `/v1/completions`, `/v1/models`, `/health`)
+plus a first-party RFN classifier endpoint.
+
+- `backend="mindllm"` (also accepts `mind-llm` / `mind_llm` aliases) in
+  `mind-mem.json` or `MIND_MEM_LLM_BACKEND=mindllm` in the environment.
+- Default URL `http://localhost:8080/v1`; override via `MIND_MEM_MINDLLM_URL`.
+- `auto`-discovery probes MindLLM **before** vLLM, so deployments
+  running MindLLM are picked up without explicit configuration.
+- `pipeline_hash._BACKEND_SOURCE_FILES` recognises `mindllm` as a known
+  backend (not the unknown-backend stub hash).
+
+Differentiator vs Ollama/vLLM: bit-identical output across runs (Q16.16
+evidence path + deterministic-reduction kernels) and a per-token
+cryptographic evidence chain. mind-mem treats it as just another
+OpenAI-compatible endpoint at the wire level — the value-add is the
+deterministic + evidence-chain guarantees. 6 new regression tests.
+
+### Added — Token rotation primitive (roadmap v4.0.x federation hardening)
+
+Closes the 3rd of 4 federation transport hardening gaps.
+
+- `MIND_MEM_TOKENS` (comma-separated) supports **N-of-K active tokens**
+  with a grace window during rotation. The HTTP transport reads it on
+  every request — no restart required when tokens change.
+- New CLI: `mm token rotate [--length 24] [--grace-seconds 86400]`
+  mints a fresh url-safe token (192-bit entropy) and emits the shell
+  export statement plus operator instructions. New token is canonical
+  going forward; old tokens stay valid through the grace window so
+  in-flight clients don't break.
+- Backwards compatible: deployments using the existing single-token
+  `MIND_MEM_TOKEN` env var keep working unchanged. Adding the new env
+  is opt-in.
+- 11 new regression tests covering env-var precedence, grace-window
+  preservation, single-token fallback, entropy floor, CLI wiring.
+
+### Added — Time-bounded recall (`since` / `until` ISO-8601 filters)
+
+Closes the first of three time-related items in Group E (compliance).
+
+- `recall(workspace, query, *, since="2026-01-01", until="2026-12-31")`
+  filters returned hits by block `Date` field. Comparison is string-
+  based on ISO-8601 so `YYYY-MM-DD`, `YYYY-MM-DD HH:MM:SS`, and full
+  timestamps all work because lexical and chronological ordering
+  coincide on ISO-8601.
+- Filtering is **post-rank** — applied after BM25 + vector + RRF +
+  reranker — so the ranking quality the reranker provides is preserved
+  for the in-range subset.
+- New CLI flags: `mm recall <query> --since YYYY-MM-DD --until YYYY-MM-DD`.
+- 18 new regression tests covering helper invariants, end-to-end
+  filtering, bound semantics (inclusive), impossible ranges, CLI flag
+  wiring. `event_id` filter from the original roadmap entry is deferred
+  to v4.0.16 — needs the event-store hook design pass first.
+
+### Added — Companion-tools documentation (MindLLM + GitNexus)
+
+- New `docs/companion-tools.md` with the canonical positioning for
+  mind-mem ↔ MindLLM (first-class backend) and mind-mem ↔ GitNexus
+  (sibling MCP server, orthogonal scope — "code structure today" vs
+  "decision history over time"). License + integration recipe for each.
+- README's "Deep-dive docs" list now points at it; `mind-mem-4b-setup.md`
+  entry updated to mention MindLLM alongside Ollama / vLLM / etc.
+
+### Added — `decrypt_file` forensic audit trail (alert N-08)
+
+Closes the 2026-04-28 audit `N-08` item.
+
+- Every successful `decrypt_file` MCP-tool call appends a JSON-line
+  to `memory/decrypted_files.jsonl` carrying `ts` (ISO-8601 UTC) +
+  `path` + `actor` (from the agent-id ContextVar, defaults to
+  `anonymous` for direct callers) + `mode` (`read` for `decrypt_file`,
+  `in_place` reserved for `decrypt_file_in_place`).
+- Append failures are logged but never block the legitimate decrypt
+  (forensic audit is depth-in-defence, not a DoS vector).
+- Pair with the new T-007 operator runbook (below) for OS-level
+  immutability of the trail. 4 new regression tests.
+
+### Docs — Append-only audit-log runbook (closes T-007)
+
+Closes the 2026-04-28 audit `T-007` item with an operator-side runbook
+rather than runtime code: `docs/append-only-audit-logs.md`. Covers:
+
+- Linux `chattr +a` (works on ext2/3/4, btrfs, xfs; not on NFS/SMB).
+- macOS `chflags uappnd` (USR_APPEND).
+- Windows `icacls` (NTFS `FILE_APPEND_DATA` grant + `FILE_WRITE_DATA`
+  deny pattern; or forward to a WORM store).
+- Rotation pattern that survives the immutability attribute.
+- Threat-model alignment: closes post-compromise tampering of the
+  forensic JSONL files; the hash-chain layer remains the primary
+  integrity signal.
+
+### Green-gate
+
+- 5152+ tests pass non-stress (+39 new across the 5 items).
+- ruff check + ruff format clean on changed files.
+- mypy clean on changed surfaces.
+- Open code-scanning alerts: **0** (carried clean from v4.0.14).
+
+### Deferred from v4.0.15 (still tracked in ROADMAP)
+
+- `event_id` filter on `recall(...)` — needs event-store hook design.
+- Block versioning + time-travel (`as_of=date`, `block_history()`) —
+  audit chain has the data; needs the query API surface.
+- OpenAPI / AsyncAPI specs export — single source of truth for SDK
+  generation; chunk-of-work item, not 1-day.
+- Per-peer identity binding (token → agent_id table + signed-write
+  envelopes) — needs schema + key-management design pass.
+
 ## v4.0.14 — ROADMAP honesty pass + audit headers + federation peer allowlist
 
 Released 2026-05-20.

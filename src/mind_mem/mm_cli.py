@@ -43,7 +43,14 @@ def _workspace() -> str:
 def _cmd_recall(args: argparse.Namespace) -> int:
     from mind_mem.recall import recall
 
-    results = recall(_workspace(), args.query, limit=args.limit, active_only=args.active_only)
+    results = recall(
+        _workspace(),
+        args.query,
+        limit=args.limit,
+        active_only=args.active_only,
+        since=getattr(args, "since", None),
+        until=getattr(args, "until", None),
+    )
     print(json.dumps(results, indent=2, default=str))
     return 0
 
@@ -1822,6 +1829,70 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     return 0 if report.get("in_sync", False) or args.rebuild_cache or args.migrate_recall_log else 1
 
 
+def _cmd_token_rotate(args: argparse.Namespace) -> int:
+    """Mint a new federation/HTTP transport token and emit the rotation hint.
+
+    Token rotation primitive (roadmap v4.0.x federation hardening). The
+    HTTP transport reads ``MIND_MEM_TOKENS`` (comma-separated) on every
+    request, so appending a new token gives an immediate grace window
+    where both old and new tokens authenticate. After the grace window
+    closes the operator removes the old entry.
+
+    Output:
+        ``new_token``  — the freshly minted token (192-bit url-safe)
+        ``shell``      — the export statement the operator pastes to
+                          ROTATE NOW (appends new token; keeps old(s)
+                          for the grace window)
+        ``shell_final`` — the export statement after the grace window
+                          (drops the previous tokens)
+        ``grace_seconds`` — the configured / default grace window
+
+    The token itself is generated via ``secrets.token_urlsafe(24)`` —
+    24 url-safe bytes = 192 bits of entropy. Operators with stricter
+    requirements can pass ``--length`` (in url-safe bytes).
+    """
+    import json as _json
+    import os as _os
+    import secrets as _secrets
+
+    length = max(16, int(args.length))
+    grace_seconds = int(args.grace_seconds)
+    new_token = _secrets.token_urlsafe(length)
+
+    current_multi = _os.environ.get("MIND_MEM_TOKENS", "").strip()
+    current_single = _os.environ.get("MIND_MEM_TOKEN", "").strip()
+
+    existing: list[str] = []
+    if current_multi:
+        existing = [t.strip() for t in current_multi.split(",") if t.strip()]
+    elif current_single:
+        existing = [current_single]
+
+    # Rotation set: new token canonical FIRST (clients minted after
+    # rotation use it; the old set stays valid through grace).
+    rotated_set = [new_token, *[t for t in existing if t != new_token]]
+    final_set = [new_token]
+
+    report = {
+        "new_token": new_token,
+        "active_tokens_after_rotate": rotated_set,
+        "active_tokens_after_grace": final_set,
+        "grace_seconds": grace_seconds,
+        "shell": f"export MIND_MEM_TOKENS={','.join(rotated_set)}",
+        "shell_final": f"export MIND_MEM_TOKENS={','.join(final_set)}",
+        "instructions": (
+            "1. Run the 'shell' export now to authorise the new token "
+            "while old tokens stay valid through the grace window.  "
+            "2. Distribute the new_token to clients.  "
+            "3. After grace_seconds, run 'shell_final' to drop the old "
+            "tokens.  The HTTP transport reads MIND_MEM_TOKENS at each "
+            "request so no restart is required."
+        ),
+    }
+    print(_json.dumps(report, indent=2))
+    return 0
+
+
 def _cmd_verify_model(args: argparse.Namespace) -> int:
     from mind_mem.model_signing import ED25519_PUBLIC_KEY_BYTES, verify_model
 
@@ -1872,6 +1943,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_recall.add_argument("query")
     p_recall.add_argument("--limit", type=int, default=10)
     p_recall.add_argument("--active-only", action="store_true")
+    p_recall.add_argument(
+        "--since",
+        default=None,
+        help="ISO-8601 lower bound on block Date (inclusive). E.g. --since 2026-01-01.",
+    )
+    p_recall.add_argument(
+        "--until",
+        default=None,
+        help="ISO-8601 upper bound on block Date (inclusive). E.g. --until 2026-12-31.",
+    )
     p_recall.set_defaults(func=_cmd_recall)
 
     # context
@@ -2034,6 +2115,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="Add v2-schema columns (intent_type, stage_counts) to the SQLite retrieval_log.",
     )
     p_doctor.set_defaults(func=_cmd_doctor)
+
+    # token namespace — rotation primitive (roadmap v4.0.x federation hardening)
+    p_token = sub.add_parser(
+        "token",
+        help="Federation/HTTP transport token management (rotation primitive).",
+    )
+    tsub = p_token.add_subparsers(dest="token_cmd", required=True)
+    t_rotate = tsub.add_parser(
+        "rotate",
+        help="Mint a new token and emit the rotation hint (N-of-K active tokens with grace window; no server restart required).",
+    )
+    t_rotate.add_argument(
+        "--length",
+        type=int,
+        default=24,
+        help="Token entropy in url-safe bytes (default 24 = 192 bits).",
+    )
+    t_rotate.add_argument(
+        "--grace-seconds",
+        type=int,
+        default=86_400,
+        help="Grace window during which old tokens remain valid (default 24 h).",
+    )
+    t_rotate.set_defaults(func=_cmd_token_rotate)
 
     # vault namespace
     p_vault = sub.add_parser("vault", help="Vault sync subcommands.")

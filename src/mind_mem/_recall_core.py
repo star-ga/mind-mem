@@ -229,6 +229,56 @@ class RecallBackend(ABC):
         ...
 
 
+def _block_date(hit: dict) -> str | None:
+    """Return the block's date as an ISO-8601 string, or None when absent.
+
+    Each hit carries the original ``Date:`` block field as either ``Date``
+    (verbatim case from markdown) or ``date`` (lowercased by some backends).
+    Returns whichever is present, stripped.
+    """
+    for key in ("Date", "date"):
+        v = hit.get(key)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return None
+
+
+def _in_date_range(
+    date_str: str | None,
+    since: str | None,
+    until: str | None,
+) -> bool:
+    """True iff ``date_str`` falls within ``[since, until]`` (inclusive).
+
+    Comparison is done at the ISO-8601 string level — works for
+    YYYY-MM-DD, YYYY-MM-DD HH:MM:SS, and full timestamps because all
+    three sort lexicographically the same as chronologically.
+
+    A None bound means "open on that side"; a None ``date_str`` is
+    rejected (block has no date → cannot satisfy a date-bound query).
+    """
+    if since is None and until is None:
+        return True
+    if not date_str:
+        return False
+    if since and date_str < since:
+        return False
+    if until and date_str > until:
+        return False
+    return True
+
+
+def _apply_date_filter(
+    hits: list[dict],
+    since: str | None,
+    until: str | None,
+) -> list[dict]:
+    """Filter recall hits by ``Date`` field against [since, until]."""
+    if since is None and until is None:
+        return hits
+    return [h for h in hits if _in_date_range(_block_date(h), since, until)]
+
+
 @_traced("recall")
 def recall(
     workspace: str,
@@ -241,6 +291,9 @@ def recall(
     rerank: bool = True,
     rerank_debug: bool = False,
     include_pending: bool = False,
+    *,
+    since: str | None = None,
+    until: str | None = None,
     _allow_decompose: bool = True,
 ) -> list[dict]:
     """Search across all memory files using BM25 scoring. Returns ranked results.
@@ -256,6 +309,13 @@ def recall(
         rerank: Enable deterministic reranking (v7).
         rerank_debug: Log reranker feature breakdowns.
         include_pending: Include unreviewed SIGNALS.md proposals (default False).
+        since: ISO-8601 lower bound on block ``Date``; None = no lower bound.
+        until: ISO-8601 upper bound on block ``Date``; None = no upper bound.
+            Time-bounded recall (roadmap v4.0.0 Group E). Comparison is
+            string-based so ``YYYY-MM-DD`` and full timestamps both work.
+            Filtering is applied AFTER ranking + reranking — date is a
+            post-filter, not a retrieval-time prefilter, so the ranking
+            quality the reranker provides is preserved.
     """
     query_tokens = tokenize(query)
     if not query_tokens:
@@ -270,7 +330,7 @@ def recall(
     if _cfg_backend == "sqlite":
         from .sqlite_index import query_index
 
-        return query_index(
+        hits = query_index(
             workspace,
             query,
             limit=limit,
@@ -280,10 +340,15 @@ def recall(
             rerank=rerank,
             rerank_debug=rerank_debug,
         )
+        if since is not None or until is not None:
+            hits = _apply_date_filter(hits, since, until)[:limit]
+        return hits
     if isinstance(_cfg_backend, RecallBackend):
         try:
             backend_hits: list[dict] = _cfg_backend.search(workspace, query, limit=limit, active_only=active_only)
             if backend_hits:
+                if since is not None or until is not None:
+                    backend_hits = _apply_date_filter(backend_hits, since, until)[:limit]
                 return backend_hits
         except Exception as exc:
             _log.warning("recall_backend_error_fallback_to_scan", error=str(exc))
@@ -424,6 +489,8 @@ def recall(
             # Sort merged results by score descending, return up to limit
             all_merged = sorted(merged.values(), key=lambda r: (r["score"], r.get("_id", "")), reverse=True)
             _log.info("multihop_merged", total=len(all_merged), limit=limit, sub_queries=len(sub_queries))
+            if since is not None or until is not None:
+                all_merged = _apply_date_filter(all_merged, since, until)
             return all_merged[:limit]
 
     # Month normalization: inject numeric month tokens for date matching
@@ -1254,6 +1321,8 @@ def recall(
         except Exception as exc:
             _log.debug("intent_feedback_skipped", error=str(exc))
 
+    if since is not None or until is not None:
+        top = _apply_date_filter(top, since, until)[:limit]
     return top
 
 
