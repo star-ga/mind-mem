@@ -664,8 +664,72 @@ over the full candidate set selects survivors, and L1/L2 expansion
 applies only to those — multi-stage retrieval rather than one-shot
 block return. Pairs with the late-interaction reranker (§8).
 
+**Surface sketch.** `recall` gains an optional `tier` parameter
+(`l0` | `l1` | `l2`, default `l2` for backward compatibility) and an
+optional `expand` list of block ids. A typical broad-recall flow:
+
+1. `recall(query, tier="l0")` → ranked anchors for the full result
+   set, ~100 tokens each.
+2. caller inspects anchors, picks the ids worth the budget.
+3. `recall(query, tier="l2", expand=[ids])` → full blocks only for
+   the chosen ids; everything else stays at L0.
+
+A token-budget guard can also cap total expansion: return L0 for all,
+L1 for the top-k by score, L2 only for the top-n, so a single call
+self-throttles to a target context size without a round trip. The
+governed-write path is untouched — tiering is read-side only;
+`propose_update → review → approve_apply` and the evidence chain are
+unaffected.
+
 Status: v4.1 candidate, design-only. No new storage primitives —
-reuses compiled-truth.
+reuses compiled-truth. Read-side only; no governance change.
+
+### 12. Drift-resistant iterative-edit workflows
+
+Industry research on semantic drift in iterative LLM workflows
+reports that repeated automated editing of a document degrades its
+semantic anchor to the original by 25–50% over time — small
+cumulative numeric and clausal errors compounded by larger nuance
+loss. The document remains formatting-coherent (looks identical at a
+glance) but no longer faithfully represents the original.
+
+This is the failure mode mind-mem's governed-write architecture was
+designed against. Every memory block update routes through
+`propose_update → review → approve_apply`, with the prior state
+content-addressed and retained in the evidence chain. Iterative
+edits accumulate as proposals, not as silent mutation. The original
+remains cryptographically anchored regardless of how many revision
+cycles touch the surface representation.
+
+Three concrete v4.1 surfaces that operationalise this property:
+
+- **Drift surface report.** A read-only API that summarises the
+  cumulative semantic distance between a block's current state and
+  its earliest committed version, with a per-revision contribution
+  attribution. Lets operators see drift accumulating before it
+  reaches a damaging threshold.
+- **Provenance-preserving export.** When mind-mem blocks are
+  exported into downstream iterative workflows (LLM editing pipelines,
+  document generators), the export packet includes the content-
+  addressed original anchor and the evidence-chain ID, so the
+  downstream workflow can re-verify against the original after each
+  pass.
+- **Stable-original retrieval mode.** A retrieval flag that returns
+  the earliest committed version of a memory block alongside the
+  current, for workflows that need the unmodified reference (legal
+  discovery, scientific reproducibility, regulated audit).
+
+Rationale: in regulated industries (legal, medical, scientific,
+financial) the ability to demonstrate a provable original becomes a
+hard requirement as automation grows. mind-mem's governed-write
+guarantee is the structural mechanism that delivers this; §12
+surfaces the operator-facing API that lets buyers in those industries
+verify the property holds in their workflow.
+
+Status: v4.1 candidate, design-only. No new storage primitives —
+all three surfaces compose over the existing evidence chain and
+proposal queue. Coordinates with [[512-mind frame-local invariant
+work]] for cross-jurisdiction drift attribution.
 
 ### Why v4.1 not v4.0
 
