@@ -637,6 +637,36 @@ dropped, not silently guessed.
 Status: v4.1 candidate, design-only. Gated behind §5 contradiction-
 cluster ranking (shares the candidate-surfacing UX).
 
+### 11. Tiered progressive context loading (L0/L1/L2)
+
+Recall currently returns full memory blocks. On wide recall sets this
+spends token budget on blocks the caller may only need to know
+*exist*. A tiered loading model returns progressively richer
+representations on demand:
+
+- **L0 — anchor (~100 tokens).** Block id, title, one-line compiled
+  summary, relevance score. Enough for the caller to decide whether to
+  expand.
+- **L1 — overview (~500–2k tokens).** The compiled-truth digest of the
+  block plus key evidence-chain references.
+- **L2 — full block.** Complete content, expanded only on request.
+
+The mechanism composes over the existing compiled-truth layer: the
+working/episodic/semantic/procedural tiers already maintain the
+summaries L0/L1 draw from, so tiered recall is a retrieval-surface
+change, not a new storage primitive. A recall call returns L0 for the
+full result set and L1/L2 only for blocks the caller drills into,
+cutting token cost on broad recalls without losing the path to full
+fidelity.
+
+Coarse-to-fine retrieval falls out of the same surface: L0 ranking
+over the full candidate set selects survivors, and L1/L2 expansion
+applies only to those — multi-stage retrieval rather than one-shot
+block return. Pairs with the late-interaction reranker (§8).
+
+Status: v4.1 candidate, design-only. No new storage primitives —
+reuses compiled-truth.
+
 ### Why v4.1 not v4.0
 
 All sub-sections are additive, schema-compatible, and orthogonal to the
