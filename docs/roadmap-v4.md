@@ -731,6 +731,44 @@ all three surfaces compose over the existing evidence chain and
 proposal queue. Coordinates with [[512-mind frame-local invariant
 work]] for cross-jurisdiction drift attribution.
 
+### 13. Deterministic weighted graph traversal for related-entity resolution
+
+The entity graph mind-mem builds from `[[ref]]` links between blocks
+already needs "nearest related block" queries — ranking resolution
+suggestions for dangling references (§10), seeding contradiction
+clusters (§5), and surfacing hub nodes (§2). These are weighted
+shortest-path / traversal problems over the block-and-edge graph.
+
+The opportunity is not a faster shortest-path algorithm — that
+frontier is saturated and owned by specialists, and reaching for a
+novel bound would be negative-value effort. The fit for mind-mem is a
+traversal layer with properties the standard implementations lack:
+
+- **Deterministic ordering.** Equal-weight paths and tied candidates
+  resolve by a stable secondary key (content-addressed block id), so
+  the same graph state always yields the same ranked result — across
+  runs, machines, and index rebuilds. This is the stable-tie-break
+  discipline the recall path already requires; traversal inherits it
+  rather than reintroducing run-to-run nondeterminism.
+- **Reproducible given graph state.** A traversal result carries the
+  graph-state hash it was computed against, so a ranking can be
+  replayed and audited — "why was this block suggested" is answered
+  from the evidence chain, not re-derived.
+- **Governed, not auto-applied.** Traversal produces *ranked
+  suggestions* surfaced through propose → review → apply (§10), never
+  silent auto-links. Read-side proposes; the gate decides.
+
+Rationale: mind-mem's edge over a generic graph library is the same as
+everywhere else in the system — not a better abstract algorithm, but
+standard algorithms given determinism and auditability they don't ship
+with. A suggested link a reviewer can reproduce and trace beats a
+faster one they can't.
+
+Status: v4.1 candidate, design-only. Read-side only; composes over the
+existing edge set (§1 provenance tags), candidate queue (§10), and
+contradiction ranking (§5). No new storage primitives, no governance
+change.
+
 ### Why v4.1 not v4.0
 
 All sub-sections are additive, schema-compatible, and orthogonal to the
