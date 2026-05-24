@@ -1247,12 +1247,11 @@ payloads via `trust_remote_code` / `auto_map` / pickle imports.
 > bundled a "Social Ingestion" thread (per-platform fetchers for
 > HN / Reddit / X / LinkedIn / Instagram / TikTok / Moltbook /
 > Bluesky / Mastodon / Farcaster). That work has been **moved out
-> of MIND-Mem to naestro-bot** — fetching social content is an
-> agent-layer concern, not a memory-layer concern. MIND-Mem stays
-> the substrate (blocks + recall + governance); naestro-bot
-> extensions (alongside `extensions/discord/`, `extensions/slack/`,
-> etc.) own per-platform fetching and write into MIND-Mem via the
-> existing MCP surface. This preserves MIND-Mem's zero-dependency
+> of MIND-Mem to a separate agent-layer project** — fetching social
+> content is an agent-layer concern, not a memory-layer concern.
+> MIND-Mem stays the substrate (blocks + recall + governance); the
+> agent layer owns per-platform fetching and writes into MIND-Mem via
+> the existing MCP surface. This preserves MIND-Mem's zero-dependency
 > posture and avoids inheriting 8 platforms' worth of auth, rate-
 > limit, anti-bot, and ToS maintenance liability.
 
@@ -1401,19 +1400,18 @@ streaming I/O, and a native accelerator for the hot loops.
   ``tests/test_mic_map_accel.py`` (TestModuleShape /
   TestEquivalence skip-if-no-accel / TestPurePythonAlwaysWorks).
 
-### Social Ingestion — moved to naestro-bot (2026-05-02)
+### Social Ingestion — moved to the agent layer (2026-05-02)
 
 The platform fetcher set (HN / Reddit / X / LinkedIn / Instagram /
 TikTok / Moltbook / Bluesky / Mastodon / Farcaster) and the
 URL-to-block ingestion CLI / MCP tool are no longer scoped to
-mind-mem. **Tracked in naestro-bot** alongside the existing
-`extensions/discord/` / `extensions/slack/` / `extensions/telegram/`
-/ `extensions/feishu/` channels — fetching social content is the
-same shape of work as bridging a chat platform, and naestro-bot
-already owns that surface. Naestro-bot extensions write captured
-posts into MIND-Mem through the existing MCP recall / capture
-tools, so MIND-Mem's role (substrate for blocks + recall +
-governance + contradiction detection) is unchanged.
+mind-mem. **Tracked in the agent layer** alongside the existing
+chat-platform channels (Discord / Slack / Telegram / Feishu) —
+fetching social content is the same shape of work as bridging a chat
+platform, and the agent layer already owns that surface. Those
+extensions write captured posts into MIND-Mem through the existing
+MCP recall / capture tools, so MIND-Mem's role (substrate for blocks
++ recall + governance + contradiction detection) is unchanged.
 
 The split keeps MIND-Mem zero-dependency, avoids inheriting per-
 platform auth / anti-bot / ToS maintenance, and preserves the
@@ -1422,7 +1420,7 @@ clean layering: **MIND-Mem stores; agents fetch.**
 **Estimated:** ~1500 lines audit (CLI + pickle disassembly + Ed25519 +
 load-gate + CI hook) — all shipped in v3.8.1 → v3.8.7. The social
 ingestion estimate (~2500 lines fetchers + ~600 lines block
-integration) is now a naestro-bot concern.
+integration) is now an agent-layer concern.
 
 ## v3.11.0 — Quality Gates, Typed Lineage, Recall Explainability ✅ Released 2026-05-08
 
@@ -1499,7 +1497,7 @@ Skipped in favour of the v4.0.0 retrain. Tracked here for history.
 ### Out of scope for v3.12.0
 
 - Networked mesh / federated recall — v4.0
-- Streaming consensus mixer — stays in private naestro-bot
+- Streaming consensus mixer — stays in the private agent layer
 - gRPC transport — v4.0
 - Sharded Postgres — v4.0
 
@@ -1788,7 +1786,7 @@ MIND-Mem is designed as a governed-memory substrate for autonomous agents operat
 
 ## TRIZ-Driven Direction
 
-Auditable criterion for every roadmap addition. Lifted from the same TRIZ pattern in `mind/docs/roadmap.md` and `naestro/ROADMAP.md`, tuned to the persistent-memory domain.
+Auditable criterion for every roadmap addition. Lifted from the same TRIZ pattern in `mind/docs/roadmap.md`, tuned to the persistent-memory domain.
 
 ### Ideal Final Result (IFR)
 

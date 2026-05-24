@@ -473,7 +473,7 @@ def is_available() -> bool:
 
 
 def is_protected() -> bool:
-    """Check if the MIND kernel has FORTRESS runtime protection."""
+    """Check if the MIND kernel has runtime protection."""
     k = get_kernel()
     if k is None:
         return False

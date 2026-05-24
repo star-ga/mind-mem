@@ -1031,7 +1031,7 @@ from mind_ffi import get_kernel, is_available, is_protected
 if is_available():
     kernel = get_kernel()
     scores = kernel.rrf_fuse_py(bm25_ranks, vec_ranks, k=60.0)
-    print(f"Protected: {is_protected()}")  # True with FORTRESS build
+    print(f"Protected: {is_protected()}")  # True with the hardened build
 ```
 
 ### Without MIND
