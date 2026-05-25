@@ -3,11 +3,10 @@
   MIND-Mem
 </h1>
 <p align="center">
-  <strong>Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent.</strong><br>
-  <sub>OpenClaw is an <a href="https://github.com/openclaw/openclaw">open-source AI assistant platform</a> with multi-channel support.</sub>
+  <strong>Replayable memory for AI agents. Byte-identical across runs, machines, and substrates.</strong>
 </p>
 <p align="center">
-  Local-first &bull; Zero-infrastructure &bull; Governance-aware &bull; MIND-accelerated<br>
+  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 84 MCP tools<br>
   <sub>MIND Language Profile: <code>default</code> (full tensor stdlib + Q16.16 + heap) &mdash; see <a href="https://github.com/star-ga/mind/blob/main/docs/roadmap.md#phase-106--library-output--c-abi-mindc-026--030">Phase 10.6</a></sub><!-- mind-profile: default -->
 </p>
 <p align="center">
@@ -15,52 +14,35 @@
   <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/pyversions/mind-mem?style=flat-square" alt="Python Versions"></a>
   <a href="https://github.com/star-ga/mind-mem/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/mind-mem?style=flat-square" alt="License"></a>
   <a href="https://github.com/star-ga/mind-mem/releases"><img src="https://img.shields.io/github/v/release/star-ga/mind-mem?include_prereleases&style=flat-square&color=green&label=Release" alt="Release"></a>
+  <img src="https://img.shields.io/badge/MIND-substrate-orange?style=flat-square" alt="MIND Substrate">
+  <img src="https://img.shields.io/badge/byte--identical-replay-brightgreen?style=flat-square" alt="Byte-identical Replay">
+  <img src="https://img.shields.io/badge/governed--write-propose→apply-purple?style=flat-square" alt="Governed Write">
+  <img src="https://img.shields.io/badge/MCP-compatible-blueviolet?style=flat-square" alt="MCP Compatible">
   <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
-  <img src="https://img.shields.io/badge/MCP-compatible-purple?style=flat-square" alt="MCP Compatible">
-  <img src="https://img.shields.io/badge/MIND-accelerated-orange?style=flat-square" alt="MIND Accelerated">
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
   <img src="https://img.shields.io/badge/tests-5428%2B-brightgreen?style=flat-square" alt="Tests: 5428+">
   <img src="https://img.shields.io/badge/MCP_tools-84-blue?style=flat-square" alt="MCP Tools: 84">
-  <img src="https://img.shields.io/badge/clients-18-blueviolet?style=flat-square" alt="AI Clients: 18">
+  <img src="https://img.shields.io/badge/clients-17-blueviolet?style=flat-square" alt="AI Clients: 17">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
   <img src="https://img.shields.io/badge/audit-10--LLM_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="10-LLM consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
 </p>
 
 <p align="center"><sub>
-  <strong>Current release:</strong> <code>v4.0.13</code> &mdash;
+  <strong>Current release:</strong> <code>v4.0.15</code> &mdash;
   <a href="CHANGELOG.md">see CHANGELOG</a>
   (single source of truth; per-version detail tables below may lag the changelog)
 </sub></p>
 
 ---
 
-Drop-in memory layer for AI coding agents — Claude Code, Claude Desktop, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed, OpenClaw, or any MCP-compatible client. Upgrades your agent from "chat history + notes" to a governed **Memory OS** with hybrid search, RRF fusion, intent routing, optional MIND kernels, structured persistence, contradiction detection, drift analysis, safe governance, and full audit trail.
+Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). Deterministic recall. 84 MCP tools as the surface — but the differentiator is the substrate underneath. Every recall, every block, every audit is byte-identical on the same workspace, on every architecture mind-mem builds on.
+
+Most memory layers ship tools. That is table-stakes. MIND-Mem ships a substrate: Q16.16 fixed-point scoring kernels compiled from MIND source, a governance pipeline that rejects every unreviewed write, and an audit chain where every applied proposal is hash-anchored. The same query, the same workspace, the same machine — or a different machine that pulls the same workspace — produces bit-identical results. That property is what makes MIND-Mem suitable as a canonical memory layer across heterogeneous agent stacks.
 
 > **If your agent runs for weeks, it will drift. MIND-Mem prevents silent drift.**
 >
 > MIND-Mem powers the Memory Plane of the [MIND Cognitive Kernel](https://mindlang.dev/docs/cognitive-kernel) — the deterministic AI runtime architecture.
-
-### Shared Memory Across All Your AI Agents
-
-**This is the killer feature.** When you install MIND-Mem, all your AI coding agents share the same memory workspace. Claude Code, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed — every MCP-compatible client connects to the same persistent memory through a single workspace.
-
-What this means in practice:
-
-- A decision made in **Claude Code** is instantly recalled by **Codex CLI** and **Gemini CLI**
-- Entity knowledge (projects, tools, people) accumulates from **all sessions across all agents**
-- Contradictions detected by one agent are flagged to all others
-- Your memory doesn't fragment across tools — it compounds
-
-**One install script, all agents configured in seconds:**
-
-```bash
-git clone https://github.com/star-ga/mind-mem.git
-cd mind-mem
-./install.sh --all    # Auto-detects and configures every AI coding client on your machine
-```
-
-The installer auto-detects Claude Code, Claude Desktop, Codex CLI, Gemini CLI, Cursor, Windsurf, Zed, and OpenClaw — creates a shared workspace and wires the MCP server into each client's config. SQLite WAL mode ensures safe concurrent access: one writer, many readers, zero corruption.
 
 ### 30-Second Demo
 
@@ -79,19 +61,19 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>Current release: **v4.0.9** (2026-05-15) — `Predicate.register()` runtime API on `knowledge_graph`. Companion <strong>mind-mem-4b v4.1.1</strong> (r4 retrain, 133/133 on main + holdout) is current `main` on <a href="https://huggingface.co/star-ga/mind-mem-4b">HF</a>; v4.1.0 / v4.0.0-base / v3.12.0 stay pinnable on revision branches. Full per-release notes (issues closed, CI run ids, job counts) live in <a href="./CHANGELOG.md">CHANGELOG.md</a> — keeping this block from accumulating.</sub>
+<sub>Current release: **v4.0.15** — Full per-release notes (issues closed, CI run ids, job counts) live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
 
-### Trust Signals
+### Substrate Properties
 
-| Principle               | What it means                                                                     |
+| Property                | What it means                                                                     |
 | ----------------------- | --------------------------------------------------------------------------------- |
-| **Deterministic**       | Same input, same output. No ML in the core, no probabilistic mutations.           |
-| **Auditable**           | Every apply logged with timestamp, receipt, and DIFF. Full traceability.          |
+| **Byte-identical replay** | Same workspace + same query = same ranked results, every time, every machine. No probabilistic mutations in the core. |
+| **Governed-write**      | Nothing reaches the source of truth without `propose → review → approve_apply`. No silent mutations. Ever. |
+| **Auditable**           | Every apply logged with timestamp, receipt, and DIFF. Full traceability from signal to decision. |
+| **Deterministic**       | No ML in the retrieval core. Q16.16 fixed-point scoring. The same preimage produces the same hash. |
 | **Local-first**         | All data stays on disk. No cloud calls, no telemetry, no phoning home.            |
 | **No vendor lock-in**   | Plain Markdown files. Move to any system, any time.                               |
-| **Zero magic**          | Every check is a grep, every mutation is a file write. Read the source in 30 min. |
-| **No silent mutation**  | Nothing writes to source of truth without explicit `/apply`. Ever.                |
-| **Zero infrastructure** | Core requires only Python 3.10+ stdlib. Postgres, Redis, Docker, and GPU are opt-in extras — nothing is required to start. |
+| **Zero infrastructure** | Core requires only Python 3.10+ stdlib. Postgres, Redis, Docker, and GPU are opt-in extras. |
 | **100% NIAH**           | 250/250 Needle In A Haystack retrieval. Every needle, every depth, every size.     |
 
 ---
@@ -100,7 +82,7 @@ Output:
 
 - [Why MIND-Mem](#why-mind-mem)
 - [Features](#features)
-- [Integrations](#integrations)
+- [Integrations are the substrate working](#integrations-are-the-substrate-working)
 - [Benchmark Results](#benchmark-results)
 - [Quick Start](#quick-start)
 - [Health Summary](#health-summary)
@@ -117,6 +99,7 @@ Output:
 - [MCP Server](#mcp-server)
 - [Security](#security)
 - [Troubleshooting](#troubleshooting)
+- [Built in MIND lang](#built-in-mind-lang)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -291,9 +274,11 @@ Scheduled background enrichment: scans recent memory for missing cross-reference
 
 ---
 
-## Integrations
+## Integrations are the substrate working
 
-> Honest positioning. The integrations below are *software-level* —
+Because the substrate is deterministic, integrating with 17 different CLIs produces the same answers on each. That is not a coincidence — it is the point. MIND-Mem can be the canonical memory layer across heterogeneous agent stacks precisely because the recall output is byte-identical regardless of which client is asking. The 17-CLI surface is a consequence of the substrate, not a feature in itself.
+
+> Honest positioning: the integrations below are *software-level* —
 > the named tool talks to MIND-Mem via the Model Context Protocol.
 > They are **not** commercial-customer relationships with any vendor.
 > Full positioning policy: [`docs/integrations.md`](docs/integrations.md).
@@ -427,28 +412,30 @@ Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer w
 
 > MIND-Mem now **surpasses Mem0 and Letta** with **local-only** retrieval — no cloud calls, no graph DB, no LLM in the retrieval loop. MIND-Mem's unique value is **governance** (contradiction detection, drift analysis, audit trails) and **agent-agnostic shared memory** via MCP — areas these benchmarks don't measure.
 
-### Benchmark Comparison (2026-02-22)
+### Competitive Landscape (LoCoMo)
 
-| System | LoCoMo Acc>=50 | LongMemEval R@10 | Infrastructure | Dependencies |
-| --- | ---: | ---: | --- | --- |
-| **MIND-Mem** (hybrid) | **76.7%** | **88.1%** | **Local-only** | **Zero core (optional: llama.cpp, sentence-transformers)** |
-| Memobase | 75.8% | -- | Cloud + GPU | embeddings + vector DB |
-| Letta | 74.0% | -- | Cloud | embeddings + vector DB |
-| **MIND-Mem** (BM25) | **73.8%** | **88.1%** | **Local-only** | **Zero core** |
-| full-context | 72.9% | -- | N/A | LLM context window |
-| Mem0 | 68.5% | -- | Cloud (managed) | graph DB + embeddings |
+| System | LoCoMo Acc>=50 | Infrastructure | Dependencies |
+| --- | ---: | --- | --- |
+| **MIND-Mem** (hybrid) | **76.7%** | **Local-only** | **Zero core (optional: llama.cpp, sentence-transformers)** |
+| Memobase | 75.8% | Cloud + GPU | embeddings + vector DB |
+| Letta | 74.0% | Cloud | embeddings + vector DB |
+| **MIND-Mem** (BM25) | **73.8%** | **Local-only** | **Zero core** |
+| full-context | 72.9% | N/A | LLM context window |
+| Mem0 | 68.5% | Cloud (managed) | graph DB + embeddings |
 
-> MIND-Mem surpasses Mem0 (68.5%), Letta (74.0%), and Memobase (75.8%) with zero cloud infrastructure. Full 10-conversation benchmark (1986 questions) validates this at scale.
+> MIND-Mem surpasses Mem0 (68.5%), Letta (74.0%), and Memobase (75.8%) with zero cloud infrastructure. Full 10-conversation benchmark (1986 questions) validates this at scale. Note: benchmarks measure retrieval accuracy. The substrate properties (byte-identical replay, governed-write, audit chain) are not captured by any of these benchmarks — they are properties of the architecture, not the recall scores.
 
-### LongMemEval (ICLR 2025, 470 questions)
+### LongMemEval (held pending reconciliation)
+
+> **Provenance hold active.** The LongMemEval R@5 numbers below are pending reconciliation against a higher-iteration run. They are not part of the MIND-Mem positioning until the hold is resolved. See [`benchmarks/STATUS.md`](benchmarks/STATUS.md) for the current status and methodology.
 
 | Category         |       N |      R@1 |      R@5 |     R@10 |      MRR |
 | ---------------- | ------: | -------: | -------: | -------: | -------: |
-| **Overall**      | **470** | **73.2** | **85.3** | **88.1** | **.784** |
-| Multi-session    |     121 |     83.5 |     95.9 |     95.9 |     .885 |
-| Temporal         |     127 |     76.4 |     91.3 |     92.9 |     .826 |
-| Knowledge update |      72 |     80.6 |     88.9 |     91.7 |     .844 |
-| Single-session   |      56 |     82.1 |     89.3 |     89.3 |     .847 |
+| **Overall**      | **470** | **73.2** | **(held)** | **88.1** | **.784** |
+| Multi-session    |     121 |     83.5 |     (held) |     95.9 |     .885 |
+| Temporal         |     127 |     76.4 |     (held) |     92.9 |     .826 |
+| Knowledge update |      72 |     80.6 |     (held) |     91.7 |     .844 |
+| Single-session   |      56 |     82.1 |     (held) |     89.3 |     .847 |
 
 ### Performance (Latency & Throughput)
 
@@ -1525,6 +1512,16 @@ This drops and recreates the FTS5 index from all workspace files.
 ## Specification
 
 For the formal grammar, invariant rules, state machine, and atomicity guarantees, see **[SPEC.md](SPEC.md)**.
+
+---
+
+## Built in MIND lang
+
+mind-mem's scoring kernels live in the `mind/` directory of this repo. The BM25F field-weighting, RRF fusion, reranking, negation penalty, date proximity, category boost, importance decay, entity overlap, confidence gating, and top-k selection are all written in MIND source and compiled to native shared libraries via the MIND compiler. The pure Python fallback mirrors them exactly — same results, no compilation required.
+
+The MIND language compiler is at [github.com/star-ga/mind](https://github.com/star-ga/mind). The formal specification is at [github.com/star-ga/mind-spec](https://github.com/star-ga/mind-spec). The agent CLI being built on the same substrate is at [github.com/star-ga/mind](https://github.com/star-ga/mind) (RFC 0013, in development). Visit [mindlang.dev](https://mindlang.dev) to see the substrate that makes byte-identical replay possible.
+
+For many developers, `pip install mind-mem` is their first encounter with a MIND-native system. The scoring kernels in `mind/` are readable MIND source — the language is approachable, and the compiler produces output that is byte-identical on every architecture mind-mem CI targets.
 
 ---
 
