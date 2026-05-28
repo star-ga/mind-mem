@@ -679,7 +679,7 @@ your-workspace/
 ├── mind-mem.json             # Config
 ├── MEMORY.md                # Protocol rules
 │
-├── mind/                    # 17 MIND source files (.mind)
+├── mind/                    # 26 INI-style config files (.mind, see docs/MIND_CONFIG_VS_MIND_LANG.md)
 │   ├── bm25.mind           # BM25F scoring kernel
 │   ├── rrf.mind            # Reciprocal Rank Fusion kernel
 │   ├── reranker.mind        # Deterministic reranking
@@ -949,19 +949,32 @@ Supports ONNX inference (local, no server) or cloud embeddings. Falls back to BM
 
 ## MIND Kernels
 
-MIND-Mem includes 17 `.mind` kernel source files — numerical hot paths written in the [MIND programming language](https://mindlang.dev). The MIND kernel is **optional**. MIND-Mem works identically without it (pure Python fallback). With it, scoring runs at native speed with compile-time tensor shape verification.
+MIND-Mem ships **26 `.mind` configuration files** under `mind/` that tune
+the scoring pipeline at runtime. These files are **INI-style declarative
+configuration** (e.g. `[fusion]` / `rrf_k = 60`), parsed by
+`load_kernel_config()` in `src/mind_mem/mind_ffi.py`. They are **not** the
+MIND programming language — see
+[`docs/MIND_CONFIG_VS_MIND_LANG.md`](docs/MIND_CONFIG_VS_MIND_LANG.md) for
+the disambiguation. The Python runtime (in `src/mind_mem/mind_kernels.py`)
+implements the actual scoring logic; the `.mind` files only carry
+numerical knobs.
 
-### Compilation
+### Compilation (forward-looking — not yet wired)
 
-Requires the MIND compiler (`mindc`). See [mindlang.dev](https://mindlang.dev) for installation.
+The roadmap moves these numerical hot paths to true MIND-language kernels
+that compile to a native shared library via `mindc`
+(see [mindlang.dev](https://mindlang.dev)). When that integration lands,
+the build command will look like:
 
 ```bash
-# Compile all kernels to a single shared library
+# Once the MIND-language port ships (not currently supported):
 mindc mind/*.mind --emit=shared -o lib/libmindmem.so
-
-# Or compile individually for testing
-mindc mind/bm25.mind --emit=shared -o lib/libbm25.so
 ```
+
+Until then, the Python fallback in `mind_kernels.py` is the authoritative
+implementation. `pip install mind-mem` is fully functional without
+`mindc`. The 26 config files themselves ship in the wheel under
+`<sys.prefix>/share/mind-mem/kernels/` for forward-compatibility tooling.
 
 ### Kernel Index
 
