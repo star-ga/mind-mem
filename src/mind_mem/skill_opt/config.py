@@ -9,14 +9,17 @@ from dataclasses import dataclass, field
 from typing import Any
 
 DEFAULT_FLEET_MODELS: dict[str, list[str]] = {
-    "test_execution": ["grok-4-1-fast-reasoning", "mistral-large-latest"],
+    # Model IDs verified 2026-05-27 (see ~/CLAUDE.md model table). Stale
+    # IDs return 404 from the upstream provider so this is REPLACE-don't-
+    # keep on rename. Must stay in sync with FLEET_MODELS in fleet_bridge.py.
+    "test_execution": ["grok-4.3", "mistral-large-latest"],
     "critique": [
-        "deepseek-reasoner",
+        "deepseek-v4-pro",
         "sonar-pro",
-        "glm-5",
+        "glm-5.1",
         "nvidia/llama-3.1-nemotron-ultra-253b-v1",
     ],
-    "mutation": ["grok-4-1-fast-reasoning", "mistral-large-latest"],
+    "mutation": ["grok-4.3", "mistral-large-latest"],
 }
 
 DEFAULT_SKILL_SOURCES: dict[str, str] = {

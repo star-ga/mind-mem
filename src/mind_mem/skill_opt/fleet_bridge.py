@@ -36,18 +36,23 @@ class FleetResponse:
 
 
 # model_key -> (provider_class_name, api_key_name, model_string)
+#
+# Model IDs verified 2026-05-27 (see ~/CLAUDE.md model table). Stale IDs
+# return 404 from the upstream provider, so this dict is REPLACE-don't-keep
+# for renamed models. The Perplexity seat is left in for when its billing
+# resumes; the orchestrator's health check will route around dead seats.
 FLEET_MODELS: dict[str, tuple[str, str, str]] = {
-    "grok-4-1-fast-reasoning": ("XAIProvider", "xai", "grok-4-1-fast-reasoning"),
+    "grok-4.3": ("XAIProvider", "xai", "grok-4.3"),
     "mistral-large-latest": ("MistralProvider", "mistral", "mistral-large-latest"),
-    "deepseek-reasoner": ("DeepSeekProvider", "deepseek", "deepseek-reasoner"),
+    "deepseek-v4-pro": ("DeepSeekProvider", "deepseek", "deepseek-v4-pro"),
     "sonar-pro": ("PerplexityProvider", "perplexity", "sonar-pro"),
-    "glm-5": ("ZhipuProvider", "zhipu", "glm-5"),
+    "glm-5.1": ("ZhipuProvider", "zhipu", "glm-5.1"),
     "nvidia/llama-3.1-nemotron-ultra-253b-v1": (
         "NvidiaProvider",
         "nvidia",
         "nvidia/llama-3.1-nemotron-ultra-253b-v1",
     ),
-    "kimi-k2.5-preview": ("MoonshotProvider", "moonshot", "kimi-k2.5-preview"),
+    "kimi-k2.6": ("MoonshotProvider", "moonshot", "kimi-k2.6"),
 }
 
 

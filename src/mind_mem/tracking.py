@@ -200,18 +200,27 @@ def extract_conventions(samples: Iterable[str]) -> dict[str, Any]:
 
 
 _CONTEXT_WINDOWS: dict[str, int] = {
+    # Best-effort lookup — old aliases retained so callers using the prior
+    # IDs still receive a sensible window rather than the 32 K default.
+    # Add-don't-replace on rename. Latest verified IDs first (2026-05-27).
     "gpt-5.5": 1_000_000,
     "gpt-5.5-2026-03-05": 1_000_000,
     "gpt-4o": 128_000,
+    "claude-opus-4-7": 1_000_000,
     "claude-opus-4-6": 1_000_000,
     "claude-opus-4-5": 200_000,
     "claude-sonnet-4-6": 1_000_000,
     "claude-haiku-4-5-20251001": 200_000,
+    "gemini-3.5-flash": 1_000_000,
     "gemini-3.1-pro-preview": 1_000_000,
     "gemini-3-pro": 1_000_000,
+    "grok-4.3": 200_000,
     "grok-4-1-fast-reasoning": 200_000,
     "mistral-large-latest": 128_000,
+    "deepseek-v4-pro": 64_000,
     "deepseek-reasoner": 64_000,
+    "glm-5.1": 1_000_000,
+    "kimi-k2.6": 200_000,
     "sonar-pro": 200_000,
 }
 
