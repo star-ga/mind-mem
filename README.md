@@ -166,11 +166,30 @@ Four-signal reranking pipeline: negation awareness (penalizes contradicting resu
 ### Optional Cross-Encoder
 Drop-in ms-marco-MiniLM-L-6-v2 cross-encoder (80MB). Blends 0.6 * CE + 0.4 * original score. Falls back gracefully when unavailable. Enabled via config.
 
-### MIND Kernels (Optional, Native Speed)
-17 compiled MIND scoring kernels (BM25F, RRF fusion, reranking, negation penalty, date proximity, category boost, importance, entity overlap, confidence, top-k, weighted rank, category affinity, query-category relevance, category assignment). Compiles to native `.so` via the [MIND compiler](https://mindlang.dev). Pure Python fallback always available — no functionality is lost without compilation.
+### MIND Kernels (Optional, Native Speed — forward-looking)
+26 `.mind` configuration files at `mind/` that tune the scoring pipeline
+(BM25F, RRF fusion, reranking, negation penalty, date proximity, category
+boost, importance, entity overlap, confidence, top-k, weighted rank,
+category affinity, query-category relevance, category assignment, and
+others). Currently INI-format declarative configuration parsed by
+`mind_ffi.py`; the MIND-language port that compiles to native `.so` via the
+[MIND compiler](https://mindlang.dev) is the forward-looking story — see
+[`docs/MIND_CONFIG_VS_MIND_LANG.md`](docs/MIND_CONFIG_VS_MIND_LANG.md) for
+the disambiguation. The pure-Python scoring logic in
+`src/mind_mem/mind_kernels.py` is the authoritative implementation today.
 
 ### MIC/MAP — MIND IR graph serialization
-Pure-Python codec for the STARGA wire formats: **mic@2** (line-oriented text, LLM-readable, git-friendly) and **mic-b** (varint binary, ~4× smaller). Both encode typed dataflow graphs (symbols + types + values + output) with byte-identical round-trip. Streaming parser for bounded peak memory; optional Cython accelerator via `mind-mem[accelerated]` (+16/+20/+36 % on parse). Two MCP tools (`mic_convert`, `mic_inspect`) and a `mm mic` CLI surface it for agents and operators. See [`docs/mic-map.md`](docs/mic-map.md).
+Pure-Python codec for the STARGA wire formats: **mic@2** (line-oriented
+text, LLM-readable, git-friendly) and **MIC-B** (varint binary, ~4×
+smaller). Both encode typed dataflow graphs (symbols + types + values +
+output) with byte-identical round-trip. Streaming parser for bounded peak
+memory; optional Cython accelerator via `mind-mem[accelerated]`
+(+16/+20/+36 % on parse). Two MCP tools (`mic_convert`, `mic_inspect`) and
+a `mm mic` CLI surface it for agents and operators. See
+[`docs/mic-map.md`](docs/mic-map.md). Note that the canonical IR per
+RFC 0021 is `mic@1` text + `mic@3` binary (see
+[mindlang.dev/docs/mic](https://mindlang.dev/docs/mic)); the `mic@2`/MIC-B
+codec mind-mem ships is the back-compat lineage.
 
 ### BM25F Hybrid Recall
 BM25F field-weighted scoring (k1=1.2, b=0.75) with per-field weighting (Statement: 3x, Title: 2.5x, Name: 2x, Summary: 1.5x), Porter stemming, bigram phrase matching (25% boost per hit), overlapping sentence chunking (3-sentence windows with 1-sentence overlap), domain-aware query expansion, and optional 2-hop graph-based cross-reference neighbor boosting. Zero dependencies. Fast and deterministic.
