@@ -125,6 +125,16 @@ package-dir = {"" = "src"}
 [tool.setuptools.package-data]
 mind_mem = ["py.typed", "*.mind", "*.pyx"]
 
+# Ship the top-level `mind/*.mind` scoring-kernel sources alongside the wheel
+# (task #298).  The kernels stay at the repo root by public convention
+# (README, ROADMAP, audit docs all reference `mind/*.mind`), so we use
+# `data-files` to surface them through the wheel rather than moving the tree
+# into `src/mind_mem/`.  Resolved at install time via
+# `importlib.resources.files("mind_mem")._paths` or
+# `sysconfig.get_paths()["data"] / "share/mind-mem/kernels"`.
+[tool.setuptools.data-files]
+"share/mind-mem/kernels" = ["mind/*.mind"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
