@@ -1496,7 +1496,7 @@ tokenizer = AutoTokenizer.from_pretrained("star-ga/mind-mem-4b")
 | `capture` says "no daily log"               | No `memory/YYYY-MM-DD.md` for today. Write something first.                                                       |
 | `intel_scan` finds 0 contradictions         | Good — no conflicting decisions.                                                                                  |
 | Tests fail on Windows                       | Use `validate_py.py` instead of `validate.sh`. Hooks require WSL.                                                 |
-| MIND kernel not loading                     | Compile with `mindc mind/*.mind --emit=shared -o lib/libmindmem.so`. Or ignore — pure Python works identically.   |
+| MIND kernel not loading                     | Expected — the `.mind` files are INI configs, not yet MIND-language source. Pure-Python scoring (in `mind_kernels.py`) is the authoritative path. See [`docs/MIND_CONFIG_VS_MIND_LANG.md`](docs/MIND_CONFIG_VS_MIND_LANG.md). |
 
 ### FAQ
 
