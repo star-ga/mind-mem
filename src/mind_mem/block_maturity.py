@@ -144,8 +144,14 @@ def maturity_score(
         A float in ``[0.0, 1.0]``.  Higher = more consolidated.
     """
     # --- Explicit override: frontmatter Maturity field ---
-    raw_override = block.get("Maturity") or block.get("maturity")
-    if raw_override is not None:
+    # Use a sentinel to distinguish "key absent" from "key present but falsy
+    # (e.g. Maturity=0 / Maturity=0.0)".  A plain `or` would silently skip
+    # a legitimate zero value because 0 / 0.0 are falsy in Python.
+    _MISSING = object()
+    raw_override = block.get("Maturity", _MISSING)
+    if raw_override is _MISSING:
+        raw_override = block.get("maturity", _MISSING)
+    if raw_override is not _MISSING:
         try:
             v = float(raw_override)
             return max(0.0, min(1.0, v))

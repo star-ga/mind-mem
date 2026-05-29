@@ -303,8 +303,13 @@ def _maturity_score_simple(block: dict[str, Any]) -> float:
     module dependency-free).  Reads only the ``Maturity`` frontmatter
     field; if absent, returns 0.5 (neutral).
     """
-    raw = block.get("Maturity") or block.get("maturity")
-    if raw is not None:
+    # Use a sentinel so a numeric Maturity=0 / 0.0 (falsy) is not confused
+    # with an absent key.  A plain `or` would skip legitimate zero values.
+    _MISSING = object()
+    raw = block.get("Maturity", _MISSING)
+    if raw is _MISSING:
+        raw = block.get("maturity", _MISSING)
+    if raw is not _MISSING:
         try:
             return max(0.0, min(1.0, float(raw)))
         except (ValueError, TypeError):
