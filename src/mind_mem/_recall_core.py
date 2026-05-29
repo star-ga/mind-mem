@@ -279,6 +279,31 @@ def _apply_date_filter(
     return [h for h in hits if _in_date_range(_block_date(h), since, until)]
 
 
+def _apply_lifecycle_filter(hits: list[dict], lifecycle: str) -> list[dict]:
+    """Filter recall hits by the ``Lifecycle`` block field.
+
+    Blocks that do not declare a ``Lifecycle`` field default to ``"durable"``.
+    Comparison is case-insensitive.
+
+    Args:
+        hits: Scored recall results.
+        lifecycle: Target lifecycle value (``"durable"``, ``"ephemeral"``,
+            or ``"generated"``).
+
+    Returns:
+        Subset of hits whose effective lifecycle matches.
+    """
+    target = lifecycle.strip().lower()
+    _DEFAULT_LIFECYCLE = "durable"
+    result = []
+    for h in hits:
+        raw = h.get("Lifecycle") or h.get("lifecycle") or _DEFAULT_LIFECYCLE
+        effective = str(raw).strip().lower()
+        if effective == target:
+            result.append(h)
+    return result
+
+
 @_traced("recall")
 def recall(
     workspace: str,
@@ -294,6 +319,7 @@ def recall(
     *,
     since: str | None = None,
     until: str | None = None,
+    lifecycle: str | None = None,
     _allow_decompose: bool = True,
 ) -> list[dict]:
     """Search across all memory files using BM25 scoring. Returns ranked results.
@@ -316,6 +342,12 @@ def recall(
             Filtering is applied AFTER ranking + reranking — date is a
             post-filter, not a retrieval-time prefilter, so the ranking
             quality the reranker provides is preserved.
+        lifecycle: Optional lifecycle filter (``"durable"``, ``"ephemeral"``,
+            or ``"generated"``).  When set, only blocks whose ``Lifecycle``
+            field matches the value (case-insensitive) are returned.
+            Blocks that have no ``Lifecycle`` field are treated as
+            ``"durable"`` (the default).  ``None`` (default) = no filter,
+            preserving existing behaviour exactly.
     """
     query_tokens = tokenize(query)
     if not query_tokens:
@@ -491,6 +523,8 @@ def recall(
             _log.info("multihop_merged", total=len(all_merged), limit=limit, sub_queries=len(sub_queries))
             if since is not None or until is not None:
                 all_merged = _apply_date_filter(all_merged, since, until)
+            if lifecycle is not None:
+                all_merged = _apply_lifecycle_filter(all_merged, lifecycle)
             return all_merged[:limit]
 
     # Month normalization: inject numeric month tokens for date matching
@@ -791,6 +825,9 @@ def recall(
             result["DiaID"] = block["DiaID"]
         if block.get("Date"):
             result["Date"] = block["Date"]
+        # Pass through Lifecycle for the lifecycle post-filter
+        if block.get("Lifecycle"):
+            result["Lifecycle"] = block["Lifecycle"]
         results.append(result)
 
     _stage_counts["bm25_passed"] = len(results)
@@ -1323,6 +1360,8 @@ def recall(
 
     if since is not None or until is not None:
         top = _apply_date_filter(top, since, until)[:limit]
+    if lifecycle is not None:
+        top = _apply_lifecycle_filter(top, lifecycle)[:limit]
     return top
 
 
