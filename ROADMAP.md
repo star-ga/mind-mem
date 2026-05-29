@@ -61,6 +61,38 @@ by its full description below.
 - [ ] **Plugin SDK** — stable API for custom rules / block kinds / detectors
 - [ ] **Chaos testing harness**
 
+### Group H — Evolving memory graph (prior-art-informed, 2026-05-29)
+
+Prior art: an evolving-memory-graph paper (arXiv:2605.28773 —
+provenance/authorship to re-verify before citing externally) models
+memory as a heterogeneous graph whose *topology* evolves in three
+stages (link-on-write → feedback-driven refinement → long-term
+consolidation), gated by a single maturity metric. SOTA reported on
+LoCoMo / Mind2Web / GAIA. The mechanism maps almost 1:1 onto our
+existing `propose_update → approve → consolidate` governance flow; we
+already have the adjacent primitives (`scan` ≈ interference pruning,
+`memory_evolution`, contradiction edges). These items formalize them.
+
+**Wedge guardrail (load-bearing):** the source mutates topology
+*autonomously* from feedback (non-deterministic learned rewiring),
+which conflicts with the mind-mem auditable-provenance / bit-identity
+wedge. Every evolution step here MUST route through the existing HITL
+`propose_update`/approval gate — the source-of-truth graph never
+self-modifies. We adopt the connectivity model, not the autonomy.
+
+- [ ] **Typed edge layer over the block store** — first-class
+      `supports / contradicts / refines / supersedes / derived-from`
+      edges; relationship-aware recall instead of flat fusion. Cheapest
+      high-leverage add; subsumes the existing contradiction-edge work.
+- [ ] **Granularity / abstraction alignment** — a named merge operation
+      for the known duplicate-memory pain (cf.
+      `docs/block-type-taxonomy-roadmap.md`).
+- [ ] **Maturity metric as consolidation gate** — governance signal for
+      what graduates ephemeral → consolidated; surfaced in `scan`.
+- [ ] **LoCoMo recall benchmark** — adopt as a standing mind-mem eval so
+      recall quality is a number, not a vibe. **Do first** (cheapest,
+      gives a baseline for everything else here).
+
 ### v3.2.x trailing fixes (4 items, deliberately deferred)
 
 - [ ] **Apply engine — text-range ops** — `insert_after_block` / `replace_range` still on raw `open()`; no v3.2.x caller generates them in practice
