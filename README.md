@@ -3,7 +3,7 @@
   MIND-Mem
 </h1>
 <p align="center">
-  <strong>Replayable memory for AI agents. Byte-identical across runs, machines, and substrates.</strong>
+  <strong>Replayable memory for AI agents. Deterministic recall with a byte-identical audit chain across runs, machines, and substrates.</strong>
 </p>
 <p align="center">
   Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 84 MCP tools<br>
@@ -36,7 +36,7 @@
 
 ---
 
-Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). Deterministic recall. 84 MCP tools as the surface — but the differentiator is the substrate underneath. Every recall, every block, every audit is byte-identical on the same workspace, on every architecture mind-mem builds on.
+Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). Deterministic recall. 84 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic (same query → same ranked results) and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
 
 Most memory layers ship tools. That is table-stakes. MIND-Mem ships a substrate: Q16.16 fixed-point scoring kernels compiled from MIND source, a governance pipeline that rejects every unreviewed write, and an audit chain where every applied proposal is hash-anchored. The same query, the same workspace, the same machine — or a different machine that pulls the same workspace — produces bit-identical results. That property is what makes MIND-Mem suitable as a canonical memory layer across heterogeneous agent stacks.
 
@@ -67,7 +67,7 @@ Output:
 
 | Property                | What it means                                                                     |
 | ----------------------- | --------------------------------------------------------------------------------- |
-| **Byte-identical replay** | Same workspace + same query = same ranked results, every time, every machine. No probabilistic mutations in the core. |
+| **Byte-identical replay** | Deterministic recall: same workspace + query → same ranked results, every time. The audit/replay chain (Q16.16) is byte-identical across machines. No probabilistic mutations in the core. |
 | **Governed-write**      | Nothing reaches the source of truth without `propose → review → approve_apply`. No silent mutations. Ever. |
 | **Auditable**           | Every apply logged with timestamp, receipt, and DIFF. Full traceability from signal to decision. |
 | **Deterministic**       | No ML in the retrieval core. Q16.16 fixed-point scoring. The same preimage produces the same hash. |
@@ -295,7 +295,7 @@ Scheduled background enrichment: scans recent memory for missing cross-reference
 
 ## Integrations are the substrate working
 
-Because the substrate is deterministic, integrating with 17 different CLIs produces the same answers on each. That is not a coincidence — it is the point. MIND-Mem can be the canonical memory layer across heterogeneous agent stacks precisely because the recall output is byte-identical regardless of which client is asking. The 17-CLI surface is a consequence of the substrate, not a feature in itself.
+Because the substrate is deterministic, integrating with 17 different CLIs produces the same answers on each. That is not a coincidence — it is the point. MIND-Mem can be the canonical memory layer across heterogeneous agent stacks precisely because recall is deterministic and its audit/replay chain is byte-identical regardless of which client is asking. The 17-CLI surface is a consequence of the substrate, not a feature in itself.
 
 > Honest positioning: the integrations below are *software-level* —
 > the named tool talks to MIND-Mem via the Model Context Protocol.
