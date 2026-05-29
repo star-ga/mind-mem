@@ -1,4 +1,4 @@
-"""Typed block-lineage edges + bounded BFS reader (v3.11.0, Pattern 3).
+"""Typed block-lineage edges + bounded BFS reader (v3.11.0+, Pattern 3).
 
 The v2.6.0 ``co_retrieval`` graph stores undirected, weighted edges
 implicitly typed as **co-occurrence** (two blocks were returned in the
@@ -10,6 +10,11 @@ same recall pass). v3.11.0 extends that table with an explicit
     * ``refines``       — block A is a tightening or correction of B.
     * ``contradicts``   — block A asserts the negation of B.
     * ``cooccurrence``  — original v2.6.0 default, unchanged.
+    * ``supports``      — block A provides evidence or context that
+                          strengthens the claim in block B.
+    * ``derived_from``  — block A was derived or synthesised from block B
+                          (e.g. a summary, a transformed view, an
+                          agent-generated distillation).
 
 The migration is zero-downtime: ``ALTER TABLE ... ADD COLUMN kind TEXT
 NOT NULL DEFAULT 'cooccurrence'`` makes every existing edge legal under
@@ -27,9 +32,22 @@ Two read tools sit on top:
 Kind-specific decay multipliers feed the existing
 :func:`mind_mem.staleness.propagate_staleness` propagator: when a
 ``contradicts`` edge fires it propagates with full hop-decay; ``cites``
-edges scale at 0.8; ``implements`` at 0.6; ``refines`` at 0.4. The
-multiplier is applied **at adjacency-construction time**, leaving the
-propagator's contract untouched.
+edges scale at 0.8; ``implements`` at 0.6; ``refines`` at 0.4; ``supports``
+at 0.7 (strong positive signal, slightly weaker than a direct citation);
+``derived_from`` at 0.5 (a derivation is one inferential step removed
+from the source). The multiplier is applied **at adjacency-construction
+time**, leaving the propagator's contract untouched.
+
+Optional edge-aware recall boost
+----------------------------------
+:func:`edge_aware_boost` computes a recall-score addend for a block
+given the typed edges anchored to it.  The boost is **off by default**
+(``weight=0.0``) so existing recall behaviour is fully preserved.  Callers
+that opt in pass a non-zero weight:
+
+    boosts = edge_aware_boost(workspace, block_ids, weight=0.1)
+
+The boost is additive: ``final_score = bm25_score + boosts.get(block_id, 0)``.
 
 The module is dependency-free (stdlib + ``mind_mem.retrieval_graph``)
 and SQLite-only — Postgres replicas are read-only paths and don't need
@@ -54,18 +72,23 @@ __all__ = [
     "LineageResult",
     "add_block_edge",
     "block_lineage",
+    "edge_aware_boost",
     "ensure_lineage_schema",
     "lineage_adjacency",
 ]
 
-ALLOWED_KINDS: frozenset[str] = frozenset({"cites", "implements", "refines", "contradicts", "cooccurrence"})
+ALLOWED_KINDS: frozenset[str] = frozenset(
+    {"cites", "implements", "refines", "contradicts", "cooccurrence", "supports", "derived_from"}
+)
 
 KIND_DECAY: dict[str, float] = {
     "contradicts": 1.0,
     "cites": 0.8,
+    "supports": 0.7,
     "implements": 0.6,
-    "refines": 0.4,
+    "derived_from": 0.5,
     "cooccurrence": 0.5,
+    "refines": 0.4,
 }
 
 LINEAGE_DEPTH_CAP: int = 3
@@ -307,3 +330,80 @@ def lineage_adjacency(
         return adj
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Edge-aware recall boost (Group H typed-edges, behavior-preserving default)
+# ---------------------------------------------------------------------------
+
+#: Per-kind boost multipliers applied inside :func:`edge_aware_boost`.
+#: ``supports`` and ``derived_from`` receive positive (but modest) boosts;
+#: ``contradicts`` receives zero so contradiction edges do not inflate
+#: the score of the target block.
+EDGE_BOOST_WEIGHT: dict[str, float] = {
+    "supports": 1.0,
+    "cites": 0.8,
+    "derived_from": 0.6,
+    "implements": 0.5,
+    "refines": 0.4,
+    "cooccurrence": 0.2,
+    "contradicts": 0.0,
+}
+
+
+def edge_aware_boost(
+    workspace: str,
+    block_ids: list[str],
+    *,
+    weight: float = 0.0,
+) -> dict[str, float]:
+    """Compute an additive score boost for each block based on typed edges.
+
+    The boost is **off by default** (``weight=0.0``) so callers that do
+    not opt in receive the same scores as before this feature existed.
+    Callers that want edge-aware ranking pass a small positive weight
+    (e.g. ``0.05``–``0.15``).
+
+    The boost for a block is the weighted sum of incoming ``supports`` and
+    ``derived_from`` edges (which indicate that other blocks actively
+    reinforce this block's claim), plus a smaller contribution from other
+    kinds.  ``contradicts`` edges contribute zero — they do not inflate
+    the score of the target.
+
+    Args:
+        workspace: Workspace root path.
+        block_ids: Block IDs whose boosts are requested.
+        weight: Global scale factor.  ``0.0`` (default) disables the
+            feature entirely; ``0.1`` is a reasonable starting point.
+
+    Returns:
+        Dict mapping block_id → additive boost value.  Missing keys mean
+        zero boost.  All values are non-negative.
+    """
+    if weight == 0.0 or not block_ids:
+        return {}
+
+    ensure_lineage_schema(workspace)
+    conn = _connect(workspace)
+    try:
+        # Build a set for fast membership check; bind each as "?" in the query.
+        id_set = set(block_ids)
+        placeholders = ",".join("?" * len(id_set))
+        # Query edges where any of the target blocks appears as the *destination*
+        # (mem2_id).  An incoming edge means another block points at this block,
+        # which is the signal we boost on (being cited / supported / derived-from
+        # by others is a quality signal).
+        rows = conn.execute(
+            f"SELECT mem2_id, kind FROM co_retrieval WHERE mem2_id IN ({placeholders})",  # nosec B608 — placeholders are "?" bind params; id_set values are passed as the params tuple
+            tuple(id_set),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    boosts: dict[str, float] = {}
+    for dst, kind in rows:
+        per_kind = EDGE_BOOST_WEIGHT.get(kind, 0.0)
+        if per_kind > 0.0:
+            boosts[dst] = boosts.get(dst, 0.0) + per_kind * weight
+
+    return boosts

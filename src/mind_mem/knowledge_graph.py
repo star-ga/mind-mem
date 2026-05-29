@@ -52,6 +52,8 @@ class Predicate(str, Enum):
     PART_OF = "part_of"
     MENTIONED_IN = "mentioned_in"
     RELATED_TO = "related_to"
+    SUPPORTS = "supports"
+    DERIVED_FROM = "derived_from"
 
     @classmethod
     def from_str(cls, name: str) -> "Predicate":
