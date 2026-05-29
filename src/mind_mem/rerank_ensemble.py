@@ -29,7 +29,7 @@ Opt-in via:
           "top_k": 10,
           "llm": {
             "base_url": "http://127.0.0.1:8766/v1/chat/completions",
-            "model": "claude-proxy/claude-opus-4-7"
+            "model": "claude-proxy/claude-opus-4-8"
           }
         }
       }
@@ -250,7 +250,7 @@ def _build_llm(llm_cfg: dict[str, Any]) -> Reranker | None:
         allow_external = bool(llm_cfg.get("allow_external", False))
         _validate_base_url(base_url, allow_external=allow_external)
 
-        model = llm_cfg.get("model", "claude-proxy/claude-opus-4-7")
+        model = llm_cfg.get("model", "claude-proxy/claude-opus-4-8")
         timeout = float(llm_cfg.get("timeout", 30.0))
 
         class LLMRerankerAdapter:

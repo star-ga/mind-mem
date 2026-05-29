@@ -142,7 +142,7 @@ class LLMQueryDecomposer:
     """LLM-backed decomposer via OpenAI-compatible endpoint.
 
     Pointed at ``http://127.0.0.1:8766/v1/chat/completions`` with
-    model ``claude-proxy/claude-opus-4-7`` for free OAuth routing,
+    model ``claude-proxy/claude-opus-4-8`` for free OAuth routing,
     or at any other OpenAI-compatible endpoint with an API key.
 
     Fails open to :class:`NLPQueryDecomposer` on any error. Enforces
@@ -160,7 +160,7 @@ class LLMQueryDecomposer:
             _log.warning("llm_decomposer_url_rejected", url=raw_url, error=str(exc))
             # Force fallback: base_url is never called.
             self.base_url = ""
-        self.model: str = cfg.get("model", "claude-proxy/claude-opus-4-7")
+        self.model: str = cfg.get("model", "claude-proxy/claude-opus-4-8")
         self.api_key_env: str = cfg.get("api_key_env", "")
         self.timeout: float = float(cfg.get("timeout", 20.0))
         self._fallback = NLPQueryDecomposer()

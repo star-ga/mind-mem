@@ -1,8 +1,8 @@
 # LoCoMo v3.4.0 conv-0 results (2026-04-22)
 
-## Run 1: Opus 4.7 + v3.4 features (partial)
+## Run 1: Opus 4.8 + v3.4 features (partial)
 
-Config: `--answerer-model claude-proxy/claude-opus-4-7 --judge-model mistral-large-latest --v34-features`
+Config: `--answerer-model claude-proxy/claude-opus-4-8 --judge-model mistral-large-latest --v34-features`
 
 **Rate-limited mid-run** at QA ~113. Opus usage cap hit, remaining
 QAs returned `"You've hit your limit · resets Apr 23, 12pm"` and

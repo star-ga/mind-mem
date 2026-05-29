@@ -206,7 +206,7 @@ _CONTEXT_WINDOWS: dict[str, int] = {
     "gpt-5.5": 1_000_000,
     "gpt-5.5-2026-03-05": 1_000_000,
     "gpt-4o": 128_000,
-    "claude-opus-4-7": 1_000_000,
+    "claude-opus-4-8": 1_000_000,
     "claude-opus-4-6": 1_000_000,
     "claude-opus-4-5": 200_000,
     "claude-sonnet-4-6": 1_000_000,

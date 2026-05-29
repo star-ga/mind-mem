@@ -93,7 +93,7 @@ def chain_of_note_pack(
         question: the original user question.
         blocks: retrieved block dicts in rank order.
         condenser_fn: ``prompt -> response_text``. Should emit bullets
-            directly, no markdown wrapping. Any LLM works; Opus 4.7
+            directly, no markdown wrapping. Any LLM works; Opus 4.8
             and Mistral Large both tested well.
         max_blocks: truncate evidence to this many blocks before
             condensing. Condenser quality plateaus above ~12.

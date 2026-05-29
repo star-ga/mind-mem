@@ -76,10 +76,10 @@ python3 benchmarks/locomo_judge.py \
     --hybrid \
     --output /tmp/mm-bench/locomo_v3.3.0_mistral.json
 
-# Option B — Opus 4.7 answerer via claude-proxy (OAuth, free) + Mistral judge
+# Option B — Opus 4.8 answerer via claude-proxy (OAuth, free) + Mistral judge
 #  (same judge as v1.1.0 → comparable score ceiling).
 python3 benchmarks/locomo_judge.py \
-    --answerer-model claude-proxy/claude-opus-4-7 \
+    --answerer-model claude-proxy/claude-opus-4-8 \
     --judge-model mistral-large-latest \
     --hybrid \
     --output /tmp/mm-bench/locomo_v3.3.0_opus.json

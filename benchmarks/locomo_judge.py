@@ -166,7 +166,7 @@ PROVIDER_CONFIG = {
     },
     # Route claude-proxy/* models through the local CLI-auth proxy on
     # port 8766 (OAuth-backed, no API key required). Model names like
-    # ``claude-proxy/claude-opus-4-7`` are stripped of the prefix by the
+    # ``claude-proxy/claude-opus-4-8`` are stripped of the prefix by the
     # proxy itself (claude-proxy.js line 314). Match this prefix before
     # "claude" so we don't trigger the Anthropic API path.
     "claude-proxy": {
