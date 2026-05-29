@@ -57,6 +57,7 @@ from ._recall_reranking import llm_rerank, rerank_hits
 from ._recall_scoring import bm25f_score_terms, build_xref_graph, compute_weighted_tf, date_score
 from ._recall_temporal import apply_temporal_filter, resolve_time_reference
 from ._recall_tokenization import tokenize
+from .block_maturity import apply_min_maturity_filter as _apply_min_maturity_filter
 from .block_parser import chunk_block, deduplicate_chunks, get_active, parse_file
 from .enums import TaskStatus
 from .observability import get_logger, metrics
@@ -343,6 +344,7 @@ def recall(
     until: str | None = None,
     lifecycle: str | None = None,
     event_id: str | None = None,
+    min_maturity: float | None = None,
     _allow_decompose: bool = True,
 ) -> list[dict]:
     """Search across all memory files using BM25 scoring. Returns ranked results.
@@ -375,6 +377,12 @@ def recall(
             whose ``EventId`` field matches (case-insensitive, exact) are
             returned.  Blocks without an ``EventId`` field are excluded.
             Applied as a post-rank filter after all scoring and reranking.
+            ``None`` (default) = no filter, preserving existing behaviour.
+        min_maturity: Optional maturity threshold in [0.0, 1.0] (Group H
+            consolidation gate).  When set, only blocks whose computed
+            maturity score is >= the threshold are returned.  The maturity
+            score is derived from the ``Maturity`` frontmatter field (if
+            present) or from the block's ``Status`` and ``Lifecycle`` fields.
             ``None`` (default) = no filter, preserving existing behaviour.
     """
     query_tokens = tokenize(query)
@@ -555,6 +563,8 @@ def recall(
                 all_merged = _apply_lifecycle_filter(all_merged, lifecycle)
             if event_id is not None:
                 all_merged = _apply_event_id_filter(all_merged, event_id)
+            if min_maturity is not None:
+                all_merged = _apply_min_maturity_filter(all_merged, min_maturity)
             return all_merged[:limit]
 
     # Month normalization: inject numeric month tokens for date matching
@@ -861,6 +871,9 @@ def recall(
         # Pass through EventId for the event_id post-filter
         if block.get("EventId"):
             result["EventId"] = block["EventId"]
+        # Pass through Maturity for the min_maturity post-filter
+        if block.get("Maturity"):
+            result["Maturity"] = block["Maturity"]
         results.append(result)
 
     _stage_counts["bm25_passed"] = len(results)
@@ -1397,6 +1410,8 @@ def recall(
         top = _apply_lifecycle_filter(top, lifecycle)[:limit]
     if event_id is not None:
         top = _apply_event_id_filter(top, event_id)[:limit]
+    if min_maturity is not None:
+        top = _apply_min_maturity_filter(top, min_maturity)[:limit]
     return top
 
 
