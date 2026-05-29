@@ -304,6 +304,28 @@ def _apply_lifecycle_filter(hits: list[dict], lifecycle: str) -> list[dict]:
     return result
 
 
+def _apply_event_id_filter(hits: list[dict], event_id: str) -> list[dict]:
+    """Filter recall hits by the ``EventId`` block field (exact match).
+
+    Only blocks whose ``EventId`` field equals ``event_id`` (case-insensitive)
+    are returned.  Blocks that have no ``EventId`` field are excluded.
+
+    Args:
+        hits: Scored recall results.
+        event_id: Target event identifier to match.
+
+    Returns:
+        Subset of hits whose ``EventId`` matches ``event_id``.
+    """
+    target = event_id.strip().lower()
+    result = []
+    for h in hits:
+        raw = h.get("EventId") or h.get("event_id") or ""
+        if str(raw).strip().lower() == target:
+            result.append(h)
+    return result
+
+
 @_traced("recall")
 def recall(
     workspace: str,
@@ -320,6 +342,7 @@ def recall(
     since: str | None = None,
     until: str | None = None,
     lifecycle: str | None = None,
+    event_id: str | None = None,
     _allow_decompose: bool = True,
 ) -> list[dict]:
     """Search across all memory files using BM25 scoring. Returns ranked results.
@@ -348,6 +371,11 @@ def recall(
             Blocks that have no ``Lifecycle`` field are treated as
             ``"durable"`` (the default).  ``None`` (default) = no filter,
             preserving existing behaviour exactly.
+        event_id: Optional event identifier filter.  When set, only blocks
+            whose ``EventId`` field matches (case-insensitive, exact) are
+            returned.  Blocks without an ``EventId`` field are excluded.
+            Applied as a post-rank filter after all scoring and reranking.
+            ``None`` (default) = no filter, preserving existing behaviour.
     """
     query_tokens = tokenize(query)
     if not query_tokens:
@@ -525,6 +553,8 @@ def recall(
                 all_merged = _apply_date_filter(all_merged, since, until)
             if lifecycle is not None:
                 all_merged = _apply_lifecycle_filter(all_merged, lifecycle)
+            if event_id is not None:
+                all_merged = _apply_event_id_filter(all_merged, event_id)
             return all_merged[:limit]
 
     # Month normalization: inject numeric month tokens for date matching
@@ -828,6 +858,9 @@ def recall(
         # Pass through Lifecycle for the lifecycle post-filter
         if block.get("Lifecycle"):
             result["Lifecycle"] = block["Lifecycle"]
+        # Pass through EventId for the event_id post-filter
+        if block.get("EventId"):
+            result["EventId"] = block["EventId"]
         results.append(result)
 
     _stage_counts["bm25_passed"] = len(results)
@@ -1362,6 +1395,8 @@ def recall(
         top = _apply_date_filter(top, since, until)[:limit]
     if lifecycle is not None:
         top = _apply_lifecycle_filter(top, lifecycle)[:limit]
+    if event_id is not None:
+        top = _apply_event_id_filter(top, event_id)[:limit]
     return top
 
 
