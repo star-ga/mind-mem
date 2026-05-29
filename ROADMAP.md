@@ -63,8 +63,7 @@ by its full description below.
 
 ### Group H — Evolving memory graph (prior-art-informed, 2026-05-29)
 
-Prior art: an evolving-memory-graph paper (arXiv:2605.28773 —
-provenance/authorship to re-verify before citing externally) models
+Prior art: recent evolving-memory-graph research models
 memory as a heterogeneous graph whose *topology* evolves in three
 stages (link-on-write → feedback-driven refinement → long-term
 consolidation), gated by a single maturity metric. SOTA reported on
