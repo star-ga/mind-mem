@@ -23,7 +23,6 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-
 from mind_mem.v4.block_kinds import FLAG as BLOCK_KINDS_FLAG
 from mind_mem.v4.block_kinds import (
     BlockKind,

@@ -17,7 +17,6 @@ import os
 from pathlib import Path
 
 import pytest
-
 from mind_mem.contradiction_detector import (
     _classify_conflict,
     _extract_block_text,

@@ -24,7 +24,6 @@ from __future__ import annotations
 import io
 
 import pytest
-
 from mind_mem.mic_map import (
     _ACCEL_AVAILABLE,
     Arg,

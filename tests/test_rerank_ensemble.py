@@ -8,7 +8,6 @@ on member failures, and factory config resolution.
 from __future__ import annotations
 
 import pytest
-
 from mind_mem.rerank_ensemble import EnsembleReranker, create_ensemble
 
 

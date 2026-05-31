@@ -3,7 +3,6 @@
 import os
 
 import pytest
-
 from mind_mem.block_store import BlockStore, MarkdownBlockStore
 
 # ---------------------------------------------------------------------------
@@ -68,9 +67,9 @@ class TestBlockStoreProtocol:
         assert isinstance(store, BlockStore)
 
     def test_protocol_is_runtime_checkable(self):
-        assert hasattr(BlockStore, "__protocol_attrs__") or hasattr(BlockStore, "__abstractmethods__"), (
-            "BlockStore should be a runtime-checkable Protocol"
-        )
+        assert hasattr(BlockStore, "__protocol_attrs__") or hasattr(
+            BlockStore, "__abstractmethods__"
+        ), "BlockStore should be a runtime-checkable Protocol"
 
 
 # ---------------------------------------------------------------------------

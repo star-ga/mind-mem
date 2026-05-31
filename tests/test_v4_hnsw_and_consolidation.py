@@ -7,7 +7,6 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-
 from mind_mem.v4 import FeatureDisabledError
 from mind_mem.v4.consolidation_worker import (
     DEFAULT_CONSOLIDATION_CONFIG,

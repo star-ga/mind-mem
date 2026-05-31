@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
 from mind_mem.storage.sharded_pg import (
     ShardConfig,
     ShardedPostgresBlockStore,

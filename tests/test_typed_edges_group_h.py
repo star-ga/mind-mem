@@ -12,7 +12,6 @@ Covers:
 from __future__ import annotations
 
 import pytest
-
 from mind_mem.block_lineage import (
     ALLOWED_KINDS,
     EDGE_BOOST_WEIGHT,
@@ -22,7 +21,6 @@ from mind_mem.block_lineage import (
     edge_aware_boost,
 )
 from mind_mem.knowledge_graph import KnowledgeGraph, Predicate
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -1,7 +1,6 @@
 """Tests for mind-mem coding-native memory schemas."""
 
 import pytest
-
 from mind_mem.coding_schemas import (
     CODING_BLOCK_TYPES,
     TYPE_ADR,

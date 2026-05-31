@@ -178,10 +178,7 @@ def rerank_hits(
             # Also check for date patterns (YYYY-MM-DD, "Month Day", etc.)
             if re.search(r"\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b", excerpt):
                 time_overlap = max(time_overlap, 0.5)
-            month_pat = (
-                r"\b(?:January|February|March|April|May|June|July|August"
-                r"|September|October|November|December)\s+\d{1,2}\b"
-            )
+            month_pat = r"\b(?:January|February|March|April|May|June|July|August" r"|September|October|November|December)\s+\d{1,2}\b"
             if re.search(month_pat, excerpt, re.IGNORECASE):
                 time_overlap = max(time_overlap, 0.8)
             # Plan-intent boost

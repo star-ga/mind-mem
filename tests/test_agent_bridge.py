@@ -7,7 +7,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from mind_mem.agent_bridge import (
     KNOWN_AGENTS,
     AgentFormatter,

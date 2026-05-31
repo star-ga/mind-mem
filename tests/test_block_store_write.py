@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from mind_mem.block_store import MarkdownBlockStore
 
 

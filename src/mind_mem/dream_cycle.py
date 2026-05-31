@@ -174,10 +174,7 @@ _PERSON_IGNORE = frozenset(
 )
 
 # Block ID patterns for citation checking
-_BLOCK_ID_RE = re.compile(
-    r"\b(D-\d{8}-\d{3}|T-\d{8}-\d{3}|INC-\d{8}-[a-z0-9-]+"
-    r"|C-\d{8}-\d{3}|DREF-\d{8}-\d{3}|I-\d{8}-\d{3})\b"
-)
+_BLOCK_ID_RE = re.compile(r"\b(D-\d{8}-\d{3}|T-\d{8}-\d{3}|INC-\d{8}-[a-z0-9-]+" r"|C-\d{8}-\d{3}|DREF-\d{8}-\d{3}|I-\d{8}-\d{3})\b")
 
 # Block header pattern (lines starting with [ID])
 _BLOCK_HEADER_RE = re.compile(r"^\[([\w-]+(?:-\d{8}-\d{3})?)\]", re.MULTILINE)

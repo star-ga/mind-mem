@@ -15,10 +15,8 @@ import os
 import tempfile
 
 import pytest
-
-from mind_mem.block_parser import parse_file
 from mind_mem._recall_core import _apply_event_id_filter, recall
-
+from mind_mem.block_parser import parse_file
 
 # ---------------------------------------------------------------------------
 # Block-parser tests

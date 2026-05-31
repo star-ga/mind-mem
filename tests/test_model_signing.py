@@ -7,7 +7,6 @@ import struct
 from pathlib import Path
 
 import pytest
-
 from mind_mem.model_signing import (
     ED25519_PRIVATE_KEY_BYTES,
     ED25519_PUBLIC_KEY_BYTES,

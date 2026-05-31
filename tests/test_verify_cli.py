@@ -10,7 +10,6 @@ from contextlib import redirect_stdout
 from pathlib import Path
 
 import pytest
-
 from mind_mem.verify_cli import (
     EXIT_CHAIN,
     EXIT_EVIDENCE,

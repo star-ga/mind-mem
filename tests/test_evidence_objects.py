@@ -7,7 +7,6 @@ import json
 import os
 
 import pytest
-
 from mind_mem.evidence_objects import (
     EvidenceAction,
     EvidenceChain,

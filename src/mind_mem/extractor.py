@@ -63,8 +63,7 @@ _IDENTITY_RE = re.compile(
 )
 # Secondary identity: "as a X woman/man/person/professional"
 _IDENTITY_AS_RE = re.compile(
-    r"\bas\s+(?:a |an )?(\w+(?:\s+\w+)?(?:\s+(?:woman|man|person|professional|"
-    r"artist|engineer|student|mother|father|parent)))\b",
+    r"\bas\s+(?:a |an )?(\w+(?:\s+\w+)?(?:\s+(?:woman|man|person|professional|" r"artist|engineer|student|mother|father|parent)))\b",
     re.IGNORECASE,
 )
 
@@ -131,8 +130,7 @@ _ATTRIBUTE_RE = re.compile(
 
 # Preference: "I love/like/enjoy/prefer X", "my favorite X is Y"
 _PREFERENCE_RE = re.compile(
-    r"\b(?:i\s+(?:love|like|enjoy|prefer|adore|really like|"
-    r"am (?:into|fond of|passionate about)))\s+(.+?)(?:\.|,|!|\?|$)",
+    r"\b(?:i\s+(?:love|like|enjoy|prefer|adore|really like|" r"am (?:into|fond of|passionate about)))\s+(.+?)(?:\.|,|!|\?|$)",
     re.IGNORECASE,
 )
 _FAVORITE_RE = re.compile(
@@ -302,8 +300,7 @@ _MONTH_MAP = {name: f"{num:02d}" for name, num in MONTH_NAMES.items() if len(nam
 
 # D.3: Temporal normalization — "March 2023" → "2023-03", "October 15, 2023" → "2023-10"
 _MONTH_YEAR_RE = re.compile(
-    r"\b(january|february|march|april|may|june|july|august|september|october|november|december)"
-    r"(?:\s+\d{1,2},?)?\s+(\d{4})\b",
+    r"\b(january|february|march|april|may|june|july|august|september|october|november|december)" r"(?:\s+\d{1,2},?)?\s+(\d{4})\b",
     re.IGNORECASE,
 )
 _YEAR_MONTH_RE = re.compile(

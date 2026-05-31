@@ -202,6 +202,6 @@ def test_embedding_pipeline_in_clause_survives_sql_metacharacters(
     # Verify the table is still intact — no DROP survived.
     with sqlite3.connect(str(db)) as conn:
         count = conn.execute("SELECT COUNT(*) FROM blocks").fetchone()[0]
-    assert count == len(adversarial_ids), (
-        f"blocks table row count changed — SQL injection may have occurred (expected {len(adversarial_ids)}, got {count})"
-    )
+    assert count == len(
+        adversarial_ids
+    ), f"blocks table row count changed — SQL injection may have occurred (expected {len(adversarial_ids)}, got {count})"

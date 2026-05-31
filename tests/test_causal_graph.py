@@ -1,7 +1,6 @@
 """Tests for mind-mem temporal causal graph (causal_graph.py)."""
 
 import pytest
-
 from mind_mem.causal_graph import (
     EDGE_CONTRADICTS,
     EDGE_DEPENDS_ON,

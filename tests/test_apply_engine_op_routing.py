@@ -19,7 +19,6 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
 from mind_mem.apply_engine import execute_op
 from mind_mem.block_parser import parse_file
 from mind_mem.block_store import MarkdownBlockStore

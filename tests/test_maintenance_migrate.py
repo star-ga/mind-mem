@@ -6,7 +6,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from mind_mem.maintenance_migrate import (
     already_migrated,
     classify_maintenance_file,

@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from mind_mem.model_provenance import (
     DEFAULT_PUBLISHERS,
     Publisher,

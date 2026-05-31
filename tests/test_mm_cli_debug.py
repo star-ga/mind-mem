@@ -8,7 +8,6 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-
 from mind_mem.mm_cli import (
     _cmd_explain,
     _cmd_inspect,

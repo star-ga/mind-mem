@@ -544,10 +544,7 @@ def _merge_mcp_codex_toml(existing_text: str, ws: str, srv: dict) -> tuple[str, 
     # non-mind-mem TOML section header.
     import re
 
-    pattern = re.compile(
-        r"\[mcp_servers\.mind-mem(?:\.[^\]]+)?\][\s\S]*?"
-        r"(?=\n\[(?!mcp_servers\.mind-mem)[^\]]+\]|\Z)"
-    )
+    pattern = re.compile(r"\[mcp_servers\.mind-mem(?:\.[^\]]+)?\][\s\S]*?" r"(?=\n\[(?!mcp_servers\.mind-mem)[^\]]+\]|\Z)")
     bool(pattern.search(text))
     text = pattern.sub("", text)
     # Tidy consecutive blank lines left behind.

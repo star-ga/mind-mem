@@ -12,7 +12,6 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 import pytest
-
 from mind_mem import axis_recall as ar
 from mind_mem.observation_axis import (
     AxisWeights,

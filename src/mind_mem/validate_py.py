@@ -325,10 +325,7 @@ class Validator:
                 _log.debug("id_collection_skipped path=%s: %s", path, exc)
 
         # Scan for references
-        ref_re = re.compile(
-            r"\b(D-\d{8}-\d{3}|T-\d{8}-\d{3}|INC-\d{8}-[a-z0-9-]+"
-            r"|PRJ-[a-z0-9-]+|PER-[a-z0-9-]+|TOOL-[a-z0-9-]+)\b"
-        )
+        ref_re = re.compile(r"\b(D-\d{8}-\d{3}|T-\d{8}-\d{3}|INC-\d{8}-[a-z0-9-]+" r"|PRJ-[a-z0-9-]+|PER-[a-z0-9-]+|TOOL-[a-z0-9-]+)\b")
         referenced = set()
         for d in VALIDATE_DIRS:
             dirpath = os.path.join(self.ws, d)

@@ -10,7 +10,6 @@ import threading
 from pathlib import Path
 
 import pytest
-
 from mind_mem.interaction_signals import (
     ABResult,
     Signal,

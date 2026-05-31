@@ -23,7 +23,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from mind_mem.apply_engine import create_snapshot, restore_snapshot
 
 
@@ -95,9 +94,9 @@ class TestAtomicityMaintenanceScope:
         # is that rollback preserves whatever was written after the
         # snapshot, because those entries are signal (errors logged during
         # the failed apply, validation progress, etc.).
-        assert "appended-during-apply" in report.read_text(), (
-            "append-only file was reverted by restore_snapshot — atomicity exclusion rule violated"
-        )
+        assert (
+            "appended-during-apply" in report.read_text()
+        ), "append-only file was reverted by restore_snapshot — atomicity exclusion rule violated"
 
     def test_restore_creates_missing_tracked_file(self, ws: Path) -> None:
         """A tracked file present at snapshot-time is recreated on restore.

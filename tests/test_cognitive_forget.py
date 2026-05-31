@@ -6,7 +6,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-
 from mind_mem.cognitive_forget import (
     BlockCognition,
     BlockLifecycle,

@@ -6,7 +6,6 @@ from __future__ import annotations
 import threading
 
 import pytest
-
 from mind_mem.speculative_prefetch import (
     PrefetchPredictor,
     get_default_predictor,

@@ -14,7 +14,6 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
-
 from mind_mem.recall import recall
 
 # v4.0.8: file-level stress marker. Synthetic 1000-2000-block workloads

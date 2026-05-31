@@ -8,7 +8,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-
 from mind_mem.chain_of_note import _clean_bullets, chain_of_note_pack
 from mind_mem.iterative_recall import _extract_followups, iterative_retrieve
 from mind_mem.temporal_metadata import annotate_with_temporal_metadata

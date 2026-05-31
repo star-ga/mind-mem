@@ -5,7 +5,6 @@ import threading
 import time
 
 import pytest
-
 from mind_mem.mind_filelock import FileLock
 
 # v4.0.8: file-level stress marker. Multi-thread file-lock contention

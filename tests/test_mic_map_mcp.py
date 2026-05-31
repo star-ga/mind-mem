@@ -20,7 +20,6 @@ import base64
 import json
 
 import pytest
-
 from mind_mem.mcp.infra.rate_limit import _rate_limiters, _rate_limiters_lock
 from mind_mem.mcp.tools.mic_map import (
     MAX_INPUT_BYTES,

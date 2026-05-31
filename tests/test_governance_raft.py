@@ -5,7 +5,6 @@ from __future__ import annotations
 import secrets
 
 import pytest
-
 from mind_mem.governance_raft import (
     CommitResult,
     LocalConsensusLog,

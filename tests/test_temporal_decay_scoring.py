@@ -16,7 +16,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 import pytest
-
 from mind_mem._recall_scoring import (
     _resolve_half_life_days,
     temporal_decay_score,

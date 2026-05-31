@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from mind_mem.personas import (
     DEFAULT_PERSONA,
     PERSONAS,

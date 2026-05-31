@@ -10,7 +10,6 @@ these tests cover only the in-code resolution contract.
 from __future__ import annotations
 
 import pytest
-
 from mind_mem.tier_recall import _TIER_BOOST, resolve_tier_weights
 
 

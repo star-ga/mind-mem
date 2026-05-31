@@ -90,9 +90,7 @@ __all__ = [
 DEFAULT_MIN_SIMILARITY: float = 0.75
 
 #: Supported merge strategies.
-MERGE_STRATEGIES: frozenset[str] = frozenset(
-    {"keep_longer", "keep_higher_maturity", "concatenate"}
-)
+MERGE_STRATEGIES: frozenset[str] = frozenset({"keep_longer", "keep_higher_maturity", "concatenate"})
 
 # ---------------------------------------------------------------------------
 # Text utilities (mirror of dedup.py tokenizer — no shared import to avoid
@@ -102,13 +100,71 @@ MERGE_STRATEGIES: frozenset[str] = frozenset(
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 _STOP_WORDS: frozenset[str] = frozenset(
     {
-        "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
-        "have", "has", "had", "do", "does", "did", "will", "would", "could",
-        "should", "may", "might", "shall", "can", "to", "of", "in", "for",
-        "on", "with", "at", "by", "from", "as", "into", "about", "it", "its",
-        "and", "or", "but", "not", "no", "if", "then", "so", "up", "out",
-        "that", "this", "these", "those", "he", "she", "they", "we", "you",
-        "i", "me", "my", "your", "his", "her", "our", "their",
+        "a",
+        "an",
+        "the",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "shall",
+        "can",
+        "to",
+        "of",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "as",
+        "into",
+        "about",
+        "it",
+        "its",
+        "and",
+        "or",
+        "but",
+        "not",
+        "no",
+        "if",
+        "then",
+        "so",
+        "up",
+        "out",
+        "that",
+        "this",
+        "these",
+        "those",
+        "he",
+        "she",
+        "they",
+        "we",
+        "you",
+        "i",
+        "me",
+        "my",
+        "your",
+        "his",
+        "her",
+        "our",
+        "their",
     }
 )
 
@@ -281,9 +337,7 @@ def find_merge_candidates(
             )
 
     # Deterministic sort: descending similarity, then by id pair
-    candidates.sort(
-        key=lambda c: (-c.similarity, _block_id(c.block_a), _block_id(c.block_b))
-    )
+    candidates.sort(key=lambda c: (-c.similarity, _block_id(c.block_a), _block_id(c.block_b)))
 
     if cap:
         candidates = candidates[:cap]
@@ -361,9 +415,7 @@ def merge_blocks(
         ValueError: If ``strategy`` is not a recognised value.
     """
     if strategy not in MERGE_STRATEGIES:
-        raise ValueError(
-            f"strategy must be one of {sorted(MERGE_STRATEGIES)}, got {strategy!r}"
-        )
+        raise ValueError(f"strategy must be one of {sorted(MERGE_STRATEGIES)}, got {strategy!r}")
 
     id_a = _block_id(a)
     id_b = _block_id(b)

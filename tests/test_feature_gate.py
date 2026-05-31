@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from mind_mem.feature_gate import (
     FeatureGate,
     FieldSpec,

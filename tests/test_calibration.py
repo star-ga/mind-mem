@@ -9,7 +9,6 @@ import os
 import time
 
 import pytest
-
 from mind_mem.calibration import (
     CALIBRATION_WINDOW_DAYS,
     MAX_CALIBRATION_WEIGHT,

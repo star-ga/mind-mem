@@ -15,7 +15,7 @@ import os
 import tempfile
 
 import pytest
-
+from mind_mem._recall_core import recall
 from mind_mem.block_maturity import (
     MATURITY_EDGE_SATURATION,
     MATURITY_EDGE_WEIGHT,
@@ -25,8 +25,6 @@ from mind_mem.block_maturity import (
     maturity_score,
 )
 from mind_mem.block_parser import parse_file
-from mind_mem._recall_core import recall
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -241,10 +239,10 @@ class TestMaturityScoreOrdering:
 class TestApplyMinMaturityFilter:
     def _make_hits(self) -> list[dict]:
         return [
-            {"_id": "A", "score": 0.9, "Status": "active", "Lifecycle": "durable"},     # high maturity
-            {"_id": "B", "score": 0.8, "Status": "wip", "Lifecycle": "generated"},       # mid maturity
-            {"_id": "C", "score": 0.7, "Status": "deprecated", "Lifecycle": "ephemeral"}, # zero maturity
-            {"_id": "D", "score": 0.6, "Maturity": "0.8"},                               # explicit high
+            {"_id": "A", "score": 0.9, "Status": "active", "Lifecycle": "durable"},  # high maturity
+            {"_id": "B", "score": 0.8, "Status": "wip", "Lifecycle": "generated"},  # mid maturity
+            {"_id": "C", "score": 0.7, "Status": "deprecated", "Lifecycle": "ephemeral"},  # zero maturity
+            {"_id": "D", "score": 0.6, "Maturity": "0.8"},  # explicit high
         ]
 
     def test_zero_threshold_passes_all(self) -> None:
@@ -313,10 +311,7 @@ class TestMaturityFieldParsing:
         assert "Maturity" not in blocks[0]
 
     def test_maturity_coexists_with_lifecycle_and_status(self) -> None:
-        blocks = _parse(
-            "[D-MAT-004]\nStatement: all fields\nStatus: active\n"
-            "Lifecycle: durable\nMaturity: 0.6\n"
-        )
+        blocks = _parse("[D-MAT-004]\nStatement: all fields\nStatus: active\n" "Lifecycle: durable\nMaturity: 0.6\n")
         assert len(blocks) == 1
         b = blocks[0]
         assert b["Status"] == "active"
@@ -338,13 +333,10 @@ def _make_workspace_with_maturity() -> tuple[str, tempfile.TemporaryDirectory]:
     content = (
         "[D-MAT-I-001]\nStatement: high maturity deployment decision active durable\n"
         "Status: active\nLifecycle: durable\nStatus: active\n\n"
-
         "[D-MAT-I-002]\nStatement: mid maturity deployment decision wip generated\n"
         "Status: wip\nLifecycle: generated\n\n"
-
         "[D-MAT-I-003]\nStatement: zero maturity deployment decision deprecated ephemeral\n"
         "Status: deprecated\nLifecycle: ephemeral\n\n"
-
         "[D-MAT-I-004]\nStatement: explicit high maturity deployment decision\n"
         "Maturity: 0.9\nStatus: deprecated\n\n"
     )

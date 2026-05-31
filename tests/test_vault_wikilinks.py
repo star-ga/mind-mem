@@ -8,7 +8,6 @@ import re
 from pathlib import Path
 
 import pytest
-
 from mind_mem.agent_bridge import VaultBlock, VaultBridge
 from mind_mem.knowledge_graph import KnowledgeGraph, Predicate
 

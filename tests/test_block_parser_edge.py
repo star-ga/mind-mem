@@ -6,7 +6,6 @@ import os
 import tempfile
 
 import pytest
-
 from mind_mem.block_parser import parse_file
 
 

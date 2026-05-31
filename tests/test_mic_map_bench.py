@@ -265,9 +265,9 @@ class TestMemoryCeiling:
         b = emit_micb(large_graph)
         # 200 layers × 3 nodes/layer + ~400 params + small constants
         # → expect well under 100 bytes per value (typical: 5-20).
-        assert len(b) < len(large_graph.values) * 100, (
-            f"emit_micb produced {len(b)} bytes for {len(large_graph.values)} values — suspiciously large"
-        )
+        assert (
+            len(b) < len(large_graph.values) * 100
+        ), f"emit_micb produced {len(b)} bytes for {len(large_graph.values)} values — suspiciously large"
 
     def test_emit_mic2_size_under_proportional_bound(self, large_graph: Graph) -> None:
         s = emit_mic2(large_graph)

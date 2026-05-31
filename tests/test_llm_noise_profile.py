@@ -10,7 +10,6 @@ import json
 import os
 
 import pytest
-
 from mind_mem.llm_noise_profile import LLMNoiseProfiler, NoiseProfile
 
 # ---------------------------------------------------------------------------

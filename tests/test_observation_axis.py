@@ -12,7 +12,6 @@ from __future__ import annotations
 import math
 
 import pytest
-
 from mind_mem.observation_axis import (
     DEFAULT_ROTATION_THRESHOLD,
     DEFAULT_WEIGHTS,

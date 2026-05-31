@@ -37,7 +37,6 @@ from __future__ import annotations
 import time
 
 import pytest
-
 from mind_mem.mic_map import (
     MAX_DIM_COUNT,
     MAX_INPUT_BYTES,

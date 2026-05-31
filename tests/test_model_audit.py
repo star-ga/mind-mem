@@ -12,7 +12,6 @@ import struct
 from pathlib import Path
 
 import pytest
-
 from mind_mem.model_audit import (
     AuditReport,
     CheckResult,

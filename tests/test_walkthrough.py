@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from mind_mem.walkthrough import (
     _date_key,
     _role_for,

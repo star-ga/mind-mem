@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 
 import pytest
-
 from mind_mem.hook_installer import (
     AGENT_REGISTRY,
     AgentSpec,
@@ -148,9 +147,9 @@ class TestClaudeCodeHookFormat:
             assert isinstance(entries, list) and entries, f"{event} empty"
             for entry in entries:
                 # Reject the legacy flat shape outright.
-                assert "hooks" in entry, (
-                    f"{event} entry uses flat {{command: ...}} shape; required nested {{matcher, hooks: [...]}} shape. Got: {entry!r}"
-                )
+                assert (
+                    "hooks" in entry
+                ), f"{event} entry uses flat {{command: ...}} shape; required nested {{matcher, hooks: [...]}} shape. Got: {entry!r}"
                 assert entry.get("matcher", None) is not None, f"{event} entry missing 'matcher' field"
                 assert isinstance(entry["hooks"], list), f"{event} entry 'hooks' must be a list"
                 for inner in entry["hooks"]:
@@ -163,12 +162,12 @@ class TestClaudeCodeHookFormat:
         # hook that always errors blocks every future Stop/PostToolUse.
         result = install_config("claude-code", str(tmp_path), dry_run=True)
         text = result["content"]
-        assert "mm capture" not in text, (
-            "PostToolUse hook points at mm capture which is not a real CLI subcommand yet — will block every tool call"
-        )
-        assert "mm vault status" not in text, (
-            "Stop hook points at mm vault status which is not a real CLI subcommand — `mm vault` only has {scan, write}"
-        )
+        assert (
+            "mm capture" not in text
+        ), "PostToolUse hook points at mm capture which is not a real CLI subcommand yet — will block every tool call"
+        assert (
+            "mm vault status" not in text
+        ), "Stop hook points at mm vault status which is not a real CLI subcommand — `mm vault` only has {scan, write}"
 
     def test_install_is_idempotent_across_both_shapes(self, tmp_path: Path) -> None:
         # Pre-populate settings.json with the LEGACY flat shape a

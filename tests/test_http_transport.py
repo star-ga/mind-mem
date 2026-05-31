@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from mind_mem.http_transport import (
     AUTH_HEADER,
     MAX_BODY_BYTES,

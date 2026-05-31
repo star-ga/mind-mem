@@ -77,9 +77,7 @@ __all__ = [
     "lineage_adjacency",
 ]
 
-ALLOWED_KINDS: frozenset[str] = frozenset(
-    {"cites", "implements", "refines", "contradicts", "cooccurrence", "supports", "derived_from"}
-)
+ALLOWED_KINDS: frozenset[str] = frozenset({"cites", "implements", "refines", "contradicts", "cooccurrence", "supports", "derived_from"})
 
 KIND_DECAY: dict[str, float] = {
     "contradicts": 1.0,

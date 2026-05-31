@@ -28,7 +28,6 @@ from __future__ import annotations
 import time
 
 import pytest
-
 from mind_mem.extractor import (
     _FACT_TEXT_MAX,
     _FACT_TEXT_MAX_WINDOWS,

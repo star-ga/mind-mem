@@ -7,7 +7,6 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-
 from mind_mem.v4 import FeatureDisabledError
 from mind_mem.v4.block_kinds import (
     ALLOWED_KINDS,

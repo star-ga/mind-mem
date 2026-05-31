@@ -10,7 +10,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from mind_mem.entity_prefetch import (
     extract_entity_candidates,
     is_entity_prefetch_enabled,

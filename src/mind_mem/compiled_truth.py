@@ -135,11 +135,7 @@ _FRONTMATTER_RE = re.compile(
 )
 
 _EVIDENCE_HEADER_RE = re.compile(
-    r"^### "
-    r"(\d{4}-\d{2}-\d{2}(?:T[\d:.+Z-]+)?)\s+"
-    r"\[(\w+)\]\s+"
-    r"\(source:\s+(.+?)\)"
-    r"(?:\s+~~SUPERSEDED~~)?\s*$",
+    r"^### " r"(\d{4}-\d{2}-\d{2}(?:T[\d:.+Z-]+)?)\s+" r"\[(\w+)\]\s+" r"\(source:\s+(.+?)\)" r"(?:\s+~~SUPERSEDED~~)?\s*$",
 )
 
 

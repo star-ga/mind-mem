@@ -84,7 +84,6 @@ def test_traced_preserves_return_value_complex() -> None:
 def test_traced_re_raises_exceptions() -> None:
     """@traced must propagate exceptions unchanged."""
     import pytest
-
     from mind_mem import telemetry
 
     @telemetry.traced("scan")

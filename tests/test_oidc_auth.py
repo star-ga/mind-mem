@@ -12,7 +12,6 @@ pytest.importorskip("jose", reason="python-jose not installed; skipping OIDC tes
 pytest.importorskip("httpx", reason="httpx not installed; skipping OIDC tests")
 
 from jose import jwt  # noqa: E402
-
 from mind_mem.api.auth import AuthError, OIDCConfig, OIDCProvider  # noqa: E402
 
 # ---------------------------------------------------------------------------

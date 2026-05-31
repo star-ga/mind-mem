@@ -16,8 +16,6 @@ Run:
 from __future__ import annotations
 
 import os
-import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -305,9 +303,7 @@ class TestLoCoMoRecallFloors:
 
     def test_mrr_floor(self, metrics):
         """MRR must be at or above the floor."""
-        assert metrics["mrr"] >= _FLOOR_MRR, (
-            f"MRR {metrics['mrr']:.4f} < floor {_FLOOR_MRR} — recall quality regression"
-        )
+        assert metrics["mrr"] >= _FLOOR_MRR, f"MRR {metrics['mrr']:.4f} < floor {_FLOOR_MRR} — recall quality regression"
 
     def test_recall_at_1_floor(self, metrics):
         """Recall@1 must be at or above the floor."""

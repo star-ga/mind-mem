@@ -23,7 +23,6 @@ from __future__ import annotations
 import io
 
 import pytest
-
 from mind_mem.mic_map import (
     Arg,
     Graph,

@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from mind_mem._recall_core import recall
 from mind_mem.init_workspace import init
 

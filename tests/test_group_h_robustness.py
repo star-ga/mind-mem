@@ -136,6 +136,7 @@ class TestMaturityScoreEdgeCases:
         b = {"Maturity": "high", "Status": "active", "Lifecycle": "durable"}
         s = maturity_score(b)
         from mind_mem.block_maturity import MATURITY_LIFECYCLE_WEIGHT, MATURITY_STATUS_WEIGHT
+
         expected = MATURITY_STATUS_WEIGHT + MATURITY_LIFECYCLE_WEIGHT
         assert abs(s - expected) < 1e-9
 
@@ -156,6 +157,7 @@ class TestMaturityScoreEdgeCases:
     def test_edge_count_exactly_saturation(self) -> None:
         """Edge count == MATURITY_EDGE_SATURATION should fully saturate."""
         from mind_mem.block_maturity import MATURITY_EDGE_WEIGHT
+
         s = maturity_score({"Lifecycle": "ephemeral"}, incoming_edge_count=MATURITY_EDGE_SATURATION)
         assert abs(s - MATURITY_EDGE_WEIGHT) < 1e-9
 
@@ -186,9 +188,7 @@ class TestMaturityScoreEdgeCases:
                     if lc is not None:
                         b["Lifecycle"] = lc
                     s = maturity_score(b, incoming_edge_count=ec)
-                    assert 0.0 <= s <= 1.0, (
-                        f"Out of range: status={st!r} lifecycle={lc!r} edge_count={ec!r} → {s}"
-                    )
+                    assert 0.0 <= s <= 1.0, f"Out of range: status={st!r} lifecycle={lc!r} edge_count={ec!r} → {s}"
 
 
 # ---------------------------------------------------------------------------
@@ -615,17 +615,17 @@ class TestBlockLineageEdgeCases:
 
     def test_first_hop_confidence_equals_kind_decay(self, workspace) -> None:
         from mind_mem.block_lineage import KIND_DECAY
+
         for kind in sorted(ALLOWED_KINDS):
             add_block_edge(workspace, f"ROOT-{kind}", f"CHILD-{kind}", kind)
             result = block_lineage(workspace, f"ROOT-{kind}", max_depth=1)
             found = [e for e in result.edges if e.block_id == f"CHILD-{kind}"]
             assert found, f"expected edge for kind={kind!r}"
-            assert abs(found[0].confidence - KIND_DECAY[kind]) < 1e-9, (
-                f"confidence mismatch for kind={kind!r}"
-            )
+            assert abs(found[0].confidence - KIND_DECAY[kind]) < 1e-9, f"confidence mismatch for kind={kind!r}"
 
     def test_second_hop_confidence_decayed(self, workspace) -> None:
         from mind_mem.block_lineage import KIND_DECAY
+
         add_block_edge(workspace, "A", "B", "cites")
         add_block_edge(workspace, "B", "C", "cites")
         result = block_lineage(workspace, "A", max_depth=2)
@@ -695,6 +695,7 @@ class TestEdgeAwareBoostEdgeCases:
         single_weight = edge_aware_boost(workspace, ["TARGET"], weight=1.0).get("TARGET", 0.0)
         # Two edges accumulate → more than one edge's contribution
         from mind_mem.block_lineage import EDGE_BOOST_WEIGHT
+
         assert single_weight > EDGE_BOOST_WEIGHT["supports"]
 
     def test_boost_scales_linearly_with_weight(self, workspace) -> None:
@@ -705,6 +706,7 @@ class TestEdgeAwareBoostEdgeCases:
 
     def test_all_non_contradicts_kinds_produce_positive_boost(self, workspace) -> None:
         from mind_mem.block_lineage import EDGE_BOOST_WEIGHT
+
         for kind in sorted(ALLOWED_KINDS):
             if EDGE_BOOST_WEIGHT.get(kind, 0.0) > 0.0:
                 tgt = f"TGT-{kind}"
@@ -911,6 +913,7 @@ class TestGroupHDefaults:
     def test_find_merge_candidates_does_not_write(self, tmp_path) -> None:
         """find_merge_candidates is purely functional — no files written."""
         import os
+
         before = set(os.listdir(str(tmp_path)))
         blocks = [
             {"_id": "A", "content": "content"},
@@ -923,6 +926,7 @@ class TestGroupHDefaults:
     def test_merge_blocks_does_not_write(self, tmp_path) -> None:
         """merge_blocks is purely functional — no files written."""
         import os
+
         before = set(os.listdir(str(tmp_path)))
         a = {"_id": "A", "content": "x"}
         b = {"_id": "B", "content": "y"}

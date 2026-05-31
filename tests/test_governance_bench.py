@@ -4,7 +4,6 @@ import json
 import os
 
 import pytest
-
 from mind_mem.governance_bench import GovernanceBench
 
 

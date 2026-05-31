@@ -19,7 +19,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from mind_mem.mic_map import (
     Arg,
     Graph,
