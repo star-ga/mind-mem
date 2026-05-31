@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from mind_mem.context_core import (
     CORE_FORMAT_VERSION,
     CoreLoadError,

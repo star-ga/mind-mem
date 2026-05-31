@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import pytest
+
 from mind_mem.preimage import preimage
 from mind_mem.q1616 import from_q16_16, hex_q16_16, to_q16_16
 

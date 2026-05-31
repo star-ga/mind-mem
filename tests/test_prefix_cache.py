@@ -7,6 +7,7 @@ import threading
 import time
 
 import pytest
+
 from mind_mem import prefix_cache as pc
 from mind_mem.prefix_cache import (
     PrefixCache,

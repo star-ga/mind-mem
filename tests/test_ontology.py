@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import pytest
+
 from mind_mem.change_stream import ChangeStream
 from mind_mem.ontology import (
     EntityType,

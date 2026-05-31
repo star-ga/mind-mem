@@ -13,6 +13,7 @@ Coverage targets every spec rule:
 from __future__ import annotations
 
 import pytest
+
 from mind_mem.mic_map import (
     DTYPES,
     MIC2_HEADER,

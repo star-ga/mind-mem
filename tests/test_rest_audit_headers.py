@@ -23,6 +23,7 @@ pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient  # noqa: E402
+
 from mind_mem.api.rest import create_app  # noqa: E402
 
 

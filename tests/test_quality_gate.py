@@ -23,6 +23,7 @@ from __future__ import annotations
 import datetime as _dt
 
 import pytest
+
 from mind_mem.quality_gate import (
     QualityGateConfig,
     QualityGateVerdict,

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
 from mind_mem.v4 import FeatureDisabledError
 from mind_mem.v4.cognitive_kernel import (
     DEFAULT_KERNEL,

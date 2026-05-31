@@ -1,6 +1,7 @@
 """Tests for mind-mem per-field mutation audit (field_audit.py)."""
 
 import pytest
+
 from mind_mem.field_audit import FieldAuditor, FieldChange
 
 

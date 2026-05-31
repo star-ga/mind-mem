@@ -19,6 +19,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+
 from mind_mem.mcp.infra.workspace import _workspace, use_workspace
 
 

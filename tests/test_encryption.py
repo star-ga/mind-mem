@@ -3,6 +3,7 @@
 import os
 
 import pytest
+
 from mind_mem.encryption import _MAGIC, EncryptionManager, _pbkdf2
 
 

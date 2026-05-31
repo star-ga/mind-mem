@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+
 from mind_mem.spec_binding import (
     SpecBinding,
     SpecBindingManager,

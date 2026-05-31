@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
+
 from mind_mem.v4 import FeatureDisabledError
 from mind_mem.v4.cognitive_kernel import KernelHit, KernelKind, KernelResult, mind_recall
 from mind_mem.v4.kernels import (  # noqa: F401  — import to trigger auto-registration

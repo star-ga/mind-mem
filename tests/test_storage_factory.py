@@ -6,6 +6,7 @@ import json
 import os
 
 import pytest
+
 from mind_mem.block_store import MarkdownBlockStore
 from mind_mem.storage import get_block_store
 

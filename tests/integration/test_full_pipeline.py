@@ -10,6 +10,7 @@ import os
 import sys
 
 import pytest
+
 from mind_mem.init_workspace import init
 from mind_mem.sqlite_index import build_index
 

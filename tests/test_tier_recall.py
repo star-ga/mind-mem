@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+
 from mind_mem.tier_recall import (
     _TIER_BOOST,
     apply_tier_boosts,

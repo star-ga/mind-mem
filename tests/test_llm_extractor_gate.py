@@ -21,6 +21,7 @@ import struct
 from pathlib import Path
 
 import pytest
+
 from mind_mem.llm_extractor import _gate_check_local
 
 

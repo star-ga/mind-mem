@@ -58,9 +58,9 @@ def test_three_way_merge_bumps_vclock(tmp_path: Path, federation_enabled):
     # same conflict on the next pass. Before the fix, the vclock wasn't
     # updated and this returned the same report again.
     re_report = fed.detect_conflict(td, block_id)
-    assert (
-        re_report is None
-    ), "Issue #527: resolved THREE_WAY_MERGE conflict re-detected — winner_version was not persisted to block_tier_vclock"
+    assert re_report is None, (
+        "Issue #527: resolved THREE_WAY_MERGE conflict re-detected — winner_version was not persisted to block_tier_vclock"
+    )
 
 
 def test_three_way_merge_audit_log_emits_hashes(tmp_path: Path, federation_enabled, caplog):

@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from mind_mem.alerting import (
     Alert,
     AlertRouter,

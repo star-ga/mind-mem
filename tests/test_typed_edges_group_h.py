@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 import pytest
+
 from mind_mem.block_lineage import (
     ALLOWED_KINDS,
     EDGE_BOOST_WEIGHT,

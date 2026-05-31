@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timedelta
 
 import pytest
+
 from mind_mem.dream_cycle import (
     BrokenCitation,
     ConsolidationCandidate,

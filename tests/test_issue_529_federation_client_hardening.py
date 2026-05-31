@@ -14,6 +14,7 @@ These tests pin the constructor + transport hardening.
 from __future__ import annotations
 
 import pytest
+
 from mind_mem.v4.federation_client import (
     FederationClient,
     FederationTransportError,

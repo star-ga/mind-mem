@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
 from mind_mem.daemon import (
     DEFAULT_INTERVALS,
     Daemon,

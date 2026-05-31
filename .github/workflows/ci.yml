@@ -24,7 +24,11 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.12"
-      - run: pip install ruff
+      # Pin ruff: an unpinned `pip install ruff` silently upgrades on every
+      # ruff release, and ruff's lint/format rules drift between minors —
+      # which spontaneously turns this job red on untouched code. Bump
+      # deliberately (and run `ruff check --fix && ruff format` once) when raising.
+      - run: pip install ruff==0.15.15
       - run: ruff check src/ tests/
       - name: Format check
         run: python3 -m ruff format --check src/ tests/

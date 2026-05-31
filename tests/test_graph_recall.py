@@ -12,6 +12,7 @@ block text.
 from __future__ import annotations
 
 import pytest
+
 from mind_mem.graph_recall import (
     graph_expand,
     is_graph_expand_enabled,

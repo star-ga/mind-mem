@@ -7,6 +7,7 @@ import struct
 from pathlib import Path
 
 import pytest
+
 from mind_mem.model_gate import (
     REASON_AUDIT_FAILED,
     REASON_AUDIT_FAILED_OVERRIDE,

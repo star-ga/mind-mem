@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from mind_mem.error_codes import (
     _ERROR_METADATA,
     ErrorCategory,

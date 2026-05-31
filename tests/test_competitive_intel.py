@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
+
 from mind_mem.project_profile import build_profile
 from mind_mem.staleness import propagate_staleness
 

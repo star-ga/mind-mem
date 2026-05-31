@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 
 import pytest
+
 from mind_mem.retrieval_trace import (
     current_trace,
     is_trace_enabled,

@@ -3,6 +3,7 @@
 import os
 
 import pytest
+
 from mind_mem.drift_detector import (
     DRIFT_REVERSAL,
     DRIFT_SEMANTIC,

@@ -18,6 +18,7 @@ import socket
 from pathlib import Path
 
 import pytest
+
 from mind_mem.http_transport import serve_http
 from mind_mem.v4.federation_client import (
     ConflictView,

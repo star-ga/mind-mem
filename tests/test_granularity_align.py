@@ -15,6 +15,7 @@ Covers:
 from __future__ import annotations
 
 import pytest
+
 from mind_mem.granularity_align import (
     DEFAULT_MIN_SIMILARITY,
     MERGE_STRATEGIES,

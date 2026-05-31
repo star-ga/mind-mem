@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from mind_mem.consensus_vote import (
     Vote,
     reach_consensus,

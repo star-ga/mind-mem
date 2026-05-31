@@ -3,6 +3,7 @@
 import os
 
 import pytest
+
 from mind_mem.auto_resolver import AutoResolver, ResolutionSuggestion
 
 

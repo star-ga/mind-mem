@@ -8,6 +8,7 @@ re-sorts by boosted score.
 from __future__ import annotations
 
 import pytest
+
 from mind_mem.session_boost import (
     apply_session_boost,
     is_session_boost_enabled,

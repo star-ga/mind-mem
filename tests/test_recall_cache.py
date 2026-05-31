@@ -6,6 +6,7 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from mind_mem.recall_cache import (
     LRUCache,
     RecallCache,

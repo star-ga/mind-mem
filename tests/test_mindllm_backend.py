@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 
 import pytest
+
 from mind_mem import llm_extractor
 
 # ---------------------------------------------------------------------------

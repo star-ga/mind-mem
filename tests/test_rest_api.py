@@ -18,6 +18,7 @@ import pytest
 fastapi = pytest.importorskip("fastapi", reason="fastapi not installed; skipping REST API tests")
 
 from fastapi.testclient import TestClient  # noqa: E402
+
 from mind_mem.api.rest import create_app  # noqa: E402
 
 # ---------------------------------------------------------------------------

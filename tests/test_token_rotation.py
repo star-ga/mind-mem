@@ -14,6 +14,7 @@ import argparse
 import json
 
 import pytest
+
 from mind_mem import http_transport, mm_cli
 
 # ---------------------------------------------------------------------------

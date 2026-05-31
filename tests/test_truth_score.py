@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
+
 from mind_mem.truth_score import (
     annotate_results,
     is_truth_score_enabled,

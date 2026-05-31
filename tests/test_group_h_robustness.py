@@ -17,6 +17,7 @@ absent" from "key present but zero".
 from __future__ import annotations
 
 import pytest
+
 from mind_mem._recall_core import _apply_event_id_filter, _apply_lifecycle_filter
 from mind_mem.block_lineage import (
     ALLOWED_KINDS,

@@ -10,6 +10,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import pytest
+
 from mind_mem.hash_chain_v2 import (
     GENESIS_HASH,
     HashChainV2,

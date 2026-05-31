@@ -29,6 +29,7 @@ import pytest
 hypothesis = pytest.importorskip("hypothesis")
 from hypothesis import HealthCheck, given, settings  # noqa: E402
 from hypothesis import strategies as st  # noqa: E402
+
 from mind_mem.mic_map import (  # noqa: E402
     DTYPES,
     OP_ARITY,

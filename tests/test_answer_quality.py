@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from mind_mem.answer_quality import (
     classify_question_category,
     prompt_for_category,

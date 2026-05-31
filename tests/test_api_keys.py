@@ -7,6 +7,7 @@ import sqlite3
 from typing import Any
 
 import pytest
+
 from mind_mem.api.api_keys import APIKeyStore, _sha256
 
 # ---------------------------------------------------------------------------

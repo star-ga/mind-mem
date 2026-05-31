@@ -3,6 +3,7 @@
 import os
 
 import pytest
+
 from mind_mem.compiled_truth import (
     VALID_CONFIDENCE_LEVELS,
     VALID_ENTITY_TYPES,

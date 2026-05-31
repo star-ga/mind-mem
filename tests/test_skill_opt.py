@@ -7,6 +7,7 @@ import json
 import os
 
 import pytest
+
 from mind_mem.skill_opt._types import (
     CritiqueReport,
     SkillSpec,

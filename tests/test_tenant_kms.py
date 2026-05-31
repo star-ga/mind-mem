@@ -6,6 +6,7 @@ import base64
 import secrets
 
 import pytest
+
 from mind_mem.tenant_kms import (
     MasterKey,
     WrappedDEK,
@@ -148,6 +149,7 @@ class TestLegacyWireFormatCompat:
 
     def test_garbage_raises_clear_error(self):
         import pytest
+
         from mind_mem.tenant_kms import WrappedDEK
 
         with pytest.raises(ValueError, match="did not match"):

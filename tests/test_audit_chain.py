@@ -4,6 +4,7 @@ import json
 import os
 
 import pytest
+
 from mind_mem.audit_chain import (
     _GENESIS_HASH,
     VALID_OPERATIONS,

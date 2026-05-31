@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+
 from mind_mem.v4 import FeatureDisabledError
 from mind_mem.v4 import circuit_breaker as cb_mod
 from mind_mem.v4.circuit_breaker import (

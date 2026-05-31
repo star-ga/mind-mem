@@ -10,6 +10,7 @@ import json
 import os
 
 import pytest
+
 from mind_mem.intent_router import IntentRouter
 
 # ---------------------------------------------------------------------------

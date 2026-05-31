@@ -7,6 +7,7 @@ import struct
 from pathlib import Path
 
 import pytest
+
 from mind_mem.mcp.tools.model import (
     audit_model_tool,
     sign_model_tool,

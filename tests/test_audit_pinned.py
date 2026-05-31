@@ -18,6 +18,7 @@ import struct
 from pathlib import Path
 
 import pytest
+
 from mind_mem.audit_pinned import (
     PinnedConfigError,
     audit_pinned,

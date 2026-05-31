@@ -15,6 +15,7 @@ import os
 import tempfile
 
 import pytest
+
 from mind_mem._recall_core import recall
 from mind_mem.block_maturity import (
     MATURITY_EDGE_SATURATION,
@@ -311,7 +312,7 @@ class TestMaturityFieldParsing:
         assert "Maturity" not in blocks[0]
 
     def test_maturity_coexists_with_lifecycle_and_status(self) -> None:
-        blocks = _parse("[D-MAT-004]\nStatement: all fields\nStatus: active\n" "Lifecycle: durable\nMaturity: 0.6\n")
+        blocks = _parse("[D-MAT-004]\nStatement: all fields\nStatus: active\nLifecycle: durable\nMaturity: 0.6\n")
         assert len(blocks) == 1
         b = blocks[0]
         assert b["Status"] == "active"

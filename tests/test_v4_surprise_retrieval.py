@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 
 import pytest
+
 from mind_mem.v4 import FeatureDisabledError
 from mind_mem.v4.surprise_retrieval import (
     DEFAULT_PROMOTE_THRESHOLD,
