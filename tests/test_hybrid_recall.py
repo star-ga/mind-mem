@@ -275,6 +275,24 @@ class TestRRFMathProperties(unittest.TestCase):
         ids = {r["_id"] for r in fused}
         self.assertEqual(ids, {"A", "B", "C", "D"})
 
+    def test_equal_score_ties_are_order_independent(self):
+        """RRF ties (equal fused score) must order deterministically by
+        block_id, so the fused order is a pure function of the input multiset --
+        independent of input-list order and dict-insertion order."""
+        a = {"_id": "blockA", "text": "a"}
+        b = {"_id": "blockB", "text": "b"}
+        # Symmetric ranked lists: A and B receive identical fused scores.
+        f1 = rrf_fuse([[a, b], [b, a]], weights=[1.0, 1.0], k=60)
+        f2 = rrf_fuse([[b, a], [a, b]], weights=[1.0, 1.0], k=60)
+        ids1 = [r["_id"] for r in f1]
+        ids2 = [r["_id"] for r in f2]
+        # It is a genuine tie ...
+        self.assertAlmostEqual(f1[0]["rrf_score"], f1[1]["rrf_score"], places=9)
+        # ... and the (score, block_id) total order makes it input-order- and
+        # insertion-order-independent (reverse=True -> block_id descending).
+        self.assertEqual(ids1, ids2)
+        self.assertEqual(ids1, ["blockB", "blockA"])
+
 
 if __name__ == "__main__":
     unittest.main()

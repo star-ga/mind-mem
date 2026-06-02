@@ -142,7 +142,13 @@ def rrf_fuse(
             elif new_date and not old_date:
                 block_data[bid] = item
 
-    sorted_ids = sorted(scores, key=lambda x: scores[x], reverse=True)
+    # Total-order tie-break (score, block_id): equal fused scores are common
+    # (RRF sums are coarse w/(k+rank)), and without the block_id secondary key
+    # ties fall back to dict-insertion = BM25-vs-vector arrival order =
+    # non-reproducible recall. Matches the (score, _id) discipline used
+    # throughout _recall_core / _recall_reranking, so the fused order is a pure
+    # function of the input ranked-list multiset.
+    sorted_ids = sorted(scores, key=lambda x: (scores[x], x), reverse=True)
     fused = []
     for bid in sorted_ids:
         item = block_data[bid].copy()
