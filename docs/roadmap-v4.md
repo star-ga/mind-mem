@@ -611,6 +611,40 @@ gated add-on: evidence-chain-preserving cross-instance sync is part
 of the v4.0 network pivot and remains available without an
 enrichment tier.
 
+#### Federation transport as a reusable primitive (consumers + extraction)
+
+The Group-D federation layer (`v4/federation.py` — per-agent version
+vectors, explicit conflict log, three-way-merge resolution that routes
+through the v3 governance propose/approve gate; `federation_client.py`
++ `http_transport.py` — stdlib HTTP, bearer-token auth, the
+`/federation/{vclock,conflicts,write,resolve}` endpoints) is
+deliberately **domain-agnostic**. It moves and reconciles state across
+nodes; it has no opinion about *what* it syncs — memory blocks,
+ratings, anything.
+
+Naestro's federated trust-rating system is the **second real consumer**
+of this transport (the first being mind-mem itself). The boundary is:
+
+- **mind-mem owns the transport** — vclock, conflict log,
+  propose/approve resolution, HTTP endpoints. Stays generic; no
+  rating/badge/reputation semantics ever move in here.
+- **naestro owns the rating *system*** — DRD-derived reputation
+  scoring, Bronze/Silver/Gold/Government badge tiers, Ed25519 signing,
+  Q16.16 deterministic aggregation, consent/governance, evidence-chained
+  collective evolution. It *consumes* this transport; it does not
+  absorb into it.
+
+Dependency arrow: **naestro federation → mind-mem v4 transport.**
+
+**Deferred extraction (gated on evidence):** if the naestro↔mind-mem
+import boundary stays clean — naestro touches only the transport, never
+mind-mem internals — extract this layer into a standalone
+`mind-federation` package that both products import. A leaky boundary
+means it stays here. Decide on the second consumer, not before; the
+arrow above is the experiment that answers it. Federation is a
+**write/consistency** layer and is NOT observability — the read-side
+trust-score dashboards belong in observability, the transport does not.
+
 What this is NOT:
 
 - Not a hosted paid path. No STARGA-operated API, no per-query
