@@ -91,6 +91,15 @@ self-modifies. We adopt the connectivity model, not the autonomy.
 - [ ] **LoCoMo recall benchmark** — adopt as a standing mind-mem eval so
       recall quality is a number, not a vibe. **Do first** (cheapest,
       gives a baseline for everything else here).
+- [ ] **Independently reproducible benchmarks** — the headline numbers
+      (NIAH 250/250, LoCoMo vs Memobase/Letta/Mem0) are self-published
+      today. Ship a one-command repro harness that pins the exact dataset
+      version + commit + config + seeds and writes RAW per-query outputs
+      (not just the aggregate) to a checked-in artifact, so a third party
+      can rerun and diff byte-for-byte. This is the single biggest lever
+      on external credibility — claims should be reproducible, not trusted.
+      (Aligns with the determinism wedge: a benchmark that replays
+      bit-identically is itself evidence.)
 
 ### v3.2.x trailing fixes (4 items, deliberately deferred)
 
