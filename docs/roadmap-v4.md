@@ -645,6 +645,18 @@ arrow above is the experiment that answers it. Federation is a
 **write/consistency** layer and is NOT observability — the read-side
 trust-score dashboards belong in observability, the transport does not.
 
+**Eval-side corroboration of the determinism precondition (2026-06-03).** An
+external attribution-as-trace-scoring framework (Khan, Jun 2026) states the
+same determinism requirement from the *evaluation* side: a trace-level score is
+well-defined only against a deterministic substrate — "without bit-identical
+computation across runs, the attribution score is measuring partly noise, and
+consistency of attribution across similar cases stops being well-defined." This
+is the second independent outside writer (after the memory-layer corroboration)
+to require MIND's cross-substrate bit-identity as a precondition. Relevance to
+this transport: the federated rating payload naestro builds on top is exactly
+such a signed trace, so reproducibility is the precondition for the *rating
+itself* to be a real object rather than a sample. Recorded as `SIG-20260603-011`.
+
 What this is NOT:
 
 - Not a hosted paid path. No STARGA-operated API, no per-query
