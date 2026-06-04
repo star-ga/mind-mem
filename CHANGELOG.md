@@ -423,7 +423,7 @@ Released 2026-05-15.
   the module's `predicate.value` / SQLite TEXT serialisation paths
   treat it identically to a closed-enum member). Closes the gap where
   the class docstring promised runtime extension but only `from_str()`
-  existed; downstream ecosystem (mind-graph scanner, orchestration adapters)
+  existed; downstream ecosystem (mind-codegraph scanner, orchestration adapters)
   no longer alias new predicates (IMPLEMENTS, CONSUMES, LICENSE,
   DOMAIN, PATENT_COVERS, etc.) to the closest builtin as a workaround.
 
