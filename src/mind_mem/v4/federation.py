@@ -394,10 +394,20 @@ def resolve_conflict(
         # not collateral-damaged), inside BEGIN IMMEDIATE so two
         # resolvers don't silently overwrite each other.
         conn.execute("BEGIN IMMEDIATE")
-        conn.execute(
+        cur = conn.execute(
             "UPDATE tier_conflict_log SET resolution = ?, resolved_to = ?, resolved_at = ? WHERE rowid = ? AND resolution IS NULL",
             (strategy.value, winner_agent, now, target_rowid),
         )
+        if cur.rowcount == 0:
+            # A concurrent resolver already resolved this exact rowid
+            # between our detect_conflict() read and this UPDATE. Proceeding
+            # would run the vclock upserts below with OUR (now stale)
+            # winner_version, overwriting the winning resolver's committed
+            # state and corrupting the federation vclock. Abort: roll back
+            # and report no-resolution, matching the already-resolved
+            # contract (Returns None) used elsewhere in this function.
+            conn.rollback()
+            return None
         # Issue #527: persist the resolution to block_tier_vclock so
         # detect_conflict doesn't re-discover the same pair on the next
         # pass. Before this fix, every resolution was a no-op for

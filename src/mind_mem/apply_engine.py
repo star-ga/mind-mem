@@ -1248,6 +1248,22 @@ def apply_proposal(ws, proposal_id, dry_run=False, agent_id=None):
 def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
     """Execute the apply pipeline while holding the workspace lock."""
 
+    # 2d. Re-read + re-validate status UNDER the lock (TOCTOU guard).
+    # apply_proposal() validates Status=='staged' BEFORE acquiring the lock,
+    # so two concurrent applies of the same proposal both pass validation,
+    # then serialize here — the second would re-apply an already-applied
+    # proposal (duplicate mutation / double-apply). Re-read the on-disk
+    # proposal now that we hold the lock; if a concurrent apply already
+    # advanced it past 'staged', abort cleanly instead of re-applying.
+    fresh_proposal, fresh_source = find_proposal(ws, proposal_id)
+    if not fresh_proposal:
+        return False, f"Proposal {proposal_id} no longer present (applied or removed by a concurrent apply)"
+    if fresh_proposal.get("Status") != "staged":
+        return False, f"Proposal {proposal_id} is no longer staged (status: '{fresh_proposal.get('Status')}') — concurrent apply"
+    # Operate on the freshly-read copy + its current source file.
+    proposal = fresh_proposal
+    source_file = fresh_source
+
     # 3. Replay WAL from any prior crash BEFORE snapshotting (ensures clean state)
     wal = WAL(ws)
     replayed = wal.replay()
