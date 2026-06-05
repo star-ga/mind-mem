@@ -4,6 +4,22 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
+**v4.0.16** (released 2026-06-05) — correctness-hardening release from a
+six-agent audit. Postgres backend: `delete_block` silent-rollback (missing
+`deleted_blocks` table aborted the txn), `diff()` AND/OR precedence + `active`
+metadata leak, `restore()` `file_path` wipe, new `ping()` health probe surfaced
+in `mm doctor`. Replication: `ReplicatedPostgresBlockStore` now forwards
+`embedding` and implements `hybrid_search`/`backfill_embedding`/`ping`. Recall:
+FTS5 `bm25()` weight shift (`block_id` stole `statement`'s weight) + unified
+`_apply_post_filters()` so sqlite/vector paths no longer drop
+`lifecycle`/`event_id`/`min_maturity`. Governance/concurrency:
+`federation.resolve_conflict` rowcount guard, `apply_proposal` re-validate
+under lock (double-apply), `conflict_resolver` winner/loser hash mapping,
+`ConnectionManager.close()` write-lock, tier-schema ALTER race. MCP: DB errors
+become structured responses instead of crashing the stdio server. 5465 tests
+(live PG). No `mind-mem-4b` retraining. Builds on **v4.0.15** (MindLLM backend +
+token rotation + time-bounded recall + N-08/T-007).
+
 **v4.0.12** (released 2026-05-19) — `build_index` perf fix (#530:
 55.9 s → 0.19 s by bounding `extract_facts` scan text) + Windows CI
 green (cross-platform `ConnectionManager` teardown in the recursion

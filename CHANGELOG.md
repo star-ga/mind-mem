@@ -2,6 +2,102 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.16 — Postgres correctness + governance concurrency + recall-ranking fixes
+
+Released 2026-06-05.
+
+A correctness-hardening release closing a cluster of latent bugs surfaced
+by a six-agent audit (storage, recall, governance/concurrency, CLI/MCP,
+plus architecture + security reviews). Several only manifested with a live
+Postgres backend — which the test suite skips when `MIND_MEM_TEST_PG_DSN`
+is unset — so they had never executed in CI. No public API changes; no
+model retraining (`mind-mem-4b` weights unchanged). Full suite **5465
+passed** (live Postgres enabled, `-m "not stress"`).
+
+### Added
+
+- **`PostgresBlockStore.ping()`** — active backend health probe (single
+  short-lived connection, bounded `connect_timeout`, never raises) that
+  reports `{ok, schema, blocks_table, block_count, error}`. `mm doctor`
+  now surfaces it as `block_store_health`, so a configured-but-unreachable
+  Postgres backend fails *loudly* instead of silently degrading while the
+  SQLite recall cache masks it.
+
+### Fixed — Postgres backend
+
+- **delete_block silently rolled back.** The best-effort deletion-journal
+  INSERT targeted a `deleted_blocks` table that `_ddl()` never created; in
+  psycopg3 the failed statement aborted the surrounding transaction, so the
+  DELETE was rolled back on commit while the call still returned `True`.
+  `deleted_blocks` is now created in `_ddl()` and the journal write is
+  wrapped in a SAVEPOINT.
+- **diff() reported every snapshotted block as modified.** (1) A missing
+  pair of parentheses let `AND` bind tighter than `OR` in the WHERE clause,
+  so the `snap_id` match alone selected unchanged rows. (2) `_row_to_block`
+  exposed the `active` column as a plain key, leaking `active:true` into
+  rebuilt snapshot metadata (absent from `write_block`'s) → a permanent
+  `metadata::text` mismatch. Fixed both; `active` is now `_active`.
+- **restore() wiped every block's `file_path`.** `_source_file` was
+  stripped from snapshot metadata and `snapshot_blocks` had no `file_path`
+  column, so restore reconstructed `''` for every block. Added a dedicated
+  `file_path` column (with `ADD COLUMN IF NOT EXISTS` migration).
+
+### Fixed — replication
+
+- `ReplicatedPostgresBlockStore.write_block` dropped the `embedding` kwarg
+  (TypeError for embedding-aware callers; embeddings never stored), and was
+  missing `hybrid_search` / `backfill_embedding` entirely (AttributeError —
+  vector recall and `migrate-store --with-embeddings` broken on the HA
+  path). All now delegated correctly; added `ping`.
+
+### Fixed — recall & ranking
+
+- **FTS5 `bm25()` weight shift.** `blocks_fts` is `fts5(block_id, …)`, so
+  `block_id` is the first indexed column, but only the 7 field weights were
+  passed — shifting every weight one column (`block_id` stole `statement`'s
+  3.0). Added an aligned leading weight via a testable `_bm25_weights()`
+  (schema-compatible; no index rebuild).
+- **recall() backend-dependent filtering.** The sqlite and vector dispatch
+  paths applied only the date filter, silently dropping
+  `lifecycle`/`event_id`/`min_maturity`. Extracted one `_apply_post_filters()`
+  that all three dispatch paths funnel through.
+
+### Fixed — governance & concurrency
+
+- **federation.resolve_conflict** ignored the conditional UPDATE's
+  `rowcount`, so a resolver that lost a race still ran the vclock upserts
+  with its stale `winner_version`, overwriting the winner's state. Now rolls
+  back and returns `None` on a lost race.
+- **apply_proposal double-apply.** `Status=='staged'` was validated *before*
+  the workspace lock, so two concurrent applies both passed and the second
+  re-applied. `_apply_proposal_locked` now re-reads + re-validates under the
+  lock before any mutation.
+- **conflict_resolver** printed `block_a`'s hash next to the winner even
+  when the winner was `block_b`, breaking the tamper-evidence trail. Hashes
+  now map to winner/loser by identity.
+- **ConnectionManager.close()** closed `_write_conn` without `_write_lock`
+  (use-after-close racing an in-flight writer). Teardown now holds the lock.
+- **ensure_recall_tier_schema** PRAGMA-check-then-ALTER had no guard, so
+  concurrent callers crashed on `duplicate column name`. Now idempotent.
+
+### Fixed — MCP server resilience
+
+- A backend DB error from either backend (notably `psycopg.OperationalError`,
+  which is not a `sqlite3` error and slipped past per-tool guards) propagated
+  out of the stdio MCP server and dropped every tool mid-session. The
+  `mcp_tool_observe` decorator now converts any DB-API error into a
+  structured response (detail logged server-side; never the raw DSN/host);
+  non-DB exceptions still propagate.
+
+### Notes
+
+- Deferred (tracked, not in this release): correcting the at-rest
+  encryption labeling (it is an HMAC-keystream cipher, not AES-256/SQLCipher)
+  or shipping real AEAD; restrictive perms on the salt / decrypt-audit files;
+  a parametrized BlockStore conformance suite + a Postgres CI service
+  container (the structural reason the above Postgres bugs were untested);
+  `extra_limit_factor` under-retrieval on the early recall paths.
+
 ## v4.0.15 — MindLLM backend + token rotation + time-bounded recall + companion-tools + N-08/T-007
 
 Released 2026-05-20.
