@@ -142,9 +142,17 @@ def _ddl(schema: str) -> Any:
             "    block_id  TEXT NOT NULL,"
             "    content   TEXT NOT NULL,"
             "    metadata  JSONB NOT NULL,"
+            # file_path is stored as a dedicated column: _source_file is an
+            # underscore-internal key stripped from snapshot metadata, so
+            # restore() cannot recover the path from metadata. Without this
+            # column every restored block gets file_path='' (silent routing-
+            # metadata corruption on the first restore).
+            "    file_path TEXT NOT NULL DEFAULT '',"
             "    PRIMARY KEY (snap_id, block_id)"
             ")"
         ).format(s=s),
+        # Back-fill the column on schemas created before it existed.
+        pgsql.SQL("ALTER TABLE {s}.snapshot_blocks ADD COLUMN IF NOT EXISTS file_path TEXT NOT NULL DEFAULT ''").format(s=s),
         # expires_at: prevents indefinite lock hold when the holder is killed.
         pgsql.SQL(
             "CREATE TABLE IF NOT EXISTS {s}.workspace_lock ("
@@ -877,11 +885,12 @@ class PostgresBlockStore:
         )
         sql_blocks = _sql(
             self._schema,
-            "INSERT INTO {s}.snapshot_blocks (snap_id, block_id, content, metadata)"
-            " VALUES (%s, %s, %s, %s::jsonb)"
+            "INSERT INTO {s}.snapshot_blocks (snap_id, block_id, content, metadata, file_path)"
+            " VALUES (%s, %s, %s, %s::jsonb, %s)"
             " ON CONFLICT (snap_id, block_id) DO UPDATE"
-            "     SET content  = EXCLUDED.content,"
-            "         metadata = EXCLUDED.metadata",
+            "     SET content   = EXCLUDED.content,"
+            "         metadata  = EXCLUDED.metadata,"
+            "         file_path = EXCLUDED.file_path",
         )
         try:
             with pool.connection() as conn:
@@ -894,7 +903,8 @@ class PostgresBlockStore:
                             bid = b.get("_id", "")
                             content = b.get("Statement") or b.get("content") or ""
                             meta = {k: v for k, v in b.items() if not k.startswith("_")}
-                            cur.execute(sql_blocks, (snap_id, bid, content, json.dumps(meta, default=str)))
+                            file_path = b.get("_source_file", "")
+                            cur.execute(sql_blocks, (snap_id, bid, content, json.dumps(meta, default=str), file_path))
         except Exception as exc:
             raise BlockStoreError(f"snapshot failed for snap_id={snap_id!r}: {exc}") from exc
 
@@ -929,7 +939,9 @@ class PostgresBlockStore:
             self._schema,
             "INSERT INTO {s}.blocks (id, file_path, content, metadata, active)"
             " SELECT sb.block_id,"
-            "        COALESCE(sb.metadata->>'_source_file', ''),"
+            # Prefer the dedicated file_path column; fall back to the legacy
+            # metadata key for snapshots taken before the column existed.
+            "        COALESCE(NULLIF(sb.file_path, ''), sb.metadata->>'_source_file', ''),"
             "        sb.content,"
             "        sb.metadata,"
             "        TRUE"
