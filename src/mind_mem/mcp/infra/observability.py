@@ -51,6 +51,26 @@ def _is_db_locked(exc: sqlite3.OperationalError) -> bool:
     return "database is locked" in str(exc).lower()
 
 
+def _is_db_error(exc: BaseException) -> bool:
+    """True if *exc* is a database error from EITHER supported backend.
+
+    Used as the MCP-server crash backstop: a backend error must become a
+    structured tool response, never propagate out of the stdio server and
+    drop every tool mid-session. SQLite errors subclass ``sqlite3.Error``;
+    Postgres errors subclass ``psycopg.Error`` (which is NOT a
+    ``sqlite3.Error``, so per-tool ``except sqlite3.OperationalError``
+    guards miss it entirely — the original crash-loop cause). psycopg is an
+    optional dependency, so import it lazily and tolerate its absence.
+    """
+    if isinstance(exc, sqlite3.Error):
+        return True
+    try:
+        import psycopg
+    except Exception:
+        return False
+    return isinstance(exc, psycopg.Error)
+
+
 def mcp_tool_observe(fn):
     """Decorator that wraps MCP tool calls with observability logging (#31).
 
@@ -135,6 +155,24 @@ def mcp_tool_observe(fn):
         except Exception as exc:
             success = False
             error_type = type(exc).__name__
+            # Crash backstop: a database error from either backend must not
+            # escape the stdio MCP server (it would drop every tool
+            # mid-session). Convert it to a structured tool response — the
+            # same JSON-string shape tools already return for handled
+            # errors. Full detail is logged server-side; the client gets the
+            # error class only, never raw paths/DSN. Non-DB exceptions still
+            # propagate, preserving the decorator's error-surfacing contract.
+            if _is_db_error(exc):
+                _log.error("mcp_tool_db_error", tool_name=tool_name, error_type=error_type, error=str(exc))
+                result = json.dumps(
+                    {
+                        "error": "database backend error",
+                        "error_type": error_type,
+                        "tool": tool_name,
+                        "_schema_version": "1.0",
+                    }
+                )
+                return result
             raise
         finally:
             duration_ms = round((time.monotonic() - start) * 1000, 2)
