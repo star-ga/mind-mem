@@ -164,6 +164,19 @@ def _ddl(schema: str) -> Any:
             "    description TEXT NOT NULL"
             ")"
         ).format(s=s),
+        # Deletion journal: delete_block() records removed rows here for
+        # audit/recovery. It MUST exist — when absent, the best-effort
+        # INSERT in delete_block() aborts the surrounding transaction and
+        # silently rolls back the DELETE (psycopg3 aborts a transaction on
+        # any failed statement). delete_block() also guards the INSERT with
+        # a SAVEPOINT for defence-in-depth on legacy schemas.
+        pgsql.SQL(
+            "CREATE TABLE IF NOT EXISTS {s}.deleted_blocks ("
+            "    block_id    TEXT PRIMARY KEY,"
+            "    content     TEXT NOT NULL DEFAULT '',"
+            "    deleted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+            ")"
+        ).format(s=s),
     ]
     return pgsql.SQL(";\n").join(stmts)
 
@@ -257,8 +270,13 @@ def _row_to_block(row: dict[str, Any]) -> dict[str, Any]:
         block.setdefault("_created_at", str(row["created_at"]))
     if row.get("updated_at"):
         block.setdefault("_updated_at", str(row["updated_at"]))
+    # Internal/column-derived field — underscore-prefixed like _id /
+    # _source_file / _created_at so it is uniformly excluded from
+    # reconstructed metadata. (Exposing it as a plain "active" key caused
+    # it to leak into snapshot metadata, making diff() report unchanged
+    # blocks as modified on a metadata::text mismatch.)
     if "active" in row:
-        block.setdefault("active", row["active"])
+        block.setdefault("_active", row["active"])
     return block
 
 
@@ -790,8 +808,15 @@ class PostgresBlockStore:
                             return False
                         deleted_content = deleted_row[1] if len(deleted_row) > 1 else ""
                         # Best-effort: log deletion if the journal table exists.
+                        # Wrapped in a SAVEPOINT (nested transaction) so a
+                        # failure here (e.g. a legacy schema predating the
+                        # deleted_blocks table) rolls back ONLY the journal
+                        # write — not the DELETE. Without this, the failed
+                        # statement aborts the outer transaction and the
+                        # DELETE is silently rolled back on commit.
                         try:
-                            cur.execute(sql_log, (block_id, deleted_content))
+                            with conn.transaction():
+                                cur.execute(sql_log, (block_id, deleted_content))
                         except Exception as exc:
                             _log.debug("deletion_journal_skipped block_id=%s: %s", block_id, exc)  # journal table absent — non-fatal
             _log.debug("block_store_delete", extra={"block_id": block_id})
@@ -953,7 +978,7 @@ class PostgresBlockStore:
             " FROM {s}.blocks AS live"
             " FULL OUTER JOIN {s}.snapshot_blocks AS snap"
             "     ON live.id = snap.block_id AND snap.snap_id = %s"
-            " WHERE snap.snap_id = %s OR snap.snap_id IS NULL"
+            " WHERE (snap.snap_id = %s OR snap.snap_id IS NULL)"
             "   AND ("
             "        live.id IS NULL"
             "        OR snap.block_id IS NULL"
