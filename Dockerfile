@@ -17,7 +17,14 @@ COPY mcp_server.py ./
 # fails with `error in 'egg_base' option: 'src' does not exist`.
 COPY src/ src/
 
-RUN pip install --no-cache-dir -e .
+# Upgrade the base-image pip/setuptools first: python:3.12-slim ships an
+# older pip (25.0.1) carrying fixable CVEs (e.g. CVE-2025-8869,
+# CVE-2026-3219/6357/1703) that the Trivy image scan flags and the release
+# alerts-gate blocks on. mind-mem ships zero core deps so end users are not
+# exposed via the package, but keeping the build image clean remediates the
+# supply-chain finding at the source rather than suppressing it.
+RUN pip install --no-cache-dir --upgrade pip setuptools \
+ && pip install --no-cache-dir -e .
 
 EXPOSE 8000
 
