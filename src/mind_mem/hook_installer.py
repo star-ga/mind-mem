@@ -642,6 +642,18 @@ AGENT_REGISTRY: dict[str, AgentSpec] = {
         mcp_fmt="mcp-toml-codex",
         mcp_path_tmpl="{home}/.codex/config.toml",
     ),
+    "grok-build": AgentSpec(
+        name="grok-build",
+        description="xAI Grok Build CLI",
+        config_fmt="text-block",
+        path_tmpl="{ws}/AGENTS.md",
+        content_tmpl=MEMORY_PROTOCOL_SNIPPET,
+        detect_binaries=("grok",),
+        # Grok Build uses the same section-based TOML mcp_servers shape as
+        # Codex, at ~/.grok/config.toml.
+        mcp_fmt="mcp-toml-codex",
+        mcp_path_tmpl="{home}/.grok/config.toml",
+    ),
     "vibe": AgentSpec(
         name="vibe",
         description="Mistral Vibe CLI",
