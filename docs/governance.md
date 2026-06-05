@@ -43,7 +43,7 @@ The load-bearing layer. Every `recall` (read) or `propose_update` (write) flows 
 2. **Drift detection.** Long-window memory-shape monitoring; an alert fires if the corpus shape diverges from the recent baseline.
 3. **Proposal queue.** Writes go to the proposal queue; approval requires either explicit operator sign-off or automated approval under a declared policy (rate-limited, contradiction-free).
 4. **Audit chain.** TAG_v1 NUL-separated hash preimages over Q16.16-scored entries. The chain is replayable: feed the same inputs to the same source-tree SHA and get the same hash.
-5. **At-rest encryption.** SQLCipher + BlockStore ciphertext. Decryption is per-process; the running server is the only entity that can read the plaintext.
+5. **At-rest encryption.** Optional authenticated encryption of on-disk block files (HMAC-SHA256 keystream + encrypt-then-MAC with a PBKDF2-derived key — *not* AES/SQLCipher; the FTS5/sqlite-vec recall index is not encrypted). Decryption is per-process; the running server is the only entity that can read the plaintext.
 
 ## L5 — Continuous
 

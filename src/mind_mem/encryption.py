@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""mind-mem Encryption at Rest — optional AES-256 encryption for memory blocks.
+"""mind-mem Encryption at Rest — optional authenticated encryption for blocks.
 
 Provides transparent encryption/decryption for workspace files using
 PBKDF2-derived keys from a user passphrase. Pure stdlib implementation
-(hashlib + hmac for KDF, no external crypto libraries required).
+(hashlib + hmac, no external crypto libraries required).
 
-Uses AES-256-CTR mode via XOR with HMAC-SHA256 keystream (pure Python
-fallback when no native crypto is available).
+Construction (NOT AES / NOT SQLCipher — do not represent it as such):
+a 256-bit-keyed **HMAC-SHA256 counter-mode keystream cipher** XORed with the
+plaintext, under an **encrypt-then-MAC** scheme with separate encryption and
+authentication keys. The construction is sound (random per-message nonce,
+constant-time MAC check), but it is a hand-rolled stream cipher, not a
+NIST/AEAD primitive. Operators with FIPS/AES compliance requirements should
+not rely on this module as "AES-256". NOTE: the FTS5/sqlite-vec recall index
+is NOT encrypted — only the on-disk block files are; an attacker with
+filesystem read access can recover indexed content from recall.db.
 
 Key management:
 - Key derived from passphrase via PBKDF2-HMAC-SHA256 (600k iterations)
@@ -39,9 +46,15 @@ _log = get_logger("encryption")
 # KDF parameters
 _KDF_ITERATIONS = 600_000  # OWASP recommendation for PBKDF2-SHA256
 _SALT_SIZE = 32
-_KEY_SIZE = 32  # AES-256
+_KEY_SIZE = 32  # 256-bit key
 _NONCE_SIZE = 16
 _MAC_SIZE = 32  # HMAC-SHA256
+
+# Hard cap on a single encrypt/decrypt payload. The keystream XOR is a
+# pure-Python per-byte loop, so an unbounded input blocks the event loop /
+# exhausts memory (DoS). 256 MiB is far above any real memory block while
+# still bounding worst-case work. Override only with eyes open.
+_MAX_PAYLOAD_BYTES = 256 * 1024 * 1024
 
 # File header magic bytes
 _MAGIC = b"MMENC1"  # mind-mem encrypted v1
@@ -61,7 +74,9 @@ def _pbkdf2(passphrase: str, salt: bytes, iterations: int = _KDF_ITERATIONS) -> 
 def _keystream(key: bytes, nonce: bytes, length: int) -> bytes:
     """Generate a keystream using HMAC-SHA256 in counter mode.
 
-    This is a pure-Python AES-CTR-like construction using HMAC as PRF.
+    Pure-Python counter-mode keystream with HMAC-SHA256 as the PRF (NOT
+    AES). Each block is HMAC(key, nonce || counter); blocks are concatenated
+    and truncated to ``length``.
     """
     stream = bytearray()
     counter = 0
@@ -100,7 +115,14 @@ class EncryptionManager:
 
         self.workspace = os.path.realpath(workspace)
         self._keys_dir = os.path.join(self.workspace, ".mind-mem-keys")
-        os.makedirs(self._keys_dir, exist_ok=True)
+        # Owner-only (0700): the key-material directory must not be world- or
+        # group-readable on shared hosts. exist_ok tolerates a pre-existing
+        # dir; tighten its mode below in case it was created world-readable.
+        os.makedirs(self._keys_dir, mode=0o700, exist_ok=True)
+        try:
+            os.chmod(self._keys_dir, 0o700)
+        except OSError:  # nosec B110 — best-effort on filesystems w/o chmod
+            pass
 
         self._salt = self._get_or_create_salt()
         self._key = _pbkdf2(passphrase, self._salt)
@@ -122,6 +144,10 @@ class EncryptionManager:
             salt = os.urandom(_SALT_SIZE)
             with open(salt_path, "wb") as f:
                 f.write(salt)
+            try:
+                os.chmod(salt_path, 0o600)  # owner-only
+            except OSError:  # nosec B110 — best-effort on chmod-less FS
+                pass
             _log.info("encryption_salt_created")
             return salt
 
@@ -136,6 +162,8 @@ class EncryptionManager:
         Returns:
             Encrypted bytes with nonce and MAC.
         """
+        if len(plaintext) > _MAX_PAYLOAD_BYTES:
+            raise ValueError(f"plaintext exceeds {_MAX_PAYLOAD_BYTES} byte encrypt cap")
         nonce = os.urandom(_NONCE_SIZE)
         ks = _keystream(self._enc_key, nonce, len(plaintext))
         ciphertext = _xor_bytes(plaintext, ks)
@@ -161,6 +189,8 @@ class EncryptionManager:
         min_len = len(_MAGIC) + _NONCE_SIZE + _MAC_SIZE
         if len(data) < min_len:
             raise ValueError("Encrypted data too short")
+        if len(data) > _MAX_PAYLOAD_BYTES + min_len:
+            raise ValueError(f"ciphertext exceeds {_MAX_PAYLOAD_BYTES} byte decrypt cap")
 
         if data[: len(_MAGIC)] != _MAGIC:
             raise ValueError("Invalid encryption header (not mind-mem encrypted)")

@@ -28,7 +28,8 @@ Core modules:
     coding_schemas  — Coding-native memory schemas (ADR, CODE, PERF, ALGO, BUG)
     auto_resolver   — Automatic contradiction resolution with preference learning
     governance_bench — Governance-specific benchmark suite
-    encryption      — Optional AES-256 encryption at rest
+    encryption      — Optional authenticated encryption at rest
+                      (HMAC-SHA256 keystream + encrypt-then-MAC; not AES)
     calibration     — Retrieval quality feedback loop with per-block calibration weights
     evidence_objects — Structured tamper-evident Evidence Objects for governance decisions
     storage         — Storage factory (get_block_store) for backend selection via config

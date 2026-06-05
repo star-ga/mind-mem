@@ -34,6 +34,7 @@ parameter short-circuits the re-hash).
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -48,6 +49,8 @@ from cryptography.hazmat.primitives.serialization import (
     PrivateFormat,
     PublicFormat,
 )
+
+_log = logging.getLogger("mind_mem.model_signing")
 
 MANIFEST_FILENAME = "MODEL_MANIFEST.txt"
 SIGNATURE_FILENAME = "MODEL_MANIFEST.txt.sig"
@@ -104,7 +107,10 @@ def compute_manifest_text(root: Path) -> tuple[str, dict[str, str]]:
     if not root.is_dir():
         raise NotADirectoryError(f"checkpoint root not a directory: {root}")
     by_path: dict[str, str] = {}
-    files = sorted(p for p in root.rglob("*") if p.is_file() and p.name not in _SKIP_NAMES)
+    # Skip the sidecars only at the ROOT (where this module writes them).
+    # A basename match anywhere would let an attacker smuggle an unsigned
+    # file into a verified checkpoint as e.g. subdir/MODEL_MANIFEST.txt.
+    files = sorted(p for p in root.rglob("*") if p.is_file() and not (p.parent == root and p.name in _SKIP_NAMES))
     for p in files:
         h = hashlib.sha256()
         with p.open("rb") as f:
@@ -265,6 +271,18 @@ def verify_model(
                 error_detail=(f"{PUBKEY_FILENAME} not found and no public_key passed; either ship the .pub sidecar or pass --pubkey"),
             )
         public_key = pubkey_path.read_bytes()
+        # Self-describing verification: the key, signature, and manifest all
+        # come from the same (potentially attacker-controlled) directory, so
+        # this proves only internal consistency — NOT provenance. An attacker
+        # who can write the checkpoint dir can re-sign with their own key and
+        # pass. Surface it loudly; security-relevant callers should pin a
+        # trusted key via ``public_key=``.
+        _log.warning(
+            "model_verify_self_describing_key: verifying %s against its own in-tree %s "
+            "(proves consistency, not provenance — pin a trusted key to detect a swapped sidecar)",
+            root,
+            PUBKEY_FILENAME,
+        )
 
     stored_manifest = manifest_path.read_text()
     stored_signature = signature_path.read_bytes()

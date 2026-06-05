@@ -731,6 +731,11 @@ def parse_micb_stream(reader: IO[bytes]):
 
     # 3. Symbol table
     n_syms = _uleb128_decode(reader)
+    # Bound the claimed count before the loop (defence-in-depth, matching the
+    # string/value-table caps): symbols index into the string table, so they
+    # share its ceiling.
+    if n_syms > MAX_STRING_COUNT:
+        raise MicbParseError(f"symbol count {n_syms} exceeds {MAX_STRING_COUNT}")
     for i in range(n_syms):
         si = _uleb128_decode(reader)
         if si >= len(strings):
@@ -740,6 +745,8 @@ def parse_micb_stream(reader: IO[bytes]):
     # 4. Type table — types must be retained because values reference
     # them by index and we need the bounds check.
     n_types = _uleb128_decode(reader)
+    if n_types > MAX_VALUE_COUNT:
+        raise MicbParseError(f"type count {n_types} exceeds {MAX_VALUE_COUNT}")
     type_count = 0
     for i in range(n_types):
         dt_byte = _read_exact(reader, 1)

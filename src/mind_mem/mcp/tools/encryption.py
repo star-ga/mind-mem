@@ -79,6 +79,13 @@ def _append_decrypt_audit(ws: str, path: str, *, mode: str) -> None:
         # append-only property OS-enforced (T-007).
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, sort_keys=True) + "\n")
+        # Owner-only: this trail records which sensitive files were
+        # decrypted and by whom — a recon/repudiation leak if world-readable
+        # on a shared host. chmod each append (idempotent, cheap).
+        try:
+            os.chmod(log_path, 0o600)
+        except OSError:  # nosec B110 — best-effort on chmod-less FS
+            pass
     except Exception as exc:  # nosec B110 — see rationale below.
         # Audit append must not block the legitimate decrypt — log and
         # continue. The decrypt event still appears in the structured

@@ -189,7 +189,16 @@ def serve(port: int = 50051) -> None:
         pass
     else:
         grpc_generated.register(server, servicer)
-    server.add_insecure_port(f"[::]:{port}")
+    # Bind loopback by default, NOT [::] (all interfaces). This gRPC surface
+    # has no TLS and no auth interceptor and drives governance mutations
+    # (approve/rollback) via **kwargs, so exposing it network-wide lets any
+    # reachable party defeat the HITL gate. Operators who genuinely need a
+    # non-loopback bind must opt in explicitly via MIND_MEM_GRPC_HOST (and
+    # should front it with TLS + token auth).
+    import os as _os
+
+    host = _os.environ.get("MIND_MEM_GRPC_HOST", "127.0.0.1")
+    server.add_insecure_port(f"{host}:{port}")
     server.start()
     server.wait_for_termination()
 
