@@ -201,7 +201,16 @@ def ensure_recall_tier_schema(workspace: str | Path) -> None:
         # block_version. Add it on the fly; idempotent.
         cols = {row[1] for row in conn.execute("PRAGMA table_info(block_recall_tier)")}
         if "block_version" not in cols:
-            conn.execute(_MIGRATE_ADD_VERSION_SQL)
+            try:
+                conn.execute(_MIGRATE_ADD_VERSION_SQL)
+            except sqlite3.OperationalError as exc:
+                # A concurrent ensure_recall_tier_schema() may have added the
+                # column between our PRAGMA check and this ALTER. SQLite has
+                # no ALTER TABLE ADD COLUMN IF NOT EXISTS, so tolerate the
+                # duplicate-column error idempotently rather than crashing
+                # the caller's request.
+                if "duplicate column name" not in str(exc).lower():
+                    raise
         conn.commit()
 
 

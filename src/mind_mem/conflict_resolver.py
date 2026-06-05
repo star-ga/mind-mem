@@ -261,14 +261,30 @@ def generate_resolution_proposals(workspace: str, resolutions: list[dict] | None
         with open(proposed_path, "a", encoding="utf-8") as f:
             for i, res in enumerate(auto, start_idx):
                 proposal_id = f"R-{date_compact}-{i:03d}"
+                # hash_a/hash_b are keyed by POSITION (block_a==ids[0],
+                # block_b==ids[1]). The winner can be either side, so map the
+                # hashes to the winner/loser by identity — otherwise when the
+                # winner is block_b the audit trail prints the loser's hash
+                # next to the winner (and vice versa), defeating the
+                # tamper-evidence fingerprint check. When no positional anchor
+                # is present (hand-built resolution dicts), fall back to the
+                # hash_a==winner / hash_b==loser convention.
+                block_a = res.get("block_a")
+                if block_a is not None:
+                    winner_is_a = res["winner_id"] == block_a
+                    winner_hash = res["hash_a"] if winner_is_a else res["hash_b"]
+                    loser_hash = res["hash_b"] if winner_is_a else res["hash_a"]
+                else:
+                    winner_hash = res.get("hash_a", "")
+                    loser_hash = res.get("hash_b", "")
                 f.write(f"\n[{proposal_id}]\n")
                 f.write(f"Date: {ts}\n")
                 f.write("Type: auto-resolution\n")
                 f.write(f"Strategy: {res['strategy']}\n")
                 f.write(f"Confidence: {res['confidence']}\n")
                 f.write(f"Contradiction: {res['contradiction_id']}\n")
-                f.write(f"Winner: {res['winner_id']} (hash: {res['hash_a']})\n")
-                f.write(f"Loser: {res['loser_id']} (hash: {res['hash_b']})\n")
+                f.write(f"Winner: {res['winner_id']} (hash: {winner_hash})\n")
+                f.write(f"Loser: {res['loser_id']} (hash: {loser_hash})\n")
                 f.write(f"Action: Supersede {res['loser_id']} with SupersededBy: {res['winner_id']}\n")
                 f.write(f"Rationale: {res['rationale']}\n")
                 f.write("Status: pending-review\n")

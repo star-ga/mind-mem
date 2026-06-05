@@ -110,10 +110,16 @@ class ConnectionManager:
                 pass
             self._local.read_conn = None
 
-        if self._write_conn is not None:
-            try:
-                self._write_conn.close()
-            except sqlite3.Error:
-                pass
-            self._write_conn = None
+        # Serialize the write-connection teardown under write_lock: a writer
+        # holds write_lock while executing on _write_conn, so closing it
+        # without the lock is a use-after-close (and races _write_conn=None
+        # against get_write_connection()'s None-check, which can create two
+        # write connections). Acquire the same lock writers use.
+        with self._write_lock:
+            if self._write_conn is not None:
+                try:
+                    self._write_conn.close()
+                except sqlite3.Error:
+                    pass
+                self._write_conn = None
         _log.debug("connections_closed")
