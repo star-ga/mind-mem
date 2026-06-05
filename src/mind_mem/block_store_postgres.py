@@ -366,6 +366,65 @@ class PostgresBlockStore:
                 )
         return self._pool
 
+    def ping(self, *, timeout: float = 5.0) -> dict[str, Any]:
+        """Actively verify the Postgres backend is reachable and provisioned.
+
+        Normal operations open a *pooled* connection lazily and only
+        surface a down/misconfigured backend at call time — which, when a
+        SQLite recall cache is serving reads, can keep the failure
+        invisible to the operator for days. ``ping`` instead opens a
+        single short-lived connection with a bounded ``connect_timeout``
+        so a broken backend fails *fast and loud*. It never raises; the
+        status is returned as a dict suitable for ``mm doctor`` and
+        health endpoints.
+
+        Args:
+            timeout: Connection timeout in seconds (floored to ≥1; libpq
+                     treats 0 as "wait forever", which would reintroduce
+                     the very hang this probe exists to avoid).
+
+        Returns:
+            ``{"backend": "postgres", "ok": bool, "schema": str,
+            "blocks_table": bool, "block_count": int | None,
+            "error": str | None}``.
+        """
+        status: dict[str, Any] = {
+            "backend": "postgres",
+            "ok": False,
+            "schema": self._schema,
+            "blocks_table": False,
+            "block_count": None,
+            "error": None,
+        }
+        try:
+            psycopg, _ = _require_psycopg()
+        except ImportError as exc:  # the [postgres] extra is not installed
+            status["error"] = str(exc)
+            return status
+
+        from psycopg import sql as _sql_mod
+
+        connect_timeout = max(1, int(timeout))
+        try:
+            with psycopg.connect(self._dsn, connect_timeout=connect_timeout, autocommit=True) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                    blocks_tbl = _sql_mod.Identifier(self._schema, "blocks")
+                    try:
+                        cur.execute(_sql_mod.SQL("SELECT count(*) FROM {tbl}").format(tbl=blocks_tbl))
+                        row = cur.fetchone()
+                        status["blocks_table"] = True
+                        status["block_count"] = int(row[0]) if row else 0
+                    except Exception as tbl_exc:
+                        # Reachable, but the schema/table is missing — a
+                        # real misconfiguration, not a healthy backend.
+                        status["error"] = f"blocks table unavailable: {str(tbl_exc).strip()}"
+                        return status
+            status["ok"] = True
+        except Exception as exc:
+            status["error"] = str(exc).strip() or exc.__class__.__name__
+        return status
+
     def _ensure_schema(self) -> None:
         """Run CREATE TABLE / INDEX migrations idempotently on first call.
 

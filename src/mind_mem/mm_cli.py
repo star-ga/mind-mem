@@ -1664,6 +1664,16 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         store_class = ""
         bs = None
 
+    # Backend health: actively probe Postgres so a configured-but-down
+    # backend surfaces loudly here instead of failing quietly per-call
+    # (regression guard for the 2026-06-05 silent-auth-failure incident,
+    # where a broken DSN was masked by the SQLite recall cache for days).
+    if store_class == "PostgresBlockStore" and bs is not None and hasattr(bs, "ping"):
+        try:
+            report["block_store_health"] = bs.ping(timeout=5.0)
+        except Exception as exc:  # defensive — ping() is documented non-raising
+            report["block_store_health"] = {"backend": "postgres", "ok": False, "error": str(exc)}
+
     pg_ids: set[str] = set()
     if store_class == "PostgresBlockStore" and bs is not None:
         try:
