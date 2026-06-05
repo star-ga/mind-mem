@@ -83,7 +83,21 @@ class TestReadRouting:
 class TestWriteRouting:
     def test_write_block_always_primary(self, rep_store) -> None:
         rep_store.write_block({"_id": "D-1"})
-        rep_store._primary.write_block.assert_called_once_with({"_id": "D-1"})
+        # embedding is forwarded to the primary (defaults to None).
+        rep_store._primary.write_block.assert_called_once_with({"_id": "D-1"}, embedding=None)
+
+    def test_write_block_forwards_embedding_to_primary(self, rep_store) -> None:
+        vec = [0.1, 0.2, 0.3]
+        rep_store.write_block({"_id": "D-2"}, embedding=vec)
+        rep_store._primary.write_block.assert_called_once_with({"_id": "D-2"}, embedding=vec)
+
+    def test_backfill_embedding_routes_to_primary(self, rep_store) -> None:
+        rep_store.backfill_embedding("D-1", [0.4, 0.5])
+        rep_store._primary.backfill_embedding.assert_called_once_with("D-1", [0.4, 0.5])
+
+    def test_hybrid_search_routes_to_replica(self, rep_store) -> None:
+        rep_store.hybrid_search("q", limit=5)
+        rep_store._primary.hybrid_search.assert_not_called()
         for rep in rep_store._replicas:
             rep.store.write_block.assert_not_called()
 

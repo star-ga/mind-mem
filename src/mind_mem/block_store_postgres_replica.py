@@ -152,11 +152,51 @@ class ReplicatedPostgresBlockStore:
     def diff(self, snap_dir: str) -> list[str]:
         return cast(list[str], self._run_on_replica("diff", snap_dir))
 
+    def hybrid_search(
+        self,
+        query: str,
+        *,
+        query_embedding: list[float] | None = None,
+        limit: int = 10,
+        rrf_k: int = 60,
+        candidate_pool: int = 100,
+    ) -> list[dict[str, Any]]:
+        # Read path: route to a replica (falls back to primary). Without
+        # this delegation, recall(backend="hybrid") against a replicated
+        # store raised AttributeError — vector recall was entirely broken
+        # on the HA configuration.
+        return cast(
+            list[dict[str, Any]],
+            self._run_on_replica(
+                "hybrid_search",
+                query,
+                query_embedding=query_embedding,
+                limit=limit,
+                rrf_k=rrf_k,
+                candidate_pool=candidate_pool,
+            ),
+        )
+
     # ─── Write surface → primary ─────────────────────────────────────
 
-    def write_block(self, block: dict[str, Any]) -> str:
+    def write_block(self, block: dict[str, Any], *, embedding: list[float] | None = None) -> str:
+        # Must forward `embedding`: the primary's signature accepts it, and
+        # dropping it both raised TypeError for embedding-aware callers and
+        # silently prevented embeddings from ever being stored (vector
+        # recall permanently empty on replicated deployments).
         metrics.inc("replica_write_primary")
-        return self._primary.write_block(block)
+        return self._primary.write_block(block, embedding=embedding)
+
+    def backfill_embedding(self, block_id: str, embedding: list[float]) -> None:
+        # Write path (mutates the vector column) → primary. Without this,
+        # `mm migrate-store --with-embeddings` raised AttributeError against
+        # a replicated store.
+        metrics.inc("replica_write_primary")
+        self._primary.backfill_embedding(block_id, embedding)
+
+    def ping(self, *, timeout: float = 5.0) -> dict[str, Any]:
+        # Backend health = the authoritative (primary) connection.
+        return cast(dict[str, Any], self._primary.ping(timeout=timeout))
 
     def delete_block(self, block_id: str) -> bool:
         metrics.inc("replica_write_primary")
