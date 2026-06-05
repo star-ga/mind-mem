@@ -327,6 +327,37 @@ def _apply_event_id_filter(hits: list[dict], event_id: str) -> list[dict]:
     return result
 
 
+def _apply_post_filters(
+    hits: list[dict],
+    *,
+    since: str | None,
+    until: str | None,
+    lifecycle: str | None,
+    event_id: str | None,
+    min_maturity: float | None,
+    limit: int,
+) -> list[dict]:
+    """Apply the recall post-retrieval filter contract uniformly.
+
+    Single source of truth for date/lifecycle/event_id/min_maturity
+    filtering. Every recall dispatch path (sqlite, vector/RecallBackend,
+    BM25 scan) MUST funnel through this so the contract can't diverge per
+    backend. Previously the sqlite and vector early-returns applied only
+    the date filter, silently ignoring lifecycle/event_id/min_maturity — a
+    backend-dependent correctness bug (e.g. a consolidation gate's
+    min_maturity returned unfiltered results on PG/sqlite deployments).
+    """
+    if since is not None or until is not None:
+        hits = _apply_date_filter(hits, since, until)[:limit]
+    if lifecycle is not None:
+        hits = _apply_lifecycle_filter(hits, lifecycle)[:limit]
+    if event_id is not None:
+        hits = _apply_event_id_filter(hits, event_id)[:limit]
+    if min_maturity is not None:
+        hits = _apply_min_maturity_filter(hits, min_maturity)[:limit]
+    return hits
+
+
 @_traced("recall")
 def recall(
     workspace: str,
@@ -408,16 +439,28 @@ def recall(
             rerank=rerank,
             rerank_debug=rerank_debug,
         )
-        if since is not None or until is not None:
-            hits = _apply_date_filter(hits, since, until)[:limit]
-        return hits
+        return _apply_post_filters(
+            hits,
+            since=since,
+            until=until,
+            lifecycle=lifecycle,
+            event_id=event_id,
+            min_maturity=min_maturity,
+            limit=limit,
+        )
     if isinstance(_cfg_backend, RecallBackend):
         try:
             backend_hits: list[dict] = _cfg_backend.search(workspace, query, limit=limit, active_only=active_only)
             if backend_hits:
-                if since is not None or until is not None:
-                    backend_hits = _apply_date_filter(backend_hits, since, until)[:limit]
-                return backend_hits
+                return _apply_post_filters(
+                    backend_hits,
+                    since=since,
+                    until=until,
+                    lifecycle=lifecycle,
+                    event_id=event_id,
+                    min_maturity=min_maturity,
+                    limit=limit,
+                )
         except Exception as exc:
             _log.warning("recall_backend_error_fallback_to_scan", error=str(exc))
 
@@ -1404,14 +1447,15 @@ def recall(
         except Exception as exc:
             _log.debug("intent_feedback_skipped", error=str(exc))
 
-    if since is not None or until is not None:
-        top = _apply_date_filter(top, since, until)[:limit]
-    if lifecycle is not None:
-        top = _apply_lifecycle_filter(top, lifecycle)[:limit]
-    if event_id is not None:
-        top = _apply_event_id_filter(top, event_id)[:limit]
-    if min_maturity is not None:
-        top = _apply_min_maturity_filter(top, min_maturity)[:limit]
+    top = _apply_post_filters(
+        top,
+        since=since,
+        until=until,
+        lifecycle=lifecycle,
+        event_id=event_id,
+        min_maturity=min_maturity,
+        limit=limit,
+    )
     return top
 
 

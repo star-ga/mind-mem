@@ -68,6 +68,23 @@ FTS5_COLUMNS = [
     ("all_text", 1.0),  # catch-all for other fields
 ]
 
+# Leading weight for the block_id column. The blocks_fts table is
+# fts5(block_id, <FTS5_COLUMNS...>), so block_id is the first INDEXED column
+# and bm25() positional weights must include it. A neutral 1.0 keeps block_id
+# searchable without distorting the tuned field weights.
+_BLOCK_ID_WEIGHT = 1.0
+
+
+def _bm25_weights() -> str:
+    """Return the comma-separated bm25() weights aligned to blocks_fts.
+
+    One weight per indexed FTS5 column: block_id first, then FTS5_COLUMNS.
+    Omitting the leading block_id weight shifts every field's weight by one
+    column (block_id steals statement's weight, etc.).
+    """
+    return ", ".join(str(w) for w in (_BLOCK_ID_WEIGHT, *(w for _, w in FTS5_COLUMNS)))
+
+
 # Only allow alphanumeric tokens (plus _ - .) through to FTS5 queries
 # to prevent wildcard injection (e.g. "*" matching entire corpus)
 _FTS5_SAFE = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
@@ -968,7 +985,10 @@ def query_index(
     try:
         # FTS5 bm25() returns negative scores (lower = better)
         # We negate to get positive scores (higher = better)
-        weights = ", ".join(str(w) for _, w in FTS5_COLUMNS)
+        #
+        # bm25() weights must align to the blocks_fts columns
+        # (block_id first, then FTS5_COLUMNS); see _bm25_weights().
+        weights = _bm25_weights()
         rows = conn.execute(
             f"""SELECT b.*, f.rank as fts_rank,
                        -bm25(blocks_fts, {weights}) as bm25_score
