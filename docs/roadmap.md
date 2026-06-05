@@ -432,7 +432,7 @@ total.
 ## v3.0.0 (Released 2026-04-14)
 
 Governance alerting hooks (webhook / Slack), transparent at-rest
-encryption (SQLCipher + BlockStore), TTL/LRU tier decay, and
+encryption (HMAC-SHA256 keystream BlockStore; not SQLCipher), TTL/LRU tier decay, and
 full-fine-tune local model `star-ga/mind-mem-4b` (Qwen3.5-4B base).
 Adversarial-memory corpus tests and Jepsen-style concurrency stress
 tests merged. MCP tool surface now 57.
@@ -470,7 +470,7 @@ Foundational retrieval and governance work:
 - Temporal causal dependency graph
 - Coding-native memory schemas (ADR / CODE / PERF / ALGO / BUG)
 - Auto contradiction resolution with preference learning
-- Governance benchmark suite, AES-256 encryption at rest
+- Governance benchmark suite, authenticated encryption at rest (HMAC-SHA256 keystream; not AES)
 - LLM-free multi-query expansion with RRF fusion
 - 4-layer search deduplication
 - Semantic-aware smart chunking

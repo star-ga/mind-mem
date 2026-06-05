@@ -29,7 +29,7 @@
 </p>
 
 <p align="center"><sub>
-  <strong>Current release:</strong> <code>v4.0.16</code> &mdash;
+  <strong>Current release:</strong> <code>v4.0.17</code> &mdash;
   <a href="CHANGELOG.md">see CHANGELOG</a>
   (single source of truth; per-version detail tables below may lag the changelog)
 </sub></p>
@@ -61,7 +61,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>Current release: **v4.0.16** — Full per-release notes (issues closed, CI run ids, job counts) live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
+<sub>Current release: **v4.0.17** — Full per-release notes (issues closed, CI run ids, job counts) live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
 
 ### Substrate Properties
 

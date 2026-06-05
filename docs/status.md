@@ -29,7 +29,7 @@ Three-column ledger of what is operational on the current `main`, what is in-tre
 
 | Component | Source | Notes |
 |---|---|---|
-| At-rest encryption (SQLCipher + BlockStore ciphertext) | `src/mind_mem/core/encryption.py` | v3.0.0+. |
+| At-rest encryption (HMAC-SHA256 keystream + encrypt-then-MAC; not AES/SQLCipher) | `src/mind_mem/encryption.py` | v3.0.0+. |
 | Tier decay (TTL + LRU aging) | `src/mind_mem/core/decay.py` | v3.0.0+. |
 | Delta-based snapshot rollback | `src/mind_mem/core/snapshot.py` | MANIFEST.json for O(manifest) restore. |
 

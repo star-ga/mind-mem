@@ -37,7 +37,7 @@ Persistence layers under audit:
 | Knowledge graph                   | SQLite with typed edges                                                       |
 | Governance chain                  | Append-only SHA3-512 hash chain + evidence objects                            |
 | Snapshots / rollback              | `intelligence/applied/<ts>/` trees + MANIFEST.json + SHA-256 content hashes   |
-| At-rest encryption (opt-in v3.0+) | SQLCipher (AES-256) for indexes, ChaCha20-Poly1305 for block content files    |
+| At-rest encryption (opt-in v3.0+) | HMAC-SHA256 keystream + encrypt-then-MAC for block content files (NOT AES/SQLCipher/ChaCha); recall index NOT encrypted |
 | Postgres backend (v3.2.0, opt-in) | `blocks` / `snapshots` / `snapshot_blocks` / `workspace_lock` tables + LISTEN/NOTIFY |
 
 Releases are published to PyPI with OIDC trusted publishing +
@@ -108,9 +108,9 @@ durable state or network egress.
   score canonicalization.
 - **Merkle tree** — proof verification, leaf ordering, root
   reproducibility (`src/mind_mem/merkle_tree.py`).
-- **SQLCipher** configuration — KDF iterations, cipher mode,
+- **Block-file cipher** configuration — PBKDF2 KDF iterations, keystream construction,
   key derivation from `MIND_MEM_ENCRYPTION_PASSPHRASE`.
-- **ChaCha20-Poly1305 at-rest** — nonce handling, key rotation,
+- **Block-file at-rest cipher** — nonce handling, key rotation,
   integrity tag verification.
 - **Evidence chain** — `EvidenceObject` serialization determinism,
   cross-version compatibility.

@@ -66,7 +66,7 @@ gate.
 
 - Spoofing — constant-time token compare, OIDC iss/aud/exp checks,
   per-agent API keys with SHA-256 storage.
-- Tampering — SHA3-512 governance chain, Merkle proofs, SQLCipher
+- Tampering — SHA3-512 governance chain, Merkle proofs, at-rest block-file cipher
   (opt-in), schema-name allowlist.
 - Repudiation — `agent_id` attribution in every audit record.
 - DoS — sliding-window rate limit, token/query/path-length caps,
@@ -137,7 +137,7 @@ The surfaces below are on the post-release agenda:
 1. 57 MCP tool auth boundaries — per-tool trace of the rate-limit
    + ACL + scope check. Already green in unit tests but a fresh
    pair-review pass is valuable.
-2. SQLCipher configuration — KDF iteration count, cipher mode,
+2. Block-file cipher configuration — PBKDF2 KDF iteration count, keystream construction,
    key-file permissions, backup/restore key rotation.
 3. Merkle preimage construction — byte-for-byte repro from a fresh
    workspace to catch any `bytes` vs `str` corner.

@@ -474,7 +474,7 @@ Controls which storage backend is used for Markdown block I/O. Added in v3.2.0.
 | Value | Description | Requirements |
 | --- | --- | --- |
 | `"markdown"` | Default. Reads and writes plain Markdown files under the workspace corpus directories. Zero dependencies. | None |
-| `"encrypted"` | Transparent AES-256 encryption at rest via `EncryptedBlockStore`. Wraps the markdown backend. | `MIND_MEM_ENCRYPTION_PASSPHRASE` env var must be set to a non-empty string. |
+| `"encrypted"` | Transparent authenticated encryption at rest (HMAC-SHA256 keystream + encrypt-then-MAC; **not** AES/SQLCipher — the recall index is not encrypted) via `EncryptedBlockStore`. Wraps the markdown backend. | `MIND_MEM_ENCRYPTION_PASSPHRASE` env var must be set to a non-empty string. |
 | `"postgres"` | Postgres-backed block store with atomic snapshot/restore, upsert writes, FTS search, and read-replica routing. Ships in v3.2.0. | `block_store.dsn` required; `pip install "mind-mem[postgres]"`. |
 
 ### Encrypted Backend

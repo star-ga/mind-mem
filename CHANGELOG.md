@@ -2,6 +2,52 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.17 — Security hardening (crypto labeling, file perms, signing/parser/gRPC)
+
+Released 2026-06-05.
+
+Closes the security-audit findings from the same six-agent review behind
+v4.0.16. Real remediations, not suppressions. No public API changes; no
+model retraining.
+
+### Fixed — at-rest encryption
+
+- **Honest labeling (HIGH).** The at-rest cipher was documented as
+  "AES-256-CTR / SQLCipher" but is actually a **256-bit HMAC-SHA256
+  keystream + encrypt-then-MAC** construction (sound, but hand-rolled and
+  not a NIST/AEAD primitive). Relabeled the module, `__init__`, and
+  `docs/governance.md`, and documented that the FTS5/sqlite-vec recall index
+  is **not** encrypted. (`tenant_kms` uses real `AESGCM` via `cryptography`
+  and is unchanged.)
+- **DoS cap.** Added a 256 MiB size cap on `encrypt`/`decrypt` — the
+  keystream XOR is a pure-Python per-byte loop, so an unbounded payload
+  could block the event loop / exhaust memory.
+- **Key-material perms.** `.mind-mem-keys/` is now created `0700` and the
+  `salt` file `0600`.
+
+### Fixed — other surfaces
+
+- **Decrypt audit trail (MEDIUM):** `memory/decrypted_files.jsonl` (which
+  records which files were decrypted and by whom) is now `0600`.
+- **Model signing (MEDIUM/LOW):** `verify_model` logs a loud warning when it
+  trusts the in-tree `MODEL_PUBKEY.pub` (self-describing verification proves
+  consistency, not provenance — pin a key via `public_key=`).
+  `compute_manifest_text` now skips sidecars only at the checkpoint **root**,
+  so a `subdir/MODEL_MANIFEST.txt` can no longer be smuggled out of the
+  signed set.
+- **MIC-b parser (LOW):** bound `n_syms` / `n_types` before their loops,
+  matching the existing string/value-table caps.
+- **gRPC governance surface (MEDIUM):** binds `127.0.0.1` by default instead
+  of `[::]` (it has no TLS/auth and drives governance mutations); explicit
+  `MIND_MEM_GRPC_HOST` opt-in for non-loopback.
+
+### Notes
+
+- Still deferred (tracked): `extra_limit_factor` under-retrieval on the early
+  recall paths (needs query-type detection moved ahead of dispatch + recall
+  benchmarks), and the architectural BlockStore conformance suite + a
+  Postgres CI service container.
+
 ## v4.0.16 — Postgres correctness + governance concurrency + recall-ranking fixes
 
 Released 2026-06-05.

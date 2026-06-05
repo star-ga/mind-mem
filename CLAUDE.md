@@ -4,6 +4,15 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
+**v4.0.17** (released 2026-06-05) — security-hardening companion to v4.0.16
+(same audit). At-rest encryption relabeled honestly (256-bit HMAC-SHA256
+keystream + encrypt-then-MAC, **not** AES-256/SQLCipher; recall index not
+encrypted) + 256 MiB encrypt/decrypt DoS cap + `.mind-mem-keys` 0700 / salt
+0600 / decrypt-audit-jsonl 0600. `verify_model` warns on in-tree-key
+(self-describing) verification + manifest skips sidecars only at root (no
+smuggling). MIC-b parser bounds `n_syms`/`n_types`. gRPC binds 127.0.0.1 by
+default (was `[::]`). `tenant_kms` (real AESGCM) unchanged.
+
 **v4.0.16** (released 2026-06-05) — correctness-hardening release from a
 six-agent audit. Postgres backend: `delete_block` silent-rollback (missing
 `deleted_blocks` table aborted the txn), `diff()` AND/OR precedence + `active`

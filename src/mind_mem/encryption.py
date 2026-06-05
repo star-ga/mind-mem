@@ -56,6 +56,28 @@ _MAC_SIZE = 32  # HMAC-SHA256
 # still bounding worst-case work. Override only with eyes open.
 _MAX_PAYLOAD_BYTES = 256 * 1024 * 1024
 
+# Envelope overhead on a ciphertext (MAGIC + NONCE + MAC), used to bound the
+# on-disk ciphertext size against the plaintext cap.
+_ENVELOPE_SIZE = 6 + _NONCE_SIZE + _MAC_SIZE  # _MAGIC is 6 bytes
+
+
+def _reject_oversized_file(path: str, max_bytes: int) -> None:
+    """Reject an oversized file BEFORE it is read into memory.
+
+    The encrypt/decrypt caps protect the pure-Python XOR loop, but the file
+    entry points ``read()`` the whole file first — a multi-GB file would
+    buffer fully into RAM before the in-memory cap fires. A stat-size
+    pre-check closes that gap. Missing/unstattable files fall through so the
+    subsequent ``open()`` surfaces the real error.
+    """
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        return
+    if size > max_bytes:
+        raise ValueError(f"file {path!r} ({size} bytes) exceeds {max_bytes} byte cap")
+
+
 # File header magic bytes
 _MAGIC = b"MMENC1"  # mind-mem encrypted v1
 
@@ -215,6 +237,7 @@ class EncryptionManager:
         """
         resolved = os.path.realpath(file_path)
         with FileLock(resolved):
+            _reject_oversized_file(resolved, _MAX_PAYLOAD_BYTES)
             with open(resolved, "rb") as f:
                 plaintext = f.read()
 
@@ -246,6 +269,7 @@ class EncryptionManager:
         Returns:
             Decrypted content.
         """
+        _reject_oversized_file(file_path, _MAX_PAYLOAD_BYTES + _ENVELOPE_SIZE)
         with open(file_path, "rb") as f:
             data = f.read()
 
@@ -262,6 +286,7 @@ class EncryptionManager:
         """
         resolved = os.path.realpath(file_path)
         with FileLock(resolved):
+            _reject_oversized_file(resolved, _MAX_PAYLOAD_BYTES + _ENVELOPE_SIZE)
             with open(resolved, "rb") as f:
                 data = f.read()
 
@@ -330,6 +355,8 @@ class EncryptionManager:
         staged: list[tuple[str, str]] = []  # (final_path, tmp_path)
         try:
             for path, plaintext in plaintexts:
+                if len(plaintext) > _MAX_PAYLOAD_BYTES:
+                    raise ValueError(f"key rotation payload for {path!r} exceeds {_MAX_PAYLOAD_BYTES} byte cap")
                 nonce = os.urandom(_NONCE_SIZE)
                 ks = _keystream(new_enc_key, nonce, len(plaintext))
                 ciphertext = _xor_bytes(plaintext, ks)
