@@ -18,6 +18,7 @@ import json
 import sqlite3
 
 import pytest
+
 from mind_mem.mcp.infra import acl as _acl
 from mind_mem.mcp.infra import observability as _obs
 

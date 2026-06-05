@@ -9,8 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mind_mem.conflict_resolver import generate_resolution_proposals
-from mind_mem.conflict_resolver import ResolutionStrategy
+from mind_mem.conflict_resolver import ResolutionStrategy, generate_resolution_proposals
 
 
 def test_winner_is_block_b_prints_winner_hash(tmp_path: Path) -> None:
