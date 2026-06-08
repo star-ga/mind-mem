@@ -736,7 +736,7 @@ _Rationale: model endpoints + retrieval backends are infrastructure — they nee
 - [x] **Shell integration** — optional shell hooks for automatic context injection:
   ```bash
   # .bashrc / .zshrc
-  export MIND_MEM_WORKSPACE=/home/n/.openclaw/workspace
+  export MIND_MEM_WORKSPACE=~/.mind-mem/workspace
   alias codex='mm inject --agent codex --quiet && codex'
   alias gemini='mm inject --agent gemini --quiet && gemini'
   ```
@@ -1187,7 +1187,7 @@ Total: +117 regression tests, 3758 passing as of 2026-04-20.
 ## v3.7.0 — External-Audit Response ✅ Released 2026-05-01
 
 Closes the nine findings from the 2026-05-01 external audit
-(`/home/n/.openclaw/workspace/projects/mind-mem-audit-2026-05-01/AUDIT.md`).
+(tracked internally in the audit report).
 Single `BREAKING` change: HTTP/REST authentication now fails CLOSED
 when no token is configured.
 
@@ -1924,3 +1924,40 @@ the intended end state, not a contradiction.
 own sake; any port step that regresses correctness, the perf-gate, or
 the availability guarantee the Python fallback provides; or surfacing
 any runtime / backend / protection internal in this or any public doc.
+
+## Calibrated Recall Confidence (sidecar)
+
+Attach a **calibrated confidence/utility score** to each recall result — a
+usable signal for how strongly a retrieved block matches intent, beyond the
+raw fusion rank.
+
+- **Outside the deterministic path.** The confidence is a sidecar field on the
+  result, not an input to scoring or to the audit chain. Recall ordering and the
+  evidence/proposal chain stay deterministic and auditable; the confidence rides
+  beside the result and is **excluded from any audit hash**. A probabilistic
+  estimate must never become load-bearing for a governed mutation.
+- **Calibrated, not raw.** Report a calibrated score (reliability-curve fit over
+  the BM25 + vector + RRF fusion), not raw similarity, so agents can threshold on
+  it for "recall or say no record found."
+- **Use.** Drives the agent-facing decision boundary — low-confidence recalls
+  return as explicit low-confidence rather than confident guesses, reinforcing
+  the "cite or say no record found" discipline.
+- **Status:** Planned. Composes over the existing `recall.py` fusion path and the
+  `retrieval_diagnostics` surface; no new storage, no change to the deterministic
+  ranking.
+
+## Pure-MIND Self-Hosting Migration
+
+> Ecosystem-wide milestone — gated on the `mind` compiler reaching self-host completeness.
+
+Once the `mind` toolchain self-hosts (the open-core compiler builds itself byte-identically),
+this repository's **Python** implementation is migrated to **pure, executing MIND**, so the whole
+MIND ecosystem runs on its own deterministic, byte-identical, evidence-carrying toolchain — the
+wedge applied to ourselves.
+
+- **Gate:** `mind` self-host keystone complete (see the `mind` roadmap self-host track).
+- **Approach:** port via the `mind-migrator` path — to the executable MIND subset, verifying every
+  emitted symbol actually runs and reusing `std` primitives; no silent AOT-only stubs.
+- **Invariant:** migration preserves behavior and the cross-substrate byte-identity gate — no
+  regression in determinism or the signed evidence chain.
+- **Status:** Planned — sequenced after `mind` self-host; tracked here so the endgame is explicit.
