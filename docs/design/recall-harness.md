@@ -71,9 +71,37 @@ provides the *best* environment-side memory wins that layer. mind-mem's bid: the
 working memory is **deterministic + tamper-evident + governed**. The recall harness is how an
 agent plugs into it.
 
+## Model dependency — `mind-mem:4b` must be retrained
+
+The harness changes the **I/O contract** the policy model operates over. Today
+`mind-mem:4b` (the Qwen3.5-4B fine-tune; generative — query rewrite / expansion /
+generative-retrieval, not a vector encoder) is trained against **flat recall**: it sees
+raw results and rewrites/expands queries. The harness moves the policy to *semantic
+decisions over a structured working set* — `curate(keep/drop, importance)`, `link`,
+`verify`, `render`, `stop` — with the environment (mind-mem) holding the state.
+
+A model trained on flat recall will not drive the structured harness well. This is the
+load-bearing point of the source research: **the harness is part of what the policy
+learns to use** — the model is not the whole system. So shipping the recall harness
+**requires a 4B retrain** on harness-structured traces, sequenced AFTER the harness exists:
+
+1. build the deterministic harness (env-side state) + instrument it to log decision traces;
+2. generate a corpus of `(working-set state → good curate/verify/stop decision)` traces —
+   mirror the existing 4B fine-tune discipline (production-query-anchored corpus +
+   paraphrase robustness + zero-contamination, per the prior 4B GO/NO-GO checkpoint);
+3. retrain `mind-mem:4b` as the **policy over the harness** (SFT on the traces; RL only if
+   a reliable reward — e.g. curated-recall — is wired). Keep the prior 4B as fallback until
+   the harness-trained model wins on the production-query spec.
+
+The retrain is gated on the harness being deterministic first, so the traces (and thus the
+training corpus) are themselves reproducible.
+
 ## Phasing
 
 1. `RecallSession` core + event log + deterministic replay (no MCP yet) + tests.
 2. `pack_recall_budget` → `recall_session_render` (importance/verified-first/dedup).
 3. MCP surface + ACL/budget wiring.
 4. Verification-first rendering backed by the evidence chain.
+5. **Trace instrumentation + `mind-mem:4b` retrain on harness-structured decisions**
+   (the model dependency above) — the harness is inert as a *policy* interface until the
+   4B is retrained to use it; phases 1–4 stand alone as deterministic infrastructure.
