@@ -436,7 +436,7 @@ only new work.
 
 ### 7. Tool-routing preselector (intent-classification layer before MCP dispatch)
 
-The MCP surface has crossed 84 tools and is still growing. Today
+The MCP surface has crossed 80 tools and is still growing. Today
 the calling LLM sees the full tool list in every system prompt and
 decides which tool to invoke by reading all of them. Two problems
 compound as the surface grows: every additional tool burns prompt
@@ -499,7 +499,7 @@ behaviour (full tool list, LLM decides). The router is a
 performance optimization, not a correctness requirement; the
 substrate must work without it.
 
-**Why this matters now.** The 84-tool surface is already at the
+**Why this matters now.** The 83-tool surface is already at the
 edge of what models can reliably classify in a system prompt. The
 v4.0 network/federation work adds federation-aware tools, the
 v4.1 §1-§6 graph-discipline work adds provenance and contradiction

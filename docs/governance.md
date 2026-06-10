@@ -32,7 +32,7 @@ MIND-Mem's request-time surface is the MCP server. Every MCP tool call flows thr
 
 1. **Auth check.** `X-MindMem-Token` header validated against the configured token list.
 2. **Rate limit.** Sliding-window per-token + global; the limiter primitive is shared with 512-mind.
-3. **Tool dispatch.** 81 MCP tools, each with a typed input schema. Schema mismatch rejects with a structured error.
+3. **Tool dispatch.** 83 MCP tools, each with a typed input schema. Schema mismatch rejects with a structured error.
 4. **Audit chain entry.** The request is recorded with the calling `auth_hash` (when supplied) so a downstream auditor can replay.
 
 ## L4 — Retrieval-time
@@ -49,7 +49,7 @@ The load-bearing layer. Every `recall` (read) or `propose_update` (write) flows 
 
 The drift-detection layer:
 
-- **CI** on every push and PR — full pytest matrix (4000+ tests across the suite).
+- **CI** on every push and PR — full pytest matrix (5,465+ tests across the suite).
 - **PyPI release** on tag push via OIDC trusted publishing (no long-lived tokens).
 - **LoCoMo benchmark snapshot** per release; regression on any axis (mean / adversarial / temporal) is documented in CHANGELOG.
 
@@ -67,10 +67,7 @@ MIND-Mem is one consumer of the 512 kernel; the same kernel runs in:
 - `rfn-mind` (RFN classifier inference)
 - `MindLLM` (request-time HTTP surface; uses MIND-Mem for L4)
 - `mind-mem` (this repo — L4 retrieval-time)
-- `mind-flow` (graph-authoring; `:mem` backend dispatches to MIND-Mem)
-- `mind-fleet` (planned — governed swarm orchestration; will use MIND-Mem for swarm-shared memory)
 - `arch-mind` (L1 ecosystem-wide)
-- `mind-runtime` (vendored backend execution)
 
 A change to the kernel surface in 512-mind propagates here through the MIND-Mem MCP server's auth-hash binding; the consumer's audit-chain replay catches any mismatch.
 

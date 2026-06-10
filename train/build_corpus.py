@@ -1,6 +1,6 @@
 """Harvest a training corpus for the mind-mem-4b model.
 
-Produces /home/n/mm-train-output/corpus.jsonl — one example per line, in
+Produces ~/mm-train-output/corpus.jsonl — one example per line, in
 the chat format expected by the SFTTrainer.  Each example follows::
 
     {"messages": [
@@ -31,7 +31,7 @@ import re
 from pathlib import Path
 from typing import Iterable, Iterator
 
-REPO = Path("/home/n/mind-mem")
+REPO = Path(__file__).resolve().parents[1]
 OUT = Path(
     os.environ.get(
         "MM_CORPUS_OUT",

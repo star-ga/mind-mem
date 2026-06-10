@@ -23,7 +23,7 @@ answer that contains all required tokens. There is now an audit
 script that runs offline:
 
 ```bash
-cd /home/n/mind-mem
+cd ~/mind-mem
 python3 - <<'PY'
 import json, ast
 src = open('train/eval_harness.py').read()
@@ -176,7 +176,7 @@ Final loss: `~0.32`, mean_token_accuracy: `~0.94` at step 375.
 ### 3.1 Provision
 
 ```bash
-cd /home/n/mind-mem
+cd ~/mind-mem
 nohup python3 -u train/runpod_deploy.py --gpu-type "NVIDIA H200" \
     --skip-upload --keep-pod \
     > /tmp/mm-runpod/deploy.log 2>&1 &
@@ -269,8 +269,8 @@ incur volume-storage charges; only `DELETE /pods/{id}` zeros them.
 
 ```bash
 python3 -c "
-import sys, json
-sys.path.insert(0, '/home/n/mind-mem/train')
+import os, sys, json
+sys.path.insert(0, os.path.expanduser('~/mind-mem/train'))
 from runpod_deploy import _api_call
 print(json.dumps(_api_call('DELETE', '/pods/$POD_ID')))
 "
@@ -290,7 +290,7 @@ never start, stop, or delete pods it didn't create.
 After local hash verify, before any HF push:
 
 ```bash
-cd /home/n/mind-mem
+cd ~/mind-mem
 export MM_FULLFT_DIR=/data/checkpoints/mm-workspace/mind-mem-4b-fullft/full-ft
 nohup python3 -u train/eval_harness.py \
     > /tmp/mm-local/eval.log 2>&1 &
@@ -333,8 +333,8 @@ hf upload star-ga/mind-mem-4b /data/checkpoints/mm-workspace/mind-mem-4b-fullft/
    --commit-message "v3.10.x fullft — N/N eval"
 
 # 2. build GGUF Q4_K_M (requires modern llama.cpp that knows the Qwen3.5 BPE pre-tokenizer)
-cd /home/n/llama.cpp && git pull   # if NotImplementedError on tokenizer
-cd /home/n/mind-mem
+cd ~/llama.cpp && git pull   # if NotImplementedError on tokenizer
+cd ~/mind-mem
 python3 train/export_gguf.py
 # → /data/checkpoints/mm-workspace/train-output/mind-mem-4b-Q4_K_M.gguf (~2.5 GB)
 

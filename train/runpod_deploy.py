@@ -43,7 +43,7 @@ CORPUS = Path(
         "/data/checkpoints/mm-workspace/train-output/corpus.jsonl",
     )
 )
-SSH_KEY = Path(os.environ.get("MM_SSH_KEY", "/home/n/.ssh/id_ed25519"))
+SSH_KEY = Path(os.environ.get("MM_SSH_KEY", str(Path.home() / ".ssh" / "id_ed25519")))
 # scp lands the pod's `/workspace/train-output/full-ft` directory at
 # `WEIGHTS_OUT.parent` and creates a `full-ft/` subdir inside it. So the
 # *actual* destination is `WEIGHTS_OUT.parent / "full-ft"`. Default
@@ -58,7 +58,7 @@ WEIGHTS_OUT = Path(
     )
 )
 HF_TOKEN_FILE = Path(os.environ.get("MM_HF_TOKEN_FILE", "/tmp/hf_write_token"))
-RUNPOD_CONFIG = Path("/home/n/.runpod/config.toml")
+RUNPOD_CONFIG = Path(os.environ.get("MM_RUNPOD_CONFIG", str(Path.home() / ".runpod" / "config.toml")))
 
 # Image ships PyTorch 2.x + CUDA 12.x; add our deps via pip at runtime.
 DEFAULT_IMAGE = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
@@ -338,9 +338,10 @@ def main() -> None:
         # 2. Ship corpus + training script + upload helper
         print("uploading corpus + scripts …")
         _scp_to(ip, port, str(CORPUS), "/workspace/train-output/corpus.jsonl")
-        _scp_to(ip, port, "/home/n/mind-mem/train/runpod_full_ft.py", "/workspace/runpod_full_ft.py")
-        _scp_to(ip, port, "/home/n/mind-mem/train/upload_to_hf.py", "/workspace/upload_to_hf.py")
-        _scp_to(ip, port, "/home/n/mind-mem/train/build_model_card.py", "/workspace/build_model_card.py")
+        _train_dir = Path(__file__).resolve().parent
+        _scp_to(ip, port, str(_train_dir / "runpod_full_ft.py"), "/workspace/runpod_full_ft.py")
+        _scp_to(ip, port, str(_train_dir / "upload_to_hf.py"), "/workspace/upload_to_hf.py")
+        _scp_to(ip, port, str(_train_dir / "build_model_card.py"), "/workspace/build_model_card.py")
 
         # 3. Launch training via nohup so it survives SSH disconnects
         # (RunPod hosts have been dropping connections every ~3-20 min,

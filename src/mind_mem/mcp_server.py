@@ -63,7 +63,7 @@ if os.path.isdir(_SRC_DIR) and _SRC_DIR not in sys.path:
 # ---------------------------------------------------------------------------
 #
 # Absolute imports (not relative) because the top-level developer-checkout
-# shim at ``/home/n/mind-mem/mcp_server.py`` runs this file via
+# shim at ``<repo>/mcp_server.py`` runs this file via
 # ``exec(compile(...))`` with no parent package, and the test harness
 # loads it via ``spec_from_file_location`` which also strips the
 # package. ``mind_mem.mcp.*`` resolves in both paths because the shim

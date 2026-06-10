@@ -14,10 +14,10 @@ redis-server --daemonize yes
 ollama serve &>/dev/null &
 ollama pull mind-mem:4b    # first run only
 
-# claude-proxy (Opus OAuth routing for the LoCoMo judge answerer).
-# Skip if the service is already running.
-systemctl --user status claude-proxy || \
-    nohup node /home/n/claude-proxy.js > /tmp/claude-proxy.log 2>&1 &
+# Optional: a local proxy that routes the answerer to a hosted endpoint.
+# Skip if you point --answerer-model directly at an API, or if it's running.
+systemctl --user status answerer-proxy || \
+    nohup node ~/answerer-proxy.js > /tmp/answerer-proxy.log 2>&1 &
 ```
 
 Verify:
@@ -69,29 +69,30 @@ Point the harness at it by editing `benchmarks/locomo_judge.py`'s
 per-conv config after the harness writes it.
 
 ```bash
-# Option A — Mistral answerer + Mistral judge (v1.1.0 apples-to-apples baseline):
+# Option A — same model for answerer + external LLM judge
+#  (apples-to-apples with the v1.1.0 baseline, which used one model for both):
 python3 benchmarks/locomo_judge.py \
-    --answerer-model mistral-large-latest \
-    --judge-model mistral-large-latest \
+    --answerer-model <your-answerer-model> \
+    --judge-model <your-judge-model> \
     --hybrid \
-    --output /tmp/mm-bench/locomo_v3.3.0_mistral.json
+    --output /tmp/mm-bench/locomo_v3.3.0_a.json
 
-# Option B — Opus 4.8 answerer via claude-proxy (OAuth, free) + Mistral judge
+# Option B — a stronger hosted answerer + the same external LLM judge
 #  (same judge as v1.1.0 → comparable score ceiling).
 python3 benchmarks/locomo_judge.py \
-    --answerer-model claude-proxy/claude-opus-4-8 \
-    --judge-model mistral-large-latest \
+    --answerer-model <your-answerer-model> \
+    --judge-model <your-judge-model> \
     --hybrid \
-    --output /tmp/mm-bench/locomo_v3.3.0_opus.json
+    --output /tmp/mm-bench/locomo_v3.3.0_b.json
 ```
 
 Expected runtime:
 
 | Variant | Wall time | Cost |
 |---|---|---|
-| Mistral answerer + Mistral judge | ~2-3 h | ~$3-5 |
-| Opus answerer (CLI) + Mistral judge | ~8-14 h | ~$1 (judge only) |
-| Opus answerer (API) + Mistral judge | ~3-4 h | ~$220 |
+| API answerer + external LLM judge | ~2-3 h | ~$3-5 |
+| Proxied/CLI answerer + external LLM judge | ~8-14 h | ~$1 (judge only) |
+| Strong API answerer + external LLM judge | ~3-4 h | ~$220 |
 
 ## 5. Sanity-check the run
 
@@ -99,14 +100,14 @@ Before committing any result:
 
 ```bash
 # Verify the config that actually ran:
-jq '.config.retrieval' /tmp/mm-bench/locomo_v3.3.0_opus.json | head
+jq '.config.retrieval' /tmp/mm-bench/locomo_v3.3.0_b.json | head
 
 # Check that v3.3.0 features fired:
 grep -c "query_decomposition_auto_enabled\|graph_expand_applied\|entity_prefetch_merged\|cross_encoder_auto_enabled\|session_boost_applied" \
-    /tmp/mm-bench/locomo_v3.3.0_opus.log
+    /tmp/mm-bench/locomo_v3.3.0_b.log
 
 # Per-category breakdown:
-jq '.metrics.by_category' /tmp/mm-bench/locomo_v3.3.0_opus.json
+jq '.metrics.by_category' /tmp/mm-bench/locomo_v3.3.0_b.json
 ```
 
 Fail conditions:
@@ -119,7 +120,7 @@ Fail conditions:
 ## 6. Publish
 
 If the sanity check passes, commit:
-* `benchmarks/locomo_v3.3.0_opus.json` (raw judge output)
+* `benchmarks/locomo_v3.3.0_b.json` (raw judge output)
 * `benchmarks/LOCOMO.md` update with the new overall + per-category
   table
 * README + PyPI badge bumps if the number moves the headline

@@ -2,7 +2,7 @@
 
 Scripts to retrain the [`star-ga/mind-mem-4b`](https://huggingface.co/star-ga/mind-mem-4b) governance-aware memory-assistant model on a fresh checkout of the MIND-Mem repo.
 
-Training artifacts land in `/home/n/mm-train-output/`, which is gitignored — the repo only carries the scripts, not the weights.
+Training artifacts land in `~/mm-train-output/`, which is gitignored — the repo only carries the scripts, not the weights.
 
 ## Pipeline
 
@@ -17,11 +17,11 @@ build_corpus.py  →  train_qlora.py  →  eval_harness.py  →  export_gguf.py 
 ### 1. Harvest corpus (deterministic)
 
 ```bash
-cd /home/n/mind-mem
+cd ~/mind-mem
 python3 train/build_corpus.py
 ```
 
-Produces `/home/n/mm-train-output/corpus.jsonl`. Five sources: MCP tool docstrings, block schemas, CHANGELOG, docs/, governance workflows. No LLM calls; running twice yields byte-identical output.
+Produces `~/mm-train-output/corpus.jsonl`. Five sources: MCP tool docstrings, block schemas, CHANGELOG, docs/, governance workflows. No LLM calls; running twice yields byte-identical output.
 
 ### 2. Fine-tune
 
@@ -45,7 +45,7 @@ Runs three benchmarks. Exits non-zero if any target fails (tool-call ≥ 95%, bl
 python3 train/export_gguf.py
 ```
 
-Merges the LoRA back into the base, converts to GGUF, then quantizes to Q4_K_M. Prerequisites: `llama.cpp` cloned + built at `/home/n/llama.cpp`.
+Merges the LoRA back into the base, converts to GGUF, then quantizes to Q4_K_M. Prerequisites: `llama.cpp` cloned + built at `~/llama.cpp`.
 
 ### 5. Upload to HuggingFace
 
@@ -58,6 +58,6 @@ Pushes adapter + README + GGUF to `star-ga/mind-mem-4b`. **Requires a write-scop
 ## Constraints
 
 - GPU: ≥ 10 GB VRAM (RTX 3080 target)
-- Disk: ~20 GB free in `~/.cache/huggingface/hub` + `/home/n/mm-train-output`
+- Disk: ~20 GB free in `~/.cache/huggingface/hub` + `~/mm-train-output`
 - Python: 3.10+ with `transformers`, `peft`, `bitsandbytes`, `accelerate`, `trl`, `datasets`, `torch`
 - HF token with **write** scope for upload (read-only token is enough for training base-model pulls)

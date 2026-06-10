@@ -42,7 +42,7 @@ if [[ ! -f "$WEIGHTS_DIR/model.safetensors" ]] && [[ -z "$(ls $WEIGHTS_DIR/model
 fi
 echo "[chain] weights present at $WEIGHTS_DIR; running un-softened eval …"
 
-cd /home/n/mind-mem
+cd "$(git rev-parse --show-toplevel)"
 export MM_FULLFT_DIR="$WEIGHTS_DIR"
 
 # 1) un-softened eval_harness (109 probes, target 109/109)

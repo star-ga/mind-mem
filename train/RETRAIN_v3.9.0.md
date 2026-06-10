@@ -108,4 +108,4 @@ I'll add three new probes to `eval_harness.py` to cover these — separate small
 
 ## What I'm not committing here
 
-The corpus-builder patch is the only pre-condition that needs a code change. Everything else is execution. **I'm not kicking off training until you confirm** — RTX 3080 is the only local GPU, and an overnight training run blocks other GPU work (NikolaChess testing, llama-server, etc.). Cheaper to defer to the next idle window or send to Runpod H200.
+The corpus-builder patch is the only pre-condition that needs a code change. Everything else is execution. **I'm not kicking off training until you confirm** — RTX 3080 is the only local GPU, and an overnight training run blocks other GPU work (other local testing, llama-server, etc.). Cheaper to defer to the next idle window or send to Runpod H200.

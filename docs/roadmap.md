@@ -45,8 +45,8 @@ OIDC-published.
 
 ## v3.11.0 (Released 2026-05-08)
 
-Three additive surfaces locked from a 4-model multi-LLM consensus
-(Grok 4.1, Mistral Large, DeepSeek v4, GLM-5; mean 8.3/10):
+Three additive surfaces locked from a cross-model architecture review
+(recent research synthesized into the roadmap):
 
 - **`validate_block`** — deterministic 7-rule quality gate
   (`empty`, `too_short`, `oversize`, `malformed_utf8`,
@@ -732,8 +732,6 @@ projects can adopt without parallel implementation:
 - **rfn-mind / MindLLM** — research-artifact walkthroughs once the Phase
   truthfulness work (audit findings F1-F14) is closed; not blocked on that
   work, but only useful once the codebase is buildable.
-- **mind-fleet** — swarm-orchestration walkthroughs as governance evidence
-  when human operators review autonomous fleet decisions.
 
 MIND-Mem ships the *primitives* (MCP tools); each consumer ships its own
 *surface* (CLI flag, panel, channel command). No per-consumer code in mind-mem.

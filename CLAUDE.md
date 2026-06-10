@@ -96,7 +96,7 @@ class stress tests); marked Python 3.14 matrix rows as
 `continue-on-error` (still pre-release). No source/test changes.
 Builds on **v4.0.5** (released 2026-05-14) — Docs/badges aligned + release
 workflow idempotent. README badges + comparison table now match
-ground truth (`tests-5155+`, `clients-18`, `audit-10-LLM`, `84` MCP
+ground truth (`tests-5155+`, `clients-18`, `audit-cross-model`, `84` MCP
 tools); CLAUDE.md drift cleared (`MCP Tools (81) → (84)`,
 `16 → 15` clients). `.github/workflows/release.yml` `pypa/gh-action-pypi-publish`
 step passes `skip-existing: true` so tag re-pushes and local-twine
@@ -135,8 +135,8 @@ under `v4.<flag>` in `mind-mem.json`. No breaking changes. `mind-mem-4b`
 retrained at **109/109 = 100%** on the un-softened harness (14 new
 `V4_SURFACES` probes; `qg.escape_hatch` and `lin.cites=0.8` gaps from
 v3.12.1 confirmed fixed). 376 v4 unit + 38 concurrency + 22 held-out
-paraphrase tests. Architecture audited at unanimous **10/10** across 4
-LLMs (Grok 4.3, DeepSeek v4-pro, Mistral large, GLM-5).
+paraphrase tests. Architecture audited at unanimous **10/10** in a
+cross-model review.
 Builds on **v3.12.1** (2026-05-10) — patched eval, model card honesty.
 Builds on **v3.12.0** (2026-05-09) — strict quality gate, lineage→staleness.
 Builds on **v3.11.0** (2026-05-08) — typed lineage edges, recall explainability.
@@ -257,7 +257,7 @@ pytest --collect-only -q | tail  # verify test count
 - No `print()` in library code — use `logging`
 - SQLite WAL mode for concurrent reads
 
-## Benchmarks (LoCoMo, Mistral Large)
+## Benchmarks (LoCoMo, external LLM judge)
 Mean: 77.9, Adversarial: 82.3, Temporal: 88.5
 
 ## Git

@@ -7,12 +7,12 @@ provides. See [setup.md](setup.md) first.
 
 | Surface | When to use |
 |---|---|
-| **MCP server** | Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, Zed, OpenClaw, any MCP agent. 81 tools. |
+| **MCP server** | Claude Code, Codex, Gemini, Cursor, Windsurf, Continue, Cline, Roo, Zed, OpenClaw, any MCP agent. 83 tools. |
 | **`mm` CLI** | Non-MCP agents: codex, gemini CLI, Cursor, Windsurf, Aider, plain shell. |
 | **`mind-mem-verify` CLI** | Third-party integrity audits. Standalone; no network. |
 | **Python library** | Direct import from your own code. |
 
-## MCP tool index (81 tools)
+## MCP tool index (83 tools)
 
 ### Retrieval
 - `recall(query, limit, active_only, backend)` — BM25 / hybrid / auto
@@ -150,14 +150,14 @@ Exit codes: 0 ok / 1 generic / 2 chain / 3 spec / 4 evidence /
 from mind_mem.hook_installer import install_config
 
 # Preview what would be written
-install_config("claude-code", "/home/n/ws", dry_run=True)
+install_config("claude-code", "~/ws", dry_run=True)
 
 # Actually write the config
-install_config("codex", "/home/n/ws")
-install_config("gemini", "/home/n/ws")
-install_config("cursor", "/home/n/ws")
-install_config("windsurf", "/home/n/ws")
-install_config("aider", "/home/n/ws")
+install_config("codex", "~/ws")
+install_config("gemini", "~/ws")
+install_config("cursor", "~/ws")
+install_config("windsurf", "~/ws")
+install_config("aider", "~/ws")
 ```
 
 Each agent gets the right config file name (`~/.claude/settings.json`,

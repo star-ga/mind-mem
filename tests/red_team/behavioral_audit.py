@@ -57,7 +57,7 @@ def test_advisory_petri_audit(petri_limit: int) -> None:
     ]
 
     dish = petri.Dish.from_mcp_server(
-        "python3 /home/n/mind-mem/mcp_server.py",
+        "python3 mcp_server.py",
         transport="stdio",
     )
 

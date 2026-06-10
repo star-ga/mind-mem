@@ -33,11 +33,11 @@ Three-column ledger of what is operational on the current `main`, what is in-tre
 | Tier decay (TTL + LRU aging) | `src/mind_mem/core/decay.py` | v3.0.0+. |
 | Delta-based snapshot rollback | `src/mind_mem/core/snapshot.py` | MANIFEST.json for O(manifest) restore. |
 
-### MCP server (81 tools, 8 resources)
+### MCP server (83 tools, 8 resources)
 
 | Component | Source | Notes |
 |---|---|---|
-| MCP server entry | `src/mind_mem/mcp_server.py` | 81 tools across recall / write / governance / observability / audit. |
+| MCP server entry | `src/mind_mem/mcp_server.py` | 83 tools across recall / write / governance / observability / audit. |
 | Native MCP integration (18 clients) | `src/mind_mem/hook_installer/` | `mm install-all` wires Claude Code, Claude Desktop, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor, Windsurf, Zed, OpenClaw + 9 more. |
 | Multi-backend LLM extractor | `src/mind_mem/extractors/` | ollama / openai-compatible / vLLM / exllamav2. |
 
@@ -78,4 +78,4 @@ For product roadmap, see `ROADMAP.md` and `CHANGELOG.md`. Cross-repo alignment i
 
 - It is not a release-claim. The README + CHANGELOG are authoritative.
 - It is not auto-generated yet. Future workstream will derive it from the MCP tool catalogue + the `[invariant]` table.
-- It does not cover consumers (MindLLM uses MIND-Mem for L4 retrieval; mind-flow's `:mem` backend dispatches here). Each carries its own `docs/status.md`.
+- It does not cover consumers (MindLLM uses MIND-Mem for L4 retrieval). Each carries its own `docs/status.md`.

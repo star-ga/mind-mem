@@ -6,7 +6,7 @@ Runs three benchmarks the model-card promises:
     3. Governance workflow      — ≥ 90% target.
 
 Prints a report to stdout and writes JSON to
-/home/n/mm-train-output/eval_report.json.  Exit 0 if all three
+~/mm-train-output/eval_report.json.  Exit 0 if all three
 targets hit, exit 1 otherwise — so CI can gate uploads on a green
 eval.
 """

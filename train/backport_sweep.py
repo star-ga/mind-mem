@@ -23,7 +23,7 @@ import re
 import subprocess
 from pathlib import Path
 
-REPO = Path("/home/n/mind-mem")
+REPO = Path(__file__).resolve().parents[1]
 V29_SHA = subprocess.check_output(["git", "rev-parse", "v2.9.0"], cwd=REPO, text=True).strip()
 
 # First 7 (v2.0.0a1..v2.1.0) shipped before disk-full hit. Resume

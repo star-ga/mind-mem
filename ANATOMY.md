@@ -250,7 +250,7 @@
 - `testing-guide.md` (~369 tok, medium) — Testing Guide
 - `troubleshooting.md` (~681 tok, large) — Troubleshooting
 - `usage.md` (~2011 tok, huge) — Usage
-- `v3.11.0-implementation-plan.md` (~1566 tok, huge) — v3.11.0 Implementation Plan — synthesis from multi-LLM consensus
+- `v3.11.0-implementation-plan.md` (~1566 tok, huge) — v3.11.0 Implementation Plan — synthesis from cross-model review
 - `v3.11.0-mind-mem-4b-retrain-plan.md` (~1529 tok, huge) — mind-mem-4b v3.11.0 Retrain Plan
 - `v3.1.9-self-audit.md` (~1396 tok, large) — Self-audit after v3.1.9
 - `v3.2.0-atomicity-scope-plan.md` (~1681 tok, huge) — v3.2.0 — Atomicity scope plan (§2.2)
@@ -639,10 +639,10 @@
 - `union_recall.py` (~1310 tok, large) — Union-style retrieval for decomposed queries (v3.4.0).
 ### `src/mind_mem/v4/`
 
-- `backpressure.py` (~2058 tok, huge) — v4 backpressure controller (round 4 audit, DeepSeek 9.75→10 gap).
+- `backpressure.py` (~2058 tok, huge) — v4 backpressure controller (round 4 audit, 9.75→10 gap).
 - `block_kinds.py` (~3123 tok, huge) — v4 block-kind taxonomy (Group B: knowledge graph).
 - `block_metadata.py` (~2713 tok, huge) — v4 block metadata + schema-validation hooks.
-- `circuit_breaker.py` (~3390 tok, huge) — v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10 gap).
+- `circuit_breaker.py` (~3390 tok, huge) — v4 circuit breaker (round 5 audit, 9.9→10 gap).
 - `cognitive_kernel.py` (~2375 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
 - `consolidation_worker.py` (~2427 tok, huge) — v4 consolidation worker (Group A — MemGPT-pattern).
 - `embedding_pipeline.py` (~1480 tok, large) — v4 embedding auto-derivation pipeline (Group A — closes the
@@ -650,12 +650,12 @@
 - `feature_flags.py` (~1533 tok, huge) — v4.0 feature-flag registry.
 - `federation_client.py` (~3468 tok, huge) — Federation wire-transport client for mind-mem v4.
 - `federation.py` (~5588 tok, huge) — v4 federated cross-agent consistency (Group D).
-- `health.py` (~1884 tok, huge) — v4 health-check surface (round 4 audit, DeepSeek 9.75→10 gap).
+- `health.py` (~1884 tok, huge) — v4 health-check surface (round 4 audit, 9.75→10 gap).
 - `hnsw_kind_index.py` (~2122 tok, huge) — v4 HNSW kind-filtered ANN index (Group D).
 - `__init__.py` (~824 tok, large) — mind-mem v4.0 surface — side-by-side scaffolding, default OFF.
 - `kernels.py` (~3674 tok, huge) — v4 kernel strategy implementations (Group A).
 - `kind_summaries.py` (~1878 tok, huge) — v4 per-kind global summaries (Group B — GraphRAG-style).
-- `logging_context.py` (~1232 tok, large) — v4 structured logging context (round 4 audit, DeepSeek 9.75→10 gap).
+- `logging_context.py` (~1232 tok, large) — v4 structured logging context (round 4 audit, 9.75→10 gap).
 - `observability.py` (~2613 tok, huge) — v4 observability — counters, timers, histograms, exporters.
 - `pq.py` (~4323 tok, huge) — v4 product-quantization (PQ) encoding for embedding storage (Group D).
 - `self_editing.py` (~2420 tok, huge) — v4 self-editing on recall (Group A — MemGPT pattern).
@@ -958,7 +958,7 @@
 - `test_v320_gaps.py` (~3257 tok, huge) — v3.2.0 gap tests — regression and edge-case coverage for new modules.
 - `test_v34_features.py` (~2993 tok, huge) — Tests for v3.4.0 retrieval features.
 - `test_v4_block_kinds.py` (~4112 tok, huge) — Tests for the v4 block-kind taxonomy module."""
-- `test_v4_circuit_breaker.py` (~3770 tok, huge) — Tests for v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10)."""
+- `test_v4_circuit_breaker.py` (~3770 tok, huge) — Tests for v4 circuit breaker (round 5 audit, 9.9→10)."""
 - `test_v4_cognitive_kernel.py` (~2770 tok, huge) — Tests for the v4 Cognitive Mind Kernel registry + dispatcher."""
 - `test_v4_concurrency.py` (~2325 tok, huge) — v4 concurrency / fuzz tests.
 - `test_v4_federation_wire.py` (~2162 tok, huge) — Wire-transport tests for v4 federation.

@@ -27,7 +27,7 @@ from peft import PeftModel
 LOCAL_BASE = Path("/data/checkpoints/mm-workspace/full-ft.retry2e-109of109+18of22")
 DEFAULT_ADAPTER = "star-ga/mind-mem-4b-lora-v4.1.0"
 SHIP_DIR_DEFAULT = Path("/data/checkpoints/mm-workspace/full-ft.v4.1.0-candidate")
-TRAIN_DIR = Path("/home/n/mind-mem/train")
+TRAIN_DIR = Path(__file__).resolve().parent
 
 
 def _assert_clean_ship_dir(ship_dir: Path) -> None:

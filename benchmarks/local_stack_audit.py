@@ -76,7 +76,7 @@ def check_mind_kernels() -> tuple[str, str]:
     try:
         from mind_mem.mind_ffi import get_mind_dir, load_all_kernel_configs
 
-        ws = os.environ.get("MIND_MEM_WORKSPACE", "/home/n/.openclaw/workspace")
+        ws = os.environ.get("MIND_MEM_WORKSPACE", os.path.expanduser("~/.mind-mem/workspace"))
         cfgs = load_all_kernel_configs(get_mind_dir(ws))
         required = {
             "query_plan",

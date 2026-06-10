@@ -8,7 +8,7 @@ LoRA config: r=16, alpha=32, dropout=0.05, target=all linear.
 Training:    3 epochs, per_device_batch_size=1, grad_accum_steps=16,
              lr=2e-4 with cosine decay + 3% warmup, bf16.
 
-Output:      /home/n/mm-train-output/adapter/   (PEFT adapter files)
+Output:      ~/mm-train-output/adapter/   (PEFT adapter files)
 """
 
 from __future__ import annotations

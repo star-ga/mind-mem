@@ -17,7 +17,7 @@
   },
   "_comment": "Produced by `arch-mind sidecar-scan` from canonical-AST JSON. v0.0.4 / Phase D.",
   "_languages": "python,typescript",
-  "_repo_root": "/home/n/mind-mem",
+  "_repo_root": ".",
   "edges": [],
   "nodes": []
 }

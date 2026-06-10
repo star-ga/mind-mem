@@ -6,7 +6,7 @@
   <strong>Replayable memory for AI agents. Deterministic recall with a byte-identical audit chain across runs, machines, and substrates.</strong>
 </p>
 <p align="center">
-  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 84 MCP tools<br>
+  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 83 MCP tools<br>
   <sub>MIND Language Profile: <code>default</code> (full tensor stdlib + Q16.16 + heap) &mdash; see <a href="https://github.com/star-ga/mind/blob/main/docs/roadmap.md#phase-106--library-output--c-abi-mindc-026--030">Phase 10.6</a></sub><!-- mind-profile: default -->
 </p>
 <p align="center">
@@ -22,10 +22,10 @@
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
   <img src="https://img.shields.io/badge/tests-5465%2B-brightgreen?style=flat-square" alt="Tests: 5465+">
-  <img src="https://img.shields.io/badge/MCP_tools-84-blue?style=flat-square" alt="MCP Tools: 84">
+  <img src="https://img.shields.io/badge/MCP_tools-83-blue?style=flat-square" alt="MCP Tools: 83">
   <img src="https://img.shields.io/badge/clients-17-blueviolet?style=flat-square" alt="AI Clients: 17">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
-  <img src="https://img.shields.io/badge/audit-10--LLM_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="10-LLM consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
+  <img src="https://img.shields.io/badge/audit-cross--model_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="Cross-model consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
 </p>
 
 <p align="center"><sub>
@@ -36,7 +36,7 @@
 
 ---
 
-Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). Deterministic recall. 84 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic (same query → same ranked results) and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
+Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). Deterministic recall. 83 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic (same query → same ranked results) and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
 
 Most memory layers ship tools. That is table-stakes. MIND-Mem ships a substrate: Q16.16 fixed-point scoring kernels compiled from MIND source, a governance pipeline that rejects every unreviewed write, and an audit chain where every applied proposal is hash-anchored. The same query on the same workspace produces the same ranked recall, every time; that recall's audit/replay chain is byte-identical whether you replay it on the same machine or a different one that pulls the same workspace. That property is what makes MIND-Mem suitable as a canonical memory layer across heterogeneous agent stacks.
 
@@ -236,8 +236,8 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 ### Transcript JSONL Capture
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
-### MCP Server (84 tools, 8 resources)
-Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 84 tools and 8 read-only resources. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
+### MCP Server (83 tools, 8 resources)
+Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 83 distinct tools and 8 read-only resources (6 static + 2 templated). The server makes 84 `mcp.tool(...)` registrations, but the consolidated `recall` dispatcher intentionally shadows the base `recall`, so the live surface is 83 distinct tool names. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
 
 ### 74+ Structural Checks + 3024 Unit Tests
 `validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 3024 pytest unit tests covering all core modules.
@@ -338,10 +338,9 @@ regardless of which LLM is asking.
 
 ### Production usage at STARGA
 
-MIND-Mem is the daily-driver memory layer for STARGA's six active
-projects: `mind`, `mind-runtime`, `mindlang.dev`, `mind-inference`,
-`mind-fleet`, `arch-mind`. First-party, verifiable in our own
-commit history.
+MIND-Mem is the daily-driver memory layer across STARGA's active
+projects, including `mind`, `mindlang.dev`, `mind-inference`, and
+`arch-mind`. First-party, verifiable in our own commit history.
 
 ### What we do not claim
 
@@ -381,7 +380,7 @@ A single fact is planted at a controlled depth within a haystack of semantically
 
 Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer with LLM, score against gold reference with judge LLM. Directly comparable methodology.
 
-**v1.0.7 — Hybrid + top_k=18** (Mistral answerer + judge, conv-0, 199 questions):
+**v1.0.7 — Hybrid + top_k=18** (external LLM answerer + judge, conv-0, 199 questions):
 
 | Category        |      N | Acc (>=50) | Mean Score |
 | --------------- | -----: | ---------: | ---------: |
@@ -394,7 +393,7 @@ Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer w
 
 > **Pipeline:** BM25 + Qwen3-Embedding-8B (4096d) vector search → RRF fusion (k=60) → top-18 evidence blocks → observation compression → answer → judge. A/B validated: +2.8 mean vs top_k=10 baseline.
 
-**v1.1.1 — BM25 + top_k=18** (Mistral Large answerer + judge, 10 conversations, 1986 questions):
+**v1.1.1 — BM25 + top_k=18** (external LLM answerer + judge, 10 conversations, 1986 questions):
 
 | Category        |        N | Acc (>=50) | Mean Score |
 | --------------- | -------: | ---------: | ---------: |
@@ -405,9 +404,9 @@ Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer w
 | Temporal        |       96 |      66.7% |       65.9 |
 | Multi-hop       |      321 |      50.5% |       51.1 |
 
-> **Pipeline:** BM25 + RM3 query expansion → top-18 evidence blocks → observation compression → answer → judge. Full 10-conversation benchmark with Mistral Large as both answerer and judge.
+> **Pipeline:** BM25 + RM3 query expansion → top-18 evidence blocks → observation compression → answer → judge. Full 10-conversation benchmark with the same external LLM as both answerer and judge.
 
-**v1.0.0 — BM25-only baseline** (gpt-4o-mini answerer + judge, 10 conversations):
+**v1.0.0 — BM25-only baseline** (external LLM answerer + judge, 10 conversations):
 
 | Category    |        N | Acc (>=50) | Mean Score |
 | ----------- | -------: | ---------: | ---------: |
@@ -427,7 +426,7 @@ Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer w
 | **MIND-Mem** | **76.7%** | Hybrid BM25 + Qwen3-8B vector + RRF fusion (local-only)    |
 | Memobase     |     75.8% | Specialized extraction                                       |
 | **Letta**    |     74.0% | Files + agent tool use                                       |
-| **MIND-Mem** |     73.8% | BM25-only, full 10-conv (1986 questions, Mistral Large)     |
+| **MIND-Mem** |     73.8% | BM25-only, full 10-conv (1986 questions, external LLM judge) |
 | **Mem0**     |     68.5% | Graph + LLM extraction                                      |
 
 > MIND-Mem now **surpasses Mem0 and Letta** with **local-only** retrieval — no cloud calls, no graph DB, no LLM in the retrieval loop. MIND-Mem's unique value is **governance** (contradiction detection, drift analysis, audit trails) and **agent-agnostic shared memory** via MCP — areas these benchmarks don't measure.
@@ -494,10 +493,10 @@ python3 benchmarks/longmemeval_harness.py
 
 # LLM-as-judge (accuracy metrics, requires API key)
 python3 benchmarks/locomo_judge.py --dry-run
-python3 benchmarks/locomo_judge.py --answerer-model gpt-4o-mini --output results.json
+python3 benchmarks/locomo_judge.py --answerer-model <your-answerer-model> --output results.json
 
 # Hybrid retrieval with any model pair (BM25 + vector + cross-encoder)
-python3 benchmarks/locomo_judge.py --hybrid --compress --answerer-model mistral-large-latest --judge-model mistral-large-latest --output results.json
+python3 benchmarks/locomo_judge.py --hybrid --compress --answerer-model <your-answerer-model> --judge-model <your-judge-model> --output results.json
 
 # Selective conversations
 python3 benchmarks/locomo_harness.py --conv-ids 4,7,8
@@ -695,7 +694,7 @@ TOTAL: 0 critical | 0 warnings | 16 info
 
 ```
 your-workspace/
-├── mcp_server.py            # MCP server (FastMCP, 81 tools, 8 resources)
+├── mcp_server.py            # MCP server (FastMCP, 83 tools, 8 resources)
 ├── mind-mem.json             # Config
 ├── MEMORY.md                # Protocol rules
 │
@@ -813,9 +812,9 @@ your-workspace/
 | Hybrid retrieval | BM25F + vector + RRF | Vector only | Hybrid | Graph + vector |
 | Governance (propose/review/apply) | Yes | No | No | No |
 | Contradiction detection | Yes | No | No | No |
-| Tests | 3,600+ | - | - | - |
-| LoCoMo benchmark | 86.33 conv-0 (v3.6, Mistral-Large) | 66.88 | 74.0% | - |
-| MCP tools | 81 (58 legacy + 7 dispatchers + 16 v3.7→v3.9 additions) | - | - | - |
+| Tests | 5,465+ | - | - | - |
+| LoCoMo benchmark | 86.33 conv-0 (v3.6, external LLM judge) | 66.88 | 74.0% | - |
+| MCP tools | 83 distinct (84 `mcp.tool` registrations; `recall` dispatcher shadows base `recall`) | - | - | - |
 | Core dependencies | 0 | Many | Many | Many |
 
 ### At a Glance
@@ -832,7 +831,7 @@ your-workspace/
 | [**Graphlit**](https://www.graphlit.com) | Multimodal ingestion, semantic search, managed platform | Cloud-only, managed service |
 | [**ClawMem**](https://github.com/yoloshii/ClawMem) | Full ML pipeline (cross-encoder + QMD + beam search) | 4.5GB VRAM, 3 GPU processes required |
 | [**MemU**](https://github.com/supermemory/memu) | Hierarchical 3-layer memory, multimodal ingestion, LLM-based retrieval | Requires LLM for extraction and retrieval, no hybrid search |
-| **MIND-Mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 84 MCP tools (incl. MIC/MAP, walkthrough, persona, pipeline-hash) + 10-LLM consensus audit per release | Lexical recall by default (vector/CE optional) |
+| **MIND-Mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 83 MCP tools (incl. MIC/MAP, walkthrough, persona, pipeline-hash) + cross-model consensus audit per release | Lexical recall by default (vector/CE optional) |
 
 ### Full Feature Matrix
 
@@ -878,7 +877,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | No daemon       |                   —                    |                   —                   |                            —                            |               —                |               —               |                     Yes                     |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
 | GPU required    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                    **4.5GB**                    |                      No                      |     **No**     |
 | Git-friendly    |                   —                    |                   —                   |                            —                            |              Part              |               —               |                      —                      |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
-| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **81 tools**   |
+| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **83 tools**   |
 | MIND kernels    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **16 source**  |
 
 ### The Gap MIND-Mem Fills

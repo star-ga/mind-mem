@@ -197,8 +197,8 @@ void category_assign(const float *affinity, float threshold,
 }
 
 /* ── Runtime Protection Probe ──────────────────────────────── */
-/* Returns 1 if FORTRESS protection is linked, 0 for dev/CI builds.
- * Protected builds replace this with the real check from protection.mind. */
+/* Returns 1 if runtime protection is linked, 0 for dev/CI builds.
+ * Protected builds replace this with the real check. */
 
 int mindmem_protected(void) {
 #ifdef MIND_PROTECTED

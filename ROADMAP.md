@@ -190,7 +190,7 @@ self-modifies. We adopt the connectivity model, not the autonomy.
 
 - [x] **recall_vector.py test suite** — 36 tests covering VectorBackend init, cosine similarity, local index I/O, search_batch, provider routing
 - [x] **validate_py.py test suite** — 30 tests covering Validator, file structure, decisions, tasks, entities, provenance, cross-refs, intelligence
-- [x] **LoCoMo benchmark with Mistral Large** — full 10-conversation LLM-as-judge evaluation (1986 questions, 134 min)
+- [x] **LoCoMo benchmark with an external LLM judge** — full 10-conversation LLM-as-judge evaluation (1986 questions, 134 min)
   - Overall: mean=70.5, acc≥50=73.8%, acc≥75=65.6%
   - Adversarial: mean=87.2, acc≥50=92.4% (+43pp over v1.0.5 baseline)
   - BM25-only recall (v1.0.5 baseline used hybrid BM25+vector)
@@ -1118,7 +1118,7 @@ Close the retrieval-quality gap and widen the governance moat. All additive — 
 
 ### LoCoMo score improvements — 4-tier roadmap
 
-Baseline: v1.1.0 overall mean 70.54 (Mistral-Large answerer + judge). LoCoMo category breakdown shows where points bleed:
+Baseline: v1.1.0 overall mean 70.54 (external LLM answerer + judge). LoCoMo category breakdown shows where points bleed:
 
 | Category | Baseline | N | Biggest intervention |
 |---|---|---|---|
@@ -1128,7 +1128,7 @@ Baseline: v1.1.0 overall mean 70.54 (Mistral-Large answerer + judge). LoCoMo cat
 | open-domain | 70.27 | 841 | conversation-boundary preservation |
 | adversarial | 87.22 | 446 | at ceiling |
 
-Projected v3.3.0 overall with Tier-1+2 shipped: **74-76 (Mistral-Mistral)** / **82-85 (Opus answerer + Mistral judge)**.
+Projected v3.3.0 overall with Tier-1+2 shipped: **74-76 (same model as answerer + judge)** / **82-85 (stronger answerer + external LLM judge)**.
 
 #### Tier 1 — highest leverage, must ship
 

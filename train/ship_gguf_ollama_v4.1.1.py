@@ -13,16 +13,17 @@ Refuses to ship if the smoke test misses any of the 4 fixed facts.
 from __future__ import annotations
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-LLAMA_CPP = Path("/home/n/llama.cpp")
+LLAMA_CPP = Path(os.environ.get("MM_LLAMA_CPP_DIR", str(Path.home() / "llama.cpp")))
 CONVERT_HF = LLAMA_CPP / "convert_hf_to_gguf.py"
 QUANTIZE = LLAMA_CPP / "build/bin/llama-quantize"
 SHIP_DIR_DEFAULT = Path("/data/checkpoints/mm-workspace/full-ft.v4.1.1-r4-candidate")
 GGUF_OUT_DIR = Path("/data/checkpoints/mm-workspace/gguf-v4.1.1")
-MODELFILE_OUT = Path("/home/n/mind-mem/train/Modelfile.v4.1.1")
+MODELFILE_OUT = Path(__file__).resolve().parent / "Modelfile.v4.1.1"
 OLLAMA_TAG_DEFAULT = "mind-mem:4b"
 OLLAMA_TAG_BACKUP = "mind-mem:4b-v4.1.0"  # snapshot the current alias before swap
 

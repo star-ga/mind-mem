@@ -223,7 +223,7 @@ PROJECTS = [
     "mind-mem",
     "512-mind",
     "CogNet",
-    "NikolaChess",
+    "Project Atlas",
     "mindlang.dev",
 ]
 

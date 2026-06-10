@@ -1,14 +1,15 @@
 # LoCoMo v3.4.0 conv-0 results (2026-04-22)
 
-## Run 1: Opus 4.8 + v3.4 features (partial)
+## Run 1: hosted answerer + v3.4 features (partial)
 
-Config: `--answerer-model claude-proxy/claude-opus-4-8 --judge-model mistral-large-latest --v34-features`
+Config: `--answerer-model <your-answerer-model> --judge-model <your-judge-model> --v34-features`
+(answerer was a rate-limited hosted endpoint; judge was an external LLM judge).
 
-**Rate-limited mid-run** at QA ~113. Opus usage cap hit, remaining
-QAs returned `"You've hit your limit · resets Apr 23, 12pm"` and
-judge scored those 0. 87 of 199 QAs were rate-limited.
+**Rate-limited mid-run** at QA ~113. The answerer's usage cap was hit, remaining
+QAs returned a `"You've hit your limit"` notice and the judge scored those 0.
+87 of 199 QAs were rate-limited.
 
-### Real numbers (112 QAs with valid Opus responses)
+### Real numbers (112 QAs with valid answerer responses)
 
 | Category | v3.3.0 baseline | v3.4.0 | Δ |
 |---|---|---|---|
@@ -22,7 +23,7 @@ judge scored those 0. 87 of 199 QAs were rate-limited.
 ### If we had counted the rate-limited 0-scores
 
 Apparent overall score on full 199 QAs = 46.46 — **not a valid
-measurement** because 87/199 responses weren't from Opus.
+measurement** because 87/199 responses weren't from the answerer.
 
 ## Interpretation
 
@@ -37,11 +38,11 @@ measurement** because 87/199 responses weren't from Opus.
 
 ## Next
 
-1. Re-run adversarial + single-hop + open-domain QAs after Opus
-   limit resets (Apr 23 12pm PT), OR
-2. Run Mistral-Large answerer (unlimited API) to validate v3.4
-   features without the rate-limit interruption, then A/B against
-   Opus when quota resets.
+1. Re-run adversarial + single-hop + open-domain QAs after the
+   answerer's rate limit resets, OR
+2. Run an unlimited-API answerer to validate v3.4 features without the
+   rate-limit interruption, then A/B against the rate-limited endpoint
+   when its quota resets.
 
 Not kicking full 10-conv until a clean 199-QA conv-0 result is in
 hand.

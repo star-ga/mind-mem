@@ -66,6 +66,22 @@ canonical module path, not the shim.
 - Mock external dependencies (LLM calls, network)
 - Aim for >90% coverage on new code
 
+## Docs-Claim Gate
+
+Public claims (IR version strings, runtime-boundary wording, tool counts)
+must not drift out of sync with the wider MIND project. A small regression
+gate checks `README.md` and `docs/**/*.md` against the shared MIND
+capability manifest:
+
+```bash
+# Requires the star-ga/mind repo checked out beside this one (../mind).
+scripts/check_claims.sh
+```
+
+It runs forbidden-phrase + canonical-IR checks only; it exits 0 (skips
+cleanly) if the `mind` repo isn't present, so it's safe to run anywhere.
+Run it after editing any public docs.
+
 ## Reporting Issues
 
 Use the GitHub issue templates for bug reports and feature requests.

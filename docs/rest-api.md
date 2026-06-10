@@ -74,7 +74,7 @@ curl http://127.0.0.1:8080/v1/health
 {
   "_schema_version": "1.0",
   "status": "ok",
-  "workspace": "/home/n/.openclaw/workspace",
+  "workspace": "/path/to/workspace",
   "workspace_exists": true,
   "schema_version": "2.1.0",
   "api_version": "3.2.0"

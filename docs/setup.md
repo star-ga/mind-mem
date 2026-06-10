@@ -149,7 +149,7 @@ See [Configuration Reference](configuration.md#extraction-llm-backend) for full 
 }
 ```
 
-Restart Claude Code. All 81 MCP tools (recall, recall_with_axis,
+Restart Claude Code. All 83 MCP tools (recall, recall_with_axis,
 verify_merkle, observe_signal, graph_query, build_core,
 agent_inject, etc.) become available.
 

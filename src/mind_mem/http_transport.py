@@ -45,6 +45,7 @@ import hmac
 import json
 import logging
 import os
+import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -158,6 +159,49 @@ _LOOPBACK_ADDRS = frozenset({"127.0.0.1", "::1", "localhost"})
 class _ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
+    # Bound the per-request handler thread join at shutdown so stop() is
+    # deterministic and never blocks on a stuck client connection.
+    block_on_close = True
+
+
+# Server-startup readiness handshake (deterministic boot). HTTPServer.__init__
+# binds + listens synchronously, but serve_forever()'s accept loop runs in a
+# background thread that may not have been scheduled yet when serve_http()
+# returns. On a loaded CI runner (notably Windows) a client that connects in
+# that window can stall until its own connect timeout fires, surfacing as a
+# spurious socket TimeoutError. We close the window by polling a real TCP
+# connect against the listener until it accepts, before serve_http() returns.
+_READY_TIMEOUT_SECS = 10.0
+_READY_POLL_INTERVAL_SECS = 0.01
+
+
+def _wait_until_accepting(host: str, port: int, *, deadline: float) -> None:
+    """Block until ``(host, port)`` accepts a TCP connection or ``deadline``.
+
+    Raises :class:`TimeoutError` if the listener never accepts within the
+    deadline so a genuinely-broken bind fails loudly instead of leaking a
+    half-started server. The probe connection is opened and immediately
+    closed; it does not issue an HTTP request, so it does not perturb the
+    rate limiter or any application state.
+    """
+    # 0.0.0.0 / :: are bind-all sentinels that are not necessarily
+    # connectable as destinations; probe loopback instead.
+    connect_host = host
+    if host in ("", "0.0.0.0", "::"):
+        connect_host = "127.0.0.1"
+    last_err: OSError | None = None
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(
+                f"http_transport listener on {host}:{port} did not start accepting within {_READY_TIMEOUT_SECS:.1f}s"
+            ) from last_err
+        try:
+            with socket.create_connection((connect_host, port), timeout=min(remaining, 1.0)):
+                return
+        except OSError as exc:
+            last_err = exc
+            time.sleep(min(_READY_POLL_INTERVAL_SECS, max(remaining, 0.0)))
 
 
 class _PerClientRateLimiter:
@@ -1065,12 +1109,24 @@ def serve_http(
         rate_limiter=rate_limiter,
     )
     httpd = _ThreadingHTTPServer((host, port), handler_cls)
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    # serve_forever()'s poll interval bounds shutdown latency; tighten it so
+    # _stop() returns promptly instead of waiting up to the 0.5s default.
+    thread = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
     thread.start()
 
     def _stop() -> None:
         httpd.shutdown()
         httpd.server_close()
+
+    # Deterministic boot: do not return until the listener is actually
+    # accepting connections (see _wait_until_accepting). If the accept loop
+    # never comes up, tear the half-started server down and surface the error.
+    try:
+        _wait_until_accepting(host, port, deadline=time.monotonic() + _READY_TIMEOUT_SECS)
+    except TimeoutError:
+        _stop()
+        thread.join(timeout=5)
+        raise
 
     _log.info(
         "http_transport_started",

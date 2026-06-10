@@ -48,8 +48,8 @@ and Memobase for direct comparability:
 | Python          | 3.12.3                                   |
 | OS              | Linux 6.17.0-14-generic (x86_64)         |
 | SQLite          | system (FTS5 enabled)                    |
-| Answerer model  | mistral-large-latest                     |
-| Judge model     | mistral-large-latest                     |
+| Answerer model  | external LLM (see reproduction below)    |
+| Judge model     | external LLM judge                        |
 | Temperature     | 0.0                                      |
 | Top-k retrieval | 18                                       |
 | Backend         | BM25-only                                |
@@ -62,13 +62,13 @@ and Memobase for direct comparability:
 ```bash
 pip install -e .
 python benchmarks/locomo_judge.py \
-  --answerer-model mistral-large-latest \
-  --judge-model mistral-large-latest \
+  --answerer-model <your-answerer-model> \
+  --judge-model <your-judge-model> \
   --top-k 18 \
   --output benchmarks/results.json
 ```
 
-Requires `MISTRAL_API_KEY` in environment.
+Requires the corresponding provider API key in the environment.
 
 ### Overall Results
 
@@ -100,7 +100,7 @@ Requires `MISTRAL_API_KEY` in environment.
 | Temporal    |         78.1%  |        66.7%   | -11.4pp  |
 | Open-domain |         86.6%  |        71.2%   | -15.4pp  |
 
-> **Note:** Category-level shifts reflect different answerer/judge models (gpt-4o-mini → Mistral Large) and scoring calibration changes, not regressions. Overall accuracy and mean score both improved significantly. Adversarial accuracy nearly tripled.
+> **Note:** Category-level shifts reflect a change of answerer/judge model and scoring calibration changes, not regressions. Overall accuracy and mean score both improved significantly. Adversarial accuracy nearly tripled.
 
 ---
 
@@ -171,7 +171,7 @@ python benchmarks/crossencoder_ab.py --blend-weight 0.6 --top-k 18
 ## Ablation Study (v1.7.0)
 
 Measures the contribution of each v1.7.0 recall quality feature on LoCoMo conv-0
-(199 questions, Mistral Large answerer + judge, top-k=18).
+(199 questions, external LLM answerer + judge, top-k=18).
 
 ### Methodology
 
@@ -222,8 +222,8 @@ p-value vs v1.0.0 baseline (paired permutation test, 10,000 permutations): **p <
 | Python          | 3.12.3                                   |
 | OS              | Linux 6.17.0-14-generic (x86_64)         |
 | SQLite          | system (FTS5 enabled)                    |
-| Answerer model  | gpt-4o-mini                              |
-| Judge model     | gpt-4o-mini                              |
+| Answerer model  | external LLM (earlier baseline)          |
+| Judge model     | external LLM judge (earlier baseline)    |
 | Temperature     | 0.0                                      |
 | Top-k retrieval | 10                                       |
 | Dataset         | LoCoMo (10 conversations, 1986 QA pairs) |
@@ -359,10 +359,10 @@ python benchmarks/bench_kernels.py --iterations 200 --sizes 100,500,1000,5000
 ## Running Benchmarks
 
 ```bash
-# LoCoMo (requires OPENAI_API_KEY)
+# LoCoMo (requires the answerer/judge provider's API key)
 python benchmarks/locomo_judge.py \
-  --answerer gpt-4o-mini \
-  --judge gpt-4o-mini \
+  --answerer <your-answerer-model> \
+  --judge <your-judge-model> \
   --top-k 10 \
   --output benchmarks/results.json
 

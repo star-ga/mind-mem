@@ -7,7 +7,7 @@
 set -euo pipefail
 
 POD_ID="uz2uajluzskmm2"
-SSH_KEY="/home/n/.ssh/id_ed25519"
+SSH_KEY="${MM_SSH_KEY:-$HOME/.ssh/id_ed25519}"
 # Default HF token location — override with HF_TOKEN_FILE env. Kept under
 # $HOME (not /tmp) to avoid a world-readable, predictably-named path that
 # other tenants of a shared box could race or read. 0600 enforced below.
@@ -26,7 +26,7 @@ if [[ "${perms}" != "600" && "${perms}" != "400" ]]; then
 fi
 
 api_key() {
-    awk -F'=' '/api_key|^apikey/ {gsub(/[ "]/, "", $2); print $2; exit}' /home/n/.runpod/config.toml
+    awk -F'=' '/api_key|^apikey/ {gsub(/[ "]/, "", $2); print $2; exit}' "${RUNPOD_CONFIG:-$HOME/.runpod/config.toml}"
 }
 
 echo "=== Step 1: start pod ${POD_ID} ==="

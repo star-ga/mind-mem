@@ -5,7 +5,7 @@ GH issue: [#501](https://github.com/star-ga/mind-mem/issues/501)
 
 ## Problem
 
-MIND-Mem v2.10 ships **57 MCP tools**. Gemini 3 Pro's arch audit
+MIND-Mem v2.10 ships **57 MCP tools**. A cross-model arch review
 flagged this as a high-friction surface for LLM clients:
 
 > "57 MCP tools will overwhelm the context window and the agent's

@@ -48,7 +48,7 @@ except StaleVersionError:
     ...
 ```
 
-This closes the unanimous blind spot identified in the 4-LLM
+This closes the unanimous blind spot identified in the cross-model
 architecture audit: read-after-write consistency during concurrent tier
 promotions.
 

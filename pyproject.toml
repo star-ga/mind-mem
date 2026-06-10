@@ -183,6 +183,10 @@ select = ["E", "F", "W", "I"]
 "train/*.py" = ["E501", "E402"]
 "generate_mind7b_training.py" = ["E501", "E402"]
 "train_mind7b_runpod.py" = ["E402"]
+# Reproducible NIAH harness must cap native-thread env vars BEFORE numpy /
+# onnxruntime / tokenizers are imported (they read these at import time), so
+# its imports are intentionally not at the top of the file.
+"benchmarks/repro_niah.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.10"

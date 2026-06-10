@@ -150,7 +150,7 @@ v2 is evaluated on the same LoCoMo 10-conversation suite as v1. Publishing numbe
 
 | Target | Baseline (v1.1.0) | Current (v3.2.1) | v3.3.0 projected |
 |---|---|---|---|
-| Mean | 70.54 | ~76.7 (Opus conv-0) | **≥ 82** |
+| Mean | 70.54 | ~76.7 (conv-0) | **≥ 82** |
 | Temporal | — | — | — |
 | Adversarial | — | — | — |
 

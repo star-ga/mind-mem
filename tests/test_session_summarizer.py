@@ -167,7 +167,7 @@ class TestFormatSummaryBlock:
             "message_count": 10,
             "roles": {"user": 5, "assistant": 5},
             "topics": [("Refactoring", 3), ("CI", 2)],
-            "files": [("/home/n/app.py", 4)],
+            "files": [("/tmp/app.py", 4)],
             "decisions": [],
         }
         block = format_summary_block("SESS-20260224-001", "t.jsonl", summary, "abc123")
@@ -176,7 +176,7 @@ class TestFormatSummaryBlock:
         assert "TranscriptHash: abc123" in block
         assert "Messages: 10" in block
         assert "Refactoring (3)" in block
-        assert "/home/n/app.py" in block
+        assert "/tmp/app.py" in block
 
     def test_no_topics(self):
         summary = {

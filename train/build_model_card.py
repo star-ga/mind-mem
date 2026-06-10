@@ -288,7 +288,7 @@ def _load_train_metrics() -> dict[str, str]:
 
 
 def main() -> None:
-    init_path = Path(os.environ.get("MM_INIT_PATH", "/home/n/mind-mem/src/mind_mem/__init__.py"))
+    init_path = Path(os.environ.get("MM_INIT_PATH", str(Path(__file__).resolve().parents[1] / "src" / "mind_mem" / "__init__.py")))
     version = os.environ.get("MM_VERSION_OVERRIDE", "3.9.0")
     if init_path.is_file() and not os.environ.get("MM_VERSION_OVERRIDE"):
         for line in init_path.read_text().splitlines():

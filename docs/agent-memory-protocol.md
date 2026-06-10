@@ -47,7 +47,7 @@ about to hallucinate. Stop and call recall first.
 
 ## Why this exists
 
-Audit on 2026-05-08 of a sibling product (a 9-LLM consensus engine
+Audit on 2026-05-08 of a sibling product (a multi-agent consensus engine
 also based on OpenClaw) showed it had its own internal memory plugin
 and **zero call paths to mind-mem MCP**. The result was repeated
 hallucinations on memory-grounded questions. Adding this prompt block

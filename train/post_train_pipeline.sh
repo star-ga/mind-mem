@@ -4,7 +4,7 @@
 # Pre-conditions:
 #   * H200 pod uz2uajluzskmm2 finished training and dumped weights to
 #     /workspace/train-output/full-ft on the pod.
-#   * SSH key at /home/n/.ssh/id_ed25519, pod IP 213.186.10.12 port 15075.
+#   * SSH key at ~/.ssh/id_ed25519, pod reachable via MM_POD_IP / MM_POD_PORT.
 #
 # Steps:
 #   1. scp weights pod → /data/checkpoints/mm-workspace/full-ft-v3.9.2/
@@ -14,9 +14,9 @@
 #   5. Print decision: PASS → push HF + GGUF; FAIL → diagnose
 set -euo pipefail
 
-POD_IP="${MM_POD_IP:-213.186.10.12}"
-POD_PORT="${MM_POD_PORT:-15075}"
-SSH_KEY="${MM_SSH_KEY:-/home/n/.ssh/id_ed25519}"
+POD_IP="${MM_POD_IP:?set MM_POD_IP to the training pod IP}"
+POD_PORT="${MM_POD_PORT:-22}"
+SSH_KEY="${MM_SSH_KEY:-$HOME/.ssh/id_ed25519}"
 WORKSPACE="/data/checkpoints/mm-workspace"
 NEW_DIR="${WORKSPACE}/full-ft-v3.9.2"
 OLD_DIR="${WORKSPACE}/mind-mem-4b-fullft/full-ft"
@@ -50,7 +50,7 @@ ls -la "${CANONICAL}"
 
 echo ""
 echo "=== Step 4: run eval gate ==="
-cd /home/n/mind-mem
+cd "$(git rev-parse --show-toplevel)"
 MM_FULLFT_DIR="${CANONICAL}" python3 train/eval_harness.py 2>&1 | tee "${WORKSPACE}/train-output/eval_v3.9.2.log"
 RC=$?
 echo ""

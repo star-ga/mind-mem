@@ -1,6 +1,6 @@
 # MIND-Mem — response to the 2026-05-02 ecosystem audit
 
-The audit ran during the cross-repo alignment pass that brought rfn-mind v0.1.3, MindLLM v0.4.0-alpha.6, mind-flow, mind-runtime, mind-inference, and 512-mind onto the same governance-kernel surface. MIND-Mem is the L4 retrieval-time layer of the ecosystem; this commit lands the alignment metadata other repos already carry.
+The audit ran during the cross-repo alignment pass that brought rfn-mind v0.1.3, MindLLM v0.4.0-alpha.6, mind-inference, and 512-mind onto the same governance-kernel surface. MIND-Mem is the L4 retrieval-time layer of the ecosystem; this commit lands the alignment metadata other repos already carry.
 
 ## How to read this
 

@@ -34,7 +34,7 @@ Usage:
       --local-weights /data/checkpoints/mm-workspace/full-ft.retry2j-...
 
 Ledger:
-  /home/n/mind-mem/.run-ledger.jsonl (append-only, JSONL)
+  <repo>/.run-ledger.jsonl (append-only, JSONL)
   One line per run with: tag, started_at, pod_id, budget_usd, spend_usd,
   weights_local_path, weights_local_sha256, weights_pod_sha256,
   hash_match, pod_terminated_at, eval_summary, status.
@@ -51,7 +51,7 @@ import sys
 from pathlib import Path
 
 LEDGER = Path(os.environ.get(
-    "MM_RUN_LEDGER", "/home/n/mind-mem/.run-ledger.jsonl"))
+    "MM_RUN_LEDGER", str(Path(__file__).resolve().parents[1] / ".run-ledger.jsonl")))
 WEIGHT_ROOT = Path("/data/checkpoints/mm-workspace")
 KNOWN_GOOD = WEIGHT_ROOT / "full-ft.retry2e-109of109+18of22"
 

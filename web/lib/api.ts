@@ -6,7 +6,7 @@
  * MIND_MEM_API_URL env var.
  *
  * The REST API is documented at
- * /home/n/mind-mem/docs/v3.2.0-release-notes.md and served by
+ * docs/v3.2.0-release-notes.md and served by
  * src/mind_mem/api/rest.py.
  */
 

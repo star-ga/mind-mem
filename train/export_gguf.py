@@ -14,7 +14,7 @@ The full-FT path is auto-detected when a `model.safetensors` (or
 Override layout choice with ``MM_GGUF_SOURCE`` (`fullft` or `adapter`).
 
 Prerequisites:
-    ``llama.cpp`` cloned at /home/n/llama.cpp  (or set MM_LLAMA_CPP_DIR).
+    ``llama.cpp`` cloned at ~/llama.cpp  (or set MM_LLAMA_CPP_DIR).
     ``llama.cpp`` built:  cmake -B build && cmake --build build.
 
 Output:
@@ -43,7 +43,7 @@ FULLFT = Path(
 MERGED = Path("/data/checkpoints/mm-workspace/mm_merged")
 OUT_GGUF_F16 = Path("/data/checkpoints/mm-workspace/mind-mem-4b-F16.gguf")
 OUT_GGUF_Q4 = _BASE_DIR / "mind-mem-4b-Q4_K_M.gguf"
-LLAMA_CPP = Path(os.environ.get("MM_LLAMA_CPP_DIR", "/home/n/llama.cpp"))
+LLAMA_CPP = Path(os.environ.get("MM_LLAMA_CPP_DIR", str(Path.home() / "llama.cpp")))
 
 
 def _resolve_source() -> Path:
@@ -94,7 +94,7 @@ def _convert_to_gguf(source: Path) -> None:
     if not convert.is_file():
         sys.exit(
             f"llama.cpp converter missing at {convert}. "
-            "Clone https://github.com/ggml-org/llama.cpp to /home/n/llama.cpp "
+            "Clone https://github.com/ggml-org/llama.cpp to ~/llama.cpp "
             "or set MM_LLAMA_CPP_DIR."
         )
     cmd = [

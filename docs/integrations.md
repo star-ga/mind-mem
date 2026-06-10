@@ -44,7 +44,7 @@ Currently supported:
 | OpenClaw | OpenClaw | `~/.openclaw/openclaw.json` |
 | NanoClaw / NemoClaw | OpenClaw forks | `~/.openclaw/openclaw.json` |
 
-**What this means**: each of these tools can call MIND-Mem's 81 MCP
+**What this means**: each of these tools can call MIND-Mem's 83 MCP
 tools (recall, propose_update, scan, hybrid_search, mic_convert_tool,
 mic_inspect_tool, etc.) the same way it calls any other MCP server.
 
@@ -88,8 +88,8 @@ matching pipeline configs in the README.
 | Benchmark | Score | Methodology |
 |-----------|-------|-------------|
 | **NIAH** (Needle In A Haystack) | **250 / 250** (100%) | Hybrid BM25 + BAAI/bge-large-en-v1.5 + RRF (k=60) + sqlite-vec. See `benchmarks/NIAH.md`. |
-| **LoCoMo** (Mistral Large judge, 10-conv, 1986 questions) | **73.8% Acc≥50, mean 70.5** | BM25 + RM3 query expansion → top-18 evidence → observation compression → answer → judge. Full 10-conv benchmark. |
-| **LoCoMo** (Mistral Large judge, conv-0, 199 questions, hybrid pipeline) | **92.5% Acc≥50, mean 76.7** | Hybrid: BM25 + Qwen3-Embedding-8B (4096d) → RRF fusion → top-18 → compression → answer → judge. |
+| **LoCoMo** (external LLM judge, 10-conv, 1986 questions) | **73.8% Acc≥50, mean 70.5** | BM25 + RM3 query expansion → top-18 evidence → observation compression → answer → judge. Full 10-conv benchmark. |
+| **LoCoMo** (external LLM judge, conv-0, 199 questions, hybrid pipeline) | **92.5% Acc≥50, mean 76.7** | Hybrid: BM25 + Qwen3-Embedding-8B (4096d) → RRF fusion → top-18 → compression → answer → judge. |
 | **LoCoMo Adversarial subset** | **97.9% Acc≥50** | Subset of the conv-0 hybrid run; tests retrieval against intentionally-misleading distractor turns. |
 
 > Comparisons: published numbers for Mem0 (66.88), Zep (65.99),
@@ -101,9 +101,9 @@ matching pipeline configs in the README.
 
 ## Production usage at STARGA
 
-MIND-Mem is the daily-driver memory layer for STARGA's six active
-projects: `mind`, `mind-runtime`, `mindlang.dev`, `mind-inference`,
-`mind-fleet`, `arch-mind`. Used internally for cross-session recall,
+MIND-Mem is the daily-driver memory layer across STARGA's active
+projects, including `mind`, `mindlang.dev`, `mind-inference`, and
+`arch-mind`. Used internally for cross-session recall,
 contradiction detection, and audit-grade rationale chains during
 agent-driven development.
 

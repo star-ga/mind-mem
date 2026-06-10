@@ -775,11 +775,11 @@ surface as v4.0.3.
 
 - README badges: `tests-4400+ → 5155+` (actual collected count),
   `clients-17 → 15` (actual H2 sections in `docs/client-integrations.md`),
-  `audit-3-LLM → 10-LLM` (matches the 10-LLM consensus gate established
-  in v3.11.0; was last updated when the gate was 3 models).
+  audit badge → `cross-model` (matches the cross-model consensus gate
+  established in v3.11.0; was last updated when the gate was smaller).
 - README comparison table: `81 MCP tools` → `84` (matches header
-  badge + `scripts/count_mcp_tools.py`); `3-LLM audit per release` →
-  `10-LLM consensus audit per release`.
+  badge + `scripts/count_mcp_tools.py`); audit cadence text →
+  `cross-model consensus audit per release`.
 - CLAUDE.md drift: section header `### MCP Tools (81)` → `(84)`;
   `16 AI clients auto-wired` → `15` (aligns with README badge + docs).
 
@@ -1015,7 +1015,7 @@ unmodified by default.
 
 - **`tier_memory.py`** — `block_recall_tier` table with CAS via
   `block_version`. Stale writes raise `StaleVersionError`. Addresses the
-  unanimous read-after-write blind spot from the 4-LLM architecture audit.
+  unanimous read-after-write blind spot from the cross-model architecture audit.
 - **`cognitive_kernel.py`** — `KernelKind` enum (`DEFAULT`,
   `SURPRISE_WEIGHTED`, `LINEAGE_FIRST`, `RECENT_FIRST`,
   `CONTRADICTS_FIRST`, `GRAPH_WALK`), `register_kernel`, `mind_recall`,
@@ -1304,11 +1304,11 @@ actions taken.
   job.
 - All three modes are idempotent — safe to re-run on cron.
 
-## v3.10.6 — `mm install-model` hardening (multi-LLM audit findings)
+## v3.10.6 — `mm install-model` hardening (security audit findings)
 
-Released 2026-05-08. Three external code reviewers (Mistral Large,
-xAI Grok, DeepSeek) plus internal review found additional defense-in-depth
-gaps in v3.10.5's `_cmd_install_model`. All fixed below.
+Released 2026-05-08. An independent security review plus internal
+review found additional defense-in-depth gaps in v3.10.5's
+`_cmd_install_model`. All fixed below.
 
 ### Fixed
 - **Modelfile injection via `--dest` newline** (internal review). A
@@ -1320,24 +1320,24 @@ gaps in v3.10.5's `_cmd_install_model`. All fixed below.
   blanket `/var/` block refused legitimate macOS dests. Narrowed to
   `/var/lib/`, `/var/log/`, `/var/run/`, `/var/cache/` so macOS
   tmpdirs work.
-- **Modelfile `FROM` path unquoted** (Grok + Mistral). A dest with
+- **Modelfile `FROM` path unquoted** (external review). A dest with
   spaces could confuse Ollama's parser. Now `FROM "{dest}"`.
 - **Full env passed to `ollama` subprocess** (internal review). The
   user's full env including `ANTHROPIC_API_KEY`, `HF_TOKEN`, etc.
   was passed to `ollama run`. Now passes only `OLLAMA_KEEP_ALIVE`,
   `PATH`, `HOME`, and `OLLAMA_*` keys. Defense in depth against
   Ollama or its child processes logging env.
-- **Partial-write masquerading as complete download** (Mistral +
-  Grok). Streamed download went directly to `dest`. A mid-stream
+- **Partial-write masquerading as complete download** (external
+  review). Streamed download went directly to `dest`. A mid-stream
   drop without exception (rare but possible on some clients) would
   leave a corrupt file at the canonical path. Now downloads to
   `dest.part`, verifies size against `Content-Length`, then
   atomic-renames via `os.replace`.
-- **TOCTOU symlink at `dest`** (Mistral). If a symlink existed at
+- **TOCTOU symlink at `dest`** (external review). If a symlink existed at
   `dest` between checks and write, the rename could land at the
   symlink's target. Now reject symlinks at `dest` early; rename is
   POSIX-atomic.
-- **Modelfile non-atomic write** (Mistral + Grok). Concurrent
+- **Modelfile non-atomic write** (external review). Concurrent
   invocations could see a half-written Modelfile. Now write to
   `Modelfile.part` and `os.replace` atomically.
 
@@ -1451,7 +1451,7 @@ wasn't told to actually call `mcp__mind-mem__recall` before answering.
   format-specific templates — they're not text system prompts.
 
 ### Why
-A 9-LLM consensus product based on OpenClaw was hallucinating on
+A multi-agent product was hallucinating on
 memory-grounded questions despite mind-mem's Postgres backend
 holding the right answers. Audit traced this to MCP wiring being
 present but the agent system-prompt only saying *"run `mm context`
@@ -1814,7 +1814,7 @@ release; the live workspace was re-migrated and EXPLAIN-verified.
 
 ### Verified
 
-- Re-migrated `/home/n/.openclaw/workspace`: 263 blocks + 263
+- Re-migrated the production workspace: 263 blocks + 263
   embeddings, 0 errors, 12.19s end-to-end.
 - `EXPLAIN` of the BM25 path now reports `Bitmap Index Scan on
   blocks_fts` (was `Seq Scan` in v3.8.13).
@@ -2868,7 +2868,7 @@ allowed" behaviour must take action — see *Migration* below.
     (``../../private/...``) that never matched the manifest on
     restore. Every legitimate file in the touched root was deleted
     as an "orphan" on rollback.
-  - ``_cleanup_orphans_from_manifest`` (the v3.6.9 Gemini-CLI fix)
+  - ``_cleanup_orphans_from_manifest`` (the v3.6.9 audit fix)
     replaced ``dirpath = os.path.join(ws, d)`` with
     ``dirpath = safe_d`` (the realpath-resolved value), reproducing
     bug #1's failure mode in the cleanup walk.
@@ -2953,7 +2953,7 @@ release makes the guard explicit at every touchpoint.
 
 ### Security
 
-- **Orphan-cleanup path-injection hardened** (Gemini CLI post-audit
+- **Orphan-cleanup path-injection hardened** (post-audit
   finding). ``_cleanup_orphans_from_manifest`` walked
   ``os.path.join(ws, d)`` for every key ``d`` in
   ``MANIFEST.json``'s ``cleanup_inventory``; a crafted manifest with
@@ -3002,7 +3002,7 @@ allowlist for the same reason.
 - ``MIND_MEM_LIB`` env-override allowlist expanded to match so
   operators can point at either path.
 - Verified end-to-end: ``MindMemKernel()`` loads
-  ``/home/n/mind-mem/lib/libmindmem.so``, ``is_available() ==
+  ``<repo>/lib/libmindmem.so``, ``is_available() ==
   True``, and all exported scoring symbols (``bm25f_batch``,
   ``rrf_fuse``, ``category_assign``, ``negation_penalty``,
   ``date_proximity``) resolve.
@@ -3042,7 +3042,7 @@ receipts, env-flag table, two-stage block) inline.
 
 ## 3.6.2 (2026-04-22)
 
-**Fix — WrappedDEK legacy-format compatibility.** Gemini CLI audit of
+**Fix — WrappedDEK legacy-format compatibility.** An audit of
 the v3.4.2 → v3.6.1 delta flagged that
 ``WrappedDEK.from_b64`` could not parse blobs persisted under the
 pre-v3.5.0-rc colon-delimited wire format (replaced by a
@@ -3173,7 +3173,7 @@ tag stripper for local reasoning models.
 
 ### LoCoMo bench (honest status)
 
-conv-0 (Mistral-Large answerer + judge, v3.4 retrieval features on):
+conv-0 (external LLM answerer + judge, v3.4 retrieval features on):
 **86.33** — +8.4 over v1.9.0 published 77.9. Ahead of all publicly
 benchmarked competitors **except** Mem0's 2026 managed platform
 (reported 91.6). The per-category-prompt / 4b-utility /
@@ -3211,7 +3211,7 @@ items (warnings + type issues) surfaced by `ruff`, `mypy src/`, and
 
 ## 3.4.1 (2026-04-22)
 
-**Audit-fix patch.** Resolves 4 HIGH findings from the Gemini CLI
+**Audit-fix patch.** Resolves 4 HIGH findings from the external
 post-release audit. No behavioural breaks for users already on 3.4.0.
 
 ### Fixed
@@ -3240,8 +3240,7 @@ post-release audit. No behavioural breaks for users already on 3.4.0.
 ### Audit provenance
 
 Pre-release: 2-agent audit (code-reviewer + security-reviewer).
-Post-release: Gemini CLI 3.1-Pro audit caught the 4 issues above.
-Codex CLI audit blocked by OpenAI quota exhaustion.
+Post-release: an independent review caught the 4 issues above.
 
 ## 3.4.0 (2026-04-22)
 
@@ -3308,7 +3307,7 @@ are resolved in this release:
 - Fence-stripping handles ``JSON`` / ``json`` / ``JsOn`` variants
   from non-deterministic LLM outputs.
 
-### LoCoMo (Opus 4.7 answerer, Mistral-Large judge, BM25 retrieval)
+### LoCoMo (external LLM answerer + judge, BM25 retrieval)
 
 | Release | conv-0 10-QA smoke | Notes |
 |---|---|---|
@@ -3464,13 +3463,13 @@ samples odd, ensemble uses reranker not retriever, etc.).
   latest checkpoint when ``output_dir`` contains one. Survives SSH
   hangups and pod restarts.
 
-### LoCoMo results (Opus 4.7 answerer, Mistral-Large judge)
+### LoCoMo results (external LLM answerer + judge)
 
 | | conv-0 | Notes |
 |---|---|---|
-| v1.1.0 (Mistral baseline) | 70.54 | Original LoCoMo run |
-| v3.2.1 (Opus, BM25) | 76.7 | Previous release |
-| v3.3.0 (Opus, BM25) | **77.06** | This release — 199 QAs, +0.36 over v3.2.1 |
+| v1.1.0 (baseline) | 70.54 | Original LoCoMo run |
+| v3.2.1 (BM25) | 76.7 | Previous release |
+| v3.3.0 (BM25) | **77.06** | This release — 199 QAs, +0.36 over v3.2.1 |
 
 Per-category on v3.3.0 conv-0: adversarial=92.98, temporal=98.12,
 open-domain=74.87, single-hop=70.12, multi-hop=64.35.
@@ -3479,8 +3478,7 @@ open-domain=74.87, single-hop=70.12, multi-hop=64.35.
 rerank ensemble + self-consistency) regressed full-bench score to
 70.05 because sub-query RRF-fuse attenuated joint-reasoning bridges.
 Path to 85+ documented in ``docs/v3.4.0-roadmap-llm-consensus.md``
-based on 4-LLM consensus (Grok-4.1, Mistral-Large, DeepSeek-Reasoner,
-Gemini-3.1-Pro).
+based on cross-model consensus.
 
 ## 3.2.1 (2026-04-20)
 
@@ -4085,7 +4083,7 @@ Fix options:
 
 ## 3.0.0 (2026-04-13)
 
-**v3.0 architectural release.** Addresses seven of nine v3.0 workstreams flagged in the Gemini arch review (issues #501–#507). Backwards-compatible with v2.x (no data migration required); adds opt-in encryption + alerting + AI-client integrations.
+**v3.0 architectural release.** Addresses seven of nine v3.0 workstreams flagged in the architecture review (issues #501–#507). Backwards-compatible with v2.x (no data migration required); adds opt-in encryption + alerting + AI-client integrations.
 
 ### Added
 
@@ -4114,7 +4112,7 @@ Fix options:
 
 ## 2.10.0 (2026-04-13)
 
-**Audit-integrity patch release.** Lands two correctness fixes from the cognitive-kernel design review (GH #498 + #499), plus seven additional hardening fixes caught by the pre-release 3-CLI audit (Gemini 3 Pro identified a downgrade-attack in the v1 fallback that would have shipped). Hash-chain verification is backward-compatible for pure-v1 chains; once any chain contains a v3 entry, no later entry may fall back to v1.
+**Audit-integrity patch release.** Lands two correctness fixes from the cognitive-kernel design review (GH #498 + #499), plus seven additional hardening fixes caught by the pre-release cross-model audit (which identified a downgrade-attack in the v1 fallback that would have shipped). Hash-chain verification is backward-compatible for pure-v1 chains; once any chain contains a v3 entry, no later entry may fall back to v1.
 
 ### Added
 - `src/mind_mem/q1616.py` — Q16.16 fixed-point helpers (`to_q16_16`, `from_q16_16`, `hex_q16_16`). Gives byte-identical encoding of confidence/importance scores across x86_64, aarch64, and every other CPU architecture; resolves non-determinism in cross-architecture audit-chain replay.
@@ -4350,7 +4348,7 @@ Fix options:
 - Incremental core diffing / patch format
 - LLM-powered core rollback with change summary
 
-### Fixed (audit-driven, pre-release — Claude + Grok + Gemini)
+### Fixed (audit-driven, pre-release — cross-model review)
 - **[MEDIUM]** `load_core` now filters to a closed set of known entry filenames and rejects anything else. Earlier behaviour would happily stream arbitrary tar entries into memory; a malicious archive could waste RAM/CPU via unknown files.
 - **[MEDIUM]** Per-entry size cap (default 256 MiB) + total entry count cap defuse tar-bomb DoS. Callers with legitimately huge cores can raise the caps explicitly.
 - **[MEDIUM]** Manifest ↔ content reconciliation: `block_count`, `edge_count`, and the `has_*` flags must all match what the archive actually carries. Catches hand-rebuilt archives where an attacker adjusted manifest metadata without re-signing.
@@ -4378,7 +4376,7 @@ Fix options:
 - LLM-powered entity coreference (current registry does lowercased whitespace-collapsed canonicalisation only).
 - Cypher-compatible query parser (current `graph_query` is a structured JSON interface).
 
-### Fixed (audit-driven, pre-release — 3-LLM joint: Claude + codex + Grok)
+### Fixed (audit-driven, pre-release — cross-model joint review)
 - **[MEDIUM]** Temporal validity comparison moved from raw SQLite string `>=` to Python `datetime` parsing. Naive string compare broke on fractional seconds (`"...56.999Z" < "...56Z"` by ASCII). Malformed timestamps are now rejected at `add_edge` time instead of silently tripping over at query time.
 - **[LOW]** `json.dumps(metadata)` now uses `default=str` so non-JSON-native values (datetime, set, Path) stringify gracefully instead of raising mid-insert.
 - **[LOW]** `KnowledgeGraph` implements `__enter__` / `__exit__` so callers can `with KnowledgeGraph(path) as kg:` instead of remembering `close()`.
@@ -4408,7 +4406,7 @@ Fix options:
 
 These remain on the roadmap under v2.1.0 and ship when the training infrastructure is available. The signal store is the durable foundation they need.
 
-### Fixed (audit-driven, pre-release — 3-LLM joint: Claude + codex + Gemini/Grok)
+### Fixed (audit-driven, pre-release — cross-model joint review)
 - **[HIGH]** `SignalStore._load_ids` / `all_signals` now open the JSONL with `encoding="utf-8", errors="replace"` so binary corruption at the tail of the file (e.g. a partial write during a crash) can no longer block the store from loading. Both LLMs flagged this.
 - **[MEDIUM]** Correction markers are now word-boundary regexes (`\bwrong\b`, `\bno[, ]*i\s+(?:mean|meant)\b`, …). Previously `"wrong"` as a substring flipped queries containing `wrongdoing` / `wrongful` into `CORRECTION`, poisoning A/B eval.
 - **[MEDIUM]** `_tokens()` caps input at 8192 chars before regex matching to defuse CPU DoS from hostile multi-MB queries.
@@ -4434,7 +4432,7 @@ These remain on the roadmap under v2.1.0 and ship when the training infrastructu
 - All v2.0.0a*/b*/rc* features complete
 - **3197 tests passing**, 6 skipped, 0 failing on Python 3.12
 - No breaking changes from v1.9.x (v2.0 surfaces are additive)
-- 3-LLM joint audit (Claude + codex + Gemini/Grok) performed on every pre-release; CRITICAL/HIGH findings fixed before upload
+- Cross-model joint audit performed on every pre-release; CRITICAL/HIGH findings fixed before upload
 - Migration path: `pip install --upgrade mind-mem` — no config migration required
 
 ### Deferred to future releases
@@ -4456,7 +4454,7 @@ These remain on the roadmap under v2.1.0 and ship when the training infrastructu
 - `verify_merkle` MCP tool (user scope) — builds the tree from the live FTS index, returns `{ok, root, proof, block_id}` for the supplied block.
 - `mind_mem_verify` MCP tool (user scope) — invokes the standalone verifier against the active workspace so agents can trigger verification without shelling out.
 
-### Fixed (audit-driven, pre-release — 3-LLM joint: Claude + codex/GPT-5.5 + Gemini/Grok via API)
+### Fixed (audit-driven, pre-release — cross-model joint review)
 - **[CRITICAL]** `sqlite_index.merkle_leaves()` was querying `blocks.content_hash`, a column that doesn't exist (content hashes live on `index_meta`). Every call would have crashed with `no such column`. Fixed to join `index_meta` with `blocks`.
 - **[CRITICAL]** `HashChainV2` gained `open_readonly(path)` + `readonly=True` constructor flag. The verifier now opens the ledger via `file:...?mode=ro` and skips `_init_db`, so auditing a workspace never mutates schema — not even on DBs that predate the current layout.
 - **[HIGH]** `verify_cli` `--snapshot` now canonicalises the path and requires it to stay under the workspace root. `..` traversal and absolute paths are rejected with a structured failure. `mind_mem_verify` MCP tool enforces the same invariant at the MCP layer so hostile callers can't coax the verifier into reading an external directory.
@@ -4475,11 +4473,11 @@ These remain on the roadmap under v2.1.0 and ship when the training infrastructu
 ### Docs refresh (ships with this release)
 - README badges switched to `?include_prereleases` so PyPI shows the current pre-release instead of the stale v1.9.1 stable.
 - Removed the CI and Security-Review badges — GitHub Actions is disabled account-wide; the badges would stay permanently "unknown".
-- Bumped hardcoded counts across README + comparison matrix + FAQ + docs to 3197 tests / 35 MCP tools. Added badges for "3-LLM joint audit" and "release: local (no Actions)".
+- Bumped hardcoded counts across README + comparison matrix + FAQ + docs to 3197 tests / 35 MCP tools. Added badges for "cross-model joint audit" and "release: local (no Actions)".
 
 ## 2.0.0b1 (2026-04-13)
 
-**v2.0.0b1: inference acceleration — Python-only subset, hardened via 3-LLM joint audit (Claude Opus 4.6 + Grok 4.1 Fast + codex/GPT-5.5). LLM prefix cache + speculative prefetch predictor. The MIND-compiled hot paths (BM25F, SHA3-512, vector similarity, RRF fusion) are deferred until the `mindc` toolchain is available.**
+**v2.0.0b1: inference acceleration — Python-only subset, hardened via cross-model joint audit. LLM prefix cache + speculative prefetch predictor. The MIND-compiled hot paths (BM25F, SHA3-512, vector similarity, RRF fusion) are deferred until the `mindc` toolchain is available.**
 
 ### Added
 - `prefix_cache.py` — per-namespace LRU prefix cache with optional TTL. Keys include the namespace so cross-encoder, intent-router, and query-expansion caches never collide. Registry bounded at 64 namespaces to prevent dynamic-namespace DoS; `set_max_namespaces()` exposes the cap. `PrefixCache.stats()` surfaces hit/miss/evictions/expirations counters; `all_stats()` snapshots every registered cache.
@@ -4510,7 +4508,7 @@ These remain on the roadmap under v2.1.0 and ship when the training infrastructu
 
 ## 2.0.0a3 (2026-04-13)
 
-**v2.0.0a3: Observer-Dependent Cognition (ODC) — axis-aware retrieval, hardened via a 3-LLM joint audit (Claude Opus 4.6 + Gemini 3.1 Pro + Grok 4.1 Fast).**
+**v2.0.0a3: Observer-Dependent Cognition (ODC) — axis-aware retrieval, hardened via a cross-model joint audit.**
 
 ### Added
 - `observation_axis.py` — `ObservationAxis` enum (LEXICAL, SEMANTIC, TEMPORAL, ENTITY_GRAPH, CONTRADICTION, ADVERSARIAL), `AxisWeights` vector with non-negative / finite validation, `AxisScore` / `Observation` value objects, `axis_diversity()` metric, `rotate_axes()` / `should_rotate()` helpers, `adversarial_pair()` mapping.
@@ -4532,7 +4530,7 @@ These remain on the roadmap under v2.1.0 and ship when the training infrastructu
 
 ## 2.0.0a2 (2026-04-13)
 
-**GBrain-adapted knowledge enrichment: multi-query expansion, compiled truth pages, dream cycle, 4-layer dedup, smart chunker, 13 new MCP tools. Plus pre-release hardening from a 3-LLM joint audit (Claude Opus 4.6 + Gemini 3.1 Pro + Grok 4.1 Fast).**
+**GBrain-adapted knowledge enrichment: multi-query expansion, compiled truth pages, dream cycle, 4-layer dedup, smart chunker, 13 new MCP tools. Plus pre-release hardening from a cross-model joint audit.**
 
 ### Added
 - `query_expansion.py` — LLM-free multi-query expansion with synonym swap, specificity shift, temporal rephrasing, negation variant, and RRF fusion across reformulations
@@ -4542,7 +4540,7 @@ These remain on the roadmap under v2.1.0 and ship when the training infrastructu
 - `smart_chunker.py` — Content-aware chunking at semantic boundaries (headers, paragraphs, code blocks) instead of fixed character counts; format-specific splitting for markdown, code, and prose
 - 13 new MCP tools: `expand_query`, `smart_chunk`, `deduplicate_results`, `run_dream_cycle`, `dream_cycle_status`, `compile_truth`, `get_compiled_truth`, `compiled_truth_add_evidence`, `compiled_truth_contradictions`, `compiled_truth_load`, `list_compiled_truths`, `chunk_and_index`, `dedup_search`
 
-### Fixed (3-LLM audit, pre-release hardening)
+### Fixed (cross-model audit, pre-release hardening)
 - **[CRITICAL]** `merkle_tree.py`: Added leaf/internal-node domain separation tags (`L:` / `N:`) to close the Bitcoin-style second-preimage attack. `verify_tree()` now recomputes leaf hashes from their `content_hash` + `block_id` instead of trusting them blindly. `import_json()` fails on stored-vs-recomputed root mismatch.
 - **[CRITICAL]** `evidence_objects.py`: Canonical form for `_compute_evidence_hash` switched from colon-delimited string to JSON-canonical (sorted keys) so fields containing `:` cannot shift across field boundaries without changing the digest.
 - **[CRITICAL]** `hash_chain_v2.py`: `_connect` now uses `isolation_level="DEFERRED"` (autocommit=None silently defeated `BEGIN EXCLUSIVE`) with a 30s `timeout` and `busy_timeout=30000`. `append()` serializes reads-then-writes under a per-instance `RLock` on top of `BEGIN IMMEDIATE`. `import_jsonl` anchors linkage to the current chain head instead of GENESIS so imports append rather than creating disjoint segments. `convert_from_v1` preserves original v1 timestamps.
@@ -4705,7 +4703,7 @@ These remain on the roadmap under v2.1.0 and ship when the training infrastructu
 
 ### Changed
 - Copyright updated to "STARGA Inc and contributors"
-- Benchmark example uses `mistral-large-latest` to match published results
+- Benchmark example uses an external LLM judge to match published results
 
 ## 1.7.1 (2026-02-25)
 
@@ -4919,7 +4917,7 @@ These remain on the roadmap under v2.1.0 and ship when the training infrastructu
 - Total: **964 tests passing** (up from 898)
 
 ### Benchmark
-- Full 10-conversation LoCoMo LLM-as-Judge benchmark completed (Mistral Large answerer + judge, BM25-only, top_k=18)
+- Full 10-conversation LoCoMo LLM-as-Judge benchmark completed (external LLM answerer + judge, BM25-only, top_k=18)
 - 1986 questions: **73.8% Acc≥50**, mean=70.5 (up from 67.3% / 61.4 on v1.0.0 baseline)
 - Adversarial accuracy: **92.4%** (up from 36.3% on v1.0.0 baseline)
 - Conv-0 detailed: mean=77.9, adversarial=82.3, temporal=88.5

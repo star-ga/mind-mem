@@ -51,7 +51,7 @@ right-to-left Unicode overrides, homograph attacks, zero-width joiners,
 and control characters.
 
 **What a failure means:** the server crashes, hangs, or returns a tool
-name that is not in the published 84-tool surface.  Hallucinated tool
+name that is not in the published 83-tool surface.  Hallucinated tool
 names indicate the LLM extraction path (if any) is not grounded against
 the canonical tool list.
 
