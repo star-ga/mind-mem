@@ -15,6 +15,7 @@ via the feature-flag override fixture.
 from __future__ import annotations
 
 import socket
+import time
 from pathlib import Path
 
 import pytest
@@ -35,6 +36,35 @@ def _free_port() -> int:
     port = s.getsockname()[1]
     s.close()
     return port
+
+
+# Bounded client timeout for the in-process localhost server. The default
+# FederationClient read timeout. The production default is 10s; in-process
+# tests want headroom for a heavily-loaded Windows CI runner (the in-process
+# server thread can be GIL-starved under load, surfacing as a client
+# socket.recv_into TimeoutError) while still failing well within the 120s
+# pytest-timeout so a genuine hang is still caught by name.
+_CLIENT_TIMEOUT = 30.0
+
+
+def _wait_until_accepting(host: str, port: int, *, timeout: float = 10.0) -> None:
+    """Poll-connect to ``(host, port)`` until the listener accepts.
+
+    Defence-in-depth: ``serve_http`` already performs this handshake before
+    returning, but the test asserts readiness independently so the suite stays
+    deterministic even if the transport's internals change. Raises
+    ``TimeoutError`` if the server never comes up.
+    """
+    deadline = time.monotonic() + timeout
+    last_err: OSError | None = None
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=1.0):
+                return
+        except OSError as exc:  # not yet listening
+            last_err = exc
+            time.sleep(0.01)
+    raise TimeoutError(f"server on {host}:{port} never started accepting") from last_err
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +112,8 @@ def server(workspace: Path):
         token="test-token",
         allow_unauthenticated_localhost=False,
     )
+    # serve_http blocks until the listener accepts; assert it independently.
+    _wait_until_accepting("127.0.0.1", port)
     base_url = f"http://127.0.0.1:{port}"
     try:
         yield base_url
@@ -96,13 +128,13 @@ def server(workspace: Path):
 
 
 def test_vclock_empty_block_returns_empty_vector(server: str, federation_enabled: None) -> None:
-    client = FederationClient(server, token="test-token")
+    client = FederationClient(server, token="test-token", timeout=_CLIENT_TIMEOUT)
     vec = client.get_vclock("unknown-block")
     assert vec == {}
 
 
 def test_push_write_increments_version(server: str, federation_enabled: None) -> None:
-    client = FederationClient(server, token="test-token")
+    client = FederationClient(server, token="test-token", timeout=_CLIENT_TIMEOUT)
     r1 = client.push_write("block-1", agent_id="alice")
     assert r1.version == 1
     assert r1.conflict is None
@@ -112,7 +144,7 @@ def test_push_write_increments_version(server: str, federation_enabled: None) ->
 
 
 def test_two_agent_divergence_surfaces_conflict(server: str, federation_enabled: None) -> None:
-    client = FederationClient(server, token="test-token")
+    client = FederationClient(server, token="test-token", timeout=_CLIENT_TIMEOUT)
     # Alice writes once, Bob writes twice → divergence.
     client.push_write("block-2", agent_id="alice")
     client.push_write("block-2", agent_id="bob")
@@ -128,7 +160,7 @@ def test_two_agent_divergence_surfaces_conflict(server: str, federation_enabled:
 
 
 def test_list_conflicts_returns_open_pairs(server: str, federation_enabled: None) -> None:
-    client = FederationClient(server, token="test-token")
+    client = FederationClient(server, token="test-token", timeout=_CLIENT_TIMEOUT)
     client.push_write("block-3", agent_id="alice")
     client.push_write("block-3", agent_id="bob")
     client.push_write("block-3", agent_id="bob")
@@ -139,7 +171,7 @@ def test_list_conflicts_returns_open_pairs(server: str, federation_enabled: None
 
 
 def test_resolve_higher_version_picks_left_agent(server: str, federation_enabled: None) -> None:
-    client = FederationClient(server, token="test-token")
+    client = FederationClient(server, token="test-token", timeout=_CLIENT_TIMEOUT)
     client.push_write("block-4", agent_id="alice")
     client.push_write("block-4", agent_id="bob")
     client.push_write("block-4", agent_id="bob")
@@ -152,7 +184,7 @@ def test_resolve_higher_version_picks_left_agent(server: str, federation_enabled
 
 
 def test_resolve_three_way_merge_round_trips_payload(server: str, federation_enabled: None) -> None:
-    client = FederationClient(server, token="test-token")
+    client = FederationClient(server, token="test-token", timeout=_CLIENT_TIMEOUT)
     client.push_write("block-5", agent_id="alice")
     client.push_write("block-5", agent_id="bob")
     client.push_write("block-5", agent_id="bob")
@@ -169,20 +201,20 @@ def test_resolve_three_way_merge_round_trips_payload(server: str, federation_ena
 
 
 def test_resolve_missing_conflict_returns_404(server: str, federation_enabled: None) -> None:
-    client = FederationClient(server, token="test-token")
+    client = FederationClient(server, token="test-token", timeout=_CLIENT_TIMEOUT)
     with pytest.raises(FederationTransportError) as exc_info:
         client.resolve_conflict("never-written", strategy="higher_version")
     assert "404" in str(exc_info.value)
 
 
 def test_unauthenticated_request_rejected(server: str, federation_enabled: None) -> None:
-    client = FederationClient(server, token="WRONG-token")
+    client = FederationClient(server, token="WRONG-token", timeout=_CLIENT_TIMEOUT)
     with pytest.raises(FederationAuthError):
         client.push_write("block-x", agent_id="alice")
 
 
 def test_flag_disabled_returns_503(server: str, federation_disabled: None) -> None:
-    client = FederationClient(server, token="test-token")
+    client = FederationClient(server, token="test-token", timeout=_CLIENT_TIMEOUT)
     with pytest.raises(FederationFlagDisabled):
         client.push_write("block-y", agent_id="alice")
 
@@ -215,7 +247,7 @@ def test_full_two_host_handshake_via_vclock_then_resolve(workspace: Path, federa
         allow_unauthenticated_localhost=False,
     )
     try:
-        client = FederationClient(f"http://127.0.0.1:{port}", token="test-token")
+        client = FederationClient(f"http://127.0.0.1:{port}", token="test-token", timeout=_CLIENT_TIMEOUT)
         for _ in range(3):
             client.push_write("hand-1", agent_id="alice")
         client.push_write("hand-1", agent_id="bob")
