@@ -6,7 +6,7 @@
   <strong>Replayable memory for AI agents. Deterministic recall with a byte-identical audit chain across runs, machines, and substrates.</strong>
 </p>
 <p align="center">
-  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 84 MCP tools<br>
+  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 83 MCP tools<br>
   <sub>MIND Language Profile: <code>default</code> (full tensor stdlib + Q16.16 + heap) &mdash; see <a href="https://github.com/star-ga/mind/blob/main/docs/roadmap.md#phase-106--library-output--c-abi-mindc-026--030">Phase 10.6</a></sub><!-- mind-profile: default -->
 </p>
 <p align="center">
@@ -22,8 +22,8 @@
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
   <img src="https://img.shields.io/badge/tests-5465%2B-brightgreen?style=flat-square" alt="Tests: 5465+">
-  <img src="https://img.shields.io/badge/MCP_tools-84-blue?style=flat-square" alt="MCP Tools: 84">
-  <img src="https://img.shields.io/badge/clients-18-blueviolet?style=flat-square" alt="AI Clients: 18">
+  <img src="https://img.shields.io/badge/MCP_tools-83-blue?style=flat-square" alt="MCP Tools: 83">
+  <img src="https://img.shields.io/badge/clients-17-blueviolet?style=flat-square" alt="AI Clients: 17">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
   <img src="https://img.shields.io/badge/audit-cross--model_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="Cross-model consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
 </p>
@@ -38,7 +38,7 @@
 
 MIND-Mem is a deterministic AI memory system whose recall is byte-identical across runs, machines, and substrates — same query produces the same ranked results every time, with a Q16.16 fixed-point audit chain embedded in every applied decision.
 
-Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 84 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic (same query → same ranked results) and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
+Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 83 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic (same query → same ranked results) and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
 
 Most memory layers ship tools. That is table-stakes. MIND-Mem ships a substrate: Q16.16 fixed-point scoring kernels compiled from MIND source, a governance pipeline that rejects every unreviewed write, and an audit chain where every applied proposal is hash-anchored. The same query on the same workspace produces the same ranked recall, every time; that recall's audit/replay chain is byte-identical whether you replay it on the same machine or a different one that pulls the same workspace. That property is what makes MIND-Mem suitable as a canonical memory layer across heterogeneous agent stacks.
 
