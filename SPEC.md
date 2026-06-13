@@ -69,18 +69,34 @@ A `Resource` value SHOULD be a dereferenceable or canonical URI
 
 ### OKF Conformance (interop)
 
-Mind Mem's block format is an **OKF-conformant** ([Open Knowledge
-Format](https://github.com/GoogleCloudPlatform/knowledge-catalog),
-Apache-2.0) knowledge representation: typed units (`type`), a
-title/description (`Statement`/`Excerpt`/`Summary`), `Tags`, a timestamp
-(`Date`), citations (`Sources`), and a subject URI (`Resource` ↔ OKF
-`resource`). OKF is adopted as an **import/export envelope only** — see
-[`core_export.export_to_okf`](src/mind_mem/core_export.py). Mind Mem's
-differentiated layers (HITL governance, contradiction handling,
-BM25+vector+RRF retrieval, the evidence/Merkle chain) sit strictly
-**above** the format and are deliberately outside OKF's scope ("notable
-absences"); export to OKF is lossy by design and never flattens those
-layers away.
+Mind Mem maps cleanly onto the [Open Knowledge
+Format](https://github.com/GoogleCloudPlatform/knowledge-catalog)
+(Apache-2.0): typed units (`type`), a title/description
+(`Statement`/`Excerpt`/`Summary`), `Tags`, a timestamp (`Date`),
+citations (`Sources` → OKF `# Citations`), and a subject URI (`Resource`
+↔ OKF `resource`). The required OKF `type` is resolved from an explicit
+`type` or the `_id` prefix (`D-` → decision, `PRJ-` → project, …), never
+left as an empty or masking default. OKF is adopted as an
+**import/export interchange** with two surfaces in
+[`core_export`](src/mind_mem/core_export.py):
+
+- `write_okf_bundle()` — emits a **conformant OKF bundle on disk**: one
+  markdown file per concept (YAML frontmatter + body, edges as
+  bundle-relative links, citations under `# Citations`), plus
+  `index.md`/`log.md`. This is the form OKF consumers read.
+- `export_to_okf()` — a JSON **envelope** (units + relations + manifest)
+  for programmatic interop; not a bundle.
+- `import_okf_bundle()` — reads an OKF bundle back into mind-mem blocks,
+  uppercasing OKF's lowercase keys to satisfy the `^[A-Z][A-Za-z]+:`
+  field grammar. Imported blocks enter through the normal HITL-gated
+  path, never as trusted source-of-truth.
+
+Mind Mem's differentiated layers (HITL governance, contradiction
+handling, BM25+vector+RRF retrieval, the evidence/Merkle chain) sit
+strictly **above** the format and are deliberately outside OKF's scope
+("notable absences"). Both export surfaces emit only an allow-listed OKF
+field set, so the moat is lossy by construction and can never reach OKF
+output.
 
 ### Status Values
 
