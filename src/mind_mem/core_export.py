@@ -48,6 +48,89 @@ def export_to_jsonld(core: LoadedCore) -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# OKF export (interop envelope)
+# ---------------------------------------------------------------------------
+
+OKF_VERSION = "0.1"
+
+# Map mind-mem block fields onto OKF unit fields. Mind-mem capitalizes its
+# field keys (the `^[A-Z][A-Za-z]+:` grammar); OKF uses lowercase. We probe
+# each candidate in order and take the first present.
+_OKF_TITLE_KEYS = ("Title", "Name", "Summary")
+_OKF_DESC_KEYS = ("Statement", "Excerpt", "Description", "text", "content")
+_OKF_RESOURCE_KEYS = ("Resource", "resource")
+_OKF_TIMESTAMP_KEYS = ("Date", "timestamp", "built_at")
+_OKF_TAG_KEYS = ("Tags", "tags")
+
+
+def _first(block: Mapping[str, Any], keys: tuple[str, ...]) -> Any:
+    for k in keys:
+        v = block.get(k)
+        if v not in (None, "", [], {}):
+            return v
+    return None
+
+
+def _block_to_okf_unit(block: Mapping[str, Any]) -> dict[str, Any]:
+    """Project a mind-mem block onto a lossy OKF knowledge unit.
+
+    Only the OKF-conformant surface is emitted. Mind-mem's differentiated
+    fields (governance status, evidence chain, contradiction links,
+    retrieval scores) are intentionally dropped — OKF is an interop
+    envelope, not a faithful round-trip of the moat.
+    """
+    unit: dict[str, Any] = {"type": block.get("type", "block")}
+    bid = _block_id(block)
+    if bid:
+        unit["id"] = bid
+    title = _first(block, _OKF_TITLE_KEYS)
+    if title is not None:
+        unit["title"] = str(title)
+    desc = _first(block, _OKF_DESC_KEYS)
+    if desc is not None:
+        unit["description"] = str(desc).strip()
+    resource = _first(block, _OKF_RESOURCE_KEYS)
+    if resource is not None:
+        unit["resource"] = str(resource)
+    ts = _first(block, _OKF_TIMESTAMP_KEYS)
+    if ts is not None:
+        unit["timestamp"] = str(ts)
+    tags = _first(block, _OKF_TAG_KEYS)
+    if tags is not None:
+        unit["tags"] = tags if isinstance(tags, list) else [tags]
+    return unit
+
+
+def export_to_okf(core: LoadedCore) -> dict[str, Any]:
+    """Return an OKF-conformant export envelope for a loaded core.
+
+    OKF = Open Knowledge Format (Apache-2.0,
+    github.com/GoogleCloudPlatform/knowledge-catalog). This is an
+    *envelope only*: blocks become OKF knowledge units and graph edges
+    become typed relations. Mind-mem's governance, contradiction
+    handling, retrieval ranking, and evidence chain are deliberately not
+    represented (OKF's "notable absences") — the export is lossy by
+    design so the moat stays above the format.
+    """
+    manifest = core.manifest.as_dict()
+    return {
+        "okf_version": OKF_VERSION,
+        "source": "mind-mem",
+        "id": f"urn:mindmem:{manifest['namespace']}:{manifest['version']}",
+        "manifest": manifest,
+        "units": [_block_to_okf_unit(b) for b in core.blocks],
+        "relations": [
+            {
+                "subject": e.get("subject"),
+                "predicate": e.get("predicate"),
+                "object": e.get("object"),
+            }
+            for e in core.edges
+        ],
+    }
+
+
 def export_to_markdown(core: LoadedCore) -> str:
     """Flatten a core into a single markdown document for human review."""
     manifest = core.manifest

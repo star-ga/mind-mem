@@ -56,6 +56,32 @@ Continuation  ::= Space Space { AnyChar }           (* appends to previous Value
 | Signal (SIG-)      | Date, Type, Source, Status, Excerpt                                                               |
 | Proposal (P-)      | Date, Type, Status, Target                                                                        |
 
+### Optional Fields (any type)
+
+| Field      | Meaning                                                                                          |
+| ---------- | ----------------------------------------------------------------------------------------------- |
+| `Resource` | Stable URI identifying the real-world asset this block is **about** (a repo, commit, file, person, arXiv ID, …). Enables dedup-by-subject and "show every memory about X" queries. Complements — does not replace — typed graph edges. Capitalized to match the `^[A-Z][A-Za-z]+:` field grammar; parses generically, no special handling. |
+
+A `Resource` value SHOULD be a dereferenceable or canonical URI
+(`https://github.com/star-ga/mind`, `git+sha:abc123`, `file:///…`,
+`urn:arxiv:2401.00001`, `urn:person:polo`). Multiple blocks MAY share a
+`Resource` (they describe the same subject from different angles).
+
+### OKF Conformance (interop)
+
+Mind Mem's block format is an **OKF-conformant** ([Open Knowledge
+Format](https://github.com/GoogleCloudPlatform/knowledge-catalog),
+Apache-2.0) knowledge representation: typed units (`type`), a
+title/description (`Statement`/`Excerpt`/`Summary`), `Tags`, a timestamp
+(`Date`), citations (`Sources`), and a subject URI (`Resource` ↔ OKF
+`resource`). OKF is adopted as an **import/export envelope only** — see
+[`core_export.export_to_okf`](src/mind_mem/core_export.py). Mind Mem's
+differentiated layers (HITL governance, contradiction handling,
+BM25+vector+RRF retrieval, the evidence/Merkle chain) sit strictly
+**above** the format and are deliberately outside OKF's scope ("notable
+absences"); export to OKF is lossy by design and never flattens those
+layers away.
+
 ### Status Values
 
 ```ebnf
