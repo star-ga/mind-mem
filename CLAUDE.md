@@ -4,6 +4,16 @@
 BM25F + vector hybrid search memory system for AI agents.
 Published on PyPI: `pip install mind-mem`
 
+**v4.0.18** (released 2026-06-14) — Postgres backend parity: the recall / scan /
+governance / export / reindex / daemon feature layer was reading the local
+Markdown corpus + SQLite FTS index and ignoring the configured `block_store`
+backend, so Postgres users' blocks were invisible to those features. Added a
+shared backend-aware `storage.iter_active_blocks()` + `PostgresRecallBackend`
+(BM25 + pgvector RRF), backend-aware/read-only-safe `build_index`/`index_status`,
+pgvector cross-schema detection, daemon cron module path, `init_workspace` PG
+setup, MCP `_check_workspace` backend-aware gate. **SQLite/markdown default
+unchanged** (5566 tests, no regression); 81 new both-backend tests. Builds on
+
 **v4.0.17** (released 2026-06-05) — security-hardening companion to v4.0.16
 (same audit). At-rest encryption relabeled honestly (256-bit HMAC-SHA256
 keystream + encrypt-then-MAC, **not** AES-256/SQLCipher; recall index not

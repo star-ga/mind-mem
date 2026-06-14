@@ -2,6 +2,22 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.0.18 — Postgres backend parity (out-of-the-box on any backend)
+
+Fixed 14 audited parity bugs where the recall / scan / governance / export /
+reindex / daemon feature layer read the local Markdown corpus + local SQLite FTS
+index and ignored the configured `block_store` backend, so a Postgres user's
+blocks were invisible to those features (the `sqlite_only_count` drift). Added the
+shared backend-aware `storage.iter_active_blocks()` primitive + a
+`PostgresRecallBackend` (server-side BM25 + pgvector RRF); made
+`build_index`/`index_status` backend-aware and crash-safe on read-only handles;
+fixed pgvector detection across schemas, the daemon cron module path,
+`init_workspace` Postgres setup, and the MCP `_check_workspace` decisions/-dir
+gate. **SQLite/markdown remains the default and is taken byte-for-byte unchanged**
+— 5566 tests pass, no regression. 81 new both-backend tests pass against live
+Postgres and skip cleanly when `MIND_MEM_TEST_PG_DSN` is unset (SQLite-only CI
+green). Audit: `docs/postgres-parity-audit-2026-06-14.md`.
+
 ## v4.0.17 — Security hardening (crypto labeling, file perms, signing/parser/gRPC)
 
 Released 2026-06-05.
