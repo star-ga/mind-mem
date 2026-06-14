@@ -31,23 +31,37 @@ _log = get_logger("cron_runner")
 
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Package the job modules live in. Jobs are invoked as ``python -m PACKAGE.<module>``
+# rather than as bare script paths, so their intra-package relative imports
+# (``from .block_parser import ...``) resolve. ``__package__`` is ``mind_mem``
+# when this module is imported normally; fall back to the literal name for the
+# ``python cron_runner.py`` edge case.
+PACKAGE = __package__ or "mind_mem"
+
 # ---------------------------------------------------------------------------
-# Job definitions: name -> (script, args_fn, config_toggle)
+# Job definitions: name -> (module, extra_args, config_toggle)
+#
+# ``module`` is the package-relative module name (no ``.py`` suffix, no path).
+# Each module is a package module that uses relative imports, so it MUST be run
+# via ``python -m mind_mem.<module>`` — running it as a bare script path raises
+# ``ImportError: attempted relative import with no known parent package``.
+# Note: the ``transcript_scan`` job lives in the ``transcript_capture`` module,
+# so the job name and module name deliberately differ.
 # ---------------------------------------------------------------------------
 
 JOB_DEFS: dict[str, tuple[str, list[str], str]] = {
     "transcript_scan": (
-        "transcript_capture.py",
+        "transcript_capture",
         ["--scan-recent", "--days", "1"],
         "transcript_scan",
     ),
     "entity_ingest": (
-        "entity_ingest.py",
+        "entity_ingest",
         [],
         "entity_ingest",
     ),
     "intel_scan": (
-        "intel_scan.py",
+        "intel_scan",
         [],
         "intel_scan",
     ),
@@ -88,20 +102,28 @@ def is_job_enabled(config: dict, job_name: str) -> bool:
 
 
 def run_job(job_name: str, workspace: str) -> dict:
-    """Run a single job. Returns result dict with status and details."""
-    script, extra_args, _ = JOB_DEFS[job_name]
-    script_path = os.path.join(SCRIPTS_DIR, script)
+    """Run a single job. Returns result dict with status and details.
 
-    if not os.path.isfile(script_path):
-        _log.error("script_not_found", job=job_name, path=script_path)
-        return {"job": job_name, "status": "error", "error": f"script not found: {script_path}"}
+    Jobs are invoked as ``python -m mind_mem.<module>`` (not as bare script
+    paths) so the job modules' intra-package relative imports resolve. Running
+    them as a top-level script raised ``ImportError: attempted relative import
+    with no known parent package``, which silently broke every daemon tick.
+    """
+    module, extra_args, _ = JOB_DEFS[job_name]
+    # Validate the module file actually exists in the package before invoking,
+    # so a missing/renamed module fails fast with a clear error instead of a
+    # generic subprocess non-zero exit.
+    module_path = os.path.join(SCRIPTS_DIR, f"{module}.py")
+    if not os.path.isfile(module_path):
+        _log.error("script_not_found", job=job_name, path=module_path)
+        return {"job": job_name, "status": "error", "error": f"script not found: {module_path}"}
 
-    cmd = [sys.executable, script_path, workspace] + extra_args
+    cmd = [sys.executable, "-m", f"{PACKAGE}.{module}", workspace] + extra_args
     _log.info("job_start", job=job_name, cmd=" ".join(cmd))
 
     start = time.monotonic()
     try:
-        result = subprocess.run(  # nosec B603 — cmd is [sys.executable, script_path, workspace] + extra_args; script_path is validated to be an existing file under SCRIPTS_DIR (package internal); shell=False (default)
+        result = subprocess.run(  # nosec B603 — cmd is [sys.executable, "-m", "mind_mem.<module>", workspace] + extra_args; module is a fixed package-internal name from JOB_DEFS validated to exist under SCRIPTS_DIR; shell=False (default)
             cmd,
             timeout=120,
             capture_output=True,
@@ -143,13 +165,17 @@ def run_job(job_name: str, workspace: str) -> dict:
 
 
 def print_cron_instructions(workspace: str) -> None:
-    """Print crontab entries for all jobs."""
-    script_path = os.path.abspath(__file__)
+    """Print crontab entries for all jobs.
+
+    Emits the ``python -m mind_mem.cron_runner`` module form (not a bare script
+    path) so the cron-installed jobs run under the package context.
+    """
     ws = os.path.abspath(workspace)
+    runner = f"{PACKAGE}.cron_runner"
     print("# mind-mem auto-ingestion (add to crontab with: crontab -e)")
-    print(f"0 */6 * * * python3 {script_path} {ws} --job transcript_scan 2>&1 | logger -t mind-mem")
-    print(f"0 3 * * * python3 {script_path} {ws} --job entity_ingest 2>&1 | logger -t mind-mem")
-    print(f"0 3 * * * python3 {script_path} {ws} --job intel_scan 2>&1 | logger -t mind-mem")
+    print(f"0 */6 * * * python3 -m {runner} {ws} --job transcript_scan 2>&1 | logger -t mind-mem")
+    print(f"0 3 * * * python3 -m {runner} {ws} --job entity_ingest 2>&1 | logger -t mind-mem")
+    print(f"0 3 * * * python3 -m {runner} {ws} --job intel_scan 2>&1 | logger -t mind-mem")
 
 
 # ---------------------------------------------------------------------------

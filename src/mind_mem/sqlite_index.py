@@ -176,6 +176,35 @@ def _get_conn_manager(workspace: str) -> ConnectionManager:
     return mgr
 
 
+# Core index tables whose presence indicates the FTS schema has been built.
+# ``index_status``/``merkle_leaves`` probe these via ``sqlite_master`` instead
+# of calling ``_init_schema`` (a write) on a read-only connection — recall.db
+# is frequently created by side-tables (calibration, retrieval_log) before
+# ``build_index`` ever runs, leaving it without these tables. On the Postgres
+# backend the FTS schema is often never built at all, making the read-only
+# CREATE TABLE crash reliable. See audit bugs 13 & 14.
+_INDEX_SCHEMA_TABLES: frozenset[str] = frozenset({"blocks", "meta"})
+
+
+def _index_schema_present(conn: sqlite3.Connection) -> bool:
+    """Return True when the core FTS index tables exist in *conn*.
+
+    Read-only safe: issues a single ``sqlite_master`` SELECT and never
+    executes DDL. Used by the read-only status/merkle paths so they do
+    not attempt a ``CREATE TABLE`` on a ``mode=ro`` connection (which
+    raises ``OperationalError: attempt to write a readonly database``).
+    """
+    try:
+        rows = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type IN ('table','view') "
+            "AND name IN ('blocks','meta')"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return False
+    present = {r[0] for r in rows}
+    return _INDEX_SCHEMA_TABLES.issubset(present)
+
+
 def _init_schema(conn: sqlite3.Connection) -> None:
     """Create tables if they don't exist."""
     conn.executescript("""
@@ -693,15 +722,118 @@ def _delete_blocks(
     )
 
 
+def _is_markdown_backend(workspace: str) -> bool:
+    """Return True when *workspace*'s blocks of record live on the Markdown corpus.
+
+    Defaults to the markdown corpus (the zero-config SQLite default) when
+    no config / no ``block_store`` section is present. Never raises — a
+    malformed config degrades to the markdown path so the default
+    SQLite / Markdown experience is byte-for-byte unchanged. The
+    enumeration helper :func:`mind_mem.storage.iter_active_blocks` owns
+    the single source of truth for the same backend classification.
+    """
+    # Lazy import: avoids an import cycle (storage -> block_store -> ...)
+    # at module-import time and matches the lazy ``from .storage import``
+    # convention used elsewhere in the package.
+    from .storage import _MARKDOWN_BACKENDS, _backend_name
+
+    return _backend_name(workspace) in _MARKDOWN_BACKENDS
+
+
+def _build_index_from_store(workspace: str, conn: sqlite3.Connection, start: datetime) -> dict:
+    """Rebuild the FTS5 index from the configured (non-markdown) block store.
+
+    For backends whose blocks of record live in the store (e.g. Postgres)
+    the local Markdown corpus files are empty init templates, so the
+    markdown-driven ``build_index`` path would index nothing (or worse,
+    index stray template blocks — the ``sqlite_only_count`` drift the
+    audit warns about). This path enumerates the store's active blocks
+    via :func:`mind_mem.storage.iter_active_blocks` and reindexes them
+    through the same :func:`_insert_block` machinery (FTS fields, xrefs,
+    fact-cards) the markdown path uses, so recall sees the store-resident
+    blocks out of the box.
+
+    The store rebuild is always a full rebuild (the store is the source
+    of truth; there is no per-file mtime to diff against), so the
+    ``blocks``/``blocks_fts``/``xref_edges``/``index_meta`` tables are
+    cleared first to drop any rows orphaned by deletes in the store.
+    """
+    from .storage import iter_active_blocks
+
+    blocks = iter_active_blocks(workspace)
+
+    # Full rebuild: clear all index state so deletes in the store
+    # propagate and no markdown-template rows linger (drift fix).
+    conn.execute("DELETE FROM blocks")
+    conn.execute("DELETE FROM blocks_fts")
+    conn.execute("DELETE FROM xref_edges")
+    conn.execute("DELETE FROM index_meta")
+    conn.execute("DELETE FROM file_state")
+
+    all_block_ids = {b.get("_id", "") for b in blocks if b.get("_id")}
+
+    indexed = 0
+    for block in blocks:
+        bid = block.get("_id", "")
+        if not bid:
+            continue
+        rel_path = block.get("_source_file", "") or ""
+        _insert_block(conn, block, bid, rel_path, all_block_ids)
+        conn.execute(
+            "INSERT OR REPLACE INTO index_meta (file_path, block_id, content_hash) VALUES (?, ?, ?)",
+            (rel_path, bid, _compute_block_hash(block)),
+        )
+        indexed += 1
+
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+        ("last_build", datetime.now().isoformat()),
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+        ("build_mode", "store-full"),
+    )
+    conn.commit()
+
+    elapsed = (datetime.now() - start).total_seconds() * 1000
+    row = conn.execute("SELECT COUNT(*) as cnt FROM blocks").fetchone()
+    summary = {
+        "files_checked": 0,
+        "files_indexed": 0,
+        "blocks_indexed": indexed,
+        "blocks_new": indexed,
+        "blocks_modified": 0,
+        "blocks_deleted": 0,
+        "blocks_unchanged": 0,
+        "elapsed_ms": round(elapsed, 1),
+        "total_blocks": row["cnt"],
+        "source": "block_store",
+    }
+    _log.info("build_complete", **summary)
+    metrics.inc("index_builds")
+    metrics.inc("index_blocks_indexed", indexed)
+    return summary
+
+
 def build_index(workspace: str, incremental: bool = True) -> dict:
     """Build or incrementally update the FTS5 index.
 
     Uses ConnectionManager (#466) for write connection pooling with
     chunked commits (one commit per file) to reduce lock hold time.
 
+    Backend-aware (audit bugs 4 & 9): for the default Markdown / SQLite
+    backend, the corpus files are the blocks of record and are indexed
+    incrementally via :data:`CORPUS_FILES` + :func:`parse_file`. For a
+    non-markdown backend (e.g. Postgres) the blocks of record live in
+    the configured store, so the index is rebuilt from
+    :func:`mind_mem.storage.iter_active_blocks` instead — otherwise the
+    PG user's blocks would be invisible to recall and stray markdown
+    template rows would introduce ``sqlite_only_count`` drift.
+
     Args:
         workspace: Workspace root path.
         incremental: If True, only re-index changed files. If False, rebuild all.
+            Ignored for non-markdown backends (a store rebuild is always full).
 
     Returns:
         Summary dict with files_checked, files_indexed, blocks_indexed, elapsed_ms.
@@ -709,12 +841,17 @@ def build_index(workspace: str, incremental: bool = True) -> dict:
     ws = os.path.abspath(workspace)
     start = datetime.now()
 
+    markdown_backend = _is_markdown_backend(workspace)
+
     mgr = _get_conn_manager(workspace)
     with mgr.write_lock:
         conn = mgr.get_write_connection()
         conn.row_factory = sqlite3.Row
         try:
             _init_schema(conn)
+
+            if not markdown_backend:
+                return _build_index_from_store(workspace, conn, start)
 
             # Collect all block IDs for xref resolution
             all_block_ids = set()
@@ -1251,7 +1388,12 @@ def merkle_leaves(workspace: str) -> list[tuple[str, str]]:
     conn = None
     try:
         conn = _connect(workspace, readonly=True)
-        _init_schema(conn)
+        # Read-only safe (audit bugs 13 & 14): never run _init_schema on a
+        # mode=ro connection. When recall.db exists but the FTS schema has
+        # not been built (side-tables only, or a PG-backed workspace whose
+        # local cache was never populated), there are no leaves yet.
+        if not _index_schema_present(conn):
+            return []
         rows = conn.execute(
             """
             SELECT im.block_id AS block_id, im.content_hash AS content_hash
@@ -1277,7 +1419,19 @@ def merkle_leaves(workspace: str) -> list[tuple[str, str]]:
 
 
 def index_status(workspace: str) -> dict:
-    """Return index status: exists, block count, last build time, staleness."""
+    """Return index status: exists, block count, last build time, staleness.
+
+    Read-only safe (audit bugs 13 & 14). ``recall.db`` is frequently
+    created by side-tables (calibration, retrieval_log) *before*
+    ``build_index`` ever runs the FTS schema, and on the Postgres
+    backend the FTS schema is often never built locally. In both cases
+    the ``blocks``/``meta`` tables are absent. This function opens the DB
+    ``mode=ro`` and therefore must never run ``_init_schema`` (a
+    ``CREATE TABLE``), which would raise
+    ``OperationalError: attempt to write a readonly database``. Instead
+    it probes ``sqlite_master`` and reports ``blocks=0`` when the index
+    schema has not been built yet.
+    """
     db_path = _db_path(workspace)
     if not os.path.isfile(db_path):
         return {"exists": False, "blocks": 0, "stale_files": len(CORPUS_FILES)}
@@ -1285,7 +1439,20 @@ def index_status(workspace: str) -> dict:
     conn = None
     try:
         conn = _connect(workspace, readonly=True)
-        _init_schema(conn)
+        # Do NOT call _init_schema here — the connection is read-only.
+        # When recall.db exists but the index schema has not been built
+        # (only side-tables present), report "built but empty" without
+        # attempting any DDL.
+        if not _index_schema_present(conn):
+            return {
+                "exists": True,
+                "blocks": 0,
+                "last_build": None,
+                "stale_files": len(CORPUS_FILES),
+                "db_size_bytes": os.path.getsize(db_path),
+                "schema_built": False,
+            }
+
         row = conn.execute("SELECT COUNT(*) as cnt FROM blocks").fetchone()
         block_count = row["cnt"]
 

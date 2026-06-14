@@ -230,6 +230,102 @@ class RecallBackend(ABC):
         ...
 
 
+def _pg_block_to_hit(block: dict[str, Any], score: float) -> dict[str, Any]:
+    """Convert a PostgresBlockStore block dict into a recall hit dict.
+
+    The store returns blocks in the ``_row_to_block`` shape (``_id`` +
+    ``_source_file`` + flattened ``metadata`` keys such as ``Statement``,
+    ``Status``, ``Date``). Recall callers expect the hit contract
+    ``{_id, type, score, excerpt, file, line, status}`` plus the
+    pass-through fields the post-filter contract reads
+    (``Date`` / ``Lifecycle`` / ``EventId`` / ``Maturity`` / ``DiaID``).
+    This bridges the two so the Postgres path produces hits identical in
+    shape to the BM25 / sqlite / vector paths and flows through
+    :func:`_apply_post_filters` unchanged.
+    """
+    bid = str(block.get("_id", "?"))
+    tags_str = block.get("Tags", "") or ""
+    hit: dict[str, Any] = {
+        "_id": bid,
+        "type": get_block_type(bid),
+        "score": round(float(score), 4),
+        "excerpt": get_excerpt(block),
+        "speaker": _parse_speaker_from_tags(tags_str),
+        "tags": tags_str,
+        "file": block.get("_source_file", "?") or "?",
+        "line": int(block.get("_line", 0) or 0),
+        "status": block.get("Status", "") or "",
+    }
+    # Pass through the fields the recall post-filters operate on so the
+    # date / lifecycle / event_id / min_maturity contract works on PG too.
+    for key in ("Date", "Lifecycle", "EventId", "Maturity", "DiaID"):
+        val = block.get(key)
+        if val:
+            hit[key] = val
+    return hit
+
+
+class PostgresRecallBackend(RecallBackend):
+    """Recall backend that queries the configured Postgres block store.
+
+    The default recall pipeline reads the local Markdown corpus + the
+    local SQLite FTS index. On a Postgres-backed workspace those files
+    are the empty init templates — every real block lives in the
+    ``blocks`` table — so recall against Markdown/FTS returns nothing.
+    This backend bridges the gap by delegating ``search()`` to
+    :meth:`PostgresBlockStore.hybrid_search` (which already implements
+    server-side BM25 + optional pgvector fusion), so a Postgres user gets
+    results out of the box with no ``mm doctor --rebuild-cache`` step.
+
+    ``_load_backend`` returns an instance of this class when
+    ``block_store.backend == "postgres"`` and the user has not explicitly
+    overridden ``recall.backend`` to ``sqlite`` / ``vector``. The default
+    Markdown / SQLite path is untouched.
+    """
+
+    def __init__(self, workspace: str, config: dict[str, Any] | None = None) -> None:
+        self._workspace = workspace
+        self._config = config
+
+    def search(self, workspace, query, limit=10, active_only=False):
+        """Return recall hits sourced from the Postgres block store.
+
+        Delegates to ``PostgresBlockStore.hybrid_search`` (BM25 + optional
+        pgvector). ``active_only`` is implicit: ``hybrid_search`` filters
+        on ``WHERE active`` server-side, so every hit is already active.
+        Returns ``[]`` for an empty query (mirrors the BM25/vector paths).
+        """
+        if not query or not query.strip():
+            return []
+        from .storage import get_block_store
+
+        store = get_block_store(workspace, config=self._config)
+        # PostgresBlockStore (and its replicated variant) expose
+        # hybrid_search; fall back to plain full-text search() if not.
+        if hasattr(store, "hybrid_search"):
+            blocks = store.hybrid_search(query, limit=limit)
+        else:  # pragma: no cover — defensive; PG stores always have it
+            blocks = store.search(query, limit=limit)
+        hits: list[dict[str, Any]] = []
+        for block in blocks:
+            # hybrid_search annotates each block with ``_score`` (RRF);
+            # plain search() does not, so fall back to a descending rank.
+            score = block.get("_score")
+            if score is None:
+                score = 1.0 / (len(hits) + 1)
+            hits.append(_pg_block_to_hit(block, score))
+        return hits
+
+    def index(self, workspace):
+        """No-op: the Postgres block store is the index of record.
+
+        Blocks are written directly to the ``blocks`` table by the
+        block-store write path; there is no separate recall index to
+        (re)build for this backend.
+        """
+        return None
+
+
 def _block_date(hit: dict) -> str | None:
     """Return the block's date as an ISO-8601 string, or None when absent.
 
@@ -1466,29 +1562,61 @@ def _load_backend(workspace: str) -> str | RecallBackend | None:
         "scan" / "tfidf" — in-memory BM25 scan (default, O(corpus))
         "sqlite"          — SQLite FTS5 index (O(log N))
         "vector"          — vector embedding backend (requires recall_vector)
+
+    Backend resolution order:
+
+    1. An explicit ``recall.backend`` of ``sqlite`` / ``vector`` always
+       wins (a user who opted into a recall index for a PG workspace —
+       e.g. via ``mm doctor --rebuild-cache`` — keeps that path).
+    2. Otherwise, when ``block_store.backend == "postgres"`` the blocks of
+       record live in Postgres, not the local Markdown corpus, so recall
+       must query the store. Return a :class:`PostgresRecallBackend` that
+       delegates to ``PostgresBlockStore.hybrid_search``. Without this a
+       PG user's blocks are invisible to ``recall`` (audit bug 1).
+    3. Otherwise fall through to the built-in BM25 Markdown scan.
     """
     cfg = _get_config(workspace)
+    recall_backend: str | None = None
     if cfg:
         recall_cfg = cfg.get("recall", {})
         # Defensive: an old or hand-edited mind-mem.json can have
         # `recall` as a string / list / null.  Treat anything non-dict
-        # as "no recall config" — falls through to default BM25 scan.
+        # as "no recall config" — but still honour a postgres block_store
+        # below so a PG workspace with a malformed recall section is not
+        # silently downgraded to the (empty) Markdown scan.
         if not isinstance(recall_cfg, dict):
             _log.warning("recall_config_not_dict", got_type=type(recall_cfg).__name__)
-            return None
-        unknown = set(recall_cfg.keys()) - _VALID_RECALL_KEYS
-        if unknown:
-            _log.warning("unknown_recall_config_keys", keys=sorted(unknown))
-        backend = recall_cfg.get("backend", "scan")
-        if backend == "sqlite":
-            return "sqlite"
-        if backend == "vector":
-            try:
-                from .recall_vector import VectorBackend
+        else:
+            unknown = set(recall_cfg.keys()) - _VALID_RECALL_KEYS
+            if unknown:
+                _log.warning("unknown_recall_config_keys", keys=sorted(unknown))
+            recall_backend = recall_cfg.get("backend", "scan")
+            if recall_backend == "sqlite":
+                return "sqlite"
+            if recall_backend == "vector":
+                try:
+                    from .recall_vector import VectorBackend
 
-                return VectorBackend(recall_cfg)
-            except ImportError:
-                _log.warning("vector_backend_unavailable", hint="recall_vector not installed, falling back to BM25 scan")
+                    return VectorBackend(recall_cfg)
+                except ImportError:
+                    _log.warning("vector_backend_unavailable", hint="recall_vector not installed, falling back to BM25 scan")
+                    return None
+
+    # No explicit sqlite/vector recall backend selected. If the block
+    # store is a non-Markdown backend (postgres), route recall through it
+    # so the store's blocks are visible. Markdown / encrypted backends
+    # keep the default BM25 Markdown scan (None) — the zero-config path is
+    # byte-for-byte unchanged.
+    try:
+        from .storage import _backend_name
+
+        block_backend = _backend_name(workspace, cfg or None)
+    except Exception as exc:  # pragma: no cover — config read is best-effort
+        _log.debug("block_store_backend_probe_failed", error=str(exc))
+        block_backend = "markdown"
+    if block_backend == "postgres":
+        return PostgresRecallBackend(workspace, config=cfg or None)
+
     return None  # use built-in BM25 scan
 
 

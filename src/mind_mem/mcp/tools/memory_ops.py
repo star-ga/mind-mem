@@ -34,6 +34,7 @@ from mind_mem.mind_ffi import is_protected as mind_kernel_protected
 from mind_mem.mind_ffi import list_kernels as ffi_list_kernels
 from mind_mem.mind_filelock import FileLock
 from mind_mem.sqlite_index import _db_path as fts_db_path
+from mind_mem.storage import _MARKDOWN_BACKENDS, _backend_name, get_block_store
 
 from ..infra.config import _load_extra_categories
 from ..infra.constants import MCP_SCHEMA_VERSION
@@ -65,6 +66,26 @@ def _find_block_file(ws: str, block_id: str) -> str | None:
     return None
 
 
+def _is_markdown_backend(ws: str) -> bool:
+    """Return True when *ws*'s blocks of record live on the Markdown corpus.
+
+    Audit bug #5: ``export_memory`` / ``get_block`` enumerated blocks via
+    ``parse_file`` over :data:`CORPUS_DIRS`, so a Postgres-backed workspace
+    (whose blocks live in the DB and whose corpus files are empty init
+    templates) could not see its own blocks of record.
+
+    Defaults to the Markdown corpus — the zero-config SQLite / Markdown
+    default — when no config / no ``block_store`` section is present, and
+    on any config-read failure. This keeps the default path byte-for-byte
+    unchanged; only an explicitly non-Markdown backend (e.g. ``postgres``)
+    routes through the block store.
+    """
+    try:
+        return _backend_name(ws) in _MARKDOWN_BACKENDS
+    except Exception:  # pragma: no cover - defensive: config read failure
+        return True
+
+
 @mcp_tool_observe
 def index_stats() -> str:
     """Block counts, index staleness, vector coverage, and MIND kernel status."""
@@ -93,18 +114,29 @@ def index_stats() -> str:
             fts_exists = False
 
     if not fts_exists:
-        for kind in CORPUS_DIRS:
-            d = os.path.join(ws, kind)
-            if os.path.isdir(d):
-                count = 0
-                for fn in os.listdir(d):
-                    if fn.endswith(".md"):
-                        try:
-                            blocks = parse_file(os.path.join(d, fn))
-                            count += len(blocks)
-                        except (OSError, ValueError) as e:
-                            _log.debug("index_stats_parse_failed", file=fn, error=str(e))
-                stats[f"{kind}_blocks"] = count
+        if _is_markdown_backend(ws):
+            for kind in CORPUS_DIRS:
+                d = os.path.join(ws, kind)
+                if os.path.isdir(d):
+                    count = 0
+                    for fn in os.listdir(d):
+                        if fn.endswith(".md"):
+                            try:
+                                blocks = parse_file(os.path.join(d, fn))
+                                count += len(blocks)
+                            except (OSError, ValueError) as e:
+                                _log.debug("index_stats_parse_failed", file=fn, error=str(e))
+                    stats[f"{kind}_blocks"] = count
+        else:
+            # Audit bug #5: on a non-Markdown backend (e.g. Postgres) the
+            # corpus files are empty init templates; report the store's
+            # block count so an un-indexed PG workspace is not reported as
+            # empty.
+            try:
+                store = get_block_store(ws)
+                stats["total_blocks"] = len(store.get_all(active_only=False))
+            except Exception as e:  # pragma: no cover - defensive: store probe
+                _log.debug("index_stats_store_count_failed", error=str(e))
 
     mind_dir = get_mind_dir(ws)
     kernels = ffi_list_kernels(mind_dir)
@@ -335,26 +367,41 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blo
 
     all_blocks: list[dict] = []
 
-    for subdir in CORPUS_DIRS:
-        dir_path = os.path.join(ws, subdir)
-        if not os.path.isdir(dir_path):
-            continue
-        for fn in sorted(os.listdir(dir_path)):
-            if not fn.endswith(".md"):
+    def _strip_internal(block: dict) -> dict:
+        """Drop underscore-prefixed metadata unless ``include_metadata``."""
+        if include_metadata:
+            return block
+        for key in list(block.keys()):
+            if key.startswith("_") and key not in ("_id", "_source_file"):
+                del block[key]
+        return block
+
+    if _is_markdown_backend(ws):
+        # Default Markdown / encrypted path — byte-for-byte unchanged.
+        for subdir in CORPUS_DIRS:
+            dir_path = os.path.join(ws, subdir)
+            if not os.path.isdir(dir_path):
                 continue
-            filepath = os.path.join(dir_path, fn)
-            try:
-                blocks = parse_file(filepath)
-            except (OSError, ValueError) as exc:
-                _log.warning("export_parse_failed", file=fn, error=str(exc))
-                continue
-            for block in blocks:
-                block["_source_file"] = f"{subdir}/{fn}"
-                if not include_metadata:
-                    for key in list(block.keys()):
-                        if key.startswith("_") and key not in ("_id", "_source_file"):
-                            del block[key]
-                all_blocks.append(block)
+            for fn in sorted(os.listdir(dir_path)):
+                if not fn.endswith(".md"):
+                    continue
+                filepath = os.path.join(dir_path, fn)
+                try:
+                    blocks = parse_file(filepath)
+                except (OSError, ValueError) as exc:
+                    _log.warning("export_parse_failed", file=fn, error=str(exc))
+                    continue
+                for block in blocks:
+                    block["_source_file"] = f"{subdir}/{fn}"
+                    all_blocks.append(_strip_internal(block))
+    else:
+        # Audit bug #5: a non-Markdown backend (e.g. Postgres) keeps its
+        # blocks of record in the store, not in local Markdown files.
+        # Export every block (active + inactive, matching the markdown
+        # path which exports all parsed blocks) from the configured store.
+        store = get_block_store(ws)
+        for block in store.get_all(active_only=False):
+            all_blocks.append(_strip_internal(block))
 
     truncated = False
     total = len(all_blocks)
@@ -397,6 +444,40 @@ def get_block(block_id: str) -> str:
     if ws_err:
         return ws_err
 
+    def _found(block: dict) -> str:
+        metrics.inc("mcp_get_block")
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "block_id": block_id,
+                "found": True,
+                "block": block,
+            },
+            indent=2,
+            default=str,
+        )
+
+    # Audit bug #5: a non-Markdown backend (e.g. Postgres) keeps the block
+    # of record in the store, not in local Markdown files, so the
+    # corpus-file resolution below would never find it. Query the store
+    # directly by primary key.
+    if not _is_markdown_backend(ws):
+        store = get_block_store(ws)
+        block = store.get_by_id(block_id)
+        if block is not None:
+            return _found(block)
+        metrics.inc("mcp_get_block_miss")
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "block_id": block_id,
+                "found": False,
+                "error": f"Block {block_id} not found in the block store.",
+                "hint": "Check the block ID and ensure the workspace is initialized.",
+            },
+            indent=2,
+        )
+
     filepath = _find_block_file(ws, block_id)
     if filepath and os.path.isfile(filepath):
         try:
@@ -405,17 +486,7 @@ def get_block(block_id: str) -> str:
                 if block.get("_id") == block_id:
                     rel_path = os.path.relpath(filepath, ws)
                     block["_source_file"] = rel_path.replace(os.sep, "/")
-                    metrics.inc("mcp_get_block")
-                    return json.dumps(
-                        {
-                            "_schema_version": MCP_SCHEMA_VERSION,
-                            "block_id": block_id,
-                            "found": True,
-                            "block": block,
-                        },
-                        indent=2,
-                        default=str,
-                    )
+                    return _found(block)
         except (OSError, ValueError, BlockCorruptedError) as exc:
             _log.debug("get_block_parse_failed", file=filepath, error=str(exc))
 
@@ -434,17 +505,7 @@ def get_block(block_id: str) -> str:
                 for block in blocks:
                     if block.get("_id") == block_id:
                         block["_source_file"] = f"{subdir}/{fn}"
-                        metrics.inc("mcp_get_block")
-                        return json.dumps(
-                            {
-                                "_schema_version": MCP_SCHEMA_VERSION,
-                                "block_id": block_id,
-                                "found": True,
-                                "block": block,
-                            },
-                            indent=2,
-                            default=str,
-                        )
+                        return _found(block)
             except (OSError, ValueError, BlockCorruptedError):
                 continue
 
@@ -475,25 +536,50 @@ def memory_health() -> str:
     corpus_stats: dict[str, dict[str, int]] = {}
     total_blocks = 0
     total_active = 0
-    for subdir in CORPUS_DIRS:
-        dir_path = os.path.join(ws, subdir)
-        if not os.path.isdir(dir_path):
-            corpus_stats[subdir] = {"total": 0, "active": 0}
-            continue
-        sub_total = 0
-        sub_active = 0
-        for fn in os.listdir(dir_path):
-            if not fn.endswith(".md") or fn.endswith("_ARCHIVE.md"):
+    if _is_markdown_backend(ws):
+        for subdir in CORPUS_DIRS:
+            dir_path = os.path.join(ws, subdir)
+            if not os.path.isdir(dir_path):
+                corpus_stats[subdir] = {"total": 0, "active": 0}
                 continue
-            try:
-                blocks = parse_file(os.path.join(dir_path, fn))
-                sub_total += len(blocks)
-                sub_active += len(get_active(blocks))
-            except (OSError, ValueError):
-                pass
-        corpus_stats[subdir] = {"total": sub_total, "active": sub_active}
-        total_blocks += sub_total
-        total_active += sub_active
+            sub_total = 0
+            sub_active = 0
+            for fn in os.listdir(dir_path):
+                if not fn.endswith(".md") or fn.endswith("_ARCHIVE.md"):
+                    continue
+                try:
+                    blocks = parse_file(os.path.join(dir_path, fn))
+                    sub_total += len(blocks)
+                    sub_active += len(get_active(blocks))
+                except (OSError, ValueError):
+                    pass
+            corpus_stats[subdir] = {"total": sub_total, "active": sub_active}
+            total_blocks += sub_total
+            total_active += sub_active
+    else:
+        # Audit bug #5: derive corpus stats from the configured block
+        # store (e.g. Postgres) instead of the empty Markdown templates.
+        # Bucket each block under its source subdir (parsed from the
+        # store's ``_source_file``) so the per-corpus breakdown is
+        # preserved; blocks with an unknown source land in ``other``.
+        corpus_stats = {subdir: {"total": 0, "active": 0} for subdir in CORPUS_DIRS}
+        try:
+            store_blocks = get_block_store(ws).get_all(active_only=False)
+        except Exception as exc:  # pragma: no cover - defensive: store probe
+            _log.debug("memory_health_store_count_failed", error=str(exc))
+            store_blocks = []
+        for block in store_blocks:
+            src = str(block.get("_source_file", "") or "")
+            subdir = src.split("/", 1)[0] if "/" in src else ""
+            bucket = subdir if subdir in corpus_stats else "other"
+            stat = corpus_stats.setdefault(bucket, {"total": 0, "active": 0})
+            stat["total"] += 1
+            is_active = str(block.get("Status", "active")).lower() == "active"
+            if is_active:
+                stat["active"] += 1
+            total_blocks += 1
+            if is_active:
+                total_active += 1
     health["corpus"] = corpus_stats
     health["total_blocks"] = total_blocks
     health["total_active"] = total_active
@@ -551,9 +637,13 @@ def memory_health() -> str:
             health["embedding_coverage_pct"] = 0.0
             if total_blocks > 10:
                 recommendations.append("No vector index found. Run reindex(include_vectors=True) for hybrid search.")
-    except (ImportError, OSError, _struct_mod.error):
+    except (ImportError, AttributeError, OSError, _struct_mod.error) as exc:
+        # AttributeError: the vector-index path accessor is optional and
+        # version-dependent; degrade the embedding-coverage probe to
+        # "unknown" rather than crashing the whole health dashboard.
         health["embedded_blocks"] = "unknown"
         health["embedding_coverage_pct"] = "unknown"
+        _log.debug("health_embedding_probe_skipped", error=str(exc))
 
     signals_path = os.path.join(ws, "intelligence", "SIGNALS.md")
     pending_signals = 0

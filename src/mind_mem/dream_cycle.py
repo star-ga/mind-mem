@@ -30,6 +30,77 @@ from .observability import get_logger, metrics, timed
 _log = get_logger("dream_cycle")
 
 
+# --- Backend-aware block enumeration (audit bug 11) ---
+#
+# The block-oriented passes (citation repair, stale detection, tracked-entity
+# loading) historically scanned the local Markdown corpus directly via
+# ``parse_file`` / ``os.walk``. On a non-Markdown backend (e.g. Postgres) the
+# on-disk corpus files are empty init templates, so every pass returned 0 and
+# the enrichment/repair feature silently did nothing. These helpers route the
+# block set through the shared :func:`mind_mem.storage.iter_active_blocks`
+# primitive so the configured store's blocks of record are visible, while
+# leaving the default Markdown / SQLite path byte-for-byte unchanged.
+
+
+def _is_markdown_backend(workspace: str) -> bool:
+    """Return True when *workspace*'s blocks of record live on the Markdown corpus.
+
+    Defaults to the Markdown corpus (the zero-config SQLite default) when no
+    config / no ``block_store`` section is present. Never raises — a malformed
+    config degrades to the markdown path so the default experience is
+    unchanged. :func:`mind_mem.storage.iter_active_blocks` owns the single
+    source of truth for the same backend classification.
+    """
+    # Lazy import: avoids an import cycle (storage -> block_store -> ...) at
+    # module-import time and matches the lazy ``from .storage import``
+    # convention used elsewhere in the package.
+    from .storage import _MARKDOWN_BACKENDS, _backend_name
+
+    return _backend_name(workspace) in _MARKDOWN_BACKENDS
+
+
+def _block_scan_text(block: dict[str, Any]) -> str:
+    """Reconstruct a scannable plain-text blob from a store block dict.
+
+    The citation / entity regexes were written against raw Markdown text.
+    Store backends return a structured block dict (``_id`` + named fields +
+    list fields) rather than the original lines, so this joins the block's
+    public field values back into a single text blob the same regexes can
+    scan. Private ``_``-prefixed keys (``_id``, ``_source_file``, …) are
+    excluded — the block header (``_id``) is handled separately as a
+    *definition*, not a *reference*.
+    """
+    parts: list[str] = []
+    for key, value in block.items():
+        if key.startswith("_"):
+            continue
+        if isinstance(value, str):
+            parts.append(value)
+        elif isinstance(value, (list, tuple)):
+            parts.extend(str(item) for item in value if isinstance(item, (str, int, float)))
+        elif isinstance(value, (int, float)):
+            parts.append(str(value))
+    return "\n".join(parts)
+
+
+def _block_embedded_date(block: dict[str, Any]) -> str | None:
+    """Return the YYYY-MM-DD date of a store block (ID date, else ``Date`` field).
+
+    Mirrors the Markdown stale pass: prefer the date embedded in the block ID
+    (``D-20260213-001`` -> ``2026-02-13``), falling back to a ``Date`` field
+    on the block dict when the ID carries no date component.
+    """
+    from_id = _parse_date_from_id(str(block.get("_id", "")))
+    if from_id:
+        return from_id
+    raw_date = block.get("Date")
+    if isinstance(raw_date, str):
+        m = re.match(r"(\d{4})-(\d{2})-(\d{2})", raw_date.strip())
+        if m:
+            return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    return None
+
+
 # --- Data classes (immutable results) ---
 
 
@@ -228,9 +299,30 @@ def _extract_raw_entities(text: str) -> list[dict[str, str]]:
     return found
 
 
+_TRACKED_ENTITY_RE = re.compile(r"\[?(PRJ|TOOL|PER)-([\w-]+)\]?")
+
+
 def _load_tracked_slugs(workspace: str) -> set[str]:
-    """Load all entity slugs already tracked in entities/*.md."""
+    """Load all entity slugs already tracked in the workspace.
+
+    Backend-aware (audit bug 11): for the Markdown backend the tracked
+    entities live in ``entities/*.md`` (scanned for ``[PRJ|TOOL|PER-slug]``
+    headers/references). For a non-Markdown backend (e.g. Postgres) the
+    entity records are blocks of record in the store, so their slugs are
+    derived from the active block IDs via
+    :func:`mind_mem.storage.iter_active_blocks`.
+    """
     tracked: set[str] = set()
+
+    if not _is_markdown_backend(workspace):
+        from .storage import iter_active_blocks
+
+        for block in iter_active_blocks(workspace):
+            m = _TRACKED_ENTITY_RE.match(str(block.get("_id", "")))
+            if m:
+                tracked.add(m.group(2).lower())
+        return tracked
+
     entities_dir = os.path.join(workspace, "entities")
     if not os.path.isdir(entities_dir):
         return tracked
@@ -249,11 +341,56 @@ def _load_tracked_slugs(workspace: str) -> set[str]:
     return tracked
 
 
+def _pass_entity_discovery_store(workspace: str, tracked: set[str]) -> list[EntityProposal]:
+    """Entity discovery over a non-Markdown store's active blocks (bug 11).
+
+    On a store backend there are no ``memory/*.md`` daily logs — the blocks of
+    record live in the store. Scan each active block's reconstructed text for
+    untracked entity references, attributing the proposal to the block's
+    ``_source_file`` (falling back to its ``_id``).
+    """
+    from .storage import iter_active_blocks
+
+    proposals: list[EntityProposal] = []
+    seen_global: set[str] = set()
+
+    for block in iter_active_blocks(workspace):
+        text = _block_scan_text(block)
+        if not text:
+            continue
+        source = str(block.get("_source_file") or block.get("_id") or "store")
+        for ent in _extract_raw_entities(text):
+            slug = ent["slug"]
+            if slug in tracked or slug in seen_global:
+                continue
+            seen_global.add(slug)
+            proposals.append(
+                EntityProposal(
+                    entity_type=ent["entity_type"],
+                    slug=slug,
+                    source_pattern=ent["source_pattern"],
+                    excerpt=ent["excerpt"][:120],
+                    source_file=source,
+                )
+            )
+
+    _log.info("entity_discovery_complete", found=len(proposals), source="block_store")
+    metrics.inc("dream_entities_found", len(proposals))
+    return proposals
+
+
 def pass_entity_discovery(
     workspace: str,
     lookback_days: int = 7,
 ) -> list[EntityProposal]:
-    """Scan recent daily logs for untracked entities."""
+    """Scan recent daily logs (or, on a store backend, active blocks) for untracked entities."""
+    tracked = _load_tracked_slugs(workspace)
+
+    # Backend-aware (audit bug 11): a non-Markdown store has no daily-log
+    # corpus, so discover entities from the store's active blocks instead.
+    if not _is_markdown_backend(workspace):
+        return _pass_entity_discovery_store(workspace, tracked)
+
     memory_dir = os.path.join(workspace, "memory")
     if not os.path.isdir(memory_dir):
         _log.info("entity_discovery_skip", reason="no memory/ dir")
@@ -262,7 +399,6 @@ def pass_entity_discovery(
     cutoff = datetime.now() - timedelta(days=lookback_days)
     cutoff_str = cutoff.strftime("%Y-%m-%d")
 
-    tracked = _load_tracked_slugs(workspace)
     proposals: list[EntityProposal] = []
     seen_global: set[str] = set()
 
@@ -321,7 +457,18 @@ def _scan_workspace_md_files(workspace: str) -> list[str]:
 
 
 def _collect_defined_ids(workspace: str) -> set[str]:
-    """Collect all block IDs defined in the workspace (headers like [D-...])."""
+    """Collect all block IDs defined in the workspace.
+
+    Backend-aware (audit bug 11): for the Markdown backend the defined IDs are
+    the ``[ID]`` headers across decisions/tasks/entities files. For a
+    non-Markdown backend (e.g. Postgres) the defined IDs are the active block
+    IDs in the store, read via :func:`mind_mem.storage.iter_active_blocks`.
+    """
+    if not _is_markdown_backend(workspace):
+        from .storage import iter_active_blocks
+
+        return {str(b.get("_id", "")) for b in iter_active_blocks(workspace) if b.get("_id")}
+
     defined: set[str] = set()
     for fpath in _scan_workspace_md_files(workspace):
         try:
@@ -334,9 +481,50 @@ def _collect_defined_ids(workspace: str) -> set[str]:
     return defined
 
 
+def _pass_citation_repair_store(workspace: str, defined_ids: set[str]) -> list[BrokenCitation]:
+    """Citation repair over a non-Markdown store's active blocks (bug 11).
+
+    Scans each active block's reconstructed text (not the empty on-disk
+    template files) for references to block IDs that are not defined in the
+    store. ``line_number`` is the 1-based line within the block's text blob.
+    """
+    from .storage import iter_active_blocks
+
+    broken: list[BrokenCitation] = []
+    for block in iter_active_blocks(workspace):
+        bid = str(block.get("_id", ""))
+        source = str(block.get("_source_file") or bid or "store")
+        text = _block_scan_text(block)
+        for line_num, line in enumerate(text.split("\n"), start=1):
+            for m in _BLOCK_ID_RE.finditer(line):
+                cited_id = m.group(1)
+                # A block referencing its own ID is a definition, not a
+                # dangling citation.
+                if cited_id == bid or cited_id in defined_ids:
+                    continue
+                broken.append(
+                    BrokenCitation(
+                        source_file=source,
+                        cited_id=cited_id,
+                        line_number=line_num,
+                        context=line.strip()[:120],
+                    )
+                )
+
+    _log.info("citation_repair_complete", broken=len(broken), source="block_store")
+    metrics.inc("dream_broken_citations", len(broken))
+    return broken
+
+
 def pass_citation_repair(workspace: str) -> list[BrokenCitation]:
     """Find broken internal references (IDs citing nonexistent blocks)."""
     defined_ids = _collect_defined_ids(workspace)
+
+    # Backend-aware (audit bug 11): on a non-Markdown store the corpus files
+    # are empty templates, so scan the store's active blocks instead.
+    if not _is_markdown_backend(workspace):
+        return _pass_citation_repair_store(workspace, defined_ids)
+
     broken: list[BrokenCitation] = []
 
     for fpath in _scan_workspace_md_files(workspace):
@@ -380,11 +568,79 @@ def _parse_date_from_id(block_id: str) -> str | None:
     return None
 
 
+def _block_last_modified_date(block: dict[str, Any]) -> str | None:
+    """Staleness date for a store block: embedded ID/``Date`` first, ``_updated_at`` last.
+
+    This mirrors the Markdown stale pass, which ages a block by the date
+    embedded in its ID (``D-20260213-001`` -> ``2026-02-13``). That embedded
+    date is the block's *semantic* age and is therefore the primary signal —
+    using the store's ``_updated_at`` (set to write-time on every persist)
+    would mask genuinely old blocks the moment they are imported into the
+    store. ``_updated_at`` is only the fallback for a block whose ID and
+    ``Date`` carry no date. Returns YYYY-MM-DD or ``None`` when no date exists.
+    """
+    embedded = _block_embedded_date(block)
+    if embedded:
+        return embedded
+    updated = block.get("_updated_at")
+    if isinstance(updated, str):
+        m = re.match(r"(\d{4})-(\d{2})-(\d{2})", updated.strip())
+        if m:
+            return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    return None
+
+
+def _pass_stale_detection_store(workspace: str, stale_days: int) -> list[StaleBlock]:
+    """Stale detection over a non-Markdown store's active blocks (bug 11).
+
+    A store backend has no file mtime, so staleness is decided purely from the
+    block's last-modified date (``_updated_at`` when available, else the date
+    embedded in the ID / ``Date`` field). A block with no derivable date cannot
+    be aged and is skipped (matching the Markdown path, which only flags
+    dateless blocks when their *file* is old — a signal that does not exist for
+    a store row).
+    """
+    from .storage import iter_active_blocks
+
+    cutoff = datetime.now() - timedelta(days=stale_days)
+    cutoff_str = cutoff.strftime("%Y-%m-%d")
+
+    stale: list[StaleBlock] = []
+    for block in iter_active_blocks(workspace):
+        block_id = str(block.get("_id", ""))
+        if not block_id:
+            continue
+        mod_date = _block_last_modified_date(block)
+        if not mod_date or mod_date >= cutoff_str:
+            continue
+        try:
+            days = (datetime.now() - datetime.strptime(mod_date, "%Y-%m-%d")).days
+        except ValueError:
+            continue
+        stale.append(
+            StaleBlock(
+                block_id=block_id,
+                source_file=str(block.get("_source_file") or block_id or "store"),
+                last_modified_date=mod_date,
+                days_stale=days,
+            )
+        )
+
+    _log.info("stale_detection_complete", stale=len(stale), source="block_store")
+    metrics.inc("dream_stale_blocks", len(stale))
+    return stale
+
+
 def pass_stale_detection(
     workspace: str,
     stale_days: int = 30,
 ) -> list[StaleBlock]:
     """Find blocks not updated in >stale_days (file mtime + embedded date)."""
+    # Backend-aware (audit bug 11): a non-Markdown store has no file mtime, so
+    # age blocks by their last-modified/embedded date instead.
+    if not _is_markdown_backend(workspace):
+        return _pass_stale_detection_store(workspace, stale_days)
+
     cutoff = datetime.now() - timedelta(days=stale_days)
     cutoff_str = cutoff.strftime("%Y-%m-%d")
     cutoff_ts = cutoff.timestamp()

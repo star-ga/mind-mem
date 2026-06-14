@@ -201,31 +201,174 @@ def _sql(schema: str, template: str) -> Any:
     return pgsql.SQL(template).format(s=pgsql.Identifier(schema))
 
 
-def _try_create_extension_vector(conn: Any) -> bool:
-    """Attempt ``CREATE EXTENSION IF NOT EXISTS vector``. Returns True on
-    success, False when the extension is unavailable on the server. The
-    failure path leaves the transaction in a clean state for the caller.
+def _detect_vector_schema(conn: Any) -> str | None:
+    """Return the schema name in which the ``vector`` extension is installed.
+
+    pgvector installs its ``vector`` type, operator classes and operators
+    into a single namespace (whatever schema was current at
+    ``CREATE EXTENSION`` time — almost always ``public``). When the DSN
+    pins ``search_path`` to an isolated workspace schema (the recommended
+    multi-tenant isolation pattern), that namespace drops off the path and
+    the *unqualified* ``vector`` type/operator-class can no longer resolve,
+    even though the extension exists.
+
+    Resolving the namespace serves two purposes:
+      * schema-qualify the DDL (``<ns>.vector`` / ``<ns>.vector_cosine_ops``)
+        so the embedding column and HNSW index can be created regardless of
+        ``search_path`` (see :func:`_ddl_pgvector`); and
+      * append the namespace to each pooled connection's ``search_path``
+        (see :func:`_configure_vector_search_path`) so the runtime ``vector``
+        type, the ``<=>`` cosine operator and the ``::vector`` casts in
+        :meth:`PostgresBlockStore.hybrid_search` / ``write_block`` /
+        ``backfill_embedding`` all resolve. Qualifying the operator would
+        require verbose ``OPERATOR(<ns>.<=>)`` syntax everywhere and could
+        defeat HNSW index matching, so appending the schema is preferred.
+
+    Returns the namespace name (e.g. ``"public"``) or ``None`` when the
+    extension is not present. Leaves the connection in a clean state.
     """
     try:
-        conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
-        return True
+        cur = conn.execute("SELECT extnamespace::regnamespace::text FROM pg_extension WHERE extname = 'vector'")
+        row = cur.fetchone()
     except Exception:
-        # Roll back the failed statement so the next exec inherits a
-        # clean transaction state. Conn is autocommit in our caller so
-        # this is a no-op there but defensive in case that changes.
         try:
             conn.rollback()
         except Exception:
             pass
-        return False
+        return None
+    if not row or not row[0]:
+        return None
+    return str(row[0])
 
 
-def _ddl_pgvector(schema: str, embedding_dim: int = DEFAULT_EMBEDDING_DIM) -> Any:
+def _configure_vector_search_path(conn: Any) -> None:
+    """Pool ``configure`` callback: append the pgvector schema to ``search_path``.
+
+    Runs once per newly-created pooled connection. When the ``vector``
+    extension lives in a schema that is NOT already on the connection's
+    ``search_path`` (the schema-isolation case where the DSN pins
+    ``search_path`` to just the workspace schema and ``public`` drops off),
+    the bare ``vector`` type, the ``<=>`` operator and ``vector_cosine_ops``
+    operator class cannot resolve and every embedded read/write fails with
+    ``UndefinedObject`` / ``UndefinedFunction``.
+
+    This callback detects the extension's namespace and, if absent from the
+    current path, re-issues ``SET search_path`` with that namespace appended
+    *after* the existing entries — so the operator/type/opclass resolve
+    while the workspace schema stays primary for unqualified object
+    creation. It is a best-effort, fail-soft hook: any error is swallowed
+    (the connection still works for BM25-only paths).
+
+    psycopg_pool requires the ``configure`` callback to leave the connection
+    in a clean (IDLE, not INTRANS) state, so the ``SET`` — which is
+    transactional — is committed before returning. ``SET`` (without
+    ``LOCAL``) persists for the rest of the session once committed.
+    """
+    from psycopg import sql as pgsql
+
+    try:
+        ns = _detect_vector_schema(conn)
+        if not ns:
+            conn.rollback()  # leave IDLE for the pool (the SELECT opened a txn).
+            return
+        current = conn.execute("SELECT current_setting('search_path', true)").fetchone()
+        current_path = (current[0] if current and current[0] else "") or ""
+        # Parse the existing path into individual schema names, stripping
+        # the optional double-quotes Postgres uses for non-simple idents.
+        existing_names = [p.strip().strip('"') for p in current_path.split(",") if p.strip()]
+        if ns in existing_names:
+            conn.rollback()  # already reachable; leave IDLE for the pool.
+            return
+        # Rebuild the path entirely from quoted Identifiers (never splice
+        # the raw current_setting text into SQL) with the vector schema
+        # appended last so the workspace schema stays primary.
+        all_names = [*existing_names, ns]
+        idents = pgsql.SQL(", ").join(pgsql.Identifier(n) for n in all_names)
+        conn.execute(pgsql.SQL("SET search_path = {p}").format(p=idents))
+        # Commit so the SET persists and the connection is returned to the
+        # pool in IDLE state (configure must not leave it INTRANS).
+        conn.commit()
+    except Exception as exc:
+        # Fail-soft: a missing/un-appendable vector schema must not break
+        # connection setup. Embedded paths degrade to BM25-only.
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        _log.debug("pg_vector_search_path_configure_skipped: %s", exc)
+
+
+def _try_create_extension_vector(conn: Any) -> str | None:
+    """Ensure pgvector is usable and return the schema it lives in.
+
+    Attempts ``CREATE EXTENSION IF NOT EXISTS vector`` (a no-op when the
+    extension already exists), then *verifies the type is actually
+    resolvable* by detecting its namespace and round-tripping a
+    schema-qualified ``'[1]'::<ns>.vector`` cast. The roundtrip is the
+    load-bearing check: ``CREATE EXTENSION`` succeeds idempotently when the
+    extension already exists in some *other* schema, which would otherwise
+    make us claim vector support that the current ``search_path`` cannot
+    reach.
+
+    Returns the extension's schema name on success, or ``None`` when the
+    extension is unavailable / unusable. The failure path leaves the
+    transaction in a clean state for the caller.
+    """
+    from psycopg import sql as pgsql
+
+    # CREATE EXTENSION is best-effort: it succeeds when we have privileges
+    # and pgvector is available, and is a harmless no-op when the extension
+    # already exists (possibly in another schema). We do NOT trust its
+    # return value to mean "usable here" — the namespace probe + cast
+    # roundtrip below is what actually decides has_vector.
+    try:
+        conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    except Exception:
+        # Insufficient privilege / not available. The extension may still
+        # already exist (installed by an admin), so fall through to detect.
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+    ns = _detect_vector_schema(conn)
+    if ns is None:
+        return None
+
+    # Verify the qualified type genuinely resolves under the current
+    # search_path. This catches the case where the extension exists in a
+    # namespace that is off the path AND the qualified name is somehow
+    # still unreachable (defence-in-depth; normally a qualified reference
+    # always resolves).
+    try:
+        conn.execute(pgsql.SQL("SELECT '[1]'::{t}").format(t=pgsql.Identifier(ns, "vector")))
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return None
+    return ns
+
+
+def _ddl_pgvector(
+    schema: str,
+    embedding_dim: int = DEFAULT_EMBEDDING_DIM,
+    *,
+    vector_schema: str = "public",
+) -> Any:
     """Return DDL that adds the embedding column + HNSW cosine index.
 
     Run this only after :func:`_try_create_extension_vector` confirmed
-    pgvector is available on the server. The ALTER TABLE is idempotent
+    pgvector is available on the server (and supplied the namespace it
+    lives in via *vector_schema*). The ALTER TABLE is idempotent
     (``ADD COLUMN IF NOT EXISTS``) so re-runs are safe.
+
+    The ``vector`` type and the ``vector_cosine_ops`` operator class are
+    schema-qualified with *vector_schema* (e.g. ``public.vector``) so the
+    DDL works even when the DSN's ``search_path`` excludes the extension's
+    schema — the schema-isolation pattern where this used to silently
+    disable embeddings (``has_vector=False``).
 
     Index choice: HNSW (pgvector >= 0.5.0). HNSW builds incrementally
     on insert so the index quality is independent of when we run the
@@ -237,22 +380,25 @@ def _ddl_pgvector(schema: str, embedding_dim: int = DEFAULT_EMBEDDING_DIM) -> An
 
     The integer dimension is rendered through ``pgsql.Literal`` so the
     SQL composition stays inside the Composable API; we never glue
-    user-controlled values into raw SQL text.
+    user-controlled values into raw SQL text. The vector schema name is
+    validated and rendered as a quoted ``Identifier`` so it can never act
+    as an injection vector.
     """
     from psycopg import sql as pgsql
 
     s = pgsql.Identifier(schema)
     dim_lit = pgsql.Literal(int(embedding_dim))
+    vec_ns = _validate_schema_name(vector_schema)
+    vector_type = pgsql.Identifier(vec_ns, "vector")
+    cosine_ops = pgsql.Identifier(vec_ns, "vector_cosine_ops")
     stmts: list[Any] = [
-        pgsql.SQL("ALTER TABLE {s}.blocks ADD COLUMN IF NOT EXISTS embedding VECTOR({d})").format(s=s, d=dim_lit),
+        pgsql.SQL("ALTER TABLE {s}.blocks ADD COLUMN IF NOT EXISTS embedding {vt}({d})").format(s=s, vt=vector_type, d=dim_lit),
         # HNSW with cosine. lists/m tuning replaces the brittle
         # IVFFlat lists=100 default that mis-bucketed any corpus
         # smaller than ~100k rows.
         pgsql.SQL(
-            "CREATE INDEX IF NOT EXISTS blocks_embedding "
-            "ON {s}.blocks USING hnsw (embedding vector_cosine_ops) "
-            "WITH (m=16, ef_construction=64)"
-        ).format(s=s),
+            "CREATE INDEX IF NOT EXISTS blocks_embedding ON {s}.blocks USING hnsw (embedding {ops}) WITH (m=16, ef_construction=64)"
+        ).format(s=s, ops=cosine_ops),
     ]
     return pgsql.SQL(";\n").join(stmts)
 
@@ -374,6 +520,13 @@ class PostgresBlockStore:
         # before _ensure_schema() runs (constructor arg or attr write).
         self._embedding_dim: int = DEFAULT_EMBEDDING_DIM
         self._has_vector: bool = False
+        # Namespace the pgvector extension lives in (resolved at
+        # _ensure_schema time). Used to schema-qualify the ``vector`` type
+        # and ``vector_cosine_ops`` operator class so embeddings keep
+        # working when the DSN's search_path excludes the extension's
+        # schema (e.g. ?options=-csearch_path=<workspace_schema>). Defaults
+        # to "public" — the conventional pgvector install schema.
+        self._vector_schema: str = "public"
 
     # ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -389,6 +542,13 @@ class PostgresBlockStore:
                     min_size=1,
                     max_size=10,
                     open=True,
+                    # Append the pgvector extension's schema to each
+                    # connection's search_path so the bare ``vector`` type,
+                    # ``<=>`` operator and ``vector_cosine_ops`` opclass
+                    # resolve even when the DSN isolates search_path to a
+                    # single workspace schema (bug-6: embeddings silently
+                    # disabled / hybrid_search crashed under isolation).
+                    configure=_configure_vector_search_path,
                 )
         return self._pool
 
@@ -468,10 +628,17 @@ class PostgresBlockStore:
                 with pool.connection() as conn:
                     conn.autocommit = True
                     conn.execute(_ddl(self._schema))
-                    self._has_vector = _try_create_extension_vector(conn)
-                    if self._has_vector:
+                    # Returns the namespace the vector extension lives in
+                    # (e.g. "public"), or None when pgvector is unusable.
+                    # We schema-qualify all vector references with it so
+                    # embeddings work even when the DSN's search_path
+                    # excludes that namespace (the schema-isolation case).
+                    vector_schema = _try_create_extension_vector(conn)
+                    self._has_vector = vector_schema is not None
+                    if self._has_vector and vector_schema is not None:
+                        self._vector_schema = vector_schema
                         try:
-                            conn.execute(_ddl_pgvector(self._schema, self._embedding_dim))
+                            conn.execute(_ddl_pgvector(self._schema, self._embedding_dim, vector_schema=vector_schema))
                         except Exception as vec_exc:
                             # Vector ext present but DDL failed (e.g. dim
                             # mismatch with an existing column). Don't

@@ -31,6 +31,50 @@ from .observability import get_logger, metrics
 
 _log = get_logger("drift_detector")
 
+# Backend-aware block enumeration (audit bug 12): drift detection used to
+# read ``decisions/DECISIONS.md`` directly via ``parse_file``, so on a
+# non-Markdown backend (e.g. Postgres) — where that file is the empty init
+# template and every real decision lives in the store — drift analysis was
+# silently blind. The store's blocks of record are now reached through the
+# shared :func:`mind_mem.storage.iter_active_blocks` primitive, while the
+# default Markdown / SQLite path stays byte-for-byte unchanged.
+
+
+def _is_markdown_backend(workspace: str) -> bool:
+    """Return True when *workspace*'s blocks of record live on the Markdown corpus.
+
+    Defaults to the Markdown corpus (the zero-config SQLite default) when no
+    config / no ``block_store`` section is present. Never raises — a malformed
+    config degrades to the Markdown path so the default experience is
+    unchanged. :func:`mind_mem.storage.iter_active_blocks` owns the single
+    source of truth for the same backend classification; this mirrors the
+    identical helper used by ``dream_cycle`` / ``sqlite_index``.
+    """
+    # Lazy import: avoids an import cycle (storage -> block_store -> ...) at
+    # module-import time and matches the lazy ``from .storage import``
+    # convention used elsewhere in the package.
+    from .storage import _MARKDOWN_BACKENDS, _backend_name
+
+    return _backend_name(workspace) in _MARKDOWN_BACKENDS
+
+
+def _is_decision_block(block: dict) -> bool:
+    """Return True when a store block dict is a decision block.
+
+    Mirrors the Markdown corpus semantics where drift detection reads only
+    ``decisions/DECISIONS.md``. A store-backed block is a decision when its
+    ``_source_file`` resolves to that file, or — when the writer left
+    ``_source_file`` unset — when its ``_id`` carries the ``D-`` decision
+    prefix (e.g. ``D-20260613-001``).
+    """
+    source = str(block.get("_source_file", "")).replace("\\", "/")
+    if source.endswith("decisions/DECISIONS.md"):
+        return True
+    if source:
+        # An explicit, non-decisions source file means a non-decision block.
+        return False
+    return str(block.get("_id", "")).startswith("D-")
+
 
 def _trigrams(text: str) -> set[str]:
     """Extract character trigrams from text for similarity computation."""
@@ -208,8 +252,23 @@ class DriftDetector:
             conn.close()
 
     def _load_blocks(self) -> list[dict]:
-        """Load all decision blocks from the workspace."""
-        blocks = []
+        """Load all decision blocks from the workspace.
+
+        Backend-aware (audit bug 12): for the Markdown / encrypted backend
+        the decision blocks live in ``decisions/DECISIONS.md`` and are read
+        via :func:`parse_file` exactly as before (the default SQLite path is
+        unchanged). For a non-Markdown backend (e.g. Postgres) the decisions
+        are blocks of record in the configured store, so they are read
+        through the shared :func:`mind_mem.storage.iter_active_blocks`
+        primitive and filtered to decision blocks — otherwise drift analysis
+        is blind to the store's contents.
+        """
+        if not _is_markdown_backend(self.workspace):
+            from .storage import iter_active_blocks
+
+            return [b for b in iter_active_blocks(self.workspace) if _is_decision_block(b)]
+
+        blocks: list[dict] = []
         decisions_path = os.path.join(self.workspace, "decisions", "DECISIONS.md")
         if os.path.isfile(decisions_path):
             try:

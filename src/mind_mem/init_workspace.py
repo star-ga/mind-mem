@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mind-mem workspace initializer. Zero external deps.
+"""mind-mem workspace initializer. Zero external deps (Postgres optional).
 
 Scaffolds directory structure and copies templates for a new mind-mem workspace.
 Never overwrites existing files.
@@ -7,19 +7,46 @@ Never overwrites existing files.
 Usage:
     python3 -m mind_mem.init_workspace [workspace_path]
     python3 -m mind_mem.init_workspace /path/to/workspace
+
+    # Opt-in Postgres backend (default stays SQLite/markdown):
+    python3 -m mind_mem.init_workspace /path/to/workspace \\
+        --backend postgres --dsn postgresql://user:pw@host/db --schema mind_mem
+
+The Postgres backend may also be selected via the environment so CI /
+container entrypoints need no flags:
+    MIND_MEM_BACKEND=postgres MIND_MEM_DSN=postgresql://... \\
+        python3 -m mind_mem.init_workspace /path/to/workspace
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
 import sys
+from typing import Any
 
 from . import __version__ as _pkg_version
 from .observability import get_logger
 
 _log = get_logger("init_workspace")
+
+# Backends init_workspace can scaffold. ``markdown`` is the zero-config
+# default (SQLite recall cache + local Markdown corpus); ``postgres`` and
+# ``encrypted`` are opt-in and write an extra ``block_store`` config
+# section. Kept in sync with ``storage._SUPPORTED_BACKENDS``.
+SUPPORTED_BACKENDS = ("markdown", "postgres", "encrypted")
+
+# When a non-markdown block_store backend is chosen, recall must read from
+# the local SQLite FTS cache (which the store-driven reindexer mirrors from
+# the backend) rather than the empty Markdown corpus. ``markdown`` keeps the
+# zero-config BM25 scan over the on-disk corpus.
+_BACKEND_RECALL = {
+    "markdown": "bm25",
+    "postgres": "sqlite",
+    "encrypted": "bm25",
+}
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # PLUGIN_ROOT: go up two levels from src/mind_mem/ to repo root
@@ -124,6 +151,94 @@ DEFAULT_CONFIG = {
 }
 
 
+def _build_config(
+    *,
+    backend: str = "markdown",
+    dsn: str | None = None,
+    schema: str | None = None,
+) -> dict[str, Any]:
+    """Return a fresh config dict for *backend*.
+
+    For the default ``markdown`` backend this is a deep copy of
+    :data:`DEFAULT_CONFIG` with **no** ``block_store`` section — the
+    zero-config SQLite/Markdown layout, byte-for-byte unchanged.
+
+    For ``postgres`` (and ``encrypted``) a ``block_store`` section is
+    added and ``recall.backend`` is set so the recall cache reads from the
+    backend-mirroring SQLite FTS index rather than the empty Markdown
+    corpus.
+
+    Args:
+        backend: One of :data:`SUPPORTED_BACKENDS`.
+        dsn:     Postgres connection string (required for ``postgres``).
+        schema:  Postgres schema name (defaults to ``"mind_mem"`` for the
+                 ``postgres`` backend; ignored otherwise).
+
+    Returns:
+        A new config dict ready to serialise to ``mind-mem.json``.
+
+    Raises:
+        ValueError: ``backend`` is unknown, or ``postgres`` is requested
+                    without a ``dsn``.
+    """
+    if backend not in SUPPORTED_BACKENDS:
+        raise ValueError(f"unknown backend {backend!r}; choose from {', '.join(SUPPORTED_BACKENDS)}")
+
+    # Deep-ish copy so callers never mutate the module-level template.
+    cfg: dict[str, Any] = json.loads(json.dumps(DEFAULT_CONFIG))
+
+    if backend == "markdown":
+        # Default path: identical to the historical config — no
+        # block_store section, recall.backend = "bm25".
+        return cfg
+
+    recall = cfg.setdefault("recall", {})
+    recall["backend"] = _BACKEND_RECALL[backend]
+
+    if backend == "postgres":
+        if not dsn:
+            raise ValueError("the postgres backend requires a --dsn (or MIND_MEM_DSN) connection string")
+        cfg["block_store"] = {
+            "backend": "postgres",
+            "dsn": dsn,
+            "schema": schema or "mind_mem",
+        }
+    elif backend == "encrypted":
+        # Encrypted wraps the Markdown corpus; the passphrase is supplied
+        # at runtime via MIND_MEM_ENCRYPTION_PASSPHRASE (never written to
+        # disk). No dsn/schema apply.
+        cfg["block_store"] = {"backend": "encrypted"}
+
+    return cfg
+
+
+def _ensure_postgres_schema(dsn: str, schema: str) -> tuple[bool, str | None]:
+    """Best-effort: create the Postgres schema/tables for a fresh install.
+
+    Returns ``(ok, error)``. Never raises — a missing ``psycopg`` driver or
+    an unreachable database degrades to ``(False, <reason>)`` so init still
+    writes a usable config and the SQLite-default path is never affected.
+    """
+    try:
+        from .block_store_postgres import PostgresBlockStore
+    except ImportError as exc:
+        return False, f"psycopg not installed; run 'pip install \"mind-mem[postgres]\"' then mind-mem-init again ({exc})"
+
+    store = None
+    try:
+        store = PostgresBlockStore(dsn=dsn, schema=schema, workspace=os.getcwd())
+        store._ensure_schema()
+        return True, None
+    except Exception as exc:  # noqa: BLE001 — surface, don't crash init
+        return False, str(exc)
+    finally:
+        if store is not None:
+            try:
+                store.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
 # Numeric range constraints for recall config: (min, max, default)
 _RECALL_RANGES: dict[str, tuple[float, float, float]] = {
     "bm25_k1": (0.5, 3.0, 1.2),
@@ -190,9 +305,36 @@ def load_config(ws: str) -> dict:
     return dict(DEFAULT_CONFIG)
 
 
-def init(ws: str) -> tuple[list[str], list[str]]:
-    """Initialize a mind-mem workspace."""
+def init(
+    ws: str,
+    *,
+    backend: str = "markdown",
+    dsn: str | None = None,
+    schema: str | None = None,
+) -> tuple[list[str], list[str]]:
+    """Initialize a mind-mem workspace.
+
+    Args:
+        ws:      Workspace root path.
+        backend: Block-store backend to scaffold (:data:`SUPPORTED_BACKENDS`).
+                 ``"markdown"`` (default) writes the historical zero-config
+                 layout; ``"postgres"`` / ``"encrypted"`` add a
+                 ``block_store`` section to ``mind-mem.json``.
+        dsn:     Postgres connection string (required when ``backend`` is
+                 ``"postgres"``).
+        schema:  Postgres schema name (``backend="postgres"`` only).
+
+    Returns:
+        ``(created, skipped)`` lists of relative-path descriptions.
+
+    Raises:
+        ValueError: ``backend`` is unknown or ``postgres`` lacks a ``dsn``.
+    """
     ws = os.path.abspath(ws)
+
+    # Validate backend selection up front (before any filesystem writes) so
+    # a bad invocation never leaves a half-built workspace.
+    config = _build_config(backend=backend, dsn=dsn, schema=schema)
 
     # Security: reject symlinks as workspace root to prevent writing outside intended location
     if os.path.islink(ws):
@@ -232,11 +374,13 @@ def init(ws: str) -> tuple[list[str], list[str]]:
             shutil.copy2(src, dst)
             created.append(f"file: maintenance/{script}")
 
-    # Create mind-mem.json config (never overwrite)
+    # Create mind-mem.json config (never overwrite). For the default
+    # markdown backend ``config`` equals DEFAULT_CONFIG (no block_store
+    # section), so the zero-config path is byte-for-byte unchanged.
     config_path = os.path.join(ws, "mind-mem.json")
     if not os.path.exists(config_path):
         with open(config_path, "w") as f:
-            json.dump(DEFAULT_CONFIG, f, indent=2)
+            json.dump(config, f, indent=2)
             f.write("\n")
         os.chmod(config_path, 0o600)
         created.append("file: mind-mem.json")
@@ -252,13 +396,60 @@ def init(ws: str) -> tuple[list[str], list[str]]:
     return created, skipped
 
 
-def main():
-    ws = sys.argv[1] if len(sys.argv) > 1 else "."
+def _build_arg_parser() -> argparse.ArgumentParser:
+    """Construct the ``mind-mem-init`` argument parser.
 
-    print(f"mind-mem init: {os.path.abspath(ws)}")
+    Unknown flags are rejected by argparse (exit 2) instead of being
+    silently treated as the workspace path — which previously caused
+    ``mind-mem-init --help`` to create a literal ``./--help`` directory.
+    """
+    parser = argparse.ArgumentParser(
+        prog="mind-mem-init",
+        description="Initialize a mind-mem workspace (SQLite/Markdown by default; opt-in Postgres).",
+    )
+    parser.add_argument(
+        "workspace",
+        nargs="?",
+        default=".",
+        help="Workspace directory to initialize (default: current directory).",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=SUPPORTED_BACKENDS,
+        default=os.environ.get("MIND_MEM_BACKEND", "markdown"),
+        help="Block-store backend (default: markdown / SQLite, zero-config). Override via MIND_MEM_BACKEND.",
+    )
+    parser.add_argument(
+        "--dsn",
+        default=os.environ.get("MIND_MEM_DSN"),
+        help="Postgres connection string (required for --backend postgres). Override via MIND_MEM_DSN.",
+    )
+    parser.add_argument(
+        "--schema",
+        default=os.environ.get("MIND_MEM_SCHEMA"),
+        help="Postgres schema name (default: mind_mem; --backend postgres only).",
+    )
+    parser.add_argument(
+        "--ensure-schema",
+        action="store_true",
+        help="For --backend postgres, also CREATE the schema/tables now (best-effort; skipped if psycopg/Postgres unavailable).",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_arg_parser()
+    args = parser.parse_args(argv)
+
+    ws = args.workspace
+
+    print(f"mind-mem init: {os.path.abspath(ws)} (backend={args.backend})")
     print()
 
-    created, skipped = init(ws)
+    try:
+        created, skipped = init(ws, backend=args.backend, dsn=args.dsn, schema=args.schema)
+    except ValueError as exc:
+        parser.error(str(exc))  # exits 2 with a usage message
 
     if created:
         print(f"Created ({len(created)}):")
@@ -270,8 +461,23 @@ def main():
         for item in skipped:
             print(f"  = {item}")
 
+    # Opt-in Postgres schema provisioning. Best-effort: a failure here
+    # never aborts init — the config is already written and the user can
+    # provision later (or fix the DSN). The SQLite/markdown default never
+    # reaches this branch.
+    if args.backend == "postgres" and args.ensure_schema:
+        schema = args.schema or "mind_mem"
+        ok, err = _ensure_postgres_schema(args.dsn or "", schema)
+        if ok:
+            print(f"\nPostgres schema ensured: {schema}")
+        else:
+            print(f"\nWARNING: could not ensure Postgres schema ({schema}): {err}", file=sys.stderr)
+            print("The config was still written; provision the DB and re-run with --ensure-schema, ", file=sys.stderr)
+            print("or run 'mm doctor --rebuild-cache' once the backend is reachable.", file=sys.stderr)
+
     print(f"\nDone. Run 'bash maintenance/validate.sh {ws}' to verify.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
