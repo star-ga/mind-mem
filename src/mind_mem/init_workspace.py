@@ -236,7 +236,7 @@ def _ensure_postgres_schema(dsn: str, schema: str) -> tuple[bool, str | None]:
             try:
                 store.close()
             except Exception:  # noqa: BLE001
-                pass
+                _log.debug("store.close during cleanup failed", exc_info=True)
 
 
 # Numeric range constraints for recall config: (min, max, default)

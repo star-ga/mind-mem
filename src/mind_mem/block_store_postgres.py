@@ -234,7 +234,7 @@ def _detect_vector_schema(conn: Any) -> str | None:
         try:
             conn.rollback()
         except Exception:
-            pass
+            _log.debug("rollback during error cleanup failed", exc_info=True)
         return None
     if not row or not row[0]:
         return None
@@ -294,7 +294,7 @@ def _configure_vector_search_path(conn: Any) -> None:
         try:
             conn.rollback()
         except Exception:
-            pass
+            _log.debug("rollback during error cleanup failed", exc_info=True)
         _log.debug("pg_vector_search_path_configure_skipped: %s", exc)
 
 
@@ -329,7 +329,7 @@ def _try_create_extension_vector(conn: Any) -> str | None:
         try:
             conn.rollback()
         except Exception:
-            pass
+            _log.debug("rollback during error cleanup failed", exc_info=True)
 
     ns = _detect_vector_schema(conn)
     if ns is None:
@@ -346,7 +346,7 @@ def _try_create_extension_vector(conn: Any) -> str | None:
         try:
             conn.rollback()
         except Exception:
-            pass
+            _log.debug("rollback during error cleanup failed", exc_info=True)
         return None
     return ns
 
