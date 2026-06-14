@@ -40,13 +40,12 @@ Ledger:
   hash_match, pod_terminated_at, eval_summary, status.
 """
 from __future__ import annotations
+
 import argparse
 import datetime as _dt
 import hashlib
 import json
 import os
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -64,7 +63,7 @@ def _read_ledger() -> list[dict]:
     if not LEDGER.is_file():
         return []
     with LEDGER.open() as f:
-        return [json.loads(l) for l in f if l.strip()]
+        return [json.loads(line) for line in f if line.strip()]
 
 
 def _append_ledger(entry: dict) -> None:

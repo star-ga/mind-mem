@@ -12,6 +12,7 @@ Lock-in: NEVER overwrite full-ft.retry2e-* (the 127/131 known-good).
 Always write to a fresh dir per attempt.
 """
 from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -21,8 +22,8 @@ import sys
 from pathlib import Path
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 LOCAL_BASE = Path("/data/checkpoints/mm-workspace/full-ft.retry2e-109of109+18of22")
 DEFAULT_ADAPTER = "star-ga/mind-mem-4b-lora-v4.1.0"

@@ -2397,10 +2397,6 @@ def _harvest_eval_block_schema() -> Iterator[dict]:
     tokens byte-for-byte. Eval prompts use form 'Show me {a/an} <SHORT>
     block template.' — we emit each verbatim form 6× to up gradient
     weight on the canonical phrasing."""
-    canonical_paraphrases = [
-        # eval-verbatim form, repeated 6x for high gradient density
-        None,  # placeholder, computed per block-type
-    ]
     secondary_paraphrases = [
         "Print the canonical {short} block template.",
         "Give me the canonical {short} block format.",

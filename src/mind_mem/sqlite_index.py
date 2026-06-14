@@ -195,10 +195,7 @@ def _index_schema_present(conn: sqlite3.Connection) -> bool:
     raises ``OperationalError: attempt to write a readonly database``).
     """
     try:
-        rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type IN ('table','view') "
-            "AND name IN ('blocks','meta')"
-        ).fetchall()
+        rows = conn.execute("SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name IN ('blocks','meta')").fetchall()
     except sqlite3.OperationalError:
         return False
     present = {r[0] for r in rows}

@@ -33,7 +33,7 @@ def _load_eval_harness():
     sys.modules["eval_harness"] = mod
     try:
         spec.loader.exec_module(mod)
-    except ImportError as exc:
+    except ImportError:
         # We only need the probe lists at module top; torch import would fail
         # on this side. Fall back to text extraction.
         return None

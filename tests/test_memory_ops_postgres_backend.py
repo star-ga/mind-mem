@@ -125,8 +125,7 @@ class TestMarkdownDefaultUnchanged:
         ws = tmp_path / "ws"
         _write_workspace(ws)
         (ws / "decisions" / "DECISIONS.md").write_text(
-            _md_block("D-20260613-205", "active decision")
-            + _md_block("D-20260613-206", "old decision", status="superseded"),
+            _md_block("D-20260613-205", "active decision") + _md_block("D-20260613-206", "old decision", status="superseded"),
             encoding="utf-8",
         )
         with use_workspace(str(ws)):
@@ -216,9 +215,7 @@ class TestMemoryOpsPostgresLive:
         assert {"D-20260613-301", "D-20260613-302"} <= ids
         assert payload["block_count"] >= 2
 
-    def test_export_memory_strips_internal_without_metadata(
-        self, pg_workspace: tuple[str, PostgresBlockStore]
-    ) -> None:
+    def test_export_memory_strips_internal_without_metadata(self, pg_workspace: tuple[str, PostgresBlockStore]) -> None:
         ws, store = pg_workspace
         store.write_block(
             {
@@ -253,9 +250,7 @@ class TestMemoryOpsPostgresLive:
         assert payload["block"]["_id"] == "D-20260613-304"
         assert payload["block"]["Statement"] == "fetch me from Postgres"
 
-    def test_get_block_missing_on_pg_returns_not_found(
-        self, pg_workspace: tuple[str, PostgresBlockStore]
-    ) -> None:
+    def test_get_block_missing_on_pg_returns_not_found(self, pg_workspace: tuple[str, PostgresBlockStore]) -> None:
         ws, _store = pg_workspace
         with use_workspace(ws):
             payload = json.loads(get_block("D-20260613-999"))

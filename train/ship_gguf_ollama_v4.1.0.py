@@ -11,8 +11,8 @@ Steps:
 Refuses to ship if the smoke test misses any of the 4 fixed facts.
 """
 from __future__ import annotations
+
 import argparse
-import json
 import os
 import subprocess
 import sys
@@ -70,7 +70,7 @@ def _refuse(msg: str) -> None:
 
 def _run(cmd: list[str]) -> None:
     print(f"$ {' '.join(map(str, cmd))}")
-    r = subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True)
 
 
 def convert(ship_dir: Path) -> Path:
@@ -133,7 +133,7 @@ def ollama_create(modelfile: Path, tag: str) -> None:
 
 
 def smoke_test(tag: str) -> bool:
-    print(f"\n=== smoke test (4 previously-failing probes) ===")
+    print("\n=== smoke test (4 previously-failing probes) ===")
     all_ok = True
     for name, prompt, needed in SMOKE_PROBES:
         r = subprocess.run(

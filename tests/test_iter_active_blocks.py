@@ -54,8 +54,7 @@ def test_markdown_returns_active_blocks(tmp_path: Path) -> None:
     ws = tmp_path / "ws"
     _write_workspace(ws)
     (ws / "decisions" / "DECISIONS.md").write_text(
-        _block("D-20260613-001", "default backend is SQLite", "active")
-        + _block("D-20260613-002", "an archived call", "archived"),
+        _block("D-20260613-001", "default backend is SQLite", "active") + _block("D-20260613-002", "an archived call", "archived"),
         encoding="utf-8",
     )
 
@@ -74,8 +73,7 @@ def test_markdown_excludes_pending_signals(tmp_path: Path) -> None:
     ws = tmp_path / "ws"
     _write_workspace(ws)
     (ws / "intelligence" / "SIGNALS.md").write_text(
-        _block("SIG-20260613-001", "a pending signal", "pending")
-        + _block("SIG-20260613-002", "a reviewed signal", "active"),
+        _block("SIG-20260613-001", "a pending signal", "pending") + _block("SIG-20260613-002", "a reviewed signal", "active"),
         encoding="utf-8",
     )
 
@@ -96,9 +94,7 @@ def test_markdown_missing_config_degrades_to_markdown(tmp_path: Path) -> None:
     """No mind-mem.json at all → markdown default, never raises."""
     ws = tmp_path / "ws"
     (ws / "decisions").mkdir(parents=True)
-    (ws / "decisions" / "DECISIONS.md").write_text(
-        _block("D-20260613-003", "no config present", "active"), encoding="utf-8"
-    )
+    (ws / "decisions" / "DECISIONS.md").write_text(_block("D-20260613-003", "no config present", "active"), encoding="utf-8")
     blocks = iter_active_blocks(str(ws))
     assert {b["_id"] for b in blocks} == {"D-20260613-003"}
 
@@ -106,9 +102,7 @@ def test_markdown_missing_config_degrades_to_markdown(tmp_path: Path) -> None:
 def test_get_active_blocks_alias_matches(tmp_path: Path) -> None:
     ws = tmp_path / "ws"
     _write_workspace(ws)
-    (ws / "decisions" / "DECISIONS.md").write_text(
-        _block("D-20260613-004", "alias parity", "active"), encoding="utf-8"
-    )
+    (ws / "decisions" / "DECISIONS.md").write_text(_block("D-20260613-004", "alias parity", "active"), encoding="utf-8")
     assert {b["_id"] for b in iter_active_blocks(str(ws))} == {b["_id"] for b in get_active_blocks(str(ws))}
 
 

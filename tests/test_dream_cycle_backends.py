@@ -71,9 +71,7 @@ def test_markdown_entity_discovery_scans_logs(tmp_path: Path) -> None:
     ws = tmp_path / "ws"
     _write_markdown_workspace(ws)
     today = datetime.now().strftime("%Y-%m-%d")
-    (ws / "memory" / f"{today}.md").write_text(
-        "See https://github.com/star-ga/freshrepo for details.\n", encoding="utf-8"
-    )
+    (ws / "memory" / f"{today}.md").write_text("See https://github.com/star-ga/freshrepo for details.\n", encoding="utf-8")
     proposals = pass_entity_discovery(str(ws))
     assert "freshrepo" in {p.slug for p in proposals}
 
@@ -172,9 +170,7 @@ def test_pg_citation_repair_detects_dangling(pg_workspace: tuple[str, PostgresBl
 def test_pg_citation_repair_valid_refs_not_flagged(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     """A reference to a block that *is* defined in the store is not broken."""
     ws, store = pg_workspace
-    store.write_block(
-        {"_id": "D-20260613-201", "Statement": "Base decision", "Status": "active", "Date": "2026-06-13"}
-    )
+    store.write_block({"_id": "D-20260613-201", "Statement": "Base decision", "Status": "active", "Date": "2026-06-13"})
     store.write_block(
         {
             "_id": "D-20260613-202",
@@ -207,9 +203,7 @@ def test_pg_entity_discovery_scans_store_blocks(pg_workspace: tuple[str, Postgre
 def test_pg_entity_discovery_skips_tracked(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     """An entity already tracked as a PRJ-/TOOL-/PER- block is not re-proposed."""
     ws, store = pg_workspace
-    store.write_block(
-        {"_id": "PRJ-newproject", "Statement": "tracked project record", "Status": "active", "Date": "2026-06-13"}
-    )
+    store.write_block({"_id": "PRJ-newproject", "Statement": "tracked project record", "Status": "active", "Date": "2026-06-13"})
     store.write_block(
         {
             "_id": "D-20260613-302",
@@ -227,13 +221,9 @@ def test_pg_stale_detection_flags_old_block(pg_workspace: tuple[str, PostgresBlo
     """A block whose embedded date is well past the cutoff is flagged stale."""
     ws, store = pg_workspace
     old_id = f"D-{_old_id_date()}-001"
-    store.write_block(
-        {"_id": old_id, "Statement": "An ancient decision", "Status": "active"}
-    )
+    store.write_block({"_id": old_id, "Statement": "An ancient decision", "Status": "active"})
     today_id = "D-" + datetime.now().strftime("%Y%m%d") + "-002"
-    store.write_block(
-        {"_id": today_id, "Statement": "A fresh decision", "Status": "active"}
-    )
+    store.write_block({"_id": today_id, "Statement": "A fresh decision", "Status": "active"})
     stale = pass_stale_detection(ws, stale_days=30)
     ids = {s.block_id for s in stale}
     assert old_id in ids

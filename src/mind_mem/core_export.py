@@ -82,9 +82,7 @@ _OKF_CITATION_KEYS = ("Sources", "Citations", "sources", "citations")
 
 # The OKF-conformant surface of an emitted unit. Anything outside this set
 # is part of the moat and must never appear in OKF output. Asserted in tests.
-_OKF_UNIT_FIELDS = frozenset(
-    {"id", "type", "title", "description", "resource", "timestamp", "tags"}
-)
+_OKF_UNIT_FIELDS = frozenset({"id", "type", "title", "description", "resource", "timestamp", "tags"})
 
 # mind-mem block-id prefix -> OKF concept `type`. OKF requires a non-empty
 # `type`; the real type lives in the `_id` prefix, not on the build path.
@@ -317,9 +315,7 @@ def write_okf_bundle(core: LoadedCore, out_dir: str | Path) -> Path:
         f"title: {_yaml_scalar(manifest['namespace'] + ' v' + str(manifest['version']))}\n"
         f"timestamp: {_okf_timestamp(manifest.get('built_at', ''))}\n"
         "---\n\n"
-        f"# {manifest['namespace']} v{manifest['version']}\n\n"
-        + "\n".join(index_rows)
-        + "\n",
+        f"# {manifest['namespace']} v{manifest['version']}\n\n" + "\n".join(index_rows) + "\n",
         encoding="utf-8",
     )
     (out / "log.md").write_text(

@@ -280,6 +280,7 @@ def _worker_main(task_q: multiprocessing.Queue, result_q: multiprocessing.Queue)
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
     import torch
+
     import mind_mem.recall_vector as _rv
 
     # ── Process-local embedder singleton ────────────────────────────────────
@@ -335,8 +336,9 @@ def _worker_main(task_q: multiprocessing.Queue, result_q: multiprocessing.Queue)
     # indefinitely (CUDA per-thread context initialisation race).  Patching
     # the search to run both backends sequentially in the main thread avoids
     # the deadlock.  Scores are identical; only wall-clock order differs.
-    from mind_mem.hybrid_recall import HybridBackend as _HB
     from concurrent.futures import Future as _Future
+
+    from mind_mem.hybrid_recall import HybridBackend as _HB
 
     _orig_search = _HB.search
 

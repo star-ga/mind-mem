@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 882 | **Est. tokens:** ~1,909,624
-**Generated:** 2026-06-14 07:36 UTC
+**Files:** 882 | **Est. tokens:** ~1,909,543
+**Generated:** 2026-06-14 15:53 UTC
 
 ## Token Budget Guide
 
@@ -26,7 +26,7 @@
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
-| `benchmarks/` | 40 | ~103,184 |
+| `benchmarks/` | 40 | ~103,186 |
 | `deploy/` | 2 | ~772 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
@@ -48,7 +48,7 @@
 | `lib/` | 1 | ~2,170 |
 | `mind/` | 27 | ~9,687 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 6 | ~4,677 |
+| `scripts/` | 6 | ~4,675 |
 | `sdk/go/` | 9 | ~6,773 |
 | `sdk/js/` | 5 | ~1,388 |
 | `sdk/js/src/` | 4 | ~2,320 |
@@ -58,7 +58,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 161 | ~592,883 |
+| `src/mind_mem/` | 161 | ~592,867 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
 | `src/mind_mem/mcp/infra/` | 8 | ~9,991 |
@@ -67,11 +67,11 @@
 | `src/mind_mem/storage/` | 2 | ~5,519 |
 | `src/mind_mem/v4/` | 22 | ~58,472 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 306 | ~656,326 |
+| `tests/` | 306 | ~656,279 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
-| `train/` | 31 | ~56,073 |
+| `train/` | 31 | ~56,055 |
 | `web/` | 5 | ~927 |
 | `web/app/` | 2 | ~1,204 |
 | `web/app/console/` | 1 | ~1,169 |
@@ -141,7 +141,7 @@
 - `CACHE.md` (~1028 tok, large) — Recall Cache Effectiveness Benchmark
 - `_capfix_probe.py` (~1023 tok, large) — Isolation probe: quantify the recall.dedup type_cap=3 ceiling.
 - `_ch_minilm.py` (~2032 tok, huge) — LongMemEval-S — per-turn chunking + hybrid (BM25F+mxbai RRF) + 4b expansion.
-- `_ch_minilm_spawn.py` (~6416 tok, huge) — LongMemEval-S — mind-mem FULL POTENTIAL harness (same-equipment, best-vs-best).
+- `_ch_minilm_spawn.py` (~6417 tok, huge) — LongMemEval-S — mind-mem FULL POTENTIAL harness (same-equipment, best-vs-best).
 - `compare_runs.py` (~857 tok, large) — Compare two LoCoMo benchmark runs side-by-side.
 - `crossencoder_ab.py` (~3205 tok, huge) — Cross-Encoder A/B Test — retrieval-level comparison.
 - `generate_dispatcher_examples.py` (~2346 tok, huge) — Generate synthetic training examples for the v3.2.x 7-dispatcher MCP surface.
@@ -155,7 +155,7 @@
 - `longmemeval_apples.py` (~1660 tok, huge) — LongMemEval-S apples-to-apples harness (mind-mem hybrid BM25+vector).
 - `longmemeval_chunk_bm25_4b.py` (~1605 tok, huge) — Per-turn chunking + BM25 + mind-mem:4b multi-query expansion.
 - `longmemeval_chunked_hybrid.py` (~2055 tok, huge) — LongMemEval-S — per-turn chunking + hybrid (BM25F+mxbai RRF) + 4b expansion.
-- `longmemeval_chunked_minilm.py` (~6569 tok, huge) — LongMemEval-S — mind-mem FULL POTENTIAL harness (same-equipment, best-vs-best).
+- `longmemeval_chunked_minilm.py` (~6570 tok, huge) — LongMemEval-S — mind-mem FULL POTENTIAL harness (same-equipment, best-vs-best).
 - `longmemeval_chunked.py` (~1222 tok, large) — LongMemEval-S — per-turn passage chunking (architectural gap closure).
 - `longmemeval_clean.py` (~1397 tok, large) — LongMemEval-S — clean reproducible mind-mem retrieval benchmark.
 - `LONGMEMEVAL_FINDINGS_2026-05-19.md` (~2123 tok, huge) — LongMemEval-S Benchmark Audit — Findings (2026-05-19)
@@ -387,7 +387,7 @@
 - `anatomy.sh` (~2010 tok, huge) — anatomy — Generate ANATOMY.md for any repo
 - `build_integrity_manifest.py` (~634 tok, large) — Bake ``_integrity_manifest.json`` into the package before wheel build.
 - `check_claims.sh` (~385 tok, medium) — Cross-repo docs-claim regression gate (mind-mem side).
-- `count_mcp_tools.py` (~966 tok, large) — Count registered MCP tools and assert the count matches CLAUDE.md.
+- `count_mcp_tools.py` (~964 tok, large) — Count registered MCP tools and assert the count matches CLAUDE.md.
 - `regen_bash_literals.py` (~424 tok, medium) — Regenerate src/mind_mem/_task_status_literals.sh from enums.py.
 ### `sdk/go/`
 
@@ -482,7 +482,7 @@
 - `consensus_vote.py` (~1871 tok, huge) — Quorum-based consensus voting on contradictions (v3.3.0).
 - `context_core.py` (~4313 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `contradiction_detector.py` (~4888 tok, huge) — mind-mem Contradiction Detector — Surface conflicts at the governance gate.
-- `core_export.py` (~5301 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `core_export.py` (~5295 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `corpus_registry.py` (~471 tok, medium) — Central corpus path registry for mind-mem.
 - `cron_runner.py` (~2305 tok, huge) — mind-mem Cron Runner — single entry point for all periodic jobs. Zero external deps.
 - `cross_encoder_reranker.py` (~749 tok, large) — mind-mem Optional Cross-Encoder Reranker.
@@ -644,7 +644,7 @@
 - `smoke_test.sh` (~633 tok, large) — mind-mem Smoke Test — end-to-end verification
 - `spec_binding.py` (~2883 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `speculative_prefetch.py` (~3195 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `sqlite_index.py` (~14514 tok, huge) — Mind Mem SQLite FTS5 Index — incremental lexical indexing. Zero external deps.
+- `sqlite_index.py` (~14504 tok, huge) — Mind Mem SQLite FTS5 Index — incremental lexical indexing. Zero external deps.
 - `staleness.py` (~1179 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/storage/`
 
@@ -808,7 +808,7 @@
 - `test_dedup_vector.py` (~1087 tok, large) — Tests for vector-enhanced cosine dedup (Layer 2b)."""
 - `test_detection.py` (~326 tok, medium) — Tests for query detection module."""
 - `test_downgrade_mitigation.py` (~1339 tok, large) — # Copyright 2026 STARGA, Inc.
-- `test_dream_cycle_backends.py` (~2514 tok, huge) — Backend-aware dream-cycle maintenance passes (audit bug 11).
+- `test_dream_cycle_backends.py` (~2497 tok, huge) — Backend-aware dream-cycle maintenance passes (audit bug 11).
 - `test_dream_cycle.py` (~4567 tok, huge) — Tests for dream_cycle.py — autonomous memory enrichment passes."""
 - `test_drift_detector.py` (~3697 tok, huge) — Tests for mind-mem semantic belief drift detection (drift_detector.py)."""
 - `test_dsn_redaction.py` (~542 tok, large) — Tests for DSN password redaction in mm_cli.
@@ -870,7 +870,7 @@
 - `test_issue_526_acl_fail_closed.py` (~682 tok, large) — Regression for issue #526: ACL `_get_request_scope` must fail-closed.
 - `test_issue_527_three_way_merge_vclock.py` (~1018 tok, large) — Regression for issue #527: THREE_WAY_MERGE must bump the vclock.
 - `test_issue_529_federation_client_hardening.py` (~1202 tok, large) — Regression for issue #529: FederationClient hardening.
-- `test_iter_active_blocks.py` (~1951 tok, huge) — Backend-aware active-block enumeration — ``storage.iter_active_blocks``.
+- `test_iter_active_blocks.py` (~1940 tok, huge) — Backend-aware active-block enumeration — ``storage.iter_active_blocks``.
 - `test_kalman_belief.py` (~3728 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_knowledge_graph.py` (~3437 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_filter.py` (~1777 tok, huge) — Unit tests for the optional lifecycle block field and recall filter.
@@ -889,7 +889,7 @@
 - `test_mcp_tool_surface_v3_2.py` (~2002 tok, huge) — v3.2.0 — consolidated MCP public dispatcher tests."""
 - `test_mcp_v140.py` (~5966 tok, huge) — Tests for MCP v1.4.0 features — issues #29, #31, #35, #36.
 - `test_mcp_walkthrough_persona.py` (~1942 tok, huge) — Tests for the v3.9.0 MCP walkthrough + persona wrapper tools."""
-- `test_memory_ops_postgres_backend.py` (~3047 tok, huge) — Backend-aware memory_ops tools — Postgres parity (audit bug 5).
+- `test_memory_ops_postgres_backend.py` (~3037 tok, huge) — Backend-aware memory_ops tools — Postgres parity (audit bug 5).
 - `test_memory_practical_e2e.py` (~2389 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_memory_tiers.py` (~3479 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_merkle_tree.py` (~3185 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -918,7 +918,7 @@
 - `test_observation_compress.py` (~2754 tok, huge) — Tests for observation_compress module.
 - `test_oidc_admin_enforcement.py` (~1716 tok, huge) — v3.2.1 — OIDC JWTs must pass through ``_require_admin`` checks.
 - `test_oidc_auth.py` (~2970 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
-- `test_okf_export.py` (~2017 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_okf_export.py` (~2008 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ontology.py` (~2306 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_personas.py` (~1336 tok, large) — Tests for the v3.9 persona-aware recall projection."""
 - `test_pg_block_store_ping.py` (~738 tok, large) — Tests for ``PostgresBlockStore.ping()`` — active backend health probe.
@@ -1043,7 +1043,7 @@
 ### `train/`
 
 - `audit_canonical_coverage.json` (~5300 tok, huge) — Keys: threshold, total_probes, total_weak, by_group, weak
-- `audit_canonical_coverage.py` (~1481 tok, large) — Audit canonical-answer coverage on every eval probe.
+- `audit_canonical_coverage.py` (~1479 tok, large) — Audit canonical-answer coverage on every eval probe.
 - `audit_semantic_correctness.json` (~5 tok, tiny) — Keys: findings
 - `audit_semantic_correctness.py` (~1963 tok, huge) — Cross-check every 'file X ships Y' claim in the corpus against src/.
 - `backport_sweep.py` (~1661 tok, huge) — Backport v2.9.0 audit fixes to every prior v2.x release as .post1.
@@ -1061,15 +1061,15 @@
 - `Modelfile.v4.1.1` (~440 tok, medium) — FROM /data/checkpoints/mm-workspace/gguf-v4.1.1/mind-mem-4b-v4.1.1-Q4_K_M.gguf
 - `post_train_chain.sh` (~632 tok, large) — Post-training chain: wait for deploy → verify scp + SHA256 + pod-destroy markers → run eval.
 - `post_train_pipeline.sh` (~592 tok, large) — Post-training pipeline for mind-mem-4b v3.9.2 (augmented-corpus retrain).
-- `qlora_local_3080.py` (~1185 tok, large) — Local QLoRA fallback on RTX 3080 (10GB VRAM).
+- `qlora_local_3080.py` (~1182 tok, large) — Local QLoRA fallback on RTX 3080 (10GB VRAM).
 - `README.md` (~569 tok, large) — mind-mem-4b training pipeline
 - `resume_pod_train.sh` (~1138 tok, large) — Recovery: pod uz2uajluzskmm2 was preempted mid-run. Wake it up,
 - `RETRAIN_v3.9.0.md` (~1405 tok, large) — mind-mem-4b — v3.9.0 retrain plan
 - `runpod_deploy.py` (~5323 tok, huge) — End-to-end RunPod driver for full-FT on Qwen3.5-4B.
 - `runpod_full_ft.py` (~2551 tok, huge) — Full fine-tune of Qwen3.5-4B on RunPod (A100/H100) for mind-mem-4b.
-- `ship_gguf_ollama_v4.1.0.py` (~1745 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.0.
-- `ship_gguf_ollama_v4.1.1.py` (~1795 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.1.
-- `spend_guard.py` (~2041 tok, huge) — spend_guard — mechanical interlock on cloud spend.
+- `ship_gguf_ollama_v4.1.0.py` (~1741 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.0.
+- `ship_gguf_ollama_v4.1.1.py` (~1791 tok, huge) — GGUF + Ollama shipper for mind-mem-4b v4.1.1.
+- `spend_guard.py` (~2036 tok, huge) — spend_guard — mechanical interlock on cloud spend.
 - `train_qlora.py` (~1314 tok, large) — QLoRA fine-tune for mind-mem-4b on the harvested corpus.
 - `upload_to_hf.py` (~1122 tok, large) — Push the retrained adapter + model card to star-ga/mind-mem-4b.
 - `V4_RETRAIN_TODO.md` (~2361 tok, huge) — v4 Retrain — Probe Honesty TODO

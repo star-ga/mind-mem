@@ -13,22 +13,22 @@ Memory budget on 10GB 3080:
 Output: LoRA adapter at /data/checkpoints/mm-workspace/lora-v4.1.0/
 """
 from __future__ import annotations
+
 import json
 import os
-import sys
 from pathlib import Path
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import torch
 from datasets import Dataset
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     BitsAndBytesConfig,
 )
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-from trl import SFTTrainer, SFTConfig
+from trl import SFTConfig, SFTTrainer
 
 BASE = Path("/data/checkpoints/mm-workspace/full-ft.retry2e-109of109+18of22")
 CORPUS = Path("/data/checkpoints/mm-workspace/train-output/corpus.jsonl")

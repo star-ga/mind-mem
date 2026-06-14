@@ -146,8 +146,7 @@ class TestOkfBundleWriter:
         core = _load(
             tmp_core,
             [
-                {"_id": "PRJ-mind", "type": "project", "Name": "mind",
-                 "Resource": "https://github.com/star-ga/mind"},
+                {"_id": "PRJ-mind", "type": "project", "Name": "mind", "Resource": "https://github.com/star-ga/mind"},
                 {"_id": "D-1", "type": "decision", "Statement": "Ship OKF."},
             ],
             [{"subject": "D-1", "predicate": "concerns", "object": "PRJ-mind"}],
@@ -180,8 +179,7 @@ class TestOkfImportRoundTrip:
         core = _load(
             tmp_core,
             [
-                {"_id": "PRJ-mind", "type": "project", "Name": "mind",
-                 "Resource": "https://github.com/star-ga/mind", "Tags": ["wedge"]},
+                {"_id": "PRJ-mind", "type": "project", "Name": "mind", "Resource": "https://github.com/star-ga/mind", "Tags": ["wedge"]},
                 {"_id": "D-1", "type": "decision", "Statement": "Ship OKF."},
             ],
         )
