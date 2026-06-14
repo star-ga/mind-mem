@@ -187,7 +187,7 @@ def _wait_until_accepting(host: str, port: int, *, deadline: float) -> None:
     # 0.0.0.0 / :: are bind-all sentinels that are not necessarily
     # connectable as destinations; probe loopback instead.
     connect_host = host
-    if host in ("", "0.0.0.0", "::"):
+    if host in ("", "0.0.0.0", "::"):  # nosec B104 — not a bind; remaps bind-all sentinels to loopback for the readiness probe
         connect_host = "127.0.0.1"
     last_err: OSError | None = None
     while True:
