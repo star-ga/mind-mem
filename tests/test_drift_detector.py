@@ -239,3 +239,219 @@ Subject: Use Python Django
         signals = strict.scan()
         # Very strict threshold — unlikely to find drift
         assert len(signals) == 0 or all(s.similarity >= 0.9 for s in signals)
+
+
+# ─── Backend-aware block enumeration (audit bug 12) ──────────────────────────
+#
+# drift_detector._load_blocks read ``decisions/DECISIONS.md`` directly via
+# parse_file, so on a non-Markdown backend (Postgres) — where that file is
+# the empty init template and every decision lives in the store — drift
+# analysis was silently blind. The load now routes non-Markdown backends
+# through ``mind_mem.storage.iter_active_blocks`` while leaving the default
+# Markdown / SQLite path byte-for-byte unchanged.
+#
+# These tests run on BOTH backends: the Markdown branch needs no DB; the
+# Postgres branch uses an isolated, uniquely-named scratch schema that is
+# created and dropped per test (the production ``mind_mem`` schema is never
+# touched) and skips cleanly when psycopg / a live Postgres is unavailable
+# so SQLite-only CI stays green.
+
+import json  # noqa: E402
+import uuid  # noqa: E402
+from typing import Generator  # noqa: E402
+
+from mind_mem.drift_detector import _is_decision_block, _is_markdown_backend  # noqa: E402
+
+# Two near-identical decision statements that drift detection should pair.
+_DRIFT_A = "Use PostgreSQL for all persistent data storage in production"
+_DRIFT_B = "Use MongoDB for all persistent data storage in production"
+
+
+def _write_config(ws: str, block_store: dict | None = None) -> None:
+    config: dict = {"recall": {"backend": "scan"}}
+    if block_store is not None:
+        config["block_store"] = block_store
+    with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as fh:
+        json.dump(config, fh)
+
+
+class TestDecisionBlockPredicate:
+    """``_is_decision_block`` mirrors the Markdown 'decisions only' semantics."""
+
+    def test_decisions_source_file_matches(self):
+        assert _is_decision_block({"_id": "D-20260613-001", "_source_file": "decisions/DECISIONS.md"})
+
+    def test_windows_separator_source_matches(self):
+        assert _is_decision_block({"_id": "D-1", "_source_file": "decisions\\DECISIONS.md"})
+
+    def test_d_prefix_without_source_matches(self):
+        assert _is_decision_block({"_id": "D-20260613-001"})
+
+    def test_non_decision_source_excluded(self):
+        assert not _is_decision_block({"_id": "T-20260613-001", "_source_file": "tasks/TASKS.md"})
+
+    def test_explicit_non_decisions_source_overrides_prefix(self):
+        # A D-prefixed id with an explicit non-decisions source is not a decision.
+        assert not _is_decision_block({"_id": "D-1", "_source_file": "tasks/TASKS.md"})
+
+    def test_non_d_prefix_without_source_excluded(self):
+        assert not _is_decision_block({"_id": "PRJ-foo"})
+
+
+class TestMarkdownBackendUnchanged:
+    """The zero-config Markdown / SQLite default path must not regress."""
+
+    def test_no_config_is_markdown_backend(self, workspace):
+        # No mind-mem.json at all → markdown (the zero-config default).
+        assert _is_markdown_backend(workspace) is True
+
+    def test_explicit_markdown_backend(self, workspace):
+        _write_config(workspace, block_store={"backend": "markdown"})
+        assert _is_markdown_backend(workspace) is True
+        det = DriftDetector(workspace, similarity_threshold=0.2)
+        path = os.path.join(workspace, "decisions", "DECISIONS.md")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(
+                f"\n[D-20260301-001]\nDate: 2026-03-01\nSubject: {_DRIFT_A}\n\n"
+                f"---\n\n[D-20260302-001]\nDate: 2026-03-02\nSubject: {_DRIFT_B}\n"
+            )
+        signals = det.scan()
+        assert len(signals) >= 1
+        ids = {signals[0].block_a_id, signals[0].block_b_id}
+        assert ids == {"D-20260301-001", "D-20260302-001"}
+
+
+# ─── Postgres backend (live DB; skips cleanly when unavailable) ──────────────
+
+psycopg = pytest.importorskip("psycopg", reason="psycopg not installed; skipping Postgres tests")
+
+from mind_mem.block_store_postgres import PostgresBlockStore  # noqa: E402
+
+_DSN = os.environ.get("MIND_MEM_TEST_PG_DSN")
+
+
+def _pg_available(dsn: str) -> bool:
+    try:
+        conn = psycopg.connect(dsn, connect_timeout=3)
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+
+_pg_live = pytest.mark.skipif(
+    not _pg_available(_DSN),
+    reason="no live Postgres available at the test DSN",
+)
+
+
+@pytest.fixture
+def pg_workspace(tmp_path) -> Generator[tuple[str, "PostgresBlockStore"], None, None]:
+    """A workspace configured for Postgres on an isolated scratch schema."""
+    schema = f"mm_fix_{uuid.uuid4().hex[:12]}"
+    ws = str(tmp_path / "pgws")
+    os.makedirs(os.path.join(ws, "decisions"), exist_ok=True)
+    _write_config(ws, block_store={"backend": "postgres", "dsn": _DSN, "schema": schema})
+
+    store = PostgresBlockStore(dsn=_DSN, schema=schema, workspace=ws)
+    store._ensure_schema()
+    try:
+        yield ws, store
+    finally:
+        try:
+            conn = psycopg.connect(_DSN)
+            conn.autocommit = True
+            conn.execute(f"DROP SCHEMA IF EXISTS {schema} CASCADE")
+            conn.close()
+        except Exception:
+            pass
+        store.close()
+
+
+@_pg_live
+class TestDriftDetectorPostgres:
+    """Drift detection must see Postgres-resident decision blocks (audit bug 12)."""
+
+    def test_load_blocks_reads_store_not_empty_markdown(self, pg_workspace):
+        ws, store = pg_workspace
+        assert _is_markdown_backend(ws) is False
+        store.write_block(
+            {
+                "_id": "D-20260613-401",
+                "_source_file": "decisions/DECISIONS.md",
+                "Subject": _DRIFT_A,
+                "Status": "active",
+                "Date": "2026-06-13",
+            }
+        )
+        store.write_block(
+            {
+                "_id": "D-20260613-402",
+                "_source_file": "decisions/DECISIONS.md",
+                "Subject": _DRIFT_B,
+                "Status": "active",
+                "Date": "2026-06-14",
+            }
+        )
+        det = DriftDetector(ws, similarity_threshold=0.2)
+        # The on-disk DECISIONS.md is the empty init template — without
+        # backend-aware enumeration this returns [] (the exact audit bug 12).
+        ids = {b.get("_id") for b in det._load_blocks()}
+        assert {"D-20260613-401", "D-20260613-402"} <= ids
+
+    def test_scan_detects_drift_in_postgres(self, pg_workspace):
+        ws, store = pg_workspace
+        store.write_block(
+            {
+                "_id": "D-20260613-411",
+                "_source_file": "decisions/DECISIONS.md",
+                "Subject": _DRIFT_A,
+                "Status": "active",
+                "Date": "2026-06-13",
+            }
+        )
+        store.write_block(
+            {
+                "_id": "D-20260613-412",
+                "_source_file": "decisions/DECISIONS.md",
+                "Subject": _DRIFT_B,
+                "Status": "active",
+                "Date": "2026-06-14",
+            }
+        )
+        det = DriftDetector(ws, similarity_threshold=0.2)
+        signals = det.scan()
+        assert len(signals) >= 1
+        paired = {signals[0].block_a_id, signals[0].block_b_id}
+        assert paired == {"D-20260613-411", "D-20260613-412"}
+
+    def test_non_decision_store_blocks_excluded(self, pg_workspace):
+        ws, store = pg_workspace
+        # A task block must not be mistaken for a decision block.
+        store.write_block(
+            {
+                "_id": "T-20260613-421",
+                "_source_file": "tasks/TASKS.md",
+                "Subject": _DRIFT_A,
+                "Status": "active",
+                "Date": "2026-06-13",
+            }
+        )
+        store.write_block(
+            {
+                "_id": "D-20260613-422",
+                "_source_file": "decisions/DECISIONS.md",
+                "Subject": _DRIFT_B,
+                "Status": "active",
+                "Date": "2026-06-14",
+            }
+        )
+        det = DriftDetector(ws, similarity_threshold=0.2)
+        ids = {b.get("_id") for b in det._load_blocks()}
+        assert "D-20260613-422" in ids
+        assert "T-20260613-421" not in ids
+
+    def test_empty_store_returns_no_signals(self, pg_workspace):
+        ws, _store = pg_workspace
+        det = DriftDetector(ws, similarity_threshold=0.2)
+        assert det.scan() == []

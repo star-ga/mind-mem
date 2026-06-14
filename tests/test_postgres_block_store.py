@@ -142,8 +142,12 @@ class TestPgVectorWiring:
         from mind_mem.block_store_postgres import _ddl_pgvector
 
         sql = _ddl_pgvector("mind_mem", embedding_dim=1024).as_string(None)
-        assert "ADD COLUMN IF NOT EXISTS embedding VECTOR(1024)" in sql
-        assert "USING hnsw (embedding vector_cosine_ops)" in sql
+        # v3.8.x bug-6 fix: the vector type + operator class are now
+        # schema-qualified (default "public") so the DDL works when the
+        # DSN search_path excludes the extension's schema. The type/
+        # opclass names are rendered as quoted Identifiers.
+        assert 'ADD COLUMN IF NOT EXISTS embedding "public"."vector"(1024)' in sql
+        assert 'USING hnsw (embedding "public"."vector_cosine_ops")' in sql
         assert '"mind_mem"' in sql
 
     def test_ddl_pgvector_respects_dim(self) -> None:
@@ -151,7 +155,7 @@ class TestPgVectorWiring:
 
         for dim in (384, 768, 1024, 1536, 3072):
             sql = _ddl_pgvector("mind_mem", embedding_dim=dim).as_string(None)
-            assert f"VECTOR({dim})" in sql
+            assert f'"vector"({dim})' in sql
 
     def test_embedding_to_pg_format(self) -> None:
         from mind_mem.block_store_postgres import _embedding_to_pg
@@ -222,7 +226,7 @@ class TestPgVectorHardening:
         from mind_mem.block_store_postgres import _ddl_pgvector
 
         sql = _ddl_pgvector("mind_mem", embedding_dim=768).as_string(None)
-        assert "VECTOR(768)" in sql
+        assert '"vector"(768)' in sql
 
     def test_ddl_includes_full_fts_expression(self) -> None:
         """The GIN index on blocks_fts must use the SAME tsvector
@@ -261,6 +265,189 @@ class TestPgVectorHardening:
         s._embedding_dim = 1024
         with pytest.raises(BlockStoreError, match="dim mismatch"):
             s.hybrid_search("anything", query_embedding=[])  # 0 != 1024.
+
+
+class TestPgVectorSchemaIsolation:
+    """Bug-6 regression: pgvector must stay enabled when the DSN pins
+    ``search_path`` to an isolated workspace schema (the recommended
+    multi-tenant isolation pattern), which drops ``public`` — and the
+    extension's schema with it — off the path.
+
+    Before the fix, ``_ddl_pgvector`` referenced the ``VECTOR`` type
+    unqualified and ``_try_create_extension_vector`` trusted
+    ``CREATE EXTENSION``'s idempotent success, so ``has_vector`` flipped to
+    ``False`` and ``hybrid_search`` silently degraded to BM25-only (or
+    crashed on the ``<=>`` operator) for any workspace using
+    ``?options=-csearch_path=<schema>``.
+
+    The unit tests below run on every backend (no DB required); the
+    integration tests skip gracefully when no live Postgres/pgvector is
+    available, so SQLite-only CI stays green.
+    """
+
+    # ── Unit (no DB) ─────────────────────────────────────────────────────
+
+    def test_default_vector_schema_is_public(self) -> None:
+        """A fresh store assumes pgvector lives in ``public`` until
+        ``_ensure_schema`` resolves the real namespace."""
+        from mind_mem.block_store_postgres import PostgresBlockStore
+
+        s = PostgresBlockStore("postgresql://nobody@localhost/none")
+        assert s._vector_schema == "public"
+
+    def test_ddl_pgvector_qualifies_type_and_opclass(self) -> None:
+        """The embedding column type and HNSW operator class must be
+        schema-qualified so the DDL resolves even when ``public`` is off
+        the search_path."""
+        from mind_mem.block_store_postgres import _ddl_pgvector
+
+        sql = _ddl_pgvector("workspace_ns", embedding_dim=8, vector_schema="ext_ns").as_string(None)
+        assert '"ext_ns"."vector"(8)' in sql
+        assert '"ext_ns"."vector_cosine_ops"' in sql
+        # The target table still lives in the workspace schema.
+        assert '"workspace_ns".blocks' in sql
+
+    def test_ddl_pgvector_rejects_unsafe_vector_schema(self) -> None:
+        """The vector schema name flows into a quoted Identifier but is also
+        validated as defence-in-depth against an injection vector."""
+        from mind_mem.block_store_postgres import _ddl_pgvector
+
+        with pytest.raises(ValueError):
+            _ddl_pgvector("workspace_ns", vector_schema='evil"; DROP SCHEMA public; --')
+
+    def test_detect_vector_schema_handles_missing_extension(self) -> None:
+        """When ``pg_extension`` has no ``vector`` row the detector returns
+        None without raising (degrades to BM25-only)."""
+        from mind_mem.block_store_postgres import _detect_vector_schema
+
+        class _FakeCur:
+            def fetchone(self):
+                return None
+
+        class _FakeConn:
+            def execute(self, *_a, **_k):
+                return _FakeCur()
+
+            def rollback(self):
+                pass
+
+        assert _detect_vector_schema(_FakeConn()) is None
+
+    # ── Integration (live PG + pgvector) ─────────────────────────────────
+
+    @staticmethod
+    def _isolated_dsn(base_dsn: str, schema: str) -> str:
+        """Return *base_dsn* with ``search_path`` pinned to *schema* only.
+
+        This is the schema-isolation pattern the audit recommends — and the
+        exact configuration that used to disable pgvector. ``public`` is
+        deliberately absent from the path.
+        """
+        sep = "&" if "?" in base_dsn else "?"
+        return f"{base_dsn}{sep}options=-csearch_path%3D{schema}"
+
+    def test_has_vector_true_under_isolated_search_path(self) -> None:
+        """With the DSN pinned to an isolated schema (no ``public``),
+        ``_ensure_schema`` must still detect pgvector and set
+        ``has_vector=True`` — the core of the bug-6 fix."""
+        dsn = _require_dsn()
+        schema = _unique_schema()
+        # Provision the isolated schema up-front via an admin connection.
+        admin = psycopg.connect(dsn)
+        admin.autocommit = True
+        admin.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+        admin.close()
+        s = PostgresBlockStore(dsn=self._isolated_dsn(dsn, schema), schema=schema, workspace="/tmp/mm-iso")
+        s._embedding_dim = 8
+        try:
+            s._ensure_schema()
+            if not s._has_vector:
+                pytest.skip("pgvector not installed on the test server; cannot verify isolation fix")
+            assert s._has_vector is True
+            assert s._vector_schema  # a real namespace was resolved.
+        finally:
+            try:
+                cleanup = psycopg.connect(dsn)
+                cleanup.autocommit = True
+                cleanup.execute(f"DROP SCHEMA IF EXISTS {schema} CASCADE")
+                cleanup.close()
+            except Exception:
+                pass
+            s.close()
+
+    def test_embedding_round_trip_under_isolated_search_path(self) -> None:
+        """End-to-end: write an embedded block, run hybrid_search and
+        backfill_embedding through the qualified casts / appended
+        search_path under schema isolation. Before the fix the ``<=>``
+        operator and ``::vector`` cast raised UndefinedObject/Function."""
+        dsn = _require_dsn()
+        schema = _unique_schema()
+        admin = psycopg.connect(dsn)
+        admin.autocommit = True
+        admin.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+        admin.close()
+        s = PostgresBlockStore(dsn=self._isolated_dsn(dsn, schema), schema=schema, workspace="/tmp/mm-iso")
+        s._embedding_dim = 8
+        emb = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+        try:
+            s._ensure_schema()
+            if not s._has_vector:
+                pytest.skip("pgvector not installed on the test server; cannot verify isolation fix")
+            s.write_block(_make_block("D-ISO-001", statement="pgvector under isolated search_path"), embedding=emb)
+            results = s.hybrid_search("pgvector isolated", query_embedding=emb, limit=5)
+            ids = {r["_id"] for r in results}
+            assert "D-ISO-001" in ids
+            # The vector half must have actually run (not BM25-only fallback).
+            hit = next(r for r in results if r["_id"] == "D-ISO-001")
+            assert hit.get("_retrieval_source") == "hybrid_pgvector"
+            # backfill_embedding uses the same qualified ::vector cast.
+            s.backfill_embedding("D-ISO-001", [0.9] * 8)
+            # Confirm the embedding column is populated (vector write landed).
+            pool = s._get_pool()
+            with pool.connection() as conn:
+                count = conn.execute(f"SELECT count(*) FROM {schema}.blocks WHERE embedding IS NOT NULL").fetchone()[0]
+            assert count == 1
+        finally:
+            try:
+                cleanup = psycopg.connect(dsn)
+                cleanup.autocommit = True
+                cleanup.execute(f"DROP SCHEMA IF EXISTS {schema} CASCADE")
+                cleanup.close()
+            except Exception:
+                pass
+            s.close()
+
+    def test_isolated_search_path_keeps_workspace_schema_primary(self) -> None:
+        """Appending the vector schema must not displace the workspace
+        schema as the primary (first) entry — unqualified object creation
+        still targets the workspace schema."""
+        dsn = _require_dsn()
+        schema = _unique_schema()
+        admin = psycopg.connect(dsn)
+        admin.autocommit = True
+        admin.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+        admin.close()
+        s = PostgresBlockStore(dsn=self._isolated_dsn(dsn, schema), schema=schema, workspace="/tmp/mm-iso")
+        s._embedding_dim = 8
+        try:
+            s._ensure_schema()
+            if not s._has_vector:
+                pytest.skip("pgvector not installed; isolation search_path assertion needs the configure hook")
+            pool = s._get_pool()
+            with pool.connection() as conn:
+                effective = conn.execute("SHOW search_path").fetchone()[0]
+            entries = [p.strip().strip('"') for p in effective.split(",") if p.strip()]
+            assert entries[0] == schema, f"workspace schema must stay primary; got {effective!r}"
+            assert s._vector_schema in entries, f"vector schema must be appended; got {effective!r}"
+        finally:
+            try:
+                cleanup = psycopg.connect(dsn)
+                cleanup.autocommit = True
+                cleanup.execute(f"DROP SCHEMA IF EXISTS {schema} CASCADE")
+                cleanup.close()
+            except Exception:
+                pass
+            s.close()
 
 
 class TestRoundTrip:

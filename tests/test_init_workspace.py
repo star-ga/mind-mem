@@ -1,5 +1,7 @@
 """Tests for init_workspace — config validation and workspace scaffolding."""
 
+import contextlib
+import io
 import json
 import logging
 import os
@@ -10,9 +12,12 @@ import unittest.mock
 from mind_mem.init_workspace import (  # noqa: E402
     _RECALL_RANGES,
     DEFAULT_CONFIG,
+    SUPPORTED_BACKENDS,
+    _build_config,
     _validate_config,
     init,
     load_config,
+    main,
 )
 
 
@@ -238,6 +243,159 @@ class TestInitWorkspace(unittest.TestCase):
             with open(config_path) as f:
                 cfg = json.load(f)
             self.assertTrue(cfg.get("custom"))
+
+
+class TestBuildConfig(unittest.TestCase):
+    """_build_config produces a backend-correct config (no DB required)."""
+
+    def test_markdown_has_no_block_store(self):
+        """The default backend must not add a block_store section."""
+        cfg = _build_config()
+        self.assertNotIn("block_store", cfg)
+        self.assertEqual(cfg["recall"]["backend"], "bm25")
+
+    def test_markdown_equals_default_config(self):
+        """The default config must be byte-identical to DEFAULT_CONFIG."""
+        self.assertEqual(_build_config(backend="markdown"), DEFAULT_CONFIG)
+
+    def test_does_not_mutate_default_config(self):
+        """Building a postgres config must not mutate the module template."""
+        before = json.dumps(DEFAULT_CONFIG, sort_keys=True)
+        _build_config(backend="postgres", dsn="postgresql://u:p@h/db")
+        after = json.dumps(DEFAULT_CONFIG, sort_keys=True)
+        self.assertEqual(before, after)
+        self.assertNotIn("block_store", DEFAULT_CONFIG)
+
+    def test_postgres_writes_block_store(self):
+        cfg = _build_config(backend="postgres", dsn="postgresql://u:p@h:5432/db", schema="myschema")
+        self.assertEqual(
+            cfg["block_store"],
+            {"backend": "postgres", "dsn": "postgresql://u:p@h:5432/db", "schema": "myschema"},
+        )
+        # recall must point at the SQLite FTS cache (mirrors the PG store),
+        # not the empty markdown corpus.
+        self.assertEqual(cfg["recall"]["backend"], "sqlite")
+
+    def test_postgres_default_schema(self):
+        cfg = _build_config(backend="postgres", dsn="postgresql://u:p@h/db")
+        self.assertEqual(cfg["block_store"]["schema"], "mind_mem")
+
+    def test_postgres_requires_dsn(self):
+        with self.assertRaises(ValueError):
+            _build_config(backend="postgres")
+
+    def test_encrypted_block_store(self):
+        cfg = _build_config(backend="encrypted")
+        self.assertEqual(cfg["block_store"], {"backend": "encrypted"})
+
+    def test_unknown_backend_rejected(self):
+        with self.assertRaises(ValueError):
+            _build_config(backend="nosuch")
+
+    def test_supported_backends_constant(self):
+        self.assertIn("markdown", SUPPORTED_BACKENDS)
+        self.assertIn("postgres", SUPPORTED_BACKENDS)
+
+
+class TestInitBackendAware(unittest.TestCase):
+    """init() honours the backend kwarg while keeping the default path intact."""
+
+    def test_default_init_omits_block_store(self):
+        """Default markdown init writes a config with no block_store (SQLite path)."""
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
+            init(ws)
+            with open(os.path.join(ws, "mind-mem.json")) as f:
+                cfg = json.load(f)
+            self.assertNotIn("block_store", cfg)
+
+    def test_postgres_init_writes_block_store(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
+            init(ws, backend="postgres", dsn="postgresql://u:p@h/db", schema="s1")
+            with open(os.path.join(ws, "mind-mem.json")) as f:
+                cfg = json.load(f)
+            self.assertEqual(cfg["block_store"]["backend"], "postgres")
+            self.assertEqual(cfg["block_store"]["dsn"], "postgresql://u:p@h/db")
+            self.assertEqual(cfg["block_store"]["schema"], "s1")
+            self.assertEqual(cfg["recall"]["backend"], "sqlite")
+
+    def test_postgres_init_without_dsn_raises_before_writing(self):
+        """A bad backend selection must not leave a half-built workspace."""
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
+            target = os.path.join(ws, "fresh")
+            with self.assertRaises(ValueError):
+                init(target, backend="postgres")
+            # No directories/config should have been created.
+            self.assertFalse(os.path.exists(os.path.join(target, "mind-mem.json")))
+            self.assertFalse(os.path.isdir(os.path.join(target, "decisions")))
+
+
+class TestMainCli(unittest.TestCase):
+    """main() argument handling: argparse rejects junk, env defaults work."""
+
+    def _run_main(self, argv):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                rc = main(argv)
+            except SystemExit as exc:
+                rc = exc.code
+        return rc, out.getvalue(), err.getvalue()
+
+    def test_default_workspace_markdown(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
+            rc, _out, _err = self._run_main([ws])
+            self.assertEqual(rc, 0)
+            with open(os.path.join(ws, "mind-mem.json")) as f:
+                cfg = json.load(f)
+            self.assertNotIn("block_store", cfg)
+
+    def test_help_does_not_create_junk_dir(self):
+        """`--help` must exit cleanly, not create a './--help' directory."""
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as cwd:
+            prev = os.getcwd()
+            os.chdir(cwd)
+            try:
+                rc, _out, _err = self._run_main(["--help"])
+            finally:
+                os.chdir(prev)
+            self.assertEqual(rc, 0)
+            self.assertFalse(os.path.exists(os.path.join(cwd, "--help")))
+
+    def test_unknown_flag_rejected(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
+            rc, _out, _err = self._run_main([ws, "--bogus"])
+            self.assertEqual(rc, 2)
+
+    def test_postgres_flag_without_dsn_errors(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
+            target = os.path.join(ws, "fresh")
+            rc, _out, _err = self._run_main([target, "--backend", "postgres"])
+            self.assertEqual(rc, 2)
+            self.assertFalse(os.path.exists(os.path.join(target, "mind-mem.json")))
+
+    def test_postgres_via_cli_flags(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
+            rc, _out, _err = self._run_main([ws, "--backend", "postgres", "--dsn", "postgresql://u:p@h/db", "--schema", "sch"])
+            self.assertEqual(rc, 0)
+            with open(os.path.join(ws, "mind-mem.json")) as f:
+                cfg = json.load(f)
+            self.assertEqual(cfg["block_store"]["backend"], "postgres")
+            self.assertEqual(cfg["block_store"]["schema"], "sch")
+
+    def test_postgres_via_env(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
+            env = {
+                "MIND_MEM_BACKEND": "postgres",
+                "MIND_MEM_DSN": "postgresql://u:p@h/db",
+                "MIND_MEM_SCHEMA": "envsch",
+            }
+            with unittest.mock.patch.dict(os.environ, env):
+                rc, _out, _err = self._run_main([ws])
+            self.assertEqual(rc, 0)
+            with open(os.path.join(ws, "mind-mem.json")) as f:
+                cfg = json.load(f)
+            self.assertEqual(cfg["block_store"]["backend"], "postgres")
+            self.assertEqual(cfg["block_store"]["schema"], "envsch")
 
 
 if __name__ == "__main__":

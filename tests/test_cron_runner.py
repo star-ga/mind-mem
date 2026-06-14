@@ -4,13 +4,19 @@
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
+import uuid
 from unittest import mock
 
+import pytest
+
+from mind_mem import init_workspace
 from mind_mem.cron_runner import (
     ALL_JOBS,
     JOB_DEFS,
+    PACKAGE,
     is_job_enabled,
     load_config,
     main,
@@ -155,8 +161,12 @@ class TestPrintCronInstructions(unittest.TestCase):
         # Verify cron schedule patterns
         self.assertIn("0 */6 * * *", combined)  # transcript_scan: every 6h
         self.assertIn("0 3 * * *", combined)  # entity_ingest + intel_scan: 3AM daily
-        # Verify script reference
-        self.assertIn("cron_runner.py", combined)
+        # Verify the runner is invoked as a module (-m), not a bare script path,
+        # so the package context (and relative imports) resolve.
+        self.assertIn("-m mind_mem.cron_runner", combined)
+        # A bare ``cron_runner.py`` script path must NOT appear — running the
+        # package module as a top-level script breaks relative imports.
+        self.assertNotIn("python3 /", combined)
         # Verify logger pipe
         self.assertIn("logger -t mind-mem", combined)
 
@@ -227,13 +237,141 @@ class TestJobDefinitions(unittest.TestCase):
         self.assertEqual(set(ALL_JOBS), set(JOB_DEFS.keys()))
 
     def test_job_defs_structure(self):
-        """Each job def is a 3-tuple (script, args, toggle)."""
+        """Each job def is a 3-tuple (module, args, toggle).
+
+        ``module`` is a package-relative module name with NO ``.py`` suffix and
+        NO path separators — jobs are run via ``python -m mind_mem.<module>``.
+        """
         for name, definition in JOB_DEFS.items():
             self.assertEqual(len(definition), 3, f"Bad tuple length for {name}")
-            script, args, toggle = definition
-            self.assertTrue(script.endswith(".py"), f"{name}: script must be .py")
+            module, args, toggle = definition
+            self.assertIsInstance(module, str, f"{name}: module must be a str")
+            self.assertFalse(module.endswith(".py"), f"{name}: module must NOT carry a .py suffix")
+            self.assertNotIn(os.sep, module, f"{name}: module must be a bare module name, not a path")
+            self.assertNotIn("/", module, f"{name}: module must be a bare module name, not a path")
             self.assertIsInstance(args, list, f"{name}: args must be a list")
             self.assertIsInstance(toggle, str, f"{name}: toggle must be a str")
+
+
+class TestRunJobModuleInvocation(unittest.TestCase):
+    """Regression for bug 7: daemon jobs must be invoked as ``python -m mind_mem.<module>``.
+
+    The job scripts (transcript_capture / entity_ingest / intel_scan) are package
+    modules that use relative imports (``from .block_parser import ...``). Running
+    them as bare script paths raised ``ImportError: attempted relative import with
+    no known parent package``, silently breaking every daemon tick on ALL backends.
+    """
+
+    @mock.patch("mind_mem.cron_runner.subprocess.run")
+    @mock.patch("mind_mem.cron_runner.os.path.isfile", return_value=True)
+    def test_cmd_uses_module_runner_not_bare_script(self, _mock_isfile, mock_run):
+        """run_job must build ``[python, -m, mind_mem.<module>, ws, *args]`` — never a bare path."""
+        mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        for job_name, (module, extra_args, _toggle) in JOB_DEFS.items():
+            mock_run.reset_mock()
+            run_job(job_name, "/tmp/ws")
+            cmd = mock_run.call_args.args[0]
+            self.assertEqual(cmd[0], sys.executable, f"{job_name}: must use sys.executable")
+            self.assertEqual(cmd[1], "-m", f"{job_name}: must invoke via -m (module runner)")
+            self.assertEqual(
+                cmd[2],
+                f"{PACKAGE}.{module}",
+                f"{job_name}: must run the package module, not a script path",
+            )
+            self.assertEqual(cmd[3], "/tmp/ws", f"{job_name}: workspace must follow the module")
+            self.assertEqual(cmd[4:], extra_args, f"{job_name}: extra args must follow the workspace")
+            # No element may be a bare ``.py`` file path — that's the bug.
+            for part in cmd:
+                self.assertFalse(
+                    str(part).endswith(".py"),
+                    f"{job_name}: cmd must not contain a bare .py script path: {part!r}",
+                )
+
+
+def _init_real_workspace(ws: str, *, backend: str = "markdown", dsn=None, schema=None) -> None:
+    """Init a real workspace (markdown or postgres) for the end-to-end daemon test."""
+    init_workspace.init(ws, backend=backend, dsn=dsn, schema=schema)
+
+
+def _assert_jobs_import_cleanly(ws: str) -> None:
+    """Run every real daemon job via run_job and assert none crash on import.
+
+    This exercises the actual subprocess path (NO mock): a relative-import
+    failure surfaces as a non-zero exit with the ImportError in stderr.
+    """
+    from mind_mem.cron_runner import run_job as _run_job
+
+    for job_name in ALL_JOBS:
+        result = _run_job(job_name, ws)
+        # The job may legitimately do nothing (empty corpus) but it MUST start,
+        # i.e. it must not die at import time. Guard specifically against the
+        # relative-import regression and any non-clean status.
+        stderr = result.get("stderr", "") or ""
+        assert "attempted relative import" not in stderr, f"{job_name}: relative-import regression — {stderr}"
+        assert "ImportError" not in stderr, f"{job_name}: import failure — {stderr}"
+        assert result["status"] == "ok", f"{job_name}: expected status 'ok', got {result['status']} (stderr: {stderr!r})"
+
+
+def test_daemon_jobs_run_on_sqlite_backend(tmp_path):
+    """E2E: all daemon jobs start cleanly on the default SQLite/markdown workspace."""
+    ws = str(tmp_path / "ws-sqlite")
+    _init_real_workspace(ws, backend="markdown")
+    _assert_jobs_import_cleanly(ws)
+
+
+# ─── Postgres parity (optional; skips gracefully without psycopg / DSN) ─────────
+
+_PG_DSN_ENV = "MIND_MEM_TEST_PG_DSN"
+
+
+def _pg_dsn():
+    return os.environ.get(_PG_DSN_ENV)
+
+
+def test_daemon_jobs_run_on_postgres_backend(tmp_path):
+    """E2E: all daemon jobs start cleanly on a Postgres-backed workspace.
+
+    Mirrors the tests/test_postgres_*.py pattern — uses a uniquely-named
+    scratch schema and tears it down. Skips gracefully when psycopg or a live
+    Postgres DSN is unavailable so SQLite-only CI stays green.
+    """
+    pytest.importorskip("psycopg", reason="psycopg not installed; skipping Postgres parity test")
+    dsn = _pg_dsn()
+    if not dsn:
+        pytest.skip(f"{_PG_DSN_ENV} not set — no live Postgres available")
+
+    from mind_mem.block_store_postgres import PostgresBlockStore
+
+    schema = f"mm_cron_{uuid.uuid4().hex[:12]}"
+    ws = str(tmp_path / "ws-pg")
+    _init_real_workspace(ws, backend="postgres", dsn=dsn, schema=schema)
+
+    store = PostgresBlockStore(dsn=dsn, schema=schema, workspace=ws)
+    try:
+        store._ensure_schema()
+        # The fix is backend-independent (it is about how the daemon invokes the
+        # job modules), so the jobs must import + run cleanly here too.
+        _assert_jobs_import_cleanly(ws)
+    finally:
+        # Drop the scratch schema; never touch the production mind_mem schema.
+        try:
+            with psycopg_connect(dsn) as conn:  # type: ignore[name-defined]
+                with conn.cursor() as cur:
+                    cur.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+                conn.commit()
+        except Exception:  # pragma: no cover — best-effort teardown
+            pass
+        try:
+            store.close()
+        except Exception:  # pragma: no cover
+            pass
+
+
+def psycopg_connect(dsn):
+    """Thin import-time-deferred psycopg.connect wrapper for scratch-schema teardown."""
+    import psycopg
+
+    return psycopg.connect(dsn)
 
 
 if __name__ == "__main__":
