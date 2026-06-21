@@ -33,12 +33,13 @@ by its full description below.
 - [ ] **Block versioning + time-travel** — `recall(..., as_of=date)`, `block_history(block_id)`
 - [ ] **Conversational chat layer** — `chat_with_memory(workspace, question)` with `[[block_id]]` citations
 
-### Group C — KG governance / UX (5 items)
+### Group C — KG governance / UX (6 items)
 
 - [ ] **AI lint with auto-fix** — `lint_autofix(workspace, finding_id)` tool
 - [ ] **Local visual viewer** — `mm view` web UI (stdlib HTTP + JS/D3)
 - [ ] **Auto-generated hierarchical index** — `index.md` + `log.md` autogen
 - [ ] **Adversarial / poisoning defense** — per-actor anomaly, canary blocks
+- [ ] **Ingest codepoint sanitization** — strip/normalize invisible-Unicode (zero-width, Unicode tag chars, bidi controls) on blocks + proposals *before* they reach the HITL gate or any model. Defensive takeaway from the GLOSSOPETRAE "Lingua Ex Machina" report ([elder-plinius/GLOSSOPETRAE](https://github.com/elder-plinius/GLOSSOPETRAE), Jun 2026): its covert-channel finding shows payloads hidden in invisible Unicode pass a monitor whose tokenizer silently deletes them before its model sees them (100% receiver recovery, 0% monitor detection). Cheap fix = NFC-normalize + reject/flag disallowed codepoint categories at ingest.
 - [ ] **Memory reputation / trust scores** — per-actor reliability signal in recall
 
 ### Group E — Compliance (5 items)
