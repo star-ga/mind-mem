@@ -101,6 +101,72 @@ self-modifies. We adopt the connectivity model, not the autonomy.
       (Aligns with the determinism wedge: a benchmark that replays
       bit-identically is itself evidence.)
 
+### Group I — Feedback-quality recall scoring (prior-art-informed, 2026-06-20)
+
+Prior art: recent scaling-law research on agent harnesses argues that
+agent success scales not with raw compute (tokens, tool calls) but with
+**how efficiently a budget is converted into durable, task-sufficient
+feedback**. The headline coordinate credits a piece of feedback only
+when it is **informative ∧ valid ∧ non-redundant ∧ retained for
+subsequent decisions**, and the best predictor *normalizes that quantity
+by task demand*. Reported separation is stark: raw tokens / tool calls
+predict task outcome at R²≈0.33 / 0.42; the four-criteria coordinate
+normalized by task demand reaches R²≈0.99 with an oracle and R²≈0.92 on
+mixed real traces (≈0.85 on a prospective holdout); holding cost and
+tool calls *fixed*, improving feedback quality alone moves success from
+0.27 → 0.90.
+
+**Why this is ours to steal.** mind-mem *is* the retention leg of that
+formula — "feedback retained for subsequent decisions" is a one-line
+argument for why a governed memory store exists. We already implement
+two of the four criteria: **non-redundant** (RRF dedup in
+`hybrid_recall` / `union_recall`) and **retained** (the governed block
+store + lineage). We do **not** explicitly score **informative** (does
+this block reduce uncertainty for the *current* decision?) or **valid**
+(is it still true / not contradicted / not stale?). Closing that gap
+turns recall from "we returned 8 blocks at score X" into "we returned
+*enough durable, valid, non-redundant, on-task* context for this task
+class" — a defensible, scaling-law-grounded product metric.
+
+**Wedge guardrail (load-bearing):** the per-hit credit must be a
+*deterministic, inspectable* function of existing block fields
+(contradiction edges, staleness flags, lineage, dedup membership,
+query-overlap) — **not** a learned black-box re-ranker. The score is
+evidence, computed the same way on every substrate, auditable in the
+retrieval log. No autonomous reweighting; if a credit weight changes it
+ships as a versioned config, like any other governed change.
+
+- [ ] **Per-hit feedback-quality credit in `retrieval_diagnostics`** —
+      extend `retrieval_graph.retrieval_diagnostics` to emit, per
+      returned block, a four-component credit
+      `{informative, valid, non_redundant, retained}` instead of only a
+      relevance/confidence histogram. `valid` ← contradiction-edge +
+      staleness lookup (already in the store); `non_redundant` ← RRF
+      dedup membership (already computed); `retained` ← governance state;
+      `informative` ← marginal-uncertainty-reduction proxy (top-score
+      delta vs. the already-packed set). **Do first** — cheapest, and it
+      makes the rest measurable.
+- [ ] **Recall-sufficiency score (EFC ÷ task-demand analog)** — a single
+      normalized "did this recall deliver enough on-task durable context
+      for this query class" number, surfaced in `retrieval_diagnostics`
+      and `pack_recall_budget`. The novel product metric; report it
+      instead of (or beside) raw block counts.
+- [ ] **Validity gate wired into fusion** — let the `valid` component
+      *demote* (never silently drop) stale / contradicted blocks during
+      `hybrid_recall` fusion, so the four-criteria filter shapes results,
+      not just diagnostics. Routes through existing contradiction /
+      staleness primitives; deterministic, logged.
+- [ ] **Feedback-quality → downstream-success bench** — add a standing
+      eval that predicts agent task-failure from recall feedback-quality
+      coordinates (their headline method), proving mind-mem *improves
+      agent success*, not just retrieval scores. Pairs with the LoCoMo /
+      reproducible-benchmark items in Group H; the matched-budget
+      0.27 → 0.90 framing is the pitch slide.
+
+> Provenance (arxiv id, authors, exact tables) recorded privately in
+> `mind-internal`, per the no-public-attribution rule — public artifacts
+> say "recent scaling-law research" only.
+
 ### v3.2.x trailing fixes (4 items, deliberately deferred)
 
 - [ ] **Apply engine — text-range ops** — `insert_after_block` / `replace_range` still on raw `open()`; no v3.2.x caller generates them in practice
@@ -148,9 +214,9 @@ self-modifies. We adopt the connectivity model, not the autonomy.
 **Sizing summary** (genuine remaining work):
 
 - **Small (1–3 day items, ship-this-month):** audit headers, public/private workspaces, peer allowlist, token rotation, time-bounded recall, time-travel/as_of, OpenAPI specs, GitNexus doc, vocabulary-bound fields, T-004/T-001/N-08/N-12/N-13
-- **Medium (1–3 weeks):** TLS 1.3 + cert pinning, mTLS service-to-service, AI lint with auto-fix, JS/TS SDK, content provenance + provenance-rich blocks, audit attribution ContextVar fix, FastAPI request.state, PostgresBlockStore snapshot snap_id, migration importers, plugin SDK, cost metering
+- **Medium (1–3 weeks):** TLS 1.3 + cert pinning, mTLS service-to-service, AI lint with auto-fix, JS/TS SDK, content provenance + provenance-rich blocks, audit attribution ContextVar fix, FastAPI request.state, PostgresBlockStore snapshot snap_id, migration importers, plugin SDK, cost metering, Group I per-hit feedback-quality credit + recall-sufficiency score
 - **Large (multi-month):** local visual viewer (`mm view` web UI), conversational chat layer, Kubernetes operator, managed-service console, Byzantine consensus, Pure-MIND port (gated on `mindc` C-ABI maturity)
-- **Long-horizon / research (post-v4):** Pure-MIND port completion, [CAUSAL]/[SKILL]/[VISUAL] block types, ActivityPub interop, edge deployment
+- **Long-horizon / research (post-v4):** Pure-MIND port completion, [CAUSAL]/[SKILL]/[VISUAL] block types, ActivityPub interop, edge deployment, Group I validity-gated fusion + feedback-quality→success bench
 
 ---
 

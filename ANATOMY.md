@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 882 | **Est. tokens:** ~1,909,543
-**Generated:** 2026-06-14 15:53 UTC
+**Files:** 883 | **Est. tokens:** ~1,910,904
+**Generated:** 2026-06-21 02:02 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~68,551 |
+| `./` | 35 | ~68,562 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -31,7 +31,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 79 | ~143,591 |
+| `docs/` | 80 | ~144,941 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 3 | ~4,055 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -96,7 +96,7 @@
 - `EVIDENCE.md` (~1206 tok, large) — Evidence Matrix
 - `generate_mind7b_training.py` (~5558 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
-- `.gitignore` (~226 tok, medium) — *.pyc
+- `.gitignore` (~237 tok, medium) — *.pyc
 - `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~4935 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
@@ -229,6 +229,7 @@
 - `glossary.md` (~263 tok, medium) — Glossary
 - `governance.md` (~1353 tok, large) — MIND-Mem — governance design (5 layers)
 - `hf-mind-mem-4b-v2-README.md` (~2152 tok, huge) — mind-mem-4b v2 (2026-04-21)
+- `HYPEREDGE_DESIGN_2026-06-17.md` (~1350 tok, large) — Hyperedge + temporal-anchor design (Hyper-Extract steal)
 - `install-guide.md` (~2855 tok, huge) — Installation guide — every step + every option
 - `integrations.md` (~1540 tok, huge) — Integrations
 - `locomo-v3.4-conv0-results.md` (~475 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
