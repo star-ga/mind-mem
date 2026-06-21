@@ -43,3 +43,7 @@ train/output/
 mm-train-output/
 .mind-mem-index/
 _integrity_manifest.json
+
+# secrets (audit 2026-06-20)
+.env
+.env.*
