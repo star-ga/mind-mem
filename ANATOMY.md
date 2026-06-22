@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 883 | **Est. tokens:** ~1,910,904
-**Generated:** 2026-06-21 21:15 UTC
+**Files:** 883 | **Est. tokens:** ~1,911,023
+**Generated:** 2026-06-22 21:07 UTC
 
 ## Token Budget Guide
 
@@ -40,7 +40,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 8 | ~4,180 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 12 | ~9,817 |
+| `.github/workflows/` | 12 | ~9,936 |
 | `hooks/` | 3 | ~801 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -320,7 +320,7 @@
 
 - `audit-pinned.yml` (~412 tok, medium) — name: Audit Pinned Models
 - `benchmark.yml` (~761 tok, large) — name: Benchmark
-- `ci.yml` (~2927 tok, huge) — name: CI
+- `ci.yml` (~3046 tok, huge) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs

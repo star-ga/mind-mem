@@ -44,6 +44,13 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[test]"
+      # numpy 2.5's bundled type stub (__init__.pyi) uses a PEP-695 `type`
+      # statement that mypy (under our 3.10 type-check target) rejects as
+      # "only supported in Python 3.12+", failing the gate on a third-party stub
+      # rather than our code. Pin numpy < 2.5 for the type-check step ONLY — the
+      # runtime/tests jobs keep the latest numpy. (Remove once mypy handles the
+      # numpy 2.5 stub under a 3.10 target.)
+      - run: pip install "numpy<2.5"
       - run: python -m mypy src/ --ignore-missing-imports
 
   test:
