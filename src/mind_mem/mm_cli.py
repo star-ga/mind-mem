@@ -1269,6 +1269,39 @@ def _cmd_inbox_watch(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_send(args: argparse.Namespace) -> int:
+    """Send an agent-to-agent message (write an MSG- block) — v4.0.19."""
+    from mind_mem.agent_messaging import send_message
+
+    try:
+        block_id = send_message(
+            _workspace(),
+            args.text,
+            to=args.to,
+            sender=getattr(args, "from_agent", None),
+            subject=args.subject,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps({"sent": block_id, "to": args.to, "from": getattr(args, "from_agent", None)}))
+    return 0
+
+
+def _cmd_inbox(args: argparse.Namespace) -> int:
+    """Read agent messages (receive = recall over MSG- blocks) — v4.0.19."""
+    from mind_mem.agent_messaging import read_inbox
+
+    messages = read_inbox(
+        _workspace(),
+        to=args.to,
+        since=args.since,
+        limit=args.limit,
+    )
+    print(json.dumps(messages, indent=2, default=str))
+    return 0
+
+
 def _cmd_audit_model(args: argparse.Namespace) -> int:
     from mind_mem.model_audit import audit_model, format_report_text
 
@@ -2275,6 +2308,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_inbox.add_argument("--interval", type=float, default=5.0, help="Polling interval in seconds (>=0.5).")
     p_inbox.add_argument("--once", action="store_true", help="Drain inbox once and exit.")
     p_inbox.set_defaults(func=_cmd_inbox_watch)
+
+    # send — v4.0.19 agent-to-agent messaging (write an MSG- block)
+    p_send = sub.add_parser(
+        "send",
+        help="Send a message to another agent (writes an MSG- block to shared memory).",
+    )
+    p_send.add_argument("text", help="Message body.")
+    p_send.add_argument("--to", default=None, help="Recipient agent id (e.g. S1). Omit for a broadcast.")
+    p_send.add_argument("--from", dest="from_agent", default=None, help="Sender agent id (e.g. U1).")
+    p_send.add_argument("--subject", default=None, help="Optional subject line.")
+    p_send.set_defaults(func=_cmd_send)
+
+    # inbox — v4.0.19 receive agent messages (recall over MSG- blocks)
+    p_inbox_msg = sub.add_parser(
+        "inbox",
+        help="Read agent messages addressed to you (recall over MSG- blocks).",
+    )
+    p_inbox_msg.add_argument("--to", default=None, help="Filter to messages addressed to this agent id (plus broadcasts).")
+    p_inbox_msg.add_argument("--since", default=None, help="ISO-8601 lower bound on message date.")
+    p_inbox_msg.add_argument("-n", "--limit", type=int, default=20, help="Max messages to return.")
+    p_inbox_msg.set_defaults(func=_cmd_inbox)
 
     # pipeline-status — v3.9 hash-of-code invalidation inspection
     p_pipeline = sub.add_parser(

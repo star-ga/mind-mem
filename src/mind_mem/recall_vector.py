@@ -1445,7 +1445,12 @@ def rebuild_index(workspace: str) -> int:
 
 def main():
     parser = argparse.ArgumentParser(description="mind-mem Vector Recall Backend (Semantic Search)")
-    parser.add_argument("--workspace", "-w", default=".", help="Workspace path")
+    parser.add_argument(
+        "--workspace",
+        "-w",
+        default=None,
+        help="Workspace path (default: $MIND_MEM_WORKSPACE > nearest mind-mem.json upward > cwd)",
+    )
     parser.add_argument("--index", action="store_true", help="Build/rebuild index")
     parser.add_argument("--query", "-q", help="Search query")
     parser.add_argument("--limit", "-l", type=int, default=10, help="Max results")
@@ -1454,8 +1459,15 @@ def main():
     parser.add_argument("--force", action="store_true", help="Force reindex")
     args = parser.parse_args()
 
+    # Resolve workspace via the shared resolver so this twin CLI stops
+    # diverging from _recall_core.main (--workspace > $MIND_MEM_WORKSPACE >
+    # nearest mind-mem.json upward > cwd).
+    from ._recall_workspace import resolve_workspace
+
+    workspace = resolve_workspace(args.workspace)
+
     # Load config
-    config_path = os.path.join(args.workspace, "mind-mem.json")
+    config_path = os.path.join(workspace, "mind-mem.json")
     config = {}
     if os.path.isfile(config_path):
         try:
@@ -1476,8 +1488,8 @@ def main():
     # Index mode
     if args.index:
         try:
-            backend.index(args.workspace)
-            print(f"Index built successfully at {backend._get_index_path(args.workspace)}")
+            backend.index(workspace)
+            print(f"Index built successfully at {backend._get_index_path(workspace)}")
         except Exception as e:
             print(f"recall_vector: indexing failed: {e}", file=sys.stderr)
             sys.exit(1)
@@ -1489,7 +1501,7 @@ def main():
         sys.exit(1)
 
     try:
-        results = backend.search(args.workspace, args.query, args.limit, args.active_only)
+        results = backend.search(workspace, args.query, args.limit, args.active_only)
     except Exception as e:
         print(f"recall_vector: search failed: {e}", file=sys.stderr)
         sys.exit(1)
@@ -1498,6 +1510,18 @@ def main():
         print(json.dumps(results, indent=2))
     else:
         if not results:
+            # Distinguish an empty/missing store from a genuine 0-of-N miss
+            # (mirrors _recall_core.main).
+            from ._recall_workspace import empty_workspace_warning, probe_block_count
+
+            health = probe_block_count(workspace)
+            if health.probe_error is not None:
+                print(
+                    f"recall_vector: note — could not verify workspace block count ({health.probe_error})",
+                    file=sys.stderr,
+                )
+            elif health.is_empty_or_unbuilt:
+                print(empty_workspace_warning(health), file=sys.stderr)
             print("No results found.")
         else:
             for r in results:

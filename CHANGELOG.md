@@ -2,6 +2,25 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.1.0 — recall workspace resolution + agent-to-agent comm
+
+### Fixed
+- **recall CLI silently read the wrong store.** `mind-mem-recall` defaulted to an
+  empty local index and printed `No results found.` even when the configured
+  workspace held matches — training users to distrust recall. Recall now resolves
+  the workspace in order: `--workspace` > `$MIND_MEM_WORKSPACE` > nearest
+  `mind-mem.json` discovered upward from cwd > cwd, and distinguishes an
+  **empty/unconfigured store** (loud warning to stderr naming the resolved
+  workspace + how to fix) from a genuinely-empty result over a populated store
+  (the quiet `No results found.`). (`_recall_core`, `recall_vector`,
+  new `_recall_workspace`).
+
+### Added
+- **Agent-to-agent comm** (`agent_messaging`): the sanctioned in-fleet channel for
+  agents to send/receive messages through the governed memory store (works across
+  CLIs/nodes over the shared backend). New `mm` CLI verbs + an MCP surface + a
+  send→receive round-trip test. See `docs/agent-comm.md`.
+
 ## v4.0.18 — Postgres backend parity (out-of-the-box on any backend)
 
 Fixed 14 audited parity bugs where the recall / scan / governance / export /

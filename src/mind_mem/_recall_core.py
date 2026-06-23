@@ -1746,7 +1746,12 @@ def prefetch_context(
 def main():
     parser = argparse.ArgumentParser(description="mind-mem Recall Engine (BM25 + Graph)")
     parser.add_argument("--query", "-q", required=True, help="Search query")
-    parser.add_argument("--workspace", "-w", default=".", help="Workspace path")
+    parser.add_argument(
+        "--workspace",
+        "-w",
+        default=None,
+        help="Workspace path (default: $MIND_MEM_WORKSPACE > nearest mind-mem.json upward > cwd)",
+    )
     parser.add_argument("--limit", "-l", type=int, default=10, help="Max results")
     parser.add_argument("--active-only", action="store_true", help="Only search active blocks")
     parser.add_argument("--graph", action="store_true", help="Enable graph-based neighbor boosting")
@@ -1762,16 +1767,24 @@ def main():
     )
     args = parser.parse_args()
 
+    # Resolve workspace: --workspace > $MIND_MEM_WORKSPACE > nearest
+    # mind-mem.json upward from cwd > cwd. (#recall-workspace-default — the
+    # recall CLI was the one component that never honoured the env var or
+    # discovered the workspace, unlike mm_cli / mcp / api.)
+    from ._recall_workspace import resolve_workspace
+
+    workspace = resolve_workspace(args.workspace)
+
     # Resolve backend: CLI flag > config > default scan
     backend = args.backend
     if backend == "auto":
-        cfg_backend = _load_backend(args.workspace)
+        cfg_backend = _load_backend(workspace)
         if cfg_backend == "sqlite":
             backend = "sqlite"
         elif cfg_backend is not None and isinstance(cfg_backend, RecallBackend):
             # Vector or other custom backend
             try:
-                results = cfg_backend.search(args.workspace, args.query, args.limit, args.active_only)
+                results = cfg_backend.search(workspace, args.query, args.limit, args.active_only)
             except (OSError, ValueError, TypeError) as e:
                 print(f"recall: backend error ({e}), falling back to scan", file=sys.stderr)
                 backend = "scan"
@@ -1784,7 +1797,7 @@ def main():
         from .sqlite_index import query_index
 
         results = query_index(
-            args.workspace,
+            workspace,
             args.query,
             limit=args.limit,
             active_only=args.active_only,
@@ -1795,7 +1808,7 @@ def main():
         )
     elif backend == "scan":
         results = recall(
-            args.workspace,
+            workspace,
             args.query,
             args.limit,
             args.active_only,
@@ -1809,6 +1822,20 @@ def main():
         print(json.dumps(results, indent=2))
     else:
         if not results:
+            # Distinguish "0 because wrong/empty/missing store" from a genuine
+            # "0 of N matched" by probing the RESOLVED workspace's block count.
+            # A populated store with a real miss keeps the quiet stdout line;
+            # an empty/unconfigured store warns LOUDLY to stderr (path + fix).
+            from ._recall_workspace import empty_workspace_warning, probe_block_count
+
+            health = probe_block_count(workspace)
+            if health.probe_error is not None:
+                print(
+                    f"recall: note — could not verify workspace block count ({health.probe_error})",
+                    file=sys.stderr,
+                )
+            elif health.is_empty_or_unbuilt:
+                print(empty_workspace_warning(health), file=sys.stderr)
             print("No results found.")
         else:
             for r in results:

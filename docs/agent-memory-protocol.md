@@ -43,6 +43,14 @@ If you find yourself writing about prior projects, repos, or
 decisions without having called recall in this session, you are
 about to hallucinate. Stop and call recall first.
 
+### Message another agent
+mind-mem is also the sanctioned agent-to-agent / cross-node comm
+channel: send with `mm send "<text>" --to <agent> --from <self>`
+(omit `--to` for a broadcast), receive with `mm inbox --to <self>`.
+Send = write an `MSG-` block; receive = read your mail (your `To`
+plus broadcasts). It works fleet-wide because the store is the shared
+Postgres hub. Full guide: `docs/agent-comm.md`.
+
 ---
 
 ## Why this exists

@@ -248,6 +248,10 @@ _BLOCK_PREFIX_MAP: dict[str, tuple[str, str]] = {
     "TOOL": ("entities", "tools.md"),
     # v3.9: inbox folder ingestion (text + PDF) writes here.
     "INBOX": ("memory", "INBOX.md"),
+    # v4.0.19: agent-to-agent messaging (`mm send` / `mm inbox`) writes here.
+    # Receive = recall over this corpus; cross-node works because the store
+    # is the shared Postgres hub (claude-peers is banned; this is the channel).
+    "MSG": ("memory", "MESSAGES.md"),
 }
 
 _BLOCK_ID_RE = _re.compile(r"^([A-Z]+)-[a-zA-Z0-9_.-]+$")

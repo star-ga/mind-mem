@@ -89,6 +89,11 @@ mm inject --agent codex "jwt auth"
 mm inject --agent gemini "jwt auth" > /tmp/gem.md
 mm inject --agent claude-code "jwt auth"
 
+# Agent-to-agent messaging (see docs/agent-comm.md)
+mm send "deploy the patch" --to S1 --from U1 --subject "patch"
+mm send "fleet-wide notice" --from U1          # broadcast (no --to)
+mm inbox --to S1                                # read your mail + broadcasts
+
 # Status of current workspace
 mm status
 

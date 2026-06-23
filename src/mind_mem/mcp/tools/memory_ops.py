@@ -55,6 +55,9 @@ _BLOCK_PREFIX_MAP = {
     "TOOL": ("entities", "tools.md"),
     # v3.9: inbox folder ingestion (text + PDF) writes here.
     "INBOX": ("memory", "INBOX.md"),
+    # v4.0.19: agent-to-agent messaging (`mm send` / `mm inbox`). Keep in
+    # lockstep with ``block_store._BLOCK_PREFIX_MAP``.
+    "MSG": ("memory", "MESSAGES.md"),
 }
 
 

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 883 | **Est. tokens:** ~1,911,023
-**Generated:** 2026-06-22 21:07 UTC
+**Files:** 888 | **Est. tokens:** ~1,921,067
+**Generated:** 2026-06-23 09:55 UTC
 
 ## Token Budget Guide
 
@@ -31,7 +31,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 80 | ~144,941 |
+| `docs/` | 81 | ~146,165 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 3 | ~4,055 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -58,16 +58,16 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 161 | ~592,867 |
+| `src/mind_mem/` | 163 | ~597,767 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
 | `src/mind_mem/mcp/infra/` | 8 | ~9,991 |
-| `src/mind_mem/mcp/tools/` | 24 | ~58,292 |
+| `src/mind_mem/mcp/tools/` | 24 | ~58,333 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,702 |
 | `src/mind_mem/storage/` | 2 | ~5,519 |
 | `src/mind_mem/v4/` | 22 | ~58,472 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 306 | ~656,279 |
+| `tests/` | 308 | ~660,158 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -197,7 +197,8 @@
 - `002-bm25f-scoring.md` (~205 tok, medium) — ADR-002: BM25F as Primary Scoring Algorithm
 ### `docs/`
 
-- `agent-memory-protocol.md` (~597 tok, large) — Agent Memory Protocol — canonical system-prompt snippet
+- `agent-comm.md` (~1055 tok, large) — Agent-to-agent messaging (`mm send` / `mm inbox`)
+- `agent-memory-protocol.md` (~700 tok, large) — Agent Memory Protocol — canonical system-prompt snippet
 - `api-reference.md` (~1683 tok, huge) — API Reference
 - `append-only-audit-logs.md` (~1424 tok, large) — Append-Only Audit Logs — Operator Runbook
 - `architecture.md` (~1936 tok, huge) — Architecture
@@ -274,7 +275,7 @@
 - `supply-chain-security.md` (~1051 tok, large) — Supply-Chain Security
 - `testing-guide.md` (~369 tok, medium) — Testing Guide
 - `troubleshooting.md` (~681 tok, large) — Troubleshooting
-- `usage.md` (~2002 tok, huge) — Usage
+- `usage.md` (~2068 tok, huge) — Usage
 - `v3.11.0-implementation-plan.md` (~1570 tok, huge) — v3.11.0 Implementation Plan — synthesis from cross-model review
 - `v3.11.0-mind-mem-4b-retrain-plan.md` (~1529 tok, huge) — mind-mem-4b v3.11.0 Retrain Plan
 - `v3.1.9-self-audit.md` (~1396 tok, large) — Self-audit after v3.1.9
@@ -440,6 +441,7 @@
 
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
 - `agent_bridge.py` (~4158 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `agent_messaging.py` (~1675 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `alerting.py` (~2476 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `answer_quality.py` (~2681 tok, huge) — Answer-quality layer: verification + self-consistency + per-category spec.
 ### `src/mind_mem/api/`
@@ -465,7 +467,7 @@
 - `block_store_encrypted.py` (~2313 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `block_store_postgres.py` (~14850 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~2530 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
-- `block_store.py` (~10467 tok, huge) — BlockStore abstraction — decouples block access from storage format.
+- `block_store.py` (~10535 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `calibration.py` (~4838 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
 - `capture.py` (~3722 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
@@ -563,7 +565,7 @@
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
 - `lineage.py` (~717 tok, large) — MCP wrapping for the v3.11.0 typed block-lineage graph (Pattern 3).
-- `memory_ops.py` (~8362 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
+- `memory_ops.py` (~8403 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `mic_map.py` (~2436 tok, huge) — MIC/MAP serialization MCP tools — wraps ``mind_mem.mic_map``.
 - `model.py` (~2586 tok, huge) — Model audit / signing MCP tools — wraps ``mind_mem.model_audit``,
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
@@ -583,7 +585,7 @@
 - `mind_ffi.py` (~5479 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~25031 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `mm_cli.py` (~25570 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `model_audit.py` (~4370 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
 - `model_gate.py` (~2549 tok, huge) — Load-gate registry for ``mm audit-model`` checkpoints.
 - `model_provenance.py` (~1751 tok, huge) — Provenance allowlist check for ``mm audit-model`` checkpoints.
@@ -608,9 +610,9 @@
 - `query_expansion.py` (~4680 tok, huge) — Multi-query expansion for improved recall.
 - `query_planner.py` (~2865 tok, huge) — Query decomposition for multi-hop questions (v3.3.0 Tier 1 #1).
 - `recall_cache.py` (~2938 tok, huge) — v3.2.0 — distributed recall result cache (Redis + in-process LRU fallback).
-- `_recall_constants.py` (~2420 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
+- `_recall_constants.py` (~2514 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
 - `_recall_context.py` (~2601 tok, huge) — Recall engine context packing — post-retrieval augmentation rules."""
-- `_recall_core.py` (~19077 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
+- `_recall_core.py` (~19395 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
 - `_recall_detection.py` (~5477 tok, huge) — Recall engine detection — query type classification, text extraction, block utilities."""
 - `_recall_expansion.py` (~3249 tok, huge) — Recall engine query expansion — domain synonyms, month normalization, RM3."""
 - `_recall_explain.py` (~1331 tok, large) — Score decomposition record for explainable recall (v3.11.0, Pattern 1).
@@ -619,7 +621,8 @@
 - `_recall_scoring.py` (~3715 tok, huge) — Recall engine scoring — BM25F helper, date scores, graph boosting, negation, date proximity, categories."""
 - `_recall_temporal.py` (~2044 tok, huge) — Recall engine temporal filtering — resolve relative time references and filter blocks."""
 - `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
-- `recall_vector.py` (~14688 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
+- `recall_vector.py` (~14936 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
+- `_recall_workspace.py` (~1958 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `rerank_ensemble.py` (~3364 tok, huge) — Reranker ensemble via Borda count (v3.3.0 Tier 4 #9).
 - `retrieval_graph.py` (~5099 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
 - `retrieval_trace.py` (~1252 tok, large) — Per-feature retrieval attribution (v3.3.0 architect audit item #7).
@@ -740,6 +743,7 @@
 - `test_adversarial_corpus.py` (~2321 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_agent_bridge.py` (~2324 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_agent_id_filter.py` (~335 tok, medium) — Tests for agent_id namespace filtering."""
+- `test_agent_messaging.py` (~1533 tok, huge) — Tests for v4.0.19 agent-to-agent messaging (`mm send` / `mm inbox`).
 - `test_alerting.py` (~1777 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_allow_decompose.py` (~311 tok, medium) — Tests for _allow_decompose recall parameter."""
 - `test_answer_quality.py` (~1288 tok, large) — Tests for the v3.3.0 answer-quality shims."""
@@ -939,6 +943,7 @@
 - `test_query_expansion.py` (~3809 tok, huge) — Tests for query_expansion.py -- multi-query expansion for improved recall."""
 - `test_query_planner.py` (~1348 tok, large) — v3.3.0 Tier 1 #1 — query decomposition for multi-hop questions.
 - `test_recall_cache.py` (~1916 tok, huge) — Tests for v3.2.0 distributed recall cache (LRU + Redis)."""
+- `test_recall_cli_workspace.py` (~2346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_concurrent.py` (~344 tok, medium) — Tests for concurrent recall queries."""
 - `test_recall_context_field.py` (~263 tok, medium) — Tests for context field in blocks."""
 - `test_recall_cross_encoder.py` (~1345 tok, large) — Tests for cross-encoder reranker integration in recall pipeline."""

@@ -72,6 +72,12 @@ CORPUS_FILES = {
     "contradictions": "intelligence/CONTRADICTIONS.md",
     "drift": "intelligence/DRIFT.md",
     "signals": "intelligence/SIGNALS.md",
+    # v4.0.19: agent-to-agent messages (`mm send`). Indexed so `mm inbox`
+    # (recall) finds them on the SQLite default, at parity with Postgres.
+    "messages": "memory/MESSAGES.md",
+    # v4.0.19: fixes the pre-existing inbox-invisible-on-SQLite bug — INBOX-
+    # blocks were written to this file but never indexed, so recall returned 0.
+    "inbox": "memory/INBOX.md",
 }
 
 # BM25 parameters
