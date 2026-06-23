@@ -22,6 +22,10 @@ import secrets
 from datetime import datetime, timezone
 from typing import Optional
 
+from .observability import get_logger
+
+_log = get_logger("agent_messaging")
+
 __all__ = [
     "MESSAGE_TYPE",
     "build_message_block",
@@ -121,10 +125,11 @@ def send_message(
             from .sqlite_index import build_index
 
             build_index(workspace)
-        except Exception:  # pragma: no cover - index rebuild is best-effort
+        except Exception as exc:  # pragma: no cover - index rebuild is best-effort
             # A send must not fail just because the local index couldn't be
-            # refreshed; the block is durably written either way.
-            pass
+            # refreshed; the block is durably written either way — log it
+            # rather than swallow it silently (avoids B110 / our no-silent-swallow rule).
+            _log.debug("send_message: best-effort index rebuild skipped: %s", exc)
     return written_id
 
 

@@ -2,6 +2,12 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.1.2 — log best-effort index-rebuild failure (no silent swallow)
+
+`send_message`'s optional post-write index rebuild caught all exceptions and
+`pass`ed (Bandit B110). The send is still durable, but the swallowed error is
+now logged at debug level instead of dropped silently. No API change.
+
 ## v4.1.1 — docs/badges/PyPI alignment
 
 Documentation-only release: README version + "Current release" line updated to
