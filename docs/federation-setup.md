@@ -42,7 +42,7 @@ Postgres-backed corpus.**
    (no hyphens between Mind/Mem), not `Authorization: Bearer` or `X-Mind-Mem-Token`.
    Worth a one-line note in the serve help text.
 4. **Fleet version drift → `unknown_recall_config_keys` warnings.** A node on an older
-   pip (`mind-mem==4.0.17`) reading a config written by a newer build warns on keys it
+   pip (`mind-mem==4.1.1`) reading a config written by a newer build warns on keys it
    doesn't know (`bm25_weight`, `model`, `ollama_embed_model`, `onnx_backend`, `provider`,
    `rrf_k`, `vector_enabled`, `postgres`). → **Keep mind-mem versions aligned across the
    fleet**, and the config loader should ignore-with-info unknown keys (it does) but the

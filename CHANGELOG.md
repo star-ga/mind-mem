@@ -2,6 +2,13 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.1.1 — docs/badges/PyPI alignment
+
+Documentation-only release: README version + "Current release" line updated to
+v4.1.x, agent-to-agent comm + recall workspace-resolution surfaced in the docs,
+and the PyPI long-description re-rendered so the published page matches the code.
+No functional changes vs v4.1.0.
+
 ## v4.1.0 — recall workspace resolution + agent-to-agent comm
 
 ### Fixed
