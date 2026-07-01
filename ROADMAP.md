@@ -1946,11 +1946,16 @@ boundary.
 a pure-Python fallback, so the kernel boundary is already proven and
 non-load-bearing for availability.
 
-**Gating dependency (honest):** a full port is sequenced behind the
-MIND toolchain's **library-emit / stable C-ABI** capability (cdylib
-output + FFI surface) maturing upstream. Until that lands, the I/O
-shell (MCP transport, SQLite/Postgres/Redis adapters, HTTP, external
-model clients) stays Python by necessity, not by design.
+**Gating dependency (updated — the compiler-side blocker has shipped):**
+`mindc` library-emit / stable C-ABI (cdylib output + FFI surface) landed
+upstream in 0.2.6 (`pub fn`→C export, RFC 0002/0003 cdylib seam) and 0.3.0
+(`--emit-shared`, struct-ABI lowering) — see `star-ga/mind-nerve`'s ROADMAP
+for a sibling consumer already tracking this as mindc-side SHIPPED. The
+remaining gap is entirely on this repo's side: the port work itself hasn't
+started. Until the governance/core-retrieval/I/O layers below are actually
+ported, the I/O shell (MCP transport, SQLite/Postgres/Redis adapters, HTTP,
+external model clients) stays Python — by sequencing choice, not by a
+missing compiler capability.
 
 **Sequencing (incremental, never a big-bang rewrite):**
 
