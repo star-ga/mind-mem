@@ -29,18 +29,18 @@
 </p>
 
 <p align="center"><sub>
-  <strong>Current release:</strong> <code>v4.1.1</code> &mdash; recall workspace resolution + agent-to-agent comm &mdash;
+  <strong>Current release:</strong> <code>v4.1.2</code> &mdash; recall workspace resolution + agent-to-agent comm + index-rebuild logging &mdash;
   <a href="CHANGELOG.md">see CHANGELOG</a>
   (single source of truth; per-version detail tables below may lag the changelog)
 </sub></p>
 
 ---
 
-MIND-Mem is a deterministic AI memory system whose recall is byte-identical across runs, machines, and substrates — same query produces the same ranked results every time, with a Q16.16 fixed-point audit chain embedded in every applied decision.
+MIND-Mem is a deterministic AI memory system: on the same workspace, the same query produces the same ranked results every time, with a Q16.16 fixed-point audit chain — byte-identical across runs, machines, and substrates — embedded in every applied decision. (Recall scoring itself is standard floating-point; the byte-identity guarantee is the Q16.16 audit/replay chain.)
 
 Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 83 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic (same query → same ranked results) and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
 
-Most memory layers ship tools. That is table-stakes. MIND-Mem ships a substrate: Q16.16 fixed-point scoring kernels compiled from MIND source, a governance pipeline that rejects every unreviewed write, and an audit chain where every applied proposal is hash-anchored. The same query on the same workspace produces the same ranked recall, every time; that recall's audit/replay chain is byte-identical whether you replay it on the same machine or a different one that pulls the same workspace. That property is what makes MIND-Mem suitable as a canonical memory layer across heterogeneous agent stacks.
+Most memory layers ship tools. That is table-stakes. MIND-Mem ships a substrate: scoring kernels compiled from MIND source with Q16.16 fixed-point encoding in the audit-hash preimage, a governance pipeline that rejects every unreviewed write, and an audit chain where every applied proposal is hash-anchored. The same query on the same workspace produces the same ranked recall, every time; that recall's audit/replay chain is byte-identical whether you replay it on the same machine or a different one that pulls the same workspace. That property is what makes MIND-Mem suitable as a canonical memory layer across heterogeneous agent stacks.
 
 > **If your agent runs for weeks, it will drift. MIND-Mem prevents silent drift.**
 >
@@ -63,7 +63,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>Current release: **v4.1.1** — recall workspace resolution + agent-to-agent comm — Full per-release notes (issues closed, CI run ids, job counts) live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
+<sub>Current release: **v4.1.2** — recall workspace resolution + agent-to-agent comm + index-rebuild logging — Full per-release notes (issues closed, CI run ids, job counts) live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
 
 ### Substrate Properties
 
@@ -72,7 +72,7 @@ Output:
 | **Byte-identical replay** | Deterministic recall: same workspace + query → same ranked results, every time. The audit/replay chain (Q16.16) is byte-identical across machines. No probabilistic mutations in the core. |
 | **Governed-write**      | Nothing reaches the source of truth without `propose → review → approve_apply`. No silent mutations. Ever. |
 | **Auditable**           | Every apply logged with timestamp, receipt, and DIFF. Full traceability from signal to decision. |
-| **Deterministic**       | No ML in the retrieval core. Q16.16 fixed-point scoring. The same preimage produces the same hash. |
+| **Deterministic**       | No ML in the retrieval core. Q16.16 fixed-point encoding in the audit-hash preimage. The same preimage produces the same hash. |
 | **Local-first**         | All data stays on disk. No cloud calls, no telemetry, no phoning home.            |
 | **No vendor lock-in**   | Plain Markdown files. Move to any system, any time.                               |
 | **Zero infrastructure** | Core requires only Python 3.10+ stdlib. Postgres, Redis, Docker, and GPU are opt-in extras. |

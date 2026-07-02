@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 888 | **Est. tokens:** ~1,921,157
-**Generated:** 2026-07-01 19:47 UTC
+**Files:** 888 | **Est. tokens:** ~1,921,261
+**Generated:** 2026-07-02 18:23 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~68,590 |
+| `./` | 35 | ~68,651 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -31,7 +31,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 81 | ~146,164 |
+| `docs/` | 81 | ~146,207 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 3 | ~4,055 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -107,7 +107,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~2257 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~25046 tok, huge) — 30-Second Demo
+- `README.md` (~25107 tok, huge) — 30-Second Demo
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
@@ -240,7 +240,7 @@
 - `mic-map.md` (~1686 tok, huge) — MIC/MAP — MIND IR Graph Serialization
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
 - `migration.md` (~2754 tok, huge) — Migration Guide: mem-os to MIND-Mem
-- `MIND_CONFIG_VS_MIND_LANG.md` (~2275 tok, huge) — MIND configuration vs MIND language — clarifying the .mind extension
+- `MIND_CONFIG_VS_MIND_LANG.md` (~2318 tok, huge) — MIND configuration vs MIND language — clarifying the .mind extension
 - `mind-kernels.md` (~339 tok, medium) — MIND Kernels
 - `mind-mem-4b-setup.md` (~2615 tok, huge) — Setting up the mind-mem-4b model
 - `mind-mem-4b-training-runbook.md` (~3586 tok, huge) — mind-mem-4b training runbook (post-v3.10.2 lessons)

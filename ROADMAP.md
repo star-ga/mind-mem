@@ -1934,10 +1934,10 @@ Acceptance gate: every new feature cites IFR component strengthened, law of evol
 ## Pure-MIND Core Port (long-horizon architectural goal)
 
 **Goal:** progressively port the MIND-Mem core to pure MIND until the
-Python surface is a thin adapter shell, then eliminate it. MIND is now
-a self-hosted systems language (the compiler and source-quality
-toolchain self-host), so this is a real trajectory, not a category
-boundary.
+Python surface is a thin adapter shell, then eliminate it. The MIND
+compiler's bootstrap/front-end now self-hosts (byte-identical native-ELF
+fixed point), with full-toolchain self-hosting on the `mind` roadmap, so
+this is a real trajectory, not a category boundary.
 
 **Already MIND today:** the hot scoring/decision kernels ship as
 `.mind` and compile via `mindc` — `bm25`, `rrf`, `reranker`,
@@ -2031,5 +2031,6 @@ wedge applied to ourselves.
 - **Approach:** port via the `mind-migrator` path — to the executable MIND subset, verifying every
   emitted symbol actually runs and reusing `std` primitives; no silent AOT-only stubs.
 - **Invariant:** migration preserves behavior and the cross-substrate byte-identity gate — no
-  regression in determinism or the signed evidence chain.
+  regression in determinism or the evidence chain (signing of the
+  evidence chain is itself a tracked `mind` milestone).
 - **Status:** Planned — sequenced after `mind` self-host; tracked here so the endgame is explicit.

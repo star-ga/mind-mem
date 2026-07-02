@@ -75,12 +75,15 @@ Key properties:
 
 - **First-class fixed-point arithmetic** — `q16` (Q16.16) is a native dtype,
   not a library type.
-- **Cross-substrate bit-identity contract** — given the same input bytes, every
-  backend (CPU x86 AVX2, ARM NEON, CUDA) produces the exact same output bytes.
+- **Cross-substrate bit-identity contract** — for integer and Q16.16
+  fixed-point computation, given the same input bytes, the CPU backends
+  (x86 AVX2, ARM NEON) produce the exact same output bytes; scalar-float
+  cross-ISA verification and GPU backends are on the roadmap.
 - **Determinism as a type property** — the `#[deterministic]`, `#[target(...)]`,
   and `#[q16]` annotations are enforced by the type checker, not just by
   convention.
-- **Self-hosted compiler** — `mindc` at [github.com/star-ga/mind](https://github.com/star-ga/mind)
+- **Compiler with a self-hosting bootstrap/front-end** — `mindc` at
+  [github.com/star-ga/mind](https://github.com/star-ga/mind)
   compiles `.mind` files that contain MIND language source.
 - **Normative specification** at [github.com/star-ga/mind-spec](https://github.com/star-ga/mind-spec).
 - **Public landing** at [https://mindlang.dev](https://mindlang.dev).
@@ -171,7 +174,8 @@ separately and handled by a parallel workstream.
 ## Related projects — the open MIND ecosystem
 
 **mindc** ([github.com/star-ga/mind](https://github.com/star-ga/mind))
-The self-hosted compiler for the MIND programming language. Accepts `.mind`
+The compiler for the MIND programming language (its bootstrap/front-end
+self-hosts). Accepts `.mind`
 files containing MIND language source (`pub fn`, `module`, `Tensor`, etc.) and
 produces compiled artifacts. This is the canonical tool that defines what "a
 MIND file" means in the language sense. Does not parse INI syntax.
