@@ -29,6 +29,30 @@ _log = logging.getLogger("mind_mem.block_store_postgres")
 
 __all__ = ["PostgresBlockStore", "BlockStoreError"]
 
+# ─── Process-wide connection-pool registry (thread-leak fix) ─────────────────
+#
+# ``storage.get_block_store()`` is a factory: every recall() / hybrid_search()
+# / _check_workspace() call on a Postgres-backed workspace constructs a
+# *fresh* PostgresBlockStore (by design — construction itself is free, see
+# __init__ below). ``_get_pool()`` used to open a brand-new
+# ``psycopg_pool.ConnectionPool(..., open=True)`` on that fresh instance's
+# first real query. Opening a pool spawns a scheduler thread plus
+# ``num_workers`` (default 3) worker threads that run until ``.close()`` is
+# called — and nothing on the per-MCP-tool-call path ever called it, since
+# the ephemeral PostgresBlockStore went out of scope as soon as the tool
+# call returned. The 4 background threads per call were only reclaimed
+# incidentally whenever Python's garbage collector happened to collect the
+# discarded pool, which is not guaranteed to keep pace under sustained
+# traffic. Production symptom: 76,479 accumulated threads / ~32GB RSS over
+# 2.6 days on a long-running `mcp_server.py` process (~1 leaked thread set
+# per tool call), exhausting the box's fork/thread capacity.
+#
+# Fix: key pools by (dsn, schema) in a process-wide registry so every
+# PostgresBlockStore pointed at the same database shares one long-lived
+# pool, regardless of how many wrapper instances the factory constructs.
+_pool_registry: dict[tuple[str, str], Any] = {}
+_pool_registry_lock = threading.Lock()
+
 # Schema names must be safe Postgres identifiers (no injection surface).
 _SAFE_SCHEMA_RE = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
 
@@ -531,25 +555,42 @@ class PostgresBlockStore:
     # ─── Lifecycle ────────────────────────────────────────────────────────────
 
     def _get_pool(self) -> Any:
-        """Return the connection pool, creating it on first call."""
+        """Return the connection pool, creating (or reusing) it on first call.
+
+        Pools are cached process-wide in ``_pool_registry``, keyed by
+        ``(dsn, schema)`` — see the module-level note above. This avoids
+        opening a brand-new ``ConnectionPool`` (and its background
+        scheduler + worker threads) for every ephemeral PostgresBlockStore
+        the ``storage.get_block_store()`` factory constructs. ``self._pool``
+        still caches the resolved pool locally so repeated calls on the
+        same instance skip the registry lookup.
+        """
         if self._pool is not None:
             return self._pool
         _, ConnectionPool = _require_psycopg()
         with self._init_lock:
-            if self._pool is None:
-                self._pool = ConnectionPool(
-                    self._dsn,
-                    min_size=1,
-                    max_size=10,
-                    open=True,
-                    # Append the pgvector extension's schema to each
-                    # connection's search_path so the bare ``vector`` type,
-                    # ``<=>`` operator and ``vector_cosine_ops`` opclass
-                    # resolve even when the DSN isolates search_path to a
-                    # single workspace schema (bug-6: embeddings silently
-                    # disabled / hybrid_search crashed under isolation).
-                    configure=_configure_vector_search_path,
-                )
+            if self._pool is not None:
+                return self._pool
+            key = (self._dsn, self._schema)
+            with _pool_registry_lock:
+                pool = _pool_registry.get(key)
+                if pool is None or pool.closed:
+                    pool = ConnectionPool(
+                        self._dsn,
+                        min_size=1,
+                        max_size=10,
+                        open=True,
+                        # Append the pgvector extension's schema to each
+                        # connection's search_path so the bare ``vector``
+                        # type, ``<=>`` operator and ``vector_cosine_ops``
+                        # opclass resolve even when the DSN isolates
+                        # search_path to a single workspace schema (bug-6:
+                        # embeddings silently disabled / hybrid_search
+                        # crashed under isolation).
+                        configure=_configure_vector_search_path,
+                    )
+                    _pool_registry[key] = pool
+                self._pool = pool
         return self._pool
 
     def ping(self, *, timeout: float = 5.0) -> dict[str, Any]:
@@ -1261,12 +1302,24 @@ class PostgresBlockStore:
     # ─── Context manager / cleanup ────────────────────────────────────────────
 
     def close(self) -> None:
-        """Close the underlying connection pool."""
+        """Close the underlying connection pool.
+
+        Pools are shared process-wide via ``_pool_registry`` (keyed by
+        ``(dsn, schema)``), so this also evicts the registry entry —
+        otherwise a *different* PostgresBlockStore instance still holding
+        the same (now-closed) pool object cached on ``self._pool`` would
+        try to reuse it. The next ``_get_pool()`` call for this
+        ``(dsn, schema)`` opens a fresh pool.
+        """
         if self._pool is not None:
+            key = (self._dsn, self._schema)
             try:
                 self._pool.close()
             except Exception as exc:
                 _log.debug("pg_pool_close_failed: %s", exc)
+            with _pool_registry_lock:
+                if _pool_registry.get(key) is self._pool:
+                    del _pool_registry[key]
             self._pool = None
 
     def __enter__(self) -> "PostgresBlockStore":

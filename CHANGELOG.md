@@ -2,6 +2,25 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.2.1 — fix a Postgres connection-pool thread leak in the MCP server
+
+**Bugfix (resource leak).** Every MCP tool call routes through `storage.get_block_store()`,
+an intentionally uncached per-call factory. For a **Postgres-backed** workspace, each fresh
+`PostgresBlockStore._get_pool()` opened its *own* `psycopg_pool.ConnectionPool` (1 scheduler +
+3 worker threads) and never closed it — so a long-running server leaked ~4 threads per call.
+Observed in production: a single MCP server accumulated **76k threads / ~32 GB RAM over 2.6
+days** until the host could no longer `fork()`. (Markdown/default backends were unaffected —
+they open no pool.)
+
+- **Fix:** a process-wide `_pool_registry` keyed on `(dsn, schema)` in
+  `block_store_postgres.py`, so `_get_pool()` reuses the open pool instead of creating a new
+  one; `close()` evicts its own registry entry. Surgical — no change to the factory contract
+  the other ~10 call sites rely on.
+- **Proof:** new `tests/test_mcp_thread_leak.py` (CI-safe fake-pool + opt-in live-Postgres)
+  asserts exactly **1** pool is created across 100 tool-calls. Pre-fix: 40 calls → 40 pools →
+  161 threads (and real Postgres slot exhaustion at 50). Post-fix: 40 calls → 1 pool → 5
+  threads, flat. Full suite green (5574 passed).
+
 ## v4.2.0 — tool-output offload store (keep giant command logs out of agent context)
 
 New capability `mind_mem.tool_output` (ROADMAP Group J, §5). A single `cargo test`

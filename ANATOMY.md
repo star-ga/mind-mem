@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 893 | **Est. tokens:** ~1,905,582
-**Generated:** 2026-07-04 09:01 UTC
+**Files:** 894 | **Est. tokens:** ~1,909,221
+**Generated:** 2026-07-04 15:49 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~68,860 |
+| `./` | 35 | ~68,854 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -59,7 +59,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 162 | ~572,260 |
+| `src/mind_mem/` | 162 | ~573,005 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
 | `src/mind_mem/mcp/infra/` | 8 | ~9,991 |
@@ -69,7 +69,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 22 | ~58,472 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 309 | ~662,326 |
+| `tests/` | 310 | ~665,226 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -109,7 +109,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~2257 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~25316 tok, huge) — 30-Second Demo
+- `README.md` (~25310 tok, huge) — 30-Second Demo
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
@@ -471,7 +471,7 @@
 - `block_metadata.py` (~2223 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~7555 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_store_encrypted.py` (~2313 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store_postgres.py` (~14850 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
+- `block_store_postgres.py` (~15595 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~2530 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
 - `block_store.py` (~10535 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
@@ -901,6 +901,7 @@
 - `test_mcp_integration.py` (~5478 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_pipeline.py` (~1465 tok, large) — Tests for the v3.9.0 pipeline-hash MCP tools."""
 - `test_mcp_server.py` (~5277 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
+- `test_mcp_thread_leak.py` (~2900 tok, huge) — Regression tests for the MCP-server thread leak (2026-07-04).
 - `test_mcp_tools_model.py` (~2249 tok, huge) — Tests for ``mind_mem.mcp.tools.model`` — MCP wrappers for audit / sign / verify."""
 - `test_mcp_tools.py` (~277 tok, medium) — Tests for MCP server tool definitions."""
 - `test_mcp_tool_surface_v3_2.py` (~2002 tok, huge) — v3.2.0 — consolidated MCP public dispatcher tests."""
