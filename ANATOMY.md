@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 888 | **Est. tokens:** ~1,921,261
-**Generated:** 2026-07-02 18:23 UTC
+**Files:** 893 | **Est. tokens:** ~1,926,019
+**Generated:** 2026-07-04 06:28 UTC
 
 ## Token Budget Guide
 
@@ -27,11 +27,12 @@
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
 | `benchmarks/` | 40 | ~103,186 |
+| `bin/` | 1 | ~526 |
 | `deploy/` | 2 | ~772 |
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 81 | ~146,207 |
+| `docs/` | 81 | ~146,513 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 3 | ~4,055 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -65,9 +66,10 @@
 | `src/mind_mem/mcp/tools/` | 24 | ~58,333 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,702 |
 | `src/mind_mem/storage/` | 2 | ~5,519 |
+| `src/mind_mem/tool_output/` | 3 | ~2,993 |
 | `src/mind_mem/v4/` | 22 | ~58,472 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 308 | ~660,158 |
+| `tests/` | 309 | ~661,091 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -175,6 +177,9 @@
 - `train_config_a100.yaml` (~347 tok, medium) — base_model: star-ga/mind-mem-4b
 - `train_config.yaml` (~208 tok, medium) — base_model: star-ga/mind-mem-4b
 - `train_mind_mem_4b.py` (~3286 tok, huge) — mind-mem-4b v2 training script — Runpod H200 full-fine-tune.
+### `bin/`
+
+- `mm-run` (~526 tok, large) — #!/usr/bin/env bash
 ### `deploy/`
 
 - `docker-compose.yml` (~690 tok, large) — name: mind-mem
@@ -257,7 +262,7 @@
 - `review-database-v3.2.0.md` (~3171 tok, huge) — Database Review — PostgresBlockStore v3.2.0
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — MIND-Mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
-- `roadmap.md` (~13371 tok, huge) — Roadmap
+- `roadmap.md` (~13677 tok, huge) — Roadmap
 - `roadmap-v4.md` (~10304 tok, huge) — mind-mem v4.0 — Design Rationale
 - `scoring.md` (~517 tok, large) — Scoring System
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2267 tok, huge) — MIND-Mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
@@ -664,6 +669,13 @@
 - `tenant_kms.py` (~2960 tok, huge) — Per-tenant key management + envelope encryption (v4.0 prep).
 - `tiered_memory.py` (~1102 tok, large) — # Copyright 2026 STARGA, Inc.
 - `tier_recall.py` (~2096 tok, huge) — Tier-aware recall score boosting (v3.2.0 hot/cold tier wire-up).
+### `src/mind_mem/tool_output/`
+
+- `__init__.py` (~161 tok, small) — mind_mem.tool_output — context-offload for large command/tool output (§5).
+- `store.py` (~1571 tok, huge) — Tool-output store — full text out-of-context, keyed by handle (mind-mem §5).
+- `summarize.py` (~1261 tok, large) — Deterministic tool-output summarizer (mind-mem §5 — context offload).
+### `src/mind_mem/`
+
 - `tracking.py` (~2018 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `trajectory.py` (~2233 tok, huge) — Trajectory Memory — task execution trace storage and recall.
 - `transcript_capture.py` (~2333 tok, huge) — mind-mem Transcript JSONL Capture. Zero external deps.
@@ -1012,6 +1024,7 @@
 - `test_tier_weights_config.py` (~784 tok, large) — v3.3.0 Tier 4 #10 — per-tier learned weights override.
 - `test_tokenization.py` (~436 tok, medium) — Tests for tokenization module."""
 - `test_token_rotation.py` (~1766 tok, huge) — Regression tests for the token rotation primitive (roadmap v4.0.x).
+- `test_tool_output.py` (~933 tok, large) — Tests for mind_mem.tool_output — the context-offload store (§5).
 - `test_train_mind_mem_4b.py` (~962 tok, large) — Smoke tests for benchmarks/train_mind_mem_4b.py.
 - `test_trajectory.py` (~2392 tok, huge) — Tests for trajectory.py — trajectory memory block operations."""
 - `test_transcript_capture.py` (~3235 tok, huge) — Tests for transcript_capture.py — zero external deps (stdlib unittest)."""

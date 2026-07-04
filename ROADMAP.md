@@ -168,6 +168,70 @@ ships as a versioned config, like any other governed change.
 > `mind-internal`, per the no-public-attribution rule — public artifacts
 > say "recent scaling-law research" only.
 
+### Group J — Client-side anticipation cache + tool-output offload (prior-art-informed, 2026-07-03)
+
+Prior art: recent hosted agent-memory tooling ships two client-side
+patterns we lack, both aimed at the same goal — **keep bytes out of the
+round-trip / out of the context window**. (1) An *anticipation cache*: a
+local TTL-scoped bundle store fronted by a cheap BM25 lookup, so likely-
+relevant context is served locally at sub-round-trip latency instead of
+re-fetched from the store. (2) A *novel-term gate*: a dependency-free
+confidence heuristic that suppresses a local-cache hit when the query's
+novel-term ratio exceeds a threshold (the local corpus can't answer it →
+fall through to the source), with a corpus-size floor so the ratio isn't
+dominated by stopwords on a cold cache.
+
+**Why this is ours to steal.** mind-mem already has the *hard* half — the
+governed store, the federation transport (U1-served Postgres+Redis), and
+the idle machinery (`prefetch` / `speculative_prefetch`, the learned
+co-retrieval graph). What we lack is the *consumer* pattern that turns
+those idle tools into an actual local hot-path cache, plus the cheap
+local-vs-source decision gate. The offload idea generalizes further:
+tool/command output (a 50k-line `cargo test` / `pytest` dump) is the
+single biggest context sink for coding agents and has no home in the
+block store today.
+
+**Wedge guardrail (load-bearing):** the novel-term gate and the offload
+summarizer must be **deterministic, LLM-free** functions of existing
+signals — a pattern-extraction summary (same input → same summary
+bytes), a stem-ratio gate computed the same way on every substrate,
+inspectable in the retrieval/offload log. Cache eviction and gate
+thresholds ship as versioned config, not autonomous reweighting. Fail
+safe: the offload summarizer must never silently drop a failure line;
+dropped-line counts are logged.
+
+- [ ] **Anticipation-cache consumer** — wire the existing idle
+      `prefetch` / `speculative_prefetch` tools into a local TTL bundle
+      cache fronted by BM25, so a recall checks the local bundle before a
+      round-trip. Reuses the co-retrieval graph as the "what to prefetch"
+      signal; **feed the loop that's currently starving** (`signal_stats`
+      = 0, prefetch observations = 0 today). Redis is the push
+      transport — do **not** add a second one.
+- [ ] **Novel-term gate** — a ~40-line deterministic heuristic: suppress
+      a local-cache hit when the query's novel-stem ratio exceeds a
+      configured threshold (default ≈0.45) once the cached corpus has
+      ≥N stems (default ≈200), else fall through to the store. The cheap
+      local-vs-source confidence signal the prefetch layer lacks. **Do
+      first** — it's the piece the cache consumer needs to be safe.
+- [ ] **Tool-output offload store (`tool_output` block kind)** — a new
+      Postgres-backed block kind + `store_and_summarize(text, source,
+      exit_code)` path returning `{handle, summary, line_count}` only,
+      with `recall_output(handle)` for on-demand full text. Deterministic
+      pattern-extraction summary (failures + head/tail + pass/fail
+      tallies); a dependency-free `mm-run -- <cmd>` wrapper streams a live
+      tail to the user and emits only the summary+handle to the agent.
+      Closes the biggest single context sink for the `mind` repo
+      (247 test binaries). **The real build** of the three.
+- [ ] **One-command federation connect (`mind-mem connect`)** — the only
+      onboarding gap vs. hosted "shared context across all CLIs" comps:
+      a wrapper that wires a new CLI into the U1-served federation
+      (Postgres+Redis DSN) without hand-editing config. We already own
+      the shared-context substrate; this is the frictionless join.
+
+> Provenance (source repos, exact heuristics) recorded privately in
+> `mind-internal`, per the no-public-attribution rule — public artifacts
+> say "recent agent-memory tooling" only.
+
 ### v3.2.x trailing fixes (4 items, deliberately deferred)
 
 - [ ] **Apply engine — text-range ops** — `insert_after_block` / `replace_range` still on raw `open()`; no v3.2.x caller generates them in practice
@@ -214,8 +278,8 @@ ships as a versioned config, like any other governed change.
 
 **Sizing summary** (genuine remaining work):
 
-- **Small (1–3 day items, ship-this-month):** audit headers, public/private workspaces, peer allowlist, token rotation, time-bounded recall, time-travel/as_of, OpenAPI specs, GitNexus doc, vocabulary-bound fields, T-004/T-001/N-08/N-12/N-13
-- **Medium (1–3 weeks):** TLS 1.3 + cert pinning, mTLS service-to-service, AI lint with auto-fix, JS/TS SDK, content provenance + provenance-rich blocks, audit attribution ContextVar fix, FastAPI request.state, PostgresBlockStore snapshot snap_id, migration importers, plugin SDK, cost metering, Group I per-hit feedback-quality credit + recall-sufficiency score
+- **Small (1–3 day items, ship-this-month):** audit headers, public/private workspaces, peer allowlist, token rotation, time-bounded recall, time-travel/as_of, OpenAPI specs, GitNexus doc, vocabulary-bound fields, T-004/T-001/N-08/N-12/N-13, Group J novel-term gate + `mind-mem connect`
+- **Medium (1–3 weeks):** TLS 1.3 + cert pinning, mTLS service-to-service, AI lint with auto-fix, JS/TS SDK, content provenance + provenance-rich blocks, audit attribution ContextVar fix, FastAPI request.state, PostgresBlockStore snapshot snap_id, migration importers, plugin SDK, cost metering, Group I per-hit feedback-quality credit + recall-sufficiency score, Group J tool-output offload store + anticipation-cache consumer
 - **Large (multi-month):** local visual viewer (`mm view` web UI), conversational chat layer, Kubernetes operator, managed-service console, Byzantine consensus, Pure-MIND port (gated on `mindc` C-ABI maturity)
 - **Long-horizon / research (post-v4):** Pure-MIND port completion, [CAUSAL]/[SKILL]/[VISUAL] block types, ActivityPub interop, edge deployment, Group I validity-gated fusion + feedback-quality→success bench
 

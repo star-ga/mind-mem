@@ -1083,3 +1083,20 @@ federated recall path benefits from local parallel recall on day one.
 3. **Fast** — Sub-500ms recall on commodity hardware
 4. **Portable** — Plain Markdown files, any filesystem
 5. **Extensible** — MIND kernels for custom scoring
+
+## Context-offload: tool-output store (§5 gap — landed, working tree)
+
+`mind_mem.tool_output` closes the §5 context-window gap: a single `cargo test` /
+`pytest` / build run dumps 10k–50k lines into an agent's context (on the `mind`
+repo's 247 test binaries this is the single biggest token sink). The store takes
+the raw output → keeps the FULL text out-of-context in a dedicated `tool_outputs`
+sibling table (SQLite by default; reuses the existing Postgres connection when
+configured — no new DB, and deliberately NOT the embedded `blocks` table so it
+never pollutes recall/embeddings) → returns only `{handle, summary}`. The summary
+is DETERMINISTIC (pure pattern extraction, no LLM: every failure line + head/tail
+windows + pass/fail tallies, byte-identical across runs) and fail-SAFE (a failure
+line is never silently dropped; elided middle-line counts are logged). Recall the
+handle to get the full text back only when a failure needs the detail. Fronted by a
+dependency-free `bin/mm-run -- <cmd>` wrapper that an agent invokes instead of raw
+`cargo test`. Verified: a 50k-line synthetic log with 3 buried failures preserves
+all 3; handles round-trip the full text; summary bytes are identical across runs.
