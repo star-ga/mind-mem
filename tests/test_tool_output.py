@@ -120,6 +120,16 @@ def test_all_lines_matching_failure_is_bounded_but_not_silent():
     assert len(s.summary) < 20_000  # bounded regardless of 10k failures
 
 
+def test_all_tally_lines_is_bounded():
+    # regression (audit finding): a log where EVERY line matches a TALLY pattern
+    # (e.g. 50k "running 5 tests") must NOT produce an unbounded summary — tally
+    # lines are display-capped just like failures.
+    text = "\n".join("running 5 tests" for _ in range(50_000))
+    s = summarize(text, source="cargo test")
+    assert len(s.summary) < 20_000, "tally lines are uncapped — bounded invariant violated"
+    assert s.dropped_lines > 49_000  # the middle tally flood is elided, and it's counted
+
+
 def test_summary_carries_the_config_version():
     s = summarize("hello", source="x")
     assert f"v{SUMMARIZER_VERSION}/" in s.summary  # reproducibility: version stamped

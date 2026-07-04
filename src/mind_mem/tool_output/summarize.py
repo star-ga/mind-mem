@@ -72,6 +72,7 @@ class SummarizerConfig:
     tail: int = 60
     max_line_chars: int = 500  # per-line cap — bounds a giant single line
     max_failures_shown: int = 200  # display cap — full count still reported
+    max_tallies: int = 40  # cap tally lines too (a log of all-tally lines must stay bounded)
     failure_patterns: tuple[str, ...] = _DEFAULT_FAILURE_PATTERNS
     version: int = SUMMARIZER_VERSION
 
@@ -85,6 +86,7 @@ class SummarizerConfig:
                 str(self.tail),
                 str(self.max_line_chars),
                 str(self.max_failures_shown),
+                str(self.max_tallies),
                 *self.failure_patterns,
             ]
         ).encode("utf-8")
@@ -148,11 +150,15 @@ def summarize(
         elif tally_re.search(line):
             tally_idx.append(i)
 
-    # Indices kept in the VIEW: head + tail + up-to-cap failures + all tallies.
+    # Indices kept in the VIEW: head + tail + up-to-cap failures + up-to-cap tallies.
+    # BOTH failures and tallies are display-capped so the summary stays bounded
+    # regardless of input shape (a log of 50k all-tally lines must not explode the
+    # summary). The pass/fail FOOTER tally lands in the tail window, so it is always
+    # kept even when the tally cap trims the (rare) middle tally lines.
     keep: set[int] = set()
     keep.update(range(min(cfg.head, n)))
     keep.update(range(max(0, n - cfg.tail), n))
-    keep.update(tally_idx)
+    keep.update(tally_idx[: cfg.max_tallies])
     shown_failures = failure_idx[: cfg.max_failures_shown]
     keep.update(shown_failures)
 
