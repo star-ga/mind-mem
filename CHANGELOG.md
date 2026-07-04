@@ -2,6 +2,21 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.2.2 — release hygiene: version-string consistency + mypy typecheck
+
+Follow-up to v4.2.1 (same Postgres connection-pool thread-leak fix). Two release-hygiene
+corrections CI caught:
+
+- **`__init__.__version__` lagged at `4.2.0`** when v4.2.1 bumped pyproject/CHANGELOG, so the
+  published 4.2.1 wheel reported the wrong `mind_mem.__version__`. All three version sources
+  now agree at 4.2.2 (guarded by `tests/test_check_version.py::test_versions_match`, which is
+  what turned the whole CI matrix red — pytest runs with `-x`).
+- **mypy typecheck** — `agent_messaging.py` called the structured `_log.debug` with a
+  printf-style `"…%s", exc` instead of `(event, **fields)`; corrected to
+  `_log.debug("send_message_index_rebuild_skipped", error=str(exc))`.
+
+No functional change beyond v4.2.1.
+
 ## v4.2.1 — fix a Postgres connection-pool thread leak in the MCP server
 
 **Bugfix (resource leak).** Every MCP tool call routes through `storage.get_block_store()`,

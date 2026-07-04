@@ -129,7 +129,7 @@ def send_message(
             # A send must not fail just because the local index couldn't be
             # refreshed; the block is durably written either way — log it
             # rather than swallow it silently (avoids B110 / our no-silent-swallow rule).
-            _log.debug("send_message: best-effort index rebuild skipped: %s", exc)
+            _log.debug("send_message_index_rebuild_skipped", error=str(exc))
     return written_id
 
 

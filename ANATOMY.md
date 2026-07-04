@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 894 | **Est. tokens:** ~1,909,221
-**Generated:** 2026-07-04 15:49 UTC
+**Files:** 894 | **Est. tokens:** ~1,909,219
+**Generated:** 2026-07-04 18:14 UTC
 
 ## Token Budget Guide
 
@@ -59,7 +59,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 162 | ~573,005 |
+| `src/mind_mem/` | 162 | ~573,003 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
 | `src/mind_mem/mcp/infra/` | 8 | ~9,991 |
@@ -447,7 +447,7 @@
 
 - `abstention_classifier.py` (~3261 tok, huge) — Deterministic adversarial abstention classifier for Mind-Mem.
 - `agent_bridge.py` (~4158 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `agent_messaging.py` (~1738 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `agent_messaging.py` (~1736 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `alerting.py` (~2476 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `answer_quality.py` (~2681 tok, huge) — Answer-quality layer: verification + self-consistency + per-category spec.
 ### `src/mind_mem/api/`
