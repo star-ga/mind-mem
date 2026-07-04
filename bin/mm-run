@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# mm-run — run a command, keep its giant output OUT of the agent's context.
+#
+#   mm-run -- cargo test           # runs it, streams a live tail to YOU,
+#                                  # captures full output, prints only a compact
+#                                  # {summary + handle}. Recall the handle later
+#                                  # ONLY if a failure needs the full detail.
+#   mm-run --recall <handle>       # print the full stored text for a handle.
+#
+# Dependency-free (bash + python3 + mind_mem). The full text is stored via
+# mind_mem.tool_output (SQLite by default, reuses Postgres when configured); the
+# summary is deterministic (no LLM) and fail-safe (failures are never dropped).
+set -euo pipefail
+
+usage() { echo "usage: mm-run -- <command...>   |   mm-run --recall <handle>" >&2; }
+
+if [ "${1:-}" = "--recall" ]; then
+    [ -n "${2:-}" ] || { usage; exit 64; }
+    exec python3 -c 'import sys; from mind_mem.tool_output import ToolOutputStore
+t=ToolOutputStore().recall_output(sys.argv[1])
+sys.stdout.write(t if t is not None else ""); sys.exit(0 if t is not None else 3)' "$2"
+fi
+
+[ "${1:-}" = "--" ] || { usage; exit 64; }
+shift
+[ "$#" -ge 1 ] || { usage; exit 64; }
+
+CMD_STR="$*"
+TMP="$(mktemp)"
+trap 'rm -f "$TMP"' EXIT
+
+# Run the command; stream a live tail to the user's terminal (stderr) while
+# capturing the FULL combined output to $TMP. Preserve the command's exit code.
+set +e
+"$@" > >(tee "$TMP" | tail -n 20 >&2) 2>&1
+EXIT=$?
+set -e
+wait 2>/dev/null || true
+
+# Store the full text out-of-context; print ONLY the summary + handle.
+python3 - "$CMD_STR" "$EXIT" "$TMP" <<'PY'
+import sys
+from mind_mem.tool_output import ToolOutputStore
+cmd, exit_code, path = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+text = open(path, encoding="utf-8", errors="replace").read()
+r = ToolOutputStore().store_and_summarize(text, source=cmd, exit_code=exit_code)
+print(r.summary)
+print(f"[mm-run] handle={r.handle}  ({r.line_count} lines, {r.failure_lines} failures, "
+      f"{r.dropped_lines} elided)  ·  recall: mm-run --recall {r.handle}")
+PY
+exit "$EXIT"
