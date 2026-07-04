@@ -40,15 +40,15 @@ SUMMARIZER_VERSION = 1
 _DEFAULT_FAILURE_PATTERNS = (
     r"\bFAILED\b",
     r"\bFAIL\b",
-    r"error\[",              # rustc: error[E0499]
-    r"\berror:\s",           # cargo/rustc/clang: "error: ..."
-    r"\bError:\s",           # generic "Error: ..."
-    r"panicked",             # rust panic
-    r"assertion",            # assertion failures
-    r"AssertionError",       # pytest
+    r"error\[",  # rustc: error[E0499]
+    r"\berror:\s",  # cargo/rustc/clang: "error: ..."
+    r"\bError:\s",  # generic "Error: ..."
+    r"panicked",  # rust panic
+    r"assertion",  # assertion failures
+    r"AssertionError",  # pytest
     r"\bException\b",
     r"Traceback \(most recent call last\)",
-    r"=== .*failed",         # pytest footer: "=== 3 failed, 10 passed ==="
+    r"=== .*failed",  # pytest footer: "=== 3 failed, 10 passed ==="
     r"test result: FAILED",  # cargo test footer
     r"\b\d+ failed\b",
     r"\berror\b.*\baborting\b",
@@ -57,7 +57,7 @@ _DEFAULT_FAILURE_PATTERNS = (
 
 _TALLY_PATTERN = (
     r"(test result:.*)"
-    r"|(=+ .*(passed|failed|error).* =+)"        # pytest footer
+    r"|(=+ .*(passed|failed|error).* =+)"  # pytest footer
     r"|(\d+ passed.*\d+ failed)"
     r"|(running \d+ tests?)"
 )
@@ -67,21 +67,27 @@ _TALLY_PATTERN = (
 class SummarizerConfig:
     """Versioned, inspectable knobs — the summary is a pure function of (text, this).
     No autonomous reweighting; callers override explicitly."""
+
     head: int = 40
     tail: int = 60
-    max_line_chars: int = 500          # per-line cap — bounds a giant single line
-    max_failures_shown: int = 200      # display cap — full count still reported
+    max_line_chars: int = 500  # per-line cap — bounds a giant single line
+    max_failures_shown: int = 200  # display cap — full count still reported
     failure_patterns: tuple[str, ...] = _DEFAULT_FAILURE_PATTERNS
     version: int = SUMMARIZER_VERSION
 
     def config_hash(self) -> str:
         """Stable digest of the config — two summaries with the same hash used the
         same rules (part of the reproducibility contract)."""
-        blob = "|".join([
-            str(self.version), str(self.head), str(self.tail),
-            str(self.max_line_chars), str(self.max_failures_shown),
-            *self.failure_patterns,
-        ]).encode("utf-8")
+        blob = "|".join(
+            [
+                str(self.version),
+                str(self.head),
+                str(self.tail),
+                str(self.max_line_chars),
+                str(self.max_failures_shown),
+                *self.failure_patterns,
+            ]
+        ).encode("utf-8")
         return hashlib.sha256(blob).hexdigest()[:12]
 
 
@@ -91,14 +97,15 @@ DEFAULT_CONFIG = SummarizerConfig()
 @dataclass(frozen=True)
 class ToolOutputSummary:
     """The compact, BOUNDED result kept in context (full text lives out-of-context)."""
+
     summary: str
     line_count: int
     byte_count: int
-    failure_lines: int          # TRUE count of failure-matching lines (never capped)
-    failures_shown: int         # how many were displayed (<= failure_lines)
-    dropped_lines: int          # middle lines elided from the view (audited)
-    config_hash: str = ""       # which rules produced this (reproducibility)
-    truncated_lines: int = 0    # how many emitted lines were per-line-capped
+    failure_lines: int  # TRUE count of failure-matching lines (never capped)
+    failures_shown: int  # how many were displayed (<= failure_lines)
+    dropped_lines: int  # middle lines elided from the view (audited)
+    config_hash: str = ""  # which rules produced this (reproducibility)
+    truncated_lines: int = 0  # how many emitted lines were per-line-capped
 
 
 def _cap_line(line: str, limit: int) -> tuple[str, bool]:
@@ -108,9 +115,15 @@ def _cap_line(line: str, limit: int) -> tuple[str, bool]:
     return line[:limit] + f"…[+{len(line) - limit} chars]", True
 
 
-def summarize(text: str, source: str = "", exit_code: int | None = None,
-              *, config: SummarizerConfig | None = None,
-              head: int | None = None, tail: int | None = None) -> ToolOutputSummary:
+def summarize(
+    text: str,
+    source: str = "",
+    exit_code: int | None = None,
+    *,
+    config: SummarizerConfig | None = None,
+    head: int | None = None,
+    tail: int | None = None,
+) -> ToolOutputSummary:
     """Compress ``text`` to a deterministic, BOUNDED summary. Pure — no clock/RNG/LLM.
 
     ``head``/``tail`` are convenience overrides on the default config (kept for the
@@ -118,8 +131,7 @@ def summarize(text: str, source: str = "", exit_code: int | None = None,
     """
     cfg = config or DEFAULT_CONFIG
     if head is not None or tail is not None:
-        cfg = replace(cfg, head=head if head is not None else cfg.head,
-                      tail=tail if tail is not None else cfg.tail)
+        cfg = replace(cfg, head=head if head is not None else cfg.head, tail=tail if tail is not None else cfg.tail)
     failure_re = re.compile("|".join(cfg.failure_patterns), re.IGNORECASE)
     tally_re = re.compile(_TALLY_PATTERN, re.IGNORECASE)
 
@@ -150,8 +162,7 @@ def summarize(text: str, source: str = "", exit_code: int | None = None,
     out: list[str] = []
     out.append(
         f"# tool-output summary v{cfg.version}/{cfg.config_hash()} — "
-        f"source: {source or '(unknown)'}"
-        + (f" · exit={exit_code}" if exit_code is not None else "")
+        f"source: {source or '(unknown)'}" + (f" · exit={exit_code}" if exit_code is not None else "")
     )
     out.append(
         f"# {n} lines / {byte_count} bytes · {len(failure_idx)} failure line(s) "
@@ -171,15 +182,16 @@ def summarize(text: str, source: str = "", exit_code: int | None = None,
 
     if failure_idx:
         out.append("#" + "-" * 60)
-        out.append(f"# FAILURES ({len(failure_idx)} total"
-                   + (f", showing first {len(shown_failures)}" if len(shown_failures) < len(failure_idx) else "")
-                   + "):")
+        out.append(
+            f"# FAILURES ({len(failure_idx)} total"
+            + (f", showing first {len(shown_failures)}" if len(shown_failures) < len(failure_idx) else "")
+            + "):"
+        )
         for i in shown_failures:
             capped, _ = _cap_line(lines[i].strip(), cfg.max_line_chars)
             out.append(f"  L{i + 1}: {capped}")
         if len(shown_failures) < len(failure_idx):
-            out.append(f"  … +{len(failure_idx) - len(shown_failures)} more failure line(s) "
-                       f"— recall the handle for the full log")
+            out.append(f"  … +{len(failure_idx) - len(shown_failures)} more failure line(s) — recall the handle for the full log")
 
     return ToolOutputSummary(
         summary="\n".join(out) + "\n",

@@ -64,9 +64,14 @@ class ToolOutputStore:
     """Handle → full-text store. SQLite by default; ``backend='postgres'`` reuses
     the mind-mem block-store connection (same DB, sibling table)."""
 
-    def __init__(self, sqlite_path: str | None = None, *, backend: str = "sqlite",
-                 max_rows: int = DEFAULT_MAX_ROWS,
-                 max_store_bytes: int = DEFAULT_MAX_STORE_BYTES):
+    def __init__(
+        self,
+        sqlite_path: str | None = None,
+        *,
+        backend: str = "sqlite",
+        max_rows: int = DEFAULT_MAX_ROWS,
+        max_store_bytes: int = DEFAULT_MAX_STORE_BYTES,
+    ):
         self.backend = backend
         self.max_rows = max_rows
         self.max_store_bytes = max_store_bytes
@@ -93,6 +98,7 @@ class ToolOutputStore:
     # ── Postgres path (reuses the existing block-store connection) ─────────────
     def _pg(self):
         from mind_mem.block_store_postgres import _require_psycopg  # existing helper
+
         psycopg, _ = _require_psycopg()
         dsn = os.environ.get("MIND_MEM_BLOCK_STORE") or os.environ.get("MIND_MEM_PG_DSN")
         if not dsn:
@@ -108,8 +114,7 @@ class ToolOutputStore:
         )
 
     # ── public API ────────────────────────────────────────────────────────────
-    def store_and_summarize(self, text: str, source: str = "",
-                            exit_code: int | None = None, *, ts: str = "") -> StoreResult:
+    def store_and_summarize(self, text: str, source: str = "", exit_code: int | None = None, *, ts: str = "") -> StoreResult:
         """Store the FULL text out-of-context; return only {handle, summary, …}.
 
         Idempotent: the handle is content-addressed, so re-storing identical output
@@ -143,27 +148,30 @@ class ToolOutputStore:
                     (handle, source, exit_code, ts, stored, s.summary, s.line_count, s.byte_count),
                 )
                 self._evict_sqlite(con)
-        return StoreResult(handle=handle, summary=s.summary, line_count=s.line_count,
-                           failure_lines=s.failure_lines, dropped_lines=s.dropped_lines,
-                           stored_bytes=stored_bytes, truncated_store=truncated)
+        return StoreResult(
+            handle=handle,
+            summary=s.summary,
+            line_count=s.line_count,
+            failure_lines=s.failure_lines,
+            dropped_lines=s.dropped_lines,
+            stored_bytes=stored_bytes,
+            truncated_store=truncated,
+        )
 
     def _evict_sqlite(self, con) -> int:
         """Keep only the newest ``max_rows`` (by insertion rowid). Returns #evicted."""
         if self.max_rows <= 0:
             return 0
         cur = con.execute(
-            "DELETE FROM tool_outputs WHERE handle IN "
-            "(SELECT handle FROM tool_outputs ORDER BY rowid DESC LIMIT -1 OFFSET ?)",
-            (self.max_rows,))
+            "DELETE FROM tool_outputs WHERE handle IN (SELECT handle FROM tool_outputs ORDER BY rowid DESC LIMIT -1 OFFSET ?)",
+            (self.max_rows,),
+        )
         return cur.rowcount or 0
 
     def _evict_pg(self, con) -> None:
         if self.max_rows <= 0:
             return
-        con.execute(
-            "DELETE FROM tool_outputs WHERE ctid IN "
-            "(SELECT ctid FROM tool_outputs ORDER BY ts DESC OFFSET %s)",
-            (self.max_rows,))
+        con.execute("DELETE FROM tool_outputs WHERE ctid IN (SELECT ctid FROM tool_outputs ORDER BY ts DESC OFFSET %s)", (self.max_rows,))
 
     def gc(self) -> int:
         """Force retention now (evict beyond ``max_rows``). Returns #evicted."""
@@ -177,12 +185,10 @@ class ToolOutputStore:
         if self.backend == "postgres":
             with self._pg() as con:
                 self._pg_init(con)
-                row = con.execute(
-                    "SELECT full_text FROM tool_outputs WHERE handle=%s", (handle,)).fetchone()
+                row = con.execute("SELECT full_text FROM tool_outputs WHERE handle=%s", (handle,)).fetchone()
         else:
             with sqlite3.connect(self._sqlite_path) as con:
-                row = con.execute(
-                    "SELECT full_text FROM tool_outputs WHERE handle=?", (handle,)).fetchone()
+                row = con.execute("SELECT full_text FROM tool_outputs WHERE handle=?", (handle,)).fetchone()
         return row[0] if row else None
 
     def meta(self, handle: str) -> dict | None:
@@ -190,8 +196,9 @@ class ToolOutputStore:
             return None
         with sqlite3.connect(self._sqlite_path) as con:
             con.row_factory = sqlite3.Row
-            row = con.execute("SELECT handle, source, exit_code, ts, line_count, "
-                              "byte_count FROM tool_outputs WHERE handle=?", (handle,)).fetchone()
+            row = con.execute(
+                "SELECT handle, source, exit_code, ts, line_count, byte_count FROM tool_outputs WHERE handle=?", (handle,)
+            ).fetchone()
         return dict(row) if row else None
 
 

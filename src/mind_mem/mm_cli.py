@@ -114,8 +114,7 @@ def _cmd_tool_run(args: argparse.Namespace) -> int:
     # shell=False, so there is no shell-injection surface.
     proc = subprocess.run(cmd, capture_output=True, text=True)  # nosec B603 — no shell, argv list
     combined = (proc.stdout or "") + (proc.stderr or "")
-    r = ToolOutputStore().store_and_summarize(
-        combined, source=" ".join(cmd), exit_code=proc.returncode)
+    r = ToolOutputStore().store_and_summarize(combined, source=" ".join(cmd), exit_code=proc.returncode)
     print(r.summary)
     print(
         f"[mm tool-run] handle={r.handle}  ({r.line_count} lines, "
@@ -2073,14 +2072,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run a command; keep its large output out of context, print a summary+handle.",
     )
     p_toolrun.add_argument(
-        "command", nargs=argparse.REMAINDER,
+        "command",
+        nargs=argparse.REMAINDER,
         help="the command to run, after `--` (e.g. mm tool-run -- cargo test)",
     )
     p_toolrun.set_defaults(func=_cmd_tool_run)
 
-    p_toolrecall = sub.add_parser(
-        "tool-recall", help="Print the full stored output for a tool-run handle."
-    )
+    p_toolrecall = sub.add_parser("tool-recall", help="Print the full stored output for a tool-run handle.")
     p_toolrecall.add_argument("handle", help="the to-… handle from a prior tool-run")
     p_toolrecall.set_defaults(func=_cmd_tool_recall)
 

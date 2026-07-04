@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 893 | **Est. tokens:** ~1,905,384
-**Generated:** 2026-07-04 07:29 UTC
+**Files:** 893 | **Est. tokens:** ~1,905,322
+**Generated:** 2026-07-04 08:08 UTC
 
 ## Token Budget Guide
 
@@ -66,10 +66,10 @@
 | `src/mind_mem/mcp/tools/` | 24 | ~58,333 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,702 |
 | `src/mind_mem/storage/` | 2 | ~5,519 |
-| `src/mind_mem/tool_output/` | 3 | ~4,523 |
+| `src/mind_mem/tool_output/` | 3 | ~4,492 |
 | `src/mind_mem/v4/` | 22 | ~58,472 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 309 | ~662,220 |
+| `tests/` | 309 | ~662,189 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -672,8 +672,8 @@
 ### `src/mind_mem/tool_output/`
 
 - `__init__.py` (~200 tok, medium) — mind_mem.tool_output — context-offload for large command/tool output (§5).
-- `store.py` (~2252 tok, huge) — Tool-output store — full text out-of-context, keyed by handle (mind-mem §5).
-- `summarize.py` (~2071 tok, huge) — Deterministic tool-output summarizer (mind-mem §5 — context offload).
+- `store.py` (~2238 tok, huge) — Tool-output store — full text out-of-context, keyed by handle (mind-mem §5).
+- `summarize.py` (~2054 tok, huge) — Deterministic tool-output summarizer (mind-mem §5 — context offload).
 ### `src/mind_mem/`
 
 - `tracking.py` (~2018 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1024,7 +1024,7 @@
 - `test_tier_weights_config.py` (~784 tok, large) — v3.3.0 Tier 4 #10 — per-tier learned weights override.
 - `test_tokenization.py` (~436 tok, medium) — Tests for tokenization module."""
 - `test_token_rotation.py` (~1766 tok, huge) — Regression tests for the token rotation primitive (roadmap v4.0.x).
-- `test_tool_output.py` (~2062 tok, huge) — Tests for mind_mem.tool_output — the context-offload store (§5).
+- `test_tool_output.py` (~2031 tok, huge) — Tests for mind_mem.tool_output — the context-offload store (§5).
 - `test_train_mind_mem_4b.py` (~962 tok, large) — Smoke tests for benchmarks/train_mind_mem_4b.py.
 - `test_trajectory.py` (~2392 tok, huge) — Tests for trajectory.py — trajectory memory block operations."""
 - `test_transcript_capture.py` (~3235 tok, huge) — Tests for transcript_capture.py — zero external deps (stdlib unittest)."""

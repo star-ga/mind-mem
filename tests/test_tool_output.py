@@ -46,7 +46,7 @@ def test_all_buried_failures_survive_the_summary():
     for fail in buried:
         assert fail in s.summary, f"a failure was DROPPED from the summary: {fail!r}"
     assert "3 failed" in s.summary  # the tally footer is preserved
-    assert s.failure_lines >= 4     # 3 buried + the footer
+    assert s.failure_lines >= 4  # 3 buried + the footer
     # the summary is DRAMATICALLY smaller than the input (the whole point)
     assert len(s.summary) < len(text) // 50
     assert s.line_count == 50_001
@@ -84,9 +84,9 @@ def test_handle_is_content_addressed_and_idempotent():
 def test_head_and_tail_windows_preserved():
     text = "\n".join(f"line {i}" for i in range(500))
     s = summarize(text, head=10, tail=10)
-    assert "line 0" in s.summary and "line 9" in s.summary      # head
+    assert "line 0" in s.summary and "line 9" in s.summary  # head
     assert "line 499" in s.summary and "line 490" in s.summary  # tail
-    assert "line 250" not in s.summary                          # middle elided
+    assert "line 250" not in s.summary  # middle elided
     assert s.dropped_lines > 400
 
 
@@ -97,6 +97,7 @@ def test_empty_and_tiny_inputs_are_safe():
 
 
 # ── bounded-summary invariant (the load-bearing architectural fix) ──────────────
+
 
 def test_giant_single_line_cannot_blow_the_summary():
     # a 10 MB minified line (JSON blob / no newlines) must NOT flow whole into the
@@ -113,10 +114,10 @@ def test_all_lines_matching_failure_is_bounded_but_not_silent():
     # the display is capped, but the TRUE count is reported and the cap is explicit.
     text = "\n".join(f"error: thing {i} failed" for i in range(10_000))
     s = summarize(text, config=SummarizerConfig(max_failures_shown=50))
-    assert s.failure_lines == 10_000          # TRUE count — never understated
-    assert s.failures_shown == 50             # display capped
+    assert s.failure_lines == 10_000  # TRUE count — never understated
+    assert s.failures_shown == 50  # display capped
     assert "more failure line(s)" in s.summary  # cap is EXPLICIT, not silent
-    assert len(s.summary) < 20_000            # bounded regardless of 10k failures
+    assert len(s.summary) < 20_000  # bounded regardless of 10k failures
 
 
 def test_summary_carries_the_config_version():
@@ -130,18 +131,18 @@ def test_summary_byte_identical_only_within_a_config():
     a = summarize(text, config=SummarizerConfig(head=10))
     b = summarize(text, config=SummarizerConfig(head=10))
     c = summarize(text, config=SummarizerConfig(head=20))
-    assert a.summary == b.summary          # same config → byte-identical
-    assert a.summary != c.summary          # different config → different (and its hash differs)
+    assert a.summary == b.summary  # same config → byte-identical
+    assert a.summary != c.summary  # different config → different (and its hash differs)
     assert a.config_hash != c.config_hash
 
 
 # ── retention / storage bounds ──────────────────────────────────────────────────
 
+
 def test_retention_bounds_the_table():
     with tempfile.TemporaryDirectory() as d:
         store = ToolOutputStore(sqlite_path=os.path.join(d, "t.db"), max_rows=5)
-        handles = [store.store_and_summarize(f"output number {i}\n", source="cmd").handle
-                   for i in range(20)]
+        handles = [store.store_and_summarize(f"output number {i}\n", source="cmd").handle for i in range(20)]
         # only the newest 5 survive; the oldest 15 were evicted (bounded table)
         alive = [h for h in handles if store.recall_output(h) is not None]
         assert len(alive) == 5
@@ -150,8 +151,7 @@ def test_retention_bounds_the_table():
 
 def test_store_cap_truncates_with_explicit_marker():
     with tempfile.TemporaryDirectory() as d:
-        store = ToolOutputStore(sqlite_path=os.path.join(d, "t.db"),
-                                max_store_bytes=1000)
+        store = ToolOutputStore(sqlite_path=os.path.join(d, "t.db"), max_store_bytes=1000)
         big = "A" * 5000 + "\nfinal FAILED line\n"
         r = store.store_and_summarize(big, source="cmd")
         assert r.truncated_store is True
@@ -163,6 +163,7 @@ def test_store_cap_truncates_with_explicit_marker():
 
 
 # ── mm CLI integration (first-class product surface) ───────────────────────────
+
 
 def test_mm_cli_tool_run_and_recall(monkeypatch, tmp_path):
     import argparse
