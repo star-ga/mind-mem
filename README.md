@@ -29,7 +29,7 @@
 </p>
 
 <p align="center"><sub>
-  <strong>Current release:</strong> <code>v4.1.2</code> &mdash; recall workspace resolution + agent-to-agent comm + index-rebuild logging &mdash;
+  <strong>Current release:</strong> <code>v4.2.0</code> &mdash; tool-output offload store (keep giant command logs out of agent context) &mdash;
   <a href="CHANGELOG.md">see CHANGELOG</a>
   (single source of truth; per-version detail tables below may lag the changelog)
 </sub></p>
@@ -63,7 +63,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>Current release: **v4.1.2** — recall workspace resolution + agent-to-agent comm + index-rebuild logging — Full per-release notes (issues closed, CI run ids, job counts) live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
+<sub>Current release: **v4.2.0** — tool-output offload store (keep giant command logs out of agent context) — Full per-release notes (issues closed, CI run ids, job counts) live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
 
 ### Substrate Properties
 
@@ -216,6 +216,9 @@ Deterministic pre-LLM confidence gate for adversarial/verification queries. Comp
 
 ### Auto-Capture with Structured Extraction
 Session-end hook detects decision/task language (26 patterns with confidence classification), extracts structured metadata (subject, object, tags), and writes to `SIGNALS.md` only. Never touches source of truth directly. All signals go through `/apply`.
+
+### Tool-Output Offload (v4.2.0)
+A single `cargo test` / `pytest` / build run dumps 10k–50k lines into an agent's context — the biggest single token sink for coding agents. `mm tool-run -- <cmd>` stores the **full output out-of-context** (a `tool_outputs` sibling table; SQLite by default, reuses the Postgres connection with no new DB) and returns only a compact `{handle, summary}`; `mm tool-recall <handle>` returns the full text on demand. The summary is **bounded** regardless of input (a 10 MB line or 100k error lines can't blow it up), **fail-safe** (the full text is always stored and every truncation is explicit and counted — a failure line is never silently dropped), and **deterministic** (pure pattern extraction, no LLM; versioned config). See [docs/tool-output-architecture.md](docs/tool-output-architecture.md).
 
 ### Concurrency Safety
 Cross-platform advisory file locking (`fcntl`/`msvcrt`/atomic create) protects all concurrent write paths. Stale lock detection with PID-based cleanup. Zero dependencies.

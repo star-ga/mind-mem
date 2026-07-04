@@ -160,3 +160,31 @@ def test_store_cap_truncates_with_explicit_marker():
         assert "stored blob truncated" in recalled  # explicit, never silent
         # the summary was computed on the FULL text, so the failure is still surfaced
         assert "FAILED" in r.summary
+
+
+# ── mm CLI integration (first-class product surface) ───────────────────────────
+
+def test_mm_cli_tool_run_and_recall(monkeypatch, tmp_path):
+    import argparse
+    import contextlib
+    import io
+    import re
+
+    from mind_mem import mm_cli
+
+    monkeypatch.setenv("MIND_MEM_WORKSPACE", str(tmp_path))
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = mm_cli._cmd_tool_run(argparse.Namespace(command=["--", "echo", "hello from cli"]))
+    assert rc == 0
+    handle = re.search(r"to-[0-9a-f]+", buf.getvalue()).group(0)
+
+    buf2 = io.StringIO()
+    with contextlib.redirect_stdout(buf2):
+        rc2 = mm_cli._cmd_tool_recall(argparse.Namespace(handle=handle))
+    assert rc2 == 0
+    assert "hello from cli" in buf2.getvalue()  # full text round-trips through the CLI
+
+    # unknown handle → exit 3 (fail-loud, no crash)
+    assert mm_cli._cmd_tool_recall(argparse.Namespace(handle="to-nope")) == 3

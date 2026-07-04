@@ -96,6 +96,47 @@ def _cmd_status(args: argparse.Namespace) -> int:
     return 0 if info["exists"] else 1
 
 
+def _cmd_tool_run(args: argparse.Namespace) -> int:
+    """Run a command; keep its large output OUT of context, print only a
+    deterministic summary + handle. Recall the full text later with
+    ``mm tool-recall <handle>``. (mind-mem tool-output offload, §5.)"""
+    from mind_mem.tool_output import ToolOutputStore
+
+    cmd = list(args.command or [])
+    if cmd and cmd[0] == "--":  # argparse leaves the separator in REMAINDER
+        cmd = cmd[1:]
+    if not cmd:
+        print("usage: mm tool-run -- <command...>", file=sys.stderr)
+        return 64
+    import subprocess  # nosec B404 — the command is the operator/agent's own argv
+
+    # The command is intentionally caller-supplied (that is the feature); argv list,
+    # shell=False, so there is no shell-injection surface.
+    proc = subprocess.run(cmd, capture_output=True, text=True)  # nosec B603 — no shell, argv list
+    combined = (proc.stdout or "") + (proc.stderr or "")
+    r = ToolOutputStore().store_and_summarize(
+        combined, source=" ".join(cmd), exit_code=proc.returncode)
+    print(r.summary)
+    print(
+        f"[mm tool-run] handle={r.handle}  ({r.line_count} lines, "
+        f"{r.failure_lines} failures, {r.dropped_lines} elided)  ·  "
+        f"recall: mm tool-recall {r.handle}"
+    )
+    return proc.returncode
+
+
+def _cmd_tool_recall(args: argparse.Namespace) -> int:
+    """Print the full stored text for a tool-output handle, or exit 3 if unknown."""
+    from mind_mem.tool_output import ToolOutputStore
+
+    text = ToolOutputStore().recall_output(args.handle)
+    if text is None:
+        print(f"no stored output for handle {args.handle!r}", file=sys.stderr)
+        return 3
+    sys.stdout.write(text)
+    return 0
+
+
 def _cmd_vault_scan(args: argparse.Namespace) -> int:
     from mind_mem.agent_bridge import VaultBridge
 
@@ -2025,6 +2066,23 @@ def build_parser() -> argparse.ArgumentParser:
     # status
     p_status = sub.add_parser("status", help="Print workspace status as JSON.")
     p_status.set_defaults(func=_cmd_status)
+
+    # tool-run / tool-recall — context-offload for large command output (§5)
+    p_toolrun = sub.add_parser(
+        "tool-run",
+        help="Run a command; keep its large output out of context, print a summary+handle.",
+    )
+    p_toolrun.add_argument(
+        "command", nargs=argparse.REMAINDER,
+        help="the command to run, after `--` (e.g. mm tool-run -- cargo test)",
+    )
+    p_toolrun.set_defaults(func=_cmd_tool_run)
+
+    p_toolrecall = sub.add_parser(
+        "tool-recall", help="Print the full stored output for a tool-run handle."
+    )
+    p_toolrecall.add_argument("handle", help="the to-… handle from a prior tool-run")
+    p_toolrecall.set_defaults(func=_cmd_tool_recall)
 
     # migrate-store — markdown <-> postgres backend migration
     p_migrate = sub.add_parser(

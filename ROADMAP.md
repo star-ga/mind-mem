@@ -213,7 +213,7 @@ dropped-line counts are logged.
       ≥N stems (default ≈200), else fall through to the store. The cheap
       local-vs-source confidence signal the prefetch layer lacks. **Do
       first** — it's the piece the cache consumer needs to be safe.
-- [ ] **Tool-output offload store (`tool_output` block kind)** — a new
+- [x] **Tool-output offload store** (v4.2.0, `mind_mem.tool_output`) — a new
       Postgres-backed block kind + `store_and_summarize(text, source,
       exit_code)` path returning `{handle, summary, line_count}` only,
       with `recall_output(handle)` for on-demand full text. Deterministic

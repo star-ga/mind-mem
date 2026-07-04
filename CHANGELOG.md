@@ -2,6 +2,34 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.2.0 — tool-output offload store (keep giant command logs out of agent context)
+
+New capability `mind_mem.tool_output` (ROADMAP Group J, §5). A single `cargo test`
+/ `pytest` / build run dumps 10k–50k lines into an agent's context window — the
+single biggest token sink for coding agents. This offloads it: pipe the raw output
+in → the **full text is stored out-of-context** in a dedicated `tool_outputs`
+sibling table (SQLite by default; reuses the existing Postgres block-store
+connection, **no new DB**) → you get back only `{handle, summary}`; `recall(handle)`
+returns the full text on demand. First-class CLI — `mm tool-run -- <cmd>` and
+`mm tool-recall <handle>` — plus a dependency-free `bin/mm-run` wrapper.
+
+Three load-bearing invariants (13 tests, `tests/test_tool_output.py`):
+
+- **Bounded summary** regardless of input shape (per-line cap + failure-display cap
+  + head/tail windows): a 10 MB single line → a ~725-byte summary; 100k
+  matching-error lines → true-counted, 200 shown, ~11 KB. An unbounded summary
+  would silently defeat the whole point.
+- **Fail-safe**: the full text is always stored and recallable; every display
+  truncation is **explicit and counted**; a failure line is never silently dropped.
+- **Deterministic**: pure pattern extraction — no LLM, clock, or RNG; versioned
+  config (`SUMMARIZER_VERSION`) stamped into the summary for reproducibility.
+
+Bounded storage (`max_store_bytes` 32 MiB, explicit truncation marker) and a bounded
+table (`max_rows` 500, insertion-order eviction + `gc()`). Purely additive — a
+sibling table, **not** a `blocks` kind, so semantic recall / embeddings are
+untouched and no existing surface changes. Architecture:
+`docs/tool-output-architecture.md`. MCP-tool exposure is the documented next step.
+
 ## v4.1.2 — log best-effort index-rebuild failure (no silent swallow)
 
 `send_message`'s optional post-write index rebuild caught all exceptions and

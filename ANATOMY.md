@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 894 | **Est. tokens:** ~1,930,496
-**Generated:** 2026-07-04 06:36 UTC
+**Files:** 893 | **Est. tokens:** ~1,905,384
+**Generated:** 2026-07-04 07:29 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~68,651 |
+| `./` | 35 | ~68,860 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -59,7 +59,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 163 | ~597,830 |
+| `src/mind_mem/` | 162 | ~572,260 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
 | `src/mind_mem/mcp/infra/` | 8 | ~9,991 |
@@ -69,7 +69,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~4,523 |
 | `src/mind_mem/v4/` | 22 | ~58,472 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 309 | ~661,971 |
+| `tests/` | 309 | ~662,220 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -109,7 +109,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~2257 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~25107 tok, huge) — 30-Second Demo
+- `README.md` (~25316 tok, huge) — 30-Second Demo
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
@@ -591,7 +591,6 @@
 - `mind_ffi.py` (~5479 tok, huge) — mind-mem FFI bridge — loads compiled MIND .so and exposes scoring functions.
 - `mind_filelock.py` (~1844 tok, huge) — mind-mem file locking — cross-platform advisory locks. Zero external deps.
 - `mind_kernels.py` (~1706 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `mm_cli.py` (~25570 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `model_audit.py` (~4370 tok, huge) — Model checkpoint audit — scan for remote-code hooks, unsafe pickle, tokenizer injection.
 - `model_gate.py` (~2549 tok, huge) — Load-gate registry for ``mm audit-model`` checkpoints.
 - `model_provenance.py` (~1751 tok, huge) — Provenance allowlist check for ``mm audit-model`` checkpoints.
@@ -1025,7 +1024,7 @@
 - `test_tier_weights_config.py` (~784 tok, large) — v3.3.0 Tier 4 #10 — per-tier learned weights override.
 - `test_tokenization.py` (~436 tok, medium) — Tests for tokenization module."""
 - `test_token_rotation.py` (~1766 tok, huge) — Regression tests for the token rotation primitive (roadmap v4.0.x).
-- `test_tool_output.py` (~1813 tok, huge) — Tests for mind_mem.tool_output — the context-offload store (§5).
+- `test_tool_output.py` (~2062 tok, huge) — Tests for mind_mem.tool_output — the context-offload store (§5).
 - `test_train_mind_mem_4b.py` (~962 tok, large) — Smoke tests for benchmarks/train_mind_mem_4b.py.
 - `test_trajectory.py` (~2392 tok, huge) — Tests for trajectory.py — trajectory memory block operations."""
 - `test_transcript_capture.py` (~3235 tok, huge) — Tests for transcript_capture.py — zero external deps (stdlib unittest)."""
