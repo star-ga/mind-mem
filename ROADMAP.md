@@ -2081,8 +2081,17 @@ raw fusion rank.
 - **Status:** Planned. Composes over the existing `recall.py` fusion path and the
   `retrieval_diagnostics` surface; no new storage, no change to the deterministic
   ranking.
-
-## Pure-MIND Self-Hosting Migration
+- **Method note — conformal prediction as the calibrator (prior-art shape observed
+  2026-07-05).** The reliability-curve fit above should be a **conformal-prediction
+  calibration**: sort nonconformity scores over a labeled recall calibration set and
+  take the (1−α)(n+1)/n quantile — a distribution-free coverage guarantee that is
+  **deterministic given the calibration set** (both properties the wedge already
+  worships). This upgrades the sidecar from "confident/not" to a **recall-abstention
+  gate with a proven bound**: "return the smallest set of memories that provably
+  contains the right one at X% coverage, else say no record found." It is a ~40-line
+  quantile rule, reimplemented in fixed-point in the pure-MIND core — never a
+  dependency. Prior-art shape: probabilistic-modeling libraries that ship a
+  conformally-calibrated defer/answer cascade (a distill→cascade `task` surface).
 
 > Ecosystem-wide milestone — gated on the `mind` compiler reaching self-host completeness.
 
