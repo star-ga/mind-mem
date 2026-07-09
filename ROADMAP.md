@@ -92,6 +92,56 @@ self-modifies. We adopt the connectivity model, not the autonomy.
 - [ ] **LoCoMo recall benchmark** — adopt as a standing mind-mem eval so
       recall quality is a number, not a vibe. **Do first** (cheapest,
       gives a baseline for everything else here).
+
+#### H.1 — Graph *integration* (not a new graph) — 2026-07-05
+
+Grounding pass (2026-07-05): a source read confirmed mind-mem already
+ships **three** graph subsystems, not zero — so the remaining work is
+*integration*, not designing a relation layer. Live graph today: **52
+entities / 103 edges** over predicates `authored_by / depends_on /
+part_of / related_to` (`graph_stats`, schema v1.0). The three:
+`knowledge_graph.py` (typed `entities/aliases/edges` triple store with a
+`Predicate` enum + per-edge provenance/confidence/temporal-validity —
+*more* rigor than the generic MCP entity/relation/observation memory
+pattern), `graph_recall.py` (implicit xref graph auto-built free from
+canonical-ID mentions, BFS ≤3 hops, auto-fires on multi-hop queries),
+and `causal_graph.py` (directed `depends_on/supersedes/informs` +
+staleness propagation).
+
+The gap, confirmed by grep not guessed: `graph_add_edge` /
+`KnowledgeGraph(...)` are constructed **only** in the MCP wrapper,
+`agent_bridge.py:281`, and `mcp/tools/core.py:62` — **never inside the
+`propose_update`/`approve_apply` write path**. The rich typed graph is
+populate-on-demand; nothing extracts entities/relations when a block is
+written. (Provenance of this framing: a repo the operator floated,
+`Memento-Teams/Memento`, turned out to be a CBR `(question,plan,reward)`
+case-bank with *no* graph model — nothing to port. The
+entity/relation/observation pattern lives in the unrelated
+`gannonh/memento-mcp`. We adopt the *pattern's* one real modeling idea
+below, no code, no attribution in public artifacts.)
+
+- [ ] **Auto-extract edges on the write path (HITL-gated)** — wire
+      lightweight entity/relation extraction (generalize the
+      `block_parser.py:60-64` `_ENTITY_ID_RE` beyond canonical IDs to
+      named entities) into `propose_update`, so writing a block *proposes*
+      typed KG edges. **Extracted edges land as proposals, never
+      auto-committed** — same approval gate as blocks, honoring the Group
+      H wedge guardrail (source-of-truth graph never self-modifies).
+      Closes the populate-on-demand gap; the single highest-leverage item.
+- [ ] **First-class entity `observations` field** — the one real modeling
+      gap vs. the generic pattern: mind-mem entities are bare canonicalized
+      strings (`EntityRegistry.resolve`, `knowledge_graph.py:190-212`) with
+      no accreted per-entity facts. Add `entities.observations` (small
+      `ALTER TABLE … ADD COLUMN observations TEXT NOT NULL DEFAULT '[]'`),
+      feature-flag-gated, so entity-centric multi-hop questions that never
+      mention a block ID have somewhere to aggregate. Composes with the
+      v4 `BlockKind.ENTITY`/`CONCEPT` work (`v4/block_kinds.py`).
+- [ ] **Fuse `KnowledgeGraph.neighbors()` into `recall()`** — today the
+      typed triple store is reachable only via `graph_query`, separate from
+      `recall()`; only the *free* xref graph feeds `graph_expand()`. Blend
+      typed-predicate neighbor hits into the RRF-scored result set so a
+      single `recall()` benefits from typed hops, deterministically and
+      logged (no learned re-ranker).
 - [ ] **Independently reproducible benchmarks** — the headline numbers
       (NIAH 250/250, LoCoMo vs Memobase/Letta/Mem0) are self-published
       today. Ship a one-command repro harness that pins the exact dataset
@@ -2092,6 +2142,32 @@ raw fusion rank.
   quantile rule, reimplemented in fixed-point in the pure-MIND core — never a
   dependency. Prior-art shape: probabilistic-modeling libraries that ship a
   conformally-calibrated defer/answer cascade (a distill→cascade `task` surface).
+- **Research-watch — faithful (not just factual) calibration, training-side complement
+  (2026-07-08).** RLMF, *"Reinforcement Learning with Metacognitive Feedback Elicits
+  Faithful Uncertainty Expression in LLMs"* (Liu et al., Yale NLP, COLM 2026 —
+  arXiv:2606.32032, github.com/yale-nlp/RLMF). Distinction worth stealing: *factual*
+  calibration = "90% claimed → right 90% of the time"; *faithful* calibration = the
+  stated confidence matches the model's own internal consistency (measured by sampling
+  the same answer ~N× and comparing to the confidence it emits). Their fix is a second
+  RL reward for how well the model predicts its own performance ("metacognitive
+  feedback"), reported to surpass standard RL by up to 63% on faithful calibration.
+  - **The lift for mind-mem is the *evaluation lens*, not the training recipe.** The
+    conformal sidecar above calibrates *retrieval* confidence (inference-time, over the
+    fusion score, distribution-free bound). RLMF is the *generation-time* twin: if a
+    mind-mem answer surface ever emits a spoken confidence ("I'm fairly sure this block
+    is the one"), faithful-calibration is the honest test of whether that phrase matches
+    the system's actual self-consistency. It sharpens the existing "cite or say no record
+    found" discipline from a rule into a measurable property.
+  - **What NOT to lift.** Don't bolt an RL training loop onto the deterministic recall
+    path — mind-mem's honesty rail is a *gate*, and the conformal quantile already gives
+    it a proven bound with none of RL's nondeterminism. RLMF is the wedge-*aligned* idea
+    (a system telling the truth about what it knows) but it's an LLM-training technique;
+    keep it beside the recall path, not inside it. Orthogonal to the substrate/determinism
+    wedge — epistemic honesty, not execution byte-identity (the two rhyme, don't conflate).
+  - **Promote-out criteria.** Only becomes work if/when mind-mem fronts an LLM answer
+    surface that emits linguistic confidence; then port the *faithful-calibration metric*
+    (self-consistency vs stated confidence) as a fixed-point eval harness, never the RL
+    loop, and only after the conformal sidecar ships.
 
 > Ecosystem-wide milestone — gated on the `mind` compiler reaching self-host completeness.
 
