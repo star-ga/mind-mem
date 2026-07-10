@@ -33,21 +33,35 @@ from typing import Any
 _DEFAULT_HOST = "http://localhost:11434"
 _DEFAULT_TIMEOUT_S = 60.0
 
-_PROMPT_TEMPLATE = """You are re-compressing a cluster of related memory blocks into a single \
-tight summary. Re-read the sibling blocks below together with the current \
-summary, then emit a TIGHTER summary that PRESERVES EVERY FACT (every \
-number, identifier, date, name, and decision) — do not drop or generalize \
-any fact. If the current summary is already minimal and complete, return it \
-VERBATIM, unchanged. Return ONLY the summary text: no preamble, no \
-markdown code fences, no explanation of what you did.
+_PROMPT_TEMPLATE = """You normalize a cluster of related memory blocks into a single CANONICAL \
+FACT LIST. This is a deterministic normal form, not free writing: the same \
+facts must always produce the exact same bytes, so that re-normalizing an \
+already-canonical list returns it byte-for-byte unchanged (a fixed point).
 
-Current summary:
+Apply these rules EXACTLY, in order:
+1. Read the current fact list and the sibling blocks together.
+2. Emit one atomic fact per line, each line beginning with "- " (hyphen, space).
+3. PRESERVE EVERY FACT verbatim where possible — copy every number, identifier, \
+date, proper noun, and decision exactly as written; never round, generalize, \
+rephrase, or invent. A tighter list drops only EXACT duplicates and pure \
+connective prose ("Additionally,", "As noted above"), never a fact.
+4. If two lines state the same fact, keep only the first occurrence.
+5. Order lines by the position their fact first appears across the current list \
+then the sibling blocks (stable order — do not re-sort by any other key).
+6. Do not add commentary, headings, blank lines, trailing punctuation beyond \
+what a fact contains, markdown fences, or a preamble.
+
+Because these rules are deterministic and idempotent, a list that is already \
+canonical (no duplicates, no connective prose, already one-fact-per-line in \
+first-appearance order) MUST be returned byte-for-byte identical.
+
+Current fact list:
 {current}
 
 Sibling blocks:
 {siblings}
 
-Tighter summary:"""
+Canonical fact list:"""
 
 
 class CompressorError(RuntimeError):
@@ -101,16 +115,28 @@ _PREAMBLE_RE = re.compile(
 )
 _FENCE_RE = re.compile(r"^```[a-zA-Z0-9_-]*\n(.*)\n```$", re.DOTALL)
 
+# A leading reasoning block emitted by Qwen3-family models (`mind-mem:4b` is a
+# Qwen3.5-4B fine-tune): `<think>...</think>` before the actual summary. It is
+# not part of the summary and is the single biggest reason a compressing model
+# fails to reach a byte fixed point — the block's whitespace/content varies pass
+# to pass, so the same summary never compares equal to its predecessor. Strip it
+# only at the very start (a `<think>` that appears mid-body is real content, not
+# a reasoning wrapper) and non-greedily (`.*?`) so only the first block goes.
+_THINK_RE = re.compile(r"^\s*<think>.*?</think>\s*", re.DOTALL | re.IGNORECASE)
+
 
 def _clean_response(raw: str) -> str:
-    """Deterministically strip markdown fences and LLM preamble.
+    """Deterministically strip a reasoning block, markdown fences, and LLM preamble.
 
-    Idempotent by construction (each sub-step only removes a fixed prefix or
-    fence wrapper) — cleaning an already-clean string is a no-op, which is
-    required for the fixed point: `recompact_cluster` compares cleaned output
-    to the previous cleaned output, not raw model text.
+    Idempotent by construction (each sub-step only removes a fixed leading block,
+    prefix, or fence wrapper) — cleaning an already-clean string is a no-op,
+    which is required for the fixed point: `recompact_cluster` compares cleaned
+    output to the previous cleaned output, not raw model text. The `<think>`
+    strip runs first because the reasoning wrapper, when present, precedes any
+    fence or preamble the summary itself might carry.
     """
     text = raw.strip()
+    text = _THINK_RE.sub("", text).strip()
     fence_match = _FENCE_RE.match(text)
     if fence_match:
         text = fence_match.group(1).strip()
