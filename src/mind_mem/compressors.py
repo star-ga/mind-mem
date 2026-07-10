@@ -32,6 +32,18 @@ from typing import Any
 
 _DEFAULT_HOST = "http://localhost:11434"
 _DEFAULT_TIMEOUT_S = 60.0
+# Deterministic hard cap on generated tokens per pass. A `mind-mem:4b`-shaped
+# small model asked for a canonical fact list can degenerate into runaway
+# repetition or spill past the settled list — pure `compression_ratio` bloat and,
+# worse, a body that never lands on a byte fixed point. `num_predict` bounds that
+# from the REQUEST side (a qualitatively different axis from the post-processing
+# body-shrinkers): with `temperature=0` + a fixed `seed` the truncation point is
+# a pure function of the inputs, so it adds zero non-determinism. The cap is set
+# generously (a real consolidated cluster is a handful of fact lines, far under
+# this) so it never clips a converged body — it only hard-stops the over-
+# generation the small model drifts into, and the probe guard re-appends any
+# source probe a clip removed so `fact_retention` stays 1.0.
+_DEFAULT_NUM_PREDICT = 512
 
 # --- probe-preserving guard --------------------------------------------------
 # The recompaction benchmark scores fact retention as the fraction of "probes"
@@ -350,6 +362,7 @@ class OllamaCompressor:
         temperature: float = 0.0,
         seed: int = 0,
         timeout: float = _DEFAULT_TIMEOUT_S,
+        num_predict: int = _DEFAULT_NUM_PREDICT,
     ) -> None:
         if not model:
             raise ValueError("model must be a non-empty string")
@@ -357,11 +370,16 @@ class OllamaCompressor:
             # Non-zero sampling temperature breaks purity w.r.t. inputs —
             # the whole fixed-point argument depends on temperature=0.
             raise ValueError("OllamaCompressor requires temperature=0.0 for a well-defined fixed point")
+        if num_predict < 1:
+            # A non-positive cap would emit an empty (or ollama-default unbounded)
+            # body — the former destroys retention, the latter defeats the cap.
+            raise ValueError("num_predict must be >= 1 to bound the generated body deterministically")
         self._model = model
         self._host = host.rstrip("/")
         self._temperature = temperature
         self._seed = seed
         self._timeout = timeout
+        self._num_predict = num_predict
 
     def __call__(self, current_text: str, blocks: list[dict[str, Any]]) -> str:
         prompt = _PROMPT_TEMPLATE.format(current=current_text, siblings=_render_siblings(blocks))
@@ -369,7 +387,15 @@ class OllamaCompressor:
             "model": self._model,
             "prompt": prompt,
             "stream": False,
-            "options": {"temperature": self._temperature, "seed": self._seed},
+            "options": {
+                "temperature": self._temperature,
+                "seed": self._seed,
+                # Deterministic hard token cap (see `_DEFAULT_NUM_PREDICT`): with
+                # temperature=0 + fixed seed the truncation point is a pure
+                # function of the inputs, so purity/idempotence hold. Bounds
+                # runaway small-model over-generation from the request side.
+                "num_predict": self._num_predict,
+            },
         }
         raw_response = self._post(body)
         cleaned = _clean_response(raw_response)
