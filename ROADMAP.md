@@ -89,6 +89,35 @@ self-modifies. We adopt the connectivity model, not the autonomy.
       `docs/block-type-taxonomy-roadmap.md`).
 - [ ] **Maturity metric as consolidation gate** — governance signal for
       what graduates ephemeral → consolidated; surfaced in `scan`.
+- [x] **Iterative re-compression ("sleep") — fixed-point cluster rewrite**
+      — `recompaction.py` (prototype landed 2026-07-10; `mind_mem.recompaction`,
+      18 tests, 99% cov). Motivating prior art: recent memory-consolidation work
+      argues a *single* compression pass over context is lossy and that
+      **re-reading one's own summary and re-compressing** recovers what the first
+      pass missed (reported large accuracy gains on long-context math for small
+      models; unverified at frontier scale — treat the *mechanism*, not the
+      number, as the takeaway). The distinct piece vs the existing
+      mark→merge→archive sleep cycle (Groups above): this takes a
+      `find_similar` **cluster** of related blocks and re-compresses it against
+      full sibling context, **looping until the rewrite is byte-identical to its
+      input** (a fixed point), then emits the settled text as a `propose_update`
+      proposal. Two load-bearing wedge guardrails, both already enforced +
+      tested: (1) **fixed point, not fixed count** — the loop stops on
+      byte-identity or raises `NonConvergenceError` at the bound, never a silent
+      truncation (same discipline as the mic@1 self-host fixed-point gate); a
+      "4 sleep loops" hyperparameter would hide non-convergence. (2) **injected
+      compressor** — the model call is a `Callable`, so the loop / convergence /
+      order-independent cluster digest / retention floor are proven with **zero
+      API calls** in CI. Never mutates source of truth; every rewrite carries
+      `source_ids` + `input_digest` for HITL provenance. **Remaining (open):**
+      (a) wire a real LLM compressor behind the `Compressor` type; (b) a `mm
+      recompact` / dream-cycle pass 6 that clusters via `find_similar` and routes
+      results through `propose_update`; (c) a **before/after recall benchmark on
+      our own corpus** (gate on the LoCoMo item below) — do not take the reported
+      accuracy gain on faith, measure it on the 1469-block store. **Naestro note:**
+      do NOT port this to the Naestro vault as-is — its append-only + provenance-
+      chain guarantee forbids in-place rewrite; a correct port appends a
+      superseding block, i.e. a materialized view, not "sleep".
 - [ ] **LoCoMo recall benchmark** — adopt as a standing mind-mem eval so
       recall quality is a number, not a vibe. **Do first** (cheapest,
       gives a baseline for everything else here).
