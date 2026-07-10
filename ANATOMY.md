@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 909 | **Est. tokens:** ~1,946,774
-**Generated:** 2026-07-10 14:30 UTC
+**Files:** 910 | **Est. tokens:** ~1,948,596
+**Generated:** 2026-07-10 14:40 UTC
 
 ## Token Budget Guide
 
@@ -35,7 +35,7 @@
 | `docs/` | 84 | ~155,664 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 3 | ~4,055 |
-| `docs/science-superpowers/preregistrations/` | 6 | ~7,713 |
+| `docs/science-superpowers/preregistrations/` | 7 | ~8,996 |
 | `docs/security-baselines/` | 1 | ~18,974 |
 | `examples/` | 3 | ~1,201 |
 | `.gemini/` | 1 | ~28 |
@@ -60,7 +60,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 164 | ~580,050 |
+| `src/mind_mem/` | 164 | ~580,589 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 2 | ~5,379 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
@@ -270,6 +270,7 @@
 - `roadmap-v4.md` (~10304 tok, huge) — mind-mem v4.0 — Design Rationale
 ### `docs/science-superpowers/preregistrations/`
 
+- `2026-07-10-body-line-dedup-compressor.md` (~1283 tok, large) — Pre-registration: body-level exact-line deduplication in `_clean_response`
 - `2026-07-10-extractive-projection-compressor.md` (~1292 tok, large) — Pre-registration: extractive-projection OllamaCompressor for recompaction
 - `2026-07-10-probe-guard-substring-collapse.md` (~1447 tok, large) — Pre-registration: substring-collapse the probe-guard trailer in OllamaCompressor
 - `2026-07-10-probe-preserving-guard-compressor.md` (~1359 tok, large) — Pre-registration: deterministic probe-preserving guard in OllamaCompressor
@@ -506,7 +507,7 @@
 - `cognitive_forget.py` (~2667 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `compaction.py` (~3270 tok, huge) — mind-mem Compaction & GC Engine. Zero external deps.
 - `compiled_truth.py` (~6410 tok, huge) — mind-mem Compiled Truth — synthesized entity pages with append-only evidence.
-- `compressors.py` (~4549 tok, huge) — Real `Compressor` implementations for mind_mem.recompaction. Zero new deps.
+- `compressors.py` (~5088 tok, huge) — Real `Compressor` implementations for mind_mem.recompaction. Zero new deps.
 - `conflict_resolver.py` (~3377 tok, huge) — mind-mem Automated Conflict Resolution Pipeline. Zero external deps.
 - `connection_manager.py` (~1165 tok, large) — SQLite connection manager with read/write separation and WAL mode.
 - `consensus_vote.py` (~1871 tok, huge) — Quorum-based consensus voting on contradictions (v3.3.0).

@@ -241,6 +241,43 @@ _THINK_RE = re.compile(r"^\s*<think>.*?</think>\s*", re.DOTALL | re.IGNORECASE)
 _BLANK_RUN_RE = re.compile(r"\n[ \t]*\n(?:[ \t]*\n)+")
 
 
+def _dedup_lines(text: str) -> str:
+    """Drop exact-duplicate NON-EMPTY lines, keeping the first occurrence.
+
+    A `mind-mem:4b`-shaped model asked for a canonical one-fact-per-line list
+    does not reliably deduplicate (the prompt asks it to; the small model emits
+    repeats). Those repeated lines are pure ``compression_ratio`` bloat — the one
+    lever the champion gate (``compression_ratio < 1.0``) reads that no prior
+    pass touches. This removes them on the model BODY (a distinct axis from the
+    probe-guard trailer and the whitespace normalizer).
+
+    Retention-safe by construction: a removed line is byte-identical to an
+    earlier retained line, so every bench probe on it (numbers, quoted IDs, ISO
+    dates, capitalized entities) still appears as a substring of the surviving
+    first occurrence — ``fact_retention`` is provably unchanged.
+
+    Idempotent by construction: after one pass no two non-empty lines are equal,
+    so a second pass removes nothing — required for ``_clean_response`` to stay a
+    no-op on already-clean text and for the recompaction fixed point.
+
+    Only NON-EMPTY lines are deduped: blank lines are structure, not facts, and
+    are owned by :func:`_canonicalize_whitespace` (which runs after this). Lines
+    are compared after ``rstrip`` so trailing-whitespace drift does not defeat the
+    duplicate match; the retained line keeps its original text (whitespace is then
+    normalized downstream).
+    """
+    seen: set[str] = set()
+    kept: list[str] = []
+    for line in text.split("\n"):
+        stripped = line.rstrip()
+        if stripped and stripped in seen:
+            continue
+        if stripped:
+            seen.add(stripped)
+        kept.append(line)
+    return "\n".join(kept)
+
+
 def _canonicalize_whitespace(text: str) -> str:
     """Collapse line-boundary whitespace to a deterministic normal form.
 
@@ -281,6 +318,12 @@ def _clean_response(raw: str) -> str:
     if fence_match:
         text = fence_match.group(1).strip()
     text = _PREAMBLE_RE.sub("", text).strip()
+    # Drop exact-duplicate fact-lines the small model repeats — pure
+    # compression_ratio bloat on the body, retention-safe (a removed line is
+    # byte-identical to a retained earlier one) and idempotent. Runs before
+    # whitespace canonicalization so blank-line structure stays owned by
+    # `_canonicalize_whitespace`. See `_dedup_lines` for the proofs.
+    text = _dedup_lines(text)
     # Final: canonicalize line-boundary whitespace so whitespace drift (trailing
     # spaces, blank-line runs) can't block the byte fixed point. Runs last so it
     # also normalizes whitespace exposed by the fence/preamble strips. The outer
