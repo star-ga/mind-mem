@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 907 | **Est. tokens:** ~1,943,644
-**Generated:** 2026-07-10 14:08 UTC
+**Files:** 908 | **Est. tokens:** ~1,944,643
+**Generated:** 2026-07-10 14:19 UTC
 
 ## Token Budget Guide
 
@@ -32,10 +32,10 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 84 | ~156,515 |
+| `docs/` | 84 | ~155,664 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 3 | ~4,055 |
-| `docs/science-superpowers/preregistrations/` | 4 | ~4,722 |
+| `docs/science-superpowers/preregistrations/` | 5 | ~6,169 |
 | `docs/security-baselines/` | 1 | ~18,974 |
 | `examples/` | 3 | ~1,201 |
 | `.gemini/` | 1 | ~28 |
@@ -60,7 +60,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 164 | ~579,060 |
+| `src/mind_mem/` | 164 | ~579,463 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 2 | ~5,379 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
@@ -266,11 +266,12 @@
 - `review-database-v3.2.0.md` (~3171 tok, huge) — Database Review — PostgresBlockStore v3.2.0
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — MIND-Mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
-- `roadmap.md` (~14528 tok, huge) — Roadmap
+- `roadmap.md` (~13677 tok, huge) — Roadmap
 - `roadmap-v4.md` (~10304 tok, huge) — mind-mem v4.0 — Design Rationale
 ### `docs/science-superpowers/preregistrations/`
 
 - `2026-07-10-extractive-projection-compressor.md` (~1292 tok, large) — Pre-registration: extractive-projection OllamaCompressor for recompaction
+- `2026-07-10-probe-guard-substring-collapse.md` (~1447 tok, large) — Pre-registration: substring-collapse the probe-guard trailer in OllamaCompressor
 - `2026-07-10-probe-preserving-guard-compressor.md` (~1359 tok, large) — Pre-registration: deterministic probe-preserving guard in OllamaCompressor
 - `2026-07-10-recompaction-canonical-bullet-prompt.md` (~1316 tok, large) — Pre-registration: recompaction canonical-bullet convergence prompt
 - `2026-07-10-recompaction-think-strip.md` (~755 tok, large) — Pre-registration: strip leading <think></think> block in _clean_response
@@ -504,7 +505,7 @@
 - `cognitive_forget.py` (~2667 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `compaction.py` (~3270 tok, huge) — mind-mem Compaction & GC Engine. Zero external deps.
 - `compiled_truth.py` (~6410 tok, huge) — mind-mem Compiled Truth — synthesized entity pages with append-only evidence.
-- `compressors.py` (~3559 tok, huge) — Real `Compressor` implementations for mind_mem.recompaction. Zero new deps.
+- `compressors.py` (~3962 tok, huge) — Real `Compressor` implementations for mind_mem.recompaction. Zero new deps.
 - `conflict_resolver.py` (~3377 tok, huge) — mind-mem Automated Conflict Resolution Pipeline. Zero external deps.
 - `connection_manager.py` (~1165 tok, large) — SQLite connection manager with read/write separation and WAL mode.
 - `consensus_vote.py` (~1871 tok, huge) — Quorum-based consensus voting on contradictions (v3.3.0).

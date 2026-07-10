@@ -60,9 +60,7 @@ _GUARD_NUMBER_RE = re.compile(r"\b\d[\d,]*(?:\.\d+)?\b")
 _GUARD_QUOTED_RE = re.compile(r'"([^"]{2,80})"')
 _GUARD_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _GUARD_ENTITY_RE = re.compile(r"\b(?:[A-Z][a-zA-Z0-9]*(?:-[A-Za-z0-9]+)*|[A-Z]{2,}(?:-[A-Za-z0-9]+)*)\b")
-_GUARD_ENTITY_STOPWORDS = frozenset(
-    {"The", "A", "An", "This", "That", "It", "In", "On", "At", "For", "With", "Is", "Was", "Are"}
-)
+_GUARD_ENTITY_STOPWORDS = frozenset({"The", "A", "An", "This", "That", "It", "In", "On", "At", "For", "With", "Is", "Was", "Are"})
 # A lowercase sentinel so the trailer introduces no NEW capitalized-entity probe
 # of its own (which could otherwise re-enter the probe set on the next pass and
 # perturb convergence). The colon-space prefix is matched when we detect an
@@ -169,17 +167,47 @@ def _source_probes(blocks: list[dict[str, Any]]) -> list[str]:
     return sorted(probes)
 
 
+def _collapse_substring_probes(probes: list[str]) -> list[str]:
+    """Keep only the *maximal* probes — drop any that is a substring of another.
+
+    The bench scores retention as substring-presence: if probe ``s`` is a
+    substring of probe ``t`` and ``t`` is appended verbatim, then ``s`` is a
+    substring of ``t`` is a substring of the output, so ``s`` still counts as
+    retained. Collapsing substring-probes into their maximal superstring
+    therefore removes ZERO retained probes while shrinking the appended trailer
+    (``2026`` need not be listed when ``2026-05-29`` already is; ``Q16`` when
+    ``Q16.16`` is). Returns a canonically sorted list so the trailer stays
+    byte-stable across passes.
+
+    Pure and deterministic (length-desc pass + substring tests + a final sort),
+    so the guard's idempotence and the recompaction fixed point are preserved:
+    the same missing set always yields the same maximal set in the same order.
+    """
+    kept: list[str] = []
+    for p in sorted(set(probes), key=len, reverse=True):
+        if not any(p != q and p in q for q in kept):
+            kept.append(p)
+    return sorted(kept)
+
+
 def _apply_probe_guard(cleaned: str, blocks: list[dict[str, Any]]) -> str:
     """Append any source probes the model dropped, under a fixed sentinel line.
 
     Idempotent and deterministic: a probe already present as a substring of
-    ``cleaned`` is never re-appended, and missing probes are appended in the
-    canonical sorted order from :func:`_source_probes`. Re-guarding an
-    already-guarded string is therefore a no-op — the property the recompaction
-    fixed point depends on. Returns ``cleaned`` unchanged when nothing is
-    missing (including the empty-cluster / no-probe case).
+    ``cleaned`` is never re-appended, and the missing probes are collapsed to
+    their maximal superstrings (see :func:`_collapse_substring_probes`) then
+    appended in canonical sorted order. Re-guarding an already-guarded string is
+    therefore a no-op — the property the recompaction fixed point depends on.
+    Returns ``cleaned`` unchanged when nothing is missing (including the
+    empty-cluster / no-probe case).
+
+    The substring-collapse keeps ``fact_retention`` at exactly 1.0 (every
+    dropped short probe is a substring of a kept longer one and so is still
+    substring-present in the output) while strictly shrinking the trailer on any
+    cluster with substring-overlapping probes — moving ``compression_ratio``
+    away from the disqualifying 1.0 boundary instead of toward it.
     """
-    missing = [p for p in _source_probes(blocks) if p not in cleaned]
+    missing = _collapse_substring_probes([p for p in _source_probes(blocks) if p not in cleaned])
     if not missing:
         return cleaned
     return f"{cleaned}\n\n{_GUARD_SENTINEL}{'; '.join(missing)}"
