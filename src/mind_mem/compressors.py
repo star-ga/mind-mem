@@ -290,6 +290,59 @@ def _dedup_lines(text: str) -> str:
     return "\n".join(kept)
 
 
+_BULLET_RE = re.compile(r"^- ")
+
+
+def _canonicalize_bullet_order(text: str) -> str:
+    """Sort each contiguous run of ``- ``-prefixed fact lines into a fixed order.
+
+    This attacks a convergence failure mode NO existing cleaner touches: a
+    ``mind-mem:4b``-shaped model asked for a one-fact-per-line list re-emits the
+    *same set* of fact lines in a *different order* pass-to-pass (a fact list is
+    semantically order-invariant, so the small model has no stable ordering
+    prior). Two byte-distinct permutations of the same facts cycle forever ->
+    :class:`NonConvergenceError` -> that cluster scores 0. Whitespace/dedup
+    normalization cannot fix a *reordering*; only mapping every permutation of a
+    run to one canonical order can. This is a distinct axis from the
+    probe-guard / whitespace / dedup / prompt family — it is a *convergence*
+    mechanism that acts on the relative ORDER of the model body's fact lines.
+
+    Scoped deliberately to contiguous runs of ``- ``-prefixed lines (the
+    canonical fact-list lines the prompt asks the model to emit): non-bullet
+    lines (prose, headers, blank lines, and the guard's ``preserved facts:``
+    trailer — which is not ``- ``-prefixed) are ANCHORS held in place, and only
+    the bullet lines *between* successive anchors are sorted among themselves.
+    So a legitimately-ordered mixed body keeps its structure; only a pure
+    fact-list run is canonicalized.
+
+    Fixed-point safety: sorting is idempotent (a sorted run sorts to itself), so
+    re-cleaning an already-canonical body is a no-op — required for the
+    recompaction byte fixed point. It manufactures a fixed point ONLY when the
+    underlying fact *set* has genuinely stabilized; it never fakes convergence
+    for a body whose set of facts is still changing.
+
+    Retention-safe by construction: reordering lines deletes no line, so every
+    bench probe (numbers, quoted IDs, ISO dates, capitalized entities) still
+    appears as a substring of the output — ``fact_retention`` is provably
+    unchanged. ``compression_ratio`` is unchanged too (a permutation preserves
+    total bytes); the win is purely convergence.
+    """
+    lines = text.split("\n")
+    out: list[str] = []
+    run: list[str] = []
+    for line in lines:
+        if _BULLET_RE.match(line):
+            run.append(line)
+            continue
+        if run:
+            out.extend(sorted(run))
+            run = []
+        out.append(line)
+    if run:
+        out.extend(sorted(run))
+    return "\n".join(out)
+
+
 def _canonicalize_whitespace(text: str) -> str:
     """Collapse line-boundary whitespace to a deterministic normal form.
 
@@ -342,6 +395,14 @@ def _clean_response(raw: str) -> str:
     # `.strip()` above already handles leading/trailing blank lines; this handles
     # the interior. See `_canonicalize_whitespace` for the retention-safety proof.
     text = _canonicalize_whitespace(text)
+    # Final: canonicalize the ORDER of `- `-prefixed fact-list runs so a model
+    # that re-emits the same facts in a permuted order lands on a byte fixed
+    # point instead of oscillating forever. Runs LAST — after dedup (so each run
+    # is already duplicate-free) and after whitespace canonicalization (so lines
+    # are rstripped before the byte-sort, keeping the sort idempotent). Reorders
+    # only; deletes nothing, so retention/ratio are untouched. See
+    # `_canonicalize_bullet_order` for the convergence + safety proofs.
+    text = _canonicalize_bullet_order(text)
     return text
 
 

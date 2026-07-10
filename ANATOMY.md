@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 911 | **Est. tokens:** ~1,950,343
-**Generated:** 2026-07-10 14:52 UTC
+**Files:** 911 | **Est. tokens:** ~1,951,122
+**Generated:** 2026-07-10 15:02 UTC
 
 ## Token Budget Guide
 
@@ -60,7 +60,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 164 | ~581,008 |
+| `src/mind_mem/` | 164 | ~581,787 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 2 | ~5,379 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
@@ -508,7 +508,7 @@
 - `cognitive_forget.py` (~2667 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `compaction.py` (~3270 tok, huge) — mind-mem Compaction & GC Engine. Zero external deps.
 - `compiled_truth.py` (~6410 tok, huge) — mind-mem Compiled Truth — synthesized entity pages with append-only evidence.
-- `compressors.py` (~5507 tok, huge) — Real `Compressor` implementations for mind_mem.recompaction. Zero new deps.
+- `compressors.py` (~6286 tok, huge) — Real `Compressor` implementations for mind_mem.recompaction. Zero new deps.
 - `conflict_resolver.py` (~3377 tok, huge) — mind-mem Automated Conflict Resolution Pipeline. Zero external deps.
 - `connection_manager.py` (~1165 tok, large) — SQLite connection manager with read/write separation and WAL mode.
 - `consensus_vote.py` (~1871 tok, huge) — Quorum-based consensus voting on contradictions (v3.3.0).
