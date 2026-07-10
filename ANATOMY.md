@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 897 | **Est. tokens:** ~1,919,208
-**Generated:** 2026-07-10 08:22 UTC
+**Files:** 903 | **Est. tokens:** ~1,938,249
+**Generated:** 2026-07-10 11:09 UTC
 
 ## Token Budget Guide
 
@@ -32,7 +32,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 83 | ~152,532 |
+| `docs/` | 84 | ~155,866 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 3 | ~4,055 |
 | `docs/security-baselines/` | 1 | ~18,974 |
@@ -59,8 +59,9 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 163 | ~575,970 |
+| `src/mind_mem/` | 164 | ~577,928 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
+| `src/mind_mem/bench/` | 2 | ~5,379 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
 | `src/mind_mem/mcp/infra/` | 8 | ~9,991 |
 | `src/mind_mem/mcp/tools/` | 24 | ~58,460 |
@@ -69,7 +70,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 22 | ~58,472 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 311 | ~668,024 |
+| `tests/` | 313 | ~676,394 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -207,7 +208,7 @@
 - `api-reference.md` (~1683 tok, huge) — API Reference
 - `append-only-audit-logs.md` (~1424 tok, large) — Append-Only Audit Logs — Operator Runbook
 - `architecture_audit_fable5_2026-07-07.md` (~3952 tok, huge) — mind-mem — Fable-5 Architecture + Honesty Audit (2026-07-07)
-- `architecture.md` (~1936 tok, huge) — Architecture
+- `architecture.md` (~2138 tok, huge) — Architecture
 - `audit_response.md` (~950 tok, large) — MIND-Mem — response to the 2026-05-02 ecosystem audit
 - `benchmarks.md` (~757 tok, large) — Benchmarks
 - `block-format.md` (~431 tok, medium) — Block Format
@@ -257,6 +258,7 @@
 - `protection.md` (~1443 tok, large) — MIND-Mem Library Protection
 - `quality-gate.md` (~1267 tok, large) — Quality Gate — Operator Runbook
 - `quickstart.md` (~601 tok, large) — MIND-Mem Quickstart
+- `recompaction.md` (~3132 tok, huge) — Iterative Re-Compression Engine (Recompaction)
 - `red-team-audit.md` (~1164 tok, large) — Behavioral Audit — Operator Runbook
 - `rest-api.md` (~1135 tok, large) — MIND-Mem REST API
 - `review-architecture-v3.2.0.md` (~1919 tok, huge) — Architecture Review — MIND-Mem v3.2.0 (Release Candidate)
@@ -467,6 +469,12 @@
 - `axis_recall.py` (~4217 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `backup_restore.py` (~4224 tok, huge) — mind-mem Backup & Restore CLI. Zero external deps.
 - `baseline_snapshot.py` (~4176 tok, huge) — Baseline snapshot for intent drift detection.
+### `src/mind_mem/bench/`
+
+- `__init__.py` (~19 tok, tiny) — mind-mem benchmark harnesses — scalar metrics over the live corpus."""
+- `recompaction_bench.py` (~5360 tok, huge) — Recompaction benchmark — the scalar metric downstream tooling depends on.
+### `src/mind_mem/`
+
 - `block_lineage.py` (~3590 tok, huge) — Typed block-lineage edges + bounded BFS reader (v3.11.0+, Pattern 3).
 - `block_maturity.py` (~1977 tok, huge) — Block maturity metric — consolidation gate (Group H, v4.0.x).
 - `block_metadata.py` (~2223 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
@@ -487,6 +495,7 @@
 - `cognitive_forget.py` (~2667 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `compaction.py` (~3270 tok, huge) — mind-mem Compaction & GC Engine. Zero external deps.
 - `compiled_truth.py` (~6410 tok, huge) — mind-mem Compiled Truth — synthesized entity pages with append-only evidence.
+- `compressors.py` (~1958 tok, huge) — Real `Compressor` implementations for mind_mem.recompaction. Zero new deps.
 - `conflict_resolver.py` (~3377 tok, huge) — mind-mem Automated Conflict Resolution Pipeline. Zero external deps.
 - `connection_manager.py` (~1165 tok, large) — SQLite connection manager with read/write separation and WAL mode.
 - `consensus_vote.py` (~1871 tok, huge) — Quorum-based consensus voting on contradictions (v3.3.0).
@@ -804,6 +813,7 @@
 - `test_compaction.py` (~1869 tok, huge) — Tests for compaction.py — GC and archival engine."""
 - `test_competitive_intel.py` (~1881 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_compiled_truth.py` (~3929 tok, huge) — Tests for mind-mem compiled truth pages (compiled_truth.py)."""
+- `test_compressors.py` (~2610 tok, huge) — Tests for compressors.py — real Compressor implementations.
 - `test_concurrency_stress.py` (~4160 tok, huge) — Concurrency and performance stress tests for recall engine.
 - `test_concurrent_integration.py` (~10855 tok, huge) — Integration tests for concurrent access and partial failure in mind-mem.
 - `test_conflict_resolver_hash_mapping.py` (~316 tok, medium) — Audit trail must print the WINNER's hash next to Winner, not block_a's.
@@ -990,6 +1000,7 @@
 - `test_recall_temporal.py` (~2800 tok, huge) — Tests for _recall_temporal.py — time-aware hard filters for temporal queries."""
 - `test_recall_time_bounded.py` (~1965 tok, huge) — Regression tests for time-bounded recall (roadmap v4.0.0 Group E).
 - `test_recall_vector.py` (~4901 tok, huge) — Tests for recall_vector.py — VectorBackend semantic search."""
+- `test_recompaction_bench.py` (~5760 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_recompaction.py` (~1962 tok, huge) — Tests for recompaction.py — iterative re-compression to a fixed point.
 - `test_rerank_debug.py` (~342 tok, medium) — Tests for rerank debug mode."""
 - `test_rerank_ensemble.py` (~1531 tok, huge) — v3.3.0 Tier 4 #9 — reranker ensemble via Borda count.

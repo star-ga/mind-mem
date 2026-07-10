@@ -90,8 +90,9 @@ self-modifies. We adopt the connectivity model, not the autonomy.
 - [ ] **Maturity metric as consolidation gate** — governance signal for
       what graduates ephemeral → consolidated; surfaced in `scan`.
 - [x] **Iterative re-compression ("sleep") — fixed-point cluster rewrite**
-      — `recompaction.py` (prototype landed 2026-07-10; `mind_mem.recompaction`,
-      18 tests, 99% cov). Motivating prior art: recent memory-consolidation work
+      — `recompaction.py` + `compressors.py` + `bench/recompaction_bench.py`
+      (landed 2026-07-10; `mind_mem.recompaction`, 43 tests across
+      `test_recompaction.py` + `test_compressors.py`). Motivating prior art: recent memory-consolidation work
       argues a *single* compression pass over context is lossy and that
       **re-reading one's own summary and re-compressing** recovers what the first
       pass missed (reported large accuracy gains on long-context math for small
@@ -109,15 +110,41 @@ self-modifies. We adopt the connectivity model, not the autonomy.
       compressor** — the model call is a `Callable`, so the loop / convergence /
       order-independent cluster digest / retention floor are proven with **zero
       API calls** in CI. Never mutates source of truth; every rewrite carries
-      `source_ids` + `input_digest` for HITL provenance. **Remaining (open):**
-      (a) wire a real LLM compressor behind the `Compressor` type; (b) a `mm
-      recompact` / dream-cycle pass 6 that clusters via `find_similar` and routes
-      results through `propose_update`; (c) a **before/after recall benchmark on
-      our own corpus** (gate on the LoCoMo item below) — do not take the reported
-      accuracy gain on faith, measure it on the 1469-block store. **Naestro note:**
-      do NOT port this to the Naestro vault as-is — its append-only + provenance-
-      chain guarantee forbids in-place rewrite; a correct port appends a
-      superseding block, i.e. a materialized view, not "sleep".
+      `source_ids` + `input_digest` for HITL provenance. **Follow-ups:**
+      - [x] wire a real LLM compressor behind the `Compressor` type —
+        `compressors.py` ships `EchoCompressor` (control, returns input verbatim)
+        and `OllamaCompressor` (local ollama, `temperature=0` + fixed seed =
+        deterministic, so a fixed point is legitimately reachable).
+      - [x] a **fact-retention benchmark** — `mind_mem.bench.recompaction_bench`
+        (`--model <echo|ollama-tag> --clusters N --db <path>`) prints a
+        machine-greppable `recompaction_score: <float>` where score =
+        `fact_retention * convergence_rate` over deterministic kNN clusters; an
+        autoresearch harness (`config.mind-recompaction.yaml` +
+        `program.mind-recompaction.md` + `run_mind_recompaction.sh`, a 4-stage
+        gated evaluator: lint/type → test suites → echo-control-must-be-1.0 →
+        measure) drives it against the real ~1469-block corpus to optimize the
+        loop + compressor prompt.
+      - [ ] a `mm recompact` / dream-cycle pass 6 that clusters via `find_similar`
+        and routes results through `propose_update` (engine + bench shipped; the
+        CLI verb and scheduler wiring are not yet built).
+      - [ ] a **before/after recall benchmark on our own corpus** (gate on the
+        LoCoMo item below) — the retention bench measures fact preservation, not
+        end-to-end recall; do not take the reported accuracy gain on faith,
+        measure recall on the governed corpus.
+      - [ ] **`mind-mem:4b` retrain decision.** Empirical finding (live bench run
+        2026-07-10): 4B **converges** — reaches a fixed point in ~2 passes and
+        changes text (not a no-op) — but is **lossy**: it over-compresses and
+        trips the retention floor on a meaningful fraction of clusters, so the
+        safety gate rejects those rewrites. This is the "converges but degrades →
+        case for a narrow retrain" outcome. Retrain target, if pursued: given N
+        related blocks, emit one block such that (1) re-feeding its own output
+        reproduces it (fixed point) **and** (2) recall over the merged block
+        answers every question the source blocks answered. Decide use-as-is vs
+        narrow retrain once the recall benchmark above lands.
+      **Naestro warning (load-bearing):** do NOT port this to the
+      Naestro vault as-is — its append-only + provenance-chain guarantee forbids
+      in-place rewrite; a correct port appends a superseding block with a
+      back-pointer, i.e. a materialized view, not "sleep".
 - [ ] **LoCoMo recall benchmark** — adopt as a standing mind-mem eval so
       recall quality is a number, not a vibe. **Do first** (cheapest,
       gives a baseline for everything else here).
