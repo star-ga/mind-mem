@@ -231,6 +231,39 @@ _FENCE_RE = re.compile(r"^```[a-zA-Z0-9_-]*\n(.*)\n```$", re.DOTALL)
 # a reasoning wrapper) and non-greedily (`.*?`) so only the first block goes.
 _THINK_RE = re.compile(r"^\s*<think>.*?</think>\s*", re.DOTALL | re.IGNORECASE)
 
+# Line-boundary whitespace that a chat-tuned model re-emits non-deterministically
+# pass to pass: trailing spaces/tabs on a line, and runs of ≥2 blank lines. Both
+# vary in width without changing content, so the same settled facts never compare
+# byte-equal to their predecessor — the whitespace, not the facts, blocks the
+# fixed point. Canonicalizing it is a distinct axis from the probe guard (it acts
+# on the model BODY, not the appended trailer) and strips bytes, so it can only
+# lower `compression_ratio`.
+_BLANK_RUN_RE = re.compile(r"\n[ \t]*\n(?:[ \t]*\n)+")
+
+
+def _canonicalize_whitespace(text: str) -> str:
+    """Collapse line-boundary whitespace to a deterministic normal form.
+
+    Restricted to **line boundaries only** — trailing whitespace per line and
+    runs of blank lines — and deliberately does NOT touch inter-word spaces.
+    That restriction is load-bearing for retention: a quoted-identifier probe
+    may contain a single internal space (``"mind mem"``), so collapsing
+    inter-word runs could alter a probe; line-boundary whitespace never appears
+    inside any bench probe (numbers, ISO dates, capitalized entities, and quoted
+    strings are all single-line tokens with no trailing/blank-line runs), so
+    this normalization is provably substring-preserving for every probe.
+
+    Idempotent by construction: each sub-op is a projection onto a normal form
+    (rstrip each line; collapse ≥2 blank lines to exactly one), so applying it
+    twice equals applying it once — required for ``_clean_response`` to stay a
+    no-op on already-clean text and for the recompaction fixed point.
+    """
+    # rstrip each line (kills trailing spaces/tabs the model drifts on).
+    text = "\n".join(line.rstrip() for line in text.split("\n"))
+    # Collapse any run of 2+ blank lines to a single blank line.
+    text = _BLANK_RUN_RE.sub("\n\n", text)
+    return text
+
 
 def _clean_response(raw: str) -> str:
     """Deterministically strip a reasoning block, markdown fences, and LLM preamble.
@@ -248,6 +281,12 @@ def _clean_response(raw: str) -> str:
     if fence_match:
         text = fence_match.group(1).strip()
     text = _PREAMBLE_RE.sub("", text).strip()
+    # Final: canonicalize line-boundary whitespace so whitespace drift (trailing
+    # spaces, blank-line runs) can't block the byte fixed point. Runs last so it
+    # also normalizes whitespace exposed by the fence/preamble strips. The outer
+    # `.strip()` above already handles leading/trailing blank lines; this handles
+    # the interior. See `_canonicalize_whitespace` for the retention-safety proof.
+    text = _canonicalize_whitespace(text)
     return text
 
 
