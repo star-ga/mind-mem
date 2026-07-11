@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 914 | **Est. tokens:** ~1,957,265
-**Generated:** 2026-07-11 00:05 UTC
+**Files:** 916 | **Est. tokens:** ~1,964,727
+**Generated:** 2026-07-11 01:07 UTC
 
 ## Token Budget Guide
 
@@ -60,7 +60,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 164 | ~583,697 |
+| `src/mind_mem/` | 165 | ~588,446 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 2 | ~5,379 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
@@ -71,7 +71,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 22 | ~58,472 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 313 | ~675,558 |
+| `tests/` | 314 | ~678,271 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -479,7 +479,7 @@
 ### `src/mind_mem/`
 
 - `apply_engine.py` (~16524 tok, huge) — Mind Mem Apply Engine v1.0 — Atomic proposal application with rollback.
-- `audit_chain.py` (~4547 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
+- `audit_chain.py` (~4621 tok, huge) — mind-mem Hash-Chain Mutation Log — tamper-evident append-only ledger.
 - `audit_pinned.py` (~3078 tok, huge) — Pinned-model audit pipeline — release-CI gate for ``mind-mem.json``.
 - `auto_resolver.py` (~3194 tok, huge) — mind-mem Automatic Contradiction Resolution Suggestions.
 - `axis_recall.py` (~4217 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -511,7 +511,7 @@
 - `cognitive_forget.py` (~2667 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `compaction.py` (~3270 tok, huge) — mind-mem Compaction & GC Engine. Zero external deps.
 - `compiled_truth.py` (~6410 tok, huge) — mind-mem Compiled Truth — synthesized entity pages with append-only evidence.
-- `compressors.py` (~8196 tok, huge) — Real `Compressor` implementations for mind_mem.recompaction. Zero new deps.
+- `compressors.py` (~8690 tok, huge) — Real `Compressor` implementations for mind_mem.recompaction. Zero new deps.
 - `conflict_resolver.py` (~3377 tok, huge) — mind-mem Automated Conflict Resolution Pipeline. Zero external deps.
 - `connection_manager.py` (~1165 tok, large) — SQLite connection manager with read/write separation and WAL mode.
 - `consensus_vote.py` (~1871 tok, huge) — Quorum-based consensus voting on contradictions (v3.3.0).
@@ -538,6 +538,7 @@
 - `extractor.py` (~7670 tok, huge) — mind-mem Entity & Fact Extractor (Regex NER-lite). Zero external deps.
 - `feature_gate.py` (~1377 tok, large) — Shared config-resolver for retrieval features (architect audit item #6).
 - `field_audit.py` (~3103 tok, huge) — mind-mem Per-Field Mutation Audit — tracks individual field changes.
+- `fold_attestation.py` (~4181 tok, huge) — Evidence-anchored fold-equivalence ("folded==ran") attestation. Zero new deps.
 - `governance_bench.py` (~1855 tok, huge) — mind-mem Governance Benchmark Suite.
 - `governance_gate.py` (~2212 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `governance_raft.py` (~2208 tok, huge) — Raft-style consensus wrapper for governance writes (v4.0 prep).
@@ -881,6 +882,7 @@
 - `test_field_extraction.py` (~201 tok, medium) — Tests for field token extraction."""
 - `test_filelock.py` (~979 tok, large) — Tests for filelock.py — cross-platform advisory locking."""
 - `test_filelock_stress.py` (~1182 tok, large) — Stress tests for mind-mem file locking under contention."""
+- `test_fold_attestation.py` (~2713 tok, huge) — Tests for fold_attestation.py — evidence-anchored folded==ran attestation.
 - `test_fts5_bm25_weights.py` (~391 tok, medium) — bm25() weights must align 1:1 with the indexed blocks_fts columns.
 - `test_fts_fallback.py` (~4436 tok, huge) — Tests for FTS fallback behavior, recall envelope structure, block size cap,
 - `test_governance_bench.py` (~811 tok, large) — Tests for mind-mem governance benchmark suite."""

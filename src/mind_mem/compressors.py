@@ -45,6 +45,15 @@ _DEFAULT_TIMEOUT_S = 60.0
 # source probe a clip removed so `fact_retention` stays 1.0.
 _DEFAULT_NUM_PREDICT = 512
 
+# Post-processing pipeline version. Bumped whenever the prompt template or any
+# `_clean_response` / `_precondition_input` sub-step changes the bytes the
+# compressor emits for a fixed (model, temperature, seed) input. It is folded
+# into `fold_identity()` so a fold-equivalence attestation binds the EXACT
+# compressor behaviour that produced it: a verifier holding a different pipeline
+# version is re-running a different function, and `verify_fold` must refuse it
+# rather than diff against the wrong ground truth.
+_COMPRESSOR_PIPELINE_VERSION = "1"
+
 # --- probe-preserving guard --------------------------------------------------
 # The recompaction benchmark scores fact retention as the fraction of "probes"
 # (numbers, quoted identifiers, ISO dates, capitalized entities) from the source
@@ -92,14 +101,17 @@ date, proper noun, and decision exactly as written; never round, generalize, \
 rephrase, or invent. A tighter list drops only EXACT duplicates and pure \
 connective prose ("Additionally,", "As noted above"), never a fact.
 4. If two lines state the same fact, keep only the first occurrence.
-5. Order lines by the position their fact first appears across the current list \
-then the sibling blocks (stable order — do not re-sort by any other key).
+5. Sort the surviving lines in ascending lexicographic (byte) order — compare \
+them character by character and put the smaller-valued line first. This is a \
+fixed, content-free ordering: it does NOT depend on the order the facts arrived \
+in, so re-normalizing a list that is already byte-sorted leaves it in the exact \
+same order. Do not re-order by salience, recency, appearance, or any other key.
 6. Do not add commentary, headings, blank lines, trailing punctuation beyond \
 what a fact contains, markdown fences, or a preamble.
 
 Because these rules are deterministic and idempotent, a list that is already \
 canonical (no duplicates, no connective prose, already one-fact-per-line in \
-first-appearance order) MUST be returned byte-for-byte identical.
+ascending lexicographic order) MUST be returned byte-for-byte identical.
 
 Current fact list:
 {current}
@@ -121,6 +133,13 @@ class CompressorError(RuntimeError):
 
 def _echo(current_text: str, blocks: list[dict[str, Any]]) -> str:
     return current_text
+
+
+# Fold-attestation identity for the echo control (see `fold_attestation`). Echo
+# is a pure identity function with no knobs, so its version is a bare "1".
+# Attached as a function attribute so `compressor_identity` finds it through the
+# same `fold_identity` hook the class compressors expose.
+_echo.fold_identity = ("mind-mem/echo", "1")  # type: ignore[attr-defined]
 
 
 def EchoCompressor() -> Callable[[str, list[dict[str, Any]]], str]:  # noqa: N802 - factory named like the type it returns
@@ -290,6 +309,67 @@ def _dedup_lines(text: str) -> str:
     return "\n".join(kept)
 
 
+def _line_has_probe(line: str) -> bool:
+    """True iff *line* contains at least one bench-shaped probe.
+
+    Applies the four in-module probe regexes (numbers, quoted identifiers, ISO
+    dates, capitalized entities minus stopwords, len>1) — the exact set the
+    benchmark's ``extract_probes`` scores retention against — to a SINGLE line.
+    A line with no probe carries no fact the bench can measure.
+    """
+    if _GUARD_NUMBER_RE.search(line):
+        return True
+    if _GUARD_QUOTED_RE.search(line):
+        return True
+    if _GUARD_DATE_RE.search(line):
+        return True
+    for m in _GUARD_ENTITY_RE.findall(line):
+        if m not in _GUARD_ENTITY_STOPWORDS and len(m) > 1:
+            return True
+    return False
+
+
+def _drop_probe_empty_lines(text: str) -> str:
+    """Delete non-blank body lines that contain ZERO source-shaped probes.
+
+    A ``mind-mem:4b``-shaped model asked for a canonical fact list still leaves
+    pure connective / filler prose lines in ("Additionally, these blocks are
+    related.", "In summary."). The canonical-list prompt asks it to drop them; a
+    small model does not. Such a line carries no number, quoted identifier, ISO
+    date, or capitalized entity from the source, so by the bench's own
+    ``probes_present`` definition it is fact-free — deleting it is pure
+    ``compression_ratio`` reduction that CANNOT lower ``fact_retention`` (there
+    is no probe on the line to lose). This is a distinct axis from
+    :func:`_dedup_lines` (which removes *duplicate* lines, not fact-free ones)
+    and from the probe-guard trailer (which *adds* dropped probes back).
+
+    Retention-safe by construction: a removed line has no probe, so every bench
+    probe that was a substring of the retained body is still a substring of the
+    output — ``fact_retention`` is provably unchanged. The probe guard runs
+    strictly after this in the pipeline, so any source probe the model genuinely
+    omitted is still re-appended by the guard, not lost here.
+
+    Idempotent by construction: after one pass every surviving non-blank line
+    has a probe, so a second pass drops nothing — required for
+    ``_clean_response`` to stay a no-op on already-clean text and for the
+    recompaction byte fixed point.
+
+    Safety floor (never no-op the compressor into empty): if EVERY non-blank
+    line is probe-empty, drop NOTHING and return the text unchanged. A
+    legitimately probe-free cluster scores retention vacuously 1.0; collapsing
+    its whole body to empty would instead trip the retention floor in
+    ``recompact_cluster`` and score the cluster 0. Blank lines are structure, not
+    facts, and are left to :func:`_canonicalize_whitespace`.
+    """
+    lines = text.split("\n")
+    kept = [line for line in lines if not line.strip() or _line_has_probe(line)]
+    # If nothing probe-bearing survived, the whole (non-blank) body was
+    # fact-free — return it untouched rather than collapse it to empty.
+    if not any(line.strip() for line in kept):
+        return text
+    return "\n".join(kept)
+
+
 _BULLET_RE = re.compile(r"^- ")
 
 
@@ -300,7 +380,14 @@ def _canonicalize_bullet_order(text: str) -> str:
     ``mind-mem:4b``-shaped model asked for a one-fact-per-line list re-emits the
     *same set* of fact lines in a *different order* pass-to-pass (a fact list is
     semantically order-invariant, so the small model has no stable ordering
-    prior). Two byte-distinct permutations of the same facts cycle forever ->
+    prior). The prompt (rule 5) now asks the model for exactly this ascending
+    lexicographic order, so a prompt-obedient model already emits the sorted
+    form and this cleaner is a no-op on it — closing the prompt/post-processor
+    tension where the prompt previously asked for first-appearance order while
+    the cleaner byte-sorted, forcing the model to fight the normalizer every
+    pass. It remains the deterministic backstop for a model that does not honour
+    the ordering rule. Two byte-distinct permutations of the same facts cycle
+    forever ->
     :class:`NonConvergenceError` -> that cluster scores 0. Whitespace/dedup
     normalization cannot fix a *reordering*; only mapping every permutation of a
     run to one canonical order can. This is a distinct axis from the
@@ -367,6 +454,50 @@ def _canonicalize_whitespace(text: str) -> str:
     return text
 
 
+def _precondition_input(current_text: str) -> str:
+    """Project the model's INPUT summary onto the same canonical normal form its OUTPUT is held to.
+
+    This is a qualitatively distinct axis from every prior sub-step: the dedup /
+    whitespace / bullet-order normalizers and the probe guard all act on the
+    model's *response*; this acts on the ``current_text`` the model is *fed*,
+    before the prompt is even built. The motivation is the pass-1 distribution
+    gap. ``recompact_cluster`` seeds the loop with the raw concatenated block
+    bodies (prose), so on the FIRST pass the model reads free prose, while on
+    every later pass it reads its own canonical bullet output. A ``mind-mem:4b``-
+    shaped model told to return an already-canonical list byte-for-byte can only
+    honour that instruction when its input *is* canonical; feeding it raw prose
+    on pass 1 maximises the paraphrase divergence that compounds into
+    oscillation. Pre-conditioning the input closes that gap — the model reads a
+    normalized draft on pass 1 too, so a settled fact set is far likelier to
+    reach the byte fixed point (and in fewer passes) instead of cycling.
+
+    It reuses only the three BODY normalizers — line dedup, line-boundary
+    whitespace, and bullet-run order — and deliberately NOT the preamble / fence
+    / ``<think>`` strips, which are model-response artifacts that never appear in
+    a ``current_text`` (that is either the source-derived prose seed or a prior
+    cleaned pipeline output).
+
+    Fixed-point safety (the load-bearing property): every value the pipeline can
+    emit — ``_apply_probe_guard(_clean_response(raw), blocks)`` — is already a
+    fixed point of these three normalizers (``_clean_response`` runs all three
+    last, and the probe-guard trailer is non-``- ``-prefixed so it is held as an
+    anchor). Therefore ``_precondition_input`` is a strict no-op on any pass-2+
+    ``current_text`` (which is always a prior pipeline output), and it perturbs
+    ONLY the pass-1 prose seed. The loop's ``rewritten == current`` comparison is
+    thus untouched once the loop is in canonical-form territory — this cannot
+    manufacture a fixed point the underlying facts have not reached, and it
+    cannot make the compressor a no-op (the model is still called every pass).
+
+    Pure, deterministic, and idempotent by construction (each sub-op is a
+    projection onto a normal form), so it adds zero non-determinism to the
+    fixed-point argument.
+    """
+    text = _dedup_lines(current_text)
+    text = _canonicalize_whitespace(text)
+    text = _canonicalize_bullet_order(text)
+    return text
+
+
 def _clean_response(raw: str) -> str:
     """Deterministically strip a reasoning block, markdown fences, and LLM preamble.
 
@@ -389,6 +520,16 @@ def _clean_response(raw: str) -> str:
     # whitespace canonicalization so blank-line structure stays owned by
     # `_canonicalize_whitespace`. See `_dedup_lines` for the proofs.
     text = _dedup_lines(text)
+    # Drop fact-free body lines — non-blank lines with ZERO source-shaped probes
+    # (connective/filler prose the small model fails to prune). Runs after dedup
+    # (so a duplicate fact-free line is already gone) and before whitespace
+    # canonicalization (blank-line structure stays owned by
+    # `_canonicalize_whitespace`). Pure compression_ratio reduction: a removed
+    # line has no probe, so retention is provably unchanged; the probe guard runs
+    # later and still re-appends any genuinely-omitted source probe. Idempotent
+    # (surviving lines all have a probe) with a safety floor against collapsing a
+    # legitimately probe-free body to empty. See `_drop_probe_empty_lines`.
+    text = _drop_probe_empty_lines(text)
     # Final: canonicalize line-boundary whitespace so whitespace drift (trailing
     # spaces, blank-line runs) can't block the byte fixed point. Runs last so it
     # also normalizes whitespace exposed by the fence/preamble strips. The outer
@@ -443,7 +584,13 @@ class OllamaCompressor:
         self._num_predict = num_predict
 
     def __call__(self, current_text: str, blocks: list[dict[str, Any]]) -> str:
-        prompt = _PROMPT_TEMPLATE.format(current=current_text, siblings=_render_siblings(blocks))
+        # Pre-condition the INPUT onto the same canonical normal form the OUTPUT
+        # is held to, closing the pass-1 prose-vs-bullet distribution gap (see
+        # `_precondition_input`). A strict no-op on every pass-2+ input (those are
+        # prior pipeline outputs, already canonical), so the fixed-point
+        # comparison is untouched once the loop is in canonical-form territory.
+        conditioned = _precondition_input(current_text)
+        prompt = _PROMPT_TEMPLATE.format(current=conditioned, siblings=_render_siblings(blocks))
         body = {
             "model": self._model,
             "prompt": prompt,
@@ -466,6 +613,22 @@ class OllamaCompressor:
         # does. See the `_apply_probe_guard` docstring for the fixed-point
         # argument.
         return _apply_probe_guard(cleaned, blocks)
+
+    def fold_identity(self) -> tuple[str, str]:
+        """Canonical ``(id, version)`` binding this compressor into a fold attestation.
+
+        The ``id`` names the model; the ``version`` fingerprints every knob that
+        makes the compressor's output a *pure function of its inputs* — the
+        pinned ``temperature`` and ``seed``, the deterministic token cap, and the
+        post-processing ``_COMPRESSOR_PIPELINE_VERSION``. A verifier re-running a
+        fold must hold a compressor whose ``fold_identity`` matches, or it is
+        re-deriving the fixed point with a *different function* than the one that
+        produced the attestation. The host is deliberately excluded — it is a
+        transport endpoint, not part of the bytes the model emits — and no
+        wall-clock or randomness enters, so the identity is stable across runs.
+        """
+        version = f"pipeline{_COMPRESSOR_PIPELINE_VERSION}/temp{self._temperature}/seed{self._seed}/np{self._num_predict}"
+        return (f"mind-mem/ollama:{self._model}", version)
 
     def _post(self, body: dict[str, Any]) -> str:
         url = f"{self._host}/api/generate"

@@ -51,6 +51,11 @@ VALID_OPERATIONS = frozenset(
         "restore_backup",
         "apply_proposal",
         "rollback",
+        # Anchors a recompaction fold-equivalence ("folded==ran") attestation:
+        # the fold's input/output digests + compressor identity, chained
+        # tamper-evidently so a third party can re-run one deterministic pass
+        # and diff. See `fold_attestation`.
+        "fold_attest",
     }
 )
 
