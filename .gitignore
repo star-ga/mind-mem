@@ -47,3 +47,9 @@ _integrity_manifest.json
 # secrets (audit 2026-06-20)
 .env
 .env.*
+
+# internal intel — never push to public (attribution/no-public-attribution rule)
+docs/internal/
+
+# local recall index DB — never commit to the public flagship
+recall.db

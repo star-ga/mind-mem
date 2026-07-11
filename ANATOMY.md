@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 912 | **Est. tokens:** ~1,953,394
-**Generated:** 2026-07-10 15:13 UTC
+**Files:** 914 | **Est. tokens:** ~1,957,265
+**Generated:** 2026-07-11 00:05 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~68,854 |
+| `./` | 35 | ~68,897 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -35,7 +35,7 @@
 | `docs/` | 84 | ~155,664 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 3 | ~4,055 |
-| `docs/science-superpowers/preregistrations/` | 9 | ~11,688 |
+| `docs/science-superpowers/preregistrations/` | 11 | ~14,514 |
 | `docs/security-baselines/` | 1 | ~18,974 |
 | `examples/` | 3 | ~1,201 |
 | `.gemini/` | 1 | ~28 |
@@ -60,7 +60,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 164 | ~582,695 |
+| `src/mind_mem/` | 164 | ~583,697 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 2 | ~5,379 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
@@ -100,7 +100,7 @@
 - `EVIDENCE.md` (~1206 tok, large) — Evidence Matrix
 - `generate_mind7b_training.py` (~5558 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
-- `.gitignore` (~237 tok, medium) — *.pyc
+- `.gitignore` (~280 tok, medium) — *.pyc
 - `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~4935 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
@@ -271,9 +271,11 @@
 ### `docs/science-superpowers/preregistrations/`
 
 - `2026-07-10-body-line-dedup-compressor.md` (~1283 tok, large) — Pre-registration: body-level exact-line deduplication in `_clean_response`
+- `2026-07-10-canonical-normal-form-short-circuit.md` (~1439 tok, large) — Pre-registration: pre-model canonical-normal-form idempotence short-circuit
 - `2026-07-10-extractive-projection-compressor.md` (~1292 tok, large) — Pre-registration: extractive-projection OllamaCompressor for recompaction
 - `2026-07-10-list-marker-glyph-canonicalization.md` (~1364 tok, large) — Pre-registration: list-marker glyph canonicalization for recompaction convergence
 - `2026-07-10-numpredict-length-cap-compressor.md` (~1328 tok, large) — Pre-registration: deterministic `num_predict` output-length cap on OllamaCompressor
+- `2026-07-10-probe-empty-line-drop-compressor.md` (~1387 tok, large) — Pre-registration: probe-empty fact-free line drop in `_clean_response`
 - `2026-07-10-probe-guard-substring-collapse.md` (~1447 tok, large) — Pre-registration: substring-collapse the probe-guard trailer in OllamaCompressor
 - `2026-07-10-probe-preserving-guard-compressor.md` (~1359 tok, large) — Pre-registration: deterministic probe-preserving guard in OllamaCompressor
 - `2026-07-10-recompaction-canonical-bullet-prompt.md` (~1316 tok, large) — Pre-registration: recompaction canonical-bullet convergence prompt
@@ -509,7 +511,7 @@
 - `cognitive_forget.py` (~2667 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `compaction.py` (~3270 tok, huge) — mind-mem Compaction & GC Engine. Zero external deps.
 - `compiled_truth.py` (~6410 tok, huge) — mind-mem Compiled Truth — synthesized entity pages with append-only evidence.
-- `compressors.py` (~7194 tok, huge) — Real `Compressor` implementations for mind_mem.recompaction. Zero new deps.
+- `compressors.py` (~8196 tok, huge) — Real `Compressor` implementations for mind_mem.recompaction. Zero new deps.
 - `conflict_resolver.py` (~3377 tok, huge) — mind-mem Automated Conflict Resolution Pipeline. Zero external deps.
 - `connection_manager.py` (~1165 tok, large) — SQLite connection manager with read/write separation and WAL mode.
 - `consensus_vote.py` (~1871 tok, huge) — Quorum-based consensus voting on contradictions (v3.3.0).
