@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as _FutureTimeout
 from typing import Any
 
 from .observability import get_logger, metrics, timed
@@ -237,8 +238,27 @@ class HybridBackend:
         self._query_expansion_enabled: bool = bool(qe_cfg.get("enabled", False))
         self._query_expansion_config: dict[str, Any] = qe_cfg
 
-        # Probe vector availability once at init
-        self._vector_available = self._check_vector() if self.vector_enabled else False
+        # Probe vector availability once at init. When the operator
+        # explicitly enabled vector recall (recall.vector_enabled=true) but
+        # the backend is not importable / not serviceable, FAIL LOUD
+        # (warning + metric) instead of silently degrading to BM25 — a
+        # misconfigured or missing embedder must be visible, never invisible
+        # (#139: silent BM25-only fallback).
+        if self.vector_enabled:
+            self._vector_available = self._check_vector()
+            if not self._vector_available:
+                _log.warning(
+                    "hybrid_vector_requested_but_unavailable",
+                    hint=(
+                        "recall.vector_enabled=true but the vector backend is not "
+                        "importable; recall is degraded to BM25-only. Install the "
+                        "vector extras and verify the embedder is reachable."
+                    ),
+                    fallback="bm25_only",
+                )
+                metrics.inc("hybrid_vector_requested_but_unavailable")
+        else:
+            self._vector_available = False
 
         _log.info(
             "hybrid_backend_init",
@@ -264,6 +284,23 @@ class HybridBackend:
     @property
     def vector_available(self) -> bool:
         return self._vector_available
+
+    def _vector_deadline_seconds(self) -> float:
+        """Wall-clock bound (seconds) on the parallel vector leg.
+
+        Guarantees recall degrades to BM25-only fusion rather than
+        blocking when the embedder or vector store stalls. Defaults to a
+        margin above the per-request embed timeout; override via
+        ``recall.vector_deadline_seconds``. Clamped to a sane range.
+        """
+        default = 14.0
+        try:
+            val = float(self._config.get("vector_deadline_seconds", default))
+        except (TypeError, ValueError):
+            return default
+        if val <= 0:
+            return default
+        return max(1.0, min(val, 120.0))
 
     # -- search entry point -------------------------------------------------
 
@@ -471,7 +508,20 @@ class HybridBackend:
                     active_only=active_only,
                 )
                 bm25_results = bm25_future.result()
-                vec_results = vec_future.result()
+                # Hard bound on the vector leg: if the embedder is cold /
+                # slow / down, degrade to BM25-only fusion instead of
+                # blocking the whole recall request (the vector work
+                # includes an embedding HTTP round-trip, itself bounded).
+                try:
+                    vec_results = vec_future.result(timeout=self._vector_deadline_seconds())
+                except _FutureTimeout:
+                    _log.warning(
+                        "hybrid_vector_leg_timeout",
+                        deadline=self._vector_deadline_seconds(),
+                        fallback="bm25_only",
+                    )
+                    vec_future.cancel()
+                    vec_results = []
 
             _log.info(
                 "hybrid_results_pre_fusion",

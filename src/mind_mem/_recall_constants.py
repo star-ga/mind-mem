@@ -467,5 +467,24 @@ _VALID_RECALL_KEYS = frozenset(
         "knee_cutoff",
         "min_score",
         "dedup",
+        # Vector / hybrid recall keys (Postgres pgvector + RRF path). These
+        # are consumed by PostgresRecallBackend / VectorBackend / the pgvector
+        # hybrid_search; previously they lived only in recall_vector's own
+        # allowlist, so a `recall` block authored against the hybrid backend
+        # spuriously logged `unknown_recall_config_keys` and the loader fell
+        # back to BM25-only. See _recall_core.PostgresRecallBackend.search.
+        "rrf_k",
+        "bm25_weight",
+        "vector_weight",
+        "vector_enabled",
+        "onnx_backend",
+        "provider",
+        "model",
+        "ollama_embed_model",
+        "postgres",
+        # Fail-fast bounds for the embedding / vector legs so recall never
+        # blocks when the embedder (ollama / llama.cpp) is cold or down.
+        "embed_timeout_seconds",
+        "vector_deadline_seconds",
     }
 )

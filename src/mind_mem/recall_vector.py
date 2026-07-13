@@ -61,6 +61,26 @@ from .recall import (
 
 _log = get_logger("recall_vector")
 
+# Default hard bound (seconds) on a single embedding HTTP round-trip. Recall
+# must degrade to BM25 on a cold/slow/unreachable embedder rather than block
+# for minutes; override per-workspace via recall.embed_timeout_seconds.
+_DEFAULT_EMBED_TIMEOUT_SECONDS = 8.0
+
+
+def _embed_timeout_seconds(config: dict | None) -> float:
+    """Return the per-request embedding timeout in seconds (fail-fast bound).
+
+    Reads ``embed_timeout_seconds`` from the recall config, clamped to a
+    sane [0.5, 120] range. Invalid / missing values fall back to the default.
+    """
+    try:
+        val = float((config or {}).get("embed_timeout_seconds", _DEFAULT_EMBED_TIMEOUT_SECONDS))
+    except (TypeError, ValueError):
+        return _DEFAULT_EMBED_TIMEOUT_SECONDS
+    if val <= 0:
+        return _DEFAULT_EMBED_TIMEOUT_SECONDS
+    return max(0.5, min(val, 120.0))
+
 
 # ---------------------------------------------------------------------------
 # Vector Backend Implementation
@@ -111,6 +131,10 @@ class VectorBackend(RecallBackend):
             "onnx_backend",
             "sqlite_vec_db",
             "llama_cpp_url",
+            "ollama_embed_model",
+            "embed_timeout_seconds",
+            "vector_deadline_seconds",
+            "postgres",
         }
         unknown = set(config.keys()) - _VALID_KEYS
         if unknown:
@@ -394,12 +418,15 @@ class VectorBackend(RecallBackend):
 
         url = self.llama_cpp_url.rstrip("/") + "/embeddings"
         BATCH = 32
+        # Fail-fast bound: recall must degrade to BM25 on a cold/slow/down
+        # embedder, never block for minutes. Configurable via recall config.
+        _embed_timeout = _embed_timeout_seconds(self.config)
         all_embeddings = []
         for i in range(0, len(texts), BATCH):
             batch = texts[i : i + BATCH]
             payload = json.dumps({"input": batch}).encode("utf-8")
             req = _req.Request(url, data=payload, headers={"Content-Type": "application/json"})
-            with _req.urlopen(req, timeout=120) as resp:  # nosec B310 — URL is hardcoded to http://localhost:*/ (loopback only)
+            with _req.urlopen(req, timeout=_embed_timeout) as resp:  # nosec B310 — URL is hardcoded to http://localhost:*/ (loopback only)
                 result = json.loads(resp.read().decode("utf-8"))
             # llama.cpp returns a list of {index, embedding} objects
             if isinstance(result, list):
@@ -434,6 +461,9 @@ class VectorBackend(RecallBackend):
         model = self.config.get("ollama_embed_model", self.model_name)
         MAX_CHARS = 1500  # ~375 tokens, safe for 512-ctx embedding models
         BATCH = 16  # small batches to stay under total context limit
+        # Fail-fast bound: recall must degrade to BM25 on a cold/slow/down
+        # ollama, never block for minutes. Configurable via recall config.
+        _embed_timeout = _embed_timeout_seconds(self.config)
         all_embeddings: list[list[float]] = []
 
         for i in range(0, len(texts), BATCH):
@@ -441,7 +471,7 @@ class VectorBackend(RecallBackend):
             payload = json.dumps({"model": model, "input": batch}).encode("utf-8")
             req = _req.Request(url, data=payload, headers={"Content-Type": "application/json"})
             with timed("embed_ollama"):
-                with _req.urlopen(req, timeout=120) as resp:  # nosec B310 — URL is hardcoded to http://localhost:11434 (loopback only)
+                with _req.urlopen(req, timeout=_embed_timeout) as resp:  # nosec B310 — URL is hardcoded to http://localhost:11434 (loopback only)
                     result = json.loads(resp.read().decode("utf-8"))
             embeddings = result.get("embeddings", [])
             all_embeddings.extend(embeddings)

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 916 | **Est. tokens:** ~1,964,727
-**Generated:** 2026-07-11 01:07 UTC
+**Files:** 917 | **Est. tokens:** ~1,970,121
+**Generated:** 2026-07-13 05:59 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~68,897 |
+| `./` | 35 | ~69,100 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -32,7 +32,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 84 | ~155,664 |
+| `docs/` | 84 | ~155,886 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 3 | ~4,055 |
 | `docs/science-superpowers/preregistrations/` | 11 | ~14,514 |
@@ -42,7 +42,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 8 | ~4,180 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 12 | ~9,940 |
+| `.github/workflows/` | 12 | ~10,047 |
 | `hooks/` | 3 | ~801 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -60,7 +60,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 165 | ~588,446 |
+| `src/mind_mem/` | 165 | ~590,858 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 2 | ~5,379 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
@@ -71,7 +71,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 22 | ~58,472 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 314 | ~678,271 |
+| `tests/` | 315 | ~680,721 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -88,7 +88,7 @@
 
 - `AGENTS.md` (~995 tok, large) — mind-mem: agent instructions (auto-written)
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: MIND-Mem (Commit 30d8b71)
-- `CLAUDE.md` (~4084 tok, huge) — MIND-Mem — Persistent AI Memory System
+- `CLAUDE.md` (~4214 tok, huge) — MIND-Mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~751 tok, large) — Contributing to MIND-Mem
 - `.cursorrules` (~23 tok, tiny) — # mind-mem
@@ -111,7 +111,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~2257 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~25310 tok, huge) — 30-Second Demo
+- `README.md` (~25383 tok, huge) — 30-Second Demo
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
@@ -248,7 +248,7 @@
 - `mic-map.md` (~1686 tok, huge) — MIC/MAP — MIND IR Graph Serialization
 - `migration-guide.md` (~421 tok, medium) — Migration Guide
 - `migration.md` (~2754 tok, huge) — Migration Guide: mem-os to MIND-Mem
-- `MIND_CONFIG_VS_MIND_LANG.md` (~2318 tok, huge) — MIND configuration vs MIND language — clarifying the .mind extension
+- `MIND_CONFIG_VS_MIND_LANG.md` (~2540 tok, huge) — MIND configuration vs MIND language — clarifying the .mind extension
 - `mind-kernels.md` (~339 tok, medium) — MIND Kernels
 - `mind-mem-4b-setup.md` (~2615 tok, huge) — Setting up the mind-mem-4b model
 - `mind-mem-4b-training-runbook.md` (~3586 tok, huge) — mind-mem-4b training runbook (post-v3.10.2 lessons)
@@ -346,7 +346,7 @@
 
 - `audit-pinned.yml` (~412 tok, medium) — name: Audit Pinned Models
 - `benchmark.yml` (~761 tok, large) — name: Benchmark
-- `ci.yml` (~3046 tok, huge) — name: CI
+- `ci.yml` (~3153 tok, huge) — name: CI
 - `codeql.yml` (~225 tok, medium) — name: CodeQL
 - `dependency-review.yml` (~114 tok, small) — name: Dependency Review
 - `docs.yml` (~262 tok, medium) — name: Docs
@@ -496,7 +496,7 @@
 - `block_metadata.py` (~2223 tok, huge) — mind-mem A-MEM — auto-evolving block metadata.
 - `block_parser.py` (~7555 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_store_encrypted.py` (~2313 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store_postgres.py` (~15595 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
+- `block_store_postgres.py` (~16283 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~2530 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
 - `block_store.py` (~10535 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
@@ -547,7 +547,7 @@
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~10495 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `http_transport.py` (~11242 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
-- `hybrid_recall.py` (~10274 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `hybrid_recall.py` (~10875 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `inbox.py` (~3595 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).
 - `ingestion_pipeline.py` (~1752 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~714 tok, large) — # Mind Mem — Memory + Immune System for AI agents
@@ -642,9 +642,9 @@
 - `query_expansion.py` (~4680 tok, huge) — Multi-query expansion for improved recall.
 - `query_planner.py` (~2865 tok, huge) — Query decomposition for multi-hop questions (v3.3.0 Tier 1 #1).
 - `recall_cache.py` (~2938 tok, huge) — v3.2.0 — distributed recall result cache (Redis + in-process LRU fallback).
-- `_recall_constants.py` (~2514 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
+- `_recall_constants.py` (~2734 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
 - `_recall_context.py` (~2601 tok, huge) — Recall engine context packing — post-retrieval augmentation rules."""
-- `_recall_core.py` (~19395 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
+- `_recall_core.py` (~19941 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
 - `_recall_detection.py` (~5477 tok, huge) — Recall engine detection — query type classification, text extraction, block utilities."""
 - `_recall_expansion.py` (~3249 tok, huge) — Recall engine query expansion — domain synonyms, month normalization, RM3."""
 - `_recall_explain.py` (~1331 tok, large) — Score decomposition record for explainable recall (v3.11.0, Pattern 1).
@@ -653,7 +653,7 @@
 - `_recall_scoring.py` (~3715 tok, huge) — Recall engine scoring — BM25F helper, date scores, graph boosting, negation, date proximity, categories."""
 - `_recall_temporal.py` (~2044 tok, huge) — Recall engine temporal filtering — resolve relative time references and filter blocks."""
 - `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
-- `recall_vector.py` (~14936 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
+- `recall_vector.py` (~15293 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `_recall_workspace.py` (~1958 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `recompaction.py` (~2498 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
 - `rerank_ensemble.py` (~3364 tok, huge) — Reranker ensemble via Borda count (v3.3.0 Tier 4 #9).
@@ -914,6 +914,7 @@
 - `test_intent_router_adaptive.py` (~3618 tok, huge) — Tests for adaptive intent routing (#470).
 - `test_intent_router.py` (~1176 tok, large) — Tests for 9-type intent router."""
 - `test_interaction_signals.py` (~3177 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_issue_139_140_recall_infra.py` (~2450 tok, huge) — Regression tests for recall-infra issues #139 and #140.
 - `test_issue_526_acl_fail_closed.py` (~682 tok, large) — Regression for issue #526: ACL `_get_request_scope` must fail-closed.
 - `test_issue_527_three_way_merge_vclock.py` (~1018 tok, large) — Regression for issue #527: THREE_WAY_MERGE must bump the vclock.
 - `test_issue_529_federation_client_hardening.py` (~1202 tok, large) — Regression for issue #529: FederationClient hardening.
