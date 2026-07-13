@@ -464,9 +464,19 @@ class HybridBackend:
                     fallback="single_query",
                 )
 
+        # Postgres workspaces fuse BM25 + pgvector SERVER-SIDE: the local
+        # "BM25" leg here (recall -> PostgresRecallBackend.search) is itself
+        # the store's ``hybrid_search`` (BM25 + pgvector RRF, labeled
+        # ``hybrid_pgvector`` / ``bm25_fallback``). Running HybridBackend's
+        # OWN second local vector leg on top would (a) double-count the
+        # vector contribution and (b) drive the provider=postgres path in
+        # ``search_batch`` (audit 1a). So for postgres we take the single-leg
+        # local path — which is already server-side hybrid — and let the
+        # cross-encoder rerank below still apply, instead of fusing twice.
+        pg_server_side = isinstance(self._config, dict) and self._config.get("provider") == "postgres"
         with timed("hybrid_search"):
-            if not self._vector_available:
-                _log.info("hybrid_bm25_only", query=query)
+            if not self._vector_available or pg_server_side:
+                _log.info("hybrid_bm25_only", query=query, pg_server_side=pg_server_side)
                 results = self._bm25_search(
                     query,
                     workspace,
@@ -488,7 +498,19 @@ class HybridBackend:
             bm25_results: list[dict] = []
             vec_results: list[dict] = []
 
-            with ThreadPoolExecutor(max_workers=2) as pool:
+            # Manual pool lifecycle — NOT ``with ThreadPoolExecutor(...) as
+            # pool``. The context manager's __exit__ calls shutdown(wait=True),
+            # which re-joins a still-running vector worker even after the
+            # deadline below fired — so ``timeout=`` bounded the RESULT wait
+            # but NOT the wall-clock of an unbounded leg (e.g. a provider=local
+            # sentence-transformers embed that hangs on model download). We
+            # therefore shut the pool down with wait=False + cancel_futures so
+            # recall returns at the deadline and abandons the leaked worker
+            # instead of blocking on it (audit finding 4). cancel_futures drops
+            # any not-yet-started task; an already-running embed thread cannot
+            # be force-killed, but it no longer holds up the response.
+            pool = ThreadPoolExecutor(max_workers=2)
+            try:
                 bm25_future: Future = pool.submit(
                     self._bm25_search,
                     query,
@@ -522,6 +544,10 @@ class HybridBackend:
                     )
                     vec_future.cancel()
                     vec_results = []
+            finally:
+                # wait=False so a hung vector leg cannot re-block the response
+                # here (the whole point of the deadline above).
+                pool.shutdown(wait=False, cancel_futures=True)
 
             _log.info(
                 "hybrid_results_pre_fusion",

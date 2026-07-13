@@ -1,13 +1,22 @@
 """Regression tests for recall-infra issues #139 and #140.
 
-#139 — recall config-key schema drift silently degraded vector/hybrid recall
-       to BM25-only. The vector/RRF config keys (``rrf_k``, ``bm25_weight``,
+#139 — the vector/RRF config keys (``rrf_k``, ``bm25_weight``,
        ``vector_enabled``, ``ollama_embed_model``, ``postgres`` …) were absent
        from ``_VALID_RECALL_KEYS`` so a hybrid-authored ``recall`` block logged
-       ``unknown_recall_config_keys`` and never engaged the vector leg. These
-       tests assert the config now *resolves to hybrid* (not BM25-fallback) and
-       that an unavailable-but-requested vector backend fails **loud**, never
-       silently.
+       a spurious ``unknown_recall_config_keys`` warning.
+       **Narrative correction (v4.2.3, audit finding 6):** that missing-key
+       warning was *hygiene only* — ``_load_backend`` never consults
+       ``_VALID_RECALL_KEYS`` for backend RESOLUTION (it logs the warning, then
+       resolves from ``recall.backend`` / the block-store backend regardless),
+       so the whitelist gap did NOT by itself downgrade recall to BM25-only.
+       The real, silent BM25-only degradation on a Postgres workspace came from
+       the pgvector-engagement defects fixed in v4.2.3 (``VectorBackend.search``
+       raising ``ValueError: Unknown provider: postgres`` swallowed to ``[]``;
+       an un-backfilled ``embedding`` column mislabelled ``hybrid_pgvector``;
+       ``_embed_query`` hardcoding ``embed_ollama``). These tests still assert
+       the useful, TRUE properties: the keys are recognised (no spurious
+       warning), the config *resolves to hybrid*, and an unavailable-but-
+       requested vector backend fails **loud**, never silently.
 
 #140 — the MCP recall tool hung ~30s on a postgres+ollama workspace: the
        embedding HTTP round-trip and the psycopg_pool checkout both had no /
@@ -194,12 +203,14 @@ def _install_recording_pool(monkeypatch: pytest.MonkeyPatch) -> dict:
 
 def test_postgres_pool_uses_bounded_connect_and_checkout_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     """The pool is built with a bounded libpq connect_timeout AND a checkout
-    timeout strictly below psycopg_pool's 30s default — the #140 root cause."""
+    timeout strictly below psycopg_pool's 30s default (the #140 root cause),
+    plus a server-side ``statement_timeout`` so a stuck query is aborted
+    rather than waited on forever (audit finding 9)."""
     rec = _install_recording_pool(monkeypatch)
     store = PostgresBlockStore(dsn="postgresql://u:p@localhost:5432/db", schema="mind_mem")
     store._get_pool()
 
-    assert rec["kw"]["kwargs"] == {"connect_timeout": 5}
+    assert rec["kw"]["kwargs"] == {"connect_timeout": 5, "options": "-c statement_timeout=30000"}
     checkout = rec["kw"]["timeout"]
     assert checkout == 10.0
     assert checkout < 30.0, "checkout timeout must be below psycopg_pool's 30s default"
@@ -207,11 +218,41 @@ def test_postgres_pool_uses_bounded_connect_and_checkout_timeout(monkeypatch: py
 
 def test_postgres_pool_respects_dsn_supplied_connect_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     """When the operator already set connect_timeout in the DSN, we do not
-    override it (their intent wins)."""
+    override it (their intent wins) — but the server-side statement_timeout is
+    still applied because the DSN carries no ``options``."""
     rec = _install_recording_pool(monkeypatch)
     store = PostgresBlockStore(dsn="postgresql://u:p@h/db?connect_timeout=20", schema="mind_mem")
     store._get_pool()
-    assert rec["kw"]["kwargs"] == {}
+    assert rec["kw"]["kwargs"] == {"options": "-c statement_timeout=30000"}
+
+
+def test_postgres_pool_respects_dsn_supplied_options(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An ``options`` already in the DSN (e.g. the ``-csearch_path=`` schema
+    form) is never clobbered — statement_timeout is only injected when the
+    operator supplied no options of their own (audit finding 9)."""
+    rec = _install_recording_pool(monkeypatch)
+    store = PostgresBlockStore(dsn="postgresql://u:p@h/db?options=-csearch_path=ws", schema="mind_mem")
+    store._get_pool()
+    assert "options" not in rec["kw"]["kwargs"] or "search_path" not in rec["kw"]["kwargs"].get("options", "")
+    assert rec["kw"]["kwargs"] == {"connect_timeout": 5}
+
+
+def test_postgres_pool_statement_timeout_env_overridable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """statement_timeout is env-overridable to any positive value — but a
+    non-positive / non-numeric override falls back to the safe default, never
+    silently re-opening an unbounded wait (audit finding 9). Operators who
+    genuinely want no statement_timeout use their own DSN ``options`` instead
+    (see test_postgres_pool_respects_dsn_supplied_options)."""
+    monkeypatch.setenv("MIND_MEM_PG_STATEMENT_TIMEOUT_MS", "5000")
+    rec = _install_recording_pool(monkeypatch)
+    PostgresBlockStore(dsn="postgresql://u:p@h/db", schema="mind_mem")._get_pool()
+    assert rec["kw"]["kwargs"] == {"connect_timeout": 5, "options": "-c statement_timeout=5000"}
+
+    # Non-positive / typo → safe default (30s), never 0/forever.
+    monkeypatch.setenv("MIND_MEM_PG_STATEMENT_TIMEOUT_MS", "0")
+    rec2 = _install_recording_pool(monkeypatch)
+    PostgresBlockStore(dsn="postgresql://u:p@h2/db", schema="mind_mem")._get_pool()
+    assert rec2["kw"]["kwargs"] == {"connect_timeout": 5, "options": "-c statement_timeout=30000"}
 
 
 def test_postgres_pool_timeout_env_overridable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -221,7 +262,7 @@ def test_postgres_pool_timeout_env_overridable(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("MIND_MEM_PG_POOL_TIMEOUT", "12")
     rec = _install_recording_pool(monkeypatch)
     PostgresBlockStore(dsn="postgresql://u:p@h/db", schema="mind_mem")._get_pool()
-    assert rec["kw"]["kwargs"] == {"connect_timeout": 7}
+    assert rec["kw"]["kwargs"] == {"connect_timeout": 7, "options": "-c statement_timeout=30000"}
     assert rec["kw"]["timeout"] == 12.0
 
     # Bad env value → default, never 0/forever.
@@ -229,5 +270,5 @@ def test_postgres_pool_timeout_env_overridable(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("MIND_MEM_PG_CONNECT_TIMEOUT", "nope")
     rec2 = _install_recording_pool(monkeypatch)
     PostgresBlockStore(dsn="postgresql://u:p@h2/db", schema="mind_mem")._get_pool()
-    assert rec2["kw"]["kwargs"] == {"connect_timeout": 5}
+    assert rec2["kw"]["kwargs"] == {"connect_timeout": 5, "options": "-c statement_timeout=30000"}
     assert rec2["kw"]["timeout"] == 10.0

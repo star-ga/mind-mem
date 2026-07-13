@@ -219,6 +219,20 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
         )
         warnings.append(f"Query exceeded timeout ({round(recall_elapsed, 1)}s > {timeout_seconds}s). Results may be incomplete.")
 
+    # Surface the pgvector-degradation label (audit findings 1b + 7): when the
+    # Postgres store served BM25-only because its ``embedding`` column is
+    # un-backfilled or the embedder was unavailable, every hit carries
+    # ``_retrieval_source == "bm25_fallback"``. The MCP ``warnings`` array is
+    # the only surface a caller sees, so lift the degradation into it instead
+    # of letting a "hybrid" backend label imply a two-leg fusion that never
+    # happened.
+    if any(isinstance(r, dict) and r.get("_retrieval_source") == "bm25_fallback" for r in results):
+        warnings.append(
+            "Vector recall degraded to BM25-only: the pgvector embedding column "
+            "is empty (run the 'reindex' tool / backfill_embedding) or the "
+            "embedder is unavailable. Results are BM25-only, not hybrid."
+        )
+
     try:
         from mind_mem.calibration import make_query_id
 

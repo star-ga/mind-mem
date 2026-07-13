@@ -62,6 +62,7 @@ _pool_registry_lock = threading.Lock()
 # operators on genuinely slow links.
 _DEFAULT_PG_CONNECT_TIMEOUT = 5.0  # libpq per-connection connect() bound (s)
 _DEFAULT_PG_POOL_TIMEOUT = 10.0  # pool checkout wait bound (s); < psycopg_pool's 30s
+_DEFAULT_PG_STATEMENT_TIMEOUT_MS = 30000.0  # server-side per-statement abort (ms); 0 disables
 
 
 def _env_float(name: str, default: float) -> float:
@@ -81,18 +82,33 @@ def _env_float(name: str, default: float) -> float:
 
 
 def _pool_connect_kwargs(dsn: str) -> dict[str, Any]:
-    """psycopg connect kwargs for pooled connections, with a bounded
-    ``connect_timeout`` so an unreachable Postgres fails fast (#140).
+    """psycopg connect kwargs for pooled connections, with two bounds so a
+    slow/unreachable Postgres cannot hang a caller indefinitely:
 
-    Respects a ``connect_timeout`` already present in the DSN (operator
-    intent wins) and the ``MIND_MEM_PG_CONNECT_TIMEOUT`` env override. libpq
+      * ``connect_timeout`` — libpq per-connection connect() bound (#140).
+      * ``options='-c statement_timeout=<ms>'`` — server-side cap on any
+        single statement so a stuck query is aborted rather than waited on
+        forever (audit finding 9).
+
+    Operator intent in the DSN wins: an existing ``connect_timeout`` /
+    ``options`` in the DSN is left untouched (the ``?options=-csearch_path=``
+    schema form is therefore never clobbered — and supplying your own
+    ``options`` is the escape hatch to run without a statement_timeout). libpq
     treats ``connect_timeout`` as an integer number of seconds and any value
-    below 2 as 2, so the bound is floored to an int ≥ 1.
+    below 2 as 2, so the bound is floored to an int ≥ 1. The statement bound
+    is overridable via ``MIND_MEM_PG_STATEMENT_TIMEOUT_MS`` (a non-positive /
+    non-numeric value is ignored → the safe default, per ``_env_float``, so a
+    typo can never re-introduce an unbounded wait), and the connect bound via
+    ``MIND_MEM_PG_CONNECT_TIMEOUT``.
     """
-    if "connect_timeout" in dsn:
-        return {}
-    secs = int(max(1.0, _env_float("MIND_MEM_PG_CONNECT_TIMEOUT", _DEFAULT_PG_CONNECT_TIMEOUT)))
-    return {"connect_timeout": secs}
+    kwargs: dict[str, Any] = {}
+    if "connect_timeout" not in dsn:
+        kwargs["connect_timeout"] = int(max(1.0, _env_float("MIND_MEM_PG_CONNECT_TIMEOUT", _DEFAULT_PG_CONNECT_TIMEOUT)))
+    if "options" not in dsn:
+        stmt_ms = int(max(0.0, _env_float("MIND_MEM_PG_STATEMENT_TIMEOUT_MS", _DEFAULT_PG_STATEMENT_TIMEOUT_MS)))
+        if stmt_ms > 0:
+            kwargs["options"] = f"-c statement_timeout={stmt_ms}"
+    return kwargs
 
 
 def _pool_checkout_timeout() -> float:
@@ -950,6 +966,41 @@ class PostgresBlockStore:
                         fcur.execute(fetch_sql, (top_ids,))
                         rows_by_id = {r["id"]: dict(r) for r in fcur.fetchall()}
 
+                    # Honest retrieval-source label (audit finding 1b). The
+                    # label must reflect what actually contributed to fusion,
+                    # not what was *requested*: stamping ``hybrid_pgvector``
+                    # whenever ``do_vector`` was true silently lied on a
+                    # workspace whose ``embedding`` column is un-backfilled
+                    # (every row NULL → ``cos_rows`` empty → RRF fused BM25
+                    # alone at 1/(k+1), yet the caller saw ``hybrid_pgvector``).
+                    #   * ``hybrid_pgvector`` — the vector CTE returned rows and
+                    #     genuinely contributed to fusion.
+                    #   * ``bm25_fallback``   — vector was requested (embedding
+                    #     supplied + pgvector present) but the CTE returned 0
+                    #     rows (no backfill / leg failed): BM25-only, and LOUD.
+                    #   * ``bm25_only``       — no embedding supplied; BM25 by
+                    #     design (caller never asked for the vector leg).
+                    vector_contributed = bool(cos_rows)
+                    if vector_contributed:
+                        retrieval_source = "hybrid_pgvector"
+                    elif do_vector:
+                        retrieval_source = "bm25_fallback"
+                        _log.warning(
+                            "pg_hybrid_vector_leg_empty_bm25_fallback",
+                            extra={
+                                "schema": self._schema,
+                                "has_vector": self._has_vector,
+                                "advice": (
+                                    "pgvector cosine leg returned 0 rows — the "
+                                    "embedding column is not backfilled or the "
+                                    "embedder is unavailable; results are BM25-only. "
+                                    "Run backfill_embedding / reindex."
+                                ),
+                            },
+                        )
+                    else:
+                        retrieval_source = "bm25_only"
+
                     out: list[dict[str, Any]] = []
                     for bid in top_ids:
                         row = rows_by_id.get(bid)
@@ -957,11 +1008,65 @@ class PostgresBlockStore:
                             continue  # raced delete; skip silently.
                         block = _row_to_block(row)
                         block["_score"] = score_by_id[bid]
-                        block["_retrieval_source"] = "hybrid_pgvector" if do_vector else "bm25_only"
+                        block["_retrieval_source"] = retrieval_source
                         out.append(block)
                     return out
         except Exception as exc:
             raise BlockStoreError(f"hybrid_search failed: {exc}") from exc
+
+    def vector_search(
+        self,
+        query_embedding: list[float],
+        *,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Vector-only cosine recall against the pgvector ``embedding`` column.
+
+        Returns the ``limit`` nearest active blocks by cosine distance,
+        each annotated with ``_score`` (``1 - cosine_distance``, higher =
+        closer) and ``_retrieval_source = "pgvector"``. Returns ``[]`` when
+        pgvector is unavailable or no row has an embedding (un-backfilled
+        column) — never silently mislabels.
+
+        Single-leg counterpart to :meth:`hybrid_search`. Lets a caller that
+        runs its own BM25 leg (the HybridBackend RRF path via
+        ``VectorBackend.search``) obtain a real pgvector leg for a Postgres
+        workspace instead of the old ``ValueError: Unknown provider:
+        postgres`` that ``search_batch`` swallowed to ``[]`` (audit 1a).
+        """
+        self._ensure_schema()
+        psycopg, _ = _require_psycopg()
+        if not self._has_vector or not query_embedding:
+            return []
+        if len(query_embedding) != self._embedding_dim:
+            raise BlockStoreError(f"query_embedding dim mismatch: got {len(query_embedding)}, schema expects {self._embedding_dim}")
+        limit = min(int(limit), 200)
+        cos_sql = _sql(
+            self._schema,
+            "SELECT id, file_path, content, metadata, created_at, updated_at, active,"
+            "       (embedding <=> %s::vector) AS dist"
+            " FROM {s}.blocks"
+            " WHERE active AND embedding IS NOT NULL"
+            " ORDER BY embedding <=> %s::vector"
+            " LIMIT %s",
+        )
+        pool = self._get_pool()
+        emb_lit = _embedding_to_pg(query_embedding)
+        try:
+            with pool.connection() as conn:
+                with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+                    cur.execute(cos_sql, (emb_lit, emb_lit, limit))
+                    rows = [dict(r) for r in cur.fetchall()]
+            out: list[dict[str, Any]] = []
+            for row in rows:
+                dist = float(row.pop("dist", 1.0) or 0.0)
+                block = _row_to_block(row)
+                block["_score"] = round(1.0 - dist, 6)
+                block["_retrieval_source"] = "pgvector"
+                out.append(block)
+            return out
+        except Exception as exc:
+            raise BlockStoreError(f"vector_search failed: {exc}") from exc
 
     def list_blocks(self) -> list[str]:
         """Return distinct ``file_path`` values for all active blocks."""

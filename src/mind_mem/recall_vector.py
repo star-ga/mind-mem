@@ -1102,6 +1102,8 @@ class VectorBackend(RecallBackend):
                 results = self._search_qdrant(workspace, query, limit, active_only)
             elif self.provider == "pinecone":
                 results = self._search_pinecone(workspace, query, limit, active_only)
+            elif self.provider == "postgres":
+                results = self._search_postgres(workspace, query, limit, active_only)
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
 
@@ -1114,6 +1116,40 @@ class VectorBackend(RecallBackend):
                 top_score=results[0]["score"] if results else 0,
             )
             return results
+
+    def _search_postgres(self, workspace: str, query: str, limit: int, active_only: bool) -> list[dict]:
+        """Vector-only cosine search against the Postgres pgvector store.
+
+        The vector store lives server-side (``recall.provider == "postgres"``)
+        — there is no local JSON / sqlite-vec index to consult. Embed the
+        query with the configured embedder (honoring the fallback chain +
+        circuit breaker) and delegate to ``PostgresBlockStore.vector_search``,
+        returning hits in the standard recall shape via ``_pg_block_to_hit``.
+
+        Previously ``provider == "postgres"`` fell through to
+        ``raise ValueError("Unknown provider: postgres")``, which
+        ``search_batch`` swallowed to ``[]`` — so the HybridBackend/MCP RRF
+        path fused BM25 *alone* on every Postgres query while reporting a
+        hybrid backend (audit finding 1a). Returns ``[]`` (honest BM25-only
+        on the caller's side) when the embedder is unavailable or no block is
+        embedded yet — it never raises.
+        """
+        emb = self._embed_for_provider([query])
+        if not emb or not emb[0]:
+            _log.warning("pg_vector_search_embed_unavailable_bm25_only", query=query)
+            return []
+        from ._recall_core import _pg_block_to_hit
+        from .storage import get_block_store
+
+        # config=None → get_block_store auto-loads the FULL workspace
+        # mind-mem.json (with its block_store/storage section). ``self.config``
+        # here is the recall-only section, which lacks the store DSN.
+        store = get_block_store(workspace, config=None)
+        if not hasattr(store, "vector_search"):
+            _log.warning("pg_vector_search_unsupported_store", store=type(store).__name__)
+            return []
+        blocks = store.vector_search(list(emb[0]), limit=limit)
+        return [_pg_block_to_hit(block, block.get("_score", 0.0)) for block in blocks]
 
     def _search_local(self, workspace: str, query: str, limit: int, active_only: bool) -> list[dict]:
         """Search local JSON index.

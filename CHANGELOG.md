@@ -2,6 +2,64 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.2.3 — Postgres hybrid recall actually engages the pgvector leg (+ honest labels)
+
+**Bugfix (flagship recall correctness).** On a Postgres-backed workspace hybrid
+recall was **silently BM25-only** while stamping results
+`_retrieval_source = "hybrid_pgvector"` — the vector leg never contributed.
+Confirmed live on a 2,367-block deployment where the top hit scored exactly
+`1/(k+1) = 0.0164` (single-leg BM25) yet was labelled `hybrid_pgvector`. Root
+causes:
+
+- **Un-backfilled embeddings + a dishonest label.** Every row's `embedding`
+  column was NULL (no backfill ever ran), so the pgvector cosine CTE returned
+  zero rows and RRF fused BM25 alone — yet each hit was labelled
+  `hybrid_pgvector`. `PostgresBlockStore.hybrid_search` now labels honestly:
+  `hybrid_pgvector` **only** when the vector CTE returned rows, `bm25_fallback`
+  (LOUD, with a warning log) when the vector leg was requested but returned
+  nothing, `bm25_only` when no embedding was supplied. The `bm25_fallback`
+  label bubbles into the MCP `recall` response `warnings` array — the only
+  degradation surface a caller sees.
+- **`VectorBackend.search` raised `ValueError: Unknown provider: postgres`**,
+  swallowed by `search_batch`'s bare `except → return []`, so the
+  HybridBackend/MCP vector leg was empty on every Postgres query. Added a
+  `postgres` provider branch routing to a new vector-only
+  `PostgresBlockStore.vector_search`; `HybridBackend` now delegates to the
+  store's server-side BM25 + pgvector fusion once for a Postgres workspace
+  instead of double-counting the vector contribution.
+- **`PostgresRecallBackend._embed_query` hardcoded `embed_ollama`**, bypassing
+  the `_embed_for_provider` dispatch + circuit breaker, so a llama_cpp /
+  fastembed workspace (or a circuit-broken ollama) could never engage the
+  vector leg. It now routes through `_embed_for_provider`; an unavailable
+  embedder degrades to `bm25_fallback` (visible) rather than a silent
+  `bm25_only`.
+
+Also hardened: the MCP hybrid executor used `with ThreadPoolExecutor(...)`,
+whose `__exit__` (`shutdown(wait=True)`) re-joined a hung vector worker even
+after the deadline fired — replaced with `shutdown(wait=False,
+cancel_futures=True)` so a stuck embed cannot re-block recall past its bound.
+The Postgres pool now sets a server-side `statement_timeout`
+(`MIND_MEM_PG_STATEMENT_TIMEOUT_MS`, default 30 s; an `options` already in the
+DSN wins) so a stuck query is aborted rather than waited on forever.
+
+**Narrative correction (audit finding 6).** The prior #139 changelog/commit
+story — "hybrid didn't engage because the vector/RRF keys were missing from
+`_VALID_RECALL_KEYS`" — is **false**. `_VALID_RECALL_KEYS` is warning-hygiene
+only; `_load_backend` never consults it for backend resolution (it logs
+`unknown_recall_config_keys`, then resolves from `recall.backend` / the
+block-store backend regardless). Adding the keys silenced a spurious warning
+but did **not** change which backend engaged. The real BM25-only degradation
+was the three defects above.
+
+**Proof:** new `tests/test_recall_pgvector_engagement.py` asserts the genuine
+two-leg RRF fusion score (a doc present in both pools scores `2/(k+1)`, strictly
+above the single-leg `1/(k+1)`) with the honest
+`hybrid_pgvector`/`bm25_fallback`/`bm25_only` labels, and that `bm25_fallback`
+reaches the MCP `warnings` array. Verified live: after backfilling the 2,367
+embeddings, `recall("MIND deterministic compiler")` returns hits at `0.0305`
+(≈ `2/(k+1)`) labelled `hybrid_pgvector` — vs the pre-fix uniform `0.0164`
+mislabel. Full unit suite green (5662 passed).
+
 ## v4.2.2 — release hygiene: version-string consistency + mypy typecheck
 
 Follow-up to v4.2.1 (same Postgres connection-pool thread-leak fix). Two release-hygiene

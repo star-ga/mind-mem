@@ -262,6 +262,14 @@ def _pg_block_to_hit(block: dict[str, Any], score: float) -> dict[str, Any]:
         val = block.get(key)
         if val:
             hit[key] = val
+    # Carry the store's honest retrieval-source label through so callers —
+    # and the MCP `warnings` surface (the only thing a caller sees) — can
+    # tell a genuine two-leg fusion (``hybrid_pgvector``) from a degraded
+    # BM25-only fallback (``bm25_fallback``) instead of trusting a stamp
+    # that lied whenever the embedding column was empty. Audit 1b + 7.
+    src = block.get("_retrieval_source")
+    if src:
+        hit["_retrieval_source"] = src
     return hit
 
 
@@ -339,12 +347,23 @@ class PostgresRecallBackend(RecallBackend):
                 except (TypeError, ValueError):
                     rrf_k = 60
                 try:
-                    fused: list[dict[str, Any]] = store.hybrid_search(
-                        query, query_embedding=emb, limit=limit, rrf_k=rrf_k
-                    )
+                    fused: list[dict[str, Any]] = store.hybrid_search(query, query_embedding=emb, limit=limit, rrf_k=rrf_k)
                     return fused
                 except Exception as exc:
                     _log.warning("pg_hybrid_vector_failed_fallback_bm25", error=str(exc))
+            else:
+                # vector_enabled but the embedder produced nothing (cold /
+                # down / circuit-broken) → the pgvector leg cannot run. Fall
+                # back to BM25 but LABEL the hits ``bm25_fallback`` so the
+                # degradation is visible to the caller (it bubbles into the
+                # MCP ``warnings`` array via _pg_block_to_hit) instead of
+                # silently masquerading as a healthy ``bm25_only``. Audit
+                # findings 1b / 7 / 13 — "vector leg down" must be LOUD.
+                _log.warning("pg_query_embed_unavailable_bm25_fallback", query=query)
+                degraded: list[dict[str, Any]] = store.hybrid_search(query, limit=limit)
+                for h in degraded:
+                    h["_retrieval_source"] = "bm25_fallback"
+                return degraded
         bm25_hits: list[dict[str, Any]] = store.hybrid_search(query, limit=limit)
         return bm25_hits
 
@@ -353,13 +372,22 @@ class PostgresRecallBackend(RecallBackend):
         """Embed one query string for the pgvector leg (bounded, fail-fast).
 
         Returns ``None`` (→ BM25-only) on any error or if the embedder is
-        unavailable. Never raises; the underlying HTTP call is bounded by
-        ``recall.embed_timeout_seconds`` so this cannot hang recall.
+        unavailable. Never raises; each underlying embedder HTTP call is
+        bounded (``recall.embed_timeout_seconds`` for ollama) so this
+        cannot hang recall.
+
+        Routes through ``VectorBackend._embed_for_provider`` (not the old
+        hardcoded ``embed_ollama``) so the configured embedder — ollama /
+        llama_cpp / fastembed / sentence-transformers — plus its circuit
+        breaker and fallback chain are honored. The hardcoded ollama call
+        meant a llama_cpp- or fastembed-only workspace (or one whose ollama
+        seat is circuit-broken) could never engage the pgvector leg at all,
+        so it was permanently, silently BM25-only (audit finding 13).
         """
         try:
             from .recall_vector import VectorBackend
 
-            vecs = VectorBackend(recall_cfg).embed_ollama([query])
+            vecs = VectorBackend(recall_cfg)._embed_for_provider([query])
             if vecs and vecs[0]:
                 return list(vecs[0])
         except Exception as exc:
