@@ -53,6 +53,57 @@ __all__ = ["PostgresBlockStore", "BlockStoreError"]
 _pool_registry: dict[tuple[str, str], Any] = {}
 _pool_registry_lock = threading.Lock()
 
+# ─── Fast-fail connection bounds (#140) ───────────────────────────────────────
+# A down / unreachable Postgres must fail *fast and loud*, never stall the
+# caller (the MCP recall tool was observed hanging ~30s — psycopg_pool's
+# default checkout ``timeout`` — because libpq's default ``connect_timeout=0``
+# means "wait forever" and the pool then waits its full 30s for a connection
+# that can never be established). Both bounds are overridable via env for
+# operators on genuinely slow links.
+_DEFAULT_PG_CONNECT_TIMEOUT = 5.0  # libpq per-connection connect() bound (s)
+_DEFAULT_PG_POOL_TIMEOUT = 10.0  # pool checkout wait bound (s); < psycopg_pool's 30s
+
+
+def _env_float(name: str, default: float) -> float:
+    """Read a positive float from env *name*, falling back to *default*.
+
+    Non-numeric / non-positive values are ignored (return *default*) so a
+    typo in the environment cannot re-introduce an unbounded wait.
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        return default
+    return val if val > 0 else default
+
+
+def _pool_connect_kwargs(dsn: str) -> dict[str, Any]:
+    """psycopg connect kwargs for pooled connections, with a bounded
+    ``connect_timeout`` so an unreachable Postgres fails fast (#140).
+
+    Respects a ``connect_timeout`` already present in the DSN (operator
+    intent wins) and the ``MIND_MEM_PG_CONNECT_TIMEOUT`` env override. libpq
+    treats ``connect_timeout`` as an integer number of seconds and any value
+    below 2 as 2, so the bound is floored to an int ≥ 1.
+    """
+    if "connect_timeout" in dsn:
+        return {}
+    secs = int(max(1.0, _env_float("MIND_MEM_PG_CONNECT_TIMEOUT", _DEFAULT_PG_CONNECT_TIMEOUT)))
+    return {"connect_timeout": secs}
+
+
+def _pool_checkout_timeout() -> float:
+    """Bounded wait (seconds) for a pooled connection checkout (#140).
+
+    psycopg_pool defaults to 30s, which is the observed MCP recall stall when
+    the backend is unreachable. Overridable via ``MIND_MEM_PG_POOL_TIMEOUT``.
+    """
+    return _env_float("MIND_MEM_PG_POOL_TIMEOUT", _DEFAULT_PG_POOL_TIMEOUT)
+
+
 # Schema names must be safe Postgres identifiers (no injection surface).
 _SAFE_SCHEMA_RE = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
 
@@ -580,6 +631,13 @@ class PostgresBlockStore:
                         min_size=1,
                         max_size=10,
                         open=True,
+                        # Fast-fail bounds (#140): a bounded libpq
+                        # ``connect_timeout`` on each pooled connection plus a
+                        # bounded checkout ``timeout`` (< psycopg_pool's 30s
+                        # default) so an unreachable Postgres surfaces in
+                        # seconds instead of stalling the MCP recall turn.
+                        kwargs=_pool_connect_kwargs(self._dsn),
+                        timeout=_pool_checkout_timeout(),
                         # Append the pgvector extension's schema to each
                         # connection's search_path so the bare ``vector``
                         # type, ``<=>`` operator and ``vector_cosine_ops``

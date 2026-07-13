@@ -303,7 +303,7 @@ class PostgresRecallBackend(RecallBackend):
         # PostgresBlockStore (and its replicated variant) expose
         # hybrid_search; fall back to plain full-text search() if not.
         if hasattr(store, "hybrid_search"):
-            blocks = store.hybrid_search(query, limit=limit)
+            blocks = self._hybrid_blocks(store, query, limit)
         else:  # pragma: no cover — defensive; PG stores always have it
             blocks = store.search(query, limit=limit)
         hits: list[dict[str, Any]] = []
@@ -315,6 +315,52 @@ class PostgresRecallBackend(RecallBackend):
                 score = 1.0 / (len(hits) + 1)
             hits.append(_pg_block_to_hit(block, score))
         return hits
+
+    def _hybrid_blocks(self, store: Any, query: str, limit: int) -> list[dict[str, Any]]:
+        """Run ``store.hybrid_search``, threading a query embedding when
+        vector recall is enabled and serviceable.
+
+        When ``recall.vector_enabled`` is set we embed the query (bounded,
+        fail-fast) and pass it plus ``rrf_k`` so the store fuses pgvector
+        cosine distance with BM25 via RRF (real hybrid recall). Any embedder
+        failure — cold / slow / down ollama, dim mismatch, missing pgvector
+        column — degrades cleanly to BM25-only ``hybrid_search``. Recall
+        never blocks past the configured embed timeout and never raises on
+        the vector path.
+        """
+        recall_cfg = (self._config or {}).get("recall", {})
+        if not isinstance(recall_cfg, dict):
+            recall_cfg = {}
+        if recall_cfg.get("vector_enabled"):
+            emb = self._embed_query(query, recall_cfg)
+            if emb:
+                try:
+                    rrf_k = int(recall_cfg.get("rrf_k", 60) or 60)
+                except (TypeError, ValueError):
+                    rrf_k = 60
+                try:
+                    return store.hybrid_search(query, query_embedding=emb, limit=limit, rrf_k=rrf_k)
+                except Exception as exc:
+                    _log.warning("pg_hybrid_vector_failed_fallback_bm25", error=str(exc))
+        return store.hybrid_search(query, limit=limit)
+
+    @staticmethod
+    def _embed_query(query: str, recall_cfg: dict[str, Any]) -> list[float] | None:
+        """Embed one query string for the pgvector leg (bounded, fail-fast).
+
+        Returns ``None`` (→ BM25-only) on any error or if the embedder is
+        unavailable. Never raises; the underlying HTTP call is bounded by
+        ``recall.embed_timeout_seconds`` so this cannot hang recall.
+        """
+        try:
+            from .recall_vector import VectorBackend
+
+            vecs = VectorBackend(recall_cfg).embed_ollama([query])
+            if vecs and vecs[0]:
+                return list(vecs[0])
+        except Exception as exc:
+            _log.warning("pg_query_embed_failed_fallback_bm25", error=str(exc))
+        return None
 
     def index(self, workspace):
         """No-op: the Postgres block store is the index of record.
