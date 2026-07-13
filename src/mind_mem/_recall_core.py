@@ -339,10 +339,14 @@ class PostgresRecallBackend(RecallBackend):
                 except (TypeError, ValueError):
                     rrf_k = 60
                 try:
-                    return store.hybrid_search(query, query_embedding=emb, limit=limit, rrf_k=rrf_k)
+                    fused: list[dict[str, Any]] = store.hybrid_search(
+                        query, query_embedding=emb, limit=limit, rrf_k=rrf_k
+                    )
+                    return fused
                 except Exception as exc:
                     _log.warning("pg_hybrid_vector_failed_fallback_bm25", error=str(exc))
-        return store.hybrid_search(query, limit=limit)
+        bm25_hits: list[dict[str, Any]] = store.hybrid_search(query, limit=limit)
+        return bm25_hits
 
     @staticmethod
     def _embed_query(query: str, recall_cfg: dict[str, Any]) -> list[float] | None:
