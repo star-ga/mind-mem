@@ -2256,6 +2256,49 @@ raw fusion rank.
     with a dated note rather than building it. Cross-repo sibling: naestro **R61**
     (same rule, the cockpit/doc-retrieval side).
 
+## Divergent recall-path work on `autoresearch-recompact/jul10` (opened 2026-07-22)
+
+**Operational note, not a feature.** A long-lived branch is carrying recall-path
+changes that now conflict with `main`. Recorded here so it is visible before
+someone attempts the merge cold.
+
+**State as measured 2026-07-22** (`git merge-tree origin/main
+autoresearch-recompact/jul10`, exit 1):
+
+- Branch is **11 commits ahead, 3 behind** `origin/main`; fork point
+  `58034a7`, last branch commit 2026-07-10 — roughly twelve days divergent.
+- **Conflicts on merge:** `src/mind_mem/_recall_core.py`,
+  `src/mind_mem/hybrid_recall.py`, `src/mind_mem/block_store_postgres.py`,
+  `ANATOMY.md`, and an **add/add conflict** on
+  `tests/test_issue_139_140_recall_infra.py`.
+- `src/mind_mem/recall_vector.py` and `_recall_constants.py` also changed on
+  both sides but auto-merge.
+
+**The add/add is the informative one.** Both branches independently created a
+test file for issues #139/#140, and both sides carry a commit whose subject is
+`fix(recall): engage hybrid on config drift + bound MCP recall waits (#139, #140)`.
+The same defect was fixed twice in parallel — once on the branch, once on main
+(where it was then extended by `56674d8`, the pgvector leg + honest
+retrieval-source labels). Merging is therefore not a mechanical conflict
+resolution: someone has to decide **which fix is the real one** and whether the
+branch's other ten commits (recompaction cleaning stages, fold attestations)
+still apply on top of the newer recall path.
+
+**Naming caveat.** The branch prefix `autoresearch-` refers to the *method* used
+to develop it (pre-registered, exp-numbered iterations), not to a home repo. The
+consolidated research tooling now lives in `mind-lab`; this branch's contents are
+mind-mem product code and belong here. The prefix is misleading and cost one
+misread already — worth renaming if the branch survives.
+
+**Bearing on the attribution gap above.** `56674d8` changed the retrieval path
+*after* the attribution-gap bullet was written. Before that bullet is acted on,
+read it: "honest retrieval-source labels" may already supply part of the
+observed-failure signal it asks for, in which case the bullet needs revision
+rather than implementation.
+
+- **Status:** Recorded 2026-07-22, unresolved. No merge attempted. Decision is
+  which-fix-wins on #139/#140, not a conflict-resolution task.
+
 > Ecosystem-wide milestone — gated on the `mind` compiler reaching self-host completeness.
 
 Once the `mind` toolchain self-hosts (the open-core compiler builds itself byte-identically),
