@@ -44,7 +44,7 @@ by its full description below.
 
 ### Group E — Compliance (5 items)
 
-- [ ] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters
+- [x] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters
 - [ ] **Vocabulary-bound fields** — per-workspace controlled vocabularies
 - [ ] **Provenance-rich blocks** — `actor_id`, `actor_role`, `session_id`, `tool_id`, `purpose`
 - [ ] **Tenant KMS + row-level encryption** — `tenant_crypto.py`
@@ -1895,7 +1895,7 @@ default story is two laptops talking to each other.
 
 **Open:**
 
-- [ ] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters on `recall(...)` not exposed; audit chain has the data. Tracked (small).
+- [x] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters exposed on `recall(...)` (v4.0.15), applied via `_apply_post_filters` in `_recall_core.py`.
 - [ ] **Vocabulary-bound fields** — per-workspace controlled vocabularies not wired into `validate_block`. Tracked.
 - [ ] **Provenance-rich blocks** — `actor_id`/`actor_role`/`session_id`/`tool_id`/`purpose` fields gated by `provenance: off|recommended|required` not added. Tracked.
 - [ ] **Tenant KMS + row-level encryption** — `src/mind_mem/tenant_crypto.py` not built; per-tenant envelope encryption above the existing `EncryptedBlockStore`. Tracked.
@@ -2224,6 +2224,37 @@ raw fusion rank.
     surface that emits linguistic confidence; then port the *faithful-calibration metric*
     (self-consistency vs stated confidence) as a fixed-point eval harness, never the RL
     loop, and only after the conformal sidecar ships.
+
+- **Gap — the gate has no failure-attribution input (2026-07-22).** Both calibrators
+  above answer *"how confident should this recall be?"*. Neither answers *"when an
+  answer built on this recall came out wrong, which half broke?"* — retrieval never
+  returned the right block, or it did and the consuming LLM ignored/contradicted it.
+  Those are indistinguishable downstream (a fluent, confident, wrong answer either
+  way), and the abstention classifier already shipped (`abstention_classifier.py` /
+  `abstention.mind`, 5-signal pre-LLM gate, adversarial 36.3% → 92.4%) fires on
+  *predicted* low confidence, not on *observed* post-hoc failure — so nothing today
+  closes the loop from a wrong answer back to its cause.
+  - **The split, stated as a decision rule.** Measure the halves separately and route
+    on the pair: *retrieval* = was the correct block returned at all and at what rank
+    (recall@k / MRR over labelled query→block pairs, which `retrieval_diagnostics`
+    already has the surface for); *generation* = given the correct block, is every
+    claim in the answer supported by it. The disambiguating experiment is **forced
+    context**: hand the consumer the known-correct block deliberately. Wrong answer
+    out ⇒ generation. Block never retrieved in the normal path ⇒ retrieval.
+  - **Why it belongs to this section rather than beside it.** A defer/abstain
+    threshold can only be tuned against a measured retrieval-quality signal; without
+    the split, a conformal bound is calibrated on an outcome whose cause is unknown,
+    and any later tuning of the threshold is unfalsifiable. This supplies the missing
+    input to the gate above — it is not a second gate.
+  - **Trap to avoid.** Widening the recall set to compensate for a suspected retrieval
+    miss trades precision for recall and can *raise* the confident-wrong rate as the
+    correct block is buried among distractors. Not forbidden — cheap to try once the
+    split exists, worthless as evidence before it.
+  - **First step is a backtest, not a build.** This gap was named from an external
+    prompt, not from a defect we hit. Replay past recall complaints and count how many
+    would have been diagnosed faster with the split in place. Zero ⇒ close this bullet
+    with a dated note rather than building it. Cross-repo sibling: naestro **R61**
+    (same rule, the cockpit/doc-retrieval side).
 
 > Ecosystem-wide milestone — gated on the `mind` compiler reaching self-host completeness.
 
