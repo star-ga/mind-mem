@@ -33,6 +33,11 @@ by its full description below.
 - [ ] **Block versioning + time-travel** — `recall(..., as_of=date)`, `block_history(block_id)`
 - [ ] **Conversational chat layer** — `chat_with_memory(workspace, question)` with `[[block_id]]` citations
 
+> See also **Group K — Graph-from-text construction + edge-grounded recall**
+> (below): description-grounded entity resolution, blocking + LLM-arbitration,
+> answer-with-edge-citations, cross-source edge confidence, schema versioning,
+> degree-gated profile synthesis.
+
 ### Group C — KG governance / UX (6 items)
 
 - [ ] **AI lint with auto-fix** — `lint_autofix(workspace, finding_id)` tool
@@ -337,6 +342,75 @@ dropped-line counts are logged.
 > Provenance (source repos, exact heuristics) recorded privately in
 > `mind-internal`, per the no-public-attribution rule — public artifacts
 > say "recent agent-memory tooling" only.
+
+### Group K — Graph-from-text construction + edge-grounded recall (prior-art-informed, 2026-07-24)
+
+Prior art: a recent structured-knowledge-graph-from-unstructured-text
+pipeline builds a queryable entity/relation graph entirely from
+schema-constrained LLM calls (no trained NER / relation-classifier),
+resolves surface-form variants into canonical nodes via LLM clustering,
+and answers multi-hop questions where **every claim cites the specific
+edge + source document that supports it**. It maps almost 1:1 onto our
+existing graph surface (`block_lineage.add_block_edge`,
+`mcp/tools/graph.{graph_add_edge,graph_query,traverse_graph}`,
+`retrieval_graph`, `ontology` typed entities) — these items formalize
+the construction + grounding half we don't yet have.
+
+**Wedge guardrail (load-bearing):** the source's resolution/merge and
+edge-confidence steps are *autonomous* LLM judgments. Every graph
+mutation here MUST route through the existing HITL `propose_update` /
+approval gate — the source-of-truth graph never self-modifies from an
+un-reviewed model call. We adopt the construction mechanics + the
+edge-grounded verdict; we keep our auditable-provenance / bit-identity
+wedge (the model call is an injected `Callable`, so the loop / digest /
+retention floor prove out with zero API calls in CI, same discipline as
+Group H recompaction).
+
+- [ ] **Description-grounded entity resolution** — canonicalize
+      surface-form variants (nicknames, abbreviations, cross-lingual
+      transliterations) that string-similarity dedup misses, using a
+      one-line per-entity description as disambiguation context rather
+      than edit distance. Extends the existing block-merge / dedup path
+      (`capture.py`, `contradiction_detector`); pairs with Group H
+      "granularity / abstraction alignment." Two enforced failure modes:
+      unmatched name → single-element cluster (never silently dropped);
+      over-merge guarded by description mismatch + HITL review.
+- [ ] **Blocking + LLM-arbitration hybrid (resolution at scale)** —
+      cheap deterministic blocking (inverted index on name tokens /
+      embedding neighbors) narrows candidates to 50–100-item blocks; the
+      LLM only arbitrates *within* a block. Keeps resolution sublinear
+      and keeps the expensive model call off the easy cases (typos,
+      casing) that deterministic logic already handles.
+- [ ] **Edge-grounded recall / answer-with-citations** — an answer mode
+      constrained to extracted edges: serialize the k-hop subgraph (k=2
+      default) of the seed entity as triples, answer only from those
+      edges, cite the supporting edge + provenance document per claim,
+      and explicitly flag what the graph does **not** contain. The
+      construction-side counterpart to the existing evidence-chain
+      recall — makes "cite the edge" concrete. Feeds the Group B
+      `chat_with_memory` `[[block_id]]` citation item.
+- [ ] **Edge confidence from cross-source corroboration** — an edge seen
+      in N independent source blocks outranks a single-source edge; a
+      calibrated-confidence signal per edge so recall + the contradiction
+      gate weight evidence instead of treating all edges as equal.
+      Converges with the SIGNALS.md conformal-calibration / calibrated-
+      confidence direction (same idea, second source). Sidecar only —
+      never in the sealed audit-hash preimage.
+- [ ] **Schema versioning alongside the graph** — version entity-type /
+      predicate / extraction-prompt changes with the graph so blocks
+      extracted under an old schema are distinguishable, comparable, and
+      re-extractable; a hard prerequisite before scaling ingestion.
+      Aligns with the existing spec-hash-binding (I-5) discipline.
+- [ ] **Hub-node profile synthesis (degree-gated)** — for high-degree
+      nodes only (degree ≥ 3), pool every mention + graph neighborhood
+      into a synthesized profile (summary + 3–5 traceable atomic facts +
+      structured time range), "resolve contradictions by preferring the
+      most specific claim, invent nothing." Reuses the Group H
+      recompaction fixed-point + injected-compressor machinery; emits as
+      a `propose_update`, never a direct write.
+
+> Provenance (source cookbook / working note + URL) recorded privately
+> in `mind-internal`, per the no-public-attribution rule.
 
 ### v3.2.x trailing fixes (4 items, deliberately deferred)
 
