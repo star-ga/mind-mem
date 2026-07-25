@@ -181,7 +181,7 @@ class OllamaCompressor:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # noqa: S310 - scheme allow-listed above
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # nosec B310 — scheme validated to http/https only by __init__ and the _post guard above
                 status = getattr(resp, "status", 200)
                 if status != 200:
                     raise CompressorError(f"ollama returned HTTP {status} for model {self._model!r}")
