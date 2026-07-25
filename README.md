@@ -69,7 +69,7 @@ Output:
 
 | Property                | What it means                                                                     |
 | ----------------------- | --------------------------------------------------------------------------------- |
-| **Byte-identical replay** | Deterministic recall: same workspace + query → same ranked results, every time. The audit/replay chain (Q16.16) is byte-identical across machines. No probabilistic mutations in the core. |
+| **Byte-identical replay** | Recall ranking is a deterministic function of workspace + metadata state — same state + query → same ranked results (A-MEM importance/recency evolves deterministically on access, so ordering shifts as that state updates; no *probabilistic* mutations). The byte-identical guarantee is the audit/replay chain (Q16.16), identical across runs, machines, and substrates. |
 | **Governed-write**      | Nothing reaches the source of truth without `propose → review → approve_apply`. No silent mutations. Ever. |
 | **Auditable**           | Every apply logged with timestamp, receipt, and DIFF. Full traceability from signal to decision. |
 | **Deterministic**       | No ML in the retrieval core. Q16.16 fixed-point encoding in the audit-hash preimage. The same preimage produces the same hash. |
@@ -169,15 +169,17 @@ Four-signal reranking pipeline: negation awareness (penalizes contradicting resu
 Drop-in ms-marco-MiniLM-L-6-v2 cross-encoder (80MB). Blends 0.6 * CE + 0.4 * original score. Falls back gracefully when unavailable. Enabled via config.
 
 ### MIND Kernels (Optional, Native Speed — forward-looking)
-26 `.mind` configuration files at `mind/` that tune the scoring pipeline
-(BM25F, RRF fusion, reranking, negation penalty, date proximity, category
-boost, importance, entity overlap, confidence, top-k, weighted rank,
-category affinity, query-category relevance, category assignment, and
-others). Currently INI-format declarative configuration parsed by
-`mind_ffi.py`; the MIND-language port that compiles to native `.so` via the
-[MIND compiler](https://mindlang.dev) is the forward-looking story — see
+26 `.mind` files at `mind/` that tune the scoring pipeline (BM25F, RRF
+fusion, reranking, negation penalty, date proximity, category boost,
+importance, entity overlap, confidence, top-k, weighted rank, category
+affinity, query-category relevance, category assignment, and others). **18
+are INI-format declarative configuration** parsed by `mind_ffi.py`; the
+**other 8 are already MIND-language tensor sources** (`bm25`, `ranking`,
+`reranker`, `rrf`, `prefetch`, `importance`, `category`, `abstention`) that
+compile to native `.so` via the [MIND compiler](https://mindlang.dev) — the
+forward-looking story. See
 [`docs/MIND_CONFIG_VS_MIND_LANG.md`](docs/MIND_CONFIG_VS_MIND_LANG.md) for
-the disambiguation. The pure-Python scoring logic in
+the per-file breakdown. The pure-Python scoring logic in
 `src/mind_mem/mind_kernels.py` is the authoritative implementation today.
 
 ### MIC/MAP — MIND IR graph serialization

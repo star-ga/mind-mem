@@ -47,3 +47,13 @@ _integrity_manifest.json
 # secrets (audit 2026-06-20)
 .env
 .env.*
+
+# local recall index (never commit)
+recall.db
+.mind-mem-index/
+# internal / not-for-public (operator intel, FORTRESS audits, worktrees, handoffs)
+.wt/
+docs/internal/
+docs/architecture_audit_fable5_2026-07-07.md
+docs/HANDOFF_MINDMEM_2026-07-24.md
+docs/science-superpowers/

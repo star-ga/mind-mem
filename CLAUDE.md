@@ -157,14 +157,18 @@ inbox ingestion, pipeline hash, persona projection, Kahn walkthrough.
 
 ## Architecture
 ```
-src/mind_mem/           — Main package (src layout)
-  core/                 — BlockStore, ConnectionManager, retrieval
-  governance/           — Contradiction detection, drift, proposals,
-                          audit chain, alerting hooks
-  mcp_server.py         — MCP server (84 tools, 8 resources)
-  ingestion/            — Auto-ingestion pipeline
+src/mind_mem/           — Main package (src layout; flat modules, not
+                          core/governance/ingestion sub-packages)
+  block_store.py        — BlockStore (+ connection_manager.py pooled access)
+  contradiction_detector.py, drift_detector.py, audit_chain.py,
+    alerting.py, governance_gate.py — governance: contradiction/drift
+                          detection, proposals, audit chain, alerting hooks
+  _recall_core.py, hybrid_recall.py, recall_vector.py — retrieval core
+  mcp_server.py         — MCP server monolith (84 tools, 8 resources)
+  mcp/                  — per-domain MCP tool modules (mcp.tools.*)
+  ingestion_pipeline.py, inbox.py, entity_ingest.py — auto-ingestion
   skill_opt/            — Skill optimization
-  hook_installer/       — Client hook installation (v3.1.1+)
+  hook_installer.py     — Client hook installation (v3.1.1+)
   http_transport.py     — Stdlib HTTP REST adapter (v3.9.0)
   daemon.py             — Background dream-cycle/intel-scan loop (v3.9.0)
   inbox.py              — File-drop folder ingestion (v3.9.0)
@@ -174,7 +178,7 @@ src/mind_mem/           — Main package (src layout)
   quality_gate.py       — Deterministic quality validation (v3.11.0)
   block_lineage.py      — Typed relationship edges (v3.11.0)
   lineage_staleness.py  — BFS staleness propagation (v3.12.0)
-  — v4.0.0 surfaces (all flag-gated) —
+  v4/  — v4.0.0 surfaces (all flag-gated), each file under src/mind_mem/v4/ —
   tier_memory.py        — Hot/warm/cold block tiers + CAS (v4.0.0)
   cognitive_kernel.py   — KernelKind enum + mind_recall (v4.0.0)
   surprise_retrieval.py — compute_surprise + FallbackPolicy (v4.0.0)
@@ -215,7 +219,9 @@ docs/                   — User + integration docs (35+ files)
   separation
 - **Delta-based snapshot rollback**: MANIFEST.json for O(manifest)
   restore
-- **At-rest encryption** (v3.0.0+): SQLCipher + BlockStore ciphertext
+- **At-rest encryption** (v3.0.0+, opt-in): 256-bit HMAC-SHA256 keystream
+  + encrypt-then-MAC over BlockStore content files (NOT AES/SQLCipher; the
+  FTS5/sqlite-vec recall index is not encrypted)
 - **Tier decay** (v3.0.0+): TTL/LRU aging for lower tiers
 - **Audit-integrity patterns** (v2.10.0+): Q16.16 fixed-point scoring in
   audit hash preimages, TAG_v1 NUL-separated composition for collision

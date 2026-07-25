@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 915 | **Est. tokens:** ~1,960,464
-**Generated:** 2026-07-24 10:46 UTC
+**Files:** 904 | **Est. tokens:** ~1,944,197
+**Generated:** 2026-07-25 01:50 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~69,057 |
+| `./` | 35 | ~69,125 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -32,11 +32,9 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 84 | ~155,886 |
+| `docs/` | 83 | ~151,934 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/design/` | 3 | ~4,055 |
-| `docs/internal/` | 2 | ~1,532 |
-| `docs/science-superpowers/preregistrations/` | 8 | ~10,851 |
 | `docs/security-baselines/` | 1 | ~18,974 |
 | `examples/` | 3 | ~1,201 |
 | `.gemini/` | 1 | ~28 |
@@ -101,7 +99,7 @@
 - `EVIDENCE.md` (~1206 tok, large) — Evidence Matrix
 - `generate_mind7b_training.py` (~5558 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
-- `.gitignore` (~237 tok, medium) — *.pyc
+- `.gitignore` (~305 tok, medium) — *.pyc
 - `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~4935 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
@@ -209,7 +207,6 @@
 - `agent-memory-protocol.md` (~700 tok, large) — Agent Memory Protocol — canonical system-prompt snippet
 - `api-reference.md` (~1683 tok, huge) — API Reference
 - `append-only-audit-logs.md` (~1424 tok, large) — Append-Only Audit Logs — Operator Runbook
-- `architecture_audit_fable5_2026-07-07.md` (~3952 tok, huge) — mind-mem — Fable-5 Architecture + Honesty Audit (2026-07-07)
 - `architecture.md` (~1936 tok, huge) — Architecture
 - `audit_response.md` (~950 tok, large) — MIND-Mem — response to the 2026-05-02 ecosystem audit
 - `benchmarks.md` (~757 tok, large) — Benchmarks
@@ -242,12 +239,6 @@
 - `HYPEREDGE_DESIGN_2026-06-17.md` (~1350 tok, large) — Hyperedge + temporal-anchor design (Hyper-Extract steal)
 - `install-guide.md` (~2855 tok, huge) — Installation guide — every step + every option
 - `integrations.md` (~1540 tok, huge) — Integrations
-### `docs/internal/`
-
-- `iteration-operator-intel.md` (~729 tok, large) — Iteration-operator intel → mind-mem
-- `second-brain-capture-latency-2026-07-17.md` (~803 tok, large) — Observation — append-only capture-latency reflex (2026-07-17)
-### `docs/`
-
 - `locomo-v3.4-conv0-results.md` (~475 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
 - `maintenance-namespaces.md` (~1601 tok, huge) — `maintenance/` namespaces
 - `mcp-integration.md` (~1691 tok, huge) — MCP Integration Guide
@@ -275,18 +266,6 @@
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
 - `roadmap.md` (~13677 tok, huge) — Roadmap
 - `roadmap-v4.md` (~10304 tok, huge) — mind-mem v4.0 — Design Rationale
-### `docs/science-superpowers/preregistrations/`
-
-- `2026-07-10-body-line-dedup-compressor.md` (~1283 tok, large) — Pre-registration: body-level exact-line deduplication in `_clean_response`
-- `2026-07-10-canonical-normal-form-short-circuit.md` (~1439 tok, large) — Pre-registration: pre-model canonical-normal-form idempotence short-circuit
-- `2026-07-10-extractive-projection-compressor.md` (~1292 tok, large) — Pre-registration: extractive-projection OllamaCompressor for recompaction
-- `2026-07-10-numpredict-length-cap-compressor.md` (~1328 tok, large) — Pre-registration: deterministic `num_predict` output-length cap on OllamaCompressor
-- `2026-07-10-probe-empty-line-drop-compressor.md` (~1387 tok, large) — Pre-registration: probe-empty fact-free line drop in `_clean_response`
-- `2026-07-10-probe-guard-substring-collapse.md` (~1447 tok, large) — Pre-registration: substring-collapse the probe-guard trailer in OllamaCompressor
-- `2026-07-10-probe-preserving-guard-compressor.md` (~1359 tok, large) — Pre-registration: deterministic probe-preserving guard in OllamaCompressor
-- `2026-07-10-recompaction-canonical-bullet-prompt.md` (~1316 tok, large) — Pre-registration: recompaction canonical-bullet convergence prompt
-### `docs/`
-
 - `scoring.md` (~517 tok, large) — Scoring System
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2267 tok, huge) — MIND-Mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
 - `security-audit-sow.md` (~3353 tok, huge) — MIND-Mem — External Security Audit Statement of Work (SoW)

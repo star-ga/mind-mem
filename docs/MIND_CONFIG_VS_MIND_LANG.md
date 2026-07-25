@@ -2,25 +2,31 @@
 
 ## TL;DR
 
-The `.mind` files in this repository are NOT the MIND programming language.
-They are declarative configuration files in an INI-style format
+Most `.mind` files in this repository are NOT the MIND programming language:
+**18 of the 26** are declarative configuration files in an INI-style format
 (`[section]` / `key = value`) used to tune mind-mem's scoring kernels at
-runtime. The MIND programming language itself lives at
-[github.com/star-ga/mind](https://github.com/star-ga/mind).
+runtime. The **other 8** (`abstention`, `bm25`, `category`, `importance`,
+`prefetch`, `ranking`, `reranker`, `rrf`) ARE MIND-language tensor source
+(`import std.tensor; fn …(tensor<f32[N]>…)`) — the compile target for a
+native `.so`, inert at runtime until compiled. The MIND programming language
+itself lives at [github.com/star-ga/mind](https://github.com/star-ga/mind).
 
 ---
 
 ## What's in `mind/*.mind` in this repo
 
-mind-mem ships 26 configuration files under the `mind/` directory. Each file
-tunes a specific pipeline stage and is parsed at runtime by
-`load_kernel_config()` in `src/mind_mem/mind_ffi.py`. They contain no
-compiled code — only declarative key/value tuning data.
+mind-mem ships 26 files under the `mind/` directory. **18 are INI-style
+configuration** — each tunes a specific pipeline stage and is parsed at
+runtime by `load_kernel_config()` in `src/mind_mem/mind_ffi.py` (key/value
+tuning data, no compiled code). The **other 8 (marked `†` below) are
+MIND-language tensor kernel sources** — the compile target for
+`lib/libmindmem.so`; `load_kernel_config()` returns `{}` for them, so they
+are inert at runtime until compiled.
 
 | File | What it tunes |
 |------|---------------|
 | `hybrid.mind` | RRF fusion parameters — `rrf_k`, BM25/vector weight multipliers, vector similarity threshold |
-| `ranking.mind` | Ranking-pipeline scoring weights and cutoff strategy |
+| `ranking.mind` † | **MIND-language kernel source** — ranking-pipeline scoring (compiles to native `.so`) |
 | `governance.mind` | Rationale gate, audit-chain invariants, concurrency lock timeout |
 | `recall.mind` | Recall-flow parameters — candidate limits, RM3 expansion, knee cutoff |
 | `truth.mind` | Truth-evaluation thresholds and confidence bands |
@@ -29,26 +35,29 @@ compiled code — only declarative key/value tuning data.
 | `graph.mind` | Knowledge-graph edge scoring, co-retrieval boost multiplier |
 | `query_plan.mind` | Query-planning budget, intent-routing weights |
 | `intent.mind` | Intent-classification confidence weights per intent type |
-| `bm25.mind` | BM25F field weights, stemmer, IDF floor |
+| `bm25.mind` † | **MIND-language kernel source** — `fn bm25f_doc(...)`, compiles to `libbm25.so` |
 | `rm3.mind` | RM3 query-expansion — feedback term count, lambda |
-| `reranker.mind` | Reranker stage parameters |
+| `reranker.mind` † | **MIND-language kernel source** — reranker stage |
 | `rerank.mind` | Rerank score combination weights |
-| `rrf.mind` | RRF standalone parameters (used by the federation merge path) |
+| `rrf.mind` † | **MIND-language kernel source** — RRF fusion (federation merge path) |
 | `temporal.mind` | Temporal-decay curve and freshness weight |
 | `trajectory.mind` | Trajectory-scoring parameters for session continuity |
-| `prefetch.mind` | Prefetch-trigger thresholds and TTL |
+| `prefetch.mind` † | **MIND-language kernel source** — prefetch scoring |
 | `adversarial.mind` | Adversarial-probe guard thresholds |
-| `category.mind` | Category-summary scoring parameters |
-| `importance.mind` | Importance scoring decay and floor |
+| `category.mind` † | **MIND-language kernel source** — category-summary scoring |
+| `importance.mind` † | **MIND-language kernel source** — importance scoring |
 | `ensemble.mind` | Ensemble combiner weights |
 | `evidence.mind` | Evidence-tier routing parameters |
 | `session.mind` | Session-context scoring and decay |
-| `abstention.mind` | Abstention-threshold tuning |
+| `abstention.mind` † | **MIND-language kernel source** — abstention scoring |
 | `answer.mind` | Answer-extraction scoring parameters |
 
-Each file parses as `{ section: { key: value } }` via `load_kernel_config()`.
-Values are typed automatically: integers (`60`), floats (`1.0`), booleans
-(`true` / `false`), and comma-separated lists are all recognized.
+`†` = MIND-language tensor source (compiles to a native `.so`), **not** INI
+config. The 18 INI files parse as `{ section: { key: value } }` via
+`load_kernel_config()`; values are typed automatically: integers (`60`),
+floats (`1.0`), booleans (`true` / `false`), and comma-separated lists are all
+recognized. The 8 `†` kernel sources are not INI and return `{}` from
+`load_kernel_config()`.
 
 Example — the first few lines of `mind/hybrid.mind`:
 
