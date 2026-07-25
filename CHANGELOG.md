@@ -2,6 +2,44 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.2.4 — Roadmap batch: codepoint sanitization, provenance-rich blocks, controlled vocabularies, auto-index
+
+**Four genuinely-open roadmap items implemented, tested, and landed.** Each was
+built in an isolated worktree, adversarially verified, and merged only after the
+full local gate set (144 new tests, **zero regression** across 1,093 existing
+tests in the touched modules, MCP tool surface unchanged at 84, ruff + mypy clean).
+
+* **Ingest codepoint sanitization** (Group C, security) — new
+  `codepoint_sanitize.py` strips invisible Unicode on ingest: zero-width
+  (U+200B–U+200F, U+FEFF), bidi embeddings/overrides/isolates (U+202A–U+202E,
+  U+2060–U+206F), Unicode tag characters (U+E0000–U+E007F), surrogates, private-use
+  areas, and Cc controls except `\t\n\r`. Ranges deliberately cover **whole
+  invisible blocks including unassigned slots**; a Unicode-category cross-check
+  test verifies coverage against the interpreter's own character database. Wired
+  into `ingestion_pipeline`, `inbox`, and `entity_ingest`. This closes an
+  invisible-character prompt-injection vector on the ingest path.
+* **Provenance-rich blocks** (Group E) — new `block_provenance.py` adds optional,
+  schema-additive `actor_id` / `actor_role` / `session_id` / `tool_id` / `purpose`
+  fields threaded through the write/propose path and surfaced in recall output when
+  present. Fully backward compatible: existing blocks and callers are unaffected.
+* **Vocabulary-bound fields** (Group E) — new `v4/vocabulary.py` supports
+  per-workspace controlled vocabularies: a workspace may declare allowed values for
+  a named field, and metadata validation rejects out-of-vocabulary values. No
+  vocabulary declared ⇒ no restriction (backward compatible).
+* **Auto-generated hierarchical index** (Group C) — new `memory_index.py` plus an
+  `mm index` subcommand regenerates `index.md` (hierarchical, by category/kind) and
+  `log.md` (chronological) from the active block corpus. Deterministic and
+  idempotent, stdlib only.
+
+**Release hygiene.** The MCP tool-count CI gate now counts registrations by static
+AST parse instead of a runtime import, so it yields the same 84 in environments
+that do not install the `mcp` extra (the runtime-import form returned 0 and red-lit
+the build). `OllamaCompressor` validates its host against an http(s) scheme
+allow-list at construction and again before `urlopen`, closing code-scanning alert
+B310. `mind-mem-4b` weights unchanged — the tool surface is identical and the new
+provenance/vocabulary fields are caller-supplied, not extraction targets, so **no
+retraining is required**.
+
 ## v4.2.3 — Postgres hybrid recall actually engages the pgvector leg (+ honest labels)
 
 **Bugfix (flagship recall correctness).** On a Postgres-backed workspace hybrid
