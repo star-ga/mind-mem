@@ -42,16 +42,16 @@ by its full description below.
 
 - [ ] **AI lint with auto-fix** — `lint_autofix(workspace, finding_id)` tool
 - [ ] **Local visual viewer** — `mm view` web UI (stdlib HTTP + JS/D3)
-- [ ] **Auto-generated hierarchical index** — `index.md` + `log.md` autogen
+- [x] **Auto-generated hierarchical index** — `index.md` + `log.md` autogen
 - [ ] **Adversarial / poisoning defense** — per-actor anomaly, canary blocks
-- [ ] **Ingest codepoint sanitization** — strip/normalize invisible-Unicode (zero-width, Unicode tag chars, bidi controls) on blocks + proposals *before* they reach the HITL gate or any model. Defensive takeaway from the GLOSSOPETRAE "Lingua Ex Machina" report ([elder-plinius/GLOSSOPETRAE](https://github.com/elder-plinius/GLOSSOPETRAE), Jun 2026): its covert-channel finding shows payloads hidden in invisible Unicode pass a monitor whose tokenizer silently deletes them before its model sees them (100% receiver recovery, 0% monitor detection). Cheap fix = NFC-normalize + reject/flag disallowed codepoint categories at ingest.
+- [x] **Ingest codepoint sanitization** — strip/normalize invisible-Unicode (zero-width, Unicode tag chars, bidi controls) on blocks + proposals *before* they reach the HITL gate or any model. Defensive takeaway from the GLOSSOPETRAE "Lingua Ex Machina" report ([elder-plinius/GLOSSOPETRAE](https://github.com/elder-plinius/GLOSSOPETRAE), Jun 2026): its covert-channel finding shows payloads hidden in invisible Unicode pass a monitor whose tokenizer silently deletes them before its model sees them (100% receiver recovery, 0% monitor detection). Cheap fix = NFC-normalize + reject/flag disallowed codepoint categories at ingest.
 - [ ] **Memory reputation / trust scores** — per-actor reliability signal in recall
 
 ### Group E — Compliance (5 items)
 
 - [x] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters
-- [ ] **Vocabulary-bound fields** — per-workspace controlled vocabularies
-- [ ] **Provenance-rich blocks** — `actor_id`, `actor_role`, `session_id`, `tool_id`, `purpose`
+- [x] **Vocabulary-bound fields** — per-workspace controlled vocabularies
+- [x] **Provenance-rich blocks** — `actor_id`, `actor_role`, `session_id`, `tool_id`, `purpose`
 - [ ] **Tenant KMS + row-level encryption** — `tenant_crypto.py`
 - [ ] **C2PA content provenance** — signed manifests on synthesis blocks
 
@@ -1913,7 +1913,7 @@ multi-tenancy thread is also tracked as issue [#505].
 - [x] **Contradiction state machine** — `detected → review_ok → resolved` / `pending_fix` lifecycle ships in `governance` engine.
 - [x] **Self-healing index** — `mm doctor` triggers integrity check + repair; background reindex runs in idle windows.
 - [ ] **Local visual viewer** — `mm view` web UI not yet shipped. Stack target: stdlib HTTP + minimal JS/D3. Tracked.
-- [ ] **Auto-generated hierarchical index** — `index.md` / `log.md` autogen not wired. Tracked.
+- [x] **Auto-generated hierarchical index** — `index.md` / `log.md` autogen not wired. Tracked.
 - [x] **Real-time contradiction stream** — webhook stream on contradiction-detection ships under the alerting layer.
 - [ ] **Adversarial / poisoning defense** — per-actor anomaly detection + canary blocks not yet shipped. Sigstore-signed manifests partial (release artifacts only). Tracked.
 - [x] **Approval workflows for sensitive proposals** — multi-reviewer chain (OPA/Rego-style) ships behind opt-in dep.
@@ -1970,8 +1970,8 @@ default story is two laptops talking to each other.
 **Open:**
 
 - [x] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters exposed on `recall(...)` (v4.0.15), applied via `_apply_post_filters` in `_recall_core.py`.
-- [ ] **Vocabulary-bound fields** — per-workspace controlled vocabularies not wired into `validate_block`. Tracked.
-- [ ] **Provenance-rich blocks** — `actor_id`/`actor_role`/`session_id`/`tool_id`/`purpose` fields gated by `provenance: off|recommended|required` not added. Tracked.
+- [x] **Vocabulary-bound fields** — per-workspace controlled vocabularies not wired into `validate_block`. Tracked.
+- [x] **Provenance-rich blocks** — `actor_id`/`actor_role`/`session_id`/`tool_id`/`purpose` fields gated by `provenance: off|recommended|required` not added. Tracked.
 - [ ] **Tenant KMS + row-level encryption** — `src/mind_mem/tenant_crypto.py` not built; per-tenant envelope encryption above the existing `EncryptedBlockStore`. Tracked.
 - [ ] **C2PA content provenance** — C2PA-signed manifests on chat-layer synthesis blocks not implemented. Tracked (depends on chat layer above).
 
