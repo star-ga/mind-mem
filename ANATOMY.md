@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 916 | **Est. tokens:** ~2,002,348
-**Generated:** 2026-07-25 02:55 UTC
+**Files:** 912 | **Est. tokens:** ~1,970,993
+**Generated:** 2026-07-25 03:08 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~69,130 |
+| `./` | 35 | ~69,135 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -49,7 +49,6 @@
 | `lib/` | 1 | ~2,170 |
 | `mind/` | 27 | ~9,687 |
 | `.roo/` | 1 | ~22 |
-| `scratchpad_roadmap/` | 4 | ~31,360 |
 | `scripts/` | 6 | ~4,627 |
 | `sdk/go/` | 9 | ~6,773 |
 | `sdk/js/` | 5 | ~1,388 |
@@ -100,7 +99,7 @@
 - `EVIDENCE.md` (~1206 tok, large) — Evidence Matrix
 - `generate_mind7b_training.py` (~5558 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
-- `.gitignore` (~305 tok, medium) — *.pyc
+- `.gitignore` (~310 tok, medium) — *.pyc
 - `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~4935 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
@@ -392,12 +391,6 @@
 ### `.roo/`
 
 - `system-prompt.md` (~22 tok, tiny) — mind-mem
-### `scratchpad_roadmap/`
-
-- `item1.patch` (~7237 tok, huge) — diff --git a/src/mind_mem/codepoint_sanitize.py b/src/mind_mem/codepoint_sanitiz
-- `item2.patch` (~8771 tok, huge) — diff --git a/src/mind_mem/_recall_core.py b/src/mind_mem/_recall_core.py
-- `item3.patch` (~8685 tok, huge) — diff --git a/src/mind_mem/v4/block_metadata.py b/src/mind_mem/v4/block_metadata.
-- `item4.patch` (~6667 tok, huge) — diff --git a/src/mind_mem/memory_index.py b/src/mind_mem/memory_index.py
 ### `scripts/`
 
 - `anatomy-hook.sh` (~258 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
