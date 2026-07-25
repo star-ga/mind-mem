@@ -437,9 +437,7 @@ def evaluate(
         # reassuring direction: a compressor that fails every cluster would
         # report a low, healthy-looking iteration count. 0.0 here means "nothing
         # converged", which convergence_rate already says plainly.
-        mean_iterations=(sum(r.iterations for r in converged_records) / len(converged_records))
-        if converged_records
-        else 0.0,
+        mean_iterations=(sum(r.iterations for r in converged_records) / len(converged_records)) if converged_records else 0.0,
         fact_retention=(sum(r.fact_retention for r in converged_records) / len(converged_records)) if converged_records else 0.0,
         compression_ratio=(sum(r.compression_ratio for r in converged_records) / len(converged_records)) if converged_records else 0.0,
         records=tuple(records),

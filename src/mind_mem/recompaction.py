@@ -104,10 +104,7 @@ class NonConvergenceError(RuntimeError):
 
     def __init__(self, iterations: int):
         self.iterations = iterations
-        super().__init__(
-            f"re-compression did not converge within {iterations} iterations; "
-            "refusing to emit a non-fixed-point rewrite"
-        )
+        super().__init__(f"re-compression did not converge within {iterations} iterations; refusing to emit a non-fixed-point rewrite")
 
 
 @dataclass(frozen=True)

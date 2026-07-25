@@ -189,9 +189,7 @@ def test_block_dict_returns_none_for_malformed_json(tmp_path):
         "CREATE TABLE blocks (id TEXT PRIMARY KEY, type TEXT, file TEXT, line INTEGER, status TEXT, "
         "date TEXT, speaker TEXT, tags TEXT, dia_id TEXT, parent_id TEXT, json_blob TEXT)"
     )
-    conn.execute(
-        "INSERT INTO blocks VALUES ('Y-001','decision','x.md',1,'active','2026-01-01','','','','','{broken')"
-    )
+    conn.execute("INSERT INTO blocks VALUES ('Y-001','decision','x.md',1,'active','2026-01-01','','','','','{broken')")
     conn.commit()
     conn.close()
     conn = _open_readonly(path)
@@ -278,9 +276,7 @@ def test_lexical_fallback_skips_malformed_json_blob(tmp_path):
             date TEXT, speaker TEXT, tags TEXT, dia_id TEXT, parent_id TEXT, json_blob TEXT
         )"""
     )
-    conn.execute(
-        "INSERT INTO blocks VALUES ('X-001','decision','x.md',1,'active','2026-01-01','','','','','not json')"
-    )
+    conn.execute("INSERT INTO blocks VALUES ('X-001','decision','x.md',1,'active','2026-01-01','','','','','not json')")
     conn.commit()
     conn.close()
     clusters = load_clusters(path, k=2, min_size=2)

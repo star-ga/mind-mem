@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 904 | **Est. tokens:** ~1,944,197
-**Generated:** 2026-07-25 01:50 UTC
+**Files:** 904 | **Est. tokens:** ~1,944,177
+**Generated:** 2026-07-25 01:53 UTC
 
 ## Token Budget Guide
 
@@ -59,9 +59,9 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 164 | ~582,768 |
+| `src/mind_mem/` | 164 | ~582,759 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
-| `src/mind_mem/bench/` | 2 | ~5,379 |
+| `src/mind_mem/bench/` | 2 | ~5,375 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
 | `src/mind_mem/mcp/infra/` | 8 | ~9,991 |
 | `src/mind_mem/mcp/tools/` | 24 | ~58,544 |
@@ -70,7 +70,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 22 | ~58,472 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 315 | ~681,117 |
+| `tests/` | 315 | ~681,110 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -471,7 +471,7 @@
 ### `src/mind_mem/bench/`
 
 - `__init__.py` (~19 tok, tiny) — mind-mem benchmark harnesses — scalar metrics over the live corpus."""
-- `recompaction_bench.py` (~5360 tok, huge) — Recompaction benchmark — the scalar metric downstream tooling depends on.
+- `recompaction_bench.py` (~5356 tok, huge) — Recompaction benchmark — the scalar metric downstream tooling depends on.
 ### `src/mind_mem/`
 
 - `block_lineage.py` (~3590 tok, huge) — Typed block-lineage edges + bounded BFS reader (v3.11.0+, Pattern 3).
@@ -637,7 +637,7 @@
 - `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
 - `recall_vector.py` (~15809 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `_recall_workspace.py` (~1958 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `recompaction.py` (~2498 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
+- `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
 - `rerank_ensemble.py` (~3364 tok, huge) — Reranker ensemble via Borda count (v3.3.0 Tier 4 #9).
 - `retrieval_graph.py` (~5099 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
 - `retrieval_trace.py` (~1252 tok, large) — Per-feature retrieval attribution (v3.3.0 architect audit item #7).
@@ -1001,7 +1001,7 @@
 - `test_recall_temporal.py` (~2800 tok, huge) — Tests for _recall_temporal.py — time-aware hard filters for temporal queries."""
 - `test_recall_time_bounded.py` (~1965 tok, huge) — Regression tests for time-bounded recall (roadmap v4.0.0 Group E).
 - `test_recall_vector.py` (~4901 tok, huge) — Tests for recall_vector.py — VectorBackend semantic search."""
-- `test_recompaction_bench.py` (~5760 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
+- `test_recompaction_bench.py` (~5753 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_recompaction.py` (~1962 tok, huge) — Tests for recompaction.py — iterative re-compression to a fixed point.
 - `test_rerank_debug.py` (~342 tok, medium) — Tests for rerank debug mode."""
 - `test_rerank_ensemble.py` (~1531 tok, huge) — v3.3.0 Tier 4 #9 — reranker ensemble via Borda count.
