@@ -22,6 +22,7 @@ import re
 from datetime import datetime
 
 from .capture import append_signals
+from .codepoint_sanitize import sanitize_text_for_ingest
 from .observability import get_logger, metrics
 
 _log = get_logger("entity_ingest")
@@ -351,9 +352,13 @@ def main() -> None:
                     with open(fpath, "r", encoding="utf-8") as f:
                         texts.append((fname, f.read()))
 
-    # Extract and filter
+    # Extract and filter. Scanned text is sanitized first (invisible
+    # Unicode is a prompt-injection channel; gated by
+    # ingest.sanitize_codepoints, default ON) so hidden codepoints
+    # cannot ride into entity slugs / signal excerpts.
     all_entities = []
     for source_name, content in texts:
+        content = sanitize_text_for_ingest(content, ws, source=source_name)
         entities = extract_entities(content)
         new_entities = filter_new_entities(entities, existing)
         if new_entities:

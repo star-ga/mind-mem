@@ -26,6 +26,7 @@ import re
 import sys
 from datetime import datetime, timedelta
 
+from .block_provenance import PROVENANCE_FIELDS, sanitize_provenance_value
 from .mind_filelock import FileLock
 from .observability import get_logger, metrics
 
@@ -320,6 +321,14 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
                     f.write(f"Object: {st['object'].replace(chr(10), ' ').replace(chr(13), '')}\n")
                 if st.get("tags"):
                     f.write(f"Tags: {', '.join(st['tags'])}\n")
+
+                # Provenance fields (roadmap Group E) — optional; written
+                # only when the caller attached them (e.g. propose_update).
+                prov = sig.get("provenance") or {}
+                for prov_param, prov_field in PROVENANCE_FIELDS.items():
+                    prov_val = prov.get(prov_param)
+                    if prov_val:
+                        f.write(f"{prov_field}: {sanitize_provenance_value(str(prov_val))}\n")
 
                 prefix = "D-" if sig["type"] == "decision" else "T-"
                 f.write(f"Action: Review and formalize as {prefix} block if warranted\n")

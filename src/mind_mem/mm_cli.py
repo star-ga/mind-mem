@@ -9,6 +9,7 @@ Usage::
     mm vault scan <vault_root>      # list parsed vault blocks (JSON)
     mm vault write <vault_root> <id> --type <t> --body <b>
     mm status                       # workspace summary
+    mm index                        # regenerate index.md + log.md
 
 Filesystem-watcher integration and the per-agent hook installer
 remain deferred (need ``watchdog`` and per-agent setup scripts).
@@ -94,6 +95,21 @@ def _cmd_status(args: argparse.Namespace) -> int:
         info[f"{sub}_dir_exists"] = os.path.isdir(os.path.join(ws, sub))
     print(json.dumps(info, indent=2))
     return 0 if info["exists"] else 1
+
+
+def _cmd_index(args: argparse.Namespace) -> int:
+    """Regenerate ``index.md`` (hierarchical) + ``log.md`` (chronological).
+
+    Thin CLI wrapper over :func:`mind_mem.memory_index.generate_index`
+    (Group C — auto-generated hierarchical index). Idempotent: an
+    unchanged corpus reports ``index_changed`` / ``log_changed`` false
+    and leaves both files untouched.
+    """
+    from mind_mem.memory_index import generate_index
+
+    result = generate_index(_workspace(), out_dir=getattr(args, "out_dir", None))
+    print(json.dumps(result.as_dict(), indent=2))
+    return 0
 
 
 def _cmd_tool_run(args: argparse.Namespace) -> int:
@@ -2065,6 +2081,20 @@ def build_parser() -> argparse.ArgumentParser:
     # status
     p_status = sub.add_parser("status", help="Print workspace status as JSON.")
     p_status.set_defaults(func=_cmd_status)
+
+    # index — auto-generated hierarchical index (Group C)
+    p_index = sub.add_parser(
+        "index",
+        help="Regenerate index.md (hierarchical, by category/kind) + log.md (chronological) from the block corpus.",
+    )
+    p_index.add_argument(
+        "--out-dir",
+        default=None,
+        dest="out_dir",
+        metavar="DIR",
+        help="Directory to write index.md / log.md into (default: the workspace root).",
+    )
+    p_index.set_defaults(func=_cmd_index)
 
     # tool-run / tool-recall — context-offload for large command output (§5)
     p_toolrun = sub.add_parser(

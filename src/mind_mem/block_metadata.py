@@ -16,10 +16,16 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 
+from .block_provenance import PROVENANCE_FIELDS, sanitize_provenance_value
 from .connection_manager import ConnectionManager
 from .observability import get_logger
 
 _log = get_logger("block_metadata")
+
+# Provenance columns (roadmap Group E) — snake_case, all nullable TEXT so
+# the migration is purely additive: existing rows read back as NULL and
+# existing DBs are upgraded in place via idempotent ALTER TABLE.
+_PROVENANCE_COLUMNS: tuple[str, ...] = tuple(PROVENANCE_FIELDS.keys())
 
 
 class BlockMetadataManager:
@@ -36,7 +42,12 @@ class BlockMetadataManager:
         access_count INTEGER DEFAULT 0,
         last_accessed TEXT,
         keywords TEXT DEFAULT '',
-        connections TEXT DEFAULT ''
+        connections TEXT DEFAULT '',
+        actor_id TEXT,
+        actor_role TEXT,
+        session_id TEXT,
+        tool_id TEXT,
+        purpose TEXT
     );
     """
 
@@ -47,12 +58,22 @@ class BlockMetadataManager:
         self._ensure_table()
 
     def _ensure_table(self) -> None:
-        """Create block_meta table if it doesn't exist."""
+        """Create block_meta table if it doesn't exist; add missing columns.
+
+        The provenance columns (Group E) are added via idempotent
+        ``ALTER TABLE ... ADD COLUMN`` for databases created before the
+        columns existed — same zero-downtime pattern as
+        ``block_lineage.ensure_lineage_schema``.
+        """
         with self._lock:
             try:
                 with self._conn_mgr.write_lock:
                     conn = self._conn_mgr.get_write_connection()
                     conn.execute(self.SCHEMA)
+                    cols = {row[1] for row in conn.execute("PRAGMA table_info(block_meta)").fetchall()}
+                    for col in _PROVENANCE_COLUMNS:
+                        if col not in cols:
+                            conn.execute(f"ALTER TABLE block_meta ADD COLUMN {col} TEXT")  # nosec B608 — col from the module-level _PROVENANCE_COLUMNS constant, not user input
                     conn.commit()
             except (sqlite3.Error, ValueError):
                 pass  # Graceful degradation if DB unavailable
@@ -208,6 +229,80 @@ class BlockMetadataManager:
             return []
         except (sqlite3.Error, json.JSONDecodeError):
             return []
+
+    def set_provenance(
+        self,
+        block_id: str,
+        *,
+        actor_id: str | None = None,
+        actor_role: str | None = None,
+        session_id: str | None = None,
+        tool_id: str | None = None,
+        purpose: str | None = None,
+    ) -> bool:
+        """Record provenance for a block (roadmap Group E). All fields optional.
+
+        Only the fields provided (non-None, non-blank after sanitization)
+        are written; existing values for omitted fields are preserved.
+        Values are single-line by contract and capped at
+        :data:`~mind_mem.block_provenance.MAX_PROVENANCE_VALUE_LEN` chars.
+
+        Returns True when a write happened, False when nothing was
+        provided or the DB is unavailable (graceful degradation, matching
+        the rest of this manager).
+        """
+        provided = {
+            "actor_id": actor_id,
+            "actor_role": actor_role,
+            "session_id": session_id,
+            "tool_id": tool_id,
+            "purpose": purpose,
+        }
+        updates: dict[str, str] = {}
+        for col in _PROVENANCE_COLUMNS:
+            raw = provided[col]
+            if raw is None:
+                continue
+            value = sanitize_provenance_value(str(raw))
+            if value:
+                updates[col] = value
+        if not updates:
+            return False
+        set_clause = ", ".join(f"{col} = ?" for col in updates)
+        with self._lock:
+            try:
+                with self._conn_mgr.write_lock:
+                    conn = self._conn_mgr.get_write_connection()
+                    conn.execute("INSERT OR IGNORE INTO block_meta (id) VALUES (?)", (block_id,))
+                    conn.execute(
+                        f"UPDATE block_meta SET {set_clause} WHERE id = ?",  # nosec B608 — set_clause built from _PROVENANCE_COLUMNS constant; values bound as params
+                        (*updates.values(), block_id),
+                    )
+                    conn.commit()
+                _log.debug("set_provenance", block_id=block_id, fields=sorted(updates))
+                return True
+            except sqlite3.Error:
+                return False  # Graceful degradation
+
+    def get_provenance(self, block_id: str) -> dict[str, str]:
+        """Return recorded provenance for a block; ``{}`` when none.
+
+        Keys are the snake_case caller-facing names (``actor_id``,
+        ``actor_role``, ``session_id``, ``tool_id``, ``purpose``); only
+        non-null, non-empty fields are included.
+        """
+        cols = ", ".join(_PROVENANCE_COLUMNS)
+        try:
+            conn = self._conn_mgr.get_read_connection()
+            row = conn.execute(
+                f"SELECT {cols} FROM block_meta WHERE id = ?",  # nosec B608 — cols from the _PROVENANCE_COLUMNS constant
+                (block_id,),
+            ).fetchone()
+            if not row:
+                return {}
+            return {col: value for col, value in zip(_PROVENANCE_COLUMNS, row) if value}
+        except sqlite3.Error:
+            return {}
 
     def close(self) -> None:
         """Close the underlying ConnectionManager."""

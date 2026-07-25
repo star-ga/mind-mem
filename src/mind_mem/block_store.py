@@ -294,6 +294,14 @@ _CANONICAL_FIELD_ORDER: tuple[str, ...] = (
     "Evidence",
     "Source",
     "Confidence",
+    # Provenance fields (roadmap Group E) — optional, schema-additive;
+    # see block_provenance.PROVENANCE_FIELDS. Existing blocks without
+    # them render byte-identically.
+    "ActorId",
+    "ActorRole",
+    "SessionId",
+    "ToolId",
+    "Purpose",
     "ContentHash",
     "Excerpt",
     "Action",

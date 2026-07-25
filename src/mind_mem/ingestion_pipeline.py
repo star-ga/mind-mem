@@ -26,6 +26,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from typing import Any, Callable, Mapping, Optional
 
+from .codepoint_sanitize import sanitize_structure
+
 
 @dataclass
 class IngestionStats:
@@ -163,6 +165,7 @@ def serve_webhook(
     *,
     wal: Optional[WriteAheadLog] = None,
     host: str = "127.0.0.1",
+    sanitize: bool = True,
 ) -> tuple[threading.Thread, Callable[[], None]]:
     """Start a stdlib HTTP server accepting POST /ingest with a JSON body.
 
@@ -170,6 +173,15 @@ def serve_webhook(
     to shut the server down cleanly. Requests that exceed 1 MiB are
     refused with HTTP 413 so the endpoint cannot be used as a memory
     DoS vector.
+
+    ``sanitize`` (default ``True``) strips invisible-Unicode codepoints
+    (zero-width chars, Unicode tag chars, bidi controls — a
+    prompt-injection channel) from every string in the event before it
+    reaches the WAL or the queue; see
+    :mod:`mind_mem.codepoint_sanitize`. Events nested deeper than 64
+    levels are refused with HTTP 400. Callers wiring this from a
+    workspace config should pass
+    ``sanitize=is_sanitize_enabled(config)``.
     """
 
     class Handler(BaseHTTPRequestHandler):
@@ -197,6 +209,13 @@ def serve_webhook(
                 self.send_response(400)
                 self.end_headers()
                 return
+            if sanitize:
+                try:
+                    event = sanitize_structure(event)
+                except ValueError:  # nesting deeper than the sanitizer's cap
+                    self.send_response(400)
+                    self.end_headers()
+                    return
             if wal is not None:
                 wal.append(event)
             ok = ingestion.offer(event)

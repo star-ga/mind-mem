@@ -39,6 +39,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable
 
+from .codepoint_sanitize import sanitize_text_for_ingest
+
 __all__ = [
     "ROUTING_TABLE",
     "InboxWatcher",
@@ -129,6 +131,11 @@ def ingest_text_file(workspace: str, file_path: str) -> str:
     with open(file_path, encoding="utf-8", errors="replace") as fh:
         content = fh.read()
 
+    # Security: strip invisible-Unicode (zero-width, tag chars, bidi
+    # controls) before the text becomes a block — prompt-injection
+    # channel. Config-gated, default ON (ingest.sanitize_codepoints).
+    content = sanitize_text_for_ingest(content, workspace, source=file_path)
+
     base = os.path.splitext(os.path.basename(file_path))[0]
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     safe_base = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in base)[:64] or "inbox"
@@ -186,6 +193,8 @@ def _ingest_pdf(workspace: str, file_path: str) -> str:
     text = "\n\n".join(pages).strip()
     if not text:
         raise ValueError("PDF contained no extractable text")
+    # Same invisible-Unicode sanitization as the text path (security).
+    text = sanitize_text_for_ingest(text, workspace, source=file_path)
 
     base = os.path.splitext(os.path.basename(file_path))[0]
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

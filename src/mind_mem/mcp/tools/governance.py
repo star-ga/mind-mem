@@ -51,6 +51,11 @@ def propose_update(
     rationale: str = "",
     tags: str = "",
     confidence: str = "medium",
+    actor_id: str = "",
+    actor_role: str = "",
+    session_id: str = "",
+    tool_id: str = "",
+    purpose: str = "",
 ) -> str:
     """Propose a new decision or task. Writes to SIGNALS.md for human review.
 
@@ -59,8 +64,46 @@ def propose_update(
     means the audit trail answers "why" three months later without having
     to dig through Slack. Must be at least 8 non-whitespace characters
     so callers can't bypass the gate with a trivial string.
+
+    Provenance (roadmap Group E, all optional): ``actor_id`` /
+    ``actor_role`` / ``session_id`` / ``tool_id`` / ``purpose`` record
+    who proposed the block, in what role, from which session, via which
+    tool, and why. When provided they are written into the SIGNALS.md
+    block as ``ActorId:`` / ``ActorRole:`` / ``SessionId:`` / ``ToolId:``
+    / ``Purpose:`` fields and travel with the block from then on.
+    Omitting them keeps the exact pre-Group-E behaviour.
     """
     ws = _workspace()
+
+    from mind_mem.block_provenance import (
+        MAX_PROVENANCE_VALUE_LEN,
+        PROVENANCE_FIELDS,
+        sanitize_provenance_value,
+    )
+
+    provenance_in = {
+        "actor_id": actor_id,
+        "actor_role": actor_role,
+        "session_id": session_id,
+        "tool_id": tool_id,
+        "purpose": purpose,
+    }
+    provenance: dict[str, str] = {}
+    for prov_param in PROVENANCE_FIELDS:
+        raw_val = provenance_in[prov_param]
+        if not raw_val:
+            continue
+        if len(raw_val) > MAX_PROVENANCE_VALUE_LEN:
+            return json.dumps(
+                {
+                    "error": (f"{prov_param} exceeds {MAX_PROVENANCE_VALUE_LEN} chars (provenance values are metadata, not content)"),
+                    "field": prov_param,
+                    "length": len(raw_val),
+                }
+            )
+        cleaned = sanitize_provenance_value(raw_val)
+        if cleaned:
+            provenance[prov_param] = cleaned
 
     if block_type not in ("decision", "task"):
         return json.dumps({"error": f"block_type must be 'decision' or 'task', got '{block_type}'"})
@@ -170,6 +213,8 @@ def propose_update(
     }
     if rationale:
         signal["structure"]["rationale"] = rationale  # type: ignore[index]
+    if provenance:
+        signal["provenance"] = provenance
 
     written = append_signals(ws, [signal], today)
 
@@ -180,17 +225,17 @@ def propose_update(
     # serve a pre-proposal envelope that omits the new signal.
     _invalidate_recall_cache()
 
-    return json.dumps(
-        {
-            "_schema_version": MCP_SCHEMA_VERSION,
-            "status": "proposed",
-            "written": written,
-            "location": "intelligence/SIGNALS.md",
-            "next_step": ("Run /apply or `python3 maintenance/apply_engine.py` to review and promote to source of truth."),
-            "safety": "This signal is in SIGNALS.md only. It has NOT been written to DECISIONS.md or TASKS.md.",
-        },
-        indent=2,
-    )
+    response: dict[str, Any] = {
+        "_schema_version": MCP_SCHEMA_VERSION,
+        "status": "proposed",
+        "written": written,
+        "location": "intelligence/SIGNALS.md",
+        "next_step": ("Run /apply or `python3 maintenance/apply_engine.py` to review and promote to source of truth."),
+        "safety": "This signal is in SIGNALS.md only. It has NOT been written to DECISIONS.md or TASKS.md.",
+    }
+    if provenance:
+        response["provenance_attached"] = sorted(provenance)
+    return json.dumps(response, indent=2)
 
 
 def _invalidate_recall_cache() -> None:
@@ -821,15 +866,17 @@ def memory_evolution(block_id: str, action: str = "get") -> str:
             importance = mgr.get_importance_boost(block_id)
             co_blocks = mgr.get_co_occurring_blocks(block_id)
             metrics.inc("mcp_evolution_reads")
-            return json.dumps(
-                {
-                    "_schema_version": MCP_SCHEMA_VERSION,
-                    "block_id": block_id,
-                    "importance": round(importance, 4),
-                    "co_occurring_blocks": co_blocks,
-                },
-                indent=2,
-            )
+            payload: dict[str, Any] = {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "block_id": block_id,
+                "importance": round(importance, 4),
+                "co_occurring_blocks": co_blocks,
+            }
+            # Provenance (Group E) — only included when recorded.
+            prov = mgr.get_provenance(block_id)
+            if prov:
+                payload["provenance"] = prov
+            return json.dumps(payload, indent=2)
 
     except ImportError:
         return json.dumps(

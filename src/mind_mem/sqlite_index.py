@@ -31,6 +31,7 @@ import threading
 from datetime import datetime
 
 from .block_parser import parse_file
+from .block_provenance import PROVENANCE_FIELD_NAMES
 from .connection_manager import ConnectionManager
 from .enums import TaskStatus
 from .extractor import extract_facts
@@ -1210,6 +1211,10 @@ def query_index(
             result["DiaID"] = row["dia_id"]
         if row["date"]:
             result["Date"] = row["date"]
+        # Pass through provenance fields (Group E) when present
+        for _prov_field in PROVENANCE_FIELD_NAMES:
+            if block_data.get(_prov_field):
+                result[_prov_field] = block_data[_prov_field]
         results.append(result)
 
     # --- Feature 2: Aggregate fact sub-blocks to parents (small-to-big) ---

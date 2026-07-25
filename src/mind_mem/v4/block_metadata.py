@@ -29,6 +29,15 @@ write; ``ok=False`` rejects with the supplied reason. This keeps the
 v3 propose/approve flow authoritative for *what* gets written; this
 module only adds a programmatic gate before the propose call.
 
+Vocabulary-bound fields (Group E, ``v4.vocabulary``): when that flag is
+also on, :func:`validate_block` (given a ``workspace``) and
+:func:`set_block_metadata` additionally check field values against the
+workspace's controlled vocabularies (see :mod:`mind_mem.v4.vocabulary`).
+Reject-mode violations fail the validation / raise
+:class:`~mind_mem.v4.vocabulary.OutOfVocabularyError`; flag-mode
+violations are reported but do not block. No vocabulary declared —
+or the flag off — means no restriction (backward compatible).
+
 Feature-flag gated under ``v4.block_metadata``.
 
 Copyright STARGA, Inc.
@@ -45,7 +54,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .feature_flags import require_enabled
+from ..observability import get_logger
+from . import vocabulary as _vocabulary
+from .feature_flags import is_enabled, require_enabled
 
 __all__ = [
     "FLAG",
@@ -63,7 +74,23 @@ __all__ = [
 ]
 
 
+_log = get_logger("v4.block_metadata")
+
 FLAG: str = "block_metadata"
+
+
+def _vocabulary_violations(
+    workspace: str | Path,
+    fields: dict[str, Any],
+) -> list[_vocabulary.VocabularyViolation]:
+    """Run the workspace vocabulary check when ``v4.vocabulary`` is on.
+
+    Returns ``[]`` when the flag is off or nothing is declared — the
+    vocabulary layer is strictly additive.
+    """
+    if not is_enabled(_vocabulary.FLAG):
+        return []
+    return _vocabulary.validate_workspace_fields(workspace, fields)
 
 
 @dataclass(frozen=True)
@@ -156,10 +183,22 @@ def set_block_metadata(
     Uses ``INSERT ... ON CONFLICT DO UPDATE`` so ``created_at`` is
     preserved across updates — the original creation time is
     audit-relevant. ``updated_at`` advances on every call.
+
+    When ``v4.vocabulary`` is enabled, tag values are checked against
+    the workspace's controlled vocabularies: reject-mode violations
+    raise :class:`~mind_mem.v4.vocabulary.OutOfVocabularyError` before
+    anything is written; flag-mode violations log a warning and the
+    write proceeds.
     """
     require_enabled(FLAG)
     ensure_metadata_schema(workspace)
     safe_tags = {str(k): str(v) for k, v in (tags or {}).items()}
+    violations = _vocabulary_violations(workspace, safe_tags)
+    rejects = _vocabulary.rejections(violations)
+    if rejects:
+        raise _vocabulary.OutOfVocabularyError(rejects)
+    for v in _vocabulary.flagged(violations):
+        _log.warning("vocabulary_flagged", block_id=block_id, field=v.field, value=v.value)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
     db = Path(workspace) / "index.db"
     with sqlite3.connect(db, timeout=30) as conn:
@@ -279,25 +318,50 @@ def register_schema_validator(kind: str, fn: SchemaValidator) -> None:
         _validators[kind] = fn
 
 
-def validate_block(kind: str, payload: dict[str, Any]) -> SchemaValidationResult:
+def validate_block(
+    kind: str,
+    payload: dict[str, Any],
+    *,
+    workspace: str | Path | None = None,
+) -> SchemaValidationResult:
     """Run the validator for ``kind`` against ``payload``.
 
     Returns ``ok=True`` when no validator is registered (open by
     default — callers register validators only for kinds they want to
     constrain). Validator exceptions are caught and reported as
     ``ok=False`` so the recall path can continue cleanly.
+
+    When ``workspace`` is given and ``v4.vocabulary`` is enabled, the
+    payload (plus the implicit ``block_kind`` field, set to ``kind``
+    unless the payload carries its own) is additionally checked against
+    the workspace's controlled vocabularies. Reject-mode violations
+    return ``ok=False``; flag-mode violations keep ``ok=True`` with a
+    ``vocabulary_flagged: ...`` reason so callers can surface them.
     """
     require_enabled(FLAG)
     with _validator_lock:
         fn = _validators.get(kind)
     if fn is None:
-        return SchemaValidationResult(ok=True, reason="no_validator")
-    try:
-        result = fn(payload)
-    except Exception as exc:
-        return SchemaValidationResult(ok=False, reason=f"validator_raised: {exc!r}")
-    if not isinstance(result, SchemaValidationResult):
-        return SchemaValidationResult(ok=False, reason="validator_returned_wrong_type")
+        result = SchemaValidationResult(ok=True, reason="no_validator")
+    else:
+        try:
+            result = fn(payload)
+        except Exception as exc:
+            return SchemaValidationResult(ok=False, reason=f"validator_raised: {exc!r}")
+        if not isinstance(result, SchemaValidationResult):
+            return SchemaValidationResult(ok=False, reason="validator_returned_wrong_type")
+    if not result.ok or workspace is None:
+        return result
+
+    fields = dict(payload)
+    fields.setdefault("block_kind", kind)
+    violations = _vocabulary_violations(workspace, fields)
+    rejects = _vocabulary.rejections(violations)
+    if rejects:
+        return SchemaValidationResult(ok=False, reason="vocabulary: " + "; ".join(v.message() for v in rejects))
+    flags = _vocabulary.flagged(violations)
+    if flags:
+        return SchemaValidationResult(ok=True, reason="vocabulary_flagged: " + "; ".join(v.message() for v in flags))
     return result
 
 

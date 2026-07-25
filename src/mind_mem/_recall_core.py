@@ -59,6 +59,7 @@ from ._recall_temporal import apply_temporal_filter, resolve_time_reference
 from ._recall_tokenization import tokenize
 from .block_maturity import apply_min_maturity_filter as _apply_min_maturity_filter
 from .block_parser import chunk_block, deduplicate_chunks, get_active, parse_file
+from .block_provenance import PROVENANCE_FIELD_NAMES
 from .enums import TaskStatus
 from .observability import get_logger, metrics
 from .retrieval_graph import (
@@ -1091,6 +1092,10 @@ def recall(
         # Pass through Maturity for the min_maturity post-filter
         if block.get("Maturity"):
             result["Maturity"] = block["Maturity"]
+        # Pass through provenance fields (Group E) when present
+        for _prov_field in PROVENANCE_FIELD_NAMES:
+            if block.get(_prov_field):
+                result[_prov_field] = block[_prov_field]
         results.append(result)
 
     _stage_counts["bm25_passed"] = len(results)
