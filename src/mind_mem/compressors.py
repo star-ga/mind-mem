@@ -26,12 +26,14 @@ from __future__ import annotations
 import json
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from typing import Any
 
 _DEFAULT_HOST = "http://localhost:11434"
 _DEFAULT_TIMEOUT_S = 60.0
+_ALLOWED_SCHEMES = ("http", "https")
 
 _PROMPT_TEMPLATE = """You are re-compressing a cluster of related memory blocks into a single \
 tight summary. Re-read the sibling blocks below together with the current \
@@ -142,6 +144,12 @@ class OllamaCompressor:
             # Non-zero sampling temperature breaks purity w.r.t. inputs —
             # the whole fixed-point argument depends on temperature=0.
             raise ValueError("OllamaCompressor requires temperature=0.0 for a well-defined fixed point")
+        scheme = urllib.parse.urlparse(host).scheme.lower()
+        if scheme not in _ALLOWED_SCHEMES:
+            # Reject file:/ and custom schemes up front (B310) — the host is
+            # an operator config value, but a misconfiguration must never let
+            # urlopen touch the local filesystem or an unexpected transport.
+            raise ValueError(f"OllamaCompressor host scheme must be one of {_ALLOWED_SCHEMES}, got {scheme!r}")
         self._model = model
         self._host = host.rstrip("/")
         self._temperature = temperature
@@ -161,6 +169,11 @@ class OllamaCompressor:
 
     def _post(self, body: dict[str, Any]) -> str:
         url = f"{self._host}/api/generate"
+        # Defense-in-depth scheme guard at the call site (B310): _host is
+        # validated in __init__, but re-check here so the urlopen can never
+        # be reached with a non-http(s) scheme.
+        if urllib.parse.urlparse(url).scheme.lower() not in _ALLOWED_SCHEMES:
+            raise CompressorError(f"refusing non-http(s) ollama url: {url!r}")
         req = urllib.request.Request(
             url,
             data=json.dumps(body).encode("utf-8"),
@@ -168,7 +181,7 @@ class OllamaCompressor:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # noqa: S310 - scheme allow-listed above
                 status = getattr(resp, "status", 200)
                 if status != 200:
                     raise CompressorError(f"ollama returned HTTP {status} for model {self._model!r}")

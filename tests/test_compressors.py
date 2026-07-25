@@ -268,3 +268,17 @@ def test_ollama_compressor_does_not_mutate_blocks():
         compressor("x", blocks)
 
     assert blocks == before
+
+
+def test_ollama_compressor_rejects_non_http_scheme():
+    """B310: file:/ and custom schemes are refused at construction."""
+    import pytest
+
+    from mind_mem.compressors import OllamaCompressor
+
+    for bad in ("file:///etc/passwd", "ftp://host/x", "gopher://h", "javascript:alert(1)"):
+        with pytest.raises(ValueError, match="scheme"):
+            OllamaCompressor(model="m", host=bad)
+    # http/https accepted (no network call in __init__)
+    OllamaCompressor(model="m", host="http://localhost:11434")
+    OllamaCompressor(model="m", host="https://ollama.internal:11434")
