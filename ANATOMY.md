@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 912 | **Est. tokens:** ~1,970,993
-**Generated:** 2026-07-25 03:10 UTC
+**Files:** 914 | **Est. tokens:** ~1,975,684
+**Generated:** 2026-07-25 03:16 UTC
 
 ## Token Budget Guide
 
@@ -68,9 +68,9 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,702 |
 | `src/mind_mem/storage/` | 2 | ~5,519 |
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
-| `src/mind_mem/v4/` | 23 | ~62,064 |
+| `src/mind_mem/v4/` | 24 | ~63,748 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 319 | ~695,904 |
+| `tests/` | 320 | ~698,911 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -701,6 +701,7 @@
 - `backpressure.py` (~2058 tok, huge) — v4 backpressure controller (round 4 audit, DeepSeek 9.75→10 gap).
 - `block_kinds.py` (~3123 tok, huge) — v4 block-kind taxonomy (Group B: knowledge graph).
 - `block_metadata.py` (~3410 tok, huge) — v4 block metadata + schema-validation hooks.
+- `block_versioning.py` (~1684 tok, huge) — Block versioning + time-travel — reconstruct what a block said, and when.
 - `circuit_breaker.py` (~3390 tok, huge) — v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10 gap).
 - `cognitive_kernel.py` (~2375 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
 - `consolidation_worker.py` (~2427 tok, huge) — v4 consolidation worker (Group A — MemGPT-pattern).
@@ -1059,6 +1060,7 @@
 - `test_v320_gaps.py` (~3257 tok, huge) — v3.2.0 gap tests — regression and edge-case coverage for new modules.
 - `test_v34_features.py` (~2993 tok, huge) — Tests for v3.4.0 retrieval features.
 - `test_v4_block_kinds.py` (~4112 tok, huge) — Tests for the v4 block-kind taxonomy module."""
+- `test_v4_block_versioning.py` (~3007 tok, huge) — Tests for v4 block versioning + time-travel (Group B, ``v4.self_editing``).
 - `test_v4_circuit_breaker.py` (~3770 tok, huge) — Tests for v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10)."""
 - `test_v4_cognitive_kernel.py` (~2770 tok, huge) — Tests for the v4 Cognitive Mind Kernel registry + dispatcher."""
 - `test_v4_concurrency.py` (~2325 tok, huge) — v4 concurrency / fuzz tests.
