@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 904 | **Est. tokens:** ~1,944,177
-**Generated:** 2026-07-25 01:53 UTC
+**Files:** 904 | **Est. tokens:** ~1,944,129
+**Generated:** 2026-07-25 02:10 UTC
 
 ## Token Budget Guide
 
@@ -49,7 +49,7 @@
 | `lib/` | 1 | ~2,170 |
 | `mind/` | 27 | ~9,687 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 6 | ~4,675 |
+| `scripts/` | 6 | ~4,627 |
 | `sdk/go/` | 9 | ~6,773 |
 | `sdk/js/` | 5 | ~1,388 |
 | `sdk/js/src/` | 4 | ~2,320 |
@@ -397,7 +397,7 @@
 - `anatomy.sh` (~2010 tok, huge) — anatomy — Generate ANATOMY.md for any repo
 - `build_integrity_manifest.py` (~634 tok, large) — Bake ``_integrity_manifest.json`` into the package before wheel build.
 - `check_claims.sh` (~385 tok, medium) — Cross-repo docs-claim regression gate (mind-mem side).
-- `count_mcp_tools.py` (~964 tok, large) — Count registered MCP tools and assert the count matches CLAUDE.md.
+- `count_mcp_tools.py` (~916 tok, large) — Count registered MCP tools and assert the count matches CLAUDE.md.
 - `regen_bash_literals.py` (~424 tok, medium) — Regenerate src/mind_mem/_task_status_literals.sh from enums.py.
 ### `sdk/go/`
 

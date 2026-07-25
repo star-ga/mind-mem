@@ -21,8 +21,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import importlib
-import pkgutil
+import ast
 import sys
 from pathlib import Path
 
@@ -31,45 +30,45 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-class _StubMCP:
-    """Minimal stand-in for fastmcp.FastMCP that just counts ``.tool(...)``."""
+def _tool_source_files() -> list[Path]:
+    """Every source file that can register MCP tools: the per-domain modules
+    under ``mcp/tools/*`` and the historical monolith ``mcp_server.py``."""
+    root = _project_root() / "src" / "mind_mem"
+    files = sorted((root / "mcp" / "tools").glob("*.py"))
+    monolith = root / "mcp_server.py"
+    if monolith.exists():
+        files.append(monolith)
+    return files
 
-    def __init__(self) -> None:
-        self.tools: list[str] = []
 
-    def tool(self, fn=None, **_kw):
-        def _add(target):
-            self.tools.append(getattr(target, "__name__", repr(target)))
-            return target
+def _tool_names(path: Path) -> list[str]:
+    """Statically collect the argument name of every ``mcp.tool(<fn>)`` (or
+    ``<x>.tool(<fn>)``) registration call in ``path``.
 
-        if fn is None:
-            return _add
-        return _add(fn)
+    Static AST parsing — NOT a runtime import — so the count is identical in
+    any environment, including CI jobs that do not install the ``mcp`` extra
+    (the runtime-import approach returned 0 there and red-lit the build)."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (SyntaxError, OSError) as exc:  # pragma: no cover - defensive
+        print(f"WARN: could not parse {path.name}: {exc}", file=sys.stderr)
+        return []
+    names: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "tool" and node.args:
+            arg = node.args[0]
+            if isinstance(arg, ast.Name):
+                names.append(arg.id)
+            elif isinstance(arg, ast.Attribute):
+                names.append(arg.attr)
+    return names
 
 
 def count_tools() -> int:
-    src = _project_root() / "src"
-    if str(src) not in sys.path:
-        sys.path.insert(0, str(src))
-
-    pkg = importlib.import_module("mind_mem.mcp.tools")
-    stub = _StubMCP()
-    for mod_info in pkgutil.iter_modules(pkg.__path__):
-        try:
-            mod = importlib.import_module(f"mind_mem.mcp.tools.{mod_info.name}")
-        except Exception as exc:
-            print(f"WARN: could not import mind_mem.mcp.tools.{mod_info.name}: {exc}", file=sys.stderr)
-            continue
-        register = getattr(mod, "register", None)
-        if callable(register):
-            try:
-                register(stub)
-            except Exception as exc:
-                print(
-                    f"WARN: register({mod_info.name}) raised: {exc}",
-                    file=sys.stderr,
-                )
-    return len(stub.tools)
+    total = 0
+    for path in _tool_source_files():
+        total += len(_tool_names(path))
+    return total
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -96,23 +95,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
     if args.verbose:
-        # Re-run with name capture for the verbose listing.
-        from mind_mem.mcp import tools as _tools  # noqa: F401
-
-        stub = _StubMCP()
-        pkg = importlib.import_module("mind_mem.mcp.tools")
-        for mod_info in pkgutil.iter_modules(pkg.__path__):
-            try:
-                mod = importlib.import_module(f"mind_mem.mcp.tools.{mod_info.name}")
-            except Exception:
-                continue
-            register = getattr(mod, "register", None)
-            if callable(register):
-                try:
-                    register(stub)
-                except Exception:
-                    continue
-        for name in sorted(stub.tools):
+        names: list[str] = []
+        for path in _tool_source_files():
+            names.extend(_tool_names(path))
+        for name in sorted(names):
             print(f"  - {name}")
     return 0
 
