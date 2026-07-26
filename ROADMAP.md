@@ -2387,3 +2387,62 @@ wedge applied to ourselves.
   regression in determinism or the evidence chain (signing of the
   evidence chain is itself a tracked `mind` milestone).
 - **Status:** Planned — sequenced after `mind` self-host; tracked here so the endgame is explicit.
+
+---
+
+## Blocking-then-arbitration for entity resolution (prior art: recent working note on agentic KG practice)
+
+> Opened 2026-07-25. Source is a third-party synthesis of public Anthropic material.
+> **Idea only — no code adopted, no dependency, no public attribution.** Note that the
+> social claims made *about* that document ("two Anthropic seniors", "1000x better")
+> are fabrications by a reposter and appear nowhere in it; the document's own numbers
+> are modest and honestly stated. Cite the technique, never the hype.
+
+**The pattern.** Resolving thousands of entity mentions by handing them all to a
+model in one prompt does not work. The disciplined form is two-stage: **cheap
+deterministic blocking** — an inverted index over name tokens, no model call — to
+group candidates into small blocks, **then** model arbitration *only within a
+block*. Keep the model for the parts that require judgment; use deterministic logic
+for everything else.
+
+**Why it belongs here.** That is the mind-mem gate discipline applied to
+resolution. It matters for the dedup/contradiction path, where the two failure
+modes are the ones already tracked as quality risks:
+
+- **Silent loss** — a surface form that lands in no cluster vanishes from the store
+  entirely, because the alias map has no entry for it. A production resolver must
+  fall back to a single-element cluster so nothing is dropped without a record.
+- **Over-merge** — a specific entity folded into a broader one because their
+  descriptions overlap. Loses precision in a way that then propagates through every
+  downstream recall.
+
+Both are spot-checkable, and both are exactly the class of error the governed
+`propose_update` path exists to keep out of the store.
+
+**Determinism constraint (ours, not the source's).** The blocking stage must be
+pure and replayable — same inputs → same blocks, byte-identical, no clock, no RNG.
+The arbitration call is the only non-deterministic step, and its *verdict* must be
+recorded so the merge is re-derivable from the record even though the call itself
+is not. An arbitration outcome must never reach a signed or sealed surface
+unrecorded — same rule that keeps raw floats out of a signed payload.
+
+**Disambiguation input.** The source note's sharpest observation is that resolution
+quality comes almost entirely from a **one-line, per-entity, per-document
+description written at extraction time**. Without it the resolver sees only names
+and falls back to surface-form matching — the exact failure the approach exists to
+avoid. If this is built, the description is a first-class input, not metadata.
+
+**Related but already ahead of the source:** the corroboration-weighted, integer-
+encoded confidence the same note lists as a "future direction" is already shipped
+in `mind-lab`'s `dr-spine` (`independent_corroboration()` → saturating term →
+`confidence_milli`). Nothing to port; noted so the two are not confused.
+
+**What we did NOT take.** The note's knowledge-graph layer — mind-mem is already a
+governed store with provenance chains, and a KG would duplicate it. And its
+"operational discipline" section is a list of *conventions* (sample daily, cap
+volume, version the schema); our position is that conventions get skipped under
+deadline and invariants do not.
+
+- **Status:** Proposed 2026-07-25. Evaluate-item, not a commitment. Blocking is
+  ~an inverted index, not a dependency. Sequence behind any live dedup-quality
+  signal — build the measurement before the mechanism.
