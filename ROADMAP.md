@@ -412,6 +412,71 @@ Group H recompaction).
 > Provenance (source cookbook / working note + URL) recorded privately
 > in `mind-internal`, per the no-public-attribution rule.
 
+#### K.0 — Graph population is the bottleneck, not graph capability (2026-07-27)
+
+Triggered by an external "graph engineering" workflow board (ingest → entity
+extraction → graph build → hybrid index → GraphRAG query → agent memory →
+multi-agent swarm → autonomous refresh) evaluated against what we actually run.
+Seven of its eight stages are already shipped here or in the surrounding stack.
+The audit's real finding was not a missing feature — it was that **the graph we
+already built is nearly empty**, so the shipped capability is invisible in
+practice.
+
+**Verified live 2026-07-27** (`graph_stats` + `graph_query` against the active
+workspace, not read from docs):
+
+- `entities: 52`, `edges: 103`, `orphan_entities: 0`.
+- Only **four** predicates in use: `depends_on` (61), `related_to` (18),
+  `part_of` (13), `authored_by` (11).
+- Multi-hop traversal **works**: `graph_query(entity="mind-mem", depth=3,
+  direction="both")` returns real 2-hop paths
+  (`mind-mem → mind-kg → mindc`, `mind-mem → starga inc → 512-mind`).
+- `extraction.enabled: true`, backend `ollama`, model `mind-mem:4b`.
+
+So `knowledge_graph.py` (typed `Predicate` enum, `valid_from`/`valid_until`
+temporal columns, `EntityRegistry` alias resolution, `neighbors()` BFS capped at
+8 hops) and `graph_recall.py` (decayed multi-hop fusion into the BM25/hybrid
+result set) are **shipped and functional**. What is missing is throughput: ~100
+edges over a 1469-block corpus means recall almost never has an edge to walk.
+The predicate distribution is the tell — those four are repo-topology
+predicates, i.e. what a structural pass produces, not what reading the corpus
+produces. People, decisions, commitments, and threads are essentially unedged.
+
+- [ ] **Measure extraction yield before tuning it** — instrument
+      edges-per-block and predicate histogram over a known corpus slice.
+      The current numbers do not distinguish "extraction never ran over the
+      corpus" from "it ran and produced almost nothing." Those have opposite
+      fixes, so measure first. Blocks every item below; no mechanism work
+      until this reads out.
+- [ ] **Backfill pass over the existing corpus** — extraction is enabled but
+      the graph reflects a structural scan, not a corpus read. A one-shot
+      backfill (HITL-gated per the Group K wedge guardrail — the graph never
+      self-modifies from an un-reviewed model call) is the cheapest path from
+      103 edges to a graph worth traversing.
+- [ ] **Widen the predicate vocabulary beyond repo topology** — the four live
+      predicates cannot express the relations our corpus is actually made of
+      (person ↔ organization, decision ↔ rationale, commitment ↔ owner,
+      claim ↔ evidence). Pairs with the Group K "schema versioning" item:
+      version the vocabulary *before* scaling ingestion, so pre-widening
+      blocks stay distinguishable and re-extractable.
+- [ ] **`retrieval.multi_hop` is absent from the live workspace config** —
+      `graph_recall` reads an opt-in block (`enabled`, `auto_enable`,
+      `max_hops`, `decay`, `max_neighbors_per_hop`) that is not present in
+      `mind-mem.json`, so the documented fusion path runs on defaults rather
+      than a reviewed setting. Pin it explicitly once yield is known.
+
+**Not adopted from the source board.** Neo4j — our SQLite incidence tables
+already carry typed predicates and a real temporal model, and the dependency
+buys nothing we lack. Its "agent memory" and "multi-agent swarm" stages are
+mind-mem and the Naestro scheduler respectively, both shipped. Its "autonomous
+refresh" is `reindex` plus the existing post-merge/post-commit hook — and note
+its refresh loop is autonomous by design, which is exactly the property our
+HITL gate deliberately refuses.
+
+- **Status:** Proposed 2026-07-27. Diagnostic-first: the first item is a
+  measurement, and the rest are gated behind what it reports. No capability
+  work is implied — the capability exists and was verified running.
+
 ### v3.2.x trailing fixes (4 items, deliberately deferred)
 
 - [ ] **Apply engine — text-range ops** — `insert_after_block` / `replace_range` still on raw `open()`; no v3.2.x caller generates them in practice
