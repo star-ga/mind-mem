@@ -84,8 +84,8 @@ class TestExtractRelations:
             ' {"subject": "a", "predicate": "part_of", "object": "b",'
             ' "confidence": "bogus"}]'
         )
-        monkeypatch.setattr(llm, "is_available", lambda backend="auto": True)
-        monkeypatch.setattr(llm, "_query_llm", lambda prompt, model, backend="auto": payload)
+        monkeypatch.setattr(llm, "is_available", lambda backend="auto", **kw: True)
+        monkeypatch.setattr(llm, "_query_llm", lambda prompt, model, backend="auto", **kw: payload)
         out = llm.extract_relations("some text", model="m", backend="ollama")
         # Unknown predicate and empty subject are dropped; bogus
         # confidence falls back to the 0.5 default.
@@ -101,7 +101,7 @@ class TestExtractRelations:
     def test_empty_when_no_backend(self, monkeypatch) -> None:
         import mind_mem.llm_extractor as llm
 
-        monkeypatch.setattr(llm, "is_available", lambda backend="auto": False)
+        monkeypatch.setattr(llm, "is_available", lambda backend="auto", **kw: False)
         assert llm.extract_relations("text") == []
 
     def test_empty_text_short_circuits(self) -> None:
@@ -114,11 +114,11 @@ class TestExtractRelations:
 
         seen: list[str] = []
 
-        def fake_query(prompt: str, model: str, backend: str = "auto") -> str:
+        def fake_query(prompt: str, model: str, backend: str = "auto", **kw: object) -> str:
             seen.append(prompt)
             return "[]"
 
-        monkeypatch.setattr(llm, "is_available", lambda backend="auto": True)
+        monkeypatch.setattr(llm, "is_available", lambda backend="auto", **kw: True)
         monkeypatch.setattr(llm, "_query_llm", fake_query)
         llm.extract_relations("text", model="m", backend="ollama")
         assert seen and "depends_on" in seen[0] and "authored_by" in seen[0]

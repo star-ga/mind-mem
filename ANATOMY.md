@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 921 | **Est. tokens:** ~1,997,183
-**Generated:** 2026-07-28 04:06 UTC
+**Files:** 921 | **Est. tokens:** ~1,997,193
+**Generated:** 2026-07-28 04:17 UTC
 
 ## Token Budget Guide
 
@@ -70,7 +70,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 24 | ~63,748 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 324 | ~709,041 |
+| `tests/` | 324 | ~709,051 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -884,7 +884,7 @@
 - `test_granularity_align.py` (~3310 tok, huge) — Tests for granularity_align — named merge operation (Group H, v4.0.x).
 - `test_graph_boost.py` (~6050 tok, huge) — Tests for graph boost, context packing, config validation, and block cap.
 - `test_graph_boost_recall.py` (~315 tok, medium) — Tests for graph_boost recall parameter."""
-- `test_graph_ingest.py` (~3690 tok, huge) — Corpus → typed knowledge-graph wiring (extraction → HITL signal → apply).
+- `test_graph_ingest.py` (~3700 tok, huge) — Corpus → typed knowledge-graph wiring (extraction → HITL signal → apply).
 - `test_graph_recall.py` (~1498 tok, large) — v3.3.0 Tier 1 #2 — multi-hop graph traversal on recall results.
 - `test_grid_search.py` (~1199 tok, large) — Tests for benchmarks/grid_search.py — grid generation and utility functions."""
 - `test_group_h_robustness.py` (~10224 tok, huge) — Robustness tests for Group-H modules: edge-cases, error-paths, boundary values.
