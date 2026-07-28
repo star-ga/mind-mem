@@ -23,6 +23,7 @@ from mind_mem.graph_ingest import (
     RELATION_PATTERN,
     RelationTriple,
     approve_relation_signals,
+    attach_source_excerpts,
     backfill,
     pending_relation_signals,
     relations_to_signals,
@@ -188,6 +189,84 @@ class TestStageAndApprove:
         report = approve_relation_signals(workspace, ["SIG-20990101-001"])
         assert report["applied"] == []
         assert "SIG-20990101-001" in report["errors"]
+
+    def test_comma_in_source_block_id_roundtrips_exactly(self, workspace) -> None:
+        """Tags serialize comma-joined; a comma inside a tag VALUE must
+        not split mid-value and corrupt the provenance anchor."""
+        weird = "D-20260101-001,extra-segment"
+        stage_relation_signals(workspace, [_triple(source=weird)], DATE)
+        pending = pending_relation_signals(workspace)
+        assert len(pending) == 1
+        assert pending[0]["source_block_id"] == weird
+        assert pending[0]["predicate"] == "depends_on"
+        assert pending[0]["confidence"] == pytest.approx(0.7)
+
+    def test_percent_and_comma_escape_roundtrip(self, workspace) -> None:
+        """Escape-of-escape: values containing the escape character
+        itself must also survive the round trip byte-exact."""
+        weird = "D-100%,x%2C-y"
+        stage_relation_signals(workspace, [_triple(source=weird)], DATE)
+        pending = pending_relation_signals(workspace)
+        assert len(pending) == 1
+        assert pending[0]["source_block_id"] == weird
+
+    def test_comma_source_block_survives_approve(self, workspace) -> None:
+        weird = "D-20260101-001,extra"
+        stage_relation_signals(workspace, [_triple(source=weird)], DATE)
+        sig_id = pending_relation_signals(workspace)[0]["signal_id"]
+        report = approve_relation_signals(workspace, [sig_id])
+        assert report["applied"] == [sig_id]
+        with KnowledgeGraph(default_db_path(workspace)) as kg:
+            edges = kg.edges_from("starga")
+        assert edges[0].source_block_id == weird
+
+
+class TestPendingExcerpts:
+    """HITL review surface: pending relations carry a bounded excerpt
+    of their source block so the operator can verify the relation
+    against the text before approving."""
+
+    def test_attach_source_excerpts_bounded(self, workspace) -> None:
+        stage_relation_signals(workspace, [_triple()], DATE)
+        pending = pending_relation_signals(workspace)
+        corpus = [{"_id": BLOCK_A, "excerpt": "STARGA depends on mindc " + "x" * 400}]
+        enriched = attach_source_excerpts(workspace, pending, corpus=corpus)
+        assert enriched[0]["source_excerpt"].startswith("STARGA depends on mindc")
+        assert len(enriched[0]["source_excerpt"]) <= 160
+        # Immutable: input dicts are not mutated.
+        assert "source_excerpt" not in pending[0]
+
+    def test_missing_source_block_gives_empty_excerpt(self, workspace) -> None:
+        stage_relation_signals(workspace, [_triple()], DATE)
+        pending = pending_relation_signals(workspace)
+        enriched = attach_source_excerpts(workspace, pending, corpus=[])
+        assert enriched[0]["source_excerpt"] == ""
+
+    def test_list_pending_cli_shows_excerpt(self, workspace, monkeypatch, capsys) -> None:
+        import mind_mem.graph_ingest as gi
+        from mind_mem.mm_cli import main
+
+        monkeypatch.setenv("MIND_MEM_WORKSPACE", workspace)
+        monkeypatch.setattr(gi, "_load_corpus", lambda ws: [{"_id": BLOCK_A, "excerpt": "STARGA depends on mindc for compilation"}])
+        stage_relation_signals(workspace, [_triple()], DATE)
+        rc = main(["graph-backfill", "--list-pending"])
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "starga depends_on mindc" in out
+        assert "STARGA depends on mindc for compilation" in out
+
+    def test_list_pending_json_includes_excerpt(self, workspace, monkeypatch, capsys) -> None:
+        import mind_mem.graph_ingest as gi
+        from mind_mem.mm_cli import main
+
+        monkeypatch.setenv("MIND_MEM_WORKSPACE", workspace)
+        monkeypatch.setattr(gi, "_load_corpus", lambda ws: [{"_id": BLOCK_A, "excerpt": "source text here"}])
+        stage_relation_signals(workspace, [_triple()], DATE)
+        rc = main(["graph-backfill", "--list-pending", "--json"])
+        assert rc == 0
+        rows = json.loads(capsys.readouterr().out)
+        assert rows[0]["source_excerpt"] == "source text here"
+        assert rows[0]["source_block_id"] == BLOCK_A
 
 
 class TestBackfill:

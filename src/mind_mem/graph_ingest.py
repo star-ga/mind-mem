@@ -83,12 +83,31 @@ class RelationTriple:
 # ---------------------------------------------------------------------------
 
 
+def _encode_tag_value(value: str) -> str:
+    """Escape the tag-list delimiter inside a tag VALUE.
+
+    SIGNALS.md serializes tags as one comma-joined ``Tags:`` line and
+    the reader splits it back on commas — a comma inside a value (e.g.
+    an unusual ``source_block_id``) would split mid-value and silently
+    corrupt the provenance anchor of every edge approved from that
+    signal. Percent-escape the comma, and the escape character itself
+    first so decoding is unambiguous.
+    """
+    return value.replace("%", "%25").replace(",", "%2C")
+
+
+def _decode_tag_value(value: str) -> str:
+    """Reverse :func:`_encode_tag_value` (order matters: comma first)."""
+    return value.replace("%2C", ",").replace("%25", "%")
+
+
 def relations_to_signals(relations: Iterable[RelationTriple]) -> list[dict]:
     """Convert triples to signal dicts for ``append_signals``.
 
     Mirrors ``entity_ingest.entities_to_signals``; predicate, source
-    block, and confidence ride in the structured tags so the approve
-    step can reconstruct the full edge from the SIGNALS.md block.
+    block, and confidence ride in the structured tags (values escaped
+    via :func:`_encode_tag_value`) so the approve step can reconstruct
+    the full edge from the SIGNALS.md block byte-exactly.
     """
     signals = []
     for rel in relations:
@@ -109,8 +128,8 @@ def relations_to_signals(relations: Iterable[RelationTriple]) -> list[dict]:
                     "tags": [
                         "graph-edge",
                         "auto-ingest",
-                        f"{_TAG_PREDICATE}{rel.predicate}",
-                        f"{_TAG_SOURCE_BLOCK}{rel.source_block_id}",
+                        f"{_TAG_PREDICATE}{_encode_tag_value(rel.predicate)}",
+                        f"{_TAG_SOURCE_BLOCK}{_encode_tag_value(rel.source_block_id)}",
                         f"{_TAG_CONFIDENCE}{rel.confidence:g}",
                     ],
                 },
@@ -162,9 +181,9 @@ def _relation_from_block(block: dict) -> Optional[dict]:
     confidence = 0.5
     for tag in tags:
         if tag.startswith(_TAG_PREDICATE):
-            predicate = tag[len(_TAG_PREDICATE) :]
+            predicate = _decode_tag_value(tag[len(_TAG_PREDICATE) :])
         elif tag.startswith(_TAG_SOURCE_BLOCK):
-            source_block = tag[len(_TAG_SOURCE_BLOCK) :]
+            source_block = _decode_tag_value(tag[len(_TAG_SOURCE_BLOCK) :])
         elif tag.startswith(_TAG_CONFIDENCE):
             try:
                 confidence = max(0.0, min(1.0, float(tag[len(_TAG_CONFIDENCE) :])))
@@ -202,6 +221,42 @@ def _relation_signal_blocks(workspace: str) -> list[dict]:
 def pending_relation_signals(workspace: str) -> list[dict]:
     """Return staged relation signals still awaiting operator approval."""
     return [r for r in _relation_signal_blocks(workspace) if r["status"] == "pending"]
+
+
+_EXCERPT_MAX_LEN = 160
+
+
+def attach_source_excerpts(
+    workspace: str,
+    relations: Iterable[dict],
+    *,
+    corpus: Optional[list[dict]] = None,
+    max_len: int = _EXCERPT_MAX_LEN,
+) -> list[dict]:
+    """Return copies of *relations* with a bounded ``source_excerpt``.
+
+    HITL review surface: without the source-block text next to a
+    pending relation, the operator cannot verify the relation actually
+    reflects the block (vs an injected fabrication) before approving.
+    The excerpt is whitespace-collapsed and hard-capped at *max_len*
+    characters; a missing source block yields an empty string rather
+    than an error so the review listing never fails open-ended.
+
+    Input dicts are not mutated — new dicts are returned.
+    """
+    if corpus is None:
+        corpus = _load_corpus(workspace)
+    id_to_text: dict[str, str] = {}
+    for block in corpus:
+        bid = str(block.get("_id") or "").strip()
+        if bid and bid not in id_to_text:
+            id_to_text[bid] = str(block.get("excerpt") or block.get("content") or block.get("Statement") or "")
+    out: list[dict] = []
+    for rel in relations:
+        text = id_to_text.get(str(rel.get("source_block_id", "")), "")
+        excerpt = " ".join(text.split())[: max(0, int(max_len))]
+        out.append({**rel, "source_excerpt": excerpt})
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -425,6 +480,7 @@ __all__ = [
     "relations_to_signals",
     "stage_relation_signals",
     "pending_relation_signals",
+    "attach_source_excerpts",
     "approve_relation_signals",
     "backfill",
 ]
