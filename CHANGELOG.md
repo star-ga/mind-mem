@@ -2,6 +2,70 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.3.0 — Knowledge-graph wiring: corpus→KG extraction (HITL), opt-in KG-fusion recall, capability-scoped edge writes
+
+**The typed knowledge graph is now populated by the corpus and consumable by recall
+— closing the "shipped but starved/unplumbed" gap (roadmap Group H.1 + K.0).** An
+audit found the typed KG (`knowledge_graph.py`) had no corpus→graph write path at
+all: extraction output was attached at recall time and discarded, `entity_ingest`
+only ever wrote SIGNALS proposals, and recall walked the *free block-xref* graph,
+not the typed KG — so a fully-populated KG could not have changed a single recall
+result. A measured dry run (live `mind-mem:4b`, 25-block slice) confirmed extraction
+itself works — **1.52 edges/block across 7 predicates** vs the 4 repo-topology
+predicates present before — the graph was empty because nothing ever ran extraction
+over the corpus. This release wires that path end-to-end, HITL-gated, no model
+retrain (the graph layer is stdlib-only SQLite; the 4B is not in the embedding loop
+and the extractor is config-swappable). MCP tool surface unchanged at **84**.
+Full suite **5908 passed**, +60 new tests, zero regression; blind code + security
+review (PASS_WITH_NOTES, 0 CRITICAL/0 HIGH-blocking); ruff/mypy/bandit clean.
+
+* **Corpus → KG extraction via HITL staging** (Group H.1 #1) — new `graph_ingest.py`
+  + `extract_relations()` on `llm_extractor` prompt the existing `extraction.{model,
+  backend}` config model for typed relation triples over each block, validated
+  strictly against the closed `Predicate` enum (invalid predicates dropped, never
+  written). Extracted edges are emitted as **SIGNALS.md proposals** (never a direct
+  graph write); an explicit approve step (`approve_relation_signals`) is the *only*
+  path from extraction to `KnowledgeGraph.add_edge`, stamping the real
+  `source_block_id` + `valid_from` and using `INSERT OR IGNORE` so re-approval is
+  idempotent. New `mm graph-backfill` **CLI verb** (dry-run by default, `--write`
+  stages, `--approve SIG-…` applies, `--list-pending` shows a bounded source-block
+  excerpt so an operator can verify each relation against its source before
+  approving) — a CLI verb, not a new MCP tool, so the surface stays 84.
+* **KG-fusion into hybrid recall** (Group H.1 #3) — new `kg_fusion.py` +
+  `_maybe_kg_expand`: query terms resolve read-only via the entity registry, typed
+  edges walk ≤2 hops, and edge source blocks are appended decayed into the result
+  set, deterministically (SQL-ordered, bounded, no clock/RNG). **Opt-in behind
+  `retrieval.kg_fusion.enabled`, default OFF** — with fusion off, recall returns the
+  identical result object as before (byte-identity preserved, tested). An explicit
+  `retrieval.multi_hop` block was added to workspace config pinning the prior
+  implicit defaults (`max_hops=2, decay=0.5, max_neighbors_per_hop=5`; governs the
+  free-xref expansion, not the KG).
+* **Direct KG edge writes are capability-scoped** (security, Group K guardrail) —
+  `graph_add_edge` moved USER→ADMIN so every un-reviewed graph mutation requires
+  admin scope. Also closed a confused-deputy path: the consolidated `graph()`
+  dispatcher called `graph_add_edge.__wrapped__()`, stripping the ACL decorator; it
+  now enforces the `graph_add_edge` capability scope *inside* the dispatcher, so the
+  admin requirement can't be silently re-opened by a future reclassification of the
+  `graph` tool name.
+* **Provenance integrity** — relation tags are delimiter-escaped
+  (`%`→`%25`, `,`→`%2C`) so a `source_block_id` containing a comma round-trips
+  byte-exact through the SIGNALS tag line instead of silently truncating.
+* **Roadmap honesty pass** — corrected stale ROADMAP items (Group B block-versioning
+  marked shipped, tenant-KMS + Group G SDK wording, K.0 rewritten wiring-first).
+
+**Config-compatibility notes (behavior changes for the affected opt-in installs):**
+
+* `extraction.enrich_on_recall` (new, **default false**): per-recall LLM enrichment
+  now requires this flag *in addition to* `extraction.enabled`. Installs that set
+  `extraction.enabled: true` purely for per-query enrichment will get nothing until
+  they also set `enrich_on_recall: true` — this removes a per-recall latency tax
+  (an ollama call up to 2× per top block, previously discarded) and redirects that
+  extraction budget to the backfill write-path. Recall scoring/ordering is unchanged.
+* `ExtractionFeedback` default telemetry path now anchors to the workspace /
+  `MIND_MEM_WORKSPACE` instead of a CWD-relative `./.mind-mem/…`; callers relying on
+  the old CWD default with `MIND_MEM_WORKSPACE` set will write telemetry elsewhere.
+  Diagnostic only — does not touch recall/graph state.
+
 ## v4.2.4 — Roadmap batch: codepoint sanitization, provenance-rich blocks, controlled vocabularies, auto-index
 
 **Four genuinely-open roadmap items implemented, tested, and landed.** Each was
