@@ -105,3 +105,63 @@ class TestGraphEdgeAcl:
 
         assert "graph_query" in USER_TOOLS
         assert "graph_stats" in USER_TOOLS
+
+
+class TestConsolidatedGraphDispatcherAcl:
+    """Confused-deputy guard: the consolidated ``graph()`` dispatcher
+    calls the edge writer via ``__wrapped__``, which strips the
+    decorator that enforces ACL — so the ``add_edge`` branch must
+    enforce the ``graph_add_edge`` capability itself. Otherwise any
+    future reclassification of the "graph" dispatcher name would
+    silently re-open an unreviewed user-scope graph write."""
+
+    @staticmethod
+    def _dispatch(workspace: str, monkeypatch, scope_env: str | None = None) -> str:
+        from mind_mem.mcp.tools.public import graph
+
+        monkeypatch.setenv("MIND_MEM_WORKSPACE", workspace)
+        monkeypatch.delenv("MIND_MEM_ACL_DISABLED", raising=False)
+        if scope_env is None:
+            monkeypatch.delenv("MIND_MEM_SCOPE", raising=False)
+        else:
+            monkeypatch.setenv("MIND_MEM_SCOPE", scope_env)
+        return graph.__wrapped__(  # type: ignore[attr-defined]
+            action="add_edge",
+            subject="starga",
+            predicate="depends_on",
+            object="mindc",
+            source_block_id="D-20260101-001",
+        )
+
+    def test_user_scope_denied_before_writer(self, workspace, monkeypatch) -> None:
+        import os
+
+        from mind_mem.knowledge_graph import default_db_path
+
+        out = json.loads(self._dispatch(workspace, monkeypatch))
+        assert "admin scope" in out["error"]
+        # Denied before the writer ran — no graph database created.
+        assert not os.path.isfile(default_db_path(workspace))
+
+    def test_admin_scope_reaches_writer(self, workspace, monkeypatch) -> None:
+        from mind_mem.knowledge_graph import KnowledgeGraph, default_db_path
+
+        out = json.loads(self._dispatch(workspace, monkeypatch, scope_env="admin"))
+        assert out.get("subject") == "starga"
+        with KnowledgeGraph(default_db_path(workspace)) as kg:
+            assert kg.stats().edges == 1
+
+    def test_deny_sentinel_denied(self, workspace, monkeypatch) -> None:
+        from mind_mem.mcp.infra import acl as _acl
+
+        monkeypatch.setattr(_acl, "_get_request_scope", lambda: "deny")
+        out = json.loads(self._dispatch(workspace, monkeypatch, scope_env="admin"))
+        assert "Permission denied" in out["error"]
+
+    def test_read_actions_stay_open_at_user_scope(self, workspace, monkeypatch) -> None:
+        from mind_mem.mcp.tools.public import graph
+
+        monkeypatch.setenv("MIND_MEM_WORKSPACE", workspace)
+        monkeypatch.delenv("MIND_MEM_SCOPE", raising=False)
+        out = json.loads(graph.__wrapped__(action="stats"))  # type: ignore[attr-defined]
+        assert "error" not in out

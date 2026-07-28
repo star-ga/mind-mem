@@ -14,6 +14,7 @@ log-based assertions keep working.
 from __future__ import annotations
 
 import json
+import os
 
 from fastmcp.server.dependencies import get_access_token
 
@@ -149,6 +150,44 @@ def check_tool_acl(tool_name: str, scope: str) -> str | None:
             }
         )
     return None
+
+
+def enforce_capability_acl(capability: str) -> str | None:
+    """Enforce the ACL for *capability* exactly as ``@mcp_tool_observe``
+    would for a tool of that name. Returns None if allowed, or the same
+    JSON error string the decorator returns when denied.
+
+    Confused-deputy guard for consolidated dispatchers: they invoke the
+    underlying tool via ``__wrapped__`` (to avoid double-charging the
+    rate limiter), which also strips the decorator's ACL gate — the
+    only enforcement point. A dispatcher branch that maps to an
+    admin-scope capability must therefore call this BEFORE the
+    ``__wrapped__`` call, so the check binds to the CAPABILITY and
+    cannot regress no matter how the dispatcher name itself is later
+    classified in ``ADMIN_TOOLS`` / ``USER_TOOLS``.
+
+    Scope resolution mirrors the decorator: the ``deny`` fail-closed
+    sentinel wins over everything; otherwise the token scope, falling
+    back to ``MIND_MEM_SCOPE`` (default ``user``). The documented
+    ``MIND_MEM_ACL_DISABLED`` dev/test override is honoured with the
+    same audited ``acl_bypassed_via_env`` warning the decorator emits.
+    """
+    scope = _get_request_scope()
+    if scope == "deny":
+        return check_tool_acl(capability, "deny")
+    acl_scope = scope or os.environ.get("MIND_MEM_SCOPE", "user")
+    if os.environ.get("MIND_MEM_ACL_DISABLED", "").lower() in ("1", "true", "yes"):
+        if capability in ADMIN_TOOLS:
+            _log.warning(
+                "acl_bypassed_via_env",
+                extra={
+                    "tool": capability,
+                    "reason": "MIND_MEM_ACL_DISABLED",
+                    "scope": acl_scope,
+                },
+            )
+        return None
+    return check_tool_acl(capability, acl_scope)
 
 
 def _get_request_scope() -> str | None:

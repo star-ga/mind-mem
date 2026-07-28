@@ -294,6 +294,21 @@ def graph(
     from . import graph as _g
 
     if action == "add_edge":
+        # Security decision (admin-scope/HITL, roadmap Group K): direct
+        # knowledge-graph edge writes bypass the HITL proposal gate, so
+        # graph_add_edge lives in ADMIN_TOOLS. This dispatcher calls the
+        # writer via __wrapped__, which strips @mcp_tool_observe — the
+        # only place that ACL is enforced — and the dispatcher's own
+        # "graph" name is only *accidentally* denied today (unknown-tool
+        # fail-closed). Enforce the CAPABILITY's scope here explicitly so
+        # a future reclassification of "graph" (e.g. adding it to
+        # USER_TOOLS) cannot silently re-open an unreviewed user-scope
+        # graph write.
+        from ..infra.acl import enforce_capability_acl
+
+        acl_error = enforce_capability_acl("graph_add_edge")
+        if acl_error:
+            return acl_error
         return _g.graph_add_edge.__wrapped__(  # type: ignore[attr-defined]
             subject, predicate, object, source_block_id, confidence=confidence
         )
