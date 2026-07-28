@@ -132,6 +132,7 @@ class VectorBackend(RecallBackend):
             "sqlite_vec_db",
             "llama_cpp_url",
             "ollama_embed_model",
+            "ollama_url",
             "embed_timeout_seconds",
             "vector_deadline_seconds",
             "postgres",
