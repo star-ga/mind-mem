@@ -2,6 +2,43 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.3.1 — Honor `OLLAMA_HOST` / configurable ollama endpoint so central-ollama fleet deployments work
+
+**Every ollama endpoint was hardcoded to `http://localhost:11434` with no
+env/config override**, so a node configured to use a central ollama server
+(e.g. a LAN GPU box serving `mind-mem:4b` + `mxbai-embed-large`) could not
+reach it — its recall silently degraded to BM25-only. This release routes all
+six call sites through one resolver. **Backward-compatible: with the env var
+unset and no config key, behavior is byte-identical to v4.3.0
+(`http://localhost:11434`) — existing installs are unaffected.**
+
+* **New `ollama_host.ollama_base_url()`** — single source of truth for the
+  ollama base URL. Precedence: explicit config key (`recall.ollama_url` /
+  `extraction.ollama_url`) > `OLLAMA_HOST` env var (ollama's own standard
+  env; accepts `host:port` or a full `http[s]://` URL, normalized to a base
+  URL) > `http://localhost:11434`. Scheme validated to http/https at the
+  boundary — a malformed value raises `ValueError` instead of surfacing later
+  as a confusing connection error.
+* **Threaded through every previously hardcoded site**: embed
+  (`recall_vector.embed_ollama`, `mm_cli._embed_via_ollama`), extraction
+  (`llm_extractor` `/api/generate` + `/api/tags` probe, with a new optional
+  `extraction.ollama_url` config key threaded through `extract_entities` /
+  `extract_facts` / `extract_relations` / `enrich_block` and the
+  `graph-backfill` extractor), compression (`compressors.OllamaCompressor`
+  default host), rerank (`_recall_reranking.llm_rerank` default URL;
+  `_recall_core` keeps the existing `recall.llm_rerank_url` key working and
+  falls through the resolver when it is unset), and the recompaction bench
+  `--host` default.
+* **`nosec B310` justifications updated** — they claimed "URL is hardcoded to
+  localhost (loopback only)", which is no longer true; the URL is now
+  operator-controlled deployment config (workspace `mind-mem.json` or process
+  env), never user/recall input, with the scheme enforced by the resolver.
+* Docs: `docs/configuration.md` gains `recall.ollama_url` /
+  `extraction.ollama_url` rows + endpoint-resolution note.
+* Tests: +26 (`tests/test_ollama_host_resolver.py`) covering resolver
+  precedence/normalization/validation and per-call-site URL threading.
+  No model retrain (endpoint plumbing only; tool surface unchanged at 84).
+
 ## v4.3.0 — Knowledge-graph wiring: corpus→KG extraction (HITL), opt-in KG-fusion recall, capability-scoped edge writes
 
 **The typed knowledge graph is now populated by the corpus and consumable by recall

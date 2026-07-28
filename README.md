@@ -29,7 +29,7 @@
 </p>
 
 <p align="center"><sub>
-  <strong>Current release:</strong> <code>v4.3.0</code> &mdash; typed knowledge-graph wiring: corpus&rarr;KG extraction via HITL, opt-in KG-fusion recall, capability-scoped edge writes &mdash;
+  <strong>Current release:</strong> <code>v4.3.1</code> &mdash; configurable ollama endpoint (<code>OLLAMA_HOST</code> / <code>ollama_url</code>) so central-ollama fleet deployments work; default stays localhost &mdash;
   <a href="CHANGELOG.md">see CHANGELOG</a>
   (single source of truth; per-version detail tables below may lag the changelog)
 </sub></p>
@@ -63,7 +63,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>Current release: **v4.3.0** — typed knowledge-graph wiring: corpus→KG extraction via HITL, opt-in KG-fusion recall, capability-scoped edge writes — Full per-release notes (issues closed, CI run ids, job counts) live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
+<sub>Current release: **v4.3.1** — configurable ollama endpoint (`OLLAMA_HOST` env / `recall.ollama_url` + `extraction.ollama_url` config) so central-ollama fleet deployments work; backward-compatible default stays `http://localhost:11434` — Full per-release notes (issues closed, CI run ids, job counts) live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
 
 ### Substrate Properties
 

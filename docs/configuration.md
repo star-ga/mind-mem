@@ -260,6 +260,7 @@ These settings control the vector/embedding-based search component.
 | `recall.vector_enabled` | bool | `false` | Enable the vector search backend. When `false`, hybrid mode falls back to BM25-only. |
 | `recall.vector_model` | string | `"all-MiniLM-L6-v2"` | Embedding model name for the hybrid backend. Used by `HybridBackend`. |
 | `recall.onnx_backend` | bool | `false` | Use ONNX runtime for local embedding inference instead of PyTorch. |
+| `recall.ollama_url` | string | `""` | Ollama endpoint for `embed_ollama` (v4.3.1). Accepts `host:port` or a full `http[s]://` URL. Precedence: this key > `OLLAMA_HOST` env var > `http://localhost:11434`. Lets a fleet node use a central Ollama server. |
 
 ### Vector Provider Settings
 
@@ -363,12 +364,13 @@ Controls the LLM used for memory extraction from transcripts and text. Added mul
 | `extraction.enabled` | bool | `true` | Enable LLM-based extraction. When `false`, only deterministic rule-based capture runs. |
 | `extraction.model` | string | `"mind-mem:4b"` | Model identifier. For Ollama: the model tag (e.g., `mind-mem:4b`, `qwen3:4b`). For vLLM / OpenAI-compat: the served model name. For llama-cpp: absolute path to the GGUF file. |
 | `extraction.backend` | string | `"ollama"` | LLM backend. See Backend Values below. |
+| `extraction.ollama_url` | string | `""` | Ollama endpoint for extraction (v4.3.1). Accepts `host:port` or a full `http[s]://` URL. Precedence: this key > `OLLAMA_HOST` env var > `http://localhost:11434`. |
 
 ### Backend Values
 
 | Value | Description | Typical setup |
 | --- | --- | --- |
-| `"ollama"` | Local Ollama daemon at `http://localhost:11434` | `ollama serve` + `ollama create mind-mem:4b -f Modelfile` |
+| `"ollama"` | Ollama daemon — endpoint resolves `extraction.ollama_url` > `OLLAMA_HOST` env > `http://localhost:11434` | `ollama serve` + `ollama create mind-mem:4b -f Modelfile`; for a central server set `OLLAMA_HOST=<host>:11434` |
 | `"vllm"` | Local vLLM OpenAI-compatible server | `vllm serve <model> --port 8000` → set `MIND_MEM_VLLM_URL` if non-default |
 | `"openai-compatible"` | Any OpenAI-compatible endpoint (LM Studio, llama-server, TGI, OpenAI itself, Anthropic via proxy, etc.) | Set `MIND_MEM_LLM_BASE_URL` and optional `MIND_MEM_LLM_API_KEY` |
 | `"llama-cpp"` | In-process `llama-cpp-python` | `pip install llama-cpp-python`; set `extraction.model` to GGUF path |
