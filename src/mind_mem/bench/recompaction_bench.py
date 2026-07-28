@@ -458,11 +458,12 @@ def evaluate(
 # --- compressor selection + CLI ---------------------------------------------
 
 
-def _build_compressor(model: str, host: str, seed: int) -> Compressor:
+def _build_compressor(model: str, host: str | None, seed: int) -> Compressor:
     if model == "echo":
         return EchoCompressor()
     if not model:
         raise ValueError("--model must be non-empty ('echo' or an ollama model tag)")
+    # host=None lets OllamaCompressor resolve via OLLAMA_HOST env → localhost.
     return OllamaCompressor(model=model, host=host, seed=seed)
 
 
@@ -470,7 +471,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="mind-mem recompaction benchmark")
     parser.add_argument("--db", required=True, help="Path to a recall.db-shaped sqlite file (opened read-only)")
     parser.add_argument("--model", required=True, help="'echo' for the control, else an ollama model tag")
-    parser.add_argument("--host", default="http://localhost:11434", help="ollama host")
+    parser.add_argument(
+        "--host",
+        default=None,
+        help="ollama host (default: OLLAMA_HOST env, else http://localhost:11434)",
+    )
     parser.add_argument("--clusters", type=int, default=30, help="max number of clusters to evaluate")
     parser.add_argument("--k", type=int, default=_DEFAULT_K, help="kNN neighbor count per cluster seed")
     parser.add_argument("--min-size", type=int, default=_DEFAULT_MIN_SIZE, help="minimum blocks per cluster")

@@ -1518,7 +1518,11 @@ def recall(
     # Stage 2.7: Optional LLM-based reranking — config-gated, stdlib only
     recall_cfg = _get_config(workspace).get("recall", {})
     if recall_cfg.get("llm_rerank", False) and deduped:
-        llm_url = recall_cfg.get("llm_rerank_url", "http://localhost:11434/api/generate")
+        # llm_rerank_url (full endpoint) wins; else the shared resolver:
+        # recall.ollama_url > OLLAMA_HOST env > http://localhost:11434.
+        from .ollama_host import ollama_base_url
+
+        llm_url = recall_cfg.get("llm_rerank_url") or (ollama_base_url(recall_cfg) + "/api/generate")
         llm_model = recall_cfg.get("llm_rerank_model", "qwen3-coder:30b")
         llm_weight = float(recall_cfg.get("llm_rerank_weight", 0.3))
         llm_cap = min(len(deduped), limit * 2)

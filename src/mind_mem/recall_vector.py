@@ -448,6 +448,9 @@ class VectorBackend(RecallBackend):
 
         Uses the ``ollama_embed_model`` config key, falling back to ``model``.
         Much faster than ONNX on CPU for local deployments with a GPU.
+        The endpoint resolves via ``recall.ollama_url`` config, then the
+        ``OLLAMA_HOST`` env var, then ``http://localhost:11434`` — so a
+        fleet node can use a central ollama server.
 
         Args:
             texts: List of text strings to embed
@@ -457,7 +460,11 @@ class VectorBackend(RecallBackend):
         """
         import urllib.request as _req
 
-        url = "http://localhost:11434/api/embed"
+        from .ollama_host import ollama_base_url
+
+        # Base URL: recall.ollama_url config key > OLLAMA_HOST env >
+        # http://localhost:11434 (see ollama_host.ollama_base_url).
+        url = ollama_base_url(self.config) + "/api/embed"
         model = self.config.get("ollama_embed_model", self.model_name)
         MAX_CHARS = 1500  # ~375 tokens, safe for 512-ctx embedding models
         BATCH = 16  # small batches to stay under total context limit
@@ -471,7 +478,7 @@ class VectorBackend(RecallBackend):
             payload = json.dumps({"model": model, "input": batch}).encode("utf-8")
             req = _req.Request(url, data=payload, headers={"Content-Type": "application/json"})
             with timed("embed_ollama"):
-                with _req.urlopen(req, timeout=_embed_timeout) as resp:  # nosec B310 — URL is hardcoded to http://localhost:11434 (loopback only)
+                with _req.urlopen(req, timeout=_embed_timeout) as resp:  # nosec B310 — base URL from operator-controlled config/env only (ollama_base_url enforces http/https), never user or recall input
                     result = json.loads(resp.read().decode("utf-8"))
             embeddings = result.get("embeddings", [])
             all_embeddings.extend(embeddings)

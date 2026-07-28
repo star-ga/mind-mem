@@ -355,13 +355,17 @@ def approve_relation_signals(
 def _default_extract_fn(workspace: str) -> Callable[[str], list[dict]]:
     """Bind the configured extraction model as the extractor callable."""
     from .llm_extractor import extract_relations, load_config
+    from .ollama_host import ollama_base_url
 
     config = load_config(workspace)
     model = str(config.get("model", "qwen3.5:9b"))
     backend = str(config.get("backend", "auto"))
+    # Resolved once (extraction.ollama_url > OLLAMA_HOST > localhost
+    # default) so the whole backfill run hits one consistent endpoint.
+    ollama_url = ollama_base_url(config)
 
     def _extract(text: str) -> list[dict]:
-        return extract_relations(text, model=model, backend=backend, workspace=workspace)
+        return extract_relations(text, model=model, backend=backend, workspace=workspace, ollama_url=ollama_url)
 
     return _extract
 

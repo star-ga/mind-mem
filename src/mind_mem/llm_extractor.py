@@ -13,11 +13,14 @@ Config (mind-mem.json):
     "extraction": {
         "enabled": false,
         "model": "qwen3.5:9b",
-        "backend": "auto"
+        "backend": "auto",
+        "ollama_url": ""          # optional; overrides OLLAMA_HOST env
     }
 
 Backends (tried in order when backend="auto"):
-    1. ollama   — HTTP API at localhost:11434
+    1. ollama   — HTTP API; endpoint resolves extraction.ollama_url >
+                  OLLAMA_HOST env > http://localhost:11434
+                  (see ollama_host.ollama_base_url)
     2. llama-cpp-python — Python bindings for llama.cpp
     3. (none)   — graceful empty results
 
@@ -44,6 +47,10 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": False,
     "model": "qwen3.5:9b",
     "backend": "auto",
+    # Optional ollama endpoint override for this section; empty string
+    # falls through to the OLLAMA_HOST env var, then localhost:11434
+    # (precedence documented in ollama_host.ollama_base_url).
+    "ollama_url": "",
     # Read-path gate: even with extraction enabled, per-recall
     # enrichment stays off unless explicitly requested — the
     # extraction budget funds the write-path backfill instead of
@@ -78,16 +85,23 @@ def load_config(workspace: str = ".") -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _ollama_available(model: str = "") -> bool:
-    """Check if ollama is running and reachable at localhost:11434."""
+def _ollama_available(model: str = "", base_url: str | None = None) -> bool:
+    """Check if ollama is running and reachable.
+
+    ``base_url`` defaults through :func:`~mind_mem.ollama_host.ollama_base_url`
+    (``OLLAMA_HOST`` env, else ``http://localhost:11434``).
+    """
     try:
         import urllib.request
 
+        from .ollama_host import ollama_base_url
+
+        resolved = base_url if base_url else ollama_base_url()
         req = urllib.request.Request(
-            "http://localhost:11434/api/tags",
+            f"{resolved.rstrip('/')}/api/tags",
             method="GET",
         )
-        with urllib.request.urlopen(req, timeout=2) as resp:  # nosec B310 — URL is hardcoded to http://localhost:11434 (loopback only)
+        with urllib.request.urlopen(req, timeout=2) as resp:  # nosec B310 — base URL from operator-controlled config/env only (ollama_base_url enforces http/https), never user input
             if resp.status == 200:
                 return True
     except (OSError, ValueError):
@@ -105,11 +119,15 @@ def _llama_cpp_available() -> bool:
         return False
 
 
-def is_available(backend: str = "auto") -> bool:
+def is_available(backend: str = "auto", *, ollama_url: str | None = None) -> bool:
     """Check if the requested LLM backend is reachable.
 
+    ``ollama_url`` (optional) pins the ollama endpoint for the probe —
+    callers pass ``extraction.ollama_url`` when configured; otherwise the
+    endpoint resolves via ``OLLAMA_HOST`` env, then ``localhost:11434``.
+
     Backends:
-        ``ollama``              local ollama daemon at :11434
+        ``ollama``              ollama daemon (default :11434)
         ``llama-cpp``           in-process llama-cpp-python
         ``vllm``                local vLLM OpenAI-compatible server
         ``mindllm``             local MindLLM server (STARGA's pure-MIND
@@ -125,7 +143,9 @@ def is_available(backend: str = "auto") -> bool:
     ``MIND_MEM_MINDLLM_URL``).
     """
     if backend == "ollama":
-        return _ollama_available()
+        # Zero-arg call when no explicit URL — keeps monkeypatch-style
+        # test doubles (``lambda: False``) and the legacy path intact.
+        return _ollama_available(base_url=ollama_url) if ollama_url else _ollama_available()
     if backend in ("llama-cpp", "llama_cpp"):
         return _llama_cpp_available()
     if backend == "vllm":
@@ -138,7 +158,7 @@ def is_available(backend: str = "auto") -> bool:
         return _transformers_available()
     if backend == "auto":
         return (
-            _ollama_available()
+            (_ollama_available(base_url=ollama_url) if ollama_url else _ollama_available())
             or _openai_compatible_available(_mindllm_url())
             or _openai_compatible_available(_vllm_url())
             or _openai_compatible_available(_oai_url())
@@ -207,10 +227,18 @@ def _transformers_available() -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _query_ollama(prompt: str, model: str) -> str:
-    """Send a prompt to ollama and return the response text."""
+def _query_ollama(prompt: str, model: str, base_url: str | None = None) -> str:
+    """Send a prompt to ollama and return the response text.
+
+    ``base_url`` defaults through :func:`~mind_mem.ollama_host.ollama_base_url`
+    (``OLLAMA_HOST`` env, else ``http://localhost:11434``); callers with an
+    ``extraction.ollama_url`` config value pass it explicitly.
+    """
     import urllib.request
 
+    from .ollama_host import ollama_base_url
+
+    resolved = base_url if base_url else ollama_base_url()
     payload = json.dumps(
         {
             "model": model,
@@ -220,12 +248,12 @@ def _query_ollama(prompt: str, model: str) -> str:
         }
     ).encode()
     req = urllib.request.Request(
-        "http://localhost:11434/api/generate",
+        f"{resolved.rstrip('/')}/api/generate",
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310 — URL is hardcoded to http://localhost:11434 (loopback only)
+    with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310 — base URL from operator-controlled config/env only (ollama_base_url enforces http/https), never user input
         body = json.loads(resp.read().decode())
     return str(body.get("response", ""))
 
@@ -384,17 +412,19 @@ def _query_transformers(prompt: str, model: str) -> str:
     return str(tok.decode(new_tokens, skip_special_tokens=True))
 
 
-def _query_llm(prompt: str, model: str, backend: str = "auto") -> str:
+def _query_llm(prompt: str, model: str, backend: str = "auto", *, ollama_url: str | None = None) -> str:
     """Dispatch to the named backend. Returns empty string on failure.
 
     Order for ``auto`` mode: ollama → vllm → openai-compat → llama-cpp →
     transformers. Each is tried until one returns a non-empty string.
+    ``ollama_url`` pins the ollama endpoint (``extraction.ollama_url``);
+    when ``None`` it resolves via ``OLLAMA_HOST`` env → ``localhost:11434``.
     """
     backends = [backend] if backend != "auto" else ["ollama", "mindllm", "vllm", "openai-compatible", "llama-cpp", "transformers"]
     for b in backends:
         try:
             if b == "ollama":
-                out = _query_ollama(prompt, model)
+                out = _query_ollama(prompt, model, base_url=ollama_url)
             elif b in ("llama-cpp", "llama_cpp"):
                 out = _query_llama_cpp(prompt, model)
             elif b == "vllm":
@@ -460,6 +490,7 @@ def extract_entities(
     backend: str = "auto",
     *,
     workspace: str | None = None,
+    ollama_url: str | None = None,
 ) -> list[dict]:
     """Extract entities (people, places, dates, decisions) from text.
 
@@ -467,6 +498,9 @@ def extract_entities(
         text: Input text to extract entities from.
         model: LLM model name (default: qwen3.5:9b).
         backend: Backend to use ("auto", "ollama", "llama-cpp").
+        workspace: Workspace root — anchors extraction-feedback telemetry.
+        ollama_url: Optional ollama endpoint (``extraction.ollama_url``);
+            defaults via ``OLLAMA_HOST`` env → ``localhost:11434``.
 
     Returns:
         List of entity dicts with keys: name, type, context.
@@ -474,11 +508,11 @@ def extract_entities(
     """
     if not text or not text.strip():
         return []
-    if not is_available(backend):
+    if not is_available(backend, ollama_url=ollama_url):
         return []
     prompt = _ENTITY_PROMPT.format(text=text[:2000])
     _start = time.monotonic()
-    response = _query_llm(prompt, model, backend)
+    response = _query_llm(prompt, model, backend, ollama_url=ollama_url)
     _latency_ms = (time.monotonic() - _start) * 1000.0
     if not response:
         _record_extraction_feedback(model, "entities", len(text), 0, _latency_ms, workspace=workspace)
@@ -522,6 +556,7 @@ def extract_facts(
     backend: str = "auto",
     *,
     workspace: str | None = None,
+    ollama_url: str | None = None,
 ) -> list[dict]:
     """Extract factual claims from text.
 
@@ -529,6 +564,9 @@ def extract_facts(
         text: Input text to extract facts from.
         model: LLM model name (default: qwen3.5:9b).
         backend: Backend to use ("auto", "ollama", "llama-cpp").
+        workspace: Workspace root — anchors extraction-feedback telemetry.
+        ollama_url: Optional ollama endpoint (``extraction.ollama_url``);
+            defaults via ``OLLAMA_HOST`` env → ``localhost:11434``.
 
     Returns:
         List of fact dicts with keys: claim, confidence, category.
@@ -536,11 +574,11 @@ def extract_facts(
     """
     if not text or not text.strip():
         return []
-    if not is_available(backend):
+    if not is_available(backend, ollama_url=ollama_url):
         return []
     prompt = _FACT_PROMPT.format(text=text[:2000])
     _start = time.monotonic()
-    response = _query_llm(prompt, model, backend)
+    response = _query_llm(prompt, model, backend, ollama_url=ollama_url)
     _latency_ms = (time.monotonic() - _start) * 1000.0
     if not response:
         _record_extraction_feedback(model, "facts", len(text), 0, _latency_ms, workspace=workspace)
@@ -615,6 +653,7 @@ def extract_relations(
     backend: str = "auto",
     *,
     workspace: str | None = None,
+    ollama_url: str | None = None,
 ) -> list[dict]:
     """Extract typed relation triples from text.
 
@@ -633,12 +672,12 @@ def extract_relations(
 
     if not text or not text.strip():
         return []
-    if not is_available(backend):
+    if not is_available(backend, ollama_url=ollama_url):
         return []
     vocabulary = ", ".join(p.value for p in Predicate)
     prompt = _RELATION_PROMPT.format(predicates=vocabulary, text=text[:2000])
     _start = time.monotonic()
-    response = _query_llm(prompt, model, backend)
+    response = _query_llm(prompt, model, backend, ollama_url=ollama_url)
     _latency_ms = (time.monotonic() - _start) * 1000.0
     if not response:
         _record_extraction_feedback(model, "relations", len(text), 0, _latency_ms, workspace=workspace)
@@ -686,6 +725,7 @@ def enrich_block(
     enabled: bool = False,
     *,
     workspace: str | None = None,
+    ollama_url: str | None = None,
 ) -> dict:
     """Add LLM-extracted metadata to a memory block.
 
@@ -706,10 +746,10 @@ def enrich_block(
     text = block.get("excerpt", block.get("content", ""))
     if not text:
         return block
-    if not is_available(backend):
+    if not is_available(backend, ollama_url=ollama_url):
         return block
-    entities = extract_entities(text, model=model, backend=backend, workspace=workspace)
-    facts = extract_facts(text, model=model, backend=backend, workspace=workspace)
+    entities = extract_entities(text, model=model, backend=backend, workspace=workspace, ollama_url=ollama_url)
+    facts = extract_facts(text, model=model, backend=backend, workspace=workspace, ollama_url=ollama_url)
     if entities:
         block["llm_entities"] = entities
     if facts:
@@ -744,8 +784,13 @@ def enrich_results(
         return results
     if not config.get("enrich_on_recall", False):
         return results
+    from .ollama_host import ollama_base_url
+
     model = config.get("model", "qwen3.5:9b")
     backend = config.get("backend", "auto")
+    # Fully resolved here (extraction.ollama_url > OLLAMA_HOST > default)
+    # so every per-block call below hits one consistent endpoint.
+    ollama_url = ollama_base_url(config)
     for block in results:
-        enrich_block(block, model=model, backend=backend, enabled=True, workspace=workspace)
+        enrich_block(block, model=model, backend=backend, enabled=True, workspace=workspace, ollama_url=ollama_url)
     return results

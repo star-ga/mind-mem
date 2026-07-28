@@ -229,10 +229,14 @@ def _embed_via_ollama(texts: list[str], model: str = "mxbai-embed-large") -> lis
 
     Kept inside mm_cli to avoid pulling the recall_vector module's heavy
     deps just for migration. Mirrors recall_vector.embed_ollama batching
-    behaviour. URL is hardcoded to localhost loopback only.
+    behaviour. Endpoint resolves via the OLLAMA_HOST env var, defaulting
+    to http://localhost:11434 (see ollama_host.ollama_base_url).
     """
     import urllib.request as _req
 
+    from .ollama_host import ollama_base_url
+
+    embed_url = ollama_base_url() + "/api/embed"
     MAX_CHARS = 1500
     BATCH = 16
     out: list[list[float]] = []
@@ -240,11 +244,11 @@ def _embed_via_ollama(texts: list[str], model: str = "mxbai-embed-large") -> lis
         batch = [t[:MAX_CHARS] for t in texts[i : i + BATCH]]
         payload = json.dumps({"model": model, "input": batch}).encode("utf-8")
         req = _req.Request(
-            "http://localhost:11434/api/embed",
+            embed_url,
             data=payload,
             headers={"Content-Type": "application/json"},
         )
-        with _req.urlopen(req, timeout=180) as resp:  # nosec B310 — loopback only.
+        with _req.urlopen(req, timeout=180) as resp:  # nosec B310 — URL from operator-controlled env only (ollama_base_url enforces http/https), never user input.
             data = json.loads(resp.read().decode("utf-8"))
         out.extend(data.get("embeddings", []))
     return out

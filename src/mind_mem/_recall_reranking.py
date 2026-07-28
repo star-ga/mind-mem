@@ -274,7 +274,7 @@ def llm_rerank(
     query: str,
     hits: list[dict],
     *,
-    url: str = "http://localhost:11434/api/generate",
+    url: str | None = None,
     model: str = "qwen3.5:9b",
     weight: float = 0.3,
     timeout: float = 10.0,
@@ -310,7 +310,9 @@ def llm_rerank(
     Args:
         query: The original search query.
         hits: Candidates already scored by deterministic reranker.
-        url: Ollama-compatible generate endpoint.
+        url: Ollama-compatible generate endpoint. ``None`` (default)
+            resolves ``{ollama_base_url()}/api/generate`` — i.e. the
+            ``OLLAMA_HOST`` env var, else ``http://localhost:11434``.
         model: Model name to use. Generic instruct models only; see note
             above about ``mind-mem-4b``.
         weight: Blend weight for LLM scores (0=ignore, 1=replace).
@@ -321,6 +323,11 @@ def llm_rerank(
     """
     if not hits:
         return hits
+
+    if url is None:
+        from .ollama_host import ollama_base_url
+
+        url = ollama_base_url() + "/api/generate"
 
     # Build scoring prompt with numbered candidates
     candidates = []

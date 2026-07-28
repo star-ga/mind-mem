@@ -31,7 +31,8 @@ import urllib.request
 from collections.abc import Callable
 from typing import Any
 
-_DEFAULT_HOST = "http://localhost:11434"
+from .ollama_host import ollama_base_url as _ollama_base_url
+
 _DEFAULT_TIMEOUT_S = 60.0
 _ALLOWED_SCHEMES = ("http", "https")
 
@@ -133,7 +134,7 @@ class OllamaCompressor:
     def __init__(
         self,
         model: str,
-        host: str = _DEFAULT_HOST,
+        host: str | None = None,
         temperature: float = 0.0,
         seed: int = 0,
         timeout: float = _DEFAULT_TIMEOUT_S,
@@ -144,6 +145,10 @@ class OllamaCompressor:
             # Non-zero sampling temperature breaks purity w.r.t. inputs —
             # the whole fixed-point argument depends on temperature=0.
             raise ValueError("OllamaCompressor requires temperature=0.0 for a well-defined fixed point")
+        if host is None:
+            # OLLAMA_HOST env > http://localhost:11434 (legacy default) —
+            # see ollama_host.ollama_base_url for the full precedence.
+            host = _ollama_base_url()
         scheme = urllib.parse.urlparse(host).scheme.lower()
         if scheme not in _ALLOWED_SCHEMES:
             # Reject file:/ and custom schemes up front (B310) — the host is
