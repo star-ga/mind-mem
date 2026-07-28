@@ -30,7 +30,7 @@ by its full description below.
 
 ### Group B — Knowledge graph (2 items)
 
-- [ ] **Block versioning + time-travel** — `recall(..., as_of=date)`, `block_history(block_id)`
+- [x] **Block versioning + time-travel** — **shipped** (`v4/block_versioning.py`: `block_history(block_id)` + `content_as_of(...)` over the applied-edit chain); `recall(..., as_of=date)` parameter plumb-through still open
 - [ ] **Conversational chat layer** — `chat_with_memory(workspace, question)` with `[[block_id]]` citations
 
 > See also **Group K — Graph-from-text construction + edge-grounded recall**
@@ -52,14 +52,14 @@ by its full description below.
 - [x] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters
 - [x] **Vocabulary-bound fields** — per-workspace controlled vocabularies
 - [x] **Provenance-rich blocks** — `actor_id`, `actor_role`, `session_id`, `tool_id`, `purpose`
-- [ ] **Tenant KMS + row-level encryption** — `tenant_crypto.py`
+- [ ] **Row-level encryption on top of tenant KMS** — per-tenant KMS envelope keys **ship** (`tenant_kms.py`, real AESGCM); the open half is wiring row-level encryption over those keys
 - [ ] **C2PA content provenance** — signed manifests on synthesis blocks
 
 ### Group G — Ecosystem (9 items, mostly SDK fan-out)
 
-- [ ] **JavaScript / TypeScript SDK** — `@star-ga/mind-mem-client` npm package
+- [ ] **JavaScript / TypeScript SDK** — client **exists in-tree** (`sdk/js/`); open work is packaging/publishing it as `@star-ga/mind-mem-client` on npm
 - [ ] **Browser-native WebAssembly bundle**
-- [ ] **Go / Rust / Java / Ruby SDK stubs**
+- [ ] **Go SDK publish + Rust / Java / Ruby SDK stubs** — Go client **exists in-tree** (`sdk/go/`, with tests); open work is module publishing; Rust/Java/Ruby not started
 - [ ] **OpenAPI + AsyncAPI specs** (single source of truth for SDK generation)
 - [ ] **Migration importers** — `mm import --from {pinecone|weaviate|chroma|qdrant|letta|mem0}`
 - [ ] **Cost metering / quota / spending alerts** — `mm usage`
@@ -433,37 +433,60 @@ workspace, not read from docs):
   (`mind-mem → mind-kg → mindc`, `mind-mem → starga inc → 512-mind`).
 - `extraction.enabled: true`, backend `ollama`, model `mind-mem:4b`.
 
-So `knowledge_graph.py` (typed `Predicate` enum, `valid_from`/`valid_until`
-temporal columns, `EntityRegistry` alias resolution, `neighbors()` BFS capped at
-8 hops) and `graph_recall.py` (decayed multi-hop fusion into the BM25/hybrid
-result set) are **shipped and functional**. What is missing is throughput: ~100
-edges over a 1469-block corpus means recall almost never has an edge to walk.
-The predicate distribution is the tell — those four are repo-topology
-predicates, i.e. what a structural pass produces, not what reading the corpus
-produces. People, decisions, commitments, and threads are essentially unedged.
+The deeper finding (code audit, 2026-07-27): the graph was not merely
+under-populated — it was **unwired**. `knowledge_graph.py` (typed `Predicate`
+enum, `valid_from`/`valid_until` temporal columns, `EntityRegistry` alias
+resolution, `neighbors()` BFS capped at 8 hops) shipped with no corpus→graph
+ingestion path (the only edge writer was the manual `graph_add_edge` tool —
+every live edge is hand-curated or structural-scan) and no recall consumer
+(the "graph" that recall walks is the free block-xref graph in
+`graph_recall.py`, not the typed store; note **`retrieval.multi_hop` governs
+that XREF expansion, not the knowledge graph**). Meanwhile
+`extraction.enabled: true` bought only per-recall enrichment whose output the
+caller discarded — a pure read-path latency tax. "Measure the extraction
+pipeline's yield" was therefore the wrong first step: there was no pipeline to
+measure. Wiring comes first, with the yield measurement built into the wiring:
 
-- [ ] **Measure extraction yield before tuning it** — instrument
-      edges-per-block and predicate histogram over a known corpus slice.
-      The current numbers do not distinguish "extraction never ran over the
-      corpus" from "it ran and produced almost nothing." Those have opposite
-      fixes, so measure first. Blocks every item below; no mechanism work
-      until this reads out.
-- [ ] **Backfill pass over the existing corpus** — extraction is enabled but
-      the graph reflects a structural scan, not a corpus read. A one-shot
-      backfill (HITL-gated per the Group K wedge guardrail — the graph never
-      self-modifies from an un-reviewed model call) is the cheapest path from
-      103 edges to a graph worth traversing.
+- [x] **Corpus → graph ingestion, HITL-gated, with yield metrics built in** —
+      `graph_ingest.py` + `llm_extractor.extract_relations` (prompt
+      constrained to the `Predicate` vocabulary; extractor = the configured
+      extraction model, swappable, never retrained here). Extracted triples
+      stage as SIGNALS.md entries (`auto-capture-relation`); the graph is
+      written only by operator approval (`mm graph-backfill --approve`),
+      which stamps `source_block_id` + `valid_from` + an origin marker.
+      `mm graph-backfill` is dry-run by default and prints edges-per-block +
+      a predicate histogram — the yield measurement IS the wiring's default
+      output, not a separate diagnostic step.
+- [x] **Typed-graph fusion into recall** — `kg_fusion.py` +
+      `HybridBackend._maybe_kg_expand`: query terms resolve through the
+      entity registry (read-only), typed edges walk ≤2 hops, and each edge's
+      `source_block_id` pulls its backing block into the result set with a
+      decayed score. Gated behind `retrieval.kg_fusion.enabled` (default
+      OFF — recall replays byte-identical until the graph is populated and
+      the operator opts in).
+- [x] **Stop the read-path extraction tax** — per-recall enrichment now also
+      requires `extraction.enrich_on_recall` (default false), so
+      `extraction.enabled: true` funds write-path ingestion instead of
+      discarded per-query calls.
+- [x] **Close the HITL bypass** — `graph_add_edge` moved to the admin ACL
+      set; user-scope graph mutation now routes through signal staging +
+      approval only, making the Group K "every graph mutation routes through
+      HITL" guardrail true in code, not just in docs.
+- [ ] **Run the backfill over the live corpus** — with the wiring landed,
+      run `mm graph-backfill` over the 1469-block corpus, read the yield
+      numbers, review/approve the staged edges, then enable
+      `retrieval.kg_fusion` once there is a graph worth walking.
 - [ ] **Widen the predicate vocabulary beyond repo topology** — the four live
       predicates cannot express the relations our corpus is actually made of
       (person ↔ organization, decision ↔ rationale, commitment ↔ owner,
       claim ↔ evidence). Pairs with the Group K "schema versioning" item:
       version the vocabulary *before* scaling ingestion, so pre-widening
       blocks stay distinguishable and re-extractable.
-- [ ] **`retrieval.multi_hop` is absent from the live workspace config** —
-      `graph_recall` reads an opt-in block (`enabled`, `auto_enable`,
-      `max_hops`, `decay`, `max_neighbors_per_hop`) that is not present in
-      `mind-mem.json`, so the documented fusion path runs on defaults rather
-      than a reviewed setting. Pin it explicitly once yield is known.
+- [x] **Pin `retrieval.multi_hop` in the live workspace config** — the XREF
+      expansion block (`enabled`, `auto_enable`, `max_hops`, `decay`,
+      `max_neighbors_per_hop`) is now written explicitly with the previous
+      auto-enable defaults (zero behavior change), alongside
+      `retrieval.kg_fusion: {enabled: false}`.
 
 **Not adopted from the source board.** Neo4j — our SQLite incidence tables
 already carry typed predicates and a real temporal model, and the dependency
@@ -473,9 +496,9 @@ refresh" is `reindex` plus the existing post-merge/post-commit hook — and note
 its refresh loop is autonomous by design, which is exactly the property our
 HITL gate deliberately refuses.
 
-- **Status:** Proposed 2026-07-27. Diagnostic-first: the first item is a
-  measurement, and the rest are gated behind what it reports. No capability
-  work is implied — the capability exists and was verified running.
+- **Status:** Wiring landed 2026-07-27 (ingestion, fusion, read-path gate,
+  ACL). Open: the live-corpus backfill run + predicate-vocabulary widening,
+  both gated on the yield numbers the backfill prints.
 
 ### v3.2.x trailing fixes (4 items, deliberately deferred)
 
@@ -1962,7 +1985,7 @@ multi-tenancy thread is also tracked as issue [#505].
 ### B. Knowledge graph (mostly shipped — 2 items open)
 
 - [x] **Block kinds** — `block_kinds.py` + `kind ∈ {entity, concept, source, synthesis, image, audio, code, structured}`.
-- [ ] **Block versioning + time-travel** — `recall(..., as_of=date)` and `block_history(block_id)` not exposed yet; audit chain has the data. Tracked.
+- [x] **Block versioning + time-travel** — `v4/block_versioning.py` ships `block_history(block_id)` + `content_as_of(...)` over the applied-edit chain. Open remainder: expose `as_of=` on `recall(...)` itself.
 - [x] **Content-addressable block IDs** — content-hash + CID-style stable id ship; replication uses it.
 - [x] **Long-context recall mode** — `mode="long_context"` ships in the recall API.
 - [x] **LLM-driven knowledge fusion** — `propose_fuse` tool ships, hooked into `propose_update → approve_apply`.
@@ -2037,7 +2060,7 @@ default story is two laptops talking to each other.
 - [x] **Time-bounded and event-bounded recall** — `since` / `until` / `event_id` filters exposed on `recall(...)` (v4.0.15), applied via `_apply_post_filters` in `_recall_core.py`.
 - [x] **Vocabulary-bound fields** — per-workspace controlled vocabularies not wired into `validate_block`. Tracked.
 - [x] **Provenance-rich blocks** — `actor_id`/`actor_role`/`session_id`/`tool_id`/`purpose` fields gated by `provenance: off|recommended|required` not added. Tracked.
-- [ ] **Tenant KMS + row-level encryption** — `src/mind_mem/tenant_crypto.py` not built; per-tenant envelope encryption above the existing `EncryptedBlockStore`. Tracked.
+- [ ] **Row-level encryption over tenant KMS** — `src/mind_mem/tenant_kms.py` ships per-tenant AESGCM envelope keys; the row-level encryption layer above the existing `EncryptedBlockStore` is the open half. Tracked.
 - [ ] **C2PA content provenance** — C2PA-signed manifests on chat-layer synthesis blocks not implemented. Tracked (depends on chat layer above).
 
 ### G. Observability, reliability, ecosystem (partial — 7 open)
@@ -2051,9 +2074,9 @@ default story is two laptops talking to each other.
 
 **Open:**
 
-- [ ] **JavaScript / TypeScript SDK** — Python SDK is the only first-class client. `@star-ga/mind-mem-client` npm package not generated. Tracked.
+- [ ] **JavaScript / TypeScript SDK** — client code ships in-tree at `sdk/js/`; the npm publish as `@star-ga/mind-mem-client` is the open step. Tracked.
 - [ ] **Browser-native WebAssembly bundle** — WASM read-only client not built. Tracked.
-- [ ] **Go / Rust / Java / Ruby SDK stubs** — additional language SDKs not generated. Tracked.
+- [ ] **Go SDK publish + Rust / Java / Ruby stubs** — Go client ships in-tree at `sdk/go/` (with tests); module publish is the open step. Rust/Java/Ruby not started. Tracked.
 - [ ] **OpenAPI + AsyncAPI specs** — declarative specs not published; clients are hand-rolled. Tracked (small, well-defined).
 - [ ] **Migration importers from competing systems** — `mm import --from {pinecone|weaviate|chroma|qdrant|letta|mem0}` not implemented. Tracked (adoption blocker).
 - [ ] **Cost metering / quota / spending alerts** — per-workspace usage counters + `mm usage` CLI not surfaced. Tracked.
