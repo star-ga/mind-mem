@@ -44,6 +44,11 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": False,
     "model": "qwen3.5:9b",
     "backend": "auto",
+    # Read-path gate: even with extraction enabled, per-recall
+    # enrichment stays off unless explicitly requested — the
+    # extraction budget funds the write-path backfill instead of
+    # per-query calls whose output the recall caller discards.
+    "enrich_on_recall": False,
 }
 
 
@@ -449,7 +454,13 @@ Text: {text}
 JSON:"""
 
 
-def extract_entities(text: str, model: str = "qwen3.5:9b", backend: str = "auto") -> list[dict]:
+def extract_entities(
+    text: str,
+    model: str = "qwen3.5:9b",
+    backend: str = "auto",
+    *,
+    workspace: str | None = None,
+) -> list[dict]:
     """Extract entities (people, places, dates, decisions) from text.
 
     Args:
@@ -470,7 +481,7 @@ def extract_entities(text: str, model: str = "qwen3.5:9b", backend: str = "auto"
     response = _query_llm(prompt, model, backend)
     _latency_ms = (time.monotonic() - _start) * 1000.0
     if not response:
-        _record_extraction_feedback(model, "entities", len(text), 0, _latency_ms)
+        _record_extraction_feedback(model, "entities", len(text), 0, _latency_ms, workspace=workspace)
         return []
     entities = _parse_json_from_response(response)
     # Validate required keys
@@ -484,7 +495,7 @@ def extract_entities(text: str, model: str = "qwen3.5:9b", backend: str = "auto"
                     "context": str(ent.get("context", "")),
                 }
             )
-    _record_extraction_feedback(model, "entities", len(text), len(validated), _latency_ms)
+    _record_extraction_feedback(model, "entities", len(text), len(validated), _latency_ms, workspace=workspace)
     return validated
 
 
@@ -505,7 +516,13 @@ Text: {text}
 JSON:"""
 
 
-def extract_facts(text: str, model: str = "qwen3.5:9b", backend: str = "auto") -> list[dict]:
+def extract_facts(
+    text: str,
+    model: str = "qwen3.5:9b",
+    backend: str = "auto",
+    *,
+    workspace: str | None = None,
+) -> list[dict]:
     """Extract factual claims from text.
 
     Args:
@@ -526,7 +543,7 @@ def extract_facts(text: str, model: str = "qwen3.5:9b", backend: str = "auto") -
     response = _query_llm(prompt, model, backend)
     _latency_ms = (time.monotonic() - _start) * 1000.0
     if not response:
-        _record_extraction_feedback(model, "facts", len(text), 0, _latency_ms)
+        _record_extraction_feedback(model, "facts", len(text), 0, _latency_ms, workspace=workspace)
         return []
     facts = _parse_json_from_response(response)
     # Validate required keys
@@ -546,16 +563,23 @@ def extract_facts(text: str, model: str = "qwen3.5:9b", backend: str = "auto") -
                     "category": str(fact.get("category", "state")),
                 }
             )
-    _record_extraction_feedback(model, "facts", len(text), len(validated), _latency_ms)
+    _record_extraction_feedback(model, "facts", len(text), len(validated), _latency_ms, workspace=workspace)
     return validated
 
 
-def _record_extraction_feedback(model: str, operation: str, input_length: int, output_count: int, latency_ms: float) -> None:
+def _record_extraction_feedback(
+    model: str,
+    operation: str,
+    input_length: int,
+    output_count: int,
+    latency_ms: float,
+    workspace: str | None = None,
+) -> None:
     """Best-effort ExtractionFeedback.record wrapper. Never raises."""
     try:
         from .extraction_feedback import ExtractionFeedback
 
-        ExtractionFeedback().record(
+        ExtractionFeedback(workspace=workspace).record(
             model=model,
             operation=operation,
             input_length=input_length,
@@ -564,6 +588,90 @@ def _record_extraction_feedback(model: str, operation: str, input_length: int, o
         )
     except Exception as exc:  # pragma: no cover — best-effort telemetry
         _log.debug("extraction_feedback_skipped: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Relation extraction — typed triples for the knowledge graph
+# ---------------------------------------------------------------------------
+
+_RELATION_PROMPT = """\
+Extract typed relationships from the following text. Return a JSON array \
+of objects, each with keys: "subject" (string), "predicate" (one of: \
+{predicates}), "object" (string), "confidence" (float 0-1).
+
+Only use predicates from the list above. Only return the JSON array, no \
+explanation.
+
+Text: {text}
+
+JSON:"""
+
+_MAX_ENTITY_NAME_LEN = 512
+
+
+def extract_relations(
+    text: str,
+    model: str = "qwen3.5:9b",
+    backend: str = "auto",
+    *,
+    workspace: str | None = None,
+) -> list[dict]:
+    """Extract typed relation triples from text.
+
+    The prompt is constrained to the :class:`~mind_mem.knowledge_graph.Predicate`
+    vocabulary; triples whose predicate falls outside it (or whose
+    subject/object is empty or oversized) are dropped at validation.
+    The extractor model is whatever the extraction config names — no
+    training happens here; poor yield is surfaced by the backfill
+    metrics, not patched in code.
+
+    Returns:
+        List of dicts with keys: subject, predicate, object, confidence.
+        Empty list when no LLM backend is available.
+    """
+    from .knowledge_graph import Predicate
+
+    if not text or not text.strip():
+        return []
+    if not is_available(backend):
+        return []
+    vocabulary = ", ".join(p.value for p in Predicate)
+    prompt = _RELATION_PROMPT.format(predicates=vocabulary, text=text[:2000])
+    _start = time.monotonic()
+    response = _query_llm(prompt, model, backend)
+    _latency_ms = (time.monotonic() - _start) * 1000.0
+    if not response:
+        _record_extraction_feedback(model, "relations", len(text), 0, _latency_ms, workspace=workspace)
+        return []
+    triples = _parse_json_from_response(response)
+    validated: list[dict] = []
+    for tri in triples:
+        subject = str(tri.get("subject", "")).strip()
+        obj = str(tri.get("object", "")).strip()
+        if not subject or not obj:
+            continue
+        if len(subject) > _MAX_ENTITY_NAME_LEN or len(obj) > _MAX_ENTITY_NAME_LEN:
+            continue
+        try:
+            pred = Predicate.from_str(str(tri.get("predicate", "")))
+        except ValueError:
+            continue
+        conf = tri.get("confidence", 0.5)
+        try:
+            conf = float(conf)
+        except (ValueError, TypeError):
+            conf = 0.5
+        conf = max(0.0, min(1.0, conf))
+        validated.append(
+            {
+                "subject": subject,
+                "predicate": pred.value,
+                "object": obj,
+                "confidence": conf,
+            }
+        )
+    _record_extraction_feedback(model, "relations", len(text), len(validated), _latency_ms, workspace=workspace)
+    return validated
 
 
 # ---------------------------------------------------------------------------
@@ -576,6 +684,8 @@ def enrich_block(
     model: str = "qwen3.5:9b",
     backend: str = "auto",
     enabled: bool = False,
+    *,
+    workspace: str | None = None,
 ) -> dict:
     """Add LLM-extracted metadata to a memory block.
 
@@ -586,6 +696,7 @@ def enrich_block(
         model: LLM model name.
         backend: Backend to use.
         enabled: Whether LLM extraction is enabled.
+        workspace: Workspace root — anchors extraction-feedback telemetry.
 
     Returns:
         The block dict, potentially with added "llm_entities" and "llm_facts" keys.
@@ -597,8 +708,8 @@ def enrich_block(
         return block
     if not is_available(backend):
         return block
-    entities = extract_entities(text, model=model, backend=backend)
-    facts = extract_facts(text, model=model, backend=backend)
+    entities = extract_entities(text, model=model, backend=backend, workspace=workspace)
+    facts = extract_facts(text, model=model, backend=backend, workspace=workspace)
     if entities:
         block["llm_entities"] = entities
     if facts:
@@ -615,6 +726,12 @@ def enrich_results(
     Reads extraction config from mind-mem.json.  When disabled (default),
     returns results unchanged with zero overhead.
 
+    Two gates apply: ``extraction.enabled`` AND
+    ``extraction.enrich_on_recall`` (default false). The second gate
+    exists because this function sits on the recall hot path — with it
+    off, ``extraction.enabled: true`` powers write-path ingestion
+    (relation backfill) without taxing every query.
+
     Args:
         results: List of recall result dicts.
         workspace: Workspace root path for config loading.
@@ -625,8 +742,10 @@ def enrich_results(
     config = load_config(workspace)
     if not config.get("enabled", False):
         return results
+    if not config.get("enrich_on_recall", False):
+        return results
     model = config.get("model", "qwen3.5:9b")
     backend = config.get("backend", "auto")
     for block in results:
-        enrich_block(block, model=model, backend=backend, enabled=True)
+        enrich_block(block, model=model, backend=backend, enabled=True, workspace=workspace)
     return results

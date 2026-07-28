@@ -19,14 +19,24 @@ import os
 import time
 from typing import Any
 
-_DEFAULT_PATH = os.path.join(".", ".mind-mem", "extraction-feedback.json")
+
+def default_feedback_path(workspace: str | None = None) -> str:
+    """Resolve the feedback-file path anchored to *workspace*.
+
+    Falls back to ``MIND_MEM_WORKSPACE`` and then the current
+    directory — the old CWD-relative default meant the file landed
+    wherever the process happened to start, scattering feedback state
+    across unrelated directories.
+    """
+    ws = workspace or os.environ.get("MIND_MEM_WORKSPACE") or "."
+    return os.path.join(ws, ".mind-mem", "extraction-feedback.json")
 
 
 class ExtractionFeedback:
     """Track extraction quality per model and content type."""
 
-    def __init__(self, path: str | None = None):
-        self.path = path or _DEFAULT_PATH
+    def __init__(self, path: str | None = None, workspace: str | None = None):
+        self.path = path or default_feedback_path(workspace)
         self.records: list[dict[str, Any]] = []
         self._stats: dict[str, dict[str, Any]] = {}
         self._load()

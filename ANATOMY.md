@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 914 | **Est. tokens:** ~1,975,684
-**Generated:** 2026-07-27 22:10 UTC
+**Files:** 919 | **Est. tokens:** ~1,989,163
+**Generated:** 2026-07-28 02:27 UTC
 
 ## Token Budget Guide
 
@@ -59,18 +59,18 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 167 | ~590,763 |
+| `src/mind_mem/` | 169 | ~598,519 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 2 | ~5,375 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
-| `src/mind_mem/mcp/infra/` | 8 | ~9,991 |
+| `src/mind_mem/mcp/infra/` | 8 | ~10,051 |
 | `src/mind_mem/mcp/tools/` | 24 | ~59,008 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,702 |
 | `src/mind_mem/storage/` | 2 | ~5,519 |
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 24 | ~63,748 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 320 | ~698,911 |
+| `tests/` | 323 | ~704,574 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -519,7 +519,7 @@
 - `evidence_bundle.py` (~2205 tok, huge) — Structured evidence bundle for answerer co-design (v3.3.0 Tier 3 #7).
 - `evidence_objects.py` (~5859 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `evidence_packer.py` (~3265 tok, huge) — Deterministic evidence packer for Mind-Mem.
-- `extraction_feedback.py` (~1177 tok, large) — mind-mem Extraction Quality Feedback Tracker.
+- `extraction_feedback.py` (~1297 tok, large) — mind-mem Extraction Quality Feedback Tracker.
 - `extractor.py` (~7670 tok, huge) — mind-mem Entity & Fact Extractor (Regex NER-lite). Zero external deps.
 - `feature_gate.py` (~1377 tok, large) — Shared config-resolver for retrieval features (architect audit item #6).
 - `field_audit.py` (~3103 tok, huge) — mind-mem Per-Field Mutation Audit — tracks individual field changes.
@@ -527,11 +527,12 @@
 - `governance_gate.py` (~2212 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `governance_raft.py` (~2208 tok, huge) — Raft-style consensus wrapper for governance writes (v4.0 prep).
 - `granularity_align.py` (~3714 tok, huge) — Granularity / abstraction alignment — named merge operation (Group H, v4.0.x).
+- `graph_ingest.py` (~3930 tok, huge) — Corpus → typed knowledge-graph ingestion (HITL-gated).
 - `graph_recall.py` (~1907 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~10495 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `http_transport.py` (~11242 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
-- `hybrid_recall.py` (~11353 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `hybrid_recall.py` (~11990 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `inbox.py` (~3716 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).
 - `ingestion_pipeline.py` (~1958 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~714 tok, large) — # Mind Mem — Memory + Immune System for AI agents
@@ -541,16 +542,17 @@
 - `interaction_signals.py` (~4278 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `iterative_recall.py` (~2808 tok, huge) — Iterative chain-of-retrieval for multi-hop evidence (v3.4.0).
 - `kalman_belief.py` (~4219 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `knowledge_graph.py` (~5948 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `kg_fusion.py` (~1798 tok, huge) — Typed knowledge-graph fusion into recall (opt-in, default OFF).
+- `knowledge_graph.py` (~6207 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1183 tok, large) — # Copyright 2026 STARGA, Inc.
 - `lineage_staleness.py` (~1916 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
-- `llm_extractor.py` (~5749 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
+- `llm_extractor.py` (~6761 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
 - `llm_noise_profile.py` (~2339 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `maintenance_migrate.py` (~1243 tok, large) — v3.2.0 §2.2 — one-shot migration helper for ``maintenance/`` subdivision.
 - `mcp_entry.py` (~495 tok, medium) — Thin entry point for the ``mind-mem-mcp`` console script.
 ### `src/mind_mem/mcp/infra/`
 
-- `acl.py` (~1570 tok, huge) — Per-tool ACL — scope enforcement for the MCP surface.
+- `acl.py` (~1630 tok, huge) — Per-tool ACL — scope enforcement for the MCP surface.
 - `config.py` (~1070 tok, large) — ``mind-mem.json`` config loading + configurable limits.
 - `constants.py` (~98 tok, small) — MCP-surface-wide constants shared by the infra submodules.
 - `http_auth.py` (~1454 tok, large) — HTTP bearer-token authentication helpers for the MCP surface.
@@ -861,6 +863,7 @@
 - `test_evidence_packer.py` (~5180 tok, huge) — Tests for the evidence packer module."""
 - `test_excerpt.py` (~248 tok, medium) — Tests for excerpt generation."""
 - `test_expand_query.py` (~265 tok, medium) — Tests for query expansion module."""
+- `test_extraction_recall_gate.py` (~1080 tok, large) — Read-path extraction gate + feedback anchoring + graph-edge ACL.
 - `test_extractor.py` (~3387 tok, huge) — Tests for the regex NER-lite entity/fact extractor."""
 - `test_extractor_windowed_scan.py` (~1838 tok, huge) — Regression tests for the windowed extract_facts scan (issue #530).
 - `test_fact_indexing.py` (~3101 tok, huge) — Tests for Feature 2 (fact card indexing) and Feature 4 (metadata-augmented embeddings)."""
@@ -880,6 +883,7 @@
 - `test_granularity_align.py` (~3310 tok, huge) — Tests for granularity_align — named merge operation (Group H, v4.0.x).
 - `test_graph_boost.py` (~6050 tok, huge) — Tests for graph boost, context packing, config validation, and block cap.
 - `test_graph_boost_recall.py` (~315 tok, medium) — Tests for graph_boost recall parameter."""
+- `test_graph_ingest.py` (~2679 tok, huge) — Corpus → typed knowledge-graph wiring (extraction → HITL signal → apply).
 - `test_graph_recall.py` (~1498 tok, large) — v3.3.0 Tier 1 #2 — multi-hop graph traversal on recall results.
 - `test_grid_search.py` (~1199 tok, large) — Tests for benchmarks/grid_search.py — grid generation and utility functions."""
 - `test_group_h_robustness.py` (~10224 tok, huge) — Robustness tests for Group-H modules: edge-cases, error-paths, boundary values.
@@ -908,6 +912,7 @@
 - `test_issue_529_federation_client_hardening.py` (~1202 tok, large) — Regression for issue #529: FederationClient hardening.
 - `test_iter_active_blocks.py` (~1940 tok, huge) — Backend-aware active-block enumeration — ``storage.iter_active_blocks``.
 - `test_kalman_belief.py` (~3728 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_kg_fusion.py` (~1904 tok, huge) — Typed-knowledge-graph fusion into recall (opt-in, default OFF).
 - `test_knowledge_graph.py` (~3437 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_lifecycle_filter.py` (~1777 tok, huge) — Unit tests for the optional lifecycle block field and recall filter.
 - `test_lineage_staleness.py` (~2161 tok, huge) — End-to-end tests for the v3.12 lineage→staleness wiring (Theme C).

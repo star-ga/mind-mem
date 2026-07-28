@@ -1264,6 +1264,60 @@ def _cmd_daemon(args: argparse.Namespace) -> int:
     return run_daemon(_workspace(), dry_run=args.dry_run, once=args.once)
 
 
+def _cmd_graph_backfill(args: argparse.Namespace) -> int:
+    """Corpus → knowledge-graph backfill (yield measurement built in)."""
+    from mind_mem.graph_ingest import approve_relation_signals, backfill, pending_relation_signals
+
+    ws = _workspace()
+
+    if args.approve:
+        report = approve_relation_signals(ws, args.approve)
+        for sig_id in report["applied"]:
+            print(f"applied  {sig_id}")
+        for sig_id, reason in report["errors"].items():
+            print(f"ERROR    {sig_id}: {reason}")
+        return 0 if not report["errors"] else 1
+
+    if args.list_pending:
+        pending = pending_relation_signals(ws)
+        for rel in pending:
+            print(
+                f"{rel['signal_id']}  {rel['subject']} {rel['predicate']} {rel['object']}  "
+                f"(from {rel['source_block_id']}, confidence {rel['confidence']:g})"
+            )
+        print(f"{len(pending)} pending relation signal(s)")
+        return 0
+
+    dry_run = not args.write
+    report = backfill(
+        ws,
+        limit=args.limit,
+        offset=args.offset,
+        dry_run=dry_run,
+    )
+    if args.json:
+        import json as _json
+
+        print(_json.dumps(report, indent=2))
+        return 0
+    mode = "DRY RUN (no writes)" if dry_run else "write mode (signals staged for review)"
+    print(f"graph-backfill — {mode}")
+    print(f"  blocks scanned       : {report['blocks_scanned']}")
+    print(f"  blocks with edges    : {report['blocks_with_edges']}")
+    print(f"  edges extracted      : {report['edges_extracted']}")
+    print(f"  edges per block      : {report['edges_per_block']:.3f}")
+    print(f"  dropped (invalid)    : {report['edges_dropped_invalid']}")
+    print("  predicate histogram  :")
+    if report["predicate_histogram"]:
+        for pred, count in report["predicate_histogram"].items():
+            print(f"    {pred:<16} {count}")
+    else:
+        print("    (none)")
+    if not dry_run:
+        print(f"  signals staged       : {report['signals_written']} (approve with `mm graph-backfill --approve SIG-...`)")
+    return 0
+
+
 def _cmd_pipeline_status(args: argparse.Namespace) -> int:
     """Show the current pipeline hash + dirty-block count (v3.9)."""
     from mind_mem.pipeline_hash import current_pipeline_hash, pipeline_dirty_blocks
@@ -2415,6 +2469,37 @@ def build_parser() -> argparse.ArgumentParser:
     p_inbox_msg.add_argument("--since", default=None, help="ISO-8601 lower bound on message date.")
     p_inbox_msg.add_argument("-n", "--limit", type=int, default=20, help="Max messages to return.")
     p_inbox_msg.set_defaults(func=_cmd_inbox)
+
+    # graph-backfill — corpus → typed-knowledge-graph extraction (HITL-gated)
+    p_gbf = sub.add_parser(
+        "graph-backfill",
+        help=(
+            "Extract typed relations from a corpus slice into staged SIGNALS.md "
+            "proposals. Dry-run by default: prints edges-per-block + predicate "
+            "histogram (the yield measurement)."
+        ),
+    )
+    p_gbf.add_argument("--limit", type=int, default=25, help="Max blocks to scan (default: 25).")
+    p_gbf.add_argument("--offset", type=int, default=0, help="Skip the first N corpus blocks.")
+    p_gbf.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Stage extracted edges as pending SIGNALS.md entries for operator "
+            "review. Without this flag the run is a pure yield measurement. The "
+            "knowledge graph itself is only written on --approve."
+        ),
+    )
+    p_gbf.add_argument(
+        "--approve",
+        nargs="+",
+        default=[],
+        metavar="SIG-ID",
+        help="Apply the named staged relation signal(s) to the knowledge graph.",
+    )
+    p_gbf.add_argument("--list-pending", action="store_true", help="List staged relation signals awaiting approval.")
+    p_gbf.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    p_gbf.set_defaults(func=_cmd_graph_backfill)
 
     # pipeline-status — v3.9 hash-of-code invalidation inspection
     p_pipeline = sub.add_parser(

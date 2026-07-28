@@ -136,6 +136,16 @@ def _canonicalise(name: str) -> str:
     return " ".join(name.strip().lower().split())
 
 
+def default_db_path(workspace: str) -> str:
+    """Canonical on-disk location of the workspace knowledge graph.
+
+    Mirrors the MCP layer's ``_kg_path`` helper so library callers
+    (ingest, recall fusion, CLI) and the MCP tools always address the
+    same database file.
+    """
+    return os.path.join(workspace, "memory", "knowledge_graph.db")
+
+
 def _parse_iso8601(value: str) -> datetime:
     """Parse ``value`` as an ISO 8601 UTC timestamp.
 
@@ -210,6 +220,21 @@ class EntityRegistry:
             )
             self._conn.commit()
             return entity_id
+
+    def lookup(self, surface: str) -> Optional[str]:
+        """Read-only alias resolution: return the entity id for
+        *surface* or ``None`` when unknown.
+
+        Unlike :meth:`resolve`, this never creates an entity — safe to
+        call from read paths (recall fusion) where minting registry
+        rows as a side effect of a query would pollute the graph.
+        """
+        canon = _canonicalise(surface)
+        if not canon:
+            return None
+        with self._lock:
+            row = self._conn.execute("SELECT entity_id FROM aliases WHERE alias = ?", (canon,)).fetchone()
+        return None if row is None else str(row["entity_id"])
 
     def add_alias(self, alias: str, entity_id: str) -> None:
         """Bind *alias* → *entity_id*. Idempotent.
@@ -639,4 +664,5 @@ __all__ = [
     "EntityRegistry",
     "KnowledgeGraph",
     "GraphStats",
+    "default_db_path",
 ]
