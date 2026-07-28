@@ -575,6 +575,7 @@ class HybridBackend:
             # python-reviewer 2026-04-20).
             corpus = self._load_corpus_if_needed(query, workspace)
             result = self._maybe_graph_expand(query, workspace, result, corpus=corpus)
+            result = self._maybe_kg_expand(query, workspace, result, corpus=corpus)
             result = self._maybe_entity_prefetch(query, workspace, result, corpus=corpus)
 
             # v3.3.0 Tier 2 #5 — session-boundary preservation.
@@ -800,9 +801,12 @@ class HybridBackend:
         try:
             from .entity_prefetch import is_entity_prefetch_enabled
             from .graph_recall import is_graph_expand_enabled
+            from .kg_fusion import is_kg_fusion_enabled
         except ImportError:  # pragma: no cover
             return None
-        if not (is_graph_expand_enabled(self._config, query) or is_entity_prefetch_enabled(self._config)):
+        if not (
+            is_graph_expand_enabled(self._config, query) or is_entity_prefetch_enabled(self._config) or is_kg_fusion_enabled(self._config)
+        ):
             return None
         try:
             from .block_parser import parse_file
@@ -930,6 +934,66 @@ class HybridBackend:
             return expanded
         except Exception as exc:  # pragma: no cover — defensive
             _log.warning("graph_expand_failed", error=str(exc))
+            return results
+
+    def _maybe_kg_expand(
+        self,
+        query: str,
+        workspace: str,
+        results: list[dict],
+        *,
+        corpus: list[dict] | None = None,
+    ) -> list[dict]:
+        """Append typed-knowledge-graph blocks when enabled.
+
+        Gated behind ``retrieval.kg_fusion.enabled`` (default false)
+        so existing recall replays byte-identical until the operator
+        opts in. Read-only against the graph — query terms resolve via
+        ``EntityRegistry.lookup`` and never mint entities. Fails open
+        on any error so recall never blocks on graph issues.
+        """
+        if not results:
+            return results
+        try:
+            from .kg_fusion import (
+                is_kg_fusion_enabled,
+                kg_expand,
+                resolve_kg_fusion_config,
+            )
+            from .knowledge_graph import KnowledgeGraph, default_db_path
+
+            if not is_kg_fusion_enabled(self._config):
+                return results
+            db_path = default_db_path(workspace)
+            if not os.path.isfile(db_path):
+                return results
+            if corpus is not None:
+                all_blocks = corpus
+            else:
+                from .block_parser import parse_file
+                from .block_store import MarkdownBlockStore
+
+                store = MarkdownBlockStore(workspace)
+                all_blocks = []
+                for path in store.list_blocks():
+                    try:
+                        all_blocks.extend(parse_file(path))
+                    except Exception as exc:  # pragma: no cover
+                        _log.debug("kg_expand_block_parse_skipped", error=str(exc))
+                        continue
+            params = resolve_kg_fusion_config(self._config)
+            with KnowledgeGraph(db_path) as kg:
+                expanded = kg_expand(results, all_blocks, kg, query, **params)
+            if len(expanded) > len(results):
+                _log.info(
+                    "kg_fusion_applied",
+                    seeds=len(results),
+                    final=len(expanded),
+                    max_hops=params["max_hops"],
+                )
+            return expanded
+        except Exception as exc:  # pragma: no cover — defensive
+            _log.warning("kg_expand_failed", error=str(exc))
             return results
 
     def _maybe_cross_encoder_rerank(self, query: str, result: list[dict], limit: int) -> list[dict]:
