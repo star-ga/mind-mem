@@ -38,6 +38,11 @@ ADMIN_TOOLS = frozenset(
         "compact",
         "encrypt_file",
         "decrypt_file",
+        # Direct typed-knowledge-graph edge writes bypass the HITL
+        # proposal gate, so they require the admin scope. User-scope
+        # ingestion routes through graph_ingest signal staging +
+        # operator approval instead.
+        "graph_add_edge",
     }
 )
 
@@ -51,7 +56,6 @@ USER_TOOLS = frozenset(
         "signal_stats",
         "graph_query",
         "graph_stats",
-        "graph_add_edge",
         "build_core",
         "load_core",
         "unload_core",
