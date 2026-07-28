@@ -1266,7 +1266,12 @@ def _cmd_daemon(args: argparse.Namespace) -> int:
 
 def _cmd_graph_backfill(args: argparse.Namespace) -> int:
     """Corpus → knowledge-graph backfill (yield measurement built in)."""
-    from mind_mem.graph_ingest import approve_relation_signals, backfill, pending_relation_signals
+    from mind_mem.graph_ingest import (
+        approve_relation_signals,
+        attach_source_excerpts,
+        backfill,
+        pending_relation_signals,
+    )
 
     ws = _workspace()
 
@@ -1279,12 +1284,22 @@ def _cmd_graph_backfill(args: argparse.Namespace) -> int:
         return 0 if not report["errors"] else 1
 
     if args.list_pending:
-        pending = pending_relation_signals(ws)
+        # HITL review surface: show a bounded source-block excerpt next
+        # to each pending relation so the operator can check the claim
+        # against the text before --approve.
+        pending = attach_source_excerpts(ws, pending_relation_signals(ws))
+        if args.json:
+            import json as _json
+
+            print(_json.dumps(pending, indent=2))
+            return 0
         for rel in pending:
             print(
                 f"{rel['signal_id']}  {rel['subject']} {rel['predicate']} {rel['object']}  "
                 f"(from {rel['source_block_id']}, confidence {rel['confidence']:g})"
             )
+            excerpt = rel.get("source_excerpt", "")
+            print(f"    source: {excerpt}" if excerpt else "    source: (block not found in corpus)")
         print(f"{len(pending)} pending relation signal(s)")
         return 0
 
