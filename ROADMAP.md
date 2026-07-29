@@ -2417,6 +2417,48 @@ raw fusion rank.
     would have been diagnosed faster with the split in place. Zero ⇒ close this bullet
     with a dated note rather than building it. Cross-repo sibling: naestro **R61**
     (same rule, the cockpit/doc-retrieval side).
+  - **Prior art — one-class learning on the success manifold (observed 2026-07-29).**
+    A public paper attacks the *unsupervised* form of exactly this attribution problem:
+    train only on **successful** trajectories, score each step of a failed run by its
+    deviation from the learned dynamics, and take the high-deviation steps as the
+    error-contributing ones. No failure examples, no step-level error labels. The
+    transferable primitive is the framing, not the architecture: **we have abundant
+    good recalls and no labelled corpus of bad ones**, which is the same asymmetry.
+    Learn what a good recall looks like, score deviation, abstain above threshold.
+    Under ~100 training trajectories, and 200–5000× cheaper than prompting a frontier
+    model to audit each step.
+  - **Why it lands here specifically: conformal is the load-bearing part, and that is
+    the second independent sighting.** The paper reports two thresholding strategies
+    over the *same* anomaly scores — a fixed top-k, and a conformal-prediction set
+    with an adaptive, distribution-calibrated threshold. In-domain, CP moves precision
+    0.321 → 0.443 while top-k keeps the higher recall (0.706 vs 0.484). Same trade the
+    conformal sidecar above is built on, arrived at independently: **the quantile rule
+    is what converts a noisy score into a usable set.** Two unrelated sources now
+    converge on it; that convergence is stronger evidence for the sidecar than either
+    source alone, and it is the reason this is recorded as a sub-item of the gate
+    rather than as a competing mechanism.
+  - **The numbers that bound the ambition — read before anyone proposes wiring it to a
+    decision.** Best in-domain precision is **0.443**: more than half of flagged steps
+    are wrong. Random step-selection scores 0.284 precision — *above* both frontier-LLM
+    prompting baselines (0.233 and 0.217), so "beats a frontier model" describes a weak
+    baseline, not a strong detector. Out-of-domain it degrades hard: precision 0.184,
+    recall 0.330, and the random baseline is 0.137 — the margin narrows to a few points
+    on a cross-benchmark shift. Treat published +20% / +7% F1 as *relative to those
+    baselines*, never as an absolute standard.
+  - **Therefore: diagnostic input only, never an autonomous gate.** This may inform the
+    retrieval-vs-generation split (a ranked "which step looks off" hint for a human
+    replaying a bad answer). It must not become an abstention trigger on its own —
+    a 0.44-precision signal driving abstention would suppress correct recalls roughly
+    half the times it fired, which is strictly worse than the shipped 5-signal
+    classifier. Same boundary the 512-mind calibrated-confidence sidecar draws: the
+    score informs, the gate decides, and they never merge.
+  - **Sequencing.** Strictly behind the backtest above and behind the conformal sidecar.
+    If the backtest closes this bullet, this closes with it. Cross-repo: the
+    observability-only reading of the same paper belongs to naestro's agent-trajectory
+    lane, not here — mind-mem's interest is the one-class + conformal *pairing*.
+  - **Provenance rail.** Prior-art shape observed in a public paper; no code, no
+    dependency, nothing named in any public artifact. Full citation lives in
+    `mind-internal` per the no-public-attribution convention.
 
 ## Divergent recall-path work on `autoresearch-recompact/jul10` (opened 2026-07-22)
 
