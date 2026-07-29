@@ -2427,16 +2427,40 @@ raw fusion rank.
     Learn what a good recall looks like, score deviation, abstain above threshold.
     Under ~100 training trajectories, and 200–5000× cheaper than prompting a frontier
     model to audit each step.
-  - **Why it lands here specifically: conformal is the load-bearing part, and that is
-    the second independent sighting.** The paper reports two thresholding strategies
-    over the *same* anomaly scores — a fixed top-k, and a conformal-prediction set
-    with an adaptive, distribution-calibrated threshold. In-domain, CP moves precision
-    0.321 → 0.443 while top-k keeps the higher recall (0.706 vs 0.484). Same trade the
-    conformal sidecar above is built on, arrived at independently: **the quantile rule
-    is what converts a noisy score into a usable set.** Two unrelated sources now
-    converge on it; that convergence is stronger evidence for the sidecar than either
-    source alone, and it is the reason this is recorded as a sub-item of the gate
-    rather than as a competing mechanism.
+  - **Why it lands here specifically: conformal is the load-bearing part.** The paper
+    reports two thresholding strategies over the *same* anomaly scores — a fixed top-k,
+    and a conformal-prediction set with an adaptive, distribution-calibrated threshold.
+    In-domain, CP moves precision 0.321 → 0.443 while top-k keeps the higher recall
+    (0.706 vs 0.484). Same trade the conformal sidecar above is built on, arrived at
+    independently: **the quantile rule is what converts a noisy score into a usable
+    set.**
+  - **CORRECTION (same day, 2026-07-29) — this is the THIRD sighting, and the decisive
+    one is ours and already shipped.** The bullet above was first written calling this
+    a "second independent sighting" alongside the external distill→cascade note, which
+    framed conformal as something we might build. That was wrong, and an ecosystem-wide
+    check found why: **`ar_spine/rsi/conformal.py` (216 lines) is working code in
+    `mind-lab`, not a plan.** It implements the split-conformal quantile as the gate
+    (`conformal_threshold(calib, stratum, alpha)`, distil only when `score > tau`),
+    **Mondrian stratification** (per-problem-class quantiles, not one global bound),
+    cold-start abstention (`MIN_CALIB_PER_STRATUM = 20`, `MIN_BAD_PER_STRATUM = 5` —
+    below either, `tau is None` and it abstains), the conservative unbounded case
+    (rank > n_bad ⇒ `tau = +inf`, always abstain; its docstring: *"we never clamp"*),
+    and `Fraction` arithmetic with golden-parity tests so rank boundaries cannot drift
+    on float comparison. Its own docstring states the design rule we would otherwise
+    have re-derived: **"The deterministic quantile IS the gate; no LLM in this module."**
+  - **What that changes about this section.** The question is no longer *whether* to
+    adopt conformal calibration — it is **reuse-vs-reimplement**. The sidecar note above
+    proposes "~40 lines reimplemented in fixed-point in the pure-MIND core"; that remains
+    a defensible call for the wedge, but it must now be made knowing a tested Python
+    implementation exists with cold-start and unbounded-tau semantics already worked out.
+    If we reimplement, those three behaviours are the spec to match, and the golden-parity
+    tests are the oracle. Do not re-solve them from scratch.
+  - **Fork check (verified 2026-07-29).** `conformal.py` appears at eight live paths
+    across `ar-spine/`, `autoresearch/`, `mind-lab/`, `mind-lab-build/` and
+    `mind-lab-staging/`. All eight are **byte-identical** (md5 `24034cf5eb89`), so the
+    "never fork across repos again" intent in its header is currently holding. Recorded
+    because vendored-copy count is the kind of thing that silently stops being true;
+    re-check before editing any copy.
   - **The numbers that bound the ambition — read before anyone proposes wiring it to a
     decision.** Best in-domain precision is **0.443**: more than half of flagged steps
     are wrong. Random step-selection scores 0.284 precision — *above* both frontier-LLM
