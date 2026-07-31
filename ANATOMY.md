@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 926 | **Est. tokens:** ~2,007,620
-**Generated:** 2026-07-31 04:40 UTC
+**Files:** 927 | **Est. tokens:** ~2,010,077
+**Generated:** 2026-07-31 04:46 UTC
 
 ## Token Budget Guide
 
@@ -59,18 +59,18 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 170 | ~601,190 |
+| `src/mind_mem/` | 170 | ~601,921 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 6 | ~13,430 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
 | `src/mind_mem/mcp/infra/` | 8 | ~10,495 |
-| `src/mind_mem/mcp/tools/` | 24 | ~59,217 |
+| `src/mind_mem/mcp/tools/` | 24 | ~59,473 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,702 |
 | `src/mind_mem/storage/` | 2 | ~5,519 |
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 24 | ~63,748 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 325 | ~711,455 |
+| `tests/` | 326 | ~712,925 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -536,7 +536,7 @@
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~10495 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `http_transport.py` (~11242 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
-- `hybrid_recall.py` (~11990 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `hybrid_recall.py` (~12721 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `inbox.py` (~3716 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).
 - `ingestion_pipeline.py` (~1958 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~714 tok, large) — # Mind Mem — Memory + Immune System for AI agents
@@ -595,7 +595,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~4766 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~534 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~5659 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~5915 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `walkthrough_persona.py` (~1493 tok, large) — MCP wrapping for v3.9 walkthrough + persona projection.
 ### `src/mind_mem/`
@@ -899,6 +899,7 @@
 - `test_hook_installer_registry.py` (~3841 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_auth_fail_closed.py` (~1724 tok, huge) — v3.7.0 H4: HTTP / REST auth must fail CLOSED by default.
 - `test_http_transport.py` (~4326 tok, huge) — Tests for the v3.9 HTTP transport adapter.
+- `test_hybrid_degraded_marker.py` (~1470 tok, large) — Tests for the in-band recall degradation marker (Task 2).
 - `test_hybrid_recall.py` (~3107 tok, huge) — Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
 - `test_hybrid_search.py` (~599 tok, large) — Tests for hybrid search functionality."""
 - `test_inbox.py` (~2352 tok, huge) — Tests for the v3.9 inbox folder ingestion."""

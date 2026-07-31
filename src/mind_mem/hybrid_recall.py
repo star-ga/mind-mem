@@ -196,6 +196,41 @@ def _get_block_id(item: dict, id_key: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+class VectorLegError(RuntimeError):
+    """The vector leg could not run (import/embed/store failure).
+
+    Raised by :meth:`HybridBackend._vector_search` so its sole caller can
+    tell a *failed* vector leg (degrade to BM25, mark it) apart from a
+    vector leg that ran fine and simply matched nothing. ``reason`` is a
+    short machine-readable tag surfaced in the ``degraded`` marker.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"vector leg unavailable: {reason}")
+        self.reason = reason
+
+
+class RecallResults(list):
+    """A ranked result list that can carry a ``degraded`` marker.
+
+    Backward-compatible on purpose: it *is* a ``list``, so every existing
+    caller that iterates / slices / indexes the results is unaffected.
+    Degradation-aware callers read ``.degraded`` — ``None`` when the full
+    requested pipeline ran, otherwise ``{"leg": ..., "reason": ...}``. The
+    whole point (silent degradation is the bug): a caller can finally tell
+    that a "hybrid" recall actually served BM25-only because the vector leg
+    was unavailable / timed out / failed.
+    """
+
+    degraded: dict[str, str] | None = None
+
+
+def _as_results(items: list[dict], degraded: dict[str, str] | None = None) -> RecallResults:
+    rr = RecallResults(items)
+    rr.degraded = degraded
+    return rr
+
+
 class HybridBackend:
     """Orchestrates BM25 and vector search with RRF fusion.
 
@@ -491,7 +526,14 @@ class HybridBackend:
                 # v3.3.0 Tier 2: cross-encoder rerank also applies to
                 # BM25-only deployments (previously only post-fusion).
                 results = self._maybe_cross_encoder_rerank(query, results, limit)
-                return results
+                # Mark degradation ONLY when the operator asked for vector
+                # recall but the backend was unavailable at init — a plain
+                # BM25 config (vector never requested) is not "degraded",
+                # and a postgres server-side hybrid is its own leg.
+                degraded = None
+                if self.vector_enabled and not self._vector_available and not pg_server_side:
+                    degraded = {"leg": "vector", "reason": "unavailable"}
+                return _as_results(results, degraded)
 
             # Run BM25 + vector in parallel
             _log.info("hybrid_parallel_search", query=query)
@@ -509,6 +551,9 @@ class HybridBackend:
             # instead of blocking on it (audit finding 4). cancel_futures drops
             # any not-yet-started task; an already-running embed thread cannot
             # be force-killed, but it no longer holds up the response.
+            # Records why the vector leg did not contribute, if it didn't.
+            # None => the full two-leg fusion ran as requested.
+            vector_degraded: dict[str, str] | None = None
             pool = ThreadPoolExecutor(max_workers=2)
             try:
                 bm25_future: Future = pool.submit(
@@ -544,6 +589,19 @@ class HybridBackend:
                     )
                     vec_future.cancel()
                     vec_results = []
+                    vector_degraded = {"leg": "vector", "reason": "deadline_exceeded"}
+                except VectorLegError as exc:
+                    # Embed/store/import failure inside the vector leg:
+                    # degrade to BM25-only fusion and MARK it so a caller
+                    # can tell (previously this was swallowed to [] and the
+                    # "hybrid" label silently lied).
+                    _log.warning(
+                        "hybrid_vector_leg_failed",
+                        reason=exc.reason,
+                        fallback="bm25_only",
+                    )
+                    vec_results = []
+                    vector_degraded = {"leg": "vector", "reason": exc.reason}
             finally:
                 # wait=False so a hung vector leg cannot re-block the response
                 # here (the whole point of the deadline above).
@@ -612,8 +670,9 @@ class HybridBackend:
                 query=query,
                 results=len(result),
                 top_rrf=result[0].get("rrf_score", 0) if result else 0,
+                degraded=bool(vector_degraded),
             )
-            return result
+            return _as_results(result, vector_degraded)
 
     # -- multi-query expansion search ----------------------------------------
 
@@ -1130,12 +1189,12 @@ class HybridBackend:
             # Fallback: VectorBackend.search
             backend = recall_vector.VectorBackend(self._config)
             return list(backend.search(workspace, query, limit=limit, active_only=active_only))
-        except ImportError:
+        except ImportError as exc:
             _log.warning("vector_search_import_failed")
-            return []
+            raise VectorLegError("import_failed") from exc
         except Exception as exc:
             _log.error("vector_search_failed", error=str(exc))
-            return []
+            raise VectorLegError("error") from exc
 
     # -- factory ------------------------------------------------------------
 

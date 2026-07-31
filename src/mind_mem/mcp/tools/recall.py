@@ -167,6 +167,7 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
     config_warnings: list[str] = []
     used_backend = "scan"
     results: list = []
+    hybrid_degraded: dict | None = None
 
     if backend in ("hybrid", "auto"):
         try:
@@ -183,6 +184,11 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
             hb = HybridBackend.from_config(config)
             results = hb.search(query, ws, limit=limit, active_only=active_only)
             used_backend = "hybrid"
+            # Surface an in-band degradation marker: when the vector leg was
+            # unavailable / timed out / failed, ``search`` returns BM25-only
+            # results tagged with ``.degraded`` so a caller can tell the
+            # "hybrid" label did NOT mean a two-leg fusion this time.
+            hybrid_degraded = getattr(results, "degraded", None)
         except ImportError:
             if backend == "hybrid":
                 warnings.append("Hybrid backend unavailable — falling back to BM25.")
@@ -251,6 +257,17 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
         "count": len(results),
         "results": results,
     }
+    # In-band degradation marker (local hybrid path): a "hybrid" backend that
+    # actually served BM25-only because the vector leg was unavailable / timed
+    # out / failed. Silent degradation is the bug — make it a first-class,
+    # machine-readable envelope field, not just a log line.
+    if hybrid_degraded:
+        envelope["degraded"] = hybrid_degraded
+        warnings.append(
+            f"Recall degraded to BM25-only: the {hybrid_degraded.get('leg', 'vector')} leg "
+            f"was not used (reason: {hybrid_degraded.get('reason', 'unknown')}). "
+            "Results are BM25-only, not hybrid."
+        )
     if warnings:
         envelope["warnings"] = warnings
     if config_warnings:
