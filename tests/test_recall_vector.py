@@ -544,8 +544,7 @@ class TestCircuitBreaker:
         assert vb._provider_breakers == {}
 
     def test_breaker_created_lazily_per_provider(self):
-        from mind_mem.v4.circuit_breaker import CircuitBreaker
-        from mind_mem.v4.circuit_breaker import CircuitState
+        from mind_mem.v4.circuit_breaker import CircuitBreaker, CircuitState
 
         vb = _make_backend()
         b = vb._provider_breaker("ollama")

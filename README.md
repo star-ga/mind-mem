@@ -6,7 +6,7 @@
   <strong>Replayable memory for AI agents. Deterministic recall with a byte-identical audit chain across runs, machines, and substrates.</strong>
 </p>
 <p align="center">
-  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 84 MCP tools<br>
+  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 90 MCP tools<br>
   <sub>MIND Language Profile: <code>default</code> (full tensor stdlib + Q16.16 + heap) &mdash; see <a href="https://github.com/star-ga/mind/blob/main/docs/roadmap.md#phase-106--library-output--c-abi-mindc-026--030">Phase 10.6</a></sub><!-- mind-profile: default -->
 </p>
 <p align="center">
@@ -22,7 +22,7 @@
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
   <img src="https://img.shields.io/badge/tests-6000%2B-brightgreen?style=flat-square" alt="Tests: 5900+">
-  <img src="https://img.shields.io/badge/MCP_tools-84-blue?style=flat-square" alt="MCP Tools: 84">
+  <img src="https://img.shields.io/badge/MCP_tools-90-blue?style=flat-square" alt="MCP Tools: 90">
   <img src="https://img.shields.io/badge/clients-17-blueviolet?style=flat-square" alt="AI Clients: 17">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
   <img src="https://img.shields.io/badge/audit-cross--model_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="Cross-model consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
@@ -38,7 +38,7 @@
 
 MIND-Mem is a deterministic AI memory system: on the same workspace, the same query produces the same ranked results every time, with a Q16.16 fixed-point audit chain — byte-identical across runs, machines, and substrates — embedded in every applied decision. (Recall scoring itself is standard floating-point; the byte-identity guarantee is the Q16.16 audit/replay chain.)
 
-Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 84 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic (same query → same ranked results) and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
+Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 90 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic (same query → same ranked results) and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
 
 Most memory layers ship tools. That is table-stakes. MIND-Mem ships a substrate: scoring kernels compiled from MIND source with Q16.16 fixed-point encoding in the audit-hash preimage, a governance pipeline that rejects every unreviewed write, and an audit chain where every applied proposal is hash-anchored. The same query on the same workspace produces the same ranked recall, every time; that recall's audit/replay chain is byte-identical whether you replay it on the same machine or a different one that pulls the same workspace. That property is what makes MIND-Mem suitable as a canonical memory layer across heterogeneous agent stacks.
 
@@ -244,7 +244,7 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
 ### MCP Server (83 tools, 8 resources)
-Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 83 distinct tools and 8 read-only resources (6 static + 2 templated). The server makes 84 `mcp.tool(...)` registrations, but the consolidated `recall` dispatcher intentionally shadows the base `recall`, so the live surface is 83 distinct tool names. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
+Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 89 distinct tools and 8 read-only resources (6 static + 2 templated). The server makes 90 `mcp.tool(...)` registrations, but the consolidated `recall` dispatcher intentionally shadows the base `recall`, so the live surface is 89 distinct tool names. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
 
 ### 74+ Structural Checks + 3024 Unit Tests
 `validate.sh` checks schemas, cross-references, ID formats, status values, supersede chains, ConstraintSignatures, and more. Backed by 3024 pytest unit tests covering all core modules.
@@ -821,7 +821,7 @@ your-workspace/
 | Contradiction detection | Yes | No | No | No |
 | Tests | 5,465+ | - | - | - |
 | LoCoMo benchmark | 86.33 conv-0 (v3.6, external LLM judge) | 66.88 | 74.0% | - |
-| MCP tools | 83 distinct (84 `mcp.tool` registrations; `recall` dispatcher shadows base `recall`) | - | - | - |
+| MCP tools | 89 distinct (90 `mcp.tool` registrations; `recall` dispatcher shadows base `recall`) | - | - | - |
 | Core dependencies | 0 | Many | Many | Many |
 
 ### At a Glance

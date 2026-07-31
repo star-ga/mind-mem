@@ -44,14 +44,13 @@ import os
 import struct
 import sys
 import threading
-from typing import Any
+from typing import Any, cast
 
 # Import helpers from recall.py
 from .block_parser import parse_file
 from .corpus_registry import CORPUS_DIRS
 from .enums import TaskStatus
 from .observability import get_logger, metrics, timed
-from .v4.circuit_breaker import CircuitBreaker, CircuitOpenError
 from .recall import (
     CORPUS_FILES,
     RecallBackend,
@@ -60,6 +59,7 @@ from .recall import (
     get_block_type,
     get_excerpt,
 )
+from .v4.circuit_breaker import CircuitBreaker, CircuitOpenError
 
 _log = get_logger("recall_vector")
 
@@ -546,7 +546,7 @@ class VectorBackend(RecallBackend):
         def _try(provider: str, fn) -> list[list[float]] | None:
             breaker = self._provider_breaker(provider)
             try:
-                return breaker.guarded_call(fn, texts)
+                return cast("list[list[float]] | None", breaker.guarded_call(fn, texts))
             except CircuitOpenError as exc:
                 # Breaker OPEN: skip this provider without hitting it, but
                 # say so — a short-circuited leg is a degradation, mark it.

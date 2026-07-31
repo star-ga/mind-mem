@@ -121,10 +121,10 @@ jobs:
       - name: Check MCP tool count consistency
         # Single source of truth for the registered MCP tool count.
         # Fails the build if the discovered count drifts from the
-        # number documented in CLAUDE.md / README (84 mcp.tool(...)
-        # registrations; 83 distinct live names). Bump the expected
+        # number documented in CLAUDE.md / README (90 mcp.tool(...)
+        # registrations; 89 distinct live names). Bump the expected
         # value here when tools are added/removed.
-        run: python scripts/count_mcp_tools.py --check 84
+        run: python scripts/count_mcp_tools.py --check 90
 
   validate:
     runs-on: ubuntu-latest

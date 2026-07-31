@@ -164,7 +164,7 @@ src/mind_mem/           — Main package (src layout; flat modules, not
     alerting.py, governance_gate.py — governance: contradiction/drift
                           detection, proposals, audit chain, alerting hooks
   _recall_core.py, hybrid_recall.py, recall_vector.py — retrieval core
-  mcp_server.py         — MCP server monolith (84 tools, 8 resources)
+  mcp_server.py         — MCP server monolith (90 tools, 8 resources)
   mcp/                  — per-domain MCP tool modules (mcp.tools.*)
   ingestion_pipeline.py, inbox.py, entity_ingest.py — auto-ingestion
   skill_opt/            — Skill optimization
@@ -237,7 +237,7 @@ docs/                   — User + integration docs (35+ files)
   Cursor, Windsurf, Zed, OpenClaw, and 8 more). See
   `docs/client-integrations.md`.
 
-### MCP Tools (84)
+### MCP Tools (90)
 Grouped surfaces (full list in `docs/api-reference.md` and
 `src/mind_mem/mcp_server.py`):
 recall, hybrid_search, prefetch, propose_update, approve_apply,
