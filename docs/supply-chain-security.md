@@ -33,8 +33,8 @@ brew install cosign          # macOS
 
 # Download the wheel + its .sigstore bundle from the GitHub Release
 cosign verify-blob \
-  --bundle mind_mem-3.2.0-py3-none-any.whl.sigstore \
-  mind_mem-3.2.0-py3-none-any.whl
+  --bundle mind_mem-4.4.0-py3-none-any.whl.sigstore \
+  mind_mem-4.4.0-py3-none-any.whl
 
 # Expected output:
 # Verified OK
@@ -46,14 +46,14 @@ cosign verify-blob \
 pip install sigstore
 python -m sigstore verify github \
   --cert-identity "https://github.com/star-ga/mind-mem/.github/workflows/release.yml@refs/tags/v3.2.0" \
-  dist/mind_mem-3.2.0-py3-none-any.whl
+  dist/mind_mem-4.4.0-py3-none-any.whl
 ```
 
 ### Verify PyPI attestation (PEP 740)
 
 ```bash
 pip install pypi-attestations
-python -m pypi_attestations verify mind-mem==3.2.0
+python -m pypi_attestations verify mind-mem==4.4.0
 ```
 
 ---

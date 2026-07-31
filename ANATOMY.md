@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 944 | **Est. tokens:** ~2,068,869
-**Generated:** 2026-07-31 08:52 UTC
+**Files:** 944 | **Est. tokens:** ~2,068,934
+**Generated:** 2026-07-31 09:23 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~69,607 |
+| `./` | 35 | ~69,579 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -32,7 +32,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 85 | ~155,657 |
+| `docs/` | 85 | ~155,750 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/benchmarks/` | 6 | ~8,995 |
 | `docs/design/` | 3 | ~4,055 |
@@ -98,7 +98,7 @@
 - `Dockerfile` (~306 tok, medium) — FROM python:3.12-slim
 - `.dockerignore` (~37 tok, tiny) — .git
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
-- `EVIDENCE.md` (~1206 tok, large) — Evidence Matrix
+- `EVIDENCE.md` (~1213 tok, large) — Evidence Matrix
 - `generate_mind7b_training.py` (~5558 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
 - `.gitignore` (~315 tok, medium) — *.pyc
@@ -112,11 +112,11 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~2257 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~25441 tok, huge) — 30-Second Demo
+- `README.md` (~25421 tok, huge) — 30-Second Demo
 - `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
-- `SECURITY.md` (~1752 tok, huge) — Security Policy
+- `SECURITY.md` (~1737 tok, huge) — Security Policy
 - `setup.py` (~397 tok, medium) — Conditional setup hook for the optional Cython accelerator.
 - `SPEC.md` (~6230 tok, huge) — Mind Mem Formal Specification v1.5.1
 - `train_mind7b_runpod.py` (~1654 tok, huge)
@@ -222,12 +222,12 @@
 - `2026-07-31-locomo-baseline-mind_mem.md` (~643 tok, large) — LoCoMo recall scorecard — `mind_mem` (2026-07-31)
 ### `docs/`
 
-- `benchmarks.md` (~757 tok, large) — Benchmarks
+- `benchmarks.md` (~764 tok, large) — Benchmarks
 - `block-format.md` (~431 tok, medium) — Block Format
 - `block-type-taxonomy-roadmap.md` (~911 tok, large) — Block-Type Taxonomy Enhancement — Roadmap Note
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~254 tok, medium) — CI Workflows
-- `claude-desktop-setup.md` (~752 tok, large) — Claude Desktop Setup Guide
+- `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
 - `client-integrations.md` (~2684 tok, huge) — Client Integrations
 - `cli-reference.md` (~1857 tok, huge) — CLI Reference
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
@@ -253,7 +253,7 @@
 - `install-guide.md` (~2855 tok, huge) — Installation guide — every step + every option
 - `integrations.md` (~1540 tok, huge) — Integrations
 - `locomo-v3.4-conv0-results.md` (~475 tok, medium) — LoCoMo v3.4.0 conv-0 results (2026-04-22)
-- `maintenance-namespaces.md` (~1601 tok, huge) — `maintenance/` namespaces
+- `maintenance-namespaces.md` (~1625 tok, huge) — `maintenance/` namespaces
 - `mcp-integration.md` (~1691 tok, huge) — MCP Integration Guide
 - `mcp-tool-examples.md` (~902 tok, large) — MCP Tool Examples
 - `mic-map.md` (~1686 tok, huge) — MIC/MAP — MIND IR Graph Serialization
@@ -288,7 +288,7 @@
 - `bandit-v3.2.0-baseline.json` (~18974 tok, huge) — Keys: errors, generated_at, metrics, results
 ### `docs/`
 
-- `security-model.md` (~350 tok, medium) — Security Model
+- `security-model.md` (~400 tok, medium) — Security Model
 - `setup.md` (~1741 tok, huge) — Setup
 - `status.md` (~1125 tok, large) — MIND-Mem — implementation status (alignment companion)
 - `storage-backends.md` (~1264 tok, large) — Storage Backends

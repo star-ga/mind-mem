@@ -56,7 +56,7 @@ Minimal config:
 
 ```json
 {
-  "version": "2.8.0",
+  "version": "4.4.0",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,
@@ -68,7 +68,7 @@ Minimal config:
 
 ```json
 {
-  "version": "2.8.0",
+  "version": "4.4.0",
   "workspace_path": ".",
   "governance_mode": "detect_only",
   "recall": {
@@ -149,7 +149,7 @@ See [Configuration Reference](configuration.md#extraction-llm-backend) for full 
 }
 ```
 
-Restart Claude Code. All 83 MCP tools (recall, recall_with_axis,
+Restart Claude Code. All 89 MCP tools (recall, recall_with_axis,
 verify_merkle, observe_signal, graph_query, build_core,
 agent_inject, etc.) become available.
 
@@ -163,7 +163,7 @@ mm install-all   # write hook + native MCP config for every detected client
 ```
 
 This installs **both** the text-hook (visibility + auto-capture) **and**
-the native MCP server entry (full 57-tool surface) for all 8
+the native MCP server entry (full 89-tool surface) for all 8
 MCP-aware clients: Codex, Gemini, Cursor, Windsurf, Continue, Cline,
 Roo, Zed. Clients without MCP support (Claude Code hook-mode, Aider,
 OpenClaw variants) get the hook only.

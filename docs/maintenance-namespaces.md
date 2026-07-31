@@ -131,9 +131,10 @@ When you introduce a new file kind under `maintenance/`:
 
 ## Deprecation timeline
 
-The top-level-maintenance layout continues to auto-migrate throughout
-v3.2.x. v4.0 removes the migration helper and will treat a file
-directly under `maintenance/` as a configuration error.
+The top-level-maintenance layout auto-migrated throughout the v3.2.x
+line. As of v4.4.0 the migration helper (`maintenance_migrate.py`) still
+ships but is no longer auto-invoked by the apply engine; a file directly
+under `maintenance/` is treated as a configuration error unless migrated.
 
 ## References
 

@@ -10,11 +10,11 @@
 
 ## Currently shipping
 
-**v4.0.13** (2026-05-19) is the current PyPI release. See
+**v4.4.0** is the current PyPI release. See
 `CHANGELOG.md` for the per-version detail; this roadmap covers
 forward-looking work, not history.
 
-## Genuinely Open Items (post-v4.0.13 reality)
+## Genuinely Open Items (post-v4.4.0 reality)
 
 Surfaced at the top so the actual remaining work is visible without
 scrolling 1500 lines of historical sections. Each item is followed

@@ -38,6 +38,6 @@ All proposals are logged with timestamps, reasons, and outcomes.
 ## File Security
 
 - All data stored as plain text markdown (auditable)
-- No encryption at rest (rely on filesystem permissions)
+- Optional at-rest encryption (opt-in `encrypted` backend: HMAC-SHA256 keystream + encrypt-then-MAC over block files; the FTS5/sqlite-vec recall index is not encrypted). The zero-config default stores plain-text markdown and relies on filesystem permissions
 - No network connections (zero external dependencies)
 - No credential storage

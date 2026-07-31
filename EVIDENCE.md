@@ -34,7 +34,7 @@ diff byte-for-byte.
 | 5 | **MIND kernels equivalent to the Python baseline** | `tests/test_mind_ffi.py` (Q16.16 FFI vs Python scoring) | `pytest tests/test_mind_ffi.py -q` | see `CHANGELOG.md` | ❌ not yet — covered by repo tests |
 | 6 | **Zero-infra / SQLite core** (no external service for the default backend) | default `mind-mem.json` backend = SQLite (`src/mind_mem/core/`); Postgres/pgvector is opt-in | `mm init <ws> && mm recall "q" <ws>` with no services running | see `CHANGELOG.md` | ❌ not yet — covered by install-smoke CI |
 | 7 | **LoCoMo** (mean 77.9 / adversarial 82.3 / temporal 88.5) | `benchmarks/locomo_harness.py` + `benchmarks/locomo_*results*.json` | `python3 benchmarks/locomo_harness.py` (needs a judge LLM) | `locomo_*_20260304.json` | ❌ **self-published** — repro harness exists; raw outputs checked in; independent rerun wanted |
-| 8 | **LongMemEval** | — | — | — | ⏸️ **HELD** — provenance hold active (`benchmarks/STATUS.md`); intentionally excluded from positioning until reconciled |
+| 8 | **LongMemEval** | — | — | — | ⏸️ **HELD** — provenance hold active (`benchmarks/LONGMEMEVAL_FINDINGS_2026-05-19.md`); intentionally excluded from positioning until reconciled |
 
 ## What "10/10" requires (and what we are NOT claiming yet)
 

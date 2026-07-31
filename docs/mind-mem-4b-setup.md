@@ -3,7 +3,7 @@
 `star-ga/mind-mem-4b` is the **fully trained** mind-mem:4b model —
 all ~4.2B parameters trained on the MIND-Mem domain (not a LoRA
 adapter). The current revision (v4 weights, shipped alongside the
-**v4.0.0** library release on 2026-05-11) knows the 84 MCP tools (incl.
+**v4.0.0** library release on 2026-05-11) knows the 89 MCP tools (incl.
 `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`,
 `reindex_dirty`, `validate_block`, `block_lineage`, `add_block_edge`,
 MIC/MAP serialization, governance hooks), block schemas including the
@@ -239,7 +239,7 @@ Typical stack:
 ```
 ┌──────────────┐       ┌─────────────────┐       ┌──────────────────────┐
 │  Claude Code │──────▶│ mind-mem MCP    │──────▶│ SQLite + FTS + vec   │
-│ (or any CLI) │       │  (83 tools)     │       │   OR                 │
+│ (or any CLI) │       │  (89 tools)     │       │   OR                 │
 └──────────────┘       └────────┬────────┘       │ Postgres + pgvector  │
                                 │                │   + HNSW + GIN       │
                                 ▼                └──────────────────────┘

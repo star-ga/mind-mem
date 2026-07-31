@@ -29,7 +29,7 @@
 </p>
 
 <p align="center"><sub>
-  <strong>Current release:</strong> <code>v4.3.1</code> &mdash; configurable ollama endpoint (<code>OLLAMA_HOST</code> / <code>ollama_url</code>) so central-ollama fleet deployments work; default stays localhost &mdash;
+  <strong>Current release:</strong> <code>v4.4.0</code> &mdash; per-run recall attestation, typed knowledge-graph edges (HITL-gated), and a standing LoCoMo recall benchmark &mdash;
   <a href="CHANGELOG.md">see CHANGELOG</a>
   (single source of truth; per-version detail tables below may lag the changelog)
 </sub></p>
@@ -63,7 +63,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>Current release: **v4.3.1** — configurable ollama endpoint (`OLLAMA_HOST` env / `recall.ollama_url` + `extraction.ollama_url` config) so central-ollama fleet deployments work; backward-compatible default stays `http://localhost:11434` — Full per-release notes (issues closed, CI run ids, job counts) live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
+<sub>Current release: **v4.4.0** — per-run recall attestation (derivable, never stored), typed knowledge-graph edges (HITL-gated `propose_edge`/`approve_edge`), and a standing LoCoMo recall benchmark — Full per-release notes (issues closed, CI run ids, job counts) live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
 
 ### Substrate Properties
 
@@ -243,7 +243,7 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 ### Transcript JSONL Capture
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
-### MCP Server (83 tools, 8 resources)
+### MCP Server (89 tools, 8 resources)
 Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 89 distinct tools and 8 read-only resources (6 static + 2 templated). The server makes 90 `mcp.tool(...)` registrations, but the consolidated `recall` dispatcher intentionally shadows the base `recall`, so the live surface is 89 distinct tool names. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
 
 ### 74+ Structural Checks + 3024 Unit Tests
@@ -701,7 +701,7 @@ TOTAL: 0 critical | 0 warnings | 16 info
 
 ```
 your-workspace/
-├── mcp_server.py            # MCP server (FastMCP, 83 tools, 8 resources)
+├── mcp_server.py            # MCP server (FastMCP, 89 tools, 8 resources)
 ├── mind-mem.json             # Config
 ├── MEMORY.md                # Protocol rules
 │
@@ -838,7 +838,7 @@ your-workspace/
 | [**Graphlit**](https://www.graphlit.com) | Multimodal ingestion, semantic search, managed platform | Cloud-only, managed service |
 | [**ClawMem**](https://github.com/yoloshii/ClawMem) | Full ML pipeline (cross-encoder + QMD + beam search) | 4.5GB VRAM, 3 GPU processes required |
 | [**MemU**](https://github.com/supermemory/memu) | Hierarchical 3-layer memory, multimodal ingestion, LLM-based retrieval | Requires LLM for extraction and retrieval, no hybrid search |
-| **MIND-Mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 84 MCP tools (incl. MIC/MAP, walkthrough, persona, pipeline-hash) + cross-model consensus audit per release | Lexical recall by default (vector/CE optional) |
+| **MIND-Mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 89 MCP tools (incl. MIC/MAP, walkthrough, persona, pipeline-hash) + cross-model consensus audit per release | Lexical recall by default (vector/CE optional) |
 
 ### Full Feature Matrix
 
@@ -884,7 +884,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | No daemon       |                   —                    |                   —                   |                            —                            |               —                |               —               |                     Yes                     |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
 | GPU required    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                    **4.5GB**                    |                      No                      |     **No**     |
 | Git-friendly    |                   —                    |                   —                   |                            —                            |              Part              |               —               |                      —                      |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
-| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **83 tools**   |
+| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **89 tools**   |
 | MIND kernels    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **16 source**  |
 
 ### The Gap MIND-Mem Fills
@@ -1200,7 +1200,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 ```json
 {
-  "version": "2.8.0",
+  "version": "4.4.0",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,

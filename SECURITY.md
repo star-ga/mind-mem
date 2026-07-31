@@ -4,11 +4,9 @@
 
 | Version | Supported |
 |---------|-----------|
-| 3.2.x   | Yes — current stable |
-| 3.1.x   | Security fixes only |
-| 3.0.x   | Security fixes only |
-| 2.x     | Security fixes only |
-| < 2.0   | No |
+| 4.4.x   | Yes — current stable |
+| 4.0.x – 4.3.x | Security fixes only |
+| < 4.0   | No |
 
 ## Reporting a Vulnerability
 

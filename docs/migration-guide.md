@@ -10,7 +10,7 @@ MIND-Mem is the successor to mem-os. This guide covers the migration path.
 |---------|--------|----------|
 | Dependencies | Multiple | Zero (core) |
 | Search | Basic BM25 | Hybrid BM25 + vector + RRF |
-| MCP Tools | 8 | 18 |
+| MCP Tools | 8 | 89 |
 | Scoring | Fixed | MIND kernel-based |
 | Audit | Basic | Full contradiction/drift scan |
 

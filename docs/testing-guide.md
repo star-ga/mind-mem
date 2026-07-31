@@ -71,4 +71,4 @@ def test_optional():
 Tests run on:
 - Python: 3.10, 3.12, 3.13, 3.14
 - OS: Ubuntu, macOS, Windows
-- Total: 14 CI jobs
+- Total: 12 CI jobs
