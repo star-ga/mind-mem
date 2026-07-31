@@ -168,6 +168,11 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
     used_backend = "scan"
     results: list = []
     hybrid_degraded: dict | None = None
+    # Recorded backend flags — used to *derive* the recall attestation (which
+    # legs actually ran), never a self-declared claim. Default to the BM25-only
+    # shape (vector neither requested nor available) for the sqlite/scan paths.
+    vector_requested = False
+    vector_available = False
 
     if backend in ("hybrid", "auto"):
         try:
@@ -184,6 +189,11 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
             hb = HybridBackend.from_config(config)
             results = hb.search(query, ws, limit=limit, active_only=active_only)
             used_backend = "hybrid"
+            # getattr so a duck-typed backend (tests, alt implementations)
+            # without these flags degrades to the BM25-only attestation shape
+            # instead of raising an AttributeError the recall path won't catch.
+            vector_requested = bool(getattr(hb, "vector_enabled", False))
+            vector_available = bool(getattr(hb, "vector_available", False))
             # Surface an in-band degradation marker: when the vector leg was
             # unavailable / timed out / failed, ``search`` returns BM25-only
             # results tagged with ``.degraded`` so a caller can tell the
@@ -239,6 +249,31 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
             "embedder is unavailable. Results are BM25-only, not hybrid."
         )
 
+    # Per-run recall attestation — a runtime artifact recording *how* this
+    # answer was produced (which legs ran, the effective config hash, the index
+    # anchor, degradation folded in). Derived from the recorded run state, never
+    # self-declared, and NEVER written back to the store — it lives only on this
+    # response. Failure to derive it must never break recall (it is auxiliary),
+    # but is logged rather than swallowed silently.
+    attestation = None
+    try:
+        from mind_mem.recall_attestation import derive_recall_attestation_for_workspace
+
+        attestation = derive_recall_attestation_for_workspace(
+            results,
+            ws,
+            vector_requested=vector_requested,
+            vector_available=vector_available,
+        )
+        # Generalise ``.degraded``: hang the full attestation off the results
+        # object too when it can carry attributes (the hybrid RecallResults).
+        try:
+            results.attestation = attestation
+        except (AttributeError, TypeError):
+            pass
+    except Exception as exc:  # pragma: no cover — defensive; recall must not fail on attestation
+        _log.warning("recall_attestation_derive_failed", query=query, error=str(exc))
+
     try:
         from mind_mem.calibration import make_query_id
 
@@ -268,6 +303,10 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
             f"was not used (reason: {hybrid_degraded.get('reason', 'unknown')}). "
             "Results are BM25-only, not hybrid."
         )
+    # Runtime recall attestation, surfaced next to ``degraded`` (which it
+    # generalises). Response-only: it is never written back to the block store.
+    if attestation is not None:
+        envelope["attestation"] = attestation.to_dict()
     if warnings:
         envelope["warnings"] = warnings
     if config_warnings:

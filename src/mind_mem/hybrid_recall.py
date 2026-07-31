@@ -220,9 +220,17 @@ class RecallResults(list):
     whole point (silent degradation is the bug): a caller can finally tell
     that a "hybrid" recall actually served BM25-only because the vector leg
     was unavailable / timed out / failed.
+
+    ``.attestation`` generalises ``.degraded``: it is the full per-run recall
+    attestation (which legs ran, the effective config hash, the index anchor,
+    plus the degraded marker folded in) when a caller has derived one. It is a
+    runtime artifact only — populated on the response, never written to the
+    store. See :mod:`mind_mem.recall_attestation`. Default ``None`` so callers
+    that never derive one are unaffected.
     """
 
     degraded: dict[str, str] | None = None
+    attestation: Any | None = None
 
 
 def _as_results(items: list[dict], degraded: dict[str, str] | None = None) -> RecallResults:
