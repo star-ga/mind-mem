@@ -2603,8 +2603,8 @@ deadline and invariants do not.
 
 ## Graph-retrieval systems are not memory systems (positioning, prior art observed 2026-07-30)
 
-> A permissively-licensed multi-language AST-graph tool reached ~99k★ in four months
-> and publishes a benchmark table putting itself against dedicated memory systems on
+> A permissively-licensed multi-language AST-graph tool reached very large adoption
+> very fast and publishes a benchmark table putting itself against dedicated memory systems on
 > LOCOMO and LongMemEval. **Idea only — no code adopted, no dependency, no public
 > attribution.** This is a positioning entry, not a feature request: nothing in its
 > engine belongs in mind-mem. Recorded because the comparison it invites is the one
