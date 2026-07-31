@@ -85,7 +85,7 @@ wedge. Every evolution step here MUST route through the existing HITL
 `propose_update`/approval gate — the source-of-truth graph never
 self-modifies. We adopt the connectivity model, not the autonomy.
 
-- [ ] **Typed edge layer over the block store** — first-class
+- [x] **Typed edge layer over the block store** (shipped v4.4.0) — first-class
       `supports / contradicts / refines / supersedes / derived-from`
       edges; relationship-aware recall instead of flat fusion. Cheapest
       high-leverage add; subsumes the existing contradiction-edge work.
@@ -150,7 +150,7 @@ self-modifies. We adopt the connectivity model, not the autonomy.
       Naestro vault as-is — its append-only + provenance-chain guarantee forbids
       in-place rewrite; a correct port appends a superseding block with a
       back-pointer, i.e. a materialized view, not "sleep".
-- [ ] **LoCoMo recall benchmark** — adopt as a standing mind-mem eval so
+- [x] **LoCoMo recall benchmark** (harness shipped v4.4.0; full-corpus run measured on a quiet node) — adopt as a standing mind-mem eval so
       recall quality is a number, not a vibe. **Do first** (cheapest,
       gives a baseline for everything else here).
 
@@ -189,7 +189,7 @@ below, no code, no attribution in public artifacts.)
       auto-committed** — same approval gate as blocks, honoring the Group
       H wedge guardrail (source-of-truth graph never self-modifies).
       Closes the populate-on-demand gap; the single highest-leverage item.
-- [ ] **First-class entity `observations` field** — the one real modeling
+- [x] **First-class entity `observations` field** (shipped v4.4.0, flag-gated) — the one real modeling
       gap vs. the generic pattern: mind-mem entities are bare canonicalized
       strings (`EntityRegistry.resolve`, `knowledge_graph.py:190-212`) with
       no accreted per-entity facts. Add `entities.observations` (small

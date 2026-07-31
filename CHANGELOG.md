@@ -2,6 +2,39 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## v4.4.0 — Recall attestation + LoCoMo benchmark + typed knowledge-graph edges
+
+Three roadmap items land together: a standing recall-quality benchmark, the first
+runtime attestation of a recall result, and a first-class typed edge layer over the
+block store. All three are deterministic (no wall-clock / rand in scored or attested
+paths) and were blind-verified before landing.
+
+* **Recall attestation (`recall_attestation.py`)** — every `recall()` result can now
+  carry a per-run `RecallAttestation`: a *derivable* runtime artifact recording which
+  retrieval legs ran (bm25 / vector / graph / hybrid), the effective config hash, and
+  the degraded state. It is **derived from recorded run signals, never self-declared**,
+  and **never written back to the block store** (a runtime artifact, not a stored
+  score — the same discipline `spec_binding` applies to config attestation). Surfaced
+  in the MCP recall envelope alongside `degraded`; mirrors the existing
+  `fold_attestation` pattern. The degraded-recall marker shipped earlier on this line
+  is now the first named member of this class.
+* **LoCoMo recall benchmark (`bench/locomo_suite.py`)** — a standing eval so recall
+  quality is a number, not a vibe. Reuses the LongMemEval scorer + pluggable adapter
+  registry (bm25_baseline + mind_mem), handles LoCoMo's multi-session conversational
+  shape, ships a committed deterministic fixture (zero external dataset / zero API
+  calls in CI), and enforces the honesty rails (discloses sample size + whether the
+  vector leg was exercised; no fabricated numbers; no competitor comparison). The
+  full-corpus run is measured separately on a quiet node.
+* **Typed edge layer + entity observations (`knowledge_graph.py`)** — first-class
+  `supports / contradicts / refines / supersedes / derived-from` edges over the
+  existing typed triple store (subsumes the prior contradiction edge; write-path edges
+  are HITL-gated proposals, never auto-committed), plus a feature-flagged
+  `entities.observations` field (idempotent migration) so entity-centric multi-hop
+  questions have somewhere to accrete facts.
+
+Backward-compatible: no wire-format or schema break beyond the additive, flag-gated
+`observations` column.
+
 ## v4.3.1 — Honor `OLLAMA_HOST` / configurable ollama endpoint so central-ollama fleet deployments work
 
 **Every ollama endpoint was hardcoded to `http://localhost:11434` with no

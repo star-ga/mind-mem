@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 931 | **Est. tokens:** ~2,024,443
-**Generated:** 2026-07-31 06:13 UTC
+**Files:** 938 | **Est. tokens:** ~2,052,247
+**Generated:** 2026-07-31 06:34 UTC
 
 ## Token Budget Guide
 
@@ -60,18 +60,19 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 170 | ~603,099 |
+| `src/mind_mem/` | 171 | ~613,153 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
-| `src/mind_mem/bench/` | 6 | ~13,946 |
+| `src/mind_mem/bench/` | 7 | ~18,497 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
 | `src/mind_mem/mcp/infra/` | 8 | ~10,495 |
-| `src/mind_mem/mcp/tools/` | 24 | ~59,473 |
+| `src/mind_mem/mcp/tools/` | 24 | ~60,014 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,702 |
 | `src/mind_mem/storage/` | 2 | ~5,519 |
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
-| `src/mind_mem/v4/` | 24 | ~64,921 |
+| `src/mind_mem/v4/` | 24 | ~64,969 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 326 | ~716,735 |
+| `tests/` | 330 | ~728,635 |
+| `tests/fixtures/` | 1 | ~710 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -483,6 +484,7 @@
 - `eval_adapters.py` (~2307 tok, huge) — Concrete retrieval-eval adapters.
 - `eval_scorer.py` (~1122 tok, large) — Dual-protocol retrieval scoring for the eval harness.
 - `__init__.py` (~180 tok, small) — mind-mem benchmark harnesses — scalar metrics over the live corpus.
+- `locomo_suite.py` (~4551 tok, huge) — LoCoMo recall harness — one loop, any adapter, self-asserting.
 - `longmemeval_suite.py` (~3692 tok, huge) — LongMemEval-S consolidation harness — one loop, any adapter, self-asserting.
 - `recompaction_bench.py` (~5395 tok, huge) — Recompaction benchmark — the scalar metric downstream tooling depends on.
 ### `src/mind_mem/`
@@ -545,7 +547,7 @@
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~10495 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `http_transport.py` (~11242 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
-- `hybrid_recall.py` (~13408 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `hybrid_recall.py` (~13525 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `inbox.py` (~3716 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).
 - `ingestion_pipeline.py` (~1958 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~714 tok, large) — # Mind Mem — Memory + Immune System for AI agents
@@ -556,7 +558,7 @@
 - `iterative_recall.py` (~2808 tok, huge) — Iterative chain-of-retrieval for multi-hop evidence (v3.4.0).
 - `kalman_belief.py` (~4219 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kg_fusion.py` (~1798 tok, huge) — Typed knowledge-graph fusion into recall (opt-in, default OFF).
-- `knowledge_graph.py` (~6207 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `knowledge_graph.py` (~11063 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1183 tok, large) — # Copyright 2026 STARGA, Inc.
 - `lineage_staleness.py` (~1916 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
 - `llm_extractor.py` (~7491 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
@@ -604,7 +606,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~4766 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~534 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~5915 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~6456 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `walkthrough_persona.py` (~1493 tok, large) — MCP wrapping for v3.9 walkthrough + persona projection.
 ### `src/mind_mem/`
@@ -642,6 +644,7 @@
 - `quality_gate.py` (~2253 tok, huge) — Deterministic block quality gate (v3.11.0, Pattern 2).
 - `query_expansion.py` (~4680 tok, huge) — Multi-query expansion for improved recall.
 - `query_planner.py` (~2865 tok, huge) — Query decomposition for multi-hop questions (v3.3.0 Tier 1 #1).
+- `recall_attestation.py` (~5081 tok, huge) — Per-run recall attestation — runtime evidence of *how* an answer was produced.
 - `recall_cache.py` (~2938 tok, huge) — v3.2.0 — distributed recall result cache (Redis + in-process LRU fallback).
 - `_recall_constants.py` (~2734 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
 - `_recall_context.py` (~2601 tok, huge) — Recall engine context packing — post-retrieval augmentation rules."""
@@ -723,7 +726,7 @@
 - `consolidation_worker.py` (~2427 tok, huge) — v4 consolidation worker (Group A — MemGPT-pattern).
 - `embedding_pipeline.py` (~1500 tok, huge) — v4 embedding auto-derivation pipeline (Group A — closes the
 - `eviction.py` (~3008 tok, huge) — v4 eviction policies (Group A — long-term decay).
-- `feature_flags.py` (~1533 tok, huge) — v4.0 feature-flag registry.
+- `feature_flags.py` (~1581 tok, huge) — v4.0 feature-flag registry.
 - `federation_client.py` (~3468 tok, huge) — Federation wire-transport client for mind-mem v4.
 - `federation.py` (~6059 tok, huge) — v4 federated cross-agent consistency (Group D).
 - `health.py` (~1884 tok, huge) — v4 health-check surface (round 4 audit, DeepSeek 9.75→10 gap).
@@ -767,6 +770,9 @@
 - `TASKS.md` (~83 tok, small) — TASKS — MIND-Mem v1.0
 - `TASKS_PROPOSED.md` (~33 tok, tiny) — TASKS_PROPOSED — MIND-Mem v1.0
 - `tools.md` (~33 tok, tiny) — TOOLS — MIND-Mem v1.0
+### `tests/fixtures/`
+
+- `locomo_mini.json` (~710 tok, large)
 ### `tests/integration/`
 
 - `__init__.py` (~0 tok, tiny)
@@ -867,6 +873,7 @@
 - `test_edge_cases.py` (~4055 tok, huge) — Edge-case and stress tests for mind-mem — block_parser, recall, and MCP server."""
 - `test_encryption.py` (~1732 tok, huge) — Tests for mind-mem encryption at rest."""
 - `test_entity_ingest.py` (~4091 tok, huge) — Tests for the entity_ingest module — extraction, filtering, signal generation."""
+- `test_entity_observations.py` (~1975 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_entity_prefetch.py` (~1674 tok, huge) — v3.3.0 Tier 3 #8 — entity-graph prefetch.
 - `test_enums.py` (~534 tok, large) — Tests for centralised enums (mind_mem.enums)."""
 - `test_error_codes.py` (~2394 tok, huge) — Tests for mind-mem Error Codes module."""
@@ -935,6 +942,7 @@
 - `test_llm_extractor_gate.py` (~2214 tok, huge) — Backend wiring — :func:`mind_mem.llm_extractor._gate_check_local`.
 - `test_llm_extractor.py` (~1820 tok, huge) — Tests for the optional LLM entity/fact extractor module."""
 - `test_llm_noise_profile.py` (~2354 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_locomo_suite.py` (~2395 tok, huge) — Tests for the LoCoMo recall harness (self-asserting adapters).
 - `test_maintenance_migrate.py` (~710 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_mcp_arch_mind_tools.py` (~2312 tok, huge) — Tests for the arch-mind MCP tool wrapper.
 - `test_mcp_db_error_backstop.py` (~699 tok, large) — The MCP tool decorator must not let a backend DB error crash the server.
@@ -997,6 +1005,7 @@
 - `test_query_expansion_multi_provider.py` (~1237 tok, large) — Tests for multi-provider LLM query expansion (OpenAI-compatible endpoints)."""
 - `test_query_expansion.py` (~3809 tok, huge) — Tests for query_expansion.py -- multi-query expansion for improved recall."""
 - `test_query_planner.py` (~1348 tok, large) — v3.3.0 Tier 1 #1 — query decomposition for multi-hop questions.
+- `test_recall_attestation.py` (~4195 tok, huge) — Tests for the per-run recall attestation (recall_attestation.py).
 - `test_recall_cache.py` (~1916 tok, huge) — Tests for v3.2.0 distributed recall cache (LRU + Redis)."""
 - `test_recall_cli_workspace.py` (~2346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_concurrent.py` (~344 tok, medium) — Tests for concurrent recall queries."""
@@ -1076,6 +1085,7 @@
 - `test_transcript_capture.py` (~3235 tok, huge) — Tests for transcript_capture.py — zero external deps (stdlib unittest)."""
 - `test_truth_score.py` (~1520 tok, huge) — v3.3.0 — probabilistic truth score.
 - `test_typed_edges_group_h.py` (~2870 tok, huge) — Tests for Group H typed-edge additions: supports, derived_from, edge_aware_boost.
+- `test_typed_edges.py` (~3335 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_uncertainty_propagation.py` (~2158 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_unicode_edge_cases.py` (~2440 tok, huge) — Tests for Unicode and edge case handling across mind-mem modules."""
 - `test_v28_completion.py` (~4622 tok, huge) — # Copyright 2026 STARGA, Inc.
