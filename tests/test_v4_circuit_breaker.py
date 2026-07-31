@@ -479,3 +479,152 @@ def test_integration_with_fallback_pattern(cb_on: Path) -> None:
     assert b.state() is CircuitState.OPEN
     # Third call: short-circuits, fallback covers.
     assert embed_with_fallback() == [0.0] * 8
+
+
+# ---------------------------------------------------------------------------
+# Rolling failure window (failure_window_s) — subsumes ad-hoc windowed breaker
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_window_none_preserves_consecutive_default() -> None:
+    """Unset failure_window_s == the original consecutive behaviour."""
+    b = CircuitBreaker()
+    assert b.failure_window_s is None
+
+
+@pytest.mark.unit
+def test_window_rejects_non_positive() -> None:
+    with pytest.raises(ValueError, match="failure_window_s"):
+        CircuitBreaker(failure_window_s=0.0)
+    with pytest.raises(ValueError, match="failure_window_s"):
+        CircuitBreaker(failure_window_s=-1.0)
+
+
+@pytest.mark.unit
+def test_window_opens_after_n_failures_in_window(cb_on: Path) -> None:
+    """N failures inside the window trip OPEN (open-after-N-in-window)."""
+    b = CircuitBreaker(failure_threshold=3, recovery_timeout=10.0, failure_window_s=5.0)
+    for _ in range(2):
+        with pytest.raises(RuntimeError):
+            b.call(_raises)
+    assert b.state() is CircuitState.CLOSED
+    assert b.failure_count() == 2
+    with pytest.raises(RuntimeError):
+        b.call(_raises)
+    assert b.state() is CircuitState.OPEN
+    with pytest.raises(CircuitOpenError):
+        b.call(lambda: 1)
+
+
+@pytest.mark.unit
+def test_window_expiry_stale_failures_do_not_trip(cb_on: Path) -> None:
+    """Failures spaced wider than the window age out and never accumulate
+    to the threshold (window expiry)."""
+    b = CircuitBreaker(failure_threshold=3, recovery_timeout=10.0, failure_window_s=0.1)
+    for _ in range(5):
+        with pytest.raises(RuntimeError):
+            b.call(_raises)
+        # Each failure is older than the window by the next one — the
+        # prior timestamps are pruned, so the count never reaches 3.
+        assert b.failure_count() == 1
+        assert b.state() is CircuitState.CLOSED
+        time.sleep(0.15)
+    assert b.state() is CircuitState.CLOSED
+
+
+@pytest.mark.unit
+def test_window_success_resets_the_window(cb_on: Path) -> None:
+    """A success clears in-window failures — only failures without an
+    intervening success accumulate."""
+    b = CircuitBreaker(failure_threshold=3, recovery_timeout=10.0, failure_window_s=10.0)
+    for _ in range(2):
+        with pytest.raises(RuntimeError):
+            b.call(_raises)
+    assert b.failure_count() == 2
+    b.call(lambda: 1)  # success clears the window
+    assert b.failure_count() == 0
+    # Two more failures still do NOT trip (window was reset by the success).
+    for _ in range(2):
+        with pytest.raises(RuntimeError):
+            b.call(_raises)
+    assert b.state() is CircuitState.CLOSED
+
+
+@pytest.mark.unit
+def test_window_half_open_then_close(cb_on: Path) -> None:
+    """Windowed breaker still recovers via HALF_OPEN → CLOSED."""
+    b = CircuitBreaker(failure_threshold=2, recovery_timeout=0.1, failure_window_s=5.0)
+    for _ in range(2):
+        with pytest.raises(RuntimeError):
+            b.call(_raises)
+    assert b.state() is CircuitState.OPEN
+    time.sleep(0.15)
+    assert b.call(lambda: "ok") == "ok"  # HALF_OPEN probe succeeds → CLOSED
+    assert b.state() is CircuitState.CLOSED
+    assert b.failure_count() == 0
+
+
+@pytest.mark.unit
+def test_window_half_open_failure_reopens_then_recloses(cb_on: Path) -> None:
+    """Windowed breaker: a failed probe reopens; a later probe re-closes
+    (close/reopen)."""
+    b = CircuitBreaker(failure_threshold=2, recovery_timeout=0.1, failure_window_s=5.0)
+    for _ in range(2):
+        with pytest.raises(RuntimeError):
+            b.call(_raises)
+    assert b.state() is CircuitState.OPEN
+    time.sleep(0.15)
+    # HALF_OPEN probe fails → re-OPEN for a full window.
+    with pytest.raises(RuntimeError):
+        b.call(_raises)
+    assert b.state() is CircuitState.OPEN
+    with pytest.raises(CircuitOpenError):
+        b.call(lambda: 1)
+    # After recovery again, a successful probe re-closes.
+    time.sleep(0.15)
+    assert b.call(lambda: "ok") == "ok"
+    assert b.state() is CircuitState.CLOSED
+
+
+@pytest.mark.unit
+def test_window_trip_and_reset_manual(cb_on: Path) -> None:
+    """Manual trip()/reset() behave in windowed mode too."""
+    b = CircuitBreaker(failure_threshold=3, recovery_timeout=10.0, failure_window_s=5.0)
+    b.trip()
+    assert b.state() is CircuitState.OPEN
+    b.reset()
+    assert b.state() is CircuitState.CLOSED
+    assert b.failure_count() == 0
+    assert b.call(lambda: 1) == 1
+
+
+# ---------------------------------------------------------------------------
+# guarded_call — flag-free entry point for always-on internal breakers
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_guarded_call_works_when_flag_off(cb_off: Path) -> None:
+    """guarded_call runs WITHOUT the v4 feature flag (call() would raise).
+
+    This is what lets the always-on embedder breaker protect the recall
+    path regardless of the optional circuit_breaker surface being enabled.
+    """
+    b = CircuitBreaker(failure_threshold=2, recovery_timeout=10.0)
+    # call() is gated...
+    with pytest.raises(FeatureDisabledError):
+        b.call(lambda: 1)
+    # ...guarded_call is not.
+    assert b.guarded_call(lambda x: x + 1, 4) == 5
+
+
+@pytest.mark.unit
+def test_guarded_call_trips_and_short_circuits(cb_off: Path) -> None:
+    b = CircuitBreaker(failure_threshold=2, recovery_timeout=10.0, failure_window_s=5.0)
+    for _ in range(2):
+        with pytest.raises(RuntimeError):
+            b.guarded_call(_raises)
+    assert b.state() is CircuitState.OPEN
+    with pytest.raises(CircuitOpenError):
+        b.guarded_call(lambda: 1)

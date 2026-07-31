@@ -14,6 +14,14 @@ Three-state machine:
                  increment a counter; after ``failure_threshold``
                  consecutive failures, the breaker trips OPEN.
 
+                 With the optional ``failure_window_s`` set, the counter
+                 is instead a *rolling window*: only failures observed in
+                 the last ``failure_window_s`` seconds count toward the
+                 threshold (older ones age out), so ``failure_threshold``
+                 failures *within the window* trip OPEN. Left unset
+                 (default), the pure consecutive-failure behaviour above
+                 is preserved unchanged.
+
     OPEN         every call short-circuits with
                  :class:`CircuitOpenError` for the next
                  ``recovery_timeout`` seconds. No load on the failing
@@ -119,22 +127,41 @@ class CircuitBreaker:
                                  recovery_timeout=60.0,
                                  half_open_probes=3)
 
+    ``failure_window_s`` (optional) switches the CLOSED-state failure
+    counter from *consecutive* to a *rolling time window*: only failures
+    in the last ``failure_window_s`` seconds count toward the threshold.
+    Left ``None`` (default), the consecutive-failure behaviour is
+    preserved. This lets one breaker subsume ad-hoc windowed breakers
+    (e.g. "trip after N failures within W seconds")::
+
+        breaker = CircuitBreaker(failure_threshold=3,
+                                 recovery_timeout=60.0,
+                                 failure_window_s=60.0)
+
     Or globally via ``mind-mem.json``::
 
         "v4": {"circuit_breaker": {"enabled": true,
                                    "failure_threshold": 5,
                                    "recovery_timeout_s": 30.0,
-                                   "half_open_probes": 1}}
+                                   "half_open_probes": 1,
+                                   "failure_window_s": null}}
     """
 
     failure_threshold: int = DEFAULT_FAILURE_THRESHOLD
     recovery_timeout: float = DEFAULT_RECOVERY_TIMEOUT_S
     half_open_probes: int = DEFAULT_HALF_OPEN_PROBES
+    #: Optional rolling-window width (seconds). ``None`` => consecutive
+    #: counting (the original behaviour); a positive value => only
+    #: failures in the last window count toward ``failure_threshold``.
+    failure_window_s: float | None = None
 
     _state: CircuitState = CircuitState.CLOSED
     _failure_count: int = 0
     _success_count_in_half_open: int = 0
     _opened_at: float = 0.0
+    #: Monotonic timestamps of in-window CLOSED-state failures. Only
+    #: populated / consulted when ``failure_window_s`` is set.
+    _failure_times: list[float] = field(default_factory=list, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def __post_init__(self) -> None:
@@ -144,6 +171,8 @@ class CircuitBreaker:
             raise ValueError(f"recovery_timeout must be >= 0 (got {self.recovery_timeout})")
         if self.half_open_probes < 1:
             raise ValueError(f"half_open_probes must be >= 1 (got {self.half_open_probes})")
+        if self.failure_window_s is not None and self.failure_window_s <= 0:
+            raise ValueError(f"failure_window_s must be > 0 when set (got {self.failure_window_s})")
 
     # -----------------------------------------------------------------
     # Read-only state inspection
@@ -157,12 +186,19 @@ class CircuitBreaker:
             return self._state
 
     def failure_count(self) -> int:
-        """Consecutive failures observed in CLOSED state.
+        """CLOSED-state failures counted toward the threshold.
 
-        Reset to zero on every success and on every state transition.
-        Does not include failures observed in HALF_OPEN.
+        In consecutive mode (``failure_window_s`` unset) this is the run
+        of failures since the last success / transition. In windowed mode
+        it is the number of failures observed in the last
+        ``failure_window_s`` seconds (stale ones are pruned on read).
+        Reset to zero on every success and on every state transition;
+        does not include failures observed in HALF_OPEN.
         """
         with self._lock:
+            if self.failure_window_s is not None:
+                self._prune_failures_locked(time.monotonic())
+                self._failure_count = len(self._failure_times)
             return self._failure_count
 
     def time_until_retry(self) -> float:
@@ -188,6 +224,7 @@ class CircuitBreaker:
         with self._lock:
             self._state = CircuitState.CLOSED
             self._failure_count = 0
+            self._failure_times.clear()
             self._success_count_in_half_open = 0
             self._opened_at = 0.0
 
@@ -196,9 +233,12 @@ class CircuitBreaker:
         external monitoring sees the dependency is sick before the
         breaker reaches its failure threshold (fail-fast)."""
         with self._lock:
+            now = time.monotonic()
             self._state = CircuitState.OPEN
-            self._opened_at = time.monotonic()
+            self._opened_at = now
             self._failure_count = self.failure_threshold
+            if self.failure_window_s is not None:
+                self._failure_times = [now] * self.failure_threshold
             self._success_count_in_half_open = 0
 
     # -----------------------------------------------------------------
@@ -213,8 +253,25 @@ class CircuitBreaker:
         re-raised (callers see the original exception, not a wrapper)
         unless the breaker is OPEN, in which case ``fn`` is never
         called and ``CircuitOpenError`` is raised pre-emptively.
+
+        This is the v4-surface entry point: it requires the
+        ``circuit_breaker`` feature flag. Internal always-on callers that
+        must be protected regardless of the flag use :meth:`guarded_call`.
         """
         require_enabled(FLAG)
+        return self.guarded_call(fn, *args, **kwargs)
+
+    def guarded_call(self, fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+        """Breaker-guarded call WITHOUT the v4 feature-flag gate.
+
+        Identical semantics to :meth:`call` (state check → invoke →
+        record success/failure → re-raise original exception; raise
+        :class:`CircuitOpenError` while OPEN) but never consults
+        :func:`require_enabled`. Intended for internal, always-on
+        breakers — e.g. the embedder fallback chain — that must
+        short-circuit a dead dependency even when the optional
+        ``circuit_breaker`` surface is disabled.
+        """
         # Decide state under the lock; release before calling.
         with self._lock:
             self._maybe_half_open_locked()
@@ -245,6 +302,18 @@ class CircuitBreaker:
             self._state = CircuitState.HALF_OPEN
             self._success_count_in_half_open = 0
 
+    def _prune_failures_locked(self, now: float) -> None:
+        """Drop failure timestamps older than the rolling window.
+
+        No-op in consecutive mode (``failure_window_s`` unset). Caller
+        holds the lock.
+        """
+        if self.failure_window_s is None:
+            return
+        cutoff = now - self.failure_window_s
+        if self._failure_times and self._failure_times[0] <= cutoff:
+            self._failure_times = [t for t in self._failure_times if t > cutoff]
+
     def _record_success(self) -> None:
         with self._lock:
             if self._state is CircuitState.HALF_OPEN:
@@ -252,11 +321,14 @@ class CircuitBreaker:
                 if self._success_count_in_half_open >= self.half_open_probes:
                     self._state = CircuitState.CLOSED
                     self._failure_count = 0
+                    self._failure_times.clear()
                     self._success_count_in_half_open = 0
             else:
-                # Reset failure run on every CLOSED success — only
-                # *consecutive* failures should trip the breaker.
+                # Reset the failure run/window on every CLOSED success —
+                # only failures *without an intervening success* should
+                # trip the breaker.
                 self._failure_count = 0
+                self._failure_times.clear()
 
     def _record_failure(self) -> None:
         with self._lock:
@@ -266,7 +338,13 @@ class CircuitBreaker:
                 self._opened_at = time.monotonic()
                 self._success_count_in_half_open = 0
                 return
-            self._failure_count += 1
+            if self.failure_window_s is None:
+                self._failure_count += 1
+            else:
+                now = time.monotonic()
+                self._prune_failures_locked(now)
+                self._failure_times.append(now)
+                self._failure_count = len(self._failure_times)
             if self._failure_count >= self.failure_threshold:
                 self._state = CircuitState.OPEN
                 self._opened_at = time.monotonic()
@@ -282,6 +360,7 @@ def circuit_breaker(
     failure_threshold: int = DEFAULT_FAILURE_THRESHOLD,
     recovery_timeout: float = DEFAULT_RECOVERY_TIMEOUT_S,
     half_open_probes: int = DEFAULT_HALF_OPEN_PROBES,
+    failure_window_s: float | None = None,
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Decorator factory — wraps a function in a per-function breaker.
 
@@ -304,6 +383,7 @@ def circuit_breaker(
         failure_threshold=failure_threshold,
         recovery_timeout=recovery_timeout,
         half_open_probes=half_open_probes,
+        failure_window_s=failure_window_s,
     )
 
     def _decorate(fn: Callable[..., T]) -> Callable[..., T]:
@@ -343,6 +423,7 @@ def default_breaker() -> CircuitBreaker:
                 failure_threshold=cfg["failure_threshold"],
                 recovery_timeout=cfg["recovery_timeout_s"],
                 half_open_probes=cfg["half_open_probes"],
+                failure_window_s=cfg["failure_window_s"],
             )
         return _default_breaker
 
@@ -370,4 +451,14 @@ def _load_config() -> dict[str, Any]:
             out[key] = caster(v)
         except (TypeError, ValueError):
             out[key] = default
+    # Optional rolling window: absent / null => None (consecutive mode).
+    window = raw.get("failure_window_s", None)
+    if window is None:
+        out["failure_window_s"] = None
+    else:
+        try:
+            parsed = float(window)
+            out["failure_window_s"] = parsed if parsed > 0 else None
+        except (TypeError, ValueError):
+            out["failure_window_s"] = None
     return out

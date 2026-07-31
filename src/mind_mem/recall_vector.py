@@ -43,6 +43,7 @@ import math
 import os
 import struct
 import sys
+import threading
 from typing import Any
 
 # Import helpers from recall.py
@@ -50,6 +51,7 @@ from .block_parser import parse_file
 from .corpus_registry import CORPUS_DIRS
 from .enums import TaskStatus
 from .observability import get_logger, metrics, timed
+from .v4.circuit_breaker import CircuitBreaker, CircuitOpenError
 from .recall import (
     CORPUS_FILES,
     RecallBackend,
@@ -65,6 +67,17 @@ _log = get_logger("recall_vector")
 # must degrade to BM25 on a cold/slow/unreachable embedder rather than block
 # for minutes; override per-workspace via recall.embed_timeout_seconds.
 _DEFAULT_EMBED_TIMEOUT_SECONDS = 8.0
+
+# Per-provider embedding circuit-breaker tunables. The embedding fallback
+# chain (ollama -> llama_cpp -> fastembed -> sentence-transformers) guards
+# each provider with the generic v4 CircuitBreaker so a repeatedly-failing
+# provider is short-circuited instead of hammered on every recall. These
+# values reproduce the previous ad-hoc breaker (trip after 3 failures, hold
+# open ~60s) and add a rolling 60s window so isolated, well-spaced failures
+# no longer accumulate into a trip.
+_EMBED_CB_THRESHOLD = 3
+_EMBED_CB_RECOVERY_S = 60.0
+_EMBED_CB_WINDOW_S = 60.0
 
 
 def _embed_timeout_seconds(config: dict | None) -> float:
@@ -160,8 +173,13 @@ class VectorBackend(RecallBackend):
         self.pinecone_index_name = str(config.get("pinecone_index", "mind-mem"))
         self.pinecone_namespace = str(config.get("pinecone_namespace", "default"))
 
-        # Circuit breaker state for embedding fallback chain
-        self._provider_failures: dict[str, tuple[int, float]] = {}
+        # Circuit breakers for the embedding fallback chain — one generic
+        # v4 CircuitBreaker per provider (created lazily). Driven via
+        # ``guarded_call`` so the protection is always on, independent of
+        # the optional ``circuit_breaker`` v4 feature flag. Replaces the
+        # previous ad-hoc windowed breaker (``_provider_failures`` dict).
+        self._provider_breakers: dict[str, CircuitBreaker] = {}
+        self._provider_breakers_lock = threading.Lock()
         _log.info("vector_backend_init", provider=self.provider, model=self.model_name)
 
     # ------------------------------------------------------------------
@@ -488,65 +506,82 @@ class VectorBackend(RecallBackend):
         metrics.inc("embeddings_generated", len(texts))
         return all_embeddings
 
+    def _provider_breaker(self, provider: str) -> CircuitBreaker:
+        """Get-or-create the circuit breaker for one embedding provider.
+
+        Thread-safe lazy construction — the embedding path runs under the
+        hybrid parallel pool and the multi-query expansion pool, so two
+        threads may race to create the same provider's breaker.
+        """
+        breaker = self._provider_breakers.get(provider)
+        if breaker is not None:
+            return breaker
+        with self._provider_breakers_lock:
+            breaker = self._provider_breakers.get(provider)
+            if breaker is None:
+                breaker = CircuitBreaker(
+                    failure_threshold=_EMBED_CB_THRESHOLD,
+                    recovery_timeout=_EMBED_CB_RECOVERY_S,
+                    failure_window_s=_EMBED_CB_WINDOW_S,
+                )
+                self._provider_breakers[provider] = breaker
+        return breaker
+
     def _embed_for_provider(self, texts: list[str]) -> list[list[float]]:
-        """Route embedding to configured backend with fallback chain + circuit breaker."""
-        import time
+        """Route embedding to the configured backend with a fallback chain,
+        each provider guarded by its own circuit breaker.
 
-        _CB_THRESHOLD = 3
-        _CB_COOLDOWN = 60.0  # seconds
-
-        def _is_tripped(provider: str) -> bool:
-            if provider not in self._provider_failures:
-                return False
-            count, last_fail = self._provider_failures[provider]
-            if count >= _CB_THRESHOLD:
-                if time.time() - last_fail < _CB_COOLDOWN:
-                    return True
-                # Cooldown expired — reset
-                del self._provider_failures[provider]
-            return False
-
-        def _record_failure(provider: str) -> None:
-            count, _ = self._provider_failures.get(provider, (0, 0))
-            self._provider_failures[provider] = (count + 1, time.time())
-
-        def _record_success(provider: str) -> None:
-            self._provider_failures.pop(provider, None)
-
+        The generic v4 :class:`CircuitBreaker` (3 failures within a 60s
+        window trips OPEN; ~60s recovery) short-circuits a provider that
+        is repeatedly failing so a dead embedder is not re-hit on every
+        recall. A tripped or failing provider falls through to the next
+        one in the chain; every fall-through is logged loudly — the
+        degradation is never silent. If the whole chain is exhausted, the
+        final sentence-transformers fallback runs unguarded and any
+        exception propagates so the caller (the vector leg) can mark the
+        recall degraded rather than quietly return nothing.
+        """
         backend = self.config.get("onnx_backend", True)
 
-        # Try Ollama first (GPU-accelerated, fastest for local)
-        if not _is_tripped("ollama"):
+        def _try(provider: str, fn) -> list[list[float]] | None:
+            breaker = self._provider_breaker(provider)
             try:
-                result = self.embed_ollama(texts)
-                _record_success("ollama")
-                return result
+                return breaker.guarded_call(fn, texts)
+            except CircuitOpenError as exc:
+                # Breaker OPEN: skip this provider without hitting it, but
+                # say so — a short-circuited leg is a degradation, mark it.
+                _log.warning(
+                    "embed_provider_breaker_open",
+                    provider=provider,
+                    retry_after=round(exc.retry_after, 2),
+                    fallback="next_provider",
+                )
+                return None
             except Exception as e:
-                _record_failure("ollama")
-                _log.warning("ollama_embed_failed_fallback", error=str(e))
+                _log.warning(
+                    "embed_provider_failed_fallback",
+                    provider=provider,
+                    error=str(e),
+                )
+                return None
+
+        # Try Ollama first (GPU-accelerated, fastest for local)
+        result = _try("ollama", self.embed_ollama)
+        if result is not None:
+            return result
 
         # Try llama_cpp if configured
         if backend == "llama_cpp" or str(backend).lower() == "llama_cpp":
-            if not _is_tripped("llama_cpp"):
-                try:
-                    result = self.embed_llama_cpp(texts)
-                    _record_success("llama_cpp")
-                    return result
-                except Exception as e:
-                    _record_failure("llama_cpp")
-                    _log.warning("llama_cpp_embed_failed_fallback_fastembed", error=str(e))
+            result = _try("llama_cpp", self.embed_llama_cpp)
+            if result is not None:
+                return result
 
         # Try fastembed (ONNX on CPU)
-        if not _is_tripped("fastembed"):
-            try:
-                result = self.embed_fastembed(texts)
-                _record_success("fastembed")
-                return result
-            except (ImportError, Exception) as e:
-                _record_failure("fastembed")
-                _log.warning("fastembed_failed_fallback_sentence_transformers", error=str(e))
+        result = _try("fastembed", self.embed_fastembed)
+        if result is not None:
+            return result
 
-        # Final fallback: sentence-transformers
+        # Final fallback: sentence-transformers (unguarded last resort).
         return self.embed(texts)
 
     def _sqlite_vec_db_path(self, workspace: str) -> str:

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 927 | **Est. tokens:** ~2,010,077
-**Generated:** 2026-07-31 04:46 UTC
+**Files:** 927 | **Est. tokens:** ~2,013,767
+**Generated:** 2026-07-31 05:24 UTC
 
 ## Token Budget Guide
 
@@ -59,7 +59,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 170 | ~601,921 |
+| `src/mind_mem/` | 170 | ~602,412 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 6 | ~13,430 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
@@ -68,9 +68,9 @@
 | `src/mind_mem/skill_opt/` | 11 | ~13,702 |
 | `src/mind_mem/storage/` | 2 | ~5,519 |
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
-| `src/mind_mem/v4/` | 24 | ~63,748 |
+| `src/mind_mem/v4/` | 24 | ~64,921 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 326 | ~712,925 |
+| `tests/` | 326 | ~714,951 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -645,7 +645,7 @@
 - `_recall_scoring.py` (~3715 tok, huge) — Recall engine scoring — BM25F helper, date scores, graph boosting, negation, date proximity, categories."""
 - `_recall_temporal.py` (~2044 tok, huge) — Recall engine temporal filtering — resolve relative time references and filter blocks."""
 - `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
-- `recall_vector.py` (~15929 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
+- `recall_vector.py` (~16420 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `_recall_workspace.py` (~1958 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
 - `rerank_ensemble.py` (~3364 tok, huge) — Reranker ensemble via Borda count (v3.3.0 Tier 4 #9).
@@ -709,7 +709,7 @@
 - `block_kinds.py` (~3123 tok, huge) — v4 block-kind taxonomy (Group B: knowledge graph).
 - `block_metadata.py` (~3410 tok, huge) — v4 block metadata + schema-validation hooks.
 - `block_versioning.py` (~1684 tok, huge) — Block versioning + time-travel — reconstruct what a block said, and when.
-- `circuit_breaker.py` (~3390 tok, huge) — v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10 gap).
+- `circuit_breaker.py` (~4563 tok, huge) — v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10 gap).
 - `cognitive_kernel.py` (~2375 tok, huge) — v4 Cognitive Mind Kernel — composable retrieval strategies (Group A).
 - `consolidation_worker.py` (~2427 tok, huge) — v4 consolidation worker (Group A — MemGPT-pattern).
 - `embedding_pipeline.py` (~1500 tok, huge) — v4 embedding auto-derivation pipeline (Group A — closes the
@@ -1021,7 +1021,7 @@
 - `test_recall_tags.py` (~320 tok, medium) — Tests for tag-based recall."""
 - `test_recall_temporal.py` (~2800 tok, huge) — Tests for _recall_temporal.py — time-aware hard filters for temporal queries."""
 - `test_recall_time_bounded.py` (~1965 tok, huge) — Regression tests for time-bounded recall (roadmap v4.0.0 Group E).
-- `test_recall_vector.py` (~4901 tok, huge) — Tests for recall_vector.py — VectorBackend semantic search."""
+- `test_recall_vector.py` (~5499 tok, huge) — Tests for recall_vector.py — VectorBackend semantic search."""
 - `test_recompaction_bench.py` (~5753 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_recompaction.py` (~1962 tok, huge) — Tests for recompaction.py — iterative re-compression to a fixed point.
 - `test_rerank_debug.py` (~342 tok, medium) — Tests for rerank debug mode."""
@@ -1074,7 +1074,7 @@
 - `test_v34_features.py` (~2993 tok, huge) — Tests for v3.4.0 retrieval features.
 - `test_v4_block_kinds.py` (~4112 tok, huge) — Tests for the v4 block-kind taxonomy module."""
 - `test_v4_block_versioning.py` (~3007 tok, huge) — Tests for v4 block versioning + time-travel (Group B, ``v4.self_editing``).
-- `test_v4_circuit_breaker.py` (~3770 tok, huge) — Tests for v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10)."""
+- `test_v4_circuit_breaker.py` (~5198 tok, huge) — Tests for v4 circuit breaker (round 5 audit, Mistral + GLM 9.9→10)."""
 - `test_v4_cognitive_kernel.py` (~2770 tok, huge) — Tests for the v4 Cognitive Mind Kernel registry + dispatcher."""
 - `test_v4_concurrency.py` (~2325 tok, huge) — v4 concurrency / fuzz tests.
 - `test_v4_federation_wire.py` (~2585 tok, huge) — Wire-transport tests for v4 federation.

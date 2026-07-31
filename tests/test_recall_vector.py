@@ -529,18 +529,74 @@ class TestDimensionMismatch:
 
 
 class TestCircuitBreaker:
-    """Test embedding provider circuit breaker state."""
+    """Embedding fallback chain guarded by the generic v4 CircuitBreaker.
+
+    The ad-hoc ``_provider_failures`` windowed breaker was retired in
+    favour of one :class:`CircuitBreaker` per provider (rolling 60s
+    window, trips after 3 failures). These tests pin the wiring: lazy
+    per-provider breakers, always-on protection (no v4 flag needed via
+    ``guarded_call``), a tripped provider skipped in the chain, and no
+    silent masking of a total embed failure.
+    """
 
     def test_initial_state_empty(self):
         vb = _make_backend()
-        assert vb._provider_failures == {}
+        assert vb._provider_breakers == {}
 
-    def test_failures_tracked_across_calls(self):
-        """Circuit breaker state persists on the backend instance."""
+    def test_breaker_created_lazily_per_provider(self):
+        from mind_mem.v4.circuit_breaker import CircuitBreaker
+        from mind_mem.v4.circuit_breaker import CircuitState
+
         vb = _make_backend()
-        import time
+        b = vb._provider_breaker("ollama")
+        assert isinstance(b, CircuitBreaker)
+        assert b.state() is CircuitState.CLOSED
+        # Tuned to subsume the retired ad-hoc breaker.
+        assert b.failure_threshold == 3
+        assert b.failure_window_s == 60.0
+        # Same instance is returned on repeat (state persists).
+        assert vb._provider_breaker("ollama") is b
+        # Distinct providers get distinct breakers.
+        assert vb._provider_breaker("fastembed") is not b
 
-        vb._provider_failures["test"] = (3, time.time())
-        assert "test" in vb._provider_failures
-        count, _ = vb._provider_failures["test"]
-        assert count == 3
+    def test_fallback_chain_skips_tripped_provider(self, monkeypatch):
+        """A tripped ollama breaker is short-circuited; the chain falls
+        through to fastembed WITHOUT calling embed_ollama again."""
+        vb = _make_backend()
+        calls: list[str] = []
+
+        def _ollama(_texts):
+            calls.append("ollama")
+            raise RuntimeError("ollama down")
+
+        def _fastembed(_texts):
+            calls.append("fastembed")
+            return [[0.1, 0.2, 0.3]]
+
+        monkeypatch.setattr(vb, "embed_ollama", _ollama)
+        monkeypatch.setattr(vb, "embed_fastembed", _fastembed)
+
+        # Trip ollama: 3 failures within the window.
+        vb._provider_breaker("ollama").trip()
+        result = vb._embed_for_provider(["q"])
+
+        assert result == [[0.1, 0.2, 0.3]]
+        # ollama is OPEN → never invoked; fastembed served the request.
+        assert "ollama" not in calls
+        assert "fastembed" in calls
+
+    def test_total_failure_propagates_not_masked(self, monkeypatch):
+        """When every provider (incl. the final sentence-transformers
+        fallback) fails, the exception PROPAGATES — never a silent []
+        that would let a caller mistake a dead embedder for empty."""
+        vb = _make_backend()
+
+        def _boom(*_a, **_k):
+            raise RuntimeError("provider down")
+
+        monkeypatch.setattr(vb, "embed_ollama", _boom)
+        monkeypatch.setattr(vb, "embed_fastembed", _boom)
+        monkeypatch.setattr(vb, "embed", _boom)
+
+        with pytest.raises(RuntimeError, match="provider down"):
+            vb._embed_for_provider(["q"])
