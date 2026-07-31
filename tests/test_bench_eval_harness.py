@@ -20,6 +20,7 @@ from mind_mem.bench.longmemeval_suite import (
     render_scorecard,
     resolve_data_path,
     run_suite,
+    stratified_sample,
     write_ndjson,
 )
 
@@ -218,6 +219,43 @@ def test_run_suite_and_ndjson_carries_pipeline(tmp_path):
         assert "config_sha256" in row["pipeline"]
         assert "recall_any_at_k" in row
         assert "recall_all_at_k" in row
+
+
+def test_stratified_sample_covers_each_type_and_is_deterministic():
+    pool = (
+        [{"question_id": f"a{i}", "question_type": "alpha"} for i in range(10)]
+        + [{"question_id": f"b{i}", "question_type": "beta"} for i in range(3)]
+        + [{"question_id": "g0", "question_type": "gamma"}]
+    )
+    picked = stratified_sample(pool, per_type=2, seed=42)
+    by_type: dict[str, int] = {}
+    for q in picked:
+        by_type[q["question_type"]] = by_type.get(q["question_type"], 0) + 1
+    # up to 2 per type; gamma has only 1 so it contributes 1 (rare type still covered)
+    assert by_type == {"alpha": 2, "beta": 2, "gamma": 1}
+    # deterministic under a fixed seed
+    assert [q["question_id"] for q in picked] == [q["question_id"] for q in stratified_sample(pool, per_type=2, seed=42)]
+
+
+def test_run_suite_per_type_limits_pool(tmp_path):
+    # two types in the synthetic pool (single-session-user, preference)
+    ds = _synthetic_dataset()
+    result = run_suite("bm25_baseline", ds, k=5, turns="all", per_type=1)
+    # one per type → 2 evaluated (abstention already filtered)
+    assert result.evaluated == 2
+    types = {s.question_type for s in result.scores}
+    assert types == {"single-session-user", "preference"}
+
+
+def test_scorecard_sampling_line_present():
+    a = score_question("q1", "t1", ["g"], {"g"}, 1.0)
+    from mind_mem.bench.longmemeval_suite import SuiteResult
+
+    probe = PipelineProbe("bm25_baseline", "bm25_inmemory", "bm25_inmemory", False, "abc")
+    result = SuiteResult("bm25_baseline", "all", [a], [probe], 1, 0, 0.1)
+    card = render_scorecard(result, dataset_path="x.json", k=5, embedder="none", sampling="STRATIFIED SAMPLE — 2 per type")
+    assert "STRATIFIED SAMPLE" in card
+    assert "**Sampling:**" in card
 
 
 def test_render_scorecard_honesty_rails(tmp_path):

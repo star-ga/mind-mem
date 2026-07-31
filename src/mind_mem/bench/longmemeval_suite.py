@@ -66,6 +66,29 @@ def load_dataset(path: str) -> list[dict[str, Any]]:
     return data
 
 
+def stratified_sample(pool: list[dict[str, Any]], per_type: int, seed: int) -> list[dict[str, Any]]:
+    """Up to ``per_type`` questions per ``question_type``, seeded for determinism.
+
+    Stratified coverage so every question_type is represented in a small
+    sample — a uniform random draw of the same size can miss a rare type
+    (e.g. single-session-preference is ~6% of the LongMemEval-S pool). This
+    controls *which* questions run, never how they are scored; the scorecard
+    discloses that the number is a stratified sample, not the full set.
+    """
+    import random
+
+    by_type: dict[str, list[dict[str, Any]]] = {}
+    for q in pool:
+        by_type.setdefault(str(q.get("question_type", "unknown")), []).append(q)
+    rng = random.Random(seed)
+    picked: list[dict[str, Any]] = []
+    for qtype in sorted(by_type):
+        group = sorted(by_type[qtype], key=lambda q: str(q.get("question_id", "")))
+        rng.shuffle(group)
+        picked.extend(group[:per_type])
+    return picked
+
+
 def build_session_docs(question: dict[str, Any], turns: str) -> list[SessionDoc]:
     """One SessionDoc per haystack session. ``turns`` = 'all' | 'user'."""
     sessions = question.get("haystack_sessions", [])
@@ -111,15 +134,23 @@ def run_suite(
     turns: str = "all",
     config: dict[str, Any] | None = None,
     sample: int = 0,
+    per_type: int = 0,
     seed: int = 42,
     k_values: tuple[int, ...] = K_VALUES,
     progress: bool = False,
 ) -> SuiteResult:
-    """Drive one adapter across the dataset; return per-question scores + probes."""
+    """Drive one adapter across the dataset; return per-question scores + probes.
+
+    ``per_type`` (stratified: up to N per question_type) takes precedence over
+    ``sample`` (uniform random of N); either narrows *which* questions run
+    without touching how they are scored.
+    """
     adapter = get_adapter(adapter_name)
 
     pool = [q for q in dataset if not str(q.get("question_id", "")).endswith("_abs") and q.get("answer_session_ids")]
-    if sample and sample < len(pool):
+    if per_type > 0:
+        pool = stratified_sample(pool, per_type, seed)
+    elif sample and sample < len(pool):
         import random
 
         random.seed(seed)
@@ -182,7 +213,7 @@ def write_ndjson(result: SuiteResult, path: str) -> None:
             f.write(json.dumps(row, sort_keys=True) + "\n")
 
 
-def render_scorecard(result: SuiteResult, *, dataset_path: str, k: int, embedder: str) -> str:
+def render_scorecard(result: SuiteResult, *, dataset_path: str, k: int, embedder: str, sampling: str = "full set") -> str:
     """Render the Markdown scorecard (measured numbers + honesty rails)."""
     agg = aggregate(result.scores)
     probe = result.representative_probe()
@@ -193,6 +224,7 @@ def render_scorecard(result: SuiteResult, *, dataset_path: str, k: int, embedder
     lines.append("## Disclosure (what was actually measured)")
     lines.append("")
     lines.append(f"- **Adapter:** `{result.adapter}`")
+    lines.append(f"- **Sampling:** {sampling}")
     if probe is not None:
         lines.append(f"- **Declared backend:** `{probe.declared_backend}`")
         lines.append(f"- **Effective backend (probed):** `{probe.effective_backend}`")
@@ -269,7 +301,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--data-path", default=None)
     ap.add_argument("--turns", choices=["all", "user"], default="all")
     ap.add_argument("--k", type=int, default=10)
-    ap.add_argument("--sample", type=int, default=0, help="0 = full set")
+    ap.add_argument("--sample", type=int, default=0, help="uniform random sample; 0 = full set")
+    ap.add_argument(
+        "--per-type",
+        type=int,
+        default=0,
+        dest="per_type",
+        help="stratified: up to N questions per question_type (0 = off; takes precedence over --sample)",
+    )
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--ndjson", default=None, help="NDJSON artifact output path")
     ap.add_argument("--scorecard", default=None, help="Markdown scorecard output path")
@@ -284,13 +323,24 @@ def main(argv: list[str] | None = None) -> int:
         k=a.k,
         turns=a.turns,
         sample=a.sample,
+        per_type=a.per_type,
         seed=a.seed,
         progress=True,
     )
 
+    if a.per_type > 0:
+        sampling = (
+            f"STRATIFIED SAMPLE — up to {a.per_type} questions per question_type "
+            f"(seed {a.seed}); {result.evaluated} evaluated. FULL 500-question set DEFERRED."
+        )
+    elif a.sample > 0:
+        sampling = f"uniform random sample of {a.sample} (seed {a.seed}); full set DEFERRED"
+    else:
+        sampling = "full set"
+
     ndjson_path = a.ndjson or f"benchmarks/.cache/{date.today().isoformat()}-longmemeval-s-{a.adapter}.ndjson"
     write_ndjson(result, ndjson_path)
-    scorecard = render_scorecard(result, dataset_path=data_path, k=a.k, embedder=a.embedder)
+    scorecard = render_scorecard(result, dataset_path=data_path, k=a.k, embedder=a.embedder, sampling=sampling)
     scorecard_path = a.scorecard or f"docs/benchmarks/{date.today().isoformat()}-longmemeval-s-{a.adapter}.md"
     os.makedirs(os.path.dirname(os.path.abspath(scorecard_path)), exist_ok=True)
     with open(scorecard_path, "w", encoding="utf-8") as f:
