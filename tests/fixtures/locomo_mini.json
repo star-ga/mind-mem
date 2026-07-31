@@ -1,0 +1,51 @@
+[
+  {
+    "sample_id": "conv-1",
+    "conversation": {
+      "speaker_a": "Caroline",
+      "speaker_b": "Melanie",
+      "session_1_date_time": "1:00 pm on 8 May 2023",
+      "session_1": [
+        {"speaker": "Caroline", "dia_id": "D1:1", "text": "I adopted a golden retriever puppy named Biscuit last week and he already loves the park."},
+        {"speaker": "Melanie", "dia_id": "D1:2", "text": "That's wonderful, a golden retriever puppy is such a joy."}
+      ],
+      "session_2_date_time": "9:00 am on 20 May 2023",
+      "session_2": [
+        {"speaker": "Caroline", "dia_id": "D2:1", "text": "I started training for a marathon in Boston and my knees are already sore."},
+        {"speaker": "Melanie", "dia_id": "D2:2", "text": "Good luck with the Boston marathon training, that is a big goal."}
+      ],
+      "session_3_date_time": "6:00 pm on 2 June 2023",
+      "session_3": [
+        {"speaker": "Melanie", "dia_id": "D3:1", "text": "I just got a promotion to senior engineer at my company this morning."},
+        {"speaker": "Caroline", "dia_id": "D3:2", "text": "Congratulations on the promotion to senior engineer, Melanie!"}
+      ]
+    },
+    "qa": [
+      {"question": "Which golden retriever puppy did Caroline adopt?", "answer": "A golden retriever puppy named Biscuit", "evidence": ["D1:1"], "category": 1},
+      {"question": "What Boston marathon is Caroline training for?", "answer": "A marathon in Boston", "evidence": ["D2:1"], "category": 2},
+      {"question": "What promotion to senior engineer did Melanie receive?", "answer": "A promotion to senior engineer", "evidence": ["D3:1"], "category": 1},
+      {"question": "Did Caroline mention visiting Paris?", "answer": "No information available", "evidence": [], "category": 5}
+    ]
+  },
+  {
+    "sample_id": "conv-2",
+    "conversation": {
+      "speaker_a": "David",
+      "speaker_b": "Priya",
+      "session_1_date_time": "10:00 am on 3 March 2023",
+      "session_1": [
+        {"speaker": "David", "dia_id": "D1:1", "text": "I am learning to play the violin this year and practice every morning."},
+        {"speaker": "Priya", "dia_id": "D1:2", "text": "That sounds lovely, the violin is a beautiful instrument, David."}
+      ],
+      "session_2_date_time": "2:00 pm on 15 March 2023",
+      "session_2": [
+        {"speaker": "Priya", "dia_id": "D2:1", "text": "My sister moved to Tokyo to work as a pastry chef at a hotel."},
+        {"speaker": "David", "dia_id": "D2:2", "text": "Tokyo is amazing for food, your sister will love it there."}
+      ]
+    },
+    "qa": [
+      {"question": "Which violin instrument is David learning to play?", "answer": "The violin", "evidence": ["D1:1"], "category": 1},
+      {"question": "Where in Tokyo did Priya's sister move to work?", "answer": "Tokyo", "evidence": ["D2:1"], "category": 2}
+    ]
+  }
+]
