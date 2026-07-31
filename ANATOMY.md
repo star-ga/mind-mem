@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 921 | **Est. tokens:** ~1,997,200
-**Generated:** 2026-07-31 02:07 UTC
+**Files:** 926 | **Est. tokens:** ~2,007,620
+**Generated:** 2026-07-31 04:40 UTC
 
 ## Token Budget Guide
 
@@ -61,7 +61,7 @@
 | `src/` | 1 | ~280 |
 | `src/mind_mem/` | 170 | ~601,190 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
-| `src/mind_mem/bench/` | 2 | ~5,414 |
+| `src/mind_mem/bench/` | 6 | ~13,430 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
 | `src/mind_mem/mcp/infra/` | 8 | ~10,495 |
 | `src/mind_mem/mcp/tools/` | 24 | ~59,217 |
@@ -70,7 +70,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 24 | ~63,748 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 324 | ~709,051 |
+| `tests/` | 325 | ~711,455 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -470,7 +470,11 @@
 - `baseline_snapshot.py` (~4176 tok, huge) — Baseline snapshot for intent drift detection.
 ### `src/mind_mem/bench/`
 
-- `__init__.py` (~19 tok, tiny) — mind-mem benchmark harnesses — scalar metrics over the live corpus."""
+- `eval_adapter.py` (~1250 tok, large) — Pluggable retrieval-eval adapter contract + pipeline self-assertion.
+- `eval_adapters.py` (~2307 tok, huge) — Concrete retrieval-eval adapters.
+- `eval_scorer.py` (~1122 tok, large) — Dual-protocol retrieval scoring for the eval harness.
+- `__init__.py` (~180 tok, small) — mind-mem benchmark harnesses — scalar metrics over the live corpus.
+- `longmemeval_suite.py` (~3176 tok, huge) — LongMemEval-S consolidation harness — one loop, any adapter, self-asserting.
 - `recompaction_bench.py` (~5395 tok, huge) — Recompaction benchmark — the scalar metric downstream tooling depends on.
 ### `src/mind_mem/`
 
@@ -790,6 +794,7 @@
 - `test_axis_recall.py` (~3683 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_backup_restore.py` (~3256 tok, huge) — Tests for backup_restore.py — zero external deps (stdlib unittest)."""
 - `test_baseline_snapshot.py` (~2997 tok, huge) — Tests for baseline snapshot and drift detection (#431)."""
+- `test_bench_eval_harness.py` (~2404 tok, huge) — Tests for the LongMemEval consolidation harness (self-asserting adapters).
 - `test_bigrams.py` (~168 tok, small) — Tests for bigram extraction."""
 - `test_block_id_format.py` (~327 tok, medium) — Tests for block ID format validation."""
 - `test_block_lineage.py` (~2122 tok, huge) — Tests for the v3.11.0 typed block-lineage graph (Pattern 3)."""
