@@ -22,6 +22,7 @@ Pure Python, stdlib-only. Concurrency-safe.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sqlite3
 import threading
@@ -53,12 +54,22 @@ class Predicate(str, Enum):
     MENTIONED_IN = "mentioned_in"
     RELATED_TO = "related_to"
     SUPPORTS = "supports"
+    REFINES = "refines"
     DERIVED_FROM = "derived_from"
 
     @classmethod
     def from_str(cls, name: str) -> "Predicate":
-        """Hyphen-tolerant, case-insensitive lookup. Honors runtime-registered predicates."""
+        """Hyphen-tolerant, case-insensitive lookup. Honors runtime-registered predicates.
+
+        Legacy predicate spellings recorded before the typed-edge layer
+        existed (:data:`_PREDICATE_ALIASES` — e.g. the singular
+        ``"contradiction"`` or the older ``"contraindicates"``) are folded
+        onto their canonical typed relation so historical data keeps
+        resolving. This is the back-compat half of subsuming the existing
+        contradiction-edge work onto :attr:`CONTRADICTS`.
+        """
         normalised = name.strip().lower().replace("-", "_")
+        normalised = _PREDICATE_ALIASES.get(normalised, normalised)
         for pred in cls:
             if pred.value == normalised:
                 return pred
@@ -125,6 +136,46 @@ class _RuntimePredicate(str):
 
 _RUNTIME_PREDICATES: dict[str, "_RuntimePredicate"] = {}
 
+#: Legacy / synonymous predicate spellings folded onto a canonical typed
+#: relation by :meth:`Predicate.from_str`. Keys are already
+#: hyphen-normalised (``-`` → ``_``, lowercased). The contradiction entries
+#: subsume the pre-typed-edge contradiction-edge work onto
+#: :attr:`Predicate.CONTRADICTS` without a data migration: any row or caller
+#: still using the old spelling resolves to the one canonical predicate.
+_PREDICATE_ALIASES: dict[str, str] = {
+    "contradiction": "contradicts",
+    "contradicted_by": "contradicts",
+    "contraindicates": "contradicts",
+    "refined_by": "refines",
+    "supported_by": "supports",
+    "superseded_by": "supersedes",
+}
+
+#: The five first-class typed relations of the edge layer (roadmap §a).
+#: Recall can weight edges per relation rather than fusing a flat edge set.
+TYPED_RELATIONS: frozenset[Predicate] = frozenset(
+    {
+        Predicate.SUPPORTS,
+        Predicate.CONTRADICTS,
+        Predicate.REFINES,
+        Predicate.SUPERSEDES,
+        Predicate.DERIVED_FROM,
+    }
+)
+
+#: Lex-sorted string values of the typed relations — a deterministic order
+#: for iteration / bucketing (no clock, no set-iteration nondeterminism).
+TYPED_RELATION_VALUES: tuple[str, ...] = tuple(sorted(p.value for p in TYPED_RELATIONS))
+
+
+def is_typed_relation(predicate: "Predicate | str") -> bool:
+    """True iff *predicate* is one of the five first-class typed relations."""
+    try:
+        pred = predicate if isinstance(predicate, Predicate) else Predicate.from_str(predicate)
+    except ValueError:
+        return False
+    return pred.value in {p.value for p in TYPED_RELATIONS}
+
 
 # ---------------------------------------------------------------------------
 # Entity registry — canonical entity resolution
@@ -134,6 +185,26 @@ _RUNTIME_PREDICATES: dict[str, "_RuntimePredicate"] = {}
 def _canonicalise(name: str) -> str:
     """Lowercased + whitespace-collapsed canonical form for an entity name."""
     return " ".join(name.strip().lower().split())
+
+
+def _decode_observations(raw: Optional[str]) -> list[str]:
+    """Parse the ``entities.observations`` JSON column into a list of facts.
+
+    Tolerant of NULL / malformed content (returns ``[]``) so a corrupt row
+    can never crash a read. Non-string members are dropped; the result is
+    lex-sorted for a deterministic view regardless of stored order.
+    """
+    import json as _json
+
+    if not raw:
+        return []
+    try:
+        data = _json.loads(raw)
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return sorted(str(x) for x in data if isinstance(x, str))
 
 
 def default_db_path(workspace: str) -> str:
@@ -259,6 +330,82 @@ class EntityRegistry:
             ).fetchall()
         return [r["alias"] for r in rows]
 
+    # ------------------------------------------------------------------
+    # Observations — accreted per-entity facts (roadmap §b, flag-gated)
+    # ------------------------------------------------------------------
+
+    def migrate_observations(self) -> bool:
+        """Idempotently add the ``entities.observations`` column.
+
+        ``observations`` is a JSON list of accreted facts about an entity,
+        so entity-centric multi-hop questions that never mention a block id
+        have somewhere to aggregate. Guarded by a column-exists check, so
+        re-running on an already-migrated database is a pure no-op.
+
+        Returns ``True`` when the column was added by this call, ``False``
+        when it already existed (no-op). Deterministic — no clock / rand.
+        """
+        with self._lock:
+            cols = {row[1] for row in self._conn.execute("PRAGMA table_info(entities)").fetchall()}
+            if "observations" in cols:
+                return False
+            self._conn.execute("ALTER TABLE entities ADD COLUMN observations TEXT NOT NULL DEFAULT '[]'")
+            self._conn.commit()
+        return True
+
+    def _require_observations(self) -> None:
+        """Gate observation access behind the v4 ``entity_observations`` flag
+        and ensure the column exists (lazy, idempotent migration)."""
+        from .v4 import feature_flags
+
+        feature_flags.require_enabled("entity_observations")
+        self.migrate_observations()
+
+    def add_observation(self, surface: str, fact: str) -> list[str]:
+        """Append *fact* to *surface*'s entity observation list.
+
+        Facts are deduplicated and stored in lexicographic order so the
+        serialised column is a deterministic function of the fact *set* —
+        re-adding the same fact, or adding facts in a different order,
+        yields byte-identical storage. Returns the full accreted list.
+
+        Requires the ``entity_observations`` v4 flag.
+        """
+        import json as _json
+
+        text = fact.strip()
+        if not text:
+            raise ValueError("observation fact must be a non-empty string")
+        self._require_observations()
+        entity_id = self.resolve(surface)
+        with self._lock:
+            row = self._conn.execute("SELECT observations FROM entities WHERE id = ?", (entity_id,)).fetchone()
+            current = _decode_observations(row["observations"] if row is not None else "[]")
+            merged = sorted(set(current) | {text})
+            self._conn.execute(
+                "UPDATE entities SET observations = ? WHERE id = ?",
+                (_json.dumps(merged, separators=(",", ":"), ensure_ascii=False), entity_id),
+            )
+            self._conn.commit()
+        return merged
+
+    def observations(self, surface: str) -> list[str]:
+        """Return the lex-ordered accreted fact list for *surface*.
+
+        Read-only: never mints a registry row. Unknown entities and
+        never-observed entities both return ``[]``. Requires the
+        ``entity_observations`` v4 flag.
+        """
+        self._require_observations()
+        entity_id = self.lookup(surface)
+        if entity_id is None:
+            return []
+        with self._lock:
+            row = self._conn.execute("SELECT observations FROM entities WHERE id = ?", (entity_id,)).fetchone()
+        if row is None:
+            return []
+        return _decode_observations(row["observations"])
+
 
 # ---------------------------------------------------------------------------
 # Edge value object
@@ -288,6 +435,73 @@ class Edge:
             "predicate": self.predicate.value,
             "object": self.object,
             "source_block_id": self.source_block_id,
+            "confidence": round(self.confidence, 6),
+            "valid_from": self.valid_from,
+            "valid_until": self.valid_until,
+            "metadata": self.metadata,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Edge proposal — HITL-gated typed-edge write (wedge guardrail, roadmap §a)
+# ---------------------------------------------------------------------------
+
+#: Proposal lifecycle states. A staged proposal has NOT touched the
+#: source-of-truth ``edges`` table; only ``approve_edge`` commits.
+PROPOSAL_STAGED = "staged"
+PROPOSAL_APPLIED = "applied"
+PROPOSAL_REJECTED = "rejected"
+
+
+def _edge_proposal_id(subject: str, predicate_value: str, object_: str, source_block_id: str) -> str:
+    """Deterministic id for an edge proposal.
+
+    Derived by SHA-256 over a canonical, NUL-separated preimage of the
+    edge tuple — no clock, no counter, no randomness — so proposing the
+    same edge twice collapses onto one id (idempotent staging) and the id
+    is reproducible across processes and substrates.
+    """
+    preimage = "\x00".join(
+        [
+            "mm-edge-proposal-v1",
+            _canonicalise(subject),
+            predicate_value,
+            _canonicalise(object_),
+            source_block_id.strip(),
+        ]
+    ).encode("utf-8")
+    return "EP-" + hashlib.sha256(preimage).hexdigest()[:16]
+
+
+@dataclass(frozen=True)
+class EdgeProposal:
+    """A staged, human-review-gated typed edge.
+
+    The source-of-truth graph never self-modifies: an ``EdgeProposal`` sits
+    in a separate ``edge_proposals`` table until :meth:`KnowledgeGraph.approve_edge`
+    commits it. Entity resolution is deferred to approval time so staging a
+    proposal touches neither the ``entities`` nor the ``edges`` table.
+    """
+
+    proposal_id: str
+    subject: str
+    predicate: Predicate
+    object: str
+    source_block_id: str
+    status: str = PROPOSAL_STAGED
+    confidence: float = 1.0
+    valid_from: Optional[str] = None
+    valid_until: Optional[str] = None
+    metadata: dict = field(default_factory=dict)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "proposal_id": self.proposal_id,
+            "subject": self.subject,
+            "predicate": self.predicate.value,
+            "object": self.object,
+            "source_block_id": self.source_block_id,
+            "status": self.status,
             "confidence": round(self.confidence, 6),
             "valid_from": self.valid_from,
             "valid_until": self.valid_until,
@@ -343,6 +557,19 @@ class KnowledgeGraph:
     CREATE INDEX IF NOT EXISTS idx_edges_subject ON edges(subject);
     CREATE INDEX IF NOT EXISTS idx_edges_object ON edges(object);
     CREATE INDEX IF NOT EXISTS idx_edges_predicate ON edges(predicate);
+    CREATE TABLE IF NOT EXISTS edge_proposals (
+        proposal_id      TEXT PRIMARY KEY,
+        subject          TEXT NOT NULL,
+        predicate        TEXT NOT NULL,
+        object           TEXT NOT NULL,
+        source_block_id  TEXT NOT NULL,
+        status           TEXT NOT NULL DEFAULT 'staged',
+        confidence       REAL NOT NULL DEFAULT 1.0,
+        valid_from       TEXT,
+        valid_until      TEXT,
+        metadata         TEXT NOT NULL DEFAULT '{}'
+    );
+    CREATE INDEX IF NOT EXISTS idx_edge_proposals_status ON edge_proposals(status);
     """
     )
 
@@ -444,6 +671,238 @@ class KnowledgeGraph:
             )
             self._conn.commit()
         return edge
+
+    # ------------------------------------------------------------------
+    # HITL-gated typed-edge proposals (wedge guardrail, roadmap §a)
+    # ------------------------------------------------------------------
+
+    def propose_edge(
+        self,
+        subject: str,
+        predicate: "Predicate | str",
+        object: str,
+        *,
+        source_block_id: str,
+        confidence: float = 1.0,
+        valid_from: Optional[str] = None,
+        valid_until: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+    ) -> EdgeProposal:
+        """Stage a typed edge for human review — the ONLY sanctioned write
+        path for the typed-edge layer.
+
+        The source-of-truth graph never self-modifies: this inserts a row
+        into ``edge_proposals`` and touches neither ``entities`` nor
+        ``edges``. A later :meth:`approve_edge` is the sole committer.
+        Restaging the same edge tuple is idempotent (deterministic id,
+        ``INSERT OR IGNORE``) and never clobbers an already-decided
+        proposal's status.
+
+        All validation (predicate, provenance, confidence, ISO-8601
+        timestamps) runs here so a malformed proposal is refused up front
+        rather than at approval.
+        """
+        import json as _json
+
+        pred = predicate if isinstance(predicate, Predicate) else Predicate.from_str(predicate)
+        if not source_block_id or not source_block_id.strip():
+            raise ValueError("source_block_id is required for provenance")
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError(f"confidence must be in [0, 1], got {confidence!r}")
+        if valid_from is not None:
+            _parse_iso8601(valid_from)
+        if valid_until is not None:
+            _parse_iso8601(valid_until)
+        if valid_from is not None and valid_until is not None:
+            if _parse_iso8601(valid_until) < _parse_iso8601(valid_from):
+                raise ValueError("valid_until must be >= valid_from")
+
+        meta = dict(metadata or {})
+        pid = _edge_proposal_id(subject, pred.value, object, source_block_id)
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT OR IGNORE INTO edge_proposals
+                    (proposal_id, subject, predicate, object, source_block_id,
+                     status, confidence, valid_from, valid_until, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    pid,
+                    subject,
+                    pred.value,
+                    object,
+                    source_block_id.strip(),
+                    PROPOSAL_STAGED,
+                    float(confidence),
+                    valid_from,
+                    valid_until,
+                    _json.dumps(meta, separators=(",", ":"), default=str, sort_keys=True),
+                ),
+            )
+            self._conn.commit()
+        got = self.get_edge_proposal(pid)
+        assert got is not None  # nosec B101 — just inserted-or-ignored above
+        return got
+
+    def get_edge_proposal(self, proposal_id: str) -> Optional[EdgeProposal]:
+        """Return the staged/decided proposal by id, or ``None`` if unknown."""
+        import json as _json
+
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT proposal_id, subject, predicate, object, source_block_id, "
+                "status, confidence, valid_from, valid_until, metadata "
+                "FROM edge_proposals WHERE proposal_id = ?",
+                (proposal_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            meta = _json.loads(row["metadata"] or "{}")
+        except (ValueError, TypeError):
+            meta = {}
+        return EdgeProposal(
+            proposal_id=row["proposal_id"],
+            subject=row["subject"],
+            predicate=Predicate.from_str(row["predicate"]),
+            object=row["object"],
+            source_block_id=row["source_block_id"],
+            status=row["status"],
+            confidence=float(row["confidence"]),
+            valid_from=row["valid_from"],
+            valid_until=row["valid_until"],
+            metadata=meta if isinstance(meta, dict) else {},
+        )
+
+    def list_edge_proposals(self, *, status: Optional[str] = None) -> list[EdgeProposal]:
+        """List proposals, optionally filtered by status, in deterministic
+        (``proposal_id`` lex) order."""
+        import json as _json
+
+        clauses = ""
+        params: tuple[Any, ...] = ()
+        if status is not None:
+            clauses = "WHERE status = ?"
+            params = (status,)
+        sql = (
+            "SELECT proposal_id, subject, predicate, object, source_block_id, "
+            "status, confidence, valid_from, valid_until, metadata "
+            f"FROM edge_proposals {clauses} ORDER BY proposal_id"  # nosec B608 — `clauses` is a fixed literal; status passes as a bind param
+        )
+        with self._lock:
+            rows = self._conn.execute(sql, params).fetchall()
+        out: list[EdgeProposal] = []
+        for row in rows:
+            try:
+                meta = _json.loads(row["metadata"] or "{}")
+            except (ValueError, TypeError):
+                meta = {}
+            out.append(
+                EdgeProposal(
+                    proposal_id=row["proposal_id"],
+                    subject=row["subject"],
+                    predicate=Predicate.from_str(row["predicate"]),
+                    object=row["object"],
+                    source_block_id=row["source_block_id"],
+                    status=row["status"],
+                    confidence=float(row["confidence"]),
+                    valid_from=row["valid_from"],
+                    valid_until=row["valid_until"],
+                    metadata=meta if isinstance(meta, dict) else {},
+                )
+            )
+        return out
+
+    def approve_edge(self, proposal_id: str) -> Edge:
+        """Commit a staged proposal to the source-of-truth graph.
+
+        This is the sole path that turns a proposal into a real edge:
+        it resolves both endpoints and delegates to :meth:`add_edge`
+        (idempotent), then marks the proposal ``applied``. Approving an
+        already-applied proposal re-commits idempotently. A ``rejected``
+        proposal cannot be approved.
+        """
+        prop = self.get_edge_proposal(proposal_id)
+        if prop is None:
+            raise KeyError(f"unknown edge proposal: {proposal_id!r}")
+        if prop.status == PROPOSAL_REJECTED:
+            raise ValueError(f"cannot approve a rejected proposal: {proposal_id!r}")
+        edge = self.add_edge(
+            prop.subject,
+            prop.predicate,
+            prop.object,
+            source_block_id=prop.source_block_id,
+            confidence=prop.confidence,
+            valid_from=prop.valid_from,
+            valid_until=prop.valid_until,
+            metadata=prop.metadata,
+        )
+        with self._lock:
+            self._conn.execute(
+                "UPDATE edge_proposals SET status = ? WHERE proposal_id = ?",
+                (PROPOSAL_APPLIED, proposal_id),
+            )
+            self._conn.commit()
+        return edge
+
+    def reject_edge(self, proposal_id: str) -> EdgeProposal:
+        """Mark a staged proposal ``rejected``. No edge is ever written.
+
+        Rejecting an already-applied proposal is refused (the edge is
+        already committed — rejecting the proposal would misrepresent the
+        graph). Rejecting an already-rejected proposal is idempotent.
+        """
+        prop = self.get_edge_proposal(proposal_id)
+        if prop is None:
+            raise KeyError(f"unknown edge proposal: {proposal_id!r}")
+        if prop.status == PROPOSAL_APPLIED:
+            raise ValueError(f"cannot reject an already-applied proposal: {proposal_id!r}")
+        with self._lock:
+            self._conn.execute(
+                "UPDATE edge_proposals SET status = ? WHERE proposal_id = ?",
+                (PROPOSAL_REJECTED, proposal_id),
+            )
+            self._conn.commit()
+        updated = self.get_edge_proposal(proposal_id)
+        assert updated is not None  # nosec B101 — row existed above, only status changed
+        return updated
+
+    # ------------------------------------------------------------------
+    # Relationship-aware view (roadmap §a — weight per relation, not flat)
+    # ------------------------------------------------------------------
+
+    def relations_of(
+        self,
+        entity: str,
+        *,
+        direction: str = "outgoing",
+        include_expired: bool = False,
+    ) -> dict[str, list[Edge]]:
+        """Bucket an entity's typed edges by relation for relationship-aware
+        recall.
+
+        Returns a dict keyed by every typed-relation value (lex order,
+        always all five keys present — empty lists when absent) so a recall
+        fuser can weight ``supports`` differently from ``contradicts``
+        instead of collapsing them into one flat neighbour set. ``direction``
+        is ``"outgoing"`` (subject→object), ``"incoming"`` (object→subject),
+        or ``"both"``.
+        """
+        direction = direction.lower()
+        if direction not in {"outgoing", "incoming", "both"}:
+            raise ValueError("direction must be 'outgoing', 'incoming', or 'both'")
+        buckets: dict[str, list[Edge]] = {value: [] for value in TYPED_RELATION_VALUES}
+        for value in TYPED_RELATION_VALUES:
+            pred = Predicate.from_str(value)
+            collected: list[Edge] = []
+            if direction in {"outgoing", "both"}:
+                collected.extend(self.edges_from(entity, predicate=pred, include_expired=include_expired))
+            if direction in {"incoming", "both"}:
+                collected.extend(self.edges_to(entity, predicate=pred, include_expired=include_expired))
+            collected.sort(key=lambda e: (-e.confidence, e.subject, e.object, e.source_block_id))
+            buckets[value] = collected
+        return buckets
 
     def edges_from(
         self,
@@ -661,8 +1120,15 @@ class KnowledgeGraph:
 __all__ = [
     "Predicate",
     "Edge",
+    "EdgeProposal",
     "EntityRegistry",
     "KnowledgeGraph",
     "GraphStats",
+    "TYPED_RELATIONS",
+    "TYPED_RELATION_VALUES",
+    "is_typed_relation",
     "default_db_path",
+    "PROPOSAL_STAGED",
+    "PROPOSAL_APPLIED",
+    "PROPOSAL_REJECTED",
 ]

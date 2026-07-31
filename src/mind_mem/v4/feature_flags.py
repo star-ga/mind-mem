@@ -79,6 +79,8 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "tenant_chains",
     "compliance_export",
     "contraindicates_edges",
+    "typed_edges",  # first-class typed relation layer + proposal-gated writes (roadmap §a)
+    "entity_observations",  # per-entity accreted-facts field on the entity registry (roadmap §b)
 )
 
 
