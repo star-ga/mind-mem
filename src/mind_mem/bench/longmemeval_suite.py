@@ -80,7 +80,8 @@ def stratified_sample(pool: list[dict[str, Any]], per_type: int, seed: int) -> l
     by_type: dict[str, list[dict[str, Any]]] = {}
     for q in pool:
         by_type.setdefault(str(q.get("question_type", "unknown")), []).append(q)
-    rng = random.Random(seed)
+    # Deterministic seeded stratified sampling for reproducible benchmark selection (not a crypto/security context).
+    rng = random.Random(seed)  # nosec B311
     picked: list[dict[str, Any]] = []
     for qtype in sorted(by_type):
         group = sorted(by_type[qtype], key=lambda q: str(q.get("question_id", "")))
@@ -154,7 +155,8 @@ def run_suite(
         import random
 
         random.seed(seed)
-        pool = random.sample(pool, sample)
+        # Deterministic seeded sampling for reproducible benchmark selection (not a crypto/security context).
+        pool = random.sample(pool, sample)  # nosec B311
 
     scores: list[QuestionScore] = []
     probes: list[PipelineProbe] = []

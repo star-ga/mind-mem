@@ -225,7 +225,8 @@ def run_suite(
     elif sample and sample < len(pool):
         import random
 
-        rng = random.Random(seed)
+        # Deterministic seeded sampling for reproducible benchmark selection (not a crypto/security context).
+        rng = random.Random(seed)  # nosec B311
         pool = rng.sample(pool, sample)
 
     scores = []
