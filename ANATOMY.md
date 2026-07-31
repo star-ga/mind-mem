@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 927 | **Est. tokens:** ~2,016,754
-**Generated:** 2026-07-31 05:38 UTC
+**Files:** 931 | **Est. tokens:** ~2,024,443
+**Generated:** 2026-07-31 05:41 UTC
 
 ## Token Budget Guide
 
@@ -34,6 +34,7 @@
 | `deploy/grafana/` | 1 | ~1,145 |
 | `docs/` | 83 | ~152,078 |
 | `docs/adr/` | 2 | ~521 |
+| `docs/benchmarks/` | 4 | ~7,689 |
 | `docs/design/` | 3 | ~4,055 |
 | `docs/security-baselines/` | 1 | ~18,974 |
 | `examples/` | 3 | ~1,201 |
@@ -209,6 +210,14 @@
 - `append-only-audit-logs.md` (~1424 tok, large) — Append-Only Audit Logs — Operator Runbook
 - `architecture.md` (~1936 tok, huge) — Architecture
 - `audit_response.md` (~950 tok, large) — MIND-Mem — response to the 2026-05-02 ecosystem audit
+### `docs/benchmarks/`
+
+- `2026-07-30-longmemeval-s-bm25_baseline.md` (~646 tok, large) — LongMemEval-S scorecard — `bm25_baseline` (2026-07-30)
+- `2026-07-30-longmemeval-s-bm25_baseline.ndjson` (~3322 tok, huge) — {"adapter": "bm25_baseline", "first_gold_rank": 1, "hit": true, "latency_ms": 2.
+- `2026-07-30-longmemeval-s-mind_mem.md` (~643 tok, large) — LongMemEval-S scorecard — `mind_mem` (2026-07-30)
+- `2026-07-30-longmemeval-s-mind_mem.ndjson` (~3078 tok, huge) — {"adapter": "mind_mem", "first_gold_rank": 1, "hit": true, "latency_ms": 303.282
+### `docs/`
+
 - `benchmarks.md` (~757 tok, large) — Benchmarks
 - `block-format.md` (~431 tok, medium) — Block Format
 - `block-type-taxonomy-roadmap.md` (~911 tok, large) — Block-Type Taxonomy Enhancement — Roadmap Note
