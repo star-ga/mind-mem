@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 938 | **Est. tokens:** ~2,052,247
-**Generated:** 2026-07-31 06:34 UTC
+**Files:** 943 | **Est. tokens:** ~2,056,232
+**Generated:** 2026-07-31 07:20 UTC
 
 ## Token Budget Guide
 
@@ -32,15 +32,15 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 83 | ~152,078 |
+| `docs/` | 84 | ~153,752 |
 | `docs/adr/` | 2 | ~521 |
-| `docs/benchmarks/` | 4 | ~7,689 |
+| `docs/benchmarks/` | 7 | ~9,616 |
 | `docs/design/` | 3 | ~4,055 |
 | `docs/security-baselines/` | 1 | ~18,974 |
 | `examples/` | 3 | ~1,201 |
 | `.gemini/` | 1 | ~28 |
 | `.githooks/` | 1 | ~98 |
-| `.github/` | 8 | ~4,180 |
+| `.github/` | 9 | ~4,469 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
 | `.github/workflows/` | 12 | ~10,047 |
 | `hooks/` | 3 | ~801 |
@@ -62,7 +62,7 @@
 | `src/` | 1 | ~280 |
 | `src/mind_mem/` | 171 | ~613,153 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
-| `src/mind_mem/bench/` | 7 | ~18,497 |
+| `src/mind_mem/bench/` | 7 | ~18,592 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
 | `src/mind_mem/mcp/infra/` | 8 | ~10,495 |
 | `src/mind_mem/mcp/tools/` | 24 | ~60,014 |
@@ -206,6 +206,7 @@
 ### `docs/`
 
 - `agent-comm.md` (~1055 tok, large) — Agent-to-agent messaging (`mm send` / `mm inbox`)
+- `AGENTIC-MEMORY-SOTA.md` (~1674 tok, huge) — mind-mem → SOTA Agentic Memory (v4.5.0+ design brief)
 - `agent-memory-protocol.md` (~700 tok, large) — Agent Memory Protocol — canonical system-prompt snippet
 - `api-reference.md` (~1683 tok, huge) — API Reference
 - `append-only-audit-logs.md` (~1424 tok, large) — Append-Only Audit Logs — Operator Runbook
@@ -217,6 +218,9 @@
 - `2026-07-30-longmemeval-s-bm25_baseline.ndjson` (~3322 tok, huge) — {"adapter": "bm25_baseline", "first_gold_rank": 1, "hit": true, "latency_ms": 2.
 - `2026-07-30-longmemeval-s-mind_mem.md` (~643 tok, large) — LongMemEval-S scorecard — `mind_mem` (2026-07-30)
 - `2026-07-30-longmemeval-s-mind_mem.ndjson` (~3078 tok, huge) — {"adapter": "mind_mem", "first_gold_rank": 1, "hit": true, "latency_ms": 303.282
+- `2026-07-31-locomo-baseline-bm25_baseline.md` (~663 tok, large) — LoCoMo recall scorecard — `bm25_baseline` (2026-07-31)
+- `2026-07-31-locomo-baseline-mind_mem.md` (~643 tok, large) — LoCoMo recall scorecard — `mind_mem` (2026-07-31)
+- `2026-07-31-longmemeval-vs-agentmemory-bm25_baseline.md` (~621 tok, large) — LongMemEval-S scorecard — `bm25_baseline` (2026-07-31)
 ### `docs/`
 
 - `benchmarks.md` (~757 tok, large) — Benchmarks
@@ -323,6 +327,7 @@
 
 - `CODEOWNERS` (~25 tok, tiny) — # Default owners
 - `copilot-instructions.md` (~71 tok, small) — mind-mem: GitHub Copilot workspace instructions
+- `dependabot.yml` (~289 tok, medium) — version: 2
 - `FUNDING.yml` (~4 tok, tiny) — github: star-ga
 ### `.github/ISSUE_TEMPLATE/`
 
@@ -484,8 +489,8 @@
 - `eval_adapters.py` (~2307 tok, huge) — Concrete retrieval-eval adapters.
 - `eval_scorer.py` (~1122 tok, large) — Dual-protocol retrieval scoring for the eval harness.
 - `__init__.py` (~180 tok, small) — mind-mem benchmark harnesses — scalar metrics over the live corpus.
-- `locomo_suite.py` (~4551 tok, huge) — LoCoMo recall harness — one loop, any adapter, self-asserting.
-- `longmemeval_suite.py` (~3692 tok, huge) — LongMemEval-S consolidation harness — one loop, any adapter, self-asserting.
+- `locomo_suite.py` (~4582 tok, huge) — LoCoMo recall harness — one loop, any adapter, self-asserting.
+- `longmemeval_suite.py` (~3756 tok, huge) — LongMemEval-S consolidation harness — one loop, any adapter, self-asserting.
 - `recompaction_bench.py` (~5395 tok, huge) — Recompaction benchmark — the scalar metric downstream tooling depends on.
 ### `src/mind_mem/`
 

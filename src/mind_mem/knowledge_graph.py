@@ -452,6 +452,15 @@ PROPOSAL_STAGED = "staged"
 PROPOSAL_APPLIED = "applied"
 PROPOSAL_REJECTED = "rejected"
 
+#: Provenance markers stamped onto an edge's ``metadata.origin`` so the write
+#: path is auditable after the fact. ``approve_edge`` (the HITL propose→approve
+#: flow) stamps :data:`EDGE_ORIGIN_HITL_APPROVED`; the direct admin-scoped MCP
+#: ``graph_add_edge`` tool stamps :data:`EDGE_ORIGIN_DIRECT_ADMIN`. A read of an
+#: edge's origin thus tells an operator whether it went through review or an
+#: admin bypass.
+EDGE_ORIGIN_HITL_APPROVED = "hitl_approved"
+EDGE_ORIGIN_DIRECT_ADMIN = "direct_admin"
+
 
 def _edge_proposal_id(subject: str, predicate_value: str, object_: str, source_block_id: str) -> str:
     """Deterministic id for an edge proposal.
@@ -822,6 +831,12 @@ class KnowledgeGraph:
         (idempotent), then marks the proposal ``applied``. Approving an
         already-applied proposal re-commits idempotently. A ``rejected``
         proposal cannot be approved.
+
+        Provenance: the committed edge is stamped ``metadata.origin =
+        "hitl_approved"`` so an operator-approved edge is distinguishable
+        from one written through the direct admin-scoped :meth:`add_edge`
+        path (which stamps ``"direct_admin"``). This closes the audit gap
+        where an approved edge and a directly-added edge were byte-identical.
         """
         prop = self.get_edge_proposal(proposal_id)
         if prop is None:
@@ -836,7 +851,7 @@ class KnowledgeGraph:
             confidence=prop.confidence,
             valid_from=prop.valid_from,
             valid_until=prop.valid_until,
-            metadata=prop.metadata,
+            metadata={**prop.metadata, "origin": EDGE_ORIGIN_HITL_APPROVED},
         )
         with self._lock:
             self._conn.execute(
@@ -1131,4 +1146,6 @@ __all__ = [
     "PROPOSAL_STAGED",
     "PROPOSAL_APPLIED",
     "PROPOSAL_REJECTED",
+    "EDGE_ORIGIN_HITL_APPROVED",
+    "EDGE_ORIGIN_DIRECT_ADMIN",
 ]

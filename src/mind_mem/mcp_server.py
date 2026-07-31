@@ -196,9 +196,15 @@ from mind_mem.mcp.tools.governance import (  # noqa: E402, F401
     scan,
 )
 from mind_mem.mcp.tools.graph import (  # noqa: E402, F401
+    approve_edge,
+    entity_add_observation,
+    entity_observations,
     graph_add_edge,
     graph_query,
     graph_stats,
+    list_edge_proposals,
+    propose_edge,
+    reject_edge,
     traverse_graph,
 )
 from mind_mem.mcp.tools.kernels import (  # noqa: E402, F401

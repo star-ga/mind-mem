@@ -118,6 +118,17 @@ def _recall_impl(
         raw_result = _inner_with_format(query, limit=limit, active_only=active_only, backend=backend)
         raw = str(raw_result) if raw_result is not None else ""
 
+    # v4.4.0 Finding 2 — derive the per-run recall attestation POST-cache,
+    # mirroring the explain pattern below. The recall-cache key omits the
+    # pipeline/config hash, so an attestation baked into the cached envelope
+    # would replay a PAST run's legs_ran / config_hash / index_anchor on a
+    # cache hit after config drift — presenting stale evidence as the current
+    # recall's. Deriving it here (on both hit and miss) binds the attestation
+    # to the CURRENT pipeline config + live index anchor every time, and keeps
+    # the cached payload attestation-free.
+    if raw:
+        raw = _apply_attestation(raw, backend)
+
     # v3.11.0 Pattern 1 — apply explain annotation post-cache so that the
     # cached payload (explain-free) is not polluted and explain=True can
     # still operate on both cache-hit and cache-miss paths.
@@ -125,6 +136,80 @@ def _recall_impl(
         raw = _apply_explain(query, raw)
 
     return raw
+
+
+class _AttestationInput(list):
+    """A list of result-hit dicts carrying the recorded ``.degraded`` marker.
+
+    The attestation deriver reads its signals off two places on a results
+    object: the ``.degraded`` attribute and per-hit provenance flags
+    (``_retrieval_source`` / ``_graph_hop``) on the hit dicts. Post-cache both
+    live in the recall envelope, so this tiny carrier re-presents them to
+    :func:`derive_recall_attestation_for_workspace` without re-running recall.
+    """
+
+    degraded: dict | None = None
+
+
+def _current_vector_flags(ws: str, backend: str) -> tuple[bool, bool]:
+    """Resolve the CURRENT config's ``(vector_requested, vector_available)``.
+
+    Derived fresh from the live ``mind-mem.json`` each call so a config toggle
+    (e.g. ``recall.vector_enabled``) is reflected in the attestation even on a
+    cache hit — the whole point of Finding 2. A ``bm25`` request never runs the
+    vector leg regardless of config. Any failure degrades to the BM25-only shape
+    (both False) rather than raising — an auxiliary artifact must not break
+    recall.
+    """
+    if backend == "bm25":
+        return False, False
+    try:
+        from mind_mem.hybrid_recall import HybridBackend
+
+        hb = HybridBackend.from_config(_load_config(ws))
+        return bool(getattr(hb, "vector_enabled", False)), bool(getattr(hb, "vector_available", False))
+    except Exception as exc:  # pragma: no cover — defensive
+        _log.warning("recall_attestation_vector_flags_failed", error=str(exc))
+        return False, False
+
+
+def _apply_attestation(raw_json: str, backend: str) -> str:
+    """Derive the recall attestation from *raw_json* + live config, inject it.
+
+    Runs post-cache (both cache-hit and cache-miss paths). Rebuilds the recorded
+    run signals from the envelope (per-hit provenance + the ``degraded`` marker),
+    resolves the CURRENT pipeline config hash / index anchor / vector flags, and
+    stamps ``envelope["attestation"]`` with a freshly derived
+    :class:`RecallAttestation`. Never touches the block store. Failure to derive
+    must never break recall — it is logged and the envelope returned unchanged.
+    """
+    try:
+        from mind_mem.recall_attestation import derive_recall_attestation_for_workspace
+
+        envelope = json.loads(raw_json)
+        if not isinstance(envelope, dict) or "results" not in envelope:
+            # Not a blocks-shaped recall envelope (e.g. format="bundle"): skip.
+            return raw_json
+        results = envelope.get("results")
+        if not isinstance(results, list):
+            return raw_json
+        ws = _workspace()
+        carrier = _AttestationInput(results)
+        degraded = envelope.get("degraded")
+        if isinstance(degraded, dict):
+            carrier.degraded = degraded
+        vector_requested, vector_available = _current_vector_flags(ws, backend)
+        attestation = derive_recall_attestation_for_workspace(
+            carrier,
+            ws,
+            vector_requested=vector_requested,
+            vector_available=vector_available,
+        )
+        envelope["attestation"] = attestation.to_dict()
+        return json.dumps(envelope, indent=2, default=str)
+    except Exception as exc:  # pragma: no cover — defensive; recall must not fail on attestation
+        _log.warning("recall_attestation_apply_failed", error=str(exc))
+        return raw_json
 
 
 def _apply_explain(query: str, raw_json: str) -> str:
@@ -168,11 +253,6 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
     used_backend = "scan"
     results: list = []
     hybrid_degraded: dict | None = None
-    # Recorded backend flags — used to *derive* the recall attestation (which
-    # legs actually ran), never a self-declared claim. Default to the BM25-only
-    # shape (vector neither requested nor available) for the sqlite/scan paths.
-    vector_requested = False
-    vector_available = False
 
     if backend in ("hybrid", "auto"):
         try:
@@ -189,11 +269,6 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
             hb = HybridBackend.from_config(config)
             results = hb.search(query, ws, limit=limit, active_only=active_only)
             used_backend = "hybrid"
-            # getattr so a duck-typed backend (tests, alt implementations)
-            # without these flags degrades to the BM25-only attestation shape
-            # instead of raising an AttributeError the recall path won't catch.
-            vector_requested = bool(getattr(hb, "vector_enabled", False))
-            vector_available = bool(getattr(hb, "vector_available", False))
             # Surface an in-band degradation marker: when the vector leg was
             # unavailable / timed out / failed, ``search`` returns BM25-only
             # results tagged with ``.degraded`` so a caller can tell the
@@ -249,31 +324,13 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
             "embedder is unavailable. Results are BM25-only, not hybrid."
         )
 
-    # Per-run recall attestation — a runtime artifact recording *how* this
-    # answer was produced (which legs ran, the effective config hash, the index
-    # anchor, degradation folded in). Derived from the recorded run state, never
-    # self-declared, and NEVER written back to the store — it lives only on this
-    # response. Failure to derive it must never break recall (it is auxiliary),
-    # but is logged rather than swallowed silently.
-    attestation = None
-    try:
-        from mind_mem.recall_attestation import derive_recall_attestation_for_workspace
-
-        attestation = derive_recall_attestation_for_workspace(
-            results,
-            ws,
-            vector_requested=vector_requested,
-            vector_available=vector_available,
-        )
-        # Generalise ``.degraded``: hang the full attestation off the results
-        # object too when it can carry attributes (the hybrid RecallResults).
-        try:
-            results.attestation = attestation
-        except (AttributeError, TypeError):
-            pass
-    except Exception as exc:  # pragma: no cover — defensive; recall must not fail on attestation
-        _log.warning("recall_attestation_derive_failed", query=query, error=str(exc))
-
+    # Per-run recall attestation is derived POST-cache in ``_recall_impl``
+    # (see ``_apply_attestation``), NOT here: the cache key omits the pipeline/
+    # config hash, so an attestation embedded in this (cached) envelope would be
+    # replayed stale on a later cache hit after config drift. Keeping the cached
+    # payload attestation-free — exactly as it is explain-free — means the
+    # surfaced attestation always reflects the CURRENT pipeline, with the vector
+    # flags resolved from the live config at derivation time.
     try:
         from mind_mem.calibration import make_query_id
 
@@ -303,10 +360,9 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
             f"was not used (reason: {hybrid_degraded.get('reason', 'unknown')}). "
             "Results are BM25-only, not hybrid."
         )
-    # Runtime recall attestation, surfaced next to ``degraded`` (which it
-    # generalises). Response-only: it is never written back to the block store.
-    if attestation is not None:
-        envelope["attestation"] = attestation.to_dict()
+    # NOTE: the runtime recall attestation is injected into this envelope
+    # POST-cache by ``_apply_attestation`` (Finding 2) — deliberately not here,
+    # so the cached payload carries no stale attestation.
     if warnings:
         envelope["warnings"] = warnings
     if config_warnings:

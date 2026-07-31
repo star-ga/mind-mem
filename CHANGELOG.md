@@ -14,10 +14,17 @@ paths) and were blind-verified before landing.
   retrieval legs ran (bm25 / vector / graph / hybrid), the effective config hash, and
   the degraded state. It is **derived from recorded run signals, never self-declared**,
   and **never written back to the block store** (a runtime artifact, not a stored
-  score — the same discipline `spec_binding` applies to config attestation). Surfaced
-  in the MCP recall envelope alongside `degraded`; mirrors the existing
-  `fold_attestation` pattern. The degraded-recall marker shipped earlier on this line
-  is now the first named member of this class.
+  score — the same discipline `spec_binding` applies to config attestation). The
+  attestation is **derived POST-cache** in the MCP recall path (mirroring the explain
+  annotation): the recall-cache key does not include the pipeline/config hash, so
+  binding it here means a cache hit after a config toggle reflects the *current*
+  pipeline's legs / config hash / index anchor, never a replayed stale copy. Each
+  record is stamped `derivation="derived"` when its legs were recomputed from run
+  state (the sanctioned `derive_recall_attestation` path) vs `"asserted"` for the raw
+  `build_recall_attestation` builder, and that marker is hash-bound so an asserted
+  record cannot be passed off as derived. Surfaced in the MCP recall envelope alongside
+  `degraded`; mirrors the existing `fold_attestation` pattern. The degraded-recall
+  marker shipped earlier on this line is now the first named member of this class.
 * **LoCoMo recall benchmark (`bench/locomo_suite.py`)** — a standing eval so recall
   quality is a number, not a vibe. Reuses the LongMemEval scorer + pluggable adapter
   registry (bm25_baseline + mind_mem), handles LoCoMo's multi-session conversational
@@ -27,10 +34,26 @@ paths) and were blind-verified before landing.
   full-corpus run is measured separately on a quiet node.
 * **Typed edge layer + entity observations (`knowledge_graph.py`)** — first-class
   `supports / contradicts / refines / supersedes / derived-from` edges over the
-  existing typed triple store (subsumes the prior contradiction edge; write-path edges
-  are HITL-gated proposals, never auto-committed), plus a feature-flagged
-  `entities.observations` field (idempotent migration) so entity-centric multi-hop
-  questions have somewhere to accrete facts.
+  existing typed triple store (subsumes the prior contradiction edge), plus a
+  feature-flagged `entities.observations` field (idempotent migration) so
+  entity-centric multi-hop questions have somewhere to accrete facts.
+  * **Typed-edge writes are governed on the MCP surface.** The HITL propose→approve
+    flow is wired as real MCP tools: `propose_edge` (user-scope) stages a proposal
+    into the separate `edge_proposals` table and touches neither `entities` nor
+    `edges`; `approve_edge` (admin-scope) is the **sole committer** and stamps the
+    committed edge `metadata.origin="hitl_approved"`; `reject_edge` (admin-scope)
+    never writes; `list_edge_proposals` (user-scope) is the read-only review queue.
+    Auto-ingestion (`graph_ingest`) likewise only *stages* pending SIGNALS.md
+    relation proposals and never auto-commits — the source-of-truth `edges` table is
+    never modified without an explicit operator approval.
+  * The direct, admin-scoped `graph_add_edge` tool remains (operators need a bypass)
+    but now stamps `metadata.origin="direct_admin"` on every edge it writes, so a
+    directly-added edge is distinguishable from an HITL-approved one — a default
+    user-scope caller can reach neither direct-commit path (`graph_add_edge` /
+    `approve_edge` are both admin-gated).
+  * The `entities.observations` field is reachable via the flag-gated
+    `entity_add_observation` (admin-scope write) / `entity_observations` (user-scope
+    read) MCP tools.
 
 Backward-compatible: no wire-format or schema break beyond the additive, flag-gated
 `observations` column.

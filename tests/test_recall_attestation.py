@@ -310,14 +310,18 @@ def test_mcp_recall_envelope_surfaces_attestation(monkeypatch):
     import mind_mem.hybrid_recall as hr
 
     monkeypatch.setattr(hr, "HybridBackend", _FakeHB)
+    # Attestation is injected POST-cache by ``_recall_impl`` (Finding 2). Disable
+    # the recall cache so the assertion exercises a clean derivation.
+    monkeypatch.setattr(mcp_recall, "_load_config", lambda ws: {"cache": {"enabled": False}})
 
-    raw = mcp_recall._recall_impl_uncached("capital of France", limit=5, backend="hybrid")
+    raw = mcp_recall._recall_impl("capital of France", limit=5, backend="hybrid")
     envelope = json.loads(raw)
     att = envelope.get("attestation")
     assert att is not None, "envelope must carry an attestation"
     assert att["schema"] == RECALL_ATTEST_TAG
     assert att["legs_ran"] == ["bm25", "hybrid", "vector"]
     assert att["degraded"] is None
+    assert att["derivation"] == "derived"
     assert "attestation_hash" in att
 
 
@@ -344,8 +348,9 @@ def test_mcp_envelope_attestation_reflects_degradation(monkeypatch):
     import mind_mem.hybrid_recall as hr
 
     monkeypatch.setattr(hr, "HybridBackend", _FakeHB)
+    monkeypatch.setattr(mcp_recall, "_load_config", lambda ws: {"cache": {"enabled": False}})
 
-    raw = mcp_recall._recall_impl_uncached("capital of France", limit=5, backend="hybrid")
+    raw = mcp_recall._recall_impl("capital of France", limit=5, backend="hybrid")
     envelope = json.loads(raw)
     # The legacy degraded field still fires loud (bug #139 not regressed).
     assert envelope.get("degraded") == {"leg": "vector", "reason": "deadline_exceeded"}
@@ -356,14 +361,13 @@ def test_mcp_envelope_attestation_reflects_degradation(monkeypatch):
     assert att["degraded"] == {"leg": "vector", "reason": "deadline_exceeded"}
 
 
-def test_hybrid_results_carry_attestation_attribute(monkeypatch):
-    """`results` carries `.attestation` (generalising `.degraded`) after recall."""
+def test_mcp_envelope_attestation_internally_consistent(monkeypatch):
+    """The envelope attestation is a fully-formed, internally-consistent record
+    derived post-cache on the public recall path (Finding 2 placement)."""
     import mind_mem.mcp.tools.recall as mcp_recall
 
     ws = _make_workspace()
     monkeypatch.setattr(mcp_recall, "_workspace", lambda: ws)
-
-    captured = {}
 
     class _FakeHB:
         vector_enabled = True
@@ -374,18 +378,79 @@ def test_hybrid_results_carry_attestation_attribute(monkeypatch):
             return _FakeHB()
 
         def search(self, query, workspace, limit=10, active_only=False):
-            rr = _as_results([{"_id": "D-1"}], None)
-            captured["rr"] = rr
-            return rr
+            return _as_results([{"_id": "D-1"}], None)
 
     import mind_mem.hybrid_recall as hr
 
     monkeypatch.setattr(hr, "HybridBackend", _FakeHB)
-    mcp_recall._recall_impl_uncached("q", limit=5, backend="hybrid")
-    rr = captured["rr"]
-    assert getattr(rr, "attestation", None) is not None
-    assert isinstance(rr.attestation, RecallAttestation)
-    assert rr.attestation.is_internally_consistent()
+    monkeypatch.setattr(mcp_recall, "_load_config", lambda ws: {"cache": {"enabled": False}})
+
+    raw = mcp_recall._recall_impl("q", limit=5, backend="hybrid")
+    att = RecallAttestation.from_dict(json.loads(raw)["attestation"])
+    assert isinstance(att, RecallAttestation)
+    assert att.is_internally_consistent()
+    assert att.derivation == "derived"
+
+
+def test_attestation_reflects_config_toggle_on_cache_hit(monkeypatch):
+    """Finding 2: config drift (vector toggled) WITHOUT a governance event must
+    not replay a stale attestation on a cache hit. The recall-cache key omits the
+    config hash, so a second identical query hits the cache — but the post-cache
+    derivation must bind the CURRENT pipeline's config_hash + legs, never the
+    cached ones."""
+    import mind_mem.mcp.tools.recall as mcp_recall
+    from mind_mem.recall_cache import reset_singleton
+
+    reset_singleton()
+    ws = _make_workspace()
+    monkeypatch.setattr(mcp_recall, "_workspace", lambda: ws)
+
+    # Live, mutable pipeline config that both the fake backend and the vector-
+    # flag probe read. Cache stays ENABLED (that is the whole point).
+    state = {"recall": {"vector_enabled": False}, "cache": {"enabled": True}}
+    monkeypatch.setattr(mcp_recall, "_load_config", lambda w: state)
+
+    class _FakeHB:
+        def __init__(self, enabled):
+            self.vector_enabled = enabled
+            self.vector_available = enabled
+
+        @staticmethod
+        def from_config(config):
+            return _FakeHB(bool(config.get("recall", {}).get("vector_enabled", False)))
+
+        def search(self, query, workspace, limit=10, active_only=False):
+            return _as_results([{"_id": "D-1"}], None)
+
+    import mind_mem.hybrid_recall as hr
+
+    monkeypatch.setattr(hr, "HybridBackend", _FakeHB)
+    # Config hash a pure function of the live flag so the assertion is
+    # independent of the pipeline-probe internals.
+    monkeypatch.setattr(
+        "mind_mem.pipeline_hash.current_pipeline_hash",
+        lambda w: "CFG_ON" if state["recall"]["vector_enabled"] else "CFG_OFF",
+    )
+
+    # Call 1 — vector OFF, populates the cache.
+    raw1 = mcp_recall._recall_impl("same query", limit=5, backend="hybrid")
+    env1 = json.loads(raw1)
+    att1 = env1["attestation"]
+    assert att1["config_hash"] == "CFG_OFF"
+    assert "vector" not in att1["legs_ran"]
+
+    # Toggle vector ON — NO cache invalidation (simulating silent config drift).
+    state["recall"]["vector_enabled"] = True
+
+    # Call 2 — SAME cache key → cache hit, but attestation reflects the NEW pipeline.
+    raw2 = mcp_recall._recall_impl("same query", limit=5, backend="hybrid")
+    env2 = json.loads(raw2)
+    att2 = env2["attestation"]
+    assert att2["config_hash"] == "CFG_ON", "config_hash must be the CURRENT pipeline's, not the cached one"
+    assert "vector" in att2["legs_ran"], "legs_ran must reflect the NEW (vector-on) pipeline"
+    # Prove we truly served the cached envelope (same result payload).
+    assert env2["count"] == env1["count"]
+    assert RecallAttestation.from_dict(att2).is_internally_consistent()
 
 
 # ---------------------------------------------------------------------------

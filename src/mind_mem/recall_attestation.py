@@ -87,6 +87,19 @@ LEG_HYBRID = "hybrid"  # the two-leg fusion mode — present iff bm25 AND vector
 # rather than an empty string that could be confused with "unresolved".
 GENESIS_ANCHOR = "0" * 64
 
+# Provenance of an attestation's leg/config values (rail 1 hardening, Finding 3).
+# ``derived`` — legs were recomputed from the recorded ``RecallResults`` run
+# state by :func:`derive_recall_attestation` (the sanctioned path); the value is
+# a function of the artifact the run left behind, not a caller's assertion.
+# ``asserted`` — the values were supplied verbatim by a caller to
+# :func:`build_recall_attestation` (the raw builder). The marker is bound into
+# the preimage, so a caller cannot mint a self-consistent attestation over
+# fabricated (leg, config) and pass it off as ``derived``: flipping the field
+# breaks the hash. Consumers that require provenance-guaranteed legs check
+# ``derivation == DERIVATION_DERIVED``.
+DERIVATION_DERIVED = "derived"
+DERIVATION_ASSERTED = "asserted"
+
 
 # ---------------------------------------------------------------------------
 # Derivation helpers — every one reads a *recorded* run signal, never a claim.
@@ -259,13 +272,16 @@ def _attestation_preimage(
     degraded_digest: str,
     index_anchor: str,
     result_count: int,
+    derivation: str,
 ) -> bytes:
     """Build the tagged, NUL-separated recall-attestation preimage.
 
     Deterministic by construction — every field is a content-derived digest,
-    the reused config hash, the index anchor, or a count. No timestamp, no
-    randomness, so the same run state always yields the same preimage (and hence
-    the same attestation hash).
+    the reused config hash, the index anchor, a count, or the derivation-
+    provenance marker. No timestamp, no randomness, so the same run state always
+    yields the same preimage (and hence the same attestation hash). Binding
+    ``derivation`` here means a caller-``asserted`` record cannot be relabelled
+    ``derived`` without invalidating the hash (Finding 3).
     """
     return preimage(
         RECALL_ATTEST_TAG,
@@ -275,6 +291,7 @@ def _attestation_preimage(
         degraded_digest,
         index_anchor,
         result_count,
+        derivation,
     )
 
 
@@ -302,6 +319,10 @@ class RecallAttestation:
     result_count: int
     attestation_hash: str
     schema: str = field(default=RECALL_ATTEST_TAG)
+    #: Whether the legs/config were derived from recorded run state
+    #: (:data:`DERIVATION_DERIVED`) or asserted by a caller
+    #: (:data:`DERIVATION_ASSERTED`). Bound into ``attestation_hash``.
+    derivation: str = field(default=DERIVATION_ASSERTED)
 
     def recompute_hash(self) -> str:
         """Recompute the attestation hash from the bound fields (no I/O)."""
@@ -313,6 +334,7 @@ class RecallAttestation:
                 degraded_digest=_marker_digest(self.degraded),
                 index_anchor=self.index_anchor,
                 result_count=self.result_count,
+                derivation=self.derivation,
             )
         ).hexdigest()
 
@@ -330,6 +352,7 @@ class RecallAttestation:
             "degraded": self.degraded,
             "index_anchor": self.index_anchor,
             "result_count": self.result_count,
+            "derivation": self.derivation,
             "attestation_hash": self.attestation_hash,
         }
 
@@ -345,6 +368,7 @@ class RecallAttestation:
             result_count=int(d["result_count"]),
             attestation_hash=d["attestation_hash"],
             schema=d.get("schema", RECALL_ATTEST_TAG),
+            derivation=d.get("derivation", DERIVATION_ASSERTED),
         )
 
 
@@ -356,6 +380,7 @@ def build_recall_attestation(
     degraded: dict[str, str] | None,
     index_anchor: str,
     result_count: int,
+    derivation: str = DERIVATION_ASSERTED,
 ) -> RecallAttestation:
     """Build a :class:`RecallAttestation` from already-derived recorded values.
 
@@ -363,11 +388,24 @@ def build_recall_attestation(
     yields an equal attestation with the same hash. Leg tuples are normalised
     (deduped + sorted) so the digest is order-stable regardless of caller input
     order.
+
+    TRUST BOUNDARY (Finding 3): the ``legs_ran`` / ``legs_degraded`` /
+    ``config_hash`` values are taken **verbatim from the caller** — this builder
+    does not derive them from run state and cannot vouch for them. It therefore
+    stamps ``derivation=DERIVATION_ASSERTED`` by default, marking the record as
+    caller-asserted. Only :func:`derive_recall_attestation`, which recomputes the
+    legs from a recorded ``RecallResults``, may pass
+    ``derivation=DERIVATION_DERIVED``. The marker is hash-bound, so an asserted
+    record cannot be relabelled derived without breaking internal consistency.
+    Callers minting an attestation from untrusted input must not pass
+    ``DERIVATION_DERIVED``.
     """
     legs_ran_n = tuple(sorted(set(legs_ran)))
     legs_degraded_n = tuple(sorted(set(legs_degraded)))
     if result_count < 0:
         raise ValueError("result_count must be >= 0")
+    if derivation not in (DERIVATION_DERIVED, DERIVATION_ASSERTED):
+        raise ValueError(f"derivation must be {DERIVATION_DERIVED!r} or {DERIVATION_ASSERTED!r}, got {derivation!r}")
     attestation_hash = hashlib.sha256(
         _attestation_preimage(
             legs_ran_digest=_seq_digest(legs_ran_n),
@@ -376,6 +414,7 @@ def build_recall_attestation(
             degraded_digest=_marker_digest(degraded),
             index_anchor=index_anchor,
             result_count=result_count,
+            derivation=derivation,
         )
     ).hexdigest()
     return RecallAttestation(
@@ -386,6 +425,7 @@ def build_recall_attestation(
         index_anchor=index_anchor,
         result_count=result_count,
         attestation_hash=attestation_hash,
+        derivation=derivation,
     )
 
 
@@ -404,6 +444,16 @@ def derive_recall_attestation(
     backend flags, derives the legs, folds in the degraded marker, and binds the
     *reused* ``config_hash`` (from the pipeline probe — this function never
     invents one) and ``index_anchor``. Nothing is written anywhere.
+
+    Because the legs are recomputed from the recorded run state here (not taken
+    from a caller), the produced record is stamped
+    ``derivation=DERIVATION_DERIVED`` (Finding 3). The one remaining
+    caller-supplied value is ``config_hash``: the sanctioned callers
+    (:func:`derive_recall_attestation_for_workspace`, the MCP recall path) resolve
+    it from :func:`mind_mem.pipeline_hash.current_pipeline_hash`, never from
+    untrusted input. A caller that cannot vouch for ``config_hash`` should use
+    :func:`build_recall_attestation` (which stamps ``asserted``) rather than this
+    function.
 
     Args:
         results: The recall result list — a ``RecallResults`` (carrying
@@ -437,6 +487,9 @@ def derive_recall_attestation(
         degraded=degraded,
         index_anchor=index_anchor,
         result_count=result_count,
+        # Sanctioned path: legs were recomputed from the recorded run state
+        # above, so this record is provenance-guaranteed, not caller-asserted.
+        derivation=DERIVATION_DERIVED,
     )
     metrics.inc("recall_attestations_derived")
     if legs_degraded:
@@ -487,6 +540,8 @@ def derive_recall_attestation_for_workspace(
 
 
 __all__ = [
+    "DERIVATION_ASSERTED",
+    "DERIVATION_DERIVED",
     "GENESIS_ANCHOR",
     "LEG_BM25",
     "LEG_GRAPH",

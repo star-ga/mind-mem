@@ -33,8 +33,18 @@ def graph_add_edge(
     source_block_id: str,
     confidence: float = 1.0,
 ) -> str:
-    """Record a typed relationship in the knowledge graph."""
-    from mind_mem.knowledge_graph import KnowledgeGraph, Predicate
+    """Record a typed relationship in the knowledge graph — DIRECT admin write.
+
+    This is the admin-scoped bypass of the HITL propose→approve flow: it commits
+    straight to the source-of-truth ``edges`` table. The committed edge is
+    stamped ``metadata.origin = "direct_admin"`` so it is auditable as a direct
+    admin write and distinguishable from an ``approve_edge`` (HITL-reviewed)
+    edge. Operators who want review-gated typed-edge writes use ``propose_edge``
+    → ``approve_edge`` instead; user-scope ingestion routes through the
+    ``graph_ingest`` signal-staging + approval path. The origin marker is forced
+    here and cannot be overridden by the caller.
+    """
+    from mind_mem.knowledge_graph import EDGE_ORIGIN_DIRECT_ADMIN, KnowledgeGraph, Predicate
 
     ws = _workspace()
     ws_err = _check_workspace(ws)
@@ -60,12 +70,259 @@ def graph_add_edge(
             object,
             source_block_id=source_block_id,
             confidence=float(confidence),
+            metadata={"origin": EDGE_ORIGIN_DIRECT_ADMIN},
         )
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
     finally:
         kg.close()
     return json.dumps({**edge.as_dict(), "_schema_version": "1.0"}, indent=2)
+
+
+@mcp_tool_observe
+def propose_edge(
+    subject: str,
+    predicate: str,
+    object: str,
+    source_block_id: str,
+    confidence: float = 1.0,
+) -> str:
+    """Stage a typed knowledge-graph edge as an HITL proposal (user-scope).
+
+    The ONLY user-reachable typed-edge write path. Nothing touches the
+    source-of-truth ``edges`` table: the triple lands in the separate
+    ``edge_proposals`` table (status ``staged``) and is committed only by an
+    explicit operator ``approve_edge`` call. Restaging the same edge tuple is
+    idempotent (deterministic proposal id). Mirrors the ``graph_ingest``
+    signal-staging discipline — auto-ingestion likewise only stages and never
+    auto-commits.
+    """
+    from mind_mem.knowledge_graph import KnowledgeGraph, Predicate
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(subject, str) or not subject.strip():
+        return json.dumps({"error": "subject must be a non-empty string"})
+    if not isinstance(object, str) or not object.strip():
+        return json.dumps({"error": "object must be a non-empty string"})
+    if len(subject) > 512 or len(object) > 512:
+        return json.dumps({"error": "entity names must be ≤512 chars"})
+    if not isinstance(source_block_id, str) or not source_block_id.strip():
+        return json.dumps({"error": "source_block_id is required for provenance"})
+    try:
+        pred = Predicate.from_str(predicate)
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        proposal = kg.propose_edge(
+            subject,
+            pred,
+            object,
+            source_block_id=source_block_id,
+            confidence=float(confidence),
+        )
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+    finally:
+        kg.close()
+    return json.dumps({**proposal.as_dict(), "_schema_version": "1.0"}, indent=2)
+
+
+@mcp_tool_observe
+def approve_edge(proposal_id: str) -> str:
+    """Commit a staged typed-edge proposal to the graph (ADMIN-scope).
+
+    The sole committer of the HITL flow: resolves both endpoints, writes the
+    edge (idempotent) stamped ``metadata.origin = "hitl_approved"``, and marks
+    the proposal ``applied``. A rejected proposal cannot be approved. This is an
+    explicit operator signal — the source-of-truth edges table is never modified
+    without it.
+    """
+    from mind_mem.knowledge_graph import KnowledgeGraph
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(proposal_id, str) or not proposal_id.strip():
+        return json.dumps({"error": "proposal_id must be a non-empty string"})
+
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        edge = kg.approve_edge(proposal_id.strip())
+    except KeyError as exc:
+        return json.dumps({"error": f"unknown edge proposal: {exc}"})
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+    finally:
+        kg.close()
+    return json.dumps(
+        {"approved": proposal_id.strip(), **edge.as_dict(), "_schema_version": "1.0"},
+        indent=2,
+    )
+
+
+@mcp_tool_observe
+def reject_edge(proposal_id: str) -> str:
+    """Reject a staged typed-edge proposal (ADMIN-scope). No edge is written.
+
+    Marks the proposal ``rejected``. An already-applied proposal cannot be
+    rejected (its edge is committed); rejecting an already-rejected proposal is
+    idempotent.
+    """
+    from mind_mem.knowledge_graph import KnowledgeGraph
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(proposal_id, str) or not proposal_id.strip():
+        return json.dumps({"error": "proposal_id must be a non-empty string"})
+
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        proposal = kg.reject_edge(proposal_id.strip())
+    except KeyError as exc:
+        return json.dumps({"error": f"unknown edge proposal: {exc}"})
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+    finally:
+        kg.close()
+    return json.dumps({**proposal.as_dict(), "_schema_version": "1.0"}, indent=2)
+
+
+@mcp_tool_observe
+def list_edge_proposals(status: str = "staged", limit: int = 64) -> str:
+    """List typed-edge proposals, optionally filtered by status (user-scope).
+
+    ``status`` is one of ``staged`` / ``applied`` / ``rejected`` / ``all``
+    (default ``staged`` — the operator review queue). Read-only: the source-of-
+    truth graph is never touched. Returns proposals in deterministic
+    (proposal-id lex) order.
+    """
+    from mind_mem.knowledge_graph import (
+        PROPOSAL_APPLIED,
+        PROPOSAL_REJECTED,
+        PROPOSAL_STAGED,
+        KnowledgeGraph,
+    )
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    valid_status = {PROPOSAL_STAGED, PROPOSAL_APPLIED, PROPOSAL_REJECTED, "all"}
+    if status not in valid_status:
+        return json.dumps({"error": f"status must be one of {sorted(valid_status)}"})
+    if not (1 <= limit <= 256):
+        return json.dumps({"error": "limit must be in [1, 256]"})
+
+    if not os.path.isfile(_kg_path(ws)):
+        return json.dumps(
+            {"status": status, "count": 0, "proposals": [], "_schema_version": "1.0"},
+            indent=2,
+        )
+
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        proposals = kg.list_edge_proposals(status=None if status == "all" else status)
+    finally:
+        kg.close()
+    proposals = proposals[:limit]
+    return json.dumps(
+        {
+            "status": status,
+            "count": len(proposals),
+            "proposals": [p.as_dict() for p in proposals],
+            "_schema_version": "1.0",
+        },
+        indent=2,
+    )
+
+
+@mcp_tool_observe
+def entity_add_observation(entity: str, fact: str) -> str:
+    """Append an accreted fact to an entity's observation list (ADMIN-scope).
+
+    Writes the ``entities.observations`` field (a deduplicated, lex-sorted JSON
+    list of per-entity facts). Requires the v4 ``entity_observations`` flag.
+    Facts are stored order- and duplicate-independent, so re-adding the same
+    fact is a deterministic no-op. Admin-scoped because it mutates the entity
+    registry.
+    """
+    from mind_mem.knowledge_graph import KnowledgeGraph
+    from mind_mem.v4.feature_flags import FeatureDisabledError
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(entity, str) or not entity.strip():
+        return json.dumps({"error": "entity must be a non-empty string"})
+    if not isinstance(fact, str) or not fact.strip():
+        return json.dumps({"error": "fact must be a non-empty string"})
+    if len(entity) > 512:
+        return json.dumps({"error": "entity name must be ≤512 chars"})
+
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        observations = kg.entities.add_observation(entity, fact)
+    except FeatureDisabledError as exc:
+        return json.dumps({"error": str(exc)})
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+    finally:
+        kg.close()
+    return json.dumps(
+        {"entity": entity, "observations": observations, "count": len(observations), "_schema_version": "1.0"},
+        indent=2,
+    )
+
+
+@mcp_tool_observe
+def entity_observations(entity: str) -> str:
+    """Return an entity's accreted observation facts (user-scope, read-only).
+
+    Reads the lex-ordered ``entities.observations`` list. Never mints a registry
+    row; unknown / never-observed entities return ``[]``. Requires the v4
+    ``entity_observations`` flag.
+    """
+    from mind_mem.knowledge_graph import KnowledgeGraph
+    from mind_mem.v4.feature_flags import FeatureDisabledError
+
+    ws = _workspace()
+    ws_err = _check_workspace(ws)
+    if ws_err:
+        return ws_err
+
+    if not isinstance(entity, str) or not entity.strip():
+        return json.dumps({"error": "entity must be a non-empty string"})
+    if len(entity) > 512:
+        return json.dumps({"error": "entity name must be ≤512 chars"})
+
+    if not os.path.isfile(_kg_path(ws)):
+        return json.dumps({"entity": entity, "observations": [], "count": 0, "_schema_version": "1.0"}, indent=2)
+
+    kg = KnowledgeGraph(_kg_path(ws))
+    try:
+        observations = kg.entities.observations(entity)
+    except FeatureDisabledError as exc:
+        return json.dumps({"error": str(exc)})
+    finally:
+        kg.close()
+    return json.dumps(
+        {"entity": entity, "observations": observations, "count": len(observations), "_schema_version": "1.0"},
+        indent=2,
+    )
 
 
 @mcp_tool_observe
@@ -271,6 +528,12 @@ def traverse_graph(block_id: str, depth: int = 2, direction: str = "both") -> st
 def register(mcp) -> None:
     """Wire the graph tools onto *mcp*."""
     mcp.tool(graph_add_edge)
+    mcp.tool(propose_edge)
+    mcp.tool(approve_edge)
+    mcp.tool(reject_edge)
+    mcp.tool(list_edge_proposals)
+    mcp.tool(entity_add_observation)
+    mcp.tool(entity_observations)
     mcp.tool(graph_query)
     mcp.tool(graph_stats)
     mcp.tool(traverse_graph)

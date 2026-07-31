@@ -44,6 +44,16 @@ ADMIN_TOOLS = frozenset(
         # ingestion routes through graph_ingest signal staging +
         # operator approval instead.
         "graph_add_edge",
+        # HITL typed-edge proposal flow: approving / rejecting a proposal
+        # is an operator governance decision. approve_edge is the SOLE
+        # committer of the propose→approve path (it mutates the
+        # source-of-truth edges table); reject_edge changes proposal state.
+        # Both are admin-scoped. (propose_edge / list_edge_proposals are
+        # user-scope — staging + read never touch the graph.)
+        "approve_edge",
+        "reject_edge",
+        # Entity observation writes mutate the entity registry.
+        "entity_add_observation",
     }
 )
 
@@ -57,6 +67,12 @@ USER_TOOLS = frozenset(
         "signal_stats",
         "graph_query",
         "graph_stats",
+        # HITL typed-edge proposal flow — staging + read only, never a
+        # source-of-truth write (approve_edge/reject_edge are admin-scoped).
+        "propose_edge",
+        "list_edge_proposals",
+        # Entity observations — read-only view of accreted per-entity facts.
+        "entity_observations",
         "build_core",
         "load_core",
         "unload_core",
