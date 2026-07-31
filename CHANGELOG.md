@@ -2,6 +2,27 @@
 
 All notable changes to MIND-Mem are documented in this file.
 
+## [Unreleased]
+
+* **OKF v0.2 interop, done better than the format asks (`core_export.py`)** — the
+  Open Knowledge Format export/import is upgraded from v0.1 to conform to the current
+  published spec (**OKF v0.2**), and the trust family is emitted *derived from recorded
+  signals* rather than self-asserted (issue #550). New on export: `status` (mind-mem
+  `DecisionStatus` → OKF `draft`/`stable`/`deprecated`, unknown states surfaced not
+  masked), `stale_after` (from `ValidUntil`), structured `sources` with per-source
+  credibility **signals** (`last_modified`) and no score, a `generated` block whose
+  actor is the producing **system** (`mind-mem:<ns>`, never a `human:` string we can't
+  substantiate), and a re-derivable `receipt` (`sha256:` digest over the canonical
+  unit — trust by re-derivation, tamper-evident, no clock/rand). The human-review
+  `verified` tier is **deliberately never synthesised**: an exported unit cannot prove
+  a review event, so it honestly reads as OKF "unverified" instead of self-granting a
+  tier — the sharp distinction from OKF's self-declared trust model. On import, a
+  foreign bundle's `verified`/`generated`/`status`/`receipt` are recorded verbatim as
+  untrusted **claims** (`OkfClaim*`/`OkfReceipt`), never mapped onto a governance/trust
+  field. The export stays lossy by construction (allow-listed `_OKF_UNIT_FIELDS`); the
+  moat (governance internals, retrieval scores, evidence chain) never reaches OKF
+  output. Fully covered by `tests/test_okf_export.py` (24 tests, deterministic).
+
 ## v4.4.0 — Recall attestation + LoCoMo benchmark + typed knowledge-graph edges
 
 Three roadmap items land together: a standing recall-quality benchmark, the first

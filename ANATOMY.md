@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 943 | **Est. tokens:** ~2,056,232
-**Generated:** 2026-07-31 07:20 UTC
+**Files:** 944 | **Est. tokens:** ~2,068,869
+**Generated:** 2026-07-31 08:50 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~69,188 |
+| `./` | 35 | ~69,607 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -32,9 +32,9 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 84 | ~153,752 |
+| `docs/` | 85 | ~155,657 |
 | `docs/adr/` | 2 | ~521 |
-| `docs/benchmarks/` | 7 | ~9,616 |
+| `docs/benchmarks/` | 6 | ~8,995 |
 | `docs/design/` | 3 | ~4,055 |
 | `docs/security-baselines/` | 1 | ~18,974 |
 | `examples/` | 3 | ~1,201 |
@@ -60,18 +60,18 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 171 | ~613,153 |
+| `src/mind_mem/` | 171 | ~616,451 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
-| `src/mind_mem/bench/` | 7 | ~18,592 |
+| `src/mind_mem/bench/` | 7 | ~18,591 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
-| `src/mind_mem/mcp/infra/` | 8 | ~10,495 |
-| `src/mind_mem/mcp/tools/` | 24 | ~60,014 |
+| `src/mind_mem/mcp/infra/` | 8 | ~10,716 |
+| `src/mind_mem/mcp/tools/` | 24 | ~63,061 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,702 |
 | `src/mind_mem/storage/` | 2 | ~5,519 |
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 24 | ~64,969 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 330 | ~728,635 |
+| `tests/` | 331 | ~733,004 |
 | `tests/fixtures/` | 1 | ~710 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
@@ -101,7 +101,7 @@
 - `EVIDENCE.md` (~1206 tok, large) — Evidence Matrix
 - `generate_mind7b_training.py` (~5558 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
-- `.gitignore` (~310 tok, medium) — *.pyc
+- `.gitignore` (~315 tok, medium) — *.pyc
 - `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~4935 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
@@ -118,7 +118,7 @@
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
 - `SECURITY.md` (~1752 tok, huge) — Security Policy
 - `setup.py` (~397 tok, medium) — Conditional setup hook for the optional Cython accelerator.
-- `SPEC.md` (~5816 tok, huge) — Mind Mem Formal Specification v1.5.1
+- `SPEC.md` (~6230 tok, huge) — Mind Mem Formal Specification v1.5.1
 - `train_mind7b_runpod.py` (~1654 tok, huge)
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
 - `.windsurfrules` (~18 tok, tiny) — # mind-mem
@@ -220,7 +220,6 @@
 - `2026-07-30-longmemeval-s-mind_mem.ndjson` (~3078 tok, huge) — {"adapter": "mind_mem", "first_gold_rank": 1, "hit": true, "latency_ms": 303.282
 - `2026-07-31-locomo-baseline-bm25_baseline.md` (~663 tok, large) — LoCoMo recall scorecard — `bm25_baseline` (2026-07-31)
 - `2026-07-31-locomo-baseline-mind_mem.md` (~643 tok, large) — LoCoMo recall scorecard — `mind_mem` (2026-07-31)
-- `2026-07-31-longmemeval-vs-agentmemory-bm25_baseline.md` (~621 tok, large) — LongMemEval-S scorecard — `bm25_baseline` (2026-07-31)
 ### `docs/`
 
 - `benchmarks.md` (~757 tok, large) — Benchmarks
@@ -268,6 +267,7 @@
 - `odc-retrieval.md` (~834 tok, large) — Observer-Dependent Cognition in MIND-Mem
 - `performance-tuning.md` (~560 tok, large) — Performance Tuning
 - `postgres-parity-audit-2026-06-14.md` (~5468 tok, huge) — mind-mem — Postgres/SQLite backend parity audit (2026-06-14)
+- `POST-V4.4.0-ROADMAP-PLAN.md` (~1905 tok, huge) — mind-mem — Post-v4.4.0 Roadmap Plan (reference)
 - `protection.md` (~1443 tok, large) — MIND-Mem Library Protection
 - `quality-gate.md` (~1267 tok, large) — Quality Gate — Operator Runbook
 - `quickstart.md` (~601 tok, large) — MIND-Mem Quickstart
@@ -489,7 +489,7 @@
 - `eval_adapters.py` (~2307 tok, huge) — Concrete retrieval-eval adapters.
 - `eval_scorer.py` (~1122 tok, large) — Dual-protocol retrieval scoring for the eval harness.
 - `__init__.py` (~180 tok, small) — mind-mem benchmark harnesses — scalar metrics over the live corpus.
-- `locomo_suite.py` (~4582 tok, huge) — LoCoMo recall harness — one loop, any adapter, self-asserting.
+- `locomo_suite.py` (~4581 tok, huge) — LoCoMo recall harness — one loop, any adapter, self-asserting.
 - `longmemeval_suite.py` (~3756 tok, huge) — LongMemEval-S consolidation harness — one loop, any adapter, self-asserting.
 - `recompaction_bench.py` (~5395 tok, huge) — Recompaction benchmark — the scalar metric downstream tooling depends on.
 ### `src/mind_mem/`
@@ -522,7 +522,7 @@
 - `consensus_vote.py` (~1871 tok, huge) — Quorum-based consensus voting on contradictions (v3.3.0).
 - `context_core.py` (~4313 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `contradiction_detector.py` (~4888 tok, huge) — mind-mem Contradiction Detector — Surface conflicts at the governance gate.
-- `core_export.py` (~5295 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `core_export.py` (~7485 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `corpus_registry.py` (~471 tok, medium) — Central corpus path registry for mind-mem.
 - `cron_runner.py` (~2305 tok, huge) — mind-mem Cron Runner — single entry point for all periodic jobs. Zero external deps.
 - `cross_encoder_reranker.py` (~749 tok, large) — mind-mem Optional Cross-Encoder Reranker.
@@ -563,7 +563,7 @@
 - `iterative_recall.py` (~2808 tok, huge) — Iterative chain-of-retrieval for multi-hop evidence (v3.4.0).
 - `kalman_belief.py` (~4219 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `kg_fusion.py` (~1798 tok, huge) — Typed knowledge-graph fusion into recall (opt-in, default OFF).
-- `knowledge_graph.py` (~11063 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `knowledge_graph.py` (~11307 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `ledger_anchor.py` (~1183 tok, large) — # Copyright 2026 STARGA, Inc.
 - `lineage_staleness.py` (~1916 tok, huge) — Lineage→staleness propagation (v3.12.0, Theme C).
 - `llm_extractor.py` (~7491 tok, huge) — mind-mem LLM Entity & Fact Extractor (Optional, config-gated).
@@ -572,7 +572,7 @@
 - `mcp_entry.py` (~495 tok, medium) — Thin entry point for the ``mind-mem-mcp`` console script.
 ### `src/mind_mem/mcp/infra/`
 
-- `acl.py` (~2074 tok, huge) — Per-tool ACL — scope enforcement for the MCP surface.
+- `acl.py` (~2295 tok, huge) — Per-tool ACL — scope enforcement for the MCP surface.
 - `config.py` (~1070 tok, large) — ``mind-mem.json`` config loading + configurable limits.
 - `constants.py` (~98 tok, small) — MCP-surface-wide constants shared by the infra submodules.
 - `http_auth.py` (~1454 tok, large) — HTTP bearer-token authentication helpers for the MCP surface.
@@ -587,7 +587,7 @@
 - `server.py` (~2571 tok, huge) — FastMCP instance + ``main()`` entry point for the Mind-Mem MCP server.
 ### `src/mind_mem/`
 
-- `mcp_server.py` (~1824 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
+- `mcp_server.py` (~1857 tok, huge) — Mind-Mem MCP Server — public facade (v3.2.0 §1.2 PR-final shim).
 ### `src/mind_mem/mcp/tools/`
 
 - `agent.py` (~1909 tok, huge) — Agent-bridge + vault MCP tools.
@@ -599,7 +599,7 @@
 - `core.py` (~1508 tok, huge) — Context-core MCP tools — ``.mmcore`` bundle lifecycle.
 - `encryption.py` (~2626 tok, huge) — At-rest encryption MCP tools — ``encrypt_file`` / ``decrypt_file``.
 - `governance.py` (~8608 tok, huge) — Governance MCP tools — propose / apply / rollback / scan / contradictions / memory_evolution.
-- `graph.py` (~2196 tok, huge) — Knowledge-graph + causal-graph MCP tools.
+- `graph.py` (~4587 tok, huge) — Knowledge-graph + causal-graph MCP tools.
 - `_helpers.py` (~816 tok, large) — Shared tool-internal helpers — workspace paths + lazy-init singletons.
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
@@ -611,7 +611,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~4766 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~534 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~6456 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~7112 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `walkthrough_persona.py` (~1493 tok, large) — MCP wrapping for v3.9 walkthrough + persona projection.
 ### `src/mind_mem/`
@@ -649,7 +649,7 @@
 - `quality_gate.py` (~2253 tok, huge) — Deterministic block quality gate (v3.11.0, Pattern 2).
 - `query_expansion.py` (~4680 tok, huge) — Multi-query expansion for improved recall.
 - `query_planner.py` (~2865 tok, huge) — Query decomposition for multi-hop questions (v3.3.0 Tier 1 #1).
-- `recall_attestation.py` (~5081 tok, huge) — Per-run recall attestation — runtime evidence of *how* an answer was produced.
+- `recall_attestation.py` (~5902 tok, huge) — Per-run recall attestation — runtime evidence of *how* an answer was produced.
 - `recall_cache.py` (~2938 tok, huge) — v3.2.0 — distributed recall result cache (Redis + in-process LRU fallback).
 - `_recall_constants.py` (~2734 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
 - `_recall_context.py` (~2601 tok, huge) — Recall engine context packing — post-retrieval augmentation rules."""
@@ -662,7 +662,7 @@
 - `_recall_scoring.py` (~3715 tok, huge) — Recall engine scoring — BM25F helper, date scores, graph boosting, negation, date proximity, categories."""
 - `_recall_temporal.py` (~2044 tok, huge) — Recall engine temporal filtering — resolve relative time references and filter blocks."""
 - `_recall_tokenization.py` (~784 tok, large) — Recall engine tokenization — Porter stemmer and tokenizer."""
-- `recall_vector.py` (~16420 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
+- `recall_vector.py` (~16430 tok, huge) — mind-mem Vector Recall Backend (Semantic Search with Embeddings).
 - `_recall_workspace.py` (~1958 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
 - `rerank_ensemble.py` (~3364 tok, huge) — Reranker ensemble via Borda count (v3.3.0 Tier 4 #9).
@@ -920,7 +920,7 @@
 - `test_hook_installer_registry.py` (~3841 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_auth_fail_closed.py` (~1724 tok, huge) — v3.7.0 H4: HTTP / REST auth must fail CLOSED by default.
 - `test_http_transport.py` (~4326 tok, huge) — Tests for the v3.9 HTTP transport adapter.
-- `test_hybrid_degraded_marker.py` (~2806 tok, huge) — Tests for the in-band recall degradation marker (Task 2).
+- `test_hybrid_degraded_marker.py` (~2797 tok, huge) — Tests for the in-band recall degradation marker (Task 2).
 - `test_hybrid_recall.py` (~3107 tok, huge) — Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
 - `test_hybrid_search.py` (~599 tok, large) — Tests for hybrid search functionality."""
 - `test_inbox.py` (~2352 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
@@ -947,10 +947,11 @@
 - `test_llm_extractor_gate.py` (~2214 tok, huge) — Backend wiring — :func:`mind_mem.llm_extractor._gate_check_local`.
 - `test_llm_extractor.py` (~1820 tok, huge) — Tests for the optional LLM entity/fact extractor module."""
 - `test_llm_noise_profile.py` (~2354 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `test_locomo_suite.py` (~2395 tok, huge) — Tests for the LoCoMo recall harness (self-asserting adapters).
+- `test_locomo_suite.py` (~2392 tok, huge) — Tests for the LoCoMo recall harness (self-asserting adapters).
 - `test_maintenance_migrate.py` (~710 tok, large) — v3.2.0 §2.2 — tests for maintenance/ subdivision migration."""
 - `test_mcp_arch_mind_tools.py` (~2312 tok, huge) — Tests for the arch-mind MCP tool wrapper.
 - `test_mcp_db_error_backstop.py` (~699 tok, large) — The MCP tool decorator must not let a backend DB error crash the server.
+- `test_mcp_graph_hitl.py` (~1868 tok, huge) — MCP-surface tests for the HITL typed-edge flow + provenance (v4.4.0 Finding 1)
 - `test_mcp_integration.py` (~5478 tok, huge) — MCP transport and auth integration tests (#474).
 - `test_mcp_pipeline.py` (~1465 tok, large) — Tests for the v3.9.0 pipeline-hash MCP tools."""
 - `test_mcp_server.py` (~5277 tok, huge) — Tests for mcp_server.py — tests the MCP server resources and tool logic.
@@ -990,7 +991,7 @@
 - `test_observation_compress.py` (~2754 tok, huge) — Tests for observation_compress module.
 - `test_oidc_admin_enforcement.py` (~1716 tok, huge) — v3.2.1 — OIDC JWTs must pass through ``_require_admin`` checks.
 - `test_oidc_auth.py` (~2970 tok, huge) — Tests for OIDCProvider / OIDCConfig in src/mind_mem/api/auth.py."""
-- `test_okf_export.py` (~2008 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_okf_export.py` (~3729 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_ollama_host_resolver.py` (~2791 tok, huge) — Tests for the shared ollama base-URL resolver (v4.3.1).
 - `test_ontology.py` (~2306 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_personas.py` (~1336 tok, large) — Tests for the v3.9 persona-aware recall projection."""
@@ -1010,7 +1011,7 @@
 - `test_query_expansion_multi_provider.py` (~1237 tok, large) — Tests for multi-provider LLM query expansion (OpenAI-compatible endpoints)."""
 - `test_query_expansion.py` (~3809 tok, huge) — Tests for query_expansion.py -- multi-query expansion for improved recall."""
 - `test_query_planner.py` (~1348 tok, large) — v3.3.0 Tier 1 #1 — query decomposition for multi-hop questions.
-- `test_recall_attestation.py` (~4195 tok, huge) — Tests for the per-run recall attestation (recall_attestation.py).
+- `test_recall_attestation.py` (~4999 tok, huge) — Tests for the per-run recall attestation (recall_attestation.py).
 - `test_recall_cache.py` (~1916 tok, huge) — Tests for v3.2.0 distributed recall cache (LRU + Redis)."""
 - `test_recall_cli_workspace.py` (~2346 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_recall_concurrent.py` (~344 tok, medium) — Tests for concurrent recall queries."""
@@ -1044,7 +1045,7 @@
 - `test_recall_tags.py` (~320 tok, medium) — Tests for tag-based recall."""
 - `test_recall_temporal.py` (~2800 tok, huge) — Tests for _recall_temporal.py — time-aware hard filters for temporal queries."""
 - `test_recall_time_bounded.py` (~1965 tok, huge) — Regression tests for time-bounded recall (roadmap v4.0.0 Group E).
-- `test_recall_vector.py` (~5499 tok, huge) — Tests for recall_vector.py — VectorBackend semantic search."""
+- `test_recall_vector.py` (~5487 tok, huge) — Tests for recall_vector.py — VectorBackend semantic search."""
 - `test_recompaction_bench.py` (~5753 tok, huge) — Tests for bench/recompaction_bench.py — the recompaction scalar metric.
 - `test_recompaction.py` (~1962 tok, huge) — Tests for recompaction.py — iterative re-compression to a fixed point.
 - `test_rerank_debug.py` (~342 tok, medium) — Tests for rerank debug mode."""

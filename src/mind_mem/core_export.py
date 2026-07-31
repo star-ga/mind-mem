@@ -16,6 +16,8 @@ covers the same interchange need for most consumers.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,7 +70,7 @@ def export_to_jsonld(core: LoadedCore) -> dict[str, Any]:
 # layers ("notable absences" in OKF) can never leak into the format.
 # ---------------------------------------------------------------------------
 
-OKF_VERSION = "0.1"
+OKF_VERSION = "0.2"
 
 # Map mind-mem block fields onto OKF unit fields. Mind-mem capitalizes its
 # field keys (the `^[A-Z][A-Za-z]+:` grammar); OKF uses lowercase. We probe
@@ -79,10 +81,62 @@ _OKF_RESOURCE_KEYS = ("Resource", "resource")
 _OKF_TIMESTAMP_KEYS = ("Date", "timestamp", "built_at")
 _OKF_TAG_KEYS = ("Tags", "tags")
 _OKF_CITATION_KEYS = ("Sources", "Citations", "sources", "citations")
+_OKF_STATUS_KEYS = ("Status", "status")
+_OKF_STALE_KEYS = ("StaleAfter", "stale_after", "ValidUntil", "valid_until")
 
-# The OKF-conformant surface of an emitted unit. Anything outside this set
-# is part of the moat and must never appear in OKF output. Asserted in tests.
-_OKF_UNIT_FIELDS = frozenset({"id", "type", "title", "description", "resource", "timestamp", "tags"})
+# mind-mem DecisionStatus ("active" | "superseded" | "revoked") -> OKF v0.2
+# lifecycle vocabulary ("draft" | "stable" | "deprecated"). An unrecognised
+# status is surfaced verbatim (lower-cased) rather than masked to a default.
+_STATUS_MAP = {
+    "active": "stable",
+    "stable": "stable",
+    "draft": "draft",
+    "proposed": "draft",
+    "superseded": "deprecated",
+    "revoked": "deprecated",
+    "deprecated": "deprecated",
+}
+
+# The canonical preimage the re-derivable `receipt` digest is computed over:
+# the unit minus its volatile `sources` list and the `receipt` field itself.
+# Stable across the JSON envelope and the on-disk bundle so a consumer can
+# recompute the digest from either form.
+_RECEIPT_PREIMAGE = (
+    "type",
+    "id",
+    "title",
+    "description",
+    "resource",
+    "timestamp",
+    "tags",
+    "status",
+    "stale_after",
+    "generated",
+)
+
+# The OKF-conformant surface of an emitted unit. Anything outside this set is
+# part of the moat and must never appear in OKF output (asserted in tests).
+# The v0.2 trust/lifecycle family (status/generated/stale_after/sources) and
+# the re-derivable `receipt` anchor are OKF's OWN fields, emitted DERIVED from
+# recorded signals — never self-asserted — so widening the allow-list to them
+# does not leak the moat: governance internals, retrieval scores, and the
+# evidence chain stay excluded.
+_OKF_UNIT_FIELDS = frozenset(
+    {
+        "id",
+        "type",
+        "title",
+        "description",
+        "resource",
+        "timestamp",
+        "tags",
+        "status",
+        "generated",
+        "stale_after",
+        "sources",
+        "receipt",
+    }
+)
 
 # mind-mem block-id prefix -> OKF concept `type`. OKF requires a non-empty
 # `type`; the real type lives in the `_id` prefix, not on the build path.
@@ -150,13 +204,95 @@ def _citations(block: Mapping[str, Any]) -> list[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
-def _block_to_okf_unit(block: Mapping[str, Any]) -> dict[str, Any]:
-    """Project a mind-mem block onto a lossy OKF knowledge unit.
+def _okf_status(block: Mapping[str, Any]) -> str | None:
+    """Map mind-mem governance status onto the OKF v0.2 lifecycle vocabulary.
 
-    Only the OKF-conformant surface is emitted. Mind-mem's differentiated
-    fields (governance status, evidence chain, contradiction links,
-    retrieval scores) are intentionally dropped — OKF is an interop
-    envelope, not a faithful round-trip of the moat.
+    Derived from the block's own recorded ``Status`` — never invented. An
+    unrecognised value is surfaced lower-cased rather than masked to a
+    ``"stable"`` default, so a consumer sees the real state.
+    """
+    raw = _first(block, _OKF_STATUS_KEYS)
+    if raw is None:
+        return None
+    key = str(raw).strip().lower()
+    return _STATUS_MAP.get(key, key)
+
+
+def _okf_generated(block: Mapping[str, Any], namespace: str) -> dict[str, str]:
+    """OKF ``generated`` provenance, DERIVED — not a self-declared actor.
+
+    ``by`` is the producing SYSTEM actor (``mind-mem:<namespace>``); mind-mem
+    never writes a ``human:`` actor it cannot substantiate from a recorded
+    approval. ``at`` is the block's own timestamp when present. This is the
+    honest half of OKF's trust family: assert what is provable (a machine
+    produced this), and decline the ``verified`` human-review tier that an
+    exported unit cannot prove — the deliberate refusal that keeps our trust
+    signal evidence-backed instead of self-asserted.
+    """
+    gen: dict[str, str] = {"by": f"mind-mem:{namespace}" if namespace else "mind-mem"}
+    ts = _first(block, _OKF_TIMESTAMP_KEYS)
+    if ts is not None:
+        gen["at"] = _okf_timestamp(ts)
+    return gen
+
+
+def _okf_sources(block: Mapping[str, Any]) -> list[dict[str, str]]:
+    """OKF ``sources`` entries carrying per-source credibility *signals*.
+
+    Each citation becomes a ``{resource, last_modified?}`` entry — the
+    ``last_modified`` signal is taken from the block's own date when present,
+    a recorded signal, never a fabricated credibility *score*. OKF's own rule
+    is to store signals, not a score; we follow it.
+    """
+    cites = _citations(block)
+    if not cites:
+        return []
+    lm_raw = _first(block, _OKF_TIMESTAMP_KEYS)
+    last_mod: str | None = None
+    if lm_raw is not None:
+        m = re.match(r"(\d{4}-\d{2}-\d{2})", str(lm_raw).strip())
+        last_mod = m.group(1) if m else None
+    out: list[dict[str, str]] = []
+    for c in cites:
+        entry: dict[str, str] = {"resource": c}
+        if last_mod:
+            entry["last_modified"] = last_mod
+        out.append(entry)
+    return out
+
+
+def _okf_receipt(unit: Mapping[str, Any]) -> str:
+    """A re-derivable content digest over the unit's canonical OKF fields.
+
+    OKF's trust tier is *self-declared*: a producer writes an actor string
+    and the tier is granted, with nothing authenticating it. This receipt is
+    the checkable alternative — a consumer canonicalises the same preimage
+    (:data:`_RECEIPT_PREIMAGE`, i.e. the unit minus ``sources`` and
+    ``receipt``), recomputes the digest, and detects any tampering. Trust by
+    re-derivation, not by the sender's word. Deterministic (sorted keys, no
+    clock, no randomness): the same unit yields the same receipt on every
+    machine. It is a tamper-evidence anchor, not a signature.
+    """
+    preimage = {k: unit[k] for k in _RECEIPT_PREIMAGE if k in unit}
+    canonical = json.dumps(preimage, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+
+
+def _block_to_okf_unit(block: Mapping[str, Any], namespace: str = "") -> dict[str, Any]:
+    """Project a mind-mem block onto a lossy OKF v0.2 knowledge unit.
+
+    Only the OKF-conformant surface is emitted (:data:`_OKF_UNIT_FIELDS`).
+    mind-mem's differentiated fields (governance internals, evidence chain,
+    contradiction links, retrieval scores) are intentionally dropped — OKF is
+    an interop envelope, not a faithful round-trip of the moat.
+
+    The v0.2 trust/lifecycle family is emitted DERIVED from recorded signals:
+    ``status`` from the block's governance status, ``generated`` from the
+    producing system (never a self-declared ``human:`` actor), ``sources``
+    with recorded credibility signals, and a re-derivable ``receipt`` anchor.
+    A ``verified`` human-review tier is deliberately NOT synthesised: an
+    exported unit cannot prove a verification event, so claiming it would be
+    exactly the self-asserted-tier anti-pattern OKF itself warns about.
     """
     unit: dict[str, Any] = {"type": _okf_type(block)}
     bid = _block_id(block)
@@ -177,6 +313,23 @@ def _block_to_okf_unit(block: Mapping[str, Any]) -> dict[str, Any]:
     tags = _first(block, _OKF_TAG_KEYS)
     if tags is not None:
         unit["tags"] = tags if isinstance(tags, list) else [tags]
+    status = _okf_status(block)
+    if status is not None:
+        unit["status"] = status
+    stale = _first(block, _OKF_STALE_KEYS)
+    if stale is not None:
+        m = re.match(r"(\d{4}-\d{2}-\d{2})", str(stale).strip())
+        if m:
+            unit["stale_after"] = m.group(1)
+    # `generated` is always emitted: mind-mem CAN always substantiate that a
+    # machine produced this unit. `verified` is intentionally never synthesised.
+    unit["generated"] = _okf_generated(block, namespace)
+    sources = _okf_sources(block)
+    if sources:
+        unit["sources"] = sources
+    # Receipt LAST, over the canonical preimage (which excludes `sources` and
+    # `receipt`) so the anchor never sits inside its own preimage.
+    unit["receipt"] = _okf_receipt(unit)
     return unit
 
 
@@ -196,7 +349,7 @@ def export_to_okf(core: LoadedCore) -> dict[str, Any]:
         "source": "mind-mem",
         "id": f"urn:mindmem:{manifest['namespace']}:{manifest['version']}",
         "manifest": manifest,
-        "units": [_block_to_okf_unit(b) for b in core.blocks],
+        "units": [_block_to_okf_unit(b, manifest["namespace"]) for b in core.blocks],
         "relations": [
             {
                 "subject": e.get("subject"),
@@ -244,12 +397,23 @@ def _render_okf_unit(unit: Mapping[str, Any], edges: list[Mapping[str, Any]]) ->
     fm: list[str] = ["---"]
     # `type` first — it is the only required field.
     fm.append(f"type: {_yaml_scalar(unit['type'])}")
-    for key in ("title", "description", "resource", "timestamp"):
+    for key in ("title", "description", "resource", "timestamp", "status", "stale_after"):
         if key in unit:
             fm.append(f"{key}: {_yaml_scalar(unit[key])}")
     if unit.get("tags"):
         fm.append("tags:")
         fm.extend(f"  - {_yaml_scalar(t)}" for t in unit["tags"])
+    gen = unit.get("generated")
+    if isinstance(gen, Mapping) and gen:
+        fm.append("generated:")
+        for gk in ("by", "at"):
+            if gk in gen:
+                fm.append(f"  {gk}: {_yaml_scalar(gen[gk])}")
+    # `receipt` is OKF's checkable trust alternative — a consumer re-derives
+    # it from the canonical unit; emitted last so it never sits in its own
+    # preimage.
+    if unit.get("receipt"):
+        fm.append(f"receipt: {_yaml_scalar(unit['receipt'])}")
     fm.append("---")
 
     body: list[str] = [""]
@@ -297,7 +461,7 @@ def write_okf_bundle(core: LoadedCore, out_dir: str | Path) -> Path:
 
     index_rows: list[str] = []
     for block in core.blocks:
-        unit = _block_to_okf_unit(block)
+        unit = _block_to_okf_unit(block, manifest["namespace"])
         unit_with_cites = dict(unit)
         unit_with_cites["_citations"] = _citations(block)  # body-only, not frontmatter
         fname = _concept_filename(unit)
@@ -346,6 +510,19 @@ _OKF_IMPORT_FIELD = {
 # prefix so it parses as the right block kind.
 _TYPE_ID_PREFIX = {v: k for k, v in _ID_PREFIX_TYPE.items()}
 
+# Foreign OKF trust/provenance fields are preserved as UNTRUSTED CLAIMS under a
+# namespaced, capitalised key — retained for provenance, but NEVER honoured as
+# mind-mem's own governance/trust tier. `verified`/`generated` are a producer's
+# self-declaration; ours is evidence derived from a recorded artifact. Keeping
+# them under `OkfClaim*` makes it impossible to mistake a sender's asserted
+# `verified: human:...` for our verified status.
+_OKF_CLAIM_FIELD = {
+    "verified": "OkfClaimVerified",
+    "generated": "OkfClaimGenerated",
+    "status": "OkfClaimStatus",
+    "receipt": "OkfReceipt",
+}
+
 
 def _parse_okf_frontmatter(text: str) -> dict[str, Any]:
     """Parse the tiny YAML subset our bundle writer emits (string scalars +
@@ -355,21 +532,36 @@ def _parse_okf_frontmatter(text: str) -> dict[str, Any]:
     if not lines or lines[0].strip() != "---":
         return {}
     fm: dict[str, Any] = {}
-    cur_list_key: str | None = None
+    pending_key: str | None = None  # empty-valued key that introduces a list or nested map
     for line in lines[1:]:
         if line.strip() == "---":
             break
-        if cur_list_key is not None and line.lstrip().startswith("- "):
-            fm.setdefault(cur_list_key, []).append(_unquote(line.lstrip()[2:].strip()))
+        indented = line[:1] in (" ", "\t")
+        stripped = line.strip()
+        if pending_key is not None and indented and stripped.startswith("- "):
+            cur = fm.get(pending_key)
+            if not isinstance(cur, list):
+                cur = []
+                fm[pending_key] = cur
+            cur.append(_unquote(stripped[2:].strip()))
             continue
-        cur_list_key = None
+        if pending_key is not None and indented and ":" in stripped:
+            # A nested mapping under `pending_key` (e.g. OKF `generated: {by, at}`).
+            sub_k, _, sub_v = stripped.partition(":")
+            cur = fm.get(pending_key)
+            if not isinstance(cur, dict):
+                cur = {}
+                fm[pending_key] = cur
+            cur[sub_k.strip()] = _unquote(sub_v.strip())
+            continue
+        pending_key = None
         if ":" not in line:
             continue
         key, _, val = line.partition(":")
         key = key.strip()
         val = val.strip()
         if val == "":
-            cur_list_key = key  # a list follows
+            pending_key = key  # a list or nested map follows; provisional [] upgraded on demand
             fm[key] = []
         else:
             fm[key] = _unquote(val)
@@ -407,6 +599,16 @@ def import_okf_bundle(bundle_dir: str | Path) -> list[dict[str, Any]]:
         for okf_key, mm_key in _OKF_IMPORT_FIELD.items():
             if okf_key in fm and fm[okf_key] not in (None, "", []):
                 block[mm_key] = fm[okf_key]
+        # Foreign trust/provenance frontmatter (`verified`, `generated`,
+        # `status`, `receipt`) is recorded VERBATIM as an untrusted claim —
+        # never mapped onto a mind-mem governance/trust field. A producer's
+        # self-declared `verified: human:...` tier is a claim, not evidence:
+        # imported blocks enter the HITL-gated path and derive their tier from
+        # OUR governance record, not the sender's word. Claim keys are
+        # capitalised to satisfy the `^[A-Z]` field grammar.
+        for okf_key, claim_key in _OKF_CLAIM_FIELD.items():
+            if okf_key in fm and fm[okf_key] not in (None, "", [], {}):
+                block[claim_key] = fm[okf_key]
         # Preserve / synthesize an id so the block keys a graph node.
         prefix = _TYPE_ID_PREFIX.get(block["type"], "")
         bid = concept_id

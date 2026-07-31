@@ -15,7 +15,10 @@ import pytest
 
 from mind_mem.context_core import build_core, load_core
 from mind_mem.core_export import (
+    _OKF_UNIT_FIELDS,
     OKF_VERSION,
+    _block_to_okf_unit,
+    _okf_receipt,
     export_to_okf,
     import_okf_bundle,
     write_okf_bundle,
@@ -93,7 +96,10 @@ class TestOkfEnvelope:
         assert rels == [{"subject": "A", "predicate": "blocks", "object": "B"}]
 
     def test_moat_fields_are_dropped(self, tmp_core: str) -> None:
-        # Governance/retrieval/evidence fields must NOT appear in the OKF unit.
+        # Governance internals / retrieval / evidence fields must NOT appear in
+        # the OKF unit. The raw capitalised `Status` never leaks (it is mapped
+        # to OKF's lowercase `status`, an OKF-own field); retrieval score and
+        # evidence hash are dropped entirely.
         block = {
             "_id": "D-1",
             "type": "decision",
@@ -104,10 +110,12 @@ class TestOkfEnvelope:
         }
         core = _load(tmp_core, [block])
         unit = export_to_okf(core)["units"][0]
-        assert "Status" not in unit
+        assert "Status" not in unit  # raw moat key never leaks…
+        assert unit["status"] == "stable"  # …but the OKF-own lifecycle field is derived
         assert "rrf_score" not in unit
         assert "evidence_hash" not in unit
-        assert set(unit) <= {"id", "type", "title", "description", "resource", "timestamp", "tags"}
+        # Everything emitted is inside the OKF-conformant allow-list.
+        assert set(unit) <= _OKF_UNIT_FIELDS
 
 
 class TestOkfTypeAndCitations:
@@ -203,3 +211,143 @@ class TestOkfImportRoundTrip:
                 if key in ("_id", "type"):
                     continue
                 assert key[0].isupper(), f"{key} must satisfy ^[A-Z] grammar"
+
+
+class TestOkfV02TrustFamily:
+    """OKF v0.2 trust/lifecycle family — DERIVED from recorded signals, never
+    self-asserted (issue #550, "better than proposed")."""
+
+    def test_version_is_v02(self, tmp_core: str) -> None:
+        core = _load(tmp_core, [{"_id": "D-1", "type": "decision"}])
+        assert export_to_okf(core)["okf_version"] == "0.2"
+        assert OKF_VERSION == "0.2"
+
+    def test_generated_is_machine_actor_never_human(self, tmp_core: str) -> None:
+        core = _load(tmp_core, [{"_id": "D-1", "type": "decision", "Date": "2026-06-13"}])
+        unit = export_to_okf(core)["units"][0]
+        gen = unit["generated"]
+        # System actor, namespaced — provable, not a self-declared `human:` tier.
+        assert gen["by"] == "mind-mem:proj"
+        assert not gen["by"].startswith("human:")
+        assert gen["at"] == "2026-06-13T00:00:00Z"
+
+    def test_verified_tier_is_never_synthesised(self, tmp_core: str) -> None:
+        # The refusal that makes this "better than proposed": an exported unit
+        # cannot prove a human-review event, so `verified` is NEVER emitted —
+        # OKF reads the concept as "unverified", the honest tier.
+        core = _load(tmp_core, [{"_id": "D-1", "type": "decision", "Status": "active"}])
+        unit = export_to_okf(core)["units"][0]
+        assert "verified" not in unit
+
+    def test_status_maps_governance_to_okf_lifecycle(self, tmp_core: str) -> None:
+        core = _load(
+            tmp_core,
+            [
+                {"_id": "D-1", "type": "decision", "Status": "active"},
+                {"_id": "D-2", "type": "decision", "Status": "superseded"},
+                {"_id": "D-3", "type": "decision", "Status": "revoked"},
+            ],
+        )
+        by_id = {u["id"]: u for u in export_to_okf(core)["units"]}
+        assert by_id["D-1"]["status"] == "stable"
+        assert by_id["D-2"]["status"] == "deprecated"
+        assert by_id["D-3"]["status"] == "deprecated"
+
+    def test_unknown_status_is_surfaced_not_masked(self, tmp_core: str) -> None:
+        core = _load(tmp_core, [{"_id": "D-1", "type": "decision", "Status": "Frozen"}])
+        unit = export_to_okf(core)["units"][0]
+        assert unit["status"] == "frozen"  # verbatim lower-cased, not a "stable" default
+
+    def test_sources_carry_signals_not_a_score(self, tmp_core: str) -> None:
+        block = {
+            "_id": "D-1",
+            "type": "decision",
+            "Statement": "x",
+            "Sources": ["arXiv:2401.1", "github.com/star-ga/mind"],
+            "Date": "2026-06-13",
+        }
+        core = _load(tmp_core, [block])
+        unit = export_to_okf(core)["units"][0]
+        assert unit["sources"] == [
+            {"resource": "arXiv:2401.1", "last_modified": "2026-06-13"},
+            {"resource": "github.com/star-ga/mind", "last_modified": "2026-06-13"},
+        ]
+        # No credibility *score* anywhere — only recorded signals (OKF's own rule).
+        for s in unit["sources"]:
+            assert "score" not in s
+            assert "confidence" not in s
+
+
+class TestOkfReceipt:
+    """The re-derivable content receipt: trust by re-derivation, not by the
+    sender's word."""
+
+    def test_receipt_is_deterministic(self, tmp_core: str) -> None:
+        block = {"_id": "D-1", "type": "decision", "Statement": "x", "Date": "2026-06-13"}
+        core = _load(tmp_core, [block])
+        r1 = export_to_okf(core)["units"][0]["receipt"]
+        r2 = export_to_okf(core)["units"][0]["receipt"]
+        assert r1 == r2
+        assert r1.startswith("sha256:")
+
+    def test_receipt_re_derivable_by_a_consumer(self, tmp_core: str) -> None:
+        block = {"_id": "D-1", "type": "decision", "Statement": "x", "Date": "2026-06-13"}
+        core = _load(tmp_core, [block])
+        unit = export_to_okf(core)["units"][0]
+        # A consumer recomputes the receipt from the unit and it must match.
+        assert _okf_receipt(unit) == unit["receipt"]
+
+    def test_receipt_detects_tampering(self, tmp_core: str) -> None:
+        block = {"_id": "D-1", "type": "decision", "Statement": "x"}
+        core = _load(tmp_core, [block])
+        unit = dict(export_to_okf(core)["units"][0])
+        original = unit["receipt"]
+        unit["description"] = "tampered"
+        # Recomputing over the tampered unit yields a different digest.
+        assert _okf_receipt(unit) != original
+
+    def test_receipt_excludes_sources_from_preimage(self) -> None:
+        # Same core fields but different citations -> identical receipt (sources
+        # are excluded from the canonical preimage so envelope and bundle agree).
+        base = {"_id": "D-1", "type": "decision", "Statement": "x", "Date": "2026-06-13"}
+        u_no_src = _block_to_okf_unit(base, "proj")
+        u_src = _block_to_okf_unit({**base, "Sources": ["arXiv:1"]}, "proj")
+        assert u_src["receipt"] == u_no_src["receipt"]
+
+
+class TestOkfImportTreatsForeignTrustAsClaim:
+    """A foreign producer's self-declared trust is recorded as an untrusted
+    claim, never honoured as mind-mem's own tier."""
+
+    def test_foreign_verified_becomes_a_namespaced_claim(self, tmp_path) -> None:
+        bundle = tmp_path / "foreign"
+        bundle.mkdir()
+        (bundle / "D-9.md").write_text(
+            "---\n"
+            "type: decision\n"
+            "title: Foreign decision\n"
+            "status: stable\n"
+            "verified:\n"
+            "  by: human:mallory\n"
+            "  at: 2026-01-01T00:00:00Z\n"
+            "receipt: sha256:deadbeefdeadbeef\n"
+            "---\n\n# Foreign decision\n",
+            encoding="utf-8",
+        )
+        blocks = import_okf_bundle(bundle)
+        b = blocks[0]
+        # The self-declared `verified: human:mallory` is a CLAIM under a
+        # namespaced key — never a trusted mind-mem field.
+        assert b["OkfClaimVerified"] == {"by": "human:mallory", "at": "2026-01-01T00:00:00Z"}
+        assert b["OkfClaimStatus"] == "stable"
+        assert b["OkfReceipt"] == "sha256:deadbeefdeadbeef"
+        # It is NOT promoted to any trusted/governance field.
+        assert "Verified" not in b
+        assert "Status" not in b  # foreign status is a claim, not our governance status
+        # Title still imports as a trusted content field.
+        assert b["Title"] == "Foreign decision"
+        # Every non-_id/type key still satisfies the capitalised grammar.
+        for key in b:
+            if key in ("_id", "type"):
+                continue
+            assert key[0].isupper()

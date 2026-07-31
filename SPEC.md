@@ -67,17 +67,20 @@ A `Resource` value SHOULD be a dereferenceable or canonical URI
 `urn:arxiv:2401.00001`, `urn:person:polo`). Multiple blocks MAY share a
 `Resource` (they describe the same subject from different angles).
 
-### OKF Conformance (interop)
+### OKF Conformance (interop) — v0.2
 
 Mind Mem maps cleanly onto the [Open Knowledge
 Format](https://github.com/GoogleCloudPlatform/knowledge-catalog)
-(Apache-2.0): typed units (`type`), a title/description
-(`Statement`/`Excerpt`/`Summary`), `Tags`, a timestamp (`Date`),
-citations (`Sources` → OKF `# Citations`), and a subject URI (`Resource`
-↔ OKF `resource`). The required OKF `type` is resolved from an explicit
-`type` or the `_id` prefix (`D-` → decision, `PRJ-` → project, …), never
-left as an empty or masking default. OKF is adopted as an
-**import/export interchange** with two surfaces in
+(Apache-2.0), tracking the current published spec (**OKF v0.2**;
+`OKF_VERSION`): typed units (`type`), a title/description
+(`Statement`/`Excerpt`/`Summary`), `Tags`, a timestamp (`Date`), a
+subject URI (`Resource` ↔ OKF `resource`), the lifecycle field (`Status`
+→ OKF `status`), the freshness field (`ValidUntil` → OKF `stale_after`),
+and structured `sources` with per-source credibility *signals*
+(`last_modified`) rather than a score. The required OKF `type` is
+resolved from an explicit `type` or the `_id` prefix (`D-` → decision,
+`PRJ-` → project, …), never left as an empty or masking default. OKF is
+adopted as an **import/export interchange** with three surfaces in
 [`core_export`](src/mind_mem/core_export.py):
 
 - `write_okf_bundle()` — emits a **conformant OKF bundle on disk**: one
@@ -91,12 +94,35 @@ left as an empty or masking default. OKF is adopted as an
   field grammar. Imported blocks enter through the normal HITL-gated
   path, never as trusted source-of-truth.
 
+**Trust is derived, never self-asserted.** OKF's trust tier is a
+producer's self-declaration: a `generated`/`verified` actor string is
+written into a file and the "human-reviewed" tier is granted, with
+nothing authenticating it (the spec is candid these are advisory
+signals, not access control). Mind Mem is deliberately stronger:
+
+- `generated` carries the producing **system** actor (`mind-mem:<ns>`) —
+  provable, never a `human:` string we cannot substantiate.
+- `verified` (the human-review tier) is **never synthesised** on export:
+  an exported unit cannot prove a review event, so the concept reads as
+  OKF "unverified" — the honest tier — rather than claiming a tier we
+  can't back. A `verified` value only ever exists in Mind Mem when a real
+  `propose_update → approve_apply` record backs it.
+- Each unit carries a re-derivable `receipt` (a `sha256:` digest over the
+  canonical unit): a consumer recomputes it and detects tampering — trust
+  by **re-derivation**, not by the sender's word. Deterministic (no
+  clock, no randomness); a tamper-evidence anchor, not a signature.
+- On **import**, a foreign bundle's self-declared `verified` / `generated`
+  / `status` / `receipt` are recorded verbatim as untrusted **claims**
+  (`OkfClaim*` / `OkfReceipt`), never mapped onto a mind-mem
+  governance/trust field. A sender's `verified: human:…` is a claim, not
+  evidence.
+
 Mind Mem's differentiated layers (HITL governance, contradiction
 handling, BM25+vector+RRF retrieval, the evidence/Merkle chain) sit
 strictly **above** the format and are deliberately outside OKF's scope
-("notable absences"). Both export surfaces emit only an allow-listed OKF
-field set, so the moat is lossy by construction and can never reach OKF
-output.
+("notable absences"). All export surfaces emit only an allow-listed OKF
+field set (`_OKF_UNIT_FIELDS`), so the moat is lossy by construction and
+can never reach OKF output.
 
 ### Status Values
 
