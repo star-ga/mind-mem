@@ -270,9 +270,7 @@ def test_search_expanded_single_variant_branch_propagates(monkeypatch):
     monkeypatch.setattr(
         hb,
         "search",
-        lambda query, workspace, *a, **k: _as_results(
-            [{"_id": "D-1", "score": 1.0}], {"leg": "vector", "reason": "error"}
-        ),
+        lambda query, workspace, *a, **k: _as_results([{"_id": "D-1", "score": 1.0}], {"leg": "vector", "reason": "error"}),
     )
     out = hb._search_expanded(queries=["only"], workspace=ws, limit=5)
     assert out.degraded is not None
@@ -293,9 +291,7 @@ def test_expansion_end_to_end_propagates_degraded(monkeypatch):
     hb._vector_available = True  # reach the fused path in each recursion
 
     # Expand into 3 variants.
-    monkeypatch.setattr(
-        qe, "expand_queries", lambda query, config=None: [query, query + " alt", query + " alt2"]
-    )
+    monkeypatch.setattr(qe, "expand_queries", lambda query, config=None: [query, query + " alt", query + " alt2"])
 
     # Every variant's vector leg fails -> each single-query result degrades.
     def _boom(*a, **k):

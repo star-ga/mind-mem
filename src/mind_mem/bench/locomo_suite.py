@@ -63,8 +63,7 @@ DEFAULT_DATA_PATH = "benchmarks/.cache/locomo.json"
 #: by an external judge, not by this harness. Named here only to disclose that
 #: they are NOT the numbers this harness produces.
 PRIOR_LLM_JUDGE_NOTE = (
-    "prior repo LoCoMo figures (mean 77.9 / adversarial 82.3 / temporal 88.5) "
-    "are external-LLM-judge answer-quality scores"
+    "prior repo LoCoMo figures (mean 77.9 / adversarial 82.3 / temporal 88.5) are external-LLM-judge answer-quality scores"
 )
 
 _SESSION_KEY_RE = re.compile(r"^session_(\d+)$")

@@ -195,9 +195,7 @@ def test_scorer_aggregate_over_fixture():
 
 def test_render_scorecard_discloses_sample_size_and_vector_leg():
     result = run_suite("bm25_baseline", _load(), k=5, turns="all")
-    card = render_scorecard(
-        result, dataset_path="locomo.json", k=5, embedder="none (BM25-only)", sampling="full set"
-    )
+    card = render_scorecard(result, dataset_path="locomo.json", k=5, embedder="none (BM25-only)", sampling="full set")
     assert "LoCoMo recall scorecard" in card
     assert "Questions evaluated:** 5" in card
     assert "Vector/embedder leg exercised:" in card
