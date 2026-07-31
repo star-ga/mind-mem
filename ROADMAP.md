@@ -2600,3 +2600,62 @@ deadline and invariants do not.
 - **Status:** Proposed 2026-07-25. Evaluate-item, not a commitment. Blocking is
   ~an inverted index, not a dependency. Sequence behind any live dedup-quality
   signal — build the measurement before the mechanism.
+
+## Graph-retrieval systems are not memory systems (positioning, prior art observed 2026-07-30)
+
+> A permissively-licensed multi-language AST-graph tool reached ~99k★ in four months
+> and publishes a benchmark table putting itself against dedicated memory systems on
+> LOCOMO and LongMemEval. **Idea only — no code adopted, no dependency, no public
+> attribution.** This is a positioning entry, not a feature request: nothing in its
+> engine belongs in mind-mem. Recorded because the comparison it invites is the one
+> we will be asked to answer.
+
+**The category confusion, stated plainly.** That tool builds a knowledge graph from
+a corpus by walking syntax trees deterministically, then retrieves over it. It
+reports strong retrieval numbers (recall@10 roughly 10x one dedicated memory system,
+above BM25) at near-zero build cost, and it is measured on the same academic memory
+datasets. A reader skimming the table concludes "graph retrieval beats memory
+systems." That conclusion does not follow, and the reason is worth writing down
+before someone asks.
+
+**What retrieval benchmarks measure, and what they omit.** LOCOMO and LongMemEval
+score *finding the right passage and answering from it*. They contain no notion of:
+whether a write was authorized, whether the new fact contradicts a stored one,
+whether a bad write can be rolled back, or whether the store's history is auditable.
+A system can top every one of those benchmarks and still be a corpus you rebuild
+from scratch — which is exactly what a graph builder is. mind-mem's product is the
+**governed write path**: HITL-gated `propose_update`, contradiction detection,
+block lineage, rollback, an auditable chain. Those are properties of the *store over
+time*, and no retrieval benchmark has ever scored them.
+
+**The honest concession, so this is not self-serving.** Retrieval quality is a real
+axis and one we compete on. Where these systems are genuinely ahead is build cost —
+a deterministic AST/structure pass costs zero model credits, and any memory system
+whose ingest requires per-item model calls carries a cost floor that a structural
+extractor does not. That is a legitimate pressure on ingest-heavy designs and worth
+tracking against our own ingest path. Two further caveats cut the other way: their
+harness is self-authored (their repo, their adapters wrapping the competing systems,
+their judge), and self-run harnesses grade themselves generously by construction —
+though publishing a second-judge agreement statistic is more rigor than most memory
+papers offer and should be credited. Also, retrieval-recall comparisons across
+systems with different embedders are confounded and should not be read as a clean
+ranking.
+
+**What we take from it.** Nothing structural. One discipline worth mirroring: they
+publish judge validation, fairness rules, and a spend ledger alongside the numbers.
+If mind-mem ever publishes a retrieval comparison, it publishes on those terms —
+one shared model, disclosed budgets, a validated judge, and the harness open — or it
+does not publish. A benchmark table without those is marketing.
+
+**The framing to use when asked.** Retrieval quality and governed durability are
+orthogonal axes, not competing scores on one. "Which retrieves better" is a fair
+question with a measurable answer; "which is the memory system" is answered by which
+one can tell you *why* a fact is in the store, *who* approved it, and *what it
+replaced*. Same shape as the determinism-vs-accuracy distinction on the compiler
+side: the benchmark the field runs is not the property we sell.
+
+- **Status:** Positioning note, 2026-07-30. No work item. Revisit if a governed-write
+  competitor appears — that would be a real one, and none of these are.
+
+> Provenance (repo, author, metrics) recorded privately in `mind-internal`, per the
+> no-public-attribution rule.
