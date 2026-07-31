@@ -2659,3 +2659,72 @@ side: the benchmark the field runs is not the property we sell.
 
 > Provenance (repo, author, metrics) recorded privately in `mind-internal`, per the
 > no-public-attribution rule.
+
+## Verified vs. attested: naming the runtime half of trust (prior-art shape observed 2026-07-30)
+
+> A major cloud vendor published an open, vendor-neutral knowledge-format
+> specification whose trust model draws a distinction we do not currently name.
+> **Vocabulary and design constraint only — no format adopted, no conformance
+> claimed, no code taken.** Unlike the code-derived entries above, this one cites a
+> *published specification*: a public standard exists to be read and reasoned about,
+> and recording that it draws a distinction is not the kind of provenance the
+> no-attribution rule protects. The source is still not named in any public artifact.
+
+**The distinction.** That spec separates two things a consumer needs to know about a
+stored fact, and argues both must exist independently:
+
+- **Verified** — *the definition still matches policy.* Doc-level, slow, recorded
+  durably in the store. Answers "has a human confirmed this content against its
+  sources?"
+- **Attested** — *this particular run produced its value the sanctioned way.*
+  Per-call, runtime, **deliberately not stored**. Answers "was this number computed
+  by the blessed path, or did the agent improvise?"
+
+The load-bearing argument for keeping them apart: a *stale definition can still
+attest cleanly*, and a *freshly-verified definition still requires attestation on
+every run*. Collapsing them into one flag loses one of those two failure modes.
+
+**Where mind-mem stands, measured not assumed.** We have the first half and named
+it: `propose_update` → `approve_apply` is a durable, human-gated, stored
+verification, with `block_lineage`, `contradiction_detector`, `audit_chain` /
+`hash_chain_v2` behind it. We have real *pieces* of the second half that were built
+for other reasons and are not organised under this concept:
+
+- `apply_engine.write_receipt` / `update_receipt` emit an `APPLY_RECEIPT.md` per
+  apply — but that is a receipt *of a governed write*, not of a *read/derivation*.
+- `spec_binding.py` binds the active governance config to a content hash and requires
+  explicit re-attestation on drift — genuinely attestation-shaped, but scoped to
+  configuration, not to a recall result.
+- `verify_cli.py` already reports `"no binding — not yet attested"`.
+
+So the gap is specific and worth stating precisely: **nothing attests a recall
+result.** When mind-mem answers a query, the caller gets ranked blocks with no
+runtime evidence of *which retrieval path produced them*. The degraded-recall marker
+shipped this session (BM25-only fallback surfaced in the response envelope) is the
+first true instance of this class — a runtime signal about how an answer was
+produced — and it arrived without the vocabulary to place it. That is the argument
+for adopting the naming now rather than after three more one-off flags.
+
+**The design constraint we do not relax.** That spec derives its trust tier from an
+*actor-string prefix* — a producer writes `human:<id>` into a metadata field and the
+"human-reviewed" tier is granted. The spec is candid that these are advisory signals,
+not access control. We do not copy that. A tier that a producer can self-assert is a
+claim, not evidence; ours is anchored to the approval gate and the hash chain. If an
+attestation surface lands here, its verdict must be **derivable from a recorded
+artifact** (which path ran, which config hash, which chain head) and never from a
+self-declared field. Same discipline as the codegraph edge-provenance label: assigned
+by which pass emitted it, never by a model and never by a threshold.
+
+**What we would take, if this becomes a work item.** The vocabulary, and one
+structural rule from it: the attestation verdict is a *runtime artifact and is not
+written back into the store*. Storing it would turn a per-run fact into a durable
+claim that goes stale exactly the way the spec warns a credibility score does — the
+same reason that spec records credibility *signals* and refuses to store a *score*,
+a discipline we independently arrived at for edge provenance.
+
+- **Status:** Vocabulary adopted for internal use, 2026-07-30. Not a schema change,
+  not a conformance commitment. Format-level interop is a separate and larger
+  question that only pays if we target the enterprise-catalog ecosystem, which is not
+  our current buyer. Sequence any implementation behind a real caller that needs to
+  distinguish "this answer came from the full stack" from "this answer came from a
+  fallback" — the degraded marker is that caller's first, narrow instance.
