@@ -35,7 +35,7 @@ test = [
     # named in the pytest output instead of silently consuming the
     # whole 6-hour GitHub Actions job slot.
     "pytest-timeout>=2.3,<3.0",
-    "mypy>=1.14,<2.0",
+    "mypy>=1.14,<3.0",
     "fastmcp>=3.2.0",
     "sqlite-vec>=0.1.6",
     # Runtime optional deps several test modules exercise directly. We
