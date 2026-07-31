@@ -20,6 +20,7 @@ from mind_mem.hybrid_recall import (
     RecallResults,
     VectorLegError,
     _as_results,
+    _union_degraded,
 )
 
 
@@ -166,3 +167,146 @@ def test_mcp_recall_envelope_surfaces_degraded(monkeypatch):
     envelope = json.loads(raw)
     assert envelope.get("degraded") == {"leg": "vector", "reason": "deadline_exceeded"}
     assert any("BM25-only" in w for w in envelope.get("warnings", []))
+
+
+# --------------------------------------------------------------------------
+# Multi-query degraded propagation (_union_degraded + _search_expanded)
+# --------------------------------------------------------------------------
+
+
+def test_union_degraded_none_when_no_variant_degraded():
+    assert _union_degraded([None, None], total=2) is None
+    assert _union_degraded([], total=0) is None
+
+
+def test_union_degraded_single_variant():
+    out = _union_degraded([None, {"leg": "vector", "reason": "error"}, None], total=3)
+    assert out == {
+        "leg": "vector",
+        "reason": "error",
+        "variants_degraded": "1",
+        "variants_total": "3",
+    }
+
+
+def test_union_degraded_dedups_and_sorts_reasons():
+    out = _union_degraded(
+        [
+            {"leg": "vector", "reason": "deadline_exceeded"},
+            {"leg": "vector", "reason": "unavailable"},
+            {"leg": "vector", "reason": "unavailable"},
+        ],
+        total=3,
+    )
+    assert out["leg"] == "vector"
+    assert out["reason"] == "deadline_exceeded,unavailable"  # sorted + deduped
+    assert out["variants_degraded"] == "3"
+    assert out["variants_total"] == "3"
+
+
+def test_search_expanded_marks_combined_when_any_variant_degraded(monkeypatch):
+    """ANY degraded variant marks the fused multi-query result."""
+    ws = _make_workspace()
+    hb = HybridBackend({"vector_enabled": True})
+
+    def _fake(query, workspace, *a, **k):
+        if query == "variant-bad":
+            return _as_results(
+                [{"_id": "D-2", "score": 0.5}],
+                {"leg": "vector", "reason": "deadline_exceeded"},
+            )
+        return _as_results([{"_id": "D-1", "score": 0.9}], None)
+
+    monkeypatch.setattr(hb, "search", _fake)
+    out = hb._search_expanded(
+        queries=["variant-ok", "variant-bad", "variant-ok-2"],
+        workspace=ws,
+        limit=5,
+    )
+    assert isinstance(out, RecallResults)
+    assert out.degraded is not None
+    assert out.degraded["leg"] == "vector"
+    assert out.degraded["reason"] == "deadline_exceeded"
+    assert out.degraded["variants_degraded"] == "1"
+    assert out.degraded["variants_total"] == "3"
+    # Fused results are still returned — degrade, don't drop.
+    assert len(out) >= 1
+
+
+def test_search_expanded_not_marked_when_all_variants_healthy(monkeypatch):
+    ws = _make_workspace()
+    hb = HybridBackend({"vector_enabled": True})
+    monkeypatch.setattr(
+        hb,
+        "search",
+        lambda query, workspace, *a, **k: _as_results([{"_id": "D-1", "score": 1.0}], None),
+    )
+    out = hb._search_expanded(queries=["a", "b", "c"], workspace=ws, limit=5)
+    assert getattr(out, "degraded", None) is None
+
+
+def test_search_expanded_unions_distinct_variant_reasons(monkeypatch):
+    ws = _make_workspace()
+    hb = HybridBackend({"vector_enabled": True})
+    markers = {
+        "q1": {"leg": "vector", "reason": "unavailable"},
+        "q2": {"leg": "vector", "reason": "import_failed"},
+    }
+
+    def _fake(query, workspace, *a, **k):
+        return _as_results([{"_id": query, "score": 1.0}], markers.get(query))
+
+    monkeypatch.setattr(hb, "search", _fake)
+    out = hb._search_expanded(queries=["q1", "q2"], workspace=ws, limit=5)
+    assert out.degraded["reason"] == "import_failed,unavailable"
+    assert out.degraded["variants_degraded"] == "2"
+    assert out.degraded["variants_total"] == "2"
+
+
+def test_search_expanded_single_variant_branch_propagates(monkeypatch):
+    """The len<=1 inline branch also propagates the marker."""
+    ws = _make_workspace()
+    hb = HybridBackend({"vector_enabled": True})
+    monkeypatch.setattr(
+        hb,
+        "search",
+        lambda query, workspace, *a, **k: _as_results(
+            [{"_id": "D-1", "score": 1.0}], {"leg": "vector", "reason": "error"}
+        ),
+    )
+    out = hb._search_expanded(queries=["only"], workspace=ws, limit=5)
+    assert out.degraded is not None
+    assert out.degraded["reason"] == "error"
+    assert out.degraded["variants_degraded"] == "1"
+    assert out.degraded["variants_total"] == "1"
+
+
+def test_expansion_end_to_end_propagates_degraded(monkeypatch):
+    """Real search() -> expansion -> per-variant recursion: a failing
+    vector leg on every variant surfaces as a combined degraded marker on
+    the fused result (the single-query 419bee5 fix is no longer lost on
+    the multi-query path)."""
+    import mind_mem.query_expansion as qe
+
+    ws = _make_workspace()
+    hb = HybridBackend({"vector_enabled": True, "query_expansion": {"enabled": True}})
+    hb._vector_available = True  # reach the fused path in each recursion
+
+    # Expand into 3 variants.
+    monkeypatch.setattr(
+        qe, "expand_queries", lambda query, config=None: [query, query + " alt", query + " alt2"]
+    )
+
+    # Every variant's vector leg fails -> each single-query result degrades.
+    def _boom(*a, **k):
+        raise VectorLegError("import_failed")
+
+    monkeypatch.setattr(hb, "_vector_search", _boom)
+
+    results = hb.search("capital of France", ws, limit=5)
+    assert getattr(results, "degraded", None) is not None
+    assert results.degraded["leg"] == "vector"
+    assert results.degraded["reason"] == "import_failed"
+    assert results.degraded["variants_total"] == "3"
+    # BM25 leg still produced fused results across variants.
+    assert len(results) >= 1

@@ -231,6 +231,38 @@ def _as_results(items: list[dict], degraded: dict[str, str] | None = None) -> Re
     return rr
 
 
+def _union_degraded(
+    markers: list[dict[str, str] | None],
+    total: int,
+) -> dict[str, str] | None:
+    """Combine per-variant degradation markers for a multi-query recall.
+
+    Multi-query expansion / decomposition fans a recall out across query
+    variants and RRF-fuses the per-variant sub-results. Each sub-result
+    carries its own ``degraded`` marker (or ``None``). If ANY variant
+    degraded — its vector leg was unavailable / timed out / failed — the
+    fused result is not the full hybrid fusion the ``hybrid`` label
+    implies, so the combined result must carry a ``degraded`` marker too;
+    otherwise the single-query fix (419bee5) would be silently lost on the
+    multi-query paths. Legs and reasons are unioned (deduped, sorted,
+    comma-joined) and the degraded/total variant counts recorded so the
+    degradation stays loud and machine-readable.
+
+    Returns ``None`` when no variant degraded.
+    """
+    present = [m for m in markers if m]
+    if not present:
+        return None
+    legs = sorted({str(m.get("leg", "vector")) for m in present})
+    reasons = sorted({str(m.get("reason", "unknown")) for m in present})
+    return {
+        "leg": ",".join(legs),
+        "reason": ",".join(reasons),
+        "variants_degraded": str(len(present)),
+        "variants_total": str(total),
+    }
+
+
 class HybridBackend:
     """Orchestrates BM25 and vector search with RRF fusion.
 
@@ -705,7 +737,11 @@ class HybridBackend:
             **kwargs: Forwarded to underlying search.
 
         Returns:
-            RRF-fused ranked list of result dicts.
+            RRF-fused :class:`RecallResults`. Carries a ``degraded``
+            marker (the union of the per-variant markers) whenever any
+            variant's sub-result was degraded, so a caller can tell the
+            fused ``hybrid`` result actually served BM25-only for one or
+            more variants.
         """
         # Pass _skip_auto_features=True so the recursion into search()
         # doesn't re-trigger expansion/decomposition. Previous code
@@ -757,7 +793,17 @@ class HybridBackend:
                 per_query_results = list(ex.map(_one, queries))
 
         if not per_query_results:
-            return []
+            return _as_results([])
+
+        # Aggregate per-variant degradation BEFORE fusion strips the
+        # ``.degraded`` markers: each sub-result is a RecallResults from
+        # the single-query path, so a vector leg that was unavailable /
+        # timed out / failed for any variant is recorded on that variant.
+        # Union them so the fused result carries the degradation too —
+        # without this, the single-query degraded marker (419bee5) would
+        # be silently dropped on the expansion / decomposition paths.
+        variant_markers = [getattr(r, "degraded", None) for r in per_query_results]
+        combined_degraded = _union_degraded(variant_markers, total=len(per_query_results))
 
         # Fuse all query variant results with equal weights
         weights = [1.0] * len(per_query_results)
@@ -767,14 +813,25 @@ class HybridBackend:
             k=self.rrf_k,
         )
 
+        if combined_degraded is not None:
+            _log.warning(
+                "multi_query_recall_degraded",
+                query_variants=len(queries),
+                variants_degraded=combined_degraded["variants_degraded"],
+                leg=combined_degraded["leg"],
+                reason=combined_degraded["reason"],
+                fallback="bm25_only",
+            )
+
         _log.info(
             "multi_query_fusion_complete",
             query_variants=len(queries),
             total_fused=len(fused),
             limit=limit,
+            degraded=bool(combined_degraded),
         )
 
-        return fused[:limit]
+        return _as_results(fused[:limit], combined_degraded)
 
     def _maybe_session_boost(self, results: list[dict]) -> list[dict]:
         """Apply session-boundary preservation (v3.3.0 Tier 2 #5)."""
