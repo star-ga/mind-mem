@@ -2728,3 +2728,78 @@ a discipline we independently arrived at for edge provenance.
   our current buyer. Sequence any implementation behind a real caller that needs to
   distinguish "this answer came from the full stack" from "this answer came from a
   fallback" — the degraded marker is that caller's first, narrow instance.
+
+## Selective re-injection: mind-mem as an active memory agent (prior art observed 2026-07-31)
+
+> Recent published work on long-horizon agents names a failure mode we have been
+> designing around without a word for it, and reports an ablation that bears directly
+> on how mind-mem is consumed. **Concept and benchmark design only — no code taken, no
+> numbers reproduced here.** The external figures are that work's claims, not ours.
+> Source not named in any public artifact; citation lives in `mind-internal`.
+
+**The failure mode.** In a long trajectory, a constraint that is present, visible, and
+still inside the context window stops influencing decisions. Not eviction, not
+hallucination — the text is right there and the agent has simply stopped treating it
+as relevant. That is a *retrieval-time relevance* problem, not a capacity problem, and
+it is the reason "we stored it and the caller can recall it" is not the same as "the
+caller acted on it."
+
+**Why this is a mind-mem entry and not only a consumer's problem.** Our surface is
+built on a pull model: a caller decides to `recall`, and everything else in the store
+is inert until asked. The external ablation compared four ways of exposing a memory
+store to a working agent — no exposure, always-on injection, passive store with recall
+available, and a *gated* policy that mostly stays silent and speaks only when the
+current trajectory conflicts with something stored. The gated arm won; **passive
+exposure was among the weakest**. Our default consumption pattern is the passive arm.
+That is a claim about *our product surface*, which is why it belongs here rather than
+only in a consumer repo's roadmap.
+
+**What already exists, and what is genuinely missing.** Most of the pipeline is
+shipped and was built for other reasons:
+
+- `intent_router.py` — 9-type classification with confidence, regex, no model call.
+  Viable as a free pre-filter deciding whether to spend anything at all.
+- `contradiction_detector.py` — BM25 + optional vector against the committed corpus,
+  returning block id, similarity, and conflict type. This is already the
+  "does the trajectory conflict with something stored" primitive.
+- `agent_bridge.py` — per-agent injection *formatting* (CLAUDE.md / AGENTS.md /
+  GEMINI.md / .cursorrules / .windsurfrules / aider conventions).
+- The local 4B model is a plausible judge for a one-line yes/no verdict: resident,
+  low temperature, already instructed to emit structured output without commentary.
+
+The missing piece is narrow and specific: **`agent_bridge` can format an injection but
+cannot deliver one mid-run.** Its own docstring records the filesystem watcher and
+per-agent hook installer as deferred. Everything else in the chain exists.
+
+**Delivery is a property of the consumer, and mind-mem should not pretend otherwise.**
+A harness with lifecycle hooks (measured 2026-07-31: `SessionStart` and `Stop` are
+installed and firing in at least one consuming harness on this box) can carry a
+mid-run tap today; a harness that owns its own scheduler can do it properly per step;
+an opaque third-party process cannot receive one at all, and writing to its config
+file reaches the *next* session, not the running one. mind-mem's job is to expose the
+verdict and the formatted line; **claiming delivery it does not control would be the
+dishonest part.** The library surface should therefore be delivery-agnostic and say so.
+
+**The discipline that does not relax.** The external result is that a *probabilistic*
+judge outperforms *fixed* injection schedules. That cuts against this project's
+posture, and the resolution is scope rather than reversal: a trigger verdict is
+**advisory, never evidence**. It must not be written into the store, must not appear
+in a hash chain, and must never be able to suppress the approval gate — the same rule
+already applied to attestation verdicts in the entry above, and to edge provenance:
+a runtime judgement stays a runtime artifact. Storing a "the model thought this was
+relevant" flag would turn a per-run guess into a durable claim that goes stale.
+
+**Required controls before any gain is claimed.** The load-bearing external finding is
+the *comparison*, not the architecture. If a trigger policy is built here, it closes
+only with a four-arm measurement on our own traffic: no injection, always-on, passive
+recall-available, and gated. A result showing the gate is no better than passive on
+our workload is a valid outcome and closes this entry as a negative finding. Adopting
+the architecture without reproducing the comparison would be importing someone else's
+conclusion — the failure mode this project has already been burned by once.
+
+- **Status:** Proposed 2026-07-31. Sequenced behind a real consumer that can deliver a
+  mid-run injection; without one, this is formatting with nowhere to go. Retraining the
+  local judge is explicitly deferred — the external work's own fine-tuned variant
+  reported only partial transfer, which is weak evidence that training is where the
+  gain lives, and a prompt-only baseline must be measured first. Delivery mechanisms
+  belong to consumers; this entry covers the verdict surface only.

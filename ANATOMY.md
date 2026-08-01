@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 944 | **Est. tokens:** ~2,068,934
-**Generated:** 2026-07-31 09:23 UTC
+**Files:** 944 | **Est. tokens:** ~2,072,240
+**Generated:** 2026-08-01 04:51 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~69,579 |
+| `./` | 35 | ~69,940 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -42,7 +42,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4,469 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 12 | ~10,047 |
+| `.github/workflows/` | 12 | ~10,048 |
 | `hooks/` | 3 | ~801 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -52,7 +52,7 @@
 | `.roo/` | 1 | ~22 |
 | `scripts/` | 6 | ~4,627 |
 | `sdk/go/` | 9 | ~6,773 |
-| `sdk/js/` | 5 | ~1,388 |
+| `sdk/js/` | 5 | ~4,332 |
 | `sdk/js/src/` | 4 | ~2,320 |
 | `sdk/js/test/` | 1 | ~2,191 |
 | `security/` | 3 | ~11,009 |
@@ -113,7 +113,7 @@
 - `pyproject.toml` (~2257 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
 - `README.md` (~25421 tok, huge) — 30-Second Demo
-- `requirements-optional.txt` (~768 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
+- `requirements-optional.txt` (~1129 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
 - `SECURITY.md` (~1737 tok, huge) — Security Policy
@@ -353,7 +353,7 @@
 - `release.yml` (~2248 tok, huge) — name: Release
 - `security-review.yml` (~240 tok, medium) — name: Security Review
 - `security.yml` (~1894 tok, huge) — name: Supply-Chain Security
-- `stale.yml` (~241 tok, medium) — name: Stale Issues
+- `stale.yml` (~242 tok, medium) — name: Stale Issues
 ### `hooks/`
 
 - `hooks.json` (~79 tok, small) — Keys: hooks
@@ -428,8 +428,8 @@
 ### `sdk/js/`
 
 - `.gitignore` (~5 tok, tiny) — node_modules/
-- `package.json` (~275 tok, medium) — Keys: name, version, description, license, type
-- `package-lock.json` (~381 tok, medium) — Keys: name, version, lockfileVersion, requires, packages
+- `package.json` (~274 tok, medium) — Keys: name, version, description, license, type
+- `package-lock.json` (~3326 tok, huge) — Keys: name, version, lockfileVersion, requires, packages
 - `README.md` (~580 tok, large) — @mind-mem/sdk
 ### `sdk/js/src/`
 
