@@ -394,12 +394,20 @@ def _merge_openclaw_hooks(existing: dict, workspace: str) -> tuple[dict, bool]:
     # subcommands (only exist in the design doc). Use `mm status`
     # until those ship. `mm inject` still requires a query positional;
     # openclaw passes one when it fires the hook, so the inject entry
-    # keeps its original shape.
+    # supplies only the flags.
+    #
+    # Two flags were wrong and made the hook fail on every fire:
+    # `--agent openclaw` is not a KNOWN agent (raises UnknownAgentError;
+    # valid = claude-code/codex/gemini/cursor/windsurf/aider/generic) and
+    # `mm inject` has no `--workspace` flag (argparse rejects it). The
+    # workspace resolves from the `MIND_MEM_WORKSPACE` env openclaw
+    # exports to hook children (and the entry `workspace` field), so
+    # neither flag is needed — `--agent generic` is the correct tag.
     target = {
         "enabled": True,
         "workspace": workspace,
         "commands": {
-            "inject": "mm inject --agent openclaw --workspace " + workspace,
+            "inject": "mm inject --agent generic",
             "capture": "mm status",
             "status": "mm status",
         },
@@ -445,7 +453,7 @@ def _merge_generic_json(existing: dict, workspace: str) -> tuple[dict, bool]:
     target = {
         "enabled": True,
         "workspace": workspace,
-        "inject_cmd": f"mm inject --workspace {workspace}",
+        "inject_cmd": "mm inject --agent generic",
     }
     out = dict(existing)
     if out.get("mind_mem") == target:

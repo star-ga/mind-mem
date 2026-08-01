@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 944 | **Est. tokens:** ~2,072,240
-**Generated:** 2026-08-01 04:51 UTC
+**Files:** 944 | **Est. tokens:** ~2,072,765
+**Generated:** 2026-08-01 08:22 UTC
 
 ## Token Budget Guide
 
@@ -60,7 +60,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 171 | ~616,451 |
+| `src/mind_mem/` | 171 | ~616,567 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 7 | ~18,591 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
@@ -71,7 +71,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 24 | ~64,969 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 331 | ~733,004 |
+| `tests/` | 331 | ~733,413 |
 | `tests/fixtures/` | 1 | ~710 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
@@ -550,7 +550,7 @@
 - `graph_ingest.py` (~4553 tok, huge) — Corpus → typed knowledge-graph ingestion (HITL-gated).
 - `graph_recall.py` (~1907 tok, huge) — Multi-hop graph traversal for recall (v3.3.0 Tier 1 #2).
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `hook_installer.py` (~10495 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `hook_installer.py` (~10611 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `http_transport.py` (~11242 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
 - `hybrid_recall.py` (~13525 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `inbox.py` (~3716 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).
@@ -917,7 +917,7 @@
 - `test_grpc_server.py` (~731 tok, large) — v4.0 prep — gRPC wire protocol (tests for the grpcio-free handlers)."""
 - `test_hash_chain_v2.py` (~3462 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_hook_installer_force_preserves_siblings.py` (~703 tok, large) — Regression test for the --force clobber bug in hook_installer."""
-- `test_hook_installer_registry.py` (~3841 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `test_hook_installer_registry.py` (~4250 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_http_auth_fail_closed.py` (~1724 tok, huge) — v3.7.0 H4: HTTP / REST auth must fail CLOSED by default.
 - `test_http_transport.py` (~4326 tok, huge) — Tests for the v3.9 HTTP transport adapter.
 - `test_hybrid_degraded_marker.py` (~2797 tok, huge) — Tests for the in-band recall degradation marker (Task 2).

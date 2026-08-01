@@ -126,6 +126,32 @@ class TestClawFamily:
             assert hooks["workspace"] == str(tmp_path)
             assert "commands" in hooks
 
+    def test_claw_inject_command_is_a_runnable_mm_invocation(self, tmp_path: Path) -> None:
+        # Regression: the claw inject hook shipped
+        # ``mm inject --agent openclaw --workspace <ws>``, which fails on
+        # BOTH counts on every fire — ``mm inject`` has no ``--workspace``
+        # flag (argparse rejects it: "unrecognized arguments") and
+        # ``openclaw`` is a client-registry name, not a KNOWN mm agent
+        # (raises UnknownAgentError; valid tags live in KNOWN_AGENTS). So
+        # openclaw received zero memory injection until this was fixed.
+        # The installed command must be a real ``mm inject`` invocation:
+        # a KNOWN_AGENTS tag and no ``--workspace`` (the workspace
+        # resolves from the MIND_MEM_WORKSPACE env / entry workspace).
+        from mind_mem.agent_bridge import KNOWN_AGENTS
+
+        for agent in ("openclaw", "nanoclaw", "nemoclaw"):
+            result = install_config(agent, str(tmp_path), dry_run=True)
+            content = json.loads(result["content"])
+            cmd = content["hooks"]["internal"]["entries"]["mind-mem"]["commands"]["inject"]
+            assert "--workspace" not in cmd, f"{agent} inject hook uses --workspace, which `mm inject` rejects: {cmd!r}"
+            parts = cmd.split()
+            assert "--agent" in parts, f"{agent} inject hook missing --agent: {cmd!r}"
+            tag = parts[parts.index("--agent") + 1]
+            assert tag in KNOWN_AGENTS, (
+                f"{agent} inject hook uses --agent {tag!r}, not a KNOWN mm agent "
+                f"({', '.join(KNOWN_AGENTS)}) → UnknownAgentError on every fire"
+            )
+
 
 class TestClaudeCodeHookFormat:
     """v1.9.2: hook entries must use Claude Code's nested shape.

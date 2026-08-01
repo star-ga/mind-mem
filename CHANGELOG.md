@@ -4,6 +4,22 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+* **OpenClaw / claw-family memory-injection hook was dead on every fire
+  (`hook_installer.py`)** — `_merge_openclaw_hooks` (and the generic-JSON fallback
+  merger) generated `mm inject --agent openclaw --workspace <ws>`, which fails on
+  **both** flags: `mm inject` has no `--workspace` option (argparse rejects it as an
+  unrecognized argument) and `openclaw` is a client-registry name, **not** a
+  `KNOWN_AGENTS` `--agent` tag (raises `UnknownAgentError`; valid tags are
+  claude-code / codex / gemini / cursor / windsurf / aider / generic). Every
+  SessionStart injection therefore errored, so OpenClaw agents received **zero**
+  recalled memory context despite a fully Postgres-backed workspace — the block store
+  and recall path were healthy; only the hook command was wrong. Fixed to
+  `mm inject --agent generic`; the workspace resolves from the `MIND_MEM_WORKSPACE`
+  env the claw runtime exports to hook children (and the entry `workspace` field), so
+  no `--workspace` flag is needed. New regression test
+  `test_claw_inject_command_is_a_runnable_mm_invocation` asserts every claw-variant
+  inject hook uses a `KNOWN_AGENTS` tag and never `--workspace`.
+
 * **OKF v0.2 interop, done better than the format asks (`core_export.py`)** — the
   Open Knowledge Format export/import is upgraded from v0.1 to conform to the current
   published spec (**OKF v0.2**), and the trust family is emitted *derived from recorded
