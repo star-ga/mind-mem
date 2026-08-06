@@ -123,6 +123,19 @@ sudo chattr +a /path/to/workspace/memory/decrypted_files.jsonl.$(date +%Y%m%d)
 Truncating the live file is intentionally blocked; rotate-and-touch
 is the supported path. Same pattern on macOS with `chflags`.
 
+**Chain-continuity caveat (hash-chained ledger).** Rotate-and-touch
+restarts the *live* hash-chained ledger from a fresh genesis: an empty
+ledger seeds the next entry with `prev_hash = GENESIS` and `seq = 1`.
+`verify_chain` walks from genesis over whatever file it is given, so it
+validates each rotated segment **independently** — it does **not**
+cryptographically bind a rotated segment to its successor. Consequently,
+deletion of an *entire* rotated segment is not detectable by the hash
+chain (the live chain still verifies clean); that gap is closed only by
+the OS append-only attribute plus your retention of the rotated files.
+Keep every rotated `*.YYYYMMDD` segment (and re-apply its `+a` /
+`uappnd` flag) if you need the ledger to be tamper-evident end-to-end,
+and verify each segment separately.
+
 ## Verification suite
 
 After applying, run:

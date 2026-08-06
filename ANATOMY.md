@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 944 | **Est. tokens:** ~2,072,765
-**Generated:** 2026-08-01 08:22 UTC
+**Files:** 944 | **Est. tokens:** ~2,073,023
+**Generated:** 2026-08-06 13:56 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~69,940 |
+| `./` | 35 | ~69,996 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -32,7 +32,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 85 | ~155,750 |
+| `docs/` | 85 | ~155,952 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/benchmarks/` | 6 | ~8,995 |
 | `docs/design/` | 3 | ~4,055 |
@@ -112,7 +112,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~2257 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~25421 tok, huge) — 30-Second Demo
+- `README.md` (~25477 tok, huge) — 30-Second Demo
 - `requirements-optional.txt` (~1129 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
@@ -209,7 +209,7 @@
 - `AGENTIC-MEMORY-SOTA.md` (~1674 tok, huge) — mind-mem → SOTA Agentic Memory (v4.5.0+ design brief)
 - `agent-memory-protocol.md` (~700 tok, large) — Agent Memory Protocol — canonical system-prompt snippet
 - `api-reference.md` (~1683 tok, huge) — API Reference
-- `append-only-audit-logs.md` (~1424 tok, large) — Append-Only Audit Logs — Operator Runbook
+- `append-only-audit-logs.md` (~1626 tok, huge) — Append-Only Audit Logs — Operator Runbook
 - `architecture.md` (~1936 tok, huge) — Architecture
 - `audit_response.md` (~950 tok, large) — MIND-Mem — response to the 2026-05-02 ecosystem audit
 ### `docs/benchmarks/`

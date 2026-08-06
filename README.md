@@ -465,7 +465,7 @@ Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer w
 
 ### Performance (Latency & Throughput)
 
-Measured on a 65-block workspace (typical personal workspace) with SQLite FTS5 backend:
+Measured on a single developer workstation (commodity x86-64, warm cache, single process) against a 65-block workspace (typical personal workspace) with the SQLite FTS5 backend. Absolute latencies are hardware-dependent — the portable claim is the O(log N) scaling noted below, not the millisecond figures:
 
 | Operation | Metric | Value |
 |-----------|--------|-------|
