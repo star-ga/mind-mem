@@ -2803,3 +2803,70 @@ conclusion — the failure mode this project has already been burned by once.
   reported only partial transfer, which is weak evidence that training is where the
   gain lives, and a prompt-only baseline must be measured first. Delivery mechanisms
   belong to consumers; this entry covers the verdict surface only.
+
+### Group L — Recall utility per context token + prescriptive blocks (prior-art-informed, 2026-08-06)
+
+Prior art: a recent task-agnostic plugin-memory module for LLM agents argues that
+raw interaction history should be transformed into structured, reusable knowledge
+before retrieval, and — the part that matters here — evaluates memory on a
+**utility-against-consumption** axis: how much decision-relevant information a
+memory module contributes *relative to how much of the agent's context window it
+consumes*. It also splits stored knowledge into **propositional** units (facts) and
+**prescriptive** units (reusable skills/strategies), citing the cognitive-science
+distinction between knowing facts and knowing how to perform a task, and reports
+that a single general-purpose module beat task-specific memory designs on three
+benchmarks while spending fewer memory tokens.
+
+**What is genuinely new to us is the metric, not the architecture.** The structured-
+units-over-raw-logs position is already this project's design: `knowledge_graph.py`,
+`category_distiller.py`, `causal_graph.py`, `graph_recall.py`, and `intent_router.py`
+all predate the external work and were not derived from it. What we do *not* have is
+a published number for **what a token of recall buys**. The machinery to *spend* a
+budget exists — `pack_recall_budget(query, max_tokens=2000, limit=20)`
+(`mcp/tools/recall.py:394`), `compressors.py`, `evidence_packer.py`,
+`_recall_tokenization.py` — and every one of them takes a budget as input while
+reporting nothing about yield. That asymmetry is the gap: the project can say how
+much context it consumed and cannot say what the consumption was worth.
+
+- [ ] **L1 — Recall utility per context token.** Define and publish a utility-against-
+  consumption measure for `pack_recall_budget` and the recall path generally:
+  decision-relevant content delivered per token of context spent. Requires a
+  ground-truth set on our own corpus, not a borrowed benchmark. **Close condition is
+  one-sided and decision-shaped, matching the criterion-gate rule used elsewhere in
+  the ecosystem:** a measured curve of utility against `max_tokens`, on our traffic,
+  with the honest possibility that the current default (2000) is already at or past
+  the knee. A result showing no headroom closes this as a negative finding and is a
+  valid outcome — the point is to make the claim measurable, not to make it flattering.
+
+- [ ] **L2 — Prescriptive blocks (EVALUATE, not committed).** Assess whether a
+  procedural/prescriptive block kind — recall returns *a strategy*, not *a fact* —
+  earns a place in the governed store. The corpus today is overwhelmingly
+  propositional (decisions, entities, projects, references). Note that `skill_opt/`
+  is **not** this: it optimizes skill *definitions* offline; a prescriptive block
+  would be a retrievable unit inside the memory itself. Open question, and the
+  reason this is EVALUATE rather than a commitment: a strategy is a claim about
+  *what worked*, which is exactly the kind of assertion that goes stale silently and
+  that the contradiction-detection surface was built to catch for facts. Adding a
+  block kind whose staleness is harder to detect than a fact's would trade recall
+  breadth for governance strength — the wrong direction for this project.
+
+**The discipline that does not relax.** The external work's pitch is task-agnostic
+plug-and-play with better benchmark numbers. Ours is *governed*: HITL-gated
+proposals, contradiction detection, audit chain, provenance. Those are different
+claims and L1 must not blur them — a utility number is a **retrieval-quality**
+statement and carries no governance weight. It must not be written into a block, must
+not enter a hash chain, and must never influence the approval gate. The same rule
+already applied to attestation verdicts and trigger verdicts in the entries above: a
+measurement artifact stays a measurement artifact.
+
+**Positioning note (not an implementation item).** "Agent memory" now has a
+well-funded default meaning attached to retrieval benchmark scores, and that meaning
+is being distributed through plugin surfaces for the same runtimes we ship into. The
+guard is the same one recorded for adjacent vocabulary collisions this year: state
+the distinction rather than argue it. Retrieval quality and auditability are
+orthogonal properties, and this project competes on the second.
+
+- **Status:** Proposed 2026-08-06. L1 is the sequenced item and is worth doing on its
+  own merits regardless of the external work — it converts an architectural claim into
+  a measurable one. L2 is explicitly EVALUATE and should not be built until L1 has a
+  number, since a second block kind changes what "utility" is being measured over.
