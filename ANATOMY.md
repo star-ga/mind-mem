@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 944 | **Est. tokens:** ~2,073,023
-**Generated:** 2026-08-06 13:56 UTC
+**Files:** 943 | **Est. tokens:** ~2,073,714
+**Generated:** 2026-08-07 14:00 UTC
 
 ## Token Budget Guide
 
@@ -32,7 +32,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 85 | ~155,952 |
+| `docs/` | 85 | ~156,883 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/benchmarks/` | 6 | ~8,995 |
 | `docs/design/` | 3 | ~4,055 |
@@ -42,7 +42,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4,469 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 12 | ~10,048 |
+| `.github/workflows/` | 11 | ~9,808 |
 | `hooks/` | 3 | ~801 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -279,7 +279,7 @@
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — MIND-Mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
 - `roadmap.md` (~13677 tok, huge) — Roadmap
-- `roadmap-v4.md` (~10304 tok, huge) — mind-mem v4.0 — Design Rationale
+- `roadmap-v4.md` (~11235 tok, huge) — mind-mem v4.0 — Design Rationale
 - `scoring.md` (~517 tok, large) — Scoring System
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2267 tok, huge) — MIND-Mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)
 - `security-audit-sow.md` (~3353 tok, huge) — MIND-Mem — External Security Audit Statement of Work (SoW)
@@ -351,7 +351,6 @@
 - `label-sync.yml` (~112 tok, small) — name: Label Sync
 - `red-team.yml` (~385 tok, medium) — name: Red Team Audit
 - `release.yml` (~2248 tok, huge) — name: Release
-- `security-review.yml` (~240 tok, medium) — name: Security Review
 - `security.yml` (~1894 tok, huge) — name: Supply-Chain Security
 - `stale.yml` (~242 tok, medium) — name: Stale Issues
 ### `hooks/`

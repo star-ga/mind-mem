@@ -645,6 +645,73 @@ arrow above is the experiment that answers it. Federation is a
 **write/consistency** layer and is NOT observability — the read-side
 trust-score dashboards belong in observability, the transport does not.
 
+#### R-XORG — Cross-organisational federation (two-party collaboration)
+
+**Status: NOT BUILT. Committed.** Priority: after the compiler; first
+governance item in the queue.
+
+**Correction to the paragraph above, recorded 2026-08-07.** That text
+describes `federation_client.py` + `http_transport.py` (stdlib HTTP,
+bearer-token auth, `/federation/{vclock,conflicts,write,resolve}`) as
+shipped. `src/mind_mem/v4/http_transport.py` **does not exist** in the
+tree. What is real and tested is the reconciliation core in
+`v4/federation.py` — per-agent version vectors (`block_tier_vclock`),
+the explicit conflict log (`tier_conflict_log`), and the four merge
+strategies including the caller-supplied merger that routes a contested
+write through the v3 propose/approve gate. The *transport* under it is
+the gap. `docs/federation-setup.md` states the current reality
+correctly: federation today means several nodes pointing at one shared
+Postgres corpus, and the HTTP path is a single-workspace file store,
+explicitly "not (today) a Postgres federation gateway."
+
+**Why the shared-Postgres model cannot serve this case.** It requires
+both parties to hold credentials on one database. Inside a fleet one
+party owns, that is fine. Between two organisations it is the wrong
+trust model at the root: each side would grant the other unmediated
+read/write over its entire corpus in order to exchange a few blocks.
+No amount of policy on top repairs that — the boundary has to exist in
+the transport itself.
+
+**What R-XORG must provide.** Two organisations collaborate on a joint
+problem while each retains sole custody of its own store:
+
+- **No shared credentials, no shared corpus.** Each side runs its own
+  instance against its own backend. Nothing is co-owned.
+- **Explicit scope.** A peering agreement names exactly which blocks or
+  namespaces are exchanged. Everything outside that scope is not merely
+  access-controlled — it is not reachable over the channel.
+- **Governed acceptance, not trusted acceptance.** An inbound write is a
+  *proposal* against the receiving side's propose/approve gate, never a
+  direct write. The receiving org decides what enters its own store,
+  under its own governance, every time.
+- **Mutual authentication + integrity at the peer boundary**, so a
+  received block's origin and contents are checkable by the recipient
+  without trusting the sender's report of them.
+- **Divergence preserved, not resolved away.** The existing vclock +
+  conflict-log discipline carries across the org boundary intact: when
+  two organisations' agents disagree, both versions and both vectors are
+  recorded and the disagreement is adjudicable afterward.
+
+**The invariant this is protecting, stated in the terms it came from.**
+A silently resolved conflict is *continuity loss*: information that
+existed at write time and did not survive into the record. The value of
+this layer is not that it prevents disagreement between two parties'
+agents — it will not, and should not. It is that the divergence stays
+legible and countable after the fact. Same instinct as the evidence
+chain: never hide a divergence, make it inspectable. Any design that
+silently picks a winner across an org boundary fails the requirement
+regardless of how well it performs.
+
+**Not this:** not a STARGA-hosted broker, not a relay either party must
+route through, not a relaxation of the governed-write model, and not a
+paid hosted path (BYOK/self-host only, consistent with the section
+above).
+
+**Provenance.** Committed externally 2026-08-07 as a stated future
+capability, with the current gap disclosed rather than papered over.
+Consistent with the standing rule that a claim is kept exactly as strong
+as the evidence supports.
+
 **Eval-side corroboration of the determinism precondition (2026-06-03).** An
 external attribution-as-trace-scoring framework (Khan, Jun 2026) states the
 same determinism requirement from the *evaluation* side: a trace-level score is
