@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 943 | **Est. tokens:** ~2,073,714
-**Generated:** 2026-08-07 14:00 UTC
+**Files:** 943 | **Est. tokens:** ~2,074,033
+**Generated:** 2026-08-12 07:26 UTC
 
 ## Token Budget Guide
 
@@ -32,7 +32,7 @@
 | `deploy/docker/` | 1 | ~495 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 85 | ~156,883 |
+| `docs/` | 85 | ~157,202 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/benchmarks/` | 6 | ~8,995 |
 | `docs/design/` | 3 | ~4,055 |
@@ -278,7 +278,7 @@
 - `review-database-v3.2.0.md` (~3171 tok, huge) — Database Review — PostgresBlockStore v3.2.0
 - `review-docs-v3.2.0.md` (~1957 tok, huge) — Documentation Review — MIND-Mem v3.2.0
 - `review-tests-v3.2.0.md` (~1300 tok, large) — Test Review — MIND-Mem v3.2.0
-- `roadmap.md` (~13677 tok, huge) — Roadmap
+- `roadmap.md` (~13996 tok, huge) — Roadmap
 - `roadmap-v4.md` (~11235 tok, huge) — mind-mem v4.0 — Design Rationale
 - `scoring.md` (~517 tok, large) — Scoring System
 - `SECURITY_AUDIT_SELF_2026_04.md` (~2267 tok, huge) — MIND-Mem v3.2.0 — Self-Audit Plan (Post-Release Deliverable)

@@ -1100,3 +1100,24 @@ handle to get the full text back only when a failure needs the detail. Fronted b
 dependency-free `bin/mm-run -- <cmd>` wrapper that an agent invokes instead of raw
 `cargo test`. Verified: a 50k-line synthetic log with 3 buried failures preserves
 all 3; handles round-trip the full text; summary bytes are identical across runs.
+
+## Anti-equivocation: bind the evidence chain to the shared chain-head format
+
+Scope here is deliberately narrow — one interoperability change, not a prediction subsystem.
+
+mind-mem already keeps a hash-chained evidence log with `verify_chain` / `verify_merkle`.
+The change is to adopt the chain-head format of the precommitment specification hosted in
+`star-ga/mind` (roadmap §18.2), so that a **single fork-detection check works across both
+naestro's prediction log and mind-mem's evidence log**. Two independently correct chains that
+cannot be cross-checked do not detect an agent that forked its history; one shared head
+format does.
+
+This is the anti-equivocation half of that specification. It matters because a commit-reveal
+scheme where the committer owns the log proves nothing on its own: the guarantee comes from
+the chain head being anchored somewhere the committer cannot rewrite.
+
+**Explicitly not in scope.** No prediction-error signal may mutate canonical memory. If
+calibration data ever informs memory confidence or consolidation, it must arrive as a
+`propose_update` through the existing propose → review → approve_apply gate, exactly as every
+other write does. A governed store that silently self-adjusts on a learned signal is no longer
+governed.
