@@ -2870,3 +2870,146 @@ orthogonal properties, and this project competes on the second.
   own merits regardless of the external work — it converts an architectural claim into
   a measurable one. L2 is explicitly EVALUATE and should not be built until L1 has a
   number, since a second block kind changes what "utility" is being measured over.
+
+---
+
+### Group M — Silent-failure gates for the retrieval and write paths (prior-art-informed, 2026-08-17)
+
+Prior art: a public tutorial building a three-tier agent memory (semantic /
+episodic / procedural) over a vector-indexed key-value store. The *architecture*
+is nothing new to this project — the tiering is a textbook Tulving taxonomy and
+the governed store already carries those categories, with contradiction
+detection, HITL proposals, and an audit chain the external design has no
+equivalent of. What is worth taking is narrower and better: a set of **failure
+modes that produce no error**, and the cheap empirical checks that expose them.
+Every item below is a gate or a write-policy change, not an architecture change,
+and none of them pulls in a new dependency.
+
+The organizing observation: this project measures retrieval quality in aggregate
+(`governance_bench.py`, `retrieval_trace.py`, `calibration.py`) and therefore
+cannot distinguish "the corpus does not contain it" from "the corpus contains it
+and retrieval structurally cannot reach it." Those have identical symptoms and
+different fixes. M1–M3 separate them.
+
+- [ ] **M1 — Embedded-field / query-vocabulary alignment (highest value).**
+  A vector store retrieves on whatever field carries the vector. If the embedded
+  text is phrased in the vocabulary of the *answer* while queries arrive phrased
+  in the vocabulary of the *problem*, the vectors never meet: nothing errors, no
+  score looks anomalous, and recall silently returns wrong-but-plausible blocks
+  forever. The external design avoids this by embedding only a designated
+  symptom field and carrying diagnosis/resolution in sibling keys that are stored
+  and returned but never vectorized.
+  **Our exposure is concrete and the opposite shape.**
+  `VectorBackend._augment_for_embedding` (`recall_vector.py:312`) prepends
+  category, speaker, date, and a 50-char tag slice into the *same* string that
+  gets embedded — metadata and content share one vector, with no way to embed one
+  field and merely store another. That was a deliberate disambiguation choice
+  ("it cost $50" needs an anchor) and it may well be net-positive; the point is
+  that **it has never been measured against the failure it can cause**, and the
+  tag-slice truncation at 50 chars is an arbitrary boundary inside a vector.
+  Deliverable: a probe test that queries a corpus in problem-phrasing against
+  blocks written in resolution-phrasing and asserts the score separation does not
+  collapse, plus an A/B of augmented vs. raw embedding on our own corpus. Honest
+  possible outcome: augmentation wins and this closes as a negative finding with
+  a number attached — which is still strictly better than the current state of
+  having no number at all.
+
+- [ ] **M2 — Namespace-property round-trip test.** Assert *empirically*, per
+  namespace, what is reachable by search versus only by direct get, with the
+  retrieval scores printed. The external work does this as three probes with
+  visible output rather than as a README claim, which is the right instinct: an
+  index-configuration regression currently degrades recall silently instead of
+  failing loudly. `NamespaceManager` (`namespaces.py:93`) governs read/write ACLs
+  but nothing asserts retrieval reachability as a *tested property*. Cheap: a few
+  lines per namespace, and it belongs in CI next to the existing quality gate.
+
+- [ ] **M3 — Per-namespace relevance floors.** A single similarity threshold
+  across differently-shaped namespaces is wrong in both directions. An unbounded,
+  mostly-irrelevant corpus needs a floor to suppress noise; a small bounded
+  per-entity record needs *no* floor, because a floor drops the one durable fact
+  on a query that never uses its vocabulary. Make the floor a per-namespace
+  property with the evidence recorded — the external example justified its floor
+  with a two-order-of-magnitude score gap (0.41 correct hit vs. 0.005 noise)
+  rather than a vibe, and any floor we set should carry the same kind of
+  measurement. Depends on M2 for the measurement surface.
+
+- [ ] **M4 — Enum-keyed upsert slots inside the governed path (best product
+  value).** For *bounded* fact spaces, prevent contradiction structurally instead
+  of detecting it after the fact. File each fact under a topic slug drawn from a
+  **closed set**, so a second statement on the same topic collides by
+  construction — an exact key collision, not a fuzzy similarity match that can
+  miss. The closed set is the load-bearing part: an open-ended topic string lets
+  an extractor file `plan` on Monday and `plan_tier` on Friday, and the two
+  contradicting facts never collide at all.
+  **This is genuinely orthogonal to what we have.** `contradiction_detector.py`,
+  `conflict_resolver.py`, and `compiled_truth_contradictions` are all *detective*
+  — they run after two conflicting facts coexist and depend on detection finding
+  them. Enum-keyed slots make coexistence impossible for the bounded case, at
+  zero detection cost and with no false negatives.
+  **Where we must not copy them:** their upsert is a silent overwrite with no
+  proposal, no lineage, no rollback. Ours must route the supersession through
+  `propose_update` → `approve_apply` so the replacement is a *recorded,
+  reversible event*. That combination — their exactness, our audit trail — is
+  strictly better than either side alone, and it is the honest reason to build it
+  rather than adopt theirs.
+  **Residual risk, stated plainly:** the model still chooses the slug. This moves
+  the failure from "forgets what it wrote" to "picks the wrong enum member" —
+  narrower and *validatable* (a closed enum rejects an invented member), but not
+  eliminated. Say so rather than claiming contradiction is solved.
+  Note also the escape hatch's cost: free-form facts with no natural identity have
+  nothing to collide on and therefore accumulate. That trade is acceptable and
+  should be stated; what should **not** be copied is content-hash keying at
+  demo width (32 bits is collision-prone as a durable identity scheme).
+
+- [ ] **M5 — Enforcement-in-code audit.** Sweep for every place a governance or
+  privacy property in this project rests on an *instruction to a model* rather
+  than on code that executes. The external work states the principle in one line
+  worth keeping: a summarizer is *told* not to include names, but a prompt is a
+  request — a scrub function is what actually holds. This project already argues
+  exactly that for `propose_update` versus "the model will remember"; the audit is
+  to confirm we live by it everywhere else, particularly on any path where
+  redaction, scoping, or exclusion is currently prompt-shaped. Output is a list
+  of prompt-enforced properties with a code-enforced replacement for each, not a
+  refactor.
+
+- [ ] **M6 — Negative-results field on episodic blocks.** Record what was
+  *attempted and did not work*, not only what resolved. An episode carrying only
+  the successful fix teaches nothing about what to skip, and skipping known dead
+  ends is most of what accumulated experience actually buys. This is structurally
+  the same mechanism as `autoresearch`'s dead-end registry (`dead_ends.md`),
+  which is independent evidence the pattern is right rather than borrowed
+  novelty. Cross-repo: see the matching autoresearch ROADMAP entry.
+
+- [ ] **M7 — Tier-ablation gate (blocked, sequenced last).** Measure what recall
+  *loses* when one tier goes dark: a frozen config with one boolean per tier,
+  five runs (all-on, minus-semantic, minus-episodic, minus-procedural, and a
+  no-memory floor row), each tier's absence producing a specific diagnosable
+  failure rather than a single aggregate score. This is the same discipline as
+  the one-sided criterion gate used elsewhere in the ecosystem: isolate one
+  variable so the delta is attributable. **Blocked on a ground-truth eval set on
+  our own corpus, which does not exist yet** — the same blocker as L1, and the
+  two should share it. Do not build the harness before the eval set; a scorecard
+  over a corpus with no ground truth is a number that means nothing.
+
+**Sequencing.** M1 and M5 first — both are cheap, both close silent-failure
+classes, neither needs new infrastructure. M2 next, since M3 depends on its
+measurement surface. M4 is the item with real product value and should be scoped
+as a spec before any code, because it changes write semantics on a governed
+store. M7 waits on the shared L1/M7 eval set.
+
+**The discipline that does not relax.** Everything here is a *retrieval-quality*
+or *write-policy* mechanism. None of it carries governance weight: a floor, a
+score, an ablation row, or an alignment probe result must never be written into
+a block, never enter a hash chain, and never influence the approval gate. Same
+rule already recorded for attestation verdicts, trigger verdicts, and Group L's
+utility number — a measurement artifact stays a measurement artifact.
+
+**Provenance rail.** Prior-art shape observed in a public tutorial; no code
+adopted, nothing named in any public artifact. Their stack (a graph runtime plus
+a vector-indexed SQLite store) is explicitly **not** being taken — only the
+measurement discipline and the closed-set write policy. Citation in
+`mind-internal`. Cross-repo: `autoresearch` ROADMAP (M6's dead-end-registry
+symmetry, and the ablation pattern applied to loop components).
+
+- **Status:** Proposed 2026-08-17. M1/M5 are actionable now. M7 is explicitly
+  blocked and must not be started before the eval set exists.
