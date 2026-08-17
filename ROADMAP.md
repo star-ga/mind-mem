@@ -2831,7 +2831,10 @@ much context it consumed and cannot say what the consumption was worth.
 - [ ] **L1 — Recall utility per context token.** Define and publish a utility-against-
   consumption measure for `pack_recall_budget` and the recall path generally:
   decision-relevant content delivered per token of context spent. Requires a
-  ground-truth set on our own corpus, not a borrowed benchmark. **Close condition is
+  ground-truth set on our own corpus, not a borrowed benchmark — now specified in
+  [`docs/design/eval-set-ground-truth.md`](docs/design/eval-set-ground-truth.md),
+  shared with M7 and deliberately written before either consumer so it is not
+  built to fit only one of them. **Close condition is
   one-sided and decision-shaped, matching the criterion-gate rule used elsewhere in
   the ecosystem:** a measured curve of utility against `max_tokens`, on our traffic,
   with the honest possibility that the current default (2000) is already at or past
@@ -2900,10 +2903,15 @@ below, written so an agent can pick one up without re-deriving the reasoning:
 | M2, M3 | [`docs/design/m2-m3-namespace-retrieval-properties.md`](docs/design/m2-m3-namespace-retrieval-properties.md) |
 | M4 | [`docs/design/m4-closed-set-slots.md`](docs/design/m4-closed-set-slots.md) |
 | M5 | [`docs/design/m5-enforcement-in-code-audit.md`](docs/design/m5-enforcement-in-code-audit.md) |
+| M6 | [`docs/design/m6-negative-results.md`](docs/design/m6-negative-results.md) |
+| M7 (blocker) | [`docs/design/eval-set-ground-truth.md`](docs/design/eval-set-ground-truth.md) |
 
-M6 needs no spec (a field addition, cross-referenced to `autoresearch`). M7
-stays unspecified on purpose: it is blocked on the shared L1/M7 eval set, and
-specifying a harness before its ground truth exists would fix the wrong shape.
+M7 itself stays unspecified on purpose: specifying a harness before its ground
+truth exists would fix the wrong shape. What *is* specified is the blocker —
+the ground-truth eval set, which gates **both** L1 and M7 and which neither
+entry previously defined. That document is the highest-leverage unblocking item
+in either group, and it is also the one most likely to be built badly, since a
+mislabelled eval set still produces confident numbers.
 
 - [ ] **M1 — Embedded-field / query-vocabulary alignment (highest value).**
   A vector store retrieves on whatever field carries the vector. If the embedded
@@ -2986,13 +2994,29 @@ specifying a harness before its ground truth exists would fix the wrong shape.
   of prompt-enforced properties with a code-enforced replacement for each, not a
   refactor.
 
-- [ ] **M6 — Negative-results field on episodic blocks.** Record what was
-  *attempted and did not work*, not only what resolved. An episode carrying only
+- [ ] **M6 — Negative results as a recorded outcome.** Record what was
+  *attempted and did not work*, not only what resolved. A record carrying only
   the successful fix teaches nothing about what to skip, and skipping known dead
-  ends is most of what accumulated experience actually buys. This is structurally
-  the same mechanism as `autoresearch`'s dead-end registry (`dead_ends.md`),
-  which is independent evidence the pattern is right rather than borrowed
-  novelty. Cross-repo: see the matching autoresearch ROADMAP entry.
+  ends is most of what accumulated experience actually buys.
+  **Correction to this entry's original wording:** it said "field on *episodic
+  blocks*", borrowing the prior art's tier name. There is no episodic tier in
+  this codebase — verified 2026-08-17, `episodic` appears nowhere in
+  `src/mind_mem/`, and "semantic" exists only as a retrieval axis
+  (`observation_axis.py:47`), not as a memory tier. The real taxonomies are
+  topical and there are **two of them that disagree**: 13 labels in
+  `CategoryDistiller.DEFAULT_CATEGORIES` (`category_distiller.py:103`) and 20 in
+  `_recall_scoring.py:330`. So M6 is "make a negative outcome representable at
+  all" on the kinds where a dead end can occur (`bugs`, `decisions`,
+  `workflows`) — not a field on a tier we do not have. The taxonomy split is a
+  separate finding, noted in the spec, and M6 must not be the change that
+  silently picks a winner between the two lists.
+  The precedent is local and stronger than the external one: `autoresearch`'s
+  dead-end registry (`dead_ends.md`) is append-only with a deterministic key, a
+  closed outcome vocabulary, and a capped reward channel
+  (`ar_rsi_alginv.py:234`) — independent evidence the pattern is right rather
+  than borrowed novelty. It also has a **truncated junk row**, which is the
+  direct argument for validating entries on append. Cross-repo: see the matching
+  autoresearch ROADMAP entry.
 
 - [ ] **M7 — Tier-ablation gate (blocked, sequenced last).** Measure what recall
   *loses* when one tier goes dark: a frozen config with one boolean per tier,
