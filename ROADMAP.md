@@ -2891,6 +2891,20 @@ cannot distinguish "the corpus does not contain it" from "the corpus contains it
 and retrieval structurally cannot reach it." Those have identical symptoms and
 different fixes. M1–M3 separate them.
 
+**Specs.** Four design documents carry the implementable detail for the items
+below, written so an agent can pick one up without re-deriving the reasoning:
+
+| Item | Spec |
+|---|---|
+| M1 | [`docs/design/m1-embedded-field-vocabulary.md`](docs/design/m1-embedded-field-vocabulary.md) |
+| M2, M3 | [`docs/design/m2-m3-namespace-retrieval-properties.md`](docs/design/m2-m3-namespace-retrieval-properties.md) |
+| M4 | [`docs/design/m4-closed-set-slots.md`](docs/design/m4-closed-set-slots.md) |
+| M5 | [`docs/design/m5-enforcement-in-code-audit.md`](docs/design/m5-enforcement-in-code-audit.md) |
+
+M6 needs no spec (a field addition, cross-referenced to `autoresearch`). M7
+stays unspecified on purpose: it is blocked on the shared L1/M7 eval set, and
+specifying a harness before its ground truth exists would fix the wrong shape.
+
 - [ ] **M1 — Embedded-field / query-vocabulary alignment (highest value).**
   A vector store retrieves on whatever field carries the vector. If the embedded
   text is phrased in the vocabulary of the *answer* while queries arrive phrased

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 943 | **Est. tokens:** ~2,074,033
-**Generated:** 2026-08-17 11:52 UTC
+**Files:** 947 | **Est. tokens:** ~2,080,788
+**Generated:** 2026-08-17 11:58 UTC
 
 ## Token Budget Guide
 
@@ -35,7 +35,7 @@
 | `docs/` | 85 | ~157,202 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/benchmarks/` | 6 | ~8,995 |
-| `docs/design/` | 3 | ~4,055 |
+| `docs/design/` | 7 | ~10,810 |
 | `docs/security-baselines/` | 1 | ~18,974 |
 | `examples/` | 3 | ~1,201 |
 | `.gemini/` | 1 | ~28 |
@@ -236,6 +236,10 @@
 - `configuration.md` (~8318 tok, huge) — Configuration Reference
 ### `docs/design/`
 
+- `m1-embedded-field-vocabulary.md` (~1570 tok, huge) — Design: M1 — the embedded field must speak the query's vocabulary
+- `m2-m3-namespace-retrieval-properties.md` (~1835 tok, huge) — Design: M2/M3 — namespace retrieval properties, asserted and tuned
+- `m4-closed-set-slots.md` (~2012 tok, huge) — Design: M4 — closed-set slots, structural contradiction prevention
+- `m5-enforcement-in-code-audit.md` (~1338 tok, large) — Design: M5 — enforcement in code, not in the prompt
 - `recall-harness.md` (~1639 tok, huge) — Design: the recall harness — deterministic working memory for search agents
 - `v3-mcp-surface-reduction.md` (~1080 tok, large) — v3.0 Design: MCP Tool Surface Reduction
 - `v3-multi-tenancy.md` (~1336 tok, large) — v3.0 Design: Multi-Tenancy Foundation
