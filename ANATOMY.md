@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 949 | **Est. tokens:** ~2,084,699
-**Generated:** 2026-08-17 12:03 UTC
+**Files:** 949 | **Est. tokens:** ~2,086,073
+**Generated:** 2026-08-17 12:07 UTC
 
 ## Token Budget Guide
 
@@ -35,7 +35,7 @@
 | `docs/` | 85 | ~157,202 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/benchmarks/` | 6 | ~8,995 |
-| `docs/design/` | 9 | ~14,721 |
+| `docs/design/` | 9 | ~16,095 |
 | `docs/security-baselines/` | 1 | ~18,974 |
 | `examples/` | 3 | ~1,201 |
 | `.gemini/` | 1 | ~28 |
@@ -237,10 +237,10 @@
 ### `docs/design/`
 
 - `eval-set-ground-truth.md` (~1740 tok, huge) — Design: the ground-truth eval set — the shared blocker for L1 and M7
-- `m1-embedded-field-vocabulary.md` (~1570 tok, huge) — Design: M1 — the embedded field must speak the query's vocabulary
+- `m1-embedded-field-vocabulary.md` (~2143 tok, huge) — Design: M1 — the embedded field must speak the query's vocabulary
 - `m2-m3-namespace-retrieval-properties.md` (~1835 tok, huge) — Design: M2/M3 — namespace retrieval properties, asserted and tuned
-- `m4-closed-set-slots.md` (~2012 tok, huge) — Design: M4 — closed-set slots, structural contradiction prevention
-- `m5-enforcement-in-code-audit.md` (~1338 tok, large) — Design: M5 — enforcement in code, not in the prompt
+- `m4-closed-set-slots.md` (~2218 tok, huge) — Design: M4 — closed-set slots, structural contradiction prevention
+- `m5-enforcement-in-code-audit.md` (~1933 tok, huge) — Design: M5 — enforcement in code, not in the prompt
 - `m6-negative-results.md` (~2171 tok, huge) — Design: M6 — negative results as a first-class recorded outcome
 - `recall-harness.md` (~1639 tok, huge) — Design: the recall harness — deterministic working memory for search agents
 - `v3-mcp-surface-reduction.md` (~1080 tok, large) — v3.0 Design: MCP Tool Surface Reduction

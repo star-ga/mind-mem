@@ -2935,6 +2935,24 @@ mislabelled eval set still produces confident numbers.
   possible outcome: augmentation wins and this closes as a negative finding with
   a number attached — which is still strictly better than the current state of
   having no number at all.
+  **A live consumer instance, worse than the Python one (added 2026-08-17).**
+  `512-mind/src/memory.mind` is the reference consumer of this store, and every
+  write it makes goes through `format!` into one flat string that is *both* the
+  stored record and the embedded text — `store_witness` (`memory.mind:65`) emits
+  `"WITNESS system={} time={} hash={} result=COMPLIANT invariants=9/9"`, and
+  `recall_witnesses` (`memory.mind:103`) queries it back with
+  `"512:witness system={}"`. Two properties make this the pathological case for
+  a vector index: the embedded text is near-constant boilerplate differing only
+  in an id and a hash, so inter-block cosine variance is close to zero and
+  similarity ranking carries almost no signal; and the fields a caller would
+  actually discriminate on (`spec_hash`, `timestamp`, failed-invariant names) are
+  fused into that same string rather than available as sibling keys. The probe
+  set must therefore include a **synthetic-boilerplate corpus**, not only a
+  symptom-vs-resolution corpus — the near-duplicate case is what a real caller
+  produces, and it is the one where a floor (M3) and a vector leg are both
+  useless while BM25 silently does all the work. Note this is an exposure in the
+  *store's own API shape*, not a 512-mind bug: nothing in the surface offers an
+  embed-vs-store split for a caller to use.
 
 - [ ] **M2 — Namespace-property round-trip test.** Assert *empirically*, per
   namespace, what is reachable by search versus only by direct get, with the
@@ -2982,17 +3000,49 @@ mislabelled eval set still produces confident numbers.
   nothing to collide on and therefore accumulate. That trade is acceptable and
   should be stated; what should **not** be copied is content-hash keying at
   demo width (32 bits is collision-prone as a durable identity scheme).
+  **The precedent is internal and one layer up (re-sourced 2026-08-17).**
+  `512-mind/src/drift.mind` applies closed-set discipline to *meaning* rather
+  than to keys: `no_semantic_drift` enumerates the mutation classes that corrupt
+  a contract — `"must not"`→`"should not"` (obligation weakened to suggestion),
+  `"fail open"`→`"fail safe"` (default inverted), `"any human"`→`"authorized
+  participants"` (scope narrowed) — and asserts against that fixed list. Same
+  move as M4: enumerate the space so the violation is *structural* instead of
+  detected. 121 enums across that repo's modules make it the house style, not a
+  one-off. So M4 should cite `drift.mind` as its precedent; the external tutorial
+  contributed the framing and none of the mechanism.
 
-- [ ] **M5 — Enforcement-in-code audit.** Sweep for every place a governance or
-  privacy property in this project rests on an *instruction to a model* rather
-  than on code that executes. The external work states the principle in one line
-  worth keeping: a summarizer is *told* not to include names, but a prompt is a
-  request — a scrub function is what actually holds. This project already argues
-  exactly that for `propose_update` versus "the model will remember"; the audit is
-  to confirm we live by it everywhere else, particularly on any path where
-  redaction, scoping, or exclusion is currently prompt-shaped. Output is a list
-  of prompt-enforced properties with a code-enforced replacement for each, not a
-  refactor.
+- [ ] **M5 — Enforcement-in-code audit, closing with capability flags
+  (rescoped 2026-08-17).** Sweep for every place a governance or privacy property
+  in this project rests on an *instruction to a model* rather than on code that
+  executes. The principle in one line: a summarizer is *told* not to include
+  names, but a prompt is a request — a scrub function is what actually holds.
+  This project already argues exactly that for `propose_update` versus "the model
+  will remember"; the audit confirms we live by it everywhere else, particularly
+  on any path where redaction, scoping, or exclusion is currently prompt-shaped.
+  Verified precondition: `scrub`/`redact` vocabulary occurs in essentially one
+  CLI file — not the write path, not the distillers, not compaction, not export.
+  That is not proof of a leak; it is proof there is **no enforcement layer to
+  point at**, which is exactly the condition under which a prompt-shaped property
+  survives unnoticed.
+  **The close condition is a mechanism, not a document.** The original scope
+  ended at "a ranked list with a code-enforced replacement for each", which
+  leaves every finding in the same unenforced state it was found in. The
+  ecosystem already has the right pattern: `512-mind` ships **fail-closed
+  capability flags** — `drift.semantic_mutation_scan_supported() -> u8 { 0 }`
+  (`drift.mind:30`) and `key_management.signature_verification_supported() -> u8
+  { 0 }` (`key_management.mind:324`), each paired with an undefined `extern` so a
+  missing backend fails at link time rather than silently returning a passing
+  default. `detect_drift` reads its flag and returns `equivalent: false` when the
+  scan is unsupported, with the reasoning written into the source: *"An
+  undefined/empty mutation list must NEVER make `equivalent` true — that was the
+  forgery-by-absence path this fix closes."*
+  That is M5 solved structurally. Each audit finding should close by installing a
+  flag that **fails closed while unimplemented**, so an unenforced property is a
+  function returning 0 that gates the path — not a doc saying the property is
+  aspirational. A caller intending to rely on it must check and refuse. The
+  ranked list becomes the work queue for installing flags, not the deliverable.
+  Keep the audit and the remediation separate passes regardless: bundling them
+  guarantees the sweep stops at the first interesting finding.
 
 - [ ] **M6 — Negative results as a recorded outcome.** Record what was
   *attempted and did not work*, not only what resolved. A record carrying only
@@ -3044,10 +3094,18 @@ utility number — a measurement artifact stays a measurement artifact.
 
 **Provenance rail.** Prior-art shape observed in a public tutorial; no code
 adopted, nothing named in any public artifact. Their stack (a graph runtime plus
-a vector-indexed SQLite store) is explicitly **not** being taken — only the
-measurement discipline and the closed-set write policy. Citation in
-`mind-internal`. Cross-repo: `autoresearch` ROADMAP (M6's dead-end-registry
-symmetry, and the ablation pattern applied to loop components).
+a vector-indexed SQLite store) is explicitly **not** being taken. After the
+2026-08-17 inspection pass, the external source contributes **no mechanism to
+any item in this group** — M4's closed-set discipline is sourced to
+`512-mind/src/drift.mind`, M5's fail-closed capability flags to `drift.mind` and
+`key_management.mind`, M6's negative-results registry to `autoresearch`'s
+`dead_ends.md`, and M1's worst instance is our own `512-mind/src/memory.mind`.
+What the tutorial supplied was framing: the observation that these are
+*silent-failure* classes worth gating. Every mechanism below it is internal
+precedent, which is the stronger position — the patterns are already running
+here and were merely not yet applied to the store. Citation in `mind-internal`.
+Cross-repo: `autoresearch` ROADMAP (M6's dead-end-registry symmetry, and the
+ablation pattern applied to loop components).
 
 - **Status:** Proposed 2026-08-17. M1/M5 are actionable now. M7 is explicitly
   blocked and must not be started before the eval set exists.

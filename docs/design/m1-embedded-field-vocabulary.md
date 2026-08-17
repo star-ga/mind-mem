@@ -93,6 +93,50 @@ Two blocks identical except that one's distinguishing tag falls after
 character 50. Assert whether they are separable by query. If they are not,
 the truncation is load-bearing in a way nobody chose deliberately.
 
+### 4. Near-duplicate boilerplate probe (added 2026-08-17)
+
+The three probes above all assume blocks whose embedded text *varies*. The
+worst real case is the opposite, and it is already in production use by our
+own reference consumer.
+
+`512-mind/src/memory.mind` writes every governance record through `format!`
+into a single flat string that is simultaneously the stored content and the
+embedded text:
+
+```
+store_witness   (memory.mind:65)   "WITNESS system={} time={} hash={} result=COMPLIANT invariants=9/9"
+store_violation (memory.mind:83)   "VIOLATION system={} time={} failed=[{}] total_failed={}"
+```
+
+and reads them back with `recall("512:witness system={}", limit, "hybrid")`
+(`memory.mind:103`). Across a corpus of witnesses, every embedded string is
+near-identical — the varying parts are an opaque id, a timestamp, and a hex
+hash, none of which carry lexical meaning to a sentence embedder. Two
+consequences to measure:
+
+1. **Vector-leg collapse.** Inter-block cosine variance approaches zero, so
+   similarity ranking degenerates to noise and the hybrid result is
+   effectively whatever BM25 returns. Probe: build a synthetic corpus of N
+   boilerplate records differing only in id/hash, query for one specific
+   record, and report the score spread between the correct hit and the
+   median wrong hit. If that spread is inside embedding noise, the vector
+   leg is contributing nothing for this shape and `retrieval_diagnostics`
+   should be able to say so.
+2. **Fused discriminators.** The fields a caller actually filters on —
+   `spec_hash`, `system_id`, the failed-invariant names — are inside the
+   embedded string rather than in sibling keys, so there is no exact-match
+   path to them and no way to embed one and merely store the other.
+
+This probe is the one with a **direct consequence for M3**: a relevance
+floor is meaningless on a corpus where all scores are compressed into a
+narrow band, so per-namespace floor policy must know whether a namespace is
+boilerplate-shaped before a floor is set on it.
+
+State plainly what this is and is not: it is an exposure in **this store's
+API shape**, not a defect in the consumer. Nothing in the surface offers an
+embed-vs-store split, so a caller building governance records has no
+correct alternative available to it.
+
 ## The rule this establishes
 
 Written down so it survives the specific fix:
@@ -119,7 +163,7 @@ the same mistake in the other direction.
 
 ## Done when
 
-- The three probes exist as tests and run without an API key (they exercise
+- The four probes exist as tests and run without an API key (they exercise
   the storage and retrieval path, not an extractor).
 - Each reports a number, and the numbers are recorded with the commit.
 - The vocabulary rule is stated in the retrieval documentation.

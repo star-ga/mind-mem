@@ -170,4 +170,17 @@ Prior-art shape observed in a public tutorial: closed-set slug as upsert
 key, and the escape-hatch trade. No code adopted, nothing named in any
 public artifact. The synthesis — keyed upsert *inside* the governed
 proposal path, supersession recorded rather than overwritten — is ours and
-is the part that differs from the source. Citation in `mind-internal`.
+is the part that differs from the source.
+
+**Internal precedent, established 2026-08-17.** The closed-set discipline
+is already house style one layer up, applied to *meaning* rather than to
+keys. `512-mind/src/drift.mind` enumerates the mutation classes that
+corrupt a contract — `"must not"`→`"should not"` weakens an obligation to a
+suggestion, `"fail open"`→`"fail safe"` inverts a default, `"any human"`→
+`"authorized participants"` narrows scope — and `no_semantic_drift` asserts
+against that fixed list. Same structural move as this item: enumerate the
+space so a violation collides by construction rather than needing to be
+noticed. 121 enums across that repo make it a convention, not a one-off.
+Cite `drift.mind` as the precedent for closed-set-as-mechanism; the
+external source contributed the specific application to storage keys and
+nothing else. Citation in `mind-internal`.

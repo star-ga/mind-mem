@@ -88,6 +88,48 @@ the audit with its fixes guarantees the audit stops early — the first
 interesting finding becomes a refactor and the sweep never finishes. The
 audit's value is completeness.
 
+### How a row closes: a fail-closed capability flag (added 2026-08-17)
+
+A list alone leaves every finding in the state it was found in — the
+property is still unenforced, now with documentation saying so. Documented
+non-enforcement decays into assumed enforcement: the next reader sees a
+governance-shaped function name and infers the guarantee.
+
+The ecosystem already runs the pattern that fixes this. `512-mind` pairs
+each unimplemented guarantee with a **capability flag that reads false**,
+plus an undefined `extern` so a missing backend fails at link time rather
+than resolving to a permissive default:
+
+```
+drift.mind:30           fn semantic_mutation_scan_supported() -> u8 { return 0 }
+key_management.mind:324 fn signature_verification_supported() -> u8 { return 0 }
+```
+
+The load-bearing half is that a caller *reads the flag and refuses*.
+`detect_drift` (`drift.mind:50`) returns `equivalent: false` whenever the
+scan is unsupported, with the reasoning committed alongside it: *"An
+undefined/empty mutation list must NEVER make `equivalent` true — that was
+the forgery-by-absence path this fix closes."* Absence of evidence is not
+evidence of compliance, and the code is what enforces that rather than a
+comment asking the reader to remember it.
+
+So each audit row closes by installing:
+
+1. A predicate naming the property, returning false while unimplemented.
+2. A consumer that reads it and takes the conservative branch — refuse,
+   redact, or decline to assert — never the permissive one.
+3. Where a backend is expected, an undefined symbol so a missing
+   implementation fails loudly instead of defaulting open.
+
+This preserves the audit/remediation split: the sweep produces the ranked
+list, and flag installation is the queue that list feeds. It changes only
+what "resolved" means for a row — a predicate that fails closed, not a
+paragraph explaining that the property is aspirational.
+
+**Applies to negative findings too.** If the sweep finds a property is
+already code-enforced, no flag is needed; the row closes as verified. Flags
+are for the gap between a named guarantee and a real mechanism.
+
 ## The honest possible outcome
 
 The sweep may find that every material property is already code-enforced
@@ -109,7 +151,8 @@ padded into a list of non-issues to justify the effort.
 
 - Every model-output-persisted call site is enumerated with its enforcement
   classification.
-- Every `prompt-only` row names a specific replacement function.
+- Every `prompt-only` row names a specific replacement function **and the
+  capability predicate that gates it while unimplemented**.
 - The list is ranked by blast radius.
 - The result — including "nothing material found" — is recorded with the
   commit.
@@ -118,4 +161,7 @@ padded into a list of non-issues to justify the effort.
 
 Prior-art shape observed in a public tutorial; the principle is one this
 project already held and published. No code adopted, nothing named in any
-public artifact. Citation in `mind-internal`.
+public artifact. The closing mechanism — fail-closed capability flags with
+undefined-extern backends — is **internal precedent** from `512-mind`
+(`drift.mind`, `key_management.mind`), not external. Citation in
+`mind-internal`.
