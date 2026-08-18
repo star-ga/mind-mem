@@ -292,6 +292,35 @@ def _sql(schema: str, template: str) -> Any:
     return pgsql.SQL(template).format(s=pgsql.Identifier(schema))
 
 
+_TS_TERM_RE = re.compile(r"[A-Za-z0-9]+")
+
+
+def _tsquery_or_terms(query: str, *, max_terms: int = 32) -> str | None:
+    """Build an OR-of-terms ``to_tsquery`` string from free text.
+
+    ``plainto_tsquery`` ANDs every term, so a multi-term natural-language
+    query ("mind-nerve gemv beat pytorch byte-identical") matches only the
+    blocks that contain ALL terms — usually none — which silently collapses
+    the BM25 arm and drops RRF fusion to the ``1/(k+rank)`` single-arm noise
+    floor. Mirror the sqlite FTS path (which ORs its tokens) by OR-joining
+    the query's alphanumeric terms for ``to_tsquery``. Each term is matched
+    by ``[A-Za-z0-9]+`` and is therefore purely alphanumeric, so the joined
+    string carries no tsquery operators and is injection-safe.
+
+    Returns ``None`` when the query has no usable terms (the caller then
+    skips the BM25 arm entirely instead of issuing an empty tsquery).
+    """
+    seen: dict[str, None] = {}
+    for tok in _TS_TERM_RE.findall(query.lower()):
+        if tok not in seen:
+            seen[tok] = None
+        if len(seen) >= max_terms:
+            break
+    if not seen:
+        return None
+    return " | ".join(seen)
+
+
 def _detect_vector_schema(conn: Any) -> str | None:
     """Return the schema name in which the ``vector`` extension is installed.
 
@@ -909,16 +938,23 @@ class PostgresBlockStore:
             raise BlockStoreError(f"query_embedding dim mismatch: got {len(query_embedding)}, schema expects {self._embedding_dim}")
         do_vector = query_embedding is not None and self._has_vector
 
+        # BM25 lexical arm: OR the query terms (via to_tsquery) instead of
+        # plainto_tsquery's implicit AND. plainto ANDs every term, so a
+        # multi-term query matched ~0 blocks and the arm went dark, dropping
+        # RRF to the 1/(k+rank) single-arm noise floor (uniform ~0.016). The
+        # OR form mirrors the sqlite FTS path and keeps the arm live so
+        # fusion actually discriminates. ``None`` => no usable terms => skip.
+        bm25_tsquery = _tsquery_or_terms(query)
         bm25_sql = _sql(
             self._schema,
             "SELECT id, ts_rank("
             "    to_tsvector('english', content || ' ' || COALESCE(metadata->>'Statement', '')),"
-            "    plainto_tsquery('english', %s)"
+            "    to_tsquery('english', %s)"
             ") AS rank"
             " FROM {s}.blocks"
             " WHERE active"
             "   AND to_tsvector('english', content || ' ' || COALESCE(metadata->>'Statement', ''))"
-            "       @@ plainto_tsquery('english', %s)"
+            "       @@ to_tsquery('english', %s)"
             " ORDER BY rank DESC"
             " LIMIT %s",
         )
@@ -938,8 +974,10 @@ class PostgresBlockStore:
         try:
             with pool.connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute(bm25_sql, (query, query, candidate_pool))
-                    bm25_rows = cur.fetchall()  # [(id, rank), ...]
+                    bm25_rows: list[tuple[str, float]] = []
+                    if bm25_tsquery is not None:
+                        cur.execute(bm25_sql, (bm25_tsquery, bm25_tsquery, candidate_pool))
+                        bm25_rows = cur.fetchall()  # [(id, rank), ...]
                     cos_rows: list[tuple[str, float]] = []
                     if do_vector:
                         emb_lit = _embedding_to_pg(query_embedding or [])
@@ -949,12 +987,18 @@ class PostgresBlockStore:
                     # RRF fusion. Both halves contribute 1/(k+rank); rank
                     # is 1-based to match the standard formulation. Ties
                     # broken by sum of contributions (already handled by
-                    # accumulation).
+                    # accumulation). ``fusion_sources`` records the per-arm
+                    # 1-based rank each id came from, so a genuinely fused hit
+                    # (names >=2 arms) is distinguishable from a single-arm
+                    # noise-floor hit downstream.
                     fused: dict[str, float] = {}
+                    fusion_sources: dict[str, dict[str, int]] = {}
                     for rank, (bid, _r) in enumerate(bm25_rows, start=1):
                         fused[bid] = fused.get(bid, 0.0) + 1.0 / (rrf_k + rank)
+                        fusion_sources.setdefault(bid, {})["bm25"] = rank
                     for rank, (cid, _d) in enumerate(cos_rows, start=1):
                         fused[cid] = fused.get(cid, 0.0) + 1.0 / (rrf_k + rank)
+                        fusion_sources.setdefault(cid, {})["vector"] = rank
 
                     if not fused:
                         return []
@@ -1009,6 +1053,7 @@ class PostgresBlockStore:
                         block = _row_to_block(row)
                         block["_score"] = score_by_id[bid]
                         block["_retrieval_source"] = retrieval_source
+                        block["fusion_sources"] = dict(fusion_sources.get(bid, {}))
                         out.append(block)
                     return out
         except Exception as exc:

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 949 | **Est. tokens:** ~2,086,073
-**Generated:** 2026-08-17 12:07 UTC
+**Files:** 950 | **Est. tokens:** ~2,091,178
+**Generated:** 2026-08-18 17:10 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~69,996 |
+| `./` | 35 | ~70,035 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -60,7 +60,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 171 | ~616,567 |
+| `src/mind_mem/` | 171 | ~619,537 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 7 | ~18,591 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
@@ -71,7 +71,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 24 | ~64,969 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 331 | ~733,413 |
+| `tests/` | 332 | ~735,509 |
 | `tests/fixtures/` | 1 | ~710 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
@@ -112,7 +112,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~2257 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~25477 tok, huge) — 30-Second Demo
+- `README.md` (~25516 tok, huge) — 30-Second Demo
 - `requirements-optional.txt` (~1129 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
@@ -505,7 +505,7 @@
 - `block_parser.py` (~7555 tok, huge) — Mind Mem Block Parser v1.0 — Self-hosted, zero external dependencies.
 - `block_provenance.py` (~1145 tok, large) — Provenance-rich blocks (roadmap Group E) — optional actor/session/tool metadata.
 - `block_store_encrypted.py` (~2313 tok, huge) — # Copyright 2026 STARGA, Inc.
-- `block_store_postgres.py` (~17692 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
+- `block_store_postgres.py` (~18281 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~2530 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
 - `block_store.py` (~10599 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
@@ -557,7 +557,7 @@
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~10611 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `http_transport.py` (~11242 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
-- `hybrid_recall.py` (~13525 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `hybrid_recall.py` (~15906 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `inbox.py` (~3716 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).
 - `ingestion_pipeline.py` (~1958 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~714 tok, large) — # Mind Mem — Memory + Immune System for AI agents
@@ -926,6 +926,7 @@
 - `test_http_auth_fail_closed.py` (~1724 tok, huge) — v3.7.0 H4: HTTP / REST auth must fail CLOSED by default.
 - `test_http_transport.py` (~4326 tok, huge) — Tests for the v3.9 HTTP transport adapter.
 - `test_hybrid_degraded_marker.py` (~2797 tok, huge) — Tests for the in-band recall degradation marker (Task 2).
+- `test_hybrid_recall_fusion_noise.py` (~2096 tok, huge) — Regression gate for the hybrid-recall NOISE bug (empty BM25 arm → 1/(k+1) floor).
 - `test_hybrid_recall.py` (~3107 tok, huge) — Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
 - `test_hybrid_search.py` (~599 tok, large) — Tests for hybrid search functionality."""
 - `test_inbox.py` (~2352 tok, huge) — Tests for the v3.9 inbox folder ingestion."""

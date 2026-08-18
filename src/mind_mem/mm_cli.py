@@ -1880,6 +1880,57 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     report["sqlite_only_count"] = len(sq_only)
     report["in_sync"] = len(pg_only) == 0 and len(sq_only) == 0
 
+    # FTS index health (P0 hybrid-noise guard). A recall.db whose blocks_fts
+    # table is empty/missing WHILE the store has active blocks is the exact
+    # structural failure that collapses hybrid recall to the 1/(k+1)
+    # single-arm noise floor (uniform ~0.016). Count the FTS rows and FAIL
+    # loudly on the read-only check when the lexical index is dead.
+    report["sqlite_recall_db_resolved"] = _os.path.abspath(sq_path)
+    fts_rows: int | None = None
+    if sq_exists:
+        try:
+            sqf = _sqlite3.connect(f"file:{sq_path}?mode=ro", uri=True)
+            frow = sqf.execute("SELECT count(*) FROM blocks_fts").fetchone()
+            fts_rows = int(frow[0]) if frow else 0
+            sqf.close()
+        except Exception as exc:
+            report["sqlite_fts_error"] = str(exc)
+            fts_rows = None  # table/schema missing == structurally empty
+    report["sqlite_fts_rows"] = fts_rows
+    store_active = len(pg_ids) if pg_ids else len(sq_ids)
+    fts_empty = (not sq_exists) or (fts_rows in (None, 0))
+    if fts_empty and store_active > 0:
+        report["fts_index_empty"] = True
+        report["actions"].append(
+            {
+                "fts_index_empty": {
+                    "recall_db": _os.path.abspath(sq_path),
+                    "fts_rows": fts_rows or 0,
+                    "store_active_blocks": store_active,
+                    "advice": (
+                        "BM25 FTS index empty/missing while the store has blocks — hybrid "
+                        "recall degrades to the 1/(k+1) single-arm noise floor. Run "
+                        "`mm doctor --rebuild-cache` (or reindex) to populate blocks_fts."
+                    ),
+                }
+            }
+        )
+
+    # Stale repo-local recall.db trap: a ./.mind-mem-index/recall.db in the
+    # CWD that resolves to a DIFFERENT absolute path than the configured
+    # workspace's recall.db means recall may read the wrong (stale) index.
+    resolved_sq = _os.path.abspath(sq_path)
+    cwd_local = _os.path.abspath(_os.path.join(_os.getcwd(), ".mind-mem-index", "recall.db"))
+    if _os.path.isfile(cwd_local) and cwd_local != resolved_sq:
+        report["recall_db_path_drift"] = {
+            "configured_workspace_db": resolved_sq,
+            "cwd_local_db": cwd_local,
+            "advice": (
+                "a repo-local recall.db shadows the configured workspace index; recall "
+                "may read a stale DB. Set MIND_MEM_WORKSPACE or remove the local index."
+            ),
+        }
+
     # --migrate-recall-log: schema-drift fix
     if args.migrate_recall_log and sq_exists:
         try:
@@ -1998,7 +2049,8 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
             report["actions"].append({"rebuild_cache": {"error": str(exc)}})
 
     print(json.dumps(report, indent=2, default=str))
-    return 0 if report.get("in_sync", False) or args.rebuild_cache or args.migrate_recall_log else 1
+    healthy = report.get("in_sync", False) and not report.get("fts_index_empty", False)
+    return 0 if healthy or args.rebuild_cache or args.migrate_recall_log else 1
 
 
 def _cmd_token_rotate(args: argparse.Namespace) -> int:

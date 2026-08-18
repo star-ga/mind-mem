@@ -67,11 +67,21 @@ def rrf_fuse(
     weights: list[float],
     k: int = 60,
     id_key: str = "_id",
+    source_names: list[str] | None = None,
 ) -> list[dict]:
     """Reciprocal Rank Fusion across multiple ranked result lists.
 
     For each document, RRF score = sum_i( weight_i / (k + rank_i) )
     where rank_i is the 1-based rank of the document in list i.
+
+    Each fused hit is annotated with ``fusion_sources`` — a
+    ``{arm_name: rank_1based}`` map recording WHICH input lists it came from
+    and at what rank, e.g. ``{"bm25": 3, "vector": 1}``. Arm names come from
+    ``source_names`` (positional, aligned to ``ranked_lists``); when absent
+    the list index is used. This is the machine-readable signal that
+    separates a genuinely FUSED hit (names >=2 arms) from a single-arm hit
+    sitting on the 1/(k+1) noise floor (names exactly one arm) — the exact
+    silent failure this annotation exists to expose.
 
     Audit R-2 — weight semantics: ``weights`` are RAW multipliers
     applied to each list's contribution. The output ``rrf_score``
@@ -120,12 +130,16 @@ def rrf_fuse(
 
     scores: dict[str, float] = {}
     block_data: dict[str, dict] = {}
+    # Per-arm 1-based ranks per fused id, e.g. {"bm25": 3, "vector": 1}.
+    fusion_sources: dict[str, dict[str, int]] = {}
 
     for list_idx, results in enumerate(ranked_lists):
         w = weights[list_idx] if list_idx < len(weights) else 1.0
+        arm = str(source_names[list_idx]) if source_names is not None and list_idx < len(source_names) else str(list_idx)
         for rank_0, item in enumerate(results):
             bid = _get_block_id(item, id_key)
             scores[bid] = scores.get(bid, 0.0) + w / (k + rank_0 + 1)
+            fusion_sources.setdefault(bid, {})[arm] = rank_0 + 1
             existing = block_data.get(bid)
             if existing is None:
                 block_data[bid] = item
@@ -155,6 +169,7 @@ def rrf_fuse(
         item = block_data[bid].copy()
         item["rrf_score"] = round(scores[bid], 6)
         item["fusion"] = "rrf"
+        item["fusion_sources"] = dict(fusion_sources.get(bid, {}))
         fused.append(item)
 
     return fused
@@ -208,6 +223,71 @@ class VectorLegError(RuntimeError):
     def __init__(self, reason: str) -> None:
         super().__init__(f"vector leg unavailable: {reason}")
         self.reason = reason
+
+
+class BM25LegError(RuntimeError):
+    """The BM25 (lexical) arm was STRUCTURALLY unavailable.
+
+    Raised by :meth:`HybridBackend._bm25_search` only under
+    ``recall.strict_hybrid=true`` when the lexical index is empty/missing
+    while the store has blocks — the exact structural failure that
+    otherwise collapses hybrid fusion to the 1/(k+1) single-arm noise
+    floor. ``reason`` is the machine-readable tag surfaced in the
+    ``degraded`` marker (mirrors :class:`VectorLegError`).
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"bm25 leg unavailable: {reason}")
+        self.reason = reason
+
+
+def _fts_row_count(db_path: str) -> int | None:
+    """Row count of the recall.db ``blocks_fts`` table (read-only, no DDL).
+
+    Returns ``0`` when the table exists but is empty, and ``None`` when the
+    DB file is absent/unreadable or the FTS table/schema is missing — both
+    of which count as a structurally-empty lexical index. Opens a
+    short-lived ``mode=ro`` connection and never mutates the store.
+    """
+    import sqlite3
+
+    if not os.path.isfile(db_path):
+        return None
+    conn = None
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        row = conn.execute("SELECT count(*) FROM blocks_fts").fetchone()
+        return int(row[0]) if row else 0
+    except sqlite3.Error:
+        return None
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except sqlite3.Error:  # nosec B110 — best-effort close of a read-only probe conn
+                pass
+
+
+def _merge_leg_markers(*markers: dict[str, str] | None) -> dict[str, str] | None:
+    """Union >=1 ``{leg, reason}`` degradation markers into one (or ``None``).
+
+    Legs and reasons are deduped, sorted, and comma-joined — the same shape
+    :func:`_union_degraded` produces for the multi-query path — so a fused
+    result can carry BOTH a degraded bm25 arm and a degraded vector arm at
+    once (``"bm25,vector"`` / ``"index_empty,unavailable"``) without either
+    masking the other. Returns ``None`` when no marker is present.
+    """
+    present = [m for m in markers if m]
+    if not present:
+        return None
+    legs = sorted({str(m.get("leg", "")).strip() for m in present if m.get("leg")})
+    reasons = sorted({str(m.get("reason", "")).strip() for m in present if m.get("reason")})
+    out: dict[str, str] = {}
+    if legs:
+        out["leg"] = ",".join(legs)
+    if reasons:
+        out["reason"] = ",".join(reasons)
+    return out or None
 
 
 class RecallResults(list):
@@ -306,6 +386,12 @@ class HybridBackend:
         self._config = cfg
         self._config_errors: list[str] = errors
 
+        # Strict-hybrid knob (default false). When true, a structurally-empty
+        # arm (an unpopulated/missing BM25 index while the store has blocks)
+        # RAISES (BM25LegError) instead of silently degrading to the 1/(k+1)
+        # single-arm RRF noise floor.
+        self._strict_hybrid: bool = bool(cfg.get("strict_hybrid", False))
+
         # Query expansion config (opt-in: adds ~3x query latency when enabled)
         qe_cfg = cfg.get("query_expansion", {})
         if not isinstance(qe_cfg, dict):
@@ -342,6 +428,7 @@ class HybridBackend:
             vector_weight=self.vector_weight,
             vector_available=self._vector_available,
             query_expansion=self._query_expansion_enabled,
+            strict_hybrid=self._strict_hybrid,
         )
 
     # -- capability probing ------------------------------------------------
@@ -562,6 +649,9 @@ class HybridBackend:
                     rerank=rerank,
                     **kwargs,
                 )
+                # Capture the bm25 leg's structural-degradation marker BEFORE
+                # rerank (which returns a plain list and drops ``.degraded``).
+                bm25_degraded = getattr(results, "degraded", None)
                 metrics.inc("hybrid_searches_bm25_only")
                 # v3.3.0 Tier 2: cross-encoder rerank also applies to
                 # BM25-only deployments (previously only post-fusion).
@@ -570,10 +660,10 @@ class HybridBackend:
                 # recall but the backend was unavailable at init — a plain
                 # BM25 config (vector never requested) is not "degraded",
                 # and a postgres server-side hybrid is its own leg.
-                degraded = None
+                vector_degraded = None
                 if self.vector_enabled and not self._vector_available and not pg_server_side:
-                    degraded = {"leg": "vector", "reason": "unavailable"}
-                return _as_results(results, degraded)
+                    vector_degraded = {"leg": "vector", "reason": "unavailable"}
+                return _as_results(results, _merge_leg_markers(bm25_degraded, vector_degraded))
 
             # Run BM25 + vector in parallel
             _log.info("hybrid_parallel_search", query=query)
@@ -594,6 +684,7 @@ class HybridBackend:
             # Records why the vector leg did not contribute, if it didn't.
             # None => the full two-leg fusion ran as requested.
             vector_degraded: dict[str, str] | None = None
+            bm25_degraded: dict[str, str] | None = None
             pool = ThreadPoolExecutor(max_workers=2)
             try:
                 bm25_future: Future = pool.submit(
@@ -615,6 +706,11 @@ class HybridBackend:
                     active_only=active_only,
                 )
                 bm25_results = bm25_future.result()
+                # A structurally-empty BM25 arm (index unbuilt while the store
+                # has blocks) is now marked LOUD by _bm25_search — fold it into
+                # the fused result's degraded marker so a single healthy leg
+                # (the 1/(k+1) noise floor) can never masquerade as "hybrid".
+                bm25_degraded = getattr(bm25_results, "degraded", None)
                 # Hard bound on the vector leg: if the embedder is cold /
                 # slow / down, degrade to BM25-only fusion instead of
                 # blocking the whole recall request (the vector work
@@ -657,6 +753,7 @@ class HybridBackend:
                 ranked_lists=[bm25_results, vec_results],
                 weights=[self.bm25_weight, self.vector_weight],
                 k=self.rrf_k,
+                source_names=["bm25", "vector"],
             )
 
             metrics.inc("hybrid_searches_fused")
@@ -710,9 +807,9 @@ class HybridBackend:
                 query=query,
                 results=len(result),
                 top_rrf=result[0].get("rrf_score", 0) if result else 0,
-                degraded=bool(vector_degraded),
+                degraded=bool(vector_degraded or bm25_degraded),
             )
-            return _as_results(result, vector_degraded)
+            return _as_results(result, _merge_leg_markers(bm25_degraded, vector_degraded))
 
     # -- multi-query expansion search ----------------------------------------
 
@@ -1204,6 +1301,48 @@ class HybridBackend:
         limit: int = 200,
         **kwargs: Any,
     ) -> list[dict]:
+        """BM25 leg with a STRUCTURAL empty-arm guard.
+
+        Runs the lexical search (:meth:`_bm25_search_raw`); when it yields
+        ZERO hits, distinguishes a legitimate zero-match (the FTS index is
+        populated, this query simply matched nothing — passes through
+        silently) from a STRUCTURAL failure (the lexical index is
+        empty/missing while the store has blocks). The latter is the exact
+        silent bug that collapses hybrid fusion to the 1/(k+1) single-arm
+        noise floor, so it is marked LOUD via the same ``degraded`` plumbing
+        the vector leg uses (:attr:`RecallResults.degraded`) — asymmetric no
+        longer: an empty BM25 arm is now as visible as a failed vector arm.
+
+        Under ``recall.strict_hybrid=true`` the structural failure RAISES
+        (:class:`BM25LegError`) instead of degrading.
+        """
+        results = self._bm25_search_raw(query, workspace, limit=limit, **kwargs)
+        if results:
+            return _as_results(results, None)
+
+        marker = self._bm25_empty_arm_marker(workspace)
+        if marker is None:
+            return _as_results(results, None)
+        if self._strict_hybrid:
+            raise BM25LegError(marker["reason"])
+        metrics.inc("hybrid_bm25_leg_index_empty")
+        _log.warning(
+            "hybrid_bm25_leg_degraded",
+            leg=marker["leg"],
+            reason=marker["reason"],
+            recall_db=marker.get("recall_db", ""),
+            fts_rows=marker.get("fts_rows", "0"),
+            advice="BM25 index empty/missing while store has blocks — run reindex / `mm doctor --rebuild-cache`",
+        )
+        return _as_results(results, {"leg": marker["leg"], "reason": marker["reason"]})
+
+    def _bm25_search_raw(
+        self,
+        query: str,
+        workspace: str,
+        limit: int = 200,
+        **kwargs: Any,
+    ) -> list[dict]:
         """BM25 search via the existing recall engine.
 
         Tries sqlite_index first (O(log N)), then falls back to recall.py
@@ -1227,6 +1366,64 @@ class HybridBackend:
         except Exception as exc:
             _log.error("bm25_search_failed", error=str(exc))
             return []
+
+    def _bm25_empty_arm_marker(self, workspace: str) -> dict[str, str] | None:
+        """Return a ``bm25`` degradation marker IFF the lexical index is
+        STRUCTURALLY empty while the store has blocks; else ``None``.
+
+        Only invoked on the zero-hit path. Resolves the absolute recall.db
+        path, counts its FTS rows, and — only when that FTS is empty/missing
+        — checks whether the configured store actually has blocks. This
+        ordering keeps the (heavier) store probe OFF the common legitimate
+        zero-match path: a populated FTS short-circuits to ``None`` cheaply.
+
+        The returned marker carries ``recall_db`` + ``fts_rows`` for the
+        degrade log's visibility; the caller strips it to ``{leg, reason}``
+        for the marker that flows into fusion / the recall attestation.
+        """
+        # The Postgres server-side hybrid provides its OWN lexical arm
+        # (PostgresBlockStore.hybrid_search); the sqlite FTS is not its
+        # source, so an empty sqlite FTS there is not a degradation.
+        if isinstance(self._config, dict) and self._config.get("provider") == "postgres":
+            return None
+        try:
+            from .sqlite_index import _db_path
+
+            db = _db_path(workspace)
+        except Exception:  # pragma: no cover — defensive
+            return None
+        fts_rows = _fts_row_count(db)  # None => file/table/schema missing
+        if fts_rows and fts_rows > 0:
+            # Populated FTS + zero hits = legitimate zero-match; stay silent.
+            _log.debug("hybrid_bm25_index_resolved", recall_db=db, fts_rows=fts_rows)
+            return None
+        if not self._store_has_blocks(workspace):
+            # Empty FTS AND empty store = a fresh workspace; not a failure.
+            return None
+        return {
+            "leg": "bm25",
+            "reason": "index_empty",
+            "recall_db": db,
+            "fts_rows": str(fts_rows if fts_rows is not None else 0),
+        }
+
+    def _store_has_blocks(self, workspace: str) -> bool:
+        """Best-effort: does the CONFIGURED store hold >=1 active block?
+
+        Routes through the backend-aware ``iter_active_blocks`` (``config=None``
+        auto-loads the workspace's mind-mem.json, so a Postgres store's blocks
+        are counted rather than the empty local Markdown corpus). Returns
+        ``False`` on any failure so an unavailable store never manufactures a
+        false ``index_empty`` degradation on a genuinely fresh workspace. Only
+        reached on the empty-FTS path, so its cost stays off the hot path.
+        """
+        try:
+            from .storage import iter_active_blocks
+
+            return bool(iter_active_blocks(workspace, config=None))
+        except Exception as exc:  # pragma: no cover — defensive
+            _log.debug("bm25_store_probe_failed", error=str(exc))
+            return False
 
     def _vector_search(
         self,
