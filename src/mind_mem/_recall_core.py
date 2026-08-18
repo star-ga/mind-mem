@@ -63,6 +63,7 @@ from .block_provenance import PROVENANCE_FIELD_NAMES
 from .enums import TaskStatus
 from .observability import get_logger, metrics
 from .retrieval_graph import (
+    feedback_quality_credit,
     get_hard_negative_ids,
     log_retrieval,
     propagate_scores,
@@ -1585,6 +1586,12 @@ def recall(
 
     # Stage 3: Context packing — augment top-K with adjacency/diversity/rescue
     top = context_pack(query, top, all_blocks, deduped, limit)
+
+    # Stage 3.1: Feedback-quality credit — deterministic four-component
+    # per-hit annotation (Group I, flag-gated, default off). Runs on the
+    # final packed list; log_retrieval persists it for diagnostics.
+    feedback_quality_credit(top, workspace, recall_cfg)
+    _stage_counts["feedback_credited"] = sum(1 for r in top if "feedback_credit" in r)
 
     # --- A-MEM: record access and evolve keywords for returned blocks ---
     if meta_mgr and top:

@@ -34,6 +34,7 @@ __all__ = [
     "VALIDITY_DEMOTION",
     "VALIDITY_STATUS_WIP",
     "VALIDITY_STATUS_DEAD",
+    "LIFECYCLE_RETENTION",
     "PRF_WEIGHT_DEFAULT",
     "PRF_WEIGHT_MULTIHOP",
     "RM3_BLEND_WEIGHT",
@@ -415,6 +416,11 @@ VALIDITY_DEMOTION = 0.5
 VALIDITY_STATUS_WIP = frozenset({"wip", "in-progress", "in_progress"})
 VALIDITY_STATUS_DEAD = frozenset({"deprecated", "archived", "rejected", "superseded"})
 
+# Feedback-quality credit (Group I, flag-gated): lifecycle retention
+# weights for the `retained` component. Missing/unknown lifecycle is
+# neutral (1.0) — same absence-is-neutral rule as the validity gate.
+LIFECYCLE_RETENTION = {"durable": 1.0, "generated": 0.75, "ephemeral": 0.5}
+
 # Pseudo-relevance feedback (PRF) blending weight
 PRF_WEIGHT_DEFAULT = 0.4
 PRF_WEIGHT_MULTIHOP = 0.25  # lower for multi-hop to avoid query drift
@@ -485,6 +491,7 @@ _VALID_RECALL_KEYS = frozenset(
         "min_score",
         "dedup",
         "validity_gate",
+        "feedback_credit",
         # Vector / hybrid recall keys (Postgres pgvector + RRF path). These
         # are consumed by PostgresRecallBackend / VectorBackend / the pgvector
         # hybrid_search; previously they lived only in recall_vector's own

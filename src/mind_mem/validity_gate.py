@@ -38,7 +38,7 @@ from .block_parser import parse_file
 from .lineage_staleness import list_staleness_scores
 from .observability import get_logger
 
-__all__ = ["apply_validity_gate"]
+__all__ = ["apply_validity_gate", "validity_components"]
 
 _log = get_logger("validity_gate")
 
@@ -75,22 +75,9 @@ def apply_validity_gate(hits: list[dict[str, Any]], workspace: str, cfg: dict[st
     staleness = list_staleness_scores(workspace, block_ids)
 
     for hit in hits:
-        block_id = hit.get("_id", "")
-        c1 = _corroboration_component(hit)
-        c2 = _status_component(hit)
-        c3 = 0.0 if block_id in contradicted_ids else 1.0
-        c4 = round(1.0 - min(1.0, staleness.get(block_id, 0.0)), 4)
-        composite = round(0.25 * (c1 + c2 + c3 + c4), 4)
-
-        hit["validity"] = {
-            "corroboration": c1,
-            "status": c2,
-            "contradiction": c3,
-            "staleness": c4,
-            "score": composite,
-        }
-
-        if composite < threshold:
+        components = validity_components(hit, contradicted_ids, staleness)
+        hit["validity"] = components
+        if components["score"] < threshold:
             hit["score"] = round(hit["score"] * demotion, 4)
             hit["_validity_demoted"] = True
 
@@ -99,6 +86,32 @@ def apply_validity_gate(hits: list[dict[str, Any]], workspace: str, cfg: dict[st
         hits=len(hits),
         demoted=sum(1 for h in hits if h.get("_validity_demoted")),
     )
+
+
+def validity_components(
+    hit: dict[str, Any],
+    contradicted_ids: set[str],
+    staleness: dict[str, float],
+) -> dict[str, float]:
+    """Pure four-criteria validity math — the ONE source of truth shared by
+    :func:`apply_validity_gate` (Stage 2.65) and
+    :func:`mind_mem.retrieval_graph.feedback_quality_credit` (Stage 3.1).
+
+    No I/O, no clock, no randomness — reads only the hit and the two
+    pre-fetched stored-state maps.
+    """
+    block_id = hit.get("_id", "")
+    c1 = _corroboration_component(hit)
+    c2 = _status_component(hit)
+    c3 = 0.0 if block_id in contradicted_ids else 1.0
+    c4 = round(1.0 - min(1.0, staleness.get(block_id, 0.0)), 4)
+    return {
+        "corroboration": c1,
+        "status": c2,
+        "contradiction": c3,
+        "staleness": c4,
+        "score": round(0.25 * (c1 + c2 + c3 + c4), 4),
+    }
 
 
 def _unit_fraction(value: Any, default: float) -> float:

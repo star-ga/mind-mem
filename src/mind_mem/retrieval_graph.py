@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import sqlite3
+from typing import Any
 
 from .observability import get_logger
 
@@ -34,6 +35,7 @@ __all__ = [
     "record_hard_negatives",
     "get_hard_negative_ids",
     "retrieval_diagnostics",
+    "feedback_quality_credit",
 ]
 
 # ---------------------------------------------------------------------------
@@ -51,7 +53,8 @@ CREATE TABLE IF NOT EXISTS retrieval_log (
     timestamp    TEXT DEFAULT (datetime('now')),
     feedback     REAL DEFAULT 0.0,
     intent_type  TEXT DEFAULT '',
-    stage_counts TEXT DEFAULT '{}'
+    stage_counts TEXT DEFAULT '{}',
+    credits      TEXT DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_rlog_qhash ON retrieval_log(query_hash);
 CREATE INDEX IF NOT EXISTS idx_rlog_ts ON retrieval_log(timestamp);
@@ -104,6 +107,8 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE retrieval_log ADD COLUMN intent_type TEXT DEFAULT ''")
     if "stage_counts" not in cols:
         conn.execute("ALTER TABLE retrieval_log ADD COLUMN stage_counts TEXT DEFAULT '{}'")
+    if "credits" not in cols:
+        conn.execute("ALTER TABLE retrieval_log ADD COLUMN credits TEXT DEFAULT '{}'")
     try:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_rlog_intent ON retrieval_log(intent_type)")
     except Exception as exc:
@@ -154,11 +159,16 @@ def log_retrieval(
         mem_ids = [r.get("_id", "") for r in results if r.get("_id")]
         scores = [r.get("score", 0) for r in results]
         qhash = hashlib.sha256(query.encode()).hexdigest()[:16]
+        credits = {
+            r["_id"]: r["feedback_credit"]
+            for r in results
+            if r.get("_id") and isinstance(r.get("feedback_credit"), dict)
+        }
 
         conn.execute(
             "INSERT INTO retrieval_log "
-            "(query_text, query_hash, mem_ids, scores, top_k, intent_type, stage_counts) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "(query_text, query_hash, mem_ids, scores, top_k, intent_type, stage_counts, credits) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 query,
                 qhash,
@@ -167,6 +177,7 @@ def log_retrieval(
                 len(results),
                 intent_type,
                 json.dumps(stage_counts or {}),
+                json.dumps(credits),
             ),
         )
 
@@ -378,6 +389,91 @@ def get_hard_negative_ids(workspace: str, *, max_age_days: int = 30) -> set[str]
 
 
 # ---------------------------------------------------------------------------
+# Feedback-quality credit (Group I, flag-gated)
+# ---------------------------------------------------------------------------
+
+
+def feedback_quality_credit(
+    hits: list[dict[str, Any]],
+    workspace: str,
+    cfg: dict[str, Any],
+) -> None:
+    """Annotate every hit with a four-component feedback-quality credit.
+
+    Group I: per-hit credit {informative, valid, non_redundant, retained},
+    each round(x, 4) in [0, 1]. Mutates ``hits`` in place (Stage 3.1),
+    mirroring the ``apply_validity_gate`` idiom. A complete no-op (no
+    annotation, no DB reads) unless ``cfg["feedback_credit"]["enabled"]``
+    is truthy. ``cfg`` is the ``recall`` section of mind-mem.json.
+
+    Deterministic by construction: reads only the hit list plus unwindowed
+    stored state (contradiction log, staleness scores) — no clock, no
+    randomness on the scored preimage.
+    """
+    fc_cfg = cfg.get("feedback_credit")
+    if not isinstance(fc_cfg, dict) or not fc_cfg.get("enabled", False):
+        return
+    if not hits:
+        return
+
+    # Lazy imports — lineage_staleness (pulled in by validity_gate)
+    # imports this module, so top-level imports would be circular.
+    from ._recall_constants import LIFECYCLE_RETENTION
+    from .dedup import _cosine_similarity, _get_result_text, _term_vector, _text_tokens
+    from .validity_gate import (
+        _load_contradicted_party_ids,
+        _status_component,
+        validity_components,
+    )
+
+    # `valid` — batch the two stored-state reads only when some hit lacks
+    # the Stage 2.65 annotation; either way the math is the ONE shared
+    # validity_components helper.
+    unannotated = [h for h in hits if not isinstance(h.get("validity"), dict)]
+    contradicted_ids: set[str] = set()
+    staleness: dict[str, float] = {}
+    if unannotated:
+        from .lineage_staleness import list_staleness_scores
+
+        contradicted_ids = _load_contradicted_party_ids(workspace)
+        block_ids = [h.get("_id", "") for h in unannotated if h.get("_id")]
+        staleness = list_staleness_scores(workspace, block_ids)
+
+    top_score = max(float(h.get("score", 0.0)) for h in hits)
+    kept_vectors: list[dict[str, int]] = []
+
+    for hit in hits:
+        score = float(hit.get("score", 0.0))
+        if top_score > 0:
+            informative = round(min(1.0, max(0.0, score / top_score)), 4)
+        else:
+            informative = 1.0  # no score signal -> neutral
+
+        validity = hit.get("validity")
+        if isinstance(validity, dict) and isinstance(validity.get("score"), (int, float)):
+            valid = round(float(validity["score"]), 4)
+        else:
+            valid = validity_components(hit, contradicted_ids, staleness)["score"]
+
+        vec = _term_vector(_text_tokens(_get_result_text(hit)))
+        max_sim = max((_cosine_similarity(vec, kv) for kv in kept_vectors), default=0.0)
+        non_redundant = round(max(0.0, 1.0 - max_sim), 4)
+        kept_vectors.append(vec)
+
+        lifecycle = str(hit.get("Lifecycle") or hit.get("lifecycle") or "durable").strip().lower()
+        retained = round(_status_component(hit) * LIFECYCLE_RETENTION.get(lifecycle, 1.0), 4)
+
+        hit["feedback_credit"] = {
+            "informative": informative,
+            "valid": valid,
+            "non_redundant": non_redundant,
+            "retained": retained,
+        }
+
+    _log.debug("feedback_credit_applied", hits=len(hits))
+
+
+# ---------------------------------------------------------------------------
 # Retrieval diagnostics (#428)
 # ---------------------------------------------------------------------------
 
@@ -410,7 +506,7 @@ def retrieval_diagnostics(
 
         # --- Stage counts aggregation ---
         rows = conn.execute(
-            "SELECT query_text, intent_type, stage_counts, scores FROM retrieval_log "
+            "SELECT query_text, intent_type, stage_counts, scores, credits FROM retrieval_log "
             "WHERE timestamp > datetime('now', ?) "
             "ORDER BY id DESC LIMIT ?",
             (f"-{max_age_days} days", last_n),
@@ -460,6 +556,34 @@ def retrieval_diagnostics(
                 all_final_counts.append(len(scores))
                 # #430: Per-intent quality signal (top score as proxy)
                 intent_quality.setdefault(intent, []).append(top_score)
+
+        # --- Feedback-quality credit aggregation (Group I, #Group-I) ---
+        # Second pass over `rows` (ORDER BY id DESC, i.e. newest first):
+        # accumulate per-component sums and capture the most recent
+        # non-empty credits dict for `latest_per_block`.
+        credit_queries = 0
+        credit_hits = 0
+        credit_sums: dict[str, float] = {}
+        latest_per_block: dict[str, dict] = {}
+        for row in rows:
+            try:
+                credits = json.loads(row["credits"]) if row["credits"] else {}
+            except (json.JSONDecodeError, TypeError):
+                credits = {}
+            if not isinstance(credits, dict) or not credits:
+                continue
+
+            credit_queries += 1
+            for block_id, components in credits.items():
+                if not isinstance(components, dict):
+                    continue
+                credit_hits += 1
+                for k, v in components.items():
+                    if isinstance(v, (int, float)):
+                        credit_sums[k] = credit_sums.get(k, 0.0) + float(v)
+
+            if not latest_per_block:
+                latest_per_block = credits
 
         # Compute per-stage averages and rejection rates
         stage_stats: dict[str, dict] = {}
@@ -540,6 +664,15 @@ def retrieval_diagnostics(
                 if confs:
                     intent_quality_summary[intent]["avg_confidence"] = round(sum(confs) / len(confs), 3)
 
+        # #Group-I: per-hit feedback-quality credit surfaced in diagnostics.
+        feedback_quality: dict[str, Any] = {
+            "queries_with_credits": credit_queries,
+            "hits_credited": credit_hits,
+        }
+        if credit_hits > 0:
+            feedback_quality["avg"] = {k: round(v / credit_hits, 4) for k, v in credit_sums.items()}
+            feedback_quality["latest_per_block"] = latest_per_block
+
         return {
             "queries_analyzed": len(rows),
             "intent_distribution": intent_dist,
@@ -549,6 +682,7 @@ def retrieval_diagnostics(
             "rejection_rates": rejection_rates,
             "score_distribution": score_dist,
             "hard_negatives": hn_summary,
+            "feedback_quality": feedback_quality,
         }
 
     except Exception as exc:
