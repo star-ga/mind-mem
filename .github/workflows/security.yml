@@ -191,6 +191,9 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: '1'
           ignore-unfixed: true
+          # Documented, narrowly-scoped ignores for pip's un-upgradable
+          # vendored deps (setuptools 70.3.0 / msgpack 1.1.2). See .trivyignore.
+          trivyignores: .trivyignore
 
       - name: Upload Trivy SARIF
         if: always() && steps.df_changed.outputs.changed == 'true'

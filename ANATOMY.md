@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 952 | **Est. tokens:** ~2,094,608
-**Generated:** 2026-08-18 18:21 UTC
+**Files:** 953 | **Est. tokens:** ~2,095,109
+**Generated:** 2026-08-18 18:37 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~70,135 |
+| `./` | 36 | ~70,588 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -42,7 +42,7 @@
 | `.githooks/` | 1 | ~98 |
 | `.github/` | 9 | ~4,469 |
 | `.github/ISSUE_TEMPLATE/` | 2 | ~179 |
-| `.github/workflows/` | 11 | ~9,808 |
+| `.github/workflows/` | 11 | ~9,856 |
 | `hooks/` | 3 | ~801 |
 | `hooks/openclaw/mind-mem/` | 2 | ~1,211 |
 | `intelligence/` | 1 | ~113 |
@@ -95,7 +95,7 @@
 - `.cursorrules` (~23 tok, tiny) — # mind-mem
 - `demo-setup.sh` (~323 tok, medium) — Pre-seed a demo workspace for VHS recording
 - `demo.tape` (~93 tok, small) — # mind-mem demo — terminal recording for README
-- `Dockerfile` (~406 tok, medium) — FROM python:3.12-slim
+- `Dockerfile` (~521 tok, large) — FROM python:3.12-slim
 - `.dockerignore` (~37 tok, tiny) — .git
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
 - `EVIDENCE.md` (~1213 tok, large) — Evidence Matrix
@@ -120,6 +120,7 @@
 - `setup.py` (~397 tok, medium) — Conditional setup hook for the optional Cython accelerator.
 - `SPEC.md` (~6230 tok, huge) — Mind Mem Formal Specification v1.5.1
 - `train_mind7b_runpod.py` (~1654 tok, huge)
+- `.trivyignore` (~338 tok, medium) — # Trivy ignore file — DOCUMENTED, un-actionable pip-vendored findings only.
 - `uninstall.sh` (~908 tok, large) — mind-mem uninstaller — removes MCP server entries from all configured clients
 - `.windsurfrules` (~18 tok, tiny) — # mind-mem
 ### `.agents/skills/mind-mem-development/`
@@ -357,7 +358,7 @@
 - `label-sync.yml` (~112 tok, small) — name: Label Sync
 - `red-team.yml` (~385 tok, medium) — name: Red Team Audit
 - `release.yml` (~2248 tok, huge) — name: Release
-- `security.yml` (~1894 tok, huge) — name: Supply-Chain Security
+- `security.yml` (~1942 tok, huge) — name: Supply-Chain Security
 - `stale.yml` (~242 tok, medium) — name: Stale Issues
 ### `hooks/`
 

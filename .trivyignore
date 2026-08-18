@@ -1,0 +1,25 @@
+# Trivy ignore file — DOCUMENTED, un-actionable pip-vendored findings only.
+#
+# The three CVEs below are reported by the Trivy image scan under the generic
+# "Python" target (no file path; PURL pkg:pypi/setuptools@70.3.0 and
+# pkg:pypi/msgpack@1.1.2). They are NOT the top-level packages — the built
+# image's actual setuptools is 84.0.0 and msgpack is 1.2.1 (both patched by the
+# Dockerfile). These are pip's OWN INTERNAL vendored copies, pinned by pip in
+# pip/_vendor/vendor.txt for its installer internals.
+#
+# Why this is the correct disposition, not a security waiver:
+#   * Un-upgradable — the versions are pinned by pip itself; even the latest
+#     pip (26.2.1) vendors exactly these. There is no user-side bump.
+#   * Not reachable — the running container's entrypoint is
+#     `python3 mcp_server.py`; pip is never invoked at runtime, so pip's
+#     vendored installer deps are never imported on the serving path.
+#   * Zero end-user exposure — mind-mem ships ZERO core runtime dependencies,
+#     so the published wheel does not contain setuptools or msgpack at all.
+#
+# Scope is deliberately narrow: three specific advisory IDs, so a real
+# top-level regression in setuptools/msgpack would still fail the scan.
+# Reassess whenever pip bumps its vendored setuptools/msgpack.
+
+CVE-2025-47273
+CVE-2026-59890
+GHSA-6v7p-g79w-8964

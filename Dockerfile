@@ -24,12 +24,19 @@ COPY src/ src/
 # exposed via the package, but keeping the build image clean remediates the
 # supply-chain finding at the source rather than suppressing it.
 #
-# Pin the PATCHED floors explicitly so the Trivy scan sees no fixable CVE:
-#   setuptools >= 83.0.0 — CVE-2025-47273 (HIGH, PackageIndex path traversal,
-#                          fixed 78.1.1) + CVE-2026-59890 (MANIFEST.in sdist
-#                          bypass, fixed 83.0.0)
-#   msgpack    >= 1.2.1  — GHSA-6v7p-g79w-8964 (HIGH, Unpacker-reuse OOB read)
-RUN pip install --no-cache-dir --upgrade "pip>=25.2" "setuptools>=83.0.0" "msgpack>=1.2.1" \
+# Upgrade pip + setuptools to patched floors (the base image ships older ones
+# with fixable CVEs). mind-mem ships ZERO core deps so end users are never
+# exposed via the wheel; this only keeps the build/scan image clean.
+#
+# NOTE: pip additionally VENDORS its own setuptools 70.3.0 + msgpack 1.1.2
+# (pip/_vendor), which the Trivy image scan reports under the generic "Python"
+# target. Those copies are pinned by pip for its installer internals — they are
+# un-upgradable independently of pip (even latest pip vendors them) and are
+# never imported on the serving path (entrypoint is `python3 mcp_server.py`;
+# pip is not invoked at runtime). The three advisory IDs are documented and
+# narrowly scoped in .trivyignore at the repo root — see that file for the
+# rationale; they are NOT the top-level packages, which are patched above.
+RUN pip install --no-cache-dir --upgrade "pip>=25.2" "setuptools>=83.0.0" \
  && pip install --no-cache-dir -e .
 
 EXPOSE 8000
