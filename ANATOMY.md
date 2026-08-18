@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 957 | **Est. tokens:** ~2,108,954
-**Generated:** 2026-08-18 20:55 UTC
+**Files:** 957 | **Est. tokens:** ~2,109,030
+**Generated:** 2026-08-18 21:26 UTC
 
 ## Token Budget Guide
 
@@ -60,7 +60,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 173 | ~629,626 |
+| `src/mind_mem/` | 173 | ~629,702 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 7 | ~18,591 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
@@ -675,7 +675,7 @@
 - `retrieval_graph.py` (~7439 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
 - `retrieval_trace.py` (~1252 tok, large) — Per-feature retrieval attribution (v3.3.0 architect audit item #7).
 - `schema_version.py` (~1897 tok, huge) — Mind-Mem Schema Version Migration. Zero external deps.
-- `self_update.py` (~5113 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `self_update.py` (~5189 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `session_boost.py` (~1533 tok, huge) — Session-boundary preservation for recall (v3.3.0 Tier 2 #5).
 - `session_summarizer.py` (~2885 tok, huge) — mind-mem Session Summarizer. Zero external deps.
 ### `src/mind_mem/skill_opt/`

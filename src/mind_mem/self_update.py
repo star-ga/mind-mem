@@ -19,6 +19,7 @@ import argparse
 import dataclasses
 import importlib.metadata
 import json
+import logging
 import math
 import os
 import re
@@ -49,6 +50,8 @@ DEFAULT_INTERVAL_HOURS = 24.0
 _MIN_INTERVAL_HOURS = 1.0
 _VALID_MODES = {"notify", "auto"}
 _VALID_CHANNELS = {"stable", "pre"}
+
+_pylog = logging.getLogger("mind_mem.self_update")
 
 
 def _log(message: str) -> None:
@@ -140,20 +143,20 @@ def _site_dirs() -> list[str]:
     if callable(get_site):
         try:
             dirs.extend(get_site())
-        except Exception:
-            pass
+        except Exception as exc:
+            _pylog.debug("%s site.getsitepackages() lookup failed: %s", _LOG_PREFIX, exc)
     get_user_site = getattr(site, "getusersitepackages", None)
     if callable(get_user_site):
         try:
             dirs.append(get_user_site())
-        except Exception:
-            pass
+        except Exception as exc:
+            _pylog.debug("%s site.getusersitepackages() lookup failed: %s", _LOG_PREFIX, exc)
     try:
         purelib = sysconfig.get_paths().get("purelib")
         if purelib:
             dirs.append(purelib)
-    except Exception:
-        pass
+    except Exception as exc:
+        _pylog.debug("%s sysconfig purelib lookup failed: %s", _LOG_PREFIX, exc)
     return [d for d in dict.fromkeys(dirs) if d]
 
 

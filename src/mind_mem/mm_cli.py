@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -218,7 +219,7 @@ def _redact_dsn(dsn: str) -> str:
             if u.port:
                 new_netloc += f":{u.port}"
             return urlunparse(u._replace(netloc=new_netloc))
-    except Exception:
+    except Exception:  # nosec B110 — intentional: on any parse error fall through to the regex redaction below; must NOT log the exception (it can carry the DSN whose password is being redacted)
         pass
     # Keyword form (postgresql://… without password OR plain key=value).
     return re.sub(r"(?i)\bpassword\s*=\s*\S+", "password=***", dsn)
@@ -2877,8 +2878,8 @@ def _run_auto_update_hook(args: argparse.Namespace) -> None:
             with open(cfg_path, encoding="utf-8") as fh:
                 config = json.load(fh)
         self_update.maybe_auto_check(config, getattr(args, "cmd", None))
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger("mind_mem.mm_cli").debug("auto-update hook skipped: %s", exc)
 
 
 def main(argv: Optional[list[str]] = None) -> int:
