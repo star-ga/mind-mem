@@ -4,6 +4,30 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+## v4.8.0 — recall-sufficiency score (Group I)
+
+* **Recall-sufficiency score — one deterministic `[0,1]` "did this recall deliver
+  enough" number per query (`retrieval_graph.recall_sufficiency`, recall Stage
+  3.2)** — aggregates the v4.7.0 per-hit feedback-quality credit into a single
+  product-mass sum (`E = Σ informative·valid·non_redundant·retained` over returned
+  hits) normalized by the expected on-task demand for the routed intent class
+  (`INTENT_DEMAND`: point lookups need one good hit, enumeration/chain classes
+  progressively more) → `S = round(min(1, E/demand), 4)`. Surfaced in
+  `retrieval_diagnostics` (a `recall_sufficiency` block: avg / p50 / min /
+  starved_rate / by_intent / latest) and in the `pack_recall_budget` MCP tool
+  (scores the *packed* list plus a `pre_pack_score` to expose packing loss — an
+  over-tight budget that drops every credited hit reports a maximally-starved
+  `0.0`, never silent). Rides the v4.7.0 `recall.feedback_credit.enabled` flag
+  (credit presence is the gate; a `recall.feedback_credit.sufficiency` sub-key
+  opts out) — **no new flag, no schema migration** (the score rides the existing
+  `stage_counts` column), **no new MCP tool**. Fully **deterministic** — pure
+  arithmetic over the already-deterministic credits plus a constant lookup;
+  flag-off is a structural no-op. Lands the Group I "recall-sufficiency" roadmap
+  item — the novel product metric to report beside raw block counts. Fable-spec'd;
+  regression-gated by `tests/test_recall_sufficiency.py` (flag-off no-op +
+  enough-vs-starved discrimination driven purely by query class + determinism);
+  the v4.7.0 / v4.6.0 tests pass **unchanged**. No `mind-mem-4b` retraining.
+
 ## v4.7.0 — per-hit feedback-quality credit (Group I)
 
 * **Per-hit feedback-quality credit in `retrieval_diagnostics` — deterministic

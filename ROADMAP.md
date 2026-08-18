@@ -258,7 +258,7 @@ ships as a versioned config, like any other governed change.
       `informative` ← marginal-uncertainty-reduction proxy (top-score
       delta vs. the already-packed set). **Do first** — cheapest, and it
       makes the rest measurable.
-- [ ] **Recall-sufficiency score (EFC ÷ task-demand analog)** — a single
+- [x] **Recall-sufficiency score (EFC ÷ task-demand analog)** — shipped v4.8.0 (`retrieval_graph.recall_sufficiency`, Stage 3.2; product-mass ÷ `INTENT_DEMAND`, surfaced in `retrieval_diagnostics` + `pack_recall_budget`). Originally: a single
       normalized "did this recall deliver enough on-task durable context
       for this query class" number, surfaced in `retrieval_diagnostics`
       and `pack_recall_budget`. The novel product metric; report it
