@@ -12,6 +12,10 @@ benchmarks/.cache/
 CLI_TASKS.md
 benchmarks/*.jsonl
 benchmarks/*results*.json*
+# Exception: this one is a TRACKED golden reference — test_feedback_success_bench
+# compares a fresh run against it (a deterministic bench), so it must exist in a
+# clean CI clone, not just after a local generate.
+!benchmarks/feedback_success_results.json
 lib/*.so
 lib/*.dylib
 lib/*.o

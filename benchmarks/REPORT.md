@@ -356,6 +356,40 @@ Pre-allocated ctypes arrays; timing measures native function call only (no marsh
 python benchmarks/bench_kernels.py --iterations 200 --sizes 100,500,1000,5000
 ```
 
+## Feedback-Quality -> Downstream-Success (Group I item 3, synthetic, deterministic)
+
+Standing regression gate proving the v4.7.0 per-hit feedback-quality credit
+(`feedback_quality_credit`) and v4.8.0 recall-sufficiency score
+(`recall_sufficiency`) predict whether a recall delivered enough for the
+downstream agent to succeed. 48 synthetic, hand-authored episodes (8 intent
+classes x 6 families: sufficient / noisy-sufficient / starved / redundant /
+invalid / not-retained); ground truth is computed independently of the
+predictor under test straight from raw fixture metadata. No clock, no
+randomness, no model, no network — byte-for-byte reproducible.
+
+| Metric                              |    Value |
+| ------------------------------------ | -------: |
+| accuracy                             |   1.0000 |
+| precision                            |   1.0000 |
+| recall                               |   1.0000 |
+| f1                                   |   1.0000 |
+| separation                           |   0.8096 |
+| **success_rate_predicted_starved**   | **0.00** |
+| **success_rate_predicted_sufficient**| **1.00** |
+| n_episodes                           |       48 |
+| threshold                            |     0.50 |
+
+Downstream-success prediction (synthetic, deterministic): starved 0.00 -> sufficient 1.00 at matched budget.
+
+### Reproduction
+
+```bash
+python benchmarks/feedback_success_bench.py
+pytest tests/test_feedback_success_bench.py -x
+```
+
+Full breakdown: `benchmarks/feedback_success_results.json`.
+
 ## Running Benchmarks
 
 ```bash

@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 957 | **Est. tokens:** ~2,109,030
-**Generated:** 2026-08-18 21:26 UTC
+**Files:** 959 | **Est. tokens:** ~2,089,730
+**Generated:** 2026-08-18 22:07 UTC
 
 ## Token Budget Guide
 
@@ -22,11 +22,11 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 36 | ~70,654 |
+| `./` | 35 | ~45,165 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
-| `benchmarks/` | 40 | ~103,186 |
+| `benchmarks/` | 42 | ~108,246 |
 | `bin/` | 1 | ~526 |
 | `deploy/` | 2 | ~772 |
 | `deploy/docker/` | 1 | ~592 |
@@ -71,7 +71,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 24 | ~64,969 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 336 | ~742,159 |
+| `tests/` | 337 | ~743,288 |
 | `tests/fixtures/` | 1 | ~710 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
@@ -101,7 +101,7 @@
 - `EVIDENCE.md` (~1213 tok, large) — Evidence Matrix
 - `generate_mind7b_training.py` (~5558 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
-- `.gitignore` (~315 tok, medium) — *.pyc
+- `.gitignore` (~379 tok, medium) — *.pyc
 - `.gitleaks.toml` (~314 tok, medium) — title = "mind-mem gitleaks config"
 - `install-bootstrap.sh` (~1756 tok, huge) — mind-mem one-command bootstrap installer
 - `install.sh` (~4935 tok, huge) — mind-mem installer — installs the package + wires MCP config for AI clients
@@ -112,7 +112,6 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~2257 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~25553 tok, huge) — 30-Second Demo
 - `requirements-optional.txt` (~1129 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
@@ -150,6 +149,8 @@
 - `_ch_minilm_spawn.py` (~6417 tok, huge) — LongMemEval-S — mind-mem FULL POTENTIAL harness (same-equipment, best-vs-best).
 - `compare_runs.py` (~857 tok, large) — Compare two LoCoMo benchmark runs side-by-side.
 - `crossencoder_ab.py` (~3205 tok, huge) — Cross-Encoder A/B Test — retrieval-level comparison.
+- `feedback_success_bench.py` (~4449 tok, huge) — Feedback-quality -> downstream-success bench (Group I item 3).
+- `feedback_success_results.json` (~230 tok, medium) — Keys: accuracy, f1, mean_sufficiency_failure, mean_sufficiency_success, n_episodes
 - `generate_dispatcher_examples.py` (~2346 tok, huge) — Generate synthetic training examples for the v3.2.x 7-dispatcher MCP surface.
 - `generate_retrieval_examples.py` (~1686 tok, huge) — Generate training examples for v3.3.0 retrieval shapes.
 - `grid_search.py` (~2849 tok, huge) — BM25F Field Weight Grid Search for mind-mem Recall Engine.
@@ -174,7 +175,7 @@
 - `niah_v3.2.1_redis_results.txt` (~111 tok, small) — ============================= test session starts ==============================
 - `niah_v3.2.1_results.txt` (~203 tok, medium) — ============================= test session starts ==============================
 - `README_benchmark_mode.md` (~1106 tok, large) — Full-capability benchmark mode (v3.3.0)
-- `REPORT.md` (~3980 tok, huge) — MIND-Mem Benchmark Report
+- `REPORT.md` (~4361 tok, huge) — MIND-Mem Benchmark Report
 - `repro_niah.py` (~2385 tok, huge) — Reproducible NIAH benchmark harness — emits independently-verifiable evidence.
 - `runpod_kickoff.sh` (~1779 tok, huge) — mind-mem-4b v2 — Runpod one-shot kickoff.
 - `tier_weight_search.py` (~1615 tok, huge) — Grid-search per-tier weights against LoCoMo judge scores (v3.3.0 T4 #10).
@@ -906,6 +907,7 @@
 - `test_federation_peer_allowlist.py` (~1606 tok, huge) — Regression tests for MIND_MEM_FED_PEERS operator-side peer allowlist
 - `test_federation_resolve_race.py` (~548 tok, large) — resolve_conflict must NOT run vclock upserts when its UPDATE was a no-op.
 - `test_feedback_credit.py` (~1375 tok, large) — Regression gate for Group I per-hit feedback-quality credit (Stage 3.1).
+- `test_feedback_success_bench.py` (~1129 tok, large) — Regression gate for benchmarks/feedback_success_bench.py (Group I item 3).
 - `test_field_audit.py` (~1399 tok, large) — Tests for mind-mem per-field mutation audit (field_audit.py)."""
 - `test_field_extraction.py` (~201 tok, medium) — Tests for field token extraction."""
 - `test_filelock.py` (~979 tok, large) — Tests for filelock.py — cross-platform advisory locking."""

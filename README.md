@@ -29,7 +29,7 @@
 </p>
 
 <p align="center"><sub>
-  <strong>Current release:</strong> <code>v4.9.0</code> &mdash; <strong>self-update</strong>: <code>mm self-update</code> + an opt-in auto-update that keeps any install on the latest release (editable-dev-tree-safe, PEP-668/pipx-aware, default off) &mdash;
+  <strong>Current release:</strong> <code>v4.9.1</code> &mdash; feedback→success bench completing <strong>Group I</strong> (recall-quality): proves the recall metrics predict agent success &mdash; starved 0.00 → sufficient 1.00 at matched budget &mdash;
   <a href="CHANGELOG.md">see CHANGELOG</a>
   (single source of truth; per-version detail tables below may lag the changelog)
 </sub></p>
@@ -63,7 +63,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>Current release: **v4.9.0** — a **self-update** mechanism: `mm self-update [--check]` plus an opt-in, interval-gated `auto_update` config that keeps installs on the latest PyPI release. Safe by construction — refuses to upgrade an editable/dev tree, handles PEP-668 + pipx, default off, and the auto-check can never break a normal `mm` command. Builds on v4.8.0 (recall-sufficiency), v4.7.0 (per-hit credit), v4.6.0 (validity gate), v4.5.0 (hybrid-recall noise fix). Full per-release notes live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
+<sub>Current release: **v4.9.1** — a deterministic **feedback→success benchmark** completing **Group I** (recall-quality moat): 48 synthetic episodes prove the per-hit credit + recall-sufficiency metrics *predict agent task success* (starved 0.00 → sufficient 1.00 at matched budget). Builds on v4.9.0 (self-update), v4.8.0 (recall-sufficiency), v4.7.0 (per-hit credit), v4.6.0 (validity gate), v4.5.0 (hybrid-recall noise fix). Full per-release notes live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
 
 ### Substrate Properties
 
@@ -478,6 +478,10 @@ Measured on a single developer workstation (commodity x86-64, warm cache, single
 | **Memory footprint** | RSS (idle MCP server) | **~28 MB** |
 
 Query latency scales as O(log N) with SQLite FTS5 (vs O(corpus) for scan backend). The co-retrieval graph adds < 1ms per query. Knee cutoff and fact aggregation add negligible overhead (< 0.5ms).
+
+### Feedback-Quality -> Downstream-Success (synthetic, deterministic)
+
+Downstream-success prediction (synthetic, deterministic): starved 0.00 -> sufficient 1.00 at matched budget. 48-episode regression gate over the v4.7.0 per-hit feedback-quality credit + v4.8.0 recall-sufficiency score; see [`benchmarks/REPORT.md`](benchmarks/REPORT.md#feedback-quality---downstream-success-group-i-item-3-synthetic-deterministic) and [`benchmarks/feedback_success_bench.py`](benchmarks/feedback_success_bench.py).
 
 ### Run Benchmarks Yourself
 

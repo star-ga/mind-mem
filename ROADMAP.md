@@ -272,7 +272,7 @@ ships as a versioned config, like any other governed change.
       clock/rand on the scored preimage; annotates `hit["validity"]` for
       `retrieval_diagnostics`. Fable-spec'd, regression-gated
       (`tests/test_validity_gate.py`).
-- [ ] **Feedback-quality → downstream-success bench** — add a standing
+- [x] **Feedback-quality → downstream-success bench** — shipped v4.9.1 (`benchmarks/feedback_success_bench.py`; 48 deterministic episodes, starved 0.00 → sufficient 1.00 at matched budget). **Completes Group I.** Originally: add a standing
       eval that predicts agent task-failure from recall feedback-quality
       coordinates (their headline method), proving mind-mem *improves
       agent success*, not just retrieval scores. Pairs with the LoCoMo /

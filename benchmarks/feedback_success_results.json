@@ -1,0 +1,45 @@
+{
+  "accuracy": 1.0,
+  "f1": 1.0,
+  "mean_sufficiency_failure": 0.1752,
+  "mean_sufficiency_success": 0.9848,
+  "n_episodes": 48,
+  "per_family": {
+    "F1_starved": {
+      "accuracy": 1.0,
+      "mean_sufficiency": 0.1396,
+      "n": 8
+    },
+    "F2_redundant": {
+      "accuracy": 1.0,
+      "mean_sufficiency": 0.4631,
+      "n": 8
+    },
+    "F3_invalid": {
+      "accuracy": 1.0,
+      "mean_sufficiency": 0.1396,
+      "n": 8
+    },
+    "F4_not_retained": {
+      "accuracy": 1.0,
+      "mean_sufficiency": 0.1396,
+      "n": 8
+    },
+    "S1_sufficient": {
+      "accuracy": 1.0,
+      "mean_sufficiency": 0.9919,
+      "n": 8
+    },
+    "S2_noisy_sufficient": {
+      "accuracy": 1.0,
+      "mean_sufficiency": 0.999,
+      "n": 8
+    }
+  },
+  "precision": 1.0,
+  "recall": 1.0,
+  "separation": 0.8096,
+  "success_rate_predicted_starved": 0.0,
+  "success_rate_predicted_sufficient": 1.0,
+  "threshold": 0.5
+}

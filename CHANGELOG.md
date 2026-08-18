@@ -4,6 +4,25 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+## v4.9.1 — feedback→success bench (completes Group I recall-quality)
+
+* **Feedback-quality → downstream-success bench (`benchmarks/feedback_success_bench.py`)**
+  — a standing, fully **deterministic** eval that proves the recall-quality metrics
+  *predict agent success*, not just retrieval scores. 48 synthetic episodes (8 intent
+  classes × 6 families: sufficient / noisy-sufficient / starved / redundant / invalid /
+  not-retained) with frozen ground-truth labels computed **independently** of the metric
+  under test — the label rule reimplements "durable / valid / non-redundant" from raw
+  fixture metadata, so the bench cannot trivially agree with itself. Predictor =
+  `recall_sufficiency ≥ SUFFICIENCY_STARVED_THRESHOLD`. At matched budget the headline
+  lands at **starved 0.00 → sufficient 1.00** (accuracy 1.0, separation 0.81). No
+  clock/rand/model/network — reproducible byte-for-byte against the tracked
+  `benchmarks/feedback_success_results.json`. Regression-gated by
+  `tests/test_feedback_success_bench.py` (determinism + separation floors + flag-off
+  honesty). **This completes Group I — the recall-quality moat (4/4): validity gate
+  (4.6.0) + per-hit credit (4.7.0) + recall-sufficiency (4.8.0) + this bench.**
+  Bench/docs only — no runtime change, no new dependency. (Patch bump: additive
+  benchmark artifact, zero behavior change.)
+
 ## v4.9.0 — self-update (`mm self-update` + opt-in auto-update)
 
 * **Self-update mechanism — keep any install on the latest release
