@@ -4,6 +4,28 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+## v4.9.0 — self-update (`mm self-update` + opt-in auto-update)
+
+* **Self-update mechanism — keep any install on the latest release
+  (`self_update.py`, `mm self-update`)** — two parts: **(a)** a manual
+  `mm self-update [--check] [--yes] [--pre]` command that queries PyPI (stdlib
+  `urllib`, offline-graceful) and upgrades in place via the pip that owns *this*
+  install; and **(b)** an opt-in, interval-gated **auto-update** hook
+  (`mind-mem.json` → `auto_update: {enabled: false, mode: "notify"|"auto",
+  interval_hours: 24, channel: "stable"|"pre"}`) that checks on `mm` invocation
+  and either prints a one-line notice or upgrades in place. **Safe by
+  construction:** refuses to upgrade an **editable/dev install** (PEP 660
+  `direct_url` + `__editable__*.pth` + repo-parent `pyproject.toml` detection —
+  never clobbers a `pip install -e` source tree), handles PEP-668
+  externally-managed envs (`--break-system-packages` retry) and pipx installs,
+  is **default OFF** (no surprise network or upgrades), and the auto-check hook
+  is fully exception-wrapped so it can **never break a normal `mm` command**.
+  **Zero coupling** to the recall/evidence/scoring layer — it only prints (to
+  stderr) and shells `pip`; it never touches any scored or evidence path. New
+  `tests/test_self_update.py` (16 tests: check / upgrade / editable-skip /
+  offline-graceful / auto-interval-gate / stable-vs-pre channel + PEP-440-subset
+  version ordering). No new dependencies (stdlib only).
+
 ## v4.8.0 — recall-sufficiency score (Group I)
 
 * **Recall-sufficiency score — one deterministic `[0,1]` "did this recall deliver

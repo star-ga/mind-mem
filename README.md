@@ -29,7 +29,7 @@
 </p>
 
 <p align="center"><sub>
-  <strong>Current release:</strong> <code>v4.8.0</code> &mdash; opt-in <strong>recall-sufficiency score</strong>: one deterministic [0,1] "did this recall deliver enough on-task context for this query class" number (per-intent-class demand), surfaced in <code>retrieval_diagnostics</code> + <code>pack_recall_budget</code> &mdash;
+  <strong>Current release:</strong> <code>v4.9.0</code> &mdash; <strong>self-update</strong>: <code>mm self-update</code> + an opt-in auto-update that keeps any install on the latest release (editable-dev-tree-safe, PEP-668/pipx-aware, default off) &mdash;
   <a href="CHANGELOG.md">see CHANGELOG</a>
   (single source of truth; per-version detail tables below may lag the changelog)
 </sub></p>
@@ -63,7 +63,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>Current release: **v4.8.0** — an opt-in, deterministic **recall-sufficiency score** that aggregates the v4.7.0 per-hit feedback-quality credit into one [0,1] "did this recall deliver enough on-task durable context for this query class" number (product-mass ÷ per-intent-class demand), surfaced in `retrieval_diagnostics` and the `pack_recall_budget` tool. Builds on v4.7.0 (per-hit credit), v4.6.0 (validity gate), v4.5.0 (hybrid-recall noise fix). Full per-release notes live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
+<sub>Current release: **v4.9.0** — a **self-update** mechanism: `mm self-update [--check]` plus an opt-in, interval-gated `auto_update` config that keeps installs on the latest PyPI release. Safe by construction — refuses to upgrade an editable/dev tree, handles PEP-668 + pipx, default off, and the auto-check can never break a normal `mm` command. Builds on v4.8.0 (recall-sufficiency), v4.7.0 (per-hit credit), v4.6.0 (validity gate), v4.5.0 (hybrid-recall noise fix). Full per-release notes live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
 
 ### Substrate Properties
 
