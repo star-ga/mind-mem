@@ -29,5 +29,11 @@
     "max_category_results": 10,
     "query_timeout_seconds": 30,
     "rate_limit_calls_per_minute": 120
+  },
+  "auto_update": {
+    "enabled": false,
+    "mode": "notify",
+    "interval_hours": 24,
+    "channel": "stable"
   }
 }

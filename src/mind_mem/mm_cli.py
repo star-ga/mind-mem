@@ -2150,6 +2150,17 @@ def _cmd_verify_model(args: argparse.Namespace) -> int:
     return 0 if result.passed else 1
 
 
+def _cmd_self_update(args: argparse.Namespace) -> int:
+    """Check PyPI for a newer mind-mem and upgrade this install (thin wrapper).
+
+    Delegates entirely to :mod:`mind_mem.self_update`, which is stdlib-only
+    and has zero coupling to the recall/evidence/scoring layers.
+    """
+    from mind_mem import self_update
+
+    return self_update.cmd_self_update(args)
+
+
 # ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
@@ -2838,12 +2849,42 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_trace.set_defaults(func=_cmd_trace)
 
+    # ── self-update — PyPI check + in-place upgrade ───────────────────────
+    p_self_update = sub.add_parser(
+        "self-update",
+        help="Check PyPI for a newer mind-mem and upgrade this install.",
+    )
+    p_self_update.add_argument("--check", action="store_true", help="Report only; exit 10 if an update is available.")
+    p_self_update.add_argument("--yes", "-y", action="store_true", help="Upgrade without prompting.")
+    p_self_update.add_argument("--pre", action="store_true", help="Include pre-releases.")
+    p_self_update.set_defaults(func=_cmd_self_update)
+
     return parser
+
+
+def _run_auto_update_hook(args: argparse.Namespace) -> None:
+    """Best-effort, interval-gated auto-update check — belt-and-braces on top
+    of :func:`mind_mem.self_update.maybe_auto_check`'s own internal guard.
+    Any failure here (network, missing config, import error) must never
+    break a normal ``mm`` command.
+    """
+    try:
+        from mind_mem import self_update
+
+        cfg_path = os.path.join(_workspace(), "mind-mem.json")
+        config: dict[str, Any] = {}
+        if os.path.isfile(cfg_path):
+            with open(cfg_path, encoding="utf-8") as fh:
+                config = json.load(fh)
+        self_update.maybe_auto_check(config, getattr(args, "cmd", None))
+    except Exception:
+        pass
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    _run_auto_update_hook(args)
     return int(args.func(args))
 
 
