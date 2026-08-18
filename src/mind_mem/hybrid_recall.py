@@ -682,9 +682,13 @@ class HybridBackend:
             # any not-yet-started task; an already-running embed thread cannot
             # be force-killed, but it no longer holds up the response.
             # Records why the vector leg did not contribute, if it didn't.
-            # None => the full two-leg fusion ran as requested.
-            vector_degraded: dict[str, str] | None = None
-            bm25_degraded: dict[str, str] | None = None
+            # None => the full two-leg fusion ran as requested. No type
+            # annotation here: both names are already bound (unannotated) in
+            # the mutually-exclusive BM25-only branch above, so an annotated
+            # re-declaration trips mypy [no-redef]; the union type is inferred
+            # from the branch assignments.
+            vector_degraded = None
+            bm25_degraded = None
             pool = ThreadPoolExecutor(max_workers=2)
             try:
                 bm25_future: Future = pool.submit(

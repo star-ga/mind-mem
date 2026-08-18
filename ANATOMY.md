@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 950 | **Est. tokens:** ~2,091,178
-**Generated:** 2026-08-18 17:10 UTC
+**Files:** 952 | **Est. tokens:** ~2,094,411
+**Generated:** 2026-08-18 18:02 UTC
 
 ## Token Budget Guide
 
@@ -60,7 +60,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 171 | ~619,537 |
+| `src/mind_mem/` | 172 | ~621,517 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 7 | ~18,591 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
@@ -71,7 +71,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 24 | ~64,969 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 332 | ~735,509 |
+| `tests/` | 333 | ~736,762 |
 | `tests/fixtures/` | 1 | ~710 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
@@ -557,7 +557,7 @@
 - `hash_chain_v2.py` (~5512 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `hook_installer.py` (~10611 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `http_transport.py` (~11242 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
-- `hybrid_recall.py` (~15906 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+- `hybrid_recall.py` (~15966 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
 - `inbox.py` (~3716 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).
 - `ingestion_pipeline.py` (~1958 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~714 tok, large) — # Mind Mem — Memory + Immune System for AI agents
@@ -656,9 +656,9 @@
 - `query_planner.py` (~2865 tok, huge) — Query decomposition for multi-hop questions (v3.3.0 Tier 1 #1).
 - `recall_attestation.py` (~5902 tok, huge) — Per-run recall attestation — runtime evidence of *how* an answer was produced.
 - `recall_cache.py` (~2938 tok, huge) — v3.2.0 — distributed recall result cache (Redis + in-process LRU fallback).
-- `_recall_constants.py` (~2734 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
+- `_recall_constants.py` (~2953 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
 - `_recall_context.py` (~2601 tok, huge) — Recall engine context packing — post-retrieval augmentation rules."""
-- `_recall_core.py` (~20553 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
+- `_recall_core.py` (~20704 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
 - `_recall_detection.py` (~5477 tok, huge) — Recall engine detection — query type classification, text extraction, block utilities."""
 - `_recall_expansion.py` (~3249 tok, huge) — Recall engine query expansion — domain synonyms, month normalization, RM3."""
 - `_recall_explain.py` (~1331 tok, large) — Score decomposition record for explainable recall (v3.11.0, Pattern 1).
@@ -756,6 +756,7 @@
 - `validate_py.py` (~4890 tok, huge) — Mind Mem Integrity Validator — canonical engine.
 - `validate.sh` (~352 tok, medium) — src/mind_mem/validate.sh — thin forwarder to the Python validator.
 - `validate.sh.pre-forwarder` (~7140 tok, huge) — #!/usr/bin/env bash
+- `validity_gate.py` (~1550 tok, huge) — Phase-2 recall validity gate — flag-gated, deterministic demotion.
 - `verify_cli.py` (~3178 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `walkthrough.py` (~2449 tok, huge) — Dependency-ordered walkthrough — `compile_walkthrough` (v3.9.0 candidate).
 - `watcher.py` (~886 tok, large) — Mind-Mem File Watcher — auto-reindex on workspace changes. Zero external deps.
@@ -1121,6 +1122,7 @@
 - `test_v4_vocabulary.py` (~4094 tok, huge) — Tests for v4 vocabulary-bound fields (Group E, ``v4.vocabulary``).
 - `test_validate_py.py` (~3438 tok, huge) — Tests for validate_py.py — workspace integrity validator."""
 - `test_validate_sh_deprecation.py` (~547 tok, large) — Pin the runtime deprecation warning on validate.sh.
+- `test_validity_gate.py` (~1253 tok, large) — Regression gate for the Phase-2 recall validity gate (Stage 2.65).
 - `test_vault_wikilinks.py` (~1783 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_verify_cli.py` (~3202 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_walkthrough.py` (~2432 tok, huge) — Tests for the v3.9 dependency-ordered walkthrough."""
