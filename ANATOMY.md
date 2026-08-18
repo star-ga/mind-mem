@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 953 | **Est. tokens:** ~2,095,109
-**Generated:** 2026-08-18 18:37 UTC
+**Files:** 953 | **Est. tokens:** ~2,095,139
+**Generated:** 2026-08-18 18:53 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 36 | ~70,588 |
+| `./` | 36 | ~70,618 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -112,7 +112,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~2257 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~25516 tok, huge) — 30-Second Demo
+- `README.md` (~25546 tok, huge) — 30-Second Demo
 - `requirements-optional.txt` (~1129 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)

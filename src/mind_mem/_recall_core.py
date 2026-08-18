@@ -69,6 +69,7 @@ from .retrieval_graph import (
     record_hard_negatives,
 )
 from .telemetry import traced as _traced
+from .validity_gate import apply_validity_gate
 
 # A-MEM block metadata (optional — graceful degradation if unavailable)
 try:
@@ -1515,8 +1516,18 @@ def recall(
     _stage_counts["reranked"] = len(deduped)
     _stage_counts["hard_neg_penalized"] = sum(1 for r in deduped if r.get("_hard_negative"))
 
-    # Stage 2.7: Optional LLM-based reranking — config-gated, stdlib only
     recall_cfg = _get_config(workspace).get("recall", {})
+
+    # Stage 2.65: Validity gate — deterministic corroboration/status/
+    # contradiction/staleness composite (Phase 2, flag-gated, default off).
+    # Runs after cross-encoder blending (2.5) so it demotes the final
+    # blended score, and before the 2.8/2.9 re-sort + knee cutoff so
+    # demotion actually moves blocks below the knee. A complete no-op
+    # (no annotation, no DB reads) when disabled.
+    apply_validity_gate(deduped, workspace, recall_cfg)
+    _stage_counts["validity_demoted"] = sum(1 for r in deduped if r.get("_validity_demoted"))
+
+    # Stage 2.7: Optional LLM-based reranking — config-gated, stdlib only
     if recall_cfg.get("llm_rerank", False) and deduped:
         # llm_rerank_url (full endpoint) wins; else the shared resolver:
         # recall.ollama_url > OLLAMA_HOST env > http://localhost:11434.

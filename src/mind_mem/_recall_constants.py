@@ -30,6 +30,10 @@ __all__ = [
     "CHUNK_BLEND_BEST",
     "CHUNK_BLEND_FULL",
     "HARD_NEGATIVE_PENALTY",
+    "VALIDITY_GATE_THRESHOLD",
+    "VALIDITY_DEMOTION",
+    "VALIDITY_STATUS_WIP",
+    "VALIDITY_STATUS_DEAD",
     "PRF_WEIGHT_DEFAULT",
     "PRF_WEIGHT_MULTIHOP",
     "RM3_BLEND_WEIGHT",
@@ -398,6 +402,19 @@ CHUNK_BLEND_FULL = 0.4  # weight for full-block score
 # Hard negative penalty: demote blocks flagged as misleading
 HARD_NEGATIVE_PENALTY = 0.7
 
+# Validity gate (Phase 2, flag-gated): deterministic corroboration/status/
+# contradiction/staleness composite score. Fires (demotes, never drops)
+# when the composite falls below the threshold. See validity_gate.py.
+VALIDITY_GATE_THRESHOLD = 0.8  # fires iff V < 0.8
+VALIDITY_DEMOTION = 0.5
+
+# Validity gate status vocab (c2 criterion). Deliberately distinct from
+# block_maturity._status_component's vocab, which scores missing/unknown
+# status as 0.0 — a *gate* must not punish absent metadata, so anything
+# outside these two sets (including missing/unknown) defaults to 1.0.
+VALIDITY_STATUS_WIP = frozenset({"wip", "in-progress", "in_progress"})
+VALIDITY_STATUS_DEAD = frozenset({"deprecated", "archived", "rejected", "superseded"})
+
 # Pseudo-relevance feedback (PRF) blending weight
 PRF_WEIGHT_DEFAULT = 0.4
 PRF_WEIGHT_MULTIHOP = 0.25  # lower for multi-hop to avoid query drift
@@ -467,6 +484,7 @@ _VALID_RECALL_KEYS = frozenset(
         "knee_cutoff",
         "min_score",
         "dedup",
+        "validity_gate",
         # Vector / hybrid recall keys (Postgres pgvector + RRF path). These
         # are consumed by PostgresRecallBackend / VectorBackend / the pgvector
         # hybrid_search; previously they lived only in recall_vector's own
