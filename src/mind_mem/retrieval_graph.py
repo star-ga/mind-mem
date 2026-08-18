@@ -36,6 +36,7 @@ __all__ = [
     "get_hard_negative_ids",
     "retrieval_diagnostics",
     "feedback_quality_credit",
+    "recall_sufficiency",
 ]
 
 # ---------------------------------------------------------------------------
@@ -470,6 +471,48 @@ def feedback_quality_credit(
 
 
 # ---------------------------------------------------------------------------
+# Recall-sufficiency score (Group I item 2, flag-gated)
+# ---------------------------------------------------------------------------
+
+
+def recall_sufficiency(
+    hits: list[dict[str, Any]],
+    intent_type: str,
+) -> dict[str, Any] | None:
+    """ONE [0,1] float: did this recall deliver enough on-task durable
+    context for this query class (Group I item 2).
+
+    Sums each credited hit's useful-context mass (the product of its four
+    Stage 3.1 credit components) and normalizes by INTENT_DEMAND for the
+    routed class. Returns {"score", "effective_hits", "demand",
+    "intent_type"}, or None when no hit carries a ``feedback_credit``
+    dict (Stage 3.1 off) — so flag-off stays byte-identical.
+
+    Deterministic: pure arithmetic over the already-deterministic credits
+    plus a constant-table lookup — no clock, no rand, no I/O.
+    """
+    from ._recall_constants import DEFAULT_INTENT_DEMAND, INTENT_DEMAND
+
+    credited = [c for c in (h.get("feedback_credit") for h in hits) if isinstance(c, dict)]
+    if not credited:
+        return None
+    effective = 0.0
+    for c in credited:
+        mass = 1.0
+        for key in ("informative", "valid", "non_redundant", "retained"):
+            v = c.get(key)
+            mass *= float(v) if isinstance(v, (int, float)) else 1.0
+        effective += max(0.0, min(1.0, mass))
+    demand = INTENT_DEMAND.get(str(intent_type or "").upper(), DEFAULT_INTENT_DEMAND)
+    return {
+        "score": round(min(1.0, effective / demand), 4),
+        "effective_hits": round(effective, 4),
+        "demand": demand,
+        "intent_type": str(intent_type or ""),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Retrieval diagnostics (#428)
 # ---------------------------------------------------------------------------
 
@@ -515,6 +558,10 @@ def retrieval_diagnostics(
         all_top_scores: list[float] = []
         all_final_counts: list[int] = []
         low_confidence_queries: list[dict] = []
+        # Group I item 2: recall-sufficiency score, when Stage 3.2 ran.
+        suff_scores: list[float] = []
+        suff_by_intent: dict[str, list[float]] = {}
+        latest_suff: dict[str, Any] | None = None
 
         for row in rows:
             intent = row["intent_type"] or "unknown"
@@ -541,6 +588,20 @@ def retrieval_diagnostics(
                             "confidence": float(conf),
                         }
                     )
+
+            # Group I item 2: recall-sufficiency score (rows are newest-first,
+            # so the first hit populates `latest_suff`).
+            suff = sc.get("sufficiency")
+            if isinstance(suff, (int, float)):
+                suff_scores.append(float(suff))
+                suff_by_intent.setdefault(intent, []).append(float(suff))
+                if latest_suff is None:
+                    latest_suff = {
+                        "score": float(suff),
+                        "effective_hits": float(sc.get("sufficiency_effective_hits", 0.0)),
+                        "demand": float(sc.get("sufficiency_demand", 0.0)),
+                        "intent": intent,
+                    }
 
             try:
                 scores = json.loads(row["scores"]) if row["scores"] else []
@@ -669,6 +730,28 @@ def retrieval_diagnostics(
             feedback_quality["avg"] = {k: round(v / credit_hits, 4) for k, v in credit_sums.items()}
             feedback_quality["latest_per_block"] = latest_per_block
 
+        # Group I item 2: recall-sufficiency score summary, additive key.
+        # `queries_scored: 0` (and nothing else) when no logged query
+        # carried the score — flag-off diagnostics stay a structural no-op.
+        from ._recall_constants import SUFFICIENCY_STARVED_THRESHOLD
+
+        recall_sufficiency_summary: dict[str, Any] = {"queries_scored": len(suff_scores)}
+        if suff_scores:
+            sorted_suff = sorted(suff_scores)
+            starved = sum(1 for s in suff_scores if s < SUFFICIENCY_STARVED_THRESHOLD)
+            recall_sufficiency_summary.update(
+                {
+                    "avg": round(sum(suff_scores) / len(suff_scores), 4),
+                    "p50": round(sorted_suff[len(sorted_suff) // 2], 4),
+                    "min": round(min(suff_scores), 4),
+                    "starved_rate": round(starved / len(suff_scores), 4),
+                    "by_intent": {
+                        i: {"queries": len(scores), "avg": round(sum(scores) / len(scores), 4)} for i, scores in suff_by_intent.items()
+                    },
+                    "latest": latest_suff,
+                }
+            )
+
         return {
             "queries_analyzed": len(rows),
             "intent_distribution": intent_dist,
@@ -679,6 +762,7 @@ def retrieval_diagnostics(
             "score_distribution": score_dist,
             "hard_negatives": hn_summary,
             "feedback_quality": feedback_quality,
+            "recall_sufficiency": recall_sufficiency_summary,
         }
 
     except Exception as exc:

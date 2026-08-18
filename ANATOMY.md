@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 954 | **Est. tokens:** ~2,098,210
-**Generated:** 2026-08-18 19:52 UTC
+**Files:** 955 | **Est. tokens:** ~2,101,099
+**Generated:** 2026-08-18 20:17 UTC
 
 ## Token Budget Guide
 
@@ -22,7 +22,7 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 36 | ~70,627 |
+| `./` | 36 | ~70,639 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
@@ -60,18 +60,18 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 172 | ~623,204 |
+| `src/mind_mem/` | 172 | ~624,513 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 7 | ~18,591 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
 | `src/mind_mem/mcp/infra/` | 8 | ~10,716 |
-| `src/mind_mem/mcp/tools/` | 24 | ~63,061 |
+| `src/mind_mem/mcp/tools/` | 24 | ~63,334 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,702 |
 | `src/mind_mem/storage/` | 2 | ~5,519 |
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 24 | ~64,969 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 334 | ~738,137 |
+| `tests/` | 335 | ~739,432 |
 | `tests/fixtures/` | 1 | ~710 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
@@ -112,7 +112,7 @@
 - `.pre-commit-config.yaml` (~366 tok, medium) — repos:
 - `pyproject.toml` (~2257 tok, huge) — [project]
 - `.python-version` (~2 tok, tiny) — 3.12
-- `README.md` (~25555 tok, huge) — 30-Second Demo
+- `README.md` (~25567 tok, huge) — 30-Second Demo
 - `requirements-optional.txt` (~1129 tok, large) — # mind-mem optional ML stack — pinned with SHA256 integrity hashes for
 - `.run-ledger.jsonl` (~154 tok, small) — {"ended_at": "2026-05-11T03:10:20+00:00", "eval_summary": "127/131 (109 main + 1
 - `SECURITY_AUDIT_2026-04.md` (~2403 tok, huge) — Security Audit — MIND-Mem v3.1.9 (April 2026)
@@ -617,7 +617,7 @@
 - `pipeline.py` (~916 tok, large) — MCP wrapping for pipeline-hash inspection + dirty-block re-extraction.
 - `public.py` (~4766 tok, huge) — # mypy: disable-error-code="no-any-return"
 - `quality.py` (~534 tok, large) — MCP wrapping for the v3.11.0 deterministic quality gate.
-- `recall.py` (~7112 tok, huge) — Recall surface — the retrieval core of the MCP API.
+- `recall.py` (~7385 tok, huge) — Recall surface — the retrieval core of the MCP API.
 - `signal.py` (~926 tok, large) — Interaction-signal MCP tools — ``observe_signal`` + ``signal_stats``.
 - `walkthrough_persona.py` (~1493 tok, large) — MCP wrapping for v3.9 walkthrough + persona projection.
 ### `src/mind_mem/`
@@ -657,9 +657,9 @@
 - `query_planner.py` (~2865 tok, huge) — Query decomposition for multi-hop questions (v3.3.0 Tier 1 #1).
 - `recall_attestation.py` (~5902 tok, huge) — Per-run recall attestation — runtime evidence of *how* an answer was produced.
 - `recall_cache.py` (~2938 tok, huge) — v3.2.0 — distributed recall result cache (Redis + in-process LRU fallback).
-- `_recall_constants.py` (~3038 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
+- `_recall_constants.py` (~3205 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
 - `_recall_context.py` (~2601 tok, huge) — Recall engine context packing — post-retrieval augmentation rules."""
-- `_recall_core.py` (~20801 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
+- `_recall_core.py` (~20980 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
 - `_recall_detection.py` (~5477 tok, huge) — Recall engine detection — query type classification, text extraction, block utilities."""
 - `_recall_expansion.py` (~3249 tok, huge) — Recall engine query expansion — domain synonyms, month normalization, RM3."""
 - `_recall_explain.py` (~1331 tok, large) — Score decomposition record for explainable recall (v3.11.0, Pattern 1).
@@ -672,7 +672,7 @@
 - `_recall_workspace.py` (~1958 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `recompaction.py` (~2489 tok, huge) — mind-mem Iterative Re-Compression ("sleep") Engine. Zero external deps.
 - `rerank_ensemble.py` (~3364 tok, huge) — Reranker ensemble via Borda count (v3.3.0 Tier 4 #9).
-- `retrieval_graph.py` (~6476 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
+- `retrieval_graph.py` (~7439 tok, huge) — Retrieval logger + co-retrieval graph for usage-based score propagation.
 - `retrieval_trace.py` (~1252 tok, large) — Per-feature retrieval attribution (v3.3.0 architect audit item #7).
 - `schema_version.py` (~1897 tok, huge) — Mind-Mem Schema Version Migration. Zero external deps.
 - `session_boost.py` (~1533 tok, huge) — Session-boundary preservation for recall (v3.3.0 Tier 2 #5).
@@ -1050,6 +1050,7 @@
 - `test_recall_source_field.py` (~279 tok, medium) — Tests for source field in recall results."""
 - `test_recall_speaker.py` (~263 tok, medium) — Tests for speaker-based recall."""
 - `test_recall_status_boost.py` (~394 tok, medium) — Tests for status boost in recall."""
+- `test_recall_sufficiency.py` (~1295 tok, large) — Regression gate for Group I item 2 recall-sufficiency score.
 - `test_recall_supersedes.py` (~216 tok, medium) — Tests for supersedes field in recall."""
 - `test_recall_tags.py` (~320 tok, medium) — Tests for tag-based recall."""
 - `test_recall_temporal.py` (~2800 tok, huge) — Tests for _recall_temporal.py — time-aware hard filters for temporal queries."""

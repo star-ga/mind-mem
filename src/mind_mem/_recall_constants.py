@@ -39,6 +39,9 @@ __all__ = [
     "PRF_WEIGHT_MULTIHOP",
     "RM3_BLEND_WEIGHT",
     "BRIDGE_SCORE_WEIGHT",
+    "INTENT_DEMAND",
+    "DEFAULT_INTENT_DEMAND",
+    "SUFFICIENCY_STARVED_THRESHOLD",
     # Month name mapping
     "MONTH_NAMES",
     "MONTH_TOKEN_SET",
@@ -420,6 +423,24 @@ VALIDITY_STATUS_DEAD = frozenset({"deprecated", "archived", "rejected", "superse
 # weights for the `retained` component. Missing/unknown lifecycle is
 # neutral (1.0) — same absence-is-neutral rule as the validity gate.
 LIFECYCLE_RETENTION = {"durable": 1.0, "generated": 0.75, "ephemeral": 0.5}
+
+# Recall-sufficiency (Group I item 2): expected on-task durable-context
+# demand per IntentRouter class. Point lookups need one good hit;
+# corroborated facts two; causal/procedural chains three; comparisons,
+# timelines, and enumerations progressively more. Unknown/unrouted -> 2.0.
+INTENT_DEMAND: dict[str, float] = {
+    "ENTITY": 1.0,
+    "WHEN": 1.0,
+    "WHAT": 2.0,
+    "VERIFY": 2.0,
+    "WHY": 3.0,
+    "HOW": 3.0,
+    "COMPARE": 4.0,
+    "TRACE": 5.0,
+    "LIST": 6.0,
+}
+DEFAULT_INTENT_DEMAND = 2.0
+SUFFICIENCY_STARVED_THRESHOLD = 0.5  # diagnostics starved_rate cutoff
 
 # Pseudo-relevance feedback (PRF) blending weight
 PRF_WEIGHT_DEFAULT = 0.4

@@ -420,12 +420,35 @@ def pack_recall_budget(query: str, max_tokens: int = 2000, limit: int = 20) -> s
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
 
+    # Group I item 2: sufficiency over the PACKED list (did what fit the
+    # budget deliver enough for this query class), with the pre-pack
+    # score alongside to expose packing loss. Absent unless Stage 3.1
+    # credits are on — flag-off output is byte-identical.
+    sufficiency: dict[str, Any] | None = None
+    try:
+        from mind_mem.intent_router import get_router
+        from mind_mem.retrieval_graph import recall_sufficiency
+
+        intent = get_router(workspace=ws).classify(query).intent
+        pre = recall_sufficiency(results, intent)
+        if pre is not None:
+            sufficiency = recall_sufficiency(packed.included, intent) or {
+                "score": 0.0,
+                "effective_hits": 0.0,  # nothing fit: maximally starved
+                "demand": pre["demand"],
+                "intent_type": pre["intent_type"],
+            }
+            sufficiency["pre_pack_score"] = pre["score"]
+    except Exception as exc:
+        _log.debug("pack_sufficiency_skipped", error=str(exc))
+
     return json.dumps(
         {
             "query": query,
             "included": packed.included,
             "dropped": packed.dropped,
             **packed.as_dict(),
+            **({"sufficiency": sufficiency} if sufficiency else {}),
             "_schema_version": "1.0",
         },
         indent=2,

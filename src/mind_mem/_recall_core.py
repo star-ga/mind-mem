@@ -67,6 +67,7 @@ from .retrieval_graph import (
     get_hard_negative_ids,
     log_retrieval,
     propagate_scores,
+    recall_sufficiency,
     record_hard_negatives,
 )
 from .telemetry import traced as _traced
@@ -1592,6 +1593,18 @@ def recall(
     # final packed list; log_retrieval persists it for diagnostics.
     feedback_quality_credit(top, workspace, recall_cfg)
     _stage_counts["feedback_credited"] = sum(1 for r in top if "feedback_credit" in r)
+
+    # Stage 3.2: Recall-sufficiency score (Group I item 2) — ONE [0,1]
+    # float per query: effective credited-hit mass vs INTENT_DEMAND for
+    # the routed class. Rides Stage 3.1's flag (credit presence IS the
+    # gate); `recall.feedback_credit.sufficiency: false` opts out.
+    fc_cfg = recall_cfg.get("feedback_credit")
+    if isinstance(fc_cfg, dict) and fc_cfg.get("sufficiency", True):
+        _suff = recall_sufficiency(top, _intent_type)
+        if _suff is not None:
+            _stage_counts["sufficiency"] = _suff["score"]
+            _stage_counts["sufficiency_effective_hits"] = _suff["effective_hits"]
+            _stage_counts["sufficiency_demand"] = _suff["demand"]
 
     # --- A-MEM: record access and evolve keywords for returned blocks ---
     if meta_mgr and top:
