@@ -4,6 +4,31 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+## v4.7.0 — per-hit feedback-quality credit (Group I)
+
+* **Per-hit feedback-quality credit in `retrieval_diagnostics` — deterministic
+  four-component recall-quality signal (`retrieval_graph.feedback_quality_credit`,
+  recall Stage 3.1)** — a new opt-in stage (`recall.feedback_credit.enabled`,
+  default **off**) that annotates every returned hit with
+  `{informative, valid, non_redundant, retained}`, each a `round(x, 4)` in `[0, 1]`:
+  **informative** = normalized score delta vs the top-ranked packed hit;
+  **valid** = the v4.6.0 validity composite, reused via a new shared
+  `validity_components()` helper so `feedback_credit["valid"] == validity["score"]`
+  is guaranteed *structurally* (one source of truth, not parallel code);
+  **non_redundant** = `1 − max cosine` vs higher-ranked hits, reusing the dedup
+  module's own similarity primitives; **retained** = status × lifecycle-retention
+  weight (`LIFECYCLE_RETENTION`). The credit is persisted per query (new
+  backward-compatible `credits` column on `retrieval_log`) and surfaced in
+  `retrieval_diagnostics` as a `feedback_quality` block (per-component averages +
+  latest-per-block). Fully **deterministic** — no clock/rand on the scored
+  preimage; disabled is a **complete no-op** (byte-identical output, no DB reads).
+  Lands the Group I "do-first, cheapest, makes the rest measurable" roadmap item.
+  Fable-spec'd; regression-gated by `tests/test_feedback_credit.py` (opt-in no-op
+  + per-component discrimination + shared-helper contract + determinism), and
+  `tests/test_validity_gate.py` passes **unchanged** — the proof the shared-helper
+  refactor is behavior-preserving. Full non-stress suite green (`6128 passed`). No
+  `mind-mem-4b` retraining — backend-only, adds no MCP tool.
+
 ## v4.6.0 — recall validity gate (flag-gated four-criteria demotion)
 
 * **Recall validity gate — deterministic, flag-gated four-criteria demotion

@@ -29,7 +29,7 @@
 </p>
 
 <p align="center"><sub>
-  <strong>Current release:</strong> <code>v4.6.0</code> &mdash; opt-in recall <strong>validity gate</strong>: a deterministic four-criteria (corroboration / status / contradiction / staleness) score that demotes &mdash; never drops &mdash; low-validity hits &mdash;
+  <strong>Current release:</strong> <code>v4.7.0</code> &mdash; opt-in per-hit <strong>feedback-quality credit</strong>: a deterministic four-component (informative / valid / non-redundant / retained) recall-quality signal on every returned hit, surfaced in <code>retrieval_diagnostics</code> &mdash;
   <a href="CHANGELOG.md">see CHANGELOG</a>
   (single source of truth; per-version detail tables below may lag the changelog)
 </sub></p>
@@ -63,7 +63,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>Current release: **v4.6.0** — an opt-in, deterministic recall **validity gate** (`recall.validity_gate.enabled`, default off) that demotes (never drops) stale / contradicted / uncorroborated hits via a four-criteria composite score, annotated on each hit for `retrieval_diagnostics`. Builds on v4.5.0 (hybrid-recall noise fix — `plainto_tsquery` → OR-of-terms `to_tsquery` — plus OKF v0.2 interop and an OpenClaw hook repair). Full per-release notes live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
+<sub>Current release: **v4.7.0** — an opt-in, deterministic per-hit **feedback-quality credit** (`recall.feedback_credit.enabled`, default off) annotating every returned hit with `{informative, valid, non_redundant, retained}` (the `valid` component reuses the v4.6.0 validity gate via a shared helper) and surfacing per-component averages in `retrieval_diagnostics`. Builds on v4.6.0 (validity gate) and v4.5.0 (hybrid-recall noise fix). Full per-release notes live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
 
 ### Substrate Properties
 

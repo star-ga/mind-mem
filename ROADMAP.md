@@ -248,7 +248,7 @@ evidence, computed the same way on every substrate, auditable in the
 retrieval log. No autonomous reweighting; if a credit weight changes it
 ships as a versioned config, like any other governed change.
 
-- [ ] **Per-hit feedback-quality credit in `retrieval_diagnostics`** —
+- [x] **Per-hit feedback-quality credit in `retrieval_diagnostics`** — shipped v4.7.0 (`retrieval_graph.feedback_quality_credit`, Stage 3.1, flag-gated; `valid` reuses the v4.6.0 validity gate via the shared `validity_components()` helper). —
       extend `retrieval_graph.retrieval_diagnostics` to emit, per
       returned block, a four-component credit
       `{informative, valid, non_redundant, retained}` instead of only a
