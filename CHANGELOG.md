@@ -4,6 +4,34 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+## v4.5.0 — hybrid-recall noise fix + OKF v0.2 interop + OpenClaw hook repair
+
+* **Postgres hybrid recall collapsed to a uniform RRF floor (~`1/61 ≈ 0.016`) — the
+  BM25 arm was silently dead (`block_store_postgres.py`, `hybrid_recall.py`,
+  `mm_cli.py`)** — `PostgresRecallBackend.hybrid_search` built its full-text arm with
+  `plainto_tsquery`, which **ANDs** every term. A normal multi-word recall query
+  (e.g. five terms) therefore required a single block to contain **all five**, matching
+  ~2 of 2424 blocks — effectively zero. With one arm returning nothing, Reciprocal Rank
+  Fusion degenerated to the surviving vector arm's `1/(k+rank)` and every result landed
+  on the same `~0.016` floor, so recall read as **undifferentiated noise** even though
+  the pgvector arm was healthy and the blocks were present. Root cause is the query
+  builder, not the index or the fusion math. Fixed with a new injection-safe
+  `_tsquery_or_terms()` (alphanumeric term extraction → `to_tsquery` **OR**-of-terms),
+  so BM25 matches on *any* term (543 blocks for the same sample query) and both arms
+  contribute — fusion scores now discriminate (e.g. `0.030 → 0.024`) and rank the
+  topically-relevant blocks first. Hardening so this can never regress to a *silent*
+  floor again: an empty BM25 arm while the store holds blocks now raises/annotates a
+  loud `BM25LegError` marker instead of degrading quietly; every fused result carries a
+  `fusion_sources` provenance tag naming which arms contributed; a `strict_hybrid` knob
+  fails closed for callers that require both arms; and `mm doctor` counts `blocks_fts`
+  rows, **FAILs** on `fts_index_empty` when the store is non-empty, and WARNs on
+  repo-local workspace-path drift. Covered by new
+  `tests/test_hybrid_recall_fusion_noise.py` (5 tests: `fusion_sources` unit, fused
+  discrimination e2e, empty-arm-degrades-loud, legit-zero-match-stays-silent,
+  strict-raises). Full suite green (`6118 passed, 72 skipped`). No `mind-mem-4b`
+  retraining — retrieval-path fix only. (Follow-up already scoped: the non-hybrid
+  `PostgresBlockStore.search()` still uses `plainto_tsquery`.)
+
 * **OpenClaw / claw-family memory-injection hook was dead on every fire
   (`hook_installer.py`)** — `_merge_openclaw_hooks` (and the generic-JSON fallback
   merger) generated `mm inject --agent openclaw --workspace <ws>`, which fails on

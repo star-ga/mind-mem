@@ -29,7 +29,7 @@
 </p>
 
 <p align="center"><sub>
-  <strong>Current release:</strong> <code>v4.4.0</code> &mdash; per-run recall attestation, typed knowledge-graph edges (HITL-gated), and a standing LoCoMo recall benchmark &mdash;
+  <strong>Current release:</strong> <code>v4.5.0</code> &mdash; Postgres hybrid recall no longer collapses to a uniform RRF noise floor (OR-of-terms BM25 arm), plus OKF v0.2 interop and a repaired OpenClaw injection hook &mdash;
   <a href="CHANGELOG.md">see CHANGELOG</a>
   (single source of truth; per-version detail tables below may lag the changelog)
 </sub></p>
@@ -63,7 +63,7 @@ Output:
         decisions/DECISIONS.md:20
 ```
 
-<sub>Current release: **v4.4.0** — per-run recall attestation (derivable, never stored), typed knowledge-graph edges (HITL-gated `propose_edge`/`approve_edge`), and a standing LoCoMo recall benchmark — Full per-release notes (issues closed, CI run ids, job counts) live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
+<sub>Current release: **v4.5.0** — Postgres hybrid recall no longer collapses to a uniform RRF noise floor (`plainto_tsquery` ANDed terms → dead BM25 arm; now an OR-of-terms `to_tsquery` with a loud empty-arm guard), OKF v0.2 interop with evidence-derived trust, and a repaired OpenClaw memory-injection hook — Full per-release notes (issues closed, CI run ids, job counts) live in <a href="./CHANGELOG.md">CHANGELOG.md</a>.</sub>
 
 ### Substrate Properties
 
@@ -1200,7 +1200,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 ```json
 {
-  "version": "4.4.0",
+  "version": "4.5.0",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,
