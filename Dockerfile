@@ -23,7 +23,13 @@ COPY src/ src/
 # alerts-gate blocks on. mind-mem ships zero core deps so end users are not
 # exposed via the package, but keeping the build image clean remediates the
 # supply-chain finding at the source rather than suppressing it.
-RUN pip install --no-cache-dir --upgrade pip setuptools \
+#
+# Pin the PATCHED floors explicitly so the Trivy scan sees no fixable CVE:
+#   setuptools >= 83.0.0 — CVE-2025-47273 (HIGH, PackageIndex path traversal,
+#                          fixed 78.1.1) + CVE-2026-59890 (MANIFEST.in sdist
+#                          bypass, fixed 83.0.0)
+#   msgpack    >= 1.2.1  — GHSA-6v7p-g79w-8964 (HIGH, Unpacker-reuse OOB read)
+RUN pip install --no-cache-dir --upgrade "pip>=25.2" "setuptools>=83.0.0" "msgpack>=1.2.1" \
  && pip install --no-cache-dir -e .
 
 EXPOSE 8000

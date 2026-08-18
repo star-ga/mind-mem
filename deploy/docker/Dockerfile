@@ -16,8 +16,14 @@ COPY pyproject.toml README.md LICENSE ./
 COPY src/ src/
 COPY mcp_server.py ./
 
+# Patch the build toolchain + constrain msgpack to the fixed floors, mirroring
+# the root Dockerfile: setuptools CVE-2025-47273 (fixed 78.1.1) / CVE-2026-59890
+# (fixed 83.0.0), msgpack GHSA-6v7p-g79w-8964 (fixed 1.2.1). Keeps the runtime
+# image free of fixable HIGH/CRITICAL supply-chain CVEs.
+RUN pip install --no-cache-dir --upgrade "pip>=25.2" "setuptools>=83.0.0"
+
 # Install into an explicit prefix so we can COPY just that tree
-RUN pip install --no-cache-dir --prefix=/install ".[mcp,embeddings]"
+RUN pip install --no-cache-dir --prefix=/install ".[mcp,embeddings]" "msgpack>=1.2.1"
 
 
 # Stage 2: runtime — slim final image
