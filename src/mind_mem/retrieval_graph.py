@@ -159,11 +159,7 @@ def log_retrieval(
         mem_ids = [r.get("_id", "") for r in results if r.get("_id")]
         scores = [r.get("score", 0) for r in results]
         qhash = hashlib.sha256(query.encode()).hexdigest()[:16]
-        credits = {
-            r["_id"]: r["feedback_credit"]
-            for r in results
-            if r.get("_id") and isinstance(r.get("feedback_credit"), dict)
-        }
+        credits = {r["_id"]: r["feedback_credit"] for r in results if r.get("_id") and isinstance(r.get("feedback_credit"), dict)}
 
         conn.execute(
             "INSERT INTO retrieval_log "
