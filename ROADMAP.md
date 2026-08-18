@@ -263,11 +263,15 @@ ships as a versioned config, like any other governed change.
       for this query class" number, surfaced in `retrieval_diagnostics`
       and `pack_recall_budget`. The novel product metric; report it
       instead of (or beside) raw block counts.
-- [ ] **Validity gate wired into fusion** — let the `valid` component
-      *demote* (never silently drop) stale / contradicted blocks during
-      `hybrid_recall` fusion, so the four-criteria filter shapes results,
-      not just diagnostics. Routes through existing contradiction /
-      staleness primitives; deterministic, logged.
+- [x] **Validity gate wired into fusion** — shipped in **v4.6.0** as
+      `validity_gate.py` (recall Stage 2.65, flag-gated
+      `recall.validity_gate.enabled`, default off). Four deterministic criteria
+      (corroboration / status / contradiction / staleness) → composite `V`;
+      below threshold the hit is *demoted, never dropped*. Routes through the
+      existing contradiction-log + `list_staleness_scores` primitives; no
+      clock/rand on the scored preimage; annotates `hit["validity"]` for
+      `retrieval_diagnostics`. Fable-spec'd, regression-gated
+      (`tests/test_validity_gate.py`).
 - [ ] **Feedback-quality → downstream-success bench** — add a standing
       eval that predicts agent task-failure from recall feedback-quality
       coordinates (their headline method), proving mind-mem *improves
@@ -1558,7 +1562,7 @@ Projected v3.3.0 overall with Tier-1+2 shipped: **74-76 (same model as answerer 
 - [x] **Streaming ingest + back-pressure queue** — shipped in `src/mind_mem/streaming.py` (commit `9956b7a`). Bounded mpsc deque with drop-oldest policy + per-client token bucket. ``build_queue_from_config`` opt-in via ``streaming.enabled``. Thread-safe multi-producer. 14 tests including a 4-thread concurrency test.
 - [x] **Consensus voting** — shipped in `src/mind_mem/consensus_vote.py` (commit `f644096`). ``reach_consensus(votes, quorum_threshold, min_votes)`` returns a typed ``ConsensusDecision(winner, margin, confidence, reason, vote_counts)``; trust weights pulled from ``Vote.trust_weight`` or ``namespaces.<id>.trust_weight``; 0-weight excludes. 14 tests.
 - [ ] **Graph + timeline visualization** — `web/` Next.js app; D3 / react-flow graph view (nodes = blocks, edges = relationships), timeline view, drift heatmap; reads from REST API shipped in v3.2.0. v3.2.0 already emits `[[wikilinks]]` on `vault_sync` so an Obsidian-mounted vault gets a graph view for free; this web UI is the non-Obsidian alternative. **Frontend work — separate from the retrieval shipments above.**
-- [ ] **mind-mem-4b v2 retrain** — training recipe + data generators shipped (`docs/mind-mem-4b-v2-training-recipe.md`, `benchmarks/generate_dispatcher_examples.py`, `benchmarks/generate_retrieval_examples.py`). **Runpod H200 kickoff pending operator approval** — ~$55, 8-12hr, targets full retrain of mind-mem:4b on v3.2.x dispatchers + v3.3.0 retrieval shapes + LoCoMo replay.
+- [ ] **mind-mem-4b v2 retrain — rebase to Qwen3.8-4B + catch up to the current surface** — training recipe + data generators shipped (`docs/mind-mem-4b-v2-training-recipe.md`, `benchmarks/generate_dispatcher_examples.py`, `benchmarks/generate_retrieval_examples.py`). **NOT required by the v4.5.0 recall-noise fix or the v4.6.0 validity gate** — both are backend / flag-gated and add no MCP tool, and the 4b is only the swappable KG-extraction/dispatch model (recall + hybrid *scoring* is the `mind/*.mind` kernels + Python, never the 4b). The refresh is warranted because the current 4b was trained knowing ~84 tools while the live surface is now **90** (the typed-edge KG tools — `propose_edge` / `approve_edge` / `reject_edge` / `list_edge_proposals` / `entity_add_observation` — landed in v4.3/v4.4 *after* the 4b was trained). New model = **full retrain on a Qwen3.8-4B base** (up from Qwen3.5-4B) over the current 90-tool surface + v3.2.x dispatchers + v3.3.0/v4.x retrieval shapes (incl. the validity-gate config, OKF v0.2, and hybrid fusion-provenance fields) + LoCoMo replay. **Runpod H200 kickoff pending operator approval** — ~$55, 8-12 hr, external GPU cost. Not gated on the MIND compiler / Pure-MIND port; can run any time.
 
 **Estimated (v3.3.0):** ~2400 lines retrieval (Tier 1+2+3) + ~2000 lines web UI + ~2 GPU-days retrain. New optional extras: `mind-mem[reasoning]`, `mind-mem[streaming]`, `mind-mem[rerank-ensemble]` (Tier 4).
 

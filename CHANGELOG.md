@@ -4,6 +4,35 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+## v4.6.0 — recall validity gate (flag-gated four-criteria demotion)
+
+* **Recall validity gate — deterministic, flag-gated four-criteria demotion
+  (`validity_gate.py`, recall Stage 2.65)** — a new opt-in stage
+  (`recall.validity_gate.enabled`, default **off**) that scores every hit against
+  four independent criteria — **corroboration** (fusion-arm agreement via the
+  v4.5.0 `fusion_sources` provenance), **status** (active / wip / deprecated
+  vocab), **contradiction cleanliness** (party to an unresolved
+  `intelligence/CONTRADICTIONS.md` entry), and **lineage freshness**
+  (`list_staleness_scores`) — into a composite `V ∈ [0, 1]`. Governing rule:
+  absence of a signal is neutral (1.0); only affirmative evidence of invalidity
+  debits. Every hit is annotated with `hit["validity"]` for
+  `retrieval_diagnostics`; when `V` falls below the threshold (default `0.8`) the
+  hit is **demoted, never dropped** (`score *= 0.5`, `_validity_demoted` flag,
+  `_stage_counts["validity_demoted"]`) so it stays visible with provenance and the
+  Stage 2.9 knee cutoff truncates it naturally when better candidates exist.
+  Fully **deterministic** — no clock or randomness on the scored preimage; the two
+  DB reads (contradiction log, staleness scores) are unwindowed stored state.
+  Disabled is a **complete no-op** — no annotation, no DB reads, byte-identical to
+  prior output. Optional `threshold` / `demotion` overrides are validated to the
+  half-open `(0, 1]` range. Lands the Group I "validity gate wired into fusion"
+  roadmap item; Fable-spec'd. Regression-gated by `tests/test_validity_gate.py`
+  (opt-in no-op + discrimination + determinism); full non-stress suite green
+  (`6127 passed`). No `mind-mem-4b` retraining — backend-only, adds no MCP tool.
+  **Retrain note:** the current 4b (trained knowing ~84 tools) already lags the
+  live 90-tool surface (typed-edge KG tools added in v4.3/v4.4); a **Qwen3.8-4B**
+  rebase + full retrain is scoped in the roadmap, **pending operator approval** —
+  it is *not* required by this release.
+
 ## v4.5.0 — hybrid-recall noise fix + OKF v0.2 interop + OpenClaw hook repair
 
 * **Postgres hybrid recall collapsed to a uniform RRF floor (~`1/61 ≈ 0.016`) — the
