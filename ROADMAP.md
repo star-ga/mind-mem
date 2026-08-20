@@ -2813,10 +2813,10 @@ conclusion — the failure mode this project has already been burned by once.
 
 #### K.2 — Ontology-governed logical knowledge graph (prior-art-informed, 2026-08-19)
 
-Prior art: a practitioner critique of "knowledge graph memory" as commonly
-built — auto-linked Markdown/YAML with no traversal layer — argues the real
-bar is (a) explicit ontological *and logical* modelling and (b) genuine
-multi-hop traversal tooling, and that grepping linked files is neither.
+Prior art: recent enterprise knowledge-graph practice argues that the bar for
+"knowledge-graph memory" is (a) explicit ontological *and logical* modelling
+and (b) genuine multi-hop traversal tooling — and that auto-linked
+Markdown/YAML traversed by grep is neither.
 
 **Most of that bar we already clear, and this entry does not re-litigate it.**
 `knowledge_graph.py` is a SQLite triple store with canonical entities, typed
@@ -2915,8 +2915,9 @@ source documents in full.
   reasoner is explicitly scoped *below* full OWL: unbounded entailment on a
   memory store is a latency and explainability hazard, not a feature.
 
-> Provenance recorded privately in `mind-internal`, per the
-> no-public-attribution rule.
+> Provenance (source + full analysis) recorded privately in `mind-internal`,
+> per the no-public-attribution rule — public artifacts say "recent
+> enterprise knowledge-graph practice" only.
 
 ### Group L — Recall utility per context token + prescriptive blocks (prior-art-informed, 2026-08-06)
 
