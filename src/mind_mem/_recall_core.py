@@ -505,6 +505,47 @@ def _apply_event_id_filter(hits: list[dict], event_id: str) -> list[dict]:
     return result
 
 
+def _apply_as_of_projection(hits: list[dict], workspace: str, as_of: str) -> list[dict]:
+    """Rewind each hit's ``content`` to the block's revision as of ``as_of``.
+
+    Time-travel recall (roadmap Group B). This is a *projection*, not a
+    filter: the result set, ordering and scores are unchanged — only the
+    ``content`` field of blocks that were edited on or before ``as_of`` is
+    rewound to its historical value, and a ``valid_as_of`` marker is added.
+    Blocks with no recorded edits keep their current content
+    (``content_as_of`` returns ``None``).
+
+    Requires the ``self_editing`` v4 surface, which owns the edit history.
+    When it is disabled, or the versioning module is unavailable, the
+    projection is skipped and current content is returned — recall never
+    fails just because ``as_of`` was passed. New dicts are returned; the
+    input hits are not mutated.
+    """
+    try:
+        from .v4.block_versioning import FLAG, content_as_of
+        from .v4.feature_flags import is_enabled
+    except Exception as exc:  # pragma: no cover - defensive import guard
+        _log.warning("recall_as_of_unavailable", error=str(exc))
+        return hits
+    if not is_enabled(FLAG):
+        _log.warning("recall_as_of_requires_self_editing", as_of=as_of)
+        return hits
+    projected: list[dict] = []
+    for hit in hits:
+        block_id = str(hit.get("_id", ""))
+        historical: str | None = None
+        if block_id:
+            try:
+                historical = content_as_of(workspace, block_id, as_of)
+            except Exception as exc:  # one bad block must not sink recall
+                _log.warning("recall_as_of_block_failed", block_id=block_id, error=str(exc))
+        if historical is None:
+            projected.append(hit)
+        else:
+            projected.append({**hit, "content": historical, "valid_as_of": as_of})
+    return projected
+
+
 def _apply_post_filters(
     hits: list[dict],
     *,
@@ -514,16 +555,20 @@ def _apply_post_filters(
     event_id: str | None,
     min_maturity: float | None,
     limit: int,
+    workspace: str | None = None,
+    as_of: str | None = None,
 ) -> list[dict]:
     """Apply the recall post-retrieval filter contract uniformly.
 
     Single source of truth for date/lifecycle/event_id/min_maturity
-    filtering. Every recall dispatch path (sqlite, vector/RecallBackend,
-    BM25 scan) MUST funnel through this so the contract can't diverge per
-    backend. Previously the sqlite and vector early-returns applied only
-    the date filter, silently ignoring lifecycle/event_id/min_maturity — a
-    backend-dependent correctness bug (e.g. a consolidation gate's
-    min_maturity returned unfiltered results on PG/sqlite deployments).
+    filtering plus the ``as_of`` time-travel projection. Every recall
+    dispatch path (sqlite, vector/RecallBackend, BM25 scan) MUST funnel
+    through this so the contract can't diverge per backend. Previously the
+    sqlite and vector early-returns applied only the date filter, silently
+    ignoring lifecycle/event_id/min_maturity — a backend-dependent
+    correctness bug (e.g. a consolidation gate's min_maturity returned
+    unfiltered results on PG/sqlite deployments). ``as_of`` is applied last
+    so it rewinds the content of whatever survives the filters.
     """
     if since is not None or until is not None:
         hits = _apply_date_filter(hits, since, until)[:limit]
@@ -533,6 +578,8 @@ def _apply_post_filters(
         hits = _apply_event_id_filter(hits, event_id)[:limit]
     if min_maturity is not None:
         hits = _apply_min_maturity_filter(hits, min_maturity)[:limit]
+    if as_of is not None and workspace is not None:
+        hits = _apply_as_of_projection(hits, workspace, as_of)
     return hits
 
 
@@ -554,6 +601,7 @@ def recall(
     lifecycle: str | None = None,
     event_id: str | None = None,
     min_maturity: float | None = None,
+    as_of: str | None = None,
     _allow_decompose: bool = True,
 ) -> list[dict]:
     """Search across all memory files using BM25 scoring. Returns ranked results.
@@ -593,6 +641,16 @@ def recall(
             score is derived from the ``Maturity`` frontmatter field (if
             present) or from the block's ``Status`` and ``Lifecycle`` fields.
             ``None`` (default) = no filter, preserving existing behaviour.
+        as_of: Optional ISO-8601 date/timestamp for time-travel recall
+            (roadmap Group B). When set, each returned block's ``content``
+            is rewound to the revision in effect at ``as_of`` and a
+            ``valid_as_of`` marker is added; blocks with no recorded edit
+            history keep their current content. This is a projection, not a
+            filter — the result set, ordering and scores are unchanged.
+            Requires the ``self_editing`` v4 surface; when it is disabled the
+            current content is returned unchanged (a warning is logged) so
+            recall never fails because ``as_of`` was passed. ``None``
+            (default) = live content.
     """
     query_tokens = tokenize(query)
     if not query_tokens:
@@ -625,6 +683,8 @@ def recall(
             event_id=event_id,
             min_maturity=min_maturity,
             limit=limit,
+            workspace=workspace,
+            as_of=as_of,
         )
     if isinstance(_cfg_backend, RecallBackend):
         try:
@@ -638,6 +698,8 @@ def recall(
                     event_id=event_id,
                     min_maturity=min_maturity,
                     limit=limit,
+                    workspace=workspace,
+                    as_of=as_of,
                 )
         except Exception as exc:
             _log.warning("recall_backend_error_fallback_to_scan", error=str(exc))
@@ -786,6 +848,8 @@ def recall(
                 all_merged = _apply_event_id_filter(all_merged, event_id)
             if min_maturity is not None:
                 all_merged = _apply_min_maturity_filter(all_merged, min_maturity)
+            if as_of is not None:
+                all_merged = _apply_as_of_projection(all_merged, workspace, as_of)
             return all_merged[:limit]
 
     # Month normalization: inject numeric month tokens for date matching
@@ -1669,6 +1733,8 @@ def recall(
         event_id=event_id,
         min_maturity=min_maturity,
         limit=limit,
+        workspace=workspace,
+        as_of=as_of,
     )
     return top
 

@@ -30,7 +30,7 @@ by its full description below.
 
 ### Group B — Knowledge graph (2 items)
 
-- [x] **Block versioning + time-travel** — **shipped** (`v4/block_versioning.py`: `block_history(block_id)` + `content_as_of(...)` over the applied-edit chain); `recall(..., as_of=date)` parameter plumb-through still open
+- [x] **Block versioning + time-travel** — **shipped** (`v4/block_versioning.py`: `block_history(block_id)` + `content_as_of(...)` over the applied-edit chain; `recall(..., as_of=date)` now plumbs the point-in-time projection through every backend)
 - [ ] **Conversational chat layer** — `chat_with_memory(workspace, question)` with `[[block_id]]` citations
 
 > See also **Group K — Graph-from-text construction + edge-grounded recall**
@@ -1989,7 +1989,7 @@ multi-tenancy thread is also tracked as issue [#505].
 ### B. Knowledge graph (mostly shipped — 2 items open)
 
 - [x] **Block kinds** — `block_kinds.py` + `kind ∈ {entity, concept, source, synthesis, image, audio, code, structured}`.
-- [x] **Block versioning + time-travel** — `v4/block_versioning.py` ships `block_history(block_id)` + `content_as_of(...)` over the applied-edit chain. Open remainder: expose `as_of=` on `recall(...)` itself.
+- [x] **Block versioning + time-travel** — `v4/block_versioning.py` ships `block_history(block_id)` + `content_as_of(...)` over the applied-edit chain; `recall(..., as_of=date)` now exposes the point-in-time projection on the recall entrypoint across all backends (sqlite / vector / BM25 scan / multi-hop merge), gated on the `self_editing` surface with a graceful no-op when it is disabled.
 - [x] **Content-addressable block IDs** — content-hash + CID-style stable id ship; replication uses it.
 - [x] **Long-context recall mode** — `mode="long_context"` ships in the recall API.
 - [x] **LLM-driven knowledge fusion** — `propose_fuse` tool ships, hooked into `propose_update → approve_apply`.

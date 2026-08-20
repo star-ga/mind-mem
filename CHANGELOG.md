@@ -4,6 +4,20 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+* **`recall(..., as_of=date)` time-travel** (roadmap Group B remainder) — the
+  point-in-time projection is now exposed on the `recall()` entrypoint. When
+  `as_of` (ISO-8601) is set, each returned block's `content` is rewound to the
+  revision that was in effect at that instant (with a `valid_as_of` marker);
+  blocks with no recorded edit history keep their current content. It is a
+  *projection*, not a filter — the result set, ordering and scores are
+  unchanged — applied uniformly across every dispatch path (sqlite, vector /
+  `RecallBackend`, BM25 scan, and the multi-hop decomposition merge) via the
+  shared `_apply_post_filters` funnel. Gated on the `self_editing` v4 surface
+  (it owns the edit history); when that surface is disabled the current content
+  is returned unchanged and a warning is logged, so recall never fails because
+  `as_of` was passed. The versioning store (`v4/block_versioning.py`) was
+  already shipped in v4.2.5; this wires it to the public API. 8 new tests.
+
 ## v4.9.1 — feedback→success bench (completes Group I recall-quality)
 
 * **Feedback-quality → downstream-success bench (`benchmarks/feedback_success_bench.py`)**
