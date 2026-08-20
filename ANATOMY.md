@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 961 | **Est. tokens:** ~2,094,582
-**Generated:** 2026-08-20 02:17 UTC
+**Files:** 962 | **Est. tokens:** ~2,095,414
+**Generated:** 2026-08-20 05:56 UTC
 
 ## Token Budget Guide
 
@@ -32,7 +32,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 85 | ~159,082 |
+| `docs/` | 86 | ~159,914 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/benchmarks/` | 6 | ~8,995 |
 | `docs/design/` | 9 | ~16,095 |
@@ -254,6 +254,7 @@
 - `docker-deployment.md` (~571 tok, large) — Docker Deployment
 - `faq.md` (~374 tok, medium) — FAQ
 - `federation-setup.md` (~929 tok, large) — mind-mem federation & multi-machine setup
+- `FLEET_MCP_WIRING.md` (~832 tok, large) — mind-mem fleet / multi-CLI MCP wiring — gaps & fixes (roadmap)
 - `getting-started.md` (~493 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
 - `governance.md` (~1353 tok, large) — MIND-Mem — governance design (5 layers)

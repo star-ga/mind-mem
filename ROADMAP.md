@@ -36,7 +36,10 @@ by its full description below.
 > See also **Group K — Graph-from-text construction + edge-grounded recall**
 > (below): description-grounded entity resolution, blocking + LLM-arbitration,
 > answer-with-edge-citations, cross-source edge confidence, schema versioning,
-> degree-gated profile synthesis.
+> degree-gated profile synthesis — and **K.2 — Ontology-governed logical
+> knowledge graph**: making `ontology.py` executable on the graph write paths,
+> relation-level semantics (domain/range/inverse/transitive), a bounded
+> deterministic reasoner, and `GraphEvidencePack`.
 
 ### Group C — KG governance / UX (6 items)
 
@@ -2807,6 +2810,113 @@ conclusion — the failure mode this project has already been burned by once.
   reported only partial transfer, which is weak evidence that training is where the
   gain lives, and a prompt-only baseline must be measured first. Delivery mechanisms
   belong to consumers; this entry covers the verdict surface only.
+
+#### K.2 — Ontology-governed logical knowledge graph (prior-art-informed, 2026-08-19)
+
+Prior art: a practitioner critique of "knowledge graph memory" as commonly
+built — auto-linked Markdown/YAML with no traversal layer — argues the real
+bar is (a) explicit ontological *and logical* modelling and (b) genuine
+multi-hop traversal tooling, and that grepping linked files is neither.
+
+**Most of that bar we already clear, and this entry does not re-litigate it.**
+`knowledge_graph.py` is a SQLite triple store with canonical entities, typed
+predicates, aliases, per-edge confidence, source provenance, and validity
+windows; `neighbors()` is real BFS N-hop traversal (predicate/direction
+filtered, bounded) exposed as `graph_query`; writes route through the
+`propose_edge` → `approve_edge` HITL gate. Description-grounded entity
+resolution, blocking + LLM-arbitration, answer-with-edge-citations,
+cross-source edge confidence, and schema versioning are already open items
+in Group K above and are **not** duplicated here.
+
+**What is genuinely absent, verified against the tree (2026-08-19):**
+
+1. `src/mind_mem/ontology.py` exists (OWL-lite: entity types, parent/child
+   hierarchy, inherited/required/optional properties, strict validation,
+   versioning) — but `grep -c 'ontology' ` returns **0** in all three graph
+   write paths: `graph_ingest.py`, `knowledge_graph.py`, and
+   `mcp/tools/graph.py`. The ontology is reachable via `ontology_load` /
+   `ontology_validate` and is used by `context_core.py` for core export.
+   It is *not* consulted before an edge becomes authoritative.
+2. `ontology.py` carries **no relation-level semantics** — no `domain`,
+   `range`, `inverse`, `transitive`, `symmetric`, `functional`, or
+   `disjoint` (grep returns nothing for all seven). Predicates are typed
+   as an enum but carry no logical meaning.
+
+Consequence: a triple whose predicate is enum-valid but ontologically
+nonsensical (`Person --AUTHORED_BY--> Language`, where `AUTHORED_BY` should
+be `domain: Artifact, range: Person`) is accepted today. And because
+`PART_OF` has no transitivity declaration, `A PART_OF B` + `B PART_OF C`
+cannot derive `A PART_OF C`.
+
+**Wedge guardrail (load-bearing):** a reasoner may derive *views*; it must
+never mutate source-of-truth memory. Derived facts are materialized views
+carrying `rule_id`, `ontology_version`, and `source_edges[]`, and are
+excluded from the sealed audit-hash preimage — same rule already applied to
+edge confidence and attestation verdicts. Ontology validation is a
+*structural* gate that runs **before** the existing HITL gate; it does not
+replace or weaken it. Order: extraction → ontology validation → governance
+approval → authoritative graph.
+
+- [ ] **Make the ontology executable on write paths** — call ontology
+      validation inside `graph_ingest`, `propose_edge`, `approve_edge`,
+      direct-admin `graph_add_edge`, and entity-observation writes. An
+      invalid triple becomes an explicit governance finding; it never
+      silently enters the authoritative graph. Bind every entity/edge to
+      an ontology version + hash. Custom predicates must be declared in
+      the workspace ontology before they are authoritative.
+- [ ] **Relation schemas in `ontology.py`** — add `domain`, `range`,
+      `inverse`, `symmetric`, `transitive`, `functional`, disjoint entity
+      types, and optional cardinality. Prerequisite for both the write
+      gate above and any entailment below.
+- [ ] **Persist the active ontology per workspace** — currently
+      process-local via `OntologyRegistry`; an ontology that governs
+      authoritative writes cannot live only in process memory. Ontology
+      migrations must be explicit, versioned, and replayable.
+- [ ] **Bounded deterministic reasoner (OWL-RL-lite / Datalog-style, not
+      full OWL)** — subclass inheritance, inverse/symmetric/transitive
+      predicates, domain/range inference. Derived facts are views, never
+      writes, and each carries its full derivation path. Type-disjointness
+      and logical-incompatibility violations feed the existing
+      contradiction/governance system.
+- [ ] **Graph pattern query planning** — extend `graph_query` beyond
+      `entity + depth + predicate` into a bounded pattern API with typed
+      variable constraints, traversing graph indexes only (never grepping
+      Markdown/YAML). Score paths on edge confidence, provenance quality,
+      temporal validity, contradiction state, and hop penalty, under hard
+      bounds on hops/fan-out/budget.
+- [ ] **`GraphEvidencePack` — edge-grounded context packing** — return the
+      minimal supporting triples + citations rather than pulling whole
+      source blocks into the recall set (today's `kg_fusion` path finds an
+      edge, then hydrates the source block). Fetch full blocks only on
+      explicit demand. This is the K.2 half of the Group L
+      utility-per-context-token metric: measure **tokens consumed per
+      correctly answered graph question**.
+- [ ] **`GraphBackend` protocol + reproducible graph benchmarks** — keep
+      SQLite as the zero-infrastructure backend; prove equivalent scale via
+      a second backend (PostgreSQL recursive CTEs or a graph adapter).
+      Benchmark 1-hop / 2-hop / 3–5-hop, high-fanout nodes, temporal edges,
+      ontology violations, and contradictory paths. Track answer accuracy,
+      path precision/recall, ontology-violation detection rate, latency,
+      nodes visited, and context tokens. **The benchmark must distinguish
+      lexical retrieval from genuine relational reasoning** — otherwise it
+      measures the retriever, not the graph.
+
+**Acceptance gates.** No graph write path bypasses ontology validation; a
+domain/range-invalid relationship cannot enter the authoritative graph;
+same graph + same ontology + same query yields the same derivation; every
+inferred answer is explainable back to authoritative source edges/blocks; a
+multi-hop query is answerable from a compact evidence pack without loading
+source documents in full.
+
+- **Status:** Proposed 2026-08-19. Sequenced **behind Group K.0** — graph
+  population remains the bottleneck, and an ontology-governed write gate on
+  a sparse graph gates almost nothing. The relation-schema item is the
+  unblocking prerequisite for the rest and is the honest first slice. The
+  reasoner is explicitly scoped *below* full OWL: unbounded entailment on a
+  memory store is a latency and explainability hazard, not a feature.
+
+> Provenance recorded privately in `mind-internal`, per the
+> no-public-attribution rule.
 
 ### Group L — Recall utility per context token + prescriptive blocks (prior-art-informed, 2026-08-06)
 
