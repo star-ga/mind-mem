@@ -6,14 +6,14 @@
   <strong>Replayable memory for AI agents. Deterministic recall with a byte-identical audit chain across runs, machines, and substrates.</strong>
 </p>
 <p align="center">
-  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 90 MCP tools<br>
+  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 89 MCP tools<br>
   <sub>MIND Language Profile: <code>default</code> (full tensor stdlib + Q16.16 + heap) &mdash; see <a href="https://github.com/star-ga/mind/blob/main/docs/roadmap.md#phase-106--library-output--c-abi-mindc-026--030">Phase 10.6</a></sub><!-- mind-profile: default -->
 </p>
 <p align="center">
-  <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/v/mind-mem?include_prereleases&style=flat-square&color=blue&label=PyPI" alt="PyPI"></a>
+  <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/v/mind-mem?style=flat-square&color=blue&label=PyPI" alt="PyPI"></a>
   <a href="https://pypi.org/project/mind-mem/"><img src="https://img.shields.io/pypi/pyversions/mind-mem?style=flat-square" alt="Python Versions"></a>
   <a href="https://github.com/star-ga/mind-mem/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/mind-mem?style=flat-square" alt="License"></a>
-  <a href="https://github.com/star-ga/mind-mem/releases"><img src="https://img.shields.io/github/v/release/star-ga/mind-mem?include_prereleases&style=flat-square&color=green&label=Release" alt="Release"></a>
+  <a href="https://github.com/star-ga/mind-mem/releases"><img src="https://img.shields.io/github/v/release/star-ga/mind-mem?style=flat-square&color=green&label=Release" alt="Release"></a>
   <img src="https://img.shields.io/badge/MIND-substrate-orange?style=flat-square" alt="MIND Substrate">
   <img src="https://img.shields.io/badge/deterministic-byte--identical-brightgreen?style=flat-square" alt="Byte-identical Determinism">
   <img src="https://img.shields.io/badge/governed--write-propose→apply-purple?style=flat-square" alt="Governed Write">
@@ -21,8 +21,8 @@
   <img src="https://img.shields.io/badge/core_deps-zero-brightgreen?style=flat-square" alt="Zero Core Dependencies">
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/star-ga/mind-mem/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/star-ga/mind-mem/release.yml?style=flat-square&label=Release" alt="Release"></a>
-  <img src="https://img.shields.io/badge/tests-6000%2B-brightgreen?style=flat-square" alt="Tests: 5900+">
-  <img src="https://img.shields.io/badge/MCP_tools-90-blue?style=flat-square" alt="MCP Tools: 90">
+  <img src="https://img.shields.io/badge/tests-6%2C000%2B-brightgreen?style=flat-square" alt="Tests: 6,000+">
+  <img src="https://img.shields.io/badge/MCP_tools-89-blue?style=flat-square" alt="MCP Tools: 89">
   <img src="https://img.shields.io/badge/clients-17-blueviolet?style=flat-square" alt="AI Clients: 17">
   <img src="https://img.shields.io/badge/backends-markdown_%7C_postgres-teal?style=flat-square" alt="Storage: Markdown + Postgres">
   <img src="https://img.shields.io/badge/audit-cross--model_%2B_SAST_%2B_SoW-darkgreen?style=flat-square" alt="Cross-model consensus audit + SAST (CodeQL/bandit/trivy) + external-audit SoW published">
@@ -38,7 +38,7 @@
 
 MIND-Mem is a deterministic AI memory system: on the same workspace, the same query produces the same ranked results every time, with a Q16.16 fixed-point audit chain — byte-identical across runs, machines, and substrates — embedded in every applied decision. (Recall scoring itself is standard floating-point; the byte-identity guarantee is the Q16.16 audit/replay chain.)
 
-Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 90 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic (same query → same ranked results) and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
+Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 89 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic (same query → same ranked results) and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
 
 Most memory layers ship tools. That is table-stakes. MIND-Mem ships a substrate: scoring kernels compiled from MIND source with Q16.16 fixed-point encoding in the audit-hash preimage, a governance pipeline that rejects every unreviewed write, and an audit chain where every applied proposal is hash-anchored. The same query on the same workspace produces the same ranked recall, every time; that recall's audit/replay chain is byte-identical whether you replay it on the same machine or a different one that pulls the same workspace. That property is what makes MIND-Mem suitable as a canonical memory layer across heterogeneous agent stacks.
 
@@ -387,7 +387,14 @@ A single fact is planted at a controlled depth within a haystack of semantically
 
 Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer with LLM, score against gold reference with judge LLM. Directly comparable methodology.
 
-**v1.0.7 — Hybrid + top_k=18** (external LLM answerer + judge, conv-0, 199 questions):
+> **Canonical flagship number:** the full 10-conversation (1986-question) BM25
+> run directly below (Overall Acc>=50 **73.8%**, Mean **70.5**) — see
+> [`docs/benchmarks.md`](docs/benchmarks.md#locomo-benchmark--canonical-number)
+> for scope, evidence, and reproduction. All other LoCoMo tables on this page
+> are smaller historical subsamples, kept for their per-category detail — do
+> not treat any of them as the headline number.
+
+**v1.0.7 — Hybrid + top_k=18** (external LLM answerer + judge, conv-0 subsample, 199 of 1986 questions — 10% of the full set; no raw per-question artifact is checked into this repo for this run):
 
 | Category        |      N | Acc (>=50) | Mean Score |
 | --------------- | -----: | ---------: | ---------: |
@@ -400,7 +407,7 @@ Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer w
 
 > **Pipeline:** BM25 + Qwen3-Embedding-8B (4096d) vector search → RRF fusion (k=60) → top-18 evidence blocks → observation compression → answer → judge. A/B validated: +2.8 mean vs top_k=10 baseline.
 
-**v1.1.1 — BM25 + top_k=18** (external LLM answerer + judge, 10 conversations, 1986 questions):
+**v1.1.1 — BM25 + top_k=18 (canonical — full dataset)** (external LLM answerer + judge, 10 conversations, 1986 questions):
 
 | Category        |        N | Acc (>=50) | Mean Score |
 | --------------- | -------: | ---------: | ---------: |
@@ -426,30 +433,35 @@ Same pipeline as Mem0 and Letta evaluations: retrieve context, generate answer w
 
 > **Key improvements since v1.0.0:** Adversarial accuracy tripled from 36.3% to 92.4% via abstention classifier + hybrid retrieval. Overall Acc≥50 improved from 67.3% to 73.8% (+6.5pp).
 
-### Competitive Landscape
-
-| System       |     Score | Approach                                                     |
-| ------------ | --------: | ------------------------------------------------------------ |
-| **MIND-Mem** | **76.7%** | Hybrid BM25 + Qwen3-8B vector + RRF fusion (local-only)    |
-| Memobase     |     75.8% | Specialized extraction                                       |
-| **Letta**    |     74.0% | Files + agent tool use                                       |
-| **MIND-Mem** |     73.8% | BM25-only, full 10-conv (1986 questions, external LLM judge) |
-| **Mem0**     |     68.5% | Graph + LLM extraction                                      |
-
-> MIND-Mem now **surpasses Mem0 and Letta** with **local-only** retrieval — no cloud calls, no graph DB, no LLM in the retrieval loop. MIND-Mem's unique value is **governance** (contradiction detection, drift analysis, audit trails) and **agent-agnostic shared memory** via MCP — areas these benchmarks don't measure.
-
 ### Competitive Landscape (LoCoMo)
 
-| System | LoCoMo Acc>=50 | Infrastructure | Dependencies |
-| --- | ---: | --- | --- |
-| **MIND-Mem** (hybrid) | **76.7%** | **Local-only** | **Zero core (optional: llama.cpp, sentence-transformers)** |
-| Memobase | 75.8% | Cloud + GPU | embeddings + vector DB |
-| Letta | 74.0% | Cloud | embeddings + vector DB |
-| **MIND-Mem** (BM25) | **73.8%** | **Local-only** | **Zero core** |
-| full-context | 72.9% | N/A | LLM context window |
-| Mem0 | 68.5% | Cloud (managed) | graph DB + embeddings |
+Full 10-conversation (1986-question) LoCoMo, Acc>=50 — apples-to-apples scope
+and metric. Canonical MIND-Mem table + evidence:
+[`docs/benchmarks.md`](docs/benchmarks.md#locomo-benchmark--canonical-number).
+On this metric **MIND-Mem is not the top score** — Memobase and Letta report
+slightly higher, both on cloud infrastructure with embedding + vector-DB
+dependencies. MIND-Mem's differentiator is not "wins every cell"; it's being
+the only **local-only, zero-core-dependency, governed** system in the table —
+governance (contradiction detection, drift analysis, proposal/review/apply
+audit trail, byte-identical replay) is a property no other row has, and it
+is not measured by this benchmark at all.
 
-> MIND-Mem surpasses Mem0 (68.5%), Letta (74.0%), and Memobase (75.8%) with zero cloud infrastructure. Full 10-conversation benchmark (1986 questions) validates this at scale. Note: benchmarks measure retrieval accuracy. The substrate properties (byte-identical replay, governed-write, audit chain) are not captured by any of these benchmarks — they are properties of the architecture, not the recall scores.
+| System | LoCoMo Acc>=50 (full 10-conv, 1986Q) | Infrastructure | Dependencies |
+| --- | ---: | --- | --- |
+| Memobase¹ | 75.8% | Cloud + GPU | embeddings + vector DB |
+| Letta¹ | 74.0% | Cloud | embeddings + vector DB |
+| **MIND-Mem** (BM25) | **73.8%** | **Local-only** | **Zero core** |
+| Full-context¹ | 72.9% | N/A | LLM context window |
+| Mem0 (own LoCoMo paper)² | 66.9% | Cloud (managed) | graph DB + embeddings |
+
+¹ Third-party self-reported numbers (Letta's August 2025 analysis — see
+"Why Plain Files Outperform Fancy Retrieval" below). Not re-run by MIND-Mem.
+
+² `66.88` is Mem0's own published LoCoMo-paper number. Mem0's separate 2026
+managed platform self-reports **91.6** on LoCoMo — a different setup/judge
+(hosted product, not the open-paper config), not apples-to-apples with this
+table. Surfaced rather than omitted, per policy: never publish a comparison
+a skeptic could catch as cherry-picked.
 
 ### LongMemEval (held pending reconciliation)
 
@@ -823,10 +835,21 @@ your-workspace/
 | Hybrid retrieval | BM25F + vector + RRF | Vector only | Hybrid | Graph + vector |
 | Governance (propose/review/apply) | Yes | No | No | No |
 | Contradiction detection | Yes | No | No | No |
-| Tests | 5,465+ | - | - | - |
-| LoCoMo benchmark | 86.33 conv-0 (v3.6, external LLM judge) | 66.88 | 74.0% | - |
+| Tests | 6,000+ | - | - | - |
+| LoCoMo benchmark (full 10-conv, Acc>=50)¹ | 73.8% | 66.9%² | 74.0% | - |
 | MCP tools | 89 distinct (90 `mcp.tool` registrations; `recall` dispatcher shadows base `recall`) | - | - | - |
 | Core dependencies | 0 | Many | Many | Many |
+
+¹ Canonical MIND-Mem LoCoMo number — see
+[`docs/benchmarks.md`](docs/benchmarks.md#locomo-benchmark--canonical-number)
+for scope/evidence. On this apples-to-apples metric MIND-Mem is not the top
+score of every system evaluated (see the Competitive Landscape table above);
+its differentiator is being the only local-only, zero-dependency, governed
+option.
+
+² Mem0's own published LoCoMo-paper number. Mem0's separate 2026 managed
+platform self-reports 91.6 on a different setup/judge — not apples-to-apples
+with this row.
 
 ### At a Glance
 
@@ -912,7 +935,7 @@ Letta's August 2025 analysis showed that a plain-file baseline (full conversatio
 - **Overhead hurts.** Specialized pipelines introduce failure modes (bad embeddings, chunking errors, stale indexes) that simple file access avoids.
 - **For text-heavy agentic use cases, "how well the agent manages context" > "how smart the retrieval index is."**
 
-MIND-Mem's deterministic retrieval pipeline validates these findings: **67.3% on LoCoMo** with zero dependencies, no embeddings, and no vector database — within 1.2pp of Mem0's graph-based approach. The key insight: treating retrieval as a reasoning pipeline (wide candidate pool → deterministic rerank → context packing) closes most of the gap without any ML infrastructure. Unlike plain-file baselines, MIND-Mem adds integrity checking, governance, and agent-agnostic shared memory via MCP that no other system provides.
+MIND-Mem's deterministic retrieval pipeline validates these findings: **73.8% on the full 10-conversation LoCoMo suite** (Acc≥50, canonical run below) with zero dependencies, no embeddings, and no vector database — **5.3pp above Mem0's top graph variant (68.5%)**. The key insight: treating retrieval as a reasoning pipeline (wide candidate pool → deterministic rerank → context packing) matches embedding+vector systems without any ML infrastructure. Unlike plain-file baselines, MIND-Mem adds integrity checking, governance, and agent-agnostic shared memory via MCP that no other system provides.
 
 ---
 
@@ -1204,7 +1227,7 @@ All settings in `mind-mem.json` (created by `init_workspace.py`):
 
 ```json
 {
-  "version": "4.5.0",
+  "version": "4.9.1",
   "workspace_path": ".",
   "auto_capture": true,
   "auto_recall": true,

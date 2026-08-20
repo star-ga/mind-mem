@@ -10,9 +10,9 @@
 
 ## Currently shipping
 
-**v4.4.0** is the current PyPI release. See
-`CHANGELOG.md` for the per-version detail; this roadmap covers
-forward-looking work, not history.
+See `CHANGELOG.md` for the per-version detail (latest: v4.9.1) and the
+canonical current PyPI release; this roadmap covers forward-looking work,
+not history.
 
 ## Genuinely Open Items (post-v4.4.0 reality)
 
@@ -693,7 +693,7 @@ HITL gate deliberately refuses.
 - [x] **Encryption at rest** (`encryption.py`) — HMAC-SHA256 keystream, PBKDF2, encrypt-then-MAC
 - [x] 145 new tests across 8 modules
 
-## v1.9.1 — Current Release ✅ Released (2026-03-06)
+## v1.9.1 — Released 2026-03-06
 
 - [x] Proposal apply + rollback safety fixes
 - [x] Request-scoped MCP auth (admin from token scopes)

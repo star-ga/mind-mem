@@ -144,25 +144,29 @@ Loss plateau at ~0.085 from step 150 is characteristic of the tool-call JSON out
 
 ## Eval
 
-### LoCoMo (benchmarks/locomo_judge.py)
+**This card documents the v2 checkpoint as released on 2026-04-21.** The LoCoMo
+and tool-call-accuracy numbers for that specific checkpoint were never
+published — this card originally carried a projected LoCoMo mean (`≥ 82`) and
+`_pending_` tool-call-accuracy cells, and the sweep to fill them in was
+superseded by later retrains before it completed. Carrying an unfilled
+projection next to real numbers elsewhere invites exactly the kind of
+cherry-picked-looking comparison we don't publish, so those placeholder rows
+were removed rather than left stale.
 
-v2 is evaluated on the same LoCoMo 10-conversation suite as v1. Publishing numbers separately once the full sweep completes — v2 is the answerer-side component; retrieval-side improvements from v3.3.0 features (graph_recall, entity_prefetch, rerank_ensemble, truth_score, answer_quality) are measured in the same run.
+`star-ga/mind-mem-4b` has since been retrained twice more on expanded MCP
+surfaces, each with a real, published eval gate (not a projection):
 
-| Target | Baseline (v1.1.0) | Current (v3.2.1) | v3.3.0 projected |
-|---|---|---|---|
-| Mean | 70.54 | ~76.7 (conv-0) | **≥ 82** |
-| Temporal | — | — | — |
-| Adversarial | — | — | — |
+- **v3.10.2-fullft** — 6/6 categories at 100% (55 probes total; see
+  `CHANGELOG.md` "v3.10.0").
+- **v3.12.0-fullft** — 95/95 patched eval (see `CHANGELOG.md` "v3.12.1").
+- **v4.0.0 retrain (current)** — 109/109 = 100% across eleven categories on
+  the un-softened harness; see [`docs/mind-mem-4b-setup.md`](mind-mem-4b-setup.md).
 
-### Tool-call accuracy
-
-Replay 500 held-out dispatcher prompts:
-
-| | v1 | v2 |
-|---|---|---|
-| Correct tool | 94% | _pending_ |
-| Correct mode | 89% | _pending_ |
-| Valid JSON | 98% | _pending_ |
+For the LoCoMo retrieval benchmark (BM25/hybrid recall, independent of which
+local-model checkpoint answers) see the canonical, current published number
+in [`docs/benchmarks.md`](benchmarks.md#locomo-benchmark--canonical-number)
+(full 10-conversation set, Acc>=50 73.8% / Mean 70.5) — do not cite a
+different LoCoMo figure for `mind-mem-4b`.
 
 ## What NOT to retrain for
 

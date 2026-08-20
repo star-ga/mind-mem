@@ -60,6 +60,33 @@ Configure MIND-Mem for a single named client.
 
 Auto-detect and configure every installed AI coding client.
 
+### `mm self-update`
+
+Check PyPI for a newer `mind-mem` release and upgrade the current install in
+place, using the `pip` that owns the running interpreter. Stdlib-only, zero
+coupling to recall/evidence/scoring code. All human-facing output goes to
+**stderr**, prefixed `[self-update]`, so it never corrupts JSON/text a normal
+`mm` command prints to stdout. Refuses to upgrade over an editable/dev
+install (git checkout) — prints the `git pull + pip install -e .` path
+instead.
+
+```
+mm self-update              # check + prompt before upgrading
+mm self-update --yes        # upgrade without prompting
+mm self-update --check      # report only, no upgrade; exit 10 if newer available
+mm self-update --pre        # include pre-releases when checking/upgrading
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--check` | off | Report only; exit code `10` if an update is available, `0` if up to date |
+| `--yes`, `-y` | off | Upgrade without prompting |
+| `--pre` | off | Include pre-releases |
+
+Disabled by default. Setting `auto_update.enabled: true` in `mind-mem.json`
+turns on a lightweight, best-effort, interval-gated check (default 24h) that
+runs on other `mm` invocations without blocking them.
+
 ---
 
 ## Debug visualization commands (v3.2.0)

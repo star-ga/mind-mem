@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 959 | **Est. tokens:** ~2,089,730
-**Generated:** 2026-08-19 22:06 UTC
+**Files:** 960 | **Est. tokens:** ~2,092,475
+**Generated:** 2026-08-20 01:23 UTC
 
 ## Token Budget Guide
 
@@ -22,17 +22,17 @@
 
 | Directory | Files | Est. tokens |
 |-----------|-------|-------------|
-| `./` | 35 | ~45,165 |
+| `./` | 35 | ~45,265 |
 | `.agents/skills/mind-mem-development/` | 1 | ~456 |
 | `.arch-mind/` | 4 | ~1,313 |
 | `audits/` | 5 | ~24,039 |
-| `benchmarks/` | 42 | ~108,246 |
+| `benchmarks/` | 43 | ~109,011 |
 | `bin/` | 1 | ~526 |
 | `deploy/` | 2 | ~772 |
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 85 | ~157,202 |
+| `docs/` | 85 | ~159,082 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/benchmarks/` | 6 | ~8,995 |
 | `docs/design/` | 9 | ~16,095 |
@@ -89,7 +89,7 @@
 
 - `AGENTS.md` (~995 tok, large) — mind-mem: agent instructions (auto-written)
 - `AUDIT_FINDINGS_FOR_CLAUDE.md` (~995 tok, large) — Comprehensive Architectural Audit: MIND-Mem (Commit 30d8b71)
-- `CLAUDE.md` (~4214 tok, huge) — MIND-Mem — Persistent AI Memory System
+- `CLAUDE.md` (~4280 tok, huge) — MIND-Mem — Persistent AI Memory System
 - `conftest.py` (~1010 tok, large) — Shared pytest fixtures for mind-mem test suite."""
 - `CONTRIBUTING.md` (~751 tok, large) — Contributing to MIND-Mem
 - `.cursorrules` (~23 tok, tiny) — # mind-mem
@@ -98,7 +98,7 @@
 - `Dockerfile` (~521 tok, large) — FROM python:3.12-slim
 - `.dockerignore` (~37 tok, tiny) — .git
 - `.editorconfig` (~107 tok, small) — # EditorConfig — https://editorconfig.org
-- `EVIDENCE.md` (~1213 tok, large) — Evidence Matrix
+- `EVIDENCE.md` (~1247 tok, large) — Evidence Matrix
 - `generate_mind7b_training.py` (~5558 tok, huge) — Generate training data for Mind7B — a purpose-trained 7B model for mind-mem.
 - `.gitattributes` (~96 tok, small) — # Auto-detect text files and normalize line endings
 - `.gitignore` (~379 tok, medium) — *.pyc
@@ -178,6 +178,7 @@
 - `REPORT.md` (~4361 tok, huge) — MIND-Mem Benchmark Report
 - `repro_niah.py` (~2385 tok, huge) — Reproducible NIAH benchmark harness — emits independently-verifiable evidence.
 - `runpod_kickoff.sh` (~1779 tok, huge) — mind-mem-4b v2 — Runpod one-shot kickoff.
+- `STATUS.md` (~765 tok, large) — Benchmark Status
 - `tier_weight_search.py` (~1615 tok, huge) — Grid-search per-tier weights against LoCoMo judge scores (v3.3.0 T4 #10).
 - `train_config_a100.yaml` (~347 tok, medium) — base_model: star-ga/mind-mem-4b
 - `train_config.yaml` (~208 tok, medium) — base_model: star-ga/mind-mem-4b
@@ -224,16 +225,16 @@
 - `2026-07-31-locomo-baseline-mind_mem.md` (~643 tok, large) — LoCoMo recall scorecard — `mind_mem` (2026-07-31)
 ### `docs/`
 
-- `benchmarks.md` (~764 tok, large) — Benchmarks
+- `benchmarks.md` (~1746 tok, huge) — Benchmarks
 - `block-format.md` (~431 tok, medium) — Block Format
 - `block-type-taxonomy-roadmap.md` (~911 tok, large) — Block-Type Taxonomy Enhancement — Roadmap Note
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~254 tok, medium) — CI Workflows
 - `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
 - `client-integrations.md` (~2684 tok, huge) — Client Integrations
-- `cli-reference.md` (~1857 tok, huge) — CLI Reference
+- `cli-reference.md` (~2164 tok, huge) — CLI Reference
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
-- `comparison.md` (~313 tok, medium) — Comparison with Alternatives
+- `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
 - `configuration.md` (~8318 tok, huge) — Configuration Reference
 ### `docs/design/`
@@ -256,7 +257,7 @@
 - `getting-started.md` (~493 tok, medium) — Getting Started
 - `glossary.md` (~263 tok, medium) — Glossary
 - `governance.md` (~1353 tok, large) — MIND-Mem — governance design (5 layers)
-- `hf-mind-mem-4b-v2-README.md` (~2152 tok, huge) — mind-mem-4b v2 (2026-04-21)
+- `hf-mind-mem-4b-v2-README.md` (~2309 tok, huge) — mind-mem-4b v2 (2026-04-21)
 - `HYPEREDGE_DESIGN_2026-06-17.md` (~1350 tok, large) — Hyperedge + temporal-anchor design (Hyper-Extract steal)
 - `install-guide.md` (~2855 tok, huge) — Installation guide — every step + every option
 - `integrations.md` (~1540 tok, huge) — Integrations
@@ -298,7 +299,7 @@
 
 - `security-model.md` (~400 tok, medium) — Security Model
 - `setup.md` (~1741 tok, huge) — Setup
-- `status.md` (~1125 tok, large) — MIND-Mem — implementation status (alignment companion)
+- `status.md` (~1273 tok, large) — MIND-Mem — implementation status (alignment companion)
 - `storage-backends.md` (~1264 tok, large) — Storage Backends
 - `storage-migration.md` (~2391 tok, huge) — Storage Backend Migration Guide
 - `supply-chain-security.md` (~1051 tok, large) — Supply-Chain Security

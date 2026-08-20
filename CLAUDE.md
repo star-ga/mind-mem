@@ -274,7 +274,11 @@ pytest --collect-only -q | tail  # verify test count
 - SQLite WAL mode for concurrent reads
 
 ## Benchmarks (LoCoMo, external LLM judge)
-Mean: 77.9, Adversarial: 82.3, Temporal: 88.5
+Canonical number lives in `docs/benchmarks.md` — do not restate a figure
+here. Current: full 10-conversation set (1986Q), Acc>=50 73.8%, Mean 70.5,
+BM25-only backend. (Prior `77.9`/`82.3`/`88.5` was a mislabeled 199-question
+conv-0 subsample, not the full set — see `docs/benchmarks.md` for the
+correction.)
 
 ## Git
 - Remote: star-ga/mind-mem (public)
