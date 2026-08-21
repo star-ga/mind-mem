@@ -117,10 +117,13 @@ done
 
 cd "$TARGET_DIR"
 
-# Collect files (respect .gitignore if in a git repo)
+# Collect files. In a git repo, index ONLY tracked files: this file is
+# committed (and on a public remote), so an untracked local file must never
+# be able to reach it. `--others` would include untracked files, making the
+# generated index publish the existence and description of files nobody staged.
 collect_files() {
   if git rev-parse --is-inside-work-tree &>/dev/null; then
-    git ls-files --cached --others --exclude-standard 2>/dev/null
+    git ls-files --cached 2>/dev/null
   else
     find . -maxdepth "$MAX_DEPTH" -type f \
       -not -path '*/.git/*' \

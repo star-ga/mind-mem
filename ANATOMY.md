@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 961 | **Est. tokens:** ~2,094,596
-**Generated:** 2026-08-21 17:34 UTC
+**Files:** 961 | **Est. tokens:** ~2,094,651
+**Generated:** 2026-08-21 17:40 UTC
 
 ## Token Budget Guide
 
@@ -50,7 +50,7 @@
 | `lib/` | 1 | ~2,170 |
 | `mind/` | 27 | ~9,687 |
 | `.roo/` | 1 | ~22 |
-| `scripts/` | 6 | ~4,627 |
+| `scripts/` | 6 | ~4,682 |
 | `sdk/go/` | 9 | ~6,773 |
 | `sdk/js/` | 5 | ~4,332 |
 | `sdk/js/src/` | 4 | ~2,320 |
@@ -417,7 +417,7 @@
 ### `scripts/`
 
 - `anatomy-hook.sh` (~258 tok, medium) — anatomy-hook.sh — Git pre-commit hook to refresh ANATOMY.md
-- `anatomy.sh` (~2010 tok, huge) — anatomy — Generate ANATOMY.md for any repo
+- `anatomy.sh` (~2065 tok, huge) — anatomy — Generate ANATOMY.md for any repo
 - `build_integrity_manifest.py` (~634 tok, large) — Bake ``_integrity_manifest.json`` into the package before wheel build.
 - `check_claims.sh` (~385 tok, medium) — Cross-repo docs-claim regression gate (mind-mem side).
 - `count_mcp_tools.py` (~916 tok, large) — Count registered MCP tools and assert the count matches CLAUDE.md.
