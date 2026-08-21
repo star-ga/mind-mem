@@ -2900,13 +2900,34 @@ approval → authoritative graph.
       nodes visited, and context tokens. **The benchmark must distinguish
       lexical retrieval from genuine relational reasoning** — otherwise it
       measures the retriever, not the graph.
+- [ ] **Ontology drift as a continuous, per-ingest concern (not a
+      design-time one)** — the items above treat schema conformance as a
+      gate applied to a corpus; in practice every new ingest *re-opens*
+      the resolution question. `EntityRegistry.resolve()` mints a fresh
+      entity for any surface form absent from `aliases`, so duplicates
+      accrete continuously rather than arriving all at once, and the
+      divergence is discovered at query time rather than at write time.
+      Required: (a) resolution runs on every ingest, not once at schema
+      design; (b) an unmatched-surface-form rate tracked as a governance
+      signal, so drift is observable before it is a graph-quality
+      problem; (c) a periodic re-resolution pass over already-authoritative
+      entities as the alias table and per-entity descriptions improve
+      — proposing merges through `propose_edge`/HITL, never rewriting
+      source-of-truth silently; (d) ontology-version pinning per entity
+      so a schema migration makes affected entities explicitly stale
+      rather than retroactively reinterpreting sealed history.
+      Depends on the description-grounded resolver and blocking +
+      LLM-arbitration items in Group K; this entry is the *when*, those
+      are the *how*.
 
 **Acceptance gates.** No graph write path bypasses ontology validation; a
 domain/range-invalid relationship cannot enter the authoritative graph;
 same graph + same ontology + same query yields the same derivation; every
 inferred answer is explainable back to authoritative source edges/blocks; a
 multi-hop query is answerable from a compact evidence pack without loading
-source documents in full.
+source documents in full; an unmatched-surface-form rate is observable per
+ingest, and a re-resolution pass proposes merges without mutating
+source-of-truth.
 
 - **Status:** Proposed 2026-08-19. Sequenced **behind Group K.0** — graph
   population remains the bottleneck, and an ontology-governed write gate on
