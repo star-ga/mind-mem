@@ -3001,6 +3001,28 @@ approval → authoritative graph.
       not the action, and is decorative under an adversarial or merely
       sloppy proposer. Proposals reference opaque entity ids; the
       reviewer's rendering is resolved server-side at review time.
+- [ ] **Land the write gate in `dry-run` mode before it rejects** —
+      every item above describes a validator that *refuses* a
+      non-conforming write. There is no described way to turn it on. On a
+      populated graph the first enforcing build rejects some fraction of
+      existing callers, so the rule either ships broken or never ships;
+      the predictable outcome is that the correct rule is written and
+      left switched off. The gate therefore needs two modes from the
+      start: **`dry-run`** (evaluate, record the decision and what it
+      *would* have refused, forward the write) and **`enforce`** (refuse)
+      — the same two names naestro R87 uses, deliberately, so a rule
+      means the same thing in both stores. Both modes write the same
+      decision row, distinguished by mode, so a `dry-run` trail is
+      directly comparable to what enforcement would produce; that
+      comparability is the entire value. A rule is authored, run against
+      live ingest in `dry-run`, read out of the decision record, and only
+      then promoted. The mode in force is itself part of the record —
+      a validator whose mode is inferred rather than stated cannot be
+      audited after the fact.
+      **Fail-closed stays independent of mode**: `dry-run` governs what
+      happens to the *write*, never what happens to a *broken rule* — an
+      unparseable or absent shape still refuses. Cross-repo: this is the
+      mind-mem half of naestro **R87**.
 - [ ] **Close the `Predicate.register()` contradiction (open, contradicts
       the gate above)** — this entry states custom predicates "must be
       declared in the workspace ontology before they are authoritative."
@@ -3023,7 +3045,11 @@ inferred answer is explainable back to authoritative source edges/blocks; a
 multi-hop query is answerable from a compact evidence pack without loading
 source documents in full; an unmatched-surface-form rate is observable per
 ingest, and a re-resolution pass proposes merges without mutating
-source-of-truth.
+source-of-truth. No enforcing validator is
+promoted without a prior observe-mode run over live ingest whose recorded
+would-refuse set was read; the mode in force is recorded with each
+decision, never inferred; a malformed shape refuses in `dry-run` exactly
+as it does in `enforce`.
 
 - **Status:** Proposed 2026-08-19; revised 2026-08-21 after an
   architecture review. Sequenced **behind Group K.0** — graph population
