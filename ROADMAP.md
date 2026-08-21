@@ -2848,6 +2848,22 @@ be `domain: Artifact, range: Person`) is accepted today. And because
 `PART_OF` has no transitivity declaration, `A PART_OF B` + `B PART_OF C`
 cannot derive `A PART_OF C`.
 
+**Two engines, not one (do not conflate).** Validation and derivation are
+opposite semantics and must not be built from the same mechanism. OWL
+`domain`/`range` are *inferential*: given `Person --AUTHORED_BY--> Language`,
+an OWL reasoner concludes `Language is-a Person` rather than rejecting the
+triple. An open-world entailment engine therefore **rejects nothing** and
+cannot serve as a write gate. The split:
+
+- **Write gate = closed-world shape validation** (SHACL-shaped): a triple
+  violating a declared shape is *refused* and becomes a governance finding.
+  Absent shape → refuse (fail-closed), never silently admit.
+- **Read side = bounded derivation** (Datalog / OWL-RL-lite): derives
+  additional views, never rejects and never writes.
+
+Both consume the same relation schema; only the validator gates writes.
+Implementers must not build the entailment engine and call it the gate.
+
 **Wedge guardrail (load-bearing):** a reasoner may derive *views*; it must
 never mutate source-of-truth memory. Derived facts are materialized views
 carrying `rule_id`, `ontology_version`, and `source_edges[]`, and are
@@ -2867,7 +2883,19 @@ approval → authoritative graph.
 - [ ] **Relation schemas in `ontology.py`** — add `domain`, `range`,
       `inverse`, `symmetric`, `transitive`, `functional`, disjoint entity
       types, and optional cardinality. Prerequisite for both the write
-      gate above and any entailment below.
+      gate above and any entailment below. Declaring a predicate both
+      `symmetric` and `transitive` (e.g. a generic `related_to`) collapses
+      its component of the graph into one equivalence class where
+      everything reaches everything; such combinations are rejected at
+      ontology-load time, not discovered at query time.
+- [ ] **Closed-world shape validator (the actual write gate)** — the
+      rejecting half of the pair above. Per the write-avoidance ladder,
+      evaluate `pyshacl` before hand-rolling; adopt only if it can be
+      driven deterministically and offline (no network, no wall-clock),
+      otherwise implement the narrow subset we need (domain, range,
+      cardinality, disjointness) directly against SQLite. A hand-rolled
+      validator is acceptable; a hand-rolled *entailment* engine is not
+      when `owlrl` exists.
 - [ ] **Persist the active ontology per workspace** — currently
       process-local via `OntologyRegistry`; an ontology that governs
       authoritative writes cannot live only in process memory. Ontology
@@ -2877,7 +2905,28 @@ approval → authoritative graph.
       predicates, domain/range inference. Derived facts are views, never
       writes, and each carries its full derivation path. Type-disjointness
       and logical-incompatibility violations feed the existing
-      contradiction/governance system.
+      contradiction/governance system. Over SQLite the transitive closure
+      is a `WITH RECURSIVE` view, not a new subsystem — reach for a
+      dependency only where recursion alone is insufficient.
+- [ ] **Closure must respect time — it currently ignores it** — edges
+      already carry `valid_from` / `valid_until` (`knowledge_graph.py`),
+      but nothing in the entailment spec above consumes them. Composing
+      `A PART_OF B` (valid 2024–2025) with `B PART_OF C` (valid from 2026)
+      derives `A PART_OF C`, a fact that was true at no instant. Every
+      derivation is evaluated **as-of** an instant (default: now), and a
+      derived view carries the *intersection* of its source edges'
+      validity intervals; an empty intersection means the rule does not
+      fire. A closure that ignores time silently manufactures history.
+- [ ] **Canonical derivation, so "same query → same answer" is
+      falsifiable** — recursive CTEs return rows in unspecified order and
+      a fact reachable by several paths has several equally valid
+      derivations. Without a rule, two runs can return the same answer
+      with different explanations, and the acceptance gate below cannot
+      fail. Required: a total order over derivation paths (shortest hop
+      count, then lexicographic by `(rule_id, source_edge_id…)`), so the
+      *explanation* is bit-identical run to run, not merely the conclusion
+      — the same discipline the compiler's byte-identity gate applies to
+      output.
 - [ ] **Graph pattern query planning** — extend `graph_query` beyond
       `entity + depth + predicate` into a bounded pattern API with typed
       variable constraints, traversing graph indexes only (never grepping
@@ -2919,22 +2968,92 @@ approval → authoritative graph.
       Depends on the description-grounded resolver and blocking +
       LLM-arbitration items in Group K; this entry is the *when*, those
       are the *how*.
+- [ ] **Resolution as reversible `SAME_AS` edges, never ID rewriting** —
+      the Group K resolver items imply an approved merge collapses two
+      entities into one id. That is the one irreversible mutation in an
+      otherwise append-only store: it destroys the distinction it acted
+      on, so a wrong merge cannot be undone from the record, and any
+      block already citing the losing id is silently re-pointed. Instead a
+      merge asserts a `SAME_AS` edge (HITL-gated like any other), and
+      "the entity" becomes a **union-find view** over the `SAME_AS`
+      component. Un-merging is retracting one edge. This is exactly the
+      derived-views-never-mutate rule the reasoner already obeys — the
+      original entry simply failed to apply it to entity resolution,
+      which is where it matters most.
+- [ ] **Deterministic scoring first; the model only in the gray band** —
+      `_canonicalise()` is lowercase + whitespace-collapse only
+      (`knowledge_graph.py`; its own docstring says "no fuzzy matching, no
+      embeddings"), so `Dave` and `David Smith` mint two entities. Most of
+      that gap closes with no model call: a nickname/diminutive dictionary
+      and a transliteration table are deterministic, auditable, offline,
+      and long-solved. Above that, a Fellegi–Sunter-style match-weight
+      score (per-field agreement weights, summed into a log-odds) yields
+      an explainable weight waterfall and a tunable threshold pair —
+      auto-merge above, auto-reject below, **model arbitration only
+      between**. This narrows the LLM's role from "resolve entities" to
+      "adjudicate the ambiguous band," which is the only part needing
+      judgment.
+- [ ] **Decide merges on store-held state, never on model-supplied
+      labels** — a merge proposal must be evaluated against the canonical
+      record the store holds for each entity id, not against the
+      proposing model's *description* of what it is merging. A gate that
+      reads the caller's own summary of its action validates the summary,
+      not the action, and is decorative under an adversarial or merely
+      sloppy proposer. Proposals reference opaque entity ids; the
+      reviewer's rendering is resolved server-side at review time.
+- [ ] **Close the `Predicate.register()` contradiction (open, contradicts
+      the gate above)** — this entry states custom predicates "must be
+      declared in the workspace ontology before they are authoritative."
+      That is **false today**: `Predicate.register()`
+      (`knowledge_graph.py:84`) mints a live predicate from an arbitrary
+      string with no ontology consultation, and `from_str` then resolves
+      it alongside the closed enum. Until registration routes through
+      ontology declaration, the acceptance gate below is unmet by
+      construction. Recorded as a known contradiction rather than left as
+      an aspirational sentence.
 
 **Acceptance gates.** No graph write path bypasses ontology validation; a
 domain/range-invalid relationship cannot enter the authoritative graph;
-same graph + same ontology + same query yields the same derivation; every
+same graph + same ontology + same query yields the same derivation **under
+the declared canonical path order** (the conclusion *and* its explanation
+are stable, not just the conclusion); no derived fact spans an empty
+validity intersection; every approved merge is reversible by retracting a
+single edge, with no source-of-truth id rewritten; every
 inferred answer is explainable back to authoritative source edges/blocks; a
 multi-hop query is answerable from a compact evidence pack without loading
 source documents in full; an unmatched-surface-form rate is observable per
 ingest, and a re-resolution pass proposes merges without mutating
 source-of-truth.
 
-- **Status:** Proposed 2026-08-19. Sequenced **behind Group K.0** — graph
-  population remains the bottleneck, and an ontology-governed write gate on
-  a sparse graph gates almost nothing. The relation-schema item is the
-  unblocking prerequisite for the rest and is the honest first slice. The
-  reasoner is explicitly scoped *below* full OWL: unbounded entailment on a
-  memory store is a latency and explainability hazard, not a feature.
+- **Status:** Proposed 2026-08-19; revised 2026-08-21 after an
+  architecture review. Sequenced **behind Group K.0** — graph population
+  remains the bottleneck, and an ontology-governed write gate on a sparse
+  graph gates almost nothing. Verified 2026-08-21: `knowledge_graph.db`
+  does not exist on the development box, so the graph has never been
+  populated and no duplicate-rate measurement is possible yet — which
+  makes K.0 the true blocker, not a sequencing preference.
+
+  **Revised first slice.** The original entry named relation schemas as
+  the honest first slice. That is the *cheapest* item, not the highest
+  leverage: it gates nothing while the ontology is still process-local
+  (`OntologyRegistry`), so schemas would be declared and then not
+  enforced. Corrected order — (1) a duplicate-rate / unmatched-surface-form
+  report over a populated graph, so the problem is measured before it is
+  engineered; (2) persist the active ontology per workspace with a
+  canonical hash, so a declared schema is durable enough to gate on;
+  (3) the closed-world validator on the write paths; (4) relation
+  semantics and the derivation engine last, once there is something to
+  reason over. Item (1) is blocked on K.0 by construction.
+
+  **Deliberately not adopted.** Embedding-similarity or GNN link
+  prediction for resolution, and PageRank-style graph retrieval, are the
+  current fashionable alternatives; both are rejected here because a
+  non-explainable, non-deterministic scoring function cannot satisfy the
+  derivation-path and bit-identity gates above. Determinism is the
+  constraint, not an oversight.
+
+  The reasoner is explicitly scoped *below* full OWL: unbounded entailment
+  on a memory store is a latency and explainability hazard, not a feature.
 
 > Provenance (source + full analysis) recorded privately in `mind-internal`,
 > per the no-public-attribution rule — public artifacts say "recent
