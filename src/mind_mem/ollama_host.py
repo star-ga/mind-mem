@@ -16,8 +16,8 @@ Resolution precedence (first match wins):
        config value is the most specific operator intent, so it beats the
        ambient environment.
     2. **``OLLAMA_HOST`` env var** — ollama's own standard client/server
-       env var. Accepts both ``host:port`` (``192.168.0.193:11434``) and a
-       full URL (``http://192.168.0.193:11434``); ``host:port`` is
+       env var. Accepts both ``host:port`` (``192.0.2.10:11434``) and a
+       full URL (``http://192.0.2.10:11434``); ``host:port`` is
        normalized to ``http://host:port``.
     3. **Default** — ``http://localhost:11434``, byte-identical to the
        pre-4.3.1 hardcoded behavior, so existing installs are unaffected.
@@ -82,7 +82,7 @@ def ollama_base_url(
         config_key: Key holding the endpoint override in that section.
 
     Returns:
-        Base URL such as ``http://192.168.0.193:11434`` — append the API
+        Base URL such as ``http://192.0.2.10:11434`` — append the API
         path (``/api/embed``, ``/api/generate``, ``/api/tags``) at the
         call site.
     """

@@ -43,8 +43,8 @@ class TestOllamaBaseUrl:
         assert DEFAULT_OLLAMA_URL == "http://localhost:11434"
 
     def test_env_host_port_is_normalized_to_http_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("OLLAMA_HOST", "192.168.0.193:11434")
-        assert ollama_base_url() == "http://192.168.0.193:11434"
+        monkeypatch.setenv("OLLAMA_HOST", "192.0.2.10:11434")
+        assert ollama_base_url() == "http://192.0.2.10:11434"
 
     def test_env_full_url_passes_through(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OLLAMA_HOST", "http://x:11434")
@@ -55,8 +55,8 @@ class TestOllamaBaseUrl:
         assert ollama_base_url() == "https://ollama.internal:11434"
 
     def test_trailing_slash_stripped(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("OLLAMA_HOST", "http://192.168.0.193:11434/")
-        assert ollama_base_url() == "http://192.168.0.193:11434"
+        monkeypatch.setenv("OLLAMA_HOST", "http://192.0.2.10:11434/")
+        assert ollama_base_url() == "http://192.0.2.10:11434"
 
     def test_empty_env_falls_back_to_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OLLAMA_HOST", "")
@@ -73,7 +73,7 @@ class TestOllamaBaseUrl:
         assert ollama_base_url(cfg) == "http://from-config:11434"
 
     def test_config_host_port_normalized(self) -> None:
-        assert ollama_base_url({"ollama_url": "192.168.0.193:11434"}) == "http://192.168.0.193:11434"
+        assert ollama_base_url({"ollama_url": "192.0.2.10:11434"}) == "http://192.0.2.10:11434"
 
     def test_empty_config_value_falls_through_to_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OLLAMA_HOST", "http://from-env:11434")
@@ -110,7 +110,7 @@ class TestOllamaBaseUrl:
 # Call-site threading tests — monkeypatch env + urlopen, assert the URL
 # ---------------------------------------------------------------------------
 
-_CENTRAL = "http://192.168.0.193:11434"
+_CENTRAL = "http://192.0.2.10:11434"
 
 
 class _FakeResponse:
@@ -142,7 +142,7 @@ class TestCallSitesUseResolver:
     def test_recall_vector_embed_ollama_honors_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from mind_mem.recall_vector import VectorBackend
 
-        monkeypatch.setenv("OLLAMA_HOST", "192.168.0.193:11434")
+        monkeypatch.setenv("OLLAMA_HOST", "192.0.2.10:11434")
         captured: dict[str, Any] = {}
         monkeypatch.setattr(urllib.request, "urlopen", _capture_urlopen(captured, {"embeddings": [[0.1]]}))
         out = VectorBackend({"provider": "ollama"}).embed_ollama(["hello"])
@@ -161,7 +161,7 @@ class TestCallSitesUseResolver:
     def test_llm_extractor_generate_honors_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from mind_mem import llm_extractor
 
-        monkeypatch.setenv("OLLAMA_HOST", "192.168.0.193:11434")
+        monkeypatch.setenv("OLLAMA_HOST", "192.0.2.10:11434")
         captured: dict[str, Any] = {}
         monkeypatch.setattr(urllib.request, "urlopen", _capture_urlopen(captured, {"response": "ok"}))
         assert llm_extractor._query_ollama("prompt", "mind-mem:4b") == "ok"
@@ -170,7 +170,7 @@ class TestCallSitesUseResolver:
     def test_llm_extractor_tags_probe_honors_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from mind_mem import llm_extractor
 
-        monkeypatch.setenv("OLLAMA_HOST", "192.168.0.193:11434")
+        monkeypatch.setenv("OLLAMA_HOST", "192.0.2.10:11434")
         captured: dict[str, Any] = {}
         monkeypatch.setattr(urllib.request, "urlopen", _capture_urlopen(captured, {}))
         assert llm_extractor._ollama_available() is True
@@ -188,7 +188,7 @@ class TestCallSitesUseResolver:
     def test_mm_cli_embed_honors_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from mind_mem.mm_cli import _embed_via_ollama
 
-        monkeypatch.setenv("OLLAMA_HOST", "192.168.0.193:11434")
+        monkeypatch.setenv("OLLAMA_HOST", "192.0.2.10:11434")
         captured: dict[str, Any] = {}
         monkeypatch.setattr(urllib.request, "urlopen", _capture_urlopen(captured, {"embeddings": [[0.2]]}))
         assert _embed_via_ollama(["hello"]) == [[0.2]]
@@ -197,7 +197,7 @@ class TestCallSitesUseResolver:
     def test_compressor_default_host_honors_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from mind_mem.compressors import OllamaCompressor
 
-        monkeypatch.setenv("OLLAMA_HOST", "192.168.0.193:11434")
+        monkeypatch.setenv("OLLAMA_HOST", "192.0.2.10:11434")
         captured: dict[str, Any] = {}
         monkeypatch.setattr(urllib.request, "urlopen", _capture_urlopen(captured, {"response": "tight"}))
         compressor = OllamaCompressor(model="m")
@@ -216,7 +216,7 @@ class TestCallSitesUseResolver:
     def test_llm_rerank_default_url_honors_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from mind_mem._recall_reranking import llm_rerank
 
-        monkeypatch.setenv("OLLAMA_HOST", "192.168.0.193:11434")
+        monkeypatch.setenv("OLLAMA_HOST", "192.0.2.10:11434")
         captured: dict[str, Any] = {}
         monkeypatch.setattr(urllib.request, "urlopen", _capture_urlopen(captured, {"response": "[0.9]"}))
         hits = [{"_id": "B-001", "excerpt": "text", "score": 0.5}]
