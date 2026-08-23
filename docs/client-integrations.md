@@ -96,6 +96,72 @@ Appends an `AGENTS.md` block telling the codex CLI to run
 Injects a system instruction pointing at the MIND-Mem workspace. The
 instruction survives `gemini --yolo` and interactive mode.
 
+## Qwen Code (Alibaba)
+
+| | |
+|---|---|
+| Config path | `~/.qwen/settings.json` (user) or per-project `.mcp.json` |
+| Format | JSON `mcpServers.mind-mem` (stdio) |
+| Install | Manual — no `mm install qwen` writer yet |
+
+Qwen Code is a Gemini-CLI descendant, so it reads MCP servers from
+two places and merges them, with the **project `.mcp.json` entry
+winning** on a name clash:
+
+1. `~/.qwen/settings.json` → `mcpServers` — user scope, applies to
+   every project.
+2. `<project>/.mcp.json` → `mcpServers` — project scope. This file
+   is shared with Claude Code and other Claude-compatible tools.
+
+Both the **pip install** (`pip install "mind-mem[mcp]"`) and the
+**repo checkout** (`./install.sh`, an editable install) provide the
+canonical `mind-mem-mcp` console script (stdio transport by default,
+89 tools), so the stanza is identical either way:
+
+```json
+{
+  "mcpServers": {
+    "mind-mem": {
+      "command": "mind-mem-mcp",
+      "args": [],
+      "env": {
+        "MIND_MEM_WORKSPACE": "/absolute/path/to/workspace",
+        "MIND_MEM_SCOPE": "admin"
+      },
+      "timeout": 90000,
+      "trust": true
+    }
+  }
+}
+```
+
+Use an absolute `command` path (e.g. `~/.local/bin/mind-mem-mcp`
+expanded) if Qwen Code's spawn PATH does not include the pip bin dir.
+Then restart Qwen Code and check `/mcp` — `mind-mem` should show
+connected with 89 tools. Verify independently with `mm doctor`.
+
+### Qwen Code gotchas (learned the hard way)
+
+- **`timeout` is milliseconds.** Qwen Code reads
+  `mcpServers.<name>.timeout` as **milliseconds** (default 600000).
+  Claude Code's `.mcp.json` uses **seconds**. A shared `.mcp.json`
+  carrying `"timeout": 30` gives Claude Code 30 s but Qwen Code
+  30 ms — every tool call then times out and startup discovery
+  flaps. In shared `.mcp.json` files, omit `timeout` entirely (each
+  CLI applies its own sane default) or keep per-CLI overrides in each
+  CLI's own user-level config file.
+- **Approval hash-binding.** Project `.mcp.json` servers are gated:
+  Qwen Code stores an approval keyed by a SHA-256 hash of the server
+  config in `~/.qwen/mcpApprovals.json`. Any edit to the entry resets
+  it to *pending* — re-approve via the `/mcp` UI after changing it.
+- **Bogus OAuth dialog.** If the connection fails at startup, the
+  recovery path may surface
+  `Cannot perform dynamic registration without authorization URL`.
+  For a stdio server this is a red herring — check `timeout` units
+  and command resolution first; stdio servers never use OAuth.
+- `"trust": true` in `~/.qwen/settings.json` skips per-tool approval
+  prompts.
+
 ## Cursor
 
 | | |
@@ -315,6 +381,12 @@ different clients don't cross-contaminate.
 - **`mm install <client>` says "unknown agent"** — run `mm detect`
   to see the exact names; the CLI accepts only keys from
   `AGENT_REGISTRY`.
+- **MCP tools time out in Qwen Code but work in Claude Code** —
+  `timeout` in a shared `.mcp.json` is seconds for Claude Code but
+  **milliseconds** for Qwen Code (a Gemini-CLI descendant). Remove
+  `timeout` from the shared file or set a millisecond value in Qwen
+  Code's own `~/.qwen/settings.json`. See
+  [Qwen Code](#qwen-code-alibaba).
 - **Re-running `mm install-all` shows every client as `skipped`** —
   that's correct. The installers are idempotent; the `# mind-mem`
   marker prevents duplicate blocks. Use `--force` to rewrite.

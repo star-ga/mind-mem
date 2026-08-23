@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 961 | **Est. tokens:** ~2,094,651
-**Generated:** 2026-08-21 17:55 UTC
+**Files:** 961 | **Est. tokens:** ~2,095,385
+**Generated:** 2026-08-23 06:50 UTC
 
 ## Token Budget Guide
 
@@ -32,7 +32,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 85 | ~159,082 |
+| `docs/` | 85 | ~159,816 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/benchmarks/` | 6 | ~8,995 |
 | `docs/design/` | 9 | ~16,095 |
@@ -231,7 +231,7 @@
 - `changelog-format.md` (~217 tok, medium) — Changelog Format Guide
 - `ci-workflows.md` (~254 tok, medium) — CI Workflows
 - `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
-- `client-integrations.md` (~2684 tok, huge) — Client Integrations
+- `client-integrations.md` (~3418 tok, huge) — Client Integrations
 - `cli-reference.md` (~2164 tok, huge) — CLI Reference
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
