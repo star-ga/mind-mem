@@ -3441,6 +3441,17 @@ seam N2 exploits.
   preserved unless opted into. Gate: a chunk-stability test asserting that
   identical input yields identical spans, since chunk boundaries feed recall and
   a silent boundary shift is a silent recall change.
+  **Measured, 2026-08-24 — the failure is reproducible in one line.** A synthetic
+  document of six `## Section` headers, each followed by a short paragraph (1296
+  chars total, 12 segments), chunks to **exactly one chunk spanning `(0, 1296)` and
+  swallowing all six headers**. Six strong structural boundaries were available and
+  none was taken, because the document never reached the 1500-char hard ceiling —
+  the only condition the merge loop tests. This is the before-picture for N1 and it
+  doubles as its acceptance test: after the change, the same input must split on
+  those headers. Also confirmed in the same run: **chunking is deterministic**
+  (identical spans across repeated runs on identical input), so the stability gate
+  above is asserting a property that holds today rather than one that needs to be
+  established first.
 
 - [ ] **N2 — Chunk-provenance anchoring: `(doc_hash, start_char, end_char)`.**
   The external project's provenance story is *retention* — keep the source
@@ -3471,8 +3482,8 @@ seam N2 exploits.
   is not: it is a local behaviour change inside one file and can proceed
   independently.
 
-- [ ] **N3 — Quadratic-accumulation audit of every PDF/document loader (defensive,
-  independent of the above).** The external project's CVE-2026-33123 fix was a
+- [x] **N3 — Quadratic-accumulation audit of every PDF/document loader (defensive,
+  independent of the above). — AUDITED 2026-08-24, no exposure found.** The external project's CVE-2026-33123 fix was a
   quadratic `bytes +=` accumulation reachable from a crafted PDF content-stream
   array: a small hostile input produces unbounded work, so it is a denial-of-service
   class, not a memory-safety one. The bug is not in their parser *design*; it is a
@@ -3482,6 +3493,25 @@ seam N2 exploits.
   regression for each. This is the highest-value item in the whole entry per unit
   of effort, because it is a real bug class we may already carry and it costs one
   grep plus a test.
+  **Result — closed as a negative finding, with the evidence.** Swept every `+=`
+  accumulation in `src/mind_mem/`. The document-ingest path (`block_parser.py`,
+  `ingestion_pipeline.py`) is clean: it accumulates via `list.append` followed by
+  `"".join(...)` throughout (`block_parser.py:423,490,514,673`), which is linear,
+  not quadratic. That is the correct pattern and it was already in place — nothing
+  to fix. Three `+=`-in-a-loop string sites exist
+  (`query_expansion.py:440`, `transcript_capture.py:85,87`) and are the same *shape*
+  as the CVE, but each iterates over API-response content blocks whose count is
+  small and not attacker-chosen; they are noted here so a future change that widens
+  their input is recognized as changing their risk class, not because they are
+  exploitable today.
+  The most hostile-input surface in the repo — the untrusted-pickle opcode scanner
+  in `model_audit.py:190-240` — is also the best defended: bounds-checked before
+  every read, declared lengths sanity-capped at `1 << 30`, and `short_strings`
+  held to a ring buffer (`> 4096` → keep last 2048). It anticipates precisely this
+  class.
+  **Standing rule this establishes:** in any loop over an externally-influenced
+  count, accumulate into a list and `join` once. Never `+=` a `str`/`bytes`. The
+  cost of the rule is zero and it removes the bug class by construction.
 
 **Provenance rail.** Prior-art shape observed in a public Apache-2.0 project;
 **no code adopted, no dependency added, and nothing named in any public
