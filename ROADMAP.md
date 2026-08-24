@@ -3390,3 +3390,107 @@ ablation pattern applied to loop components).
 
 - **Status:** Proposed 2026-08-17. M1/M5 are actionable now. M7 is explicitly
   blocked and must not be started before the eval set exists.
+
+---
+
+### Group N — Chunk boundary policy + chunk-provenance anchoring (prior-art-informed, 2026-08-24)
+
+Prior art: a widely-used open-source document-partitioning library (Apache-2.0,
+mature, actively maintained). Its *parsing* layer is redundant here and is
+explicitly **not** being taken — this box already runs several document
+front-ends, and that project's all-extras install pulls a heavy ML stack plus
+its own vendored OCR fork pinned to an exact version that would collide with the
+working GPU OCR environment. It also runs **default-on network telemetry** from
+inside the document path (a library-load ping plus per-partition-call runtime
+events on a daemon thread, opt-*out* via env var, with an explicit opt-in gate
+having been introduced upstream and then deliberately reverted). For a store
+that ingests private and partner documents, a default-on beacon in the ingest
+path is disqualifying on its own. **No dependency is added by anything below.**
+
+What is worth taking is narrower: two ideas from its *chunking* layer, which is
+the part this project's own chunker does not fully cover. `smart_chunker.py`
+(803 lines, zero external deps) already does semantic-boundary segmentation,
+code-block preservation, header context tracking, small-chunk merging, and — the
+better half of the external idea — `start_char`/`end_char` offsets into the
+source document (`Chunk`, `smart_chunker.py:92`). An offset span is strictly
+better than the external project's convention of retaining copies of the source
+elements in chunk metadata: it is cheaper, and it is *anchorable*. That is the
+seam N2 exploits.
+
+- [ ] **N1 — Soft maximum as a distinct boundary control.** The chunker today has
+  a hard ceiling (`max_chunk_size`, default 1500) and a merge floor
+  (`min_chunk_size`, default 100), and nothing in between:
+  `_merge_segments_into_chunks` (`smart_chunker.py:361`) closes a group *only*
+  when the next segment would breach the hard ceiling. The consequence is that a
+  strong semantic boundary arriving at 60% of the ceiling is ignored, and the
+  chunk runs on until an arbitrary character budget — not the document's
+  structure — decides where it ends. The external design separates these into a
+  soft threshold ("close here if a boundary presents itself") and a hard one
+  ("close here regardless"), which makes structure the primary signal and size
+  the backstop rather than the other way round.
+  **A second, sharper finding from the same inspection.** `_score_boundary`
+  (`smart_chunker.py:289`) computes a boundary strength and **its return value is
+  never consulted by the merge loop** — the loop's own comment at line 361 says
+  "we might want to force-split the current segment instead" and then does not.
+  Boundary scoring is already implemented and currently dead on this path. N1 is
+  therefore not "add a feature": it is *wire the existing scorer to a soft
+  threshold*, which is the cheapest item in this group and the one with the
+  clearest before/after.
+  Deliverable: `soft_max_chunk_size` on `SmartChunkerConfig`, consulted against
+  `_score_boundary` in the merge loop; default set so current behaviour is
+  preserved unless opted into. Gate: a chunk-stability test asserting that
+  identical input yields identical spans, since chunk boundaries feed recall and
+  a silent boundary shift is a silent recall change.
+
+- [ ] **N2 — Chunk-provenance anchoring: `(doc_hash, start_char, end_char)`.**
+  The external project's provenance story is *retention* — keep the source
+  elements around so a chunk can be traced back. This project can do the
+  strictly stronger thing, because it already has the offsets and the ecosystem
+  already has an evidence layer: anchor the triple
+  `(doc_hash, start_char, end_char)` so a chunk's preimage is not merely
+  *retrievable* but *provable*. A recalled chunk then carries a claim about
+  exactly which bytes of which document it came from, verifiable after the fact
+  against the source. Nothing in the current Python surface does this —
+  `doc_hash` and `source_hash` appear nowhere in `src/mind_mem/`, so chunk
+  metadata today records where a chunk came from only by convention.
+  **Architectural rails, non-negotiable:**
+  1. **mic@3 + MAP is the evidence layer; JSON stays the interop boundary.**
+     This item must not become a reason to treat mic@3 as a document-interchange
+     format. The anchor is a hash triple sealed into the existing evidence
+     surface — not a document envelope.
+  2. **No new repo, no new cross-repo seam.** This lands inside mind-mem's
+     existing evidence surface. The byte boundary remains the only cross-repo
+     coupling, per the Ecosystem Architecture Contract.
+  3. **The anchor is provenance, not governance.** Consistent with the rule
+     already recorded for attestation verdicts, trigger verdicts, Group L's
+     utility number, and Group M's floors: a provenance anchor records *where a
+     chunk came from*. It must never be read as a quality signal, must never
+     influence ranking, and must never gate approval.
+  **Gated on Fable approval before it lands** — this touches the evidence
+  surface and is therefore an architectural change under the standing rule. N1
+  is not: it is a local behaviour change inside one file and can proceed
+  independently.
+
+- [ ] **N3 — Quadratic-accumulation audit of every PDF/document loader (defensive,
+  independent of the above).** The external project's CVE-2026-33123 fix was a
+  quadratic `bytes +=` accumulation reachable from a crafted PDF content-stream
+  array: a small hostile input produces unbounded work, so it is a denial-of-service
+  class, not a memory-safety one. The bug is not in their parser *design*; it is a
+  loop shape that any document loader can have. The value here is entirely
+  independent of whether that project is ever touched: audit our own ingest paths
+  for accumulate-in-a-loop over attacker-influenced counts, and add a bounded-input
+  regression for each. This is the highest-value item in the whole entry per unit
+  of effort, because it is a real bug class we may already carry and it costs one
+  grep plus a test.
+
+**Provenance rail.** Prior-art shape observed in a public Apache-2.0 project;
+**no code adopted, no dependency added, and nothing named in any public
+artifact.** The external contribution is two framings — soft-versus-hard chunk
+boundaries, and chunk-level provenance retention — plus one transferable bug
+class. Every mechanism proposed above is either already implemented here and
+merely unwired (`_score_boundary`), already stronger here than in the external
+design (offset spans versus element retention), or sourced to this ecosystem's
+own evidence layer. Citation in `mind-internal`.
+
+- **Status:** Proposed 2026-08-24. N1 and N3 are actionable now and carry no
+  architectural risk. N2 is gated on Fable approval.
