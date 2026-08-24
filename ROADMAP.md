@@ -3452,6 +3452,25 @@ seam N2 exploits.
   (identical spans across repeated runs on identical input), so the stability gate
   above is asserting a property that holds today rather than one that needs to be
   established first.
+  **LANDED 2026-08-24.** `soft_max_chunk_size` (default `0` = disabled) +
+  `soft_max_boundary_score` (default `0.5`) on `SmartChunkerConfig`; the merge loop
+  now consults `_score_boundary` once a group reaches the soft ceiling, closing it
+  early only on a boundary at or above that score. `_score_boundary` is no longer
+  dead on this path. Default behaviour is byte-for-byte unchanged (opt-in, because
+  boundaries feed recall). Validation rejects a negative soft max, a soft max above
+  the hard max, and an out-of-range score at both public entry points. The measured
+  acceptance case now splits 1 chunk → 3, each boundary landing exactly on a `##`
+  header. Gates: 110 chunker tests pass, mypy clean, ruff check + format clean,
+  bandit clean.
+  **Pre-existing finding surfaced while gating N1 (not caused by it).**
+  `max_chunk_size` bounds the chunk **span**, not the final `chunk.text`:
+  `overlap_sentences` prepends a trailing sentence *after* the size decision is
+  made, so returned text can exceed the "hard" ceiling. Verified against this file
+  with N1 stashed — **12 of 13 chunks overshot a 300-char ceiling, by up to 34
+  characters**. The N1 tests therefore assert the true invariant (span ≤ ceiling)
+  and a monotonicity guard (enabling the soft max may only close chunks *earlier*,
+  never later). Worth deciding separately whether the ceiling should be documented
+  as span-bounding or enforced on final text; N1 changes neither.
 
 - [ ] **N2 — Chunk-provenance anchoring: `(doc_hash, start_char, end_char)`.**
   The external project's provenance story is *retention* — keep the source
@@ -3477,10 +3496,66 @@ seam N2 exploits.
      utility number, and Group M's floors: a provenance anchor records *where a
      chunk came from*. It must never be read as a quality signal, must never
      influence ranking, and must never gate approval.
-  **Gated on Fable approval before it lands** — this touches the evidence
-  surface and is therefore an architectural change under the standing rule. N1
-  is not: it is a local behaviour change inside one file and can proceed
-  independently.
+  **Fable verdict 2026-08-24: AMENDED.** Approved in shape, re-sequenced, and
+  corrected on three points. The review was conducted against this entry and an
+  independent re-verification of the code (the reviewer's sandbox restricted reads
+  to this repo), so the findings below are confirmed independently rather than
+  taken on the proposer's framing.
+  1. **Anchor in the EXISTING `EvidenceChain` — never a second chain.** A separate
+     provenance chain was rejected: it doubles the verify surface, splits the audit
+     story, and violates rail 2 in spirit. But **not one evidence record per chunk**:
+     `EvidenceChain` fsyncs every append, verifies every record at load, and hard-caps
+     at 1M entries (`_integrity_compromised` beyond it). Per-chunk records would flood
+     a chain built for low-volume human-gated decisions and brick verification with
+     mechanical data. Correct shape: the triple lives in **block/chunk metadata in the
+     store**, and is **sealed** into the chain via the `metadata` dict of the
+     governance records that already fire (PROPOSE/APPLY). The v3 evidence preimage
+     already hashes `metadata` (`evidence_objects.py:156-167`), so it becomes
+     tamper-evident for free — the same precedent as the existing `spec_hash`.
+     For bulk attestation, seal one **Merkle root** over a document's chunk anchors as
+     a single record (`verify_merkle` already exists on the MCP surface).
+  2. **`EvidenceAction` is closed and stays closed.** Seven-member `str` Enum;
+     `from_dict` does a strict `EvidenceAction(...)` lookup, so an unknown member is a
+     deserialization failure for every existing reader, and `_map_action` collapses
+     unknowns to APPLY. No `ANCHOR`/`INGEST` member. Rail 3 settles it: a provenance
+     record is not a governance *action*, so it rides in metadata of existing actions.
+     This also keeps old chains readable by old code.
+  3. **`doc_hash` binds RAW BYTES, not normalized text.** Same rule as mic@3
+     (`trace_hash` anchors canonical bytes, never lossy text): hash exactly the bytes
+     that entered the pipeline. Normalized-text hashing severs the tie to the on-disk
+     artifact and lets normalization drift silently invalidate anchors. **Coherence
+     requirement this creates:** `start_char`/`end_char` index into *decoded text* while
+     `doc_hash` covers *bytes*, so the triple is only verifiable if the bytes→text
+     derivation is pinned — UTF-8 explicitly, and any non-trivial extractor (PDF→text)
+     records its id+version in the same slot as (4).
+  4. **Record `(chunker_id, chunker_version, config_digest)` — and the proposer's
+     stated reason was wrong.** N1 does **not** invalidate existing anchors: an anchor
+     is a claim about bytes, and `doc[start:end]` under `doc_hash` verifies identically
+     regardless of which chunker produced it. What N1 changes is **re-derivability** —
+     without algorithm identity you can no longer re-run the chunker and reproduce the
+     same chunk set. That is the real reason to record it, and it upgrades the anchor
+     from "this span existed in this doc" to "this span is what chunker X.Y under
+     config C deterministically produces" — a property the N1 measurement already
+     proved holds. **`config_digest` is mandatory, not optional**, since
+     `soft_max_chunk_size`/`min`/`max` all move boundaries and version alone
+     under-specifies.
+  **Sequencing — N2 is NOT next.** Fable ordered: N3 (done) → **N1** → **wire the
+  chunker into the production ingest path** (its own reviewable change) → N2 as
+  metadata-sealing per above. Two independent reasons, both confirmed against the
+  code: (a) F1 — `smart_chunker` has **zero production importers** (only its two test
+  files), and the live ingest path (`block_parser.py`, `ingestion_pipeline.py`) carries
+  **no** offset, source-path, or doc-hash fields at all, so anchoring today would be
+  evidence about a code path nobody runs; and (b) today's chunker emits one
+  `(0, 1296)` chunk swallowing six headers, so sealing spans into an **append-only**
+  chain *before* fixing boundary policy would permanently record the known-bad
+  boundaries N1 is about to stop producing. **N2 remains gated on the wiring change
+  landing, not merely on this approval.**
+  **Correction to this entry as first written.** It said the anchor should be "sealed
+  into mic@3 + MAP". That named the wrong local artifact: `mic_map.py` is mind-mem's
+  mic@2/mic-b codec for **MIND IR dataflow graphs** ("MIC/MAP is for graphs" per its
+  own docstring), not a general evidence envelope. A chunk span is not a graph. Rail 1
+  is directionally right — evidence layer is evidence, JSON stays interop — but the
+  vehicle is `EvidenceChain` metadata sealing, per (1).
 
 - [x] **N3 — Quadratic-accumulation audit of every PDF/document loader (defensive,
   independent of the above). — AUDITED 2026-08-24, no exposure found.** The external project's CVE-2026-33123 fix was a
@@ -3522,5 +3597,7 @@ merely unwired (`_score_boundary`), already stronger here than in the external
 design (offset spans versus element retention), or sourced to this ecosystem's
 own evidence layer. Citation in `mind-internal`.
 
-- **Status:** Proposed 2026-08-24. N1 and N3 are actionable now and carry no
-  architectural risk. N2 is gated on Fable approval.
+- **Status:** Proposed 2026-08-24. N3 closed (negative finding). N2 reviewed by
+  Fable 2026-08-24: **AMENDED + approved in shape, re-sequenced behind N1 and a
+  chunker-wiring change.** N1 is the actionable next item and carries no
+  architectural risk.

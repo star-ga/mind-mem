@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 961 | **Est. tokens:** ~2,095,385
-**Generated:** 2026-08-24 08:42 UTC
+**Files:** 961 | **Est. tokens:** ~2,097,166
+**Generated:** 2026-08-24 08:52 UTC
 
 ## Token Budget Guide
 
@@ -60,7 +60,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 173 | ~630,509 |
+| `src/mind_mem/` | 173 | ~631,061 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 7 | ~18,591 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
@@ -71,7 +71,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 24 | ~64,969 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 338 | ~744,575 |
+| `tests/` | 338 | ~745,804 |
 | `tests/fixtures/` | 1 | ~710 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
@@ -695,7 +695,7 @@
 - `validator.py` (~984 tok, large) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/`
 
-- `smart_chunker.py` (~6814 tok, huge) — mind-mem Smart Chunker — Semantic-boundary document chunking.
+- `smart_chunker.py` (~7366 tok, huge) — mind-mem Smart Chunker — Semantic-boundary document chunking.
 - `smoke_test.sh` (~633 tok, large) — mind-mem Smoke Test — end-to-end verification
 - `spec_binding.py` (~2883 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `speculative_prefetch.py` (~3195 tok, huge) — # Copyright 2026 STARGA, Inc.
@@ -1083,7 +1083,7 @@
 - `test_skeptical_query.py` (~194 tok, small) — Tests for skeptical query detection."""
 - `test_skill_opt.py` (~3356 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_smart_chunker_code.py` (~1135 tok, large) — Tests for code-aware chunking in smart_chunker.py."""
-- `test_smart_chunker.py` (~7744 tok, huge) — Tests for smart_chunker.py — semantic-boundary document chunking."""
+- `test_smart_chunker.py` (~8973 tok, huge) — Tests for smart_chunker.py — semantic-boundary document chunking."""
 - `test_spec_binding.py` (~3156 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_speculative_prefetch.py` (~3071 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_sqlite_index_backends.py` (~2539 tok, huge) — Backend-parity regression tests for ``sqlite_index`` (audit bugs 4, 9, 13, 14).

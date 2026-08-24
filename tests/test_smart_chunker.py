@@ -797,5 +797,104 @@ class TestEdgeCases(unittest.TestCase):
             self.assertTrue(len(chunk.text) > 0)
 
 
+class TestSoftMaxBoundary(unittest.TestCase):
+    """N1 — soft maximum wires _score_boundary into the merge loop.
+
+    Before N1 the merge loop closed a group ONLY when the hard ceiling
+    would be breached, so a document full of strong structural boundaries
+    that never reached max_chunk_size collapsed into a single chunk.
+    """
+
+    @staticmethod
+    def _sectioned_doc(n=6):
+        return "\n\n".join(
+            f"## Section {i}\n\nThis is the body paragraph for section {i}. "
+            "It has a few sentences of ordinary prose so the segment is "
+            "realistic. Nothing here approaches the hard ceiling on its own."
+            for i in range(1, n + 1)
+        )
+
+    def test_default_behaviour_is_unchanged(self):
+        # Opt-in: with soft max disabled (default) the historical single-chunk
+        # behaviour is preserved exactly.
+        doc = self._sectioned_doc()
+        cfg = SmartChunkerConfig()
+        self.assertEqual(cfg.soft_max_chunk_size, 0)
+        result = smart_chunk(doc, config=cfg)
+        self.assertEqual(len(result), 1)
+
+    def test_soft_max_splits_on_strong_boundaries(self):
+        # The measured acceptance test: six headers, well under the hard
+        # ceiling, must split once the soft max is enabled.
+        doc = self._sectioned_doc()
+        cfg = SmartChunkerConfig(soft_max_chunk_size=200, min_chunk_size=0)
+        result = smart_chunk(doc, config=cfg)
+        self.assertGreater(len(result), 1)
+        # Every split must land on a header, i.e. structure decided the
+        # boundary. Assert on start_char (the span) rather than on chunk.text,
+        # because overlap_sentences prepends a trailing sentence from the
+        # previous chunk for context continuity -- the boundary is the span.
+        for chunk in result[1:]:
+            self.assertTrue(doc[chunk.start_char :].startswith("## Section"))
+
+    def test_hard_ceiling_still_wins(self):
+        # Soft max never permits a SPAN beyond the hard ceiling.
+        #
+        # Asserted on the span, not len(chunk.text): overlap_sentences
+        # prepends a sentence AFTER the size decision, so final text can
+        # exceed max_chunk_size. That is pre-existing behaviour (verified
+        # against this file before N1: 12 of 13 chunks overshot a 300-char
+        # ceiling by up to 34 chars with overlap on) and is NOT introduced
+        # by the soft maximum.
+        doc = self._sectioned_doc(12)
+        cfg = SmartChunkerConfig(max_chunk_size=400, soft_max_chunk_size=200, min_chunk_size=0)
+        for chunk in smart_chunk(doc, config=cfg):
+            self.assertLessEqual(chunk.end_char - chunk.start_char, 400)
+
+    def test_soft_max_never_widens_spans_versus_hard_limit_only(self):
+        # Guard the core promise: enabling the soft max may only close chunks
+        # EARLIER, never later, than the hard-limit-only behaviour.
+        doc = self._sectioned_doc(12)
+        base = SmartChunkerConfig(max_chunk_size=400, min_chunk_size=0)
+        soft = SmartChunkerConfig(max_chunk_size=400, soft_max_chunk_size=200, min_chunk_size=0)
+        widest_base = max(c.end_char - c.start_char for c in smart_chunk(doc, config=base))
+        widest_soft = max(c.end_char - c.start_char for c in smart_chunk(doc, config=soft))
+        self.assertLessEqual(widest_soft, widest_base)
+
+    def test_weak_boundary_does_not_split(self):
+        # Above the soft max but with no strong boundary, the chunk runs on
+        # to the hard ceiling rather than splitting arbitrarily.
+        doc = "\n\n".join("The quick brown fox jumps over the lazy dog repeatedly today." for _ in range(8))
+        cfg = SmartChunkerConfig(
+            soft_max_chunk_size=80,
+            soft_max_boundary_score=0.95,
+            min_chunk_size=0,
+        )
+        result = smart_chunk(doc, config=cfg)
+        self.assertEqual(len(result), 1)
+
+    def test_spans_are_deterministic_and_ordered(self):
+        # Boundaries feed recall: a silent shift is a silent recall change.
+        doc = self._sectioned_doc()
+        cfg = SmartChunkerConfig(soft_max_chunk_size=200, min_chunk_size=0)
+        first = [(c.start_char, c.end_char) for c in smart_chunk(doc, config=cfg)]
+        for _ in range(3):
+            again = [(c.start_char, c.end_char) for c in smart_chunk(doc, config=cfg)]
+            self.assertEqual(first, again)
+        for (_, prev_end), (next_start, _) in zip(first, first[1:]):
+            self.assertLessEqual(prev_end, next_start)
+
+    def test_negative_soft_max_is_rejected(self):
+        with self.assertRaises(ValueError):
+            smart_chunk("hello world", config=SmartChunkerConfig(soft_max_chunk_size=-1))
+
+    def test_soft_max_above_hard_max_is_rejected(self):
+        with self.assertRaises(ValueError):
+            smart_chunk(
+                "hello world",
+                config=SmartChunkerConfig(max_chunk_size=500, soft_max_chunk_size=900),
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

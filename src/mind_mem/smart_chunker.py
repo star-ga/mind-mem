@@ -43,6 +43,17 @@ class SmartChunkerConfig:
     Attributes:
         max_chunk_size: Maximum characters per chunk. Hard limit — chunks are
             never larger than this. Default 1500.
+        soft_max_chunk_size: Soft ceiling. Once a chunk reaches this size, the
+            next segment boundary is closed early if it scores at least
+            ``soft_max_boundary_score``, so document structure decides the
+            split rather than an arbitrary character budget. ``0`` disables
+            the soft ceiling and preserves the historical hard-limit-only
+            behaviour. Must be ``0`` or in ``1..max_chunk_size``. Default 0
+            (opt-in), because chunk boundaries feed recall and changing them
+            by default would silently change recall results.
+        soft_max_boundary_score: Minimum ``_score_boundary`` strength (0.0-1.0)
+            required to honour the soft ceiling. Default 0.5, which a header
+            clears on its own.
         min_chunk_size: Minimum characters per chunk. Chunks below this size
             are merged with their neighbor. Default 100.
         overlap_sentences: Number of trailing sentences to overlap between
@@ -59,6 +70,8 @@ class SmartChunkerConfig:
     """
 
     max_chunk_size: int = 1500
+    soft_max_chunk_size: int = 0
+    soft_max_boundary_score: float = 0.5
     min_chunk_size: int = 100
     overlap_sentences: int = 1
     preserve_code_blocks: bool = True
@@ -354,13 +367,24 @@ def _merge_segments_into_chunks(
     current_header = ""
     current_header_level = 0
 
+    soft_max = config.soft_max_chunk_size
+
     for i, seg in enumerate(segments):
         seg_size = len(seg.text)
 
-        # If adding this segment would exceed max, close current group
-        if current_segs and (current_size + seg_size + 1) > config.max_chunk_size:
-            # But first check if the boundary score is low — if so, we might
-            # want to force-split the current segment instead
+        # Hard ceiling: adding this segment would breach max_chunk_size, so the
+        # current group must close regardless of how weak the boundary is.
+        close_group = bool(current_segs) and (current_size + seg_size + 1) > config.max_chunk_size
+
+        # Soft ceiling: the group is already large enough that a *strong*
+        # structural boundary should end it, rather than letting an arbitrary
+        # character budget decide. This consults _score_boundary, which was
+        # previously computed nowhere on this path.
+        if not close_group and soft_max and current_segs and current_size >= soft_max:
+            if _score_boundary(current_segs[-1], seg) >= config.soft_max_boundary_score:
+                close_group = True
+
+        if close_group:
             groups.append(
                 (
                     list(current_segs),
@@ -607,6 +631,23 @@ def _parse_llm_score(response: str) -> float | None:
     return None
 
 
+def _validate_soft_max(config: SmartChunkerConfig) -> None:
+    """Validate the soft-ceiling settings, failing fast at the boundary.
+
+    A soft max above the hard max would never fire; a negative one is
+    meaningless. Both indicate a caller bug, so reject rather than silently
+    ignore — chunk boundaries feed recall.
+    """
+    soft = config.soft_max_chunk_size
+    if soft < 0:
+        raise ValueError(f"soft_max_chunk_size must be >= 0, got {soft}")
+    if soft > config.max_chunk_size:
+        raise ValueError(f"soft_max_chunk_size ({soft}) must not exceed max_chunk_size ({config.max_chunk_size})")
+    score = config.soft_max_boundary_score
+    if not 0.0 <= score <= 1.0:
+        raise ValueError(f"soft_max_boundary_score must be in 0.0..1.0, got {score}")
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -634,6 +675,7 @@ def smart_chunk(
     """
     if config is None:
         config = SmartChunkerConfig()
+    _validate_soft_max(config)
 
     effective_source = source or config.source
 
@@ -765,6 +807,7 @@ def smart_chunk_blocks(
     """
     if config is None:
         config = SmartChunkerConfig()
+    _validate_soft_max(config)
 
     result: list[dict[str, Any]] = []
 
