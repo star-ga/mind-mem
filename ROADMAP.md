@@ -3601,3 +3601,63 @@ own evidence layer. Citation in `mind-internal`.
   Fable 2026-08-24: **AMENDED + approved in shape, re-sequenced behind N1 and a
   chunker-wiring change.** N1 is the actionable next item and carries no
   architectural risk.
+
+---
+
+### Group O — Cross-chain evidence anchor: mind-mem's leg (identity of a *belief over time*)
+
+> Cross-repo ecosystem milestone. The composite design lives in the `mind`
+> roadmap (Phase 19); this section records only mind-mem's member contribution.
+>
+> **Status:** gap identified 2026-08-26 — not scoped, not scheduled.
+
+Six layers of the ecosystem each anchor a different "what survives
+transformation": `trace_hash` (artifact, `mind`), routing lineage (decision,
+Naestro), **the provenance chain (belief over time, here)**, I1–I15 + `spec_hash`
+(constraint, 512-mind), the governed route table (intent→capability, mind-nerve),
+and the session evidence log (structural health, arch-mind). Six roots, zero
+cross-links — nothing can prove the conjunction *"this binary, produced by this
+decision, under these constraints, **consistent with these beliefs**, routed by
+this rule, at this structural health."*
+
+**mind-mem's member is the belief-state digest** — which governed blocks were in
+force, at which applied-edit generation, when the artifact was produced. This is
+the member that answers *what did the system believe when it did that*, and no
+other layer can supply it.
+
+- **O1 — Canonical belief-state preimage.** A stable digest over the applied-edit
+  chain at a point in time. The `v4/block_versioning.py` work (`block_history`,
+  `content_as_of`, `recall(..., as_of=date)`) already gives the point-in-time
+  projection this needs; the open work is a canonical *serialization* of that
+  projection, not new versioning machinery.
+  - No clock, no randomness, no dict-iteration order — the 512-mind
+    evidence-preimage discipline applies verbatim and is the standard the other
+    five members should be held to.
+  - Digest scope is the open design question: the whole workspace is stable but
+    coarse (any unrelated write moves it); the recalled subset is precise but
+    means the anchor depends on a query. **Answer this before implementing** —
+    it determines whether the member is reproducible at verify time.
+- **O2 — Absent encoding.** A compile with no memory context above it must still
+  produce a valid anchor with this member explicitly recorded as absent — never
+  omitted, never zero-filled.
+- **O3 — Re-derivation.** The verifier must recompute the member from the
+  provenance chain rather than accept a supplied hash. A member taken on faith
+  reduces the whole anchor to a manifest.
+
+**Interaction with Group M (silent-failure gates).** A belief-state member that
+silently degrades — recall path returns fewer blocks, digest still validates — is
+exactly the failure class Group M exists to catch. The member must fail closed on
+a degraded read, not produce a well-formed hash over an incomplete projection.
+
+**Interaction with R88 (Naestro).** The digest must be computed over the store's
+canonical record, never over a caller's account of what it recalled. Same rule,
+same reason: a governing layer that decides on the governed party's summary is
+theatre.
+
+**Firewall (I13, inherited from 512-mind).** The anchor is an evidence artifact,
+never a score. Belief coverage confers no authority — a well-anchored artifact is
+not thereby more trustworthy, and anchor breadth must never be optimized against
+or used to relax a gate. This is also why the composite anchor must stay separate
+from the **Calibrated Recall Confidence** sidecar above: confidence is a quality
+signal, the anchor is a provenance fact, and merging them would convert evidence
+into a metric.
