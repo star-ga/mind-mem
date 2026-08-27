@@ -300,6 +300,15 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
                 return _sqlite_busy_error()
             raise
 
+    # Import quarantine: this tool reaches the hybrid / FTS legs directly,
+    # so it does not pass through ``recall._apply_post_filters``. Unreleased
+    # external ingest is withheld here too — one funnel per public surface,
+    # so no backend leg can be the one that leaks it.
+    if results:
+        from mind_mem._recall_core import _drop_quarantined
+
+        results = _drop_quarantined(list(results), ws, status_key="status")
+
     recall_elapsed = time.monotonic() - recall_start
     if recall_elapsed > timeout_seconds:
         _log.warning(

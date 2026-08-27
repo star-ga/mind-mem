@@ -10,7 +10,7 @@ import re
 import sys
 from abc import ABC, abstractmethod
 from collections import Counter
-from typing import Any, Mapping, cast
+from typing import Any, Final, Mapping, cast
 
 from ._recall_constants import (
     _STOPWORDS,
@@ -449,6 +449,74 @@ def _in_date_range(
     return True
 
 
+# ---------------------------------------------------------------------------
+# Import quarantine (external ingest)
+# ---------------------------------------------------------------------------
+
+#: Status stamped on every block ``mm import`` writes. Kept as a literal
+#: so recall never imports the importers package on the hot path; the
+#: value is pinned to ``importers.quarantine.QUARANTINE_STATUS`` by test.
+_QUARANTINE_STATUS: Final = "quarantined"
+
+
+def _quarantined(value: Any) -> bool:
+    """True when a block/hit status value means *quarantined*."""
+    return isinstance(value, str) and value.strip().lower() == _QUARANTINE_STATUS
+
+
+def _drop_quarantined(items: list[dict], workspace: str | None, *, status_key: str) -> list[dict]:
+    """Remove unreleased external-ingest items from a recall result set.
+
+    ``mm import`` is a bulk, ungated write: a foreign corpus lands in the
+    store without passing the governance gate, so every imported block
+    arrives ``Status: quarantined`` and must stay invisible to recall
+    until a governance proposal admits it. This is the filter that makes
+    that true, and it is deliberately the *only* thing recall knows about
+    importing.
+
+    Two rules, because not every retrieval leg carries the same fields:
+    an item is withheld when its status says *quarantined* and no live
+    release decision admits it, **or** when its id is in the withheld set
+    computed straight off the corpus (the fused/vector legs return hits
+    with no ``Status``, so the status rule alone would miss them).
+
+    Cost model: an import-free workspace has no ``memory/IMPORTED.md``,
+    so the id-set lookup is one ``stat`` and returns empty, no item
+    carries a quarantined status, and the input list is returned
+    unchanged. Both lookups are cached on file identity, so a governance
+    apply invalidates them and nothing else re-reads the corpus.
+
+    Fail-closed: with no workspace to resolve admissions against, a
+    quarantined item is dropped rather than surfaced.
+    """
+    flagged = any(_quarantined(item.get(status_key)) for item in items)
+
+    def _status_only() -> list[dict]:
+        return [item for item in items if not _quarantined(item.get(status_key))] if flagged else items
+
+    if workspace is None:
+        return _status_only()
+    try:
+        from .importers.quarantine import admitted_import_ids, withheld_import_ids
+
+        withheld = withheld_import_ids(workspace)
+        admitted = admitted_import_ids(workspace) if flagged else frozenset()
+    except Exception as exc:  # pragma: no cover — defensive
+        _log.warning("quarantine_admission_lookup_failed", error=str(exc))
+        return _status_only()
+    if not flagged and not withheld:
+        return items
+    kept: list[dict] = []
+    for item in items:
+        block_id = str(item.get("_id", ""))
+        if block_id in withheld:
+            continue
+        if _quarantined(item.get(status_key)) and block_id not in admitted:
+            continue
+        kept.append(item)
+    return kept
+
+
 def _apply_date_filter(
     hits: list[dict],
     since: str | None,
@@ -580,6 +648,9 @@ def _apply_post_filters(
     drop it. ``None`` (the default) skips the step entirely and returns
     the filtered hits untouched.
     """
+    # Quarantine first: an unreleased external-ingest block must never
+    # occupy a result slot, whatever the other filters decide.
+    hits = _drop_quarantined(hits, workspace, status_key="status")
     if since is not None or until is not None:
         hits = _apply_date_filter(hits, since, until)[:limit]
     if lifecycle is not None:
@@ -955,6 +1026,9 @@ def recall(
         # #429: Exclude unreviewed signals from default recall corpus
         if label == "signals" and not include_pending:
             blocks = [b for b in blocks if b.get("Status", "").lower() != "pending"]
+        # Unreleased external ingest never enters the candidate pool, so
+        # it cannot displace a governed block before the top-k cut.
+        blocks = _drop_quarantined(blocks, workspace, status_key="Status")
         for b in blocks:
             b["_source_file"] = rel_path
             b["_source_label"] = label
@@ -989,6 +1063,7 @@ def recall(
                 continue
             if active_only:
                 blocks = get_active(blocks)
+            blocks = _drop_quarantined(blocks, workspace, status_key="Status")
             for b in blocks:
                 b["_source_file"] = ns_path
                 b["_source_label"] = f"{label}@{agent_id}"

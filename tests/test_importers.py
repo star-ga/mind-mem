@@ -21,6 +21,8 @@ from mind_mem.importers import (
     ALL_SYSTEMS,
     DEFERRED_SYSTEMS,
     IMPORTED_CORPUS_FILE,
+    QUARANTINE_STATUS,
+    QUARANTINE_TIER,
     SUPPORTED_SYSTEMS,
     ImportParseError,
     UnsupportedSystemError,
@@ -186,7 +188,10 @@ def test_dump_imports_to_n_blocks_with_provenance(workspace: str, system: str, d
         assert block["Source"] == token
         assert extract_provenance(block)["tool_id"] == token
         assert extract_provenance(block)["purpose"] == "migration-import"
-        assert block["Status"] == "active"
+        # External ingest is quarantined on arrival — never authoritative.
+        assert block["Status"] == QUARANTINE_STATUS
+        assert block["IngestTier"] == QUARANTINE_TIER
+        assert block["ImportBatch"] == result.batch
         assert block["Statement"].strip()
 
 
@@ -247,30 +252,34 @@ def test_dry_run_writes_nothing(workspace: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Acceptance gate 3 — imported content is recallable
+# Acceptance gate 3 — imported content is INERT until released
+#
+# The end-to-end "quarantined -> governed release -> recallable" proof
+# lives in tests/test_importers_quarantine.py; these two pin the half
+# that matters for every dump format: a fresh import answers nothing.
 # ---------------------------------------------------------------------------
 
 
-def test_imported_content_is_recallable(workspace: str) -> None:
+def test_imported_content_is_not_recallable_while_quarantined(workspace: str) -> None:
     from mind_mem.recall import recall
 
     run_import(workspace, "chroma", CHROMA_DUMP)
     hits = recall(workspace, "reproducibility gate staging deployment", limit=10)
     ids = {hit.get("id") or hit.get("_id") for hit in hits}
-    assert any(str(i).startswith("IMP-chroma-") for i in ids), ids
+    assert not any(str(i).startswith("IMP-chroma-") for i in ids), ids
 
 
-def test_recall_finds_mem0_and_letta_content(workspace: str) -> None:
+def test_recall_withholds_mem0_and_letta_content(workspace: str) -> None:
     from mind_mem.recall import recall
 
     run_import(workspace, "mem0", MEM0_DUMP)
     run_import(workspace, "letta", LETTA_DUMP)
 
     mem0_hits = recall(workspace, "billing service payment reconciliation escalation", limit=10)
-    assert any(str(h.get("id") or h.get("_id")).startswith("IMP-mem0-") for h in mem0_hits)
+    assert not any(str(h.get("id") or h.get("_id")).startswith("IMP-mem0-") for h in mem0_hits)
 
     letta_hits = recall(workspace, "migration held an exclusive lock rollback release", limit=10)
-    assert any(str(h.get("id") or h.get("_id")).startswith("IMP-letta-") for h in letta_hits)
+    assert not any(str(h.get("id") or h.get("_id")).startswith("IMP-letta-") for h in letta_hits)
 
 
 def test_multiline_record_round_trips_through_the_parser(workspace: str) -> None:

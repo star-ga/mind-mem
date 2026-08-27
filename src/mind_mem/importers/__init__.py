@@ -3,7 +3,15 @@
 
 ``mm import --from <system> <path>`` lifts memory out of another system
 and lands it in the corpus as ``IMP-`` blocks, each stamped with an
-``imported:<system>`` provenance token and recallable immediately.
+``imported:<system>`` provenance token — and each **quarantined**.
+
+External ingest is never authoritative on arrival: an imported block
+carries ``Status: quarantined`` + ``IngestTier: external-ingest``, recall
+filters it out, and it becomes recallable only when a governance
+proposal releases it (``propose_import_release`` -> ``approve_apply``).
+The bulk write itself is recorded in the tamper-evident audit chain.
+:mod:`mind_mem.importers.quarantine` documents why bulk ingest is one
+chained write plus one governed release rather than a proposal per block.
 
 The set is chosen by where agent memory actually lives on disk, not by
 which stores are fashionable. Three formats hold the *source text*:
@@ -49,6 +57,19 @@ from .engine import (
     provenance_token,
     run_import,
 )
+from .quarantine import (
+    MAX_RELEASE_BLOCKS,
+    QUARANTINE_STATUS,
+    QUARANTINE_TIER,
+    ImportQuarantineError,
+    NothingToReleaseError,
+    ReleaseTooLargeError,
+    admitted_import_ids,
+    batch_id_for,
+    is_quarantined,
+    propose_import_release,
+    quarantined_import_ids,
+)
 from .records import (
     ImporterError,
     ImportParseError,
@@ -66,16 +87,27 @@ __all__ = [
     "IMPORT_BLOCK_TYPE",
     "IMPORTED_CORPUS_FILE",
     "MAX_DUMP_BYTES",
+    "MAX_RELEASE_BLOCKS",
+    "QUARANTINE_STATUS",
+    "QUARANTINE_TIER",
     "ImporterError",
     "ImportParseError",
+    "ImportQuarantineError",
     "ImportRecord",
     "ImportResult",
+    "NothingToReleaseError",
+    "ReleaseTooLargeError",
     "UnsupportedSystemError",
+    "admitted_import_ids",
+    "batch_id_for",
     "block_id_for",
     "build_import_block",
+    "is_quarantined",
     "load_dump",
     "load_source",
+    "propose_import_release",
     "provenance_token",
+    "quarantined_import_ids",
     "resolve_system",
     "run_import",
 ]

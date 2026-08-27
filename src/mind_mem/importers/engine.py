@@ -10,9 +10,14 @@ them already present, and writes nothing. Nothing new is deduplicated
 here — the optional near-duplicate collapse defers to the existing
 :mod:`mind_mem.dedup` cosine layer.
 
-*Recall* works because ``IMP-`` routes through ``_BLOCK_PREFIX_MAP`` to
-``memory/IMPORTED.md``, which is registered in ``CORPUS_FILES`` — the
-same wiring ``INBOX-`` and ``MSG-`` blocks use.
+*Recall* routing works because ``IMP-`` maps through
+``_BLOCK_PREFIX_MAP`` to ``memory/IMPORTED.md``, which is registered in
+``CORPUS_FILES`` — the same wiring ``INBOX-`` and ``MSG-`` blocks use.
+Routing is not admission, though: every block this engine writes lands
+**quarantined**, so recall filters it out until a governance proposal
+releases it. See :mod:`mind_mem.importers.quarantine` for why bulk
+ingest is one chained, ungated write plus one governed release rather
+than one proposal per block.
 """
 
 from __future__ import annotations
@@ -24,6 +29,14 @@ from typing import Any, Iterable
 from ..block_provenance import attach_provenance
 from ..capture import content_hash
 from ..observability import get_logger
+from .quarantine import (
+    BATCH_FIELD,
+    QUARANTINE_STATUS,
+    QUARANTINE_TIER,
+    TIER_FIELD,
+    batch_id_for,
+    record_import_in_chain,
+)
 from .records import ImporterError, ImportParseError, ImportRecord, ImportResult
 
 _log = get_logger("importers")
@@ -155,24 +168,39 @@ def _iso_date(raw: str) -> str:
     return ""
 
 
-def build_import_block(record: ImportRecord) -> dict[str, Any]:
+def build_import_block(record: ImportRecord, *, batch: str = "") -> dict[str, Any]:
     """Build the immutable ``IMP-`` block dict for *record*.
 
     Every block carries the ``imported:<system>`` provenance token twice:
     as the ``Source`` field (visible to recall + BM25) and as the
     ``ToolId`` provenance field (structured, read back by
     :func:`mind_mem.block_provenance.extract_provenance`).
+
+    It also arrives **quarantined**: ``Status`` is
+    :data:`~mind_mem.importers.quarantine.QUARANTINE_STATUS` and
+    ``IngestTier`` is the existing ``external-ingest`` provenance class,
+    never ``active``. External content is inert until a governance
+    proposal releases it — see :mod:`mind_mem.importers.quarantine`.
+
+    Args:
+        record: The parsed foreign memory unit.
+        batch: Optional import-batch id, stamped as ``ImportBatch`` so a
+            block can be traced back to the run — and to that run's
+            audit-chain entry — that wrote it. Omitted when empty.
     """
     token = provenance_token(record.system)
     block: dict[str, Any] = {
         "_id": block_id_for(record),
         "Type": IMPORT_BLOCK_TYPE,
         "Statement": _as_block_value(record.text),
-        "Status": "active",
+        "Status": QUARANTINE_STATUS,
+        TIER_FIELD: QUARANTINE_TIER,
         "Source": token,
         "ExternalId": record.external_id,
         "ContentHash": _record_digest(record),
     }
+    if batch:
+        block[BATCH_FIELD] = batch
     date = _iso_date(record.created_at)
     if date:
         block["Date"] = date
@@ -289,7 +317,14 @@ def run_import(
     link_edges: bool = False,
     dry_run: bool = False,
 ) -> ImportResult:
-    """Import the source at *path* into *workspace*.
+    """Import the source at *path* into *workspace*, quarantined.
+
+    Every block written lands with ``Status: quarantined`` and is
+    therefore invisible to :func:`mind_mem.recall.recall` until a
+    release proposal is approved
+    (:func:`mind_mem.importers.quarantine.propose_import_release` ->
+    ``approve_apply``). The run itself is appended to the tamper-evident
+    audit chain before this function returns.
 
     Args:
         workspace: mind-mem workspace root.
@@ -310,6 +345,10 @@ def run_import(
     Raises:
         UnsupportedSystemError: *system* has no file-based importer.
         ImportParseError: the dump is unreadable or malformed.
+        ImportQuarantineError: blocks were written but the run could not
+            be recorded in the audit chain. The blocks stay quarantined
+            and inert, so the corpus is safe; the import is not a
+            success and must not be reported as one.
     """
     from . import resolve_system
 
@@ -343,17 +382,25 @@ def run_import(
         # property of the workspace config, identical for every block.
         transform_hash = str(current_pipeline_hash(workspace))
 
-    planned: set[str] = set()
+    # Plan first, then stamp: the batch id is derived from the ids this
+    # run will write, so it cannot be computed per block inside the loop.
+    seen: set[str] = set()
+    plan: list[tuple[str, ImportRecord]] = []
     for record in records:
         block_id = block_id_for(record)
-        if block_id in existing or block_id in planned:
+        if block_id in existing or block_id in seen:
             skipped_existing += 1
             continue
-        planned.add(block_id)
+        seen.add(block_id)
+        plan.append((block_id, record))
+
+    batch = batch_id_for(resolved, (block_id for block_id, _ in plan))
+
+    for block_id, record in plan:
         if dry_run or store is None:
             written.append(block_id)
             continue
-        block = build_import_block(record)
+        block = build_import_block(record, batch=batch)
         if transform_hash:
             block = {**block, "TransformHash": transform_hash}
         written.append(str(store.write_block(block)))
@@ -361,6 +408,19 @@ def run_import(
     linked = 0
     if link_edges and not dry_run and records:
         linked = _materialize_link_edges(workspace, records)
+
+    # Bulk ingest is ungated by design; the audit-chain entry is the half
+    # of that bargain that keeps it honest, so it is not best-effort.
+    # A dry run writes nothing, so it records nothing.
+    if written and not dry_run:
+        record_import_in_chain(
+            workspace,
+            system=resolved,
+            source_path=os.path.abspath(path),
+            batch=batch,
+            block_ids=written,
+            corpus_file=IMPORTED_CORPUS_FILE,
+        )
 
     result = ImportResult(
         system=resolved,
@@ -372,6 +432,8 @@ def run_import(
         block_ids=tuple(written),
         dry_run=dry_run,
         linked_edges=linked,
+        batch=batch,
+        status=QUARANTINE_STATUS,
     )
     _log.info("import_completed", extra=result.as_dict())
     return result

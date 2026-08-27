@@ -66,7 +66,17 @@ class ImportRecord:
 
 @dataclass(frozen=True)
 class ImportResult:
-    """Immutable receipt for one ``mm import`` run."""
+    """Immutable receipt for one ``mm import`` run.
+
+    Attributes:
+        batch: Deterministic import-batch id stamped on every block the
+            run wrote (``""`` when the run wrote nothing). The handle an
+            operator passes to the release proposal.
+        status: The status the blocks landed with. Always
+            ``"quarantined"`` — imported content is never authoritative
+            on arrival, so the receipt says so out loud rather than
+            letting a caller assume the blocks are live.
+    """
 
     system: str
     source_path: str
@@ -77,13 +87,15 @@ class ImportResult:
     block_ids: tuple[str, ...]
     dry_run: bool = False
     linked_edges: int = 0
+    batch: str = ""
+    status: str = "quarantined"
 
     def as_dict(self) -> dict[str, Any]:
         """JSON-serializable form (what ``mm import`` prints).
 
         ``linked_edges`` appears only when the default-OFF ``link_edges``
-        flag actually materialized edges, so the default receipt is
-        byte-identical to the pre-flag one.
+        flag actually materialized edges, so the flag-off receipt keeps
+        the shape it had before that flag existed.
         """
         payload: dict[str, Any] = {
             "system": self.system,
@@ -94,6 +106,8 @@ class ImportResult:
             "skipped_near_duplicate": self.skipped_near_duplicate,
             "block_ids": list(self.block_ids),
             "dry_run": self.dry_run,
+            "batch": self.batch,
+            "status": self.status,
         }
         if self.linked_edges:
             payload["linked_edges"] = self.linked_edges

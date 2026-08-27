@@ -21,6 +21,8 @@ from mind_mem.importers import (
     ALL_SYSTEMS,
     DIRECTORY_SYSTEMS,
     IMPORTED_CORPUS_FILE,
+    QUARANTINE_STATUS,
+    QUARANTINE_TIER,
     SUPPORTED_SYSTEMS,
     ImportParseError,
     provenance_token,
@@ -366,7 +368,10 @@ def test_import_stamps_provenance_on_every_block(workspace: str, system: str, so
         assert block["Source"] == token
         assert extract_provenance(block)["tool_id"] == token
         assert extract_provenance(block)["purpose"] == "migration-import"
-        assert block["Status"] == "active"
+        # External ingest is quarantined on arrival — never authoritative.
+        assert block["Status"] == QUARANTINE_STATUS
+        assert block["IngestTier"] == QUARANTINE_TIER
+        assert block["ImportBatch"] == result.batch
         assert str(block["Statement"]).strip()
 
 
@@ -471,28 +476,28 @@ def test_blocks_without_links_have_no_links_field(workspace: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_vault_content_is_recallable(workspace: str) -> None:
+def test_vault_content_is_withheld_until_released(workspace: str) -> None:
     from mind_mem.recall import recall
 
     run_import(workspace, "markdown", VAULT)
     hits = recall(workspace, "append-only block store canonical file prefix", limit=10)
-    assert any(str(hit.get("id") or hit.get("_id")).startswith("IMP-markdown-") for hit in hits)
+    assert not any(str(hit.get("id") or hit.get("_id")).startswith("IMP-markdown-") for hit in hits)
 
 
-def test_auto_memory_content_is_recallable(workspace: str) -> None:
+def test_auto_memory_content_is_withheld_until_released(workspace: str) -> None:
     from mind_mem.recall import recall
 
     run_import(workspace, "agentmem", AGENT_MEMORY)
     hits = recall(workspace, "advisory health checks cannot evict a dead socket after failover", limit=10)
-    assert any(str(hit.get("id") or hit.get("_id")).startswith("IMP-agentmem-") for hit in hits)
+    assert not any(str(hit.get("id") or hit.get("_id")).startswith("IMP-agentmem-") for hit in hits)
 
 
-def test_transcript_content_is_recallable(workspace: str) -> None:
+def test_transcript_content_is_withheld_until_released(workspace: str) -> None:
     from mind_mem.recall import recall
 
     run_import(workspace, "chatjson", CHAT_SESSION)
     hits = recall(workspace, "posting-list rebuild shard segment format merge cost", limit=10)
-    assert any(str(hit.get("id") or hit.get("_id")).startswith("IMP-chatjson-") for hit in hits)
+    assert not any(str(hit.get("id") or hit.get("_id")).startswith("IMP-chatjson-") for hit in hits)
 
 
 def test_multiline_note_body_round_trips(workspace: str) -> None:
@@ -554,7 +559,7 @@ class TestLinkEdgeFlag:
         assert result.linked_edges == 0
         assert "linked_edges" not in result.as_dict()
 
-    def test_default_receipt_keys_are_unchanged(self, workspace: str) -> None:
+    def test_default_receipt_keys_are_stable(self, workspace: str) -> None:
         payload = run_import(workspace, "markdown", VAULT).as_dict()
         assert set(payload) == {
             "system",
@@ -565,7 +570,13 @@ class TestLinkEdgeFlag:
             "skipped_near_duplicate",
             "block_ids",
             "dry_run",
+            "batch",
+            "status",
         }
+        # The receipt states the quarantine out loud: a caller reading it
+        # cannot mistake an import for content that is live in recall.
+        assert payload["status"] == QUARANTINE_STATUS
+        assert payload["batch"].startswith("IMPB-markdown-")
 
     def test_flag_off_is_byte_identical_to_the_no_flag_call(self, tmp_path: Path) -> None:
         corpora = []
