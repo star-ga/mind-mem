@@ -2523,7 +2523,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Import memory from another system into the corpus (local dumps and note directories).",
         description=(
             "Import foreign agent memory into memory/IMPORTED.md as IMP- blocks, each stamped with an "
-            "'imported:<system>' provenance token and recallable immediately. Sources are a local JSON "
+            "'imported:<system>' provenance token. Imported blocks arrive QUARANTINED: they are withheld "
+            "from recall until a governed release proposal is approved, so untrusted external "
+            "content is never silently authoritative. Sources are a local JSON "
             "dump (chatjson/mem0/letta/chroma) or a local directory of markdown notes "
             "(markdown/agentmem). Re-running the same import is idempotent (block ids are derived from "
             "the record content, so nothing is duplicated). "

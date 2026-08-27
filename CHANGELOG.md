@@ -6,6 +6,25 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [4.10.0] - 2026-08-27
 
+### Behaviour change — imported memory is quarantined
+
+`mm import` no longer makes foreign memory live on arrival. Imported blocks are
+written as `IMP-` records stamped `Status: quarantined` with an
+`IngestTier: external-ingest` provenance class, and are **withheld from recall**
+until a governed release proposal is approved through the normal
+`propose_update` -> `approve_apply` path. The import itself is recorded in the
+audit chain (system, source, batch id, and every block id inside the hashed
+payload).
+
+This closes a hole found in pre-release verification: the importer previously
+wrote `Status: active` blocks directly to the corpus with no proposal, no gate
+and no chain entry, which made an untrusted external corpus immediately
+authoritative in recall. Related: a block carrying external-ingest provenance can
+never be recognised as a `GUARDRAIL` (guardrails bypass the ranker and are
+mandatory-surfaced, so minting one from imported content was an injection
+primitive).
+
+
 ### Known issue — Python 3.14
 
 The test suite (and `install.sh`'s post-install smoke) can crash with a
