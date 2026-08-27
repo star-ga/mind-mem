@@ -3661,3 +3661,85 @@ or used to relax a gate. This is also why the composite anchor must stay separat
 from the **Calibrated Recall Confidence** sidecar above: confidence is a quality
 signal, the anchor is a provenance fact, and merging them would convert evidence
 into a metric.
+
+---
+
+### Group P — SCAR: the confidently-wrong ledger (2026-08-26)
+
+> **Status:** proposed 2026-08-26, not scheduled. Ships as a **GitHub-runtime**
+> surface — the ledger is written by the agent harness (post-landing audit,
+> verifier gates, CI) and read back at recall time, so the store must be
+> reachable from a runner, not just from an interactive session.
+
+**The gap.** mind-mem records what is *true* (blocks), what was *decided*
+(decisions), and what *conflicts* (`contradiction_detector.py`,
+`list_contradictions`). It records nothing about **who asserted something
+confidently and was later proven wrong.** Confidence is therefore re-asserted
+fresh every turn, with no track record behind it — an agent that has been wrong
+about a class of claim four times sounds exactly like one that has never been
+wrong at all.
+
+The 2026-08-26 AGI3 session is the motivating case, and it is not hypothetical:
+in one session a documented fix was reported before it was applied; the tail
+failure was attributed to goal surplus and the attribution was wrong; §16.57
+over-generalized from two same-signed data points; and pre-screen timings were
+reported from a probe that bypassed the propagator. Every one was caught — but
+caught **independently, from scratch, each time.** Nothing accumulated. A ledger
+turns four rediscoveries into one named pattern.
+
+**What a scar is.** A record that a *specific asserter* made a *specific claim*
+with confidence, and that a *specific refutation* later falsified it:
+
+    {claim, asserter, confidence, refutation, refuted_by, refuted_at, scope}
+
+The load-bearing field is `refuted_by` — the artifact that did the refuting (a
+gate run, a verifier verdict, a diff, a solver result). A scar whose refutation
+is another assertion is not evidence; it is a second opinion.
+
+- **P1 — `scar` block type + write path.** Additive block type alongside
+  `decision`/`task`. Written through the existing HITL-gated `propose_update`
+  path, not a side channel — a scar is a governed claim about an agent and must
+  be as auditable as any other block. Per the versioning rule this is a **PATCH**
+  bump (additive, opt-in, default-off), not a minor.
+- **P2 — Recall-time surfacing.** When recall returns blocks in a scope with
+  live scars against the asserting agent, surface them alongside. Off by default;
+  a `scars=True` recall flag. The value is that the *next* agent working the same
+  ground sees the prior confident error without having to rediscover it.
+- **P3 — Wire the profiler that already exists.** `llm_noise_profile.py`
+  implements per-provider, per-domain EMA reliability with `record_outcome` —
+  and **has no production caller** (only `tests/test_llm_noise_profile.py`
+  imports it). A refuted scar is precisely a `was_correct=False` observation.
+  This is the cheapest item in the group: connect an existing tested scorer to a
+  real event source rather than build a new one.
+- **P4 — GitHub-runtime emission.** The post-landing audit cycle and the
+  verifier/`evidence-qa` gates write a scar whenever a confident claim is
+  refuted. This is the leg that makes the ledger accumulate without anyone
+  remembering to file one — a ledger that depends on the wrong party
+  volunteering the entry stays empty.
+
+**Firewall — a scar is evidence, never a score.** Same rule Group O inherits
+from 512-mind (I13). A scar count must never be optimized against, never relax
+or tighten a gate automatically, and never be surfaced as an agent ranking. The
+moment "fewest scars" becomes a target, the incentive is to assert less
+specifically rather than to be right more often — and vague claims are the
+failure mode the ledger exists to make visible. Scars inform a human reading the
+record; they do not govern routing.
+
+**Second idea from the same source — agreement as a signal to escalate.** Our
+consensus surfaces (`9llm`, the multi-perspective fan-out) implicitly treat
+convergence as confirmation. But models sharing a training-set blind spot
+produce unanimity that is indistinguishable from competence. The `9llm` skill
+already seats one adversarial role, which is the right instinct; the sharper
+form treats a *narrow spread* as a trigger to escalate rather than to ship.
+Cheap to add, and it belongs to the skill layer rather than to mind-mem — noted
+here because it arrived with P and should not be lost.
+
+**Provenance rail.** Prior-art shape observed in a public promotional post
+(unverified attribution, unverifiable statistics — treated as an idea, not a
+source). **No code adopted, no dependency added, nothing named in any public
+artifact.** Of the four nodes described, three (worker / challenger / gate) are
+already implemented here in stronger form as the status-token dispatch contract,
+blind cross-family verifiers, and the byte-identity gates; only the wrongness
+ledger is genuinely absent. The "confidence as a spendable balance" framing was
+evaluated and **rejected** — it requires calibrated confidences, which LLM
+self-reports are not. Citation in `mind-internal`.
