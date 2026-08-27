@@ -20,6 +20,15 @@ Flag-gated via ``mind-mem.json`` -> ``recall.validity_gate.enabled``
 (default ``False``). When disabled, :func:`apply_validity_gate` is a
 complete no-op: no annotation, no DB reads, byte-identical output to the
 pre-gate pipeline.
+
+A fifth signal — **outcome attribution** (did acting on this block
+actually work?) — is available behind its own default-OFF sub-flag,
+``recall.validity_gate.outcome_attribution.enabled``. With that sub-flag
+off the four-criteria output above is byte-identical and no outcome DB
+read happens. With it on, a block repeatedly implicated in failed
+outcomes is demoted and a block corroborated by successful outcomes has
+its corroboration component confirmed. See
+:mod:`mind_mem.outcome_attribution`.
 """
 
 from __future__ import annotations
@@ -37,6 +46,7 @@ from ._recall_constants import (
 from .block_parser import parse_file
 from .lineage_staleness import list_staleness_scores
 from .observability import get_logger
+from .outcome_attribution import OutcomeSignal
 
 __all__ = ["apply_validity_gate", "validity_components"]
 
@@ -73,9 +83,10 @@ def apply_validity_gate(hits: list[dict[str, Any]], workspace: str, cfg: dict[st
     contradicted_ids = _load_contradicted_party_ids(workspace)
     block_ids = [hit.get("_id", "") for hit in hits if hit.get("_id")]
     staleness = list_staleness_scores(workspace, block_ids)
+    outcomes = _load_outcome_signals(vg_cfg, workspace, block_ids)
 
     for hit in hits:
-        components = validity_components(hit, contradicted_ids, staleness)
+        components = validity_components(hit, contradicted_ids, staleness, outcomes)
         hit["validity"] = components
         if components["score"] < threshold:
             hit["score"] = round(hit["score"] * demotion, 4)
@@ -92,26 +103,81 @@ def validity_components(
     hit: dict[str, Any],
     contradicted_ids: set[str],
     staleness: dict[str, float],
+    outcome_signals: dict[str, OutcomeSignal] | None = None,
 ) -> dict[str, float]:
     """Pure four-criteria validity math — the ONE source of truth shared by
     :func:`apply_validity_gate` (Stage 2.65) and
     :func:`mind_mem.retrieval_graph.feedback_quality_credit` (Stage 3.1).
 
-    No I/O, no clock, no randomness — reads only the hit and the two
+    No I/O, no clock, no randomness — reads only the hit and the
     pre-fetched stored-state maps.
+
+    ``outcome_signals`` is the opt-in fifth signal (utility, from
+    :mod:`mind_mem.outcome_attribution`). ``None`` — the default, and what
+    every pre-outcome caller passes — returns the exact four-key dict this
+    function has always returned. When supplied:
+
+    * a block corroborated by successful outcomes has its corroboration
+      component lifted to ``1.0`` (real-world confirmation counts as a
+      second source);
+    * a block repeatedly implicated in failed outcomes multiplies the
+      four-criteria mean by its utility factor (``[0.5, 1.0]``), which is
+      what pushes it under the demotion threshold.
     """
     block_id = hit.get("_id", "")
     c1 = _corroboration_component(hit)
     c2 = _status_component(hit)
     c3 = 0.0 if block_id in contradicted_ids else 1.0
     c4 = round(1.0 - min(1.0, staleness.get(block_id, 0.0)), 4)
+
+    if outcome_signals is None:
+        return {
+            "corroboration": c1,
+            "status": c2,
+            "contradiction": c3,
+            "staleness": c4,
+            "score": round(0.25 * (c1 + c2 + c3 + c4), 4),
+        }
+
+    signal = outcome_signals.get(block_id)
+    if signal is None:
+        factor = 1.0
+    else:
+        factor = signal.factor
+        if signal.corroborated:
+            c1 = 1.0
     return {
         "corroboration": c1,
         "status": c2,
         "contradiction": c3,
         "staleness": c4,
-        "score": round(0.25 * (c1 + c2 + c3 + c4), 4),
+        "outcome": factor,
+        "score": round(0.25 * (c1 + c2 + c3 + c4) * factor, 4),
     }
+
+
+def _load_outcome_signals(
+    vg_cfg: dict[str, Any],
+    workspace: str,
+    block_ids: list[str],
+) -> dict[str, OutcomeSignal] | None:
+    """Fetch utility evidence iff ``validity_gate.outcome_attribution`` is on.
+
+    Returns ``None`` — the byte-identical four-criteria path — whenever the
+    sub-flag is absent or false, so no DB read happens either.
+    """
+    # deferred: Stage 3.1 (`retrieval_graph.feedback_quality_credit`) still
+    # calls validity_components/3, so its `valid` credit ignores utility —
+    # deliberate, it keeps that stage byte-identical. Upgrade path: thread the
+    # same pre-fetched signal map through feedback_quality_credit behind this
+    # same sub-flag.
+    oa_cfg = vg_cfg.get("outcome_attribution")
+    if not isinstance(oa_cfg, dict) or not oa_cfg.get("enabled", False):
+        return None
+
+    from .outcome_attribution import load_outcome_signals
+
+    return load_outcome_signals(workspace, block_ids)
 
 
 def _unit_fraction(value: Any, default: float) -> float:

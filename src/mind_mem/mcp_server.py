@@ -168,6 +168,8 @@ from mind_mem.mcp.tools.benchmark import (  # noqa: E402, F401
 from mind_mem.mcp.tools.calibration import (  # noqa: E402, F401
     calibration_feedback,
     calibration_stats,
+    outcome_stats,
+    report_outcome,
 )
 from mind_mem.mcp.tools.consolidation import (  # noqa: E402, F401
     dream_cycle,

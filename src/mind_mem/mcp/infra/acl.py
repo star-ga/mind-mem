@@ -103,6 +103,8 @@ USER_TOOLS = frozenset(
         "get_mind_kernel",
         "calibration_feedback",
         "calibration_stats",
+        "report_outcome",
+        "outcome_stats",
         "list_evidence",
         "get_block",
         "memory_health",
