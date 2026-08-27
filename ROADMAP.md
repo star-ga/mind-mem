@@ -3743,3 +3743,67 @@ blind cross-family verifiers, and the byte-identity gates; only the wrongness
 ledger is genuinely absent. The "confidence as a spendable balance" framing was
 evaluated and **rejected** — it requires calibrated confidences, which LLM
 self-reports are not. Citation in `mind-internal`.
+
+---
+
+## Group Q — block type as a queryable field (Postgres JSONB projection)
+
+**Status:** planned. Additive, opt-in, default-off → PATCH bump.
+
+**What is already correct, so nobody re-proposes it.** The Postgres store
+already does the JSONB half properly. `blocks.metadata` is
+`JSONB NOT NULL DEFAULT '{}'` (`block_store_postgres.py:200`) — every non-primary
+field lives there, so a new block type gaining fields costs zero DDL. There is
+already a **GIN index** at line 215, and its comment records the trap that makes
+GIN indexes dangerous rather than merely useful:
+
+> GIN index over the SAME tsvector expression that `search()` and
+> `hybrid_search()` use in their WHERE clauses. Without character-for-character
+> match the planner falls back to a sequential scan with per-row tsvector
+> recomputation. v3.8.13 had a `to_tsvector('english', content)` index that
+> never matched.
+
+An expression index that does not textually match the query expression is
+*invisible* — no error, no warning, just the sequential scan you believed you
+had eliminated. That lesson is banked here and applies to every index below.
+
+**The actual gap.** `get_block_type()` (`_recall_detection.py:640`) infers block
+type by **parsing the ID string prefix** — `D-` → decision, `SIG-` → signal,
+`P-` → proposal, eleven entries in a module-level dict. Type is therefore a
+parsing convention over a TEXT primary key, not a field. Three consequences:
+
+1. You cannot ask Postgres for "all blocks of type X" — you fetch and filter in
+   Python.
+2. A mistyped prefix produces a silently mistyped block; there is no constraint
+   that can catch it.
+3. Adding a type requires a code change to a dict rather than a data write.
+
+This binds directly to **Group P**: a scar ledger's entire value is the query
+*"what did this asserter get confidently wrong before?"* — an asserter+type
+filter. Under prefix-parsing that is a full scan plus string matching in Python.
+
+- **Q1 — mirror type into `metadata->>'type'` at write time.** Derived from the
+  existing prefix table, never re-entered by hand. The ID prefix stays
+  authoritative; the metadata field is a *projection* of it, so the two cannot
+  disagree by construction. Backfill is a one-pass migration over existing rows.
+- **Q2 — `btree` index on the `metadata->>'type'` expression.** Explicitly **not
+  GIN**. GIN is for containment and multi-key search; a single extracted scalar
+  wants btree. Per the trap above, the index expression must match the query
+  expression character-for-character or it will never be used.
+- **Q3 — deferred with a threshold, not a vague "later."** Revisit a
+  `jsonb_path_ops` GIN over `metadata` only if (a) JSONB **containment** queries
+  actually appear in the codebase, and (b) the corpus passes ~100k blocks.
+
+**Measured, so Q3 is a decision rather than an oversight.** Grepped the whole
+store for JSONB containment operators (`@>`, `?`, `#>`): **zero uses.** Only
+`->>` extraction. You cannot index queries you do not make. And the live corpus
+is **2,427 blocks**, not the 500k of the demo that prompted this — at that scale
+a sequential scan is sub-millisecond and an added GIN index is measurable only
+as write overhead. Both numbers are recorded here specifically so a future
+reader does not reopen Q3 on intuition.
+
+**Provenance rail.** Prompted by a public demonstration of JSONB + GIN
+containment on 500k rows. The demonstrated technique does **not** apply here for
+the two measured reasons above; what it surfaced instead was the unrelated
+prefix-parsing gap. No code adopted, no dependency added, nothing named in any
+public artifact.
