@@ -1,4 +1,20 @@
-"""Recall engine scoring — BM25F helper, date scores, graph boosting, negation, date proximity, categories."""
+"""Recall engine scoring — BM25F helper, date scores, graph boosting, negation, date proximity, categories.
+
+Clock discipline
+----------------
+Every recency signal in this module reads its "now" from :func:`_utc_now`,
+which returns a **timezone-aware UTC** instant. Before this was enforced the
+recency helpers used a naive local ``datetime.now()``, so the day boundary
+that decides ``days_old`` moved with the host's ``TZ`` setting and the same
+corpus scored differently on two machines at the same instant. Recency
+scoring is now machine-independent: identical corpus + identical instant
+yields identical scores anywhere.
+
+For deterministic replay every recency helper also accepts an optional
+keyword-only ``now`` argument. Pass a fixed instant to pin the clock; leave
+it out and the helper reads UTC now. Naive values passed in are interpreted
+as UTC, aware values are converted to UTC.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +22,7 @@ import math
 import re
 from collections import Counter
 from datetime import datetime as _datetime
+from datetime import timezone as _timezone
 
 from ._recall_constants import _BLOCK_ID_RE, BM25_B, BM25_K1, FIELD_WEIGHTS, SEARCH_FIELDS
 
@@ -95,20 +112,62 @@ def bm25f_score_terms(
     return score
 
 
-def date_score(block: dict) -> float:
-    """Boost recent blocks. Returns 0.0-1.0."""
+# ---------------------------------------------------------------------------
+# Clock seam — one UTC source for every recency signal in this module
+# ---------------------------------------------------------------------------
+
+
+def _utc_now() -> _datetime:
+    """Timezone-aware UTC ``now`` — the single clock source for recency math.
+
+    Recency scoring must not depend on the host's timezone: a naive
+    ``datetime.now()`` puts the day boundary at local midnight, so the same
+    corpus scored at the same instant produced different ``days_old`` values
+    (and therefore different recall scores) on hosts in different zones.
+    """
+    return _datetime.now(_timezone.utc)
+
+
+def _as_utc(moment: _datetime | None) -> _datetime:
+    """Normalise an injected ``now`` to aware UTC; ``None`` means "read the clock".
+
+    A naive value is interpreted as UTC rather than local time, so an
+    injected instant never re-introduces host-timezone dependence.
+    """
+    if moment is None:
+        return _utc_now()
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=_timezone.utc)
+    return moment.astimezone(_timezone.utc)
+
+
+def _parse_utc_day(raw: object) -> _datetime | None:
+    """Parse a leading ``YYYY-MM-DD`` into UTC midnight, or ``None`` if unparseable."""
+    try:
+        parsed = _datetime.strptime(raw[:10], "%Y-%m-%d")  # type: ignore[index]
+    except (ValueError, TypeError):
+        return None
+    return parsed.replace(tzinfo=_timezone.utc)
+
+
+def date_score(block: dict, *, now: _datetime | None = None) -> float:
+    """Boost recent blocks. Returns 0.0-1.0.
+
+    Args:
+        block: Block dict; the ``Date`` field is read as ``YYYY-MM-DD``.
+        now: Optional instant to score against (deterministic replay).
+            Defaults to UTC now; naive values are read as UTC.
+    """
     date_str = block.get("Date", "")
     if not date_str:
         return 0.5
-    try:
-        d = _datetime.strptime(date_str[:10], "%Y-%m-%d")
-        now = _datetime.now()
-        days_old = (now - d).days
-        if days_old <= 0:
-            return 1.0
-        return max(0.1, 1.0 - (days_old / 365))
-    except (ValueError, TypeError):
+    d = _parse_utc_day(date_str)
+    if d is None:
         return 0.5
+    days_old = (_as_utc(now) - d).days
+    if days_old <= 0:
+        return 1.0
+    return max(0.1, 1.0 - (days_old / 365))
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +195,12 @@ def _resolve_half_life_days(config: dict | None) -> int:
     return value
 
 
-def temporal_decay_score(block: dict, half_life_days: int = 90) -> float:
+def temporal_decay_score(
+    block: dict,
+    half_life_days: int = 90,
+    *,
+    now: _datetime | None = None,
+) -> float:
     """Exponential half-life decay on a block's ``Created`` / ``Date`` field.
 
     ``score = 0.5 ** (age_days / half_life_days)``. Returns 1.0 for a
@@ -149,16 +213,17 @@ def temporal_decay_score(block: dict, half_life_days: int = 90) -> float:
     multiplicative ranking feature in the recall scorer, so an older
     block still ranks above a brand-new irrelevant one when BM25 strongly
     favours it.
+
+    Age is measured against UTC (see :func:`_utc_now`) so the decay is
+    machine-independent. Pass ``now`` to pin the instant for replay.
     """
     raw = block.get("Created") or block.get("Date") or ""
     if not raw:
         return 0.5
-    try:
-        d = _datetime.strptime(str(raw)[:10], "%Y-%m-%d")
-    except (ValueError, TypeError):
+    d = _parse_utc_day(str(raw))
+    if d is None:
         return 0.5
-    now = _datetime.now()
-    age_days = (now - d).days
+    age_days = (_as_utc(now) - d).days
     if age_days <= 0:
         return 1.0
     hl = max(1, int(half_life_days))
@@ -291,7 +356,12 @@ _DATE_PATTERN = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 
 
 def _extract_dates(text: str) -> list:
-    """Extract YYYY-MM-DD dates from text."""
+    """Extract YYYY-MM-DD dates from text.
+
+    Clock-free: the values below are only ever differenced against each
+    other (query date vs. block date), never against ``now``, so they stay
+    naive and carry no timezone dependence.
+    """
     dates = []
     for m in _DATE_PATTERN.finditer(text):
         try:

@@ -13,6 +13,28 @@ Calibration weights are multiplicative factors in [0.5, 1.5]:
   - Blocks with consistent negative feedback are demoted (<1.0)
   - Blocks with no feedback data default to 1.0
 
+Time-relative by design — read this before reasoning about reproducibility
+-------------------------------------------------------------------------
+The calibration weight is multiplied into the recall score unconditionally,
+and it is computed over a **rolling 30-day window** (``CALIBRATION_WINDOW_DAYS``)
+anchored on the current instant. That is the point of the feature: feedback
+older than the window stops counting, so stale opinions decay out.
+
+The consequence must be stated plainly rather than left implicit: because
+rows age out of the window as time passes, a recall score that includes a
+calibration weight is reproducible only **for a fixed "as-of" instant**, not
+across arbitrary wall-clock time. Re-running the same query a month later
+against a byte-identical corpus can legitimately return a different score.
+
+What *is* guaranteed is machine-independence: the window boundary is
+computed in UTC (:meth:`CalibrationManager._cutoff_date`), and the stored
+timestamps it is compared against are UTC too (``created_at`` defaults to
+SQLite's UTC ``strftime(..., 'now')``). Two hosts in different timezones
+evaluating the same instant therefore cut the window at the same point.
+``_cutoff_date`` accepts an injected ``now`` so a replay can pin the
+as-of instant explicitly. Recency scoring in ``_recall_scoring`` follows
+the same UTC rule.
+
 Copyright (c) STARGA, Inc.
 """
 
@@ -349,9 +371,24 @@ class CalibrationManager:
     # Compute calibration weights
     # -----------------------------------------------------------------------
 
-    def _cutoff_date(self) -> str:
-        """Return ISO date string for the rolling window cutoff."""
-        now = datetime.now(timezone.utc)
+    def _cutoff_date(self, now: datetime | None = None) -> str:
+        """Return the ISO-8601 UTC timestamp at which the rolling window opens.
+
+        The boundary is UTC-anchored so two hosts in different timezones cut
+        the window at the same point, and it is compared against ``created_at``
+        values that SQLite also writes in UTC. The window itself is
+        deliberately time-relative — see the module docstring: recall scores
+        that include a calibration weight are reproducible for a fixed
+        as-of instant, not across arbitrary wall-clock time.
+
+        Args:
+            now: Optional as-of instant. Defaults to UTC now; a naive value
+                is interpreted as UTC rather than local time.
+        """
+        if now is None:
+            now = datetime.now(timezone.utc)
+        elif now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
         cutoff = now.timestamp() - (CALIBRATION_WINDOW_DAYS * 86400)
         return datetime.fromtimestamp(cutoff, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 

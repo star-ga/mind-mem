@@ -19,6 +19,34 @@ app lifespan). Runtime use of the library is unaffected; this is a
 test-harness/interpreter interaction. Recommended interpreter for running the
 suite today: **3.12**.
 
+* **Recall recency scoring is now UTC-based, not local-time-based (behaviour
+  change)** — the recency boost applied to every recall result read the clock
+  with a naive local `datetime.now()`, so the day boundary that decides how
+  old a memory is sat at *local* midnight. Two machines querying the same
+  corpus at the same instant could return different scores purely because
+  their `TZ` differed: measured on a frozen clock just after UTC midnight,
+  the same three-block corpus totalled `9.7326` under `TZ=Pacific/Niue`
+  (UTC-11) and `9.7276` under `TZ=UTC` and `TZ=Pacific/Kiritimati` (UTC+14).
+  Determinism is the point of this product, so a score that depends on the
+  host's timezone is a defect. Recency now reads a timezone-aware UTC "now"
+  (matching the convention already used elsewhere in the codebase), and block
+  dates are anchored at UTC midnight. **Be aware this changes scores**: on a
+  host that is not on UTC, a block sitting within a day of the boundary can
+  shift by one day of recency decay — a marginal ranking change, and exactly
+  what the fix is for. Hosts already on UTC see no change at all. Both
+  recency helpers (`date_score` and the half-life `temporal_decay_score`)
+  also accept an optional `now=` instant so a replay can pin the clock; the
+  default is unchanged UTC-now, and no call site had to change.
+* **Calibration's 30-day window is documented as time-relative, and its
+  boundary is pinnable** — the calibration weight multiplied into every
+  recall score is computed over a rolling 30-day window, so scores legitimately
+  drift as feedback ages out (measured `3.5013 -> 2.5286` over 45 days on a
+  fixed corpus). That was true before and remains true — it is the feature —
+  but it was silent. It is now stated plainly in the module: a recall score
+  including a calibration weight is reproducible **for a fixed as-of instant**,
+  not across arbitrary wall-clock time. The boundary itself was already UTC and
+  stays UTC (so it is machine-independent), and `_cutoff_date()` now accepts an
+  explicit as-of instant for deterministic replay. No behaviour change here.
 * **Installer wires the copy it just installed, not a stale one on `PATH`** —
   `install.sh` resolved `mind-mem-mcp` with `command -v` *before* looking at the
   location it had just installed into, so on a machine carrying an older
