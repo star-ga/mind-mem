@@ -1034,17 +1034,7 @@ def query_index(
     rerank: bool = True,
     rerank_debug: bool = False,
 ) -> list[dict]:
-        """.. warning::
-       Raw, UNFILTERED index primitive. It does **not** apply the
-       external-ingest quarantine filter, by design: quarantine is
-       enforced once, at the recall funnels, by
-       ``_recall_core._drop_quarantined`` (post-filters, corpus-scan
-       load, and the MCP recall tool), so this layer stays unaware of
-       importing. Any NEW caller that surfaces these rows to a user or
-       an agent MUST route them through that filter first, or it will
-       leak unreleased imported blocks into recall.
-
-    Query the FTS5 index. Returns ranked results matching recall() format.
+    """Query the FTS5 index. Returns ranked results matching recall() format.
 
     Falls back to filesystem scan (recall.recall()) if index doesn't exist.
     """
