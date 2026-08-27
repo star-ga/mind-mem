@@ -98,6 +98,17 @@ from ._recall_temporal import apply_temporal_filter, resolve_time_reference
 # --- Tokenization (_recall_tokenization) ---
 from ._recall_tokenization import _stem, tokenize
 
+# --- Guardrails (guardrails / guardrail_surface) ---
+from .guardrail_surface import apply_guardrail_surfacing, guardrail_hits
+from .guardrails import (
+    GuardrailContext,
+    GuardrailPolicy,
+    GuardrailSpecError,
+    GuardrailTrigger,
+    load_guardrails,
+    match_guardrails,
+)
+
 __all__ = [
     # Constants
     "SEARCH_FIELDS",
@@ -149,6 +160,15 @@ __all__ = [
     "_extract_speaker_names",
     # Reranking
     "rerank_hits",
+    # Guardrails
+    "GuardrailContext",
+    "GuardrailPolicy",
+    "GuardrailSpecError",
+    "GuardrailTrigger",
+    "load_guardrails",
+    "match_guardrails",
+    "apply_guardrail_surfacing",
+    "guardrail_hits",
     # Context Packing
     "context_pack",
     "_parse_dia_id",

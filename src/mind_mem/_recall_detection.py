@@ -648,6 +648,7 @@ def get_block_type(block_id: str) -> str:
         "INC-": "incident",
         "C-": "contradiction",
         "DREF-": "drift",
+        "GR-": "guardrail",
         "SIG-": "signal",
         "P-": "proposal",
         "I-": "impact",

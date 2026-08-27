@@ -66,6 +66,9 @@ from mind_mem.mcp.tools import (
     graph as _tools_graph,
 )
 from mind_mem.mcp.tools import (
+    guardrails as _tools_guardrails,
+)
+from mind_mem.mcp.tools import (
     kernels as _tools_kernels,
 )
 from mind_mem.mcp.tools import (
@@ -117,6 +120,7 @@ mcp = FastMCP(
 _resources.register(mcp)
 
 _tools_recall.register(mcp)
+_tools_guardrails.register(mcp)
 _tools_audit.register(mcp)
 _tools_core.register(mcp)
 _tools_consolidation.register(mcp)

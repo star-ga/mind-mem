@@ -134,6 +134,11 @@ USER_TOOLS = frozenset(
         # v4.9.2 — conversational chat layer. Read-only: recalls
         # evidence and returns a cited answer; never writes.
         "chat_with_memory",
+        # GUARDRAIL blocks — read-only trigger evaluation + guardrail-first
+        # recall. Never writes: guardrails are authored through
+        # propose_update -> HITL like every other block kind.
+        "check_guardrails",
+        "recall_with_guardrails",
     }
 )
 

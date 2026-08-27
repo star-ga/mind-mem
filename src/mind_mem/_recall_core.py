@@ -10,7 +10,7 @@ import re
 import sys
 from abc import ABC, abstractmethod
 from collections import Counter
-from typing import Any, cast
+from typing import Any, Mapping, cast
 
 from ._recall_constants import (
     _STOPWORDS,
@@ -61,6 +61,8 @@ from .block_maturity import apply_min_maturity_filter as _apply_min_maturity_fil
 from .block_parser import chunk_block, deduplicate_chunks, get_active, parse_file
 from .block_provenance import PROVENANCE_FIELD_NAMES
 from .enums import TaskStatus
+from .guardrail_surface import apply_guardrail_surfacing
+from .guardrails import GuardrailContext, GuardrailPolicy
 from .observability import get_logger, metrics
 from .retrieval_graph import (
     feedback_quality_credit,
@@ -557,6 +559,8 @@ def _apply_post_filters(
     limit: int,
     workspace: str | None = None,
     as_of: str | None = None,
+    guardrail_context: GuardrailContext | None = None,
+    guardrail_policy: GuardrailPolicy | None = None,
 ) -> list[dict]:
     """Apply the recall post-retrieval filter contract uniformly.
 
@@ -569,6 +573,12 @@ def _apply_post_filters(
     correctness bug (e.g. a consolidation gate's min_maturity returned
     unfiltered results on PG/sqlite deployments). ``as_of`` is applied last
     so it rewinds the content of whatever survives the filters.
+
+    ``guardrail_context`` runs *after* every filter, never before: a
+    guardrail is a constraint on what the caller is about to do, so a
+    date/lifecycle/maturity filter aimed at evidence must not be able to
+    drop it. ``None`` (the default) skips the step entirely and returns
+    the filtered hits untouched.
     """
     if since is not None or until is not None:
         hits = _apply_date_filter(hits, since, until)[:limit]
@@ -580,6 +590,13 @@ def _apply_post_filters(
         hits = _apply_min_maturity_filter(hits, min_maturity)[:limit]
     if as_of is not None and workspace is not None:
         hits = _apply_as_of_projection(hits, workspace, as_of)
+    if guardrail_context is not None:
+        hits = apply_guardrail_surfacing(
+            hits,
+            workspace=workspace,
+            context=guardrail_context,
+            policy=guardrail_policy,
+        )
     return hits
 
 
@@ -602,6 +619,7 @@ def recall(
     event_id: str | None = None,
     min_maturity: float | None = None,
     as_of: str | None = None,
+    guardrail_context: Mapping[str, Any] | GuardrailContext | None = None,
     _allow_decompose: bool = True,
 ) -> list[dict]:
     """Search across all memory files using BM25 scoring. Returns ranked results.
@@ -651,10 +669,24 @@ def recall(
             current content is returned unchanged (a warning is logged) so
             recall never fails because ``as_of`` was passed. ``None``
             (default) = live content.
+        guardrail_context: Optional description of what the caller is
+            about to do — ``{"tool": ..., "command": ..., "intent": ...,
+            "paths": [...]}`` or a
+            :class:`~mind_mem.guardrails.GuardrailContext`.  When set,
+            ``[GR-...]`` guardrail blocks whose declarative triggers match
+            that context are surfaced ahead of the ranked hits regardless
+            of their similarity score (the ranker is bypassed), bounded by
+            ``recall.guardrails.max_surfaced`` so they can displace only a
+            fixed number of ranked hits.  ``None`` (default) skips the
+            whole path — output is unchanged, byte for byte.
     """
+    _guardrail_ctx = GuardrailContext.from_mapping(guardrail_context)
+    _guardrail_policy = GuardrailPolicy.from_config(_get_config(workspace)) if _guardrail_ctx else None
     query_tokens = tokenize(query)
     if not query_tokens:
-        return []
+        # A guardrail is context-triggered, not query-triggered: it must
+        # still fire when the query itself retrieves nothing.
+        return apply_guardrail_surfacing([], workspace=workspace, context=_guardrail_ctx, policy=_guardrail_policy)
 
     # Fix for #525: dispatch to the configured backend (sqlite / vector)
     # before falling through to the markdown-scan BM25 path.  This is the
@@ -685,6 +717,8 @@ def recall(
             limit=limit,
             workspace=workspace,
             as_of=as_of,
+            guardrail_context=_guardrail_ctx,
+            guardrail_policy=_guardrail_policy,
         )
     if isinstance(_cfg_backend, RecallBackend):
         try:
@@ -700,6 +734,8 @@ def recall(
                     limit=limit,
                     workspace=workspace,
                     as_of=as_of,
+                    guardrail_context=_guardrail_ctx,
+                    guardrail_policy=_guardrail_policy,
                 )
         except Exception as exc:
             _log.warning("recall_backend_error_fallback_to_scan", error=str(exc))
@@ -850,7 +886,12 @@ def recall(
                 all_merged = _apply_min_maturity_filter(all_merged, min_maturity)
             if as_of is not None:
                 all_merged = _apply_as_of_projection(all_merged, workspace, as_of)
-            return all_merged[:limit]
+            return apply_guardrail_surfacing(
+                all_merged[:limit],
+                workspace=workspace,
+                context=_guardrail_ctx,
+                policy=_guardrail_policy,
+            )
 
     # Month normalization: inject numeric month tokens for date matching
     query_tokens = expand_months(query, query_tokens)
@@ -954,7 +995,8 @@ def recall(
                 all_blocks.append(b)
 
     if not all_blocks:
-        return []
+        # Empty corpus is not a reason to withhold a constraint.
+        return apply_guardrail_surfacing([], workspace=workspace, context=_guardrail_ctx, policy=_guardrail_policy)
 
     _stage_counts["corpus_loaded"] = len(all_blocks)
 
@@ -1735,6 +1777,8 @@ def recall(
         limit=limit,
         workspace=workspace,
         as_of=as_of,
+        guardrail_context=_guardrail_ctx,
+        guardrail_policy=_guardrail_policy,
     )
     return top
 
