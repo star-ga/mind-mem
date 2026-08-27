@@ -1,6 +1,6 @@
 [project]
 name = "mind-mem"
-version = "4.9.1"
+version = "4.10.0"
 description = "Drop-in memory for Claude Code, OpenClaw, and any MCP-compatible agent."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -18,7 +18,6 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries",
     "Typing :: Typed",
 ]
@@ -62,7 +61,11 @@ api = [
     "uvicorn[standard]>=0.30,<1.0",
     "python-jose[cryptography]>=3.3,<4.0",
 ]
-postgres = ["psycopg[binary]>=3.2,<4.0", "pgvector>=0.3,<1.0"]
+postgres = [
+    "psycopg[binary]>=3.2,<4.0",
+    "psycopg-pool>=3.2,<4.0",
+    "pgvector>=0.3,<1.0",
+]
 mcp = ["fastmcp>=3.2.0"]
 # Embeddings + cross-encoder use ranges so pip can resolve a wheel on
 # any supported (OS, Python) combination. The hash-pinned baseline in
