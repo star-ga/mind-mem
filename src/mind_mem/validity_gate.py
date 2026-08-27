@@ -1,9 +1,19 @@
 """Phase-2 recall validity gate — flag-gated, deterministic demotion.
 
-Every hit reaching Stage 2.65 of the recall pipeline is scored against four
-independent criteria — corroboration, status, contradiction cleanliness, and
-lineage freshness — each in ``[0.0, 1.0]``. Governing rule: *absence of a
-signal is neutral (1.0); only affirmative evidence of invalidity debits.*
+Every hit reaching Stage 2.65 of the recall pipeline is scored against
+independent criteria — corroboration, status, contradiction cleanliness,
+lineage freshness, and (opt-in) provenance class — each in ``[0.0, 1.0]``.
+Governing rule: *absence of a signal is neutral (1.0); only affirmative
+evidence of invalidity debits.*
+
+The fifth criterion, **provenance class**, is the one composite home for
+"how much do we trust where this came from": ``operator`` >
+``agent-verified`` > ``agent-inferred`` > ``external-ingest``
+(:mod:`provenance_class`). It is a per-block, table-driven classification of
+existing provenance fields — deliberately **not** a per-actor learned or
+anomaly score, which would make the same corpus rank differently on two
+machines. Any standalone trust surface delegates here; there is one
+composite path, not two.
 
 The composite ``V`` is always attached to the hit as a diagnostics
 annotation (``hit["validity"]``), mirroring the ``fusion_sources``
@@ -20,6 +30,14 @@ Flag-gated via ``mind-mem.json`` -> ``recall.validity_gate.enabled``
 (default ``False``). When disabled, :func:`apply_validity_gate` is a
 complete no-op: no annotation, no DB reads, byte-identical output to the
 pre-gate pipeline.
+
+The provenance component carries its own default-``False`` sub-flag,
+``recall.validity_gate.provenance_class.enabled`` (a bare ``true`` is also
+accepted). With it off the composite is the original four-criteria mean,
+byte-identical to the pre-provenance gate::
+
+    {"recall": {"validity_gate": {"enabled": true,
+                                  "provenance_class": {"enabled": true}}}}
 """
 
 from __future__ import annotations
@@ -37,8 +55,14 @@ from ._recall_constants import (
 from .block_parser import parse_file
 from .lineage_staleness import list_staleness_scores
 from .observability import get_logger
+from .provenance_class import classify_provenance, confirmed_block_ids, provenance_component
 
-__all__ = ["apply_validity_gate", "validity_components"]
+__all__ = [
+    "apply_validity_gate",
+    "confirmed_block_ids",
+    "provenance_component",
+    "validity_components",
+]
 
 _log = get_logger("validity_gate")
 
@@ -74,8 +98,17 @@ def apply_validity_gate(hits: list[dict[str, Any]], workspace: str, cfg: dict[st
     block_ids = [hit.get("_id", "") for hit in hits if hit.get("_id")]
     staleness = list_staleness_scores(workspace, block_ids)
 
+    provenance_enabled = _provenance_enabled(vg_cfg)
+    confirmed_ids = _load_confirmed_ids(workspace, block_ids) if provenance_enabled else frozenset()
+
     for hit in hits:
-        components = validity_components(hit, contradicted_ids, staleness)
+        components = validity_components(
+            hit,
+            contradicted_ids,
+            staleness,
+            provenance_enabled=provenance_enabled,
+            confirmed_ids=confirmed_ids,
+        )
         hit["validity"] = components
         if components["score"] < threshold:
             hit["score"] = round(hit["score"] * demotion, 4)
@@ -92,26 +125,79 @@ def validity_components(
     hit: dict[str, Any],
     contradicted_ids: set[str],
     staleness: dict[str, float],
-) -> dict[str, float]:
-    """Pure four-criteria validity math — the ONE source of truth shared by
-    :func:`apply_validity_gate` (Stage 2.65) and
-    :func:`mind_mem.retrieval_graph.feedback_quality_credit` (Stage 3.1).
+    *,
+    provenance_enabled: bool = False,
+    confirmed_ids: frozenset[str] = frozenset(),
+) -> dict[str, Any]:
+    """Pure validity math — the ONE source of truth shared by
+    :func:`apply_validity_gate` (Stage 2.65),
+    :func:`mind_mem.retrieval_graph.feedback_quality_credit` (Stage 3.1) and
+    the standalone ``trust_scores`` surface.
 
-    No I/O, no clock, no randomness — reads only the hit and the two
+    No I/O, no clock, no randomness — reads only the hit and the
     pre-fetched stored-state maps.
+
+    Args:
+        hit: The recall hit / block dict being scored.
+        contradicted_ids: Party ids of open contradictions (c3).
+        staleness: ``block_id -> staleness`` in ``[0, 1]`` (c4).
+        provenance_enabled: Fold the fifth component (provenance class) into
+            the composite. Default ``False`` -> the composite, the key set
+            and every float are byte-identical to the four-criteria gate.
+        confirmed_ids: Human-confirmed block ids, used only when
+            *provenance_enabled* (see :func:`confirmed_block_ids`).
+
+    Returns:
+        ``{corroboration, status, contradiction, staleness, score}``, plus
+        ``{provenance, provenance_class}`` when *provenance_enabled*.
     """
     block_id = hit.get("_id", "")
     c1 = _corroboration_component(hit)
     c2 = _status_component(hit)
     c3 = 0.0 if block_id in contradicted_ids else 1.0
     c4 = round(1.0 - min(1.0, staleness.get(block_id, 0.0)), 4)
+    if not provenance_enabled:
+        return {
+            "corroboration": c1,
+            "status": c2,
+            "contradiction": c3,
+            "staleness": c4,
+            "score": round(0.25 * (c1 + c2 + c3 + c4), 4),
+        }
+    c5 = provenance_component(hit, confirmed_ids)
     return {
         "corroboration": c1,
         "status": c2,
         "contradiction": c3,
         "staleness": c4,
-        "score": round(0.25 * (c1 + c2 + c3 + c4), 4),
+        "provenance": c5,
+        "provenance_class": classify_provenance(hit, confirmed_ids=confirmed_ids),
+        "score": round(0.2 * (c1 + c2 + c3 + c4 + c5), 4),
     }
+
+
+def _provenance_enabled(vg_cfg: dict[str, Any]) -> bool:
+    """Read ``validity_gate.provenance_class`` defensively (default ``False``).
+
+    Accepts either the nested ``{"enabled": true}`` form or a bare ``true``;
+    anything else is off.
+    """
+    section = vg_cfg.get("provenance_class")
+    if isinstance(section, dict):
+        return bool(section.get("enabled", False))
+    return section is True
+
+
+def _load_confirmed_ids(workspace: str, block_ids: list[str]) -> frozenset[str]:
+    """One batch read of recorded human calibration weights per recall call.
+
+    Non-creating and failure-tolerant (see :mod:`trust_signals`): no index ->
+    empty set -> no block is promoted, which only ever costs a promotion,
+    never causes a demotion.
+    """
+    from .trust_signals import load_calibration_weights
+
+    return confirmed_block_ids(load_calibration_weights(workspace, block_ids))
 
 
 def _unit_fraction(value: Any, default: float) -> float:

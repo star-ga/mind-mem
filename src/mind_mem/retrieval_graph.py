@@ -450,7 +450,7 @@ def feedback_quality_credit(
         if isinstance(validity, dict) and isinstance(validity.get("score"), (int, float)):
             valid = round(float(validity["score"]), 4)
         else:
-            valid = validity_components(hit, contradicted_ids, staleness)["score"]
+            valid = float(validity_components(hit, contradicted_ids, staleness)["score"])
 
         vec = _term_vector(_text_tokens(_get_result_text(hit)))
         max_sim = max((_cosine_similarity(vec, kv) for kv in kept_vectors), default=0.0)

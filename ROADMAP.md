@@ -48,7 +48,7 @@ by its full description below.
 - [x] **Auto-generated hierarchical index** — `index.md` + `log.md` autogen
 - [ ] **Adversarial / poisoning defense** — per-actor anomaly, canary blocks
 - [x] **Ingest codepoint sanitization** — strip/normalize invisible-Unicode (zero-width, Unicode tag chars, bidi controls) on blocks + proposals *before* they reach the HITL gate or any model. Defensive takeaway from the GLOSSOPETRAE "Lingua Ex Machina" report ([elder-plinius/GLOSSOPETRAE](https://github.com/elder-plinius/GLOSSOPETRAE), Jun 2026): its covert-channel finding shows payloads hidden in invisible Unicode pass a monitor whose tokenizer silently deletes them before its model sees them (100% receiver recovery, 0% monitor detection). Cheap fix = NFC-normalize + reject/flag disallowed codepoint categories at ingest.
-- [x] **Memory reputation / trust scores** — shipped in `src/mind_mem/trust_scores.py`. Aggregates the existing signals (`truth_score`, `calibration` weights, contradicted-block share, `audit_chain` rollback share) per `ActorId` into a deterministic `[0.01, 0.99]` value with a neutral shrinkage prior. Exposed on recall hits as the additive `actor_trust` field; the re-rank is opt-in via `retrieval.trust_scores.{enabled,rerank}` and flag-off recall is byte-identical. 40 tests.
+- [x] **Memory reputation / trust scores** — shipped as the validity gate's FIFTH component, not a separate subsystem: `src/mind_mem/provenance_class.py` classifies a block `operator` > `agent-verified` > `agent-inferred` > `external-ingest` from the existing `ActorRole` / `ToolId` / `Source` fields, and `validity_gate.validity_components()` folds that weight into the composite `V`. No per-actor learned or anomaly scoring (determinism wedge). `trust_scores.apply_trust_scores` keeps the `actor_trust` field as a thin façade over that one component. Opt-in via `recall.validity_gate.provenance_class.enabled`; flag-off recall ordering is byte-identical. 48 tests.
 
 ### Group E — Compliance (5 items)
 
@@ -2012,7 +2012,7 @@ multi-tenancy thread is also tracked as issue [#505].
 - [x] **Real-time contradiction stream** — webhook stream on contradiction-detection ships under the alerting layer.
 - [ ] **Adversarial / poisoning defense** — per-actor anomaly detection + canary blocks not yet shipped. Sigstore-signed manifests partial (release artifacts only). Tracked.
 - [x] **Approval workflows for sensitive proposals** — multi-reviewer chain (OPA/Rego-style) ships behind opt-in dep.
-- [x] **Memory reputation / trust scores** — per-actor reliability surfaced on recall hits as `actor_trust` (`trust_scores.py`), with an opt-in low-trust demotion re-rank.
+- [x] **Memory reputation / trust scores** — provenance class surfaced on recall hits as `actor_trust` (`provenance_class.py`, the validity gate's fifth component), with an opt-in low-provenance demotion re-rank.
 
 ### D. Network & multi-agent connectivity (partial — 5 items open, big-ticket items deferred)
 

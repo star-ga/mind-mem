@@ -18,24 +18,31 @@ All notable changes to MIND-Mem are documented in this file.
   both a frozen golden and the `main` implementation loaded from git). The gate
   can only *remove* candidate transitions, never add one. The destructive
   granularity/merge half of Group H is deliberately not implemented. 25 tests.
-* **Per-actor memory trust scores** (roadmap Group D) — `src/mind_mem/trust_scores.py`
-  aggregates signals that already exist in the corpus into one per-actor
-  reliability value in `[0.01, 0.99]`: the mean `truth_score` of the actor's
-  blocks, the mean `calibration` weight from human feedback, the share of the
-  actor's blocks left in a contradicted state (`superseded` / `rejected` /
-  `deprecated`, or an explicit contradicted-id set), and the share of the
-  actor's `audit_chain` writes that were rolled back. Actor identity comes from
-  the existing `ActorId` provenance field. `compute_actor_trust()` is pure and
-  deterministic — no clock, no I/O, no iteration-order dependence — with a
-  shrinkage prior so a thin-evidence actor lands on neutral rather than being
-  punished. Surfaced on recall hits as the additive `actor_trust` field, and
-  an opt-in re-rank demotes low-trust actors by
-  `base_score x (1 - weight*(1 - trust))` (stable sort, so equal trust
-  preserves the incoming order). Everything is default-OFF behind
-  `retrieval.trust_scores.{enabled,rerank}`; with the gate off the recall
-  pipeline returns the exact list object it was given — no added fields, no
-  reordering — proven by an explicit byte-identity test over the hot path.
-  40 new tests including a poisoning fixture.
+* **Provenance class — the validity gate's fifth component** (roadmap Group D,
+  respec of the standalone trust subsystem) — trust is no longer a parallel
+  scorer. `src/mind_mem/provenance_class.py` classifies every block into one of
+  four ordered classes — `operator` (1.0) > `agent-verified` (0.75) >
+  `agent-inferred` (0.5) > `external-ingest` (0.25) — from the *existing*
+  `block_provenance` fields (`ActorRole` / `ToolId`) plus the importer's
+  `Source` token, and `validity_gate.validity_components()` folds that weight
+  in as a fifth criterion alongside corroboration, status, contradiction and
+  staleness. A block with no provenance is `unknown` and scores a neutral 1.0,
+  so a corpus predating provenance fields is never demoted. Verification
+  evidence is per-block and human-sourced (an explicit `Verified` / `VerifiedBy`
+  marker, a verifier role, or a recorded human calibration weight at or above
+  1.25) — there is deliberately **no per-actor learned or anomaly scoring**,
+  which would make the same corpus rank differently on two machines.
+  `trust_scores.apply_trust_scores()` keeps its public name and its
+  `actor_trust` / `trust_adjusted_score` fields but is now a thin façade that
+  delegates to that one component: one composite path, not two. The component
+  is default-OFF behind `recall.validity_gate.provenance_class.enabled` (itself
+  inside the default-OFF `recall.validity_gate`), and with it off the composite,
+  its key set and recall ordering are byte-identical to the four-criteria gate —
+  asserted end-to-end against the pre-gate pipeline. 48 tests.
+  *Removed with the respec:* `compute_actor_trust`, `aggregate_actor_signals`,
+  `compute_trust_map`, `ActorSignals`, `ActorTrust` (the per-actor aggregation).
+  `trust_signals.load_rollback_history` survives as a read-only diagnostic and
+  is wired into no score.
 
 * **`recall(..., as_of=date)` time-travel** (roadmap Group B remainder) — the
   point-in-time projection is now exposed on the `recall()` entrypoint. When
