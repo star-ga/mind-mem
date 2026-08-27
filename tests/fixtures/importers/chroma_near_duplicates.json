@@ -1,0 +1,12 @@
+{
+  "collection": "near_dupes",
+  "ids": ["dup-a", "dup-b"],
+  "documents": [
+    "The nightly compaction job rewrites the segment manifest in place at 03:00 UTC.",
+    "The nightly compaction job rewrites the segment manifest in place at 03:00 UTC."
+  ],
+  "metadatas": [
+    {"source": "runbook.md"},
+    {"source": "runbook-copy.md"}
+  ]
+}

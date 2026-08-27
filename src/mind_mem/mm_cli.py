@@ -7,6 +7,7 @@ Usage::
     mm context "<query>"            # generate token-budgeted snippet
     mm inject --agent <name> "<q>"  # render snippet for a specific agent
     mm vault scan <vault_root>      # list parsed vault blocks (JSON)
+    mm import --from <sys> <path>   # migrate a memory dump from another system
     mm vault write <vault_root> <id> --type <t> --body <b>
     mm status                       # workspace summary
     mm index                        # regenerate index.md + log.md
@@ -754,6 +755,61 @@ def _cmd_vault_write(args: argparse.Namespace) -> int:
     )
     target = bridge.write(block, overwrite=args.overwrite)
     print(json.dumps({"written": target}, indent=2))
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Migration importers (roadmap Group G) — file-based subset
+# ---------------------------------------------------------------------------
+
+# ``mm import --from`` choices. Literal (not imported from
+# ``mind_mem.importers``) so building the parser stays import-light; the
+# lockstep with ``importers.ALL_SYSTEMS`` is test-enforced. The deferred
+# endpoint-backed systems are listed on purpose — accepting them here is
+# what lets ``_cmd_import`` refuse them with an explicit message instead
+# of an opaque argparse choice error.
+_IMPORT_SYSTEM_CHOICES: tuple[str, ...] = (
+    "chroma",
+    "letta",
+    "mem0",
+    "pinecone",
+    "qdrant",
+    "weaviate",
+)
+
+# Exit codes for ``mm import`` (documented in the subcommand help).
+IMPORT_EXIT_UNSUPPORTED = 2
+IMPORT_EXIT_BAD_DUMP = 3
+
+
+def _cmd_import(args: argparse.Namespace) -> int:
+    """``mm import --from {chroma|mem0|letta} <path>``.
+
+    Endpoint-backed systems (pinecone / weaviate / qdrant) are accepted by
+    the parser only so they can be refused with an explicit deferred
+    message instead of an opaque argparse choice error.
+    """
+    from mind_mem.importers import ImporterError, UnsupportedSystemError, run_import
+
+    try:
+        result = run_import(
+            _workspace(),
+            args.source_system,
+            args.path,
+            dedup_near=args.dedup_near,
+            dedup_threshold=args.dedup_threshold,
+            dry_run=args.dry_run,
+        )
+    except UnsupportedSystemError as exc:
+        print(f"mm import: {exc}", file=sys.stderr)
+        return IMPORT_EXIT_UNSUPPORTED
+    except ImporterError as exc:
+        # Covers ImportParseError (unreadable / malformed dump) and any
+        # other importer-level failure.
+        print(f"mm import: {exc}", file=sys.stderr)
+        return IMPORT_EXIT_BAD_DUMP
+
+    print(json.dumps(result.as_dict(), indent=2))
     return 0
 
 
@@ -2405,6 +2461,50 @@ def build_parser() -> argparse.ArgumentParser:
         help="Grace window during which old tokens remain valid (default 24 h).",
     )
     t_rotate.set_defaults(func=_cmd_token_rotate)
+
+    # ---- import (roadmap Group G — migration importers, file-based subset) ----
+    p_import = sub.add_parser(
+        "import",
+        help="Import a memory export from another system into the corpus (file-based dumps only).",
+        description=(
+            "Import a JSON memory dump into memory/IMPORTED.md as IMP- blocks, each stamped with an "
+            "'imported:<system>' provenance token and recallable immediately. Re-running the same import "
+            "is idempotent (block ids are derived from the record content, so nothing is duplicated). "
+            "Exit codes: 0 ok, 2 unsupported/deferred system, 3 unreadable or malformed dump."
+        ),
+    )
+    p_import.add_argument(
+        "--from",
+        dest="source_system",
+        required=True,
+        choices=_IMPORT_SYSTEM_CHOICES,
+        help=(
+            "Source system. File-based importers ship for chroma/letta/mem0; "
+            "pinecone/qdrant/weaviate are accepted only to report that they are deferred."
+        ),
+    )
+    p_import.add_argument("path", help="Path to the JSON dump exported from the source system.")
+    p_import.add_argument(
+        "--dedup-near",
+        action="store_true",
+        help=(
+            "Opt-in (default OFF): collapse near-duplicate records inside the incoming dump "
+            "using the existing recall dedup cosine layer. Off by default so an import stays "
+            "a pure function of the dump."
+        ),
+    )
+    p_import.add_argument(
+        "--dedup-threshold",
+        type=float,
+        default=0.85,
+        help="Cosine threshold used by --dedup-near (default 0.85).",
+    )
+    p_import.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Parse and plan the import without writing any block.",
+    )
+    p_import.set_defaults(func=_cmd_import)
 
     # vault namespace
     p_vault = sub.add_parser("vault", help="Vault sync subcommands.")

@@ -64,7 +64,7 @@ by its full description below.
 - [ ] **Browser-native WebAssembly bundle**
 - [ ] **Go SDK publish + Rust / Java / Ruby SDK stubs** — Go client **exists in-tree** (`sdk/go/`, with tests); open work is module publishing; Rust/Java/Ruby not started
 - [ ] **OpenAPI + AsyncAPI specs** (single source of truth for SDK generation)
-- [ ] **Migration importers** — `mm import --from {pinecone|weaviate|chroma|qdrant|letta|mem0}`
+- [ ] **Migration importers** — `mm import --from {chroma|mem0|letta} <dump.json>` **ships** (file-based subset: `src/mind_mem/importers/`, `IMP-` blocks in `memory/IMPORTED.md`, `imported:<system>` provenance, idempotent re-import). Open half is the endpoint-backed systems — pinecone / weaviate / qdrant need a live endpoint + credential and are refused with an explicit deferred message
 - [ ] **Cost metering / quota / spending alerts** — `mm usage`
 - [ ] **SLSA build provenance level 3**
 - [ ] **Plugin SDK** — stable API for custom rules / block kinds / detectors
@@ -2085,7 +2085,7 @@ default story is two laptops talking to each other.
 - [ ] **Browser-native WebAssembly bundle** — WASM read-only client not built. Tracked.
 - [ ] **Go SDK publish + Rust / Java / Ruby stubs** — Go client ships in-tree at `sdk/go/` (with tests); module publish is the open step. Rust/Java/Ruby not started. Tracked.
 - [ ] **OpenAPI + AsyncAPI specs** — declarative specs not published; clients are hand-rolled. Tracked (small, well-defined).
-- [ ] **Migration importers from competing systems** — `mm import --from {pinecone|weaviate|chroma|qdrant|letta|mem0}` not implemented. Tracked (adoption blocker).
+- [ ] **Migration importers from competing systems** — file-based subset implemented: `mm import --from {chroma|mem0|letta} <dump.json>`. Endpoint-backed (pinecone / weaviate / qdrant) still deferred — they need a live endpoint + API credential.
 - [ ] **Cost metering / quota / spending alerts** — per-workspace usage counters + `mm usage` CLI not surfaced. Tracked.
 - [ ] **SLSA build provenance level 3** — partial via Sigstore; isolated-builder attestations not yet wired. Tracked.
 - [ ] **Plugin SDK** — stable plug-in API for custom rules / block kinds / decay schedules / redaction detectors not formalised. Tracked.

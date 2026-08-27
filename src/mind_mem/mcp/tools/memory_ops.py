@@ -58,6 +58,9 @@ _BLOCK_PREFIX_MAP = {
     # v4.0.19: agent-to-agent messaging (`mm send` / `mm inbox`). Keep in
     # lockstep with ``block_store._BLOCK_PREFIX_MAP``.
     "MSG": ("memory", "MESSAGES.md"),
+    # Migration importers (roadmap Group G) (`mm import --from ...`). Keep in
+    # lockstep with ``block_store._BLOCK_PREFIX_MAP``.
+    "IMP": ("memory", "IMPORTED.md"),
 }
 
 
