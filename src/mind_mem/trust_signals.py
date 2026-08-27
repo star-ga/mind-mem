@@ -1,9 +1,16 @@
-"""Workspace signal loaders for per-actor trust scores.
+"""Workspace signal loaders for the validity gate's provenance component.
 
-The scoring math in :mod:`trust_scores` is pure. This module is the only
+The scoring math in :mod:`provenance_class` is pure. This module is the only
 place that touches disk on its behalf: it reads the calibration weights
 already recorded by :mod:`calibration` and the rollback history already
 recorded by :mod:`audit_chain`, and hands them back as plain maps.
+
+Only :func:`load_calibration_weights` feeds a score — it is a *per-block*,
+human-sourced confirmation signal
+(:func:`provenance_class.confirmed_block_ids`).
+:func:`load_rollback_history` is aggregated *per actor*, which is exactly the
+learned-reputation shape the determinism wedge forbids on a scoring path, so
+it is kept as a read-only diagnostic and is wired into nothing.
 
 Both loaders are **read-only and non-creating**: if the SQLite index or
 the audit chain file does not exist, they return empty maps rather than
@@ -39,7 +46,9 @@ def load_calibration_weights(workspace: str, block_ids: list[str]) -> dict[str, 
 
     Returns:
         The weights :meth:`calibration.CalibrationManager.get_block_weights`
-        reports, or ``{}`` when the index database does not exist yet.
+        reports, or ``{}`` when the index database does not exist yet. A
+        missing weight only ever costs a class promotion, never causes a
+        demotion.
     """
     if not workspace or not block_ids:
         return {}
@@ -56,6 +65,11 @@ def load_calibration_weights(workspace: str, block_ids: list[str]) -> dict[str, 
 
 def load_rollback_history(workspace: str) -> tuple[dict[str, int], dict[str, int]]:
     """Return ``(rollbacks, total_writes)`` per actor from the audit chain.
+
+    **Diagnostic only — never scored.** Per-actor history is a learned,
+    corpus-slice-dependent quantity; folding it into recall ranking would
+    make the same hit rank differently on two machines. Exposed for
+    operators reading the audit chain, not for the gate.
 
     Entries with a blank ``agent`` are skipped — an unattributed write
     cannot be charged to anyone.
@@ -89,10 +103,12 @@ def load_rollback_history(workspace: str) -> tuple[dict[str, int], dict[str, int
     return rollbacks, writes
 
 
-# deferred: contradiction counts still come from block Status (or an
-# explicitly supplied id set) rather than from the governance contradiction
-# graph — upgrade path: add a loader here that reads the edges
-# ``contradiction_detector`` records and pass them as ``contradicted_ids``.
+# deferred: the audit chain records a file-level ``target``, so a rollback
+# cannot be attributed to the block it reverted — that is why rollback history
+# is per actor (and therefore unscorable) rather than per block. Upgrade path:
+# record the block id on rollback entries, then feed a per-block rolled-back
+# set into ``provenance_class.classify_provenance`` as negative evidence,
+# which stays deterministic because it is per block, not per actor.
 
 __all__ = [
     "AUDIT_CHAIN_REL",

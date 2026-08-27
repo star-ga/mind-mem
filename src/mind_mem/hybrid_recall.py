@@ -984,7 +984,7 @@ class HybridBackend:
             return results
 
     def _maybe_trust_scores(self, results: list[dict], workspace: str | None = None) -> list[dict]:
-        """Annotate hits with per-actor trust; re-rank only when opted in.
+        """Annotate hits with the gate's provenance class; re-rank when opted in.
 
         Gated on ``retrieval.trust_scores.enabled`` (default false). With
         the gate off this returns the *same list object* it was given —
