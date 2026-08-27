@@ -50,37 +50,47 @@ Print workspace status JSON (directory existence, config file, subdirectory chec
 
 ### `mm usage`
 
-Per-workspace usage + cost rollup over the counters mind-mem already keeps
-(`mind_mem.observability.metrics`). Read-only by default.
+Per-day token counts for the only mind-mem work that costs money: a call out
+to a model (today the injected compressor behind recompaction, and the
+optional extraction backend). Retrieval, indexing and the governance gate run
+on your own machine and are not metered — there is no currency, no rate card
+and no spending alerts, by design.
 
 ```
 mm usage
 mm usage --json
-mm usage --quota 5.00        # exit 3 + a QUOTA BREACH line on stderr if over
-mm usage --reset             # clear the workspace ledger
+mm usage --daily-cap 200000   # exit 3 + a DAILY TOKEN CAP line on stderr once reached
+mm usage --reset              # clear the workspace token ledger
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--quota USD` | off | Alert + exit `3` when the priced total exceeds this |
-| `--json` | off | Emit the rollup as JSON instead of a table |
-| `--record` | off | Fold this process's counters in before reporting |
+| `--daily-cap TOKENS` | config, else off | Report + exit `3` once today's counted tokens reach the ceiling |
+| `--json` | off | Emit the report as JSON instead of a table |
 | `--reset` | off | Clear the ledger |
 
-**Nothing leaves the host.** The rollup reads a local JSON ledger
-(`<workspace>/.mind-mem-index/usage.json`) and a local rate card; there is no
-exporter, no socket, and no network egress on any path — `mm usage` cannot
-phone home. Counters with no rate are reported as `unpriced` and cost `0`.
+**Nothing leaves the host.** The report reads a local JSON ledger
+(`<workspace>/.mind-mem-index/usage.json`, pruned to the last 90 days); there
+is no exporter, no socket, and no network egress on any path.
 
-Rates are nominal compute-equivalents and are operator-editable per workspace:
+Counting is **opt-in by construction**: nothing meters itself. Wrap the
+model callable you inject and the tokens land in the ledger — an unwrapped
+call writes nothing and is byte-for-byte unchanged.
 
-```json
-{ "usage": { "unit_costs": { "recall_queries": 0.00002 } } }
+```python
+from mind_mem import usage_meter
+from mind_mem.recompaction import recompact_cluster
+
+compressor = usage_meter.metered_compressor(my_compressor, workspace)
+recompact_cluster(blocks, compressor=compressor)
 ```
 
-Recording is **opt-in**: set `MIND_MEM_USAGE_METER=1` to have each `mm`
-command fold its counters into the ledger on exit. With the variable unset,
-`mm` writes no ledger and behaves exactly as before.
+The cap can also live in the workspace config, where the metered call itself
+enforces it (raising `DailyTokenCapExceeded` *before* the model is called):
+
+```json
+{ "usage": { "daily_token_cap": 200000 } }
+```
 
 ### `mm detect`
 

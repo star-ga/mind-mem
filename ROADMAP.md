@@ -65,7 +65,7 @@ by its full description below.
 - [ ] **Go SDK publish + Rust / Java / Ruby SDK stubs** — Go client **exists in-tree** (`sdk/go/`, with tests); open work is module publishing; Rust/Java/Ruby not started
 - [ ] **OpenAPI + AsyncAPI specs** (single source of truth for SDK generation)
 - [ ] **Migration importers** — `mm import --from {chroma|mem0|letta} <dump.json>` **ships** (file-based subset: `src/mind_mem/importers/`, `IMP-` blocks in `memory/IMPORTED.md`, `imported:<system>` provenance, idempotent re-import). Open half is the endpoint-backed systems — pinecone / weaviate / qdrant need a live endpoint + credential and are refused with an explicit deferred message
-- [ ] **Cost metering / quota / spending alerts** — `mm usage`
+- [ ] **Model-call token metering** — `mm usage` (per-day token counter + optional daily cap; quota/spending-alert surface deliberately dropped: self-hosted mind-mem has no spend outside model calls)
 - [ ] **SLSA build provenance level 3**
 - [ ] **Plugin SDK** — stable API for custom rules / block kinds / detectors
 - [ ] **Chaos testing harness**
@@ -2086,7 +2086,7 @@ default story is two laptops talking to each other.
 - [ ] **Go SDK publish + Rust / Java / Ruby stubs** — Go client ships in-tree at `sdk/go/` (with tests); module publish is the open step. Rust/Java/Ruby not started. Tracked.
 - [ ] **OpenAPI + AsyncAPI specs** — declarative specs not published; clients are hand-rolled. Tracked (small, well-defined).
 - [ ] **Migration importers from competing systems** — file-based subset implemented: `mm import --from {chroma|mem0|letta} <dump.json>`. Endpoint-backed (pinecone / weaviate / qdrant) still deferred — they need a live endpoint + API credential.
-- [ ] **Cost metering / quota / spending alerts** — per-workspace usage counters + `mm usage` CLI not surfaced. Tracked.
+- [ ] **Model-call token metering** — per-day token counter + optional daily cap behind `mm usage`. Tracked.
 - [ ] **SLSA build provenance level 3** — partial via Sigstore; isolated-builder attestations not yet wired. Tracked.
 - [ ] **Plugin SDK** — stable plug-in API for custom rules / block kinds / decay schedules / redaction detectors not formalised. Tracked.
 - [ ] **Chaos testing harness** — automated fault injection for federated deployments not built. Tracked.
