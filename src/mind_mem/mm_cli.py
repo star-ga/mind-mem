@@ -796,7 +796,7 @@ def _cmd_vault_write(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Migration importers (roadmap Group G) — file-based subset
+# Migration importers (roadmap Group G) — local file + directory subset
 # ---------------------------------------------------------------------------
 
 # ``mm import --from`` choices. Literal (not imported from
@@ -806,8 +806,11 @@ def _cmd_vault_write(args: argparse.Namespace) -> int:
 # what lets ``_cmd_import`` refuse them with an explicit message instead
 # of an opaque argparse choice error.
 _IMPORT_SYSTEM_CHOICES: tuple[str, ...] = (
+    "agentmem",
+    "chatjson",
     "chroma",
     "letta",
+    "markdown",
     "mem0",
     "pinecone",
     "qdrant",
@@ -820,7 +823,7 @@ IMPORT_EXIT_BAD_DUMP = 3
 
 
 def _cmd_import(args: argparse.Namespace) -> int:
-    """``mm import --from {chroma|mem0|letta} <path>``.
+    """``mm import --from <system> <path>``.
 
     Endpoint-backed systems (pinecone / weaviate / qdrant) are accepted by
     the parser only so they can be refused with an explicit deferred
@@ -835,6 +838,7 @@ def _cmd_import(args: argparse.Namespace) -> int:
             args.path,
             dedup_near=args.dedup_near,
             dedup_threshold=args.dedup_threshold,
+            link_edges=args.link_edges,
             dry_run=args.dry_run,
         )
     except UnsupportedSystemError as exc:
@@ -2523,12 +2527,14 @@ def build_parser() -> argparse.ArgumentParser:
     # ---- import (roadmap Group G — migration importers, file-based subset) ----
     p_import = sub.add_parser(
         "import",
-        help="Import a memory export from another system into the corpus (file-based dumps only).",
+        help="Import memory from another system into the corpus (local dumps and note directories).",
         description=(
-            "Import a JSON memory dump into memory/IMPORTED.md as IMP- blocks, each stamped with an "
-            "'imported:<system>' provenance token and recallable immediately. Re-running the same import "
-            "is idempotent (block ids are derived from the record content, so nothing is duplicated). "
-            "Exit codes: 0 ok, 2 unsupported/deferred system, 3 unreadable or malformed dump."
+            "Import foreign agent memory into memory/IMPORTED.md as IMP- blocks, each stamped with an "
+            "'imported:<system>' provenance token and recallable immediately. Sources are a local JSON "
+            "dump (chatjson/mem0/letta/chroma) or a local directory of markdown notes "
+            "(markdown/agentmem). Re-running the same import is idempotent (block ids are derived from "
+            "the record content, so nothing is duplicated). "
+            "Exit codes: 0 ok, 2 unsupported/deferred system, 3 unreadable or malformed source."
         ),
     )
     p_import.add_argument(
@@ -2537,11 +2543,16 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         choices=_IMPORT_SYSTEM_CHOICES,
         help=(
-            "Source system. File-based importers ship for chroma/letta/mem0; "
-            "pinecone/qdrant/weaviate are accepted only to report that they are deferred."
+            "Source format. Note directories: markdown (vault / note tree), agentmem (auto-memory "
+            "directory). JSON dumps: chatjson (session transcript), mem0, letta, chroma (low value — "
+            "a vector store keeps embeddings, not source text). pinecone/qdrant/weaviate are accepted "
+            "only to report that they are deferred."
         ),
     )
-    p_import.add_argument("path", help="Path to the JSON dump exported from the source system.")
+    p_import.add_argument(
+        "path",
+        help="Path to the JSON dump, or the root directory for the markdown/agentmem note-tree importers.",
+    )
     p_import.add_argument(
         "--dedup-near",
         action="store_true",
@@ -2556,6 +2567,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.85,
         help="Cosine threshold used by --dedup-near (default 0.85).",
+    )
+    p_import.add_argument(
+        "--link-edges",
+        action="store_true",
+        help=(
+            "Opt-in (default OFF): also materialize [[wikilink]] targets as 'cites' lineage edges. "
+            "Link names are always kept as the block's Links field; this flag only decides whether "
+            "the lineage graph is written too, so the imported blocks are identical either way."
+        ),
     )
     p_import.add_argument(
         "--dry-run",

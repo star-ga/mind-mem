@@ -29,15 +29,21 @@ from .records import ImporterError, ImportParseError, ImportRecord, ImportResult
 _log = get_logger("importers")
 
 __all__ = [
+    "DIRECTORY_SYSTEMS",
     "IMPORT_BLOCK_PREFIX",
     "IMPORTED_CORPUS_FILE",
     "IMPORT_BLOCK_TYPE",
     "MAX_DUMP_BYTES",
     "build_import_block",
     "load_dump",
+    "load_source",
     "provenance_token",
     "run_import",
 ]
+
+# Systems whose source is a DIRECTORY of markdown notes rather than a
+# single JSON dump. Everything else goes through :func:`load_dump`.
+DIRECTORY_SYSTEMS: frozenset[str] = frozenset({"agentmem", "markdown"})
 
 IMPORT_BLOCK_PREFIX = "IMP"
 IMPORTED_CORPUS_FILE = "memory/IMPORTED.md"
@@ -84,6 +90,24 @@ def load_dump(path: str) -> Any:
         raise ImportParseError(f"dump file is not valid JSON ({exc.msg} at line {exc.lineno}): {path}") from exc
     except OSError as exc:
         raise ImportParseError(f"cannot read dump file {path}: {exc}") from exc
+
+
+def load_source(system: str, path: str) -> Any:
+    """Load the import source for *system* — a JSON dump or a note tree.
+
+    One dispatch point so :func:`run_import` stays source-shape agnostic:
+    the directory formats get a bounded, deterministic note walk, every
+    other format gets the JSON dump reader.
+
+    Raises:
+        ImportParseError: the source is missing, the wrong kind of path,
+            oversized, or malformed for its shape.
+    """
+    if system in DIRECTORY_SYSTEMS:
+        from .fs_source import load_note_tree
+
+        return load_note_tree(path)
+    return load_dump(path)
 
 
 # ---------------------------------------------------------------------------
@@ -156,6 +180,11 @@ def build_import_block(record: ImportRecord) -> dict[str, Any]:
         block["Timestamp"] = record.created_at
     if record.metadata:
         block["Metadata"] = "; ".join(f"{k}={v}" for k, v in sorted(record.metadata.items()))
+    if record.links:
+        # Link targets are kept as a real, readable field (never dropped
+        # on the floor). Rendered bare rather than as `[[name]]` so the
+        # block parser cannot mistake the value for an inline list.
+        block["Links"] = ", ".join(record.links)
     return attach_provenance(
         block,
         actor_id=record.system,
@@ -209,6 +238,47 @@ def _collapse_near_duplicates(records: Iterable[ImportRecord], threshold: float)
 # ---------------------------------------------------------------------------
 
 
+def _materialize_link_edges(workspace: str, records: Iterable[ImportRecord]) -> int:
+    """Materialize ``[[wikilink]]`` targets as ``cites`` lineage edges.
+
+    Opt-in only (see ``link_edges``). Edges land in the lineage graph,
+    never in the corpus, so imported blocks stay byte-identical to a
+    flag-off run. Targets that do not resolve inside this batch are
+    no-ops rather than dangling edges.
+    """
+    from .note_parsers import link_aliases
+
+    ordered = list(records)
+    # name -> block id. First writer wins, and the batch is already in a
+    # deterministic order, so the mapping is a pure function of input.
+    by_name: dict[str, str] = {}
+    for record in ordered:
+        block_id = block_id_for(record)
+        for alias in link_aliases(record):
+            by_name.setdefault(alias, block_id)
+    if not by_name:
+        return 0
+
+    from ..block_lineage import add_block_edge
+
+    written = 0
+    for record in ordered:
+        if not record.links:
+            continue
+        src = block_id_for(record)
+        for target in record.links:
+            dst = by_name.get(target)
+            if dst is None or dst == src:
+                continue
+            try:
+                add_block_edge(workspace, src, dst, "cites")
+            except (ValueError, OSError) as exc:
+                _log.warning("import_link_edge_failed", extra={"src": src, "dst": dst, "error": str(exc)})
+                continue
+            written += 1
+    return written
+
+
 def run_import(
     workspace: str,
     system: str,
@@ -216,18 +286,25 @@ def run_import(
     *,
     dedup_near: bool = False,
     dedup_threshold: float = 0.85,
+    link_edges: bool = False,
     dry_run: bool = False,
 ) -> ImportResult:
-    """Import the dump at *path* into *workspace*.
+    """Import the source at *path* into *workspace*.
 
     Args:
         workspace: mind-mem workspace root.
-        system: Source system slug; must be file-based and supported.
-        path: Path to the JSON dump.
+        system: Source system slug; must be locally readable and supported.
+        path: Path to the JSON dump, or the root of the note tree for the
+            directory formats (``markdown`` / ``agentmem``).
         dedup_near: Opt-in (default OFF) near-duplicate collapse across
             the incoming batch, using ``dedup.layer_cosine_dedup``. With
             the default the import is a pure function of the dump.
         dedup_threshold: Cosine threshold for ``dedup_near``.
+        link_edges: Opt-in (default OFF) materialization of
+            ``[[wikilink]]`` targets as ``cites`` lineage edges. Link
+            names are ALWAYS preserved as the ``Links`` block field; this
+            flag only decides whether the lineage graph is also written,
+            so flag-off output is byte-identical.
         dry_run: Parse + plan without writing any block.
 
     Raises:
@@ -242,7 +319,7 @@ def run_import(
 
     from .parsers import parse_payload
 
-    records = tuple(_sanitized(r, workspace) for r in parse_payload(resolved, load_dump(path)))
+    records = tuple(_sanitized(r, workspace) for r in parse_payload(resolved, load_source(resolved, path)))
     parsed = len(records)
 
     skipped_near = 0
@@ -281,6 +358,10 @@ def run_import(
             block = {**block, "TransformHash": transform_hash}
         written.append(str(store.write_block(block)))
 
+    linked = 0
+    if link_edges and not dry_run and records:
+        linked = _materialize_link_edges(workspace, records)
+
     result = ImportResult(
         system=resolved,
         source_path=os.path.abspath(path),
@@ -290,6 +371,7 @@ def run_import(
         skipped_near_duplicate=skipped_near,
         block_ids=tuple(written),
         dry_run=dry_run,
+        linked_edges=linked,
     )
     _log.info("import_completed", extra=result.as_dict())
     return result
@@ -313,4 +395,5 @@ def _sanitized(record: ImportRecord, workspace: str) -> ImportRecord:
         text=clean,
         metadata=record.metadata,
         created_at=record.created_at,
+        links=record.links,
     )
