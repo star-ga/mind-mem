@@ -70,6 +70,7 @@ _CRITICAL_MODULES: Final[tuple[str, ...]] = (
     "governance_raft.py",
     "query_planner.py",
     "session_boost.py",
+    "trust_scores.py",
     "storage/sharded_pg.py",
 )
 

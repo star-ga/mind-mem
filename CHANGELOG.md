@@ -4,6 +4,25 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+* **Per-actor memory trust scores** (roadmap Group D) — `src/mind_mem/trust_scores.py`
+  aggregates signals that already exist in the corpus into one per-actor
+  reliability value in `[0.01, 0.99]`: the mean `truth_score` of the actor's
+  blocks, the mean `calibration` weight from human feedback, the share of the
+  actor's blocks left in a contradicted state (`superseded` / `rejected` /
+  `deprecated`, or an explicit contradicted-id set), and the share of the
+  actor's `audit_chain` writes that were rolled back. Actor identity comes from
+  the existing `ActorId` provenance field. `compute_actor_trust()` is pure and
+  deterministic — no clock, no I/O, no iteration-order dependence — with a
+  shrinkage prior so a thin-evidence actor lands on neutral rather than being
+  punished. Surfaced on recall hits as the additive `actor_trust` field, and
+  an opt-in re-rank demotes low-trust actors by
+  `base_score x (1 - weight*(1 - trust))` (stable sort, so equal trust
+  preserves the incoming order). Everything is default-OFF behind
+  `retrieval.trust_scores.{enabled,rerank}`; with the gate off the recall
+  pipeline returns the exact list object it was given — no added fields, no
+  reordering — proven by an explicit byte-identity test over the hot path.
+  40 new tests including a poisoning fixture.
+
 * **`recall(..., as_of=date)` time-travel** (roadmap Group B remainder) — the
   point-in-time projection is now exposed on the `recall()` entrypoint. When
   `as_of` (ISO-8601) is set, each returned block's `content` is rewound to the
