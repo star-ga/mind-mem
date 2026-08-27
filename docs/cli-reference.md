@@ -48,6 +48,40 @@ mm inject "auth decisions" --agent claude-code
 
 Print workspace status JSON (directory existence, config file, subdirectory checks).
 
+### `mm usage`
+
+Per-workspace usage + cost rollup over the counters mind-mem already keeps
+(`mind_mem.observability.metrics`). Read-only by default.
+
+```
+mm usage
+mm usage --json
+mm usage --quota 5.00        # exit 3 + a QUOTA BREACH line on stderr if over
+mm usage --reset             # clear the workspace ledger
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--quota USD` | off | Alert + exit `3` when the priced total exceeds this |
+| `--json` | off | Emit the rollup as JSON instead of a table |
+| `--record` | off | Fold this process's counters in before reporting |
+| `--reset` | off | Clear the ledger |
+
+**Nothing leaves the host.** The rollup reads a local JSON ledger
+(`<workspace>/.mind-mem-index/usage.json`) and a local rate card; there is no
+exporter, no socket, and no network egress on any path — `mm usage` cannot
+phone home. Counters with no rate are reported as `unpriced` and cost `0`.
+
+Rates are nominal compute-equivalents and are operator-editable per workspace:
+
+```json
+{ "usage": { "unit_costs": { "recall_queries": 0.00002 } } }
+```
+
+Recording is **opt-in**: set `MIND_MEM_USAGE_METER=1` to have each `mm`
+command fold its counters into the ledger on exit. With the variable unset,
+`mm` writes no ledger and behaves exactly as before.
+
 ### `mm detect`
 
 Auto-detect installed AI coding clients and print JSON.

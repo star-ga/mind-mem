@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 966 | **Est. tokens:** ~2,114,184
-**Generated:** 2026-08-27 12:09 UTC
+**Files:** 968 | **Est. tokens:** ~2,122,030
+**Generated:** 2026-08-27 12:10 UTC
 
 ## Token Budget Guide
 
@@ -32,7 +32,7 @@
 | `deploy/docker/` | 1 | ~592 |
 | `deploy/edge/` | 2 | ~1,149 |
 | `deploy/grafana/` | 1 | ~1,145 |
-| `docs/` | 85 | ~159,816 |
+| `docs/` | 85 | ~160,140 |
 | `docs/adr/` | 2 | ~521 |
 | `docs/benchmarks/` | 6 | ~8,995 |
 | `docs/design/` | 9 | ~16,095 |
@@ -60,7 +60,7 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 176 | ~640,375 |
+| `src/mind_mem/` | 177 | ~644,549 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 7 | ~18,591 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
@@ -71,7 +71,7 @@
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 24 | ~64,969 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 340 | ~752,878 |
+| `tests/` | 341 | ~756,226 |
 | `tests/fixtures/` | 1 | ~710 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
@@ -232,7 +232,7 @@
 - `ci-workflows.md` (~254 tok, medium) — CI Workflows
 - `claude-desktop-setup.md` (~764 tok, large) — Claude Desktop Setup Guide
 - `client-integrations.md` (~3418 tok, huge) — Client Integrations
-- `cli-reference.md` (~2164 tok, huge) — CLI Reference
+- `cli-reference.md` (~2488 tok, huge) — CLI Reference
 - `companion-tools.md` (~1113 tok, large) — Companion Tools
 - `comparison.md` (~599 tok, large) — Comparison with Alternatives
 - `competitive-analysis-persistent-memory-2026.md` (~4089 tok, huge) — Comprehensive Competitive Analysis: Persistent Memory Systems for AI Coding Agents (2025–2026)
@@ -732,6 +732,7 @@
 - `turbo_quant.py` (~1078 tok, large) — # Copyright 2026 STARGA, Inc.
 - `uncertainty_propagation.py` (~1262 tok, large) — # Copyright 2026 STARGA, Inc.
 - `union_recall.py` (~1310 tok, large) — Union-style retrieval for decomposed queries (v3.4.0).
+- `usage_meter.py` (~4174 tok, huge) — # Copyright 2026 STARGA, Inc.
 ### `src/mind_mem/v4/`
 
 - `backpressure.py` (~2058 tok, huge) — v4 backpressure controller (round 4 audit, DeepSeek 9.75→10 gap).
@@ -1115,6 +1116,7 @@
 - `test_typed_edges.py` (~3335 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_uncertainty_propagation.py` (~2158 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_unicode_edge_cases.py` (~2440 tok, huge) — Tests for Unicode and edge case handling across mind-mem modules."""
+- `test_usage_meter.py` (~3348 tok, huge) — Tests for `mm usage` — per-workspace usage/cost rollup (Group G).
 - `test_v28_completion.py` (~4622 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `test_v320_gaps.py` (~3257 tok, huge) — v3.2.0 gap tests — regression and edge-case coverage for new modules.
 - `test_v34_features.py` (~2993 tok, huge) — Tests for v3.4.0 retrieval features.
