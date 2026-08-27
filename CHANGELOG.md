@@ -4,6 +4,21 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+* **Consolidation maturity gate** (roadmap Group H, safe half) — new
+  `consolidation_maturity_gate` module puts an admission gate in front of the
+  cognitive-forgetting cycle. A block whose `block_maturity.maturity_score` is
+  below `min_maturity` is *young* and is held back; a block on either end of a
+  **live contradiction** (a `contradicts` lineage edge, or an unresolved entry
+  in `intelligence/CONTRADICTIONS.md`) is held back unconditionally, so
+  consolidation can never mark, archive, or forget across an open conflict.
+  Wired as an optional `gate=` keyword on `cognitive_forget.plan_consolidation`
+  and a `maturity_gate: bool = False` flag on the MCP `plan_consolidation`
+  tool. **Default-OFF**: with the flag off the gate object is never built and
+  the output is byte-identical to the pre-gate implementation (asserted against
+  both a frozen golden and the `main` implementation loaded from git). The gate
+  can only *remove* candidate transitions, never add one. The destructive
+  granularity/merge half of Group H is deliberately not implemented. 25 tests.
+
 * **`recall(..., as_of=date)` time-travel** (roadmap Group B remainder) — the
   point-in-time projection is now exposed on the `recall()` entrypoint. When
   `as_of` (ISO-8601) is set, each returned block's `content` is rewound to the

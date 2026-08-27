@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Iterable, Mapping, Optional
+from typing import Any, Iterable, Mapping, Optional, Protocol, runtime_checkable
 
 # ---------------------------------------------------------------------------
 # Forgetting state machine
@@ -193,17 +193,44 @@ class ConsolidationConfig:
                 raise ValueError(f"{label} must be >= 0")
 
 
+@runtime_checkable
+class ConsolidationGate(Protocol):
+    """Admission gate consulted before a block enters the forgetting cycle.
+
+    Implemented by :class:`mind_mem.consolidation_maturity_gate.MaturityGate`.
+    Declared structurally so this module keeps zero imports from the gate
+    (which imports ``BlockCognition``-shaped objects from here).
+    """
+
+    def admits(self, block: Any) -> bool:  # pragma: no cover - protocol
+        ...
+
+
 def plan_consolidation(
     blocks: Iterable[BlockCognition],
     *,
     config: Optional[ConsolidationConfig] = None,
     now: Optional[datetime] = None,
+    gate: Optional[ConsolidationGate] = None,
 ) -> ConsolidationPlan:
-    """Generate a :class:`ConsolidationPlan` from block telemetry."""
+    """Generate a :class:`ConsolidationPlan` from block telemetry.
+
+    Args:
+        blocks: Per-block telemetry.
+        config: Threshold tuning; defaults to :class:`ConsolidationConfig`.
+        now: Clock injection point for deterministic tests.
+        gate: Optional admission gate (default ``None`` = **off**).  When
+            supplied, a block that the gate declines is skipped entirely —
+            it can never be marked, archived, or forgotten.  The gate can
+            only *remove* transitions, so ``gate=None`` reproduces the
+            pre-gate output byte for byte.
+    """
     cfg = config or ConsolidationConfig()
     current = now or datetime.now(timezone.utc)
     plan = ConsolidationPlan()
     for b in blocks:
+        if gate is not None and not gate.admits(b):
+            continue
         if should_mark(
             b,
             now=current,
@@ -314,6 +341,7 @@ def pack_to_budget(
 __all__ = [
     "BlockLifecycle",
     "BlockCognition",
+    "ConsolidationGate",
     "ConsolidationConfig",
     "ConsolidationPlan",
     "plan_consolidation",

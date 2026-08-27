@@ -32,8 +32,16 @@ def plan_consolidation(
     stale_days: int = 14,
     archive_after_days: int = 60,
     grace_days: int = 30,
+    maturity_gate: bool = False,
+    min_maturity: float = 0.5,
 ) -> str:
-    """Dry-run the cognitive forgetting cycle."""
+    """Dry-run the cognitive forgetting cycle.
+
+    ``maturity_gate`` is **off by default**; with it off this tool's JSON is
+    byte-for-byte what it was before the gate existed. Turning it on holds
+    back blocks below ``min_maturity`` and any block on a live contradiction,
+    and adds a ``maturity_gate`` report section to the response.
+    """
     from mind_mem.cognitive_forget import (
         BlockCognition,
         BlockLifecycle,
@@ -94,20 +102,77 @@ def plan_consolidation(
         finally:
             conn.close()
 
-    plan = _plan(blocks, config=cfg)
-    return json.dumps(
-        {
-            "config": {
-                "importance_threshold": cfg.importance_threshold,
-                "stale_days": cfg.stale_days,
-                "archive_after_days": cfg.archive_after_days,
-                "grace_days": cfg.grace_days,
-            },
-            "plan": plan.as_dict(),
-            "_schema_version": "1.0",
+    payload: dict[str, Any] = {
+        "config": {
+            "importance_threshold": cfg.importance_threshold,
+            "stale_days": cfg.stale_days,
+            "archive_after_days": cfg.archive_after_days,
+            "grace_days": cfg.grace_days,
         },
-        indent=2,
+        "plan": None,
+        "_schema_version": "1.0",
+    }
+
+    if not maturity_gate:
+        # Default path — no gate object is ever built, so the response is
+        # identical to the pre-gate implementation.
+        payload["plan"] = _plan(blocks, config=cfg).as_dict()
+        return json.dumps(payload, indent=2)
+
+    from mind_mem.consolidation_maturity_gate import (
+        MaturityGate,
+        MaturityGateConfig,
+        collect_contradicted_block_ids,
     )
+
+    try:
+        gate_cfg = MaturityGateConfig(enabled=True, min_maturity=float(min_maturity))
+    except (TypeError, ValueError) as exc:
+        return json.dumps({"error": str(exc)})
+
+    gate = MaturityGate(
+        gate_cfg,
+        block_meta=_load_block_meta(db_path),
+        contradicted_ids=collect_contradicted_block_ids(ws),
+    )
+    decision = gate.evaluate(blocks)
+    payload["plan"] = _plan(blocks, config=cfg, gate=gate).as_dict()
+    payload["maturity_gate"] = {"min_maturity": gate_cfg.min_maturity, **decision.as_dict()}
+    return json.dumps(payload, indent=2)
+
+
+def _load_block_meta(db_path: str) -> dict[str, dict[str, Any]]:
+    """Read the maturity-relevant frontmatter fields for every indexed block.
+
+    Only runs when the maturity gate is enabled. Never raises: an unreadable
+    index degrades to an empty mapping, which scores every block low and
+    therefore *holds* it — the conservative direction for a protective gate.
+    """
+    import sqlite3 as _sqlite3
+
+    meta: dict[str, dict[str, Any]] = {}
+    if not os.path.isfile(db_path):
+        return meta
+    try:
+        conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
+        conn.row_factory = _sqlite3.Row
+        try:
+            rows = conn.execute("SELECT id, status, json_blob FROM blocks").fetchall()
+        finally:
+            conn.close()
+    except _sqlite3.Error as exc:
+        _log.warning("maturity_gate_meta_read_failed", error=str(exc))
+        return meta
+
+    for r in rows:
+        try:
+            raw = json.loads(r["json_blob"] or "{}")
+        except (json.JSONDecodeError, TypeError, ValueError):
+            raw = {}
+        entry: dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
+        entry["Status"] = r["status"] or entry.get("Status", "")
+        meta[r["id"]] = entry
+    return meta
 
 
 @mcp_tool_observe
