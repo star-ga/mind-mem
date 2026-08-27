@@ -56,6 +56,29 @@ suite today: **3.12**.
   recency helpers (`date_score` and the half-life `temporal_decay_score`)
   also accept an optional `now=` instant so a replay can pin the clock; the
   default is unchanged UTC-now, and no call site had to change.
+* **Apply/rollback audit timestamps are now genuinely UTC (correctness fix)** —
+  the apply engine wrote `datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")` into
+  three durable artifacts: `last_apply_ts` in `memory/intel-state.json`, the
+  `<Status>: <ts>` line stamped into a proposal block, and the `RolledBack:`
+  line appended to `APPLY_RECEIPT.md`. That formats a *naive local* instant and
+  then appends `Z`, the UTC designator — so every one of those records actively
+  claimed to be UTC while being local time. On a frozen instant of
+  `2026-08-27T00:30:00Z` the same apply stamped `2026-08-26T13:30:00Z` under
+  `TZ=Pacific/Niue` (UTC-11) and `2026-08-27T14:30:00Z` under
+  `TZ=Pacific/Kiritimati` (UTC+14): a 25-hour spread across an audit trail that
+  is supposed to be the record of what happened when. All three now read a
+  timezone-aware UTC clock (`_utc_now`, matching the convention already used
+  elsewhere in the codebase). **The wire format is unchanged** — still
+  `YYYY-MM-DDTHH:MM:SSZ`, so stored values and existing parsers keep working;
+  only the value became honest. The reader beside them was corrected to match:
+  the 10-minute no-touch cooldown compared the stored `Z` value against a naive
+  local clock, which happened to cancel out against the local write and would
+  otherwise have been skewed by the host's offset; a value stored before this
+  release is still read as UTC, so on a non-UTC host one cooldown check across
+  the upgrade can be off by the host's offset. The rolling window in
+  `transcript_capture.find_recent_transcripts` also moved to UTC on both sides
+  of its comparison, so an N-day lookback measures elapsed time instead of
+  wall-clock difference across a DST change.
 * **Calibration's 30-day window is documented as time-relative, and its
   boundary is pinnable** — the calibration weight multiplied into every
   recall score is computed over a rolling 30-day window, so scores legitimately

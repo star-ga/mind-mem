@@ -20,7 +20,7 @@ import os
 import re
 import subprocess  # nosec B404 — subprocess is used with a fixed argument list (shell=False) for internal tooling; no user input reaches the command
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Import block parser from same directory
 from .backup_restore import WAL
@@ -38,6 +38,42 @@ from .namespaces import NamespaceManager
 from .observability import get_logger
 
 _log = get_logger("apply_engine")
+
+# ═══════════════════════════════════════════════
+# Audit-trail clock
+# ═══════════════════════════════════════════════
+
+#: Wire format for every timestamp this module writes into a durable,
+#: auditable artifact (apply state, proposal status blocks, receipts).
+#: The trailing ``Z`` is the UTC designator, so the instant it labels
+#: MUST be UTC — a naive *local* time under a ``Z`` suffix mislabels the
+#: record by the host's offset (up to 14 hours) and silently corrupts the
+#: audit trail on every machine that is not on UTC.
+AUDIT_TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def _utc_now() -> datetime:
+    """Timezone-aware UTC "now" — the clock behind every audit timestamp."""
+    return datetime.now(timezone.utc)
+
+
+def _utc_stamp() -> str:
+    """Current instant as a genuinely-UTC ``YYYY-MM-DDTHH:MM:SSZ`` string."""
+    return _utc_now().strftime(AUDIT_TS_FORMAT)
+
+
+def _parse_audit_ts(raw: str) -> datetime:
+    """Read an audit timestamp back as a timezone-aware UTC instant.
+
+    Values written before the UTC fix carry no offset once the ``Z`` is
+    stripped; they are read as UTC as well, which is what they always
+    claimed to be.
+    """
+    parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
 
 # ═══════════════════════════════════════════════
 # Configuration
@@ -982,11 +1018,11 @@ def check_no_touch_window(ws):
     if not last_ts:
         return True, "No previous apply"
     try:
-        last = datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
-        # Normalize both to naive for safe comparison
-        last_naive = last.replace(tzinfo=None)
-        now_naive = datetime.now()
-        delta = now_naive - last_naive
+        # Both sides are timezone-aware UTC: the stored value is UTC (the
+        # "Z" it carries), so comparing it against a naive *local* clock
+        # would offset the window by the host's UTC offset.
+        last = _parse_audit_ts(last_ts)
+        delta = _utc_now() - last
         if delta < timedelta(minutes=10):
             remaining = timedelta(minutes=10) - delta
             return False, f"No-touch window: {remaining.seconds // 60}m {remaining.seconds % 60}s remaining"
@@ -1026,7 +1062,7 @@ def check_deferred_cooldown(ws, proposal):
 def update_last_apply_ts(ws):
     """Record the timestamp of the last apply."""
     state = _load_intel_state(ws)
-    state["last_apply_ts"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    state["last_apply_ts"] = _utc_stamp()
     _save_intel_state(ws, state)
 
 
@@ -1501,7 +1537,7 @@ def _mark_proposal_status(source_file, proposal_id, new_status, *, reason=""):
             if reason and status_idx >= 0:
                 sanitized = _sanitize_reason_for_markdown(reason.strip())
                 first, *rest = sanitized.split("\n")
-                timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+                timestamp = _utc_stamp()
                 reason_lines = [f"{new_status.capitalize()}: {timestamp}", f"Reason: {first}"]
                 for line in rest:
                     reason_lines.append(f"  {line}")
@@ -1581,7 +1617,7 @@ def rollback(ws, receipt_ts, reason=""):
         receipt_lock = FileLock(receipt_path + ".lock", timeout=5.0)
         try:
             with receipt_lock, open(receipt_path, "a") as f:  # nosec — receipt_path validated by _safe_resolve
-                f.write(f"\nRolledBack: {datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')}\n")
+                f.write(f"\nRolledBack: {_utc_stamp()}\n")
                 f.write("Result: rolled_back\n")
                 if reason:
                     # Same sanitization as _mark_proposal_status so a

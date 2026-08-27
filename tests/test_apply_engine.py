@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from mind_mem.apply_engine import (
@@ -290,7 +290,7 @@ class TestNoTouchWindow(unittest.TestCase):
     def test_recent_apply_blocks(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             os.makedirs(os.path.join(ws, "memory"))
-            recent = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+            recent = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             with open(os.path.join(ws, "memory", "intel-state.json"), "w") as f:
                 json.dump({"last_apply_ts": recent}, f)
             ok, reason = check_no_touch_window(ws)
@@ -300,7 +300,7 @@ class TestNoTouchWindow(unittest.TestCase):
     def test_old_apply_clears(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             os.makedirs(os.path.join(ws, "memory"))
-            old = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            old = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
             with open(os.path.join(ws, "memory", "intel-state.json"), "w") as f:
                 json.dump({"last_apply_ts": old}, f)
             ok, reason = check_no_touch_window(ws)

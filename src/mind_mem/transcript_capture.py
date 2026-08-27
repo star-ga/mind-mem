@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from .capture import CONFIDENCE_TO_PRIORITY, append_signals, extract_structure
 from .observability import get_logger, metrics
@@ -161,7 +161,10 @@ def find_recent_transcripts(days: int = 3) -> list[str]:
     Returns list of .jsonl file paths sorted by modification time (newest first).
     """
     paths = []
-    cutoff = datetime.now() - timedelta(days=days)
+    # Both the cutoff and each file's mtime are read as timezone-aware UTC,
+    # so the rolling window measures elapsed time rather than wall-clock
+    # difference (a naive local pair drifts by an hour across a DST change).
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Check ~/.claude/projects/
     claude_dir = os.path.expanduser("~/.claude/projects")
@@ -171,7 +174,7 @@ def find_recent_transcripts(days: int = 3) -> list[str]:
                 if f.endswith(".jsonl"):
                     path = os.path.join(root, f)
                     try:
-                        mtime = datetime.fromtimestamp(os.path.getmtime(path))
+                        mtime = datetime.fromtimestamp(os.path.getmtime(path), timezone.utc)
                         if mtime >= cutoff:
                             paths.append((path, mtime))
                     except OSError:
