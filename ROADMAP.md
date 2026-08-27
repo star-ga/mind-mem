@@ -3807,3 +3807,107 @@ containment on 500k rows. The demonstrated technique does **not** apply here for
 the two measured reasons above; what it surfaced instead was the unrelated
 prefix-parsing gap. No code adopted, no dependency added, nothing named in any
 public artifact.
+
+## Group R — edge evidence: `no shared source, no edge` (prior-art-informed, 2026-08-27)
+
+**Status:** planned. Additive validation on a write path + one new field →
+PATCH bump, but see R4: the strict gate is a **breaking** tightening and is
+sequenced behind a default-off flag.
+
+**What is already correct, so nobody re-proposes it.** The HITL discipline is
+sound and does not need revisiting. `propose_edge` is the only user-reachable
+typed-edge write path; nothing touches the source-of-truth `edges` table until
+an explicit operator `approve_edge` (`knowledge_graph.py:826`). Direct writes
+are admin-scoped and stamped `metadata.origin = "direct_admin"`, HITL commits
+stamp `"hitl_approved"`, so the two are distinguishable in an audit rather than
+byte-identical. Proposal ids are deterministic, so restaging is idempotent.
+`source_block_id` is **already mandatory** and validated at three layers — the
+MCP tool, `add_edge` (line 630), and `propose_edge` (line 717). Every edge
+carries a confidence in `[0,1]`, optional validity interval, and JSON metadata.
+None of that is the gap.
+
+**The actual gap: provenance is asserted, never corroborated.** The mandatory
+`source_block_id` proves an edge *names* a block. It does not prove the block
+exists, and it does not prove the block has anything to do with either endpoint.
+Grepped `knowledge_graph.py` for any block lookup (`get_block`, `block_exists`,
+`resolve_block`): **zero hits.** The knowledge graph never consults the block
+store.
+
+Verified empirically rather than inferred from absent code — a fabricated id
+stages *and commits* clean:
+
+```
+propose_edge('Company A','depends_on','Company B',
+             source_block_id='blk_TOTALLY_FABRICATED_NEVER_EXISTED')
+  → staged   : EP-b68fa79f17695903
+  → approve  → COMMITTED: company a depends_on company b
+```
+
+So the field is a **format** requirement, not an **evidence** requirement. It
+constrains the shape of a claim, not its truth. Three consequences:
+
+1. A hallucinated edge is byte-indistinguishable from a filing-derived one at
+   read time. Both carry a plausible id; only one is real.
+2. `list_contradictions` degrades. Two edges on the same pair with *different*
+   evidence is a genuine signal worth adjudicating; two edges with *unverifiable*
+   evidence is noise that cannot be adjudicated at all.
+3. The reviewer is asked to approve on vibes. HITL is only a real gate if the
+   operator is shown something checkable — otherwise approval launders an
+   assertion into a fact with an audit trail attached.
+
+This is the same failure class the codebase already names elsewhere: an
+expression index that never matches is invisible (Group Q), an evidence field
+that is never checked is decorative. **The single load-bearing rule: no shared
+source, no edge — and an empty edge list is a valid answer.** A model asked to
+find connections will always find connections; removing the pressure to produce
+something is half the fix.
+
+- **R1 — resolve `source_block_id` against the block store at propose time.**
+  The id must name a block that exists. Cheapest possible check, kills the
+  fabricated-id case outright, and is a strictly better error at staging time
+  than a dangling reference discovered during a later traversal.
+- **R2 — corroboration: the cited block must mention both endpoints.** The
+  substantive half. An edge asserts a relation *between two things*; the
+  evidence must be about both, or it is evidence for something else. Entity
+  resolution already exists (`entities.resolve`), so the check reuses the
+  registry rather than string-matching raw names. Where the corpus supports it,
+  prefer **two independent blocks** naming the same relation over one — the
+  "shared supplier named in both FY25 filings" shape, not "a document exists."
+- **R3 — carry the reason, not just the pointer.** Add an `evidence` field
+  alongside `source_block_id`: a short human-checkable statement of *what is
+  shared*. The pointer answers "where"; the reason answers "why", and an edge
+  whose reason cannot be stated is an edge that cannot be reviewed. Surfaced in
+  `list_edge_proposals` so the operator approves against a claim rather than an
+  id.
+- **R4 — sequence the tightening, do not ship it as a surprise.** R1–R3 land
+  behind a default-off `strict_edge_evidence` flag; existing edges predate the
+  gate and must not retroactively fail. Enable-by-default is a MINOR bump with
+  the migration note, after a scan reports how many live edges would fail. Order
+  matters: **measure first, then tighten** — a gate that silently invalidates a
+  corpus is worse than the gap it closes.
+
+**Why this is ours rather than a feature we are copying.** The derived-vs-asserted
+distinction is the same one the whole evidence posture rests on. An edge that a
+model asserted requires trusting that model. An edge *derived* from a shared
+source recorded in two blocks is recomputable: a third party runs the same
+reduce over the same corpus and gets the same edge set. That inherits the
+existing verifiability rather than adding a parallel trust surface. It also
+composes with the ordering discipline already in place — edge construction is a
+reduce over a completed node set, order-independent by construction, so the
+"populate all nodes before connecting anything" requirement is satisfied by an
+existing barrier rather than a new one.
+
+**Deliberately not pursued.** Wide agent fan-out as a means to more edges: fan-out
+is the commoditized half, and pairing a very wide fan-out with a short
+orchestrator *forces* the merge to be a compression pass — and compression is
+precisely the operation that preserves facts while discarding the relations
+between them. The gap is in the merge, not the width. Also out of scope: a graph
+query engine, a traversal DSL, or a vector store for edges — `traverse_graph`
+and `graph_query` already cover the read side, and the open problem here is
+write-side admission, not retrieval.
+
+**Provenance rail.** Prompted by a public write-up on merge specifications for
+wide agent fan-out. The structural half (nodes + edges as a named deliverable)
+mind-mem already has; what the note surfaced was the unchecked-evidence
+admission gap above, which is ours and pre-existing. Idea only — no code
+adopted, no dependency added, nothing named in any public artifact.
