@@ -44,6 +44,33 @@ __all__ = [
     "record_outcome",
 ]
 
+#: Calibration-projection identity used when a report carries no ``actor_id``.
+#: Unattributed reports deliberately share this one vote instead of each
+#: minting a fresh one, so an anonymous reporter can never outvote a named one.
+_ANONYMOUS_ACTOR = "anonymous"
+
+#: Ceiling applied to per-block outcome counts before they reach a score.
+#: Twice :data:`MIN_OUTCOME_EVIDENCE` — enough for a pattern to be visible and
+#: for a majority to be readable, and no more.
+_OUTCOME_COUNT_CAP = 2 * MIN_OUTCOME_EVIDENCE
+
+
+def _projection_query_id(actor_id: str) -> str:
+    """Return the ``calibration_feedback.query_id`` one reporter votes under.
+
+    The opt-in calibration projection is keyed on the **reporter**, not on the
+    outcome id, so the store's pre-existing ``UNIQUE(query_id, block_id,
+    feedback)`` constraint collapses every report one caller makes about a
+    given block+verdict into a single vote. Keying on the outcome id instead
+    minted a fresh vote per distinct report, which let one caller move a
+    block's calibration weight without bound.
+
+    A blank ``actor_id`` falls back to the fixed :data:`_ANONYMOUS_ACTOR`
+    sentinel: unattributed reports share one vote rather than each getting
+    their own.
+    """
+    return f"outcome:{actor_id or _ANONYMOUS_ACTOR}"
+
 
 def record_outcome(
     mgr: ConnectionManager,
@@ -77,6 +104,14 @@ def record_outcome(
     so a replay conflicts on the primary key and changes nothing —
     including the originally stored ``recorded_at``.
 
+    Bounded per reporter: the projected feedback row is keyed on
+    ``actor_id`` (see :func:`_projection_query_id`), not on the outcome id,
+    so one reporter contributes at most one calibration vote per
+    block+verdict no matter how many distinct reports it files. Its whole
+    influence on a block is therefore three rows — one ``accepted``, one
+    ``rejected``, one ``ignored`` — and ``projected`` is 0 on every report
+    after the first for that pair.
+
     Never mutates block content: the only writes are to this sidecar
     index database. Corpus changes go through ``propose_update``.
     """
@@ -100,7 +135,7 @@ def record_outcome(
     )
     stamp = recorded_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     feedback = _OUTCOME_TO_FEEDBACK[verdict]
-    projected_query_id = f"outcome:{outcome_id}"
+    projected_query_id = _projection_query_id(actor_id)
     recorded = 0
     projected = 0
 
@@ -190,6 +225,16 @@ def get_outcome_signals(mgr: ConnectionManager, block_ids: list[str]) -> dict[st
     Unwindowed on purpose: this feeds the validity gate, whose scored
     path must contain no clock. Blocks with no attributed outcome are
     simply absent (the caller reads absence as neutral).
+
+    Saturating by contract: every returned count is clamped to
+    :data:`_OUTCOME_COUNT_CAP` (twice :data:`MIN_OUTCOME_EVIDENCE`, i.e.
+    ``6``). One thousand reports of the same verdict on a block therefore
+    read as ``6`` — a stated invariant, not an accident of the arithmetic.
+    Volume past the cap buys no further movement in either direction, so
+    reporting the same verdict harder cannot promote or bury a block. The
+    clamp is a no-op at honest volumes (any count at or below the cap is
+    returned unchanged) and is applied only on this scored path;
+    :func:`get_outcome_stats` still reports true totals for operators.
     """
     if not block_ids:
         return {}
@@ -216,9 +261,9 @@ def get_outcome_signals(mgr: ConnectionManager, block_ids: list[str]) -> dict[st
     return {
         bid: OutcomeSignal(
             block_id=bid,
-            success=bucket.get("success", 0),
-            failure=bucket.get("failure", 0),
-            neutral=bucket.get("neutral", 0),
+            success=min(bucket.get("success", 0), _OUTCOME_COUNT_CAP),
+            failure=min(bucket.get("failure", 0), _OUTCOME_COUNT_CAP),
+            neutral=min(bucket.get("neutral", 0), _OUTCOME_COUNT_CAP),
         )
         for bid, bucket in counts.items()
     }

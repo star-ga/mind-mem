@@ -4,6 +4,35 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+## [4.10.0] - 2026-08-27
+
+### Known issue — Python 3.14
+
+The test suite (and `install.sh`'s post-install smoke) can crash with a
+segmentation fault on **Python 3.14** during `anyio` blocking-portal teardown of
+Starlette's `TestClient` — the fault is in `_asyncio._cancel_all_tasks` at
+interpreter/thread shutdown, not in library code. Reproduced in a clean
+virtualenv with a single extension module loaded, and **not** reproducible on
+Python 3.12 (same tests, same package set, all green). Affects the REST/OIDC
+test fixtures that enter `TestClient` as a context manager (i.e. exercise the
+app lifespan). Runtime use of the library is unaffected; this is a
+test-harness/interpreter interaction. Recommended interpreter for running the
+suite today: **3.12**.
+
+* **Installer wires the copy it just installed, not a stale one on `PATH`** —
+  `install.sh` resolved `mind-mem-mcp` with `command -v` *before* looking at the
+  location it had just installed into, so on a machine carrying an older
+  `mind-mem-mcp` earlier on `PATH` (a previous `pip --user` install, a leftover
+  pipx shim, a system-wide copy) a correct fresh install still ended with the
+  Claude Code / Claude Desktop / Codex / Gemini / Cursor / Windsurf / Zed /
+  OpenClaw MCP configs pointed at the **stale** binary — silently, under a green
+  "Installation complete!". After an install the script now prefers the console
+  script it just wrote (`~/.local/bin/mind-mem-mcp`, or
+  `~/Library/Python/<ver>/bin/mind-mem-mcp` for `pip --user` on macOS),
+  smoke-tests *that* copy, and prints a warning naming the shadowing binary it
+  skipped. `install.sh --no-install` is unchanged — with no install to prefer it
+  resolves via `PATH` exactly as before.
+
 * **Outcome attribution — did the recalled memory actually help?** — new
   `src/mind_mem/outcome_attribution.py` + `outcome_store.py` record, per block,
   whether acting on a recalled block succeeded, failed, or was neutral, and
@@ -20,6 +49,38 @@ All notable changes to MIND-Mem are documented in this file.
   MCP tools. Default-OFF behind `recall.validity_gate.outcome_attribution.enabled`
   (itself inside the default-OFF `recall.validity_gate`); with it off no outcome
   DB read happens at all.
+* **Outcome attribution is deduplicated, saturating, and bounded per reporter**
+  — stated limits rather than emergent ones, so an operator knows what a single
+  caller can and cannot do to a block's ranking:
+  * **Exact replay is a no-op.** An outcome's identity is the SHA-256 of its
+    canonical payload, so re-filing the same report a thousand times writes one
+    row and moves no score.
+  * **Counts saturate.** The per-block counts the validity gate scores on are
+    clamped at twice `MIN_OUTCOME_EVIDENCE` — **a thousand reports of one
+    verdict read as six.** Past the cap, reporting harder buys nothing in
+    either direction. `outcome_stats` still reports true volume for operators;
+    only the scored path is clamped.
+  * **One reporter, one vote.** The opt-in `project_to_calibration` path keyed
+    its `calibration_feedback` row on the *outcome id*, so every distinct
+    report minted a fresh vote: 100 forged-but-distinct reports from one caller
+    moved a block's calibration weight from `1.0` to `1.4902` (success) or
+    `0.5098` (failure). The row is now keyed on `actor_id`, so the store's
+    pre-existing `UNIQUE(query_id, block_id, feedback)` constraint collapses one
+    caller to a single vote per block and verdict — the same 100 reports now
+    leave the weight at `1.0`. One reporter's entire reach over a block is three
+    rows (accepted / rejected / ignored), bottoming out at `0.9651`; it cannot
+    lift a block above `1.0` at all. Reports carrying no `actor_id` share one
+    anonymous vote. Deterministic `recall_outcome` counts and the schema are
+    unchanged.
+  * **The gate is sensitive by design, and operators should know it.** Three
+    *distinct* failure reports take a block's utility factor to `0.6`, below the
+    gate's `0.8` threshold, which halves its recall score. Utility evidence is
+    meant to bite early — but a demotion costs three reports, so anyone running
+    the (default-OFF) gate should treat `actor_id` provenance as load-bearing.
+  * **Deferred:** storage is still unbounded. Reports that buy no score are
+    retained in full — a measured 100-report flood from one actor left 100
+    `recall_outcome` rows and grew the index by 48 KiB while moving nothing.
+    Retention or compaction of score-less outcome rows is not in this release.
 * **The validity gate's two opt-in extensions are independent** — provenance
   class (a fifth *criterion*, widening the mean from four terms to five) and
   outcome attribution (a *factor* applied to whichever mean is in force) now

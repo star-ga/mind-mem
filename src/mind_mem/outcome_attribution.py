@@ -41,6 +41,22 @@ block ids + verdict + provenance), so replaying the same report is a
 no-op: the insert conflicts and the stored row — including its original
 ``recorded_at`` — is returned unchanged.
 
+Bounded influence
+-----------------
+Two limits stop one reporter from moving a block without bound:
+
+* the counts the scored path reads are **clamped** at twice
+  :data:`MIN_OUTCOME_EVIDENCE` — a thousand reports of one verdict read as
+  six, by contract and not by accident; and
+* the opt-in ``calibration_feedback`` projection is keyed on the reporting
+  ``actor_id``, so one reporter is worth at most one vote per block and
+  verdict however many distinct reports it files.
+
+Neither is a rate limit, and the gate is deliberately sensitive: three
+*distinct* failure reports take a block's factor to ``0.6``, under the
+validity gate's ``0.8`` threshold, which halves its recall score. Utility
+evidence is meant to bite early — operators should know it bites that early.
+
 Governed write
 --------------
 Recording an outcome **never** mutates block content. It appends to the
@@ -324,7 +340,10 @@ def report_outcome(
             ``calibration_feedback`` loop (success -> accepted, failure ->
             rejected, neutral -> ignored). Default-off: the recall pipeline
             applies calibration weights unconditionally, so projecting by
-            default would move scores for callers who never opted in.
+            default would move scores for callers who never opted in. The
+            projected row is keyed on ``actor_id``, so one reporter casts at
+            most one vote per block and verdict; reports with no ``actor_id``
+            share a single anonymous vote.
 
     Returns:
         Dict with ``outcome_id``, ``payload_hash``, ``block_ids``,
