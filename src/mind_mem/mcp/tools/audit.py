@@ -142,6 +142,7 @@ def verify_chain() -> str:
         JSON with valid (bool), length (int), and broken_at (int, -1 if valid).
     """
     ws = _workspace()
+    tomb_section: dict | None = None
     try:
         from mind_mem.governance_gate import get_gate
 
@@ -152,6 +153,19 @@ def verify_chain() -> str:
 
         evidence = gate.evidence
         ev_valid, broken_ids = evidence.verify_chain()
+
+        # Redactable tombstones: only present once a block has been
+        # redacted, so a workspace that never deletes sees the exact
+        # same envelope as before this section existed.
+        from mind_mem.tombstone import ledger_exists, load_tombstones, verify_ledger
+
+        if ledger_exists(ws):
+            tomb_valid, tomb_errors = verify_ledger(ws)
+            tomb_section = {
+                "valid": tomb_valid,
+                "count": len(load_tombstones(ws)),
+                "errors": tomb_errors,
+            }
     except Exception as exc:
         _log.warning("verify_chain_failed", error=str(exc))
         return json.dumps(
@@ -163,6 +177,8 @@ def verify_chain() -> str:
         )
 
     overall_valid = hc_valid and ev_valid
+    if tomb_section is not None:
+        overall_valid = overall_valid and bool(tomb_section["valid"])
     metrics.inc("mcp_verify_chain")
     _log.info(
         "mcp_verify_chain",
@@ -186,6 +202,7 @@ def verify_chain() -> str:
                 "valid": ev_valid,
                 "broken_ids": broken_ids,
             },
+            **({"tombstones": tomb_section} if tomb_section is not None else {}),
         },
         indent=2,
     )

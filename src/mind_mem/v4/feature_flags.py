@@ -82,6 +82,7 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "contraindicates_edges",
     "typed_edges",  # first-class typed relation layer + proposal-gated writes (roadmap §a)
     "entity_observations",  # per-entity accreted-facts field on the entity registry (roadmap §b)
+    "redactable_tombstones",  # deletion that destroys content but preserves the Merkle leaf (roadmap §c)
 )
 
 
