@@ -48,6 +48,9 @@ from mind_mem.mcp.tools import (
     calibration as _tools_calibration,
 )
 from mind_mem.mcp.tools import (
+    chat as _tools_chat,
+)
+from mind_mem.mcp.tools import (
     consolidation as _tools_consolidation,
 )
 from mind_mem.mcp.tools import (
@@ -134,6 +137,7 @@ _tools_walkthrough_persona.register(mcp)
 _tools_pipeline.register(mcp)
 _tools_quality.register(mcp)
 _tools_lineage.register(mcp)
+_tools_chat.register(mcp)
 
 # v3.2.0 — additive consolidated dispatchers (recall, staged_change,
 # memory_verify, graph, core, kernels, compiled_truth). Registered

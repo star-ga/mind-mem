@@ -33,6 +33,10 @@ Core modules:
     calibration     — Retrieval quality feedback loop with per-block calibration weights
     evidence_objects — Structured tamper-evident Evidence Objects for governance decisions
     storage         — Storage factory (get_block_store) for backend selection via config
+    chat_memory     — Conversational chat layer: chat_with_memory(workspace,
+                      question) with verified [[block_id]] citations
+    chat_citations  — Citation extraction + the answer-grounding contract
+    chat_generators — Pluggable answerers (deterministic extractive default)
 """
 
 from .protection import (
