@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -44,7 +45,16 @@ def test_install_sh_bootstraps_clean_home(tmp_path):
     assert result.returncode == 0, result.stderr or result.stdout
     config_path = home / ".codex" / "config.toml"
     assert config_path.is_file()
-    assert "mind-mem" in config_path.read_text()
+    config_text = config_path.read_text()
+    assert "mind-mem" in config_text
+
+    # The wired command must be the console script this run just installed
+    # under the isolated HOME — never an older ``mind-mem-mcp`` that happens
+    # to sit earlier on PATH. Resolving by PATH first smoke-tests one binary
+    # and writes a different, stale one into the client config.
+    wired = re.search(r'^command = "(.+)"$', config_text, re.MULTILINE)
+    assert wired is not None, config_text
+    assert wired.group(1).startswith(str(home)), f"install.sh wired {wired.group(1)}, expected a copy under {home}"
 
 
 def test_mcp_server_help_runs_from_source_checkout(tmp_path):

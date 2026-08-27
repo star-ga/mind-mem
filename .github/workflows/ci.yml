@@ -54,14 +54,14 @@ jobs:
       - run: python -m mypy src/ --ignore-missing-imports
 
   test:
-    # v3.7.0 M5: every advertised OS/Python combination must pass.
-    # Python 3.14 was previously continue-on-error; the version is
-    # now classed as supported in pyproject.toml's classifiers, so the
-    # CI gate matches.
+    # v3.7.0 M5: every advertised OS/Python combination must pass —
+    # "advertised" means the classifiers in pyproject.toml, which stop at 3.13.
     runs-on: ${{ matrix.os }}
-    # Python 3.14 is still pre-release as of 2026-05; treat its rows as
-    # advisory rather than gating until upstream wheels stabilise. The
-    # 3.10/3.12/3.13 supported rows still gate the workflow.
+    # Python 3.14 is deliberately NOT advertised: its classifier was dropped in
+    # 4.10.0 because the suite segfaults on 3.14 during anyio/TestClient
+    # teardown (see the CHANGELOG "Known issue — Python 3.14"). The 3.14 rows
+    # stay in the matrix as an early-warning signal but remain advisory
+    # (continue-on-error); the 3.10/3.12/3.13 rows gate the workflow.
     continue-on-error: ${{ matrix.python-version == '3.14' }}
     strategy:
       fail-fast: false

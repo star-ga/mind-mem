@@ -159,20 +159,52 @@ install_package() {
   esac
 }
 
+# Scan the locations install_package writes console scripts to:
+# ~/.local/bin for pipx and for pip --user on most platforms,
+# ~/Library/Python/<ver>/bin for pip --user on macOS. Prints the first
+# executable match on stdout, nothing when there is none. An unmatched
+# glob stays literal and is filtered out by the -x test.
+first_installed_mcp() {
+  local cand
+  for cand in "$HOME/.local/bin/mind-mem-mcp" \
+              "$HOME/Library/Python"/*/bin/mind-mem-mcp; do
+    if [ -x "$cand" ]; then
+      echo "$cand"
+      return
+    fi
+  done
+}
+
 # Verify the package and its console script are reachable.
 # Records the absolute path to `mind-mem-mcp` on stdout.
+#
+# Usage: resolve_mcp_command [fresh]
+#
+# With `fresh` (passed only when we just ran install_package) the copy we
+# have just written wins over whatever `mind-mem-mcp` happens to sit first
+# on PATH — an older pip --user install, a leftover pipx shim, a
+# system-wide copy. Resolving by PATH first would smoke-test one binary
+# and wire a *different*, stale one into every client config, silently,
+# under a green "Installation complete!".
 resolve_mcp_command() {
-  local cmd
-  cmd=$(command -v mind-mem-mcp 2>/dev/null || true)
-  if [ -z "$cmd" ]; then
-    # pipx installs to ~/.local/bin on most platforms, ~/Library/... on macOS.
-    for cand in "$HOME/.local/bin/mind-mem-mcp" \
-                "$HOME/Library/Python"/*/bin/mind-mem-mcp; do
-      if [ -x "$cand" ]; then
-        cmd="$cand"
-        break
+  local mode="${1:-path}"
+  local cmd=""
+  if [ "$mode" = "fresh" ]; then
+    cmd=$(first_installed_mcp)
+    if [ -n "$cmd" ]; then
+      local on_path
+      on_path=$(command -v mind-mem-mcp 2>/dev/null || true)
+      if [ -n "$on_path" ] && [ "$on_path" != "$cmd" ]; then
+        # stdout is captured by the caller — keep chatter on stderr.
+        warn "PATH resolves mind-mem-mcp to $on_path; wiring the copy just installed at $cmd" >&2
       fi
-    done
+    fi
+  fi
+  if [ -z "$cmd" ]; then
+    cmd=$(command -v mind-mem-mcp 2>/dev/null || true)
+  fi
+  if [ -z "$cmd" ]; then
+    cmd=$(first_installed_mcp)
   fi
   if [ -z "$cmd" ]; then
     err "mind-mem-mcp console script not found on PATH after install."
@@ -544,16 +576,20 @@ main() {
     DEFAULT_PACKAGE_SPEC="$package_override"
   fi
 
+  local resolve_mode="path"
   if ! $skip_install; then
     local installer
     installer=$(select_installer "$installer_choice")
     install_package "$installer" "$DEFAULT_PACKAGE_SPEC"
+    # An install just happened — resolve the console script we wrote, not
+    # whatever older copy may shadow it on PATH.
+    resolve_mode="fresh"
   else
     info "Skipping package install (--no-install)"
   fi
 
   local mcp_command
-  mcp_command=$(resolve_mcp_command)
+  mcp_command=$(resolve_mcp_command "$resolve_mode")
   verify_install "$mcp_command"
 
   if $auto || [ ${#clients[@]} -eq 0 ]; then
