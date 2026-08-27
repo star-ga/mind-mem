@@ -1,0 +1,35 @@
+{
+  "results": [
+    {
+      "id": "9f1c2b04-6a1d-4a3e-9d8b-2c0f5e7a1101",
+      "memory": "Prefers dependency upgrades to land as a single batched pull request rather than one per package.",
+      "hash": "0c9c0f4b2ad14e6f8a1b7d3e5c2f9a44",
+      "metadata": {"category": "preference", "confidence": "high"},
+      "created_at": "2026-01-14T09:12:33.481Z",
+      "updated_at": "2026-01-14T09:12:33.481Z",
+      "user_id": "alice"
+    },
+    {
+      "id": "9f1c2b04-6a1d-4a3e-9d8b-2c0f5e7a1102",
+      "memory": "Owns the billing service and is the escalation contact for payment reconciliation incidents.",
+      "hash": "6d2a8e1f7b4c0396a5e8d1c7f2b90a13",
+      "metadata": {"category": "ownership"},
+      "created_at": "2026-01-20T17:44:02.000Z",
+      "user_id": "bob"
+    },
+    {
+      "id": "9f1c2b04-6a1d-4a3e-9d8b-2c0f5e7a1103",
+      "memory": "The team retro is every second Thursday at 15:00 in the Helsinki timezone.",
+      "metadata": {"category": "schedule", "tags": ["ritual", "team"]},
+      "created_at": "2026-02-02T11:05:00.000Z",
+      "user_id": "alice"
+    },
+    {
+      "id": "9f1c2b04-6a1d-4a3e-9d8b-2c0f5e7a1104",
+      "memory": "",
+      "metadata": {"category": "empty-placeholder"},
+      "created_at": "2026-02-03T08:00:00.000Z",
+      "user_id": "alice"
+    }
+  ]
+}

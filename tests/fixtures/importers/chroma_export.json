@@ -1,0 +1,23 @@
+{
+  "collection": "agent_memory",
+  "ids": [
+    "chroma-0001",
+    "chroma-0002",
+    "chroma-0003",
+    "chroma-0004"
+  ],
+  "documents": [
+    "The deployment pipeline promotes a build to staging only after the reproducibility gate passes on both x86 and ARM runners.",
+    "Nightly index compaction runs at 03:00 UTC and rewrites the segment manifest in place.",
+    "Retention policy for raw telemetry is 30 days; aggregated rollups are kept for 18 months.",
+    "Postmortem for the 2026-02-11 outage:\nRoot cause was a stale connection pool after the failover.\n- pool health checks were advisory only\n- the reconnect backoff was unbounded"
+  ],
+  "metadatas": [
+    {"source": "runbook.md", "team": "platform", "tags": "deploy,gate"},
+    {"source": "runbook.md", "team": "platform"},
+    {"source": "policy.md", "team": "data", "reviewed": true},
+    {"source": "postmortems/2026-02-11.md", "team": "platform", "severity": 2}
+  ],
+  "embeddings": null,
+  "uris": null
+}

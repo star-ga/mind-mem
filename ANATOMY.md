@@ -5,8 +5,8 @@
 > Re-generate with: `anatomy .`
 
 **Project:** `mind-mem`
-**Files:** 971 | **Est. tokens:** ~2,130,666
-**Generated:** 2026-08-27 12:10 UTC
+**Files:** 980 | **Est. tokens:** ~2,143,484
+**Generated:** 2026-08-27 12:11 UTC
 
 ## Token Budget Guide
 
@@ -60,19 +60,21 @@
 | `skills/integrity-scan/` | 1 | ~376 |
 | `skills/memory-recall/` | 1 | ~549 |
 | `src/` | 1 | ~280 |
-| `src/mind_mem/` | 179 | ~650,060 |
+| `src/mind_mem/` | 179 | ~650,171 |
 | `src/mind_mem/api/` | 5 | ~16,595 |
 | `src/mind_mem/bench/` | 7 | ~18,591 |
+| `src/mind_mem/importers/` | 4 | ~7,539 |
 | `src/mind_mem/mcp/` | 3 | ~4,128 |
 | `src/mind_mem/mcp/infra/` | 8 | ~10,716 |
-| `src/mind_mem/mcp/tools/` | 24 | ~63,964 |
+| `src/mind_mem/mcp/tools/` | 24 | ~64,007 |
 | `src/mind_mem/skill_opt/` | 11 | ~13,702 |
 | `src/mind_mem/storage/` | 2 | ~5,519 |
 | `src/mind_mem/tool_output/` | 3 | ~4,611 |
 | `src/mind_mem/v4/` | 24 | ~64,969 |
 | `templates/` | 19 | ~1,041 |
-| `tests/` | 342 | ~759,351 |
+| `tests/` | 343 | ~763,551 |
 | `tests/fixtures/` | 1 | ~710 |
+| `tests/fixtures/importers/` | 4 | ~925 |
 | `tests/integration/` | 2 | ~1,575 |
 | `tests/red_team/` | 3 | ~806 |
 | `tests/red_team/transcripts/` | 1 | ~0 |
@@ -510,7 +512,7 @@
 - `block_store_encrypted.py` (~2313 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `block_store_postgres.py` (~18281 tok, huge) — PostgresBlockStore — PostgreSQL-backed BlockStore for mind-mem v3.2.0.
 - `block_store_postgres_replica.py` (~2530 tok, huge) — v3.2.0 — read-replica routing for PostgresBlockStore.
-- `block_store.py` (~10599 tok, huge) — BlockStore abstraction — decouples block access from storage format.
+- `block_store.py` (~10629 tok, huge) — BlockStore abstraction — decouples block access from storage format.
 - `bootstrap_corpus.py` (~2158 tok, huge) — mind-mem Bootstrap Corpus — one-time backfill from existing knowledge sources.
 - `calibration.py` (~4838 tok, huge) — Calibration feedback loop — track retrieval quality and adjust block ranking.
 - `capture.py` (~3855 tok, huge) — mind-mem Auto-Capture Engine with Structured Extraction. Zero external deps.
@@ -562,6 +564,14 @@
 - `hook_installer.py` (~10611 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `http_transport.py` (~11242 tok, huge) — HTTP transport adapter for mind-mem (v3.9.0 candidate).
 - `hybrid_recall.py` (~16311 tok, huge) — mind-mem Hybrid Recall -- BM25 + Vector + RRF fusion.
+### `src/mind_mem/importers/`
+
+- `engine.py` (~2872 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `__init__.py` (~884 tok, large) — # Copyright 2026 STARGA, Inc.
+- `parsers.py` (~3123 tok, huge) — # Copyright 2026 STARGA, Inc.
+- `records.py` (~660 tok, large) — # Copyright 2026 STARGA, Inc.
+### `src/mind_mem/`
+
 - `inbox.py` (~3716 tok, huge) — Inbox folder ingestion — `mm inbox-watch` (v3.9.0 candidate).
 - `ingestion_pipeline.py` (~1958 tok, huge) — # Copyright 2026 STARGA, Inc.
 - `__init__.py` (~714 tok, large) — # Mind Mem — Memory + Immune System for AI agents
@@ -615,7 +625,7 @@
 - `__init__.py` (~107 tok, small) — Per-domain ``@mcp.tool`` modules (v3.2.0 §1.2 PR-3+).
 - `kernels.py` (~1902 tok, huge) — MIND kernel + compiled-truth MCP tools.
 - `lineage.py` (~717 tok, large) — MCP wrapping for the v3.11.0 typed block-lineage graph (Pattern 3).
-- `memory_ops.py` (~8403 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
+- `memory_ops.py` (~8446 tok, huge) — Memory operations MCP tools — index / lifecycle / health / export.
 - `mic_map.py` (~2436 tok, huge) — MIC/MAP serialization MCP tools — wraps ``mind_mem.mic_map``.
 - `model.py` (~2586 tok, huge) — Model audit / signing MCP tools — wraps ``mind_mem.model_audit``,
 - `ontology.py` (~969 tok, large) — Ontology MCP tools — ``ontology_load`` + ``ontology_validate``.
@@ -662,7 +672,7 @@
 - `query_planner.py` (~2865 tok, huge) — Query decomposition for multi-hop questions (v3.3.0 Tier 1 #1).
 - `recall_attestation.py` (~5902 tok, huge) — Per-run recall attestation — runtime evidence of *how* an answer was produced.
 - `recall_cache.py` (~2938 tok, huge) — v3.2.0 — distributed recall result cache (Redis + in-process LRU fallback).
-- `_recall_constants.py` (~3205 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
+- `_recall_constants.py` (~3286 tok, huge) — Recall engine constants — search fields, BM25 params, regex patterns, limits."""
 - `_recall_context.py` (~2601 tok, huge) — Recall engine context packing — post-retrieval augmentation rules."""
 - `_recall_core.py` (~21790 tok, huge) — Recall engine core — RecallBackend, main BM25 pipeline, backend loading, prefetch, CLI."""
 - `_recall_detection.py` (~5477 tok, huge) — Recall engine detection — query type classification, text extraction, block utilities."""
@@ -791,6 +801,12 @@
 - `TASKS.md` (~83 tok, small) — TASKS — MIND-Mem v1.0
 - `TASKS_PROPOSED.md` (~33 tok, tiny) — TASKS_PROPOSED — MIND-Mem v1.0
 - `tools.md` (~33 tok, tiny) — TOOLS — MIND-Mem v1.0
+### `tests/fixtures/importers/`
+
+- `chroma_export.json` (~245 tok, medium) — Keys: collection, ids, documents, metadatas, embeddings
+- `chroma_near_duplicates.json` (~86 tok, small) — Keys: collection, ids, documents, metadatas
+- `letta_agent.af.json` (~268 tok, medium) — Keys: agent_type, name, created_at, system, core_memory
+- `mem0_export.json` (~326 tok, medium) — Keys: results
 ### `tests/fixtures/`
 
 - `locomo_mini.json` (~710 tok, large)
@@ -943,6 +959,7 @@
 - `test_hybrid_recall_fusion_noise.py` (~2096 tok, huge) — Regression gate for the hybrid-recall NOISE bug (empty BM25 arm → 1/(k+1) floor).
 - `test_hybrid_recall.py` (~3107 tok, huge) — Tests for hybrid_recall.py -- HybridBackend + RRF fusion."""
 - `test_hybrid_search.py` (~599 tok, large) — Tests for hybrid search functionality."""
+- `test_importers.py` (~4200 tok, huge) — Tests for the roadmap Group G migration importers (file-based subset).
 - `test_inbox.py` (~2352 tok, huge) — Tests for the v3.9 inbox folder ingestion."""
 - `test_index_stats_b1.py` (~523 tok, large) — # Copyright 2026 STARGA, Inc.
 - `test_init_workspace_postgres.py` (~1640 tok, huge) — Postgres regression tests for ``init_workspace`` (audit bug #8).

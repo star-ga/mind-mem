@@ -252,6 +252,8 @@ _BLOCK_PREFIX_MAP: dict[str, tuple[str, str]] = {
     # Receive = recall over this corpus; cross-node works because the store
     # is the shared Postgres hub (claude-peers is banned; this is the channel).
     "MSG": ("memory", "MESSAGES.md"),
+    # Migration importers (roadmap Group G) (`mm import --from ...`) write here.
+    "IMP": ("memory", "IMPORTED.md"),
 }
 
 _BLOCK_ID_RE = _re.compile(r"^([A-Z]+)-[a-zA-Z0-9_.-]+$")

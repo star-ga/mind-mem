@@ -86,6 +86,11 @@ CORPUS_FILES = {
     # v4.0.19: fixes the pre-existing inbox-invisible-on-SQLite bug — INBOX-
     # blocks were written to this file but never indexed, so recall returned 0.
     "inbox": "memory/INBOX.md",
+    # Migration importers (roadmap Group G) (`mm import --from {chroma|mem0|letta}`)
+    # land IMP- blocks here; indexed so imported content is recallable
+    # immediately, at parity with INBOX-/MSG-. Purely additive — a
+    # workspace without the file is skipped exactly as before.
+    "imported": "memory/IMPORTED.md",
 }
 
 # BM25 parameters
