@@ -163,3 +163,72 @@ records (via `O_APPEND`) but cannot erase or rewrite historical ones.
 It does **not** stop the service itself from writing falsified
 records into the chain; that's the hash-chain layer's job. The two
 layers are independent.
+
+## Deletion vs. tamper-evidence — the tombstone ledger
+
+An append-only ledger and a right-to-forget request pull in opposite
+directions: the ledger must never lose a record, the request demands
+that content stop existing. `v4.redactable_tombstones` resolves this
+by splitting the block into the part that must die (its content) and
+the part that must survive (its hash).
+
+| File | Purpose | Added in |
+|------|---------|----------|
+| `.mind-mem-audit/tombstones.jsonl` | Redaction records — one per redacted block | v4.2 |
+
+With the flag **off** (the default) `delete_memory_item` behaves as it
+always has: the block leaves the corpus and a full copy lands in
+`memory/deleted_blocks.jsonl`, i.e. the deletion is recoverable.
+
+With the flag **on**, deletion becomes redaction:
+
+* the content is destroyed — corpus text, index rows, FTS terms (the
+  FTS5 index is rebuilt, because an FTS delete is only logical), cached
+  embeddings, the SQLite WAL and free pages (`secure_delete` + `VACUUM`),
+  and any pre-existing plaintext receipt in `deleted_blocks.jsonl`;
+* the block's **Merkle leaf is preserved** in the tombstone ledger and
+  re-supplied to the tree, so the root does not move and inclusion
+  proofs issued before the redaction still verify;
+* the deletion event is chained three ways — an evidence record and a
+  SHA3-512 hash-chain entry through the governance gate, plus a
+  `delete_block` entry in the SHA-256 audit chain — each carrying the
+  actor and the reason. The tombstone binds all three receipts and
+  back-links to the previous tombstone.
+
+A redaction therefore leaves a block that is *visibly redacted* rather
+than one that never existed: `get_block` returns `tombstoned: true`
+with the actor, the reason and the preserved leaf, and re-deleting is
+idempotent (no second chain entry is written).
+
+Enable it per workspace:
+
+```json
+{ "v4": { "redactable_tombstones": { "enabled": true } } }
+```
+
+`delete_memory_item(block_id, actor=..., reason=...)` then requires a
+reason — it is chained as the justification for destroying content.
+
+### Append-only interaction (read before running `chattr +a`)
+
+* **Do** apply the append-only attribute to
+  `.mind-mem-audit/tombstones.jsonl`: it is written with `O_APPEND` and
+  is never rewritten. Removing a tombstone is exactly how a redacted
+  block would be made to look like a block that never existed, and
+  `mind-mem-verify` reports it as a chain failure (`previous_hash
+  mismatch`).
+* **Do not** apply it to `memory/deleted_blocks.jsonl` while redaction
+  is enabled: scrubbing an old plaintext receipt is an in-place
+  rewrite, which `+a` forbids. mind-mem logs
+  `tombstone_scrub_write_failed` and continues — the block is redacted
+  everywhere else, but that one journal line must then be cleared by
+  hand. Once redaction is on, no new plaintext is ever written there.
+
+### Verify
+
+```bash
+mind-mem-verify /path/to/workspace     # includes a `tombstones` check
+```
+
+The MCP `verify_chain` tool reports the same under a `tombstones` key.
+Neither surface changes shape for a workspace that has never redacted.

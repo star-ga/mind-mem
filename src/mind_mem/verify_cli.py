@@ -288,6 +288,28 @@ def check_snapshot(
                 report.exit_code = EXIT_MERKLE
 
 
+def check_tombstones(workspace: str, report: VerifyReport) -> None:
+    """Verify the redactable-tombstone ledger, when the workspace has one.
+
+    Records nothing at all for a workspace that has never redacted, so
+    the report is byte-identical to before this check existed. A broken
+    ledger is a chain-integrity failure: a removed or reordered
+    tombstone is how a redacted block would be made to look like a block
+    that never existed.
+    """
+    from .tombstone import ledger_exists, load_tombstones, verify_ledger
+
+    if not ledger_exists(workspace):
+        return
+    ok, errors = verify_ledger(workspace)
+    if ok:
+        report.record("tombstones", True, f"{len(load_tombstones(workspace))} tombstones verified")
+        return
+    report.record("tombstones", False, "; ".join(errors[:3]))
+    if report.exit_code == EXIT_OK:
+        report.exit_code = EXIT_CHAIN
+
+
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
@@ -310,6 +332,7 @@ def verify_workspace(
     check_hash_chain(workspace, report)
     check_spec_binding(workspace, report)
     check_evidence_chain(workspace, report)
+    check_tombstones(workspace, report)
     check_snapshot(workspace, report, snapshot=snapshot)
 
     return report

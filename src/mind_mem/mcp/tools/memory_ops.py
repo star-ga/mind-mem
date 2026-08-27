@@ -232,13 +232,141 @@ def reindex(include_vectors: bool = False) -> str:
     return json.dumps(results, indent=2)
 
 
+def _atomic_write_text(filepath: str, text: str) -> None:
+    """Replace *filepath* with *text* via a same-directory temp file + rename."""
+    dir_name = os.path.dirname(filepath)
+    fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".md.tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as tmp_f:
+            tmp_f.write(text)
+        os.replace(tmp_path, filepath)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def _redact_and_write(
+    *,
+    ws: str,
+    block_id: str,
+    filepath: str,
+    deleted_content: str,
+    new_content: str,
+    lines_removed: int,
+    actor: str,
+    reason: str,
+) -> str:
+    """Redactable-tombstone deletion path (``v4.redactable_tombstones`` ON).
+
+    Chains the deletion event first, then destroys the content — see
+    :mod:`mind_mem.tombstone_redact` for why that order is load-bearing.
+    Called with the source file's :class:`FileLock` already held.
+    """
+    from mind_mem.governance_gate import _current_agent
+    from mind_mem.tombstone import TombstoneError
+    from mind_mem.tombstone_redact import redact_block
+
+    if not reason.strip():
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": "A reason is required to redact a block.",
+                "block_id": block_id,
+                "hint": (
+                    "v4.redactable_tombstones is enabled: deletion destroys content "
+                    "permanently, so the justification is chained with the deletion "
+                    "event. Pass reason=..."
+                ),
+            },
+            indent=2,
+        )
+
+    effective_actor = actor.strip() or _current_agent()
+    rel_path = os.path.relpath(filepath, ws).replace(os.sep, "/")
+
+    parsed_block: dict | None = None
+    try:
+        for block in parse_file(filepath):
+            if block.get("_id") == block_id:
+                parsed_block = block
+                break
+    except (OSError, ValueError, BlockCorruptedError) as exc:
+        _log.debug("redact_parse_failed", block_id=block_id, error=str(exc))
+
+    try:
+        record = redact_block(
+            ws,
+            block_id,
+            content=deleted_content,
+            source_file=rel_path,
+            actor=effective_actor,
+            reason=reason.strip(),
+            parsed_block=parsed_block,
+            destroy=lambda: _atomic_write_text(filepath, new_content),
+        )
+    except TombstoneError as exc:
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Redaction refused: {exc}",
+                "block_id": block_id,
+            },
+            indent=2,
+        )
+    except Exception as exc:  # governance-gate / chain failure — content untouched
+        _log.warning("redact_chain_failed", block_id=block_id, error=str(exc))
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "error": f"Redaction aborted before any content was destroyed: {exc}",
+                "block_id": block_id,
+            },
+            indent=2,
+        )
+
+    metrics.inc("mcp_delete_memory_item")
+    _log.info("mcp_delete_memory_item_redacted", block_id=block_id, file=os.path.basename(filepath))
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "status": "tombstoned",
+            "block_id": block_id,
+            "file": os.path.basename(filepath),
+            "lines_removed": lines_removed,
+            "content_recoverable": False,
+            "tombstone": record.public_view(),
+        },
+        indent=2,
+    )
+
+
 @mcp_tool_observe
-def delete_memory_item(block_id: str) -> str:
-    """Delete a block by ID from its source .md file (admin-scope)."""
+def delete_memory_item(block_id: str, actor: str = "", reason: str = "") -> str:
+    """Delete a block by ID from its source .md file (admin-scope).
+
+    Default behaviour is unchanged: the block leaves the corpus and a
+    full copy lands in ``memory/deleted_blocks.jsonl`` so the deletion
+    is recoverable.
+
+    When the workspace enables ``v4.redactable_tombstones`` the call
+    becomes a **redaction** instead: the content is destroyed (corpus
+    text, index rows, cached embeddings, and any earlier plaintext
+    recovery receipt), while the block's Merkle leaf is preserved and
+    the deletion event — ``actor`` and ``reason`` included — is written
+    to the evidence chain, the hash chain and the audit chain. A
+    ``reason`` is then mandatory, and re-deleting is idempotent.
+    """
     ws = _workspace()
     ws_err = _check_workspace(ws)
     if ws_err:
         return ws_err
+
+    from mind_mem.tombstone import tombstones_enabled
+
+    redacting = tombstones_enabled(ws)
 
     if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9-]+$", block_id):
         return json.dumps(
@@ -288,6 +416,23 @@ def delete_memory_item(block_id: str) -> str:
                         block_end = i + 1
 
         if block_start is None:
+            if redacting:
+                from mind_mem.tombstone_redact import already_tombstoned
+
+                prior = already_tombstoned(ws, block_id)
+                if prior is not None:
+                    # Idempotent re-delete: the block is already redacted,
+                    # so report the standing tombstone instead of a
+                    # never-existed miss, and write nothing.
+                    return json.dumps(
+                        {
+                            "_schema_version": MCP_SCHEMA_VERSION,
+                            "status": "already_tombstoned",
+                            "block_id": block_id,
+                            "tombstone": prior.public_view(),
+                        },
+                        indent=2,
+                    )
             return json.dumps(
                 {
                     "_schema_version": MCP_SCHEMA_VERSION,
@@ -302,6 +447,18 @@ def delete_memory_item(block_id: str) -> str:
         deleted_content = "\n".join(lines[block_start:block_end])
         new_lines = lines[:block_start] + lines[block_end:]
         new_content = "\n".join(new_lines)
+
+        if redacting:
+            return _redact_and_write(
+                ws=ws,
+                block_id=block_id,
+                filepath=filepath,
+                deleted_content=deleted_content,
+                new_content=new_content,
+                lines_removed=block_end - block_start,
+                actor=actor,
+                reason=reason,
+            )
 
         from datetime import datetime, timezone
 
@@ -434,6 +591,35 @@ def export_memory(format: str = "jsonl", include_metadata: bool = False, max_blo
     return json.dumps(envelope, indent=2)
 
 
+def _tombstone_view(ws: str, block_id: str) -> str | None:
+    """Return the JSON envelope for a redacted block, or None.
+
+    A tombstoned block must never look like a block that never existed:
+    the ID is real, the content is gone by design, and the preserved
+    leaf still proves what used to be there. Returns None (and costs a
+    single ``os.stat``) for workspaces that have never redacted.
+    """
+    from mind_mem.tombstone import get_tombstone, ledger_exists
+
+    if not ledger_exists(ws):
+        return None
+    record = get_tombstone(ws, block_id)
+    if record is None:
+        return None
+    metrics.inc("mcp_get_block_tombstoned")
+    return json.dumps(
+        {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "block_id": block_id,
+            "found": False,
+            "tombstoned": True,
+            "error": f"Block {block_id} was redacted — its content is permanently destroyed.",
+            "tombstone": record.public_view(),
+        },
+        indent=2,
+    )
+
+
 @mcp_tool_observe
 def get_block(block_id: str) -> str:
     """Retrieve a single block by its ID with full content."""
@@ -472,6 +658,9 @@ def get_block(block_id: str) -> str:
         block = store.get_by_id(block_id)
         if block is not None:
             return _found(block)
+        tombstone_view = _tombstone_view(ws, block_id)
+        if tombstone_view is not None:
+            return tombstone_view
         metrics.inc("mcp_get_block_miss")
         return json.dumps(
             {
@@ -514,6 +703,10 @@ def get_block(block_id: str) -> str:
                         return _found(block)
             except (OSError, ValueError, BlockCorruptedError):
                 continue
+
+    tombstone_view = _tombstone_view(ws, block_id)
+    if tombstone_view is not None:
+        return tombstone_view
 
     metrics.inc("mcp_get_block_miss")
     return json.dumps(
