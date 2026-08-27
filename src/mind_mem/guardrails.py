@@ -35,8 +35,16 @@ Semantics
   their similarity score — see that module for the bounded-displacement
   contract.
 * **Read-only.**  Nothing here writes to the store.  Guardrail blocks are
-  authored through the governed ``propose_update`` → HITL path like every
-  other block kind.
+  operator-authored in ``guardrails/GUARDRAILS.md`` and only ever read
+  back — ``propose_update`` mints ``decision`` / ``task`` blocks into
+  ``SIGNALS.md`` and cannot author a ``[GR-...]`` block (see
+  ``docs/guardrails.md`` §Authoring).
+* **Provenance-restricted.**  A block carrying external-ingest / imported
+  provenance is never recognised as a guardrail, whatever its content or
+  metadata declares — see :func:`guardrail_provenance_refusal`.  A
+  guardrail bypasses the ranker and is surfaced unconditionally, so
+  trigger-minting is an injection primitive: untrusted content must not
+  reach it.
 
 Every dimension shares one matcher — the glob grammar, normalisation and
 per-pattern bounds live in :mod:`mind_mem.guardrail_patterns`.
@@ -57,6 +65,7 @@ from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
 from .block_parser import parse_file
+from .block_provenance import extract_provenance
 from .guardrail_patterns import (
     MAX_PATTERN_LEN,
     MAX_PATTERNS_PER_DIMENSION,
@@ -67,6 +76,12 @@ from .guardrail_patterns import (
     substring_or_glob,
 )
 from .observability import get_logger
+from .provenance_class import (
+    EXTERNAL_INGEST,
+    EXTERNAL_ROLES,
+    EXTERNAL_TOKEN_PREFIXES,
+    classify_provenance,
+)
 
 __all__ = [
     "DEFAULT_GUARDRAIL_FILES",
@@ -76,11 +91,15 @@ __all__ = [
     "MAX_PATTERN_LEN",
     "MAX_SURFACED_HARD_CAP",
     "SEVERITY_RANK",
+    "UNTRUSTED_BLOCK_TYPES",
+    "UNTRUSTED_PROVENANCE_CLASSES",
     "Guardrail",
     "GuardrailContext",
     "GuardrailPolicy",
+    "GuardrailProvenanceError",
     "GuardrailSpecError",
     "GuardrailTrigger",
+    "guardrail_provenance_refusal",
     "load_guardrails",
     "match_guardrails",
     "parse_guardrail_block",
@@ -118,6 +137,20 @@ _TRIGGER_FIELDS: tuple[tuple[str, str], ...] = (
 #: Statuses that keep a guardrail live.  Anything else (deprecated,
 #: archived, superseded) is parsed but never fires.
 _LIVE_STATUSES = frozenset({"", "active", "wip"})
+
+#: Provenance classes that may never mint a guardrail.  Only affirmative
+#: evidence of *external* origin disqualifies a block: ``unknown`` (a
+#: corpus that predates provenance fields) stays eligible, exactly as
+#: :mod:`mind_mem.provenance_class` treats absence as neutral everywhere
+#: else.  Agent-authored guardrails are still admitted — the threat model
+#: here is untrusted *content*, not an authenticated agent.
+UNTRUSTED_PROVENANCE_CLASSES: frozenset[str] = frozenset({EXTERNAL_INGEST})
+
+#: Block ``Type`` values stamped by an ingest pipeline.  Mirrors
+#: ``importers.engine.IMPORT_BLOCK_TYPE``, kept as a literal so the
+#: recall-hot guardrail path never imports the importer package;
+#: ``tests/test_guardrail_blocks.py`` asserts the two stay in sync.
+UNTRUSTED_BLOCK_TYPES: frozenset[str] = frozenset({"importedmemory"})
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +313,69 @@ class GuardrailPolicy:
         return cls(enabled=bool(enabled), max_surfaced=bounded, sources=sources or DEFAULT_GUARDRAIL_FILES)
 
 
+class GuardrailProvenanceError(GuardrailSpecError):
+    """Raised when a block's provenance disqualifies it from being a guardrail.
+
+    A subclass of :class:`GuardrailSpecError` so every existing caller keeps
+    failing closed on it, while :func:`load_guardrails` can log the security
+    refusal under its own event.
+    """
+
+
+def _norm_marker(value: Any) -> str:
+    """Lower-cased, stripped ``str`` view of a corpus value (``""`` for None)."""
+    if value is None:
+        return ""
+    return str(value).strip().lower()
+
+
+def guardrail_provenance_refusal(block: Mapping[str, Any]) -> str:
+    """Why *block* may not mint a guardrail — ``""`` when it may.
+
+    A guardrail bypasses the ranker and is surfaced unconditionally, so a
+    trigger-bearing block is an injection primitive: content that arrived
+    from outside the governed store must never be able to declare one.
+
+    Un-launderable by construction.  The external markers are read straight
+    off the block **before** any role-based promotion, so a crafted
+    ``ActorRole: operator`` sitting next to ``Source: imported:slack``
+    is still refused — unlike
+    :func:`~mind_mem.provenance_class.classify_provenance`, whose
+    operator rule deliberately wins for *scoring*.  That classifier is
+    then consulted as a second, table-driven pass, so any external role
+    or ingest token added there applies here for free.
+
+    Pure and deterministic: reads only *block*, no I/O, no clock, no model.
+
+    Args:
+        block: A parsed block dict.
+
+    Returns:
+        A short human-readable reason, or ``""`` when the block's
+        provenance permits guardrail recognition.
+    """
+    provenance = extract_provenance(dict(block))
+
+    role = _norm_marker(provenance.get("actor_role"))
+    if role in EXTERNAL_ROLES:
+        return f"external actor role {role!r}"
+
+    for field, raw in (("ToolId", provenance.get("tool_id")), ("Source", block.get("Source"))):
+        token = _norm_marker(raw)
+        if any(token.startswith(prefix) for prefix in EXTERNAL_TOKEN_PREFIXES):
+            return f"{field} carries ingest token {token!r}"
+
+    block_type = _norm_marker(block.get("Type"))
+    if block_type in UNTRUSTED_BLOCK_TYPES:
+        return f"ingest-authored block type {block_type!r}"
+
+    provenance_class = classify_provenance(block)
+    if provenance_class in UNTRUSTED_PROVENANCE_CLASSES:
+        return f"provenance class {provenance_class!r}"
+
+    return ""
+
+
 # ---------------------------------------------------------------------------
 # Parsing + loading
 # ---------------------------------------------------------------------------
@@ -289,12 +385,22 @@ def parse_guardrail_block(block: Mapping[str, Any]) -> Guardrail:
     """Read one parsed block dict as a :class:`Guardrail`.
 
     Raises:
+        GuardrailProvenanceError: the block carries external-ingest /
+            imported provenance, so it may not mint a guardrail whatever
+            its content declares.
         GuardrailSpecError: the block is not a ``GR-`` block, or a trigger
             field is malformed.
     """
     block_id = str(block.get("_id", ""))
     if not block_id.startswith(GUARDRAIL_ID_PREFIX):
         raise GuardrailSpecError(f"not a guardrail block: {block_id!r}")
+
+    # Provenance is checked FIRST, before a single trigger field is read:
+    # an untrusted block must be refused as a guardrail on origin alone,
+    # never on how well-formed its declaration happens to be.
+    refusal = guardrail_provenance_refusal(block)
+    if refusal:
+        raise GuardrailProvenanceError(f"{block_id}: untrusted provenance ({refusal}) — cannot declare a guardrail")
 
     statement = block.get("Statement") or block.get("Rule") or block.get("Summary") or ""
     if isinstance(statement, (list, tuple)):
@@ -341,7 +447,10 @@ def load_guardrails(workspace: str, policy: GuardrailPolicy | None = None) -> tu
     Sources come from *policy* (default: :data:`DEFAULT_GUARDRAIL_FILES`).
     A source that escapes the workspace root is refused; a malformed
     guardrail is skipped with a loud warning so one bad block cannot take
-    the whole constraint set (or recall) down.
+    the whole constraint set (or recall) down.  A block whose provenance
+    is external-ingest / imported is refused outright (logged as
+    ``guardrail_provenance_refused``) even when its declaration is
+    perfectly well-formed — see :func:`guardrail_provenance_refusal`.
 
     Returns:
         Guardrails in deterministic order (severity, then block ID), with
@@ -371,6 +480,9 @@ def load_guardrails(workspace: str, policy: GuardrailPolicy | None = None) -> tu
             enriched.setdefault("_source_file", rel_path)
             try:
                 guardrail = parse_guardrail_block(enriched)
+            except GuardrailProvenanceError as exc:
+                _log.warning("guardrail_provenance_refused", source=rel_path, error=str(exc))
+                continue
             except GuardrailSpecError as exc:
                 _log.warning("guardrail_block_rejected", source=rel_path, error=str(exc))
                 continue

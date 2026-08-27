@@ -107,6 +107,13 @@ ToolId: imported:chroma
 Source: imported:chroma
 Tags: composition-fixture
 
+# NOTE: this guardrail is demoted through world-staleness (the dead anchor)
+# plus *agent* provenance, deliberately NOT external-ingest. A block carrying
+# external-ingest / imported provenance is refused guardrail recognition
+# outright (mind_mem.guardrails.guardrail_provenance_refusal) — untrusted
+# content must not be able to mint a ranker-bypassing constraint — so an
+# imported guardrail could never reach the composition this file exercises.
+# ID_EXTERNAL above keeps the external-ingest provenance class covered.
 [{ID_GR_DEMOTABLE}]
 Type: Guardrail
 Date: 2026-08-01
@@ -115,9 +122,8 @@ Statement: Widget rollout ledger migration must never run git reset --hard witho
 Severity: critical
 TriggerTools: Bash
 TriggerCommands: git reset --hard
-ActorRole: importer
-ToolId: imported:chroma
-Source: imported:chroma
+ActorRole: planner
+ActorId: composition-fixture
 Anchors:
 - {DEAD_ANCHOR}
 Tags: composition-fixture
@@ -459,13 +465,17 @@ class TestDemotionVersusForcedSurfacing:
     ALL_ON = dict(gate=True, provenance=True, outcome=True, guardrails=True)
 
     def test_the_gate_really_does_demote_the_guardrail(self, masters, tmp_path) -> None:
-        """Precondition: world-staleness + external provenance push V under the bar."""
+        """Precondition: world-staleness + agent provenance push V under the bar.
+
+        Not *external* provenance: an external-ingest block is refused
+        guardrail recognition, so it can never be the demoted guardrail.
+        """
         ws = _workspace(masters, tmp_path, "ws_precondition", world=True, recall_cfg=_recall_cfg(**self.ALL_ON))
         ranked = recall(ws, QUERY, limit=10)
         rail = next(h for h in ranked if h["_id"] == ID_GR_DEMOTABLE)
         assert rail["validity"]["staleness"] == 0.0, "world-staleness row not reaching the gate"
-        assert rail["validity"]["provenance_class"] == "external-ingest"
-        assert rail["validity"]["score"] == pytest.approx(0.65)
+        assert rail["validity"]["provenance_class"] == "agent-inferred"
+        assert rail["validity"]["score"] == pytest.approx(0.70)
         assert rail["_validity_demoted"] is True
 
     def test_a_demoted_guardrail_still_surfaces_first(self, masters, tmp_path) -> None:
@@ -594,7 +604,7 @@ class TestDocumentedCompositionQuirks:
         survived = recall(ws, QUERY, limit=10, guardrail_context=GUARDRAIL_CTX)[0]
         assert survived["_id"] == ID_GR_DEMOTABLE
         assert survived["_validity_demoted"] is True
-        assert survived["validity"]["score"] == pytest.approx(0.65)
+        assert survived["validity"]["score"] == pytest.approx(0.70)
 
         re_injected = recall(ws, QUERY, limit=3, guardrail_context=GUARDRAIL_CTX)[0]
         assert re_injected["_id"] == ID_GR_DEMOTABLE

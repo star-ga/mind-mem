@@ -11,8 +11,11 @@ Two read-only tools:
   constraints firing for the same context surfaced ahead of the ranked
   hits.  Bounded by ``recall.guardrails.max_surfaced``.
 
-Both are ``USER_TOOLS`` scope and never write: guardrail blocks are
-authored through ``propose_update`` → HITL like every other block kind.
+Both are ``USER_TOOLS`` scope and never write.  Neither can mint a
+guardrail: ``[GR-...]`` blocks are operator-authored in
+``guardrails/GUARDRAILS.md`` and read back read-only, and a block carrying
+external-ingest / imported provenance is refused recognition outright
+(``mind_mem.guardrails.guardrail_provenance_refusal``).
 
 The recall cache is deliberately bypassed here — its key does not include
 the guardrail context, so a cached envelope from a different context would

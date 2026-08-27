@@ -13,9 +13,18 @@ the ranker.
 
 ## Authoring
 
-Guardrails live in `guardrails/GUARDRAILS.md` by default and are authored
-through the normal governed path (`propose_update` → HITL approval) — nothing
-in the guardrail code writes to the store.
+Guardrails live in `guardrails/GUARDRAILS.md` by default. Nothing in the
+guardrail code writes to the store — the file is **operator-authored** and only
+ever read back.
+
+`propose_update` mints `decision` and `task` blocks into `SIGNALS.md`; it has
+no `guardrail` block type and cannot author a `[GR-...]` block. So guardrail
+authoring is an operator write to a workspace file today, not an agent
+proposal. That is deliberate for this release: a guardrail bypasses the ranker
+and is surfaced unconditionally, so the smallest trustworthy minting surface is
+a human editing the file. Extending `propose_update` → HITL to guardrails would
+add an agent-reachable minting path and needs its own review; until it exists,
+do not describe guardrails as agent-proposable.
 
 ```markdown
 [GR-20260827-001]
@@ -48,6 +57,35 @@ Status: active
 
 Every trigger field accepts either a comma-separated scalar
 (`TriggerTools: Bash, Shell`) or a markdown list.
+
+### Provenance restriction
+
+**A block that arrived from outside the governed store can never mint a
+guardrail**, whatever its content or metadata declares. Recognition is refused
+before a single trigger field is read when the block carries:
+
+| Signal | Example |
+|--------|---------|
+| An external `ActorRole` | `ActorRole: importer` / `ingest` / `crawler` / `scraper` / `feed` / `sync` |
+| An ingest token on `ToolId` or `Source` | `imported:slack`, `import:notion`, `ingest:…`, `external:…` |
+| An ingest-authored block type | `Type: ImportedMemory` |
+| An `external-ingest` provenance class | anything `mind_mem.provenance_class` classifies as external |
+
+The markers are read straight off the block *before* any role-based promotion,
+so a crafted `ActorRole: operator` sitting next to `Source: imported:slack` is
+still refused — an imported corpus cannot launder itself into a constraint by
+claiming a trusted role. The refusal is logged as
+`guardrail_provenance_refused` and the rest of the file still loads: one
+poisoned block cannot take the constraint set down.
+
+Blocks with **no** provenance fields stay eligible (a corpus predating those
+fields is not demoted, matching how absence is treated everywhere else), and
+agent-authored guardrails still work — the threat model is untrusted *content*,
+not an authenticated agent.
+
+Why this is load-bearing: guardrails bypass the ranker and are surfaced
+unconditionally, so a trigger-bearing block is an injection primitive. Content
+an attacker can get imported must not be able to declare one.
 
 ### Matching rules
 
@@ -124,14 +162,15 @@ that escapes the workspace root is refused.
 | `check_guardrails(tool, command, intent, paths)` | Pure trigger evaluation — the constraints that apply to an action, with no query and no ranker. Call it before a risky action. |
 | `recall_with_guardrails(query, tool, command, intent, paths, limit)` | Ordinary recall with the constraints for this context surfaced first. |
 
-Both are read-only, `USER_TOOLS` scope. `recall_with_guardrails` deliberately
-bypasses the recall cache: the cache key does not include the guardrail
-context, so a cached envelope could otherwise answer with the wrong
-constraints.
+Both are read-only, `USER_TOOLS` scope — they evaluate and surface guardrails,
+they never mint one. `recall_with_guardrails` deliberately bypasses the recall
+cache: the cache key does not include the guardrail context, so a cached
+envelope could otherwise answer with the wrong constraints.
 
 ## Zero regression
 
 With no guardrail blocks present — or with no `guardrail_context` supplied —
 recall output is byte-identical to a build without this feature. The whole
 path is skipped, not merely filtered to empty. See
-`tests/test_guardrail_blocks.py::TestZeroRegression`.
+`tests/test_guardrail_blocks.py::TestZeroRegression`, and
+`TestProvenanceRestriction` for the minting rules above.
