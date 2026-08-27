@@ -131,6 +131,9 @@ USER_TOOLS = frozenset(
         "mic_inspect_tool",
         "pipeline_status",
         "reindex_dirty",
+        # v4.9.2 — conversational chat layer. Read-only: recalls
+        # evidence and returns a cited answer; never writes.
+        "chat_with_memory",
     }
 )
 

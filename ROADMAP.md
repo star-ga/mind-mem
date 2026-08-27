@@ -31,7 +31,7 @@ by its full description below.
 ### Group B — Knowledge graph (2 items)
 
 - [x] **Block versioning + time-travel** — **shipped** (`v4/block_versioning.py`: `block_history(block_id)` + `content_as_of(...)` over the applied-edit chain; `recall(..., as_of=date)` now plumbs the point-in-time projection through every backend)
-- [ ] **Conversational chat layer** — `chat_with_memory(workspace, question)` with `[[block_id]]` citations
+- [x] **Conversational chat layer** — **shipped** (`chat_memory.py` + `chat_citations.py` + `chat_generators.py`): `chat_with_memory(workspace, question)` returns an answer whose every claim sentence carries a `[[block_id]]` that is resolved against the block store before the call returns. Ungrounded or fabricated ids raise `CitationError` (or reject, per `on_invalid`); empty recall returns the literal `"no record found"` without invoking a generator at all. The answerer is a dependency-injected seam — the in-box `extractive_generator` is deterministic and offline, the service adapter is opt-in. Surfaced as a Python API, the `chat_with_memory` MCP tool, and the `mind-mem-chat` console script.
 
 > See also **Group K — Graph-from-text construction + edge-grounded recall**
 > (below): description-grounded entity resolution, blocking + LLM-arbitration,
@@ -1997,7 +1997,7 @@ multi-tenancy thread is also tracked as issue [#505].
 - [x] **Long-context recall mode** — `mode="long_context"` ships in the recall API.
 - [x] **LLM-driven knowledge fusion** — `propose_fuse` tool ships, hooked into `propose_update → approve_apply`.
 - [x] **Streaming recall** — generator-style streaming path ships.
-- [ ] **Conversational chat layer** — `chat_with_memory(workspace, question)` not yet shipped. Tracked.
+- [x] **Conversational chat layer** — `chat_with_memory(workspace, question)` ships with sentence-level `[[block_id]]` citations, store-backed citation resolution, a no-record abstention path, and a pluggable (default deterministic + offline) answerer.
 - [x] **Schema layer for LLM prompts** — `mind-mem.json` `prompts.schema` ships.
 - [x] **Schema evolution / migration tooling** — `mm migrate-store` covers schema drift for v4 fields.
 
