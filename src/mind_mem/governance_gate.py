@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import os
 import threading
-from dataclasses import dataclass
 from typing import Optional
 
 from .evidence_objects import EvidenceAction, EvidenceChain
@@ -65,21 +64,6 @@ def get_gate(workspace: str) -> "GovernanceGate":
 # ---------------------------------------------------------------------------
 # GovernanceGate
 # ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class AdmitReceipt:
-    """Identifiers of the two chain records one :meth:`GovernanceGate.admit` wrote.
-
-    Callers that must *prove* a governed write happened — the redactable
-    tombstone ledger, which is the only surviving evidence that a
-    destroyed block existed — bind these hashes into their own record.
-    """
-
-    evidence_id: str
-    evidence_hash: str
-    chain_entry_id: str
-    chain_entry_hash: str
 
 
 class GovernanceGate:
@@ -134,25 +118,7 @@ class GovernanceGate:
         target_file: str = "",
         metadata: Optional[dict] = None,
     ) -> bool:
-        """Admit a write through the governance gate. Returns True.
-
-        Thin wrapper over :meth:`admit_receipt` — identical writes, in
-        identical order; only the return type differs.
-        """
-        self.admit_receipt(action, block_id, content, actor=actor, target_file=target_file, metadata=metadata)
-        return True
-
-    def admit_receipt(
-        self,
-        action: str,
-        block_id: str,
-        content: str,
-        *,
-        actor: str = "",
-        target_file: str = "",
-        metadata: Optional[dict] = None,
-    ) -> AdmitReceipt:
-        """Admit a write and return the receipt for the two records written.
+        """Admit a write through the governance gate.
 
         Steps:
         1. Verify spec-hash is current.  Raise GovernanceBypassError if drifted.
@@ -168,8 +134,7 @@ class GovernanceGate:
             metadata: Extra contextual data (optional).
 
         Returns:
-            An :class:`AdmitReceipt` naming the evidence record and the
-            hash-chain entry this write produced.
+            True when the write is admitted.
 
         Raises:
             GovernanceBypassError: When the spec-hash has drifted and the
@@ -202,7 +167,7 @@ class GovernanceGate:
             # Always surface the resolved agent ID in metadata so the audit
             # record carries attribution regardless of which field consumers read.
             meta.setdefault("agent_id", effective_actor)
-            evidence = self._evidence.create(
+            self._evidence.create(
                 action=ev_action,
                 actor=effective_actor,
                 target_block_id=block_id,
@@ -217,7 +182,7 @@ class GovernanceGate:
             # possible across JSONL + SQLite; best-effort atomicity via the
             # lock + ordered write is the strongest guarantee here.
             try:
-                chain_entry = self._chain.append(block_id, action, content)
+                self._chain.append(block_id, action, content)
             except Exception:
                 _log.error(
                     "governance_gate.chain_append_failed_after_evidence",
@@ -233,12 +198,7 @@ class GovernanceGate:
                 action=action,
                 actor=effective_actor,
             )
-            return AdmitReceipt(
-                evidence_id=evidence.evidence_id,
-                evidence_hash=evidence.evidence_hash,
-                chain_entry_id=chain_entry.entry_id,
-                chain_entry_hash=chain_entry.entry_hash,
-            )
+            return True
 
     def current_spec_hash(self) -> Optional[str]:
         """Return the current spec_hash from the binding, or None."""
@@ -262,7 +222,6 @@ _ACTION_MAP: dict[str, EvidenceAction] = {
     "APPLY": EvidenceAction.APPLY,
     "CREATE": EvidenceAction.APPLY,
     "DELETE": EvidenceAction.ROLLBACK,
-    "REDACT": EvidenceAction.ROLLBACK,
     "ROLLBACK": EvidenceAction.ROLLBACK,
     "PROPOSE": EvidenceAction.PROPOSE,
     "VERIFY": EvidenceAction.VERIFY,

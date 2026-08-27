@@ -386,12 +386,6 @@ def _atomic_write(path: str, text: str) -> None:
         raise
 
 
-#: Reason recorded when a store-level delete is redacted without an explicit
-#: justification. Callers that know why should pass ``reason=`` — an
-#: unattributed redaction is legal but is marked as such in the chain.
-DEFAULT_STORE_REDACTION_REASON = "block store delete (no reason supplied)"
-
-
 def _record_deletion(workspace: str, block_id: str, content: str) -> None:
     """Append a deletion receipt to ``memory/deleted_blocks.jsonl``.
 
@@ -757,27 +751,17 @@ class MarkdownBlockStore:
         _log.info("block_store_write", block_id=block_id, file=os.path.relpath(target, self._workspace))
         return str(block_id)
 
-    def delete_block(self, block_id: str, *, actor: str = "", reason: str = "") -> bool:
+    def delete_block(self, block_id: str) -> bool:
         """Remove a block by ID. Returns True if a block was removed.
 
         Logs the removed content to ``memory/deleted_blocks.jsonl``
         so the deletion is recoverable. The journal format matches
         what :func:`mcp.tools.memory_ops.delete_memory_item` writes —
         both write paths converge on the same recovery record.
-
-        When the workspace enables ``v4.redactable_tombstones`` this
-        becomes a redaction instead: no recoverable copy is kept, the
-        block's Merkle leaf is preserved, and the deletion event (with
-        *actor* and *reason*) is chained. Both write paths converge on
-        :func:`mind_mem.tombstone_redact.redact_block`.
         """
-        from .tombstone import tombstones_enabled
-
         target = _resolve_block_file(self._workspace, block_id)
         if target is None or not os.path.isfile(target):
             return False
-
-        redacting = tombstones_enabled(self._workspace)
 
         with FileLock(target):
             with open(target, "r", encoding="utf-8") as fh:
@@ -791,44 +775,12 @@ class MarkdownBlockStore:
             new_text = "\n".join(new_lines)
             if new_text and not new_text.endswith("\n"):
                 new_text += "\n"
-            if redacting:
-                self._redact(target, block_id, removed, new_text, actor=actor, reason=reason)
-            else:
-                _record_deletion(self._workspace, block_id, removed)
-                _atomic_write(target, new_text)
+            _record_deletion(self._workspace, block_id, removed)
+            _atomic_write(target, new_text)
 
         self.invalidate_cache()
-        _log.info("block_store_delete", block_id=block_id, file=os.path.relpath(target, self._workspace), redacted=redacting)
+        _log.info("block_store_delete", block_id=block_id, file=os.path.relpath(target, self._workspace))
         return True
-
-    def _redact(
-        self,
-        target: str,
-        block_id: str,
-        removed: str,
-        new_text: str,
-        *,
-        actor: str,
-        reason: str,
-    ) -> None:
-        """Chain the deletion event, then destroy the content.
-
-        Raises whatever the governance gate / chains raise, before any
-        content is destroyed — an unprovable deletion is not performed.
-        """
-        from .governance_gate import _current_agent
-        from .tombstone_redact import redact_block
-
-        rel_path = os.path.relpath(target, self._workspace).replace(os.sep, "/")
-        redact_block(
-            self._workspace,
-            block_id,
-            content=removed,
-            source_file=rel_path,
-            actor=actor.strip() or _current_agent(),
-            reason=reason.strip() or DEFAULT_STORE_REDACTION_REASON,
-            destroy=lambda: _atomic_write(target, new_text),
-        )
 
     # ─── snapshot surface (v3.2.0 §1.4 PR-3) ────────────────────────────
 

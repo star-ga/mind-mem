@@ -1024,24 +1024,6 @@ def _aggregate_facts_to_parents(
 # ---------------------------------------------------------------------------
 
 
-def _drop_tombstoned(workspace: str, results: list[dict]) -> list[dict]:
-    """Remove redacted blocks from a result set.
-
-    Redaction purges the index rows outright, so this is a belt-and-braces
-    guard for an index that is stale (rebuilt from a snapshot, or restored
-    from a backup taken before the redaction). Returns the same list object
-    when the workspace has no tombstone ledger.
-    """
-    from .tombstone import ledger_exists, tombstoned_ids
-
-    if not ledger_exists(workspace):
-        return results
-    dead = tombstoned_ids(workspace)
-    if not dead:
-        return results
-    return [r for r in results if r.get("_id", "") not in dead]
-
-
 def query_index(
     workspace: str,
     query: str,
@@ -1244,9 +1226,6 @@ def query_index(
 
     # Note: read connection is managed by ConnectionManager — not closed here (#466)
 
-    # Redacted blocks never reach a caller, even from a stale index
-    results = _drop_tombstoned(workspace, results)
-
     # Sort by score, then by block ID for deterministic tiebreaking
     results.sort(key=lambda r: (-r["score"], r.get("_id", "")))
 
@@ -1391,19 +1370,6 @@ def is_stale(workspace: str) -> bool:
         return True
 
 
-def _merge_tombstone_leaves(workspace: str, leaves: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    """Union live leaves with the preserved leaves of redacted blocks.
-
-    Returns *leaves* unchanged when the workspace has never redacted —
-    a single ``os.stat`` on the common path.
-    """
-    from .tombstone import ledger_exists, merge_leaves, tombstone_leaves
-
-    if not ledger_exists(workspace):
-        return leaves
-    return merge_leaves(leaves, tombstone_leaves(workspace))
-
-
 def merkle_leaves(workspace: str) -> list[tuple[str, str]]:
     """Return (block_id, content_hash) tuples for Merkle tree construction.
 
@@ -1417,10 +1383,6 @@ def merkle_leaves(workspace: str) -> list[tuple[str, str]]:
     live ``blocks`` row backs the ``index_meta`` content hash.
 
     Returns an empty list when the FTS index has not yet been built.
-
-    When the workspace has a tombstone ledger, the preserved leaves of
-    redacted blocks are merged in (see :mod:`mind_mem.tombstone`) so a
-    deletion does not silently change the Merkle root.
     """
     db_path = _db_path(workspace)
     if not os.path.isfile(db_path):
@@ -1452,11 +1414,7 @@ def merkle_leaves(workspace: str) -> list[tuple[str, str]]:
                 continue
             seen.add(bid)
             leaves.append((bid, r["content_hash"]))
-        # Redacted blocks keep their leaf so the root — and every
-        # inclusion proof issued before the redaction — still verifies.
-        # No ledger (the overwhelming default) means `leaves` is returned
-        # untouched, so the tree is byte-identical to before this hook.
-        return _merge_tombstone_leaves(workspace, leaves)
+        return leaves
     finally:
         if conn is not None:
             conn.close()
