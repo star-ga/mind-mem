@@ -66,8 +66,8 @@ def _imported_blocks(workspace: str) -> list[dict]:
 
 
 class TestRegistry:
-    def test_supported_is_the_file_based_subset(self) -> None:
-        assert SUPPORTED_SYSTEMS == ("chroma", "letta", "mem0")
+    def test_supported_is_the_local_subset(self) -> None:
+        assert SUPPORTED_SYSTEMS == ("agentmem", "chatjson", "chroma", "letta", "markdown", "mem0")
 
     def test_deferred_names_the_endpoint_backed_systems(self) -> None:
         assert set(DEFERRED_SYSTEMS) == {"pinecone", "qdrant", "weaviate"}
@@ -305,7 +305,7 @@ def test_cli_exits_with_a_deferred_message(workspace: str, system: str, monkeypa
     assert code == mm_cli.IMPORT_EXIT_UNSUPPORTED
     assert "DEFERRED" in captured.err
     assert system in captured.err
-    assert "chroma, letta, mem0" in captured.err
+    assert ", ".join(SUPPORTED_SYSTEMS) in captured.err
 
 
 def test_cli_rejects_a_completely_unknown_system(workspace: str, monkeypatch) -> None:

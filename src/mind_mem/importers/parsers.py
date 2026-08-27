@@ -1,17 +1,29 @@
 # Copyright 2026 STARGA, Inc.
-"""Dump parsers for the three file-based source systems.
+"""Parser registry — one parser per supported source format.
 
-Each parser takes an already-decoded JSON payload and returns an
+Each parser takes an already-loaded payload (decoded JSON for the dump
+formats, a note tuple for the directory formats) and returns an
 immutable tuple of :class:`~mind_mem.importers.records.ImportRecord`.
-No I/O, no network, no source-system SDK — a dump is just JSON, and the
-whole point of the file-based subset is that it stays that way.
+No I/O, no network, no source-system SDK.
+
+The note-tree / transcript parsers — the formats agent memory actually
+lives in — are defined in :mod:`mind_mem.importers.note_parsers` and
+registered here, so ``parse_payload`` stays the single dispatch point.
 
 Supported shapes
 ----------------
-``chroma``
-    The ``collection.get()`` payload: parallel ``ids`` / ``documents`` /
-    ``metadatas`` arrays. Also accepts a ``collections: [...]`` wrapper
-    (multi-collection dump) and a bare list of per-document records.
+``markdown``
+    A directory of markdown notes (vault-style or a plain note tree).
+    Front matter becomes metadata; ``[[wikilink]]`` targets are kept.
+
+``agentmem``
+    A coding-agent auto-memory directory: an index note plus sibling
+    notes carrying ``name`` / ``description`` / ``metadata.type`` front
+    matter, plus any root-level instruction file.
+
+``chatjson``
+    A chat-session transcript: a list of ``{role, content}`` turns, or a
+    wrapper object/array holding them.
 
 ``mem0``
     The ``get_all()`` payload: ``{"results": [...]}`` where each entry
@@ -22,77 +34,36 @@ Supported shapes
     The agent-file (``.af``) payload: ``core_memory`` blocks
     (``label`` / ``value``) plus ``archival_memory`` entries. An
     ``agents: [...]`` wrapper (multi-agent file) is accepted.
+
+``chroma``
+    The ``collection.get()`` payload. Low value — see
+    :func:`parse_chroma`.
 """
 
 from __future__ import annotations
 
-import re
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Mapping
 
+from ._shared import (
+    MAX_METADATA_KEYS,
+    MAX_METADATA_VALUE_LEN,
+)
+from ._shared import (
+    clean_text as _clean_text,
+)
+from ._shared import (
+    first_str as _first_str,
+)
+from ._shared import (
+    flatten_metadata as _flatten_metadata,
+)
+from ._shared import (
+    require_mapping as _require_mapping,
+)
+from .note_parsers import parse_agent_memory, parse_chat_json, parse_markdown_vault
 from .records import ImportParseError, ImportRecord
 
-__all__ = ["PARSERS", "parse_payload"]
-
-# Metadata is metadata, not content — bound every value so a hostile dump
-# can't inflate a block. Mirrors block_provenance.MAX_PROVENANCE_VALUE_LEN.
-MAX_METADATA_VALUE_LEN = 256
-MAX_METADATA_KEYS = 24
-
-_META_KEY_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
-
-
-def _flatten_metadata(raw: Any) -> dict[str, str]:
-    """Return *raw* as a sorted, bounded ``str -> str`` mapping.
-
-    Non-mapping input yields ``{}``. Nested containers are rendered as
-    comma-joined scalars; anything else is dropped. Keys that are not
-    plain identifiers are dropped so they can never collide with a
-    block field name after rendering.
-    """
-    if not isinstance(raw, Mapping):
-        return {}
-    out: dict[str, str] = {}
-    for key in sorted(str(k) for k in raw.keys()):
-        if len(out) >= MAX_METADATA_KEYS:
-            break
-        if not _META_KEY_RE.match(key):
-            continue
-        value = raw[key]
-        if isinstance(value, bool):
-            text = "true" if value else "false"
-        elif isinstance(value, (int, float, str)):
-            text = str(value)
-        elif isinstance(value, (list, tuple)):
-            text = ",".join(str(v) for v in value if isinstance(v, (bool, int, float, str)))
-        else:
-            continue
-        text = " ".join(text.split())[:MAX_METADATA_VALUE_LEN]
-        if text:
-            out[key] = text
-    return out
-
-
-def _clean_text(raw: Any) -> str:
-    """Return *raw* as text, or ``""`` when it is not usable content."""
-    if not isinstance(raw, str):
-        return ""
-    return raw.replace("\r\n", "\n").replace("\r", "\n").strip()
-
-
-def _first_str(source: Mapping[str, Any], keys: Sequence[str]) -> str:
-    """First non-empty string value among *keys*, else ``""``."""
-    for key in keys:
-        value = source.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return ""
-
-
-def _require_mapping(payload: Any, system: str) -> Mapping[str, Any]:
-    if not isinstance(payload, Mapping):
-        raise ImportParseError(f"{system} dump must be a JSON object, got {type(payload).__name__}")
-    return payload
-
+__all__ = ["MAX_METADATA_KEYS", "MAX_METADATA_VALUE_LEN", "PARSERS", "parse_payload"]
 
 # ---------------------------------------------------------------------------
 # chroma
@@ -138,7 +109,21 @@ def _parse_chroma_collection(payload: Mapping[str, Any], prefix: str) -> list[Im
 
 
 def parse_chroma(payload: Any) -> tuple[ImportRecord, ...]:
-    """Parse a Chroma ``collection.get()`` / multi-collection JSON dump."""
+    """Parse a Chroma ``collection.get()`` / multi-collection JSON dump.
+
+    deferred: this is a LOW-VALUE import path and is kept only because
+    some exports do happen to carry usable text. A vector store persists
+    *embeddings*, and an embedding is re-derived from scratch on import,
+    so the vectors in a dump are worth nothing here — the only thing
+    worth lifting is the source text, which survives an export only when
+    the writer kept a ``documents`` array (or stashed the text in payload
+    metadata). A dump whose documents are absent or blank therefore
+    imports to nothing, correctly.
+    upgrade path: prefer the note-tree (``markdown`` / ``agentmem``) and
+    transcript (``chatjson``) importers, which read source text directly;
+    if a payload-metadata text field must be supported, add an explicit
+    ``--text-field`` selector rather than guessing at key names.
+    """
     if isinstance(payload, list):
         docs = [{"document": entry} if isinstance(entry, str) else entry for entry in payload]
         flat = {
@@ -287,8 +272,11 @@ def parse_letta(payload: Any) -> tuple[ImportRecord, ...]:
 
 
 PARSERS: dict[str, Callable[[Any], tuple[ImportRecord, ...]]] = {
+    "agentmem": parse_agent_memory,
+    "chatjson": parse_chat_json,
     "chroma": parse_chroma,
     "letta": parse_letta,
+    "markdown": parse_markdown_vault,
     "mem0": parse_mem0,
 }
 

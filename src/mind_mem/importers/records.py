@@ -49,6 +49,11 @@ class ImportRecord:
             dropped by the parsers before an ``ImportRecord`` is built).
         metadata: Flattened scalar metadata, string keys and values only.
         created_at: Source timestamp verbatim, or ``""`` when absent.
+        links: Ordered, de-duplicated names this record links out to —
+            ``[[wikilink]]`` targets for the note-tree formats, empty for
+            every other source. Preserved as a real ``Links`` block field
+            and, only behind the default-OFF ``link_edges`` flag,
+            materialized as lineage edges.
     """
 
     system: str
@@ -56,6 +61,7 @@ class ImportRecord:
     text: str
     metadata: Mapping[str, str] = field(default_factory=dict)
     created_at: str = ""
+    links: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -70,10 +76,16 @@ class ImportResult:
     skipped_near_duplicate: int
     block_ids: tuple[str, ...]
     dry_run: bool = False
+    linked_edges: int = 0
 
     def as_dict(self) -> dict[str, Any]:
-        """JSON-serializable form (what ``mm import`` prints)."""
-        return {
+        """JSON-serializable form (what ``mm import`` prints).
+
+        ``linked_edges`` appears only when the default-OFF ``link_edges``
+        flag actually materialized edges, so the default receipt is
+        byte-identical to the pre-flag one.
+        """
+        payload: dict[str, Any] = {
             "system": self.system,
             "source_path": self.source_path,
             "parsed": self.parsed,
@@ -83,3 +95,6 @@ class ImportResult:
             "block_ids": list(self.block_ids),
             "dry_run": self.dry_run,
         }
+        if self.linked_edges:
+            payload["linked_edges"] = self.linked_edges
+        return payload
