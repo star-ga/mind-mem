@@ -37,6 +37,9 @@ Core modules:
                       question) with verified [[block_id]] citations
     chat_citations  — Citation extraction + the answer-grounding contract
     chat_generators — Pluggable answerers (deterministic extractive default)
+    guardrails      — GUARDRAIL blocks: declarative, trigger-fired prohibitions
+    guardrail_patterns — Deterministic glob/literal matcher for triggers
+    guardrail_surface — Ranker bypass that surfaces firing guardrails first
 """
 
 from .protection import (

@@ -537,5 +537,8 @@ _VALID_RECALL_KEYS = frozenset(
         # blocks when the embedder (ollama / llama.cpp) is cold or down.
         "embed_timeout_seconds",
         "vector_deadline_seconds",
+        # GUARDRAIL blocks: {"enabled": bool, "max_surfaced": int,
+        # "sources": [paths]}. Read by guardrails.GuardrailPolicy.
+        "guardrails",
     }
 )
