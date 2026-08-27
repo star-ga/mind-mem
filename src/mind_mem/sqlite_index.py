@@ -1037,6 +1037,13 @@ def query_index(
     """Query the FTS5 index. Returns ranked results matching recall() format.
 
     Falls back to filesystem scan (recall.recall()) if index doesn't exist.
+
+    .. warning::
+       Raw, UNFILTERED index primitive. It does not apply the external-ingest
+       quarantine filter, by design: quarantine is enforced once, at the recall
+       funnels, by ``_recall_core._drop_quarantined``. Any NEW caller that
+       surfaces these rows to a user or an agent must route them through that
+       filter first, or it will leak unreleased imported blocks into recall.
     """
     # Re-entrancy guard: if this thread is already inside query_index for the
     # same workspace (can happen when the index-missing fallback calls recall()
