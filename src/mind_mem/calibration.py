@@ -4,6 +4,10 @@ Stores per-block and per-query-type calibration data in the same SQLite
 database used by the FTS5 index.  Rolling 30-day windows prevent stale
 feedback from dominating scores.
 
+Outcome attribution (``recall_outcome``) shares this store: it records
+whether *acting* on a block worked, with unwindowed counts so the recall
+validity gate can read it without a clock on the scored path.
+
 Calibration weights are multiplicative factors in [0.5, 1.5]:
   - Blocks with consistent positive feedback are boosted (>1.0)
   - Blocks with consistent negative feedback are demoted (<1.0)
@@ -18,12 +22,19 @@ import hashlib
 import os
 import sqlite3
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 from .connection_manager import ConnectionManager
 from .observability import get_logger, metrics
+from .outcome_attribution import (
+    OUTCOME_FAILURE,
+    OUTCOME_NEUTRAL,
+    OUTCOME_SUCCESS,
+    OutcomeSignal,
+)
 
 _log = get_logger("calibration")
 
@@ -39,6 +50,17 @@ MIN_FEEDBACK_THRESHOLD = 3
 
 # DB location relative to workspace (same directory as FTS5 index)
 _DB_REL_PATH = ".mind-mem-index/recall.db"
+
+# Outcome verdict -> the calibration_feedback row it projects to, so utility
+# evidence also moves the pre-existing per-block calibration weight.
+_OUTCOME_TO_FEEDBACK: dict[str, str] = {
+    OUTCOME_SUCCESS: "accepted",
+    OUTCOME_FAILURE: "rejected",
+    OUTCOME_NEUTRAL: "ignored",
+}
+
+# Hard ceiling on rows returned by an outcome listing/report.
+_MAX_OUTCOME_PAGE = 500
 
 
 def _db_path(workspace: str) -> str:
@@ -70,6 +92,33 @@ CREATE INDEX IF NOT EXISTS idx_cal_created_at
     ON calibration_feedback(created_at);
 CREATE INDEX IF NOT EXISTS idx_cal_query_type
     ON calibration_feedback(query_type);
+
+-- Outcome attribution (utility, not quality): did acting on this block
+-- actually work?  Sibling table in the SAME store as calibration_feedback;
+-- rows are optionally projected into calibration_feedback so the
+-- pre-existing weight loop can see utility too.  `outcome_id` is the
+-- SHA-256-derived idempotency key, so replaying a report is a no-op.
+CREATE TABLE IF NOT EXISTS recall_outcome (
+    outcome_id   TEXT NOT NULL,
+    block_id     TEXT NOT NULL,
+    outcome      TEXT NOT NULL CHECK(outcome IN ('success', 'failure', 'neutral')),
+    query_id     TEXT NOT NULL DEFAULT '',
+    task_id      TEXT NOT NULL DEFAULT '',
+    actor_id     TEXT NOT NULL DEFAULT '',
+    session_id   TEXT NOT NULL DEFAULT '',
+    tool_id      TEXT NOT NULL DEFAULT '',
+    evidence     TEXT NOT NULL DEFAULT '',
+    payload_hash TEXT NOT NULL,
+    recorded_at  TEXT NOT NULL,
+    PRIMARY KEY (outcome_id, block_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_outcome_block_id
+    ON recall_outcome(block_id);
+CREATE INDEX IF NOT EXISTS idx_outcome_verdict
+    ON recall_outcome(block_id, outcome);
+CREATE INDEX IF NOT EXISTS idx_outcome_task_id
+    ON recall_outcome(task_id);
 """
 
 
@@ -239,6 +288,62 @@ class CalibrationManager:
             "not_useful_count": len(block_ids_not_useful),
             "recorded": recorded,
         }
+
+    # -----------------------------------------------------------------------
+    # Outcome attribution — utility, not quality
+    # -----------------------------------------------------------------------
+
+    def record_outcome(
+        self,
+        block_ids: Iterable[str],
+        outcome: str,
+        *,
+        query_id: str = "",
+        task_id: str = "",
+        actor_id: str = "",
+        session_id: str = "",
+        tool_id: str = "",
+        evidence: str = "",
+        recorded_at: str | None = None,
+        project_to_calibration: bool = False,
+    ) -> dict[str, Any]:
+        """Record whether acting on ``block_ids`` actually worked. Idempotent.
+
+        See :func:`mind_mem.outcome_store.record_outcome`.
+        """
+        from .outcome_store import record_outcome
+
+        return record_outcome(
+            self._mgr,
+            block_ids,
+            outcome,
+            query_id=query_id,
+            task_id=task_id,
+            actor_id=actor_id,
+            session_id=session_id,
+            tool_id=tool_id,
+            evidence=evidence,
+            recorded_at=recorded_at,
+            project_to_calibration=project_to_calibration,
+        )
+
+    def get_outcome_signals(self, block_ids: list[str]) -> dict[str, OutcomeSignal]:
+        """Batch per-block utility evidence — unwindowed, clock-free."""
+        from .outcome_store import get_outcome_signals
+
+        return get_outcome_signals(self._mgr, block_ids)
+
+    def list_outcomes(self, block_id: str = "", task_id: str = "", limit: int = 100) -> list[dict[str, Any]]:
+        """Recorded outcomes with full provenance, newest first."""
+        from .outcome_store import list_outcomes
+
+        return list_outcomes(self._mgr, block_id=block_id, task_id=task_id, limit=limit)
+
+    def get_outcome_stats(self, top_n: int = 20) -> dict[str, Any]:
+        """Utility health report — corroborated vs. implicated blocks."""
+        from .outcome_store import get_outcome_stats
+
+        return get_outcome_stats(self._mgr, top_n=top_n)
 
     # -----------------------------------------------------------------------
     # Compute calibration weights

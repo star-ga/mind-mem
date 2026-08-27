@@ -77,6 +77,8 @@ Add to `~/.claude/mcp.json`:
 |------|-------------|
 | `calibration_feedback` | Submit quality feedback for a block |
 | `calibration_stats` | View per-block quality distributions |
+| `report_outcome` | Report whether acting on recalled blocks actually worked (utility) |
+| `outcome_stats` | Query recorded outcomes — corroborated vs. implicated blocks |
 | `retrieval_diagnostics` | Analyze recent retrieval performance |
 
 ### Search Enhancement Tools

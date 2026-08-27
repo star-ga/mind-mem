@@ -31,6 +31,8 @@ Core modules:
     encryption      — Optional authenticated encryption at rest
                       (HMAC-SHA256 keystream + encrypt-then-MAC; not AES)
     calibration     — Retrieval quality feedback loop with per-block calibration weights
+    outcome_attribution — Retrieval *utility*: report_outcome(...) records whether
+                      acting on recalled blocks worked, and feeds the validity gate
     evidence_objects — Structured tamper-evident Evidence Objects for governance decisions
     storage         — Storage factory (get_block_store) for backend selection via config
     chat_memory     — Conversational chat layer: chat_with_memory(workspace,

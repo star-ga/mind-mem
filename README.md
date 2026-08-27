@@ -1410,6 +1410,8 @@ MIND_MEM_WORKSPACE=/path/to/workspace MIND_MEM_TOKEN=$(openssl rand -hex 32) \
 | `export_memory`       | Export workspace as JSONL (user-scope)                         |
 | `calibration_feedback` | Submit quality feedback for a retrieved block (thumbs up/down) |
 | `calibration_stats`   | View per-block and global calibration statistics               |
+| `report_outcome`      | Report whether acting on recalled blocks actually worked       |
+| `outcome_stats`       | Query recorded outcomes — which memories earned their keep     |
 
 ### Token Auth (HTTP)
 

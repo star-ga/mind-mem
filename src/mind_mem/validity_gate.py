@@ -2,7 +2,8 @@
 
 Every hit reaching Stage 2.65 of the recall pipeline is scored against
 independent criteria — corroboration, status, contradiction cleanliness,
-lineage freshness, and (opt-in) provenance class — each in ``[0.0, 1.0]``.
+lineage freshness, and (opt-in) provenance class — each in ``[0.0, 1.0]``,
+with an (opt-in) outcome-attribution factor applied on top of the mean.
 Governing rule: *absence of a signal is neutral (1.0); only affirmative
 evidence of invalidity debits.*
 
@@ -22,22 +23,37 @@ is **demoted, never dropped**: its score is scaled down and it is flagged
 ``_validity_demoted`` so downstream stages (knee cutoff, re-sort) can act on
 it while it stays visible with full provenance.
 
-Deterministic by construction: both DB reads this module performs
-(contradiction log, staleness scores) are unwindowed stored state — no
-``datetime.now()``, no clock, no randomness anywhere on the scored path.
+Deterministic by construction: every DB read this module performs
+(contradiction log, staleness scores, outcome counts) is unwindowed stored
+state — no ``datetime.now()``, no clock, no randomness anywhere on the
+scored path.
 
 Flag-gated via ``mind-mem.json`` -> ``recall.validity_gate.enabled``
 (default ``False``). When disabled, :func:`apply_validity_gate` is a
 complete no-op: no annotation, no DB reads, byte-identical output to the
 pre-gate pipeline.
 
-The provenance component carries its own default-``False`` sub-flag,
-``recall.validity_gate.provenance_class.enabled`` (a bare ``true`` is also
-accepted). With it off the composite is the original four-criteria mean,
-byte-identical to the pre-provenance gate::
+Two opt-in extensions hang off the gate. They are **independent**: each
+carries its own default-``False`` sub-flag, either may be enabled alone,
+and enabling both composes without either changing the other's meaning.
+
+* **provenance class** — ``recall.validity_gate.provenance_class.enabled``
+  (a bare ``true`` is also accepted). Folds the fifth *criterion* into the
+  composite, which becomes a five-way mean.
+* **outcome attribution** — did acting on this block actually work?
+  ``recall.validity_gate.outcome_attribution.enabled``. Applies a *factor*
+  to whichever mean is in force: a block repeatedly implicated in failed
+  outcomes is demoted, and a block corroborated by successful outcomes has
+  its corroboration component confirmed. See
+  :mod:`mind_mem.outcome_attribution`.
+
+With both sub-flags off the composite is the original four-criteria mean —
+the returned key set and every float byte-identical to the pre-extension
+gate — and neither extension's DB read happens::
 
     {"recall": {"validity_gate": {"enabled": true,
-                                  "provenance_class": {"enabled": true}}}}
+                                  "provenance_class": {"enabled": true},
+                                  "outcome_attribution": {"enabled": true}}}}
 """
 
 from __future__ import annotations
@@ -55,6 +71,7 @@ from ._recall_constants import (
 from .block_parser import parse_file
 from .lineage_staleness import list_staleness_scores
 from .observability import get_logger
+from .outcome_attribution import OutcomeSignal
 from .provenance_class import classify_provenance, confirmed_block_ids, provenance_component
 
 __all__ = [
@@ -98,6 +115,8 @@ def apply_validity_gate(hits: list[dict[str, Any]], workspace: str, cfg: dict[st
     block_ids = [hit.get("_id", "") for hit in hits if hit.get("_id")]
     staleness = list_staleness_scores(workspace, block_ids)
 
+    outcomes = _load_outcome_signals(vg_cfg, workspace, block_ids)
+
     provenance_enabled = _provenance_enabled(vg_cfg)
     confirmed_ids = _load_confirmed_ids(workspace, block_ids) if provenance_enabled else frozenset()
 
@@ -106,6 +125,7 @@ def apply_validity_gate(hits: list[dict[str, Any]], workspace: str, cfg: dict[st
             hit,
             contradicted_ids,
             staleness,
+            outcomes,
             provenance_enabled=provenance_enabled,
             confirmed_ids=confirmed_ids,
         )
@@ -125,6 +145,7 @@ def validity_components(
     hit: dict[str, Any],
     contradicted_ids: set[str],
     staleness: dict[str, float],
+    outcome_signals: dict[str, OutcomeSignal] | None = None,
     *,
     provenance_enabled: bool = False,
     confirmed_ids: frozenset[str] = frozenset(),
@@ -137,43 +158,97 @@ def validity_components(
     No I/O, no clock, no randomness — reads only the hit and the
     pre-fetched stored-state maps.
 
+    Two independent opt-in extensions layer onto the four base criteria, and
+    neither is aware of the other:
+
+    * *provenance class* adds a fifth **criterion** — the mean widens from
+      four terms to five.
+    * *outcome attribution* applies a **factor** to whichever mean is in
+      force, and may confirm the corroboration component.
+
     Args:
         hit: The recall hit / block dict being scored.
         contradicted_ids: Party ids of open contradictions (c3).
         staleness: ``block_id -> staleness`` in ``[0, 1]`` (c4).
-        provenance_enabled: Fold the fifth component (provenance class) into
-            the composite. Default ``False`` -> the composite, the key set
-            and every float are byte-identical to the four-criteria gate.
+        outcome_signals: Pre-fetched ``block_id -> OutcomeSignal`` utility
+            evidence (:mod:`mind_mem.outcome_attribution`). ``None`` — the
+            default, and what every pre-outcome caller passes — leaves the
+            composite untouched: no ``outcome`` key, no factor. When
+            supplied, a block corroborated by successful outcomes has its
+            corroboration component lifted to ``1.0`` (real-world
+            confirmation counts as a second source), and a block repeatedly
+            implicated in failed outcomes multiplies the mean by its utility
+            factor (``[0.5, 1.0]``), which is what pushes it under the
+            demotion threshold.
+        provenance_enabled: Fold the fifth criterion (provenance class) into
+            the composite. Default ``False``.
         confirmed_ids: Human-confirmed block ids, used only when
             *provenance_enabled* (see :func:`confirmed_block_ids`).
 
     Returns:
         ``{corroboration, status, contradiction, staleness, score}``, plus
-        ``{provenance, provenance_class}`` when *provenance_enabled*.
+        ``{provenance, provenance_class}`` when *provenance_enabled*, plus
+        ``{outcome}`` when *outcome_signals* is not ``None``. With both
+        extensions off the key set and every float are byte-identical to the
+        original four-criteria gate.
     """
     block_id = hit.get("_id", "")
     c1 = _corroboration_component(hit)
     c2 = _status_component(hit)
     c3 = 0.0 if block_id in contradicted_ids else 1.0
     c4 = round(1.0 - min(1.0, staleness.get(block_id, 0.0)), 4)
-    if not provenance_enabled:
-        return {
-            "corroboration": c1,
-            "status": c2,
-            "contradiction": c3,
-            "staleness": c4,
-            "score": round(0.25 * (c1 + c2 + c3 + c4), 4),
-        }
-    c5 = provenance_component(hit, confirmed_ids)
-    return {
+
+    factor = 1.0
+    if outcome_signals is not None:
+        signal = outcome_signals.get(block_id)
+        if signal is not None:
+            factor = signal.factor
+            if signal.corroborated:
+                c1 = 1.0
+
+    components: dict[str, Any] = {
         "corroboration": c1,
         "status": c2,
         "contradiction": c3,
         "staleness": c4,
-        "provenance": c5,
-        "provenance_class": classify_provenance(hit, confirmed_ids=confirmed_ids),
-        "score": round(0.2 * (c1 + c2 + c3 + c4 + c5), 4),
     }
+    if provenance_enabled:
+        c5 = provenance_component(hit, confirmed_ids)
+        components["provenance"] = c5
+        components["provenance_class"] = classify_provenance(hit, confirmed_ids=confirmed_ids)
+        composite = 0.2 * (c1 + c2 + c3 + c4 + c5)
+    else:
+        composite = 0.25 * (c1 + c2 + c3 + c4)
+    if outcome_signals is not None:
+        components["outcome"] = factor
+        composite = composite * factor
+    components["score"] = round(composite, 4)
+    return components
+
+
+def _load_outcome_signals(
+    vg_cfg: dict[str, Any],
+    workspace: str,
+    block_ids: list[str],
+) -> dict[str, OutcomeSignal] | None:
+    """Fetch utility evidence iff ``validity_gate.outcome_attribution`` is on.
+
+    Returns ``None`` — the composite-untouched path — whenever the sub-flag
+    is absent or false, so no DB read happens either. Independent of the
+    ``provenance_class`` sub-flag.
+    """
+    # deferred: Stage 3.1 (`retrieval_graph.feedback_quality_credit`) still
+    # calls validity_components/3, so its `valid` credit ignores utility —
+    # deliberate, it keeps that stage byte-identical. Upgrade path: thread the
+    # same pre-fetched signal map through feedback_quality_credit behind this
+    # same sub-flag.
+    oa_cfg = vg_cfg.get("outcome_attribution")
+    if not isinstance(oa_cfg, dict) or not oa_cfg.get("enabled", False):
+        return None
+
+    from .outcome_attribution import load_outcome_signals
+
+    return load_outcome_signals(workspace, block_ids)
 
 
 def _provenance_enabled(vg_cfg: dict[str, Any]) -> bool:

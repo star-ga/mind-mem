@@ -4,6 +4,35 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+* **Outcome attribution — did the recalled memory actually help?** — new
+  `src/mind_mem/outcome_attribution.py` + `outcome_store.py` record, per block,
+  whether acting on a recalled block succeeded, failed, or was neutral, and
+  surface that as an `OutcomeSignal` (unwindowed stored counts, no time window,
+  no clock). `validity_gate.validity_components()` consumes a pre-fetched
+  `block_id -> OutcomeSignal` map as a *factor* on the composite: a block
+  repeatedly implicated in failed outcomes multiplies the mean by its utility
+  factor (`[0.5, 1.0]`), which is what pushes it under the demotion threshold,
+  and a block corroborated by successful outcomes has its corroboration
+  component lifted to `1.0` (real-world confirmation counts as a second
+  source). The factor is a fixed table-driven function of two integer counts —
+  deliberately **no learned or per-actor scoring**, so the same corpus ranks
+  identically on two machines. Exposed as the `report_outcome` / `outcome_stats`
+  MCP tools. Default-OFF behind `recall.validity_gate.outcome_attribution.enabled`
+  (itself inside the default-OFF `recall.validity_gate`); with it off no outcome
+  DB read happens at all.
+* **The validity gate's two opt-in extensions are independent** — provenance
+  class (a fifth *criterion*, widening the mean from four terms to five) and
+  outcome attribution (a *factor* applied to whichever mean is in force) now
+  live in the same `validity_components()` and neither is aware of the other.
+  Each keeps its own default-`False` sub-flag; either may be enabled alone and
+  both compose. With **both** off the returned key set, key order and every
+  float are byte-identical to the original four-criteria gate — asserted
+  against both pre-merge implementations loaded from git, comparing raw
+  IEEE-754 bits rather than rounded equality
+  (`tests/test_validity_gate_extension_composition.py`). `apply_validity_gate`,
+  `retrieval_graph.feedback_quality_credit` and the `trust_scores` façade all
+  still route through that one function: one composite path, not three.
+
 * **Consolidation maturity gate** (roadmap Group H, safe half) — new
   `consolidation_maturity_gate` module puts an admission gate in front of the
   cognitive-forgetting cycle. A block whose `block_maturity.maturity_score` is
