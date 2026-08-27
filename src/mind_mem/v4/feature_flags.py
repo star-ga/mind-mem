@@ -54,6 +54,7 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "self_heal",
     "viewer",
     "contradiction_stream",
+    "world_staleness",  # external-anchor liveness check surfaced through scan()
     # Group D — platform scale (selected v4-introduced items)
     "rust_hot_path",
     "embedding_fallback",

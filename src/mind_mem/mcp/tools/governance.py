@@ -455,6 +455,46 @@ def _value_conflict_reason(text_a: str, text_b: str) -> str | None:
     return None
 
 
+def _world_staleness_enabled(ws: str) -> bool:
+    """True when the ``v4.world_staleness`` flag is ON for *ws*.
+
+    Lazy import so the default (flag-off) ``scan`` path never even loads
+    the checker, and a broken feature module can never break ``scan``.
+    """
+    try:
+        from mind_mem.world_staleness import is_world_staleness_enabled
+
+        return is_world_staleness_enabled(ws)
+    except Exception as exc:  # pragma: no cover - defensive: import/config failure
+        _log.warning("world_staleness_flag_check_failed", error=str(exc))
+        return False
+
+
+def _world_staleness_summary(ws: str) -> dict[str, Any]:
+    """External-anchor liveness summary for *ws* — only called when flag is ON.
+
+    Deterministic + local-only: filesystem existence, a per-language
+    definition grep, and ``git rev-parse`` / ``merge-base``. No network,
+    no model. A failure degrades to a zeroed summary carrying the error
+    rather than taking the whole scan down.
+    """
+    try:
+        from mind_mem.world_staleness import world_staleness_summary
+
+        return world_staleness_summary(ws)
+    except Exception as exc:
+        _log.warning("world_staleness_check_failed", error=str(exc))
+        return {
+            "blocks_scanned": 0,
+            "blocks_with_anchors": 0,
+            "anchors_checked": 0,
+            "stale_blocks": [],
+            "dead_anchor_count": 0,
+            "dead_anchors": [],
+            "error": str(exc),
+        }
+
+
 @mcp_tool_observe
 @_traced("scan")
 def scan() -> str:
@@ -552,6 +592,12 @@ def scan() -> str:
         checks["pending_signals"] = len(signals)
     else:
         checks["pending_signals"] = 0
+
+    # External grounding (v4 ``world_staleness`` flag, default OFF). When
+    # the flag is off this branch is not taken and no key is added, so the
+    # scan payload is byte-identical to the pre-feature output.
+    if _world_staleness_enabled(ws):
+        checks["world_staleness"] = _world_staleness_summary(ws)
 
     result: dict[str, Any] = {
         "_schema_version": MCP_SCHEMA_VERSION,
