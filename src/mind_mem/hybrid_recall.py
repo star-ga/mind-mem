@@ -786,6 +786,11 @@ class HybridBackend:
             # v3.3.0 — probabilistic truth_score annotation.
             result = self._maybe_truth_score(result)
 
+            # Per-actor trust scores (opt-in, default OFF). Runs AFTER
+            # truth_score so it can reuse that annotation instead of
+            # recomputing it.
+            result = self._maybe_trust_scores(result, workspace)
+
             # Enforce the caller's limit AFTER expansions — previous code
             # truncated before the graph/entity expansions appended
             # blocks, so the final list could exceed ``limit``. Dedup
@@ -976,6 +981,30 @@ class HybridBackend:
             return annotate_results(results)
         except Exception as exc:  # pragma: no cover
             _log.warning("truth_score_failed", error=str(exc))
+            return results
+
+    def _maybe_trust_scores(self, results: list[dict], workspace: str | None = None) -> list[dict]:
+        """Annotate hits with per-actor trust; re-rank only when opted in.
+
+        Gated on ``retrieval.trust_scores.enabled`` (default false). With
+        the gate off this returns the *same list object* it was given —
+        no added fields, no reordering, byte-identical output.
+
+        deferred: only the fused hybrid path is wired; the BM25-only
+        early-return path (same as ``_maybe_truth_score``) is not —
+        upgrade path: call this helper there too once the BM25-only
+        branch also carries provenance-annotated hits.
+        """
+        if not results:
+            return results
+        try:
+            from .trust_scores import apply_trust_scores, is_trust_scores_enabled
+
+            if not is_trust_scores_enabled(self._config):
+                return results
+            return apply_trust_scores(results, config=self._config, workspace=workspace)
+        except Exception as exc:  # pragma: no cover — defensive
+            _log.warning("trust_scores_failed", error=str(exc))
             return results
 
     def _maybe_temporal_decay(self, results: list[dict]) -> list[dict]:
