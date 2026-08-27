@@ -87,6 +87,27 @@ All notable changes to MIND-Mem are documented in this file.
   `as_of` was passed. The versioning store (`v4/block_versioning.py`) was
   already shipped in v4.2.5; this wires it to the public API. 8 new tests.
 
+### Deferred
+
+* **Redactable tombstones (deletion that destroys content while preserving the
+  block's Merkle leaf) — held back, not shipping in 4.10.0.** It was implemented
+  and then reverted before tagging, and returns only once five things are true:
+  the preserved leaf is **salted** — an unsalted leaf hash over low-entropy
+  content (an address, a name) is recoverable from the ledger alone by a
+  small-candidate dictionary attack, so "content destroyed" does not hold for
+  exactly the content the feature exists to erase; deletion **routes through the
+  governed HITL apply path** instead of a self-granted admin scope; the destroy
+  step **sweeps apply snapshots (`intelligence/applied/<ts>/`),
+  `intelligence/SIGNALS.md` and backups**, so a rollback cannot resurrect a
+  redacted block and `content_recoverable: false` is factually true;
+  **verifiers from already-released versions stay compatible** with a redacted
+  workspace rather than rejecting every inclusion proof — including proofs for
+  untouched live blocks — as tamper; and the **Merkle path verifies the
+  tombstone ledger** (`record_hash` / `previous_hash` chain) before merging any
+  leaf, so a forged ledger line cannot enter the root. Kept on the
+  `feat2/deletion-tombstones` branch for a hardened follow-up. Deletion in
+  4.10.0 keeps its existing behaviour.
+
 ## v4.9.1 — feedback→success bench (completes Group I recall-quality)
 
 * **Feedback-quality → downstream-success bench (`benchmarks/feedback_success_bench.py`)**
