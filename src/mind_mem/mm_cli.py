@@ -11,7 +11,7 @@ Usage::
     mm vault write <vault_root> <id> --type <t> --body <b>
     mm status                       # workspace summary
     mm index                        # regenerate index.md + log.md
-    mm usage [--quota USD]          # per-workspace cost/usage rollup (local)
+    mm usage [--daily-cap N]        # model-call token counts per day (local)
 
 Filesystem-watcher integration and the per-agent hook installer
 remain deferred (need ``watchdog`` and per-agent setup scripts).
@@ -116,26 +116,24 @@ def _cmd_index(args: argparse.Namespace) -> int:
 
 
 def _cmd_usage(args: argparse.Namespace) -> int:
-    """Per-workspace usage + cost rollup over mind-mem's existing counters.
+    """Local per-day token counter for mind-mem's model calls.
 
-    Read-only by default. With ``--quota`` the command exits
-    :data:`~mind_mem.usage_meter.QUOTA_EXIT_CODE` and prints a single
-    ``QUOTA BREACH: ...`` alert line on stderr when the priced total is over
-    the threshold. Everything stays on this host — the rollup reads a local
-    JSON ledger and a local rate card; there is no exporter and no egress.
+    Read-only by default. With ``--daily-cap`` the command reports the day's
+    counted tokens against the ceiling on stderr and exits
+    :data:`~mind_mem.usage_meter.CAP_EXIT_CODE` once the cap is reached.
+    Everything stays on this host: the counts come from a local JSON ledger,
+    there is no exporter and no egress.
     """
     from mind_mem import usage_meter
 
     ws = _workspace()
-    if getattr(args, "record", False):
-        usage_meter.record(ws)
     if getattr(args, "reset", False):
         cleared = usage_meter.reset(ws)
-        print(f"usage ledger cleared ({cleared.total_operations:g} operations, ${cleared.total_cost_usd:.6f})")
+        print(f"usage ledger cleared ({cleared.total_tokens} tokens)")
         return 0
 
     try:
-        r = usage_meter.rollup(ws, quota_usd=getattr(args, "quota", None))
+        r = usage_meter.report(ws, daily_cap=getattr(args, "daily_cap", None))
     except ValueError as exc:
         print(f"mm usage: {exc}", file=sys.stderr)
         return 64
@@ -145,9 +143,9 @@ def _cmd_usage(args: argparse.Namespace) -> int:
     else:
         print(usage_meter.format_report(r))
 
-    if r.quota_breached:
-        print(usage_meter.quota_alert_line(r), file=sys.stderr)
-        return usage_meter.QUOTA_EXIT_CODE
+    if r.cap_exceeded:
+        print(usage_meter.cap_line(r), file=sys.stderr)
+        return usage_meter.CAP_EXIT_CODE
     return 0
 
 
@@ -2326,25 +2324,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_index.set_defaults(func=_cmd_index)
 
-    # usage — per-workspace cost/usage rollup over the existing counters
+    # usage — local per-day token counter for model calls
     p_usage = sub.add_parser(
         "usage",
-        help="Per-workspace usage + cost rollup (local counters only; no egress).",
+        help="Model-call token counts per day (local ledger; no egress).",
     )
     p_usage.add_argument(
-        "--quota",
-        type=float,
+        "--daily-cap",
+        type=int,
         default=None,
-        metavar="USD",
-        help="Alert + exit non-zero when the priced total exceeds this many USD.",
+        metavar="TOKENS",
+        help="Report + exit 3 once today's counted tokens reach this ceiling.",
     )
-    p_usage.add_argument("--json", action="store_true", help="Emit the rollup as JSON.")
-    p_usage.add_argument(
-        "--record",
-        action="store_true",
-        help="Fold this process's counters into the ledger before reporting.",
-    )
-    p_usage.add_argument("--reset", action="store_true", help="Clear the workspace usage ledger.")
+    p_usage.add_argument("--json", action="store_true", help="Emit the report as JSON.")
+    p_usage.add_argument("--reset", action="store_true", help="Clear the workspace token ledger.")
     p_usage.set_defaults(func=_cmd_usage)
 
     # tool-run / tool-recall — context-offload for large command output (§5)
@@ -3040,28 +3033,11 @@ def _run_auto_update_hook(args: argparse.Namespace) -> None:
         logging.getLogger("mind_mem.mm_cli").debug("auto-update hook skipped: %s", exc)
 
 
-def _flush_usage_meter() -> None:
-    """Opt-in usage metering (``MIND_MEM_USAGE_METER=1``). Default OFF, and a
-    no-op with the variable unset — flag-off behaviour is byte-identical to a
-    build without the meter (no file writes, no output, no extra import)."""
-    if os.environ.get("MIND_MEM_USAGE_METER", "").strip().lower() not in {"1", "true", "yes", "on"}:
-        return
-    try:
-        from mind_mem import usage_meter
-
-        usage_meter.flush_if_enabled(_workspace())
-    except Exception as exc:  # pragma: no cover — metering must never fail a command
-        logging.getLogger("mind_mem.mm_cli").debug("usage meter skipped: %s", exc)
-
-
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     _run_auto_update_hook(args)
-    try:
-        return int(args.func(args))
-    finally:
-        _flush_usage_meter()
+    return int(args.func(args))
 
 
 if __name__ == "__main__":  # pragma: no cover

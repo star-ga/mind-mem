@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Tests for `mm usage` — per-workspace usage/cost rollup (Group G).
+"""Tests for `mm usage` — local per-day model-call token counter (Group G).
 
 Acceptance gate covered here:
-  1. counters increment across an integration test that exercises REAL
-     operations (recall + contradiction detection on a real workspace);
-  2. a quota breach exits non-zero and emits a clear alert line;
+  1. token counters increment across a REAL recompaction run whose model call
+     is an injected stub (the proven injected-callable pattern);
+  2. reaching the daily token cap is reported and exits non-zero — both at the
+     CLI and at the call site, which refuses before the stub is invoked;
   3. NOTHING leaves the host — every socket entry point is trapped and the
-     attempt list must stay empty across record/rollup/CLI.
-Plus: flag-off (`MIND_MEM_USAGE_METER` unset) is byte-identical to before.
+     attempt list must stay empty across record / report / CLI;
+  4. metering is opt-in by construction: an unwrapped compressor writes no
+     ledger and returns byte-identical recompaction output.
 """
 
 from __future__ import annotations
@@ -20,9 +22,12 @@ import socket
 import tempfile
 import unittest
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
+from typing import Any
 
 from mind_mem import usage_meter
-from mind_mem.observability import Metrics
+
+DAY = "2026-08-27"
+NEXT_DAY = "2026-08-28"
 
 # ---------------------------------------------------------------------------
 # No-egress guard: record (and refuse) every outbound attempt.
@@ -63,6 +68,11 @@ def no_egress():
         socket.socket.sendto = saved["sendto"]  # type: ignore[method-assign]
 
 
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
 def _make_workspace() -> str:
     ws = tempfile.mkdtemp()
     os.makedirs(os.path.join(ws, "decisions"))
@@ -76,129 +86,199 @@ def _make_workspace() -> str:
     return ws
 
 
+CLUSTER: list[dict[str, Any]] = [
+    {"_id": "D-20260101-001", "body": "Use PostgreSQL for the primary store; it is the system of record."},
+    {"_id": "D-20260102-001", "body": "Use Redis for the caching layer in front of the primary store."},
+]
+
+
+class StubModel:
+    """Stand-in for the injected model call: deterministic, offline, counted."""
+
+    def __init__(self, replies: list[str]) -> None:
+        self._replies = list(replies)
+        self.calls = 0
+
+    def __call__(self, current_text: str, blocks: list[dict[str, Any]]) -> str:
+        index = min(self.calls, len(self._replies) - 1)
+        self.calls += 1
+        return self._replies[index]
+
+
+def _stub() -> StubModel:
+    # Second reply repeats the first, so the recompaction loop reaches its
+    # fixed point after exactly two model calls.
+    summary = "PostgreSQL is the system of record; Redis caches in front of it."
+    return StubModel([summary, summary])
+
+
 class UsageMeterBase(unittest.TestCase):
     def setUp(self) -> None:
         self.ws = _make_workspace()
-        usage_meter.reset_process_high_water()
         self.addCleanup(shutil.rmtree, self.ws, ignore_errors=True)
-        self.addCleanup(usage_meter.reset_process_high_water)
 
-
-class TestRollupCore(UsageMeterBase):
-    def test_empty_workspace_is_zero(self) -> None:
-        r = usage_meter.rollup(self.ws)
-        self.assertEqual(r.total_operations, 0)
-        self.assertEqual(r.total_cost_usd, 0.0)
-        self.assertFalse(r.quota_breached)
-        self.assertIsNone(r.ledger_error)
-
-    def test_record_is_cumulative_and_priced(self) -> None:
-        usage_meter.record(self.ws, {"recall_queries": 10})
-        usage_meter.record(self.ws, {"recall_queries": 5, "vector_searches": 2})
-        r = usage_meter.rollup(self.ws)
-        self.assertEqual(r.counters["recall_queries"], 15)
-        self.assertEqual(r.counters["vector_searches"], 2)
-        expected = 15 * usage_meter.DEFAULT_UNIT_COSTS["recall_queries"] + 2 * usage_meter.DEFAULT_UNIT_COSTS["vector_searches"]
-        self.assertAlmostEqual(r.total_cost_usd, round(expected, 8), places=8)
-        self.assertEqual(r.sessions, 2)
-
-    def test_process_counters_recorded_as_delta_not_double_counted(self) -> None:
-        m = Metrics()
-        m.inc("recall_queries", 3)
-        usage_meter.record(self.ws, source=m)
-        usage_meter.record(self.ws, source=m)  # nothing new happened
-        m.inc("recall_queries", 2)
-        usage_meter.record(self.ws, source=m)
-        self.assertEqual(usage_meter.rollup(self.ws).counters["recall_queries"], 5)
-
-    def test_unpriced_counter_counts_but_costs_nothing(self) -> None:
-        usage_meter.record(self.ws, {"recall_results": 40})
-        r = usage_meter.rollup(self.ws)
-        self.assertEqual(r.total_operations, 40)
-        self.assertEqual(r.total_cost_usd, 0.0)
-        self.assertNotIn("recall_results", r.costs)
-
-    def test_rate_card_override_from_workspace_config(self) -> None:
+    def write_config(self, payload: dict[str, Any]) -> None:
         with open(os.path.join(self.ws, "mind-mem.json"), "w", encoding="utf-8") as fh:
-            json.dump({"usage": {"unit_costs": {"recall_queries": 1.0}}}, fh)
-        usage_meter.record(self.ws, {"recall_queries": 3})
-        self.assertAlmostEqual(usage_meter.rollup(self.ws).total_cost_usd, 3.0, places=8)
+            json.dump(payload, fh)
+
+
+# ---------------------------------------------------------------------------
+# Core ledger behaviour
+# ---------------------------------------------------------------------------
+
+
+class TestTokenLedger(UsageMeterBase):
+    def test_empty_workspace_is_zero(self) -> None:
+        r = usage_meter.report(self.ws, day=DAY)
+        self.assertEqual(r.total_tokens, 0)
+        self.assertEqual(r.today_tokens, 0)
+        self.assertFalse(r.cap_exceeded)
+        self.assertIsNone(r.ledger_error)
+        self.assertIsNone(r.daily_cap)
+
+    def test_record_call_is_cumulative_per_day(self) -> None:
+        usage_meter.record_call(self.ws, operation="recompaction", prompt_tokens=100, completion_tokens=20, day=DAY)
+        usage_meter.record_call(self.ws, operation="extraction", prompt_tokens=40, completion_tokens=5, day=DAY)
+        usage_meter.record_call(self.ws, operation="recompaction", prompt_tokens=7, completion_tokens=3, day=NEXT_DAY)
+
+        r = usage_meter.report(self.ws, day=DAY)
+        self.assertEqual(r.today_tokens, 165)
+        self.assertEqual(r.today_calls, 2)
+        self.assertEqual(r.total_tokens, 175)
+        self.assertEqual(dict(r.days[DAY].operations), {"recompaction": 120, "extraction": 45})
+        self.assertEqual(usage_meter.report(self.ws, day=NEXT_DAY).today_tokens, 10)
+
+    def test_no_currency_or_quota_surface_remains(self) -> None:
+        gone = (
+            "rollup",
+            "price",
+            "quota_alert_line",
+            "DEFAULT_UNIT_COSTS",
+            "QUOTA_EXIT_CODE",
+            "flush_if_enabled",
+            "meter_enabled",
+            "ENV_ENABLE",
+        )
+        for name in gone:
+            self.assertFalse(hasattr(usage_meter, name), f"{name} must not survive the token-meter rework")
+        payload = usage_meter.report(self.ws, day=DAY).as_dict()
+        self.assertNotIn("total_cost_usd", payload)
+        self.assertNotIn("quota_usd", payload)
+
+    def test_input_validation_at_boundaries(self) -> None:
+        with self.assertRaises(ValueError):
+            usage_meter.report("")
+        with self.assertRaises(ValueError):
+            usage_meter.report(self.ws, daily_cap=-1)
+        with self.assertRaises(ValueError):
+            usage_meter.report(self.ws, day="27-08-2026")
+        with self.assertRaises(ValueError):
+            usage_meter.record_call(self.ws, operation="", prompt_tokens=1, completion_tokens=1, day=DAY)
+        with self.assertRaises(ValueError):
+            usage_meter.record_call(self.ws, operation="x", prompt_tokens=-1, completion_tokens=0, day=DAY)
+        with self.assertRaises(ValueError):
+            usage_meter.record_call(self.ws, operation="x", prompt_tokens=1.5, completion_tokens=0, day=DAY)  # type: ignore[arg-type]
 
     def test_corrupt_ledger_degrades_instead_of_raising(self) -> None:
         path = usage_meter.ledger_path(self.ws)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
             fh.write("{not json")
-        r = usage_meter.rollup(self.ws)
-        self.assertEqual(r.total_operations, 0)
+        r = usage_meter.report(self.ws, day=DAY)
+        self.assertEqual(r.total_tokens, 0)
         self.assertIsNotNone(r.ledger_error)
 
-    def test_input_validation_at_boundaries(self) -> None:
-        with self.assertRaises(ValueError):
-            usage_meter.rollup("")
-        with self.assertRaises(ValueError):
-            usage_meter.rollup(self.ws, quota_usd=-1.0)
-        with self.assertRaises(ValueError):
-            usage_meter.rollup(self.ws, quota_usd="1.0")  # type: ignore[arg-type]
-
-    def test_record_with_no_new_counters_does_not_churn_the_ledger(self) -> None:
-        usage_meter.record(self.ws, {"recall_queries": 2})
+    def test_legacy_cost_ledger_is_refused_not_priced(self) -> None:
+        """A v1 (cost/quota) ledger left on disk is reported as empty, not read."""
         path = usage_meter.ledger_path(self.ws)
-        with open(path, "rb") as fh:
-            before = fh.read()
-        usage_meter.record(self.ws, {})
-        with open(path, "rb") as fh:
-            self.assertEqual(fh.read(), before, "a no-delta record must not rewrite the ledger")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump({"version": 1, "counters": {"recall_queries": 9999}, "sessions": 3}, fh)
+        r = usage_meter.report(self.ws, day=DAY)
+        self.assertEqual(r.total_tokens, 0)
+        self.assertEqual(r.ledger_error, "UnsupportedLedgerVersion")
+
+    def test_retention_prunes_old_days_and_keeps_the_newest(self) -> None:
+        for i in range(usage_meter.RETENTION_DAYS + 5):
+            usage_meter.record_call(
+                self.ws,
+                operation="recompaction",
+                prompt_tokens=1,
+                completion_tokens=0,
+                day=f"2026-{(i // 28) + 1:02d}-{(i % 28) + 1:02d}",
+            )
+        days, err = usage_meter.load_ledger(self.ws)
+        self.assertIsNone(err)
+        self.assertEqual(len(days), usage_meter.RETENTION_DAYS)
+        last = usage_meter.RETENTION_DAYS + 4
+        self.assertEqual(max(days), f"2026-{(last // 28) + 1:02d}-{(last % 28) + 1:02d}")
 
     def test_reset_clears_ledger(self) -> None:
-        usage_meter.record(self.ws, {"recall_queries": 7})
-        before = usage_meter.reset(self.ws)
-        self.assertEqual(before.counters["recall_queries"], 7)
-        self.assertEqual(usage_meter.rollup(self.ws).total_operations, 0)
+        usage_meter.record_call(self.ws, operation="recompaction", prompt_tokens=7, completion_tokens=1, day=DAY)
+        before = usage_meter.reset(self.ws, day=DAY)
+        self.assertEqual(before.today_tokens, 8)
+        self.assertEqual(usage_meter.report(self.ws, day=DAY).total_tokens, 0)
+
+    def test_cap_comes_from_workspace_config_when_unset(self) -> None:
+        self.write_config({"usage": {"daily_token_cap": 50}})
+        usage_meter.record_call(self.ws, operation="recompaction", prompt_tokens=49, completion_tokens=0, day=DAY)
+        self.assertFalse(usage_meter.report(self.ws, day=DAY).cap_exceeded)
+        usage_meter.record_call(self.ws, operation="recompaction", prompt_tokens=1, completion_tokens=0, day=DAY)
+        r = usage_meter.report(self.ws, day=DAY)
+        self.assertEqual(r.daily_cap, 50)
+        self.assertTrue(r.cap_exceeded)
+
+    def test_bad_config_cap_is_ignored_not_fatal(self) -> None:
+        self.write_config({"usage": {"daily_token_cap": "lots"}})
+        self.assertIsNone(usage_meter.load_daily_cap(self.ws))
 
 
-class TestRealOperationsIntegration(UsageMeterBase):
-    """GATE 1 — counters increment across REAL mind-mem operations."""
+# ---------------------------------------------------------------------------
+# GATE 1 — counters increment across a real recompaction run
+# ---------------------------------------------------------------------------
 
-    def test_counters_increment_across_real_operations(self) -> None:
-        from mind_mem.contradiction_detector import detect_contradictions
-        from mind_mem.observability import metrics as global_metrics
-        from mind_mem.recall import recall
 
-        global_metrics.reset()
-        usage_meter.reset_process_high_water()
-        self.assertEqual(usage_meter.rollup(self.ws).total_operations, 0)
+class TestMeteredModelCallIntegration(UsageMeterBase):
+    def test_tokens_increment_across_a_real_recompaction(self) -> None:
+        from mind_mem.recompaction import recompact_cluster
+
+        stub = _stub()
+        compressor = usage_meter.metered_compressor(stub, self.ws, day=DAY)
 
         with no_egress() as attempts:
-            for query in ("database", "caching", "postgres"):
-                recall(self.ws, query, limit=5)
-            detect_contradictions(
-                self.ws,
-                {
-                    "ProposalId": "P-1",
-                    "Title": "Switch the database",
-                    "Description": "Use MySQL for the database instead of PostgreSQL",
-                },
-                use_bm25=False,
-            )
-            usage_meter.record(self.ws)
-            r = usage_meter.rollup(self.ws)
+            result = recompact_cluster(CLUSTER, compressor=compressor)
+            r = usage_meter.report(self.ws, day=DAY)
 
-        self.assertEqual(attempts, [], "real operations must not touch the network")
-        self.assertGreaterEqual(r.counters.get("recall_queries", 0), 3)
-        self.assertGreaterEqual(r.counters.get("contradiction_checks", 0), 1)
-        self.assertGreater(r.total_operations, 0)
-        self.assertGreater(r.total_cost_usd, 0.0)
+        self.assertEqual(attempts, [], "a metered model call must not touch the network")
+        self.assertTrue(result.converged)
+        self.assertGreaterEqual(stub.calls, 2)
+        self.assertEqual(r.today_calls, stub.calls)
+        self.assertGreater(r.today_tokens, 0)
+        self.assertGreater(r.days[DAY].prompt_tokens, 0)
+        self.assertGreater(r.days[DAY].completion_tokens, 0)
+        self.assertEqual(set(r.days[DAY].operations), {usage_meter.OP_RECOMPACTION})
 
-        # A second real operation keeps moving the ledger forward.
-        recall(self.ws, "redis", limit=5)
-        usage_meter.record(self.ws)
-        self.assertGreaterEqual(usage_meter.rollup(self.ws).counters["recall_queries"], 4)
+        # A second run keeps moving the ledger forward.
+        before = r.today_tokens
+        recompact_cluster(CLUSTER, compressor=usage_meter.metered_compressor(_stub(), self.ws, day=DAY))
+        self.assertGreater(usage_meter.report(self.ws, day=DAY).today_tokens, before)
+
+    def test_operation_tag_separates_call_sites(self) -> None:
+        from mind_mem.recompaction import recompact_cluster
+
+        recompact_cluster(CLUSTER, compressor=usage_meter.metered_compressor(_stub(), self.ws, day=DAY))
+        usage_meter.record_call(self.ws, operation="extraction", prompt_tokens=11, completion_tokens=2, day=DAY)
+        ops = usage_meter.report(self.ws, day=DAY).days[DAY].operations
+        self.assertEqual(set(ops), {"recompaction", "extraction"})
+        self.assertEqual(ops["extraction"], 13)
 
 
-class TestQuotaGate(UsageMeterBase):
-    """GATE 2 — a quota breach exits non-zero with a clear alert line."""
+# ---------------------------------------------------------------------------
+# GATE 2 — the daily cap is reported and exits non-zero
+# ---------------------------------------------------------------------------
 
+
+class TestDailyCapGate(UsageMeterBase):
     def _run_cli(self, argv: list[str]) -> tuple[int, str, str]:
         from mind_mem.mm_cli import main
 
@@ -213,42 +293,67 @@ class TestQuotaGate(UsageMeterBase):
             os.environ.update(env)
         return code, out.getvalue(), err.getvalue()
 
-    def test_under_quota_exits_zero(self) -> None:
-        usage_meter.record(self.ws, {"recall_queries": 1})
-        code, out, err = self._run_cli(["usage", "--quota", "100"])
+    def test_under_cap_exits_zero(self) -> None:
+        usage_meter.record_call(self.ws, operation="recompaction", prompt_tokens=10, completion_tokens=1)
+        code, out, err = self._run_cli(["usage", "--daily-cap", "100000"])
         self.assertEqual(code, 0)
-        self.assertIn("mind-mem usage", out)
-        self.assertNotIn("QUOTA BREACH", err)
+        self.assertIn("mind-mem model-call tokens", out)
+        self.assertNotIn("DAILY TOKEN CAP", err)
 
-    def test_breach_exits_nonzero_with_alert_line(self) -> None:
-        usage_meter.record(self.ws, {"recall_queries": 1000})
+    def test_cap_reached_exits_nonzero_with_report_line(self) -> None:
+        usage_meter.record_call(self.ws, operation="recompaction", prompt_tokens=500, completion_tokens=100)
         with no_egress() as attempts:
-            code, out, err = self._run_cli(["usage", "--quota", "0.000001"])
+            code, _, err = self._run_cli(["usage", "--daily-cap", "10"])
         self.assertEqual(attempts, [])
+        self.assertEqual(code, usage_meter.CAP_EXIT_CODE)
         self.assertNotEqual(code, 0)
-        self.assertEqual(code, usage_meter.QUOTA_EXIT_CODE)
-        alert = [ln for ln in err.splitlines() if ln.startswith("QUOTA BREACH:")]
-        self.assertEqual(len(alert), 1, f"expected exactly one alert line, got: {err!r}")
-        self.assertIn("quota=$0.000001", alert[0])
-        self.assertIn(self.ws, alert[0])
+        lines = [ln for ln in err.splitlines() if ln.startswith("DAILY TOKEN CAP:")]
+        self.assertEqual(len(lines), 1, f"expected exactly one cap line, got: {err!r}")
+        self.assertIn("cap=10", lines[0])
+        self.assertIn(self.ws, lines[0])
 
-    def test_json_output_reports_breach(self) -> None:
-        usage_meter.record(self.ws, {"recall_queries": 1000})
-        code, out, _ = self._run_cli(["usage", "--quota", "0.0", "--json"])
+    def test_json_output_reports_the_cap(self) -> None:
+        usage_meter.record_call(self.ws, operation="recompaction", prompt_tokens=500, completion_tokens=0)
+        code, out, _ = self._run_cli(["usage", "--daily-cap", "1", "--json"])
         payload = json.loads(out)
-        self.assertTrue(payload["quota_breached"])
+        self.assertTrue(payload["cap_exceeded"])
+        self.assertEqual(payload["daily_token_cap"], 1)
         self.assertEqual(payload["egress"], "none")
-        self.assertEqual(code, usage_meter.QUOTA_EXIT_CODE)
+        self.assertEqual(code, usage_meter.CAP_EXIT_CODE)
 
-    def test_bad_quota_is_a_usage_error_not_a_crash(self) -> None:
-        code, _, err = self._run_cli(["usage", "--quota", "-5"])
+    def test_bad_cap_is_a_usage_error_not_a_crash(self) -> None:
+        code, _, err = self._run_cli(["usage", "--daily-cap", "-5"])
         self.assertEqual(code, 64)
-        self.assertIn("quota_usd", err)
+        self.assertIn("daily_token_cap", err)
+
+    def test_metered_call_refuses_once_the_cap_is_reached(self) -> None:
+        from mind_mem.recompaction import recompact_cluster
+
+        usage_meter.record_call(self.ws, operation="recompaction", prompt_tokens=100, completion_tokens=0, day=DAY)
+        stub = _stub()
+        compressor = usage_meter.metered_compressor(stub, self.ws, daily_cap=100, day=DAY)
+        with self.assertRaises(usage_meter.DailyTokenCapExceeded):
+            recompact_cluster(CLUSTER, compressor=compressor)
+        self.assertEqual(stub.calls, 0, "the cap must be checked BEFORE the model is called")
+
+    def test_cli_surface_is_strictly_smaller(self) -> None:
+        """`mm usage` lost --quota and --record; it must not have grown back."""
+        from mind_mem.mm_cli import build_parser
+
+        actions = {a for a in build_parser().parse_args(["usage"]).__dict__ if a not in {"func", "cmd"}}
+        self.assertEqual(actions, {"daily_cap", "json", "reset"})
+        for dead in (["usage", "--quota", "5"], ["usage", "--record"]):
+            with self.assertRaises(SystemExit):
+                with redirect_stderr(io.StringIO()):
+                    build_parser().parse_args(dead)
+
+
+# ---------------------------------------------------------------------------
+# GATE 3 / 4 — no egress anywhere; metering is opt-in by construction
+# ---------------------------------------------------------------------------
 
 
 class TestNoEgressAndOptIn(UsageMeterBase):
-    """GATE 3 — no egress anywhere; and the CLI hook is default-OFF."""
-
     def test_module_has_no_network_imports(self) -> None:
         import inspect
 
@@ -258,58 +363,49 @@ class TestNoEgressAndOptIn(UsageMeterBase):
 
     def test_full_cycle_makes_zero_network_attempts(self) -> None:
         with no_egress() as attempts:
-            usage_meter.record(self.ws, {"recall_queries": 5})
-            usage_meter.rollup(self.ws, quota_usd=1.0, include_process=True)
-            usage_meter.format_report(usage_meter.rollup(self.ws))
-            usage_meter.reset(self.ws)
+            usage_meter.record_call(self.ws, operation="recompaction", prompt_tokens=5, completion_tokens=1, day=DAY)
+            r = usage_meter.report(self.ws, daily_cap=10, day=DAY)
+            usage_meter.format_report(r)
+            usage_meter.cap_line(r)
+            usage_meter.reset(self.ws, day=DAY)
         self.assertEqual(attempts, [])
 
-    def test_meter_flush_is_default_off_and_writes_nothing(self) -> None:
+    def test_unwrapped_compressor_writes_nothing_and_is_byte_identical(self) -> None:
+        """Default-OFF proof: metering only happens where a caller wraps."""
+        from mind_mem.recompaction import recompact_cluster
+
+        plain = recompact_cluster(CLUSTER, compressor=_stub())
+        self.assertFalse(
+            os.path.exists(usage_meter.ledger_path(self.ws)),
+            "an unwrapped compressor must not create a token ledger",
+        )
+
+        metered = recompact_cluster(CLUSTER, compressor=usage_meter.metered_compressor(_stub(), self.ws, day=DAY))
+        self.assertEqual(
+            plain.text.encode("utf-8"),
+            metered.text.encode("utf-8"),
+            "metering must not change a single output byte",
+        )
+        self.assertEqual(plain.output_digest, metered.output_digest)
+        self.assertEqual(plain.iterations, metered.iterations)
+        self.assertTrue(os.path.exists(usage_meter.ledger_path(self.ws)))
+
+    def test_other_mm_commands_write_no_ledger(self) -> None:
         from mind_mem.mm_cli import main
 
         env = dict(os.environ)
         os.environ["MIND_MEM_WORKSPACE"] = self.ws
-        os.environ.pop(usage_meter.ENV_ENABLE, None)
         try:
-            out_off = io.StringIO()
-            with redirect_stdout(out_off), redirect_stderr(io.StringIO()):
-                code_off = main(["status"])
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                code = main(["status"])
         finally:
             os.environ.clear()
             os.environ.update(env)
-
-        self.assertEqual(code_off, 0)
+        self.assertEqual(code, 0)
         self.assertFalse(
             os.path.exists(usage_meter.ledger_path(self.ws)),
-            "flag-off must not create a usage ledger",
+            "a normal mm command must not create a usage ledger",
         )
-
-        # Flag ON: same stdout bytes, but the ledger now exists.
-        env = dict(os.environ)
-        os.environ["MIND_MEM_WORKSPACE"] = self.ws
-        os.environ[usage_meter.ENV_ENABLE] = "1"
-        try:
-            out_on = io.StringIO()
-            with redirect_stdout(out_on), redirect_stderr(io.StringIO()):
-                code_on = main(["status"])
-        finally:
-            os.environ.clear()
-            os.environ.update(env)
-
-        self.assertEqual(code_on, 0)
-        self.assertEqual(
-            out_off.getvalue().encode("utf-8"),
-            out_on.getvalue().encode("utf-8"),
-            "enabling the meter must not change command output",
-        )
-        self.assertTrue(os.path.exists(usage_meter.ledger_path(self.ws)))
-
-    def test_meter_enabled_parses_only_explicit_truthy(self) -> None:
-        for value in ("1", "true", "YES", "on"):
-            self.assertTrue(usage_meter.meter_enabled({usage_meter.ENV_ENABLE: value}))
-        for value in ("", "0", "false", "no", "maybe"):
-            self.assertFalse(usage_meter.meter_enabled({usage_meter.ENV_ENABLE: value}))
-        self.assertFalse(usage_meter.meter_enabled({}))
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -1,83 +1,73 @@
 # Copyright 2026 STARGA, Inc.
-"""Per-workspace usage + cost rollup over the counters mind-mem already keeps.
+"""Local token counter for mind-mem's only real variable cost: model calls.
 
-This module adds **no** telemetry of its own. It reads the existing
-in-process counters from :mod:`mind_mem.observability` (``metrics``),
-folds them into a small per-workspace JSON ledger under
-``<workspace>/.mind-mem-index/usage.json``, and prices the result against
-a local, operator-editable rate card.
+mind-mem is self-hosted and single-operator. Retrieval, indexing and the
+governance gate run on the operator's own machine, so counting and pricing
+them is theatre. The one thing that actually costs money is a call out to a
+model — today that is the injected compressor behind recompaction, and the
+optional extraction backend. This module counts **tokens** for those calls,
+per UTC day, and offers one optional **daily token cap**.
 
-Hard guarantee: **nothing leaves the host.** There is no socket, no HTTP
-client, no exporter and no import of one anywhere in this module or its
-call graph. The ledger is a plain local file; the rate card is either the
-in-repo default or ``mind-mem.json``. Egress-free operation is part of
-the contract and is asserted by ``tests/test_usage_meter.py``.
+What it deliberately is not: no currency, no rate card, no spending alerts,
+no quota subsystem. A token count and a ceiling.
+
+Hard guarantee: **nothing leaves the host.** No socket, no HTTP client, no
+exporter, and no import of one anywhere in this module. The ledger is a
+plain local JSON file; the cap comes from ``mind-mem.json`` or the CLI.
+Egress-free operation is asserted by ``tests/test_usage_meter.py``.
+
+Determinism: the ledger is keyed by UTC day, and every entry point takes an
+explicit ``day`` so a caller (and every test) can pin it. Nothing here feeds
+retrieval or scoring.
 
 Usage::
 
     from mind_mem import usage_meter
+    from mind_mem.recompaction import recompact_cluster
 
-    usage_meter.record(workspace)                    # fold this process in
-    r = usage_meter.rollup(workspace, quota_usd=1.0) # price + check quota
-    print(usage_meter.format_report(r))
+    compressor = usage_meter.metered_compressor(my_compressor, workspace)
+    recompact_cluster(blocks, compressor=compressor)   # counts as it goes
+
+    print(usage_meter.format_report(usage_meter.report(workspace)))
 """
 
 from __future__ import annotations
 
 import json
-import math
 import os
 import tempfile
 import threading
-from collections.abc import Mapping
-from dataclasses import dataclass, field
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any, Optional
 
-from .observability import get_logger, metrics
+from .cognitive_forget import estimate_tokens
+from .observability import get_logger
 
 _log = get_logger("usage_meter")
 
 LEDGER_REL_PATH = os.path.join(".mind-mem-index", "usage.json")
-LEDGER_VERSION = 1
+LEDGER_VERSION = 2
 
-#: Exit status used when a ``--quota`` threshold is breached.
-QUOTA_EXIT_CODE = 3
+#: Exit status used when the daily token cap is reached or exceeded.
+CAP_EXIT_CODE = 3
 
-#: Opt-in switch for the ``mm`` end-of-command flush. Default OFF: with the
-#: variable unset mind-mem writes no ledger and behaves byte-identically to
-#: a build without this module.
-ENV_ENABLE = "MIND_MEM_USAGE_METER"
+#: Days retained in the ledger. Older days are pruned on write so the file
+#: stays a few kilobytes forever.
+RETENTION_DAYS = 90
 
-#: Local rate card: USD per counted operation. These are nominal
-#: compute-equivalent rates, not a measured price list — override them per
-#: workspace via ``mind-mem.json`` -> ``{"usage": {"unit_costs": {...}}}``.
-# deferred: rates are nominal, not measured — upgrade path: derive them from
-# the observability latency observations (``*_ms``) times a machine-hour rate.
-DEFAULT_UNIT_COSTS: Mapping[str, float] = MappingProxyType(
-    {
-        "recall_queries": 0.000020,
-        "vector_searches": 0.000050,
-        "embeddings_generated": 0.000010,
-        "index_builds": 0.000500,
-        "index_blocks_indexed": 0.000002,
-        "index_queries": 0.000005,
-        "contradiction_checks": 0.000030,
-        "signals_written": 0.000005,
-        "summaries_written": 0.000200,
-        "dream_cycle_runs": 0.002000,
-        "mcp_proposals": 0.000100,
-        "mcp_apply_calls": 0.000100,
-        "mcp_recall_queries": 0.000020,
-    }
-)
+#: Operation tag for the recompaction compressor path.
+OP_RECOMPACTION = "recompaction"
 
+_DAY_FORMAT = "%Y-%m-%d"
+_MAX_OPERATION_LEN = 64
 _LOCK = threading.Lock()
-# High-water mark of counters already folded into a ledger by THIS process.
-# ``metrics`` counters are cumulative, so record() must post the delta or a
-# second call would double-count.
-_RECORDED: Mapping[str, float] = MappingProxyType({})
+
+
+class DailyTokenCapExceeded(RuntimeError):
+    """A metered model call was refused: the day's token cap is used up."""
 
 
 # ---------------------------------------------------------------------------
@@ -91,75 +81,112 @@ def _require_workspace(workspace: str) -> str:
     return os.path.realpath(workspace)
 
 
-def _require_quota(quota_usd: Optional[float]) -> Optional[float]:
-    if quota_usd is None:
+def _require_day(day: Optional[str]) -> str:
+    """Validate ``YYYY-MM-DD``; ``None`` means 'today, UTC'."""
+    if day is None:
+        return datetime.now(timezone.utc).strftime(_DAY_FORMAT)
+    if not isinstance(day, str):
+        raise ValueError("day must be a YYYY-MM-DD string")
+    try:
+        datetime.strptime(day, _DAY_FORMAT)
+    except ValueError as exc:
+        raise ValueError(f"day must be YYYY-MM-DD, got {day!r}") from exc
+    return day
+
+
+def _require_tokens(value: Any, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{name} must be a non-negative integer")
+    if value < 0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    return int(value)
+
+
+def _require_cap(cap: Optional[int]) -> Optional[int]:
+    if cap is None:
         return None
-    if isinstance(quota_usd, bool) or not isinstance(quota_usd, (int, float)):
-        raise ValueError("quota_usd must be a number")
-    value = float(quota_usd)
-    if not math.isfinite(value) or value < 0:
-        raise ValueError("quota_usd must be a finite, non-negative number")
-    return value
+    return _require_tokens(cap, "daily_token_cap")
 
 
-def _clean_counters(raw: Any) -> dict[str, float]:
-    """Keep only ``str -> finite non-negative number`` pairs."""
+def _require_operation(operation: str) -> str:
+    if not isinstance(operation, str) or not operation.strip():
+        raise ValueError("operation must be a non-empty string")
+    text = operation.strip()
+    if len(text) > _MAX_OPERATION_LEN:
+        raise ValueError(f"operation must be at most {_MAX_OPERATION_LEN} characters")
+    return text
+
+
+def _clean_int_map(raw: Any) -> dict[str, int]:
+    """Keep only ``str -> non-negative int`` pairs from untrusted JSON."""
     if not isinstance(raw, dict):
         return {}
-    out: dict[str, float] = {}
+    out: dict[str, int] = {}
     for key, value in raw.items():
         if not isinstance(key, str) or isinstance(value, bool):
             continue
-        if not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+        if not isinstance(value, int) or value < 0:
             continue
-        if value < 0:
-            continue
-        out[key] = float(value)
+        out[key] = value
     return out
 
 
 # ---------------------------------------------------------------------------
-# Rollup value object
+# Value objects (immutable)
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
-class UsageRollup:
-    """Immutable priced view of one workspace's usage ledger."""
+class DayUsage:
+    """One UTC day of counted model-call tokens."""
+
+    day: str
+    calls: int
+    prompt_tokens: int
+    completion_tokens: int
+    operations: Mapping[str, int]
+
+    @property
+    def total_tokens(self) -> int:
+        return self.prompt_tokens + self.completion_tokens
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "calls": self.calls,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.total_tokens,
+            "operations": dict(self.operations),
+        }
+
+
+@dataclass(frozen=True)
+class TokenReport:
+    """Immutable view of one workspace's token ledger for a given day."""
 
     workspace: str
-    counters: Mapping[str, float]
-    costs: Mapping[str, float]
-    total_operations: float
-    total_cost_usd: float
-    sessions: int
-    first_recorded: Optional[str]
-    last_recorded: Optional[str]
-    quota_usd: Optional[float] = None
-    quota_breached: bool = False
+    day: str
+    days: Mapping[str, DayUsage]
+    today_tokens: int
+    today_calls: int
+    total_tokens: int
+    daily_cap: Optional[int] = None
+    cap_exceeded: bool = False
     ledger_error: Optional[str] = None
-    generated_at: str = field(default_factory=lambda: _utc_now())
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "workspace": self.workspace,
-            "counters": dict(self.counters),
-            "costs_usd": dict(self.costs),
-            "total_operations": self.total_operations,
-            "total_cost_usd": self.total_cost_usd,
-            "sessions": self.sessions,
-            "first_recorded": self.first_recorded,
-            "last_recorded": self.last_recorded,
-            "quota_usd": self.quota_usd,
-            "quota_breached": self.quota_breached,
+            "day": self.day,
+            "days": {d: u.as_dict() for d, u in sorted(self.days.items())},
+            "today_tokens": self.today_tokens,
+            "today_calls": self.today_calls,
+            "total_tokens": self.total_tokens,
+            "daily_token_cap": self.daily_cap,
+            "cap_exceeded": self.cap_exceeded,
             "ledger_error": self.ledger_error,
-            "generated_at": self.generated_at,
             "egress": "none",
         }
-
-
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 # ---------------------------------------------------------------------------
@@ -168,46 +195,65 @@ def _utc_now() -> str:
 
 
 def ledger_path(workspace: str) -> str:
-    """Absolute path of the workspace usage ledger."""
+    """Absolute path of the workspace token ledger."""
     return os.path.join(_require_workspace(workspace), LEDGER_REL_PATH)
 
 
-def load_ledger(workspace: str) -> tuple[dict[str, Any], Optional[str]]:
-    """Read the ledger. Returns ``(ledger, error)``; a corrupt or unreadable
-    ledger yields an empty ledger plus a short error tag rather than raising —
-    a read-only usage report must never be the thing that breaks a session."""
+def _parse_days(raw: Any) -> dict[str, DayUsage]:
+    if not isinstance(raw, dict):
+        return {}
+    days: dict[str, DayUsage] = {}
+    for day, entry in raw.items():
+        if not isinstance(day, str) or not isinstance(entry, dict):
+            continue
+        try:
+            datetime.strptime(day, _DAY_FORMAT)
+        except ValueError:
+            continue
+        counts = _clean_int_map(entry)
+        days[day] = DayUsage(
+            day=day,
+            calls=counts.get("calls", 0),
+            prompt_tokens=counts.get("prompt_tokens", 0),
+            completion_tokens=counts.get("completion_tokens", 0),
+            operations=MappingProxyType(_clean_int_map(entry.get("operations"))),
+        )
+    return days
+
+
+def load_ledger(workspace: str) -> tuple[dict[str, DayUsage], Optional[str]]:
+    """Read the ledger. Returns ``(days, error)``.
+
+    A missing, corrupt or foreign-version ledger yields an empty result plus a
+    short error tag rather than raising — a read-only token report must never
+    be the thing that breaks a session.
+    """
     path = ledger_path(workspace)
-    empty: dict[str, Any] = {"version": LEDGER_VERSION, "counters": {}, "sessions": 0}
     if not os.path.isfile(path):
-        return empty, None
+        return {}, None
     try:
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, ValueError) as exc:
         _log.warning("usage_ledger_unreadable", error=type(exc).__name__)
-        return empty, type(exc).__name__
+        return {}, type(exc).__name__
     if not isinstance(data, dict):
-        return empty, "MalformedLedger"
-    sessions = data.get("sessions")
-    return (
-        {
-            "version": LEDGER_VERSION,
-            "counters": _clean_counters(data.get("counters")),
-            "sessions": int(sessions) if isinstance(sessions, int) and sessions >= 0 else 0,
-            "first_recorded": data.get("first_recorded"),
-            "last_recorded": data.get("last_recorded"),
-        },
-        None,
-    )
+        return {}, "MalformedLedger"
+    if data.get("version") != LEDGER_VERSION:
+        return {}, "UnsupportedLedgerVersion"
+    return _parse_days(data.get("days")), None
 
 
-def _write_ledger(workspace: str, ledger: Mapping[str, Any]) -> str:
+def _write_ledger(workspace: str, days: Mapping[str, DayUsage]) -> str:
+    """Atomically persist the ledger, pruned to :data:`RETENTION_DAYS`."""
     path = ledger_path(workspace)
+    kept = dict(sorted(days.items())[-RETENTION_DAYS:])
+    payload = {"version": LEDGER_VERSION, "days": {d: u.as_dict() for d, u in kept.items()}}
     os.makedirs(os.path.dirname(path), exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".usage-", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(dict(ledger), fh, indent=2, sort_keys=True)
+            json.dump(payload, fh, indent=2, sort_keys=True)
         os.replace(tmp, path)
     except BaseException:
         try:
@@ -219,221 +265,209 @@ def _write_ledger(workspace: str, ledger: Mapping[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Recording
+# Cap configuration
 # ---------------------------------------------------------------------------
 
 
-def snapshot_process_counters(source: Any = None) -> dict[str, float]:
-    """Snapshot the existing in-process counters (``observability.metrics``)."""
-    src = metrics if source is None else source
-    summary = src.summary()
-    return _clean_counters(summary.get("counters") if isinstance(summary, dict) else None)
+def load_daily_cap(workspace: str) -> Optional[int]:
+    """Read ``mind-mem.json`` -> ``{"usage": {"daily_token_cap": N}}``.
 
-
-def reset_process_high_water() -> None:
-    """Forget what this process has already folded into a ledger (tests)."""
-    global _RECORDED
-    with _LOCK:
-        _RECORDED = MappingProxyType({})
-
-
-def record(workspace: str, counters: Optional[Mapping[str, float]] = None, *, source: Any = None) -> UsageRollup:
-    """Fold counters into the workspace ledger and return the new rollup.
-
-    ``counters`` defaults to the delta of the in-process ``metrics`` counters
-    since this process last recorded, so repeated calls never double-count.
+    Returns ``None`` when unset or unreadable: no cap is the default.
     """
-    global _RECORDED
-    ws = _require_workspace(workspace)
-
-    with _LOCK:
-        if counters is None:
-            current = snapshot_process_counters(source)
-            delta = {k: v - _RECORDED.get(k, 0.0) for k, v in current.items() if v - _RECORDED.get(k, 0.0) > 0}
-            new_high_water: Mapping[str, float] = MappingProxyType(dict(current))
-        else:
-            delta = _clean_counters(dict(counters))
-            new_high_water = _RECORDED
-
-        ledger, err = load_ledger(ws)
-        merged = dict(ledger["counters"])
-        for key, value in delta.items():
-            merged[key] = merged.get(key, 0.0) + value
-
-        now = _utc_now()
-        updated = {
-            "version": LEDGER_VERSION,
-            "counters": merged,
-            "sessions": int(ledger["sessions"]) + (1 if delta else 0),
-            "first_recorded": ledger.get("first_recorded") or now,
-            "last_recorded": now if delta else ledger.get("last_recorded"),
-        }
-        # Only touch the file when there is something new, or on first run —
-        # a read-only command with an enabled meter must not churn the ledger.
-        if delta or not os.path.isfile(ledger_path(ws)):
-            _write_ledger(ws, updated)
-        _RECORDED = new_high_water
-
-    return _build_rollup(ws, updated, quota_usd=None, unit_costs=load_unit_costs(ws), ledger_error=err)
-
-
-def reset(workspace: str) -> UsageRollup:
-    """Clear the ledger; returns the rollup as it stood before clearing."""
-    ws = _require_workspace(workspace)
-    with _LOCK:
-        ledger, err = load_ledger(ws)
-        before = _build_rollup(ws, ledger, quota_usd=None, unit_costs=load_unit_costs(ws), ledger_error=err)
-        _write_ledger(ws, {"version": LEDGER_VERSION, "counters": {}, "sessions": 0, "first_recorded": None, "last_recorded": None})
-    return before
-
-
-# ---------------------------------------------------------------------------
-# Pricing + rollup
-# ---------------------------------------------------------------------------
-
-
-def load_unit_costs(workspace: str) -> Mapping[str, float]:
-    """Default rate card overlaid with ``mind-mem.json`` -> ``usage.unit_costs``."""
-    ws = _require_workspace(workspace)
-    rates = dict(DEFAULT_UNIT_COSTS)
-    cfg_path = os.path.join(ws, "mind-mem.json")
+    cfg_path = os.path.join(_require_workspace(workspace), "mind-mem.json")
     if not os.path.isfile(cfg_path):
-        return MappingProxyType(rates)
+        return None
     try:
         with open(cfg_path, encoding="utf-8") as fh:
             cfg = json.load(fh)
     except (OSError, ValueError) as exc:
-        _log.warning("usage_rate_card_unreadable", error=type(exc).__name__)
-        return MappingProxyType(rates)
+        _log.warning("usage_config_unreadable", error=type(exc).__name__)
+        return None
     section = cfg.get("usage") if isinstance(cfg, dict) else None
-    override = section.get("unit_costs") if isinstance(section, dict) else None
-    rates.update(_clean_counters(override))
-    return MappingProxyType(rates)
+    raw = section.get("daily_token_cap") if isinstance(section, dict) else None
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
+        return None
+    return raw
 
 
-def price(counters: Mapping[str, float], unit_costs: Mapping[str, float]) -> tuple[float, dict[str, float]]:
-    """Return ``(total_usd, per_counter_usd)``. Unpriced counters cost 0."""
-    per: dict[str, float] = {}
-    for key, count in _clean_counters(dict(counters)).items():
-        rate = unit_costs.get(key)
-        if rate is None:
-            continue
-        per[key] = round(count * float(rate), 8)
-    return round(sum(per.values()), 8), per
+# ---------------------------------------------------------------------------
+# Recording + reporting
+# ---------------------------------------------------------------------------
 
 
-def _build_rollup(
+def _build_report(
     workspace: str,
-    ledger: Mapping[str, Any],
+    days: Mapping[str, DayUsage],
     *,
-    quota_usd: Optional[float],
-    unit_costs: Mapping[str, float],
+    day: str,
+    daily_cap: Optional[int],
     ledger_error: Optional[str],
-) -> UsageRollup:
-    counters = _clean_counters(dict(ledger.get("counters") or {}))
-    total_cost, costs = price(counters, unit_costs)
-    return UsageRollup(
+) -> TokenReport:
+    today = days.get(day)
+    today_tokens = today.total_tokens if today else 0
+    return TokenReport(
         workspace=workspace,
-        counters=MappingProxyType(dict(sorted(counters.items()))),
-        costs=MappingProxyType(dict(sorted(costs.items()))),
-        total_operations=round(sum(counters.values()), 6),
-        total_cost_usd=total_cost,
-        sessions=int(ledger.get("sessions") or 0),
-        first_recorded=ledger.get("first_recorded"),
-        last_recorded=ledger.get("last_recorded"),
-        quota_usd=quota_usd,
-        quota_breached=quota_usd is not None and total_cost > quota_usd,
+        day=day,
+        days=MappingProxyType(dict(sorted(days.items()))),
+        today_tokens=today_tokens,
+        today_calls=today.calls if today else 0,
+        total_tokens=sum(u.total_tokens for u in days.values()),
+        daily_cap=daily_cap,
+        cap_exceeded=daily_cap is not None and today_tokens >= daily_cap,
         ledger_error=ledger_error,
     )
 
 
-def rollup(
+def record_call(
     workspace: str,
     *,
-    quota_usd: Optional[float] = None,
-    unit_costs: Optional[Mapping[str, float]] = None,
-    include_process: bool = False,
-) -> UsageRollup:
-    """Price the workspace ledger, optionally against a ``quota_usd`` threshold.
-
-    ``include_process=True`` adds this process's not-yet-recorded counters to
-    the view without writing anything.
-    """
+    operation: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    day: Optional[str] = None,
+) -> TokenReport:
+    """Count one model call into the workspace ledger and return the report."""
     ws = _require_workspace(workspace)
-    quota = _require_quota(quota_usd)
-    rates = load_unit_costs(ws) if unit_costs is None else MappingProxyType(_clean_counters(dict(unit_costs)))
+    op = _require_operation(operation)
+    prompt = _require_tokens(prompt_tokens, "prompt_tokens")
+    completion = _require_tokens(completion_tokens, "completion_tokens")
+    key = _require_day(day)
 
-    ledger, err = load_ledger(ws)
-    if include_process:
-        merged = dict(ledger["counters"])
-        for key, value in snapshot_process_counters().items():
-            pending = value - _RECORDED.get(key, 0.0)
-            if pending > 0:
-                merged[key] = merged.get(key, 0.0) + pending
-        ledger = {**ledger, "counters": merged}
-    return _build_rollup(ws, ledger, quota_usd=quota, unit_costs=rates, ledger_error=err)
+    with _LOCK:
+        days, err = load_ledger(ws)
+        prev = days.get(key)
+        operations = dict(prev.operations) if prev else {}
+        operations[op] = operations.get(op, 0) + prompt + completion
+        days = {
+            **days,
+            key: DayUsage(
+                day=key,
+                calls=(prev.calls if prev else 0) + 1,
+                prompt_tokens=(prev.prompt_tokens if prev else 0) + prompt,
+                completion_tokens=(prev.completion_tokens if prev else 0) + completion,
+                operations=MappingProxyType(operations),
+            ),
+        }
+        _write_ledger(ws, days)
 
-
-# ---------------------------------------------------------------------------
-# Reporting
-# ---------------------------------------------------------------------------
-
-
-def quota_alert_line(r: UsageRollup) -> str:
-    """One-line, machine-greppable quota breach alert."""
-    over = round(r.total_cost_usd - float(r.quota_usd or 0.0), 8)
-    return (
-        f"QUOTA BREACH: workspace={r.workspace} cost=${r.total_cost_usd:.6f} "
-        f"quota=${float(r.quota_usd or 0.0):.6f} over=${over:.6f} "
-        f"operations={r.total_operations:g}"
-    )
+    return _build_report(ws, days, day=key, daily_cap=load_daily_cap(ws), ledger_error=err)
 
 
-def format_report(r: UsageRollup) -> str:
-    """Human-readable rollup (stdout form of ``mm usage``)."""
+def report(workspace: str, *, daily_cap: Optional[int] = None, day: Optional[str] = None) -> TokenReport:
+    """Read-only token report. ``daily_cap=None`` falls back to the config cap."""
+    ws = _require_workspace(workspace)
+    key = _require_day(day)
+    cap = load_daily_cap(ws) if daily_cap is None else _require_cap(daily_cap)
+    days, err = load_ledger(ws)
+    return _build_report(ws, days, day=key, daily_cap=cap, ledger_error=err)
+
+
+def reset(workspace: str, *, day: Optional[str] = None) -> TokenReport:
+    """Clear the ledger; returns the report as it stood before clearing."""
+    ws = _require_workspace(workspace)
+    key = _require_day(day)
+    with _LOCK:
+        days, err = load_ledger(ws)
+        before = _build_report(ws, days, day=key, daily_cap=None, ledger_error=err)
+        _write_ledger(ws, {})
+    return before
+
+
+def cap_line(r: TokenReport) -> str:
+    """One-line, machine-greppable daily-cap report (stderr form)."""
+    return f"DAILY TOKEN CAP: workspace={r.workspace} day={r.day} tokens={r.today_tokens} cap={r.daily_cap} calls={r.today_calls}"
+
+
+def format_report(r: TokenReport) -> str:
+    """Human-readable token report (stdout form of ``mm usage``)."""
     lines = [
-        f"mind-mem usage — {r.workspace}",
-        f"  sessions : {r.sessions}    window : {r.first_recorded or '-'} → {r.last_recorded or '-'}",
-        "  egress   : none (all counters are local)",
+        f"mind-mem model-call tokens — {r.workspace}",
+        "  egress : none (counts are local; model calls are the only metered cost)",
         "",
-        f"  {'operation':<34}{'count':>12}{'cost (USD)':>16}",
-        f"  {'-' * 62}",
+        f"  {'day':<14}{'calls':>8}{'prompt':>12}{'completion':>14}{'total':>12}",
+        f"  {'-' * 60}",
     ]
-    for name, count in r.counters.items():
-        cost = r.costs.get(name)
-        cost_text = f"{cost:.6f}" if cost is not None else "unpriced"
-        lines.append(f"  {name:<34}{count:>12g}{cost_text:>16}")
-    lines.append(f"  {'-' * 62}")
-    lines.append(f"  {'TOTAL':<34}{r.total_operations:>12g}{r.total_cost_usd:>16.6f}")
-    if r.quota_usd is not None:
-        lines.append(f"  {'QUOTA':<34}{'':>12}{r.quota_usd:>16.6f}")
+    for day, usage in r.days.items():
+        lines.append(f"  {day:<14}{usage.calls:>8}{usage.prompt_tokens:>12}{usage.completion_tokens:>14}{usage.total_tokens:>12}")
+    lines.append(f"  {'-' * 60}")
+    lines.append(f"  {'TOTAL':<14}{'':>8}{'':>12}{'':>14}{r.total_tokens:>12}")
+    cap_text = "none" if r.daily_cap is None else str(r.daily_cap)
+    lines.append(f"  today ({r.day}) : {r.today_tokens} tokens in {r.today_calls} calls    cap: {cap_text}")
+    if r.cap_exceeded:
+        lines.append("  daily token cap reached — metered model calls are refused for the rest of the day")
     if r.ledger_error:
-        lines.append(f"  note: ledger unreadable ({r.ledger_error}) — reported as empty")
+        lines.append(f"  note: ledger unusable ({r.ledger_error}) — reported as empty")
     return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
-# Opt-in end-of-command flush (default OFF)
+# Metered model call (opt-in by construction — nothing wraps itself)
 # ---------------------------------------------------------------------------
 
 
-def meter_enabled(env: Optional[Mapping[str, str]] = None) -> bool:
-    """True only when ``MIND_MEM_USAGE_METER`` is explicitly truthy."""
-    source = os.environ if env is None else env
-    return str(source.get(ENV_ENABLE, "")).strip().lower() in {"1", "true", "yes", "on"}
+def metered_compressor(
+    compressor: Callable[[str, list[dict[str, Any]]], str],
+    workspace: str,
+    *,
+    operation: str = OP_RECOMPACTION,
+    daily_cap: Optional[int] = None,
+    day: Optional[str] = None,
+) -> Callable[[str, list[dict[str, Any]]], str]:
+    """Wrap an injected ``Compressor`` so its token cost is counted locally.
 
+    The wrapper is transparent: it returns exactly the bytes the wrapped
+    compressor returned, so a recompaction fixed point is unchanged by
+    metering. Nothing meters itself — a caller that never wraps writes no
+    ledger, which is the default-OFF proof in ``tests/test_usage_meter.py``.
 
-def flush_if_enabled(workspace: str) -> bool:
-    """Fold this process's counters into the ledger iff the meter is enabled.
+    With a cap in force (argument, else ``mind-mem.json``), a call made once
+    the day's counted tokens have reached it raises
+    :class:`DailyTokenCapExceeded` **before** the model is called.
 
-    Best-effort: a metering failure must never change the exit status of the
-    command the operator actually ran.
+    Token counts are estimates from the text handed to and returned by the
+    compressor (~4 chars/token, the same estimator the context packer uses).
+    # deferred: provider-reported token counts are not available through the
+    # injected-callable contract - upgrade path: let a compressor optionally
+    # return (text, prompt_tokens, completion_tokens) and prefer those.
     """
-    if not meter_enabled():
-        return False
-    try:
-        record(workspace)
-        return True
-    except Exception as exc:  # pragma: no cover — defensive
-        _log.warning("usage_flush_failed", error=type(exc).__name__)
-        return False
+    if not callable(compressor):
+        raise ValueError("compressor must be callable")
+    ws = _require_workspace(workspace)
+    op = _require_operation(operation)
+    cap = _require_cap(daily_cap)
+    pinned_day = day if day is None else _require_day(day)
+
+    from .recompaction import _block_body  # reuse: the exact text the compressor is handed
+
+    def _metered(current_text: str, blocks: list[dict[str, Any]]) -> str:
+        key = _require_day(pinned_day)
+        effective_cap = load_daily_cap(ws) if cap is None else cap
+        before = report(ws, daily_cap=effective_cap, day=key)
+        if before.cap_exceeded:
+            raise DailyTokenCapExceeded(cap_line(before))
+
+        result = compressor(current_text, blocks)
+
+        prompt = estimate_tokens(current_text) + sum(estimate_tokens(_block_body(b)) for b in blocks)
+        completion = estimate_tokens(result) if isinstance(result, str) else 0
+        record_call(ws, operation=op, prompt_tokens=prompt, completion_tokens=completion, day=key)
+        return result
+
+    return _metered
+
+
+__all__ = [
+    "CAP_EXIT_CODE",
+    "DailyTokenCapExceeded",
+    "DayUsage",
+    "TokenReport",
+    "cap_line",
+    "format_report",
+    "ledger_path",
+    "load_daily_cap",
+    "load_ledger",
+    "metered_compressor",
+    "record_call",
+    "report",
+    "reset",
+]

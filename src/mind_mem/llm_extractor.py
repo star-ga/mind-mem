@@ -419,6 +419,13 @@ def _query_llm(prompt: str, model: str, backend: str = "auto", *, ollama_url: st
     transformers. Each is tried until one returns a non-empty string.
     ``ollama_url`` pins the ollama endpoint (``extraction.ollama_url``);
     when ``None`` it resolves via ``OLLAMA_HOST`` env → ``localhost:11434``.
+
+    # deferred: this path is NOT counted by mind_mem.usage_meter - the backend
+    # here is selected internally rather than injected, and this function does
+    # not know the workspace, so it has nowhere to post the count. Upgrade
+    # path: thread the workspace through the extraction config and call
+    # usage_meter.record_call(ws, operation="extraction", ...) with the
+    # prompt/response token estimates once a call returns.
     """
     backends = [backend] if backend != "auto" else ["ollama", "mindllm", "vllm", "openai-compatible", "llama-cpp", "transformers"]
     for b in backends:
