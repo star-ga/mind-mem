@@ -16,7 +16,8 @@ def test_install_sh_bootstraps_clean_home(tmp_path):
     home.mkdir()
 
     env = os.environ.copy()
-    env["HOME"] = str(home).replace("\\", "/") if os.name == "nt" else str(home)
+    home_str = str(home).replace("\\", "/") if os.name == "nt" else str(home)
+    env["HOME"] = home_str
 
     # Force the pip installer. The pipx path is exercised independently
     # by the ``install.sh smoke (pipx)`` CI job; this test focuses on
@@ -54,7 +55,10 @@ def test_install_sh_bootstraps_clean_home(tmp_path):
     # and writes a different, stale one into the client config.
     wired = re.search(r'^command = "(.+)"$', config_text, re.MULTILINE)
     assert wired is not None, config_text
-    assert wired.group(1).startswith(str(home)), f"install.sh wired {wired.group(1)}, expected a copy under {home}"
+    # compare against the same path form install.sh was actually given:
+    # on Windows HOME is passed with forward slashes, so str(home) (backslashes)
+    # would never match the wired path.
+    assert wired.group(1).startswith(home_str), f"install.sh wired {wired.group(1)}, expected a copy under {home_str}"
 
 
 def test_mcp_server_help_runs_from_source_checkout(tmp_path):

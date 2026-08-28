@@ -124,7 +124,7 @@ jobs:
         # number documented in CLAUDE.md / README (90 mcp.tool(...)
         # registrations; 89 distinct live names). Bump the expected
         # value here when tools are added/removed.
-        run: python scripts/count_mcp_tools.py --check 90
+        run: python scripts/count_mcp_tools.py --check 95
 
   validate:
     runs-on: ubuntu-latest

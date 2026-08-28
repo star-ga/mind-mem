@@ -6,7 +6,7 @@
   <strong>Replayable memory for AI agents. Deterministic recall with a byte-identical audit chain across runs, machines, and substrates.</strong>
 </p>
 <p align="center">
-  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 94 MCP tools<br>
+  Built on the MIND substrate &bull; Governed-write &bull; Deterministic recall &bull; 95 MCP tools<br>
   <sub>MIND Language Profile: <code>default</code> (full tensor stdlib + Q16.16 + heap) &mdash; see <a href="https://github.com/star-ga/mind/blob/main/docs/roadmap.md#phase-106--library-output--c-abi-mindc-026--030">Phase 10.6</a></sub><!-- mind-profile: default -->
 </p>
 <p align="center">
@@ -38,7 +38,7 @@
 
 MIND-Mem is a deterministic AI memory system: on the same workspace, the same query produces the same ranked results every time, with a Q16.16 fixed-point audit chain — byte-identical across runs, machines, and substrates — embedded in every applied decision. (Recall scoring itself is standard floating-point; the byte-identity guarantee is the Q16.16 audit/replay chain.)
 
-Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 94 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic (same query → same ranked results) and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
+Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 95 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic (same query → same ranked results) and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
 
 Most memory layers ship tools. That is table-stakes. MIND-Mem ships a substrate: scoring kernels compiled from MIND source with Q16.16 fixed-point encoding in the audit-hash preimage, a governance pipeline that rejects every unreviewed write, and an audit chain where every applied proposal is hash-anchored. The same query on the same workspace produces the same ranked recall, every time; that recall's audit/replay chain is byte-identical whether you replay it on the same machine or a different one that pulls the same workspace. That property is what makes MIND-Mem suitable as a canonical memory layer across heterogeneous agent stacks.
 
@@ -243,7 +243,7 @@ Crash-safe writes via journal-based WAL. Full workspace backup (tar.gz), git-fri
 ### Transcript JSONL Capture
 Scans Claude Code transcript files for user corrections, convention discoveries, bug fix insights, and architectural decisions. 16 transcript-specific patterns with role filtering and confidence classification.
 
-### MCP Server (94 tools, 8 resources)
+### MCP Server (95 tools, 8 resources)
 Full [Model Context Protocol](https://modelcontextprotocol.io/) server with 89 distinct tools and 8 read-only resources (6 static + 2 templated). The server makes 90 `mcp.tool(...)` registrations, but the consolidated `recall` dispatcher intentionally shadows the base `recall`, so the live surface is 89 distinct tool names. Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client. HTTP and stdio transports; HTTP requires bearer-token auth (fail-closed) — see [Token Auth (HTTP)](#token-auth-http). v3.8.11 added `mic_convert_tool` / `mic_inspect_tool` (MIC/MAP wire format); v3.9.0 added `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, and `reindex_dirty`; v3.11.0 added `validate_block`, `block_lineage`, and `add_block_edge` (deterministic quality gates + typed lineage edges).
 
 ### 74+ Structural Checks + 3024 Unit Tests
@@ -717,7 +717,7 @@ TOTAL: 0 critical | 0 warnings | 16 info
 
 ```
 your-workspace/
-├── mcp_server.py            # MCP server (FastMCP, 94 tools, 8 resources)
+├── mcp_server.py            # MCP server (FastMCP, 95 tools, 8 resources)
 ├── mind-mem.json             # Config
 ├── MEMORY.md                # Protocol rules
 │
@@ -865,7 +865,7 @@ with this row.
 | [**Graphlit**](https://www.graphlit.com) | Multimodal ingestion, semantic search, managed platform | Cloud-only, managed service |
 | [**ClawMem**](https://github.com/yoloshii/ClawMem) | Full ML pipeline (cross-encoder + QMD + beam search) | 4.5GB VRAM, 3 GPU processes required |
 | [**MemU**](https://github.com/supermemory/memu) | Hierarchical 3-layer memory, multimodal ingestion, LLM-based retrieval | Requires LLM for extraction and retrieval, no hybrid search |
-| **MIND-Mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 94 MCP tools (incl. MIC/MAP, walkthrough, persona, pipeline-hash) + cross-model consensus audit per release | Lexical recall by default (vector/CE optional) |
+| **MIND-Mem** | Integrity + governance + zero core deps + hybrid search + MIND kernels + 95 MCP tools (incl. MIC/MAP, walkthrough, persona, pipeline-hash) + cross-model consensus audit per release | Lexical recall by default (vector/CE optional) |
 
 ### Full Feature Matrix
 
@@ -911,7 +911,7 @@ Compared against every major memory solution for AI agents (as of 2026):
 | No daemon       |                   —                    |                   —                   |                            —                            |               —                |               —               |                     Yes                     |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
 | GPU required    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                    **4.5GB**                    |                      No                      |     **No**     |
 | Git-friendly    |                   —                    |                   —                   |                            —                            |              Part              |               —               |                      —                      |                —                |                  —                   |                        —                        |                     Yes                      |    **Yes**     |
-| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **94 tools**   |
+| MCP server      |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **95 tools**   |
 | MIND kernels    |                   —                    |                   —                   |                            —                            |               —                |               —               |                      —                      |                —                |                  —                   |                        —                        |                      —                       | **16 source**  |
 
 ### The Gap MIND-Mem Fills
