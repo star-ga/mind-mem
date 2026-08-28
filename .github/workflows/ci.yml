@@ -126,6 +126,36 @@ jobs:
         # value here when tools are added/removed.
         run: python scripts/count_mcp_tools.py --check 95
 
+  author-identity:
+    # Catches the leak path that no local hook can: a commit made in another
+    # clone, on another machine, where the repo-local identity was never set and
+    # git fell through to a personal global default. Public history cannot be
+    # un-leaked, so this must fail BEFORE a merge, not after.
+    #
+    # Scope is deliberately the commits this push/PR INTRODUCES, not all of
+    # history: history already contains pre-existing violations, and a
+    # whole-history check would be permanently red and therefore ignored.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          # Need the merge base, not a shallow tip, to compute the range.
+          fetch-depth: 0
+      - name: Check commit author identity
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          # A zero/absent BASE (new branch, force-push, first push) has no
+          # meaningful range; check just the tip commit rather than all history.
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            RANGE="${HEAD_SHA}~1..${HEAD_SHA}"
+          else
+            RANGE="${BASE}..${HEAD_SHA}"
+          fi
+          echo "checking range: $RANGE"
+          bash scripts/check_author_identity.sh range "$RANGE"
+
   validate:
     runs-on: ubuntu-latest
     steps:
