@@ -6,6 +6,43 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [4.10.0] - 2026-08-27
 
+### Added
+
+* **`chat_with_memory` — grounded answers with verified `[[block_id]]` citations**
+  — a new public surface (Python API, MCP tool, and `mind-mem-chat`). Every claim
+  sentence must carry at least one citation that resolves in the workspace;
+  unresolvable ids are rejected rather than rendered; and an empty recall returns
+  the literal `no record found` without ever invoking the answerer. The answerer
+  itself is an injected callable, so the path is deterministic and testable
+  offline with no model, host or network.
+
+* **`GUARDRAIL` blocks — deterministic, trigger-based mandatory recall** —
+  similarity ranking is the wrong retrieval model for a prohibition: a rule like
+  "check status before a hard reset" has to fire when that action is about to
+  happen, not when a query is merely near it in vector space. A guardrail whose
+  declarative trigger (tool name, intent class, path glob) matches the current
+  context is surfaced unconditionally, bypassing the ranker, bounded so it cannot
+  crowd out normal hits. Triggers are matched deterministically — no model call.
+  Blocks carrying external-ingest provenance can never be recognised as
+  guardrails.
+
+* **Migration importers for the formats agent memory actually lives in** — local
+  markdown vaults, agent auto-memory directories, chat-session JSON transcripts,
+  plus mem0 / letta / chroma dumps. Imports are idempotent (ids derive from record
+  content) and are recorded in the audit chain. Imported blocks arrive
+  quarantined — see the behaviour change above.
+
+* **External grounding — detecting that the *world* moved, not just the corpus**
+  — blocks citing external anchors (file paths, symbols, git refs) get
+  deterministic liveness checks, and dead anchors are surfaced through `scan()`.
+  Local and offline only: no network, no remote git operations.
+
+* **`mm usage` — a per-day model-call token counter** with an optional daily cap.
+  Nothing leaves the host. Deliberately scoped down from a quota/spending surface,
+  which would have been managed-service machinery with no real spend behind it for
+  a self-hosted deployment.
+
+
 ### Behaviour change — imported memory is quarantined
 
 `mm import` no longer makes foreign memory live on arrival. Imported blocks are
