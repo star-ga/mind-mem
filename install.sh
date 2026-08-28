@@ -165,9 +165,18 @@ install_package() {
 # executable match on stdout, nothing when there is none. An unmatched
 # glob stays literal and is filtered out by the -x test.
 first_installed_mcp() {
+  # Where `pip install --user` actually puts console scripts, per platform:
+  #   Linux/BSD  $HOME/.local/bin
+  #   macOS      $HOME/Library/Python/<ver>/bin
+  #   Windows    %APPDATA%\Python\Python<XY>\Scripts   (git-bash sees $APPDATA)
+  # PYTHONUSERBASE overrides all three, so honour it first when set.
   local cand
-  for cand in "$HOME/.local/bin/mind-mem-mcp" \
-              "$HOME/Library/Python"/*/bin/mind-mem-mcp; do
+  for cand in ${PYTHONUSERBASE:+"$PYTHONUSERBASE/bin/mind-mem-mcp"} \
+              ${PYTHONUSERBASE:+"$PYTHONUSERBASE"/Python*/Scripts/mind-mem-mcp} \
+              "$HOME/.local/bin/mind-mem-mcp" \
+              "$HOME/Library/Python"/*/bin/mind-mem-mcp \
+              ${APPDATA:+"$APPDATA"/Python/Python*/Scripts/mind-mem-mcp} \
+              "$HOME/AppData/Roaming/Python"/Python*/Scripts/mind-mem-mcp; do
     if [ -x "$cand" ]; then
       echo "$cand"
       return

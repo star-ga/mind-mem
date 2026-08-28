@@ -296,7 +296,8 @@ class TestLoCoMoRecallFloors:
     """Regression gate: recall quality must not drop below floor values."""
 
     @pytest.fixture(scope="class")
-    def metrics(self, tmp_path_factory):
+    @staticmethod
+    def metrics(tmp_path_factory):
         tmpdir = str(tmp_path_factory.mktemp("locomo_ws"))
         _build_workspace(tmpdir)
         return _run_eval(tmpdir, max_k=10)

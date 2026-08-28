@@ -144,10 +144,6 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-# pytest-asyncio >=0.25 deprecates the unset default; pin to ``function``
-# so warnings stay clean on CI + editable installs.
-asyncio_default_fixture_loop_scope = "function"
-asyncio_default_test_loop_scope = "function"
 # Default run excludes the `stress` marker — it gates heavier
 # concurrency tests that take 30-60s and can flake on shared CI
 # infra. Opt in with `pytest -m stress` when you want them.

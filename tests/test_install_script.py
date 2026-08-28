@@ -18,6 +18,10 @@ def test_install_sh_bootstraps_clean_home(tmp_path):
     env = os.environ.copy()
     home_str = str(home).replace("\\", "/") if os.name == "nt" else str(home)
     env["HOME"] = home_str
+    # pip --user honours PYTHONUSERBASE on every platform; without it a
+    # Windows --user install lands in %APPDATA%, outside the isolated HOME,
+    # and the isolation this test claims would not exist.
+    env["PYTHONUSERBASE"] = home_str
 
     # Force the pip installer. The pipx path is exercised independently
     # by the ``install.sh smoke (pipx)`` CI job; this test focuses on

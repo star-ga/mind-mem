@@ -133,7 +133,8 @@ def _make_workspace_with_event_ids() -> tuple[str, tempfile.TemporaryDirectory]:
 
 class TestRecallEventIdFilter:
     @pytest.fixture(scope="class")
-    def workspace(self):
+    @staticmethod
+    def workspace():
         ws, td = _make_workspace_with_event_ids()
         yield ws
         td.cleanup()

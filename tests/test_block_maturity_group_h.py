@@ -349,7 +349,8 @@ def _make_workspace_with_maturity() -> tuple[str, tempfile.TemporaryDirectory]:
 @pytest.mark.unit
 class TestRecallMinMaturityFilter:
     @pytest.fixture(scope="class")
-    def workspace(self):
+    @staticmethod
+    def workspace():
         ws, td = _make_workspace_with_maturity()
         yield ws
         td.cleanup()

@@ -139,7 +139,8 @@ def _make_workspace_with_lifecycle() -> tuple[str, tempfile.TemporaryDirectory]:
 
 class TestRecallLifecycleFilter:
     @pytest.fixture(scope="class")
-    def workspace(self):
+    @staticmethod
+    def workspace():
         ws, td = _make_workspace_with_lifecycle()
         yield ws
         td.cleanup()
