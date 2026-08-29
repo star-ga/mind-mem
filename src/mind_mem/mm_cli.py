@@ -6,6 +6,9 @@ Usage::
     mm recall "<query>"             # search memory
     mm context "<query>"            # generate token-budgeted snippet
     mm inject --agent <name> "<q>"  # render snippet for a specific agent
+    mm resume [--frame TF-...]      # resume brief for the active task frame
+    mm dead-ends [--tool T ...]     # recorded failures, optionally filtered
+    mm review [-i] [--approve IDS]  # batch-review the HITL proposal queue
     mm vault scan <vault_root>      # list parsed vault blocks (JSON)
     mm import --from <sys> <path>   # migrate a memory dump from another system
     mm vault write <vault_root> <id> --type <t> --body <b>
@@ -86,6 +89,83 @@ def _cmd_inject(args: argparse.Namespace) -> int:
     if not isinstance(results, list):
         results = [results] if isinstance(results, dict) else []
     print(fmt.inject(args.agent, args.query, results), end="")
+    return 0
+
+
+def _frame_policy(ws: str):
+    """Build the frame policy from the workspace config."""
+    from mind_mem.init_workspace import load_config
+    from mind_mem.task_frames import FramePolicy
+
+    return FramePolicy.from_config(load_config(ws))
+
+
+def _cmd_resume(args: argparse.Namespace) -> int:
+    """Print the resume brief for the active (or named) task frame.
+
+    Exit code is 0 even when dead ends fire: a dead end is evidence, never
+    a prohibition, so it must never look like a failed command.
+    """
+    from mind_mem.resume_brief import render_resume_brief, resume_brief
+    from mind_mem.task_frames import FrameSpecError
+
+    ws = _workspace()
+    try:
+        brief = resume_brief(ws, (args.frame or "").strip(), policy=_frame_policy(ws))
+    except FrameSpecError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(brief.to_dict(), indent=2, default=str))
+    else:
+        print(render_resume_brief(brief), end="")
+    return 0
+
+
+def _cmd_dead_ends(args: argparse.Namespace) -> int:
+    """List the dead-end registry as JSON, optionally filtered by context.
+
+    With no filter this is the whole registry in block-ID order.  With any
+    of --tool/--command/--intent/--path it is the deterministic overlap
+    against that single action, most conclusive first.
+
+    ``total_matched`` / ``elided`` and ``rejected`` are always published:
+    negative memory that is trimmed by a bound, or refused by the parser,
+    is never dropped without saying so.
+    """
+    from mind_mem.dead_ends import load_dead_ends_with_rejections, match_surface
+    from mind_mem.guardrails import GuardrailContext
+    from mind_mem.task_frames import ApproachSurface
+
+    ws = _workspace()
+    policy = _frame_policy(ws)
+    registry, rejected = load_dead_ends_with_rejections(ws, policy)
+    context = GuardrailContext(
+        tool=args.tool or "",
+        command=args.command or "",
+        intent=args.intent or "",
+        paths=tuple(args.path or ()),
+    )
+    if context.is_empty():
+        total = len(registry)
+        payload = [dead_end.to_dict() for dead_end in registry]
+    else:
+        matched = match_surface(ApproachSurface.from_context(context), registry)
+        total = len(matched)
+        payload = [w.to_dict() for w in matched[: policy.max_warnings]]
+    print(
+        json.dumps(
+            {
+                "count": len(payload),
+                "total_matched": total,
+                "elided": total - len(payload),
+                "dead_ends": payload,
+                "rejected": [block.to_dict() for block in rejected],
+            },
+            indent=2,
+            default=str,
+        )
+    )
     return 0
 
 
@@ -2327,7 +2407,31 @@ def build_parser() -> argparse.ArgumentParser:
     p_inj.add_argument("--limit", type=int, default=10)
     p_inj.set_defaults(func=_cmd_inject)
 
+    # resume — TASK-FRAME continuity (v4.10.1)
+    p_resume = sub.add_parser(
+        "resume",
+        help="Print the resume brief for the active task frame, with dead-end warnings.",
+    )
+    p_resume.add_argument("--frame", default="", help="A specific TF-... frame id (default: the active frame).")
+    p_resume.add_argument("--json", action="store_true", help="Emit JSON instead of text.")
+    p_resume.set_defaults(func=_cmd_resume)
+
+    # dead-ends — negative action-space memory (v4.10.1)
+    p_dead = sub.add_parser(
+        "dead-ends",
+        help="List recorded dead ends (JSON), optionally filtered by an about-to-happen action.",
+    )
+    p_dead.add_argument("--tool", default="", help="Tool the action would invoke.")
+    p_dead.add_argument("--command", default="", help="Command line the tool would run.")
+    p_dead.add_argument("--intent", default="", help="Intent class for the action.")
+    p_dead.add_argument("--path", action="append", default=[], help="File the action would touch (repeatable).")
+    p_dead.set_defaults(func=_cmd_dead_ends)
+
     # status
+    from mind_mem.review_cli import add_review_parser
+
+    add_review_parser(sub)
+
     p_status = sub.add_parser("status", help="Print workspace status as JSON.")
     p_status.set_defaults(func=_cmd_status)
 

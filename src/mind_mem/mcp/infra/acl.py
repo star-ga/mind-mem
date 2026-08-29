@@ -141,6 +141,12 @@ USER_TOOLS = frozenset(
         # propose_update -> HITL like every other block kind.
         "check_guardrails",
         "recall_with_guardrails",
+        # TASK-FRAME / DEAD-END blocks — read-only session continuity and
+        # negative action-space memory. Never writes: frames and dead ends
+        # are authored through propose_update -> HITL like every other
+        # block kind, and a dead end warns without ever blocking.
+        "resume_brief",
+        "check_dead_ends",
     }
 )
 

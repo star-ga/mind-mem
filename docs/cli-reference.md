@@ -44,6 +44,91 @@ Render a context snippet in the format expected by a specific agent.
 mm inject "auth decisions" --agent claude-code
 ```
 
+### `mm resume`
+
+Print the resume brief for the active task frame: the goal, the plan steps, what
+was tried, what is believed, what remains, and the recorded dead ends that
+overlap this task.
+
+```
+mm resume                          # the active frame (highest live TF- id)
+mm resume --frame TF-20260829-001  # a specific frame
+mm resume --json
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--frame ID` | active | A specific `TF-...` frame id |
+| `--json` | off | Emit the brief as JSON |
+
+Exit code is `0` even when dead ends fire — a dead end is evidence, never a
+prohibition, so it must not read as a failed command. A frame the parser refused
+is **named**, not hidden behind `No active task frame.` Full guide:
+[task-frames.md](./task-frames.md).
+
+### `mm dead-ends`
+
+List the dead-end registry as JSON. With no filter this is the whole registry in
+block-id order; with any filter it is the deterministic overlap against that one
+about-to-happen action, most conclusive first.
+
+```
+mm dead-ends
+mm dead-ends --tool Bash --intent prove_floor
+mm dead-ends --path "tools/**/*.py" --path "docs/floors.json"
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--tool T` | — | Tool the action would invoke |
+| `--command C` | — | Command line the tool would run |
+| `--intent I` | — | Intent class for the action |
+| `--path P` | — | File the action would touch (repeatable) |
+
+The payload always carries `total_matched` / `elided` and `rejected`, so a list
+trimmed by `max_warnings` or shortened by a refused block says so.
+
+### `mm review`
+
+Batch-review the HITL proposal queue: pending proposals with their pre-apply
+diff, provenance, governance-chain status and staleness flags inline, then
+approve or reject many at once.
+
+```
+mm review                        # list the queue with health and blockers
+mm review --show P-20260829-001  # full detail for one proposal
+mm review -i                     # keyboard session: one keystroke per proposal
+mm review --approve P-20260829-001,P-20260829-002
+mm review --reject P-20260829-003 --reason "superseded upstream"
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--json` | off | Machine-readable output |
+| `--limit N` | all | Show at most N proposals |
+| `--show ID` | — | Full detail for one proposal |
+| `-i`, `--interactive` | off | Keyboard session, then commit |
+| `--approve IDS` | — | Comma-separated ids to approve |
+| `--reject IDS` | — | Comma-separated ids to reject |
+| `--reason TEXT` | — | Rationale for `--reject` (required, ≥ 8 chars) |
+
+Exit codes: `0` all decisions succeeded, `1` at least one proposal failed,
+`2` usage error.
+
+Every approval routes through the governed `approve_apply` path and every
+rejection through `reject_proposal`. Approving is admin-scope — export
+`MIND_MEM_SCOPE=admin`; `mm review` reports the scope but never sets it.
+Atomicity is per proposal: if one of thirty fails, the rest still run and the
+failure is reported. **There is no auto-approve path at any risk level.**
+
+Governance blockers (scope, `governance_mode`, backlog limit, apply rate limit)
+are printed **before** the operator spends any decisions — ahead of the keyboard
+session and ahead of a `--approve` batch, not only in the listing. The published
+`proposals/minute` covers the whole invocation, deciding included, and prints
+both spans (`over Xs of operator session, Ys applying`).
+
+Full guide: [review.md](./review.md).
+
 ### `mm status`
 
 Print workspace status JSON (directory existence, config file, subdirectory checks).

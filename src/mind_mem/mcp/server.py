@@ -60,6 +60,9 @@ from mind_mem.mcp.tools import (
     encryption as _tools_encryption,
 )
 from mind_mem.mcp.tools import (
+    frames as _tools_frames,
+)
+from mind_mem.mcp.tools import (
     governance as _tools_governance,
 )
 from mind_mem.mcp.tools import (
@@ -121,6 +124,7 @@ _resources.register(mcp)
 
 _tools_recall.register(mcp)
 _tools_guardrails.register(mcp)
+_tools_frames.register(mcp)
 _tools_audit.register(mcp)
 _tools_core.register(mcp)
 _tools_consolidation.register(mcp)

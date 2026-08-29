@@ -150,6 +150,9 @@ _ID_PREFIX_TYPE = {
     "DREF-": "drift",
     "SIG-": "signal",
     "P-": "proposal",
+    "GR-": "guardrail",
+    "TF-": "task_frame",
+    "DE-": "dead_end",
 }
 
 

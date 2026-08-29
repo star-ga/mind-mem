@@ -4,6 +4,164 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Added — task frames + the dead-end registry (additive, opt-in, default-off)
+
+* **`[TF-...]` TASK-FRAME blocks + `resume_brief()`.** A frame records what a
+  multi-session task *is*, what has been tried, what is currently believed and
+  what remains, so session N+1 opens with a brief instead of re-deriving
+  context. `resume_brief(workspace)` returns that brief for the active frame —
+  the live frame with the highest block ID, read off the ID and never off a
+  clock. Surfaced as a Python API, the MCP tool `resume_brief`, and `mm resume`.
+
+* **`[DE-...]` DEAD-END blocks + a deterministic overlap warning.** Negative
+  action-space memory: an approach that was tried, why it failed, and an
+  evidence handle. A dead end declares `Trigger*` fields parsed by *exactly* the
+  code a `[GR-...]` guardrail uses (`guardrail_patterns`), and a frame declares
+  the matching `Approach*` fields; `dead_ends.match_dead_ends(frame, dead_ends)`
+  is a pure function of those two arguments — no clock, no model, no learned
+  score, no ranking signal. AND across declared dimensions, OR within one,
+  fail-closed on an empty trigger or an empty surface. Same inputs render
+  byte-identical output across processes, hash seeds, timezones and locales.
+
+* **A dead end warns; it never blocks.** Firing attaches a warning carrying the
+  reason, the evidence handle and which declared dimensions matched. Nothing
+  refuses an action, filters a plan or changes an exit code — `mm resume` exits
+  `0` with warnings present. Stated in the docstrings and covered by tests.
+
+* **New MCP tools (95 → 97), both `USER_TOOLS` and read-only:** `resume_brief`
+  and `check_dead_ends` (the about-to-act check, mirroring `check_guardrails`).
+
+* **New CLI subcommands:** `mm resume [--frame TF-...] [--json]` and
+  `mm dead-ends [--tool/--command/--intent/--path]`.
+
+* **Configuration** under `recall.frames` — `enabled` (kill switch for the
+  warning channel only), `max_warnings` (hard cap 20), `frame_sources`,
+  `dead_end_sources`. Absent config means default sources; a workspace with no
+  `frames/` directory behaves exactly as before.
+
+* **Provenance-restricted.** A frame steers an agent's next session and a dead
+  end steers it away from an action, so both are injection primitives: a block
+  carrying external-ingest / imported provenance may never mint either. The
+  refusal is `guardrails.guardrail_provenance_refusal`, shared verbatim, so the
+  two threat models cannot drift.
+
+* **Read-only, no new write path.** Nothing in `frame_fields.py`,
+  `task_frames.py`, `dead_ends.py`, `resume_brief.py` or
+  `mcp/tools/frames.py` writes. Authoring
+  is the existing `propose_update` → `approve_apply` route. **Known gap:**
+  `approve_apply`'s `append_block` resolves a block's canonical file through
+  `_BLOCK_PREFIX_MAP` in `block_store.py`, which has no `TF` / `DE` entry, so
+  the governed route refuses these prefixes today — the same position `[GR-...]`
+  guardrails ship in. Adding the two entries lights it up with no change to any
+  module here. Documented in `docs/task-frames.md` §Governance.
+
+* Docs: `docs/task-frames.md`.
+
+### Added — `mm review`, batch approval for the HITL queue (MINOR)
+
+* **`mm review`** — the proposal queue with its **pre-apply diff**, provenance,
+  governance-chain status and staleness flags **inline**, plus batch
+  approve/reject. `mm review` (list) · `--show ID` (detail) · `-i` (keyboard
+  session) · `--approve IDS` / `--reject IDS --reason TEXT`. `--json` on all of
+  them. Full guide: `docs/review.md`; flags in `docs/cli-reference.md`.
+
+* **The friction it removes.** There was no verb that listed pending proposals
+  at all — `scan()` counts SIGNALS, `approve_apply` needs an id nothing hands
+  you — and no way to see a proposal's diff before applying it: the apply engine
+  generates one, but only *after* a successful apply, into the receipt.
+  Measured, one approval cost ~316 keystrokes across five commands. Reviewing
+  and approving 30 proposals now measures **17.3 s end to end**, of which the
+  review surface itself is 1.7 s and the apply engine is the rest.
+
+* **Front end, never a second write path.** Approvals leave through
+  `approve_apply`, rejections through `reject_proposal` — same contradiction
+  check, snapshot, receipt, cache invalidation and rate limit. An AST guard
+  (`tests/test_review_no_autoapprove.py`) fails the build if a governed call
+  appears outside its single choke point.
+
+* **No auto-approve path at any risk level.** Not for `Risk: low`, not for a
+  trusted source, not unattended. A `ReviewDecision` cannot be constructed
+  without an `origin` in `{keypress, cli-flag, stdin}`, and the review modules
+  never branch on risk at all — both enforced by AST scan, plus a behavioural
+  test that an undecided proposal is left staged.
+
+* **Atomicity is per proposal.** If 7 of 30 fails, 1-6 stay applied, 8-30 still
+  run, and 7 is reported with its reason.
+
+* **The metric is published**: median proposal age at approval (with its
+  `coverage` — an unknown age renders `?`, never `0s`) and proposals/minute.
+
+* **The pre-apply diff is computed by the production op executors** replayed
+  against a temporary sandbox copy, under an admission opened on the *sandbox's*
+  gate — never the workspace's, so previewing adds no governance-chain entry.
+
+* **Known ceiling, reported not bypassed:** `apply_engine.check_no_touch_window`
+  is a hard-coded 10-minute rate limit since the last successful apply, so 30
+  serial approvals means 29 x 10 min of enforced waiting. `mm review` surfaces
+  it as a per-proposal `No-touch window: …` failure and as a listing blocker.
+  Approving is also admin-scope (`MIND_MEM_SCOPE=admin`); `mm review` reports
+  the scope and never elevates it.
+
+* No new MCP tools — the tool count is unchanged.
+
+### Fixed — adversarial pass over both surfaces
+
+Six defects found by driving the two features against real workspaces rather
+than by re-reading them. Each was reproduced first, then fixed.
+
+* **A failed preview no longer ends a review session.** `preview_diff`
+  documented "never raises" but contained `OSError` / `ValueError` only, and the
+  governance gate raises `GovernanceBypassError` — a bare `Exception` subclass —
+  on spec drift and on an admission that will not resolve in the hash chain. One
+  such proposal propagated out of `mm review -i` and discarded every decision
+  staged before it. Containment is now by kind of failure; the proposal is
+  marked `(unavailable: <type>: <reason>)` and the session continues.
+
+* **Governance blockers are reported before the operator spends decisions.**
+  `queue_health` was computed on every run and rendered only in the listing, so
+  an operator in `-i` pressed thirty keys and only then learned that
+  twenty-nine applies were rate-limited or scope-denied. The banner now precedes
+  the keyboard session and a `--approve` / `--reject` batch. `mm review` still
+  works around none of these gates.
+
+* **The published `proposals/minute` now covers the operator's session.** It
+  measured the governed applies alone — the apply engine's throughput reported
+  as approval throughput. The denominator runs from the top of the invocation
+  through the last apply, and both spans are printed (`over Xs of operator
+  session, Ys applying`) so the number cannot be quoted out of context.
+  `run_batch(..., session_started=)` is optional; omitted, behaviour is
+  unchanged.
+
+* **A proposal-supplied path can no longer escape the workspace into the review
+  panel.** `FilesTouched` is attacker-influenced and the preview *reads* every
+  path it names; containment split on `/` alone, so `..\..\etc` passed. It is
+  now checked on both separators.
+
+* **A refused frame or dead end is named instead of vanishing.** A malformed
+  block was skipped with a `stderr` log line while `mm resume` printed `No
+  active task frame.` on stdout and `--json` emitted `{"frame_id": ""}` — so an
+  agent reading stdout concluded the workspace held no continuity and re-derived
+  its context, which is the exact cost the feature exists to remove. One
+  mistyped step status did it. `resume_brief`, `check_dead_ends`, `mm resume`
+  and `mm dead-ends` now all carry `rejected` (block id, source file, reason).
+
+* **Truncated dead-end warnings are counted.** `max_warnings` trimmed the list
+  and published the count *after* trimming, so six firing dead ends and five
+  rendered identically — negative memory disappearing quietly, which leaves the
+  reader with positive evidence of absence. Briefs now carry `dead_end_total` /
+  `dead_ends_elided` and the MCP/CLI payloads carry `total_matched` / `elided`.
+  `enabled: false` still silences the channel but still reports what fired.
+
+* Determinism re-verified after the change: identical digests across five
+  processes, five `PYTHONHASHSEED` values, three timezones spanning 25 hours and
+  two locales, on both a clean corpus and one carrying a refused block.
+
+* Corrected in `docs/task-frames.md`: opening the governed write route for `TF`
+  / `DE` needs an entry in `block_store._BLOCK_PREFIX_MAP` **and** one in
+  `corpus_registry.SNAPSHOT_DIRS` — `frames/` is outside the rollback snapshot
+  scope, so the prefix map alone would produce applied, receipted frame writes
+  that `rollback_proposal` cannot restore.
+
 ## [4.10.0] - 2026-08-27
 
 ### Added

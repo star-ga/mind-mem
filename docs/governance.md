@@ -32,7 +32,7 @@ MIND-Mem's request-time surface is the MCP server. Every MCP tool call flows thr
 
 1. **Auth check.** `X-MindMem-Token` header validated against the configured token list.
 2. **Rate limit.** Sliding-window per-token + global; the limiter primitive is shared with 512-mind.
-3. **Tool dispatch.** 95 MCP tools, each with a typed input schema. Schema mismatch rejects with a structured error.
+3. **Tool dispatch.** 97 MCP tools, each with a typed input schema. Schema mismatch rejects with a structured error.
 4. **Audit chain entry.** The request is recorded with the calling `auth_hash` (when supplied) so a downstream auditor can replay.
 
 ## L4 — Retrieval-time

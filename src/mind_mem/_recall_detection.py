@@ -649,6 +649,8 @@ def get_block_type(block_id: str) -> str:
         "C-": "contradiction",
         "DREF-": "drift",
         "GR-": "guardrail",
+        "TF-": "task_frame",
+        "DE-": "dead_end",
         "SIG-": "signal",
         "P-": "proposal",
         "I-": "impact",

@@ -42,6 +42,11 @@ Core modules:
     guardrails      — GUARDRAIL blocks: declarative, trigger-fired prohibitions
     guardrail_patterns — Deterministic glob/literal matcher for triggers
     guardrail_surface — Ranker bypass that surfaces firing guardrails first
+    frame_fields    — Field grammar shared by TASK-FRAME and DEAD-END blocks
+    task_frames     — TASK-FRAME blocks: what a multi-session task IS
+    dead_ends       — DEAD-END blocks: negative action-space memory, matched
+                      by declarative overlap against a task frame
+    resume_brief    — The session-N+1 brief for the active task frame
 """
 
 from .protection import (

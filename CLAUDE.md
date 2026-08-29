@@ -164,7 +164,7 @@ src/mind_mem/           — Main package (src layout; flat modules, not
     alerting.py, governance_gate.py — governance: contradiction/drift
                           detection, proposals, audit chain, alerting hooks
   _recall_core.py, hybrid_recall.py, recall_vector.py — retrieval core
-  mcp_server.py         — MCP server monolith (95 tools, 8 resources)
+  mcp_server.py         — MCP server monolith (97 tools, 8 resources)
   mcp/                  — per-domain MCP tool modules (mcp.tools.*)
   ingestion_pipeline.py, inbox.py, entity_ingest.py — auto-ingestion
   skill_opt/            — Skill optimization

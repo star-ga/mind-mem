@@ -540,5 +540,9 @@ _VALID_RECALL_KEYS = frozenset(
         # GUARDRAIL blocks: {"enabled": bool, "max_surfaced": int,
         # "sources": [paths]}. Read by guardrails.GuardrailPolicy.
         "guardrails",
+        # TASK-FRAME / DEAD-END blocks: {"enabled": bool,
+        # "max_warnings": int, "frame_sources": [paths],
+        # "dead_end_sources": [paths]}. Read by task_frames.FramePolicy.
+        "frames",
     }
 )
