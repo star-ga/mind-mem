@@ -116,7 +116,7 @@ winning** on a name clash:
 Both the **pip install** (`pip install "mind-mem[mcp]"`) and the
 **repo checkout** (`./install.sh`, an editable install) provide the
 canonical `mind-mem-mcp` console script (stdio transport by default,
-89 tools), so the stanza is identical either way:
+95 tools), so the stanza is identical either way:
 
 ```json
 {
@@ -138,7 +138,7 @@ canonical `mind-mem-mcp` console script (stdio transport by default,
 Use an absolute `command` path (e.g. `~/.local/bin/mind-mem-mcp`
 expanded) if Qwen Code's spawn PATH does not include the pip bin dir.
 Then restart Qwen Code and check `/mcp` — `mind-mem` should show
-connected with 89 tools. Verify independently with `mm doctor`.
+connected with 95 tools. Verify independently with `mm doctor`.
 
 ### Qwen Code gotchas (learned the hard way)
 
