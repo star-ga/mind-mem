@@ -43,7 +43,11 @@ by its full description below.
 
 ### Group C — KG governance / UX (6 items)
 
-- [ ] **AI lint with auto-fix** — `lint_autofix(workspace, finding_id)` tool
+- [x] **AI lint with auto-fix** — `lint_autofix(workspace, finding_id)` **ships** as a
+  Python API (`src/mind_mem/lint_autofix.py`: turns one lint finding into a governed
+  proposal; `UnknownFindingError` / `NotAutofixableError` rather than a silent no-op),
+  covered by `tests/test_lint_autofix.py`. Open half: it is not exposed as an MCP tool,
+  so today it is reachable from Python and from `lint.py`, not from an agent session.
 - [ ] **Local visual viewer** — `mm view` web UI (stdlib HTTP + JS/D3)
 - [x] **Auto-generated hierarchical index** — `index.md` + `log.md` autogen
 - [ ] **Adversarial / poisoning defense** — per-actor anomaly, canary blocks
@@ -65,7 +69,7 @@ by its full description below.
 - [ ] **Go SDK publish + Rust / Java / Ruby SDK stubs** — Go client **exists in-tree** (`sdk/go/`, with tests); open work is module publishing; Rust/Java/Ruby not started
 - [ ] **OpenAPI + AsyncAPI specs** (single source of truth for SDK generation)
 - [ ] **Migration importers** — `mm import --from {chroma|mem0|letta} <dump.json>` **ships** (file-based subset: `src/mind_mem/importers/`, `IMP-` blocks in `memory/IMPORTED.md`, `imported:<system>` provenance, idempotent re-import). Open half is the endpoint-backed systems — pinecone / weaviate / qdrant need a live endpoint + credential and are refused with an explicit deferred message
-- [ ] **Model-call token metering** — `mm usage` (per-day token counter + optional daily cap; quota/spending-alert surface deliberately dropped: self-hosted mind-mem has no spend outside model calls)
+- [x] **Model-call token metering** — `mm usage` **ships** (`src/mind_mem/usage_meter.py`, wired into `mm_cli.py` with `CAP_EXIT_CODE`; per-day token counter + optional daily cap). The quota/spending-alert surface was deliberately dropped: self-hosted mind-mem has no spend outside model calls.
 - [ ] **SLSA build provenance level 3**
 - [ ] **Plugin SDK** — stable API for custom rules / block kinds / detectors
 - [ ] **Chaos testing harness**
