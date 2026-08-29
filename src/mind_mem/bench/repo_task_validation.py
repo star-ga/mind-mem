@@ -132,11 +132,14 @@ def extract_tree(repo: str, sha: str, dest: str) -> None:
     # "git archive failed" -- a message pointing at the wrong component
     # entirely. Measured 2026-08-29: only the Python 3.10 CI rows failed, and
     # they blamed git.
-    extract_kwargs = {"filter": "data"} if hasattr(tarfile, "data_filter") else {}
+    supports_filter = hasattr(tarfile, "data_filter")
     failed = False
     try:
         with tarfile.open(fileobj=proc.stdout, mode="r|") as tar:
-            tar.extractall(dest, **extract_kwargs)  # nosec B202 - our own git archive
+            if supports_filter:
+                tar.extractall(dest, filter="data")  # nosec B202 - our own git archive
+            else:
+                tar.extractall(dest)  # nosec B202 - our own git archive, filter unavailable
     except BaseException:
         failed = True
         raise

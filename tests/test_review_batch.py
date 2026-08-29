@@ -94,8 +94,8 @@ class TestBatchApprove:
         # message that says what actually went wrong -- which cost a full CI
         # round-trip on a Windows-only failure that could not be reproduced
         # locally.
-        assert [o.proposal_id for o in report.applied] == list(ids), (
-            "outcomes: " + "; ".join(f"{o.proposal_id}/{o.action} ok={o.succeeded} msg={o.message!r}" for o in report.outcomes)
+        assert [o.proposal_id for o in report.applied] == list(ids), "outcomes: " + "; ".join(
+            f"{o.proposal_id}/{o.action} ok={o.succeeded} msg={o.message!r}" for o in report.outcomes
         )
         for pid in ids:
             assert proposal_status(root, pid) == "applied"
