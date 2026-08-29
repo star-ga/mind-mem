@@ -336,14 +336,14 @@ def _recall_impl_uncached(
                 return _sqlite_busy_error()
             raise
 
-    # Import quarantine: this tool reaches the hybrid / FTS legs directly,
-    # so it does not pass through ``recall._apply_post_filters``. Unreleased
-    # external ingest is withheld here too — one funnel per public surface,
-    # so no backend leg can be the one that leaks it.
+    # Admissibility: this tool reaches the hybrid / FTS legs directly, so it
+    # does not pass through ``recall._apply_post_filters``. One funnel per
+    # public surface, so no backend leg can be the one that leaks. The legs
+    # themselves filter before fusion; this is the surface-level backstop.
     if results:
-        from mind_mem._recall_core import _drop_quarantined
+        from mind_mem._recall_core import _withhold_inadmissible
 
-        results = _drop_quarantined(list(results), ws, status_key="status")
+        results = _withhold_inadmissible(list(results), ws, status_key="status", leg="mcp")
 
     recall_elapsed = time.monotonic() - recall_start
     if recall_elapsed > timeout_seconds:

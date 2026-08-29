@@ -27,6 +27,8 @@ from concurrent.futures import TimeoutError as _FutureTimeout
 from datetime import date
 from typing import Any
 
+from .admissibility import admit_corpus, admit_leg, is_admissible_status, workspace_release_ids
+from .enums import Leg
 from .observability import get_logger, metrics, timed
 from .scoring_instant import as_utc_datetime, resolve_scoring_instant
 
@@ -662,6 +664,7 @@ class HybridBackend:
                 # rerank (which returns a plain list and drops ``.degraded``).
                 bm25_degraded = getattr(results, "degraded", None)
                 metrics.inc("hybrid_searches_bm25_only")
+                results = self._admit(results, workspace, leg=Leg.BM25)
                 # v3.3.0 Tier 2: cross-encoder rerank also applies to
                 # BM25-only deployments (previously only post-fusion).
                 results = self._maybe_cross_encoder_rerank(query, results, limit)
@@ -757,6 +760,15 @@ class HybridBackend:
                 # wait=False so a hung vector leg cannot re-block the response
                 # here (the whole point of the deadline above).
                 pool.shutdown(wait=False, cancel_futures=True)
+
+            # Admissibility runs HERE, before fusion, and not once after it.
+            # RRF scores an item at ``sum_leg 1/(k + rank_leg(i))``; drop a
+            # withheld item after fusion and every admitted item below it
+            # carries a worse rank than it should, so the presence of
+            # withheld content stays observable through its neighbours'
+            # ranks. Filtering each leg's candidates closes that channel.
+            bm25_results = self._admit(bm25_results, workspace, leg=Leg.BM25)
+            vec_results = self._admit(vec_results, workspace, leg=Leg.VECTOR)
 
             _log.info(
                 "hybrid_results_pre_fusion",
@@ -1068,6 +1080,22 @@ class HybridBackend:
             _log.warning("temporal_decay_failed", error=str(exc))
         return results
 
+    def _admit(self, hits: list[dict], workspace: str, *, leg: Leg) -> list[dict]:
+        """Withhold everything recall may not serve from one leg's candidates.
+
+        Returns the input object untouched when every candidate is
+        admissible — the common case — so an unwithheld workspace pays
+        nothing, not even the release lookup.
+        """
+        if all(is_admissible_status(hit.get("status")) for hit in hits):
+            return hits
+        try:
+            releases = workspace_release_ids(workspace)
+        except Exception as exc:  # pragma: no cover — defensive
+            _log.warning("release_lookup_failed", error=str(exc))
+            releases = frozenset()
+        return admit_leg(hits, status_key="status", releases=releases, leg=leg.value)
+
     def _load_corpus_if_needed(self, query: str, workspace: str) -> list[dict] | None:
         """Return the workspace block corpus — shared by graph + entity
         helpers so we load once per request rather than twice.
@@ -1097,7 +1125,13 @@ class HybridBackend:
                 except Exception as exc:  # pragma: no cover
                     _log.debug("corpus_block_parse_skipped", error=str(exc))
                     continue
-            return blocks
+            # The graph / KG / prefetch legs resolve neighbour ids straight
+            # out of this list, so filtering it here is what makes a withheld
+            # block unresolvable to all three at once. Each of them filters
+            # again on its own corpus argument — this is not redundancy, it
+            # is the same rule enforced at the point of use so a caller that
+            # loads its own corpus cannot bypass it.
+            return admit_corpus(blocks)
         except Exception as exc:  # pragma: no cover
             _log.warning("corpus_load_failed", error=str(exc))
             return None

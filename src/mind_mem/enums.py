@@ -121,6 +121,42 @@ def is_servable(status: object) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Retrieval legs — the closed set of paths a candidate can enter recall by
+# ---------------------------------------------------------------------------
+
+
+class Leg(str, Enum):
+    """A retrieval path that can put a candidate in front of the caller.
+
+    Closed on purpose. The admissibility gate is only as complete as this
+    vocabulary: the quarantine acceptance test parametrises over
+    ``list(Leg)``, so a member added here without a fixture fails the
+    suite rather than quietly leaving a path untested.
+
+    ``hybrid`` is deliberately absent. It is a *fusion mode* — the label
+    the attestation uses when the lexical and vector legs both ran — not
+    a way for a candidate to arrive, and putting it here would generate a
+    parametrisation row that corresponds to no retrieval path.
+
+    :attr:`GRAPH`, :attr:`KG` and :attr:`ENTITY_PREFETCH` are the three
+    legs that splice raw parsed blocks into the result list. They are
+    named here because the previous vocabulary knew only about ``bm25``
+    and ``vector``, and a gate that cannot name a leg cannot test it.
+    """
+
+    #: Lexical retrieval — FTS5 index or the in-memory BM25 scan.
+    BM25 = "bm25"
+    #: Dense retrieval over the embedding index.
+    VECTOR = "vector"
+    #: Cross-reference walk from the ranked seeds.
+    GRAPH = "graph"
+    #: Typed knowledge-graph edge walk from the query's entities.
+    KG = "kg"
+    #: Entity-tier prefetch plus its one-hop neighbourhood.
+    ENTITY_PREFETCH = "entity_prefetch"
+
+
+# ---------------------------------------------------------------------------
 # Ingest tiers — the closed set of sources a governed write arrives from
 # ---------------------------------------------------------------------------
 
@@ -192,6 +228,7 @@ __all__ = [
     "INITIAL_STATUS",
     "SERVABLE",
     "IngestTier",
+    "Leg",
     "Status",
     "TaskStatus",
     "is_servable",

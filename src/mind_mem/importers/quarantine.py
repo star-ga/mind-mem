@@ -58,6 +58,8 @@ import re
 from datetime import datetime
 from typing import Any, Final, Iterable, Mapping, Sequence
 
+from ..admissibility import DECISIONS_FILE as _DECISIONS_FILE
+from ..admissibility import RELEASE_FIELD as _RELEASE_FIELD
 from ..enums import INITIAL_STATUS, IngestTier, Status
 from ..provenance_class import EXTERNAL_INGEST
 
@@ -78,7 +80,6 @@ __all__ = [
     "propose_import_release",
     "quarantined_import_ids",
     "record_import_in_chain",
-    "withheld_import_ids",
     "render_release_proposal_block",
 ]
 
@@ -99,7 +100,7 @@ TIER_FIELD: Final = "IngestTier"
 BATCH_FIELD: Final = "ImportBatch"
 
 #: Release-decision field listing the released block ids.
-RELEASE_FIELD: Final = "Releases"
+RELEASE_FIELD: Final = _RELEASE_FIELD
 
 #: Release-decision field naming the batch (human handle, one per run).
 BATCH_ADMIT_FIELD: Final = "AdmitsImportBatch"
@@ -109,7 +110,7 @@ BATCH_ADMIT_FIELD: Final = "AdmitsImportBatch"
 RELEASE_PROPOSAL_FILE: Final = "intelligence/proposed/EDITS_PROPOSED.md"
 
 #: Where the applied release decision lands.
-DECISIONS_FILE: Final = "decisions/DECISIONS.md"
+DECISIONS_FILE: Final = _DECISIONS_FILE
 
 #: Upper bound on block ids in one release proposal. A release is a
 #: reviewable artifact; past this the id list stops being readable and
@@ -117,16 +118,7 @@ DECISIONS_FILE: Final = "decisions/DECISIONS.md"
 MAX_RELEASE_BLOCKS: Final = 500
 
 _PROPOSAL_ID_RE: Final = re.compile(r"^P-(\d{8})-(\d{3})$")
-_IMPORT_ID_RE: Final = re.compile(r"^IMP-[a-zA-Z0-9_.-]+$")
 _UNSAFE_RE: Final = re.compile(r"[\r\n]+")
-
-#: ``(realpath, mtime_ns, size) -> admitted ids``. One slot: recall calls
-#: this repeatedly with the same workspace, and the key carries the file
-#: identity so a governance apply invalidates it on the next call.
-_ADMITTED_CACHE: dict[tuple[str, int, int], frozenset[str]] = {}
-
-#: Same shape for the withheld set, keyed on BOTH files that define it.
-_WITHHELD_CACHE: dict[tuple[tuple[str, int, int], tuple[str, int, int]], frozenset[str]] = {}
 
 
 class ImportQuarantineError(RuntimeError):
@@ -245,94 +237,22 @@ def quarantined_import_ids(workspace: str, corpus_file: str) -> tuple[str, ...]:
     return tuple(str(b["_id"]) for b in blocks if b.get("_id") and is_quarantined(b.get("Status")))
 
 
-def _release_ids(block: Mapping[str, Any]) -> list[str]:
-    """Block ids named by a release decision's ``Releases`` field."""
-    raw = block.get(RELEASE_FIELD)
-    if isinstance(raw, str):
-        candidates = [raw]
-    elif isinstance(raw, list):
-        candidates = [str(item) for item in raw]
-    else:
-        return []
-    return [c.strip() for c in candidates if _IMPORT_ID_RE.match(c.strip())]
-
-
 def admitted_import_ids(workspace: str) -> frozenset[str]:
     """Imported block ids released by an **active** release decision.
 
+    Thin delegation to :func:`~mind_mem.admissibility.workspace_release_ids`,
+    which owns both the ``Releases`` parser and the cache. Two readers of
+    the same field would be two chances to disagree about what a release
+    admits, and recall and the importer must never disagree about that.
+
     The source of truth is ``decisions/DECISIONS.md`` — written only by
     the apply engine, so an id can only appear here via an approved
-    proposal. A revoked/superseded release decision stops admitting its
-    batch, which is what makes rollback re-quarantine for free.
-
-    Cached on ``(path, mtime_ns, size)``; any governance apply changes
-    the file and therefore the key. Never raises: an unreadable
-    decisions file admits nothing (fail-closed).
+    proposal. A revoked or superseded release decision stops admitting
+    its batch, which is what makes rollback re-quarantine for free.
     """
-    path = os.path.join(workspace, DECISIONS_FILE)
-    try:
-        stat = os.stat(path)
-    except OSError:
-        return frozenset()
-    key = (os.path.realpath(path), stat.st_mtime_ns, stat.st_size)
-    cached = _ADMITTED_CACHE.get(key)
-    if cached is not None:
-        return cached
+    from ..admissibility import workspace_release_ids
 
-    from ..block_parser import parse_file
-
-    try:
-        blocks = parse_file(path)
-    except (OSError, UnicodeDecodeError, ValueError):
-        return frozenset()
-
-    admitted: set[str] = set()
-    for block in blocks:
-        if str(block.get("Status", "")).strip().lower() != "active":
-            continue
-        admitted.update(_release_ids(block))
-    result = frozenset(admitted)
-    # Single-slot cache: drop older keys rather than grow unbounded.
-    _ADMITTED_CACHE.clear()
-    _ADMITTED_CACHE[key] = result
-    return result
-
-
-def _file_key(path: str) -> tuple[str, int, int] | None:
-    """``(realpath, mtime_ns, size)`` identity for *path*, or None if absent."""
-    try:
-        stat = os.stat(path)
-    except OSError:
-        return None
-    return (os.path.realpath(path), stat.st_mtime_ns, stat.st_size)
-
-
-def withheld_import_ids(workspace: str, corpus_file: str = "memory/IMPORTED.md") -> frozenset[str]:
-    """Imported block ids recall must withhold: quarantined and unadmitted.
-
-    This is the id-set form of the quarantine rule, for retrieval paths
-    whose hits do not reliably carry a ``Status`` field (the vector and
-    fused legs). It is the exact complement of
-    :func:`admitted_import_ids` over what is actually in quarantine.
-
-    Free when there is nothing to withhold: a workspace that has never
-    run ``mm import`` has no ``memory/IMPORTED.md``, and this returns the
-    empty set after a single ``stat``. Otherwise cached on the identity
-    of both files that define the answer, so a governance apply (which
-    rewrites ``decisions/DECISIONS.md``) invalidates it.
-    """
-    corpus_key = _file_key(os.path.join(workspace, corpus_file))
-    if corpus_key is None:
-        return frozenset()
-    decisions_key = _file_key(os.path.join(workspace, DECISIONS_FILE)) or ("", 0, 0)
-    key = (corpus_key, decisions_key)
-    cached = _WITHHELD_CACHE.get(key)
-    if cached is not None:
-        return cached
-    withheld = frozenset(quarantined_import_ids(workspace, corpus_file)) - admitted_import_ids(workspace)
-    _WITHHELD_CACHE.clear()
-    _WITHHELD_CACHE[key] = withheld
-    return withheld
+    return workspace_release_ids(workspace)
 
 
 # ---------------------------------------------------------------------------

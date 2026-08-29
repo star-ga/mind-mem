@@ -76,6 +76,13 @@ def graph_expand(
         return results
 
     from ._recall_scoring import build_xref_graph
+    from .admissibility import admit_corpus
+
+    # Only admissible blocks are resolvable. This walk appends raw corpus
+    # blocks straight into the result list, so a withheld block reachable
+    # here is a withheld block served — filtering the corpus is what makes
+    # it unreachable rather than merely unwanted.
+    all_blocks = admit_corpus(all_blocks)
 
     id_to_block: dict[str, dict] = {str(b.get("_id")): b for b in all_blocks if b.get("_id")}
     if not id_to_block:
@@ -117,7 +124,13 @@ def graph_expand(
             if len(appended) >= max_total_added:
                 break
             block = id_to_block.get(nid)
-            if block is None:
+            if block is None:  # pragma: no cover — unreachable by construction
+                # Not counted as an unresolved id, because it cannot be one:
+                # ``build_xref_graph`` only emits edges *between* ids present
+                # in the list it was given, and that is the same filtered
+                # list ``id_to_block`` indexes. A cross-reference to a
+                # withheld or absent block never becomes an edge. The guard
+                # stays as a structural assertion, not a live path.
                 continue
             next_hop = hop + 1
             decayed = seed_score * (decay**next_hop)

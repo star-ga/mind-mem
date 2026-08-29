@@ -33,6 +33,7 @@ import re
 from collections import deque
 from typing import Any, Optional
 
+from .admissibility import admit_corpus, count_unresolved
 from .knowledge_graph import EntityRegistry, KnowledgeGraph
 from .observability import get_logger
 
@@ -148,6 +149,9 @@ def kg_expand(
     if not entities:
         return results
 
+    # Same rule as the cross-reference walk: this leg appends raw corpus
+    # blocks, so only admissible ones may be resolvable from an edge.
+    corpus = admit_corpus(corpus)
     id_to_block = {str(b.get("_id")): b for b in corpus if b.get("_id")}
     if not id_to_block:
         return results
@@ -177,6 +181,15 @@ def kg_expand(
                 continue
             block = id_to_block.get(bid)
             if block is None:
+                # THE unresolvable-id case: ``source_block_id`` comes out of
+                # the graph database, not the corpus, so it can name a block
+                # the corpus no longer answers for — deleted, or withheld by
+                # the filter above. Dropped and counted, and deliberately NOT
+                # a reason to mark the run degraded: an index that has outrun
+                # its corpus is ordinary, and ``served`` staying a subset of
+                # ``resolved`` staying a subset of ``admissible`` is the
+                # invariant that matters.
+                count_unresolved()
                 continue
             new = dict(block)
             new[score_field] = seed_score * (decay**next_hop)

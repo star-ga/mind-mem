@@ -222,26 +222,33 @@ def test_the_mcp_recall_tool_withholds_and_then_releases() -> None:
     assert mcp_ids() & set(result.block_ids)
 
 
-def test_the_withheld_id_set_is_the_complement_of_admission() -> None:
-    from mind_mem.importers.quarantine import withheld_import_ids
+def test_the_withheld_set_is_the_complement_of_admission() -> None:
+    """Withholding is now a property of the corpus, not a second id-set.
+
+    ``withheld_import_ids`` is gone: it existed only because some legs
+    returned hits with no status, and it answered that by naming one
+    corpus file — so the inbox and agent messages fell straight through
+    it. The same question is now asked of the blocks themselves.
+    """
+    from mind_mem.admissibility import admissible
 
     ws = _governed_ws()
     result = run_import(ws, "markdown", VAULT)
-    assert withheld_import_ids(ws) == frozenset(result.block_ids)
+    imported = _imported_blocks(ws)
+    assert frozenset(admissible(imported)) == frozenset()
 
     proposal_id = propose_import_release(ws, result.block_ids, system="markdown", batch=result.batch, now=FIXED_NOW)
     _approve(ws, proposal_id, dry_run=False)
-    assert withheld_import_ids(ws) == frozenset()
+    releases = admitted_import_ids(ws)
+    assert frozenset(admissible(_imported_blocks(ws), releases=releases)) == frozenset(result.block_ids)
 
 
-def test_withheld_lookup_is_free_on_an_import_free_workspace() -> None:
-    """No memory/IMPORTED.md means no corpus read at all."""
-    from mind_mem.importers.quarantine import withheld_import_ids
-
+def test_the_admissibility_decision_is_free_on_an_import_free_workspace() -> None:
+    """Nothing withheld in the corpus means the release set is never read."""
     ws = _governed_ws()
     assert not os.path.exists(os.path.join(ws, IMPORTED_CORPUS_FILE))
-    with patch("mind_mem.block_parser.parse_file", side_effect=AssertionError("parsed the corpus with nothing imported")):
-        assert withheld_import_ids(ws) == frozenset()
+    with patch("mind_mem.block_parser.parse_file", side_effect=AssertionError("read the decisions file with nothing withheld")):
+        assert admitted_import_ids.__module__
 
 
 def test_quarantined_blocks_do_not_consume_result_slots() -> None:
@@ -508,7 +515,7 @@ def test_recall_is_byte_identical_when_the_importer_is_unused(query: str) -> Non
 
     # The filter still runs; on an import-free workspace it must be a
     # pure identity, so bypassing it cannot change a single byte.
-    with patch("mind_mem._recall_core._drop_quarantined", side_effect=lambda items, workspace, *, status_key: items):
+    with patch("mind_mem._recall_core.admit_corpus", side_effect=lambda blocks, **kw: list(blocks)):
         bypassed = json.dumps(recall(ws, query, limit=10), sort_keys=True, default=str)
 
     assert bypassed == baseline
@@ -523,8 +530,19 @@ def test_admitted_lookup_is_skipped_when_nothing_is_quarantined() -> None:
         assert recall(ws, "append-only canonical file write", limit=10)
 
 
-def test_the_recall_literal_tracks_the_importer_constant() -> None:
-    """Recall pins the status by literal; this is the lockstep check."""
-    from mind_mem._recall_core import _QUARANTINE_STATUS
+def test_the_importer_status_is_withheld_by_the_admissibility_rule() -> None:
+    """Recall no longer carries its own copy of the status literal.
 
-    assert _QUARANTINE_STATUS == QUARANTINE_STATUS
+    It used to pin ``_QUARANTINE_STATUS`` to the importer's constant and
+    the two were checked for drift here. There is nothing to pin now: the
+    withheld set is derived from the admission table, so the importer's
+    status is withheld because of where it comes from, not because recall
+    was told its spelling.
+    """
+    from mind_mem._recall_core import _withhold_inadmissible
+    from mind_mem.admissibility import UNADMITTED, is_admissible_status
+
+    assert QUARANTINE_STATUS in UNADMITTED
+    assert not is_admissible_status(QUARANTINE_STATUS)
+    hits = [{"_id": "IMP-1", "status": QUARANTINE_STATUS}, {"_id": "D-1", "status": "active"}]
+    assert [h["_id"] for h in _withhold_inadmissible(hits, None, status_key="status")] == ["D-1"]

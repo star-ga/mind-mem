@@ -11,7 +11,7 @@ import sys
 from abc import ABC, abstractmethod
 from collections import Counter
 from datetime import date
-from typing import Any, Final, Mapping, cast
+from typing import Any, Mapping, cast
 
 from ._recall_constants import (
     _STOPWORDS,
@@ -58,6 +58,7 @@ from ._recall_reranking import llm_rerank, rerank_hits
 from ._recall_scoring import bm25f_score_terms, build_xref_graph, compute_weighted_tf, date_score
 from ._recall_temporal import apply_temporal_filter, resolve_time_reference
 from ._recall_tokenization import tokenize
+from .admissibility import admit_corpus, admit_leg, is_admissible_status, workspace_release_ids
 from .block_maturity import apply_min_maturity_filter as _apply_min_maturity_filter
 from .block_parser import chunk_block, deduplicate_chunks, get_active, parse_file
 from .block_provenance import PROVENANCE_FIELD_NAMES
@@ -455,68 +456,48 @@ def _in_date_range(
 # Import quarantine (external ingest)
 # ---------------------------------------------------------------------------
 
+
 #: Status stamped on every block ``mm import`` writes. Kept as a literal
 #: so recall never imports the importers package on the hot path; the
-#: value is pinned to ``importers.quarantine.QUARANTINE_STATUS`` by test.
-_QUARANTINE_STATUS: Final = "quarantined"
+def _withhold_inadmissible(
+    items: list[dict],
+    workspace: str | None,
+    *,
+    status_key: str,
+    leg: str | None = None,
+    allow: frozenset[str] = frozenset(),
+) -> list[dict]:
+    """Remove everything recall is not allowed to serve from a result set.
 
+    ``admissible(item) := is_servable(item.status) or item.id in releases``
 
-def _quarantined(value: Any) -> bool:
-    """True when a block/hit status value means *quarantined*."""
-    return isinstance(value, str) and value.strip().lower() == _QUARANTINE_STATUS
+    An **allow-list**, replacing the deny-list that used to live here. The
+    old rule dropped items whose status spelled *quarantined* and kept
+    everything else, so any status it had not been told about — a new
+    ingest door minting ``Status: staged``, say — was served by default.
+    It also carried a second rule, an id-set recomputed off
+    ``memory/IMPORTED.md``, which existed because some legs return hits
+    with no status; that rule named exactly one corpus file, so the inbox
+    drop folder and agent messages fell straight through it. Both are
+    gone. See :mod:`mind_mem.admissibility`.
 
+    Cost: an all-servable result set returns without resolving the
+    release set at all, so a workspace with nothing withheld performs no
+    filesystem probe — the previous rule paid a ``stat`` per recall
+    whatever the corpus held.
 
-def _drop_quarantined(items: list[dict], workspace: str | None, *, status_key: str) -> list[dict]:
-    """Remove unreleased external-ingest items from a recall result set.
-
-    ``mm import`` is a bulk, ungated write: a foreign corpus lands in the
-    store without passing the governance gate, so every imported block
-    arrives ``Status: quarantined`` and must stay invisible to recall
-    until a governance proposal admits it. This is the filter that makes
-    that true, and it is deliberately the *only* thing recall knows about
-    importing.
-
-    Two rules, because not every retrieval leg carries the same fields:
-    an item is withheld when its status says *quarantined* and no live
-    release decision admits it, **or** when its id is in the withheld set
-    computed straight off the corpus (the fused/vector legs return hits
-    with no ``Status``, so the status rule alone would miss them).
-
-    Cost model: an import-free workspace has no ``memory/IMPORTED.md``,
-    so the id-set lookup is one ``stat`` and returns empty, no item
-    carries a quarantined status, and the input list is returned
-    unchanged. Both lookups are cached on file identity, so a governance
-    apply invalidates them and nothing else re-reads the corpus.
-
-    Fail-closed: with no workspace to resolve admissions against, a
-    quarantined item is dropped rather than surfaced.
+    Fail-closed: with no workspace to resolve releases against, a
+    non-servable item is dropped rather than surfaced.
     """
-    flagged = any(_quarantined(item.get(status_key)) for item in items)
-
-    def _status_only() -> list[dict]:
-        return [item for item in items if not _quarantined(item.get(status_key))] if flagged else items
-
-    if workspace is None:
-        return _status_only()
-    try:
-        from .importers.quarantine import admitted_import_ids, withheld_import_ids
-
-        withheld = withheld_import_ids(workspace)
-        admitted = admitted_import_ids(workspace) if flagged else frozenset()
-    except Exception as exc:  # pragma: no cover — defensive
-        _log.warning("quarantine_admission_lookup_failed", error=str(exc))
-        return _status_only()
-    if not flagged and not withheld:
+    if all(is_admissible_status(item.get(status_key)) for item in items):
         return items
-    kept: list[dict] = []
-    for item in items:
-        block_id = str(item.get("_id", ""))
-        if block_id in withheld:
-            continue
-        if _quarantined(item.get(status_key)) and block_id not in admitted:
-            continue
-        kept.append(item)
-    return kept
+    releases: frozenset[str] = frozenset()
+    if workspace is not None:
+        try:
+            releases = workspace_release_ids(workspace)
+        except Exception as exc:  # pragma: no cover — defensive
+            _log.warning("release_lookup_failed", error=str(exc))
+    return admit_leg(items, status_key=status_key, releases=releases, allow=allow, leg=leg)
 
 
 def _apply_date_filter(
@@ -631,6 +612,7 @@ def _apply_post_filters(
     as_of: str | None = None,
     guardrail_context: GuardrailContext | None = None,
     guardrail_policy: GuardrailPolicy | None = None,
+    admission_allow: frozenset[str] = frozenset(),
 ) -> list[dict]:
     """Apply the recall post-retrieval filter contract uniformly.
 
@@ -650,9 +632,9 @@ def _apply_post_filters(
     drop it. ``None`` (the default) skips the step entirely and returns
     the filtered hits untouched.
     """
-    # Quarantine first: an unreleased external-ingest block must never
-    # occupy a result slot, whatever the other filters decide.
-    hits = _drop_quarantined(hits, workspace, status_key="status")
+    # Admissibility first: a block recall may not serve must never occupy
+    # a result slot, whatever the other filters decide.
+    hits = _withhold_inadmissible(hits, workspace, status_key="status", leg="funnel", allow=admission_allow)
     if since is not None or until is not None:
         hits = _apply_date_filter(hits, since, until)[:limit]
     if lifecycle is not None:
@@ -782,6 +764,14 @@ def recall(
         # still fire when the query itself retrieves nothing.
         return apply_guardrail_surfacing([], workspace=workspace, context=_guardrail_ctx, policy=_guardrail_policy)
 
+    # #429: an unreviewed signal is unadmitted content like any other, so the
+    # general admissibility rule now covers what a signals-only special case
+    # used to. ``include_pending`` stays a caller-scoped widening of exactly
+    # that, and it has to reach every dispatch path — the corpus filter on the
+    # scan leg AND the funnel every leg exits through, or the funnel silently
+    # re-withholds what the caller asked for.
+    _admission_allow = frozenset({"pending"}) if include_pending else frozenset()
+
     # Fix for #525: dispatch to the configured backend (sqlite / vector)
     # before falling through to the markdown-scan BM25 path.  This is the
     # same dispatch the `python3 -m mind_mem.recall` CLI does at line 1400
@@ -814,6 +804,7 @@ def recall(
             as_of=as_of,
             guardrail_context=_guardrail_ctx,
             guardrail_policy=_guardrail_policy,
+            admission_allow=_admission_allow,
         )
     if isinstance(_cfg_backend, RecallBackend):
         try:
@@ -831,6 +822,7 @@ def recall(
                     as_of=as_of,
                     guardrail_context=_guardrail_ctx,
                     guardrail_policy=_guardrail_policy,
+                    admission_allow=_admission_allow,
                 )
         except Exception as exc:
             _log.warning("recall_backend_error_fallback_to_scan", error=str(exc))
@@ -1053,12 +1045,6 @@ def recall(
             continue
         if active_only:
             blocks = get_active(blocks)
-        # #429: Exclude unreviewed signals from default recall corpus
-        if label == "signals" and not include_pending:
-            blocks = [b for b in blocks if b.get("Status", "").lower() != "pending"]
-        # Unreleased external ingest never enters the candidate pool, so
-        # it cannot displace a governed block before the top-k cut.
-        blocks = _drop_quarantined(blocks, workspace, status_key="Status")
         for b in blocks:
             b["_source_file"] = rel_path
             b["_source_label"] = label
@@ -1093,11 +1079,22 @@ def recall(
                 continue
             if active_only:
                 blocks = get_active(blocks)
-            blocks = _drop_quarantined(blocks, workspace, status_key="Status")
             for b in blocks:
                 b["_source_file"] = ns_path
                 b["_source_label"] = f"{label}@{agent_id}"
                 all_blocks.append(b)
+
+    # Admissibility, once, over the whole corpus — after BOTH load loops so
+    # the release decisions are visible whichever file order they arrived in,
+    # and before anything reads the pool. Nothing recall may not serve enters
+    # the candidate set, so it can neither reach the top-k nor shift the BM25
+    # document frequencies computed below off it.
+    # #429: an unreviewed signal is unadmitted content like any other, so
+    # the general rule now covers what a signals-only special case used to.
+    # ``include_pending`` stays a caller-scoped widening of exactly that.
+    _pre_admission = len(all_blocks)
+    all_blocks = admit_corpus(all_blocks, allow=_admission_allow)
+    _stage_counts["withheld"] = _pre_admission - len(all_blocks)
 
     if not all_blocks:
         # Empty corpus is not a reason to withhold a constraint.
@@ -1146,7 +1143,14 @@ def recall(
             flat.extend(tokens)
         doc_flat_tokens.append(flat)
 
-    # Document frequency + average weighted doc length
+    # Document frequency + average weighted doc length.
+    #
+    # These are computed over ``all_blocks``, which the admissibility filter
+    # above has already narrowed to what recall may serve — so a withheld
+    # block contributes nothing to IDF, and a released one contributes from
+    # the moment it is released. That ordering is load-bearing: move the
+    # filter after this loop and withheld content silently re-enters the
+    # term weights of every admitted document.
     df: Counter[str] = Counter()
     total_wdl = 0.0
     for i, ft in enumerate(doc_field_tokens):
@@ -1884,6 +1888,7 @@ def recall(
         as_of=as_of,
         guardrail_context=_guardrail_ctx,
         guardrail_policy=_guardrail_policy,
+        admission_allow=_admission_allow,
     )
     return top
 

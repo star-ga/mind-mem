@@ -41,6 +41,7 @@ import os
 import re
 from typing import Any
 
+from .admissibility import admit_corpus
 from .observability import get_logger
 
 _log = get_logger("entity_prefetch")
@@ -215,7 +216,10 @@ def prefetch_entity_blocks(
     if not candidates:
         return []
 
-    entity_blocks = _load_entity_blocks(workspace)
+    # This tier reads ``entities/`` itself rather than the shared corpus,
+    # so it needs the rule applied to its own load: a withheld entity block
+    # is not a prefetch candidate.
+    entity_blocks = admit_corpus(_load_entity_blocks(workspace))
     if not entity_blocks:
         return []
 
@@ -254,7 +258,9 @@ def prefetch_entity_blocks(
                 all_blocks = corpus
             else:
                 # graph_expand needs the full block corpus for neighbour
-                # resolution. Load it lazily.
+                # resolution. Load it lazily. ``graph_expand`` applies the
+                # admissibility rule to whatever it is handed, so this
+                # legacy load cannot be the one that bypasses it.
                 from .block_parser import parse_file
                 from .block_store import MarkdownBlockStore
 

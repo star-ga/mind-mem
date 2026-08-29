@@ -1046,11 +1046,14 @@ def query_index(
     rather than reading its own clock. ``None`` resolves to today in UTC.
 
     .. warning::
-       Raw, UNFILTERED index primitive. It does not apply the external-ingest
-       quarantine filter, by design: quarantine is enforced once, at the recall
-       funnels, by ``_recall_core._drop_quarantined``. Any NEW caller that
+       Raw, UNFILTERED index primitive. It does not apply the admissibility
+       allow-list, by design: withheld blocks stay INDEXED so that releasing
+       one never requires a reindex (the index anchor is attested, and a
+       release must not churn it). Admissibility is enforced on the way out —
+       per leg before fusion in ``hybrid_recall``, and at the recall funnels
+       by ``_recall_core._withhold_inadmissible``. Any NEW caller that
        surfaces these rows to a user or an agent must route them through that
-       filter first, or it will leak unreleased imported blocks into recall.
+       filter first, or it will leak withheld blocks into recall.
     """
     # Re-entrancy guard: if this thread is already inside query_index for the
     # same workspace (can happen when the index-missing fallback calls recall()
@@ -1141,6 +1144,18 @@ def query_index(
         #
         # bm25() weights must align to the blocks_fts columns
         # (block_id first, then FTS5_COLUMNS); see _bm25_weights().
+        # deferred: BM25 statistics here come from the PREBUILT FTS5 index,
+        # which indexes withheld blocks too (see the warning above), so a
+        # withheld document still contributes to the corpus-level term
+        # weights bm25() computes. It cannot contribute a candidate or a
+        # byte of content — the allow-list runs on every row that leaves
+        # this function — so what leaks is a second-order effect on the
+        # RANKING of admitted documents, not their identity. The in-memory
+        # scan leg has no such residual: it computes IDF over the admitted
+        # corpus because the filter runs before the document-frequency pass.
+        # Upgrade path: carry `status` into a filtered FTS5 shadow table, or
+        # move to an index that supports per-query document restriction, and
+        # recompute IDF over the admissible subset.
         weights = _bm25_weights()
         rows = conn.execute(
             f"""SELECT b.*, f.rank as fts_rank,
