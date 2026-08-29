@@ -90,6 +90,16 @@ SANCTIONED_WRITE_BLOCK_CALLERS: dict[tuple[str, str], str] = {
     # --- operator-only backend copy. Status preserved from the source
     # corpus, so a quarantined block stays quarantined across backends.
     ("src/mind_mem/mm_cli.py", "_cmd_migrate_store"): LOCAL,
+    # --- the A/B benchmark's memory arm. Seeds a THROWAWAY workspace with
+    # this repository's own pre-cutoff commit history, under one
+    # admit_proposal scope covering the whole seed, exactly as applying one
+    # approved proposal covers the blocks it writes. Nothing external
+    # enters: the content is the repo's own git log, and the workspace is
+    # created and deleted by the harness. It writes ACTIVE blocks on
+    # purpose -- a quarantined corpus is not recallable, so the memory arm
+    # would silently become a second control arm and the benchmark would
+    # report a null result it caused itself.
+    ("src/mind_mem/bench/ab_seed.py", "write_seed"): LOCAL,
     # --- the enforcement point itself, and the two delegating adapters.
     ("src/mind_mem/block_store_postgres_replica.py", "ReplicatedPostgresBlockStore.write_block"): IMPLEMENTATION,
     ("src/mind_mem/storage/sharded_pg.py", "ShardedPostgresBlockStore.write_block"): IMPLEMENTATION,

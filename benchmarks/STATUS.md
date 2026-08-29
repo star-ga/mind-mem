@@ -5,6 +5,47 @@ Live status page for benchmark holds. Linked from `README.md` and
 root-cause and methodology live in the linked artifacts below; do not
 duplicate them here.
 
+## Memory A/B (does memory HELP?) — harness landed, NO measurement yet
+
+Every other row on this page measures **retrieval**. None of them measures
+whether the retrieved memory changed an outcome. That join is what
+`benchmarks/memory_ab_bench.py` (`mind-mem-bench-ab`) exists to measure:
+the same agent, at the same budget, attempting the same real repository
+tasks with and without recalled context.
+
+**No delta has been measured.** The harness is landed, tested and proven
+end to end on a single task; one task cannot support a claim in either
+direction and the harness itself reports `no_evidence` at that size. Nothing
+on this page may cite a with-memory delta until a run over a stated stratum
+lands.
+
+- **Tasks** — `benchmarks/tasks/real_repo_tasks.json`, 108 commits from this
+  repository's own history, each proven red-at-parent / green-at-commit by
+  execution. Success is `pytest` exit 0 plus every recorded `fail_to_pass`
+  node passing; no model grades anything.
+- **Memory is the only variable** — the arms' prompts differ by a recalled
+  prefix and nothing else (`memory.prompt == memory.memory_section +
+  control.prompt`, asserted). Same tree, same environment object, same
+  ceilings. The control arm's isolation is structural: no `MIND_MEM_*`
+  variable, no `mm` / `mind-mem-*` on `PATH`, a sandboxed `HOME` so no MCP
+  server loads, and the seeded workspace outside the work tree.
+- **Seeding cannot leak the answer** — the corpus is drawn from
+  `git log <parent_sha>`, so the task's own commit is unreachable by
+  ancestry, then re-checked against the cutoff and scanned for the commit id.
+- **Statistics** — paired McNemar exact. Below 6 discordant pairs no split
+  can reach p<=0.05, so a one- or two-task difference is reported as noise
+  rather than as a result.
+- **Power** — with the 72 tasks in the primary (`single_file` + `small`)
+  stratum, a paired win needs at least 6 discordant pairs to clear p<=0.05.
+
+Run the positive control before reading any result — it proves the grader
+registers a pass, which is what licenses reading a null:
+
+```
+python3 benchmarks/memory_ab_bench.py selfcheck --select bucket:single_file:1
+python3 benchmarks/memory_ab_bench.py run --select bucket:single_file:1 --agent none
+```
+
 ## LongMemEval — HELD
 
 **Status: provenance hold active.** The headline `R@5 = 85.3` published in
