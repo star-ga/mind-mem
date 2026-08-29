@@ -114,10 +114,26 @@ case "$mode" in
     ;;
 
   range)
-    range="${2:-}"
-    [ -n "$range" ] || die "usage: $0 range <base>..<head>"
+    shift
+    [ "$#" -gt 0 ] || die "usage: $0 range <base>..<head> | range <rev> --not --remotes=origin"
+    revargs=("$@")
+    range="${revargs[*]}"
+
+    # A range that does not resolve must FAIL, not pass vacuously. Process
+    # substitution hides git's exit status from `set -e`, so the log is captured
+    # (and its status checked) BEFORE anything is inspected. Without this, a bad
+    # BASE in CI -- a force-push, a rebased base, a branch deleted and recreated
+    # -- makes this gate print success while checking nothing at all.
+    if ! log_out="$(git log --format="%H%x01%P%x01%an%x01%ae%x01%cn%x01%ce" "${revargs[@]}" 2>&1)"; then
+      printf 'identity guard: cannot resolve range %s -- refusing to report success.\n' "$range" >&2
+      printf '%s\n' "$log_out" >&2
+      exit 1
+    fi
 
     rc=0
+    # Counted so the gate can PROVE it ran. An exit status of 0 alone is not
+    # evidence: an empty range prints a pass having inspected nothing.
+    inspected=0
     # Merges are INCLUDED, deliberately. In this repo's own history 119 of the
     # 129 personal-identity commits on main are merge commits created by the
     # GitHub merge button, which stamps the clicking account as the AUTHOR —
@@ -130,6 +146,7 @@ case "$mode" in
     # the merge button; this check makes a regression visible either way.
     while IFS=$'\x01' read -r sha parents a_name a_email c_name c_email; do
       [ -n "$sha" ] || continue
+      inspected=$((inspected + 1))
       is_merge=0
       case "$parents" in *" "*) is_merge=1 ;; esac
 
@@ -141,14 +158,25 @@ case "$mode" in
       if [ "$is_merge" -eq 0 ]; then
         check_identity "committer" "$c_name" "$c_email" "$sha " || rc=1
       fi
-    done < <(git log --format="%H%x01%P%x01%an%x01%ae%x01%cn%x01%ce" "$range")
+    done <<< "$log_out"
 
     if [ "$rc" -ne 0 ]; then
       printf '\nidentity guard: the commits above carry a non-STARGA identity.\n' >&2
       remediation
       exit 1
     fi
-    echo "identity guard: all commits in $range are STARGA Inc. <$WANT_EMAIL>"
+    # Report the POSITIVE count, and never claim "all commits conform" when the
+    # range held none -- a caller must be able to tell "checked and clean" apart
+    # from "checked nothing". Set REQUIRE_NONEMPTY=1 where an empty range is
+    # itself a bug (a push is expected to introduce at least one commit).
+    if [ "$inspected" -eq 0 ]; then
+      if [ "${REQUIRE_NONEMPTY:-0}" = "1" ]; then
+        die "identity guard: range $range contained 0 commits, but REQUIRE_NONEMPTY=1."
+      fi
+      echo "identity guard: range $range contained 0 commits -- nothing was checked."
+      exit 0
+    fi
+    echo "identity guard: checked $inspected commit(s) in $range; all are STARGA Inc. <$WANT_EMAIL>"
     exit 0
     ;;
 

@@ -1,121 +1,235 @@
-# Commit author identity — policy, current state, and the open decision
+# Commit author identity — policy, measured state, and the open decision
 
 Status: **decision pending (operator)** · Scope: all public STARGA repositories
+Last re-measured: 2026-08-28. Every number below is reproducible with the command
+printed beside it; earlier revisions of this document carried figures that no
+longer hold, and the corrections are called out explicitly.
 
 ## Policy
 
 Every commit in a public repository must be authored *and* committed by
 `STARGA Inc. <noreply@star.ga>`. Published work is single-author; no personal
-identity belongs in public history. Two spellings of the name occur historically
-(`STARGA Inc` and `STARGA Inc.`); the email is the load-bearing field.
+identity belongs in public history.
 
-## Current state
+**Three** spellings of the name occur in public history, and they are not
+interchangeable to a string check:
 
-A scan of commits reachable from `origin/main`:
+| Spelling | Commits | Status |
+|---|---:|---|
+| `STARGA Inc`   | 3013 | in the workstation global config |
+| `STARGA Inc.`  |  138 | in the documented commit recipe |
+| `STARGA, Inc.` |    1 | `mind-spec` only; **not** in the guard's allowlist |
 
-| Repo | Commits on `main` | Non-conforming | Dominant pattern |
-|---|---:|---:|---|
-| `mind-mem` | 1160 | 248 | 129 personal-identity (119 of them merge commits); 106 `info@star.ga` |
-| `mind-spec` | 126 | 62 | 56 `info@star.ga`; 5 personal; 1 tool default |
-| `mind-nerve` | 297 | 17 | 9 personal-authored merges; 8 bot |
-| `mind` | 1736 | 7 | 5 bot; 2 personal |
+The period-less and period forms are both in active use — config supplies one,
+the documented recipe supplies the other — so a guard hard-coded to either would
+reject the other, and both are allowlisted. The comma form is deliberately *not*
+allowlisted: it is a single historical commit, and blessing a third spelling to
+make one commit pass would entrench the drift this section exists to remove.
+**The email is the load-bearing field**; it is what identifies a person.
 
-This is **systemic, not a one-off.** Two distinct classes:
+## Measured state
 
-1. **Personal identity** (`Nikolai Nedovodin <info@cputer.com>`) — the actual
-   leak. ~140 commits across the four repos, overwhelmingly merge commits created with the GitHub
-   merge button, which stamps the clicking account as the commit author.
-2. **Non-canonical org identity** (`info@star.ga` instead of `noreply@star.ga`)
-   — a policy drift, not a personal leak, and materially less severe.
+```bash
+git -C <repo> log --format='%an <%ae>' origin/main | LC_ALL=C sort | uniq -c | sort -rn
+```
 
-The commit that prompted this review, `28ffc5a`
-(`docs(mhs): define device-memory freshness boundary`), is class 1 and is on
-`origin/main`.
+`LC_ALL=C` matters: under a UTF-8 locale `sort` and `uniq` disagree about
+adjacency and one identity is reported as up to seven separate groups.
+
+| Repo (all public) | Commits on `main` | Personal identity | Non-canonical org email | Automation | Other |
+|---|---:|---:|---:|---:|---:|
+| `mind-mem`  | 1164 | 129 | 33 | 11 | 2 |
+| `mind`      | 1738 |   4 |  0 |  5 | 0 |
+| `mind-spec` |  126 |   4 | 40 |  0 | 1 |
+| `mind-nerve`|  297 |   9 |  0 |  8 | 0 |
+
+Totals: **146** personal-identity commits and **73** non-canonical-org-email
+commits across the four public repositories.
+
+Four distinct classes, in descending severity:
+
+1. **Personal identity** — 147 commits. The actual leak.
+2. **A third human-looking account** — 2 commits in `mind-mem`
+   (`ee5b9f7`, `b840de0`), authored by a GitHub account that is neither the org
+   account nor recognised automation, using a disposable-alias mail domain.
+   See *Access control* below; this is the finding with the largest blast radius
+   and it is not an identity-cosmetics issue.
+3. **A coding tool's default identity** — `838e1c2` in `mind-spec`, authored and
+   committed under a vendor `noreply@` address, reachable from `origin/main`.
+   The vendor string is deliberately not reproduced here: writing it into a
+   tracked file would itself trip the no-vendor-names CI gate this repository
+   enforces. Resolve the SHA to see it.
+4. **Non-canonical org email** (`info@star.ga` rather than `noreply@star.ga`) —
+   33 commits. **Not a personal-identity leak:** it is the company contact
+   address, it names the company rather than a person, and it is already
+   published on the org's own profile. It is policy drift, and materially less
+   severe than classes 1–3.
+
+### Access control (supersedes the identity question in urgency)
+
+```bash
+gh api repos/star-ga/mind-mem/collaborators --jq '.[] | "\(.login) \(.role_name)"'
+```
+
+`star-ga` (admin) plus **two non-org accounts holding `write`**. One of them has
+already authored two commits on `main`. No other public repo has extra
+collaborators. Whether or not these are our own machine accounts, standing write
+access on a public repo by accounts that do not commit under the org identity is
+the path by which class 2 occurred, and it remains open. **Confirm or revoke
+before spending any effort on history cosmetics.**
 
 ## Root cause
 
-Not a single bad commit — a configuration surface that fails open, in three
-layers:
+Three paths, and they need different fixes. The discriminator is GitHub's
+web-flow signature: server-created commits are signed, client-created ones are not.
 
-- **The global fallback is itself wrong.** `~/.gitconfig` on the primary
-  workstation reads `user.email = info@star.ga`. Any repository without a local
-  override inherits a non-conforming identity by default. On that machine, 52
-  STARGA repositories currently resolve to a non-canonical identity; `mind-mem`
-  is correct only because it happens to carry a local override.
-- **Other machines have no override at all.** `28ffc5a` does not appear in this
-  clone's reflog; it arrived via `fetch origin: fast-forward`. It was created and
-  pushed from a different checkout, where git fell through to that machine's
-  personal identity. **No local hook can prevent this** — the hook was never
-  installed there. Only a server-side or CI check catches it.
-- **The merge button re-authors.** Landing a PR through the GitHub UI attributes
-  the merge commit to the clicking human account regardless of local config.
-  This produced the large majority of class-1 commits.
+```bash
+gh api repos/star-ga/mind-mem/commits/<sha> -q .commit.verification.reason
+```
 
-The recurrence is the defect. Fixing one commit while leaving these three paths
-open simply leaks again.
+- **The merge button re-authors — the dominant path.** Of the 129 personal
+  commits in `mind-mem`, **119 are merge commits, and all 119 are committed by
+  `GitHub <noreply@github.com>`** — landed through the GitHub UI, which stamps
+  the clicking account as author. Verified: `8431c03` carries a valid web-flow
+  PGP signature. **The durable fix is on the account, not in the repo:** the org
+  GitHub account's profile name is a person's name and its primary address is
+  the personal one, so *every* server-side commit it creates leaks by
+  construction. Renaming the profile and repointing the primary address closes
+  this path for all repos at once; a repository-side hook can never reach it.
+- **A clone on another machine.** The remaining commits are **unsigned**, so they
+  came from a real git client. `28ffc5a` is not in this clone's reflog — it
+  arrived by `fetch origin: fast-forward` — and the three most recent landed
+  across two repos within four minutes, i.e. one session on one machine that is
+  not this workstation. Only a CI or server-side check catches these; no local
+  hook was ever installed there.
+- **Correction to an earlier revision of this document.** It claimed the
+  workstation global config was itself wrong (`user.email = info@star.ga`) and
+  that 52 local repositories inherited a non-canonical identity. **Neither
+  reproduces now.** `~/.gitconfig` reads `noreply@star.ga`, and of 179 local
+  clones **176 resolve to `noreply@star.ga` and 3 to `info@star.ga`**
+  (`skill-improver`, `MindLLM`, `drd.io`). Either the fix was applied or the
+  measurement was wrong; either way the global-inheritance path is not the
+  live cause and should not be cited as one.
 
 ## The decision
 
-Two standing rules conflict here: *never rewrite public history* versus *no
-personal identity in public history*.
+Two standing rules conflict: *never rewrite public history* versus *no personal
+identity in public history*.
+
+Scope first, because it is not uniform and it changes the answer per repo:
+
+```bash
+# earliest non-conforming commit, and how much history a rewrite would touch
+git log --format='%H %ae' --reverse origin/main | grep -vE 'noreply@star\.ga|users\.noreply' | head -1
+```
+
+| Repo | Earliest non-conforming | Commits rewritten | Share of history |
+|---|---|---:|---:|
+| `mind`      | 2026-08-11 |  117 | **6.7%** |
+| `mind-nerve`| 2026-08-06 |   58 | 19.5% |
+| `mind-spec` | 2025-12-27 |  125 | 99.2% |
+| `mind-mem`  | 2026-02-17 | 1164 | 100% |
 
 **Option A — accept and fix forward (recommended).**
-Leave history as-is; prevent recurrence with the guard described below.
+Leave history; prevent recurrence with the guard below and the account fix above.
 
-- The email is already public: cloned, forked, cached by the GitHub events API,
-  and mirrored by third-party services. A rewrite does **not** un-publish it.
-- `info@cputer.com` is a business contact address, not a home address or a
-  secret. The disclosure is a policy violation, not a security incident.
-- Cost is zero.
+- The addresses are already published: cloned, forked, and served by the commits
+  API. A rewrite does not un-publish them.
+- **A rewrite cannot even fully remove them here.** `mind-mem` has an external
+  fork (`dhlqiang7/mind-mem`). Forks share an object network, so the old commits
+  stay fetchable by SHA from the fork after a force-push. The remedy is partial
+  by construction.
+- The leaked address is a long-published business contact address, not a home
+  address or a secret. This is a policy violation, not a security incident.
+- Cost: zero.
 
-**Option B — rewrite and force-push.**
-Rewrite ~140 commits across four repos and force-push.
+**Option B — revert and re-land.**
+Revert the offending commits' content and re-commit it under the org identity.
 
-- Blast radius: every commit SHA from the earliest rewritten commit onward
-  changes. Every clone and fork must re-clone or hard-reset. Every open PR must
-  be rebased or reopened. Signed tags and release artifacts referencing old SHAs
-  break, as does any external link to a commit. Since the earliest affected
-  commit in `mind-mem` is `Initial commit`, this means the entire history of the
-  repository.
-- Benefit: the email disappears from the *current* tree only. Old SHAs stay
-  reachable via the events API and existing forks.
+- **This does not work for this problem and should not be chosen.** A revert adds
+  a new commit; it never removes the original. The leaking commit object stays
+  reachable on `main` exactly as before, and history grows by two commits per
+  leak. It buys nothing an identity leak cares about.
+- Only worth considering if the *content* were the problem. It is not.
 
-**Assessment:** Option B pays the maximum possible cost for a partial remedy of
-an already-published fact. Recommend Option A, with the guard made mandatory.
+**Option C — rewrite history and force-push.**
+Rewrite and force-push 1464 commits across four repos.
+
+- Who breaks: every existing clone (hard-reset or re-clone), the external fork,
+  the **2 open PRs** on `mind-mem`, and **227 tags / 215 published releases**
+  whose artifacts and release notes reference commit SHAs — `mind-mem` alone has
+  151 tags and 149 releases, and is published to PyPI, where release provenance
+  points at SHAs that would cease to exist. Every external link to a commit 404s.
+- What it buys: the addresses leave the *current* tree only. Old SHAs stay
+  reachable through the fork network and through already-fetched clones.
+- For `mind` alone the scope is small (6.7%, 117 commits, **0 open PRs**), so if
+  the operator wants the flagship repo clean, `mind` is the one place where the
+  cost is close to tractable. It still breaks 49 tags / 51 releases.
+
+**Assessment:** Option C pays a large, partly irreversible cost for a partial
+remedy of an already-published fact, and Option B pays a smaller cost for no
+remedy at all. Recommend **Option A**, with the account fix and the guard made
+mandatory, and with the access-control item treated as the actual priority.
 This is an operator decision and is **not** executed by this document.
 
-## The guard (implemented)
+## The guard
 
-- `scripts/check_author_identity.sh` — two modes. `staged` validates the
-  identity the next commit would carry, including `GIT_AUTHOR_*` /
-  `GIT_COMMITTER_*` overrides. `range <base>..<head>` validates a commit range.
-- `scripts/pre-commit-hook.sh` — composite pre-commit hook. Install with
-  `ln -sf ../../scripts/pre-commit-hook.sh .git/hooks/pre-commit`. It runs the
-  identity check first, then the existing anatomy refresh; there is only one
-  pre-commit slot and chaining here keeps a new check from silently displacing
-  an old one.
-- **`author-identity` job in `.github/workflows/ci.yml`** — the load-bearing
-  leg. It checks the commits a push or PR *introduces*, which is the only layer
-  that catches a commit made in a clone where the hook was never installed —
-  precisely how `28ffc5a` got in. Scope is the introduced range, not all
-  history, so pre-existing violations do not hold the gate permanently red.
+- `scripts/check_author_identity.sh` — `staged` validates the identity the next
+  commit would carry; `range <rev-args>` validates a set of commits.
+- `scripts/pre-commit-hook.sh` — composite pre-commit hook.
+- `scripts/pre-push-hook.sh` — **pre-push**, install with
+  `ln -sf ../../scripts/pre-push-hook.sh .git/hooks/pre-push`. The pre-commit
+  hook reads git *config* and the `GIT_AUTHOR_*` environment, so it cannot see
+  `git commit --author="..."`, which sets the author directly and passes the
+  hook. Push is where the real commit objects exist and where identity becomes
+  public, so that is where the committed identity is checked. Fails closed if
+  the checker is missing.
+- **`author-identity` job in `.github/workflows/ci.yml`** — the load-bearing leg,
+  and the only one that catches a commit made in a clone where no hook was
+  installed. Scoped to the commits a push or PR introduces so pre-existing
+  violations do not hold the gate permanently red.
 
-Merge commits are checked on the author field but not the committer field, since
-a GitHub-created merge is necessarily committed by `GitHub <noreply@github.com>`.
-Recognised automation (dependabot) is exempt by allowlist: machine accounts leak
-no personal identity.
+Merge commits are checked on the author field only: a GitHub-created merge is
+necessarily committed by `GitHub <noreply@github.com>`. Recognised automation
+(dependabot) is exempt by allowlist — machine accounts leak no personal identity.
+
+### Defects found in the first implementation, now fixed
+
+Verified by running it, not by reading it:
+
+- **A range that fails to resolve reported success.** `git log` was consumed
+  through process substitution, which hides its exit status from `set -e`;
+  `range deadbeef..cafebabe` printed `fatal: ambiguous argument` on stderr and
+  still exited 0 with an all-clear. In CI, any `BASE` that no longer resolves —
+  after a force-push, a rebased base, a deleted and recreated branch — turned the
+  gate green while it checked nothing. The range is now resolved and its status
+  checked before any commit is inspected.
+- **An empty range reported "all commits conform".** Zero commits inspected, exit
+  0, success message. The checker now counts what it inspected and prints that
+  count, so a passing run proves it ran; `REQUIRE_NONEMPTY=1` makes an empty
+  range an error where one is expected to be impossible.
+- **`git commit --author=` bypassed the pre-commit hook entirely**, producing a
+  commit under a personal identity while the hook reported success. Closed by
+  the pre-push hook above.
+- **Still open, in the CI leg:** when `BASE` is absent or all-zeros — a new
+  branch's first push — the workflow falls back to `RANGE="$HEAD~1..$HEAD"` and
+  therefore checks only the tip commit. A new branch pushed with twenty commits
+  has nineteen of them unchecked. The pre-push hook uses
+  `<sha> --not --remotes=origin` for this case, which is the correct range;
+  the workflow should use the same. Left unchanged here because editing a public
+  repo's CI is an operator decision, not a review artifact.
 
 ## Remaining operator actions
 
-1. Correct the global fallback so no repository can inherit a wrong identity:
-   ```bash
-   git config --global user.name  "STARGA Inc."
-   git config --global user.email "noreply@star.ga"
-   ```
-   Apply on **every** machine that commits to a STARGA repo — the workstation
-   and each fleet node. This is the single highest-value fix; it closes the
-   default-inheritance path for all 52 exposed local repos at once.
-2. Install the hook in each working clone (it is not transferred by `git clone`).
-3. Stop landing PRs with the GitHub merge button on public repos; land via
-   `git push`, which preserves the committed author.
-4. Adopt the same `author-identity` CI job in `mind`, `mind-spec`, `mind-nerve`.
+1. **Confirm or revoke the two non-org `write` collaborators on `mind-mem`.**
+   Highest value, and unrelated to history cosmetics.
+2. **Fix the GitHub account profile** — display name off a personal name, primary
+   address to `noreply@star.ga`. This is what actually closes the merge-button
+   path; it is an account setting, not a repo change.
+3. Stop landing PRs with the merge button on public repos; land via `git push`.
+4. Reconcile the name spelling (`STARGA Inc` vs `STARGA Inc.`) so config and the
+   documented recipe agree; until then keep both in the allowlist.
+5. Install the pre-commit **and** pre-push hooks in every clone on every machine
+   that commits to a STARGA repo — hooks are not transferred by `git clone`.
+6. Set the three drifted local clones to `noreply@star.ga`.
+7. Adopt the `author-identity` CI job in `mind`, `mind-spec`, `mind-nerve`.

@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# STARGA author guard (chained first: a wrong-identity commit must never be created).
+bash "/home/n/mind-sdlc/bin/sdlc" precommit "$(git rev-parse --show-toplevel)" || exit 1
+
 # pre-commit-hook.sh — the repository's composite pre-commit hook.
 #
 # Install:
