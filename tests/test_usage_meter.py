@@ -310,7 +310,16 @@ class TestDailyCapGate(UsageMeterBase):
         lines = [ln for ln in err.splitlines() if ln.startswith("DAILY TOKEN CAP:")]
         self.assertEqual(len(lines), 1, f"expected exactly one cap line, got: {err!r}")
         self.assertIn("cap=10", lines[0])
-        self.assertIn(self.ws, lines[0])
+        # Compare resolved paths: on Windows tempfile can hand back the 8.3
+        # short form (C:\\Users\\RUNNER~1\\...) while the reported workspace is
+        # the long form (C:\\Users\\runneradmin\\...) — same directory, different
+        # string, so a substring check on the raw value is not portable.
+        reported = lines[0].split("workspace=", 1)[1].split(" day=", 1)[0]
+        self.assertEqual(
+            os.path.realpath(reported),
+            os.path.realpath(self.ws),
+            f"cap line reported {reported!r}, expected {self.ws!r}",
+        )
 
     def test_json_output_reports_the_cap(self) -> None:
         usage_meter.record_call(self.ws, operation="recompaction", prompt_tokens=500, completion_tokens=0)
