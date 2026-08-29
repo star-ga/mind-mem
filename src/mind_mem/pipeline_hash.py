@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, overload
 
 from . import __version__ as _pkg_version
+from .enums import IngestTier
 
 __all__ = [
     "current_pipeline_hash",
@@ -289,6 +290,7 @@ def reextract_dirty_blocks(
         batch_id=f"reextract-{len(_dirty)}",
         block_ids=_dirty,
         content="\n".join(_dirty),
+        tier=IngestTier.RESTAMP,
         actor="pipeline_hash",
         metadata={"blocks": len(_dirty)},
     ):

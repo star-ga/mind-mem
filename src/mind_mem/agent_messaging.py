@@ -13,6 +13,22 @@ This module is the pure, transport-free core behind ``mm send`` /
 ``mm inbox``. It mirrors :mod:`mind_mem.inbox`'s block-shape +
 ``stamp_transform_hash`` write pattern. Blocks are built immutably (a
 fresh ``dict`` per send), so callers never mutate shared state.
+
+**A message arrives withheld.** ``IngestTier.AGENT_MESSAGE`` maps to
+``Status.QUARANTINED`` in :data:`~mind_mem.enums.INITIAL_STATUS`,
+reversing what earlier versions shipped. A peer agent is the standard
+prompt-injection carrier, and a single-operator fleet makes the *sender*
+accountable without making its *input* trusted — the text an agent
+relays is frequently not its own. So the sanctioned channel keeps
+working, and its content stops being silently retrievable as memory:
+
+* ``read_inbox`` / ``mm inbox`` still show every message. Opening a
+  named mailbox is an explicit act by the recipient, not a retrieval
+  into its context, and a quarantine that hides mail from the addressee
+  is a broken mailbox rather than a safe one.
+* ``recall`` no longer returns messages. To make one part of memory,
+  release it through a governance proposal, exactly as an imported
+  corpus is released.
 """
 
 from __future__ import annotations
@@ -22,11 +38,14 @@ import secrets
 from datetime import datetime, timezone
 from typing import Optional
 
+from .enums import INITIAL_STATUS, IngestTier, Status
 from .observability import get_logger
 
 _log = get_logger("agent_messaging")
 
 __all__ = [
+    "MESSAGE_STATUS",
+    "MESSAGE_TIER",
     "MESSAGE_TYPE",
     "build_message_block",
     "read_inbox",
@@ -36,6 +55,15 @@ __all__ = [
 # Block ``type`` field used for every agent message. ``mm inbox`` recalls
 # against this token so messages are separable from other corpus blocks.
 MESSAGE_TYPE = "AgentMessage"
+
+#: The ingest tier every message is admitted under.
+MESSAGE_TIER: IngestTier = IngestTier.AGENT_MESSAGE
+
+#: The status that tier mints. Resolved from the table, not restated.
+MESSAGE_STATUS: Status = INITIAL_STATUS[MESSAGE_TIER] or Status.QUARANTINED
+
+#: Block field naming the ingest tier (same spelling as the importer's).
+TIER_FIELD = "IngestTier"
 
 
 def _now_iso() -> str:
@@ -76,7 +104,11 @@ def build_message_block(
         "type": MESSAGE_TYPE,
         "Statement": text,
         "Timestamp": ts,
-        "Status": "active",
+        # Read from the table, never spelled here: INITIAL_STATUS is the
+        # only place an initial status is decided, so this door cannot
+        # drift from the tier it is admitted under.
+        "Status": MESSAGE_STATUS.value,
+        TIER_FIELD: MESSAGE_TIER.value,
     }
     # Optional routing fields, only set when provided (keeps blocks tidy).
     if to:
@@ -118,14 +150,16 @@ def send_message(
     store = get_block_store(workspace)
     stamped = stamp_transform_hash(workspace, block)
     block_id = str(stamped["_id"])
-    # An agent message is a single authored block, so it is admitted directly
-    # rather than quarantined: the sender is a known local actor, not the
-    # untrusted drop folder. What changes is that the write now leaves a chain
-    # entry instead of appearing in the corpus with no record of who wrote it.
+    # An agent message arrives QUARANTINED. This reverses the earlier
+    # reasoning ("the sender is a known local actor, not the untrusted drop
+    # folder"): accountability for who *sent* a message says nothing about
+    # who *wrote* the text it carries, and a peer agent is the standard
+    # prompt-injection carrier. The mailbox still shows it; recall does not.
     with get_gate(workspace).admit_block(
         action="MESSAGE",
         block_id=block_id,
         content=text,
+        tier=MESSAGE_TIER,
         actor=f"agent:{sender}" if sender else "agent",
         metadata={"to": to, "subject": subject or ""},
     ):
@@ -157,10 +191,18 @@ def read_inbox(
     """Return agent messages addressed to *to* (plus broadcasts), newest-first.
 
     Receiving mail is *enumeration*, not BM25 search: it routes through the
-    backend-aware ``storage.iter_active_blocks`` so the full block fields
+    backend-aware ``storage.iter_blocks`` so the full block fields
     (``To`` / ``From`` / ``Subject`` / ``type``) are preserved — recall's
     lean projection drops them — and so it works identically on the SQLite
     markdown default and the Postgres federation hub.
+
+    It enumerates with ``active_only=False`` because messages now arrive
+    quarantined (see the module docstring). That is not a hole in the
+    quarantine: the recipient asked for this mailbox by name, so nothing
+    is being retrieved into a context that did not request it, and the
+    alternative — a mailbox that hides the mail — makes the channel
+    useless without making it safer. The withheld property that matters
+    is enforced where it matters, on the recall path.
 
     Filtering:
       * keep only ``AgentMessage`` blocks (``MSG-`` ids);
@@ -172,9 +214,9 @@ def read_inbox(
 
     Returns at most *limit* blocks, newest-first.
     """
-    from .storage import iter_active_blocks
+    from .storage import iter_blocks
 
-    blocks = iter_active_blocks(workspace)
+    blocks = iter_blocks(workspace, active_only=False)
 
     def _is_message(b: dict) -> bool:
         if str(b.get("type", "")).strip() == MESSAGE_TYPE:

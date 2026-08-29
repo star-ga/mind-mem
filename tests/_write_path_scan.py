@@ -142,6 +142,21 @@ def calls_require_admission(func: ast.AST) -> bool:
     return any(isinstance(n, ast.Call) and called_name(n) == "require_admission" for n in ast.walk(func))
 
 
+def binds_status_to_require_admission(func: ast.AST) -> bool:
+    """True when every ``require_admission`` call in *func* passes ``status=``.
+
+    The tier check in ``require_admission`` can only refuse a status
+    escalation if the write surface hands it the status. A backend that
+    calls ``require_admission(block_id)`` alone still gets its receipt
+    checked, but its tier row is unenforceable — so that omission is a
+    build failure rather than a silent downgrade.
+    """
+    calls = [n for n in ast.walk(func) if isinstance(n, ast.Call) and called_name(n) == "require_admission"]
+    if not calls:
+        return False
+    return all(any(kw.arg == "status" for kw in call.keywords) for call in calls)
+
+
 # ---------------------------------------------------------------------------
 # Scan B — write_block implementations
 # ---------------------------------------------------------------------------
@@ -156,6 +171,18 @@ def scan_write_block_defs(files: tuple[str, ...]) -> tuple[tuple[str, str, int, 
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "write_block":
                 out.append((relpath(path), names.get(node, node.name), node.lineno, calls_require_admission(node)))
+    return tuple(sorted(out))
+
+
+def scan_write_block_status_binding(files: tuple[str, ...]) -> tuple[tuple[str, str, int, bool], ...]:
+    """``(file, qualname, lineno, binds_status)`` for every ``def write_block``."""
+    out: list[tuple[str, str, int, bool]] = []
+    for path in files:
+        tree = parse(path)
+        names = qualnames(tree)
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "write_block":
+                out.append((relpath(path), names.get(node, node.name), node.lineno, binds_status_to_require_admission(node)))
     return tuple(sorted(out))
 
 

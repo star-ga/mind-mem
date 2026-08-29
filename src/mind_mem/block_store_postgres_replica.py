@@ -184,7 +184,7 @@ class ReplicatedPostgresBlockStore:
         # Enforced here as well as on the primary: this adapter is a
         # BlockStore in its own right, so a caller holding only the replica
         # must not get a laxer write surface than one holding the primary.
-        require_admission(str(block.get("_id") or ""))
+        require_admission(str(block.get("_id") or ""), status=block.get("Status"))
         # Must forward `embedding`: the primary's signature accepts it, and
         # dropping it both raised TypeError for embedding-aware callers and
         # silently prevented embeddings from ever being stored (vector

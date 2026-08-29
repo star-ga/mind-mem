@@ -22,7 +22,7 @@ from typing import Any, cast
 from ..block_store import BlockStore, MarkdownBlockStore
 from ..observability import get_logger
 
-__all__ = ["get_block_store", "iter_active_blocks", "get_active_blocks"]
+__all__ = ["get_block_store", "iter_active_blocks", "get_active_blocks", "iter_blocks"]
 
 _SUPPORTED_BACKENDS = ("markdown", "encrypted", "postgres")
 
@@ -142,8 +142,8 @@ def _backend_name(workspace: str, config: dict[str, Any] | None = None) -> str:
     return backend if isinstance(backend, str) else "markdown"
 
 
-def _iter_markdown_active_blocks(workspace: str) -> list[dict[str, Any]]:
-    """Enumerate active blocks from the local Markdown corpus.
+def _iter_markdown_active_blocks(workspace: str, *, active_only: bool = True) -> list[dict[str, Any]]:
+    """Enumerate blocks from the local Markdown corpus.
 
     Single source of truth for the markdown-corpus enumeration used by
     the feature layer (scan / governance / export / reindex). Mirrors
@@ -151,6 +151,11 @@ def _iter_markdown_active_blocks(workspace: str) -> list[dict[str, Any]]:
     :func:`parse_file` each present file, keep only active blocks, tag
     each with ``_source_file`` / ``_source_label``, and exclude
     unreviewed pending signals (the same ``#429`` rule recall applies).
+
+    ``active_only=False`` skips both status filters — an explicit
+    "everything on disk" enumeration, for a caller that is opening a
+    named mailbox rather than searching memory. It is opt-in; every
+    existing caller keeps the filtered default.
     """
     # Lazy imports keep this module import-safe (no recall/parse cost at
     # ``import mind_mem.storage`` time) and avoid an import cycle through
@@ -168,10 +173,11 @@ def _iter_markdown_active_blocks(workspace: str) -> list[dict[str, Any]]:
         except (OSError, UnicodeDecodeError, ValueError) as exc:
             _log.debug("corpus_parse_failed", file=rel_path, error=str(exc))
             continue
-        parsed = get_active(parsed)
-        # #429: unreviewed signals are not part of the active corpus.
-        if label == "signals":
-            parsed = [b for b in parsed if str(b.get("Status", "")).lower() != "pending"]
+        if active_only:
+            parsed = get_active(parsed)
+            # #429: unreviewed signals are not part of the active corpus.
+            if label == "signals":
+                parsed = [b for b in parsed if str(b.get("Status", "")).lower() != "pending"]
         for b in parsed:
             b.setdefault("_source_file", rel_path)
             b.setdefault("_source_label", label)
@@ -216,13 +222,25 @@ def iter_active_blocks(workspace: str, config: dict[str, Any] | None = None) -> 
         silently returning ``[]`` would hide real blocks from
         governance.
     """
+    return iter_blocks(workspace, config=config, active_only=True)
+
+
+def iter_blocks(workspace: str, config: dict[str, Any] | None = None, *, active_only: bool = True) -> list[dict[str, Any]]:
+    """Backend-aware block enumeration, optionally including withheld blocks.
+
+    :func:`iter_active_blocks` is this with ``active_only=True`` and is
+    what the feature layer should use. ``active_only=False`` exists for
+    the one shape that is *not* a search: opening a named mailbox, where
+    the caller asked for specific blocks by construction rather than
+    having them retrieved into its context. It is never the recall path.
+    """
     if config is None:
         config = _load_workspace_config(workspace)
     backend = _backend_name(workspace, config)
     if backend in _MARKDOWN_BACKENDS:
-        return _iter_markdown_active_blocks(workspace)
+        return _iter_markdown_active_blocks(workspace, active_only=active_only)
     store = get_block_store(workspace, config=config)
-    return store.get_all(active_only=True)
+    return store.get_all(active_only=active_only)
 
 
 def get_active_blocks(workspace: str, config: dict[str, Any] | None = None) -> list[dict[str, Any]]:

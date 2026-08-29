@@ -28,6 +28,7 @@ import sys
 from datetime import datetime, timedelta
 
 from .block_provenance import PROVENANCE_FIELDS, sanitize_provenance_value
+from .enums import IngestTier
 from .mind_filelock import FileLock
 from .observability import get_logger, metrics
 
@@ -306,6 +307,7 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
                 batch_id=f"capture-{today_compact}",
                 block_ids=_planned_ids,
                 content="\n".join(sig["text"] for sig in new_signals),
+                tier=IngestTier.AUTO_CAPTURE,
                 actor="capture",
                 target_file=signals_path,
             )

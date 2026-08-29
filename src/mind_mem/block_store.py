@@ -712,7 +712,7 @@ class MarkdownBlockStore:
         # Governance choke-point. Refuses the write outright when no
         # admission scope is open — checked before the id is even parsed,
         # so an ungated caller cannot learn anything by probing id shapes.
-        require_admission(str(block_id))
+        require_admission(str(block_id), status=block.get("Status"))
         if not _BLOCK_ID_RE.match(str(block_id)):
             raise ValueError(f"invalid block id: {block_id!r}")
         target = _resolve_block_file(self._workspace, block_id)

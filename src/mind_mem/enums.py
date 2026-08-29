@@ -18,6 +18,8 @@ changing any file-format output or JSON payload.
 from __future__ import annotations
 
 from enum import Enum
+from types import MappingProxyType
+from typing import Mapping, Optional
 
 
 class TaskStatus(str, Enum):
@@ -59,4 +61,139 @@ class TaskStatus(str, Enum):
         return self in self.closed()
 
 
-__all__ = ["TaskStatus"]
+# ---------------------------------------------------------------------------
+# Servability — the allow-list on block Status
+# ---------------------------------------------------------------------------
+
+
+class Status(str, Enum):
+    """Block ``Status`` values the governed write paths can *mint*.
+
+    Deliberately not a catalogue of every status string a live corpus
+    holds. Two dozen distinct values exist there, several of them
+    :class:`TaskStatus` members written into a Task block's ``Status``
+    field, and folding them in here would settle that collision by
+    accident. This enum covers exactly the statuses :data:`INITIAL_STATUS`
+    decides, so the admission table is closed over a closed set.
+
+    Servability does not wait on that migration: :func:`is_servable` is
+    total over arbitrary strings, and everything it has not been told
+    about is withheld.
+
+    deferred: reconcile ``_recall_constants.VALIDITY_STATUS_DEAD`` /
+    ``apply_engine.VALID_STATUSES`` / ``contradiction_detector.
+    COMMITTED_STATUSES`` into this enum — upgrade path: fold them in once
+    the ``TaskStatus``-vs-block-``Status`` overlap on ``todo`` / ``doing``
+    / ``done`` has an owner.
+    """
+
+    #: Servable. Reachable only by applying an approved proposal.
+    ACTIVE = "active"
+    #: Withheld until a governance release moves it to :attr:`ACTIVE`.
+    QUARANTINED = "quarantined"
+    #: Withheld: an auto-captured signal nobody has reviewed yet.
+    PENDING = "pending"
+
+
+#: The allow-list. A block is servable only when its status is named here.
+#:
+#: This is an allow-list rather than a deny-list on "quarantined", and the
+#: inversion is the point: the old rule served every status it had never
+#: heard of, so a new ingest door minting ``Status: staged`` was served by
+#: default. Anything nobody has named is now withheld by default.
+SERVABLE: frozenset[Status] = frozenset({Status.ACTIVE})
+
+
+def is_servable(status: object) -> bool:
+    """True when *status* names a servable block state.
+
+    Total by construction and fail-closed. ``None``, a non-string, a
+    status a future door invents, an empty field — all withheld. Spelling
+    is normalised (case, surrounding space) because a corpus really does
+    hold ``Active`` alongside ``active``, and they are one state.
+    """
+    if isinstance(status, Status):
+        return status in SERVABLE
+    if not isinstance(status, str):
+        return False
+    normalised = status.strip().lower()
+    return any(normalised == member.value for member in SERVABLE)
+
+
+# ---------------------------------------------------------------------------
+# Ingest tiers — the closed set of sources a governed write arrives from
+# ---------------------------------------------------------------------------
+
+
+class IngestTier(str, Enum):
+    """Where an admitted write came from. Closed by construction.
+
+    ``AdmissionReceipt.tier`` is required with no default, so a new ingest
+    source that has not been given a tier here cannot obtain a receipt,
+    and ``BlockStore.write_block`` refuses it. That is the door this enum
+    exists to close: not "remember to quarantine", but "unrepresentable".
+
+    Values match what is already written to disk where an equivalent
+    string exists (``external-ingest`` is ``provenance_class.
+    EXTERNAL_INGEST``, the value the ``IngestTier:`` block field already
+    carries), so nothing in a live corpus has to be re-stamped.
+    """
+
+    #: Bulk importer and the inbox drop folder — untrusted external input.
+    EXTERNAL_INGEST = "external-ingest"
+    #: A peer agent's message. Untrusted: see :data:`INITIAL_STATUS`.
+    AGENT_MESSAGE = "agent-message"
+    #: Auto-captured signals mined out of the daily log.
+    AUTO_CAPTURE = "auto-capture"
+    #: Re-stamping blocks already in the store. Carries; mints nothing.
+    RESTAMP = "restamp"
+    #: Operator copy of an already-governed corpus between backends.
+    STORE_MIGRATION = "store-migration"
+    #: Applying an approved proposal. The only tier that reaches ACTIVE.
+    PROPOSAL_APPLY = "proposal-apply"
+
+
+#: The **only** place an initial status is decided.
+#:
+#: ``None`` names a *carrying* tier: it rewrites blocks that were already
+#: admitted once and mints no status of its own, so there is no honest
+#: value to put here. A carrying tier is still barred from minting
+#: ``ACTIVE`` in the sense that matters — it cannot raise a block's status,
+#: only preserve it.
+#:
+#: OPERATOR DECISION (this change): ``AGENT_MESSAGE`` arrives
+#: :attr:`Status.QUARANTINED`, reversing what shipped. A peer agent is the
+#: standard prompt-injection carrier, and a single-operator model does not
+#: make its *inputs* trusted. The consequence is deliberate: an agent
+#: message is no longer recallable until a governance release admits it.
+INITIAL_STATUS: Mapping[IngestTier, Optional[Status]] = MappingProxyType(
+    {
+        IngestTier.EXTERNAL_INGEST: Status.QUARANTINED,
+        IngestTier.AGENT_MESSAGE: Status.QUARANTINED,
+        IngestTier.AUTO_CAPTURE: Status.PENDING,
+        IngestTier.RESTAMP: None,
+        IngestTier.STORE_MIGRATION: None,
+        IngestTier.PROPOSAL_APPLY: Status.ACTIVE,
+    }
+)
+
+
+def mints_servable(tier: IngestTier) -> bool:
+    """True when *tier* mints a status that recall will serve.
+
+    Derived from :data:`INITIAL_STATUS`, never hand-listed, so a new row
+    is classified the moment it exists. ``GovernanceGate`` uses this to
+    refuse a servable tier from ``admit_block`` / ``admit_batch``.
+    """
+    return is_servable(INITIAL_STATUS[tier])
+
+
+__all__ = [
+    "INITIAL_STATUS",
+    "SERVABLE",
+    "IngestTier",
+    "Status",
+    "TaskStatus",
+    "is_servable",
+    "mints_servable",
+]

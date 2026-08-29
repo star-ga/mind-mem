@@ -42,10 +42,24 @@ form.
 - **Receive = read your mail.** `mm inbox --to S1` returns every message
   addressed to `S1` plus every broadcast (a message with no `To`). It
   enumerates the corpus directly (via the backend-aware
-  `storage.iter_active_blocks`), so all message fields are preserved and it
+  `storage.iter_blocks`), so all message fields are preserved and it
   works identically on SQLite-markdown and Postgres.
-- **Search still works too.** Sent messages are also indexed, so
-  `mm recall "<keyword>"` / `hybrid_search` find them like any other block.
+- **A message arrives quarantined, and `mm recall` does not return it.**
+  A peer agent is the standard prompt-injection carrier, so a message is
+  mail — not memory — until someone decides otherwise. Knowing *who sent*
+  it says nothing about who wrote the text it relays.
+
+  The mailbox is unaffected: `mm inbox` shows every message, because the
+  recipient asked for that mailbox by name rather than having the content
+  retrieved into its context. What changes is that the text no longer
+  appears in an unrelated `mm recall` answer. To make a message part of
+  memory, release it through a governance proposal, exactly as an
+  imported corpus is released.
+
+  Mechanically this is one row: `IngestTier.AGENT_MESSAGE` maps to
+  `Status.QUARANTINED` in `mind_mem.enums.INITIAL_STATUS`, the single
+  place an initial status is decided. Earlier versions shipped these
+  blocks `Status: active`.
 
 ## Verified send → receive
 
@@ -60,9 +74,10 @@ $ mm inbox --to S1
   {
     "_id": "MSG-20260623T093228Z-ff9d2b71",
     "Statement": "deploy the patch",
-    "Status": "active",
+    "Status": "quarantined",
     "Subject": "patch",
     "From": "U1",
+    "IngestTier": "agent-message",
     "Timestamp": "20260623T093228Z",
     "To": "S1",
     "_source_file": "memory/MESSAGES.md",
@@ -87,8 +102,8 @@ mm send "starting the keystone gate run" --from U1 --to S1
 mm inbox --to S1
 ```
 
-On Postgres, the store returns every active block regardless of which node
-wrote it, so no node-local index step is needed — the write is itself the
+On Postgres, the store returns every block regardless of which node wrote
+it, so no node-local index step is needed — the write is itself the
 delivery.
 
 ## Python API

@@ -28,6 +28,7 @@ from typing import Any, Iterable
 
 from ..block_provenance import attach_provenance
 from ..capture import content_hash
+from ..enums import IngestTier
 from ..observability import get_logger
 from .quarantine import (
     BATCH_FIELD,
@@ -247,9 +248,10 @@ def _write_batch(
         batch_id=batch,
         block_ids=planned_ids,
         content="\n".join(planned_ids),
+        tier=IngestTier.EXTERNAL_INGEST,
         actor=f"importer:{system}",
         target_file=IMPORTED_CORPUS_FILE,
-        metadata={"system": system, "batch": batch, "status": QUARANTINE_STATUS, "blocks": len(planned_ids)},
+        metadata={"system": system, "batch": batch, "blocks": len(planned_ids)},
     ):
         for _block_id, record in plan:
             block = build_import_block(record, batch=batch)

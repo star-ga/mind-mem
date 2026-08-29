@@ -43,6 +43,7 @@ from _write_path_scan import (
     scan_corpus_writes,
     scan_write_block_calls,
     scan_write_block_defs,
+    scan_write_block_status_binding,
 )
 
 # ---------------------------------------------------------------------------
@@ -76,10 +77,11 @@ SANCTIONED_WRITE_BLOCK_CALLERS: dict[tuple[str, str], str] = {
     # as the importer — batch admission, lands quarantined.
     ("src/mind_mem/inbox.py", "ingest_text_file"): LOCAL,
     ("src/mind_mem/inbox.py", "_ingest_pdf"): LOCAL,
-    # --- agent-to-agent messaging. Admitted per message and stays
-    # active: quarantining it would break `mm inbox`, which reads only
-    # active blocks. See the module docstring for why admission control
-    # is the wrong instrument for the confused-deputy threat here.
+    # --- agent-to-agent messaging. Admitted per message under
+    # IngestTier.AGENT_MESSAGE, which mints Status.QUARANTINED: a peer
+    # agent is the standard prompt-injection carrier, so its text is not
+    # recallable until a proposal releases it. `mm inbox` still shows it
+    # (it enumerates the mailbox by name rather than searching memory).
     ("src/mind_mem/agent_messaging.py", "send_message"): LOCAL,
     # --- plumbing. No new block: Status is inherited from get_by_id, no
     # external content enters. One batch admission per run so a bulk
@@ -259,6 +261,39 @@ def test_every_write_block_implementation_requires_a_receipt(files: tuple[str, .
             + listing
             + "\n\nEach must begin with require_admission(block_id) so a caller that\nforgot to open a scope raises UngatedWriteError instead of writing.\n"  # noqa: E501 - failure message reads better unwrapped
         )
+
+
+def test_every_write_block_binds_the_block_status(files: tuple[str, ...]) -> None:
+    """The receipt's ingest tier is unenforceable without the block's status.
+
+    ``require_admission`` refuses a servable ``Status`` under a tier that
+    cannot mint one — but only if the write surface hands it that status.
+    A backend that forgets ``status=`` would keep its receipt check and
+    silently lose the tier check, which is exactly the "remembered to
+    quarantine" convention the tier table replaces.
+    """
+    missing = [
+        (rel, qual, line)
+        for rel, qual, line, binds in scan_write_block_status_binding(files)
+        if not binds and (rel, qual) not in ENFORCEMENT_EXEMPT
+    ]
+    if missing:
+        listing = "\n".join(f"  {rel}:{line}  {qual}" for rel, qual, line in missing)
+        pytest.fail(
+            "UNBOUND STATUS — these write_block implementations admit a write without\n"
+            "telling the gate what status it carries, so their receipt's ingest tier\n"
+            "cannot be enforced:\n\n" + listing + '\n\nEach must call require_admission(block_id, status=block.get("Status")).\n'
+        )
+
+
+def test_status_binding_scanner_detects_a_synthetic_omission() -> None:
+    """Negative control: the binding matcher must reject the unbound form."""
+    from _write_path_scan import binds_status_to_require_admission
+
+    bound = ast.parse('def write_block(self, b):\n    require_admission(b["_id"], status=b.get("Status"))\n')
+    unbound = ast.parse('def write_block(self, b):\n    require_admission(b["_id"])\n')
+    assert binds_status_to_require_admission(bound.body[0]) is True
+    assert binds_status_to_require_admission(unbound.body[0]) is False
 
 
 def test_enforcement_exemptions_are_protocol_stubs_only(files: tuple[str, ...]) -> None:

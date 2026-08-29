@@ -151,7 +151,7 @@ class ShardedPostgresBlockStore:
         tenant_id: str | None = None,
         namespace: str | None = None,
     ) -> str:
-        require_admission(str(block.get("_id") or ""))
+        require_admission(str(block.get("_id") or ""), status=block.get("Status"))
         tid = tenant_id or str(block.get("_tenant") or self._default_tenant)
         ns = namespace or str(block.get("_namespace") or self._default_namespace)
         shard = self._router.shard_for(tid, ns)

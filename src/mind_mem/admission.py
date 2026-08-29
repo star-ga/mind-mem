@@ -34,9 +34,19 @@ Postgres row), which couples them harder than it protects. The upgrade
 path is a per-block ``WRITE`` chain entry emitted by ``write_block``
 itself and linked to ``receipt.entry_id``.
 
-This module imports nothing from ``mind_mem`` so the write surface can
-depend on it without dragging the whole governance stack — and its
-private state cannot be reached from anywhere else.
+**A receipt names its ingest tier.** ``tier`` is required with no
+default, so a new ingest source that has not been given an
+:class:`~mind_mem.enums.IngestTier` cannot obtain a receipt at all and
+``write_block`` refuses it. The tier's row in
+:data:`~mind_mem.enums.INITIAL_STATUS` is the only place an initial
+status is decided; :func:`require_admission` refuses a write whose
+``Status`` is servable under a tier that cannot mint one, so a
+quarantine-tier door cannot carry an ``active`` block in.
+
+This module imports nothing from ``mind_mem`` except the leaf
+``enums`` module — no I/O, no config, no other package import — so the
+write surface can depend on it without dragging the whole governance
+stack, and its private state cannot be reached from anywhere else.
 """
 
 from __future__ import annotations
@@ -45,6 +55,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Final, Iterator, Optional
+
+from .enums import INITIAL_STATUS, IngestTier, is_servable
 
 __all__ = [
     "AdmissionReceipt",
@@ -119,11 +131,17 @@ class AdmissionReceipt:
             than once per block, so a bulk import pays one extra read, not
             one per row.
         actor: Resolved identity the gate recorded for the admission.
+        tier: Which ingest source this write came from. Required with no
+            default: a door with no :class:`~mind_mem.enums.IngestTier`
+            cannot get a receipt, and without a receipt it cannot write.
+            Its :data:`~mind_mem.enums.INITIAL_STATUS` row decides the
+            status the write may carry.
     """
 
     entry_id: str
     content_hash: str
     kind: str
+    tier: IngestTier
     covers: frozenset[str] = field(default_factory=frozenset)
     chain_verified: bool = False
     actor: str = ""
@@ -160,14 +178,26 @@ def current_admission() -> Optional[AdmissionReceipt]:
     return _active_admission.get()
 
 
-def require_admission(block_id: str) -> AdmissionReceipt:
+def require_admission(block_id: str, *, status: object = None) -> AdmissionReceipt:
     """Return the open receipt authorising a write to *block_id*.
 
-    Called at the top of every ``BlockStore.write_block`` implementation.
+    Called at the top of every ``BlockStore.write_block`` implementation,
+    which passes the block's ``Status`` field as *status*. The check is
+    one-sided on purpose: a tier that mints a withheld status may not
+    write a **servable** block, because that is the escalation the tier
+    table exists to prevent. Moving between two withheld statuses is not
+    an escalation, and a carrying tier (``INITIAL_STATUS`` row ``None``)
+    constrains nothing — it rewrites blocks that were already admitted.
+
+    Every ``write_block`` implementation is required to pass *status*;
+    ``tests/test_governed_write_paths.py`` fails the build on one that
+    does not, so the default here is a signature convenience and not an
+    opt-out.
 
     Raises:
         UngatedWriteError: no admission is open, the open admission does
-            not cover *block_id*, or its chain entry was never verified.
+            not cover *block_id*, its chain entry was never verified, or
+            the block's status outranks what its tier can mint.
     """
     receipt = _active_admission.get()
     if receipt is None:
@@ -181,4 +211,19 @@ def require_admission(block_id: str) -> AdmissionReceipt:
     if not receipt.authorizes(block_id):
         covered = ", ".join(sorted(receipt.covers)[:8]) or "(none)"
         raise UngatedWriteError(f"admission {receipt.entry_id} does not cover block {block_id!r} (covers: {covered})")
+    _require_status_within_tier(receipt, block_id, status)
     return receipt
+
+
+def _require_status_within_tier(receipt: AdmissionReceipt, block_id: str, status: object) -> None:
+    """Refuse a servable status under a tier that cannot mint one."""
+    row = INITIAL_STATUS[receipt.tier]
+    if row is None or is_servable(row):
+        return
+    if is_servable(status):
+        raise UngatedWriteError(
+            f"block {block_id!r} was admitted under ingest tier {receipt.tier.value!r}, "
+            f"which mints {row.value!r}, but the write carries a servable status "
+            f"({status!r}). Release it through a governance proposal instead of "
+            "stamping it at the door."
+        )

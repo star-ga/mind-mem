@@ -40,6 +40,7 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from .codepoint_sanitize import sanitize_text_for_ingest
+from .enums import IngestTier
 from .importers.quarantine import QUARANTINE_STATUS, QUARANTINE_TIER, TIER_FIELD
 
 __all__ = [
@@ -171,8 +172,9 @@ def ingest_text_file(workspace: str, file_path: str) -> str:
         action="INGEST",
         block_id=block_id,
         content=content,
+        tier=IngestTier.EXTERNAL_INGEST,
         actor="inbox",
-        metadata={"source": os.path.basename(file_path), "status": QUARANTINE_STATUS},
+        metadata={"source": os.path.basename(file_path)},
     ):
         written_id = store.write_block(stamp_transform_hash(workspace, block))
     _log.info("inbox_text_ingested", extra={"block_id": written_id, "source": file_path})
@@ -242,8 +244,9 @@ def _ingest_pdf(workspace: str, file_path: str) -> str:
         action="INGEST",
         block_id=block_id,
         content=text,
+        tier=IngestTier.EXTERNAL_INGEST,
         actor="inbox",
-        metadata={"source": os.path.basename(file_path), "status": QUARANTINE_STATUS},
+        metadata={"source": os.path.basename(file_path)},
     ):
         return store.write_block(stamp_transform_hash(workspace, block))
 

@@ -26,6 +26,7 @@ from mind_mem.agent_messaging import (
     read_inbox,
     send_message,
 )
+from mind_mem.enums import INITIAL_STATUS, IngestTier
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -88,7 +89,12 @@ def test_build_message_block_shape() -> None:
     assert b["To"] == "S1"
     assert b["From"] == "U1"
     assert b["Subject"] == "hi"
-    assert b["Status"] == "active"
+    # A message arrives WITHHELD (see the module docstring): a peer agent is
+    # the standard prompt-injection carrier. The status is not spelled in
+    # this module -- it is read from INITIAL_STATUS, the single place an
+    # initial status is decided -- so this assertion is against the table.
+    assert b["Status"] == INITIAL_STATUS[IngestTier.AGENT_MESSAGE].value == "quarantined"
+    assert b["IngestTier"] == IngestTier.AGENT_MESSAGE.value
 
 
 def test_build_message_block_omits_empty_routing_fields() -> None:
@@ -158,11 +164,49 @@ def test_inbox_since_filter(workspace: str) -> None:
     assert len(read_inbox(workspace, to="S1", since="20000101T000000Z")) == 1
 
 
-def test_message_is_recallable(workspace: str) -> None:
-    """The search path: a sent message is findable via recall (index rebuilt)."""
-    from mind_mem.recall import recall
+def test_message_is_withheld_from_recall_until_released(workspace: str) -> None:
+    """The search path: a sent message is NOT retrievable as memory.
 
-    send_message(workspace, "zephyrine-unique-marker-9931 ping", to="S1", sender="U1")
-    hits = recall(workspace, "zephyrine-unique-marker-9931", limit=5, active_only=False)
-    assert isinstance(hits, list)
-    assert any(h.get("_id", "").startswith("MSG-") for h in hits)
+    This inverts the pre-quarantine assertion, so it has to prove the
+    absence is the *status* and not a broken index or an unmatched query.
+    Three legs, in order:
+
+      1. the mailbox shows it   -> it was durably written and is parseable;
+      2. recall does not        -> the withheld property;
+      3. flip the same block to ``active`` through a proposal admission,
+         reindex, and recall the same query -> it comes back.
+
+    Leg 3 is the control. Without it this test would pass just as happily
+    against a corpus that recall cannot read at all.
+    """
+    from mind_mem.governance_gate import get_gate
+    from mind_mem.recall import recall
+    from mind_mem.sqlite_index import build_index
+    from mind_mem.storage import get_block_store
+
+    marker = "zephyrine-unique-marker-9931"
+    mid = send_message(workspace, f"{marker} ping", to="S1", sender="U1")
+
+    # 1. present in the mailbox
+    assert [m["_id"] for m in read_inbox(workspace)] == [mid]
+
+    # 2. absent from recall
+    withheld_hits = recall(workspace, marker, limit=5, active_only=False)
+    assert isinstance(withheld_hits, list)
+    assert not [h for h in withheld_hits if h.get("_id", "").startswith("MSG-")], "a quarantined agent message was served by recall"
+
+    # 3. control — release it the sanctioned way and it comes straight back.
+    # The block comes from the mailbox read above (the markdown store's
+    # get_by_id does not resolve memory/ blocks); private ``_`` keys the
+    # enumeration tags on are dropped so only real fields are re-rendered.
+    store = get_block_store(workspace)
+    stored = next(m for m in read_inbox(workspace) if m["_id"] == mid)
+    released = {k: v for k, v in stored.items() if not k.startswith("_") or k == "_id"}
+    released["Status"] = "active"
+    with get_gate(workspace).admit_proposal(proposal_id="P-RELEASE", content="[]"):
+        store.write_block(released)
+    build_index(workspace)
+    released_hits = recall(workspace, marker, limit=5, active_only=False)
+    assert [h for h in released_hits if h.get("_id", "").startswith("MSG-")], (
+        "control leg failed: recall cannot find the message even when active, so leg 2 proves nothing about the quarantine"
+    )

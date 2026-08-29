@@ -1147,7 +1147,7 @@ class PostgresBlockStore:
             UngatedWriteError: no governance admission is open for this
                 block. See :mod:`mind_mem.admission`.
         """
-        require_admission(str(block.get("_id") or ""))
+        require_admission(str(block.get("_id") or ""), status=block.get("Status"))
         self._ensure_schema()
         pool = self._get_pool()
         block_id, file_path, content, metadata_json = _block_to_row(block)

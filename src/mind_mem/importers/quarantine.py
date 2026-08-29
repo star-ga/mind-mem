@@ -58,6 +58,7 @@ import re
 from datetime import datetime
 from typing import Any, Final, Iterable, Mapping, Sequence
 
+from ..enums import INITIAL_STATUS, IngestTier, Status
 from ..provenance_class import EXTERNAL_INGEST
 
 __all__ = [
@@ -81,8 +82,11 @@ __all__ = [
     "render_release_proposal_block",
 ]
 
-#: Status every imported block carries on arrival. Recall filters it.
-QUARANTINE_STATUS: Final = "quarantined"
+#: Status every imported block carries on arrival. Recall withholds it.
+#: Resolved from :data:`~mind_mem.enums.INITIAL_STATUS` rather than spelled
+#: here, so the importer cannot drift from the tier it is admitted under —
+#: that table is the only place an initial status is decided.
+QUARANTINE_STATUS: Final = (INITIAL_STATUS[IngestTier.EXTERNAL_INGEST] or Status.QUARANTINED).value
 
 #: Why it is quarantined — the existing provenance-class vocabulary, so
 #: the block field and ``classify_provenance`` cannot drift apart.
