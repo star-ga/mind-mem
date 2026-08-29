@@ -36,6 +36,10 @@ from mind_mem.recall_attestation import (
     derive_recall_attestation_for_workspace,
 )
 
+#: Every record below answers a question — v2 binds it, so every builder
+#: call has to name one. Held constant except where a test varies it.
+QUERY = "what did we decide about the ingest gate"
+
 
 def _make_workspace() -> str:
     ws = tempfile.mkdtemp(prefix="mm_att_")
@@ -59,7 +63,7 @@ def test_legs_derived_from_real_result_flags_not_declared():
     no ``legs=`` string parameter anyone can type to assert a path ran."""
     # Healthy two-leg hybrid fusion: vector requested + available + no marker.
     r = _as_results([{"_id": "a", "score": 1.0}], None)
-    att = derive_recall_attestation(r, vector_requested=True, vector_available=True, config_hash="CFG")
+    att = derive_recall_attestation(r, vector_requested=True, vector_available=True, config_hash="CFG", query=QUERY)
     assert att.legs_ran == ("bm25", "hybrid", "vector")
     assert att.legs_degraded == ()
 
@@ -95,7 +99,7 @@ def test_graph_leg_detected_from_graph_hop_provenance():
     """The graph leg is derived from the ``_graph_hop`` provenance the graph
     expander stamps on walked hits — a recorded signal."""
     r = _as_results([{"_id": "a"}, {"_id": "b", "_graph_hop": 1}], None)
-    att = derive_recall_attestation(r, vector_requested=True, vector_available=True, config_hash="CFG")
+    att = derive_recall_attestation(r, vector_requested=True, vector_available=True, config_hash="CFG", query=QUERY)
     assert "graph" in att.legs_ran
 
 
@@ -116,7 +120,9 @@ def test_config_hash_reuses_pipeline_probe_not_reinvented():
 
     ws = _make_workspace()
     probe = current_pipeline_hash(ws)
-    att = derive_recall_attestation_for_workspace(_as_results([{"_id": "a"}], None), ws, vector_requested=True, vector_available=True)
+    att = derive_recall_attestation_for_workspace(
+        _as_results([{"_id": "a"}], None), ws, vector_requested=True, vector_available=True, query=QUERY
+    )
     assert att.config_hash == probe
 
 
@@ -127,8 +133,8 @@ def test_config_hash_reuses_pipeline_probe_not_reinvented():
 
 def test_deterministic_bytes_same_state_same_hash():
     r = _as_results([{"_id": "a"}, {"_id": "b"}], None)
-    a1 = derive_recall_attestation(r, vector_requested=True, vector_available=True, config_hash="CFG")
-    a2 = derive_recall_attestation(r, vector_requested=True, vector_available=True, config_hash="CFG")
+    a1 = derive_recall_attestation(r, vector_requested=True, vector_available=True, config_hash="CFG", query=QUERY)
+    a2 = derive_recall_attestation(r, vector_requested=True, vector_available=True, config_hash="CFG", query=QUERY)
     assert a1.attestation_hash == a2.attestation_hash
     assert a1.to_dict() == a2.to_dict()
 
@@ -141,6 +147,7 @@ def test_hash_binds_every_field_tamper_detectable():
         degraded=None,
         index_anchor=GENESIS_ANCHOR,
         result_count=3,
+        query=QUERY,
     )
     assert a.is_internally_consistent()
     # Mutate a bound field without recomputing the hash → inconsistent.
@@ -150,10 +157,13 @@ def test_hash_binds_every_field_tamper_detectable():
     assert not tampered.is_internally_consistent()
     tampered2 = dataclasses.replace(a, config_hash="OTHER")
     assert not tampered2.is_internally_consistent()
+    # v2 added two bindings; "every field" has to keep meaning every field.
+    assert not dataclasses.replace(a, query_hash="0" * 64).is_internally_consistent()
+    assert not dataclasses.replace(a, schema="SOMETHING_ELSE").is_internally_consistent()
 
 
 def test_different_legs_produce_different_hash():
-    common = dict(config_hash="CFG", degraded=None, index_anchor=GENESIS_ANCHOR, result_count=1)
+    common = dict(config_hash="CFG", degraded=None, index_anchor=GENESIS_ANCHOR, result_count=1, query=QUERY)
     bm25_only = build_recall_attestation(legs_ran=("bm25",), legs_degraded=(), **common)
     hybrid = build_recall_attestation(legs_ran=("bm25", "vector", "hybrid"), legs_degraded=(), **common)
     assert bm25_only.attestation_hash != hybrid.attestation_hash
@@ -174,6 +184,7 @@ def test_record_is_a_pure_function_of_its_fields_roundtrip():
         vector_requested=True,
         vector_available=True,
         config_hash="CFG",
+        query=QUERY,
     )
     b = RecallAttestation.from_dict(json.loads(json.dumps(a.to_dict())))
     assert b.attestation_hash == a.attestation_hash
@@ -188,7 +199,7 @@ def test_record_is_a_pure_function_of_its_fields_roundtrip():
 def test_degraded_marker_folded_in_verbatim():
     marker = {"leg": "vector", "reason": "deadline_exceeded"}
     r = _as_results([{"_id": "a"}], marker)
-    att = derive_recall_attestation(r, vector_requested=True, vector_available=True, config_hash="CFG")
+    att = derive_recall_attestation(r, vector_requested=True, vector_available=True, config_hash="CFG", query=QUERY)
     assert att.degraded == marker
     assert att.legs_degraded == ("vector",)
     # The readable marker is bound into the hash — swapping it breaks consistency.
@@ -203,14 +214,14 @@ def test_multi_query_union_marker_legs_split_out():
     ``legs_degraded`` separately."""
     marker = {"leg": "vector", "reason": "import_failed,unavailable", "variants_degraded": "2", "variants_total": "3"}
     r = _as_results([{"_id": "a"}], marker)
-    att = derive_recall_attestation(r, vector_requested=True, vector_available=True, config_hash="CFG")
+    att = derive_recall_attestation(r, vector_requested=True, vector_available=True, config_hash="CFG", query=QUERY)
     assert att.degraded == marker
     assert "vector" in att.legs_degraded
 
 
 def test_healthy_recall_has_none_degraded():
     r = _as_results([{"_id": "a"}], None)
-    att = derive_recall_attestation(r, vector_requested=True, vector_available=True, config_hash="CFG")
+    att = derive_recall_attestation(r, vector_requested=True, vector_available=True, config_hash="CFG", query=QUERY)
     assert att.degraded is None
     assert att.legs_degraded == ()
 
@@ -264,6 +275,7 @@ def test_derive_writes_nothing_to_workspace(tmp_path):
         ws,
         vector_requested=True,
         vector_available=False,
+        query=QUERY,
     )
     after = _snapshot(ws)
     assert before == after, "deriving an attestation mutated the workspace"
@@ -288,7 +300,9 @@ def test_index_anchor_reads_existing_chain_head(tmp_path):
         f.write(json.dumps({"seq": 2, "entry_hash": "b" * 64}) + "\n")
     assert _resolve_index_anchor(ws) == "b" * 64
     # The anchor is bound into the attestation.
-    att = derive_recall_attestation_for_workspace(_as_results([{"_id": "a"}], None), ws, vector_requested=False, vector_available=False)
+    att = derive_recall_attestation_for_workspace(
+        _as_results([{"_id": "a"}], None), ws, vector_requested=False, vector_available=False, query=QUERY
+    )
     assert att.index_anchor == "b" * 64
 
 
@@ -474,6 +488,7 @@ def test_negative_result_count_rejected():
             degraded=None,
             index_anchor=GENESIS_ANCHOR,
             result_count=-1,
+            query=QUERY,
         )
 
 
@@ -485,6 +500,7 @@ def test_leg_tuples_normalised_order_independent():
         degraded=None,
         index_anchor=GENESIS_ANCHOR,
         result_count=1,
+        query=QUERY,
     )
     b = build_recall_attestation(
         legs_ran=("bm25", "vector"),
@@ -493,6 +509,7 @@ def test_leg_tuples_normalised_order_independent():
         degraded=None,
         index_anchor=GENESIS_ANCHOR,
         result_count=1,
+        query=QUERY,
     )
     assert a.legs_ran == ("bm25", "vector")
     assert a.attestation_hash == b.attestation_hash

@@ -35,12 +35,12 @@ LOAD-BEARING WEDGE — three rails, each with a test in
    creates nothing.
 
 3. **DETERMINISTIC — and complete enough to mean it.** The
-   ``RECALL_ATTEST_v1`` preimage carries content-derived digests, the config
-   hash, the anchor, the served ids in rank order, the derivation marker, and
-   the run's ``scoring_instant``. No randomness, and no *hidden* clock read:
-   the instant is recorded, not sampled behind the caller's back. Building an
-   attestation twice from the same run state yields byte-identical bytes (and
-   hence an identical ``attestation_hash``).
+   ``RECALL_ATTEST_v2`` preimage carries content-derived digests, the config
+   hash, the anchor, the query digest, the served ids in rank order, the
+   derivation marker, and the run's ``scoring_instant``. No randomness, and no
+   *hidden* clock read: the instant is recorded, not sampled behind the
+   caller's back. Building an attestation twice from the same run state yields
+   byte-identical bytes (and hence an identical ``attestation_hash``).
 
    This rail used to read "no wall-clock in the preimage", which was true of the
    record and false of the run it attested, and it described the answer only by
@@ -56,19 +56,49 @@ LOAD-BEARING WEDGE — three rails, each with a test in
    Two bindings close it. ``scoring_instant`` — the last hidden *input* — makes
    the guarantee replayable: an attested run is reproduced by passing its date
    back to ``recall()``. ``results_digest`` — the served ids in rank order,
-   through the same order-sensitive :func:`_seq_digest` as the leg tuples —
+   through the same order-sensitive :func:`seq_digest` as the leg tuples —
    makes it complete against the *output*: any two runs that served a different
    set, or the same set in a different order, hash differently whatever the
    cause, including a hidden input nobody has found yet. The ids are a fact of
    serving rather than a verdict, and nothing is written, so rail 2 holds.
+
+   The v2 bump closes what those two left, and it closes the same class of
+   hole a third and fourth time. A fingerprint of a pure function has to bind
+   every input, and the **query** was not one: two different questions
+   answered with the same ranked list produced one identical hash, so the
+   record could not say what had been asked. And the **schema** was a sibling
+   field, bound nowhere — the preimage's domain separator was a module
+   constant, so a holder could relabel a record, including *downward* to the
+   weaker layout, and it stayed internally consistent. Both now sit in the
+   preimage: :func:`query_hash` as its own slot, ``schema`` as the tag itself.
+
+   Both went in **under a new tag**, which is the only honest way to do it. A
+   value carried beside the preimage is unbound by definition — anyone holding
+   the attestation can swap it, so it attests nothing; and editing the layout
+   under the old name would leave two incompatible records answering to one
+   version string. The tag is a domain separator whose entire job is to make a
+   layout change visible, so a layout change moves it.
+   :func:`verify_recall_attestation` accepts this tag and no other.
+
+   What the preimage must NEVER bind is the other side of the run: how many
+   blocks were withheld, which ones, or any per-item score. Those are
+   judgments about content rather than facts about the answer, and a judgment
+   that reaches an emitted value is a credibility score leaking out of the
+   store — the thing rail 2 exists to prevent. The served ids in rank order
+   are the output itself, and a commitment that does not bind its output
+   commits to nothing.
 
    KNOWN LIMITS, stated rather than implied. (a) The digest binds the served
    ids and their order, **not the scores**: two runs that serve the same blocks
    in the same order with different score *values* still collide. (b) The
    corpus is bound only through ``index_anchor``, which is
    :data:`GENESIS_ANCHOR` on a workspace with no audit chain — so what the
-   record pins is the answer, not the store it came from. Neither is a hidden
-   clock; both are stated scope.
+   record pins is the answer, not the store it came from. (c) ``result_count``
+   and ``served_ids`` are supplied separately by
+   :func:`build_recall_attestation`'s callers and are not cross-checked, so a
+   hand-built record may claim a count its digest does not carry;
+   :func:`derive_recall_attestation` always derives both from the same hit
+   list. None of these is a hidden clock; all are stated scope.
 
 HARD RAIL — like every hash in this codebase, ``attestation_hash`` is a plain
 SHA-256 over the preimage: it detects an internally inconsistent record, not a
@@ -83,6 +113,7 @@ signed**; authenticated signing (Ed25519 / ML-DSA) is separate, deferred work.
         vector_available=hb.vector_available,
         config_hash=current_pipeline_hash(workspace),
         index_anchor=_resolve_index_anchor(workspace),
+        query=query,                   # bound as a digest, never as text
     )
     envelope["attestation"] = att.to_dict()   # surfaced, never stored
 """
@@ -99,6 +130,7 @@ from typing import Any
 
 from .observability import get_logger, metrics
 from .preimage import preimage
+from .recall_digests import marker_digest, query_hash, seq_digest, served_set_digest
 from .scoring_instant import format_scoring_instant, resolve_scoring_instant
 
 _log = get_logger("recall_attestation")
@@ -107,7 +139,15 @@ _log = get_logger("recall_attestation")
 # FOLD_ATTEST_v1 / AUDIT_v1 / EV_v1 so a recall-attestation preimage can never
 # collide with a fold-attestation, audit-entry, or evidence-object preimage even
 # when their bodies coincide.
-RECALL_ATTEST_TAG = "RECALL_ATTEST_v1"
+#
+# v2 (this bump) added two bindings and changed the served-set encoding, so it
+# is a DIFFERENT preimage class and takes a different name. The retired tag is
+# not defined anywhere in this package — not as a constant, not as a fallback,
+# not as an accepted value: a tag a producer can still reach is a downgrade
+# target, and "verify accepts either" would make the version stamp decorative.
+# It survives only in ``tests/test_recall_attestation_v2.py``, which asserts it
+# is never emitted and that :func:`verify_recall_attestation` refuses it.
+RECALL_ATTEST_TAG = "RECALL_ATTEST_v2"
 
 # Canonical leg names. A recall may run some subset of these.
 LEG_BM25 = "bm25"  # lexical base leg — runs on every recall path
@@ -137,37 +177,6 @@ DERIVATION_ASSERTED = "asserted"
 # ---------------------------------------------------------------------------
 # Derivation helpers — every one reads a *recorded* run signal, never a claim.
 # ---------------------------------------------------------------------------
-
-
-def _seq_digest(items: tuple[str, ...]) -> str:
-    """Unambiguous SHA-256 over an *ordered* sequence of strings.
-
-    Length-prefixed, then each item folded in as its fixed-width (32-byte)
-    SHA-256 digest, so neither element boundaries nor ordering can be forged.
-    Mirrors ``fold_attestation._seq_digest`` for the same reason: a leg set
-    ``("bm25", "vector")`` must hash distinctly from ``("bm25vector",)``.
-    """
-    h = hashlib.sha256()
-    h.update(str(len(items)).encode("ascii"))
-    h.update(b"\x00")
-    for it in items:
-        h.update(hashlib.sha256(it.encode("utf-8")).digest())
-    return h.hexdigest()
-
-
-def _marker_digest(marker: dict[str, str] | None) -> str:
-    """Deterministic SHA-256 over a ``.degraded`` marker dict (``""`` when None).
-
-    The marker ``{leg, reason, [variants_degraded, variants_total]}`` is
-    serialised with ``sort_keys`` so key order cannot change the digest, then
-    hashed. Binding this digest into the preimage means the readable
-    ``degraded`` field carried on the attestation cannot be swapped without
-    invalidating the hash.
-    """
-    if not marker:
-        return ""
-    canonical = json.dumps(marker, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _has_provenance(results: Any, key: str, *, equals: str | None = None) -> bool:
@@ -317,11 +326,13 @@ def _resolve_index_anchor(workspace: str) -> str:
 
 def _attestation_preimage(
     *,
+    tag: str,
     legs_ran_digest: str,
     legs_degraded_digest: str,
     config_hash: str,
     degraded_digest: str,
     index_anchor: str,
+    query_hash: str,
     result_count: int,
     results_digest: str,
     derivation: str,
@@ -341,7 +352,7 @@ def _attestation_preimage(
     record dishonest, and they close different halves of it:
 
     * ``results_digest`` describes the **answer** — the served block ids in
-      rank order, through the same order-sensitive :func:`_seq_digest` the leg
+      rank order, through the same order-sensitive :func:`seq_digest` the leg
       tuples use, so ``(A, B)`` and ``(B, A)`` are distinct. It sits next to
       ``result_count``, which it subsumes for hashing purposes and which is
       kept only because it is the readable form. Without it the preimage
@@ -361,12 +372,13 @@ def _attestation_preimage(
     the hash on every single call.
     """
     return preimage(
-        RECALL_ATTEST_TAG,
+        tag,
         legs_ran_digest,
         legs_degraded_digest,
         config_hash,
         degraded_digest,
         index_anchor,
+        query_hash,
         result_count,
         results_digest,
         derivation,
@@ -378,15 +390,17 @@ def _attestation_preimage(
 class RecallAttestation:
     """A per-run, runtime-only record of *how* a recall produced its answer.
 
-    Every field is bound into ``attestation_hash`` via the ``RECALL_ATTEST_v1``
-    preimage, so mutating any one of them without recomputing the hash makes the
-    record internally inconsistent — detectable with
-    :meth:`is_internally_consistent`. This record is **never persisted** (rail
-    2): it lives in the recall response and is discarded when the response is.
+    Every field is bound into ``attestation_hash`` via the ``RECALL_ATTEST_v2``
+    preimage — ``schema`` included, as the preimage tag — so mutating any one of
+    them without recomputing the hash makes the record internally inconsistent,
+    detectable with :meth:`is_internally_consistent`. There is no field on this
+    record that the hash does not cover; a sibling value would be forgeable and
+    would therefore attest nothing. This record is **never persisted** (rail 2):
+    it lives in the recall response and is discarded when the response is.
 
     ``degraded`` carries the existing ``.degraded`` ``{leg, reason}`` marker
     verbatim for readability; the preimage binds its order-independent
-    ``_marker_digest`` so the readable dict cannot be swapped without
+    ``marker_digest`` so the readable dict cannot be swapped without
     invalidating the hash.
     """
 
@@ -396,10 +410,12 @@ class RecallAttestation:
     degraded: dict[str, str] | None
     index_anchor: str
     result_count: int
-    #: Order-sensitive :func:`_seq_digest` of the served block ids, in rank
+    #: Order-sensitive :func:`seq_digest` of the served block ids, in rank
     #: order. This is what lets the record distinguish two different served
     #: *answers*, rather than only two answers of different length.
     results_digest: str
+    #: :func:`query_hash` of the question this run answered.
+    query_hash: str
     #: The UTC date the run's recency layer scored against, ``YYYY-MM-DD``.
     #: Hash-bound, so replaying a run means passing this value back to
     #: ``recall(scoring_instant=...)``.
@@ -412,14 +428,21 @@ class RecallAttestation:
     derivation: str = field(default=DERIVATION_ASSERTED)
 
     def recompute_hash(self) -> str:
-        """Recompute the attestation hash from the bound fields (no I/O)."""
+        """Recompute the attestation hash from the bound fields (no I/O).
+
+        ``schema`` is passed as the preimage *tag*, which is what makes the
+        version stamp a bound field rather than a sibling: relabel the record
+        and the domain separator moves with it, so the hash no longer matches.
+        """
         return hashlib.sha256(
             _attestation_preimage(
-                legs_ran_digest=_seq_digest(self.legs_ran),
-                legs_degraded_digest=_seq_digest(self.legs_degraded),
+                tag=self.schema,
+                legs_ran_digest=seq_digest(self.legs_ran),
+                legs_degraded_digest=seq_digest(self.legs_degraded),
                 config_hash=self.config_hash,
-                degraded_digest=_marker_digest(self.degraded),
+                degraded_digest=marker_digest(self.degraded),
                 index_anchor=self.index_anchor,
+                query_hash=self.query_hash,
                 result_count=self.result_count,
                 results_digest=self.results_digest,
                 derivation=self.derivation,
@@ -428,8 +451,19 @@ class RecallAttestation:
         ).hexdigest()
 
     def is_internally_consistent(self) -> bool:
-        """True iff the stored hash matches its own preimage (constant-time compare)."""
-        return hmac.compare_digest(self.recompute_hash(), self.attestation_hash)
+        """True iff the stored hash matches its own preimage (constant-time compare).
+
+        Total by construction. Now that ``schema`` is the preimage tag, a
+        record carrying an empty or non-ascii tag makes the preimage builder
+        refuse it — and a *predicate* that raises on a malformed record is
+        unusable at a trust boundary, which is the only place it is called.
+        Unbuildable is not consistent, so it answers False.
+        """
+        try:
+            recomputed = self.recompute_hash()
+        except (ValueError, TypeError, UnicodeEncodeError):
+            return False
+        return hmac.compare_digest(recomputed, self.attestation_hash)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the recall envelope / JSON response (stable field order)."""
@@ -442,6 +476,7 @@ class RecallAttestation:
             "index_anchor": self.index_anchor,
             "result_count": self.result_count,
             "results_digest": self.results_digest,
+            "query_hash": self.query_hash,
             "derivation": self.derivation,
             "scoring_instant": self.scoring_instant,
             "attestation_hash": self.attestation_hash,
@@ -452,14 +487,26 @@ class RecallAttestation:
         """Reconstruct from a serialized dict (e.g. an envelope round-trip).
 
         Raises:
-            ValueError: the dict predates the determinism seam — it is missing
-                ``scoring_instant`` (the recency input) or ``results_digest``
-                (the served answer). Reviving it with a guessed value would
-                yield a record that merely reports
-                ``is_internally_consistent() is False`` with no explanation, so
-                the boundary refuses it by name instead.
+            ValueError: the ``schema`` is not this preimage version — an older
+                tag, a newer one, or none at all. There is deliberately no
+                dual-tag path: a parser that accepts two layouts is a
+                downgrade target, and a record whose tag disagrees with its
+                fields is not a record of this class.
+            ValueError: the dict carries the right tag but is missing
+                ``scoring_instant`` (the recency input), ``results_digest``
+                (the served answer) or ``query_hash`` (the question).
+                Reviving it with a guessed value would yield a record that
+                merely reports ``is_internally_consistent() is False`` with no
+                explanation, so the boundary refuses it by name instead.
         """
-        missing = [k for k in ("scoring_instant", "results_digest") if k not in d]
+        schema = d.get("schema")
+        if schema != RECALL_ATTEST_TAG:
+            raise ValueError(
+                f"attestation schema {schema!r} is not {RECALL_ATTEST_TAG!r}: this preimage class "
+                "accepts exactly one layout, and every hash emitted under another tag is "
+                "unrecomputable here by design"
+            )
+        missing = [k for k in ("scoring_instant", "results_digest", "query_hash") if k not in d]
         if missing:
             raise ValueError(
                 f"attestation dict has no {' and no '.join(repr(k) for k in missing)}: it predates "
@@ -473,9 +520,10 @@ class RecallAttestation:
             index_anchor=d["index_anchor"],
             result_count=int(d["result_count"]),
             results_digest=str(d["results_digest"]),
+            query_hash=str(d["query_hash"]),
             scoring_instant=str(d["scoring_instant"]),
             attestation_hash=d["attestation_hash"],
-            schema=d.get("schema", RECALL_ATTEST_TAG),
+            schema=RECALL_ATTEST_TAG,
             derivation=d.get("derivation", DERIVATION_ASSERTED),
         )
 
@@ -488,6 +536,7 @@ def build_recall_attestation(
     degraded: dict[str, str] | None,
     index_anchor: str,
     result_count: int,
+    query: str,
     served_ids: tuple[str, ...] = (),
     derivation: str = DERIVATION_ASSERTED,
     scoring_instant: date | str | None = None,
@@ -504,6 +553,12 @@ def build_recall_attestation(
     is the thing being attested, so ``(A, B)`` must hash differently from
     ``(B, A)``. It is what makes the record able to tell two different served
     answers apart at all.
+
+    ``query`` is the question the run answered. It is **required**, with no
+    default, because a fingerprint of a pure function has to bind every input
+    and a defaulted one binds a constant — a caller who forgot would silently
+    mint exactly the record this version exists to retire. Only its
+    :func:`query_hash` is stored; the text never enters the record.
 
     ``scoring_instant`` should be the instant the run *actually scored with*,
     so the record can distinguish two differently-ranked runs and replay either.
@@ -529,14 +584,17 @@ def build_recall_attestation(
     if derivation not in (DERIVATION_DERIVED, DERIVATION_ASSERTED):
         raise ValueError(f"derivation must be {DERIVATION_DERIVED!r} or {DERIVATION_ASSERTED!r}, got {derivation!r}")
     instant = format_scoring_instant(resolve_scoring_instant(scoring_instant))
-    results_digest = _seq_digest(tuple(str(i) for i in served_ids))
+    results_digest = served_set_digest(served_ids)
+    q_digest = query_hash(query)
     attestation_hash = hashlib.sha256(
         _attestation_preimage(
-            legs_ran_digest=_seq_digest(legs_ran_n),
-            legs_degraded_digest=_seq_digest(legs_degraded_n),
+            tag=RECALL_ATTEST_TAG,
+            legs_ran_digest=seq_digest(legs_ran_n),
+            legs_degraded_digest=seq_digest(legs_degraded_n),
             config_hash=config_hash,
-            degraded_digest=_marker_digest(degraded),
+            degraded_digest=marker_digest(degraded),
             index_anchor=index_anchor,
+            query_hash=q_digest,
             result_count=result_count,
             results_digest=results_digest,
             derivation=derivation,
@@ -551,6 +609,7 @@ def build_recall_attestation(
         index_anchor=index_anchor,
         result_count=result_count,
         results_digest=results_digest,
+        query_hash=q_digest,
         scoring_instant=instant,
         attestation_hash=attestation_hash,
         derivation=derivation,
@@ -563,6 +622,7 @@ def derive_recall_attestation(
     vector_requested: bool,
     vector_available: bool,
     config_hash: str,
+    query: str,
     index_anchor: str = GENESIS_ANCHOR,
     scoring_instant: date | str | None = None,
 ) -> RecallAttestation:
@@ -597,6 +657,10 @@ def derive_recall_attestation(
         vector_available: The backend's recorded ``vector_available`` flag.
         config_hash: The pipeline-probe config SHA
             (:func:`mind_mem.pipeline_hash.current_pipeline_hash`), reused.
+        query: The query text this run answered, bound as :func:`query_hash`.
+            Required: the ranking is a function of the question, so a record
+            that omits it cannot distinguish two runs that happened to serve
+            the same list for different reasons, and cannot be replayed.
         index_anchor: The audit-chain head / index snapshot hash
             (:func:`_resolve_index_anchor`), or :data:`GENESIS_ANCHOR`.
         scoring_instant: The UTC date the run's recency layer scored against —
@@ -629,6 +693,7 @@ def derive_recall_attestation(
         index_anchor=index_anchor,
         result_count=result_count,
         served_ids=served_ids,
+        query=query,
         scoring_instant=scoring_instant,
         # Sanctioned path: legs were recomputed from the recorded run state
         # above, so this record is provenance-guaranteed, not caller-asserted.
@@ -655,6 +720,7 @@ def derive_recall_attestation_for_workspace(
     *,
     vector_requested: bool,
     vector_available: bool,
+    query: str,
     scoring_instant: date | str | None = None,
 ) -> RecallAttestation:
     """Convenience wrapper: resolve ``config_hash`` + ``index_anchor`` from *workspace*.
@@ -682,8 +748,36 @@ def derive_recall_attestation_for_workspace(
         vector_available=vector_available,
         config_hash=config_hash,
         index_anchor=index_anchor,
+        query=query,
         scoring_instant=scoring_instant,
     )
+
+
+def verify_recall_attestation(record: RecallAttestation | dict[str, Any]) -> bool:
+    """True iff *record* is a well-formed, internally consistent v2 attestation.
+
+    The one verification surface, and it accepts **exactly one tag**. Dual-tag
+    support would be a downgrade target: an attacker holding a record under the
+    weaker layout could present it unchanged and have it honoured, so the
+    version stamp would buy nothing. A record under any other tag is rejected
+    here, not migrated — the older layout bound fewer inputs, and there is no
+    honest way to synthesise what it never committed to.
+
+    Total on hostile input. A verifier's whole job is to be handed malformed
+    values, so it answers False rather than raising: a wrong type, a missing
+    field, an absent or foreign tag, a broken hash all mean the same thing to
+    the caller. Note that this checks *tamper-evidence*, not authenticity —
+    ``attestation_hash`` is a plain SHA-256 that anyone can recompute over a
+    forged body. Signing is separate, deferred work.
+    """
+    if isinstance(record, RecallAttestation):
+        return record.schema == RECALL_ATTEST_TAG and record.is_internally_consistent()
+    if not isinstance(record, dict):
+        return False
+    try:
+        return RecallAttestation.from_dict(record).is_internally_consistent()
+    except (ValueError, KeyError, TypeError):
+        return False
 
 
 __all__ = [
@@ -700,4 +794,8 @@ __all__ = [
     "derive_legs",
     "derive_recall_attestation",
     "derive_recall_attestation_for_workspace",
+    # ``query_hash`` / ``served_set_digest`` are deliberately NOT re-exported:
+    # they are owned by :mod:`mind_mem.recall_digests`, and two import paths to
+    # one canonical encoding is the first step toward two encodings.
+    "verify_recall_attestation",
 ]

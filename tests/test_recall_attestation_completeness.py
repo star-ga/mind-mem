@@ -142,6 +142,7 @@ def test_served_id_order_is_bound_not_just_the_set() -> None:
         degraded=None,
         index_anchor=GENESIS_ANCHOR,
         result_count=2,
+        query=QUERY,
         scoring_instant=NEAR_INSTANT,
     )
     forward = build_recall_attestation(**common, served_ids=("D-A", "D-B"))
@@ -162,6 +163,7 @@ def test_results_digest_is_hash_bound_and_tamper_evident() -> None:
         index_anchor=GENESIS_ANCHOR,
         result_count=2,
         served_ids=("D-A", "D-B"),
+        query=QUERY,
         scoring_instant=NEAR_INSTANT,
     )
     assert att.is_internally_consistent()
@@ -193,6 +195,7 @@ def test_scoring_instant_is_hash_bound_and_tamper_evident() -> None:
         degraded=None,
         index_anchor=GENESIS_ANCHOR,
         result_count=2,
+        query=QUERY,
         scoring_instant=NEAR_INSTANT,
     )
     assert att.is_internally_consistent()
@@ -208,6 +211,7 @@ def test_two_instants_alone_change_the_hash() -> None:
         degraded=None,
         index_anchor=GENESIS_ANCHOR,
         result_count=2,
+        query=QUERY,
     )
     near = build_recall_attestation(**common, scoring_instant=NEAR_INSTANT)
     far = build_recall_attestation(**common, scoring_instant=FAR_INSTANT)
@@ -223,13 +227,14 @@ def test_serialised_instant_is_a_bare_iso_date() -> None:
         degraded=None,
         index_anchor=GENESIS_ANCHOR,
         result_count=1,
+        query=QUERY,
         scoring_instant=datetime(2026, 8, 27, 23, 59, 59, tzinfo=timezone.utc),
     )
     assert att.scoring_instant == "2026-08-27"
     assert att.to_dict()["scoring_instant"] == "2026-08-27"
 
 
-@pytest.mark.parametrize("dropped", ["scoring_instant", "results_digest"])
+@pytest.mark.parametrize("dropped", ["scoring_instant", "results_digest", "query_hash"])
 def test_pre_seam_record_is_rejected_not_silently_inconsistent(dropped: str) -> None:
     """A v1-shaped dict without either new field must fail loudly at the boundary.
 
@@ -244,6 +249,7 @@ def test_pre_seam_record_is_rejected_not_silently_inconsistent(dropped: str) -> 
         index_anchor=GENESIS_ANCHOR,
         result_count=1,
         served_ids=("D-A",),
+        query=QUERY,
         scoring_instant=NEAR_INSTANT,
     )
     legacy = att.to_dict()

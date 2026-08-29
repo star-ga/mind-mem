@@ -147,7 +147,7 @@ def _recall_impl(
     # to the CURRENT pipeline config + live index anchor every time, and keeps
     # the cached payload attestation-free.
     if raw:
-        raw = _apply_attestation(raw, backend, instant_iso)
+        raw = _apply_attestation(raw, backend, instant_iso, query)
 
     # v3.11.0 Pattern 1 — apply explain annotation post-cache so that the
     # cached payload (explain-free) is not polluted and explain=True can
@@ -193,13 +193,23 @@ def _current_vector_flags(ws: str, backend: str) -> tuple[bool, bool]:
         return False, False
 
 
-def _apply_attestation(raw_json: str, backend: str, scoring_instant: str) -> str:
+def _apply_attestation(raw_json: str, backend: str, scoring_instant: str, query: str) -> str:
     """Derive the recall attestation from *raw_json* + live config, inject it.
 
     *scoring_instant* is the instant the run **actually scored with**, passed in
     rather than re-resolved: re-reading it here would let the record disagree
     with the run it attests across the cache boundary — the same staleness class
     Finding 2 fixed for ``config_hash``.
+
+    *query* is threaded in the same way, and read from the argument rather than
+    from ``envelope["query"]``. Not because the two can disagree today — the
+    cache key digests the query text (``recall_cache.make_cache_key``), so a
+    hit is by construction the same question — but because the argument IS the
+    run's input while the envelope field is a serialized copy of it, and
+    deriving a hash-bound value from a re-parsed copy adds a place the two can
+    drift for no benefit. ``scoring_instant`` is passed for the same reason.
+    Only the :func:`~mind_mem.recall_attestation.query_hash` is bound; the text
+    never enters the record.
 
     Runs post-cache (both cache-hit and cache-miss paths). Rebuilds the recorded
     run signals from the envelope (per-hit provenance + the ``degraded`` marker),
@@ -229,6 +239,7 @@ def _apply_attestation(raw_json: str, backend: str, scoring_instant: str) -> str
             ws,
             vector_requested=vector_requested,
             vector_available=vector_available,
+            query=query,
             scoring_instant=scoring_instant,
         )
         envelope["attestation"] = attestation.to_dict()
