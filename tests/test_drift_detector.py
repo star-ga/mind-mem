@@ -369,6 +369,7 @@ def pg_workspace(tmp_path) -> Generator[tuple[str, "PostgresBlockStore"], None, 
 
 
 @_pg_live
+@pytest.mark.usefixtures("admitted")
 class TestDriftDetectorPostgres:
     """Drift detection must see Postgres-resident decision blocks (audit bug 12)."""
 

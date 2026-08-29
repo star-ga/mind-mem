@@ -188,6 +188,7 @@ def pg_workspace(tmp_path: Path) -> Generator[tuple[str, PostgresBlockStore], No
 
 
 @_pg_live
+@pytest.mark.usefixtures("admitted")
 class TestPostgresRecallLive:
     def test_recall_surfaces_pg_blocks(self, pg_workspace: tuple[str, PostgresBlockStore]) -> None:
         ws, store = pg_workspace

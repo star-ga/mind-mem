@@ -109,6 +109,7 @@ def test_ensure_postgres_schema_provisions_db(tmp_path: Path, scratch_schema: st
     assert row is not None, "scratch schema was not created"
 
 
+@pytest.mark.usefixtures("admitted")
 def test_initialized_postgres_workspace_is_usable(tmp_path: Path, scratch_schema: str) -> None:
     """A workspace init'd for Postgres is immediately read/write-able.
 

@@ -185,6 +185,7 @@ def pg_workspace(tmp_path: Path) -> Generator[tuple[str, PostgresBlockStore], No
 
 
 @_pg_live
+@pytest.mark.usefixtures("admitted")
 class TestMemoryOpsPostgresLive:
     def test_export_memory_surfaces_pg_blocks(self, pg_workspace: tuple[str, PostgresBlockStore]) -> None:
         ws, store = pg_workspace

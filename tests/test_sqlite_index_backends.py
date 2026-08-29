@@ -188,6 +188,7 @@ def pg_workspace() -> Generator[tuple[str, PostgresBlockStore, str], None, None]
             pass
 
 
+@pytest.mark.usefixtures("admitted")
 class TestPostgresBuildSourcesStore:
     """build_index on a PG workspace indexes the store, not empty markdown."""
 

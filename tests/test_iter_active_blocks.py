@@ -154,6 +154,7 @@ def pg_workspace(tmp_path: Path) -> Generator[tuple[str, PostgresBlockStore], No
             pass
 
 
+@pytest.mark.usefixtures("admitted")
 def test_postgres_iter_active_blocks_sees_store_blocks(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     ws, store = pg_workspace
     store.write_block(
@@ -193,6 +194,7 @@ def test_postgres_empty_store_returns_empty(pg_workspace: tuple[str, PostgresBlo
     assert iter_active_blocks(ws) == []
 
 
+@pytest.mark.usefixtures("admitted")
 def test_postgres_alias_matches(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     ws, store = pg_workspace
     store.write_block(

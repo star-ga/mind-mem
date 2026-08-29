@@ -21,6 +21,7 @@ _DSN_ENV = "MIND_MEM_TEST_PG_DSN"
 
 
 @pytest.mark.skipif(not os.environ.get(_DSN_ENV), reason=f"{_DSN_ENV} not set")
+@pytest.mark.usefixtures("admitted")
 def test_restore_preserves_file_path() -> None:
     dsn = os.environ[_DSN_ENV]
     schema = f"mm_rfp_{uuid.uuid4().hex[:10]}"

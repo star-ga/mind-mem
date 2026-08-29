@@ -136,6 +136,7 @@ def pg_workspace(tmp_path: Path) -> Generator[tuple[str, PostgresBlockStore], No
 
 
 @_pg_skip
+@pytest.mark.usefixtures("admitted")
 def test_pg_citation_repair_detects_dangling(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     """The deliberate dangling citation (audit bug 11) is detected on Postgres."""
     ws, store = pg_workspace
@@ -167,6 +168,7 @@ def test_pg_citation_repair_detects_dangling(pg_workspace: tuple[str, PostgresBl
 
 
 @_pg_skip
+@pytest.mark.usefixtures("admitted")
 def test_pg_citation_repair_valid_refs_not_flagged(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     """A reference to a block that *is* defined in the store is not broken."""
     ws, store = pg_workspace
@@ -183,6 +185,7 @@ def test_pg_citation_repair_valid_refs_not_flagged(pg_workspace: tuple[str, Post
 
 
 @_pg_skip
+@pytest.mark.usefixtures("admitted")
 def test_pg_entity_discovery_scans_store_blocks(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     """Entity discovery surfaces untracked entities from store block text."""
     ws, store = pg_workspace
@@ -200,6 +203,7 @@ def test_pg_entity_discovery_scans_store_blocks(pg_workspace: tuple[str, Postgre
 
 
 @_pg_skip
+@pytest.mark.usefixtures("admitted")
 def test_pg_entity_discovery_skips_tracked(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     """An entity already tracked as a PRJ-/TOOL-/PER- block is not re-proposed."""
     ws, store = pg_workspace
@@ -217,6 +221,7 @@ def test_pg_entity_discovery_skips_tracked(pg_workspace: tuple[str, PostgresBloc
 
 
 @_pg_skip
+@pytest.mark.usefixtures("admitted")
 def test_pg_stale_detection_flags_old_block(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     """A block whose embedded date is well past the cutoff is flagged stale."""
     ws, store = pg_workspace
@@ -231,6 +236,7 @@ def test_pg_stale_detection_flags_old_block(pg_workspace: tuple[str, PostgresBlo
 
 
 @_pg_skip
+@pytest.mark.usefixtures("admitted")
 def test_pg_passes_ignore_inactive_blocks(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     """Deleted (inactive) blocks are invisible to every pass (active_only)."""
     ws, store = pg_workspace
@@ -248,6 +254,7 @@ def test_pg_passes_ignore_inactive_blocks(pg_workspace: tuple[str, PostgresBlock
 
 
 @_pg_skip
+@pytest.mark.usefixtures("admitted")
 def test_pg_full_cycle_dry_run_finds_dangling(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     """End-to-end run_dream_cycle on Postgres detects the dangling citation."""
     ws, store = pg_workspace

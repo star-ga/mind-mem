@@ -223,6 +223,7 @@ def _decision(store: PostgresBlockStore, bid: str, statement: str, status: str =
 
 
 @requires_pg
+@pytest.mark.usefixtures("admitted")
 def test_scan_postgres_sees_store_decisions(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     ws, store = pg_workspace
     _decision(store, "D-20260613-301", "default backend is Postgres")
@@ -238,6 +239,7 @@ def test_scan_postgres_sees_store_decisions(pg_workspace: tuple[str, PostgresBlo
 
 
 @requires_pg
+@pytest.mark.usefixtures("admitted")
 def test_scan_postgres_detects_contradiction(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     """The audit's seeded contradictory pair is now surfaced on Postgres."""
     ws, store = pg_workspace
@@ -252,6 +254,7 @@ def test_scan_postgres_detects_contradiction(pg_workspace: tuple[str, PostgresBl
 
 
 @requires_pg
+@pytest.mark.usefixtures("admitted")
 def test_scan_postgres_excludes_deleted_blocks(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     """A soft-deleted (inactive) row is not counted — active_only contract."""
     ws, store = pg_workspace
@@ -266,6 +269,7 @@ def test_scan_postgres_excludes_deleted_blocks(pg_workspace: tuple[str, Postgres
 
 
 @requires_pg
+@pytest.mark.usefixtures("admitted")
 def test_scan_postgres_clean_workspace_reports_zero(pg_workspace: tuple[str, PostgresBlockStore]) -> None:
     """Agreeing / non-contradictory blocks produce no false contradictions."""
     ws, store = pg_workspace
