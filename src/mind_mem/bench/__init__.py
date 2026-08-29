@@ -20,6 +20,7 @@ from .ab_cli import main as run_memory_ab
 from .ab_grade import Verdict, grade
 from .ab_harness import digest as ab_digest
 from .ab_harness import run_suite as run_memory_ab_suite
+from .ab_report import Pair, ReportError, build_report, pool_spend
 from .ab_seed import SeedLeakError, SeedReport, assert_no_leak, seed_workspace
 from .ab_stats import PairedSummary, mcnemar_exact, summarise
 from .ab_task import Task, load_task_set, select_tasks
@@ -37,7 +38,9 @@ __all__ = [
     "AgentRequest",
     "AgentResult",
     "Budget",
+    "Pair",
     "PairedSummary",
+    "ReportError",
     "SeedLeakError",
     "SeedReport",
     "Task",
@@ -47,10 +50,12 @@ __all__ = [
     "assert_control_isolated",
     "assert_no_leak",
     "build_prompt",
+    "build_report",
     "get_agent",
     "grade",
     "load_task_set",
     "mcnemar_exact",
+    "pool_spend",
     "run_memory_ab",
     "run_memory_ab_suite",
     "seed_workspace",

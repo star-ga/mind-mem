@@ -7,8 +7,12 @@ Two subcommands::
         --agent-env API_KEY -- /path/to/agent --prompt-file -
 
     mind-mem-bench-ab selfcheck --select bucket:single_file:1
+    mind-mem-bench-ab report --artifact a.json --artifact b.json
 
-``run`` is the measurement.  ``selfcheck`` is the positive control: it
+``run`` is the measurement.  ``report`` pools several ``run`` artifacts --
+the suite is run one stated stratum at a time on a shared box -- into the
+single paired number, with the per-tier and per-stratum breakdowns beside
+it.  ``selfcheck`` is the positive control: it
 proves the grader registers a pass when the reference fix is applied and a
 failure when it is not.  Without that, "both arms failed" would be
 indistinguishable from a grader that never returns success, so the
@@ -155,6 +159,34 @@ def _commit_src_paths(repo: str, sha: str) -> list[str]:
     return sorted(paths)
 
 
+def _print_pooled(payload: dict[str, Any]) -> None:
+    """Machine-greppable pooled summary, same key shape as a single run."""
+    summary = payload["summary"]
+    print(json.dumps({k: payload[k] for k in ("n_pairs", "summary", "by_tier", "by_size_bucket", "spend", "excluded")}, indent=2))
+    print(f"memory_ab_pooled_tasks: {summary['n_tasks']}")
+    print(f"memory_ab_pooled_memory_successes: {summary['memory_successes']}")
+    print(f"memory_ab_pooled_control_successes: {summary['control_successes']}")
+    print(f"memory_ab_pooled_delta: {summary['delta_successes']}")
+    print(f"memory_ab_pooled_discordant: {summary['n_discordant']}")
+    print(f"memory_ab_pooled_min_discordant_for_significance: {summary['min_discordant_for_significance']}")
+    print(f"memory_ab_pooled_excluded: {payload['excluded']['total']}")
+    print(f"memory_ab_pooled_agent_inert: {len(payload['agent_inert_task_ids'])}")
+    print(f"memory_ab_pooled_p_value: {summary['p_value']}")
+    print(f"memory_ab_pooled_verdict: {summary['verdict']}")
+    print(f"memory_ab_pooled_digest: {payload['digest']}")
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    """Pool stratum artifacts into the single paired number."""
+    from .ab_report import build_report
+
+    payload = build_report(args.artifact)
+    _print_pooled(payload)
+    if args.out:
+        print(f"memory_ab_pooled_artifact: {_write(payload, args.out, args.repo)}")
+    return 0
+
+
 def cmd_selfcheck(args: argparse.Namespace) -> int:
     """Prove the grader can see both a failure and a success."""
     _, tasks = _load(args)
@@ -205,6 +237,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     check = subs.add_parser("selfcheck", help="Prove the grader sees a failure and a success.")
     _add_common(check)
     check.set_defaults(func=cmd_selfcheck)
+    report = subs.add_parser("report", help="Pool run artifacts into one paired number.")
+    report.add_argument("--repo", default=os.getcwd(), help="Repository the runs were made against (default: cwd).")
+    report.add_argument("--artifact", action="append", default=[], required=True, help="A run artifact to pool. Repeatable.")
+    report.add_argument("--out", default="", help="Optional path for the pooled report.")
+    report.set_defaults(func=cmd_report)
     return parser.parse_args(argv)
 
 
