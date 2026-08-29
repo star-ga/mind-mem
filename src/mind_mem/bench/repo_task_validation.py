@@ -126,13 +126,28 @@ def extract_tree(repo: str, sha: str, dest: str) -> None:
     )
     if proc.stdout is None:  # pragma: no cover - defensive
         raise RuntimeError(f"git archive produced no stream for {sha}")
+    # `filter=` on extractall only exists where tarfile exposes data_filter
+    # (3.12, and the 3.9/3.10/3.11 security backports). Passing it to an older
+    # interpreter raises TypeError, which the finally-block below then masked as
+    # "git archive failed" -- a message pointing at the wrong component
+    # entirely. Measured 2026-08-29: only the Python 3.10 CI rows failed, and
+    # they blamed git.
+    extract_kwargs = {"filter": "data"} if hasattr(tarfile, "data_filter") else {}
+    failed = False
     try:
         with tarfile.open(fileobj=proc.stdout, mode="r|") as tar:
-            tar.extractall(dest, filter="data")
+            tar.extractall(dest, **extract_kwargs)  # nosec B202 - our own git archive
+    except BaseException:
+        failed = True
+        raise
     finally:
         proc.stdout.close()
-        if proc.wait() != 0:  # pragma: no cover - defensive
-            raise RuntimeError(f"git archive failed for {sha}")
+        rc = proc.wait()
+        # Only raise here if nothing else is already propagating. A `finally`
+        # that raises unconditionally REPLACES the real exception with its own,
+        # which is how a TypeError about extractall surfaced as a git failure.
+        if rc != 0 and not failed:
+            raise RuntimeError(f"git archive failed for {sha} (exit {rc})")
 
 
 def apply_test_patch(repo: str, sha: str, paths: Sequence[str], dest: str) -> None:

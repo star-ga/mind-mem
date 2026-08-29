@@ -89,7 +89,14 @@ class TestBatchApprove:
 
         root, ids = workspace
         report = run_batch(root, _approve_all(ids))
-        assert [o.proposal_id for o in report.applied] == list(ids)
+        # Report WHY on failure. `applied` filters on o.succeeded, so a failing
+        # assert printed only "[] == [P-...]" and threw away the governance
+        # message that says what actually went wrong -- which cost a full CI
+        # round-trip on a Windows-only failure that could not be reproduced
+        # locally.
+        assert [o.proposal_id for o in report.applied] == list(ids), (
+            "outcomes: " + "; ".join(f"{o.proposal_id}/{o.action} ok={o.succeeded} msg={o.message!r}" for o in report.outcomes)
+        )
         for pid in ids:
             assert proposal_status(root, pid) == "applied"
 
