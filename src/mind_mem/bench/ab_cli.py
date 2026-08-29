@@ -130,15 +130,15 @@ def _selfcheck_task(repo: str, task: Task, workdir: str, python: str, timeout: i
     os.makedirs(home, exist_ok=True)
     before = snapshot_tree(tree)
     untouched = grade(task, tree, home, python, before, timeout)
-    src_paths = _commit_src_paths(repo, task.sha)
-    fixer = make_reference_fix_agent(repo, task.sha, src_paths)
+    fix_paths = commit_fix_paths(repo, task.sha)
+    fixer = make_reference_fix_agent(repo, task.sha, fix_paths)
     fixer(AgentRequest(task.task_id, "selfcheck", "", tree, {}, timeout, 0, 0))
     # Diff against the ORIGINAL snapshot so the record names the files the
     # positive control wrote, rather than reporting an empty change set.
     fixed = grade(task, tree, home, python, before, timeout)
     return {
         "task_id": task.task_id,
-        "src_files_applied": src_paths,
+        "reference_paths_replayed": [f"{status} {path}" for status, path in fix_paths],
         "untouched_parent": untouched.as_dict(),
         "reference_fix": fixed.as_dict(),
         "grader_detects_failure": not untouched.success,
@@ -146,17 +146,31 @@ def _selfcheck_task(repo: str, task: Task, workdir: str, python: str, timeout: i
     }
 
 
-def _commit_src_paths(repo: str, sha: str) -> list[str]:
-    from .repo_task_mining import git, is_src_path
+def commit_fix_paths(repo: str, sha: str) -> list[tuple[str, str]]:
+    """The commit's whole non-test delta, as ``(status, path)`` pairs.
+
+    Every status is kept, including ``D``: a commit that fixes a defect by
+    deleting a module is as much a reference fix as one that adds a
+    function, and a replay restricted to added/modified files under
+    ``src/`` could reproduce neither that nor a fix whose substance lives
+    outside ``src/``.  It then reported "the grader cannot see a success"
+    when the grader was fine and the replay was incomplete -- a positive
+    control that fails for its own reasons is worse than none.  Test-side
+    paths are dropped: they are already applied as the task's test patch,
+    and rewriting one would trip the tamper check and void the attempt.
+    """
+    from .repo_task_mining import git, is_test_infra_path
 
     raw = git(repo, "show", "--name-status", "--no-renames", "--format=", sha)
-    paths = []
+    paths: list[tuple[str, str]] = []
     for line in raw.splitlines():
-        if "\t" in line:
-            status, path = line.split("\t", 1)
-            if status[0] in ("A", "M") and is_src_path(path.strip()):
-                paths.append(path.strip())
-    return sorted(paths)
+        if "\t" not in line:
+            continue
+        status, path = line.split("\t", 1)
+        path = path.strip()
+        if path and not is_test_infra_path(path):
+            paths.append((status.strip()[:1], path))
+    return sorted(paths, key=lambda row: row[1])
 
 
 def _print_pooled(payload: dict[str, Any]) -> None:

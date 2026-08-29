@@ -173,24 +173,38 @@ def make_command_agent(argv: Sequence[str], nice_level: int = 15) -> Callable[[A
     return run
 
 
-def make_reference_fix_agent(repo: str, sha: str, src_paths: Sequence[str]) -> Callable[[AgentRequest], AgentResult]:
-    """Harness positive control: write the commit's own source files.
+def make_reference_fix_agent(repo: str, sha: str, paths: Sequence[tuple[str, str]]) -> Callable[[AgentRequest], AgentResult]:
+    """Harness positive control: replay the commit's own non-test delta.
 
     Not an agent and never an arm.  It answers one question -- can this
     pipeline observe a success at all? -- and a benchmark that cannot
     answer that has no business reporting a failure.
+
+    ``paths`` is ``(status, path)`` straight from ``git show
+    --name-status``.  All three statuses are replayed, because a partial
+    replay produces a *false negative* on the positive control: an
+    earlier version wrote only added/modified files under ``src/`` and so
+    could not reproduce a commit that deletes a module, nor one whose fix
+    lives outside ``src/`` -- and then reported "the grader cannot see a
+    success" when the grader was fine and the replay was incomplete.
+    Test-side paths are excluded by the caller: rewriting one would trip
+    the tamper check and void the very attempt this is meant to pass.
     """
     from .repo_task_mining import git
 
     def run(request: AgentRequest) -> AgentResult:
-        written = 0
-        for path in src_paths:
+        applied = 0
+        for status, path in paths:
             target = os.path.join(request.tree, path)
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            with open(target, "w", encoding="utf-8") as handle:
-                handle.write(git(repo, "show", f"{sha}:{path}"))
-            written += 1
-        return AgentResult(returncode=0, timed_out=False, output_tokens=0, steps=written, tail=f"applied {written} source file(s)")
+            if status.startswith("D"):
+                if os.path.exists(target):
+                    os.remove(target)
+            else:
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                with open(target, "w", encoding="utf-8") as handle:
+                    handle.write(git(repo, "show", f"{sha}:{path}"))
+            applied += 1
+        return AgentResult(returncode=0, timed_out=False, output_tokens=0, steps=applied, tail=f"replayed {applied} path(s)")
 
     return run
 

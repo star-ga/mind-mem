@@ -11,6 +11,7 @@ claim rests on.
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
@@ -30,6 +31,8 @@ from mind_mem.bench.ab_report import (
     pool_inert,
     pool_spend,
 )
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 BUDGET = {"prompt_tokens": 8000, "memory_tokens": 1500, "output_tokens": 4000, "wall_seconds": 300, "steps": 40}
 AGENT = {"name": "command", "argv": ["/bin/true"], "env_passthrough_keys": []}
@@ -224,3 +227,58 @@ class TestTheReportIsDeterministicAndWired:
         import mind_mem.bench as bench
 
         assert {"build_report", "ReportError", "Pair", "pool_spend"} <= set(bench.__all__)
+
+
+class TestThePositiveControlReplaysTheWholeFix:
+    """A replay that skips deletions reports a grader failure that is its own.
+
+    The first version wrote only added/modified files under ``src/``, so on
+    a commit that fixes a defect by deleting a module the tests stayed red
+    and the control announced "the grader cannot see a success". The grader
+    was fine. These pin the three statuses.
+    """
+
+    def test_a_deletion_is_replayed_as_a_deletion(self, tmp_path):
+        from mind_mem.bench.ab_agent import AgentRequest, make_reference_fix_agent
+
+        tree = tmp_path / "tree"
+        (tree / "src").mkdir(parents=True)
+        (tree / "src" / "gone.py").write_text("stale\n", encoding="utf-8")
+        fixer = make_reference_fix_agent(str(tmp_path), "HEAD", [("D", "src/gone.py")])
+        result = fixer(AgentRequest("t", "selfcheck", "", str(tree), {}, 10, 0, 0))
+        assert not (tree / "src" / "gone.py").exists()
+        assert result.steps == 1
+        assert "replayed 1 path" in result.tail
+
+    def test_deleting_an_absent_file_is_not_an_error(self, tmp_path):
+        from mind_mem.bench.ab_agent import AgentRequest, make_reference_fix_agent
+
+        tree = tmp_path / "tree"
+        tree.mkdir()
+        fixer = make_reference_fix_agent(str(tmp_path), "HEAD", [("D", "src/never_there.py")])
+        assert fixer(AgentRequest("t", "selfcheck", "", str(tree), {}, 10, 0, 0)).returncode == 0
+
+    def test_the_whole_non_test_delta_is_collected_with_its_statuses(self):
+        from mind_mem.bench.ab_cli import commit_fix_paths
+
+        # A commit from this repository that deletes source files, adds a
+        # test file and edits documentation: every status in one row.
+        paths = commit_fix_paths(REPO_ROOT, "668df44fe17c")
+        statuses = {status for status, _ in paths}
+        collected = {path for _, path in paths}
+        assert "D" in statuses and "M" in statuses
+        assert "src/mind_mem/tier_recall.py" in collected
+        assert "docs/configuration.md" in collected
+
+    def test_no_test_side_path_is_ever_replayed(self):
+        from mind_mem.bench.ab_cli import commit_fix_paths
+
+        paths = commit_fix_paths(REPO_ROOT, "668df44fe17c")
+        assert not [path for _, path in paths if path.startswith("tests/") or path == "conftest.py"]
+
+    def test_a_fix_living_outside_src_is_still_replayed(self):
+        from mind_mem.bench.ab_cli import commit_fix_paths
+
+        collected = {path for _, path in commit_fix_paths(REPO_ROOT, "78c09fbe2c2f")}
+        assert "benchmarks/feedback_success_bench.py" in collected
+        assert "pyproject.toml" in collected
