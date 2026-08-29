@@ -70,6 +70,23 @@ by its full description below.
 - [ ] **Plugin SDK** — stable API for custom rules / block kinds / detectors
 - [ ] **Chaos testing harness**
 
+### Group R — Retrieval accountability (proposed 2026-08-28, 4 items)
+
+Full description: **[`docs/ROADMAP-RETRIEVAL-ACCOUNTABILITY.md`](docs/ROADMAP-RETRIEVAL-ACCOUNTABILITY.md)**.
+
+Reframes recall as *rent a fact has to keep earning* rather than storage.
+Gap analysis against external agent-memory prior art found we already hold
+three of its four nodes (WRITER / DECAY / RENEWER) — DECAY in a stronger,
+reversible form — but exposed one real defect and one missing subsystem.
+
+- [ ] **R.1 — split `returned_count` from `used_count`** *(correctness fix)* — `_recall_core.py:1793` increments `access_count` for every block **returned** by recall, not every block **used**, and `memory_tiers.py:492` promotes on that count. Retrieval currently reinforces its own output. `outcome_attribution.py:311 report_outcome` already records per-block success/failure; it just never reaches the tier path. Additive, opt-in, default-off.
+- [ ] **R.2 — tombstone store on eviction** *(the GRAVE node)* — `memory_tiers.py:381 _evict` is a bare `DELETE FROM block_tiers`; when a block dies we keep nothing. A bounded `block_tombstones` table (`block_id`, `content_hash`, `died_at`, `returned_count`, `used_count`, `death_reason`) gives resurrection evidence and an auditable death record.
+- [ ] **R.3 — retrieval-waste ledger + precision metric** — blocked on R.1 + R.2; then trivial. Surface through existing `retrieval_diagnostics` / `index_stats`. Measure our own corpus; do not quote external figures.
+- [ ] **R.4 — memory dashboard** — ~70% of the reference visualization is computable today (tier shelves, store graph, pipeline strip, cost-of-a-hit); the two panels that are not are exactly retrieval precision and the waste ledger. **Schema first, visualization second** — building it earlier yields panels the schema cannot support.
+
+> Determinism constraint for all of Group R: take an injected `now`, following
+> `cognitive_forget.py`, **not** `_recall_scoring.py:105` (known wall-clock/local-tz wart).
+
 ### Group H — Evolving memory graph (prior-art-informed, 2026-05-29)
 
 Prior art: recent evolving-memory-graph research models
