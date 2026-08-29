@@ -1328,7 +1328,12 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
         print("PRECONDITIONS FAILED — rolling back.")
         restore_snapshot(ws, snap_dir)
         _cleanup_orphan_files(ws, pre_apply_files)
-        return False, "Precondition check failed"
+        # Name the failing check. "Precondition check failed" identifies nothing:
+        # the report lines are printed to stdout, which a caller capturing only
+        # the return value never sees, and a CI failure then says an apply was
+        # refused without saying by what. The report is short and already built.
+        detail = "; ".join(r for r in pre_report if "FAIL" in r or "SKIP" in r) or "; ".join(pre_report)
+        return False, f"Precondition check failed: {detail}" if detail else "Precondition check failed"
 
     receipt_path = write_receipt(snap_dir, proposal, ts, pre_report)
     print(f"  Receipt: {receipt_path}")
