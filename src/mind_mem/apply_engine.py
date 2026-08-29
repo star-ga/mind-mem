@@ -322,6 +322,12 @@ def check_preconditions(ws):
             tail = [ln for ln in tail if ln.strip() and not ln.strip().startswith(noise)]
             if tail:
                 why += " | stderr: " + " / ".join(tail[-4:])
+            # stdout too: the validator writes its own refusals there (e.g. the
+            # "No mind-mem.json found" path), so an empty stderr does not mean
+            # it said nothing -- it means it said it somewhere else.
+            out = [ln.strip() for ln in (result.stdout or "").strip().splitlines() if ln.strip()]
+            why += " | stdout: " + (" / ".join(out[:4]) if out else "(completely empty)")
+            why += f" | rc={result.returncode}"
             report.append(f"validate: FAIL ({why})")
             return False, report
     except Exception as e:
