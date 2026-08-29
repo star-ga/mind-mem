@@ -219,6 +219,69 @@ def test_write_block_refuses_a_status_escalation(workspace: str) -> None:
             store.write_block(_block("active"))
 
 
+#: Every spelling of "this block states no status". The block parser renders
+#: a bare ``Status:`` line as an empty LIST, which is why the third row is
+#: not redundant with the second.
+_UNSTATED = [None, "", []]
+
+
+@pytest.mark.parametrize("unstated", _UNSTATED, ids=["absent", "empty", "bare-Status-line"])
+def test_write_block_refuses_a_block_that_states_no_status(unstated: object, workspace: str) -> None:
+    """The bypass: omitting ``Status`` entirely got the content SERVED.
+
+    The write gate used to ask ``is_servable(status)`` while recall asks
+    ``is_admissible_status(status)``. They disagree on an unstated status
+    — not servable, but admissible — so an external-ingest door that
+    simply left the field off wrote a block recall then served in full.
+    No status was ever named, so there was nothing for the old check to
+    refuse. Reached through the sanctioned gate API, in three lines.
+    """
+    from mind_mem.storage import get_block_store
+
+    store = get_block_store(workspace)
+    gate = get_gate(workspace)
+    block = _block("x")
+    if unstated is None:
+        block.pop("Status")
+    else:
+        block["Status"] = unstated
+    with gate.admit_block(action="INGEST", block_id="IMP-20260829-001", content="imported text", tier=IngestTier.EXTERNAL_INGEST):
+        with pytest.raises(UngatedWriteError):
+            store.write_block(block)
+
+
+@pytest.mark.parametrize("unstated", _UNSTATED, ids=["absent", "empty", "bare-Status-line"])
+def test_an_unstated_status_is_exactly_what_recall_would_serve(unstated: object) -> None:
+    """Why the refusal above is the right shape, and not belt-and-braces.
+
+    Pins the disagreement itself: these values are NOT servable (so the
+    old write check waved them through) and ARE admissible (so recall
+    serves them). The write gate must therefore ask the reader's
+    question, and this fails the moment the two predicates drift back
+    apart.
+    """
+    from mind_mem.admissibility import is_admissible_status
+
+    assert not is_servable(unstated), "an unstated status is not servable — this is why the old check missed it"
+    assert is_admissible_status(unstated), "an unstated status IS served by recall — this is what made it a bypass"
+
+
+def test_a_withheld_minting_tier_refuses_every_status_recall_would_serve(workspace: str) -> None:
+    """The refusal tracks the READ predicate, not a hand-listed set.
+
+    ``superseded`` is not ``active``, so a servability check let it in;
+    recall serves it (demoted) all the same, which makes it an
+    escalation out of quarantine by another name.
+    """
+    from mind_mem.storage import get_block_store
+
+    store = get_block_store(workspace)
+    gate = get_gate(workspace)
+    with gate.admit_block(action="INGEST", block_id="IMP-20260829-001", content="imported text", tier=IngestTier.EXTERNAL_INGEST):
+        with pytest.raises(UngatedWriteError):
+            store.write_block(_block("superseded"))
+
+
 def test_write_block_accepts_the_status_its_tier_mints(workspace: str) -> None:
     """The same write, correctly stamped, goes through."""
     from mind_mem.storage import get_block_store

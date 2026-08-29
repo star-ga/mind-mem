@@ -58,7 +58,7 @@ from ._recall_reranking import llm_rerank, rerank_hits
 from ._recall_scoring import bm25f_score_terms, build_xref_graph, compute_weighted_tf, date_score
 from ._recall_temporal import apply_temporal_filter, resolve_time_reference
 from ._recall_tokenization import tokenize
-from .admissibility import admit_corpus, admit_leg, is_admissible_status, workspace_release_ids
+from .admissibility import admit_corpus, admit_leg, is_admissible_status, live_statuses, with_live_statuses, workspace_release_ids
 from .block_maturity import apply_min_maturity_filter as _apply_min_maturity_filter
 from .block_parser import chunk_block, deduplicate_chunks, get_active, parse_file
 from .block_provenance import PROVENANCE_FIELD_NAMES
@@ -489,6 +489,16 @@ def _withhold_inadmissible(
     Fail-closed: with no workspace to resolve releases against, a
     non-servable item is dropped rather than surfaced.
     """
+    # The indexed dispatch paths hand us hits whose ``status`` came from the
+    # index, which caches it. Refresh from the corpus BEFORE the fast path —
+    # a cached ``active`` the corpus has since flipped to ``quarantined``
+    # would otherwise take that path and be served. Empty (and free) whenever
+    # the index is current or absent.
+    if workspace is not None:
+        try:
+            items = with_live_statuses(items, live_statuses(workspace), status_key=status_key)
+        except Exception as exc:  # pragma: no cover — defensive
+            _log.warning("live_status_refresh_failed", error=str(exc))
     if all(is_admissible_status(item.get(status_key)) for item in items):
         return items
     releases: frozenset[str] = frozenset()
@@ -1723,7 +1733,10 @@ def recall(
             _log.warning("cross_encoder_unavailable", error=str(e))
 
     # Stage 2.6: Hard negative penalty — demote blocks flagged as misleading
-    hard_neg_ids = get_hard_negative_ids(workspace)
+    # Pinned to the run's scoring instant, not the wall clock: this set
+    # demotes scores, so a clock here would make the same attested run
+    # return a different answer on a different day.
+    hard_neg_ids = get_hard_negative_ids(workspace, scoring_instant=_scoring_instant)
     if hard_neg_ids and deduped:
         for r in deduped:
             if r.get("_id") in hard_neg_ids:

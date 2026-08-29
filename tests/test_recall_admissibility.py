@@ -575,3 +575,124 @@ def test_the_withheld_id_set_helper_is_deleted() -> None:
     assert not hasattr(importers, "withheld_import_ids")
     assert "withheld_import_ids" not in q.__all__
     assert "withheld_import_ids" not in importers.__all__
+
+
+# ---------------------------------------------------------------------------
+# T3b — a status the index still remembers as servable
+#
+# The indexes carry ``status`` as a CACHE of block state, and the indexed
+# legs handed that cached copy to the allow-list. ``apply_engine``'s
+# governed ``set_status`` operation flips an already-indexed ``active``
+# block to ``quarantined`` in place, and an operator quarantining a leaked
+# block by editing the Markdown does the same — so the cache goes stale in
+# the fail-OPEN direction, and every indexed leg kept serving the block
+# until something reindexed. The corpus file is parametrised because the
+# first fix used ``MarkdownBlockStore.list_blocks()``, whose ``CORPUS_DIRS``
+# omit ``memory/`` — so the three drop corpora, which is exactly where
+# withheld content lives, were still served.
+# ---------------------------------------------------------------------------
+
+
+#: (corpus file, block id) — one ordinary corpus file plus all three
+#: ``memory/`` drop corpora the store's own enumeration does not cover.
+_STALE_CORPORA = [
+    ("intelligence/CONTRADICTIONS.md", "C-20260829-999"),
+    ("memory/IMPORTED.md", "IMP-20260829-001"),
+    ("memory/INBOX.md", "INBOX-20260829-001"),
+    ("memory/MESSAGES.md", "MSG-20260829-001"),
+]
+
+
+def _indexed_then_flipped(tmp_path: Any, rel: str, bid: str, *, to: str) -> str:
+    """Index the block while ``active``, then rewrite it as *to* on disk.
+
+    No reindex: this is precisely the window the cached status column
+    opens, and the state a workspace sits in between a governance
+    ``set_status`` and the next index build.
+    """
+    ws = _new_ws(tmp_path, "stale-" + bid)
+    _write(ws, "decisions/DECISIONS.md", _block(SEED, f"The {QUERY} decision", "active"))
+    _write(ws, rel, _block(bid, QUERY, "active", IngestTier="external-ingest"))
+    _config(ws, vector=False)
+    build_index(ws)
+    # Rewrite the whole file so the block's status really changes on disk.
+    with open(os.path.join(ws, rel), "w", encoding="utf-8") as handle:
+        handle.write(_block(bid, QUERY, to, IngestTier="external-ingest"))
+    return ws
+
+
+@pytest.mark.parametrize(("rel", "bid"), _STALE_CORPORA, ids=lambda v: str(v).split("/")[-1])
+def test_a_status_flipped_after_indexing_is_withheld_without_a_reindex(rel: str, bid: str, tmp_path: Any) -> None:
+    """T3b: the allow-list reads live block state, not the index's cache."""
+    ws = _indexed_then_flipped(tmp_path, rel, bid, to="quarantined")
+    cfg = _config(ws, vector=False)
+    served = _served_ids(HybridBackend(config=cfg).search(QUERY, ws, limit=10))
+    assert bid not in served, f"the index's stale 'active' served a quarantined block: {served}"
+    assert bid not in _served_ids(recall(ws, QUERY, limit=10))
+
+
+@pytest.mark.parametrize(("rel", "bid"), _STALE_CORPORA, ids=lambda v: str(v).split("/")[-1])
+def test_the_same_block_is_still_served_while_it_stays_servable(rel: str, bid: str, tmp_path: Any) -> None:
+    """Positive control for T3b.
+
+    Without it every row above passes whenever the fixture simply failed
+    to retrieve the block, which would make the whole parametrisation
+    vacuous. Flipping ``active`` -> ``active`` exercises the identical
+    rewrite-without-reindex path and MUST still serve.
+    """
+    ws = _indexed_then_flipped(tmp_path, rel, bid, to="active")
+    cfg = _config(ws, vector=False)
+    assert bid in _served_ids(HybridBackend(config=cfg).search(QUERY, ws, limit=10))
+
+
+def test_a_release_still_takes_effect_with_no_reindex(tmp_path: Any) -> None:
+    """The converse direction, which must NOT regress.
+
+    Withheld blocks stay indexed so that releasing one never forces a
+    reindex — the index anchor is attested, and a release must not churn
+    it. Resolving live status must not quietly turn a release into a
+    reindex.
+    """
+    ws = _new_ws(tmp_path, "release-no-reindex")
+    _write(ws, "decisions/DECISIONS.md", _block(SEED, f"The {QUERY} decision", "active"))
+    _write(ws, "memory/IMPORTED.md", _block("IMP-20260829-002", QUERY, "quarantined", IngestTier="external-ingest"))
+    cfg = _config(ws, vector=False)
+    build_index(ws)
+    assert "IMP-20260829-002" not in _served_ids(HybridBackend(config=cfg).search(QUERY, ws, limit=10))
+    # A governance release, and NO reindex.
+    _write(ws, "decisions/DECISIONS.md", _block("D-20260829-REL", "Release approved", "active", Releases="IMP-20260829-002"))
+    assert "IMP-20260829-002" in _served_ids(HybridBackend(config=cfg).search(QUERY, ws, limit=10))
+
+
+def test_a_current_index_resolves_no_live_statuses(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cost guard: the fresh-index path must not pay a corpus load.
+
+    ``live_statuses`` returns empty for a current index, and
+    ``with_live_statuses`` then returns its input object untouched. If
+    that fast path ever inverts, this parses the corpus on every recall
+    of every workspace, so it is pinned rather than assumed.
+    """
+    from mind_mem import admissibility as adm
+
+    ws = _new_ws(tmp_path, "fresh")
+    _write(ws, "decisions/DECISIONS.md", _block(SEED, f"The {QUERY} decision", "active"))
+    _config(ws, vector=False)
+    build_index(ws)
+
+    calls: list[str] = []
+    assert not hasattr(adm, "parse_file"), "live_statuses imports parse_file locally; a module-level name would need a different probe"
+
+    import mind_mem.block_parser as bp
+
+    original = bp.parse_file
+
+    def _counted(path: str, *a: Any, **k: Any) -> Any:
+        calls.append(path)
+        return original(path, *a, **k)
+
+    monkeypatch.setattr(bp, "parse_file", _counted)
+    assert adm.live_statuses(ws) == {}
+    assert calls == [], f"a current index parsed the corpus to decide admissibility: {calls}"
+    # And the override helper is a no-op on the empty map.
+    hits = [{"_id": SEED, "status": "active"}]
+    assert adm.with_live_statuses(hits, {}) is hits

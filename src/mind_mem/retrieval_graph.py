@@ -19,9 +19,11 @@ import hashlib
 import json
 import os
 import sqlite3
+from datetime import date, timedelta
 from typing import Any
 
 from .observability import get_logger
+from .scoring_instant import resolve_scoring_instant
 
 _log = get_logger("retrieval_graph")
 
@@ -363,15 +365,42 @@ def record_hard_negatives(
     return count
 
 
-def get_hard_negative_ids(workspace: str, *, max_age_days: int = 30) -> set[str]:
-    """Return set of block IDs flagged as hard negatives within max_age_days."""
+def get_hard_negative_ids(
+    workspace: str,
+    *,
+    max_age_days: int = 30,
+    scoring_instant: date | str | None = None,
+) -> set[str]:
+    """Block ids flagged as hard negatives within *max_age_days* of the run.
+
+    The window is measured from *scoring_instant* — the run's pinned
+    recency input — and NOT from the wall clock.
+
+    It used to read ``datetime('now')`` inside the SQL, which put a
+    hidden clock on the scoring path: this set demotes scores, so with
+    the identical corpus, config, query *and* pinned ``scoring_instant``,
+    the same recall returned a different answer once a row aged past the
+    window. That falsified the purity contract recall states
+    (``recall`` is a function of corpus, config and ``scoring_instant``)
+    and made an attested run unreplayable — the attestation binds
+    ``scoring_instant``, so replaying it must not consult a second,
+    unbound clock.
+
+    ``None`` still resolves to today in UTC, so an unpinned caller is
+    unchanged; the cutoff is just computed once, in Python, from the
+    instant the run is scoring against.
+    """
+    cutoff = resolve_scoring_instant(scoring_instant) - timedelta(days=max_age_days)
     conn = None
     try:
         conn = _connect(workspace)
         conn.executescript(_SCHEMA_SQL)
         rows = conn.execute(
-            "SELECT DISTINCT mem_id FROM hard_negatives WHERE timestamp > datetime('now', ?)",
-            (f"-{max_age_days} days",),
+            # Lexicographic comparison against the stored
+            # ``YYYY-MM-DD HH:MM:SS`` timestamps, which is why the cutoff
+            # is rendered at midnight in the same layout.
+            "SELECT DISTINCT mem_id FROM hard_negatives WHERE timestamp > ?",
+            (f"{cutoff.isoformat()} 00:00:00",),
         ).fetchall()
         return {row["mem_id"] for row in rows}
     except Exception as exc:

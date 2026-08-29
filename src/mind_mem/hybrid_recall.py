@@ -25,9 +25,9 @@ import os
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as _FutureTimeout
 from datetime import date
-from typing import Any
+from typing import Any, Mapping
 
-from .admissibility import admit_corpus, admit_leg, is_admissible_status, workspace_release_ids
+from .admissibility import admit_corpus, admit_leg, is_admissible_status, live_statuses, with_live_statuses, workspace_release_ids
 from .enums import Leg
 from .observability import get_logger, metrics, timed
 from .scoring_instant import as_utc_datetime, resolve_scoring_instant
@@ -664,7 +664,7 @@ class HybridBackend:
                 # rerank (which returns a plain list and drops ``.degraded``).
                 bm25_degraded = getattr(results, "degraded", None)
                 metrics.inc("hybrid_searches_bm25_only")
-                results = self._admit(results, workspace, leg=Leg.BM25)
+                results = self._admit(results, workspace, leg=Leg.BM25, overrides=live_statuses(workspace))
                 # v3.3.0 Tier 2: cross-encoder rerank also applies to
                 # BM25-only deployments (previously only post-fusion).
                 results = self._maybe_cross_encoder_rerank(query, results, limit)
@@ -767,8 +767,11 @@ class HybridBackend:
             # carries a worse rank than it should, so the presence of
             # withheld content stays observable through its neighbours'
             # ranks. Filtering each leg's candidates closes that channel.
-            bm25_results = self._admit(bm25_results, workspace, leg=Leg.BM25)
-            vec_results = self._admit(vec_results, workspace, leg=Leg.VECTOR)
+            # Resolved once and shared by both legs: the staleness check
+            # opens the index, so paying it per leg would double it.
+            _live = live_statuses(workspace)
+            bm25_results = self._admit(bm25_results, workspace, leg=Leg.BM25, overrides=_live)
+            vec_results = self._admit(vec_results, workspace, leg=Leg.VECTOR, overrides=_live)
 
             _log.info(
                 "hybrid_results_pre_fusion",
@@ -1080,13 +1083,30 @@ class HybridBackend:
             _log.warning("temporal_decay_failed", error=str(exc))
         return results
 
-    def _admit(self, hits: list[dict], workspace: str, *, leg: Leg) -> list[dict]:
+    def _admit(
+        self,
+        hits: list[dict],
+        workspace: str,
+        *,
+        leg: Leg,
+        overrides: Mapping[str, str] | None = None,
+    ) -> list[dict]:
         """Withhold everything recall may not serve from one leg's candidates.
 
         Returns the input object untouched when every candidate is
         admissible — the common case — so an unwithheld workspace pays
         nothing, not even the release lookup.
+
+        *overrides* carries the live statuses resolved once per request
+        (:func:`~mind_mem.admissibility.live_statuses`) and is applied
+        BEFORE the all-admissible fast path, not after: an index-cached
+        ``active`` that the corpus has since flipped to ``quarantined``
+        would otherwise take the fast path and be served. Empty whenever
+        the index is current, which is what keeps that ordering free.
         """
+        if overrides is None:
+            overrides = live_statuses(workspace)
+        hits = with_live_statuses(hits, overrides)
         if all(is_admissible_status(hit.get("status")) for hit in hits):
             return hits
         try:

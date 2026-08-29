@@ -216,14 +216,35 @@ def require_admission(block_id: str, *, status: object = None) -> AdmissionRecei
 
 
 def _require_status_within_tier(receipt: AdmissionReceipt, block_id: str, status: object) -> None:
-    """Refuse a servable status under a tier that cannot mint one."""
+    """Refuse, under a withheld-minting tier, anything recall would serve.
+
+    The predicate is :func:`~mind_mem.admissibility.is_admissible_status`
+    — the **same** one the recall allow-list applies — and using it here
+    is the whole point. This check used to ask ``is_servable(status)``,
+    which is a different question about the same value, and the two
+    disagreed on an **unstated** status: ``is_servable(None)`` is False,
+    so the write was let through, while ``is_admissible_status(None)`` is
+    True, so recall served it. An external-ingest door that simply
+    omitted the ``Status`` field therefore got its content served — a
+    complete bypass of the quarantine, reached through the sanctioned
+    gate API and without ever naming a status the gate could refuse.
+
+    Asking the reader's question at the writer's door closes it by
+    construction: under a tier that mints a withheld status, a block must
+    arrive in a state recall will not serve. Moving between two withheld
+    statuses is still not an escalation, and a carrying tier
+    (``INITIAL_STATUS`` row ``None``) still constrains nothing.
+    """
+    from .admissibility import is_admissible_status
+
     row = INITIAL_STATUS[receipt.tier]
     if row is None or is_servable(row):
         return
-    if is_servable(status):
+    if is_admissible_status(status):
+        served = "a servable status" if is_servable(status) else "no status at all"
         raise UngatedWriteError(
             f"block {block_id!r} was admitted under ingest tier {receipt.tier.value!r}, "
-            f"which mints {row.value!r}, but the write carries a servable status "
-            f"({status!r}). Release it through a governance proposal instead of "
-            "stamping it at the door."
+            f"which mints {row.value!r}, but the write carries {served} "
+            f"({status!r}) and recall would serve it. Stamp {row.value!r} at the "
+            "door and release it through a governance proposal instead."
         )

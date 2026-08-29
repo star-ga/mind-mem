@@ -81,8 +81,10 @@ __all__ = [
     "admit_leg",
     "count_unresolved",
     "is_admissible_status",
+    "live_statuses",
     "release_ids",
     "unresolved_count",
+    "with_live_statuses",
     "workspace_release_ids",
 ]
 
@@ -349,6 +351,134 @@ def unresolved_count() -> int | float:
 #: file. Any governance apply rewrites it and therefore changes the key, so a
 #: release takes effect on the next recall without a reindex.
 _RELEASE_CACHE: dict[tuple[str, int, int], frozenset[str]] = {}
+
+
+#: Single-slot cache keyed on the identity of every corpus file the live
+#: status map was built from, so a workspace whose files have not moved
+#: since the last resolution re-reads nothing.
+_LIVE_STATUS_CACHE: dict[tuple[tuple[str, int, int], ...], dict[str, str]] = {}
+
+
+def live_statuses(workspace: str) -> Mapping[str, str]:
+    """``id -> live status``, or empty when the index's cache can be trusted.
+
+    The FTS/vector indexes carry ``status`` as a **cache** of block state,
+    and the indexed legs hand that cached copy straight to the allow-list.
+    A cache is only as good as its freshness, and this one goes stale in
+    the **fail-open** direction: ``apply_engine``'s governed ``set_status``
+    operation flips an already-indexed ``active`` block to ``quarantined``
+    in place, and an operator quarantining a block by editing the Markdown
+    does the same. Until something reindexes, every indexed leg still reads
+    ``active`` — and serves it. An admission decision read from a stale
+    cache is not an admission decision.
+
+    Release is deliberately NOT exposed to this: it is resolved live from
+    ``decisions/DECISIONS.md`` by :func:`workspace_release_ids`, so a
+    release still takes effect with no reindex and the attested index
+    anchor stays stable across one.
+
+    Returns empty — costing one staleness check and no corpus load — when
+    either the index does not exist (nothing cached, so the hits came from
+    a live parse already) or it is current (the cached column agrees with
+    the corpus by construction).
+    """
+    import os
+
+    from .sqlite_index import DB_REL_PATH, is_stale
+
+    if not os.path.isfile(os.path.join(workspace, DB_REL_PATH)):
+        return {}
+    try:
+        if not is_stale(workspace):
+            return {}
+    except Exception as exc:  # pragma: no cover — defensive
+        # Unreadable index: resolve live rather than trust it. Fail-closed.
+        _log.warning("index_staleness_check_failed", error=str(exc))
+
+    from ._recall_constants import CORPUS_FILES
+
+    # CORPUS_FILES, not ``MarkdownBlockStore.list_blocks()``. The two
+    # disagree, and the difference is exactly the blocks that matter here:
+    # the store enumerates ``CORPUS_DIRS`` (decisions/tasks/entities/
+    # intelligence) while CORPUS_FILES also names the three ``memory/``
+    # drop corpora — IMPORTED, INBOX, MESSAGES — which is where withheld
+    # content lives and which the indexer and the scan leg both read. A
+    # status map built off the store would silently never cover them.
+    paths = [os.path.join(workspace, rel) for rel in sorted(CORPUS_FILES.values())]
+    paths = [path for path in paths if os.path.isfile(path)]
+    key = tuple(_file_identity(path) for path in paths)
+    cached = _LIVE_STATUS_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    statuses = _parse_statuses(paths)
+    _LIVE_STATUS_CACHE.clear()
+    _LIVE_STATUS_CACHE[key] = statuses
+    _log.info("live_statuses_resolved", blocks=len(statuses))
+    metrics.inc("recall_live_status_resolutions")
+    return statuses
+
+
+def _parse_statuses(paths: Sequence[str]) -> dict[str, str]:
+    """``id -> Status`` over *paths*, skipping whatever will not parse.
+
+    A file that cannot be read contributes nothing rather than raising:
+    the caller is deciding admissibility, and an unreadable corpus file
+    must not take recall down. Its blocks simply keep whatever status
+    the leg already carried, which the allow-list then judges.
+    """
+    from .block_parser import parse_file
+
+    statuses: dict[str, str] = {}
+    for path in paths:
+        try:
+            blocks = parse_file(path)
+        except (OSError, UnicodeDecodeError, ValueError):  # pragma: no cover
+            continue
+        for block in blocks:
+            bid = _block_id(block)
+            if bid:
+                raw = block.get("Status")
+                statuses[bid] = raw if isinstance(raw, str) else ""
+    return statuses
+
+
+def _file_identity(path: str) -> tuple[str, int, int]:
+    """``(realpath, mtime_ns, size)`` — the cache key for one corpus file."""
+    import os
+
+    try:
+        stat = os.stat(path)
+    except OSError:  # pragma: no cover — defensive
+        return (path, 0, 0)
+    return (os.path.realpath(path), stat.st_mtime_ns, stat.st_size)
+
+
+def with_live_statuses(
+    hits: list[dict],
+    overrides: Mapping[str, str],
+    *,
+    status_key: str = "status",
+) -> list[dict]:
+    """*hits* with every index-cached status replaced by the live one.
+
+    Returns the input object untouched when *overrides* is empty, so the
+    fresh-index path — the common one — copies nothing.
+
+    A hit the live map does not name is left alone rather than dropped:
+    resolving it is :func:`admit_leg`'s job, and an id the corpus cannot
+    answer for is handled as an unresolvable id, not as a status change.
+    """
+    if not overrides:
+        return hits
+    refreshed: list[dict] = []
+    for hit in hits:
+        bid = _block_id(hit)
+        item = dict(hit)
+        if bid in overrides:
+            item[status_key] = overrides[bid]
+        refreshed.append(item)
+    return refreshed
 
 
 def workspace_release_ids(workspace: str) -> frozenset[str]:

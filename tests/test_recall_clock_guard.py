@@ -28,8 +28,10 @@ asserts the census stayed empty.
 
 from __future__ import annotations
 
+import ast
 import json
 import os
+import re
 from datetime import date, datetime, timezone
 
 import pytest
@@ -318,3 +320,156 @@ def test_calibration_window_is_the_instants_window_not_todays(seeded_workspace) 
     outside = mgr.get_block_weight(BLOCKS[0][0], now=datetime(2027, 8, 27, tzinfo=timezone.utc))
     assert inside != outside, "the seeded feedback is not inside exactly one of the two windows"
     assert outside == 1.0, "feedback outside the window still counted"
+
+
+# ---------------------------------------------------------------------------
+# The blind spot: a clock the profiler cannot see
+#
+# The census above observes ``datetime.now`` / ``date.today`` executed in
+# PYTHON. A clock read inside a SQL string never crosses that boundary —
+# SQLite evaluates ``datetime('now')`` in C — so every test above passed
+# while ``get_hard_negative_ids`` selected its demotion set with
+# ``WHERE timestamp > datetime('now', ?)``. That set multiplies scores on
+# the scoring path, so with an identical corpus, config, query AND pinned
+# ``scoring_instant`` the same recall returned a different answer once a
+# row aged past the window — the exact property this file exists to deny.
+#
+# A runtime observer cannot close this; the read is invisible to it by
+# construction. So the guard here is a source scan over the scoring path's
+# own eager import closure — no module list to keep in sync — and every
+# surviving site must be named below with the reason it does not move a
+# served answer. A new one fails the build.
+# ---------------------------------------------------------------------------
+
+_SQL_CLOCK = re.compile(
+    r"datetime\s*\(\s*'now'|date\s*\(\s*'now'|CURRENT_TIMESTAMP|CURRENT_DATE|strftime\s*\(\s*'[^']*'\s*,\s*'now'",
+    re.IGNORECASE,
+)
+
+#: SQL clock reads allowed to survive on the scoring path, each with the
+#: reason it cannot move a served answer. A read NOT listed here fails.
+#: ``retrieval_diagnostics`` is an operator report, not a retrieval leg;
+#: the two ``DELETE`` statements are a retention policy that runs in
+#: ``log_retrieval`` — after the answer is fixed — where measuring a data
+#: lifecycle against the wall clock is the correct behaviour.
+_ALLOWED_SQL_CLOCKS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("retrieval_graph.py", "log_retrieval"),
+        ("retrieval_graph.py", "retrieval_diagnostics"),
+    }
+)
+
+
+def _scoring_path_modules() -> set[str]:
+    """Every mind_mem module eagerly imported from the recall core.
+
+    Eager only: a function-local import is not on the import path the
+    scoring code actually executes at module load, and following those
+    reaches essentially the whole package through ``api.rest``.
+    """
+    root = os.path.dirname(_recall_core.__file__)
+    seen: set[str] = set()
+    stack = ["mind_mem._recall_core"]
+    while stack:
+        name = stack.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        path = os.path.join(root, name.replace("mind_mem.", "").replace(".", os.sep) + ".py")
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8") as handle:
+            tree = ast.parse(handle.read())
+        for node in tree.body:
+            if isinstance(node, ast.Import):
+                stack.extend(a.name for a in node.names if a.name.startswith("mind_mem"))
+            elif isinstance(node, ast.ImportFrom):
+                if node.level:
+                    if node.module:
+                        stack.append("mind_mem." + node.module)
+                elif node.module and node.module.startswith("mind_mem"):
+                    stack.append(node.module)
+    return seen
+
+
+def _enclosing_function(tree: ast.AST, lineno: int) -> str:
+    best, best_line = "<module>", -1
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.lineno <= lineno and node.lineno > best_line:
+                best, best_line = node.name, node.lineno
+    return best
+
+
+def test_no_sql_clock_read_decides_a_served_answer() -> None:
+    """T-SQL-clock: the scoring path reads no clock inside SQL either."""
+    root = os.path.dirname(_recall_core.__file__)
+    offenders: list[str] = []
+    for module in sorted(_scoring_path_modules()):
+        path = os.path.join(root, module.replace("mind_mem.", "").replace(".", os.sep) + ".py")
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8") as handle:
+            source = handle.read()
+        tree = ast.parse(source)
+        rel = os.path.relpath(path, root)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
+                continue
+            text = node.value
+            # A DDL default (``timestamp TEXT DEFAULT (datetime('now'))``)
+            # stamps a row at write time and is correct; only a statement
+            # that SELECTs or filters can decide what recall serves.
+            if not _SQL_CLOCK.search(text) or not re.search(r"\bSELECT\b|\bWHERE\b", text, re.IGNORECASE):
+                continue
+            func = _enclosing_function(tree, node.lineno)
+            if (rel, func) in _ALLOWED_SQL_CLOCKS:
+                continue
+            offenders.append(f"{rel}:{node.lineno} in {func}(): {' '.join(text.split())[:80]}")
+    assert not offenders, "SQL-level clock read on the scoring path:\n  " + "\n  ".join(offenders)
+
+
+def test_the_sql_clock_scan_can_actually_see_one() -> None:
+    """Negative control: the scan must fail on a planted read.
+
+    Without this the test above passes whenever the regex, the closure
+    walk or the SELECT filter quietly stopped matching anything.
+    """
+    tree = ast.parse("def f():\n    c.execute(\"SELECT x FROM t WHERE ts > datetime('now', '-30 days')\")\n")
+    found = [
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Constant)
+        and isinstance(n.value, str)
+        and _SQL_CLOCK.search(n.value)
+        and re.search(r"\bSELECT\b|\bWHERE\b", n.value, re.IGNORECASE)
+    ]
+    assert found, "the SQL-clock scan no longer detects a planted clock read"
+    assert _enclosing_function(tree, found[0].lineno) == "f"
+    assert _scoring_path_modules(), "the scoring-path closure walk returned nothing"
+
+
+def test_the_hard_negative_window_is_the_instants_window_not_todays(tmp_path) -> None:
+    """The demotion set is a function of the pinned instant.
+
+    This is the product form of the scan above, and it failed before the
+    window was pinned: ``scoring_instant`` had no effect on the set at
+    all, so two runs an operator could not tell apart returned different
+    answers on different days.
+    """
+    from mind_mem.retrieval_graph import _SCHEMA_SQL, _connect, get_hard_negative_ids
+
+    ws = str(tmp_path)
+    conn = _connect(ws)
+    conn.executescript(_SCHEMA_SQL)
+    conn.execute(
+        "INSERT INTO hard_negatives (mem_id, query_hash, timestamp) VALUES (?, ?, ?)",
+        ("D-20260601-001", "qh", "2026-06-01 12:00:00"),
+    )
+    conn.commit()
+    conn.close()
+
+    inside = get_hard_negative_ids(ws, scoring_instant=date(2026, 6, 10))
+    outside = get_hard_negative_ids(ws, scoring_instant=date(2026, 8, 29))
+    assert inside == {"D-20260601-001"}, "the row is not inside the window it should be inside"
+    assert outside == set(), "the row survived a window that closed 60 days before it"
