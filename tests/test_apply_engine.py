@@ -26,6 +26,32 @@ from mind_mem.apply_engine import (
 )
 
 
+def _bash_actually_works() -> bool:
+    """True only if `bash` runs a command, not merely if the name resolves.
+
+    On a Windows runner a bare `bash` resolves to C:\\Windows\\System32\\bash.exe
+    -- the WSL launcher -- which, with no distribution installed, prints
+    "Windows Subsystem for Linux has no installed distributions." and exits 1.
+    shutil.which("bash") would say yes and be wrong, so this actually runs it.
+
+    The two tests guarded by this exercise the bash SHIM specifically; with no
+    usable bash they cannot test anything, so skipping is honest rather than a
+    mask. Nothing else in the suite needs bash -- check_preconditions calls the
+    validator module directly precisely because of this.
+    """
+    try:
+        r = subprocess.run(["bash", "-c", "echo mm_bash_ok"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return r.returncode == 0 and "mm_bash_ok" in (r.stdout or "")
+
+
+_NEEDS_BASH = unittest.skipUnless(
+    _bash_actually_works(),
+    "no usable bash (on Windows a bare `bash` is the WSL launcher)",
+)
+
+
 class TestSafeResolve(unittest.TestCase):
     def test_normal_path(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
@@ -342,6 +368,7 @@ class TestFingerprintDedup(unittest.TestCase):
 class TestFreshInitValidate(unittest.TestCase):
     """Verify fresh workspace passes validate.sh with 0 issues."""
 
+    @_NEEDS_BASH
     def test_fresh_init_passes_validate(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
             from mind_mem.init_workspace import init
@@ -413,6 +440,7 @@ class TestFingerprintPayload(unittest.TestCase):
 class TestValidateUninitWorkspace(unittest.TestCase):
     """validate.sh should handle uninitialized workspaces gracefully."""
 
+    @_NEEDS_BASH
     def test_rejects_uninitialized_workspace(self):
         """Running on a dir with no mind-mem.json should exit with clear error."""
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as ws:
