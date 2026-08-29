@@ -93,8 +93,22 @@ else
     fi
 fi
 
+# LAST RESORT: behave exactly as this shim did before the probe existed, i.e.
+# `exec python3 -m mind_mem.validate_py`. The probe (`python -c 'import
+# mind_mem'`) is a STRICTER test than the real invocation, and on Windows it
+# rejected an interpreter that ran the validator perfectly well -- validate.sh
+# then produced no TOTAL line and every governed apply was refused with
+# "Precondition check failed". Falling back to the historical behaviour makes
+# this shim never worse than the one-liner it replaced: the probe can only ever
+# UPGRADE the choice, never veto the only candidate.
 if [[ -z "$PY" ]]; then
-    echo "[mind-mem][error] no interpreter on PATH can 'import mind_mem'." >&2
+    for cand in python3 python; do
+        if command -v "$cand" >/dev/null 2>&1; then PY="$cand"; break; fi
+    done
+fi
+
+if [[ -z "$PY" ]]; then
+    echo "[mind-mem][error] no python interpreter found on PATH." >&2
     echo "    Set MIND_MEM_PYTHON=/path/to/python to point at the right one." >&2
     exit 127
 fi
