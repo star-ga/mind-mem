@@ -13,15 +13,25 @@ count the resulting registrations on a stub FastMCP. This catches
 both the per-domain tool modules under ``mcp/tools/*`` and the
 historical monolith in ``mcp_server.py``.
 
+Docs drift is the same bug one layer out. On 2026-08-28 the code count was
+95 and CI enforced it, yet the README *badge* said 89, twenty-odd doc
+locations said 89, and CLAUDE.md said 84 in one place and 95 in another.
+``--check 95`` could not catch any of that, because it only ever compared
+the code against a number passed on the command line. ``--check-docs``
+closes that hole: it scans the public surfaces for any claim about the tool
+count and fails on every one that disagrees with the discovered value.
+
 Usage:
     python scripts/count_mcp_tools.py            # print the count
     python scripts/count_mcp_tools.py --check N  # fail if != N
+    python scripts/count_mcp_tools.py --check-docs  # fail on doc/badge drift
 """
 
 from __future__ import annotations
 
 import argparse
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -71,6 +81,88 @@ def count_tools() -> int:
     return total
 
 
+# Surfaces a reader can reach: the shipped README, the docs tree, and the
+# in-repo agent brief. A claim in any of them is a public claim.
+_DOC_SURFACES = ("README.md", "CLAUDE.md", "docs/**/*.md")
+
+# "95 MCP tools" / "95 tools" (prose), and "MCP_tools-95" / "Tools: 95"
+# (shields.io badge label plus its alt text). Deliberately narrow: a bare
+# integer near the word "tool" is too noisy to gate on.
+# NOTE: the badge pattern must NOT be anchored with \b before "tools" -- the
+# real badge reads "MCP_tools-89", and an underscore is a word character, so
+# \btools- can never match it. That exact mistake let the badge drift to 89
+# while the prose said 95.
+_CLAIM_RE = re.compile(r"\b(\d{2,3})\s+(?:MCP\s+)?tools?\b", re.IGNORECASE)
+_BADGE_RE = re.compile(r"tools?[-_:]\s*(\d{2,3})\b", re.IGNORECASE)
+
+# A claim that names the release it describes ("19 MCP tools at v1.x") is a
+# historical statement, not a claim about now.
+_LINE_VERSIONED = re.compile(r"\bv\d+(\.\d+|\.x)", re.IGNORECASE)
+
+# Historical records must keep their original numbers or they stop being
+# records: a release note that retroactively claims today's count is a lie
+# about the release it documents. Only LIVING surfaces -- the ones a reader
+# consults to learn what is true now -- are gated.
+#
+# Recognised as historical: the changelog, anything carrying a version stamp
+# in its filename, and the record-type suffixes below.
+_EXEMPT_NAMES = ("CHANGELOG.md", "docs/audit_response.md", "docs/security-audit-sow.md")
+_EXEMPT_PREFIXES = ("docs/architecture_audit_", "docs/design/", "docs/review-docs-")
+_EXEMPT_SUFFIXES = (
+    "-release-notes.md",
+    "-implementation-plan.md",
+    "-decomposition-plan.md",
+    "-self-audit.md",
+    "-training-recipe.md",
+    "-surface-reduction.md",
+)
+# A version stamp anywhere in the filename (v3.2.0, roadmap-v4, 4b-v2) means the
+# document describes a specific past release.
+_VERSION_STAMP = re.compile(r"(^|[-/])v\d+(\.\d+)*", re.IGNORECASE)
+# A date stamp in the filename (2026_04, 2026-04-13) also means "record".
+_DATE_STAMP = re.compile(r"\d{4}[-_]\d{2}")
+
+
+def _is_historical(rel: str) -> bool:
+    if rel in _EXEMPT_NAMES:
+        return True
+    if any(rel.startswith(x) for x in _EXEMPT_PREFIXES):
+        return True
+    if any(rel.endswith(x) for x in _EXEMPT_SUFFIXES):
+        return True
+    return bool(_VERSION_STAMP.search(rel) or _DATE_STAMP.search(rel))
+
+
+def _doc_files() -> list[Path]:
+    root = _project_root()
+    out: list[Path] = []
+    for pattern in _DOC_SURFACES:
+        out.extend(sorted(root.glob(pattern)))
+    return [p for p in out if not _is_historical(p.relative_to(root).as_posix())]
+
+
+def check_docs(expected: int) -> list[str]:
+    """Return one message per doc location whose tool-count claim is stale."""
+    root = _project_root()
+    bad: list[str] = []
+    for path in _doc_files():
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:  # pragma: no cover - defensive
+            print(f"WARN: could not read {path}: {exc}", file=sys.stderr)
+            continue
+        rel = path.relative_to(root).as_posix()
+        for lineno, line in enumerate(text.splitlines(), 1):
+            if _LINE_VERSIONED.search(line):
+                continue
+            for regex in (_CLAIM_RE, _BADGE_RE):
+                for match in regex.finditer(line):
+                    found = int(match.group(1))
+                    if found != expected:
+                        bad.append(f"{rel}:{lineno}: claims {found} tools, actual is {expected} -- {match.group(0)!r}")
+    return bad
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -78,6 +170,11 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=None,
         help="Expected count; non-zero exit if the discovered count differs.",
+    )
+    parser.add_argument(
+        "--check-docs",
+        action="store_true",
+        help="Fail if any README/docs/CLAUDE.md tool-count claim or badge is stale.",
     )
     parser.add_argument(
         "--verbose",
@@ -94,6 +191,17 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
+    if args.check_docs:
+        stale = check_docs(n)
+        if stale:
+            print(
+                f"::error::mind-mem doc tool-count drift: {len(stale)} stale claim(s).",
+                file=sys.stderr,
+            )
+            for msg in stale:
+                print(f"  {msg}", file=sys.stderr)
+            return 1
+        print(f"docs: all tool-count claims agree with {n}")
     if args.verbose:
         names: list[str] = []
         for path in _tool_source_files():

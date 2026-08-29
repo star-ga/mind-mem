@@ -120,11 +120,19 @@ jobs:
         run: python src/mind_mem/check_version.py
       - name: Check MCP tool count consistency
         # Single source of truth for the registered MCP tool count.
-        # Fails the build if the discovered count drifts from the
-        # number documented in CLAUDE.md / README (90 mcp.tool(...)
-        # registrations; 89 distinct live names). Bump the expected
-        # value here when tools are added/removed.
+        # Fails the build if the discovered count drifts from the expected
+        # value. Bump the expected value here when tools are added/removed.
         run: python scripts/count_mcp_tools.py --check 95
+      - name: Check documented tool count matches the code
+        # --check 95 above compares the CODE against a number written on this
+        # line; it cannot see the docs. On 2026-08-28 that gap had the README
+        # badge reading 89 while the prose beside it read 95, with sixteen more
+        # doc locations stale. This step scans every living surface (README,
+        # CLAUDE.md, docs/**) and fails on any tool-count claim or badge that
+        # disagrees with the discovered count. Version- and date-stamped
+        # records are exempt: a release note must keep the number that was
+        # true for its release.
+        run: python scripts/count_mcp_tools.py --check-docs
 
   author-identity:
     # Catches the leak path that no local hook can: a commit made in another
