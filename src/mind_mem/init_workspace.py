@@ -388,8 +388,7 @@ def init(
                     _marker = 'PY_BAKED="@MIND_MEM_PYTHON@"'
                     if _marker in _shim:
                         with open(dst, "w", encoding="utf-8") as fh:
-                            fh.write(_shim.replace(
-                                _marker, f'PY_BAKED="{sys.executable}"', 1))
+                            fh.write(_shim.replace(_marker, f'PY_BAKED="{sys.executable}"', 1))
                 except OSError:
                     # Never fail an init over the convenience substitution -- the
                     # fallback chain in the shim covers this case.
