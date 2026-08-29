@@ -304,7 +304,12 @@ def scan_tree_for_memory_pointers(tree: str) -> tuple[str, ...]:
             except (OSError, UnicodeDecodeError):
                 continue
             if _MEMORY_POINTER.search(text):
-                found.append(os.path.relpath(path, tree))
+                # POSIX separators, always. This list is PUBLISHED in the run
+                # artifact and compared across arms and across machines, so an
+                # os-native separator would make the same tree produce a
+                # different report on Windows than on Linux -- and a benchmark
+                # whose output depends on the host it ran on is not a benchmark.
+                found.append(os.path.relpath(path, tree).replace(os.sep, "/"))
     return tuple(sorted(found))
 
 

@@ -63,7 +63,12 @@ def snapshot_tree(tree: str) -> dict[str, str]:
         dirs[:] = sorted(d for d in dirs if d not in _IGNORED_DIRS)
         for name in sorted(files):
             path = os.path.join(root, name)
-            rel = os.path.relpath(path, tree)
+            # POSIX separators: `rel` is a KEY in the returned snapshot, and
+            # changed_paths() publishes those keys into the run artifact. An
+            # os-native separator would make the same edit read as a different
+            # path on Windows than on Linux, and would not match PROTECTED_FILES
+            # (is_protected normalises, but the published list would not).
+            rel = os.path.relpath(path, tree).replace(os.sep, "/")
             try:
                 with open(path, "rb") as handle:
                     digests[rel] = hashlib.sha256(handle.read()).hexdigest()
