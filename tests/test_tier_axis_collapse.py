@@ -92,14 +92,46 @@ def test_ra0_nothing_imports_a_deleted_ladder() -> None:
     assert not offenders, f"deleted ladders still named in {offenders}"
 
 
+def _code_tokens(path: pathlib.Path) -> set[str]:
+    """Identifiers and non-docstring string literals in *path*.
+
+    Prose may quote a ruling; CODE may not reach the ladder. A raw substring
+    scan cannot tell an explanation from a query, and forcing the explanation
+    out of the file to satisfy the scan is the wrong trade — the served-set
+    ledger states the no-auto-promotion ruling in its own docstring precisely
+    so the next author finds it.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    docstrings = {
+        ast.get_docstring(node, clean=False)
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    tokens: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            tokens.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            tokens.add(node.attr)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value not in docstrings:
+            tokens.update(node.value.split())
+            tokens.add(node.value)
+    return tokens
+
+
 def test_ra0_one_ladder_means_one_tier_store() -> None:
     """``block_recall_tier`` was the second ladder's table; it has no writer left.
 
     Leaving readers of a table nothing creates is not a collapse — it is a
-    permanently-degraded branch that reads like a feature.
+    permanently-degraded branch that reads like a feature. And the surviving
+    ladder's own table stays inside the module that owns it, so there is one
+    place a tier is written rather than four.
     """
-    readers = [p.relative_to(SRC).as_posix() for p in sorted(SRC.rglob("*.py")) if "block_recall_tier" in p.read_text(encoding="utf-8")]
+    modules = {path.relative_to(SRC).as_posix(): _code_tokens(path) for path in sorted(SRC.rglob("*.py"))}
+    assert "memory_tiers.py" in modules, "scan missed the surviving ladder"
+
+    readers = sorted(name for name, tokens in modules.items() if any("block_recall_tier" in t for t in tokens))
     assert readers == [], f"block_recall_tier has no writer but is still read by {readers}"
 
-    owners = {p.relative_to(SRC).as_posix() for p in sorted(SRC.rglob("*.py")) if "block_tier_meta" in p.read_text(encoding="utf-8")}
+    owners = {name for name, tokens in modules.items() if any("block_tier_meta" in t for t in tokens)}
     assert owners == {"memory_tiers.py"}, f"the surviving ladder's table is touched outside it: {owners}"

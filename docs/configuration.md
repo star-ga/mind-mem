@@ -753,6 +753,49 @@ boost had no effect to preserve.
 
 ---
 
+## Served-Set Ledger (RA.1)
+
+An append-only record of *what was served*, so a later outcome can be credited
+to a **run** rather than correlated against a query string.
+
+**Default OFF.** Opt in per workspace:
+
+```json
+{
+  "served_ledger": {
+    "enabled": true
+  }
+}
+```
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `served_ledger.enabled` | boolean | `false` | Absent means off; only a literal `true` turns it on. |
+
+When on, every `recall` appends one row to `.mind-mem-ledger/served.jsonl`,
+written **after** `recall()` returns. Each row carries exactly nine fields —
+`seq`, `prev_row_hash`, `run_id`, `query_hash`, `served_digest`, `ids`,
+`pipeline_hash`, `index_anchor`, `scoring_instant` — and no verdict, no
+attestation, no score. `.mind-mem-ledger/served.head` seals the last row, which
+no successor binds yet.
+
+`run_id` is `sha256("MM_RUN_v1\0" || query_hash || served_digest ||
+pipeline_hash)`. It names **the answer**, not the occurrence: the same question
+answered with the same blocks in the same order under the same pipeline gets
+the same id on any host on any day, so two rows sharing a `run_id` are two
+servings of one answer. `seq` is the unique key.
+
+Verify a workspace's chain with `mind_mem.served_ledger.verify_served_chain`,
+which reads no clock and names the first row that cannot be trusted.
+
+Nothing on the recall scoring path may read this file. Serve counts are
+derivable from it, and that is only safe while they cannot flow back into a
+ranking; the rule is enforced by an import-graph test, not by convention.
+Tier promotion is likewise not a consequence of being served — it goes through
+a proposal, or a `plan_consolidation` output that `approve_apply` executes.
+
+---
+
 ## Observability Settings
 
 Requires the optional `otel` extra: `pip install "mind-mem[otel]"`.

@@ -279,7 +279,7 @@ def test_t10_two_processes_with_different_hash_seeds_agree_byte_for_byte() -> No
 
 #: Modules that persist per-run retrieval outcomes, or anchor them. A read
 #: from one of these into scoring is credibility feeding back on itself.
-LEDGER_MODULES = frozenset({"retrieval_graph", "ledger_anchor", "usage_meter"})
+LEDGER_MODULES = frozenset({"retrieval_graph", "ledger_anchor", "usage_meter", "served_ledger"})
 
 #: Every ledger symbol ``_recall_core`` is allowed to name, and why. WRITE
 #: entries record an outcome after the ranking is fixed and cannot feed it.
@@ -351,6 +351,76 @@ def test_t12_the_canonical_encodings_are_a_leaf() -> None:
     """
     assert _eager_imports("recall_digests") == set()
     assert _eager_closure("recall_digests") == {"recall_digests": "recall_digests"}
+
+
+def test_t12_the_scoring_path_cannot_reach_the_served_set_ledger() -> None:
+    """The rail, stated as the one edge RA.1 must never create.
+
+    Not closure-emptiness: ``_recall_core`` already reaches ``retrieval_graph``
+    and pulls prior-run state out of it, a live breach this bump does not own
+    (see the ratchet below). What is enforceable — and what the served-set
+    ledger must never join — is that the ledger RA.1 adds stays unreachable.
+    Frequency-of-serving is derivable from any served-set ledger, and that was
+    accepted; it is harmless only while it cannot flow backward into scoring.
+
+    Transitive, so a two-hop edge counts. Guarded against vacuity by a
+    known-true positive: if the walker cannot see the ledger edge that DOES
+    exist, its silence about the one that must not is worth nothing.
+    """
+    reached = _eager_closure("_recall_core")
+    assert "retrieval_graph" in reached, "walker found no ledger edge at all — it is not walking"
+    assert "served_ledger" not in reached, f"the scoring path reaches served_ledger via {reached.get('served_ledger')}"
+
+
+_RAIL_CHILD = """
+import json, sys
+import mind_mem.recall  # noqa: F401  — the scoring path, imported as a consumer would
+import mind_mem._recall_core  # noqa: F401
+import mind_mem.recall_attestation  # noqa: F401
+print(json.dumps(sorted(m for m in sys.modules if m.startswith("mind_mem."))))
+"""
+
+
+def test_t12_importing_the_scoring_path_does_not_load_a_ledger_module() -> None:
+    """The rail at RUNTIME, in a fresh interpreter — not only in the AST.
+
+    A static walk sees ``import`` statements. It does not see ``importlib``,
+    a plugin hook, or a re-export that pulls a module in sideways. Loading the
+    scoring path in a clean process and reading ``sys.modules`` catches all
+    three, and the two checks disagree only when something interesting is
+    happening.
+    """
+    env = {**os.environ, "PYTHONPATH": str(pathlib.Path(mind_mem.__file__).parent.parent)}
+    out = subprocess.run(
+        [sys.executable, "-c", _RAIL_CHILD],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=env,
+        check=True,
+    ).stdout
+    loaded = set(json.loads(out))
+    assert "mind_mem.recall_attestation" in loaded, "child did not import the scoring path — the check is vacuous"
+    for ledger in LEDGER_MODULES:
+        if ledger == "retrieval_graph":
+            continue  # the pinned, pre-existing breach; see the ratchet below
+        assert f"mind_mem.{ledger}" not in loaded, f"{ledger} was loaded by importing the scoring path"
+
+
+def test_t12_the_served_set_ledger_owns_nothing_the_attestation_owns() -> None:
+    """One-way ownership: the ledger imports the encodings, never the record.
+
+    ``recall_attestation`` re-exports nothing to the ledger — it must reach
+    ``served_set_digest`` at its owner, ``recall_digests``. Importing it
+    through the attestation module would put the attestation on the ledger's
+    import path and make the direction ambiguous, which is the whole reason
+    the encodings were split into a leaf.
+    """
+    source = (pathlib.Path(mind_mem.__file__).parent / "served_ledger.py").read_text(encoding="utf-8")
+    modules = {node.module for node in ast.walk(ast.parse(source)) if isinstance(node, ast.ImportFrom) and node.module}
+    assert "recall_digests" in modules, "the ledger must reuse the canonical served-set encoding"
+    assert "recall_attestation" not in modules
+    assert "recall_attestation" not in _eager_closure("served_ledger")
 
 
 def test_t12_the_scoring_path_ledger_surface_is_pinned() -> None:

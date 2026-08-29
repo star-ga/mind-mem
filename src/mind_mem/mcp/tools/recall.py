@@ -155,6 +155,12 @@ def _recall_impl(
     if explain and raw:
         raw = _apply_explain(query, raw)
 
+    # RA.1 — record the served set, strictly last. Everything above has already
+    # decided and serialised the ranking, so nothing this does can reach it.
+    # Default OFF; opt in with ``served_ledger.enabled`` in mind-mem.json.
+    if raw:
+        _record_served_run(raw, ws)
+
     return raw
 
 
@@ -247,6 +253,55 @@ def _apply_attestation(raw_json: str, backend: str, scoring_instant: str, query:
     except Exception as exc:  # pragma: no cover — defensive; recall must not fail on attestation
         _log.warning("recall_attestation_apply_failed", error=str(exc))
         return raw_json
+
+
+def _record_served_run(raw_json: str, ws: str) -> None:
+    """Append this run to the served-set ledger (RA.1). Default OFF.
+
+    Runs **after** ``recall()`` has returned and after the envelope is
+    serialised — the last thing ``_recall_impl`` does. That placement is the
+    rail, not a preference: the ranking is already fixed and written down, so a
+    ledger that will later carry serve counts cannot feed any of them back into
+    the run that produced them. The import is function-local for the same
+    reason — a module-level one would widen this module's eager-import closure
+    and put the ledger a static hop from the scoring path's package.
+
+    Every field comes from the attestation this run already published, never
+    re-resolved: re-reading the pipeline hash or the index anchor here would let
+    the ledger row disagree with the record it is supposed to join to. The ids
+    are read with the attestation's own :func:`_served_ids`, so the row's
+    ``served_digest`` cross-check inside ``append_served_run`` is structural
+    rather than hopeful.
+
+    Writes no block, so the store's admission gate is untouched. Failure must
+    never break recall — logged, and the answer is returned regardless.
+    """
+    try:
+        from mind_mem.recall_attestation import _served_ids
+        from mind_mem.served_ledger import append_served_run, ledger_enabled
+
+        if not ledger_enabled(ws):
+            return
+        envelope = json.loads(raw_json)
+        if not isinstance(envelope, dict):
+            return
+        attestation = envelope.get("attestation")
+        results = envelope.get("results")
+        if not isinstance(attestation, dict) or not isinstance(results, list):
+            # No attestation (format="bundle", or a derivation that failed):
+            # there is no record to join to, so there is nothing to record.
+            return
+        append_served_run(
+            ws,
+            query_hash=attestation["query_hash"],
+            served_digest=attestation["results_digest"],
+            ids=_served_ids(results),
+            pipeline_hash=attestation["config_hash"],
+            index_anchor=attestation["index_anchor"],
+            scoring_instant=attestation["scoring_instant"],
+        )
+    except Exception as exc:  # pragma: no cover — defensive; recall must not fail on the ledger
+        _log.warning("served_ledger_append_failed", error=str(exc))
 
 
 def _apply_explain(query: str, raw_json: str) -> str:

@@ -410,9 +410,17 @@ class RecallAttestation:
     degraded: dict[str, str] | None
     index_anchor: str
     result_count: int
-    #: Order-sensitive :func:`seq_digest` of the served block ids, in rank
-    #: order. This is what lets the record distinguish two different served
-    #: *answers*, rather than only two answers of different length.
+    #: :func:`~mind_mem.recall_digests.served_set_digest` of the served block
+    #: ids, in rank order — order-sensitive and duplicate-preserving. This is
+    #: what lets the record distinguish two different served *answers*, rather
+    #: than only two answers of different length.
+    #:
+    #: It is deliberately NOT :func:`seq_digest`, which owns the leg tuples.
+    #: This docstring said ``seq_digest`` while the code called
+    #: ``served_set_digest``, and a ledger author reading it would have
+    #: concluded the served-set ledger needed a different encoding and minted a
+    #: second one. It is the SAME value ``served_ledger`` stores as
+    #: ``served_digest``: one object, one encoding, one owner.
     results_digest: str
     #: :func:`query_hash` of the question this run answered.
     query_hash: str

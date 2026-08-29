@@ -153,6 +153,26 @@ CREATE TABLE IF NOT EXISTS block_tiers (
 );
 """
 
+# RULING (RA.1) on ``confirmations`` — the column an outcome signal wants.
+#
+# ``ROADMAP.md:94`` proposes that ``credited`` (distinct-actor successes,
+# counted in the served-set ledger) write ``block_tier_meta.confirmations``
+# and thereby "buy trust tiers", while ``served`` buys attention tiers. That
+# is automatic tier promotion driven by agent-reported outcomes — the
+# do-not-build item, *"memory learns to retrieve from rewards,
+# automatically"*, in a smaller hat. A bounded factor on a SCORE is fine; an
+# unreviewed STATE TRANSITION from an agent signal is actuation.
+#
+# ``credited`` writes ``confirmations`` ONLY through a proposal, or the
+# promotion is a ``plan_consolidation`` output that ``approve_apply``
+# executes. Never a direct write from a counter, and never an automatic
+# promotion. Absence of credit must never demote either — silence-is-deletion
+# is hostile to a governed store however it is dressed.
+#
+# ``TierPolicy.min_confirmations`` below therefore reads a governed value, not
+# a usage tally. Nothing in ``mind_mem.served_ledger`` may write here; the
+# import rail in ``tests/test_recall_attestation_v2.py`` keeps the ledger off
+# the scoring path, and this comment keeps it off the ladder.
 _TIER_META_SCHEMA = """
 CREATE TABLE IF NOT EXISTS block_tier_meta (
     id              TEXT PRIMARY KEY,
