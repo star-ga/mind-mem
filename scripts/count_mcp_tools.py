@@ -99,6 +99,19 @@ _BADGE_RE = re.compile(r"tools?[-_:]\s*(\d{2,3})\b", re.IGNORECASE)
 # historical statement, not a claim about now.
 _LINE_VERSIONED = re.compile(r"\bv\d+(\.\d+|\.x)", re.IGNORECASE)
 
+# A parenthesised count in a heading: "### MCP Tools (97)". This form slipped
+# past the prose and badge patterns entirely -- a live "(90)" claim sat in
+# CLAUDE.md while both other checks reported agreement.
+#
+# "MCP" is REQUIRED. README has "### Tools (21)" heading a table of 21 tools in
+# one subsection, which is a true statement about a subset; matching a bare
+# "Tools (N)" against the full-surface count would fail CI on a correct line.
+_HEADING_RE = re.compile(r"MCP\s+Tools?\s*\((\d{2,3})\)", re.IGNORECASE)
+
+# A line describing a TRANSITION is a record of a past fix, not a claim:
+# "CLAUDE.md drift cleared (`MCP Tools (81) -> (84)`)".
+_LINE_TRANSITION = re.compile(r"(->|\u2192|\u2013>|=>)")
+
 # Historical records must keep their original numbers or they stop being
 # records: a release note that retroactively claims today's count is a lie
 # about the release it documents. Only LIVING surfaces -- the ones a reader
@@ -153,9 +166,9 @@ def check_docs(expected: int) -> list[str]:
             continue
         rel = path.relative_to(root).as_posix()
         for lineno, line in enumerate(text.splitlines(), 1):
-            if _LINE_VERSIONED.search(line):
+            if _LINE_VERSIONED.search(line) or _LINE_TRANSITION.search(line):
                 continue
-            for regex in (_CLAIM_RE, _BADGE_RE):
+            for regex in (_CLAIM_RE, _BADGE_RE, _HEADING_RE):
                 for match in regex.finditer(line):
                     found = int(match.group(1))
                     if found != expected:
