@@ -40,6 +40,7 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from .codepoint_sanitize import sanitize_text_for_ingest
+from .importers.quarantine import QUARANTINE_STATUS, QUARANTINE_TIER, TIER_FIELD
 
 __all__ = [
     "ROUTING_TABLE",
@@ -148,17 +149,32 @@ def ingest_text_file(workspace: str, file_path: str) -> str:
         "Statement": content,
         "Source": os.path.basename(file_path),
         "Timestamp": ts,
-        "Status": "active",
+        # The inbox is a DROP FOLDER: whatever lands in it is untrusted input,
+        # exactly like an imported corpus. It arrives quarantined and stays
+        # invisible to recall until a governance proposal releases it. Before
+        # this, attacker-supplied file text landed Status: active and
+        # immediately recallable, with no proposal and no chain entry -- the
+        # same injection primitive the importer quarantine was built to close.
+        "Status": QUARANTINE_STATUS,
+        TIER_FIELD: QUARANTINE_TIER,
     }
 
     # Lazy import — storage factory is heavy. Keeping it out of module
     # import time means tests that exercise the routing table don't
     # need a workspace at all.
+    from .governance_gate import get_gate
     from .pipeline_hash import stamp_transform_hash
     from .storage import get_block_store
 
     store = get_block_store(workspace)
-    written_id = store.write_block(stamp_transform_hash(workspace, block))
+    with get_gate(workspace).admit_block(
+        action="INGEST",
+        block_id=block_id,
+        content=content,
+        actor="inbox",
+        metadata={"source": os.path.basename(file_path), "status": QUARANTINE_STATUS},
+    ):
+        written_id = store.write_block(stamp_transform_hash(workspace, block))
     _log.info("inbox_text_ingested", extra={"block_id": written_id, "source": file_path})
     return written_id
 
@@ -207,14 +223,29 @@ def _ingest_pdf(workspace: str, file_path: str) -> str:
         "Statement": text,
         "Source": os.path.basename(file_path),
         "Timestamp": ts,
-        "Status": "active",
+        # The inbox is a DROP FOLDER: whatever lands in it is untrusted input,
+        # exactly like an imported corpus. It arrives quarantined and stays
+        # invisible to recall until a governance proposal releases it. Before
+        # this, attacker-supplied file text landed Status: active and
+        # immediately recallable, with no proposal and no chain entry -- the
+        # same injection primitive the importer quarantine was built to close.
+        "Status": QUARANTINE_STATUS,
+        TIER_FIELD: QUARANTINE_TIER,
     }
 
+    from .governance_gate import get_gate
     from .pipeline_hash import stamp_transform_hash
     from .storage import get_block_store
 
     store = get_block_store(workspace)
-    return store.write_block(stamp_transform_hash(workspace, block))
+    with get_gate(workspace).admit_block(
+        action="INGEST",
+        block_id=block_id,
+        content=text,
+        actor="inbox",
+        metadata={"source": os.path.basename(file_path), "status": QUARANTINE_STATUS},
+    ):
+        return store.write_block(stamp_transform_hash(workspace, block))
 
 
 _HANDLERS: dict[str, Callable[[str, str], str]] = {

@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     pass  # No runtime-only type imports needed; psycopg is a dynamic dependency.
 
+from .admission import require_admission
 from .block_store import BlockStoreError  # noqa: F401  (re-exported for convenience)
 
 _log = logging.getLogger("mind_mem.block_store_postgres")
@@ -1141,7 +1142,12 @@ class PostgresBlockStore:
         pgvector column (``self._has_vector``), the embedding is upserted
         atomically with the row. Without an embedding the column stays
         NULL — backfill via ``backfill_embedding`` later.
+
+        Raises:
+            UngatedWriteError: no governance admission is open for this
+                block. See :mod:`mind_mem.admission`.
         """
+        require_admission(str(block.get("_id") or ""))
         self._ensure_schema()
         pool = self._get_pool()
         block_id, file_path, content, metadata_json = _block_to_row(block)

@@ -19,7 +19,7 @@ def ws(tmp_path: Path) -> Path:
 
 
 class TestWriteBlockAppend:
-    def test_appends_into_empty_file(self, ws: Path) -> None:
+    def test_appends_into_empty_file(self, ws: Path, admitted) -> None:
         store = MarkdownBlockStore(str(ws))
         block = {
             "_id": "D-20260420-001",
@@ -39,7 +39,7 @@ class TestWriteBlockAppend:
         assert "- storage" in content
         assert content.rstrip().endswith("---")
 
-    def test_appends_after_existing_block(self, ws: Path) -> None:
+    def test_appends_after_existing_block(self, ws: Path, admitted) -> None:
         store = MarkdownBlockStore(str(ws))
         store.write_block({"_id": "D-20260420-001", "Statement": "first", "Status": "active"})
         store.write_block({"_id": "D-20260420-002", "Statement": "second", "Status": "active"})
@@ -50,7 +50,7 @@ class TestWriteBlockAppend:
         second_pos = content.index("[D-20260420-002]")
         assert first_pos < second_pos
 
-    def test_targets_correct_file_per_prefix(self, ws: Path) -> None:
+    def test_targets_correct_file_per_prefix(self, ws: Path, admitted) -> None:
         store = MarkdownBlockStore(str(ws))
         store.write_block({"_id": "T-20260420-001", "Statement": "task", "Status": "todo"})
         store.write_block({"_id": "PRJ-alpha", "Statement": "project", "Status": "active"})
@@ -60,7 +60,7 @@ class TestWriteBlockAppend:
 
 
 class TestWriteBlockReplace:
-    def test_replaces_in_place_preserving_neighbours(self, ws: Path) -> None:
+    def test_replaces_in_place_preserving_neighbours(self, ws: Path, admitted) -> None:
         store = MarkdownBlockStore(str(ws))
         store.write_block({"_id": "D-20260420-001", "Statement": "first v1", "Status": "active"})
         store.write_block({"_id": "D-20260420-002", "Statement": "second", "Status": "active"})
@@ -78,7 +78,7 @@ class TestWriteBlockReplace:
         assert "Status: superseded" in content
         assert "Status: active\nStatement: first" not in content
 
-    def test_field_rename_and_drop_on_replace(self, ws: Path) -> None:
+    def test_field_rename_and_drop_on_replace(self, ws: Path, admitted) -> None:
         """Replacement is authoritative — removed fields disappear."""
         store = MarkdownBlockStore(str(ws))
         store.write_block(
@@ -103,22 +103,22 @@ class TestWriteBlockReplace:
 
 
 class TestWriteBlockSecurity:
-    def test_rejects_missing_id(self, ws: Path) -> None:
+    def test_rejects_missing_id(self, ws: Path, admitted) -> None:
         store = MarkdownBlockStore(str(ws))
         with pytest.raises(ValueError, match="_id"):
             store.write_block({"Statement": "no id"})
 
-    def test_rejects_invalid_id_format(self, ws: Path) -> None:
+    def test_rejects_invalid_id_format(self, ws: Path, admitted) -> None:
         store = MarkdownBlockStore(str(ws))
         with pytest.raises(ValueError, match="invalid block id"):
             store.write_block({"_id": "not-a-valid-id", "Statement": "x"})
 
-    def test_rejects_unknown_prefix(self, ws: Path) -> None:
+    def test_rejects_unknown_prefix(self, ws: Path, admitted) -> None:
         store = MarkdownBlockStore(str(ws))
         with pytest.raises(ValueError, match="no canonical file mapping"):
             store.write_block({"_id": "XYZZY-20260420-001", "Statement": "mystery prefix"})
 
-    def test_neutralises_embedded_block_header(self, ws: Path) -> None:
+    def test_neutralises_embedded_block_header(self, ws: Path, admitted) -> None:
         """A field value containing a newline + ``[ID]`` must not start a new block.
 
         The serializer replaces the ``\\n[`` bigram with ``\\n `` so
@@ -151,7 +151,7 @@ class TestWriteBlockSecurity:
 
 
 class TestDeleteBlock:
-    def test_removes_block_and_returns_true(self, ws: Path) -> None:
+    def test_removes_block_and_returns_true(self, ws: Path, admitted) -> None:
         store = MarkdownBlockStore(str(ws))
         store.write_block({"_id": "D-20260420-001", "Statement": "keep", "Status": "active"})
         store.write_block({"_id": "D-20260420-002", "Statement": "remove", "Status": "superseded"})
@@ -162,7 +162,7 @@ class TestDeleteBlock:
         assert "[D-20260420-002]" not in content
         assert "[D-20260420-001]" in content
 
-    def test_missing_block_returns_false(self, ws: Path) -> None:
+    def test_missing_block_returns_false(self, ws: Path, admitted) -> None:
         store = MarkdownBlockStore(str(ws))
         store.write_block({"_id": "D-20260420-001", "Statement": "only", "Status": "active"})
         assert store.delete_block("D-20260420-999") is False
@@ -171,7 +171,7 @@ class TestDeleteBlock:
         store = MarkdownBlockStore(str(ws))
         assert store.delete_block("ZZZ-20260420-001") is False
 
-    def test_records_deletion_to_recovery_journal(self, ws: Path) -> None:
+    def test_records_deletion_to_recovery_journal(self, ws: Path, admitted) -> None:
         store = MarkdownBlockStore(str(ws))
         store.write_block({"_id": "D-20260420-001", "Statement": "about to be deleted", "Status": "active"})
         store.delete_block("D-20260420-001")
@@ -186,7 +186,7 @@ class TestDeleteBlock:
 
 
 class TestRoundTrip:
-    def test_write_then_read_via_get_by_id(self, ws: Path) -> None:
+    def test_write_then_read_via_get_by_id(self, ws: Path, admitted) -> None:
         store = MarkdownBlockStore(str(ws))
         original = {
             "_id": "D-20260420-007",
@@ -205,7 +205,7 @@ class TestRoundTrip:
         # Tags round-trip as a list (parser converts "- item" bullets back).
         assert read_back.get("Tags") == ["alpha", "beta"]
 
-    def test_cache_invalidated_so_get_all_sees_new_file(self, ws: Path) -> None:
+    def test_cache_invalidated_so_get_all_sees_new_file(self, ws: Path, admitted) -> None:
         store = MarkdownBlockStore(str(ws))
         # Before: no decisions file, so get_all returns nothing.
         assert store.get_all() == []

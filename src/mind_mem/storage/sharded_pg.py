@@ -31,6 +31,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
+from ..admission import require_admission
+
 _log = logging.getLogger("mind_mem.storage.sharded_pg")
 
 
@@ -149,6 +151,7 @@ class ShardedPostgresBlockStore:
         tenant_id: str | None = None,
         namespace: str | None = None,
     ) -> str:
+        require_admission(str(block.get("_id") or ""))
         tid = tenant_id or str(block.get("_tenant") or self._default_tenant)
         ns = namespace or str(block.get("_namespace") or self._default_namespace)
         shard = self._router.shard_for(tid, ns)

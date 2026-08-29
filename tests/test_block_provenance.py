@@ -124,7 +124,7 @@ class TestAttachExtract:
 
 
 class TestBlockStoreRoundTrip:
-    def test_write_and_read_back_provenance(self, ws: Path):
+    def test_write_and_read_back_provenance(self, ws: Path, admitted):
         store = MarkdownBlockStore(str(ws))
         block = attach_provenance(
             {"_id": "D-20260724-001", "Statement": "Adopt provenance fields", "Status": "active"},
@@ -136,14 +136,14 @@ class TestBlockStoreRoundTrip:
         for field, param in zip(PROVENANCE_FIELD_NAMES, _PROV_KWARGS):
             assert got[field] == _PROV_KWARGS[param]
 
-    def test_rendered_file_contains_canonical_lines(self, ws: Path):
+    def test_rendered_file_contains_canonical_lines(self, ws: Path, admitted):
         store = MarkdownBlockStore(str(ws))
         block = attach_provenance({"_id": "D-20260724-002", "Statement": "s", "Status": "active"}, actor_id="agent-7")
         store.write_block(block)
         text = (ws / "decisions" / "DECISIONS.md").read_text(encoding="utf-8")
         assert "ActorId: agent-7" in text
 
-    def test_block_without_provenance_unaffected(self, ws: Path):
+    def test_block_without_provenance_unaffected(self, ws: Path, admitted):
         store = MarkdownBlockStore(str(ws))
         store.write_block({"_id": "D-20260724-003", "Statement": "plain block", "Status": "active"})
         text = (ws / "decisions" / "DECISIONS.md").read_text(encoding="utf-8")
@@ -317,7 +317,7 @@ class TestProposeUpdateProvenance:
 
 
 class TestRecallSurfacing:
-    def test_provenance_surfaced_when_present(self, ws: Path):
+    def test_provenance_surfaced_when_present(self, ws: Path, admitted):
         store = MarkdownBlockStore(str(ws))
         store.write_block(
             attach_provenance(
@@ -338,7 +338,7 @@ class TestRecallSurfacing:
         for field, param in zip(PROVENANCE_FIELD_NAMES, _PROV_KWARGS):
             assert hit[field] == _PROV_KWARGS[param]
 
-    def test_provenance_surfaced_via_sqlite_index(self, ws: Path):
+    def test_provenance_surfaced_via_sqlite_index(self, ws: Path, admitted):
         """The FTS5-indexed recall path surfaces provenance too."""
         store = MarkdownBlockStore(str(ws))
         store.write_block(
@@ -362,7 +362,7 @@ class TestRecallSurfacing:
         assert hit["ActorId"] == "agent-7"
         assert hit["Purpose"] == "index-path surfacing"
 
-    def test_no_provenance_keys_when_absent(self, ws: Path):
+    def test_no_provenance_keys_when_absent(self, ws: Path, admitted):
         store = MarkdownBlockStore(str(ws))
         store.write_block(
             {

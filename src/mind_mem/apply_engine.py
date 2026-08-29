@@ -1338,65 +1338,65 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
     from .governance_gate import get_gate
 
     gate = get_gate(ws)
-    gate.admit(
-        action="APPLY",
-        block_id=proposal_id,
-        content=json.dumps(proposal.get("Ops", []), default=str),
+    # One admission per proposal, opened BEFORE any op runs and held
+    # for the whole execution: the ops below write blocks through
+    # store.write_block, which refuses a write with no receipt open.
+    with gate.admit_proposal(
+        proposal_id,
+        json.dumps(proposal.get("Ops", []), default=str),
         actor="apply_engine",
         target_file=source_file,
         metadata={"proposal_id": proposal_id, "phase": "pre_apply"},
-    )
+    ):
+        # 6. Execute ops with WAL protection
+        print(f"\n--- Executing {len(proposal.get('Ops', []))} Ops (WAL-protected) ---")
+        delta: dict[str, list[str]] = {"created": [], "modified": []}
+        wal_entries = []  # Track WAL entries for this apply
+        actually_modified_files: set[str] = set()  # Track all files modified during execution
+        # Resolve the BlockStore once for the whole proposal — avoids
+        # re-resolving on every op and gives all ops a consistent view
+        # of the configured backend (v3.2.1).
+        store = _store_for(ws)
+        for i, op in enumerate(proposal.get("Ops", [])):
+            raw_file = op.get("file", "")
+            try:
+                filepath = _safe_resolve(ws, raw_file)
+            except ValueError:
+                filepath = raw_file
 
-    # 6. Execute ops with WAL protection
+            # WAL: log intention before mutation
+            wal_id = wal.begin(
+                operation=op.get("op", "unknown"),
+                target_path=filepath,
+                content=json.dumps(op, default=str),
+            )
+            wal_entries.append(wal_id)
 
-    print(f"\n--- Executing {len(proposal.get('Ops', []))} Ops (WAL-protected) ---")
-    delta: dict[str, list[str]] = {"created": [], "modified": []}
-    wal_entries = []  # Track WAL entries for this apply
-    actually_modified_files: set[str] = set()  # Track all files modified during execution
-    # Resolve the BlockStore once for the whole proposal — avoids
-    # re-resolving on every op and gives all ops a consistent view
-    # of the configured backend (v3.2.1).
-    store = _store_for(ws)
-    for i, op in enumerate(proposal.get("Ops", [])):
-        raw_file = op.get("file", "")
-        try:
-            filepath = _safe_resolve(ws, raw_file)
-        except ValueError:
-            filepath = raw_file
+            ok, msg = execute_op(ws, op, store=store)
+            print(f"  [{i}] {op.get('op')}: {msg}")
+            if not ok:
+                # WAL: rollback this failed op's WAL entry
+                wal.rollback(wal_id)
+                print(f"\nOP FAILED at step {i} — rolling back.")
+                # Also rollback any previously committed WAL entries via snapshot
+                restore_snapshot(ws, snap_dir)
+                _cleanup_orphan_files(ws, pre_apply_files)
+                update_receipt(receipt_path, ["ABORTED: op failure"], delta, "rolled_back")
+                return False, f"Op {i} failed: {msg}"
 
-        # WAL: log intention before mutation
-        wal_id = wal.begin(
-            operation=op.get("op", "unknown"),
-            target_path=filepath,
-            content=json.dumps(op, default=str),
-        )
-        wal_entries.append(wal_id)
+            # WAL: commit successful op
+            wal.commit(wal_id)
 
-        ok, msg = execute_op(ws, op, store=store)
-        print(f"  [{i}] {op.get('op')}: {msg}")
-        if not ok:
-            # WAL: rollback this failed op's WAL entry
-            wal.rollback(wal_id)
-            print(f"\nOP FAILED at step {i} — rolling back.")
-            # Also rollback any previously committed WAL entries via snapshot
-            restore_snapshot(ws, snap_dir)
-            _cleanup_orphan_files(ws, pre_apply_files)
-            update_receipt(receipt_path, ["ABORTED: op failure"], delta, "rolled_back")
-            return False, f"Op {i} failed: {msg}"
+            # Track actually modified files for accurate rollback scope
+            if filepath:
+                actually_modified_files.add(filepath)
 
-        # WAL: commit successful op
-        wal.commit(wal_id)
-
-        # Track actually modified files for accurate rollback scope
-        if filepath:
-            actually_modified_files.add(filepath)
-
-        # Track delta
-        target = op.get("target", "")
-        if op.get("op") in ("append_block", "insert_after_block", "supersede_decision"):
-            delta["created"].append(target or "new")
-        else:
-            delta["modified"].append(target)
+            # Track delta
+            target = op.get("target", "")
+            if op.get("op") in ("append_block", "insert_after_block", "supersede_decision"):
+                delta["created"].append(target or "new")
+            else:
+                delta["modified"].append(target)
 
     # 6. Post-checks
     print("\n--- Post-checks ---")

@@ -20,6 +20,7 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import re
@@ -293,7 +294,25 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
         else:
             counter = 1
 
-        with open(signals_path, "a", encoding="utf-8") as f:
+        # Admit BEFORE the bytes land. This used to admit AFTER the append,
+        # inside a bare `except` that downgraded a gate failure to a warning --
+        # so a rejected signal stayed written to the corpus anyway. Ids are
+        # derived up front so the batch can name exactly what it authorises.
+        _planned_ids = [f"SIG-{today_compact}-{counter + i:03d}" for i in range(min(len(new_signals), max(0, 1000 - counter)))]
+        _gate = _get_gate(workspace)
+        _scope = (
+            _gate.admit_batch(
+                action="WRITE",
+                batch_id=f"capture-{today_compact}",
+                block_ids=_planned_ids,
+                content="\n".join(sig["text"] for sig in new_signals),
+                actor="capture",
+                target_file=signals_path,
+            )
+            if _gate is not None and _planned_ids
+            else contextlib.nullcontext()
+        )
+        with _scope, open(signals_path, "a", encoding="utf-8") as f:
             for sig in new_signals:
                 if counter > 999:
                     break  # Cap at 999 signals per day to maintain ID format
@@ -337,24 +356,9 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
 
     written_count = len(new_signals)
 
-    # Admit each written signal through GovernanceGate (Bug 2 + Bug 3 fix).
-    # Use the actual signal ID (e.g. "SIG-20260405-001") as block_id, not content_hash.
-    if written_count > 0:
-        gate = _get_gate(workspace)
-        if gate is not None:
-            for sig in new_signals:
-                sig_id = sig.get("_sig_id", sig.get("content_hash", sig["text"][:32]))
-                try:
-                    gate.admit(
-                        action="WRITE",
-                        block_id=sig_id,
-                        content=sig["text"],
-                        actor="capture",
-                        target_file=signals_path,
-                    )
-                except Exception as exc:
-                    _log.warning("capture.gate_admit_failed", error=str(exc))
-
+    # The admission now happens above, before the append, so there is nothing
+    # to do after the fact. A gate rejection aborts the write instead of being
+    # logged next to a signal that got written anyway.
     return written_count
 
 

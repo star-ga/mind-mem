@@ -17,6 +17,7 @@ import warnings
 from datetime import datetime, timezone
 from typing import Any, Optional, Protocol, runtime_checkable
 
+from .admission import require_admission
 from .block_parser import get_active, get_by_id, parse_file
 from .corpus_registry import SNAPSHOT_DIRS, SNAPSHOT_EXCLUDE_DIRS
 from .mind_filelock import FileLock
@@ -700,12 +701,18 @@ class MarkdownBlockStore:
         ``store.write_block(b).get_by_id(...)``-style flows.
 
         Raises:
+            UngatedWriteError: no governance admission is open for this
+                block. See :mod:`mind_mem.admission`.
             ValueError: block is missing ``_id`` or has an
                 unrecognised prefix (no canonical file mapping).
         """
         block_id = block.get("_id")
         if not block_id:
             raise ValueError("block is missing '_id'; cannot write")
+        # Governance choke-point. Refuses the write outright when no
+        # admission scope is open — checked before the id is even parsed,
+        # so an ungated caller cannot learn anything by probing id shapes.
+        require_admission(str(block_id))
         if not _BLOCK_ID_RE.match(str(block_id)):
             raise ValueError(f"invalid block id: {block_id!r}")
         target = _resolve_block_file(self._workspace, block_id)

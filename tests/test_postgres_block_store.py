@@ -183,7 +183,7 @@ class TestPgVectorWiring:
         assert s._has_vector is False
         assert s._embedding_dim == 1024  # mxbai-embed-large default.
 
-    def test_write_block_embedding_dim_check(self) -> None:
+    def test_write_block_embedding_dim_check(self, admitted) -> None:
         """write_block must reject mismatched embedding dims even when
         pgvector isn't installed (input validation runs before DB)."""
         from mind_mem.block_store_postgres import BlockStoreError, PostgresBlockStore
@@ -375,7 +375,7 @@ class TestPgVectorSchemaIsolation:
                 pass
             s.close()
 
-    def test_embedding_round_trip_under_isolated_search_path(self) -> None:
+    def test_embedding_round_trip_under_isolated_search_path(self, admitted) -> None:
         """End-to-end: write an embedded block, run hybrid_search and
         backfill_embedding through the qualified casts / appended
         search_path under schema isolation. Before the fix the ``<=>``
@@ -451,7 +451,7 @@ class TestPgVectorSchemaIsolation:
 
 
 class TestRoundTrip:
-    def test_write_then_get_by_id(self, store: PostgresBlockStore) -> None:
+    def test_write_then_get_by_id(self, store: PostgresBlockStore, admitted) -> None:
         block = _make_block("D-20260419-001", statement="Round-trip test")
         returned_id = store.write_block(block)
         assert returned_id == "D-20260419-001"
@@ -465,7 +465,7 @@ class TestRoundTrip:
         result = store.get_by_id("D-99999999-999")
         assert result is None
 
-    def test_delete_block_returns_true(self, store: PostgresBlockStore) -> None:
+    def test_delete_block_returns_true(self, store: PostgresBlockStore, admitted) -> None:
         store.write_block(_make_block("D-20260419-002"))
         removed = store.delete_block("D-20260419-002")
         assert removed is True
@@ -475,7 +475,7 @@ class TestRoundTrip:
         removed = store.delete_block("D-99999999-000")
         assert removed is False
 
-    def test_get_all_returns_written_blocks(self, store: PostgresBlockStore) -> None:
+    def test_get_all_returns_written_blocks(self, store: PostgresBlockStore, admitted) -> None:
         store.write_block(_make_block("D-20260419-010"))
         store.write_block(_make_block("D-20260419-011"))
         blocks = store.get_all()
@@ -483,7 +483,7 @@ class TestRoundTrip:
         assert "D-20260419-010" in ids
         assert "D-20260419-011" in ids
 
-    def test_get_all_active_only(self, store: PostgresBlockStore) -> None:
+    def test_get_all_active_only(self, store: PostgresBlockStore, admitted) -> None:
         store.write_block(_make_block("D-20260419-020"))
         # Manually set one block to inactive.
         pool = store._get_pool()
@@ -494,14 +494,14 @@ class TestRoundTrip:
         ids = {b["_id"] for b in active}
         assert "D-20260419-020" not in ids
 
-    def test_list_blocks_returns_file_paths(self, store: PostgresBlockStore) -> None:
+    def test_list_blocks_returns_file_paths(self, store: PostgresBlockStore, admitted) -> None:
         store.write_block(_make_block("D-20260419-030", file_path="decisions/DECISIONS.md"))
         paths = store.list_blocks()
         assert "decisions/DECISIONS.md" in paths
 
 
 class TestUpsert:
-    def test_write_same_id_twice_replaces_content(self, store: PostgresBlockStore) -> None:
+    def test_write_same_id_twice_replaces_content(self, store: PostgresBlockStore, admitted) -> None:
         store.write_block(_make_block("D-20260419-050", statement="Original content"))
         store.write_block(_make_block("D-20260419-050", statement="Replaced content"))
 
@@ -509,7 +509,7 @@ class TestUpsert:
         assert fetched is not None
         assert fetched["Statement"] == "Replaced content"
 
-    def test_upsert_does_not_duplicate_rows(self, store: PostgresBlockStore) -> None:
+    def test_upsert_does_not_duplicate_rows(self, store: PostgresBlockStore, admitted) -> None:
         store.write_block(_make_block("D-20260419-051"))
         store.write_block(_make_block("D-20260419-051"))
         store.write_block(_make_block("D-20260419-051"))
@@ -520,7 +520,7 @@ class TestUpsert:
 
 
 class TestSearch:
-    def test_search_finds_matching_content(self, store: PostgresBlockStore) -> None:
+    def test_search_finds_matching_content(self, store: PostgresBlockStore, admitted) -> None:
         store.write_block(_make_block("D-20260419-060", statement="PostgreSQL adapter integration"))
         store.write_block(_make_block("D-20260419-061", statement="Unrelated topic about apples"))
 
@@ -528,21 +528,21 @@ class TestSearch:
         ids = {r["_id"] for r in results}
         assert "D-20260419-060" in ids
 
-    def test_search_limit_respected(self, store: PostgresBlockStore) -> None:
+    def test_search_limit_respected(self, store: PostgresBlockStore, admitted) -> None:
         for i in range(10):
             store.write_block(_make_block(f"D-20260419-07{i}", statement=f"searchable entry {i}"))
 
         results = store.search("searchable entry", limit=3)
         assert len(results) <= 3
 
-    def test_search_returns_empty_for_no_match(self, store: PostgresBlockStore) -> None:
+    def test_search_returns_empty_for_no_match(self, store: PostgresBlockStore, admitted) -> None:
         store.write_block(_make_block("D-20260419-080", statement="completely irrelevant content"))
         results = store.search("xyzzy_no_match_token_abc123")
         assert results == []
 
 
 class TestSnapshotRestore:
-    def test_snapshot_creates_manifest_on_disk(self, store: PostgresBlockStore, tmp_path: Path) -> None:
+    def test_snapshot_creates_manifest_on_disk(self, store: PostgresBlockStore, tmp_path: Path, admitted) -> None:
         store.write_block(_make_block("D-20260419-100"))
         snap_dir = str(tmp_path / "snap01")
         manifest = store.snapshot(snap_dir)
@@ -551,7 +551,7 @@ class TestSnapshotRestore:
         assert manifest["version"] == 2
         assert (tmp_path / "snap01" / "MANIFEST.json").is_file()
 
-    def test_snapshot_then_restore_reverts_changes(self, store: PostgresBlockStore, tmp_path: Path) -> None:
+    def test_snapshot_then_restore_reverts_changes(self, store: PostgresBlockStore, tmp_path: Path, admitted) -> None:
         store.write_block(_make_block("D-20260419-110", statement="Before snapshot"))
         snap_dir = str(tmp_path / "snap02")
         store.snapshot(snap_dir)
@@ -571,7 +571,7 @@ class TestSnapshotRestore:
         gone = store.get_by_id("D-20260419-111")
         assert gone is None
 
-    def test_diff_empty_when_no_changes(self, store: PostgresBlockStore, tmp_path: Path) -> None:
+    def test_diff_empty_when_no_changes(self, store: PostgresBlockStore, tmp_path: Path, admitted) -> None:
         store.write_block(_make_block("D-20260419-120"))
         snap_dir = str(tmp_path / "snap03")
         store.snapshot(snap_dir)
@@ -580,7 +580,7 @@ class TestSnapshotRestore:
         # No mutations after snapshot — diff should be empty.
         assert changes == []
 
-    def test_diff_detects_modification(self, store: PostgresBlockStore, tmp_path: Path) -> None:
+    def test_diff_detects_modification(self, store: PostgresBlockStore, tmp_path: Path, admitted) -> None:
         store.write_block(_make_block("D-20260419-130", statement="Original"))
         snap_dir = str(tmp_path / "snap04")
         store.snapshot(snap_dir)
@@ -597,7 +597,7 @@ class TestSnapshotRestore:
 
 
 class TestConcurrency:
-    def test_concurrent_writes_are_serialized(self, store: PostgresBlockStore) -> None:
+    def test_concurrent_writes_are_serialized(self, store: PostgresBlockStore, admitted) -> None:
         """Multiple threads writing distinct blocks must all succeed."""
         errors: list[Exception] = []
 
@@ -619,7 +619,7 @@ class TestConcurrency:
         for i in range(20):
             assert f"D-20260419-2{i:02d}" in written_ids
 
-    def test_concurrent_read_and_write(self, store: PostgresBlockStore) -> None:
+    def test_concurrent_read_and_write(self, store: PostgresBlockStore, admitted) -> None:
         """Reads during writes must not see partially-written data."""
         store.write_block(_make_block("D-20260419-300", statement="Initial"))
         read_errors: list[Exception] = []

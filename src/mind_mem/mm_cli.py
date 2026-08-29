@@ -385,12 +385,27 @@ def _cmd_migrate_store(args: argparse.Namespace) -> int:
     t0 = time.monotonic()
     written = 0
     errors: list[dict[str, str]] = []
-    for b in with_id:
-        try:
-            dst.write_block(b)
-            written += 1
-        except Exception as exc:
-            errors.append({"id": str(b.get("_id")), "error": str(exc)[:200]})
+    # Copying an already-governed corpus between backends. The blocks were
+    # admitted when they were first written; this records the bulk move itself
+    # in the chain so a backend migration is not an unexplained appearance of
+    # every block in a new store.
+    from .governance_gate import get_gate
+
+    migrate_ids = [str(b.get("_id")) for b in with_id]
+    with get_gate(ws).admit_batch(
+        action="MIGRATE",
+        batch_id=f"migrate-store-{int(t0)}",
+        block_ids=migrate_ids,
+        content="\n".join(migrate_ids),
+        actor="mm migrate-store",
+        metadata={"blocks": len(migrate_ids)},
+    ):
+        for b in with_id:
+            try:
+                dst.write_block(b)
+                written += 1
+            except Exception as exc:
+                errors.append({"id": str(b.get("_id")), "error": str(exc)[:200]})
     duration = round(time.monotonic() - t0, 2)
 
     embedded = 0

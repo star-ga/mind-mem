@@ -222,6 +222,43 @@ def build_import_block(record: ImportRecord, *, batch: str = "") -> dict[str, An
     )
 
 
+def _write_batch(
+    workspace: str,
+    plan: list[tuple[str, ImportRecord]],
+    *,
+    batch: str,
+    system: str,
+    transform_hash: str,
+    store: Any,
+) -> list[str]:
+    """Write a planned import batch under one governance admission.
+
+    Bulk ingest cannot be one proposal per block, so it is one *admission*
+    per run instead: a single chain entry whose content is the exact id
+    set this batch may write. ``store.write_block`` refuses any id the
+    entry did not name.
+    """
+    from ..governance_gate import get_gate
+
+    planned_ids = [block_id for block_id, _record in plan]
+    written: list[str] = []
+    with get_gate(workspace).admit_batch(
+        action="INGEST",
+        batch_id=batch,
+        block_ids=planned_ids,
+        content="\n".join(planned_ids),
+        actor=f"importer:{system}",
+        target_file=IMPORTED_CORPUS_FILE,
+        metadata={"system": system, "batch": batch, "status": QUARANTINE_STATUS, "blocks": len(planned_ids)},
+    ):
+        for _block_id, record in plan:
+            block = build_import_block(record, batch=batch)
+            if transform_hash:
+                block = {**block, "TransformHash": transform_hash}
+            written.append(str(store.write_block(block)))
+    return written
+
+
 # ---------------------------------------------------------------------------
 # Existing-block lookup
 # ---------------------------------------------------------------------------
@@ -396,14 +433,11 @@ def run_import(
 
     batch = batch_id_for(resolved, (block_id for block_id, _ in plan))
 
-    for block_id, record in plan:
-        if dry_run or store is None:
-            written.append(block_id)
-            continue
-        block = build_import_block(record, batch=batch)
-        if transform_hash:
-            block = {**block, "TransformHash": transform_hash}
-        written.append(str(store.write_block(block)))
+    planned_ids = [block_id for block_id, _record in plan]
+    if dry_run or store is None:
+        written.extend(planned_ids)
+    else:
+        written.extend(_write_batch(workspace, plan, batch=batch, system=resolved, transform_hash=transform_hash, store=store))
 
     linked = 0
     if link_edges and not dry_run and records:

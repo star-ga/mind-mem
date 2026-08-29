@@ -82,7 +82,7 @@ class TestShardedPostgresBlockStore:
         store = ShardedPostgresBlockStore(router, {0: a, 1: b})
         return store, a, b
 
-    def test_write_routes_to_single_shard(self) -> None:
+    def test_write_routes_to_single_shard(self, admitted) -> None:
         store, a, b = self._build()
         store.write_block({"_id": "D-1"}, tenant_id="acme", namespace="default")
         # Exactly one underlying shard got the write.

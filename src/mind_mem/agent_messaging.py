@@ -110,12 +110,26 @@ def send_message(
     """
     # Lazy imports — storage/index factories are heavy; keep module import
     # cheap so test collection that only touches block-building stays fast.
+    from .governance_gate import get_gate
     from .pipeline_hash import stamp_transform_hash
     from .storage import get_block_store
 
     block = build_message_block(text, to=to, sender=sender, subject=subject)
     store = get_block_store(workspace)
-    written_id = store.write_block(stamp_transform_hash(workspace, block))
+    stamped = stamp_transform_hash(workspace, block)
+    block_id = str(stamped["_id"])
+    # An agent message is a single authored block, so it is admitted directly
+    # rather than quarantined: the sender is a known local actor, not the
+    # untrusted drop folder. What changes is that the write now leaves a chain
+    # entry instead of appearing in the corpus with no record of who wrote it.
+    with get_gate(workspace).admit_block(
+        action="MESSAGE",
+        block_id=block_id,
+        content=text,
+        actor=f"agent:{sender}" if sender else "agent",
+        metadata={"to": to, "subject": subject or ""},
+    ):
+        written_id = store.write_block(stamped)
 
     if reindex:
         # Only the markdown corpus needs an explicit index rebuild for the

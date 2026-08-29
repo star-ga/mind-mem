@@ -362,6 +362,19 @@ class HashChainV2:
 
         return True, -1
 
+    def get_by_entry_id(self, entry_id: str) -> Optional[HashEntry]:
+        """Return the entry with *entry_id*, or ``None`` if absent.
+
+        ``entry_id`` is UNIQUE in the schema, so this resolves at most one
+        row. Used by :meth:`GovernanceGate.admit` to read an entry back out
+        of the durable chain before it hands the caller a receipt — an
+        admission whose chain entry does not resolve must not authorise a
+        write.
+        """
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM hash_chain WHERE entry_id = ?", (entry_id,)).fetchone()
+        return _row_to_entry(row) if row is not None else None
+
     def get_block_chain(self, block_id: str) -> list[HashEntry]:
         """Return all entries for a specific block in insertion order.
 

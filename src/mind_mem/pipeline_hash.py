@@ -278,20 +278,34 @@ def reextract_dirty_blocks(
 
     processed: list[str] = []
     skipped: list[str] = []
-    for bid in dirty_ids:
-        try:
-            block = store.get_by_id(bid) if hasattr(store, "get_by_id") else None
-            if block is None:
+    # Re-stamping blocks that are already in the store with a new transform
+    # hash. Content is unchanged, but the rewrite is still a write, so it is
+    # admitted as a batch rather than slipping past the gate.
+    from .governance_gate import get_gate
+
+    _dirty = [str(b) for b in dirty_ids]
+    with get_gate(workspace).admit_batch(
+        action="REEXTRACT",
+        batch_id=f"reextract-{len(_dirty)}",
+        block_ids=_dirty,
+        content="\n".join(_dirty),
+        actor="pipeline_hash",
+        metadata={"blocks": len(_dirty)},
+    ):
+        for bid in dirty_ids:
+            try:
+                block = store.get_by_id(bid) if hasattr(store, "get_by_id") else None
+                if block is None:
+                    skipped.append(bid)
+                    continue
+                store.write_block(stamp_transform_hash(workspace, block))
+                processed.append(bid)
+            except Exception as exc:
+                _log.warning(
+                    "dirty_reextract_failed",
+                    extra={"block_id": bid, "error": str(exc)},
+                )
                 skipped.append(bid)
-                continue
-            store.write_block(stamp_transform_hash(workspace, block))
-            processed.append(bid)
-        except Exception as exc:
-            _log.warning(
-                "dirty_reextract_failed",
-                extra={"block_id": bid, "error": str(exc)},
-            )
-            skipped.append(bid)
 
     return {
         "processed": len(processed),

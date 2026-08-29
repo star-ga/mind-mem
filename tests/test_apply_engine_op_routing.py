@@ -55,7 +55,7 @@ def ws(tmp_path: Path) -> Path:
 class TestOpRoutingViaStore:
     """Block-level ops invoke store.write_block on the configured backend."""
 
-    def test_update_field_calls_write_block(self, ws: Path) -> None:
+    def test_update_field_calls_write_block(self, ws: Path, admitted) -> None:
         """``update_field`` on a block routes through BlockStore.write_block.
 
         A spy store captures the call; the real MarkdownBlockStore
@@ -86,7 +86,7 @@ class TestOpRoutingViaStore:
         assert written["_id"] == "D-20260420-001"
         assert written["Status"] == "superseded"
 
-    def test_set_status_calls_write_block(self, ws: Path) -> None:
+    def test_set_status_calls_write_block(self, ws: Path, admitted) -> None:
         """``set_status`` updates Status and appends History via store."""
         store = MarkdownBlockStore(str(ws))
         spy = MagicMock(wraps=store)
@@ -104,7 +104,7 @@ class TestOpRoutingViaStore:
         # Status change + history append → two write_block calls minimum.
         assert spy.write_block.call_count >= 1
 
-    def test_append_list_item_calls_write_block(self, ws: Path) -> None:
+    def test_append_list_item_calls_write_block(self, ws: Path, admitted) -> None:
         """``append_list_item`` mutates a list field and writes block."""
         store = MarkdownBlockStore(str(ws))
         spy = MagicMock(wraps=store)
@@ -121,7 +121,7 @@ class TestOpRoutingViaStore:
         assert ok, msg
         spy.write_block.assert_called_once()
 
-    def test_append_block_calls_write_block(self, ws: Path) -> None:
+    def test_append_block_calls_write_block(self, ws: Path, admitted) -> None:
         """``append_block`` parses patch text and writes via BlockStore."""
         store = MarkdownBlockStore(str(ws))
         spy = MagicMock(wraps=store)
@@ -151,7 +151,7 @@ class TestOpRoutingViaStore:
         assert "D-20260420-001" in ids
         assert "D-20260420-002" in ids
 
-    def test_supersede_decision_calls_write_block(self, ws: Path) -> None:
+    def test_supersede_decision_calls_write_block(self, ws: Path, admitted) -> None:
         """``supersede_decision`` marks old superseded + writes new block via store."""
         store = MarkdownBlockStore(str(ws))
         spy = MagicMock(wraps=store)
@@ -180,7 +180,7 @@ class TestOpRoutingViaStore:
         assert by_id["D-20260420-001"]["Status"] == "superseded"
         assert "D-20260420-003" in by_id
 
-    def test_backward_compat_store_none_uses_factory(self, ws: Path) -> None:
+    def test_backward_compat_store_none_uses_factory(self, ws: Path, admitted) -> None:
         """When no ``store`` argument is given, execute_op resolves via factory.
 
         Preserves the pre-v3.2.2 signature ``execute_op(ws, op)`` so

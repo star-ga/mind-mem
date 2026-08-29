@@ -1,28 +1,65 @@
 # Copyright 2026 STARGA, Inc.
 """GovernanceGate — single choke-point for all block writes.
 
-Every block write must pass through GovernanceGate.admit().  The gate
-verifies spec-hash consistency, creates an evidence object, and appends
-an entry to the SHA3-512 hash chain.  If the spec-hash has drifted the
-gate raises GovernanceBypassError and the write is blocked.
+Every block write must pass through this gate.  The gate verifies
+spec-hash consistency, creates an evidence object, and appends an entry
+to the SHA3-512 hash chain.  If the spec-hash has drifted the gate raises
+GovernanceBypassError and the write is blocked.
 
-Usage:
-    from .governance_gate import GovernanceGate, GovernanceBypassError
+Callers do not use :meth:`GovernanceGate.admit` directly — they open an
+*admission scope*, which admits the write and publishes an
+:class:`~mind_mem.admission.AdmissionReceipt` that
+:func:`~mind_mem.admission.require_admission` reads inside every
+``BlockStore.write_block``.  A write with no open scope raises
+:class:`~mind_mem.admission.UngatedWriteError`::
 
-    gate = GovernanceGate(workspace="/path/to/ws")
-    gate.admit("WRITE", "D-20260401-001", "content of block")
+    from .governance_gate import get_gate
+
+    gate = get_gate(workspace)
+    with gate.admit_block("WRITE", block_id, content):
+        store.write_block(block)
+
+Three scopes, matching the three shapes a governed write actually takes:
+
+``admit_block``     one block (an agent message, a single edit).
+``admit_batch``     a named set written in one operation (bulk ingest,
+                    a backend migration, a re-stamp pass).
+``admit_proposal``  every block written while applying one approved
+                    proposal — the gate admits once per proposal, so
+                    this is the honest encoding of an apply's scope.
+
+All three mint their chain entry inside ``_admit_lock``, preserving the
+evidence-then-chain ordering that lock exists to protect.
 """
 
 from __future__ import annotations
 
 import os
 import threading
-from typing import Optional
+from contextlib import contextmanager
+from typing import Iterable, Iterator, Optional
 
+from .admission import (
+    BATCH,
+    BLOCK,
+    PROPOSAL,
+    AdmissionReceipt,
+    GovernanceBypassError,
+    UngatedWriteError,
+    _open_admission,
+)
 from .evidence_objects import EvidenceAction, EvidenceChain
-from .hash_chain_v2 import HashChainV2
+from .hash_chain_v2 import HashChainV2, HashEntry
 from .observability import get_logger
 from .spec_binding import SpecBindingManager
+
+__all__ = [
+    "AdmissionReceipt",
+    "GovernanceBypassError",
+    "GovernanceGate",
+    "UngatedWriteError",
+    "get_gate",
+]
 
 
 # Resolve the current_agent_id contextvar lazily so the API layer is not a
@@ -38,10 +75,6 @@ def _current_agent() -> str:
 
 
 _log = get_logger("governance_gate")
-
-
-class GovernanceBypassError(Exception):
-    """Raised when a write is blocked because the spec-hash has drifted."""
 
 
 # ---------------------------------------------------------------------------
@@ -117,8 +150,13 @@ class GovernanceGate:
         actor: str = "",
         target_file: str = "",
         metadata: Optional[dict] = None,
-    ) -> bool:
+    ) -> HashEntry:
         """Admit a write through the governance gate.
+
+        Prefer :meth:`admit_block` / :meth:`admit_batch` /
+        :meth:`admit_proposal`: they call this and then publish the
+        receipt that ``write_block`` requires.  Calling ``admit`` alone
+        records the admission but authorises no write.
 
         Steps:
         1. Verify spec-hash is current.  Raise GovernanceBypassError if drifted.
@@ -134,7 +172,9 @@ class GovernanceGate:
             metadata: Extra contextual data (optional).
 
         Returns:
-            True when the write is admitted.
+            The appended :class:`HashEntry`.  Previously ``True``; the
+            entry carries the identity a receipt is built from, and both
+            historical callers ignored the return value.
 
         Raises:
             GovernanceBypassError: When the spec-hash has drifted and the
@@ -182,7 +222,7 @@ class GovernanceGate:
             # possible across JSONL + SQLite; best-effort atomicity via the
             # lock + ordered write is the strongest guarantee here.
             try:
-                self._chain.append(block_id, action, content)
+                entry = self._chain.append(block_id, action, content)
             except Exception:
                 _log.error(
                     "governance_gate.chain_append_failed_after_evidence",
@@ -198,15 +238,123 @@ class GovernanceGate:
                 action=action,
                 actor=effective_actor,
             )
-            return True
+            return entry
 
-    def current_spec_hash(self) -> Optional[str]:
-        """Return the current spec_hash from the binding, or None."""
-        return self._current_spec_hash()
+    # ------------------------------------------------------------------
+    # Admission scopes — the only way to authorise a block write
+    # ------------------------------------------------------------------
+
+    @contextmanager
+    def admit_block(
+        self,
+        action: str,
+        block_id: str,
+        content: str,
+        actor: str = "",
+        target_file: str = "",
+        metadata: Optional[dict] = None,
+    ) -> Iterator[AdmissionReceipt]:
+        """Admit and authorise a write to exactly *block_id*.
+
+        A ``write_block`` for any other id inside this scope raises
+        :class:`UngatedWriteError`.
+        """
+        receipt = self._mint(action, block_id, content, BLOCK, frozenset({str(block_id)}), actor, target_file, metadata)
+        with _open_admission(receipt) as open_receipt:
+            yield open_receipt
+
+    @contextmanager
+    def admit_batch(
+        self,
+        action: str,
+        batch_id: str,
+        block_ids: Iterable[str],
+        content: str,
+        actor: str = "",
+        target_file: str = "",
+        metadata: Optional[dict] = None,
+    ) -> Iterator[AdmissionReceipt]:
+        """Admit and authorise writes to a fixed set of block ids.
+
+        For operations a per-block proposal would make impossible: a bulk
+        external ingest, a backend migration, a re-stamp pass.  The id set
+        is fixed when the scope opens, so a batch cannot grow to cover a
+        block the chain entry never named.
+        """
+        covers = frozenset(str(bid) for bid in block_ids)
+        receipt = self._mint(action, batch_id, content, BATCH, covers, actor, target_file, metadata)
+        with _open_admission(receipt) as open_receipt:
+            yield open_receipt
+
+    @contextmanager
+    def admit_proposal(
+        self,
+        proposal_id: str,
+        content: str,
+        actor: str = "",
+        target_file: str = "",
+        metadata: Optional[dict] = None,
+    ) -> Iterator[AdmissionReceipt]:
+        """Admit one approved proposal and authorise the blocks it writes.
+
+        Broader than the other two on purpose, and only honest because it
+        is narrow in *reach*: the gate records one chain entry per
+        proposal (keyed on the proposal id, hashing its ops), while the
+        apply engine writes blocks from several ops.  A per-block
+        content-bound receipt is not derivable from that entry, so this
+        scope authorises the apply rather than pretending otherwise.
+        """
+        receipt = self._mint("APPLY", proposal_id, content, PROPOSAL, frozenset(), actor, target_file, metadata)
+        with _open_admission(receipt) as open_receipt:
+            yield open_receipt
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _mint(
+        self,
+        action: str,
+        block_id: str,
+        content: str,
+        kind: str,
+        covers: frozenset[str],
+        actor: str,
+        target_file: str,
+        metadata: Optional[dict],
+    ) -> AdmissionReceipt:
+        """Admit the write, then read the chain entry back before trusting it.
+
+        The read-back is what makes "a receipt that does not resolve is an
+        error" a checked property rather than an assumption.  It costs one
+        indexed SELECT per admission — not per block — so a 10 000-block
+        import pays for it once.
+        """
+        entry = self.admit(
+            action=action,
+            block_id=block_id,
+            content=content,
+            actor=actor,
+            target_file=target_file,
+            metadata=metadata,
+        )
+        confirmed = self._chain.get_by_entry_id(entry.entry_id)
+        if confirmed is None or confirmed.entry_hash != entry.entry_hash:
+            raise GovernanceBypassError(
+                f"admission for {block_id!r} did not resolve in the hash chain (entry {entry.entry_id}); refusing to authorise the write"
+            )
+        return AdmissionReceipt(
+            entry_id=entry.entry_id,
+            content_hash=entry.content_hash,
+            kind=kind,
+            covers=covers,
+            chain_verified=True,
+            actor=actor or _current_agent(),
+        )
+
+    def current_spec_hash(self) -> Optional[str]:
+        """Return the current spec_hash from the binding, or None."""
+        return self._current_spec_hash()
 
     def _current_spec_hash(self) -> Optional[str]:
         binding = self._spec_mgr.get_binding()

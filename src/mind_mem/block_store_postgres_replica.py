@@ -38,6 +38,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, cast
 
+from .admission import require_admission
 from .block_store import BlockStore
 from .block_store_postgres import PostgresBlockStore
 from .observability import get_logger, metrics
@@ -180,6 +181,10 @@ class ReplicatedPostgresBlockStore:
     # ─── Write surface → primary ─────────────────────────────────────
 
     def write_block(self, block: dict[str, Any], *, embedding: list[float] | None = None) -> str:
+        # Enforced here as well as on the primary: this adapter is a
+        # BlockStore in its own right, so a caller holding only the replica
+        # must not get a laxer write surface than one holding the primary.
+        require_admission(str(block.get("_id") or ""))
         # Must forward `embedding`: the primary's signature accepts it, and
         # dropping it both raised TypeError for embedding-aware callers and
         # silently prevented embeddings from ever being stored (vector
