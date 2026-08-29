@@ -134,6 +134,75 @@ jobs:
         # true for its release.
         run: python scripts/count_mcp_tools.py --check-docs
 
+  postgres:
+    # The Postgres backend shipped with NO CI leg at all. 14 test files, 189
+    # tests, gate themselves on MIND_MEM_TEST_PG_DSN and therefore skipped in
+    # every run — "the Postgres backend works" was a local anecdote, not a
+    # measurement, while the fleet runs Postgres in production.
+    #
+    # Verified locally on 2026-08-28 against pgvector/pgvector:pg16: 189 pass.
+    # Two things that make this leg work and are easy to get wrong:
+    #   1. The schema must be provisioned first. Without it, ping() correctly
+    #      reports blocks_table=false and test_ping_live_ok fails — a real
+    #      result about an unprovisioned database, not a product defect.
+    #   2. pgvector is optional at runtime (block_store_postgres does a
+    #      server-side capability check), but the image ships it so this leg
+    #      exercises the vector path instead of silently skipping it.
+    name: "postgres backend"
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: mmtest
+          POSTGRES_PASSWORD: mmtest
+          POSTGRES_DB: mmtest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mmtest -d mmtest"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      MIND_MEM_TEST_PG_DSN: "postgresql://mmtest:mmtest@127.0.0.1:5432/mmtest"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[test,postgres]"
+      - name: Enable pgvector and provision the schema
+        # Done through psycopg rather than psql so this step depends only on
+        # what the job already installs, not on a client binary happening to be
+        # present on the runner image.
+        #
+        # Provisioning is load-bearing: without it ping() correctly reports
+        # blocks_table=false on an empty database and the live ping test fails
+        # -- a true statement about an unprovisioned database, not a defect.
+        run: |
+          python - <<'PROVISION'
+          import os
+          import psycopg
+          from mind_mem.block_store_postgres import PostgresBlockStore
+
+          dsn = os.environ["MIND_MEM_TEST_PG_DSN"]
+          with psycopg.connect(dsn, autocommit=True) as conn:
+              conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+
+          store = PostgresBlockStore(dsn, schema="mind_mem")
+          store._ensure_schema()
+          status = store.ping(timeout=10.0)
+          print("ping:", status)
+          assert status["ok"] is True, status
+          PROVISION
+      - name: Postgres-backed tests
+        run: |
+          FILES=$(grep -rl "MIND_MEM_TEST_PG_DSN" tests/ --include='*.py' | tr '\n' ' ')
+          echo "running: $FILES"
+          python -m pytest $FILES -q -p no:randomly
+
+
   author-identity:
     # Catches the leak path that no local hook can: a commit made in another
     # clone, on another machine, where the repo-local identity was never set and

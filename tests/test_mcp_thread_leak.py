@@ -67,6 +67,13 @@ from mind_mem.storage import get_block_store
 # ---------------------------------------------------------------------------
 
 
+# Upper bound on background-thread growth for ONE shared pool. A pool adds a
+# scheduler plus num_workers (default 3) = 4; the headroom absorbs scheduling
+# jitter and stragglers from earlier tests without coming close to the ~4-per-
+# call leak signature this test exists to catch.
+_MAX_THREAD_GROWTH = 16
+
+
 class _FakeConnectionPool:
     """Minimal stand-in for ``psycopg_pool.ConnectionPool``.
 
@@ -161,10 +168,15 @@ def test_fake_pool_reused_across_repeated_factory_calls(tmp_path, fake_psycopg_p
     )
 
     active_after = threading.active_count()
-    # Exactly 4 background threads (1 scheduler + 3 workers) regardless of N.
-    assert active_after - baseline == 4, (
-        f"thread count grew by {active_after - baseline} across {N} calls "
-        f"(expected a flat +4 for the single shared pool) — thread leak regression."
+    # One shared pool adds 4 background threads (1 scheduler + 3 workers)
+    # regardless of N; the leak adds 4 PER call. Bounded rather than exact for
+    # the same reason as the live-Postgres case below: threading.active_count()
+    # reads the whole interpreter, so a straggler thread from an earlier test
+    # exiting between these two samples silently shifts the delta.
+    grew = active_after - baseline
+    assert grew <= _MAX_THREAD_GROWTH, (
+        f"thread count grew by {grew} across {N} calls (a shared pool adds 4; "
+        f"the leak adds ~4 per call, ~{4 * N} here) — thread leak regression."
     )
 
     # Cleanup: close the one real pool so the fixture teardown is a no-op.
@@ -270,8 +282,24 @@ class TestLivePostgresThreadCount:
             f"recall() calls, got {len(created)} — the per-tool-call Postgres "
             f"pool leak regression is back."
         )
-        assert active_after - baseline == 4, (
-            f"threading.active_count() grew by {active_after - baseline} across "
-            f"{N} recall() calls (expected a flat +4 for one shared pool) — "
-            f"the per-tool-call Postgres pool leak regression is back."
+        # The leak signature is ~4 threads PER CALL, i.e. ~4*N here. Assert a
+        # bound comfortably below that rather than an exact +4.
+        #
+        # `threading.active_count()` is a live reading of a shared interpreter,
+        # not a property of this test: pool workers start asynchronously, and
+        # in a full-suite run the baseline also carries threads from earlier
+        # tests that may not have exited yet. Measured on 2026-08-28 against a
+        # live Postgres, an exact `== 4` failed 2 of 7 full-suite runs while
+        # passing 6 of 6 in isolation — a flaky gate, on a project whose
+        # headline property is determinism.
+        #
+        # The deterministic signal is the pool-construction count asserted
+        # above, exactly as this module's docstring argues; this check is the
+        # coarse backstop, so it is bounded rather than exact.
+        grew = active_after - baseline
+        assert grew <= _MAX_THREAD_GROWTH, (
+            f"threading.active_count() grew by {grew} across {N} recall() "
+            f"calls (a shared pool adds ~4; the leak adds ~4 per call, "
+            f"~{4 * N} here) — the per-tool-call Postgres pool leak "
+            f"regression is back."
         )
