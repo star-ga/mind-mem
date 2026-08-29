@@ -238,7 +238,7 @@ authoring goes through `propose_update` → `approve_apply` like any other block
 kind. Nothing in `task_frames.py`, `dead_ends.py`, `resume_brief.py` or the MCP
 tool module writes — they read the corpus back and nothing else.
 
-> **Status (v4.10.1): the governed write path is not yet open for these
+> **Status (5.0.0): the governed write path is not yet open for these
 > prefixes.** `approve_apply` routes `append_block` through
 > `BlockStore.write_block`, which resolves a block's canonical file from
 > `_BLOCK_PREFIX_MAP` in `block_store.py` and refuses an unrecognised prefix:
