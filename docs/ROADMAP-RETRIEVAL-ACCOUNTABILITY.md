@@ -1,3 +1,30 @@
+> **⚠ SUPERSEDED IN PART — audit 2026-08-28. Do not implement R.1/R.2 as written.**
+>
+> An independent audit (`docs/audit/GROUP-R-AUDIT-2026-08-28.md`) returned **FAIL**.
+> Three findings were re-verified by hand and are load-bearing:
+>
+> 1. **The tier ladder is not connected to recall.** `block_tier_meta` is created
+>    and INNER-JOINed (`memory_tiers.py:157,173`) but has **no writer anywhere
+>    outside `tests/test_memory_tiers.py:79`** — so `_read_meta` always returns
+>    `None` and `check_promotion` never fires. Recall writes
+>    `.mind-mem/block_meta.db` (`_recall_core.py:868`), the MCP tools write
+>    `memory/block_meta.db` (`mcp/tools/recall.py:594`), the ladder reads
+>    `intelligence/tiers.db` (`compaction.py:261`), and `tier_recall` reads
+>    `.sqlite_index/index.db` (`tier_recall.py:127`). **R.1 as specified would be
+>    a no-op with the flag on**, because it patches a path nothing traverses.
+> 2. **`_evict` is not death.** It deletes only the `block_tiers` row
+>    (`memory_tiers.py:381-391`); the block stays in the corpus and reads back as
+>    WORKING. R.2 would tombstone a state transition that never occurs. Real
+>    deletions already have receipts (`deleted_blocks.jsonl`, `audit_chain`), so
+>    the death record belongs in the **evidence chain**, not a side table.
+> 3. **The determinism note below is stale.** `date_score` is already UTC-normalised
+>    and takes an injected `now` (`_recall_scoring.py:120-160`). The real naive-clock
+>    wart is `compaction.py:53,150,180,226`.
+>
+> Corrected dependency order is **R.0 → R.1′ → R.3′ → R.2′ → R.4′** (audit §D).
+> R.0 (wire the ladder onto one DB) is new and blocks everything else.
+> The text below is kept for the diagnosis of *intent*, not as an implementation spec.
+
 # Group R — Retrieval Accountability (memory as rent, not storage)
 
 > **Status:** proposed 2026-08-28. Not started. Every code reference below

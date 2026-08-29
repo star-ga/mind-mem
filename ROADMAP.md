@@ -70,22 +70,42 @@ by its full description below.
 - [ ] **Plugin SDK** — stable API for custom rules / block kinds / detectors
 - [ ] **Chaos testing harness**
 
-### Group R — Retrieval accountability (proposed 2026-08-28, 4 items)
+### Group RA — Retrieval accountability (proposed 2026-08-28; **revised after audit**, 5 items)
 
-Full description: **[`docs/ROADMAP-RETRIEVAL-ACCOUNTABILITY.md`](docs/ROADMAP-RETRIEVAL-ACCOUNTABILITY.md)**.
+Full description: **[`docs/ROADMAP-RETRIEVAL-ACCOUNTABILITY.md`](docs/ROADMAP-RETRIEVAL-ACCOUNTABILITY.md)**
+(partly superseded — read the banner).
+Audit: **[`docs/audit/GROUP-R-AUDIT-2026-08-28.md`](docs/audit/GROUP-R-AUDIT-2026-08-28.md)** — verdict **FAIL** on the original spec.
 
-Reframes recall as *rent a fact has to keep earning* rather than storage.
-Gap analysis against external agent-memory prior art found we already hold
-three of its four nodes (WRITER / DECAY / RENEWER) — DECAY in a stronger,
-reversible form — but exposed one real defect and one missing subsystem.
+Renamed from "Group R" to **Group RA**: `## Group R — edge evidence` already
+exists further down this file.
 
-- [ ] **R.1 — split `returned_count` from `used_count`** *(correctness fix)* — `_recall_core.py:1793` increments `access_count` for every block **returned** by recall, not every block **used**, and `memory_tiers.py:492` promotes on that count. Retrieval currently reinforces its own output. `outcome_attribution.py:311 report_outcome` already records per-block success/failure; it just never reaches the tier path. Additive, opt-in, default-off.
-- [ ] **R.2 — tombstone store on eviction** *(the GRAVE node)* — `memory_tiers.py:381 _evict` is a bare `DELETE FROM block_tiers`; when a block dies we keep nothing. A bounded `block_tombstones` table (`block_id`, `content_hash`, `died_at`, `returned_count`, `used_count`, `death_reason`) gives resurrection evidence and an auditable death record.
-- [ ] **R.3 — retrieval-waste ledger + precision metric** — blocked on R.1 + R.2; then trivial. Surface through existing `retrieval_diagnostics` / `index_stats`. Measure our own corpus; do not quote external figures.
-- [ ] **R.4 — memory dashboard** — ~70% of the reference visualization is computable today (tier shelves, store graph, pipeline strip, cost-of-a-hit); the two panels that are not are exactly retrieval precision and the waste ledger. **Schema first, visualization second** — building it earlier yields panels the schema cannot support.
+The original framing (*rent a fact has to keep earning*) is *wrong for a governed
+store* and the repo already says so: `cognitive_forget.py:96-100` refuses to forget
+a high-importance rarely-read block because "it's often still load-bearing (e.g. an
+ADR)", and `memory_tiers.py:113-121` gives only WORKING a TTL. **Decay must act on
+attention, never on existence.** Silence-is-deletion is hostile to constitutional
+constraints, security rulings, and contradiction records.
 
-> Determinism constraint for all of Group R: take an injected `now`, following
-> `cognitive_forget.py`, **not** `_recall_scoring.py:105` (known wall-clock/local-tz wart).
+Load-bearing audit finding: **the tier ladder is not connected to recall on any
+path** — `block_tier_meta` has no writer outside tests, and four different SQLite
+files are in play. The original R.1 would have been a no-op.
+
+- [ ] **RA.0 — wire the ladder onto one DB** *(new; blocks everything)* — consolidate `block_meta` / `block_tiers` / `block_tier_meta` (recommend `.sqlite_index/index.db`, which `tier_recall.py:127` already reads). Repoint `_recall_core.py:868`, `mcp/tools/recall.py:594`, `mcp/tools/governance.py:892`, `compaction.py:261`; register blocks at index build; give `_read_meta` an injected `now`. Acceptance: recall → promotion cycle → boost visible end-to-end.
+- [ ] **RA.1 — served-set ledger** *(replaces old R.1)* — content-derived `run_id = sha256(query_hash ‖ served ids in rank order ‖ pipeline_hash ‖ index anchor)` (no clock, no randomness — same preimage discipline as `recall_attestation`), a durable `block_serve_counts` table that survives the 30-day prune, and `report_outcome(run_id=…)` so outcomes join a **run**, not a query string. Two counters with asymmetric power: **served** can buy attention tiers only; **credited** (distinct-actor successes, bounded) writes `confirmations` and buys trust tiers. **Absence of credit must never demote** — that is silence-is-deletion in a smaller hat.
+- [ ] **RA.2 — precision + waste ledger** — derived views, never stored scores: precision = credited/served per intent type, waste = `served = 0` over the corpus. Not blocked on tombstones. Measure our own corpus; never quote external figures.
+- [ ] **RA.3 — lifecycle deaths in the evidence chain** *(replaces the tombstone table)* — add `DEMOTE`/`ARCHIVE`/`FORGET` to `EvidenceAction` (`evidence_objects.py:68-77`) and `archive_block`/`forget_block` to `audit_chain.VALID_OPERATIONS`. A mutable side table would contradict tamper-evidence. **Blocked on** a governed *apply* path for consolidation plans — only `plan_consolidation` (dry-run) exists today.
+- [ ] **RA.4 — retention class + alias-merge + rationale-everywhere** — retention class as a pure function of existing fields (PROTECTED / GOVERNED / EPHEMERAL), no clock in the classification. Governed `entities.merge` that re-points edges (`knowledge_graph.py:310-323` currently splits nodes permanently by insertion order). Require `Rationale` on all `propose_update` types, not just decisions.
+- [ ] **RA.5 — dashboard** — after one tier axis is chosen and the data exists. There are currently **three** tier systems; do not render three.
+
+> Determinism constraint for all of Group RA: take an injected `now`, following
+> `cognitive_forget.py`. Note the earlier note here was stale — `date_score` is
+> already UTC-normalised and injectable (`_recall_scoring.py:120-160`); the real
+> naive-clock wart is `compaction.py:53,150,180,226`.
+
+> Explicitly **not** building: outcome-weighted online reranking; any auto-written
+> constraints file without HITL (`guardrails.py:43-50` provenance refusal exists
+> because a ranker-bypass primitive is an injection vector); LLM-judged salience at
+> ingest; a fourth tier system.
 
 ### Group H — Evolving memory graph (prior-art-informed, 2026-05-29)
 
