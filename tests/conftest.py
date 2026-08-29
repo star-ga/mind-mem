@@ -47,3 +47,37 @@ def admitted(tmp_path) -> Iterator[None]:
             )
         )
         yield
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _child_processes_speak_utf8() -> Iterator[None]:
+    """Make every subprocess this suite spawns write UTF-8.
+
+    Many tests run ``mm_cli`` through ``subprocess.run(..., encoding="utf-8")``.
+    On Windows a child Python writes stdout in the console codepage (cp1252),
+    so any non-ASCII character the CLI prints comes back as bytes the parent
+    cannot decode. The decode happens on subprocess's reader THREAD, where the
+    UnicodeDecodeError does not propagate -- ``run`` returns with
+    ``stdout=None`` and the test dies on ``"..." in None`` with a TypeError
+    that says nothing about encoding. Measured 2026-08-29: an em dash in
+    ``mm resume`` output (0x97 in cp1252) failed every Windows and macOS matrix
+    row while passing on Linux, whose default is already UTF-8.
+
+    Asking the child for UTF-8 is the other half of the parent already asking to
+    decode UTF-8; without it the pair only agrees by accident of platform.
+    Ten test modules spawn ``mm_cli`` and none of them set this, so it belongs
+    here rather than in one helper.
+    """
+    import os
+
+    previous = {k: os.environ.get(k) for k in ("PYTHONUTF8", "PYTHONIOENCODING")}
+    os.environ["PYTHONUTF8"] = "1"
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value

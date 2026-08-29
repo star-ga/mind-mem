@@ -14,8 +14,8 @@ When MIND_MEM_TEST_PG_DSN is absent the tests are skipped (no live DB).
 
 from __future__ import annotations
 
-import os
 import contextvars
+import os
 import threading
 import uuid
 from pathlib import Path
@@ -614,10 +614,7 @@ class TestConcurrency:
         # calling context explicitly. This is not a test-only workaround: it is
         # the contract any caller that fans writes out across threads has to
         # honour, because the write gate is context-scoped by design.
-        threads = [
-            threading.Thread(target=contextvars.copy_context().run, args=(_write, i))
-            for i in range(20)
-        ]
+        threads = [threading.Thread(target=contextvars.copy_context().run, args=(_write, i)) for i in range(20)]
         for t in threads:
             t.start()
         for t in threads:
