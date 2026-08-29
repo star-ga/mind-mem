@@ -22,6 +22,8 @@ from __future__ import annotations
 import difflib
 import os
 import shutil
+import stat
+import sys
 import tempfile
 from dataclasses import dataclass
 from typing import Any, Sequence
@@ -97,11 +99,51 @@ def preview_diff(workspace: str, item: ReviewItem, *, max_lines: int = MAX_DIFF_
         # reviewable; a traceback mid-queue destroys work.
         return PreviewResult(item.proposal_id, False, reason=f"preview failed: {type(exc).__name__}: {exc}")
     finally:
-        shutil.rmtree(sandbox, ignore_errors=True)
+        _remove_sandbox(sandbox)
 
     if not text:
         return PreviewResult(item.proposal_id, False, reason="proposal would change nothing", files=targets)
     return PreviewResult(item.proposal_id, True, diff_text=text, files=targets, truncated_lines=elided)
+
+
+def _remove_sandbox(path: str) -> None:
+    """Remove the preview sandbox, read-only files included.
+
+    ``shutil.rmtree(..., ignore_errors=True)`` SILENTLY leaves the directory
+    behind. On Windows a read-only file makes ``os.unlink`` raise
+    PermissionError, rmtree gives up, and nothing is reported -- so a sandbox
+    the code promises to always remove simply survives. Measured 2026-08-29:
+    three Windows CI rows failed
+    ``test_the_sandbox_is_still_removed_when_the_replay_explodes`` with a
+    leftover ``mind-mem-review-*`` directory.
+
+    Clearing the read-only bit and retrying is the standard remedy. The
+    parameter was renamed ``onerror`` -> ``onexc`` in 3.12, and this package
+    supports 3.10 upward, so both spellings are handled. ignore_errors remains
+    the final fallback: a sandbox that cannot be removed must not end a review.
+    """
+
+    def _clear_readonly(func: Any, target: str, _exc: Any) -> None:
+        # BOTH the entry and its parent. Unlinking a file needs write
+        # permission on the DIRECTORY holding it, so clearing only the file's
+        # own bit still fails inside a read-only directory -- which a first
+        # draft of this did, and a read-only-tree test caught.
+        try:
+            parent = os.path.dirname(target)
+            if parent:
+                os.chmod(parent, os.stat(parent).st_mode | stat.S_IWRITE | stat.S_IEXEC)
+            os.chmod(target, stat.S_IWRITE | stat.S_IREAD | (stat.S_IEXEC if os.path.isdir(target) else 0))
+            func(target)
+        except OSError:
+            pass
+
+    try:
+        if sys.version_info >= (3, 12):
+            shutil.rmtree(path, onexc=_clear_readonly)
+        else:
+            shutil.rmtree(path, onerror=_clear_readonly)
+    except OSError:
+        shutil.rmtree(path, ignore_errors=True)
 
 
 def _targets(item: ReviewItem) -> tuple[str, ...]:
