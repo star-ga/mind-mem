@@ -285,18 +285,24 @@ def check_preconditions(ws):
     if _pkg_root:
         env["PYTHONPATH"] = _pkg_root if not existing_pythonpath else _pkg_root + os.pathsep + existing_pythonpath
 
-    # P2: validate.sh (from installation, not workspace)
-    validate_sh = os.path.join(_script_dir, "validate.sh")
-    if not os.path.isfile(validate_sh):
-        report.append("validate: SKIP (script not found)")
-        return True, report
+    # P2: the validator, called DIRECTLY -- no bash in the path.
+    #
+    # This used to run `bash validate.sh <ws>`. On the Windows CI runner a bare
+    # `bash` resolves to C:\Windows\System32\bash.exe -- the WSL launcher --
+    # which has no distribution installed, so it printed (in UTF-16LE)
+    # "Windows Subsystem for Linux has no installed distributions." and exited 1.
+    # validate.sh never ran, there was no TOTAL line, and every governed apply
+    # was refused. The shim is only a backward-compat forwarder to
+    # `python -m mind_mem.validate_py`; going through a shell to reach our own
+    # module bought nothing and cost a whole class of platform fragility.
+    # intel_scan below already calls sys.executable directly -- this now matches.
     try:
         # encoding is explicit: `text=True` alone decodes with the locale
         # preferred encoding, which is cp1252 on Windows, so any non-ASCII the
         # validator prints comes back as mojibake or raises.
-        # nosec B603 B607 — fixed argument list; validate_sh is a package-internal path; shell=False
-        result = subprocess.run(  # nosec B603 B607
-            ["bash", validate_sh, ws],
+        # nosec B603 — fixed argument list, sys.executable, shell=False
+        result = subprocess.run(  # nosec B603
+            [sys.executable, "-m", "mind_mem.validate_py", ws],
             capture_output=True,
             text=True,
             encoding="utf-8",
