@@ -4,6 +4,39 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-08-29
+
+### Fixed
+
+* **`validate.sh` now resolves an interpreter that can actually import
+  `mind_mem`.** It forwarded to a bare `python3`, which is only correct when the
+  first `python3` on PATH happens to be the interpreter the package is installed
+  into. Where it is not, a workspace written by `init()` produced a `validate.sh`
+  that could not run at all, exiting 1 with a bare `ModuleNotFoundError` on
+  stderr — so a caller printing only stdout reported an empty reason. Resolution
+  is now: `$MIND_MEM_PYTHON`, then the interpreter baked into the workspace copy
+  at init time, then any `python3`/`python` on PATH that can import `mind_mem`,
+  then the in-repo copy's sibling package via `PYTHONPATH`; failing all four it
+  exits 127 naming `MIND_MEM_PYTHON` instead of failing obscurely. Running the
+  workspace's `validate_py.py` directly is not an option — it uses
+  package-relative imports.
+
+### Added
+
+* **`mind-mem-bench-ab report`** pools several `run` artifacts into one paired
+  result, with per-tier and per-size-bucket breakdowns. Runs whose comparability
+  signature differs are refused rather than averaged together, and the report
+  carries its exclusions, pooled spend, and agent-inert tasks — a pooled delta
+  without its exclusions overstates itself.
+
+* **A pre-push identity guard** (`scripts/pre-push-hook.sh`). The pre-commit hook
+  can only see the identity `git config` and the environment would supply; it is
+  blind to `git commit --author="..."`. Push is where an identity becomes public
+  and where the real commit objects exist, so that is where the *committed*
+  identity is checked. It fails closed and only ever refuses — it never rewrites
+  history.
+
+
 ### Removed — BREAKING (RA.0: one tier axis)
 
 * **Three block-lifecycle tier ladders collapsed to one; the other two are
