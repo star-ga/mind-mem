@@ -372,6 +372,28 @@ def init(
             continue
         if os.path.exists(src):
             shutil.copy2(src, dst)
+            if script == "validate.sh":
+                # Bake THIS interpreter into the workspace's forwarder. The workspace
+                # was created by an interpreter that can import mind_mem; the `python3`
+                # first on PATH may not be it (measured 2026-08-29: init under 3.12 but
+                # `python3` -> 3.14 without mind_mem, so validate.sh exited 1). The shim
+                # still falls back to a PATH search, so an un-substituted copy keeps
+                # working; this only removes the guesswork when we know the answer.
+                try:
+                    with open(dst, encoding="utf-8") as fh:
+                        _shim = fh.read()
+                    # Replace ONLY the assignment line. A global replace also
+                    # rewrites the sentinel in the "was it substituted?" comparison,
+                    # which silently disables the baked interpreter entirely.
+                    _marker = 'PY_BAKED="@MIND_MEM_PYTHON@"'
+                    if _marker in _shim:
+                        with open(dst, "w", encoding="utf-8") as fh:
+                            fh.write(_shim.replace(
+                                _marker, f'PY_BAKED="{sys.executable}"', 1))
+                except OSError:
+                    # Never fail an init over the convenience substitution -- the
+                    # fallback chain in the shim covers this case.
+                    pass
             created.append(f"file: maintenance/{script}")
 
     # Create mind-mem.json config (never overwrite). For the default

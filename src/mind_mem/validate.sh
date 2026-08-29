@@ -33,4 +33,70 @@ cat >&2 <<'EOF'
 The bash shim is removed in v4.0.
 EOF
 
-exec python3 -m mind_mem.validate_py "$@"
+# --- interpreter resolution -------------------------------------------------
+# `exec python3 -m mind_mem.validate_py` was wrong whenever the `python3` first
+# on PATH is not the interpreter mind_mem is installed into. Measured 2026-08-29:
+# a fresh init() run under python3.12 wrote a workspace whose validate.sh then
+# resolved `python3` -> 3.14.4, which has no mind_mem, so validate.sh exited 1
+# with a bare ModuleNotFoundError on stderr. The caller printed only stdout, so
+# the failure surfaced as an empty message ("validate.sh failed:" and nothing).
+#
+# Running the sibling maintenance/validate_py.py directly is NOT an option: it
+# uses package-relative imports (`from .block_parser import ...`) and raises
+# "attempted relative import with no known parent package" as a loose file.
+#
+# Order: explicit override, then the interpreter baked in at init time, then
+# whatever is on PATH that can actually import mind_mem.
+PY_BAKED="@MIND_MEM_PYTHON@"
+# The sentinel is assembled from two halves ON PURPOSE. A global
+# replace of the placeholder string would otherwise rewrite the comparison
+# below as well, turning the "was it substituted?" test into [[ X != X ]] --
+# always false, so the baked interpreter would be silently ignored and the
+# shim would fall through to the PATH search. (Hit exactly this 2026-08-29.)
+_MM_UNSUBSTITUTED='@MIND_MEM_'"PYTHON@"
+
+_mm_can_import() { "$1" -c 'import mind_mem' >/dev/null 2>&1; }
+
+PY=""
+_mm_pick() {  # $1 = interpreter; succeeds if it can import mind_mem as-is
+    command -v "$1" >/dev/null 2>&1 && _mm_can_import "$1"
+}
+
+if [[ -n "${MIND_MEM_PYTHON:-}" ]]; then
+    PY="$MIND_MEM_PYTHON"          # explicit override always wins
+elif [[ "$PY_BAKED" != "$_MM_UNSUBSTITUTED" ]] && [[ -x "$PY_BAKED" ]] \
+        && _mm_can_import "$PY_BAKED"; then
+    PY="$PY_BAKED"                 # workspace copy: interpreter baked at init
+else
+    for cand in python3 python; do
+        if _mm_pick "$cand"; then PY="$cand"; break; fi
+    done
+    if [[ -z "$PY" ]]; then
+        # In-repo copy (src/mind_mem/validate.sh) with mind_mem not installed into
+        # any interpreter on PATH: the package is sitting right next to us, so put
+        # its parent on PYTHONPATH rather than giving up. This is the path the repo's
+        # own tests take -- they invoke the package copy directly, which never gets
+        # an interpreter baked in (that only happens when init() writes a workspace).
+        _MM_HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        _MM_PKG_PARENT="$(dirname "$_MM_HERE")"
+        if [[ -f "$_MM_PKG_PARENT/mind_mem/__init__.py" ]]; then
+            for cand in python3 python; do
+                command -v "$cand" >/dev/null 2>&1 || continue
+                if PYTHONPATH="$_MM_PKG_PARENT${PYTHONPATH:+:$PYTHONPATH}" \
+                        "$cand" -c 'import mind_mem' >/dev/null 2>&1; then
+                    export PYTHONPATH="$_MM_PKG_PARENT${PYTHONPATH:+:$PYTHONPATH}"
+                    PY="$cand"
+                    break
+                fi
+            done
+        fi
+    fi
+fi
+
+if [[ -z "$PY" ]]; then
+    echo "[mind-mem][error] no interpreter on PATH can 'import mind_mem'." >&2
+    echo "    Set MIND_MEM_PYTHON=/path/to/python to point at the right one." >&2
+    exit 127
+fi
+
+exec "$PY" -m mind_mem.validate_py "$@"
