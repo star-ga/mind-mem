@@ -1078,7 +1078,11 @@ def _cmd_explain(args: argparse.Namespace) -> int:
             if os.path.isfile(cfg_path):
                 with open(cfg_path, encoding="utf-8") as fh:
                     cfg = json.load(fh).get("recall", {})
-            results = HybridBackend(cfg).search(ws, args.query, limit=limit)
+            # HybridBackend.search is (query, workspace, ...) -- these were
+            # swapped, and the call sits inside a bare `except Exception`
+            # that falls back to plain recall, so the hybrid leg failed
+            # SILENTLY and degraded with no signal to the operator.
+            results = HybridBackend(cfg).search(args.query, ws, limit=limit)
         except Exception:
             from mind_mem.recall import recall as _recall
 
