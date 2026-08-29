@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -21,7 +20,6 @@ from mind_mem import (
     multi_modal,
     online_trainer,
     staleness,
-    tiered_memory,
     tracking,
     turbo_quant,
 )
@@ -156,46 +154,6 @@ class TestMemoryMesh:
         mesh.log_sync("p", memory_mesh.SyncScope.MEMORIES, 10, 2)
         log = mesh.audit_log()
         assert log[0]["blocks_transferred"] == 10
-
-
-# ---------------------------------------------------------------------------
-# Tiered memory
-# ---------------------------------------------------------------------------
-
-
-class TestTieredMemory:
-    def test_tier_boost_ordering(self) -> None:
-        assert tiered_memory.Tier.PROCEDURAL.retrieval_boost > tiered_memory.Tier.WORKING.retrieval_boost
-
-    def test_decay_decreases_over_time(self) -> None:
-        decayed = tiered_memory.decay(
-            1.0,
-            "2026-01-01T00:00:00Z",
-            now=datetime(2026, 4, 1, tzinfo=timezone.utc),
-        )
-        assert decayed < 1.0
-
-    def test_reset_on_access_returns_one(self) -> None:
-        assert tiered_memory.reset_on_access(0.2) == 1.0
-
-    def test_promote_candidates_threshold(self) -> None:
-        block = tiered_memory.TieredBlock(
-            block_id="B",
-            tier=tiered_memory.Tier.EPISODIC,
-            strength=0.5,
-            session_count=5,
-        )
-        cands = tiered_memory.promote_candidates([block])
-        assert cands and cands[0].to_tier == tiered_memory.Tier.SEMANTIC
-
-    def test_procedural_never_promoted(self) -> None:
-        block = tiered_memory.TieredBlock(
-            block_id="X",
-            tier=tiered_memory.Tier.PROCEDURAL,
-            strength=1.0,
-            session_count=100,
-        )
-        assert tiered_memory.promote_candidates([block]) == []
 
 
 # ---------------------------------------------------------------------------

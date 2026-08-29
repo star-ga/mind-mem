@@ -1,24 +1,17 @@
-"""Tests for round-3 audit extensions: observability + eviction."""
+"""Tests for round-3 audit extensions: observability.
+
+The eviction half went with RA.0 — every one of its policies was a query
+against ``block_recall_tier``, the deleted ladder's table.
+"""
 
 from __future__ import annotations
 
 import json
-import sqlite3
 from pathlib import Path
 
 import pytest
 
 from mind_mem.v4 import FeatureDisabledError
-from mind_mem.v4.eviction import (
-    DEFAULT_EVICTION_LIMIT,
-    DEFAULT_LOW_SURPRISE_THRESHOLD,
-    EvictionPlan,
-    EvictionPolicy,
-    available_policies,
-    plan_eviction,
-    register_policy,
-)
-from mind_mem.v4.eviction import FLAG as EVICT_FLAG
 from mind_mem.v4.observability import FLAG as OBS_FLAG
 from mind_mem.v4.observability import (
     Counter,
@@ -221,170 +214,3 @@ def test_metric_types_are_distinct() -> None:
     assert Counter("c").name == "c"
     assert Gauge("g").name == "g"
     assert Histogram("h").name == "h"
-
-
-# ===========================================================================
-# eviction.py
-# ===========================================================================
-
-
-@pytest.fixture
-def evict_on(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    return _cfg(tmp_path, monkeypatch, **{EVICT_FLAG: True})
-
-
-@pytest.fixture
-def evict_off(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    return _cfg(tmp_path, monkeypatch, **{EVICT_FLAG: False})
-
-
-def _seed_cold(workspace: Path, rows: list[tuple[str, str, float | None]]) -> None:
-    """rows: (block_id, last_seen_at, last_surprise)."""
-    db = workspace / "index.db"
-    with sqlite3.connect(db) as conn:
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS block_recall_tier ("
-            "block_id TEXT PRIMARY KEY, tier TEXT NOT NULL DEFAULT 'cold', "
-            "last_seen_at TEXT NOT NULL, promoted_count INTEGER NOT NULL DEFAULT 0, "
-            "last_surprise REAL, block_version INTEGER NOT NULL DEFAULT 0)"
-        )
-        conn.executemany(
-            "INSERT INTO block_recall_tier (block_id, tier, last_seen_at, last_surprise) VALUES (?, 'cold', ?, ?)",
-            rows,
-        )
-        conn.commit()
-
-
-@pytest.mark.unit
-def test_evict_flag_off_blocks_plan(evict_off: Path) -> None:
-    with pytest.raises(FeatureDisabledError):
-        plan_eviction(evict_off)
-
-
-@pytest.mark.unit
-def test_evict_returns_empty_when_db_missing(evict_on: Path) -> None:
-    p = plan_eviction(evict_on)
-    assert isinstance(p, EvictionPlan)
-    assert p.count == 0
-
-
-@pytest.mark.unit
-def test_evict_lru_returns_oldest_first(evict_on: Path) -> None:
-    _seed_cold(
-        evict_on,
-        [
-            ("B-newer", "2026-05-10T05:00:00Z", 0.4),
-            ("B-oldest", "2026-05-09T05:00:00Z", 0.4),
-            ("B-mid", "2026-05-09T18:00:00Z", 0.4),
-        ],
-    )
-    p = plan_eviction(evict_on, EvictionPolicy.LRU, limit=10)
-    ids = [bid for bid, _r in p.candidates]
-    assert ids == ["B-oldest", "B-mid", "B-newer"]
-    # Reasons carry the LRU tag.
-    assert all(r.startswith("lru:") for _b, r in p.candidates)
-
-
-@pytest.mark.unit
-def test_evict_lru_respects_limit(evict_on: Path) -> None:
-    _seed_cold(
-        evict_on,
-        [(f"B-{i:02}", f"2026-05-{i + 1:02}T00:00:00Z", 0.5) for i in range(20)],
-    )
-    p = plan_eviction(evict_on, EvictionPolicy.LRU, limit=3)
-    assert p.count == 3
-
-
-@pytest.mark.unit
-def test_evict_low_surprise_filters(evict_on: Path) -> None:
-    _seed_cold(
-        evict_on,
-        [
-            ("B-bored", "2026-05-10T00:00:00Z", 0.05),
-            ("B-active", "2026-05-10T00:00:00Z", 0.8),
-            ("B-medium", "2026-05-10T00:00:00Z", 0.4),
-        ],
-    )
-    p = plan_eviction(evict_on, EvictionPolicy.LOW_SURPRISE, threshold=0.1)
-    ids = {bid for bid, _r in p.candidates}
-    assert ids == {"B-bored"}
-
-
-@pytest.mark.unit
-def test_evict_age_filters_by_cutoff(evict_on: Path) -> None:
-    _seed_cold(
-        evict_on,
-        [
-            ("B-old", "2024-01-01T00:00:00Z", 0.5),
-            ("B-mid", "2025-06-01T00:00:00Z", 0.5),
-            ("B-recent", "2026-05-10T00:00:00Z", 0.5),
-        ],
-    )
-    p = plan_eviction(evict_on, EvictionPolicy.AGE, cutoff_iso="2026-01-01T00:00:00Z")
-    ids = {bid for bid, _r in p.candidates}
-    assert ids == {"B-old", "B-mid"}
-
-
-@pytest.mark.unit
-def test_evict_composite_unions_dedupes(evict_on: Path) -> None:
-    _seed_cold(
-        evict_on,
-        [
-            ("B-old-bored", "2024-01-01T00:00:00Z", 0.05),  # old AND bored
-            ("B-old", "2024-06-01T00:00:00Z", 0.5),
-            ("B-bored", "2026-01-01T00:00:00Z", 0.05),
-            ("B-fine", "2026-05-10T00:00:00Z", 0.9),
-        ],
-    )
-    p = plan_eviction(
-        evict_on,
-        EvictionPolicy.COMPOSITE,
-        policies=[EvictionPolicy.AGE.value, EvictionPolicy.LOW_SURPRISE.value],
-        cutoff_iso="2025-01-01T00:00:00Z",
-        threshold=0.1,
-    )
-    ids = [bid for bid, _r in p.candidates]
-    # B-old-bored appears in both, should not be duplicated.
-    assert ids.count("B-old-bored") == 1
-    assert "B-fine" not in ids
-
-
-@pytest.mark.unit
-def test_evict_unknown_policy_returns_empty(evict_on: Path) -> None:
-    p = plan_eviction(evict_on, "no_such_policy")
-    assert p.count == 0
-
-
-@pytest.mark.unit
-def test_register_policy_runs_custom_fn(evict_on: Path) -> None:
-    def always_one(_w: object, **_: object) -> list[tuple[str, str]]:
-        return [("B-special", "custom:always_pick_me")]
-
-    register_policy("custom_pick", always_one)
-    p = plan_eviction(evict_on, "custom_pick")
-    assert p.candidates == [("B-special", "custom:always_pick_me")]
-
-
-@pytest.mark.unit
-def test_available_policies_includes_builtins(evict_on: Path) -> None:
-    out = available_policies()
-    assert EvictionPolicy.LRU in out
-    assert EvictionPolicy.LOW_SURPRISE in out
-    assert EvictionPolicy.AGE in out
-    assert EvictionPolicy.COMPOSITE in out
-
-
-@pytest.mark.unit
-def test_default_constants_documented() -> None:
-    """Public constants stay where production tuners look for them."""
-    assert DEFAULT_EVICTION_LIMIT == 100
-    assert DEFAULT_LOW_SURPRISE_THRESHOLD == 0.1
-
-
-@pytest.mark.unit
-def test_eviction_plan_count_property() -> None:
-    p = EvictionPlan(
-        policy=EvictionPolicy.LRU,
-        candidates=[("B-1", "x"), ("B-2", "y"), ("B-3", "z")],
-    )
-    assert p.count == 3

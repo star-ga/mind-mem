@@ -2,8 +2,7 @@
 "caller-supplied" gap from round 2 audit).
 
 Round 2 multi-LLM audit (4/4 model consensus 2026-05-10) flagged that
-``surprise_weighted`` and ``consolidation_worker`` both take
-embeddings as caller-supplied inputs — meaning the recall log is
+``surprise_weighted`` takes embeddings as a caller-supplied input — meaning the recall log is
 unreachable to the kernel layer without external glue. This module
 closes that gap.
 

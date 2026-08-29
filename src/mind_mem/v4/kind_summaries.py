@@ -24,8 +24,8 @@ The summary row carries an ``updated_at`` timestamp so callers can
 gate refresh by staleness.
 
 This module ships the planner; the caller decides when to refresh
-(write-time hook, periodic batch, on-demand). Pure-function shape
-matches :mod:`consolidation_worker`.
+(write-time hook, periodic batch, on-demand). Pure-function shape: the planner is
+read-only against the workspace, so calling it is always safe.
 
 Feature-flag gated under ``v4.kind_summaries``.
 

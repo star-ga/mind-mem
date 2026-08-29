@@ -1,13 +1,12 @@
 """v4 kernel strategy implementations (Group A).
 
-Lands the five named strategies declared in
+Lands the four named strategies declared in
 :mod:`mind_mem.v4.cognitive_kernel` and registers them at import time.
 Each strategy takes a default-kernel candidate list and **re-ranks**
 it according to a specific signal:
 
     surprise_weighted   semantic distance from rolling recall context
     lineage_first       v3.11 typed-edge graph proximity
-    recent_first        last-seen-at recency from the tier table
     contradicts_first   blocks linked by ``contradicts`` edges first
     graph_walk          bounded BFS from a seed match
 
@@ -20,7 +19,6 @@ Strategies fall back gracefully when their signal is absent:
 
   - lineage_first / contradicts_first / graph_walk degrade to
     DEFAULT when the lineage graph table does not exist yet.
-  - recent_first degrades to DEFAULT when block_recall_tier is empty.
   - surprise_weighted degrades to DEFAULT when no embedding centroid
     is supplied (the embedding pipeline that produces centroids lands
     in a separate v4 commit; for now callers pass the centroid in).
@@ -50,7 +48,6 @@ from .surprise_retrieval import compute_surprise
 __all__ = [
     "surprise_weighted_kernel",
     "lineage_first_kernel",
-    "recent_first_kernel",
     "contradicts_first_kernel",
     "graph_walk_kernel",
 ]
@@ -185,66 +182,6 @@ def lineage_first_kernel(
         kernel=KernelKind.LINEAGE_FIRST,
         hits=rescored,
         metadata={"max_hops": max_hops, "nonzero": sum(1 for v in edge_counts.values() if v > 0)},
-    )
-
-
-# ---------------------------------------------------------------------------
-# recent_first
-# ---------------------------------------------------------------------------
-
-
-def recent_first_kernel(workspace: str, query: str, **_: Any) -> KernelResult:
-    """Boost candidates whose ``block_recall_tier.last_seen_at`` is recent.
-
-    Reads the v4 ``block_recall_tier`` table. Each candidate's score
-    becomes ``base_score + recency_bonus`` where recency is
-    ``1.0 - hop_index / total_hops``. Missing rows score 0 recency
-    (no boost). Falls back to DEFAULT when the table is missing.
-    """
-    base = DEFAULT_KERNEL(workspace, query)
-    conn = _open(workspace)
-    if conn is None or not _table_exists(conn, "block_recall_tier"):
-        if conn is not None:
-            conn.close()
-        return KernelResult(
-            kernel=KernelKind.RECENT_FIRST,
-            hits=base.hits,
-            metadata={"degraded": True, "reason": "no_tier_table"},
-        )
-
-    rank: dict[str, int] = {}
-    try:
-        # Most-recent → lowest rank index.
-        rows = conn.execute("SELECT block_id FROM block_recall_tier ORDER BY last_seen_at DESC").fetchall()
-        for i, r in enumerate(rows):
-            rank[r[0]] = i
-    finally:
-        conn.close()
-
-    if not rank:
-        return KernelResult(
-            kernel=KernelKind.RECENT_FIRST,
-            hits=base.hits,
-            metadata={"degraded": True, "reason": "empty_tier_table"},
-        )
-
-    total = float(len(rank))
-    rescored: list[KernelHit] = []
-    for h in base.hits:
-        idx = rank.get(h.block_id)
-        bonus = 0.0 if idx is None else (1.0 - idx / total)
-        rescored.append(
-            KernelHit(
-                block_id=h.block_id,
-                score=h.score + bonus,
-                reason=f"recent_first:bonus={bonus:.3f}",
-            )
-        )
-    rescored.sort(key=lambda h: h.score, reverse=True)
-    return KernelResult(
-        kernel=KernelKind.RECENT_FIRST,
-        hits=rescored,
-        metadata={"tier_table_size": int(total)},
     )
 
 
@@ -406,7 +343,6 @@ from .cognitive_kernel import _registry  # noqa: E402
 
 _registry[KernelKind.SURPRISE_WEIGHTED] = surprise_weighted_kernel
 _registry[KernelKind.LINEAGE_FIRST] = lineage_first_kernel
-_registry[KernelKind.RECENT_FIRST] = recent_first_kernel
 _registry[KernelKind.CONTRADICTS_FIRST] = contradicts_first_kernel
 _registry[KernelKind.GRAPH_WALK] = graph_walk_kernel
 
@@ -419,7 +355,6 @@ def _maybe_warmup() -> None:
         # Trigger any lazy imports the strategies depend on.
         _ = surprise_weighted_kernel  # touch
         _ = lineage_first_kernel
-        _ = recent_first_kernel
         _ = contradicts_first_kernel
         _ = graph_walk_kernel
 

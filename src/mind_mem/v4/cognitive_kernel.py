@@ -12,8 +12,9 @@ default. But different reasoning tasks want different memory routing:
                          candidate set. Useful for tracing decision chains
                          and 'why is this the way it is'.
 
-    recent_first         Temporal recency boost. Useful for 'what changed
-                         lately' queries.
+    recent_first         Routing name only — no built-in strategy since RA.0
+                         deleted the recall-tier ladder it read from. Supply
+                         one with register_kernel() to use the name.
 
     contradicts_first    Surfaces lineage-contradiction edges before
                          consensus. Useful for hypothesis testing and
@@ -88,6 +89,11 @@ class KernelKind(str, Enum):
     DEFAULT = "default"
     SURPRISE_WEIGHTED = "surprise_weighted"
     LINEAGE_FIRST = "lineage_first"
+    #: No built-in strategy. RA.0 deleted the recall-tier ladder this
+    #: read its last-seen-at from; the routing name stays available for
+    #: a caller-supplied :func:`register_kernel` strategy, and
+    #: :func:`run_kernel` already answers an unregistered kind with the
+    #: list of the ones that are.
     RECENT_FIRST = "recent_first"
     CONTRADICTS_FIRST = "contradicts_first"
     GRAPH_WALK = "graph_walk"

@@ -11,7 +11,6 @@ Design rationale: ``docs/roadmap-v4.md``.
 Surfaces (mapped to ROADMAP groups):
 
 A. cognition / model layer
-   - tier-aware block schema additions   →  v4.tier_memory
    - Cognitive Mind Kernel API           →  v4.cognitive_kernel
    - surprise-weighted retrieval term    →  v4.surprise_retrieval
 

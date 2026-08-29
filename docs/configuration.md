@@ -732,40 +732,24 @@ mutating the workspace.
 
 ---
 
-## Tier-Aware Retrieval Scoring (v3.2.0+)
+## Tier-Aware Retrieval Scoring — removed (RA.0)
 
-Memory blocks assigned to a TierManager tier (`WORKING`, `SHARED`,
-`LONG_TERM`, `VERIFIED` — see `memory_tiers.py`) get a score
-multiplier applied after RRF fusion. Opt-in via a single boolean;
-the multipliers are fixed so operators don't need to hand-tune four
-dials to feel the effect.
+`retrieval.tier_boost` and `retrieval.tier_boost_weights` no longer exist.
+The module that read them (`tier_recall.py`) held a hard copy of
+`memory_tiers.MemoryTier`'s ordinals as score multipliers, kept in lockstep
+with the enum by comment. It had no importer outside its own tests, so the
+boost never reached a ranking.
 
-| Key | Type | Default | Description |
-| --- | --- | --- | --- |
-| `retrieval.tier_boost` | boolean | `false` | Master switch. Keep disabled if your workspace hasn't adopted the tier system — boost treats untiered blocks as `WORKING` (0.7x), which would demote them below tiered peers. |
+RA.0 collapsed the tree's tier ladders down to one —
+`memory_tiers.MemoryTier` (`WORKING` / `SHARED` / `LONG_TERM` / `VERIFIED`) —
+and deleted the duplicates rather than abstracting over them. The multipliers
+went with them, deliberately: a tier that moves a recall score is a state
+transition acting on the ranking, and the governance ruling routes tier
+promotion through a proposal that `approve_apply` executes, never through a
+direct write or an automatic promotion off usage counts.
 
-Fixed multipliers (from `src/mind_mem/tier_recall.py`):
-
-| Tier | Multiplier | Intent |
-| --- | --- | --- |
-| `WORKING` | 0.7x | Hot scratch context — demoted so trusted tiers surface first. |
-| `SHARED` | 1.0x | Shared team knowledge — neutral. |
-| `LONG_TERM` | 1.5x | Stable historical decisions. |
-| `VERIFIED` | 2.0x | Human-approved ground truth — ranks highest. |
-
-```json
-{
-  "retrieval": {
-    "tier_boost": true
-  }
-}
-```
-
-Boosts are applied after RRF fusion so the relative ranking within
-each tier is preserved — the boost only re-weights *across* tiers.
-A future release may promote this from boolean to a nested
-dictionary once enough workspaces have confirmed the fixed policy
-fits their corpus.
+Both keys are ignored if present in `mind-mem.json`. Nothing to migrate: the
+boost had no effect to preserve.
 
 ---
 

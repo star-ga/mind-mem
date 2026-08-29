@@ -37,7 +37,6 @@ from typing import Final
 #: ``mind-mem.json: v4: {...}``. Order roughly matches ROADMAP §A→§E.
 ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     # Group A — cognition / model layer
-    "tier_memory",
     "cognitive_kernel",
     "surprise_retrieval",
     # Group B — knowledge graph
@@ -60,13 +59,11 @@ ALL_V4_FLAGS: Final[tuple[str, ...]] = (
     "embedding_fallback",
     "pq",  # product-quantization codec (audit 4/4 consensus 2026-05-10)
     "hnsw_kind_index",  # HNSW kind-filtered ANN (audit 3/4)
-    "consolidation_worker",  # write-time clustering worker (audit 2/4)
     "federation",  # cross-agent version vectors + conflict log (round 2 audit 4/4)
     "embedding_pipeline",  # auto-derive embeddings (round 2 audit 4/4)
     "kind_summaries",  # GraphRAG-style per-kind summaries (round 2 audit 3/4)
     "self_editing",  # MemGPT-style propose_edit / approve_edit (round 2 audit 2/4)
     "observability",  # counters / gauges / histograms (round 3 audit 4/4)
-    "eviction",  # cold-tier eviction policies (round 3 audit 2/4)
     "backpressure",  # ingestion overload signal (round 4 audit, DeepSeek 9.75→10)
     "block_metadata",  # ChromaDB-style tags + Weaviate-style validators (round 4 audit)
     "circuit_breaker",  # external dependency CB (round 5 audit, Mistral + GLM 9.9→10)

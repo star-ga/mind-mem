@@ -12,8 +12,7 @@ Covers six surfaces shipped against the round-4 multi-LLM audit:
                          validators
     observability        cardinality cap returns overflow sentinel +
                          drop counter
-    eviction             debug_plan grouping + set_active_policy /
-                         active_policy
+    (eviction was deleted by RA.0 along with the ladder it read)
     surprise_retrieval   FallbackPolicy NEUTRAL/PROMOTE/DEMOTE/RAISE
                          on bad embeddings
 """
@@ -50,14 +49,6 @@ from mind_mem.v4.block_metadata import (
     register_schema_validator,
     set_block_metadata,
     validate_block,
-)
-from mind_mem.v4.eviction import FLAG as EVICT_FLAG
-from mind_mem.v4.eviction import (
-    EvictionPlan,
-    EvictionPolicy,
-    active_policy,
-    register_policy,
-    set_active_policy,
 )
 from mind_mem.v4.health import (
     health_check,
@@ -189,14 +180,12 @@ def health_ws(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         tmp_path,
         monkeypatch,
         **{
-            "tier_memory": True,
             "block_kinds": True,
             "federation": True,
             "self_editing": True,
             "kind_summaries": True,
             "block_metadata": True,
             OBS_FLAG: True,
-            EVICT_FLAG: True,
         },
     )
 
@@ -481,71 +470,6 @@ def test_observability_cap_separate_per_kind(obs_on: Path, monkeypatch: pytest.M
     snap = snapshot()
     assert "v4.cardinality.dropped_counter" in snap
     assert "g1" in snap and "g2" in snap
-
-
-# ===========================================================================
-# eviction debug_plan + active_policy
-# ===========================================================================
-
-
-@pytest.fixture
-def evict_on(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    return _cfg(tmp_path, monkeypatch, **{EVICT_FLAG: True})
-
-
-@pytest.mark.unit
-def test_eviction_debug_plan_groups_by_tag(evict_on: Path) -> None:
-    plan = EvictionPlan(
-        policy=EvictionPolicy.COMPOSITE,
-        candidates=[
-            ("b1", "lru:last_seen=2026-01-01"),
-            ("b2", "lru:last_seen=2026-02-01"),
-            ("b3", "low_surprise:s=0.05"),
-        ],
-    )
-    grouped = plan.debug_plan()
-    assert set(grouped["lru"]) == {"b1", "b2"}
-    assert grouped["low_surprise"] == ["b3"]
-
-
-@pytest.mark.unit
-def test_eviction_debug_plan_handles_missing_colon(evict_on: Path) -> None:
-    plan = EvictionPlan(policy=EvictionPolicy.LRU, candidates=[("b1", "no_colon_reason")])
-    grouped = plan.debug_plan()
-    assert "no_colon_reason" in grouped
-
-
-@pytest.mark.unit
-def test_eviction_set_active_policy_round_trip(evict_on: Path) -> None:
-    set_active_policy(EvictionPolicy.AGE)
-    assert active_policy() == EvictionPolicy.AGE
-    set_active_policy("low_surprise")
-    assert active_policy() == EvictionPolicy.LOW_SURPRISE
-    # Restore default for subsequent tests.
-    set_active_policy(EvictionPolicy.LRU)
-
-
-@pytest.mark.unit
-def test_eviction_set_active_policy_rejects_unknown(evict_on: Path) -> None:
-    with pytest.raises(ValueError):
-        set_active_policy("never_registered_policy")
-
-
-@pytest.mark.unit
-def test_eviction_set_active_policy_accepts_custom_after_register(
-    evict_on: Path,
-) -> None:
-    register_policy("custom_round4", lambda *_a, **_k: [("b1", "custom:test")])
-    set_active_policy("custom_round4")
-    assert active_policy() == "custom_round4"
-    set_active_policy(EvictionPolicy.LRU)
-
-
-@pytest.mark.unit
-def test_eviction_active_policy_flag_off(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    _cfg(tmp_path, monkeypatch, **{EVICT_FLAG: False})
-    with pytest.raises(FeatureDisabledError):
-        active_policy()
 
 
 # ===========================================================================

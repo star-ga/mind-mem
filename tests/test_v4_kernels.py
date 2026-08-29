@@ -1,7 +1,7 @@
 """Tests for the v4 kernel strategy implementations.
 
 Covers all 5 strategies registered in mind_mem.v4.kernels:
-surprise_weighted, lineage_first, recent_first, contradicts_first,
+surprise_weighted, lineage_first, contradicts_first,
 graph_walk. Each has graceful-degrade tests when the underlying state
 (lineage table, tier table, embeddings, centroid) is absent.
 """
@@ -21,7 +21,6 @@ from mind_mem.v4.kernels import (  # noqa: F401  — import to trigger auto-regi
     contradicts_first_kernel,
     graph_walk_kernel,
     lineage_first_kernel,
-    recent_first_kernel,
     surprise_weighted_kernel,
 )
 
@@ -31,7 +30,6 @@ def cfg_on(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     cfg = {
         "v4": {
             "cognitive_kernel": {"enabled": True},
-            "tier_memory": {"enabled": True},
             "surprise_retrieval": {"enabled": True},
         }
     }
@@ -67,12 +65,14 @@ def fake_v3_recall(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
 
 
 @pytest.mark.unit
-def test_all_five_strategies_registered(cfg_on: Path, fake_v3_recall: list[dict]) -> None:
-    """After importing the kernels module, every named strategy is reachable."""
+def test_all_four_strategies_registered(cfg_on: Path, fake_v3_recall: list[dict]) -> None:
+    """After importing the kernels module, every built-in strategy is
+    reachable. ``RECENT_FIRST`` is deliberately absent: RA.0 deleted the
+    recall-tier ladder it read, and the routing name now carries no
+    built-in strategy."""
     for k in (
         KernelKind.SURPRISE_WEIGHTED,
         KernelKind.LINEAGE_FIRST,
-        KernelKind.RECENT_FIRST,
         KernelKind.CONTRADICTS_FIRST,
         KernelKind.GRAPH_WALK,
     ):
@@ -179,65 +179,6 @@ def test_lineage_first_promotes_well_connected(cfg_on: Path, fake_v3_recall: lis
     assert by_id["B-1"] == pytest.approx(0.9 * 1.1)
     # B-1 still ranks above B-3 because base_score dominates.
     assert out.hits[0].block_id == "B-1"
-
-
-# ---------------------------------------------------------------------------
-# recent_first
-# ---------------------------------------------------------------------------
-
-
-def _make_tier_table(workspace: Path, rows: list[tuple[str, str]]) -> None:
-    """rows: (block_id, last_seen_at_iso)."""
-    db = workspace / "index.db"
-    with sqlite3.connect(db) as conn:
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS block_recall_tier ("
-            "block_id TEXT PRIMARY KEY, tier TEXT NOT NULL DEFAULT 'warm', "
-            "last_seen_at TEXT NOT NULL, promoted_count INTEGER NOT NULL DEFAULT 0, "
-            "last_surprise REAL, block_version INTEGER NOT NULL DEFAULT 0)"
-        )
-        conn.executemany(
-            "INSERT INTO block_recall_tier (block_id, tier, last_seen_at) VALUES (?, 'warm', ?)",
-            rows,
-        )
-        conn.commit()
-
-
-@pytest.mark.unit
-def test_recent_first_degrades_without_tier_table(cfg_on: Path, fake_v3_recall: list[dict]) -> None:
-    out = recent_first_kernel(str(cfg_on), "q")
-    assert out.metadata.get("degraded") is True
-
-
-@pytest.mark.unit
-def test_recent_first_degrades_when_tier_table_empty(cfg_on: Path, fake_v3_recall: list[dict]) -> None:
-    _make_tier_table(cfg_on, [])
-    out = recent_first_kernel(str(cfg_on), "q")
-    assert out.metadata.get("degraded") is True
-
-
-@pytest.mark.unit
-def test_recent_first_boosts_recently_seen(cfg_on: Path, fake_v3_recall: list[dict]) -> None:
-    _make_tier_table(
-        cfg_on,
-        [
-            ("B-5", "2026-05-10T10:00:00Z"),  # most recent
-            ("B-3", "2026-05-10T05:00:00Z"),
-            ("B-1", "2026-05-09T12:00:00Z"),  # oldest
-        ],
-    )
-    out = recent_first_kernel(str(cfg_on), "q")
-    by_id = {h.block_id: h.score for h in out.hits}
-    # B-5 base 0.3 + bonus (1 - 0/3) = 1.0 → 1.3
-    # B-3 base 0.5 + bonus (1 - 1/3) ≈ 0.667 → 1.167
-    # B-1 base 0.9 + bonus (1 - 2/3) ≈ 0.333 → 1.233
-    # B-2, B-4 base + 0
-    assert by_id["B-5"] == pytest.approx(0.3 + 1.0)
-    assert by_id["B-3"] == pytest.approx(0.5 + (1 - 1.0 / 3.0))
-    assert by_id["B-1"] == pytest.approx(0.9 + (1 - 2.0 / 3.0))
-    assert by_id["B-2"] == pytest.approx(0.7)  # no bonus
-    # B-5 has highest combined score.
-    assert out.hits[0].block_id == "B-5"
 
 
 # ---------------------------------------------------------------------------
@@ -368,11 +309,10 @@ def test_graph_walk_no_seeds_no_default_hits(cfg_on: Path, monkeypatch: pytest.M
 
 @pytest.mark.unit
 def test_mind_recall_routes_through_each_strategy(cfg_on: Path, fake_v3_recall: list[dict]) -> None:
-    """End-to-end: register five → dispatch via mind_recall → get back KernelResult."""
+    """End-to-end: register four → dispatch via mind_recall → get back KernelResult."""
     for k in (
         KernelKind.SURPRISE_WEIGHTED,
         KernelKind.LINEAGE_FIRST,
-        KernelKind.RECENT_FIRST,
         KernelKind.CONTRADICTS_FIRST,
         KernelKind.GRAPH_WALK,
     ):

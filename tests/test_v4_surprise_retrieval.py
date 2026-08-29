@@ -235,7 +235,7 @@ def test_promote_with_explicit_threshold(cfg_on: Path) -> None:
 
 @pytest.mark.unit
 def test_default_threshold_value() -> None:
-    """Documented default to keep tests + tier_memory in sync."""
+    """Documented default, pinned so a silent change fails here."""
     assert DEFAULT_PROMOTE_THRESHOLD == 0.65
 
 

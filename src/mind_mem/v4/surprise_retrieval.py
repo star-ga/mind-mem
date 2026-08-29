@@ -12,10 +12,12 @@ Two consumers depend on this module:
        descending surprise instead of by RRF score. Useful when an
        agent needs to catch its own wrong assumptions.
 
-    2. The :mod:`mind_mem.v4.tier_memory` promotion path: a WARM block
-       whose read produces surprise above
-       :attr:`TierConfig.promote_threshold` bumps back to HOT instead
-       of aging toward COLD.
+    RA.0 removed a second consumer — the recall-tier ladder promoted a
+    block back to HOT when a read produced surprise above a threshold.
+    That ladder is gone; the surviving one
+    (:class:`mind_mem.memory_tiers.MemoryTier`) does not read surprise,
+    and wiring it to would be a state transition driven by a score,
+    which the RA.1 ruling routes through a proposal instead.
 
 Surprise is a number in ``[0.0, 1.0]``:
 

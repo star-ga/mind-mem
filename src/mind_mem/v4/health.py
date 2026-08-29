@@ -8,7 +8,6 @@ returns a structured report, never raises:
         "status": "ok" | "degraded" | "fail",
         "modules": {
             "feature_flags": "ok",
-            "tier_memory":   "ok|missing|error: <msg>",
             "block_kinds":   ...,
             ...
         },
@@ -29,7 +28,7 @@ load source.
 The check is **never flag-gated**: ``health_check`` itself runs
 unconditionally because operators need it during failure debugging.
 The individual probes that *would* be flag-gated (e.g. checking
-tier_memory only when the flag is on) report "disabled" rather than
+block_kinds only when the flag is on) report "disabled" rather than
 "missing" so operators can distinguish "feature off" from "feature
 broken".
 
@@ -68,20 +67,6 @@ def _probe_feature_flags(_workspace: Path) -> ModuleStatus:
     except Exception as e:
         return f"error: {e!r}"
     return "ok"
-
-
-def _probe_tier_memory(workspace: Path) -> ModuleStatus:
-    if not is_enabled("tier_memory"):
-        return "disabled"
-    db = workspace / "index.db"
-    if not db.is_file():
-        return "missing"
-    try:
-        with sqlite3.connect(db, timeout=30) as conn:
-            row = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='block_recall_tier'").fetchone()
-    except sqlite3.Error as e:
-        return f"error: {e!r}"
-    return "ok" if row else "missing"
 
 
 def _probe_block_kinds(workspace: Path) -> ModuleStatus:
@@ -135,25 +120,12 @@ def _probe_observability(_workspace: Path) -> ModuleStatus:
     return "ok"
 
 
-def _probe_eviction(_workspace: Path) -> ModuleStatus:
-    if not is_enabled("eviction"):
-        return "disabled"
-    try:
-        from .eviction import EvictionPolicy, is_policy_registered
-
-        return "ok" if is_policy_registered(EvictionPolicy.LRU) else "missing"
-    except Exception as e:
-        return f"error: {e!r}"
-
-
 _BUILTIN_PROBES: list[tuple[str, Callable[[Path], ModuleStatus]]] = [
     ("feature_flags", _probe_feature_flags),
-    ("tier_memory", _probe_tier_memory),
     ("block_kinds", _probe_block_kinds),
     ("cognitive_kernel", _probe_cognitive_kernel),
     ("federation", _probe_federation),
     ("observability", _probe_observability),
-    ("eviction", _probe_eviction),
 ]
 
 

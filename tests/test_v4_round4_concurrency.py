@@ -10,8 +10,7 @@ Covers seven surfaces:
                       SQL injection impossibility, limit=0, recursive validator
     observability     200-thread cardinality race, overflow sentinel identity,
                       reset under concurrent creation
-    eviction          policy torn-read safety, debug_plan large plan timing,
-                      custom policy under contention
+    (eviction deleted by RA.0 with the ladder it read)
     surprise          all FallbackPolicy paths + RAISE reasons + coercion
 
 Each test is designed so that reintroducing the bug it guards will cause it
@@ -32,7 +31,6 @@ import pytest
 
 import mind_mem.v4.backpressure as bp_mod
 import mind_mem.v4.block_metadata as bm_mod
-import mind_mem.v4.eviction as ev_mod
 from mind_mem.v4.backpressure import FLAG as BP_FLAG
 from mind_mem.v4.backpressure import (
     BackpressureController,
@@ -47,14 +45,6 @@ from mind_mem.v4.block_metadata import (
     register_schema_validator,
     set_block_metadata,
     validate_block,
-)
-from mind_mem.v4.eviction import FLAG as EVICT_FLAG
-from mind_mem.v4.eviction import (
-    EvictionPlan,
-    EvictionPolicy,
-    active_policy,
-    register_policy,
-    set_active_policy,
 )
 from mind_mem.v4.health import (
     health_check,
@@ -113,8 +103,6 @@ def _reset_global_state() -> object:
     reset_for_tests()
     reset_custom_probes_for_tests()
     bp_mod.reset_for_tests()
-    # Restore eviction active policy to the default
-    ev_mod._active_policy = EvictionPolicy.LRU
     # Clear any custom validators from block_metadata
     with bm_mod._validator_lock:
         bm_mod._validators.clear()
@@ -122,7 +110,6 @@ def _reset_global_state() -> object:
     reset_for_tests()
     reset_custom_probes_for_tests()
     bp_mod.reset_for_tests()
-    ev_mod._active_policy = EvictionPolicy.LRU
     with bm_mod._validator_lock:
         bm_mod._validators.clear()
 
@@ -709,99 +696,6 @@ def test_observability_reset_under_concurrent_counter_creation(tmp_path: Path, m
     c = counter("post_reset")
     c.inc()
     assert snapshot().get("post_reset") == 1
-
-
-# ===========================================================================
-# EVICTION
-# ===========================================================================
-
-
-@pytest.mark.unit
-def test_eviction_32_threads_policy_swap_no_torn_reads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """32 threads alternating set_active_policy between LRU and
-    LOW_SURPRISE must never observe a torn (garbage) policy value."""
-    _cfg(tmp_path, monkeypatch, **{EVICT_FLAG: True})
-    valid_policies = {EvictionPolicy.LRU, EvictionPolicy.LOW_SURPRISE}
-    invalid_reads: list[str] = []
-    invalid_lock = threading.Lock()
-    barrier = threading.Barrier(32)
-    stop = threading.Event()
-
-    def writer(idx: int) -> None:
-        barrier.wait()
-        policies = [EvictionPolicy.LRU, EvictionPolicy.LOW_SURPRISE]
-        while not stop.is_set():
-            set_active_policy(policies[idx % 2])
-            time.sleep(0)
-
-    def reader() -> None:
-        barrier.wait()
-        while not stop.is_set():
-            p = active_policy()
-            if p not in valid_policies:
-                with invalid_lock:
-                    invalid_reads.append(repr(p))
-
-    with ThreadPoolExecutor(max_workers=32) as ex:
-        futs = [ex.submit(writer, i) for i in range(16)]
-        futs += [ex.submit(reader) for _ in range(16)]
-        time.sleep(0.2)
-        stop.set()
-        for f in as_completed(futs):
-            f.result()
-
-    assert invalid_reads == [], f"torn policy reads: {invalid_reads}"
-
-
-@pytest.mark.unit
-def test_eviction_debug_plan_10k_entries_completes_under_100ms(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """debug_plan() on a 10,000-entry EvictionPlan must finish under
-    100ms — it must not be O(n²) or do any I/O."""
-    _cfg(tmp_path, monkeypatch, **{EVICT_FLAG: True})
-    candidates = [(f"block_{i}", f"lru:last_seen=2026-01-0{i % 9 + 1}T00:00:00Z") for i in range(10000)]
-    plan = EvictionPlan(policy=EvictionPolicy.LRU, candidates=candidates)
-
-    t0 = time.perf_counter()
-    grouped = plan.debug_plan()
-    elapsed_ms = (time.perf_counter() - t0) * 1000.0
-
-    assert elapsed_ms < 100.0, f"debug_plan took {elapsed_ms:.1f}ms — too slow"
-    assert "lru" in grouped
-    assert len(grouped["lru"]) == 10000
-
-
-@pytest.mark.unit
-def test_eviction_custom_policy_register_then_set_active_under_contention(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """register_policy then set_active_policy for a custom name must work
-    when called from multiple threads — the policy must be activatable."""
-    _cfg(tmp_path, monkeypatch, **{EVICT_FLAG: True})
-    barrier = threading.Barrier(32)
-    errors: list[Exception] = []
-    errors_lock = threading.Lock()
-
-    def custom_fn(workspace, **_):
-        return [("custom_block", "custom:test")]
-
-    def worker(idx: int) -> None:
-        barrier.wait()
-        try:
-            register_policy("custom_policy_X", custom_fn)
-            set_active_policy("custom_policy_X")
-            p = active_policy()
-            if p != "custom_policy_X":
-                with errors_lock:
-                    errors.append(ValueError(f"unexpected policy: {p!r}"))
-        except Exception as e:
-            with errors_lock:
-                errors.append(e)
-
-    with ThreadPoolExecutor(max_workers=32) as ex:
-        futs = [ex.submit(worker, i) for i in range(32)]
-        for f in as_completed(futs):
-            f.result()
-
-    assert errors == [], f"errors in concurrent policy registration: {errors}"
-    assert active_policy() == "custom_policy_X"
 
 
 # ===========================================================================
