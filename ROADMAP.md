@@ -90,17 +90,53 @@ Load-bearing audit finding: **the tier ladder is not connected to recall on any
 path** — `block_tier_meta` has no writer outside tests, and four different SQLite
 files are in play. The original R.1 would have been a no-op.
 
-- [ ] **RA.0 — wire the ladder onto one DB** *(new; blocks everything)* — consolidate `block_meta` / `block_tiers` / `block_tier_meta` (recommend `.sqlite_index/index.db`, which `tier_recall.py:127` already reads). Repoint `_recall_core.py:868`, `mcp/tools/recall.py:594`, `mcp/tools/governance.py:892`, `compaction.py:261`; register blocks at index build; give `_read_meta` an injected `now`. Acceptance: recall → promotion cycle → boost visible end-to-end.
-- [ ] **RA.1 — served-set ledger** *(replaces old R.1)* — content-derived `run_id = sha256(query_hash ‖ served ids in rank order ‖ pipeline_hash ‖ index anchor)` (no clock, no randomness — same preimage discipline as `recall_attestation`), a durable `block_serve_counts` table that survives the 30-day prune, and `report_outcome(run_id=…)` so outcomes join a **run**, not a query string. Two counters with asymmetric power: **served** can buy attention tiers only; **credited** (distinct-actor successes, bounded) writes `confirmations` and buys trust tiers. **Absence of credit must never demote** — that is silence-is-deletion in a smaller hat.
+- [x] **RA.0 — one tier axis** *(shipped; re-scoped from "wire the ladder onto one DB")* — the item asked for the four tier stores to be consolidated so a boost could be wired end-to-end. Wiring a boost is the wrong first move: a tier that moves a recall score is an unreviewed state transition, which RA.1's ruling forbids. What shipped instead is the collapse the dashboard item (RA.5) actually needs — `memory_tiers.MemoryTier` survives as the ONE lifecycle ladder (the only one reachable from `mcp.server` / `mm_cli`, via `compaction.run_promotion_cycle`), and `tiered_memory.py`, `tier_recall.py` and `v4/tier_memory.py` are **deleted**, not abstracted over, together with the consumers whose only data source was the deleted `block_recall_tier` (`v4/eviction.py`, `v4/consolidation_worker.py`, `kernels.recent_first_kernel`). `retrieval.tier_boost` / `tier_boost_weights` went with them — the boost never reached a ranking. Ratcheted by `tests/test_tier_axis_collapse.py` over frozen sets, so a fourth ladder fails the build. Note `IngestTier` is NOT a fourth: it is provenance (which door a write came through), and nothing is promoted along it. **Still open:** the DB consolidation itself — `block_meta` is read from two directories, and `intelligence/tiers.db` is separate from `.sqlite_index/index.db`.
+- [~] **RA.1 — served-set ledger** *(replaces old R.1; the ledger has shipped, the counters have not)* — `src/mind_mem/served_ledger.py`. Content-derived `run_id = sha256("MM_RUN_v1\0" ‖ query_hash ‖ served_digest ‖ pipeline_hash)`, no clock and no randomness, reusing `recall_digests.served_set_digest` rather than minting a second encoding. Append-only rows — `seq`, `prev_row_hash`, `run_id`, `query_hash`, `served_digest`, `ids`, `pipeline_hash`, `index_anchor`, `scoring_instant` — and nothing else; the row hash is derived, never stored, and a head sidecar seals the last row. Written by `mcp/tools/recall._record_served_run` strictly after `recall()` returns, default OFF (`served_ledger.enabled`). **Two amendments to the wording above this line:** `run_id` is keyed on the ORDERED digest (an unordered set puts two answers under one key, which append-only cannot be consistent with), and it excludes BOTH the scoring instant and the index anchor — it names THE ANSWER, stably across days, so a repeated `run_id` is legitimate and `seq` is the unique key. **Ruling, and it overrides this bullet:** `served`/`credited` do NOT buy tiers. `credited` writes `confirmations` only through a proposal, or the promotion is a `plan_consolidation` output that `approve_apply` executes — never a direct write, never automatic. Absence of credit must never demote. Enforced structurally: nothing on the scoring path may import the ledger — in any of the six spellings, at either laziness level, and not through `importlib` either — and the ledger may not name the ladder (`tests/test_recall_attestation_v2.py` T12, `tests/test_served_ledger.py`). The rail's walker is itself under test: a meta-test feeds it source that DOES reach the ledger, in each form, and requires it to say so. The row chain seals every field derived from the schema rather than a hand-written list, so a field added without sealing it fails in the same commit that adds it. **Still open:** `block_serve_counts` surviving the 30-day prune, and `report_outcome(run_id=…)` — the right-hand side of the join.
 - [ ] **RA.2 — precision + waste ledger** — derived views, never stored scores: precision = credited/served per intent type, waste = `served = 0` over the corpus. Not blocked on tombstones. Measure our own corpus; never quote external figures.
 - [ ] **RA.3 — lifecycle deaths in the evidence chain** *(replaces the tombstone table)* — add `DEMOTE`/`ARCHIVE`/`FORGET` to `EvidenceAction` (`evidence_objects.py:68-77`) and `archive_block`/`forget_block` to `audit_chain.VALID_OPERATIONS`. A mutable side table would contradict tamper-evidence. **Blocked on** a governed *apply* path for consolidation plans — only `plan_consolidation` (dry-run) exists today.
 - [ ] **RA.4 — retention class + alias-merge + rationale-everywhere** — retention class as a pure function of existing fields (PROTECTED / GOVERNED / EPHEMERAL), no clock in the classification. Governed `entities.merge` that re-points edges (`knowledge_graph.py:310-323` currently splits nodes permanently by insertion order). Require `Rationale` on all `propose_update` types, not just decisions.
-- [ ] **RA.5 — dashboard** — after one tier axis is chosen and the data exists. There are currently **three** tier systems; do not render three.
+- [ ] **RA.5 — dashboard** — unblocked by RA.0: there is now one lifecycle tier axis (`memory_tiers.MemoryTier`) to render, not three.
 
 > Determinism constraint for all of Group RA: take an injected `now`, following
-> `cognitive_forget.py`. Note the earlier note here was stale — `date_score` is
-> already UTC-normalised and injectable (`_recall_scoring.py:120-160`); the real
-> naive-clock wart is `compaction.py:53,150,180,226`.
+> `cognitive_forget.py`.
+>
+> **Correction (this note was itself a false green).** It previously read:
+> *"`date_score` is already UTC-normalised and injectable — the real naive-clock
+> wart is `compaction.py:53,150,180,226`."* The first half was true and useless;
+> the second half pointed at a maintenance module that is not on the recall path
+> at all, and in doing so it retired the determinism question while three live
+> clock reads sat on the scored path:
+>
+> - `date_score` was injectable **but never injected** — `_recall_core.py` called
+>   it bare, as did the FTS5 and vector legs, so every ranking silently scored
+>   against "now".
+> - `CalibrationManager._cutoff_date` was likewise injectable and likewise never
+>   injected, multiplying a rolling 30-day window into the score.
+> - `_recall_temporal.resolve_time_reference` fell back to `date.today()` —
+>   **naive local time** — behind the temporal *hard filter*. That one dropped
+>   blocks, so two hosts either side of local midnight served different sets from
+>   an identical corpus. It was never named here.
+>
+> And the recall attestation asserted determinism it could not deliver: its
+> preimage bound a `result_count`, so two runs that ranked differently produced
+> one identical hash.
+>
+> **Now true.** `recall(..., scoring_instant=<UTC date>)` resolves one instant at
+> the boundary (`mind_mem.scoring_instant`) and threads it through every recency
+> term — recency ramp, calibration window, temporal filter, half-life decay, and
+> the validity gate's calibration read. The deterministic core (BM25F + vector +
+> RRF + validity gate + guardrails) completes with every scoring clock raising.
+> The resolved instant is bound into the attestation preimage, so a reordered run
+> now hashes differently and any attested run replays by passing its date back.
+> The claim is **deterministic given (corpus, config, scoring_instant)** — not
+> "deterministic" unqualified.
+>
+> Still open, and stated rather than implied: the attestation preimage describes
+> the served set only by its **cardinality**. Binding the instant worked because
+> it was the last hidden input, not because cardinality is sufficient. The
+> structural fix is to bind a served-ids-in-rank-order digest — precisely the
+> digest **RA.1** already computes for `run_id`. Reuse it there; do not mint a
+> second one.
 
 > Explicitly **not** building: outcome-weighted online reranking; any auto-written
 > constraints file without HITL (`guardrails.py:43-50` provenance refusal exists

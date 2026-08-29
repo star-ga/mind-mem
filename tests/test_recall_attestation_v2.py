@@ -291,29 +291,106 @@ LEDGER_READS = frozenset({"get_hard_negative_ids", "propagate_scores"})
 LEDGER_PURE = frozenset({"feedback_quality_credit", "recall_sufficiency"})
 
 
-def _eager_imports(module: str) -> set[str]:
-    """First-party modules *module* pulls in at import time (not lazily)."""
-    root = pathlib.Path(mind_mem.__file__).parent
-    path = root.joinpath(*module.split(".")).with_suffix(".py")
-    if not path.is_file():
-        path = root.joinpath(*module.split("."), "__init__.py")
-    if not path.is_file():
+_PKG_ROOT = pathlib.Path(mind_mem.__file__).parent
+
+
+def _module_path(module: str) -> pathlib.Path | None:
+    """File backing a package-relative dotted module name, or ``None``."""
+    parts = module.split(".")
+    for candidate in (_PKG_ROOT.joinpath(*parts).with_suffix(".py"), _PKG_ROOT.joinpath(*parts, "__init__.py")):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _import_targets(node: ast.AST, package: tuple[str, ...]) -> set[str]:
+    """Every first-party module one import statement names, in ANY spelling.
+
+    Six spellings reach the same module, and a guard that recognises five of
+    them is not a guard — it is a signpost telling the sixth where to walk::
+
+        import mind_mem.served_ledger          from .served_ledger import x
+        from mind_mem.served_ledger import x   from . import served_ledger
+        from mind_mem import served_ledger     from ..served_ledger import x
+
+    Each is normalised to the package-relative dotted name, so callers compare
+    plain names and cannot be evaded by choosing a different form. A name in a
+    ``from X import a, b`` list is counted as a module only when a file backs
+    it, which is what tells ``from . import served_ledger`` (a module) apart
+    from ``from .recall_digests import served_set_digest`` (a symbol).
+    """
+    if isinstance(node, ast.Import):
+        return {a.name[len("mind_mem.") :] for a in node.names if a.name.startswith("mind_mem.")}
+    if not isinstance(node, ast.ImportFrom):
         return set()
-    package = module.split(".")[:-1]
+    if node.level:
+        kept = max(0, len(package) - (node.level - 1))
+        base = ".".join([*package[:kept], *(node.module.split(".") if node.module else [])])
+    elif node.module == "mind_mem":
+        base = ""
+    elif node.module and node.module.startswith("mind_mem."):
+        base = node.module[len("mind_mem.") :]
+    else:
+        return set()
+    found = {base} if base else set()
+    for alias in node.names:
+        candidate = f"{base}.{alias.name}" if base else alias.name
+        if _module_path(candidate) is not None:
+            found.add(candidate)
+    return found
+
+
+def _imports_of(module: str, *, eager_only: bool) -> set[str]:
+    """First-party modules *module* names — at import time, or anywhere.
+
+    ``eager_only`` is the difference between "what loading this pulls in" and
+    "what this file can reach at all". The rail needs the second: a
+    function-local import is invisible to the loader and to ``sys.modules``,
+    which is exactly why it is the form a breach arrives in.
+    """
+    path = _module_path(module)
+    if path is None:
+        return set()
+    package = tuple(module.split(".")[:-1])
     found: set[str] = set()
     stack: list[tuple[Any, bool]] = [(ast.parse(path.read_text(encoding="utf-8")), False)]
     while stack:
         node, lazy = stack.pop()
         for child in ast.iter_child_nodes(node):
             nested = lazy or isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
-            if not nested and isinstance(child, ast.ImportFrom) and child.level and child.module:
-                found.add(".".join([*package, child.module]))
-            elif not nested and isinstance(child, (ast.Import, ast.ImportFrom)):
-                name = getattr(child, "module", None) or ""
-                names = [name] if name else [a.name for a in getattr(child, "names", [])]
-                found.update(n[len("mind_mem.") :] for n in names if n.startswith("mind_mem."))
+            if not (eager_only and nested):
+                found |= _import_targets(child, package)
             stack.append((child, nested))
     return found
+
+
+def _eager_imports(module: str) -> set[str]:
+    """First-party modules *module* pulls in at import time (not lazily)."""
+    return _imports_of(module, eager_only=True)
+
+
+def _code_tokens(source: str) -> set[str]:
+    """Identifiers, attribute names and string literals — excluding docstrings.
+
+    Prose may name a module the code may not touch: the rail is explained in
+    docstrings throughout this repo, and a check that could not tell an
+    explanation from a call would force the explanation out of the file.
+    """
+    tree = ast.parse(source)
+    docstrings = {
+        ast.get_docstring(node, clean=False)
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    tokens: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            tokens.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            tokens.add(node.attr)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value not in docstrings:
+            tokens.update(node.value.split("."))
+    return tokens
 
 
 def _eager_closure(start: str) -> dict[str, str]:
@@ -423,24 +500,116 @@ def test_t12_the_served_set_ledger_owns_nothing_the_attestation_owns() -> None:
     assert "recall_attestation" not in _eager_closure("served_ledger")
 
 
+def _ledger_surface(module: str) -> tuple[set[str], set[str]]:
+    """``(ledger modules *module* can reach, symbols it names from them)``.
+
+    Laziness-blind, deliberately. The eager closure and the ``sys.modules``
+    check below both answer "what does loading this pull in", and a
+    function-local import answers neither — it is invisible to the loader
+    until the function runs. That makes it precisely the form a breach of the
+    rail arrives in, and this is the layer that sees it.
+    """
+    path = _module_path(module)
+    assert path is not None, f"{module} is not a module — this check would pass over nothing"
+    package = tuple(module.split(".")[:-1])
+    reached = {m for m in _imports_of(module, eager_only=False) if m in LEDGER_MODULES}
+    named: set[str] = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.ImportFrom) and _import_targets(node, package) & LEDGER_MODULES:
+            named.update(alias.name for alias in node.names)
+    return reached, named
+
+
 def test_t12_the_scoring_path_ledger_surface_is_pinned() -> None:
-    """A ratchet over a breach this bump does not own.
+    """A ratchet over a breach this bump does not own — and the rail's real lock.
 
     ``_recall_core`` genuinely imports the retrieval ledger, and two of the
     names it imports are *reads* of prior-run state that move the current
-    ranking. That is the rail's real violation; deleting it is a behaviour
-    change well outside a preimage bump. What is enforceable here — and
-    what this asserts — is that the surface cannot GROW: a new ledger
-    symbol on the scoring path fails the build and has to be argued for.
-    """
-    source = (pathlib.Path(mind_mem.__file__).parent / "_recall_core.py").read_text(encoding="utf-8")
-    named: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.ImportFrom) and node.module in LEDGER_MODULES:
-            named.update(alias.name for alias in node.names)
+    ranking. That is the rail's live violation; deleting it is a behaviour
+    change well outside a preimage bump. What is enforceable here is that the
+    surface cannot GROW — in any spelling, at any laziness, by any mechanism:
 
+    * the module set is pinned, normalised across all six import spellings, so
+      ``from mind_mem.served_ledger import x`` inside a function is the same
+      finding as ``from .served_ledger import x`` at the top;
+    * the symbol set is pinned, so a new name from the one permitted ledger
+      fails the build and has to be argued for;
+    * the code tokens are pinned, so ``importlib.import_module`` and attribute
+      access on a dotted path cannot walk around the first two.
+    """
+    reached, named = _ledger_surface("_recall_core")
+
+    assert reached == {"retrieval_graph"}, f"the scoring path reaches {sorted(reached - {'retrieval_graph'})}"
     assert named == LEDGER_WRITES | LEDGER_READS | LEDGER_PURE
     assert named & LEDGER_READS == LEDGER_READS, "a pinned prior-run read vanished — re-derive the rail"
+
+    tokens = _code_tokens((_PKG_ROOT / "_recall_core.py").read_text(encoding="utf-8"))
+    assert "log_retrieval" in tokens, "token scan sees no ledger call at all — it is not scanning"
+    for ledger in LEDGER_MODULES - {"retrieval_graph"}:
+        assert ledger not in tokens, f"the scoring path names {ledger} in code"
+
+
+#: Every spelling that reaches ``mind_mem.served_ledger``, at both laziness
+#: levels. Three of these — the lazy ones that name the module absolutely or
+#: bind it as a name — defeated the closure walk AND the runtime check AND
+#: the surface ratchet as originally written, so the rail was decorative
+#: against an author who happened to write the import a different way.
+_ESCAPE_FORMS = (
+    "from .served_ledger import read_served_runs",
+    "from mind_mem.served_ledger import read_served_runs",
+    "from . import served_ledger",
+    "from mind_mem import served_ledger",
+    "import mind_mem.served_ledger",
+    "import mind_mem.served_ledger as sl",
+)
+
+
+@pytest.mark.parametrize("form", _ESCAPE_FORMS)
+@pytest.mark.parametrize("lazy", [False, True], ids=["eager", "lazy"])
+def test_t12_the_rail_scanner_sees_every_spelling_of_the_forbidden_import(form: str, lazy: bool) -> None:
+    """The guard, guarded. A rail is only as good as the walker enforcing it.
+
+    Every test above asserts an absence, and an absence is exactly what a
+    broken walker reports for free. So this asserts a PRESENCE: fed source
+    that does reach the ledger, in each spelling, the scanner must say so.
+    A walker that quietly recognises five forms out of six passes every
+    absence check ever written and stops the sixth author from nothing.
+    """
+    body = f"    {form}\n    _ = 1\n" if lazy else f"{form}\n"
+    source = "from __future__ import annotations\n" + ("def f() -> int:\n" + body if lazy else body)
+    module = ast.parse(source)
+    nodes = [n for n in ast.walk(module) if isinstance(n, (ast.Import, ast.ImportFrom))]
+    found: set[str] = set()
+    for node in nodes:
+        found |= _import_targets(node, ())
+    assert "served_ledger" in found, f"the scanner cannot see `{form}`"
+
+
+def test_t12_the_rail_scanner_does_not_cry_wolf() -> None:
+    """The other half of the meta-test: a symbol is not a module.
+
+    ``from .recall_digests import served_set_digest`` names no ledger. A
+    walker that counted every imported name as a module would report the rail
+    broken everywhere, and a guard that always fires is turned off by the
+    third person who meets it.
+    """
+    found = _import_targets(ast.parse("from .recall_digests import served_set_digest").body[0], ())
+    assert found == {"recall_digests"}
+    assert _import_targets(ast.parse("import json").body[0], ()) == set()
+    assert _import_targets(ast.parse("from typing import Any").body[0], ()) == set()
+
+
+def test_t12_a_relative_import_resolves_against_its_own_package() -> None:
+    """``from . import x`` means a different module inside a subpackage.
+
+    Normalisation that ignored the importing module's package would report
+    ``mcp.tools.served_ledger`` as ``served_ledger`` and fire on a module that
+    does not exist, or miss one that does.
+    """
+    node = ast.parse("from . import recall").body[0]
+    assert _import_targets(node, ("mcp", "tools")) == {"mcp.tools", "mcp.tools.recall"}
+    assert _import_targets(ast.parse("from ..infra import acl").body[0], ("mcp", "tools")) == {"mcp.infra", "mcp.infra.acl"}
+    assert _import_targets(ast.parse("from . import served_ledger").body[0], ()) == {"served_ledger"}
 
 
 # ---------------------------------------------------------------------------

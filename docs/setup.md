@@ -85,11 +85,6 @@ Minimal config:
     "archive_after_days": 60,
     "grace_days": 30
   },
-  "tiered_memory": {
-    "working_ttl_days": 30,
-    "promotion_threshold_sessions": 3,
-    "half_life_days": 30
-  },
   "context_core": {
     "cores_dir": "memory/cores"
   },

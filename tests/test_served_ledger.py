@@ -67,6 +67,21 @@ ROW_FIELDS = frozenset(
 )
 
 
+#: One fully-populated row, for the checks that need a value rather than a
+#: workspace. Built from the schema's own field names so it cannot drift.
+_ROW = ServedRun(
+    seq=0,
+    prev_row_hash=GENESIS_ROW_HASH,
+    run_id=run_id(query_hash=query_hash("q"), served_digest=served_set_digest(["D-1"]), pipeline_hash=PIPELINE),
+    query_hash=query_hash("q"),
+    served_digest=served_set_digest(["D-1"]),
+    ids=("D-1",),
+    pipeline_hash=PIPELINE,
+    index_anchor=ANCHOR,
+    scoring_instant="2026-08-29",
+)
+
+
 def _ws(tmp_path: Path, *, enabled: bool) -> str:
     ws = tmp_path / ("on" if enabled else "off")
     ws.mkdir(parents=True, exist_ok=True)
@@ -360,6 +375,81 @@ def test_t16_a_rewritten_prev_link_is_blamed_on_its_own_row(tmp_path: Path) -> N
         _append(ws2, [f"D-{n}"], question=f"q{n}")
     _tamper(ws2, 1, "index_anchor", "d" * 64)
     assert verify_served_chain(ws2).bad_seq == 1
+
+
+def _perturb(value: Any) -> Any:
+    """A different value of the same shape — whatever shape the field has.
+
+    Type-driven rather than field-driven, so a field added to the schema
+    tomorrow is perturbed by the same code that perturbs the nine today. A
+    perturbation that returned the value unchanged would make the assertion
+    below vacuous, so each branch is required to change it.
+    """
+    if isinstance(value, int):
+        return value + 1
+    if isinstance(value, list):
+        return [*value, "D-EVIL"]
+    if isinstance(value, str):
+        if value and set(value) <= set("0123456789abcdef"):
+            return ("1" if value[0] != "1" else "2") + value[1:]
+        return value + "-TAMPERED"
+    raise AssertionError(f"no perturbation for {type(value).__name__} — extend this before adding the field")
+
+
+@pytest.mark.parametrize("field", [f.name for f in dataclasses.fields(ServedRun)])
+def test_t16_every_field_in_the_schema_is_sealed(tmp_path: Path, field: str) -> None:
+    """EVERY declared field, derived from the schema — not a list of nine.
+
+    The gap this closes: ``row_hash`` used to name its eight covered fields by
+    hand, and nothing asserted that enumeration equalled the schema. A tenth
+    field could be declared, serialised, and read back while contributing to
+    no hash — an unsealed field sitting inside a row whose whole purpose is to
+    be tamper-evident. Parametrising over ``dataclasses.fields`` means a field
+    added without sealing it fails HERE, in the same commit that adds it,
+    rather than being discovered by whoever later trusted the row.
+    """
+    ws = _ws(tmp_path, enabled=True)
+    _append(ws, ["D-1", "D-2"], question="first")
+    _append(ws, ["D-3"], question="second")
+    assert verify_served_chain(ws).ok is True
+
+    line = json.loads(Path(ledger_path(ws)).read_text(encoding="utf-8").splitlines()[0])
+    before = line[field]
+    after = _perturb(before)
+    assert after != before, f"the perturbation of {field} changed nothing — the assertion would be vacuous"
+
+    _tamper(ws, 0, field, after)
+    verdict = verify_served_chain(ws)
+    assert verdict.ok is False, f"{field} was edited on disk and the chain still verified"
+    assert verdict.bad_seq == 0, f"{field} tamper in row 0 reported at row {verdict.bad_seq}"
+
+
+def test_t16_the_only_unsealed_field_is_the_one_the_digest_covers() -> None:
+    """``ids`` is the single exclusion, and it is not an exception to the rule.
+
+    It is sealed transitively: ``served_digest`` commits to it, the digest is
+    re-derived from the ids on every verification, and the digest itself is in
+    the hash. Adding a second name to this set removes a field from the chain,
+    which is why the set is asserted by equality rather than by membership.
+    """
+    from mind_mem.served_ledger import _HASH_EXCLUDED, _hashed_values
+
+    assert _HASH_EXCLUDED == {"ids"}
+    sealed = {f.name for f in dataclasses.fields(ServedRun)} - _HASH_EXCLUDED
+    assert len(_hashed_values(_ROW)) == len(sealed)
+    assert sealed | {"ids"} == ROW_FIELDS
+
+
+def test_t16_a_declared_field_survives_the_round_trip() -> None:
+    """Write it, read it, get it back — for every field, from the schema.
+
+    ``from_row`` used to name its arguments by hand: a declared field the
+    author forgot to thread was dropped on read, so the value on disk and the
+    value every check saw were different values.
+    """
+    restored = ServedRun.from_row(_ROW.to_row())
+    assert restored == _ROW
+    assert set(_ROW.to_row()) == {f.name for f in dataclasses.fields(ServedRun)}
 
 
 def test_t16_an_unknown_row_key_is_refused_not_ignored(tmp_path: Path) -> None:

@@ -20,6 +20,15 @@ its own row chain, anchored per row to the block chain head (``index_anchor``).
 It is written *after* ``recall()`` has returned, and it writes no block, so
 "nothing reaches the store without a gate receipt" is untouched.
 
+What the chain proves, stated narrowly: no row was **altered or removed** after
+it was written — a truncated tail fails against the head sidecar, an edited row
+fails against its successor's link. It does not prove **completeness**. An
+append that never happened leaves no gap to detect, so a run whose write failed
+is absent rather than visibly missing; the call site logs
+``served_ledger_append_failed`` and returns the answer regardless, because an
+auxiliary record must not break recall. "Proof of what was served" is therefore
+a claim about every row present, not a claim that every run has one.
+
 **Nothing on the scoring path may read it.** Frequency-of-serving is derivable
 from any served-set ledger; that is harmless only while it cannot flow backward
 into a ranking. The rule is structural, not conventional: this module is
@@ -67,9 +76,10 @@ import hashlib
 import json
 import os
 import threading
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, fields
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Optional
 
 from .preimage import preimage
@@ -139,6 +149,26 @@ def run_id(*, query_hash: str, served_digest: str, pipeline_hash: str) -> str:
     return hashlib.sha256(RUN_TAG.encode("ascii") + b"\x00" + body.encode("ascii")).hexdigest()
 
 
+def _identity(value: Any) -> Any:
+    return value
+
+
+def _as_list(value: Any) -> list[Any]:
+    return list(value)
+
+
+def _as_ids(value: Any) -> tuple[str, ...]:
+    return tuple(str(item) for item in value)
+
+
+#: Per-field coercions for the two directions. Every field not named here is
+#: ``str`` on the way in and itself on the way out — so declaring a field is
+#: all it takes to thread it, and forgetting to extend a table cannot leave a
+#: field half-persisted.
+_COERCE: Mapping[str, Callable[[Any], Any]] = MappingProxyType({"seq": int, "ids": _as_ids})
+_JSONABLE: Mapping[str, Callable[[Any], Any]] = MappingProxyType({"ids": _as_list})
+
+
 @dataclass(frozen=True)
 class ServedRun:
     """One ledger row. Nine fields, and the ninth is the last one.
@@ -161,51 +191,54 @@ class ServedRun:
     scoring_instant: str
 
     def to_row(self) -> dict[str, Any]:
-        """Serialise to the on-disk shape — exactly the declared fields."""
-        row = {f.name: getattr(self, f.name) for f in fields(self)}
-        row["ids"] = list(self.ids)
-        return row
+        """Serialise to the on-disk shape — exactly the declared fields.
+
+        Derived from the schema rather than listed, so a field added to the
+        dataclass cannot reach disk through a writer that knows about it while
+        the reader and the hash do not.
+        """
+        return {f.name: _JSONABLE.get(f.name, _identity)(getattr(self, f.name)) for f in fields(self)}
 
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> ServedRun:
-        """Rebuild from a persisted row, refusing an unknown or missing key."""
+        """Rebuild from a persisted row, refusing an unknown or missing key.
+
+        Also derived from the schema. A hand-written argument list silently
+        drops a declared field the author forgot to thread — the value is on
+        disk, absent from the object, and therefore absent from every check
+        that reads the object. ``str`` is the default coercion, so a new field
+        is threaded by declaring it, not by remembering to.
+        """
         expected = {f.name for f in fields(cls)}
         if set(row) != expected:
             raise ValueError(f"row keys {sorted(row)} do not match the schema {sorted(expected)}")
-        return cls(
-            seq=int(row["seq"]),
-            prev_row_hash=str(row["prev_row_hash"]),
-            run_id=str(row["run_id"]),
-            query_hash=str(row["query_hash"]),
-            served_digest=str(row["served_digest"]),
-            ids=tuple(str(i) for i in row["ids"]),
-            pipeline_hash=str(row["pipeline_hash"]),
-            index_anchor=str(row["index_anchor"]),
-            scoring_instant=str(row["scoring_instant"]),
-        )
+        return cls(**{name: _COERCE.get(name, str)(row[name]) for name in expected})
+
+
+#: The ONE field :func:`row_hash` does not name directly. ``ids`` enters
+#: through ``served_digest``, whose agreement with the ids is re-derived on
+#: every verification, so editing the ids alone fails there and editing them
+#: consistently fails the link. Everything else is covered BY DERIVATION from
+#: the schema: hand-listing the hashed fields meant a tenth field could be
+#: declared, written to disk and read back while contributing nothing to any
+#: hash — an unsealed field inside a tamper-evident row.
+_HASH_EXCLUDED = frozenset({"ids"})
+
+
+def _hashed_values(row: ServedRun) -> tuple[Any, ...]:
+    """Every field the row chain seals, in declaration order."""
+    return tuple(getattr(row, f.name) for f in fields(row) if f.name not in _HASH_EXCLUDED)
 
 
 def row_hash(row: ServedRun) -> str:
-    """The chain link, **derived** rather than stored.
+    """The chain link, **derived** rather than stored — over the whole schema.
 
     A stored row hash can be rewritten alongside the row it covers; a derived
-    one cannot. ``ids`` enters through ``served_digest``, whose agreement with
-    the ids is checked separately by :func:`verify_served_chain` — so editing
-    the ids alone fails there, and editing them consistently fails here.
+    one cannot. The field list is derived too, for the same reason one level
+    up: a hash whose coverage is a literal is only as current as the last
+    author who remembered to extend it.
     """
-    return hashlib.sha256(
-        preimage(
-            ROW_TAG,
-            row.seq,
-            row.prev_row_hash,
-            row.run_id,
-            row.query_hash,
-            row.served_digest,
-            row.pipeline_hash,
-            row.index_anchor,
-            row.scoring_instant,
-        )
-    ).hexdigest()
+    return hashlib.sha256(preimage(ROW_TAG, *_hashed_values(row))).hexdigest()
 
 
 @dataclass(frozen=True)

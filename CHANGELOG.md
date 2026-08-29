@@ -4,6 +4,190 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Removed — BREAKING (RA.0: one tier axis)
+
+* **Three block-lifecycle tier ladders collapsed to one; the other two are
+  deleted, not abstracted over.** `memory_tiers.MemoryTier` (WORKING → SHARED →
+  LONG_TERM → VERIFIED) survives — it is the only ladder reachable from a real
+  entry point, through `compaction.run_promotion_cycle`. Gone:
+  `tiered_memory.py` (`Tier`, `decay`, `promote_candidates`, `tier_boost`),
+  `tier_recall.py` (`apply_tier_boosts`, `resolve_tier_weights`, `_TIER_BOOST` —
+  a hard copy of `MemoryTier`'s ordinals kept in lockstep by comment), and
+  `v4/tier_memory.py` (`RecallTier` HOT/WARM/COLD, `block_recall_tier`). All
+  three had zero importers in `src/` outside their own tests.
+
+* **Consumers of the deleted `block_recall_tier` table go with it** rather than
+  becoming permanently-degraded branches that read like features:
+  `v4/eviction.py` (every policy was a query against it), `v4/consolidation_worker.py`
+  (whose `plan_consolidation` was a dead duplicate of the `cognitive_forget` one
+  that actually backs the MCP tool), `kernels.recent_first_kernel`, the
+  `tier_memory` / `eviction` health probes, and the `tier_memory` /
+  `eviction` / `consolidation_worker` feature flags. `KernelKind.RECENT_FIRST`
+  remains as a routing name with no built-in strategy.
+
+* **`retrieval.tier_boost` and `retrieval.tier_boost_weights` are gone.** Both
+  are ignored if still present in `mind-mem.json`. Nothing to migrate: the boost
+  had no importer, so it never reached a ranking. The multipliers were deleted
+  rather than relocated — a tier that moves a recall score is a state transition
+  acting on the ranking, and the RA.1 ruling routes tier promotion through a
+  proposal that `approve_apply` executes.
+
+### Added — the served-set ledger (RA.1), default OFF
+
+* **`mind_mem.served_ledger`** — an append-only record of *what was served*, so
+  an outcome can later be credited to a **run** rather than correlated against a
+  query string. Opt in with `{"served_ledger": {"enabled": true}}`; absent is
+  off, and only a literal `true` turns it on.
+
+* **`run_id = sha256("MM_RUN_v1\0" ‖ query_hash ‖ served_digest ‖
+  pipeline_hash)`** — no clock, no randomness, reusing
+  `recall_digests.served_set_digest` rather than minting a second encoding of
+  "the served set". Two amendments to the roadmap wording: the key is the
+  **ordered** digest (an unordered set holds two answers under one key, which
+  append-only cannot be consistent with), and it excludes **both** the scoring
+  instant and the index anchor, so a `run_id` names THE ANSWER stably across
+  days. A repeated `run_id` is legitimate; `seq` is the unique key.
+
+* **Rows carry exactly nine fields** — `seq`, `prev_row_hash`, `run_id`,
+  `query_hash`, `served_digest`, `ids`, `pipeline_hash`, `index_anchor`,
+  `scoring_instant` — and no attestation, `degraded` marker, leg list, verdict
+  or per-item score. The row hash is *derived*, never stored, so it cannot be
+  rewritten alongside the row it covers; a head sidecar seals the final row,
+  which no successor binds. `verify_served_chain` reads no clock and names the
+  first row that cannot be trusted, telling a rewritten `prev_row_hash` apart
+  from an edit to the row before it.
+
+* **Written by `mcp/tools/recall._record_served_run`, strictly last** — after
+  `recall()` has returned and the envelope is serialised. Every field is taken
+  from the attestation the run already published, never re-resolved, so the two
+  records join exactly. No block is written, so the store's admission gate is
+  untouched.
+
+* **The rail: nothing on the scoring path may read the ledger.** Serve counts
+  are derivable from any served-set ledger; that is safe only while they cannot
+  flow back into a ranking. Enforced four ways rather than by convention — a
+  static import-closure walk, a fresh-interpreter `sys.modules` check, a ratchet
+  pinning the ledger surface `_recall_core` already names, and a code-token scan
+  that closes `importlib` and dotted attribute access. The ratchet normalises
+  **every spelling** of an import (`import mind_mem.x`, `from mind_mem.x import
+  y`, `from mind_mem import x`, `from .x import y`, `from . import x`,
+  `from ..x import y`) at both laziness levels, because a rail that recognises
+  five forms out of six is a signpost telling the sixth author where to walk. A
+  meta-test feeds the walker source that *does* reach the ledger, in each form,
+  and requires it to say so — every other check on this rail asserts an absence,
+  and an absence is what a broken walker reports for free.
+
+* **The row chain seals every field in the schema, derived from the schema.**
+  The hashed fields were previously a hand-written list, and nothing asserted
+  that the list equalled the declaration — so a tenth field could be declared,
+  written to disk and read back while contributing to no hash. `to_row` and
+  `from_row` are derived the same way: a hand-written argument list silently
+  drops a field the author forgot to thread, leaving the value on disk and
+  absent from every check that reads the object. `ids` is the one field the row
+  hash does not name directly, and it is not an exception — `served_digest`
+  commits to it, that digest is re-derived from the ids on every verification,
+  and the digest is in the hash. A test parametrised over
+  `dataclasses.fields(ServedRun)` edits each field on disk and requires the
+  chain to break, so a field added without sealing it fails in the same commit
+  that adds it.
+
+* **What the chain proves, stated narrowly.** No row was altered or removed
+  after it was written: a truncated tail fails against the head sidecar, an
+  edited row against its successor's link. It does **not** prove completeness —
+  an append that never happened leaves no gap to detect, so a run whose write
+  failed is absent rather than visibly missing (the call site logs
+  `served_ledger_append_failed` and returns the answer regardless, because an
+  auxiliary record must not break recall). "Proof of what was served" is a claim
+  about every row present, not a claim that every run has one.
+
+* **Ruling recorded, and enforced:** `served` / `credited` do **not** buy tiers.
+  `credited` writes `block_tier_meta.confirmations` only through a proposal, or
+  the promotion is a `plan_consolidation` output that `approve_apply` executes —
+  never a direct write, never automatic. Absence of credit must never demote. A
+  test asserts the ledger cannot even name the ladder.
+
+### Changed — BREAKING (attestation hashes)
+
+* **The `RECALL_ATTEST_v1` preimage now binds the run's `scoring_instant`.**
+  Every previously-emitted `attestation_hash` changes, and
+  `RecallAttestation.from_dict` **rejects** a dict that predates the field rather
+  than reviving it into a record that would silently report itself internally
+  inconsistent. Blast radius is small by construction: rail 2 means the
+  attestation is never persisted — no block, index or audit-chain row holds an
+  old hash — and no in-tree consumer gates on the value. Only a hash recorded
+  out-of-band before this change is affected.
+
+* **`HybridBackend.search` / `VectorBackend.search` / `query_index` /
+  `apply_validity_gate` / `apply_trust_scores` / `load_calibration_weights` take
+  a new keyword argument.** Duck-typed stand-ins for these that pin an exact
+  signature need `**kwargs`. The documented `RecallBackend` plug-in ABC is
+  **unchanged**.
+
+### Fixed — recall determinism is now a claim we can defend
+
+* **Recall is deterministic given `(corpus, config, scoring_instant)`** — the
+  precise form of a claim that was previously stated unqualified and was false.
+  Three clock reads sat on the scored path, none of them injected:
+
+  - `date_score`'s recency ramp, called bare from the scan, FTS5 and vector legs;
+  - `CalibrationManager._cutoff_date`'s rolling 30-day window, multiplied into
+    every score whenever a calibration manager existed;
+  - `resolve_time_reference`, which fell back to **naive local** `date.today()`
+    behind the temporal *hard filter*. That one dropped blocks, so two hosts
+    either side of local midnight served **different sets** from an identical
+    corpus — measured at UTC-11 vs UTC vs UTC+14.
+
+  Two more were found while fixing those: the validity gate — named in the spec
+  as part of the clock-free core — reached the same rolling window through
+  `provenance_class`, and both of `query_index`'s fallbacks dropped the instant
+  on the way to `recall()`.
+
+* **New `mind_mem.scoring_instant`** — one UTC **date**, resolved once at the
+  boundary and threaded into every recency term. A date, not a timestamp,
+  because the underlying math is already day-granular: stable for a whole day,
+  cheap to record, replayable by hand, and it cannot churn the attestation hash
+  the way second resolution would. `recall(..., scoring_instant=None)` still
+  means today-in-UTC — never local time.
+
+* **Recency is preserved, not removed.** The fix is a seam. Recency ranking is
+  load-bearing for a coding agent; what changed is that it is now a *named
+  input* instead of a hidden clock read.
+
+* **The recall attestation can now tell two different answers apart.** Its rail
+  3 promised "no wall-clock in the preimage" — true of the record, false of the
+  run it attested. Two runs of the same corpus and query that ranked
+  differently, or served *entirely different blocks*, produced one identical
+  hash, because the preimage described the result set only by its
+  `result_count`. Binding the resolved instant closes that, and makes an
+  attested run replayable by passing its date back to `recall()`. Known limit,
+  now documented in the module rather than implied: cardinality is still the
+  only set-shaped field, so the structural fix remains a served-ids-in-rank-order
+  digest (roadmap RA.1).
+
+* **`scoring_instant` is part of the recall cache key**, so two instants are
+  two different answers rather than one served under the other's attestation.
+
+### Added
+
+* `recall(..., scoring_instant=)` on the Python API, the MCP `recall` tool
+  (ISO-8601 `YYYY-MM-DD`), and the recall envelope, which now surfaces the
+  resolved instant for replay.
+* `tests/test_recall_determinism.py` and
+  `tests/test_recall_attestation_completeness.py` — the structural guards: the
+  core completes with every scoring clock raising; rankings are byte-identical
+  across UTC-11/UTC/UTC+14 and across a six-month wall-clock move; two
+  differently-ordered runs hash differently; an attested instant replays.
+
+### Docs
+
+* Corrected the false-green determinism note in `ROADMAP.md` (Group RA). It had
+  declared the question closed on the strength of "`date_score` is already
+  UTC-normalised and injectable" — true, but injectable is not injected — while
+  pointing at a maintenance module that is not on the recall path and never
+  naming the one genuinely naive-local read that was.
+* `README.md`, the `recall` facade, and `calibration`'s reproducibility note now
+  state the claim in its precise form.
+
 ### Added — task frames + the dead-end registry (additive, opt-in, default-off)
 
 * **`[TF-...]` TASK-FRAME blocks + `resume_brief()`.** A frame records what a

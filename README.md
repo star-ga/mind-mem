@@ -36,9 +36,11 @@
 
 ---
 
-MIND-Mem is a deterministic AI memory system: on the same workspace, the same query produces the same ranked results every time, with a Q16.16 fixed-point audit chain — byte-identical across runs, machines, and substrates — embedded in every applied decision. (Recall scoring itself is standard floating-point; the byte-identity guarantee is the Q16.16 audit/replay chain.)
+MIND-Mem is a deterministic AI memory system: recall is a pure function of **(corpus, config, scoring_instant)** — pass the same three and the same ranked results come out, on any host, on any day — with a Q16.16 fixed-point audit chain — byte-identical across runs, machines, and substrates — embedded in every applied decision. (Recall scoring itself is standard floating-point; the byte-identity guarantee is the Q16.16 audit/replay chain.)
 
-Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 97 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic (same query → same ranked results) and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
+`scoring_instant` is a UTC date and is the honest part of that claim: recency ranking is load-bearing for a coding agent, so it is not deleted, it is *named*. Omit it and it resolves to today in UTC — the one clock read on the whole path, taken once at the boundary, never inside the scoring loop. Its resolved value is bound into the recall attestation, so any attested run replays exactly by passing that date back.
+
+Built on the MIND substrate. Governed-write (`propose → review → approve_apply`). 97 MCP tools as the surface — but the differentiator is the substrate underneath. On the same workspace, recall is deterministic given (corpus, config, `scoring_instant`) — same three inputs → same ranked results — and every block and audit hash is byte-identical across every architecture mind-mem builds on — the Q16.16 audit chain. (The ranking scores themselves are standard floating-point; the byte-identity guarantee is the audit/replay chain.)
 
 Most memory layers ship tools. That is table-stakes. MIND-Mem ships a substrate: scoring kernels compiled from MIND source with Q16.16 fixed-point encoding in the audit-hash preimage, a governance pipeline that rejects every unreviewed write, and an audit chain where every applied proposal is hash-anchored. The same query on the same workspace produces the same ranked recall, every time; that recall's audit/replay chain is byte-identical whether you replay it on the same machine or a different one that pulls the same workspace. That property is what makes MIND-Mem suitable as a canonical memory layer across heterogeneous agent stacks.
 
@@ -69,7 +71,7 @@ Output:
 
 | Property                | What it means                                                                     |
 | ----------------------- | --------------------------------------------------------------------------------- |
-| **Byte-identical replay** | Recall ranking is a deterministic function of workspace + metadata state — same state + query → same ranked results (A-MEM importance/recency evolves deterministically on access, so ordering shifts as that state updates; no *probabilistic* mutations). The byte-identical guarantee is the audit/replay chain (Q16.16), identical across runs, machines, and substrates. |
+| **Byte-identical replay** | Recall ranking is a deterministic function of (corpus, config, `scoring_instant`) — same three → same ranked results, on any host and on any day (A-MEM importance/recency evolves deterministically on access, so ordering shifts as that state updates; no *probabilistic* mutations). The byte-identical guarantee is the audit/replay chain (Q16.16), identical across runs, machines, and substrates. |
 | **Governed-write**      | Nothing reaches the source of truth without `propose → review → approve_apply`. No silent mutations. Ever. |
 | **Auditable**           | Every apply logged with timestamp, receipt, and DIFF. Full traceability from signal to decision. |
 | **Deterministic**       | No ML in the retrieval core. Q16.16 fixed-point encoding in the audit-hash preimage. The same preimage produces the same hash. |
@@ -304,7 +306,7 @@ Scheduled background enrichment: scans recent memory for missing cross-reference
 
 ## Integrations are the substrate working
 
-Because the substrate is deterministic, integrating with 17 different CLIs produces the same answers on each. That is not a coincidence — it is the point. MIND-Mem can be the canonical memory layer across heterogeneous agent stacks precisely because recall is deterministic and its audit/replay chain is byte-identical regardless of which client is asking. The 17-CLI surface is a consequence of the substrate, not a feature in itself.
+Because the substrate is deterministic, integrating with 17 different CLIs produces the same answers on each. That is not a coincidence — it is the point. MIND-Mem can be the canonical memory layer across heterogeneous agent stacks precisely because recall is deterministic given (corpus, config, `scoring_instant`) and its audit/replay chain is byte-identical regardless of which client is asking. The 17-CLI surface is a consequence of the substrate, not a feature in itself.
 
 > Honest positioning: the integrations below are *software-level* —
 > the named tool talks to MIND-Mem via the Model Context Protocol.

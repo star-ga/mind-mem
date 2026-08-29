@@ -179,15 +179,12 @@ src/mind_mem/           — Main package (src layout; flat modules, not
   block_lineage.py      — Typed relationship edges (v3.11.0)
   lineage_staleness.py  — BFS staleness propagation (v3.12.0)
   v4/  — v4.0.0 surfaces (all flag-gated), each file under src/mind_mem/v4/ —
-  tier_memory.py        — Hot/warm/cold block tiers + CAS (v4.0.0)
   cognitive_kernel.py   — KernelKind enum + mind_recall (v4.0.0)
   surprise_retrieval.py — compute_surprise + FallbackPolicy (v4.0.0)
   block_kinds.py        — Multi-label block_kind_tags table (v4.0.0)
   block_metadata.py     — Tag + TTL + schema validators (v4.0.0)
   kind_summaries.py     — Per-kind global summaries (v4.0.0)
   embedding_pipeline.py — Pluggable embedder + 3-gram default (v4.0.0)
-  consolidation_worker.py — plan_consolidation pure fn (v4.0.0)
-  eviction.py           — LRU/LOW_SURPRISE/AGE/COMPOSITE (v4.0.0)
   federation.py         — VClock + conflict log + MergeStrategy (v4.0.0)
   self_editing.py       — block_edits + propose/approve/reject (v4.0.0)
   pq.py                 — Product Quantization M=32 K=256 (v4.0.0)
@@ -237,7 +234,7 @@ docs/                   — User + integration docs (35+ files)
   Cursor, Windsurf, Zed, OpenClaw, and 8 more). See
   `docs/client-integrations.md`.
 
-### MCP Tools (90)
+### MCP Tools (97)
 Grouped surfaces (full list in `docs/api-reference.md` and
 `src/mind_mem/mcp_server.py`):
 recall, hybrid_search, prefetch, propose_update, approve_apply,

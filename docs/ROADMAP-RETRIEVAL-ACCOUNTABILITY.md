@@ -22,6 +22,13 @@
 >    wart is `compaction.py:53,150,180,226`.
 >
 > Corrected dependency order is **R.0 → R.1′ → R.3′ → R.2′ → R.4′** (audit §D).
+>
+> **Since shipped (see `ROADMAP.md` § Group RA for the live status):** RA.0, the
+> one-tier-axis collapse, and RA.1, the served-set ledger — the latter with two
+> amendments to the wording below (`run_id` is keyed on the ORDERED served-set
+> digest and excludes the scoring instant) and one ruling against it: `served` /
+> `credited` do **not** buy tiers. The `Status:` line under the title is the
+> proposal's own, and describes the proposal, not the tree.
 > R.0 (wire the ladder onto one DB) is new and blocks everything else.
 > The text below is kept for the diagnosis of *intent*, not as an implementation spec.
 

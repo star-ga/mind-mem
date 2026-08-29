@@ -34,7 +34,7 @@ Package is a flat `src/mind_mem/` — there is no `governance/` subpackage.
 | Component | Source | Notes |
 |---|---|---|
 | At-rest encryption (HMAC-SHA256 keystream + encrypt-then-MAC; not AES/SQLCipher) | `src/mind_mem/encryption.py` | v3.0.0+. |
-| Tier decay (TTL + LRU aging) | `src/mind_mem/tiered_memory.py` (`decay`, `tier_boost`) | v3.0.0+. |
+| Tier decay (TTL + idle demotion) | `src/mind_mem/memory_tiers.py` (`TierPolicy`, `run_promotion_cycle`) | RA.0 collapsed three tier ladders to this one and deleted the other two. |
 | Delta-based snapshot rollback | `src/mind_mem/block_store.py` (`MANIFEST.json` write/read) | MANIFEST.json for O(manifest) restore. |
 
 ### MCP server (97 tools, 8 resources)
@@ -53,7 +53,7 @@ Kernel sources live in `mind/` (repo root), not `kernels/`.
 |---|---|---|
 | Score fusion kernel | `mind/ranking.mind` (`weighted_rank`) | Deterministic weighted sum of BM25/recency/graph/importance signals. |
 | Audit-chain integrity verify | `src/mind_mem/mind_kernels.py` (`sha3_512_chain_verify`) | Python-side kernel wrapper; no standalone `.mind` source file yet for this step. |
-| Tier decay adjustment | `src/mind_mem/tiered_memory.py` (`decay`, `tier_boost`) | Pure Python today — not yet ported to a `.mind` kernel. |
+| Tier decay adjustment | `src/mind_mem/memory_tiers.py` (`TierPolicy`) | Pure Python today — not yet ported to a `.mind` kernel. |
 
 ### Local model
 
