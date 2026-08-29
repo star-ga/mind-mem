@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import date
 from typing import Any
 
 from ._recall_constants import (
@@ -89,7 +90,13 @@ _log = get_logger("validity_gate")
 _PARTY_ID_RE = re.compile(r"[A-Z]+-\d{8}-\d{3}")
 
 
-def apply_validity_gate(hits: list[dict[str, Any]], workspace: str, cfg: dict[str, Any]) -> None:
+def apply_validity_gate(
+    hits: list[dict[str, Any]],
+    workspace: str,
+    cfg: dict[str, Any],
+    *,
+    scoring_instant: date | None = None,
+) -> None:
     """Annotate every hit with a ``validity`` diagnostic; demote low scorers.
 
     Mutates ``hits`` in place, matching the Stage 2.6 hard-negative idiom.
@@ -101,6 +108,12 @@ def apply_validity_gate(hits: list[dict[str, Any]], workspace: str, cfg: dict[st
         workspace: Workspace root path.
         cfg: The ``recall`` config section of ``mind-mem.json`` (i.e.
             ``config.get("recall", {})``), not the full config file.
+        scoring_instant: UTC date the one clock-sensitive input here — the
+            rolling calibration window behind the ``provenance_class``
+            component — is evaluated at. Everything else the gate reads
+            (contradictions, staleness, unwindowed outcomes) is clock-free,
+            so with this injected the whole gate is. ``None`` resolves to
+            today in UTC.
     """
     vg_cfg = cfg.get("validity_gate")
     if not isinstance(vg_cfg, dict) or not vg_cfg.get("enabled", False):
@@ -118,7 +131,7 @@ def apply_validity_gate(hits: list[dict[str, Any]], workspace: str, cfg: dict[st
     outcomes = _load_outcome_signals(vg_cfg, workspace, block_ids)
 
     provenance_enabled = _provenance_enabled(vg_cfg)
-    confirmed_ids = _load_confirmed_ids(workspace, block_ids) if provenance_enabled else frozenset()
+    confirmed_ids = _load_confirmed_ids(workspace, block_ids, scoring_instant=scoring_instant) if provenance_enabled else frozenset()
 
     for hit in hits:
         components = validity_components(
@@ -263,7 +276,12 @@ def _provenance_enabled(vg_cfg: dict[str, Any]) -> bool:
     return section is True
 
 
-def _load_confirmed_ids(workspace: str, block_ids: list[str]) -> frozenset[str]:
+def _load_confirmed_ids(
+    workspace: str,
+    block_ids: list[str],
+    *,
+    scoring_instant: date | None = None,
+) -> frozenset[str]:
     """One batch read of recorded human calibration weights per recall call.
 
     Non-creating and failure-tolerant (see :mod:`trust_signals`): no index ->
@@ -272,7 +290,7 @@ def _load_confirmed_ids(workspace: str, block_ids: list[str]) -> frozenset[str]:
     """
     from .trust_signals import load_calibration_weights
 
-    return confirmed_block_ids(load_calibration_weights(workspace, block_ids))
+    return confirmed_block_ids(load_calibration_weights(workspace, block_ids, scoring_instant=scoring_instant))
 
 
 def _unit_fraction(value: Any, default: float) -> float:

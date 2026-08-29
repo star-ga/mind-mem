@@ -38,6 +38,11 @@ class RecallRequest:
     backend: str = "auto"
     format: str = "blocks"  # or "bundle"
     tenant_id: str | None = None
+    #: UTC date (``YYYY-MM-DD``) the recency layer scores against. Recall is
+    #: deterministic given (corpus, config, scoring_instant); replaying an
+    #: attested run means sending back the instant it recorded. Empty = today
+    #: in UTC.
+    scoring_instant: str = ""
 
 
 @dataclass
@@ -89,6 +94,7 @@ def handle_recall(request: RecallRequest) -> RecallResponse:
         active_only=request.active_only,
         backend=request.backend,
         format=request.format,
+        scoring_instant=request.scoring_instant or None,
     )
     took_ms = (time.perf_counter() - t0) * 1000.0
     return RecallResponse(payload=payload, took_ms=round(took_ms, 3))

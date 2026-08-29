@@ -26,10 +26,12 @@ import os
 import re as _re_mod
 import sqlite3
 import time
+from datetime import date
 from typing import Any
 
 from mind_mem.recall import recall as recall_engine
 from mind_mem.retrieval_graph import retrieval_diagnostics as _retrieval_diag
+from mind_mem.scoring_instant import format_scoring_instant, resolve_scoring_instant
 from mind_mem.sqlite_index import _db_path as fts_db_path
 from mind_mem.sqlite_index import query_index as fts_query
 
@@ -52,6 +54,7 @@ def _recall_impl(
     backend: str = "auto",
     format: str = "blocks",
     explain: bool = False,
+    scoring_instant: date | str | None = None,
 ) -> str:
     """Core recall implementation shared by recall() and hybrid_search().
 
@@ -67,6 +70,11 @@ def _recall_impl(
     raw blocks — pre-digested facts / relations / timeline / entities
     for answerer co-design. Default is ``"blocks"`` so existing callers
     see no behavioural change.
+
+    ``scoring_instant`` is the UTC date the recency layer scores against. It is
+    resolved once here, threaded into the retrieval legs, folded into the cache
+    key (two instants are two different answers) and bound into the recall
+    attestation so the run is replayable. ``None`` resolves to today in UTC.
     """
     if not isinstance(query, str):
         return json.dumps({"error": "query must be a string"})
@@ -74,6 +82,11 @@ def _recall_impl(
         return json.dumps({"error": f"query must be ≤{_MAX_QUERY_LEN} characters"})
     if format not in ("blocks", "bundle"):
         return json.dumps({"error": f"format must be 'blocks' or 'bundle', got {format!r}"})
+    try:
+        resolved_instant = resolve_scoring_instant(scoring_instant)
+    except (TypeError, ValueError) as exc:
+        return json.dumps({"error": f"invalid scoring_instant: {exc}"})
+    instant_iso = format_scoring_instant(resolved_instant)
     ws = _workspace()
     ws_err = _check_workspace(ws)
     if ws_err:
@@ -89,7 +102,13 @@ def _recall_impl(
     _cache_cfg = _raw_config.get("cache", {}) if isinstance(_raw_config, dict) else {}
 
     def _inner_with_format(query, limit, backend, active_only, **kwargs):
-        raw_json = _recall_impl_uncached(query, limit=limit, active_only=active_only, backend=backend)
+        raw_json = _recall_impl_uncached(
+            query,
+            limit=limit,
+            active_only=active_only,
+            backend=backend,
+            scoring_instant=resolved_instant,
+        )
         if format == "blocks":
             return raw_json
         # format="bundle": re-parse JSON → build_bundle → re-serialize.
@@ -113,6 +132,7 @@ def _recall_impl(
             active_only=active_only,
             config=_raw_config,
             ttl_seconds=int(_cache_cfg.get("ttl_seconds", 3600)),
+            scoring_instant=instant_iso,
         )
     else:
         raw_result = _inner_with_format(query, limit=limit, active_only=active_only, backend=backend)
@@ -127,7 +147,7 @@ def _recall_impl(
     # to the CURRENT pipeline config + live index anchor every time, and keeps
     # the cached payload attestation-free.
     if raw:
-        raw = _apply_attestation(raw, backend)
+        raw = _apply_attestation(raw, backend, instant_iso)
 
     # v3.11.0 Pattern 1 — apply explain annotation post-cache so that the
     # cached payload (explain-free) is not polluted and explain=True can
@@ -173,8 +193,13 @@ def _current_vector_flags(ws: str, backend: str) -> tuple[bool, bool]:
         return False, False
 
 
-def _apply_attestation(raw_json: str, backend: str) -> str:
+def _apply_attestation(raw_json: str, backend: str, scoring_instant: str) -> str:
     """Derive the recall attestation from *raw_json* + live config, inject it.
+
+    *scoring_instant* is the instant the run **actually scored with**, passed in
+    rather than re-resolved: re-reading it here would let the record disagree
+    with the run it attests across the cache boundary — the same staleness class
+    Finding 2 fixed for ``config_hash``.
 
     Runs post-cache (both cache-hit and cache-miss paths). Rebuilds the recorded
     run signals from the envelope (per-hit provenance + the ``degraded`` marker),
@@ -204,6 +229,7 @@ def _apply_attestation(raw_json: str, backend: str) -> str:
             ws,
             vector_requested=vector_requested,
             vector_available=vector_available,
+            scoring_instant=scoring_instant,
         )
         envelope["attestation"] = attestation.to_dict()
         return json.dumps(envelope, indent=2, default=str)
@@ -239,8 +265,18 @@ def _apply_explain(query: str, raw_json: str) -> str:
         return raw_json
 
 
-def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False, backend: str = "auto") -> str:
-    """The original recall body, now callable as the cache-miss branch of ``_recall_impl``."""
+def _recall_impl_uncached(
+    query: str,
+    limit: int = 10,
+    active_only: bool = False,
+    backend: str = "auto",
+    scoring_instant: date | None = None,
+) -> str:
+    """The original recall body, now callable as the cache-miss branch of ``_recall_impl``.
+
+    ``scoring_instant`` arrives already resolved from ``_recall_impl`` and is
+    threaded into every leg, so all three backends score against one instant.
+    """
     ws = _workspace()
     limits = _get_limits(ws)
     limit = max(1, min(limit, limits["max_recall_results"]))
@@ -267,7 +303,7 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
                 config_warnings = schema_errors
                 _log.warning("recall_config_errors", errors=schema_errors)
             hb = HybridBackend.from_config(config)
-            results = hb.search(query, ws, limit=limit, active_only=active_only)
+            results = hb.search(query, ws, limit=limit, active_only=active_only, scoring_instant=scoring_instant)
             used_backend = "hybrid"
             # Surface an in-band degradation marker: when the vector leg was
             # unavailable / timed out / failed, ``search`` returns BM25-only
@@ -289,10 +325,10 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
     if used_backend != "hybrid":
         try:
             if os.path.isfile(fts_db_path(ws)):
-                results = fts_query(ws, query, limit=limit, active_only=active_only)
+                results = fts_query(ws, query, limit=limit, active_only=active_only, scoring_instant=scoring_instant)
                 used_backend = "sqlite"
             else:
-                results = recall_engine(ws, query, limit=limit, active_only=active_only)
+                results = recall_engine(ws, query, limit=limit, active_only=active_only, scoring_instant=scoring_instant)
                 used_backend = "scan"
                 warnings.append("FTS5 index not found — using full scan. Run 'reindex' tool for faster queries.")
         except sqlite3.OperationalError as exc:
@@ -356,6 +392,7 @@ def _recall_impl_uncached(query: str, limit: int = 10, active_only: bool = False
         "query": query,
         "query_id": query_id,
         "count": len(results),
+        "scoring_instant": format_scoring_instant(resolve_scoring_instant(scoring_instant)),
         "results": results,
     }
     # In-band degradation marker (local hybrid path): a "hybrid" backend that
@@ -388,6 +425,7 @@ def recall(
     active_only: bool = False,
     backend: str = "auto",
     explain: bool = False,
+    scoring_instant: str | None = None,
 ) -> str:
     """Search across all memory files with ranked retrieval.
 
@@ -395,13 +433,31 @@ def recall(
     the score decomposition (bm25, vector, rrf_rank, governance_boost,
     intent_match, staleness_penalty, final).  Omitted by default to keep
     the payload compact.
+
+    ``scoring_instant`` is an ISO-8601 UTC date (``"YYYY-MM-DD"``) pinning the
+    recency layer — the recency ramp, the calibration window and the temporal
+    filter. Recall is deterministic given (corpus, config, scoring_instant), so
+    passing the instant from a previous run's attestation replays that run
+    exactly. Omit it for today in UTC.
     """
-    return _recall_impl(query, limit=limit, active_only=active_only, backend=backend, explain=explain)
+    return _recall_impl(
+        query,
+        limit=limit,
+        active_only=active_only,
+        backend=backend,
+        explain=explain,
+        scoring_instant=scoring_instant,
+    )
 
 
 @mcp_tool_observe
-def pack_recall_budget(query: str, max_tokens: int = 2000, limit: int = 20) -> str:
-    """Run a recall, then pack the result list under a token budget."""
+def pack_recall_budget(query: str, max_tokens: int = 2000, limit: int = 20, scoring_instant: str = "") -> str:
+    """Run a recall, then pack the result list under a token budget.
+
+    The recall underneath is the ranked pipeline, so ``scoring_instant`` (an
+    ISO-8601 UTC date, empty = today in UTC) pins its recency layer. Packing
+    itself is a pure function of the ranked list.
+    """
     from mind_mem.cognitive_forget import pack_to_budget
 
     ws = _workspace()
@@ -416,7 +472,7 @@ def pack_recall_budget(query: str, max_tokens: int = 2000, limit: int = 20) -> s
     if limit < 1 or limit > 500:
         return json.dumps({"error": "limit must be in [1, 500]"})
 
-    raw = json.loads(_recall_impl(query, limit=limit))
+    raw = json.loads(_recall_impl(query, limit=limit, scoring_instant=scoring_instant or None))
     if isinstance(raw, dict):
         results = raw.get("results", []) or []
     elif isinstance(raw, list):
@@ -474,8 +530,15 @@ def recall_with_axis(
     active_only: bool = False,
     adversarial: bool = False,
     allow_rotation: bool = True,
+    scoring_instant: str = "",
 ) -> str:
-    """Axis-aware recall under the Observer-Dependent Cognition model."""
+    """Axis-aware recall under the Observer-Dependent Cognition model.
+
+    Every axis runs the ranked recall pipeline, so ``scoring_instant`` (an
+    ISO-8601 UTC date, empty = today in UTC) pins the recency layer here too.
+    Without it the axes would each re-resolve their own "today", and a
+    multi-axis observation could straddle a UTC midnight.
+    """
     from mind_mem.axis_recall import recall_with_axis as _axis_recall
     from mind_mem.observation_axis import AxisWeights, ObservationAxis
 
@@ -537,6 +600,10 @@ def recall_with_axis(
             active_only=active_only,
             adversarial=adversarial,
             allow_rotation=allow_rotation,
+            # Every axis is a ranked recall pass, so they must all score
+            # against one instant — otherwise a multi-axis observation can
+            # straddle a UTC midnight and fuse two differently-dated rankings.
+            recall_kwargs={"scoring_instant": scoring_instant} if scoring_instant else None,
         )
     except ValueError as exc:
         return json.dumps({"error": str(exc)})
@@ -554,11 +621,21 @@ def recall_with_axis(
 
 
 @mcp_tool_observe
-def hybrid_search(query: str, limit: int = 10, active_only: bool = False, explain: bool = False) -> str:
+def hybrid_search(
+    query: str,
+    limit: int = 10,
+    active_only: bool = False,
+    explain: bool = False,
+    scoring_instant: str = "",
+) -> str:
     """Hybrid BM25+Vector recall with RRF fusion.
 
     When ``explain=True`` every hit gains an ``_explain`` field containing
     the score decomposition.  See ``recall`` for the full field description.
+
+    ``scoring_instant`` pins the recency layer to an ISO-8601 UTC date so the
+    run is replayable; empty means today in UTC. Same seam as ``recall`` —
+    without it a caller on this surface cannot reproduce a previous ranking.
 
     .. deprecated::
         Use ``recall(backend="hybrid")`` instead. This tool will be removed in a
@@ -571,7 +648,14 @@ def hybrid_search(query: str, limit: int = 10, active_only: bool = False, explai
         DeprecationWarning,
         stacklevel=2,
     )
-    raw = _recall_impl(query, limit=limit, active_only=active_only, backend="hybrid", explain=explain)
+    raw = _recall_impl(
+        query,
+        limit=limit,
+        active_only=active_only,
+        backend="hybrid",
+        explain=explain,
+        scoring_instant=scoring_instant or None,
+    )
     try:
         envelope = json.loads(raw)
         envelope["_deprecation_notice"] = "hybrid_search is deprecated. Use recall with backend='hybrid' instead."

@@ -75,6 +75,7 @@ def recall(
     weights: str = "",
     max_tokens: int = 2000,
     signals: str = "",
+    scoring_instant: str = "",
 ) -> str:
     """Unified retrieval entry point.
 
@@ -108,6 +109,18 @@ def recall(
        when the underlying ``recall_vector`` path is wired through. Any
        caller passing ``mode="vector"`` now gets the standard
        ``unknown mode`` error envelope so the gap is visible.
+
+    ``scoring_instant`` is an ISO-8601 UTC date (``"YYYY-MM-DD"``) that pins the
+    recency layer. Recall is deterministic given (corpus, config,
+    scoring_instant), so replaying a previous run means passing back the instant
+    its attestation recorded. Empty (default) means today in UTC.
+
+    It reaches every mode that runs the ranked pipeline: ``auto`` / ``bm25`` /
+    ``hybrid``, and also ``pack`` and ``axis``, both of which call straight back
+    into that pipeline. The modes it does **not** reach do not rank at all —
+    ``classify`` returns an intent, ``diagnostics`` returns config state,
+    ``similar`` is a co-occurrence lookup with no scoring loop, and ``prefetch``
+    warms a cache.
     """
     # Backward-compat: ``backend=`` alias for ``mode=``.
     if backend and mode == "auto":
@@ -116,7 +129,13 @@ def recall(
     from . import recall as _r
 
     if mode in ("auto", "bm25", "hybrid"):
-        return _r._recall_impl(query, limit=limit, active_only=active_only, backend=mode)
+        return _r._recall_impl(
+            query,
+            limit=limit,
+            active_only=active_only,
+            backend=mode,
+            scoring_instant=scoring_instant or None,
+        )
     if mode == "similar":
         if not block_id:
             return _err("mode='similar' requires 'block_id'")
@@ -125,10 +144,17 @@ def recall(
         return _r.find_similar.__wrapped__(block_id, limit=limit)  # type: ignore[attr-defined]
     if mode == "axis":
         return _r.recall_with_axis.__wrapped__(  # type: ignore[attr-defined]
-            query, axes=axes, weights=weights, limit=limit, active_only=active_only
+            query,
+            axes=axes,
+            weights=weights,
+            limit=limit,
+            active_only=active_only,
+            scoring_instant=scoring_instant,
         )
     if mode == "pack":
-        return _r.pack_recall_budget.__wrapped__(query, max_tokens=max_tokens, limit=limit)  # type: ignore[attr-defined]
+        return _r.pack_recall_budget.__wrapped__(  # type: ignore[attr-defined]
+            query, max_tokens=max_tokens, limit=limit, scoring_instant=scoring_instant
+        )
     if mode == "prefetch":
         return _r.prefetch.__wrapped__(signals or query, limit=limit)  # type: ignore[attr-defined]
     if mode == "classify":

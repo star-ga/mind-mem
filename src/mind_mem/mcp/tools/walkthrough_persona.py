@@ -117,6 +117,7 @@ def recall_with_persona(
     persona: str = "detailed",
     limit: int = 10,
     active_only: bool = False,
+    scoring_instant: str = "",
 ) -> str:
     """Recall memories and project the result list through *persona*.
 
@@ -160,7 +161,15 @@ def recall_with_persona(
     # Reuse the recall MCP impl so cache, axes, observability all flow through.
     from .recall import _recall_impl
 
-    raw = _recall_impl(query, limit=int(limit), active_only=bool(active_only))
+    raw = _recall_impl(
+        query,
+        limit=int(limit),
+        active_only=bool(active_only),
+        # A persona is a projection of the ranked list, so it inherits the
+        # recall's determinism seam rather than owning one: same instant, same
+        # underlying ranking, same projection.
+        scoring_instant=scoring_instant or None,
+    )
     try:
         envelope = json.loads(raw)
     except json.JSONDecodeError:

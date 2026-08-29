@@ -36,6 +36,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 from .observability import get_logger
@@ -178,6 +179,7 @@ def apply_trust_scores(
     config: Mapping[str, Any] | None = None,
     workspace: str | None = None,
     calibration_weights: Mapping[str, float] | None = None,
+    scoring_instant: date | None = None,
 ) -> list[dict]:
     """Annotate (and optionally re-rank) recall hits with provenance trust.
 
@@ -195,7 +197,7 @@ def apply_trust_scores(
 
     if calibration_weights is None and cfg.use_calibration and workspace:
         block_ids = [str(r.get("_id") or "") for r in results if r.get("_id")]
-        calibration_weights = load_calibration_weights(workspace, block_ids)
+        calibration_weights = load_calibration_weights(workspace, block_ids, scoring_instant=scoring_instant)
     confirmed_ids = confirmed_block_ids(calibration_weights)
 
     annotated = annotate_trust(results, confirmed_ids=confirmed_ids)

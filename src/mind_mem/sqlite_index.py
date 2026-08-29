@@ -28,7 +28,7 @@ import os
 import re
 import sqlite3
 import threading
-from datetime import datetime
+from datetime import date, datetime
 
 from .block_parser import parse_file
 from .block_provenance import PROVENANCE_FIELD_NAMES
@@ -51,6 +51,7 @@ from .recall import (
     rerank_hits,
     tokenize,
 )
+from .scoring_instant import as_utc_datetime, resolve_scoring_instant
 
 _log = get_logger("sqlite_index")
 
@@ -1033,10 +1034,16 @@ def query_index(
     retrieve_wide_k: int = 200,
     rerank: bool = True,
     rerank_debug: bool = False,
+    scoring_instant: date | None = None,
 ) -> list[dict]:
     """Query the FTS5 index. Returns ranked results matching recall() format.
 
     Falls back to filesystem scan (recall.recall()) if index doesn't exist.
+
+    ``scoring_instant`` is the UTC date the recency ramp and the calibration
+    window score against — the same seam ``recall()`` carries, threaded here so
+    the FTS5 leg is reproducible on exactly the same terms as the scan leg
+    rather than reading its own clock. ``None`` resolves to today in UTC.
 
     .. warning::
        Raw, UNFILTERED index primitive. It does not apply the external-ingest
@@ -1077,6 +1084,10 @@ def query_index(
                 retrieve_wide_k=retrieve_wide_k,
                 rerank=rerank,
                 rerank_debug=rerank_debug,
+                # A fallback that drops the instant would silently score
+                # against "today" and break replay on exactly the paths a
+                # caller cannot see — the leak this seam exists to close.
+                scoring_instant=scoring_instant,
             )
         finally:
             _active.discard(workspace)
@@ -1160,10 +1171,13 @@ def query_index(
             retrieve_wide_k=retrieve_wide_k,
             rerank=rerank,
             rerank_debug=rerank_debug,
+            scoring_instant=scoring_instant,
         )
         for r in fallback_results:
             r["_fallback"] = "bm25_scan"
         return fallback_results
+
+    _scoring_moment = as_utc_datetime(resolve_scoring_instant(scoring_instant))
 
     results = []
     for row in rows:
@@ -1175,7 +1189,7 @@ def query_index(
         # Apply same post-processing as recall.py
         # Recency boost
         block_data = json.loads(row["json_blob"]) if row["json_blob"] else {}
-        recency = date_score(block_data)
+        recency = date_score(block_data, now=_scoring_moment)
         rw = qparams.get("recency_weight", 0.3)
         score *= 1.0 - rw + rw * recency
 
@@ -1198,7 +1212,7 @@ def query_index(
         # Calibration feedback weight
         if _cal_mgr is not None:
             try:
-                cal_weight = _cal_mgr.get_block_weight(row["id"])
+                cal_weight = _cal_mgr.get_block_weight(row["id"], now=_scoring_moment)
                 score *= cal_weight
             except Exception as exc:
                 _log.debug("calibration_weight_skipped", block_id=row["id"], error=str(exc))  # graceful degradation; non-fatal

@@ -116,6 +116,11 @@ def _recall_for_axis(
             "limit": kwargs.get("limit", limit),
             "active_only": kwargs.get("active_only", active_only),
         }
+        # The scoring instant is not an axis-specific nicety — dropping it
+        # would put a hidden clock read back on this path, so it survives the
+        # minimal retry when the caller supplied one.
+        if "scoring_instant" in kwargs:
+            fallback_kwargs["scoring_instant"] = kwargs["scoring_instant"]
         raw = _recall(workspace, query, **fallback_kwargs)
 
     # Normalise to list[dict]

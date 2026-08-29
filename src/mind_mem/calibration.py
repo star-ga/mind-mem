@@ -31,9 +31,14 @@ computed in UTC (:meth:`CalibrationManager._cutoff_date`), and the stored
 timestamps it is compared against are UTC too (``created_at`` defaults to
 SQLite's UTC ``strftime(..., 'now')``). Two hosts in different timezones
 evaluating the same instant therefore cut the window at the same point.
-``_cutoff_date`` accepts an injected ``now`` so a replay can pin the
-as-of instant explicitly. Recency scoring in ``_recall_scoring`` follows
-the same UTC rule.
+``_cutoff_date`` accepts an injected ``now``, and the recall path now always
+injects it: ``recall()`` resolves one ``scoring_instant`` at its boundary and
+threads it down through :meth:`get_block_weight` / :meth:`get_block_weights`,
+so the window a run used is a recorded input rather than a hidden read. The
+precise claim is therefore **deterministic given (corpus, config,
+scoring_instant)** — pass the same instant back and the same weights, and the
+same ranking, come out. Recency scoring in ``_recall_scoring`` follows the same
+UTC rule and is fed from the same instant.
 
 Copyright (c) STARGA, Inc.
 """
@@ -392,13 +397,20 @@ class CalibrationManager:
         cutoff = now.timestamp() - (CALIBRATION_WINDOW_DAYS * 86400)
         return datetime.fromtimestamp(cutoff, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def get_block_weight(self, block_id: str) -> float:
+    def get_block_weight(self, block_id: str, *, now: datetime | None = None) -> float:
         """Compute calibration weight for a single block.
 
         Returns a float in [MIN_CALIBRATION_WEIGHT, MAX_CALIBRATION_WEIGHT].
         Defaults to 1.0 if insufficient data.
+
+        Args:
+            block_id: Block whose feedback window is summed.
+            now: As-of instant opening the rolling window. The recall path
+                injects the run's resolved scoring instant so the weight —
+                and therefore the ranking it multiplies — is reproducible;
+                ``None`` reads the clock, for direct callers only.
         """
-        cutoff = self._cutoff_date()
+        cutoff = self._cutoff_date(now)
         conn = self._mgr.get_read_connection()
         conn.row_factory = sqlite3.Row
 
@@ -419,15 +431,20 @@ class CalibrationManager:
 
         return _compute_weight(counts["accepted"], counts["rejected"], counts["ignored"])
 
-    def get_block_weights(self, block_ids: list[str]) -> dict[str, float]:
+    def get_block_weights(self, block_ids: list[str], *, now: datetime | None = None) -> dict[str, float]:
         """Compute calibration weights for multiple blocks in one query.
 
         Returns {block_id: weight} dict. Missing blocks default to 1.0.
+
+        Args:
+            block_ids: Blocks whose feedback windows are summed.
+            now: As-of instant opening the rolling window — see
+                :meth:`get_block_weight`.
         """
         if not block_ids:
             return {}
 
-        cutoff = self._cutoff_date()
+        cutoff = self._cutoff_date(now)
         conn = self._mgr.get_read_connection()
         conn.row_factory = sqlite3.Row
 

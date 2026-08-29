@@ -95,7 +95,7 @@ def _seed_and_build(ws: str) -> None:
 def _healthy_vector(ids: list[str]):
     """A deterministic stand-in for a healthy vector arm (no embedder)."""
 
-    def _mock(query: str, workspace: str, limit: int = 200, active_only: bool = False):
+    def _mock(query: str, workspace: str, limit: int = 200, active_only: bool = False, **kwargs):
         return [{"_id": i, "score": 1.0 - n * 0.01} for n, i in enumerate(ids)]
 
     return _mock

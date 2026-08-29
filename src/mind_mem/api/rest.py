@@ -344,6 +344,15 @@ class RecallRequest(BaseModel):
     limit: int = Field(10, ge=1, le=200, description="Maximum number of results")
     active_only: bool = Field(False, description="Only return active (non-superseded) blocks")
     backend: str = Field("auto", description="Retrieval backend: auto | bm25 | hybrid")
+    scoring_instant: str = Field(
+        "",
+        max_length=10,
+        description=(
+            "UTC date (YYYY-MM-DD) the recency layer scores against. Recall is deterministic "
+            "given (corpus, config, scoring_instant); pass back the instant a previous run's "
+            "attestation recorded to replay it. Empty means today in UTC."
+        ),
+    )
 
     @field_validator("backend")
     @classmethod
@@ -640,6 +649,7 @@ def create_app(workspace: str | None = None) -> FastAPI:
             limit=body.limit,
             active_only=body.active_only,
             backend=body.backend,
+            scoring_instant=body.scoring_instant or None,
         )
         return _parse_tool_json(raw)
 

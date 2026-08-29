@@ -159,9 +159,16 @@ def test_different_legs_produce_different_hash():
     assert bm25_only.attestation_hash != hybrid.attestation_hash
 
 
-def test_no_clock_or_random_in_preimage_roundtrip():
+def test_record_is_a_pure_function_of_its_fields_roundtrip():
     """Round-tripping through to_dict/from_dict preserves the hash — proof the
-    record is a pure function of its fields (no hidden timestamp/nonce)."""
+    record is a pure function of its fields (no hidden timestamp/nonce).
+
+    Renamed from ``test_no_clock_or_random_in_preimage_roundtrip``: the preimage
+    now deliberately carries the run's ``scoring_instant``, so "no clock in the
+    preimage" is no longer the property being asserted here — and leaving that
+    name in place would have been a false green. What still holds, and is what
+    this test is for, is that nothing *unrecorded* enters the hash.
+    See tests/test_recall_attestation_completeness.py for the instant binding."""
     a = derive_recall_attestation(
         _as_results([{"_id": "a"}], None),
         vector_requested=True,
@@ -304,7 +311,7 @@ def test_mcp_recall_envelope_surfaces_attestation(monkeypatch):
         def from_config(config):
             return _FakeHB()
 
-        def search(self, query, workspace, limit=10, active_only=False):
+        def search(self, query, workspace, limit=10, active_only=False, **kwargs):
             return _as_results([{"_id": "D-1", "score": 1.0}], None)
 
     import mind_mem.hybrid_recall as hr
@@ -339,7 +346,7 @@ def test_mcp_envelope_attestation_reflects_degradation(monkeypatch):
         def from_config(config):
             return _FakeHB()
 
-        def search(self, query, workspace, limit=10, active_only=False):
+        def search(self, query, workspace, limit=10, active_only=False, **kwargs):
             return _as_results(
                 [{"_id": "D-1", "score": 1.0}],
                 {"leg": "vector", "reason": "deadline_exceeded"},
@@ -377,7 +384,7 @@ def test_mcp_envelope_attestation_internally_consistent(monkeypatch):
         def from_config(config):
             return _FakeHB()
 
-        def search(self, query, workspace, limit=10, active_only=False):
+        def search(self, query, workspace, limit=10, active_only=False, **kwargs):
             return _as_results([{"_id": "D-1"}], None)
 
     import mind_mem.hybrid_recall as hr
@@ -419,7 +426,7 @@ def test_attestation_reflects_config_toggle_on_cache_hit(monkeypatch):
         def from_config(config):
             return _FakeHB(bool(config.get("recall", {}).get("vector_enabled", False)))
 
-        def search(self, query, workspace, limit=10, active_only=False):
+        def search(self, query, workspace, limit=10, active_only=False, **kwargs):
             return _as_results([{"_id": "D-1"}], None)
 
     import mind_mem.hybrid_recall as hr

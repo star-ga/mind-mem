@@ -34,10 +34,41 @@ LOAD-BEARING WEDGE — three rails, each with a test in
    is done through a read-only file peek (:func:`_resolve_index_anchor`) that
    creates nothing.
 
-3. **DETERMINISTIC.** The ``RECALL_ATTEST_v1`` preimage carries only
-   content-derived digests, the config hash, the anchor, and a count — no
-   wall-clock, no randomness. Building an attestation twice from the same run
-   state yields byte-identical bytes (and hence an identical ``attestation_hash``).
+3. **DETERMINISTIC — and complete enough to mean it.** The
+   ``RECALL_ATTEST_v1`` preimage carries content-derived digests, the config
+   hash, the anchor, the served ids in rank order, the derivation marker, and
+   the run's ``scoring_instant``. No randomness, and no *hidden* clock read:
+   the instant is recorded, not sampled behind the caller's back. Building an
+   attestation twice from the same run state yields byte-identical bytes (and
+   hence an identical ``attestation_hash``).
+
+   This rail used to read "no wall-clock in the preimage", which was true of the
+   record and false of the run it attested, and it described the answer only by
+   a ``result_count``. Both halves of that were wrong in the same direction.
+   The scoring path read the clock — ``date_score``'s ramp, the calibration
+   window, the temporal hard filter — so two runs of the same corpus and query
+   that ranked differently produced one identical hash; and because only the
+   cardinality was bound, so did two runs that served *entirely different
+   blocks*. A record that cannot distinguish two different served answers
+   asserts a reproducibility it does not have, which is worse than not
+   attesting at all.
+
+   Two bindings close it. ``scoring_instant`` — the last hidden *input* — makes
+   the guarantee replayable: an attested run is reproduced by passing its date
+   back to ``recall()``. ``results_digest`` — the served ids in rank order,
+   through the same order-sensitive :func:`_seq_digest` as the leg tuples —
+   makes it complete against the *output*: any two runs that served a different
+   set, or the same set in a different order, hash differently whatever the
+   cause, including a hidden input nobody has found yet. The ids are a fact of
+   serving rather than a verdict, and nothing is written, so rail 2 holds.
+
+   KNOWN LIMITS, stated rather than implied. (a) The digest binds the served
+   ids and their order, **not the scores**: two runs that serve the same blocks
+   in the same order with different score *values* still collide. (b) The
+   corpus is bound only through ``index_anchor``, which is
+   :data:`GENESIS_ANCHOR` on a workspace with no audit chain — so what the
+   record pins is the answer, not the store it came from. Neither is a hidden
+   clock; both are stated scope.
 
 HARD RAIL — like every hash in this codebase, ``attestation_hash`` is a plain
 SHA-256 over the preimage: it detects an internally inconsistent record, not a
@@ -63,10 +94,12 @@ import hmac
 import json
 import os
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
 
 from .observability import get_logger, metrics
 from .preimage import preimage
+from .scoring_instant import format_scoring_instant, resolve_scoring_instant
 
 _log = get_logger("recall_attestation")
 
@@ -228,6 +261,24 @@ def derive_legs(
     return tuple(sorted(ran)), tuple(sorted(degraded))
 
 
+def _served_ids(results: Any) -> tuple[str, ...]:
+    """The block ids a run served, **in the order it served them**.
+
+    A recorded run output, not a caller's claim (rail 1): it reads ``_id`` off
+    the very hit dicts the response carries. Order is preserved and duplicates
+    are kept, because the thing being attested is the ranking — collapsing it
+    to a set would put the collision straight back.
+
+    A hit with no ``_id`` contributes ``""`` rather than being dropped, so the
+    positions of its neighbours are still bound.
+    """
+    try:
+        it = iter(results)
+    except TypeError:  # pragma: no cover — defensive
+        return ()
+    return tuple(str(r.get("_id", "") or "") if isinstance(r, dict) else "" for r in it)
+
+
 def _resolve_index_anchor(workspace: str) -> str:
     """Read the audit-chain head hash for *workspace* — read-only, creates nothing.
 
@@ -272,16 +323,42 @@ def _attestation_preimage(
     degraded_digest: str,
     index_anchor: str,
     result_count: int,
+    results_digest: str,
     derivation: str,
+    scoring_instant: str,
 ) -> bytes:
     """Build the tagged, NUL-separated recall-attestation preimage.
 
     Deterministic by construction — every field is a content-derived digest,
-    the reused config hash, the index anchor, a count, or the derivation-
-    provenance marker. No timestamp, no randomness, so the same run state always
-    yields the same preimage (and hence the same attestation hash). Binding
-    ``derivation`` here means a caller-``asserted`` record cannot be relabelled
-    ``derived`` without invalidating the hash (Finding 3).
+    the reused config hash, the index anchor, the served answer, the
+    derivation-provenance marker, or the run's scoring instant. No randomness
+    and no *hidden* clock read, so the same run state always yields the same
+    preimage (and hence the same attestation hash). Binding ``derivation`` here
+    means a caller-``asserted`` record cannot be relabelled ``derived`` without
+    invalidating the hash (Finding 3).
+
+    Two of these fields close the completeness hole that made the pre-seam
+    record dishonest, and they close different halves of it:
+
+    * ``results_digest`` describes the **answer** — the served block ids in
+      rank order, through the same order-sensitive :func:`_seq_digest` the leg
+      tuples use, so ``(A, B)`` and ``(B, A)`` are distinct. It sits next to
+      ``result_count``, which it subsumes for hashing purposes and which is
+      kept only because it is the readable form. Without it the preimage
+      described the served set by cardinality alone: two runs that served no
+      block in common, or the same two blocks in opposite order, produced one
+      identical hash.
+    * ``scoring_instant`` describes the **input** that decides every recency
+      term, in exactly the class of ``config_hash`` and ``index_anchor``.
+      Without it a run was not replayable: "today" moved, the ranking moved,
+      and nothing in the record said so.
+
+    Neither is a verdict and neither is written anywhere, so binding them does
+    not weaken rail 2. ``scoring_instant`` is serialized as a bare
+    ``YYYY-MM-DD`` UTC date: ten fixed ASCII bytes, no time component and no
+    offset suffix, so a run's hash is stable for the whole day and the envelope
+    value round-trips for replay. A second-precision timestamp here would churn
+    the hash on every single call.
     """
     return preimage(
         RECALL_ATTEST_TAG,
@@ -291,7 +368,9 @@ def _attestation_preimage(
         degraded_digest,
         index_anchor,
         result_count,
+        results_digest,
         derivation,
+        scoring_instant,
     )
 
 
@@ -317,6 +396,14 @@ class RecallAttestation:
     degraded: dict[str, str] | None
     index_anchor: str
     result_count: int
+    #: Order-sensitive :func:`_seq_digest` of the served block ids, in rank
+    #: order. This is what lets the record distinguish two different served
+    #: *answers*, rather than only two answers of different length.
+    results_digest: str
+    #: The UTC date the run's recency layer scored against, ``YYYY-MM-DD``.
+    #: Hash-bound, so replaying a run means passing this value back to
+    #: ``recall(scoring_instant=...)``.
+    scoring_instant: str
     attestation_hash: str
     schema: str = field(default=RECALL_ATTEST_TAG)
     #: Whether the legs/config were derived from recorded run state
@@ -334,7 +421,9 @@ class RecallAttestation:
                 degraded_digest=_marker_digest(self.degraded),
                 index_anchor=self.index_anchor,
                 result_count=self.result_count,
+                results_digest=self.results_digest,
                 derivation=self.derivation,
+                scoring_instant=self.scoring_instant,
             )
         ).hexdigest()
 
@@ -352,13 +441,30 @@ class RecallAttestation:
             "degraded": self.degraded,
             "index_anchor": self.index_anchor,
             "result_count": self.result_count,
+            "results_digest": self.results_digest,
             "derivation": self.derivation,
+            "scoring_instant": self.scoring_instant,
             "attestation_hash": self.attestation_hash,
         }
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> RecallAttestation:
-        """Reconstruct from a serialized dict (e.g. an envelope round-trip)."""
+        """Reconstruct from a serialized dict (e.g. an envelope round-trip).
+
+        Raises:
+            ValueError: the dict predates the determinism seam — it is missing
+                ``scoring_instant`` (the recency input) or ``results_digest``
+                (the served answer). Reviving it with a guessed value would
+                yield a record that merely reports
+                ``is_internally_consistent() is False`` with no explanation, so
+                the boundary refuses it by name instead.
+        """
+        missing = [k for k in ("scoring_instant", "results_digest") if k not in d]
+        if missing:
+            raise ValueError(
+                f"attestation dict has no {' and no '.join(repr(k) for k in missing)}: it predates "
+                "the determinism seam, and every hash emitted before it is unrecomputable by design"
+            )
         return cls(
             legs_ran=tuple(d.get("legs_ran", ())),
             legs_degraded=tuple(d.get("legs_degraded", ())),
@@ -366,6 +472,8 @@ class RecallAttestation:
             degraded=d.get("degraded"),
             index_anchor=d["index_anchor"],
             result_count=int(d["result_count"]),
+            results_digest=str(d["results_digest"]),
+            scoring_instant=str(d["scoring_instant"]),
             attestation_hash=d["attestation_hash"],
             schema=d.get("schema", RECALL_ATTEST_TAG),
             derivation=d.get("derivation", DERIVATION_ASSERTED),
@@ -380,14 +488,28 @@ def build_recall_attestation(
     degraded: dict[str, str] | None,
     index_anchor: str,
     result_count: int,
+    served_ids: tuple[str, ...] = (),
     derivation: str = DERIVATION_ASSERTED,
+    scoring_instant: date | str | None = None,
 ) -> RecallAttestation:
     """Build a :class:`RecallAttestation` from already-derived recorded values.
 
-    Pure: no I/O, no clock, no randomness. Building twice from the same values
-    yields an equal attestation with the same hash. Leg tuples are normalised
-    (deduped + sorted) so the digest is order-stable regardless of caller input
-    order.
+    Pure given its arguments: no I/O, no randomness. Building twice from the
+    same values yields an equal attestation with the same hash. Leg tuples are
+    normalised (deduped + sorted) so the digest is order-stable regardless of
+    caller input order.
+
+    ``served_ids`` are the block ids the run served, **in rank order**. Unlike
+    the leg tuples they are deliberately *not* sorted or deduped: their order
+    is the thing being attested, so ``(A, B)`` must hash differently from
+    ``(B, A)``. It is what makes the record able to tell two different served
+    answers apart at all.
+
+    ``scoring_instant`` should be the instant the run *actually scored with*,
+    so the record can distinguish two differently-ranked runs and replay either.
+    Omitting it resolves today-in-UTC, matching ``recall()``'s own default —
+    correct for a run that also took the default, and the one place a clock is
+    read here.
 
     TRUST BOUNDARY (Finding 3): the ``legs_ran`` / ``legs_degraded`` /
     ``config_hash`` values are taken **verbatim from the caller** — this builder
@@ -406,6 +528,8 @@ def build_recall_attestation(
         raise ValueError("result_count must be >= 0")
     if derivation not in (DERIVATION_DERIVED, DERIVATION_ASSERTED):
         raise ValueError(f"derivation must be {DERIVATION_DERIVED!r} or {DERIVATION_ASSERTED!r}, got {derivation!r}")
+    instant = format_scoring_instant(resolve_scoring_instant(scoring_instant))
+    results_digest = _seq_digest(tuple(str(i) for i in served_ids))
     attestation_hash = hashlib.sha256(
         _attestation_preimage(
             legs_ran_digest=_seq_digest(legs_ran_n),
@@ -414,7 +538,9 @@ def build_recall_attestation(
             degraded_digest=_marker_digest(degraded),
             index_anchor=index_anchor,
             result_count=result_count,
+            results_digest=results_digest,
             derivation=derivation,
+            scoring_instant=instant,
         )
     ).hexdigest()
     return RecallAttestation(
@@ -424,6 +550,8 @@ def build_recall_attestation(
         degraded=degraded,
         index_anchor=index_anchor,
         result_count=result_count,
+        results_digest=results_digest,
+        scoring_instant=instant,
         attestation_hash=attestation_hash,
         derivation=derivation,
     )
@@ -436,14 +564,20 @@ def derive_recall_attestation(
     vector_available: bool,
     config_hash: str,
     index_anchor: str = GENESIS_ANCHOR,
+    scoring_instant: date | str | None = None,
 ) -> RecallAttestation:
     """Derive a :class:`RecallAttestation` from a completed recall's run state.
 
     This is the primary entry point. It reads the recorded signals off
-    ``results`` (the ``.degraded`` marker + per-hit provenance) and the recorded
-    backend flags, derives the legs, folds in the degraded marker, and binds the
-    *reused* ``config_hash`` (from the pipeline probe — this function never
+    ``results`` (the ``.degraded`` marker + per-hit provenance), derives the
+    legs and the served-id sequence, folds in the degraded marker, and binds
+    the *reused* ``config_hash`` (from the pipeline probe — this function never
     invents one) and ``index_anchor``. Nothing is written anywhere.
+
+    The served ids come from :func:`_served_ids`, which reads them off the hit
+    dicts in rank order — the recorded output of the run, not a caller's
+    summary of it. That is what makes the resulting hash change whenever the
+    served answer changes, whatever moved it.
 
     Because the legs are recomputed from the recorded run state here (not taken
     from a caller), the produced record is stamped
@@ -465,6 +599,12 @@ def derive_recall_attestation(
             (:func:`mind_mem.pipeline_hash.current_pipeline_hash`), reused.
         index_anchor: The audit-chain head / index snapshot hash
             (:func:`_resolve_index_anchor`), or :data:`GENESIS_ANCHOR`.
+        scoring_instant: The UTC date the run's recency layer scored against —
+            the value ``recall()`` resolved, passed through so the record binds
+            the instant that was actually used rather than re-resolving one.
+            Re-resolving here would let the record disagree with the run it
+            attests, which is the same class of staleness Finding 2 fixed for
+            ``config_hash`` across the cache boundary.
 
     Returns:
         A runtime :class:`RecallAttestation` (never persisted).
@@ -480,6 +620,7 @@ def derive_recall_attestation(
         result_count = len(results)
     except TypeError:  # pragma: no cover — defensive
         result_count = 0
+    served_ids = _served_ids(results)
     att = build_recall_attestation(
         legs_ran=legs_ran,
         legs_degraded=legs_degraded,
@@ -487,6 +628,8 @@ def derive_recall_attestation(
         degraded=degraded,
         index_anchor=index_anchor,
         result_count=result_count,
+        served_ids=served_ids,
+        scoring_instant=scoring_instant,
         # Sanctioned path: legs were recomputed from the recorded run state
         # above, so this record is provenance-guaranteed, not caller-asserted.
         derivation=DERIVATION_DERIVED,
@@ -500,6 +643,8 @@ def derive_recall_attestation(
         legs_degraded=",".join(att.legs_degraded),
         config_hash=att.config_hash[:16],
         result_count=att.result_count,
+        results_digest=att.results_digest[:16],
+        scoring_instant=att.scoring_instant,
     )
     return att
 
@@ -510,6 +655,7 @@ def derive_recall_attestation_for_workspace(
     *,
     vector_requested: bool,
     vector_available: bool,
+    scoring_instant: date | str | None = None,
 ) -> RecallAttestation:
     """Convenience wrapper: resolve ``config_hash`` + ``index_anchor`` from *workspace*.
 
@@ -536,6 +682,7 @@ def derive_recall_attestation_for_workspace(
         vector_available=vector_available,
         config_hash=config_hash,
         index_anchor=index_anchor,
+        scoring_instant=scoring_instant,
     )
 
 

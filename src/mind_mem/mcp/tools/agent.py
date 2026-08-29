@@ -71,8 +71,13 @@ def _vault_root_allowed(vault_root: str) -> tuple[bool, str]:
 
 
 @mcp_tool_observe
-def agent_inject(query: str, agent: str = "generic", limit: int = 10) -> str:
-    """Render a context snippet in the target agent's expected format."""
+def agent_inject(query: str, agent: str = "generic", limit: int = 10, scoring_instant: str = "") -> str:
+    """Render a context snippet in the target agent's expected format.
+
+    ``scoring_instant`` is an ISO-8601 UTC date pinning the recency layer of the
+    recall underneath; empty means today in UTC. Two agents handed the same
+    instant get the same snippet.
+    """
     from mind_mem.agent_bridge import KNOWN_AGENTS, AgentFormatter, UnknownAgentError
 
     ws = _workspace()
@@ -96,7 +101,7 @@ def agent_inject(query: str, agent: str = "generic", limit: int = 10) -> str:
     # lookup keeps the two extractions independently committable.
     from mind_mem.mcp_server import _recall_impl
 
-    raw = json.loads(_recall_impl(query, limit=limit))
+    raw = json.loads(_recall_impl(query, limit=limit, scoring_instant=scoring_instant or None))
     if isinstance(raw, dict):
         results = raw.get("results", []) or []
     elif isinstance(raw, list):

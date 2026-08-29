@@ -10,6 +10,7 @@ import re
 import sys
 from abc import ABC, abstractmethod
 from collections import Counter
+from datetime import date
 from typing import Any, Final, Mapping, cast
 
 from ._recall_constants import (
@@ -72,6 +73,7 @@ from .retrieval_graph import (
     recall_sufficiency,
     record_hard_negatives,
 )
+from .scoring_instant import as_utc_datetime, resolve_scoring_instant
 from .telemetry import traced as _traced
 from .validity_gate import apply_validity_gate
 
@@ -690,6 +692,7 @@ def recall(
     event_id: str | None = None,
     min_maturity: float | None = None,
     as_of: str | None = None,
+    scoring_instant: date | None = None,
     guardrail_context: Mapping[str, Any] | GuardrailContext | None = None,
     _allow_decompose: bool = True,
 ) -> list[dict]:
@@ -740,6 +743,21 @@ def recall(
             current content is returned unchanged (a warning is logged) so
             recall never fails because ``as_of`` was passed. ``None``
             (default) = live content.
+        scoring_instant: The UTC **date** the recency layer scores against
+            — ``date_score``'s ramp, the calibration manager's rolling
+            window and the temporal hard filter's "today". ``None``
+            (default) resolves to today in UTC, never local time.
+
+            This is the third input recall is a function of. The
+            deterministic core (BM25F + vector + RRF + validity gate +
+            guardrails) reads no clock at all; every clock-sensitive term
+            is fed from this one value, resolved once here at the boundary
+            rather than read separately inside the scoring loop. The
+            precise guarantee is therefore **deterministic given (corpus,
+            config, scoring_instant)**: pass the same three and the served
+            set, order and scores are identical on any host, on any day.
+            The resolved value is bound into the recall attestation, so an
+            attested run replays by passing its attested date back here.
         guardrail_context: Optional description of what the caller is
             about to do — ``{"tool": ..., "command": ..., "intent": ...,
             "paths": [...]}`` or a
@@ -751,6 +769,11 @@ def recall(
             fixed number of ranked hits.  ``None`` (default) skips the
             whole path — output is unchanged, byte for byte.
     """
+    # THE clock boundary. Resolved once, before any ranking work, and threaded
+    # into every recency term below. Nothing downstream reads a clock of its
+    # own — see mind_mem.scoring_instant for why that split is the product.
+    _scoring_instant = resolve_scoring_instant(scoring_instant)
+    _scoring_moment = as_utc_datetime(_scoring_instant)
     _guardrail_ctx = GuardrailContext.from_mapping(guardrail_context)
     _guardrail_policy = GuardrailPolicy.from_config(_get_config(workspace)) if _guardrail_ctx else None
     query_tokens = tokenize(query)
@@ -777,6 +800,7 @@ def recall(
             retrieve_wide_k=retrieve_wide_k,
             rerank=rerank,
             rerank_debug=rerank_debug,
+            scoring_instant=_scoring_instant,
         )
         return _apply_post_filters(
             hits,
@@ -929,6 +953,12 @@ def recall(
                         retrieve_wide_k=retrieve_wide_k,
                         rerank=rerank,
                         rerank_debug=rerank_debug,
+                        # The sub-queries ARE the answer for a multi-hop query.
+                        # Letting each one re-resolve its own instant would put
+                        # the clock read back on the path one level down, and a
+                        # decomposition straddling UTC midnight would merge two
+                        # differently-dated rankings into one result set.
+                        scoring_instant=_scoring_instant,
                         _allow_decompose=False,
                     )
                 except RecursionError:
@@ -1190,7 +1220,7 @@ def recall(
                     score = CHUNK_BLEND_BEST * best_chunk_score + CHUNK_BLEND_FULL * score
 
         # --- Boost factors (query-type-aware) ---
-        recency = date_score(block)
+        recency = date_score(block, now=_scoring_moment)
         rw = qparams.get("recency_weight", 0.3)
         score *= 1.0 - rw + rw * recency
 
@@ -1241,7 +1271,7 @@ def recall(
         # --- Calibration feedback weight ---
         if cal_mgr:
             try:
-                cal_weight = cal_mgr.get_block_weight(block.get("_id", ""))
+                cal_weight = cal_mgr.get_block_weight(block.get("_id", ""), now=_scoring_moment)
                 score *= cal_weight
             except Exception as e:
                 _log.warning("calibration_weight_failed", block_id=block.get("_id", ""), error=str(e))
@@ -1607,7 +1637,7 @@ def recall(
     # For temporal queries, resolve date range from the query and exclude
     # blocks whose Date falls outside the range. Undated blocks pass through.
     if temporal_hard_filter_enabled and query_type == "temporal" and results:
-        t_start, t_end = resolve_time_reference(query)
+        t_start, t_end = resolve_time_reference(query, reference_date=_scoring_instant)
         if t_start is not None or t_end is not None:
             pre_count = len(results)
             results = apply_temporal_filter(results, t_start, t_end)
@@ -1707,7 +1737,7 @@ def recall(
     # blended score, and before the 2.8/2.9 re-sort + knee cutoff so
     # demotion actually moves blocks below the knee. A complete no-op
     # (no annotation, no DB reads) when disabled.
-    apply_validity_gate(deduped, workspace, recall_cfg)
+    apply_validity_gate(deduped, workspace, recall_cfg, scoring_instant=_scoring_instant)
     _stage_counts["validity_demoted"] = sum(1 for r in deduped if r.get("_validity_demoted"))
 
     # Stage 2.7: Optional LLM-based reranking — config-gated, stdlib only

@@ -74,6 +74,7 @@ def make_cache_key(
     limit: int = 10,
     backend: str = "auto",
     active_only: bool = False,
+    scoring_instant: str = "",
 ) -> str:
     """Derive a stable cache key for a recall invocation.
 
@@ -81,6 +82,11 @@ def make_cache_key(
     repr() so the key is portable across Python versions and doesn't
     leak object-id randomness. Namespace-prefixed so multi-tenant
     deployments don't collide.
+
+    ``scoring_instant`` is part of the key because it is part of the answer:
+    recall is deterministic given (corpus, config, scoring_instant), so two
+    requests differing only in the instant are two different queries. Omitting
+    it would serve one instant's ranking under another instant's attestation.
     """
     payload = {
         "query": query,
@@ -88,6 +94,7 @@ def make_cache_key(
         "limit": int(limit),
         "backend": backend,
         "active_only": bool(active_only),
+        "scoring_instant": str(scoring_instant),
     }
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
@@ -303,6 +310,7 @@ def cached_recall(
     active_only: bool = False,
     ttl_seconds: int = _DEFAULT_TTL_SECONDS,
     config: dict[str, Any] | None = None,
+    scoring_instant: str = "",
 ) -> str:
     """Cache-wrapped call to a recall function.
 
@@ -310,6 +318,11 @@ def cached_recall(
     ``(query, limit=..., active_only=..., backend=...) -> str`` — the
     same shape ``_recall_impl`` and its consumers use. Returns the
     same string envelope.
+
+    ``scoring_instant`` (an ISO-8601 UTC date, or ``""`` for callers that do not
+    use the seam) participates in the key only — *inner* is called with its
+    original signature, so a caller that closes over the instant keeps working
+    unchanged.
     """
     key = make_cache_key(
         query,
@@ -317,6 +330,7 @@ def cached_recall(
         limit=limit,
         backend=backend,
         active_only=active_only,
+        scoring_instant=scoring_instant,
     )
     cache = get_cache(config)
     hit = cache.get(key)

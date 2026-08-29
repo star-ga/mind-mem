@@ -152,7 +152,7 @@ def test_mcp_recall_envelope_surfaces_degraded(monkeypatch):
         def from_config(config):
             return _FakeHB()
 
-        def search(self, query, workspace, limit=10, active_only=False):
+        def search(self, query, workspace, limit=10, active_only=False, **kwargs):
             return _as_results(
                 [{"_id": "D-1", "score": 1.0}],
                 {"leg": "vector", "reason": "deadline_exceeded"},

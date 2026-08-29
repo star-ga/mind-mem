@@ -23,8 +23,10 @@ Copyright (c) STARGA, Inc.
 from __future__ import annotations
 
 import os
+from datetime import date
 
 from .observability import get_logger
+from .scoring_instant import as_utc_datetime, resolve_scoring_instant
 
 _log = get_logger("trust_signals")
 
@@ -37,12 +39,21 @@ INDEX_DB_REL = os.path.join(".mind-mem-index", "recall.db")
 ROLLBACK_OPERATION = "rollback"
 
 
-def load_calibration_weights(workspace: str, block_ids: list[str]) -> dict[str, float]:
+def load_calibration_weights(
+    workspace: str,
+    block_ids: list[str],
+    *,
+    scoring_instant: date | None = None,
+) -> dict[str, float]:
     """Return ``block_id -> calibration weight``, or ``{}`` when unavailable.
 
     Args:
         workspace: Workspace root. Falsy input yields ``{}``.
         block_ids: Blocks to look up. Empty input yields ``{}``.
+        scoring_instant: UTC date opening the rolling calibration window.
+            These weights are read by the *validity gate*, so a bare clock
+            here would put a wall-clock read on the path the wedge calls
+            deterministic. ``None`` resolves to today in UTC.
 
     Returns:
         The weights :meth:`calibration.CalibrationManager.get_block_weights`
@@ -57,7 +68,10 @@ def load_calibration_weights(workspace: str, block_ids: list[str]) -> dict[str, 
     try:
         from .calibration import CalibrationManager
 
-        return CalibrationManager(workspace).get_block_weights(block_ids)
+        return CalibrationManager(workspace).get_block_weights(
+            block_ids,
+            now=as_utc_datetime(resolve_scoring_instant(scoring_instant)),
+        )
     except Exception as exc:  # pragma: no cover — defensive, degrade to neutral
         _log.warning("trust_calibration_unavailable", error=str(exc))
         return {}

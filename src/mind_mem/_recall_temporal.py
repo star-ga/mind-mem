@@ -7,6 +7,7 @@ import re
 from datetime import date, timedelta
 
 from ._recall_constants import MONTH_NAMES
+from .scoring_instant import resolve_scoring_instant
 
 __all__ = [
     "resolve_time_reference",
@@ -100,13 +101,22 @@ def resolve_time_reference(
 
     Args:
         query: The search query string.
-        reference_date: The reference date for relative calculations.
-            Defaults to today if None.
+        reference_date: The scoring instant relative references resolve
+            against. ``None`` falls back to today **in UTC**, via
+            :func:`~mind_mem.scoring_instant.resolve_scoring_instant`.
+
+    .. note::
+       This filter *drops blocks*, so a wrong reference date changes the served
+       set, not merely its order. It used to default to ``date.today()``, which
+       is naive **local** time: two hosts either side of local midnight resolved
+       "last 7 days" to different windows and served disjoint answers from an
+       identical corpus. The recall path now always injects the resolved
+       scoring instant; this fallback exists only for direct callers.
     """
     if not query:
         return None, None
 
-    ref = reference_date or date.today()
+    ref = reference_date if reference_date is not None else resolve_scoring_instant(None)
 
     # "yesterday"
     if _YESTERDAY_RE.search(query):

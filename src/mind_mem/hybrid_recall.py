@@ -24,9 +24,11 @@ from __future__ import annotations
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as _FutureTimeout
+from datetime import date
 from typing import Any
 
 from .observability import get_logger, metrics, timed
+from .scoring_instant import as_utc_datetime, resolve_scoring_instant
 
 _log = get_logger("hybrid_recall")
 
@@ -476,6 +478,7 @@ class HybridBackend:
         retrieve_wide_k: int = 200,
         rerank: bool = True,
         _skip_auto_features: bool = False,
+        scoring_instant: date | None = None,
         **kwargs: Any,
     ) -> list[dict]:
         """Run BM25 and (optionally) vector search, fuse via RRF.
@@ -491,6 +494,11 @@ class HybridBackend:
             graph_boost: Enable cross-reference graph boosting (BM25).
             retrieve_wide_k: Candidate pool size per backend.
             rerank: Enable BM25 reranker (passed through).
+            scoring_instant: UTC date every recency term scores against —
+                the BM25 leg's ramp and calibration window, the vector leg's
+                recency boost, and the half-life decay. ``None`` resolves to
+                today in UTC. The fusion itself (RRF) reads no clock; see
+                :mod:`mind_mem.scoring_instant`.
             **kwargs: Forwarded to underlying backends.
 
         Returns:
@@ -647,6 +655,7 @@ class HybridBackend:
                     graph_boost=graph_boost,
                     retrieve_wide_k=retrieve_wide_k,
                     rerank=rerank,
+                    scoring_instant=scoring_instant,
                     **kwargs,
                 )
                 # Capture the bm25 leg's structural-degradation marker BEFORE
@@ -700,6 +709,7 @@ class HybridBackend:
                     graph_boost=graph_boost,
                     retrieve_wide_k=retrieve_wide_k,
                     rerank=False,  # defer reranking to post-fusion
+                    scoring_instant=scoring_instant,
                     **kwargs,
                 )
                 vec_future: Future = pool.submit(
@@ -708,6 +718,7 @@ class HybridBackend:
                     workspace,
                     limit=retrieve_wide_k,
                     active_only=active_only,
+                    scoring_instant=scoring_instant,
                 )
                 bm25_results = bm25_future.result()
                 # A structurally-empty BM25 arm (index unbuilt while the store
@@ -781,7 +792,7 @@ class HybridBackend:
             result = self._maybe_session_boost(result)
 
             # v3.3.0 — temporal half-life decay (opt-in hot-path).
-            result = self._maybe_temporal_decay(result)
+            result = self._maybe_temporal_decay(result, scoring_instant=scoring_instant)
 
             # v3.3.0 — probabilistic truth_score annotation.
             result = self._maybe_truth_score(result)
@@ -789,7 +800,7 @@ class HybridBackend:
             # Per-actor trust scores (opt-in, default OFF). Runs AFTER
             # truth_score so it can reuse that annotation instead of
             # recomputing it.
-            result = self._maybe_trust_scores(result, workspace)
+            result = self._maybe_trust_scores(result, workspace, scoring_instant=scoring_instant)
 
             # Enforce the caller's limit AFTER expansions — previous code
             # truncated before the graph/entity expansions appended
@@ -983,7 +994,13 @@ class HybridBackend:
             _log.warning("truth_score_failed", error=str(exc))
             return results
 
-    def _maybe_trust_scores(self, results: list[dict], workspace: str | None = None) -> list[dict]:
+    def _maybe_trust_scores(
+        self,
+        results: list[dict],
+        workspace: str | None = None,
+        *,
+        scoring_instant: date | None = None,
+    ) -> list[dict]:
         """Annotate hits with the gate's provenance class; re-rank when opted in.
 
         Gated on ``retrieval.trust_scores.enabled`` (default false). With
@@ -1002,12 +1019,17 @@ class HybridBackend:
 
             if not is_trust_scores_enabled(self._config):
                 return results
-            return apply_trust_scores(results, config=self._config, workspace=workspace)
+            return apply_trust_scores(
+                results,
+                config=self._config,
+                workspace=workspace,
+                scoring_instant=scoring_instant,
+            )
         except Exception as exc:  # pragma: no cover — defensive
             _log.warning("trust_scores_failed", error=str(exc))
             return results
 
-    def _maybe_temporal_decay(self, results: list[dict]) -> list[dict]:
+    def _maybe_temporal_decay(self, results: list[dict], *, scoring_instant: date | None = None) -> list[dict]:
         """Apply half-life decay to every result's score (v3.3.0 Tier 1 #3).
 
         Opt-in via ``retrieval.temporal_decay_hot_path`` — the raw
@@ -1025,6 +1047,7 @@ class HybridBackend:
             from ._recall_scoring import _resolve_half_life_days, temporal_decay_score
 
             half_life = _resolve_half_life_days(self._config)
+            _decay_moment = as_utc_datetime(resolve_scoring_instant(scoring_instant))
             # Audit R-10: copy-on-write so we don't mutate dicts the
             # caller still holds a reference to. Two upstream paths
             # (cross-encoder rerank, session boost) reuse the input
@@ -1032,7 +1055,7 @@ class HybridBackend:
             # when temporal_decay_hot_path was enabled mid-request.
             decayed: list[dict] = []
             for r in results:
-                mult = temporal_decay_score(r, half_life_days=half_life)
+                mult = temporal_decay_score(r, half_life_days=half_life, now=_decay_moment)
                 current = float(r.get("score", 0.0) or 0.0)
                 copy = dict(r)
                 copy["score"] = current * mult
@@ -1332,6 +1355,8 @@ class HybridBackend:
         query: str,
         workspace: str,
         limit: int = 200,
+        *,
+        scoring_instant: date | None = None,
         **kwargs: Any,
     ) -> list[dict]:
         """BM25 leg with a STRUCTURAL empty-arm guard.
@@ -1349,7 +1374,11 @@ class HybridBackend:
         Under ``recall.strict_hybrid=true`` the structural failure RAISES
         (:class:`BM25LegError`) instead of degrading.
         """
-        results = self._bm25_search_raw(query, workspace, limit=limit, **kwargs)
+        # scoring_instant is a NAMED parameter of this function, so it does
+        # NOT ride in **kwargs -- forwarding only **kwargs silently dropped
+        # it and the BM25 leg re-resolved to today, which is precisely the
+        # pass-through the clock guard exists to catch.
+        results = self._bm25_search_raw(query, workspace, limit=limit, scoring_instant=scoring_instant, **kwargs)
         if results:
             return _as_results(results, None)
 
@@ -1374,19 +1403,27 @@ class HybridBackend:
         query: str,
         workspace: str,
         limit: int = 200,
+        *,
+        scoring_instant: date | None = None,
         **kwargs: Any,
     ) -> list[dict]:
         """BM25 search via the existing recall engine.
 
         Tries sqlite_index first (O(log N)), then falls back to recall.py
         (O(corpus)).
+
+        ``scoring_instant`` is named explicitly rather than left to ride in
+        ``**kwargs``: an implicit pass-through is exactly how the recency layer
+        came to read a hidden clock in the first place, and a named parameter is
+        what lets a reader — and the call-site guard in
+        ``tests/test_recall_clock_guard.py`` — see the seam at every hop.
         """
         try:
             from .sqlite_index import _db_path, query_index
 
             db = _db_path(workspace)
             if os.path.isfile(db):
-                return query_index(workspace, query, limit=limit, **kwargs)
+                return query_index(workspace, query, limit=limit, scoring_instant=scoring_instant, **kwargs)
         except ImportError:
             _log.debug("sqlite_index_not_available")
         except Exception as exc:
@@ -1395,7 +1432,7 @@ class HybridBackend:
         try:
             from .recall import recall
 
-            return recall(workspace, query, limit=limit, **kwargs)
+            return recall(workspace, query, limit=limit, scoring_instant=scoring_instant, **kwargs)
         except Exception as exc:
             _log.error("bm25_search_failed", error=str(exc))
             return []
@@ -1464,6 +1501,8 @@ class HybridBackend:
         workspace: str,
         limit: int = 200,
         active_only: bool = False,
+        *,
+        scoring_instant: date | None = None,
     ) -> list[dict]:
         """Vector search via recall_vector.search_batch (for RRF) or .search."""
         try:
@@ -1478,12 +1517,13 @@ class HybridBackend:
                         limit=limit,
                         active_only=active_only,
                         config=self._config,
+                        scoring_instant=scoring_instant,
                     )
                 )
 
             # Fallback: VectorBackend.search
             backend = recall_vector.VectorBackend(self._config)
-            return list(backend.search(workspace, query, limit=limit, active_only=active_only))
+            return list(backend.search(workspace, query, limit=limit, active_only=active_only, scoring_instant=scoring_instant))
         except ImportError as exc:
             _log.warning("vector_search_import_failed")
             raise VectorLegError("import_failed") from exc

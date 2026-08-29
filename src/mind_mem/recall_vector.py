@@ -44,6 +44,7 @@ import os
 import struct
 import sys
 import threading
+from datetime import date
 from typing import Any, cast
 
 # Import helpers from recall.py
@@ -59,6 +60,7 @@ from .recall import (
     get_block_type,
     get_excerpt,
 )
+from .scoring_instant import as_utc_datetime, resolve_scoring_instant
 from .v4.circuit_breaker import CircuitBreaker, CircuitOpenError
 
 _log = get_logger("recall_vector")
@@ -1119,7 +1121,15 @@ class VectorBackend(RecallBackend):
 
         _log.info("pinecone_indexed", index=self.pinecone_index_name, vectors=total)
 
-    def search(self, workspace: str, query: str, limit: int = 10, active_only: bool = False) -> list[dict]:
+    def search(
+        self,
+        workspace: str,
+        query: str,
+        limit: int = 10,
+        active_only: bool = False,
+        *,
+        scoring_instant: date | None = None,
+    ) -> list[dict]:
         """Search using semantic/vector similarity.
 
         Args:
@@ -1127,6 +1137,10 @@ class VectorBackend(RecallBackend):
             query: Search query text
             limit: Maximum number of results
             active_only: Only return active blocks
+            scoring_instant: UTC date the recency boost scores against;
+                ``None`` resolves to today in UTC. The local-index provider
+                multiplies a recency term into the similarity, so it takes the
+                same seam as the BM25 legs — see :mod:`mind_mem.scoring_instant`.
 
         Returns:
             List of result dicts with _id, type, score, excerpt, file, line, status
@@ -1140,7 +1154,7 @@ class VectorBackend(RecallBackend):
             if self.provider == "sqlite_vec":
                 results = self._search_sqlite_vec(workspace, query, limit, active_only)
             elif self.provider in ("local", "llama_cpp"):
-                results = self._search_local(workspace, query, limit, active_only)
+                results = self._search_local(workspace, query, limit, active_only, scoring_instant=scoring_instant)
             elif self.provider == "qdrant":
                 results = self._search_qdrant(workspace, query, limit, active_only)
             elif self.provider == "pinecone":
@@ -1194,7 +1208,15 @@ class VectorBackend(RecallBackend):
         blocks = store.vector_search(list(emb[0]), limit=limit)
         return [_pg_block_to_hit(block, block.get("_score", 0.0)) for block in blocks]
 
-    def _search_local(self, workspace: str, query: str, limit: int, active_only: bool) -> list[dict]:
+    def _search_local(
+        self,
+        workspace: str,
+        query: str,
+        limit: int,
+        active_only: bool,
+        *,
+        scoring_instant: date | None = None,
+    ) -> list[dict]:
         """Search local JSON index.
 
         Args:
@@ -1202,10 +1224,12 @@ class VectorBackend(RecallBackend):
             query: Search query
             limit: Max results
             active_only: Filter to active blocks only
+            scoring_instant: UTC date the recency boost scores against.
 
         Returns:
             Ranked list of results
         """
+        _scoring_moment = as_utc_datetime(resolve_scoring_instant(scoring_instant))
         # Load index
         index = self._load_local_index(workspace)
         if not index:
@@ -1244,7 +1268,7 @@ class VectorBackend(RecallBackend):
             # Recency boost
             date_str = block.get("date", "")
             if date_str:
-                recency = date_score({"Date": date_str})
+                recency = date_score({"Date": date_str}, now=_scoring_moment)
                 score *= 0.7 + 0.3 * recency
 
             # Status boost
@@ -1412,6 +1436,8 @@ def search_batch(
     limit: int = 200,
     active_only: bool = False,
     config: dict | None = None,
+    *,
+    scoring_instant: date | None = None,
 ) -> list[dict]:
     """Search using VectorBackend with the given (or default) config.
 
@@ -1427,6 +1453,8 @@ def search_batch(
         active_only: Only return active blocks.
         config: Optional recall config dict. If None, loads from
             ``<workspace>/mind-mem.json``.
+        scoring_instant: UTC date the recency boost scores against;
+            ``None`` resolves to today in UTC.
 
     Returns:
         List of result dicts (same format as VectorBackend.search).
@@ -1448,7 +1476,7 @@ def search_batch(
 
     try:
         backend = VectorBackend(config)
-        return backend.search(workspace, query, limit=limit, active_only=active_only)
+        return backend.search(workspace, query, limit=limit, active_only=active_only, scoring_instant=scoring_instant)
     except ImportError:
         _log.info("search_batch_unavailable", reason="sentence-transformers not installed")
         return []

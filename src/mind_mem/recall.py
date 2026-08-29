@@ -14,6 +14,13 @@ Usage:
     python3 -m mind_mem.recall --query "deadline" --active-only
     python3 -m mind_mem.recall --query "database" --graph --workspace .
 
+Determinism: recall is a pure function of **(corpus, config, scoring_instant)**.
+Pass ``scoring_instant`` (a UTC ``datetime.date``) to pin the recency layer —
+the recency ramp, the rolling calibration window and the temporal hard filter —
+and the served set, order and scores are identical on any host, on any day. Omit
+it and it resolves to today in UTC, the single clock read on the whole path.
+See :mod:`mind_mem.scoring_instant`.
+
 This module is a facade — all implementation lives in _recall_*.py submodules.
 External consumers should import from 'recall', never from '_recall_*' directly.
 """
@@ -108,6 +115,12 @@ from .guardrails import (
     load_guardrails,
     match_guardrails,
 )
+from .scoring_instant import (
+    as_utc_datetime,
+    format_scoring_instant,
+    parse_scoring_instant,
+    resolve_scoring_instant,
+)
 
 __all__ = [
     # Constants
@@ -181,6 +194,10 @@ __all__ = [
     "main",
     # Temporal Filtering
     "resolve_time_reference",
+    "resolve_scoring_instant",
+    "format_scoring_instant",
+    "parse_scoring_instant",
+    "as_utc_datetime",
     "apply_temporal_filter",
 ]
 

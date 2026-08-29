@@ -25,6 +25,11 @@ class TestRecallHandler:
             active_only=False,
             backend="auto",
             format="blocks",
+            # The gRPC surface forwards the recall scoring instant. None means
+            # "resolve at the boundary", which is the documented default; the
+            # point of asserting it here is that the parameter is threaded at
+            # all rather than dropped on this transport.
+            scoring_instant=None,
         )
         assert resp.payload == '{"results": []}'
         assert resp.took_ms >= 0

@@ -235,7 +235,7 @@ def test_mcp_recall_warns_on_bm25_fallback(monkeypatch: pytest.MonkeyPatch, tmp_
         def from_config(config: dict) -> _FakeHybrid:
             return _FakeHybrid()
 
-        def search(self, query: str, workspace: str, limit: int = 10, active_only: bool = False) -> list[dict]:
+        def search(self, query: str, workspace: str, limit: int = 10, active_only: bool = False, **kwargs) -> list[dict]:
             return [{"_id": "A", "score": 0.0164, "_retrieval_source": "bm25_fallback", "excerpt": "x"}]
 
     monkeypatch.setattr(mcp_recall, "_workspace", lambda: ws)
