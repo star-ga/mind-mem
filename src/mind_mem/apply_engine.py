@@ -291,7 +291,19 @@ def check_preconditions(ws):
         report.append("validate: SKIP (script not found)")
         return True, report
     try:
-        result = subprocess.run(["bash", validate_sh, ws], capture_output=True, text=True, timeout=60, env=env)  # nosec B603 B607 — fixed argument list; validate_sh is a package-internal script path; shell=False (default)
+        # encoding is explicit: `text=True` alone decodes with the locale
+        # preferred encoding, which is cp1252 on Windows, so any non-ASCII the
+        # validator prints comes back as mojibake or raises.
+        # nosec B603 B607 — fixed argument list; validate_sh is a package-internal path; shell=False
+        result = subprocess.run(  # nosec B603 B607
+            ["bash", validate_sh, ws],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+            env=env,
+        )
         # Find the TOTAL line (contains "issues")
         total_line = ""
         for line in result.stdout.strip().split("\n"):
@@ -301,7 +313,16 @@ def check_preconditions(ws):
         if re.search(r"\b0 issues\b", total_line):
             report.append(f"validate: PASS ({total_line})")
         else:
-            report.append(f"validate: FAIL ({total_line or 'no TOTAL line found'})")
+            # Carry the validator's own stderr. Without it a crash inside
+            # validate_py reports only "no TOTAL line found" -- true, useless,
+            # and indistinguishable from a validator that ran and said nothing.
+            why = total_line or "no TOTAL line found"
+            tail = (result.stderr or "").strip().splitlines()
+            noise = ("[mind-mem][deprecation]", "Canonical:", "Bypass:", "The bash shim")
+            tail = [ln for ln in tail if ln.strip() and not ln.strip().startswith(noise)]
+            if tail:
+                why += " | stderr: " + " / ".join(tail[-4:])
+            report.append(f"validate: FAIL ({why})")
             return False, report
     except Exception as e:
         report.append(f"validate: ERROR ({e})")
