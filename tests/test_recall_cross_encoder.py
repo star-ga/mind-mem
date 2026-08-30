@@ -1,6 +1,5 @@
 """Tests for cross-encoder reranker integration in recall pipeline."""
 
-import importlib.util
 import os
 import shutil
 import tempfile
@@ -8,7 +7,27 @@ import unittest
 
 import pytest
 
-_HAS_SENTENCE_TRANSFORMERS = importlib.util.find_spec("sentence_transformers") is not None
+
+def _sentence_transformers_usable() -> bool:
+    """Ask the SAME question the product asks: can it be IMPORTED?
+
+    This used to be ``find_spec("sentence_transformers") is not None``, which
+    answers "is it installed?" -- a different question. A package can be present
+    on disk and still fail to import because one of ITS dependencies is missing
+    (measured 2026-08-29: sentence_transformers installed, but importing it
+    raised "No module named 'pytz'" through pandas). find_spec said available,
+    the guard let the test run, and CrossEncoderReranker correctly raised
+    ImportError -- so an unusable optional dependency surfaced as a hard test
+    failure instead of a skip.
+
+    Reusing the product's own predicate is what stops the two drifting again.
+    """
+    from mind_mem.cross_encoder_reranker import _check_available
+
+    return _check_available()
+
+
+_HAS_SENTENCE_TRANSFORMERS = _sentence_transformers_usable()
 
 
 class TestCrossEncoderConfig(unittest.TestCase):
