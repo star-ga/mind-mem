@@ -51,7 +51,15 @@ _BACKEND_RECALL = {
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # PLUGIN_ROOT: go up two levels from src/mind_mem/ to repo root
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
-TEMPLATE_DIR = os.path.join(PLUGIN_ROOT, "templates")
+# Templates live INSIDE the package. The previous value walked up out of it --
+# dirname(dirname(SCRIPT_DIR))/templates -- which resolves to the repo root in a
+# source checkout and to <venv>/lib/pythonX.Y/templates in an install, where
+# nothing exists. The copy loop skipped every missing source in silence, so a
+# pip-installed `mind-mem-init` produced a workspace with no DECISIONS.md,
+# TASKS.md, MEMORY.md, entity files or maint-state.json and still reported
+# success. Measured 2026-08-29: source tree validated 69 checks / 0 issues, the
+# installed package 10 checks / 8 issues, all 8 MISSING.
+TEMPLATE_DIR = os.path.join(SCRIPT_DIR, "templates")
 
 DIRS = [
     "decisions",
@@ -358,10 +366,15 @@ def init(
             skipped.append(target_rel)
             continue
         src = os.path.join(TEMPLATE_DIR, template_name)
-        if os.path.exists(src):
-            os.makedirs(os.path.dirname(target), mode=0o700, exist_ok=True)
-            shutil.copy2(src, target)
-            created.append(f"file: {target_rel}")
+        if not os.path.exists(src):
+            # Never silent -- this is how the packaging defect above stayed
+            # invisible: a workspace missing its whole corpus scaffold still
+            # reported a successful init.
+            created.append(f"MISSING (not shipped in this install): {target_rel}")
+            continue
+        os.makedirs(os.path.dirname(target), mode=0o700, exist_ok=True)
+        shutil.copy2(src, target)
+        created.append(f"file: {target_rel}")
 
     # Copy maintenance scripts (never overwrite)
     for script in MAINTENANCE_SCRIPTS:
@@ -370,30 +383,36 @@ def init(
         if os.path.exists(dst):
             skipped.append(f"maintenance/{script}")
             continue
-        if os.path.exists(src):
-            shutil.copy2(src, dst)
-            if script == "validate.sh":
-                # Bake THIS interpreter into the workspace's forwarder. The workspace
-                # was created by an interpreter that can import mind_mem; the `python3`
-                # first on PATH may not be it (measured 2026-08-29: init under 3.12 but
-                # `python3` -> 3.14 without mind_mem, so validate.sh exited 1). The shim
-                # still falls back to a PATH search, so an un-substituted copy keeps
-                # working; this only removes the guesswork when we know the answer.
-                try:
-                    with open(dst, encoding="utf-8") as fh:
-                        _shim = fh.read()
-                    # Replace ONLY the assignment line. A global replace also
-                    # rewrites the sentinel in the "was it substituted?" comparison,
-                    # which silently disables the baked interpreter entirely.
-                    _marker = 'PY_BAKED="@MIND_MEM_PYTHON@"'
-                    if _marker in _shim:
-                        with open(dst, "w", encoding="utf-8") as fh:
-                            fh.write(_shim.replace(_marker, f'PY_BAKED="{sys.executable}"', 1))
-                except OSError:
-                    # Never fail an init over the convenience substitution -- the
-                    # fallback chain in the shim covers this case.
-                    pass
-            created.append(f"file: maintenance/{script}")
+        if not os.path.exists(src):
+            # Never silent. A listed-but-absent maintenance script means the package
+            # was built without it -- exactly what happened to validate.sh, which
+            # pyproject's package-data did not match, so every pip-installed workspace
+            # was created with no validator and still reported success.
+            created.append(f"MISSING (not shipped in this install): maintenance/{script}")
+            continue
+        shutil.copy2(src, dst)
+        if script == "validate.sh":
+            # Bake THIS interpreter into the workspace's forwarder. The workspace
+            # was created by an interpreter that can import mind_mem; the `python3`
+            # first on PATH may not be it (measured 2026-08-29: init under 3.12 but
+            # `python3` -> 3.14 without mind_mem, so validate.sh exited 1). The shim
+            # still falls back to a PATH search, so an un-substituted copy keeps
+            # working; this only removes the guesswork when we know the answer.
+            try:
+                with open(dst, encoding="utf-8") as fh:
+                    _shim = fh.read()
+                # Replace ONLY the assignment line. A global replace also
+                # rewrites the sentinel in the "was it substituted?" comparison,
+                # which silently disables the baked interpreter entirely.
+                _marker = 'PY_BAKED="@MIND_MEM_PYTHON@"'
+                if _marker in _shim:
+                    with open(dst, "w", encoding="utf-8") as fh:
+                        fh.write(_shim.replace(_marker, f'PY_BAKED="{sys.executable}"', 1))
+            except OSError:
+                # Never fail an init over the convenience substitution -- the
+                # fallback chain in the shim covers this case.
+                pass
+        created.append(f"file: maintenance/{script}")
 
     # Create mind-mem.json config (never overwrite). For the default
     # markdown backend ``config`` equals DEFAULT_CONFIG (no block_store

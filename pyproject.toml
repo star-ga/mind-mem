@@ -130,7 +130,12 @@ py-modules = ["mcp_server"]
 package-dir = {"" = "src"}
 
 [tool.setuptools.package-data]
-mind_mem = ["py.typed", "*.mind", "*.pyx"]
+# *.sh is load-bearing, not decoration: init_workspace copies validate.sh into every
+# workspace's maintenance/ dir, and the shim's own banner documents `bash validate.sh`
+# as the compat entry point. Without this glob the file never reached the wheel, so a
+# pip-installed mind-mem created workspaces with no validator and said nothing -- the
+# copy loop skips a missing source silently.
+mind_mem = ["py.typed", "*.mind", "*.pyx", "*.sh", "validate.sh.pre-forwarder", "templates/*"]
 
 # Ship the top-level `mind/*.mind` scoring-kernel sources alongside the wheel
 # (task #298).  The kernels stay at the repo root by public convention
