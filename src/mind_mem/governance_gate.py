@@ -70,6 +70,7 @@ __all__ = [
     "GovernanceGate",
     "IngestTier",
     "UngatedWriteError",
+    "evict_gate",
     "get_gate",
 ]
 
@@ -110,6 +111,52 @@ def get_gate(workspace: str) -> "GovernanceGate":
         return _gates[ws]
 
 
+def evict_gate(workspace: str) -> bool:
+    """Drop and close the cached gate for a workspace that is being destroyed.
+
+    Caching a gate per workspace forever is right for a real workspace
+    and wrong for an ephemeral one. Every ``mm review`` preview mints a
+    temporary sandbox, asks for its gate, and then deletes the
+    directory — so without this the cache grows one gate per preview,
+    each holding a chain and an evidence log, every one of them keyed on
+    a path that no longer exists.
+
+    Call this **only for a workspace the caller owns and is tearing
+    down**. It is not a refresh. Two live gates for one workspace do not
+    share ``_admit_lock``, ``HashChainV2._lock`` or
+    ``EvidenceChain._lock`` — those are per-instance, and the singleton
+    is the only thing that makes them process-wide. Measured: three
+    appends across two evidence chains on one file leave the JSONL
+    loading as *zero* entries with ``load_integrity_compromised``, i.e.
+    a fork destroys the whole audit history, not merely its tail.
+    :meth:`GovernanceGate.close` is what contains a mistake here — an
+    evicted gate refuses to admit rather than forking.
+
+    Returns:
+        True when a gate was cached for *workspace* and has been closed.
+    """
+    ws = os.path.realpath(workspace)
+    with _gate_lock:
+        gate = _gates.pop(ws, None)
+        if gate is not None:
+            # Refuse new admissions ATOMICALLY with the pop. Popping alone
+            # only stops callers who have not yet obtained a reference; a
+            # thread already holding this gate could still open an admission
+            # in the window between the pop and close(), because _closed was
+            # still False. That is a write authorised against a workspace we
+            # are in the middle of destroying. _begin_retire is a plain flag
+            # set, so the module lock is held for no longer than before.
+            gate._begin_retire()
+    if gate is None:
+        return False
+    # The DRAIN stays outside _gate_lock: close() takes the gate's own
+    # _admit_lock and can block behind an admission already in flight.
+    # Holding the module lock across that would stall get_gate() for every
+    # OTHER workspace in the process.
+    gate.close()
+    return True
+
+
 # ---------------------------------------------------------------------------
 # GovernanceGate
 # ---------------------------------------------------------------------------
@@ -143,10 +190,57 @@ class GovernanceGate:
         # evidence B, chain B, chain A — the evidence and chain orderings
         # would diverge, breaking audit-trail-to-chain-head correlation.
         self._admit_lock = threading.RLock()
+        # Set by close(); an evicted gate must refuse, not fork. See close().
+        self._closed = False
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    def _begin_retire(self) -> None:
+        """Refuse NEW admissions at once, without waiting for in-flight ones.
+
+        Called by :func:`evict_gate` while it holds the module ``_gate_lock``,
+        so the instant a gate stops being reachable through the cache it also
+        stops admitting. :meth:`close` then takes ``_admit_lock`` to wait out
+        any admission already in progress.
+
+        The split is the point. Doing it all in ``close`` means blocking on
+        ``_admit_lock`` while the module lock is held, which stalls every other
+        workspace; doing only the pop leaves a window in which the gate is
+        unreachable yet still authorising writes. A bare attribute store is
+        atomic under CPython, and ``admit`` re-reads the flag under
+        ``_admit_lock``, so no admission can begin after this returns.
+        """
+        self._closed = True
+
+    def close(self) -> None:
+        """Retire this gate: refuse every further admission. Idempotent.
+
+        A gate is retired when the workspace under it is being destroyed
+        (see :func:`evict_gate`). What makes that safe is this refusal,
+        not the cache eviction: if a caller still holds a retired gate
+        and a *new* gate has since been built for the same path, the two
+        would each compute the next ``previous_hash`` from their own
+        in-memory evidence tail and fork the log — which makes the whole
+        JSONL unloadable, not just the forked tail. Raising is strictly
+        better than that, and ``GovernanceBypassError`` is already this
+        module's vocabulary for "this write is not authorised".
+
+        Taken under ``_admit_lock`` so retirement can never land between
+        the evidence write and the chain append — the exact window that
+        lock exists to protect (see ``__init__``).
+
+        Nothing here releases an OS handle, and it must not be described
+        as though it did: :class:`HashChainV2` opens and closes a
+        connection per call, and :class:`EvidenceChain` is JSONL opened
+        per append. The gate holds paths, locks and loaded entries.
+        ``_entries`` is deliberately left intact so a reader holding a
+        retired gate (``gate.evidence``) still sees the history it
+        already loaded rather than silently seeing nothing.
+        """
+        with self._admit_lock:
+            self._closed = True
 
     @property
     def chain(self) -> HashChainV2:
@@ -200,6 +294,14 @@ class GovernanceGate:
         effective_actor = actor if actor else _current_agent()
 
         with self._admit_lock:
+            # Step 0 — a retired gate authorises nothing. Checked inside the
+            # lock so it cannot race a concurrent close() into the middle of
+            # the evidence-then-chain write below.
+            if self._closed:
+                raise GovernanceBypassError(
+                    f"GovernanceGate for {self._ws!r} was retired (its workspace is gone); refusing to admit {block_id!r}"
+                )
+
             # Step 1 — spec-hash check (only when a binding exists)
             spec_hash = self._current_spec_hash()
             if spec_hash is None:

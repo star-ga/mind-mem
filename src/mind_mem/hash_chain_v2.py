@@ -37,9 +37,10 @@ import os
 import sqlite3
 import threading
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Iterator, Optional
 
 from .preimage import preimage
 
@@ -213,8 +214,43 @@ class HashChainV2:
             conn.execute("PRAGMA busy_timeout=30000")
         return conn
 
+    @contextmanager
+    def _session(self) -> Iterator[sqlite3.Connection]:
+        """Open a connection, commit-or-rollback, then CLOSE it.
+
+        Every query below goes through here rather than through
+        ``with self._connect() as conn``, because a bare sqlite3
+        connection used as a context manager commits (or, on an
+        exception, rolls back) and then **leaves the handle open** —
+        its ``__exit__`` documents exactly that and nothing more.
+
+        Refcounting does not clean up after it. A ``sqlite3.Connection``
+        holds its prepared-statement cache, and that cache holds the
+        connection back, so every connection this class opens sits in a
+        reference cycle and is reclaimed only when the cyclic collector
+        happens to run. Until then the process keeps an open descriptor
+        on the database *and* on its ``-wal`` / ``-shm`` sidecars.
+
+        That is a leak on every platform and a correctness bug on
+        Windows, where an open handle makes ``os.unlink`` fail: a
+        directory holding a chain — a review sandbox, a test workspace —
+        could not be deleted. Closing here is also what lets SQLite
+        checkpoint and remove the sidecars, so the directory empties.
+
+        Transaction semantics are unchanged: the inner ``with conn``
+        still commits on success and rolls back on an exception, and it
+        does so *before* the close. ``close()`` on its own never
+        commits, so the ordering cannot turn a rollback into a commit.
+        """
+        conn = self._connect()
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+
     def _init_db(self) -> None:
-        with self._connect() as conn:
+        with self._session() as conn:
             conn.executescript(_SCHEMA)
 
     # ------------------------------------------------------------------
@@ -224,7 +260,7 @@ class HashChainV2:
     @property
     def length(self) -> int:
         """Total number of entries in the chain."""
-        with self._connect() as conn:
+        with self._session() as conn:
             row = conn.execute("SELECT COUNT(*) FROM hash_chain").fetchone()
             return int(row[0])
 
@@ -260,7 +296,7 @@ class HashChainV2:
         # Python-level lock avoids raising OperationalError on concurrent
         # intra-process appends that would otherwise collide.
         with self._lock:
-            with self._connect() as conn:
+            with self._session() as conn:
                 conn.execute("BEGIN IMMEDIATE")
                 last_row = conn.execute("SELECT entry_hash FROM hash_chain ORDER BY rowid DESC LIMIT 1").fetchone()
                 previous_hash = last_row["entry_hash"] if last_row else GENESIS_HASH
@@ -326,7 +362,7 @@ class HashChainV2:
         prev_hash = GENESIS_HASH
         idx = -1
         seen_v3 = False
-        with self._connect() as conn:
+        with self._session() as conn:
             cur = conn.execute("SELECT * FROM hash_chain ORDER BY rowid ASC")
             while True:
                 batch = cur.fetchmany(1024)
@@ -371,7 +407,7 @@ class HashChainV2:
         admission whose chain entry does not resolve must not authorise a
         write.
         """
-        with self._connect() as conn:
+        with self._session() as conn:
             row = conn.execute("SELECT * FROM hash_chain WHERE entry_id = ?", (entry_id,)).fetchone()
         return _row_to_entry(row) if row is not None else None
 
@@ -384,7 +420,7 @@ class HashChainV2:
         Returns:
             List of HashEntry objects (may be empty).
         """
-        with self._connect() as conn:
+        with self._session() as conn:
             rows = conn.execute(
                 "SELECT * FROM hash_chain WHERE block_id = ? ORDER BY rowid ASC",
                 (block_id,),
@@ -400,7 +436,7 @@ class HashChainV2:
         Returns:
             List of HashEntry objects, oldest first within the window.
         """
-        with self._connect() as conn:
+        with self._session() as conn:
             rows = conn.execute(
                 "SELECT * FROM hash_chain ORDER BY rowid DESC LIMIT ?",
                 (n,),
@@ -419,7 +455,7 @@ class HashChainV2:
         Returns:
             Number of entries exported.
         """
-        with self._connect() as conn:
+        with self._session() as conn:
             rows = conn.execute("SELECT * FROM hash_chain ORDER BY rowid ASC").fetchall()
 
         with open(output_path, "w", encoding="utf-8") as fh:
@@ -469,7 +505,7 @@ class HashChainV2:
         # previous_hash links to a stale head — verify_chain would then flag
         # the entire import as tampered).
         with self._lock:
-            with self._connect() as conn:
+            with self._session() as conn:
                 conn.execute("BEGIN IMMEDIATE")
                 head_row = conn.execute("SELECT entry_hash FROM hash_chain ORDER BY rowid DESC LIMIT 1").fetchone()
                 prev_hash = head_row["entry_hash"] if head_row else GENESIS_HASH

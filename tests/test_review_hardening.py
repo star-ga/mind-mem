@@ -23,7 +23,10 @@ from __future__ import annotations
 import io
 import json
 import os
+import shutil
+import stat
 import sys
+import tempfile
 
 import pytest
 
@@ -304,3 +307,150 @@ class TestATouchedFileMayNotEscapeTheWorkspace:
             ops=({"op": "update_field", "file": "tasks/TASKS.md"},),
         )
         assert _targets(item) == ("./decisions/DECISIONS.md", "tasks/TASKS.md")
+
+
+class TestThePreviewSandboxIsReallyTornDown:
+    """A sandbox is a workspace that lives for one call. Both halves of
+    destroying it — the cached gate and the directory — were leaks.
+
+    ``get_gate`` caches one gate per workspace realpath forever, so every
+    preview left a gate (holding a chain and a loaded evidence log)
+    keyed on a temp path already deleted from disk. Measured before the
+    fix: two previews, two cache entries, zero of them still on disk.
+    """
+
+    def test_a_preview_leaves_no_gate_behind_for_its_sandbox(self, workspace):
+        from mind_mem import governance_gate
+        from mind_mem.review_preview import preview_diff
+        from mind_mem.review_queue import load_queue
+
+        root, _ids = workspace
+        before = len(governance_gate._gates)
+        for _ in range(3):
+            preview_diff(root, load_queue(root)[0])
+
+        sandbox_keys = [key for key in governance_gate._gates if "mind-mem-review-" in key]
+        assert sandbox_keys == [], f"the gate cache kept a sandbox that no longer exists: {sandbox_keys}"
+        # The real workspace gate is legitimately cached; nothing else is.
+        assert len(governance_gate._gates) - before <= 1
+
+    def test_a_preview_caches_no_gate_for_a_directory_it_deleted(self, workspace):
+        """Scoped to the keys THIS preview adds.
+
+        The cache is process-global and every test that admits a write
+        leaves a gate behind for its own ``tmp_path``, which pytest later
+        reaps — so "no cached gate names a missing directory" is not a
+        property of the whole dict, only of what a preview contributes.
+        """
+        from mind_mem import governance_gate
+        from mind_mem.review_preview import preview_diff
+        from mind_mem.review_queue import load_queue
+
+        root, _ids = workspace
+        before = set(governance_gate._gates)
+        preview_diff(root, load_queue(root)[0])
+        added = set(governance_gate._gates) - before
+
+        dead = sorted(key for key in added if not os.path.isdir(key))
+        assert dead == [], f"the preview cached a gate for a directory it then deleted: {dead}"
+
+
+class TestARetiredGateRefusesRatherThanForking:
+    """Why eviction needs a refusal and not just a ``dict.pop``.
+
+    ``_admit_lock``, ``HashChainV2._lock`` and ``EvidenceChain._lock``
+    are per-instance; the ``get_gate`` singleton is the only thing that
+    makes them process-wide. Two live gates on one workspace each
+    compute the next ``previous_hash`` from their own in-memory evidence
+    tail. Measured: three appends across two chains on one file leave
+    the JSONL loading as ZERO entries with ``load_integrity_compromised``
+    — a fork destroys the whole history, not merely its tail. So a gate
+    whose workspace was torn down must fail loudly instead of writing.
+    """
+
+    def test_an_evicted_gate_admits_nothing(self, tmp_path):
+        from mind_mem.governance_gate import GovernanceBypassError, evict_gate, get_gate
+
+        ws = str(tmp_path / "ws")
+        os.makedirs(ws)
+        gate = get_gate(ws)
+        gate.admit(action="WRITE", block_id="B-1", content="payload", actor="test")
+
+        assert evict_gate(ws) is True
+        with pytest.raises(GovernanceBypassError) as caught:
+            gate.admit(action="WRITE", block_id="B-2", content="payload", actor="test")
+        assert "retired" in str(caught.value)
+
+    def test_evicting_an_uncached_workspace_is_not_an_error(self, tmp_path):
+        from mind_mem.governance_gate import evict_gate
+
+        assert evict_gate(str(tmp_path / "never-gated")) is False
+
+    def test_close_is_idempotent_and_a_fresh_gate_still_works(self, tmp_path):
+        from mind_mem.governance_gate import evict_gate, get_gate
+
+        ws = str(tmp_path / "ws")
+        os.makedirs(ws)
+        first = get_gate(ws)
+        assert evict_gate(ws) is True
+        first.close()  # idempotent
+        assert evict_gate(ws) is False
+
+        second = get_gate(ws)
+        assert second is not first
+        entry = second.admit(action="WRITE", block_id="B-1", content="payload", actor="test")
+        assert entry.block_id == "B-1"
+        assert second.chain.verify_chain() == (True, -1)
+
+
+class TestSandboxRemovalIsReportedNotAssumed:
+    def test_a_sandbox_that_survives_is_reported(self, workspace, monkeypatch):
+        """``sandbox_removed`` was hardcoded True, so it could never be False.
+
+        A field that always claims success is the silent failure the
+        module docstring criticises. Removal is forced to fail here by
+        neutering rmtree; the sandbox is cleaned up afterwards.
+        """
+        import shutil as shutil_module
+
+        from mind_mem.review_preview import preview_diff
+        from mind_mem.review_queue import load_queue
+
+        root, _ids = workspace
+        monkeypatch.setattr("mind_mem.review_preview.shutil.rmtree", lambda *a, **k: None)
+        result = preview_diff(root, load_queue(root)[0])
+        assert result.sandbox_removed is False
+
+        monkeypatch.undo()
+        leftovers = [name for name in os.listdir(tempfile.gettempdir()) if name.startswith("mind-mem-review-")]
+        for name in leftovers:
+            shutil_module.rmtree(os.path.join(tempfile.gettempdir(), name), ignore_errors=True)
+
+    def test_a_read_only_sandbox_is_still_removed(self, tmp_path):
+        """Coverage for the read-only handler, which shipped without any.
+
+        This is not a regression test for the connection fix — it passes
+        with or without it. It exists because the handler's docstring
+        claimed "a read-only-tree test caught" the parent-directory case
+        while no such test was ever committed, and because removing the
+        retry loop means ``_clear_readonly`` now has to succeed on the
+        first pass. The Windows half — that the read-only ATTRIBUTE
+        blocks delete there — is documented behaviour, not covered here.
+        """
+        from mind_mem.review_preview import _remove_sandbox
+
+        sandbox = tmp_path / "mind-mem-review-fake"
+        nested = sandbox / "memory"
+        nested.mkdir(parents=True)
+        target = nested / "locked.md"
+        target.write_text("read only", encoding="utf-8")
+        os.chmod(target, stat.S_IRUSR)
+        os.chmod(nested, stat.S_IRUSR | stat.S_IXUSR)
+        try:
+            assert _remove_sandbox(str(sandbox)) is True
+            assert not sandbox.exists()
+        finally:
+            if nested.exists():
+                os.chmod(nested, stat.S_IRWXU)
+            if sandbox.exists():
+                shutil.rmtree(str(sandbox), ignore_errors=True)

@@ -25,7 +25,7 @@ import shutil
 import stat
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Sequence
 
 from .review_queue import ReviewItem
@@ -48,6 +48,9 @@ class PreviewResult:
     reason: str = ""
     files: tuple[str, ...] = ()
     truncated_lines: int = 0
+    #: Whether the temporary sandbox was actually gone when the preview
+    #: returned. Reported, not assumed: it is the real result of the
+    #: removal, so a sandbox that survives is visible instead of silent.
     sandbox_removed: bool = True
 
     def to_dict(self) -> dict[str, Any]:
@@ -81,13 +84,20 @@ def preview_diff(workspace: str, item: ReviewItem, *, max_lines: int = MAX_DIFF_
     if missing:
         return PreviewResult(item.proposal_id, False, reason=f"file not found in workspace: {missing[0]}")
 
+    from .governance_gate import evict_gate
+
     sandbox = tempfile.mkdtemp(prefix="mind-mem-review-")
     try:
         _seed(root, sandbox, targets)
         failure = _replay(sandbox, item)
         if failure:
-            return PreviewResult(item.proposal_id, False, reason=failure, sandbox_removed=True)
-        text, elided = _render(root, sandbox, targets, max_lines=max_lines)
+            result = PreviewResult(item.proposal_id, False, reason=failure)
+        else:
+            text, elided = _render(root, sandbox, targets, max_lines=max_lines)
+            if not text:
+                result = PreviewResult(item.proposal_id, False, reason="proposal would change nothing", files=targets)
+            else:
+                result = PreviewResult(item.proposal_id, True, diff_text=text, files=targets, truncated_lines=elided)
     except Exception as exc:  # noqa: BLE001 — see below; one preview may not end the review
         # Containment is by *kind of failure*, not by a list of exception
         # types. ``execute_op`` catches OSError/ValueError and friends, but
@@ -97,37 +107,66 @@ def preview_diff(workspace: str, item: ReviewItem, *, max_lines: int = MAX_DIFF_
         # whole interactive session and discarded every decision the
         # operator had already staged. A refusal with a named reason is
         # reviewable; a traceback mid-queue destroys work.
-        return PreviewResult(item.proposal_id, False, reason=f"preview failed: {type(exc).__name__}: {exc}")
+        result = PreviewResult(item.proposal_id, False, reason=f"preview failed: {type(exc).__name__}: {exc}")
     finally:
-        _remove_sandbox(sandbox)
+        # Retire the sandbox gate BEFORE deleting the directory under it.
+        # ``_replay`` opened it through ``get_gate``, which caches one gate
+        # per workspace forever; a sandbox is a workspace that exists for
+        # one call, so without this the cache accumulates a gate — with its
+        # loaded evidence log — for every preview an operator ever runs, all
+        # keyed on temp paths that are already deleted.
+        try:
+            evict_gate(sandbox)
+        except Exception:  # noqa: BLE001 — see below
+            # Eviction is best-effort and must not be able to skip the removal
+            # this finally exists to guarantee. Unguarded, a raise here would
+            # leave the sandbox on disk -- the exact failure the block prevents.
+            pass
+        removed = _remove_sandbox(sandbox)
 
-    if not text:
-        return PreviewResult(item.proposal_id, False, reason="proposal would change nothing", files=targets)
-    return PreviewResult(item.proposal_id, True, diff_text=text, files=targets, truncated_lines=elided)
+    return replace(result, sandbox_removed=removed)
 
 
-def _remove_sandbox(path: str) -> None:
+def _remove_sandbox(path: str) -> bool:
     """Remove the preview sandbox, read-only files included.
 
-    ``shutil.rmtree(..., ignore_errors=True)`` SILENTLY leaves the directory
-    behind. On Windows a read-only file makes ``os.unlink`` raise
-    PermissionError, rmtree gives up, and nothing is reported -- so a sandbox
-    the code promises to always remove simply survives. Measured 2026-08-29:
-    three Windows CI rows failed
-    ``test_the_sandbox_is_still_removed_when_the_replay_explodes`` with a
-    leftover ``mind-mem-review-*`` directory.
+    Returns whether the sandbox is actually gone, so a cleanup that
+    fails is *reported* rather than assumed. ``shutil.rmtree(...,
+    ignore_errors=True)`` silently leaves the directory behind, which is
+    how a sandbox the code promises to always remove came to survive
+    without anything saying so.
 
-    Clearing the read-only bit and retrying is the standard remedy. The
-    parameter was renamed ``onerror`` -> ``onexc`` in 3.12, and this package
-    supports 3.10 upward, so both spellings are handled. ignore_errors remains
-    the final fallback: a sandbox that cannot be removed must not end a review.
+    On Windows a read-only file makes ``os.unlink`` raise
+    PermissionError and rmtree gives up, and ``shutil.copy2`` in
+    :func:`_seed` copies a read-only corpus file's mode into the sandbox
+    — so this is reachable from an ordinary workspace. Clearing the
+    read-only bit and retrying the one failed entry is the standard
+    remedy. The parameter was renamed ``onerror`` -> ``onexc`` in 3.12
+    and this package supports 3.10 upward, so both spellings are
+    handled. ignore_errors remains the final fallback: a sandbox that
+    cannot be removed must not end an operator's review.
+
+    One pass is enough, and that is a property of the chain, not luck.
+    A previous version of this function retried four times with
+    ``gc.collect()`` and a sleep between attempts, on the theory that
+    the sandbox's sqlite handles were "released a moment later" by the
+    OS. That theory was wrong. sqlite3's context manager commits but
+    does not close, and a ``sqlite3.Connection`` is held alive by its
+    own prepared-statement cache, so on CPython 3.11+ refcounting never
+    reclaims one — only the cyclic collector does. There was no timing
+    race: the ``gc.collect()`` in that loop *was* the close, and the
+    sleeps around it were decoration. :meth:`HashChainV2._session` now
+    closes every connection it opens, so nothing holds the sandbox open
+    (measured: seven descriptors into the sandbox before that change,
+    zero after, with the collector disabled). Retrying on top of a
+    closed handle would only convert a future regression from a red test
+    into a green one.
     """
 
     def _clear_readonly(func: Any, target: str, _exc: Any) -> None:
         # BOTH the entry and its parent. Unlinking a file needs write
         # permission on the DIRECTORY holding it, so clearing only the file's
-        # own bit still fails inside a read-only directory -- which a first
-        # draft of this did, and a read-only-tree test caught.
+        # own bit still fails inside a read-only directory.
         try:
             parent = os.path.dirname(target)
             if parent:
@@ -144,6 +183,7 @@ def _remove_sandbox(path: str) -> None:
             shutil.rmtree(path, onerror=_clear_readonly)
     except OSError:
         shutil.rmtree(path, ignore_errors=True)
+    return not os.path.exists(path)
 
 
 def _targets(item: ReviewItem) -> tuple[str, ...]:

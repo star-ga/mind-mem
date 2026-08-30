@@ -3,8 +3,11 @@
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
+import os
+import shutil
 import sqlite3
 from dataclasses import asdict
 from pathlib import Path
@@ -371,3 +374,110 @@ class TestMigrateFromV1:
         for entry in new_chain.get_latest(100):
             # SHA3-512 produces 128 hex chars; SHA256 produces 64
             assert len(entry.entry_hash) == 128
+
+
+class TestTheChainClosesTheConnectionsItOpens:
+    """The chain must not hold a database open after a call returns.
+
+    ``with sqlite3.connect(...) as conn`` commits or rolls back and
+    leaves the handle OPEN, and a ``sqlite3.Connection`` is kept alive by
+    its own prepared-statement cache — a reference cycle — so on CPython
+    3.11+ refcounting never reclaims it and only the cyclic collector
+    does. Measured here: 3.10 -> 0 leaked descriptors, 3.11/3.12/3.14 ->
+    1 per call, all cleared by ``gc.collect()``. A directory holding a
+    chain therefore could not be deleted on Windows, where an open
+    handle makes ``os.unlink`` fail; that is exactly the CI signature
+    the review sandbox hit on the 3.12/3.13/3.14 Windows rows while
+    3.10 stayed green.
+
+    The collector is disabled across each call on purpose: with it
+    enabled these assertions pass either way, and a test that passes
+    against the defect is worth nothing.
+    """
+
+    @staticmethod
+    def _sidecars(db_path: str) -> list[str]:
+        return [suffix for suffix in ("-wal", "-shm") if os.path.exists(db_path + suffix)]
+
+    @staticmethod
+    def _open_fds(db_path: str) -> list[str] | None:
+        """Descriptors held on the database, or None where that is unknowable.
+
+        Returns None -- NOT [] -- when /proc/self/fd is absent. An empty list
+        means "checked, nothing open"; None means "could not check". Collapsing
+        the two made ``assert _open_fds(...) == []`` pass for free on macOS and
+        Windows, which is an assertion about an absence that holds trivially.
+        The caller must branch on None rather than assert through it.
+        """
+        fd_dir = "/proc/self/fd"
+        if not os.path.isdir(fd_dir):  # pragma: no cover - non-Linux
+            return None
+        held = []
+        for name in os.listdir(fd_dir):
+            try:
+                target = os.readlink(os.path.join(fd_dir, name))
+            except OSError:
+                continue
+            if target.startswith(db_path):
+                held.append(os.path.basename(target))
+        return sorted(held)
+
+    def _assert_released(self, db_path: str) -> None:
+        # The sidecars are the platform-neutral proof: SQLite checkpoints
+        # and deletes -wal/-shm when the LAST connection closes, so their
+        # presence after a call means a connection is still open.
+        assert self._sidecars(db_path) == [], "chain left WAL sidecars behind: a connection is still open"
+        # The sidecar assertion above is the platform-independent proof and runs
+        # everywhere. This descriptor check is Linux-only, so it must say so
+        # rather than silently succeed where it cannot look.
+        held = self._open_fds(db_path)
+        if held is not None:
+            assert held == [], "chain left an open descriptor on its database"
+
+    def test_append_closes_its_connection(self, tmp_path: Path) -> None:
+        db_path = str(tmp_path / "chain.db")
+        gc.disable()
+        try:
+            chain = HashChainV2(db_path)
+            chain.append("B-1", "WRITE", "payload")
+            self._assert_released(db_path)
+        finally:
+            gc.enable()
+
+    def test_reads_close_their_connections(self, tmp_path: Path) -> None:
+        db_path = str(tmp_path / "chain.db")
+        chain = HashChainV2(db_path)
+        chain.append("B-1", "WRITE", "payload")
+        entry = chain.append("B-2", "WRITE", "payload")
+        gc.disable()
+        try:
+            assert chain.length == 2
+            assert chain.verify_chain() == (True, -1)
+            assert chain.get_by_entry_id(entry.entry_id) is not None
+            assert len(chain.get_block_chain("B-1")) == 1
+            assert len(chain.get_latest(10)) == 2
+            self._assert_released(db_path)
+        finally:
+            gc.enable()
+
+    def test_a_directory_holding_a_live_chain_is_removable(self, tmp_path: Path) -> None:
+        """The property the review sandbox actually needs.
+
+        On Linux this passes either way — unlink of an open file is legal
+        — so the assertion that carries the weight is the descriptor
+        count taken while the chain object is still alive. On Windows the
+        removal itself is what would fail.
+        """
+        holder = tmp_path / "workspace" / "memory"
+        holder.mkdir(parents=True)
+        db_path = str(holder / "hash_chain_v2.db")
+        gc.disable()
+        try:
+            chain = HashChainV2(db_path)
+            chain.append("B-1", "WRITE", "payload")
+            assert self._open_fds(db_path) == []
+            shutil.rmtree(str(tmp_path / "workspace"))
+            assert not os.path.exists(db_path)
+            assert chain is not None  # still referenced; nothing was collected
+        finally:
+            gc.enable()
