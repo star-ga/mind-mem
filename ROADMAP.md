@@ -3988,3 +3988,91 @@ wide agent fan-out. The structural half (nodes + edges as a named deliverable)
 mind-mem already has; what the note surfaced was the unchecked-evidence
 admission gap above, which is ours and pre-existing. Idea only — no code
 adopted, no dependency added, nothing named in any public artifact.
+
+---
+
+## Group S — cross-project corroboration as a maturity component (prior-art-informed, 2026-08-29)
+
+**Status:** Proposed. Additive, opt-in, default-off — a PATCH bump under the
+mind-mem versioning rule.
+
+**The gap.** `block_maturity.maturity_score` (`src/mind_mem/block_maturity.py`)
+composes three weighted components: status (0.3), lifecycle (0.2), and
+incoming-edge corroboration (0.5, saturating at
+`MATURITY_EDGE_SATURATION = 5`). The edge component counts *how many* incoming
+`supports`/`cites` edges a block has. It does not ask *where those edges came
+from*. Five edges asserted from inside a single repo during one campaign score
+exactly the same as five edges arriving from five independent repos.
+
+For a single-project store that is the right simplification. For the STARGA
+fleet it is not: sessions write to `mind`, `mind-lab`, `naestro`,
+`naestro-agi3`, `mind-nerve`, and `.agents` on the same day, and a fact
+independently corroborated in three of those is qualitatively stronger evidence
+than the same count accumulated inside one. Repeated corroboration from one
+context is closer to one observation restated than to three observations.
+
+**The proposal.** Add a fourth, optional component — *corroboration breadth* —
+keyed on the number of **distinct** originating projects among a block's
+incoming edges, not the raw edge count:
+
+- New optional keyword on `maturity_score`, symmetric with the existing
+  `incoming_edge_count`: `distinct_project_count: int | None = None`. `None`
+  means the caller did not supply provenance breadth, and the component
+  contributes `0.0` — the same conservative default the edge component already
+  uses. No existing call site changes behaviour.
+- Saturation is deliberately low (`MATURITY_PROJECT_SATURATION`, proposed
+  default 3). The signal is *independence*, and it saturates fast: the step from
+  one project to two is the whole finding; the step from four to five is noise.
+- Weights must be **rebalanced, not appended.** The four components already sum
+  to 1.0 with the clamp doing no work in the common case; adding a fifth weight
+  on top would make the clamp load-bearing and quietly compress the existing
+  components. Proposed split: take the new weight out of the edge component's
+  0.5 (edge 0.35 / breadth 0.15), since breadth is a refinement of the same
+  underlying corroboration signal rather than an independent axis. Any
+  rebalance ships with a scan reporting the score delta across the live corpus
+  before the default changes.
+
+**What has to be true first (the blocking prerequisite).** The scoring change is
+small; the data it needs may not exist. `maturity_score` is documented as
+*stateless per block* — derived only from fields already in the block dict, with
+no extra DB round-trip. Corroboration breadth is a property of the lineage
+graph, not of the block, so before any of this is written:
+
+1. Establish whether incoming edges carry a resolvable originating-project
+   field at all. If they do not, that is the real work item and this entry is
+   blocked on it.
+2. Decide where "project" is defined. Repo root is the obvious key and is
+   probably wrong at the margins — a worktree (`mind-wt-ri`) and its parent are
+   not independent observers, and `.agents` writes originate from whichever repo
+   the session was working in. A naive repo-path key would manufacture
+   independence that is not there, which is worse than not scoring breadth at
+   all.
+3. Preserve statelessness. If breadth cannot be derived without a lineage query,
+   it stays a caller-supplied argument exactly as `incoming_edge_count` is —
+   `block_maturity` must not grow a dependency on `block_lineage`.
+
+**Explicitly out of scope.** `apply_min_maturity_filter` stays breadth-blind.
+It is a post-rank filter running after a pipeline that carries no lineage data,
+and the existing docstring already tells operators to inject a precomputed value
+into the `Maturity` field when they need edge-aware filtering. The same escape
+hatch covers breadth. Widening the filter to fetch lineage would turn a
+post-rank filter into a second query path.
+
+**Deliberately not pursued.** Automatic minting of memory blocks from observed
+tool calls. The prior art pairs its corroboration signal with a background
+pipeline that observes agent behaviour, mints candidate behavioural rules, and
+auto-promotes them to global scope once seen in two or more projects — with the
+same cross-project count used as the promotion trigger. The *scoring* idea
+survives; the *auto-write* does not. A confidence-weighted artifact minted
+without review, admitted into a store that gates decisions, is the failure the
+governed-write path exists to prevent — and the same body of prior art says so
+itself, describing persistent memory as a surface where a payload can plant
+fragments and assemble them later. Cross-project breadth here is an input to a
+score a human still reviews, never a trigger that writes.
+
+**Provenance rail.** Prompted by a public agent-configuration corpus whose
+memory schema pins trust to a single value (`unreviewed`) and pushes governed
+truth into an artifact outside the store — i.e. it has the breadth signal
+because it has no governance layer to put it in. We have the governance layer
+and lacked the signal. Idea only — no code adopted, no dependency added, nothing
+named in any public artifact.
