@@ -422,17 +422,29 @@ class TestTheChainClosesTheConnectionsItOpens:
                 held.append(os.path.basename(target))
         return sorted(held)
 
+    @classmethod
+    def _assert_no_open_fds(cls, db_path: str) -> None:
+        """Assert no descriptor is held, where that is checkable.
+
+        Both callers go through here so the None contract of :meth:`_open_fds`
+        lives in exactly one place. Patching each call site separately is how
+        `assert None == []` reached CI: the helper's return type changed and one
+        of its two callers did not.
+
+        Off Linux this is a no-op by design. The platform-independent proof is
+        the sidecar check and, in the removability test, the rmtree itself.
+        """
+        held = cls._open_fds(db_path)
+        if held is None:  # pragma: no cover - non-Linux
+            return
+        assert held == [], "chain left an open descriptor on its database"
+
     def _assert_released(self, db_path: str) -> None:
         # The sidecars are the platform-neutral proof: SQLite checkpoints
         # and deletes -wal/-shm when the LAST connection closes, so their
         # presence after a call means a connection is still open.
         assert self._sidecars(db_path) == [], "chain left WAL sidecars behind: a connection is still open"
-        # The sidecar assertion above is the platform-independent proof and runs
-        # everywhere. This descriptor check is Linux-only, so it must say so
-        # rather than silently succeed where it cannot look.
-        held = self._open_fds(db_path)
-        if held is not None:
-            assert held == [], "chain left an open descriptor on its database"
+        self._assert_no_open_fds(db_path)
 
     def test_append_closes_its_connection(self, tmp_path: Path) -> None:
         db_path = str(tmp_path / "chain.db")
@@ -475,7 +487,7 @@ class TestTheChainClosesTheConnectionsItOpens:
         try:
             chain = HashChainV2(db_path)
             chain.append("B-1", "WRITE", "payload")
-            assert self._open_fds(db_path) == []
+            self._assert_no_open_fds(db_path)
             shutil.rmtree(str(tmp_path / "workspace"))
             assert not os.path.exists(db_path)
             assert chain is not None  # still referenced; nothing was collected
