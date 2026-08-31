@@ -107,7 +107,34 @@ _BADGE_RE = re.compile(r"tools?[-_:]\s*(\d{2,3})\b", re.IGNORECASE)
 
 # A claim that names the release it describes ("19 MCP tools at v1.x") is a
 # historical statement, not a claim about now.
+#
+# PROXIMITY IS REQUIRED (2026-08-31). This exemption used to fire on a version
+# string ANYWHERE on the line, which silenced a live claim that had nothing to
+# do with it:
+#
+#   "MIND-Mem exposes 89 MCP tools for integration with ... Zed (v3.1.0+)."
+#
+# The `v3.1.0+` qualifies ZED'S EDITOR SUPPORT and sits 137 characters from the
+# count. The line-wide exemption made `--check-docs` print "all tool-count
+# claims agree with 96" while docs/mcp-integration.md said 89 -- a gate
+# reporting success over a file it had silently excused. A version now only
+# exempts a claim it is actually ADJACENT to.
 _LINE_VERSIONED = re.compile(r"\bv\d+(\.\d+|\.x)", re.IGNORECASE)
+
+# How close a version stamp must be to a count to be read as qualifying it.
+# "19 MCP tools at v1.x" is ~8 characters; the false positive above was 137.
+_VERSION_PROXIMITY = 30
+
+
+def _version_qualifies(line: str, match: "re.Match[str]") -> bool:
+    """True when a version stamp is close enough to *match* to be describing it.
+
+    Scoped to the claim, not the line: a version elsewhere in the same
+    sentence describes something else.
+    """
+    lo = max(0, match.start() - _VERSION_PROXIMITY)
+    hi = min(len(line), match.end() + _VERSION_PROXIMITY)
+    return _LINE_VERSIONED.search(line, lo, hi) is not None
 
 # A parenthesised count in a heading: "### MCP Tools (97)". This form slipped
 # past the prose and badge patterns entirely -- a live "(90)" claim sat in
@@ -176,10 +203,13 @@ def check_docs(expected: int) -> list[str]:
             continue
         rel = path.relative_to(root).as_posix()
         for lineno, line in enumerate(text.splitlines(), 1):
-            if _LINE_VERSIONED.search(line) or _LINE_TRANSITION.search(line):
+            if _LINE_TRANSITION.search(line):
                 continue
             for regex in (_CLAIM_RE, _BADGE_RE, _HEADING_RE):
                 for match in regex.finditer(line):
+                    # Checked PER CLAIM, not per line -- see _version_qualifies.
+                    if _version_qualifies(line, match):
+                        continue
                     found = int(match.group(1))
                     if found != expected:
                         bad.append(f"{rel}:{lineno}: claims {found} tools, actual is {expected} -- {match.group(0)!r}")
