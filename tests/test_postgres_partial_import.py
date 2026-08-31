@@ -39,6 +39,16 @@ def test_a_failed_pool_import_does_not_poison_the_cache(monkeypatch: pytest.Monk
     monkeypatch.setattr(bsp, "_psycopg", None, raising=False)
     monkeypatch.setattr(bsp, "_psycopg_pool", None, raising=False)
 
+    # Stub BOTH sides rather than relying on what this interpreter happens
+    # to have installed. The first version of this test assumed psycopg was
+    # importable; it passed on 3.12 (where it is) and failed on 3.14 (where
+    # it is not), because the FIRST import then failed and the message named
+    # psycopg instead of psycopg_pool. That is the same "test asserts the
+    # runner, not the product" defect this suite has been clearing all day.
+    import sys
+    import types
+
+    monkeypatch.setitem(sys.modules, "psycopg", types.ModuleType("psycopg"))
     real_import = builtins.__import__
 
     def no_pool(name, globals=None, locals=None, fromlist=(), level=0):
@@ -66,10 +76,17 @@ def test_a_failed_pool_import_does_not_poison_the_cache(monkeypatch: pytest.Monk
 @pytest.mark.unit
 def test_a_successful_import_still_caches(monkeypatch: pytest.MonkeyPatch) -> None:
     """The fix must not disable the cache it is correcting."""
+    # Stubbed for the same reason as above -- this asserts the CACHE, which
+    # is product behaviour, not whether the driver is installed here.
+    import sys
+    import types
+
     from mind_mem import block_store_postgres as bsp
 
-    pytest.importorskip("psycopg")
-    pytest.importorskip("psycopg_pool")
+    monkeypatch.setitem(sys.modules, "psycopg", types.ModuleType("psycopg"))
+    pool_mod = types.ModuleType("psycopg_pool")
+    pool_mod.ConnectionPool = object  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "psycopg_pool", pool_mod)
 
     monkeypatch.setattr(bsp, "_psycopg", None, raising=False)
     monkeypatch.setattr(bsp, "_psycopg_pool", None, raising=False)
