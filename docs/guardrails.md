@@ -70,10 +70,17 @@ before a single trigger field is read when the block carries:
 | An ingest token on `ToolId` or `Source` | `imported:slack`, `import:notion`, `ingest:…`, `external:…` |
 | An ingest-authored block type | `Type: ImportedMemory` |
 | An `external-ingest` provenance class | anything `mind_mem.provenance_class` classifies as external |
+| A declared external content source (T-001) | `ContentSource: external` |
+
+`ContentSource` is the T-001 *declared* content tag, vocabulary-bound to
+`{agent, user, external}`. It is read fail-closed: anything outside that
+vocabulary — including a hand-edited `ContentSource: operator` — yields no
+signal at all rather than a class of the writer's choosing, so the tag can
+only ever demote a block, never promote one.
 
 The markers are read straight off the block *before* any role-based promotion,
-so a crafted `ActorRole: operator` sitting next to `Source: imported:slack` is
-still refused — an imported corpus cannot launder itself into a constraint by
+so a crafted `ActorRole: operator` sitting next to `Source: imported:slack`
+(or next to `ContentSource: external`) is still refused — an imported corpus cannot launder itself into a constraint by
 claiming a trusted role. The refusal is logged as
 `guardrail_provenance_refused` and the rest of the file still loads: one
 poisoned block cannot take the constraint set down.

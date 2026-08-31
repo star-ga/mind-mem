@@ -3,7 +3,7 @@
 Covers:
   - block_provenance: sanitize / attach / extract helpers
   - block_store: canonical rendering + write/read round-trip of the
-    five optional provenance fields, backward compatibility for blocks
+    optional provenance fields, backward compatibility for blocks
     without them
   - block_metadata: set_provenance / get_provenance + additive schema
     migration of pre-Group-E databases
@@ -42,6 +42,9 @@ _PROV_KWARGS = {
     "session_id": "sess-42",
     "tool_id": "mcp.propose_update",
     "purpose": "record architectural decision",
+    # T-001 content axis — see tests/test_content_source_provenance.py for
+    # its own contracts (vocabulary, no default, fail-closed read).
+    "content_source": "agent",
 }
 
 

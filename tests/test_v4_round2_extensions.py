@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -305,7 +306,7 @@ def test_set_embedder_swaps_implementation(emb_on: Path) -> None:
 @pytest.mark.unit
 def test_derive_embeddings_from_workspace(emb_on: Path) -> None:
     db = emb_on / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY, content TEXT)")
         conn.executemany(
             "INSERT INTO blocks (id, content) VALUES (?, ?)",
@@ -371,7 +372,7 @@ def test_default_summariser_skips_empty() -> None:
 @pytest.mark.unit
 def test_refresh_summary_empty_kind_returns_none(ks_on: Path) -> None:
     db = ks_on / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY, content TEXT, kind TEXT NOT NULL DEFAULT 'unspecified')")
         conn.commit()
     assert refresh_summary(ks_on, "entity") is None
@@ -380,7 +381,7 @@ def test_refresh_summary_empty_kind_returns_none(ks_on: Path) -> None:
 @pytest.mark.unit
 def test_refresh_summary_writes_record(ks_on: Path) -> None:
     db = ks_on / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY, content TEXT, kind TEXT NOT NULL DEFAULT 'unspecified')")
         conn.executemany(
             "INSERT INTO blocks (id, content, kind) VALUES (?, ?, ?)",
@@ -404,7 +405,7 @@ def test_refresh_summary_writes_record(ks_on: Path) -> None:
 @pytest.mark.unit
 def test_get_summary_round_trips(ks_on: Path) -> None:
     db = ks_on / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY, content TEXT, kind TEXT NOT NULL DEFAULT 'unspecified')")
         conn.execute("INSERT INTO blocks (id, content, kind) VALUES ('B-1', 'hello', 'entity')")
         conn.commit()
@@ -417,7 +418,7 @@ def test_get_summary_round_trips(ks_on: Path) -> None:
 @pytest.mark.unit
 def test_list_summaries_orders_by_kind(ks_on: Path) -> None:
     db = ks_on / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY, content TEXT, kind TEXT NOT NULL DEFAULT 'unspecified')")
         conn.executemany(
             "INSERT INTO blocks (id, content, kind) VALUES (?, ?, ?)",
@@ -439,7 +440,7 @@ def test_set_summariser_swaps_implementation(ks_on: Path) -> None:
     set_summariser(fake)
     try:
         db = ks_on / "index.db"
-        with sqlite3.connect(db) as conn:
+        with closing(sqlite3.connect(db)) as conn:
             conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY, content TEXT, kind TEXT NOT NULL DEFAULT 'unspecified')")
             conn.execute("INSERT INTO blocks (id, content, kind) VALUES ('B-1', 'x', 'entity')")
             conn.commit()
@@ -565,7 +566,7 @@ def test_list_edit_history_returns_all_for_block(se_on: Path) -> None:
 def test_propose_edit_captures_old_content(se_on: Path) -> None:
     """When blocks table has the row, old_content is snapshotted for audit."""
     db = se_on / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY, content TEXT)")
         conn.execute("INSERT INTO blocks (id, content) VALUES ('B-1', 'original')")
         conn.commit()

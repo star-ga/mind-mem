@@ -404,12 +404,22 @@ dropped-line counts are logged.
       signal; **feed the loop that's currently starving** (`signal_stats`
       = 0, prefetch observations = 0 today). Redis is the push
       transport — do **not** add a second one.
-- [ ] **Novel-term gate** — a ~40-line deterministic heuristic: suppress
-      a local-cache hit when the query's novel-stem ratio exceeds a
-      configured threshold (default ≈0.45) once the cached corpus has
-      ≥N stems (default ≈200), else fall through to the store. The cheap
-      local-vs-source confidence signal the prefetch layer lacks. **Do
-      first** — it's the piece the cache consumer needs to be safe.
+- [x] **Novel-term gate** (`mind_mem.novel_term_gate`) — shipped as a pure
+      function of `(query, cached-context)`: suppress a local-cache hit
+      when the query's novel-stem ratio *exceeds* a configured threshold
+      (default 0.45) once the cached corpus holds ≥N distinct stems
+      (default 200). Below that floor, and for a query with no usable
+      stems, it falls through to the store — a cold cache and an
+      unjudgeable query both resolve in the safe direction. Judges
+      novelty through the recall tokenizer/stemmer, so it reasons in the
+      same vocabulary the cache is indexed under, and NFC-normalises
+      first so an encoding variant never reads as a novel term. No
+      clock, no randomness, no I/O, stdlib only; thresholds arrive as a
+      validated frozen config, so the verdict is reproducible from the
+      log. The cheap local-vs-source confidence signal the prefetch
+      layer lacks, shipped **first** as specified — the
+      anticipation-cache consumer above is still open, so nothing
+      imports it yet (`tests/test_novel_term_gate.py`).
 - [x] **Tool-output offload store** (v4.2.0, `mind_mem.tool_output`) — a new
       Postgres-backed block kind + `store_and_summarize(text, source,
       exit_code)` path returning `{handle, summary, line_count}` only,
@@ -588,10 +598,10 @@ HITL gate deliberately refuses.
 
 ### v3.2.x trailing fixes (4 items, deliberately deferred)
 
-- [ ] **Apply engine — text-range ops** — `insert_after_block` / `replace_range` still on raw `open()`; no v3.2.x caller generates them in practice
+- [x] **Apply engine — text-range ops** — `insert_after_block` / `replace_range` now commit through the same `FileLock` + `_atomic_write` (temp file + `os.replace`) path as every other op; a failure partway through the write can no longer truncate the corpus file
 - [ ] **FastAPI audit attribution** — `current_agent_id` doesn't propagate through anyio threadpool worker; fix via `request.state.agent_id`
 - [ ] **`PostgresBlockStore.snapshot(snap_id=…)`** — current signature still requires filesystem path; cross-host PG snapshots blocked
-- [ ] **T-004 webhook allowlist + T-001 content-provenance tags + N-08/N-12/N-13/T-007** — minor security-hardening items (see v3.2.0 section)
+- [x] **T-004 webhook allowlist + T-001 content-provenance tags + N-08/N-12/N-13/T-007** — minor security-hardening items (see v3.2.0 section)
 
 ### v4.0.x federation transport hardening (3 items; +1 shipped in v4.0.14)
 
@@ -672,16 +682,16 @@ pin a state the toolchain cannot yet satisfy.
 - [ ] **`[VISUAL]` block type** — grid-state / image-state embeddings for perception-grounded memory
 - [ ] **Evidence-chain submission format** — tamper-evident per-episode export
 
-### Companion Tools (1 doc item)
+### Companion Tools (0 items; +1 doc shipped)
 
-- [ ] **GitNexus** documentation in README under "Companion Tools" section
+- [x] **GitNexus** documentation in README under "Companion Tools" section — the README now carries a `## Companion Tools` section: GitNexus as a sibling MCP server (code structure *now*) beside MIND-Mem (governed decision history *over time*), its PolyForm-Noncommercial license as the reason it is a co-installation and never a dependency, and a pointer to [`docs/companion-tools.md`](docs/companion-tools.md) for the full positioning.
 
 ---
 
 **Sizing summary** (genuine remaining work):
 
-- **Small (1–3 day items, ship-this-month):** audit headers, public/private workspaces, peer allowlist, token rotation, time-bounded recall, time-travel/as_of, OpenAPI specs, GitNexus doc, vocabulary-bound fields, T-004/T-001/N-08/N-12/N-13, Group J novel-term gate + `mind-mem connect`
-- **Medium (1–3 weeks):** TLS 1.3 + cert pinning, mTLS service-to-service, AI lint with auto-fix, JS/TS SDK, content provenance + provenance-rich blocks, audit attribution ContextVar fix, FastAPI request.state, PostgresBlockStore snapshot snap_id, migration importers, plugin SDK, cost metering, Group I per-hit feedback-quality credit + recall-sufficiency score, Group J tool-output offload store + anticipation-cache consumer
+- **Small (1–3 day items, ship-this-month):** audit headers, public/private workspaces, peer allowlist, token rotation, time-bounded recall, time-travel/as_of, OpenAPI specs, vocabulary-bound fields, Group J `mind-mem connect`
+- **Medium (1–3 weeks):** TLS 1.3 + cert pinning, mTLS service-to-service, AI lint with auto-fix, JS/TS SDK, audit attribution ContextVar fix, FastAPI request.state, PostgresBlockStore snapshot snap_id, migration importers, plugin SDK, cost metering, Group I per-hit feedback-quality credit + recall-sufficiency score, Group J tool-output offload store + anticipation-cache consumer
 - **Large (multi-month):** local visual viewer (`mm view` web UI), conversational chat layer, Kubernetes operator, managed-service console, Byzantine consensus, Pure-MIND port (gated on `mindc` C-ABI maturity)
 - **Long-horizon / research (post-v4):** Pure-MIND port completion, [CAUSAL]/[SKILL]/[VISUAL] block types, ActivityPub interop, edge deployment, Group I validity-gated fusion + feedback-quality→success bench
 
@@ -1494,9 +1504,33 @@ doesn't accidentally implement them.
   unguarded, so one bad URL raised out of router construction and took
   the LogSink down with it.
 - [x] **T-005: `--token` CLI arg rejected** — env-only.
-- [ ] **T-001 (partial): Content-provenance tags on block writes** —
-  `source ∈ {agent, user, external}` frontmatter NOT yet added to
-  every write path. Tracked.
+- [x] **T-001: Content-provenance tags on block writes** — shipped as
+  `ContentSource` ∈ `{agent, user, external}`, a sixth entry in the
+  existing `block_provenance.PROVENANCE_FIELDS` map (not a parallel
+  mechanism), so it threads through `block_store` field order, the
+  `block_meta` sidecar column (additive, idempotent `ALTER TABLE`),
+  `capture` + `propose_update` writes into `SIGNALS.md`, and both the
+  BM25 and FTS5 recall surfacing paths. Orthogonal to Group E, which
+  records *who* wrote a block; this records what class of source the
+  *content* came from, and the two are allowed to disagree — an agent
+  recording a scraped page is `ActorRole: planner` **and**
+  `ContentSource: external`. As a trust signal it has no default
+  (omitted stays absent; stamping `agent` would invent a claim the
+  caller never made), rejects out-of-vocabulary values loudly on every
+  write path rather than coercing them, and reads fail-closed (a
+  hand-edited value outside the vocabulary reads back as unknown, never
+  as a trusted class). It **demotes only**: `external` joins the
+  external-ingest rule in `provenance_class` (only when no operator
+  role is present — rule 1 wins first) and unconditionally refuses guardrail
+  minting in `guardrails` ahead of the operator rule, while `agent` /
+  `user` change no classification, so the tag can never be a free trust
+  promotion. Named `ContentSource` because `Source` already carries the
+  importer's origin token. `tests/test_content_source_provenance.py`
+  (47 tests). **Remaining:** individual ingest producers do not yet
+  stamp the tag themselves — `importers.engine.build_import_block`
+  should pass `content_source="external"` (it is already refused three
+  other ways: `Source: imported:*`, `ActorRole: importer`, and its
+  block type), and the inbox / namespaces writers likewise.
 
 #### Nice-to-have in v3.2.x (low priority, low UX cost)
 
@@ -1520,14 +1554,68 @@ doesn't accidentally implement them.
   unknown bind keeps them, since silently dropping the schema would be
   the worse surprise. The gate's helpers sit above `create_app` because
   the module ends in a module-level `app = create_app()`.
-- [ ] **T-007: OS-level append-only audit log** (`chattr +a` /
-  `chflags uappnd`) — open. Tracked.
-- [ ] **T-009: Threat-model `online_trainer.py` separately.** Was
-  not reviewed in this pass; agent feedback feeds local Ollama
-  fine-tune so poisoned proposals could shape the local model.
-  Run a focused threat-modeler dispatch before any external
-  training-data ingest lands. **UX cost: none — this is review
-  work, not code.**
+- [x] **T-007: OS-level append-only audit log** — `chattr +a` /
+  `chflags uappnd` are now applied in code by
+  `mind_mem.append_only.ensure_append_only`, the counterpart to the
+  operator runbook at `docs/append-only-audit-logs.md`. The hash chain
+  makes tampering *detectable*; the kernel flag makes an in-place
+  rewrite *impossible*. The two layers are independent.
+
+  The design is shaped entirely by the failure case, because the
+  failure case is the normal one: the flag needs `CAP_LINUX_IMMUTABLE`
+  (root) plus a filesystem that implements it — tmpfs, NFS and SMB do
+  not — and Windows has no equivalent at all. So `enforced` is True
+  only after the file has been read back and confirmed to refuse an
+  in-place write; a refusal, an unsupported filesystem and a platform
+  with no such flag each return a status that says `NOT append-only`
+  and why. Exit code 0 is explicitly not evidence — a shim named
+  `chattr` on PATH and an overlay that accepts the ioctl and drops it
+  both exit clean — and a test pins that. This is the defect class the
+  same pass fixed in the keyfile CLI, which printed `(private, 0600)`
+  after a chmod the filesystem had refused: a helper that answered
+  "hardened" after a failed `chattr` would be worse than no helper,
+  because an operator would stop applying the runbook.
+
+  `MIND_MEM_AUDIT_APPEND_ONLY=require` turns an unverifiable flag into
+  a raised `AppendOnlyUnavailable`, so a deployment that must not run
+  without the protection does not; `off` skips the attempt and still
+  reports the file as unprotected; an unrecognised value is refused
+  rather than quietly treated as `off`. Capability is probed
+  (`os.chflags` bound, `chattr` on PATH), never inferred from the
+  platform name, so the no-mechanism path is exercised on every runner
+  instead of only on Windows.
+
+  Deliberately *not* called from the write paths: an unprivileged
+  service cannot set the flag, so a per-append call would only emit
+  warnings. It is a privileged setup call for an installer or operator,
+  and rotation still goes through the runbook. The optional `create=`
+  path opens `O_NOFOLLOW`, since a dangling symlink at an audit path
+  would otherwise be followed, created, hardened and then trusted.
+  Covered by `tests/test_append_only_audit_log.py` — 12 tests that pass
+  as a non-root user, where the honest-degradation path is the asserted
+  one.
+- [x] **T-009: `online_trainer.py` threat-modelled** —
+  `security/threat-model-online-trainer.md`. The premise this item was
+  written on does not hold in the tree: the trainer has **no production
+  caller** (only `tests/test_v28_completion.py:21` imports it), it does
+  no I/O at all (stdlib-only, 0 bandit findings), and its one input
+  schema carries query text plus opaque block *ids* — never block or
+  proposal content — so poisoned proposals have no path to it. Four
+  *live* findings sit one layer up in the signal ledger that feeds it
+  (unbounded JSONL re-read in full per `observe_signal` — measured
+  372 ms at 100k records, so N captures cost O(N²) I/O; unbounded
+  per-record size; text skipping the invisible-codepoint sanitiser
+  every other ingest boundary applies; `0664`/`0775` modes when the
+  store creates its own dir). Five are *latent*, blocked only by the
+  absence of wiring — chiefly no signature/audit check on weight refs
+  while `sign_model_tool`/`verify_model_tool` ship in the same package,
+  a promotion gate that is vacuous with no baseline and trusts a
+  caller-reported MRR, and `generate_mind7b_training.py:559-590`, where
+  a corpus→training-data path (reads `DECISIONS.md` + `SIGNALS.md`)
+  already exists dead-coded, two calls from live. The report ends in a
+  7-item pre-ingest checklist, which is the gate the external
+  training-data trigger named here now points at. **UX cost: none —
+  review work, no code changed.**
 
 #### Defer to v3.3.x / quarter (real cost, real benefit only at
 multi-tenant scale)
@@ -1622,14 +1710,18 @@ file.
   ``apply_proposal`` resolves the store once at the top of the op
   loop so every op in a proposal sees the same backend. Backward-
   compatible with every existing caller.
-- [ ] **Apply engine — text-range ops** — the two remaining
-  handlers (``insert_after_block``, ``replace_range``) still speak
-  raw ``open()`` because they manipulate text ranges that don't
-  have a clean block-dict representation. No v3.2.0 caller
-  generates these ops in practice (they're exercised only by hand-
-  written proposals in tests). Deferred to v3.2.2 — either promote
-  them to block-level ops (``insert_after_block`` becomes
-  ``write_block`` with an ordering hint) or deprecate.
+- [x] **Apply engine — text-range ops** — the two remaining
+  handlers (``insert_after_block``, ``replace_range``) still
+  manipulate text ranges that have no clean block-dict
+  representation, so they do not route through ``write_block``.
+  They now commit through the same durable primitive that
+  ``write_block`` itself uses: ``FileLock`` around the
+  read-modify-write, and ``block_store._atomic_write`` (temp file +
+  ``os.replace``) for the commit. The raw ``open(filepath, "w")``
+  they used before truncated the destination on open, so any failure
+  between the truncate and the final flush left the corpus file
+  short with no rollback source. Reads also pin ``encoding="utf-8"``,
+  matching the rest of the write path.
 - [ ] **Audit attribution through FastAPI sync deps** — the
   ``current_agent_id`` ContextVar is set inside ``_require_auth``
   (a sync FastAPI dependency), which runs in an anyio threadpool
@@ -2359,15 +2451,15 @@ does not solve. Documented here so users see them as complements rather than
 competitors. **MIND-Mem will not depend on any of these** — license, scope, and
 substrate-of-record concerns make co-existence the right pattern.
 
-- [ ] **GitNexus** (`github.com/h4ckf0r0day/GitNexus`) — code knowledge-graph indexer
+- [x] **GitNexus** (`github.com/h4ckf0r0day/GitNexus`) — code knowledge-graph indexer
   exposed as MCP server. Parses repo structure (call graphs, dependencies, clusters)
   and serves architectural-awareness tools to coding agents. Solves "what does the
   code do at this point in time" — orthogonal to MIND-Mem's "what did we decide and
   why over time." License: PolyForm Noncommercial — incompatible with Apache-2.0
   programmatic dependency. Recommendation: install as a separate MCP server
   alongside MIND-Mem; both end up in Claude Code / Cursor / Windsurf MCP lists,
-  no integration code required. Documentation will mention this in the README under
-  "Companion Tools" once the section is added (separate task).
+  no integration code required. Documented in the README's "Companion Tools"
+  section and, in full, in [`docs/companion-tools.md`](docs/companion-tools.md).
 
 ---
 

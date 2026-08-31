@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -68,7 +69,7 @@ def test_hnsw_schema_idempotent(hnsw_on: Path) -> None:
     ensure_hnsw_schema(hnsw_on)
     ensure_hnsw_schema(hnsw_on)
     ensure_hnsw_schema(hnsw_on)
-    with sqlite3.connect(hnsw_on / "index.db") as conn:
+    with closing(sqlite3.connect(hnsw_on / "index.db")) as conn:
         rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='block_kind_embeddings'").fetchall()
     assert rows == [("block_kind_embeddings",)]
 
@@ -177,7 +178,7 @@ def test_knn_does_not_write_to_the_index(hnsw_on: Path) -> None:
     register_block_embedding(hnsw_on, "B-1", "entity", [1.0, 0.0])
     assert knn_by_kind(hnsw_on, "entity", [1.0, 0.0]) != []
 
-    with sqlite3.connect(hnsw_on / "index.db") as conn:
+    with closing(sqlite3.connect(hnsw_on / "index.db")) as conn:
         names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master").fetchall()}
     assert not any(n.startswith("bke_vec") for n in names), f"read path wrote tables: {sorted(names)}"
 

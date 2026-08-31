@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -32,7 +33,7 @@ def _write_recall_db(ws: Path, rows: list[tuple[str, dict]]) -> None:
     """Build a v3-shaped recall index (blocks carry json_blob, not content)."""
     db = ws / _RECALL_REL
     db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY, type TEXT NOT NULL DEFAULT '', json_blob TEXT NOT NULL DEFAULT '{}')")
         conn.executemany(
             "INSERT INTO blocks (id, type, json_blob) VALUES (?, 'decision', ?)",
@@ -58,7 +59,7 @@ class TestRecallIndexFallback:
         assert any(v != 0.0 for v in out["D-1"])
 
     def test_index_db_content_wins_and_recall_fills_the_rest(self, workspace: Path) -> None:
-        with sqlite3.connect(workspace / "index.db") as conn:
+        with closing(sqlite3.connect(workspace / "index.db")) as conn:
             conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY, content TEXT)")
             conn.execute("INSERT INTO blocks (id, content) VALUES ('D-1', 'from index.db')")
             conn.commit()
@@ -69,7 +70,7 @@ class TestRecallIndexFallback:
     def test_v3_schema_without_content_column_does_not_raise(self, workspace: Path) -> None:
         """A v3-shaped ``blocks`` table in index.db has no ``content``
         column; the SELECT must not blow up the caller."""
-        with sqlite3.connect(workspace / "index.db") as conn:
+        with closing(sqlite3.connect(workspace / "index.db")) as conn:
             conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY, json_blob TEXT)")
             conn.execute("INSERT INTO blocks (id, json_blob) VALUES ('D-1', '{}')")
             conn.commit()
@@ -80,7 +81,7 @@ class TestRecallIndexFallback:
     def test_unparseable_blob_yields_a_zero_vector(self, workspace: Path) -> None:
         db = workspace / _RECALL_REL
         db.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(db) as conn:
+        with closing(sqlite3.connect(db)) as conn:
             conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY, json_blob TEXT)")
             conn.execute("INSERT INTO blocks (id, json_blob) VALUES ('D-1', '{not json')")
             conn.commit()

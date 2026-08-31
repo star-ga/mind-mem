@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -81,7 +82,7 @@ def _seed_applied_edit(
     """
     ensure_edit_schema(workspace)
     db = workspace / "index.db"
-    with sqlite3.connect(db, timeout=30) as conn:
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
         cur = conn.execute(
             "INSERT INTO block_edits (block_id, old_content, new_content, reason, "
             "proposed_at, status, approved_at, approver) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",

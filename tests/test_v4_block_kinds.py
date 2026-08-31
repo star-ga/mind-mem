@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -108,7 +109,7 @@ def test_flag_off_raises_on_list(workspace_off: Path) -> None:
 def test_alter_adds_kind_column_to_fresh_table(workspace: Path) -> None:
     ensure_block_kind_column(workspace)
     db = workspace / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         cols = {row[1] for row in conn.execute("PRAGMA table_info(blocks)")}
     assert "kind" in cols
 
@@ -119,7 +120,7 @@ def test_alter_is_idempotent(workspace: Path) -> None:
     ensure_block_kind_column(workspace)  # second call must not raise
     ensure_block_kind_column(workspace)
     db = workspace / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         # Index exists exactly once (CREATE INDEX IF NOT EXISTS).
         idxs = conn.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_blocks_kind'").fetchall()
     assert idxs == [("idx_blocks_kind",)]
@@ -129,7 +130,7 @@ def test_alter_is_idempotent(workspace: Path) -> None:
 def test_alter_preserves_existing_v3_rows(workspace: Path) -> None:
     """v3-style rows survive the ALTER and pick up the unspecified default."""
     db = workspace / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY, content TEXT)")
         conn.executemany(
             "INSERT INTO blocks (id, content) VALUES (?, ?)",
@@ -137,7 +138,7 @@ def test_alter_preserves_existing_v3_rows(workspace: Path) -> None:
         )
         conn.commit()
     ensure_block_kind_column(workspace)
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         rows = conn.execute("SELECT id, content, kind FROM blocks ORDER BY id").fetchall()
     assert rows == [("B-1", "alpha", "unspecified"), ("B-2", "beta", "unspecified")]
 
@@ -146,12 +147,12 @@ def test_alter_preserves_existing_v3_rows(workspace: Path) -> None:
 def test_alter_skips_when_kind_already_present(workspace: Path) -> None:
     """If a sibling system already added the column, we don't re-ALTER."""
     db = workspace / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY, content TEXT, kind TEXT NOT NULL DEFAULT 'entity')")
         conn.execute("INSERT INTO blocks (id, content) VALUES ('B-1', 'a')")
         conn.commit()
     ensure_block_kind_column(workspace)  # must not raise duplicate-column
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         rows = conn.execute("SELECT id, kind FROM blocks").fetchall()
     assert rows == [("B-1", "entity")]
 
@@ -175,7 +176,7 @@ def test_get_returns_default_when_db_missing(workspace: Path) -> None:
 @pytest.mark.unit
 def test_get_returns_default_when_kind_column_missing(workspace: Path) -> None:
     db = workspace / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY)")
         conn.execute("INSERT INTO blocks (id) VALUES ('B-1')")
         conn.commit()
@@ -186,7 +187,7 @@ def test_get_returns_default_when_kind_column_missing(workspace: Path) -> None:
 def test_get_round_trips_each_kind(workspace: Path) -> None:
     ensure_block_kind_column(workspace)
     db = workspace / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.executemany(
             "INSERT INTO blocks (id, content, kind) VALUES (?, '', ?)",
             [
@@ -221,7 +222,7 @@ def test_get_round_trips_each_kind(workspace: Path) -> None:
 def test_get_corrupt_kind_falls_back_to_default(workspace: Path) -> None:
     ensure_block_kind_column(workspace)
     db = workspace / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("INSERT INTO blocks (id, content, kind) VALUES ('B-bad', '', 'dataset')")
         conn.commit()
     assert get_block_kind(workspace, "B-bad") is DEFAULT_KIND
@@ -236,7 +237,7 @@ def test_get_corrupt_kind_falls_back_to_default(workspace: Path) -> None:
 def test_list_filters_to_kind(workspace: Path) -> None:
     ensure_block_kind_column(workspace)
     db = workspace / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.executemany(
             "INSERT INTO blocks (id, content, kind) VALUES (?, '', ?)",
             [
@@ -256,7 +257,7 @@ def test_list_filters_to_kind(workspace: Path) -> None:
 def test_list_accepts_string_kind(workspace: Path) -> None:
     ensure_block_kind_column(workspace)
     db = workspace / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("INSERT INTO blocks (id, content, kind) VALUES ('B-e', '', 'entity')")
         conn.commit()
     assert list_blocks_by_kind(workspace, "entity") == ["B-e"]
@@ -273,7 +274,7 @@ def test_list_rejects_invalid_kind_string(workspace: Path) -> None:
 def test_list_respects_limit(workspace: Path) -> None:
     ensure_block_kind_column(workspace)
     db = workspace / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         rows = [(f"B-{i}", "", "entity") for i in range(20)]
         conn.executemany("INSERT INTO blocks (id, content, kind) VALUES (?, ?, ?)", rows)
         conn.commit()
@@ -301,7 +302,7 @@ def test_list_empty_when_db_missing(workspace: Path) -> None:
 @pytest.mark.unit
 def test_list_empty_when_kind_column_missing(workspace: Path) -> None:
     db = workspace / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("CREATE TABLE blocks (id TEXT PRIMARY KEY)")
         conn.execute("INSERT INTO blocks (id) VALUES ('B-1')")
         conn.commit()
@@ -334,7 +335,7 @@ def test_tags_flag_off_raises_on_ensure(workspace_off: Path) -> None:
 @pytest.mark.unit
 def test_ensure_tags_table_creates_schema(workspace: Path) -> None:
     ensure_block_kind_tags_table(workspace)
-    with sqlite3.connect(workspace / "index.db") as conn:
+    with closing(sqlite3.connect(workspace / "index.db")) as conn:
         rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='block_kind_tags'").fetchall()
     assert rows == [("block_kind_tags",)]
 
@@ -344,7 +345,7 @@ def test_ensure_tags_table_is_idempotent(workspace: Path) -> None:
     ensure_block_kind_tags_table(workspace)
     ensure_block_kind_tags_table(workspace)
     ensure_block_kind_tags_table(workspace)
-    with sqlite3.connect(workspace / "index.db") as conn:
+    with closing(sqlite3.connect(workspace / "index.db")) as conn:
         idxs = conn.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_block_kind_tags_kind'").fetchall()
     assert idxs == [("idx_block_kind_tags_kind",)]
 
@@ -431,7 +432,7 @@ def test_get_tags_returns_empty_when_table_missing(tmp_path: Path, monkeypatch: 
 def test_get_tags_skips_corrupt_rows(workspace: Path) -> None:
     """A garbage tag value in the table doesn't crash the reader."""
     ensure_block_kind_tags_table(workspace)
-    with sqlite3.connect(workspace / "index.db") as conn:
+    with closing(sqlite3.connect(workspace / "index.db")) as conn:
         conn.executemany(
             "INSERT INTO block_kind_tags (block_id, kind) VALUES (?, ?)",
             [("B-1", "entity"), ("B-1", "lukewarm-data"), ("B-1", "code")],
@@ -445,7 +446,7 @@ def test_single_and_multi_label_coexist(workspace: Path) -> None:
     """Single-label v3-compat read keeps working alongside multi-label tags."""
     ensure_block_kind_column(workspace)
     db = workspace / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         conn.execute("INSERT INTO blocks (id, content, kind) VALUES ('B-cls', '', 'entity')")
         conn.commit()
     set_block_kinds(workspace, "B-cls", [BlockKind.ENTITY, BlockKind.CODE])

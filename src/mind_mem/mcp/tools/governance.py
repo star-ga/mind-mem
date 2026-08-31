@@ -195,6 +195,7 @@ def propose_update(
     session_id: str = "",
     tool_id: str = "",
     purpose: str = "",
+    content_source: str = "",
 ) -> str:
     """Propose a new decision or task. Writes to SIGNALS.md for human review.
 
@@ -211,13 +212,25 @@ def propose_update(
     block as ``ActorId:`` / ``ActorRole:`` / ``SessionId:`` / ``ToolId:``
     / ``Purpose:`` fields and travel with the block from then on.
     Omitting them keeps the exact pre-Group-E behaviour.
+
+    Content provenance (roadmap T-001, optional): ``content_source``
+    declares what class of source the *statement text itself* came from —
+    ``agent`` (composed by the model), ``user`` (typed by a human), or
+    ``external`` (pulled in from outside the governed store). It is
+    written as ``ContentSource:`` and is read downstream as a trust
+    signal, so it is validated strictly: an unrecognised value is refused
+    with an error envelope and **nothing is written**. Omitting it leaves
+    the field absent — there is no default, because stamping ``agent`` on
+    an untagged proposal would invent a claim the caller never made.
     """
     ws = _workspace()
 
     from mind_mem.block_provenance import (
+        CONTENT_SOURCE_PARAM,
+        CONTENT_SOURCES,
         MAX_PROVENANCE_VALUE_LEN,
         PROVENANCE_FIELDS,
-        sanitize_provenance_value,
+        clean_provenance_value,
     )
 
     provenance_in = {
@@ -226,6 +239,7 @@ def propose_update(
         "session_id": session_id,
         "tool_id": tool_id,
         "purpose": purpose,
+        "content_source": content_source,
     }
     provenance: dict[str, str] = {}
     for prov_param in PROVENANCE_FIELDS:
@@ -240,7 +254,16 @@ def propose_update(
                     "length": len(raw_val),
                 }
             )
-        cleaned = sanitize_provenance_value(raw_val)
+        # Vocabulary-bound fields raise rather than coerce. Refuse the whole
+        # proposal here, before the SIGNALS.md append: a rejected trust tag
+        # must not leave the statement written with the tag quietly dropped.
+        try:
+            cleaned = clean_provenance_value(prov_param, raw_val)
+        except ValueError as exc:
+            refusal: dict[str, object] = {"error": str(exc), "field": prov_param}
+            if prov_param == CONTENT_SOURCE_PARAM:
+                refusal["allowed"] = list(CONTENT_SOURCES)
+            return json.dumps(refusal)
         if cleaned:
             provenance[prov_param] = cleaned
 

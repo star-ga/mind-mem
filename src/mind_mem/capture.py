@@ -28,7 +28,7 @@ import re
 import sys
 from datetime import datetime, timedelta
 
-from .block_provenance import PROVENANCE_FIELDS, sanitize_provenance_value
+from .block_provenance import PROVENANCE_FIELDS, clean_provenance_value
 from .enums import IngestTier
 from .mind_filelock import FileLock
 from .observability import get_logger, metrics
@@ -287,6 +287,15 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
         if not new_signals:
             return 0
 
+        # Validate declared provenance BEFORE a byte is written, for the same
+        # reason the gate admission below moved above the append: a refused
+        # value must abort the batch, not leave a truncated block mid-file.
+        # Vocabulary-bound fields (T-001 ``content_source``) raise here.
+        for _sig in new_signals:
+            for _param, _val in (_sig.get("provenance") or {}).items():
+                if _param in PROVENANCE_FIELDS and _val:
+                    clean_provenance_value(_param, str(_val))
+
         # Find next signal ID — filter by today's date to avoid cross-date max
         existing_ids = re.findall(r"\[SIG-(\d{8}-\d{3})\]", existing)
         today_compact = date_str.replace("-", "")
@@ -352,13 +361,17 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
                 if st.get("tags"):
                     f.write(f"Tags: {', '.join(st['tags'])}\n")
 
-                # Provenance fields (roadmap Group E) — optional; written
-                # only when the caller attached them (e.g. propose_update).
+                # Provenance fields (Group E + T-001 ContentSource) — optional;
+                # written only when the caller attached them (e.g.
+                # propose_update). Already validated above the file open.
                 prov = sig.get("provenance") or {}
                 for prov_param, prov_field in PROVENANCE_FIELDS.items():
                     prov_val = prov.get(prov_param)
-                    if prov_val:
-                        f.write(f"{prov_field}: {sanitize_provenance_value(str(prov_val))}\n")
+                    if not prov_val:
+                        continue
+                    prov_clean = clean_provenance_value(prov_param, str(prov_val))
+                    if prov_clean:
+                        f.write(f"{prov_field}: {prov_clean}\n")
 
                 prefix = "D-" if sig["type"] == "decision" else "T-"
                 f.write(f"Action: Review and formalize as {prefix} block if warranted\n")

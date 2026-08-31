@@ -93,6 +93,7 @@ Output:
 - [Commands](#commands)
 - [Architecture](#architecture)
 - [How It Compares](#how-it-compares)
+- [Companion Tools](#companion-tools)
 - [Recall](#recall)
 - [MIND Kernels](#mind-kernels)
 - [Auto-Capture](#auto-capture)
@@ -940,6 +941,45 @@ Letta's August 2025 analysis showed that a plain-file baseline (full conversatio
 - **For text-heavy agentic use cases, "how well the agent manages context" > "how smart the retrieval index is."**
 
 MIND-Mem's deterministic retrieval pipeline validates these findings: **73.8% on the full 10-conversation LoCoMo suite** (Acc≥50, canonical run below) with zero dependencies, no embeddings, and no vector database — **5.3pp above Mem0's top graph variant (68.5%)**. The key insight: treating retrieval as a reasoning pipeline (wide candidate pool → deterministic rerank → context packing) matches embedding+vector systems without any ML infrastructure. Unlike plain-file baselines, MIND-Mem adds integrity checking, governance, and agent-agnostic shared memory via MCP that no other system provides.
+
+---
+
+## Companion Tools
+
+External tools that solve an adjacent problem MIND-Mem deliberately does
+not solve. They are listed as **complements, not competitors** — MIND-Mem
+**does not depend on any of them**. License, scope, and
+substrate-of-record concerns make co-existence the right pattern: each one
+is a separate process you run alongside MIND-Mem, never a package
+dependency.
+
+| Tool | Solves | Relationship to MIND-Mem |
+| ---- | ------ | ------------------------ |
+| [**MindLLM**](https://github.com/star-ga/MindLLM) (STARGA) | Deterministic, evidence-chained local inference behind OpenAI-compatible endpoints | Optional LLM backend — `"extraction": {"backend": "mindllm"}` in `mind-mem.json`, default endpoint `http://localhost:8080/v1` (override with `MIND_MEM_MINDLLM_URL`). `"backend": "auto"` probes it before vLLM. |
+| [**GitNexus**](https://github.com/h4ckf0r0day/GitNexus) (third-party) | Code knowledge-graph indexer — parses repo structure (call graphs, dependencies, clusters) and serves architectural-awareness tools to coding agents over MCP | Sibling MCP server, no integration code. Its license is **PolyForm Noncommercial**, incompatible with MIND-Mem's Apache-2.0 as a programmatic dependency — so co-installation, never a dependency. |
+
+### GitNexus answers a different question
+
+| Question | Tool |
+| -------- | ---- |
+| "What does the code do at this point in time?" | **GitNexus** |
+| "What did we decide, and why, over time?" | **MIND-Mem** |
+
+Code structure *now* versus governed decision history — orthogonal, and
+usefully so. Install both and each shows up in your MCP client's tool list
+answering its own question domain, with no wiring between them:
+
+```bash
+# GitNexus — follow its own README for install + MCP registration
+git clone https://github.com/h4ckf0r0day/GitNexus
+
+# MIND-Mem (Apache-2.0, this repo)
+pip install "mind-mem[all]"
+mm install-all   # auto-wires MCP for Claude Code, Cursor, Windsurf, ...
+```
+
+Full positioning, the MindLLM quick start, and the license reasoning:
+[`docs/companion-tools.md`](docs/companion-tools.md).
 
 ---
 

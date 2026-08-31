@@ -121,8 +121,48 @@ def _connect(workspace: str, readonly: bool = False) -> sqlite3.Connection:
 # Connection Manager — pooled read/write separation (#466)
 # ---------------------------------------------------------------------------
 
+# BOUNDED, and closed on eviction. Each ConnectionManager holds an open
+# SQLite read connection, which costs three descriptors on disk: the db, its
+# -wal and its -shm. This cache used to be unbounded, and its only eviction
+# was REACTIVE -- a stale entry was dropped when _get_conn_manager was called
+# again FOR THAT SAME PATH and the file had vanished. Nothing re-accesses a
+# workspace once its work is done, so entries were never reached again and
+# their connections were held for the life of the process.
+#
+# Measured: a full test run reached 2,101 open fds -- 55 handles on one
+# recall.db, 38 on its -wal, 13 on its -shm, many marked (deleted) -- then
+# died with "ValueError: I/O operation on closed file" / "lost sys.stderr",
+# the process having crossed the fd limit with pytest's own stream as the
+# casualty. In a long-running MCP server the same shape leaks three
+# descriptors per workspace, permanently.
+#
+# Plain dict, which has been insertion-ordered since 3.7, so LRU needs no
+# extra type: ``d[k] = d.pop(k)`` moves an entry to the end and the oldest
+# key is ``next(iter(d))``. The evicted manager is CLOSED, not merely
+# dropped -- dropping the reference would leave the descriptors held until
+# the collector happened to run, which is precisely the non-determinism this
+# is meant to end.
+_CONN_MANAGER_CACHE_MAX = 32
+
 _conn_managers: dict[str, ConnectionManager] = {}
 _conn_managers_lock = threading.Lock()
+
+
+def _evict_conn_managers_locked() -> None:
+    """Close and drop least-recently-used managers past the bound.
+
+    Caller must hold ``_conn_managers_lock``. Closing is best-effort for the
+    same reason the stale-file path is: a manager whose backing file is gone
+    can raise on close, and that must not block the eviction it is part of.
+    """
+    while len(_conn_managers) > _CONN_MANAGER_CACHE_MAX:
+        _path = next(iter(_conn_managers))
+        victim = _conn_managers.pop(_path)
+        try:
+            victim.close()
+        except Exception:  # nosec B110 - eviction must not be blocked by a dying manager
+            _log.warning("conn_manager_evict_close_failed", db_path=_path)
+
 
 # Per-thread re-entrancy guard for query_index.  When the index file is
 # missing and query_index falls back to recall(), and recall() is configured
@@ -175,6 +215,12 @@ def _get_conn_manager(workspace: str) -> ConnectionManager:
         if mgr is None:
             mgr = ConnectionManager(path)
             _conn_managers[path] = mgr
+        else:
+            # Touch: most-recently-used goes to the end, so eviction takes
+            # the genuinely cold entries rather than whichever was created
+            # first.
+            _conn_managers[path] = _conn_managers.pop(path)
+        _evict_conn_managers_locked()
     return mgr
 
 

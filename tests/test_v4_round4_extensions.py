@@ -23,6 +23,7 @@ import json
 import logging
 import sqlite3
 import time
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -422,7 +423,7 @@ def test_bm_ensure_schema_idempotent(bm_on: Path) -> None:
     ensure_metadata_schema(bm_on)
     ensure_metadata_schema(bm_on)
     db = bm_on / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='block_metadata'").fetchone()
     assert row is not None
 

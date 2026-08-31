@@ -151,6 +151,7 @@ set from `mind-mem.json`.
 | `MIND_MEM_VAULT_ALLOW_ANY` | Restores the pre-T-006 open vault behaviour. Not recommended. |
 | `MIND_MEM_ALERT_URL_ALLOWLIST` | Comma-separated hosts alerts may be delivered to. When set it is authoritative: a publicly routable host that is not listed is still refused (T-004). |
 | `MIND_MEM_ALERT_ALLOW_ANY` | Allows alert delivery to internal address ranges — the real case being a self-hosted receiver on a private network (T-004). |
+| `MIND_MEM_AUDIT_APPEND_ONLY` | `off` / `try` (default) / `require`, governing `append_only.ensure_append_only`, which applies the OS-level append-only flag (`chattr +a`, `chflags uappnd`) to an audit file (T-007). `try` attempts it and reports a refusal — unprivileged process, unsupported filesystem, a platform with no such flag — as `NOT append-only`, never as protection it does not have. `require` fails closed: the flag must be verified on read-back or `AppendOnlyUnavailable` is raised. An unrecognised value is refused rather than treated as `off`. |
 | `MIND_MEM_API_DOCS` | `on`/`off`, forcing the OpenAPI surface either way regardless of bind (N-13). |
 | `MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST` | Skip auth; permitted only on a loopback bind. |
 | `MIND_MEM_GRPC_HOST` | gRPC bind interface. Non-loopback is refused unless the variable below is set. |

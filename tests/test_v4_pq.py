@@ -6,6 +6,7 @@ import json
 import math
 import random
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -289,7 +290,7 @@ def test_ensure_schema_idempotent(cfg_on: Path) -> None:
     ensure_pq_schema(cfg_on)
     ensure_pq_schema(cfg_on)
     db = cfg_on / "index.db"
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'pq_%'")}
     assert tables == {"pq_codebook", "pq_codes"}
 
@@ -368,7 +369,7 @@ def test_load_codebook_returns_none_when_payload_truncated(cfg_on: Path) -> None
     cb = train_codebook([_gauss_vector(rng, 4) for _ in range(8)], cfg)
     store_codebook(cfg_on, "default", cb)
 
-    with sqlite3.connect(cfg_on / "index.db") as conn:
+    with closing(sqlite3.connect(cfg_on / "index.db")) as conn:
         (payload,) = conn.execute("SELECT payload FROM pq_codebook WHERE name = 'default'").fetchone()
         conn.execute("UPDATE pq_codebook SET payload = ? WHERE name = 'default'", (payload[:-4],))
         conn.commit()

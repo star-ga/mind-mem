@@ -65,7 +65,7 @@ from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
 from .block_parser import parse_file
-from .block_provenance import extract_provenance
+from .block_provenance import CONTENT_SOURCE_EXTERNAL, CONTENT_SOURCE_FIELD, extract_provenance, read_content_source
 from .guardrail_patterns import (
     MAX_PATTERN_LEN,
     MAX_PATTERNS_PER_DIMENSION,
@@ -377,8 +377,8 @@ def guardrail_provenance_refusal(block: Mapping[str, Any]) -> str:
 
     Un-launderable by construction.  The external markers are read straight
     off the block **before** any role-based promotion, so a crafted
-    ``ActorRole: operator`` sitting next to ``Source: imported:slack``
-    is still refused — unlike
+    ``ActorRole: operator`` sitting next to ``Source: imported:slack`` or
+    ``ContentSource: external`` is still refused — unlike
     :func:`~mind_mem.provenance_class.classify_provenance`, whose
     operator rule deliberately wins for *scoring*.  That classifier is
     then consulted as a second, table-driven pass, so any external role
@@ -403,6 +403,14 @@ def guardrail_provenance_refusal(block: Mapping[str, Any]) -> str:
         token = _norm_marker(raw)
         if any(token.startswith(prefix) for prefix in EXTERNAL_TOKEN_PREFIXES):
             return f"{field} carries ingest token {token!r}"
+
+    # T-001 content axis: the writer declared the *text* came from outside the
+    # store.  Checked here, alongside the ingest tokens and ahead of the
+    # operator rule, because ``classify_provenance`` lets ``ActorRole:
+    # operator`` win for scoring — that promotion must not launder a
+    # self-declared external payload into a trigger-bearing guardrail.
+    if read_content_source(block) == CONTENT_SOURCE_EXTERNAL:
+        return f"{CONTENT_SOURCE_FIELD} declares external content"
 
     block_type = _norm_marker(block.get("Type"))
     if block_type in UNTRUSTED_BLOCK_TYPES:

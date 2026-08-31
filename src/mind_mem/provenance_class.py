@@ -11,19 +11,28 @@ Four ordered classes, strictly decreasing::
     operator  >  agent-verified  >  agent-inferred  >  external-ingest
       1.00          0.75               0.50               0.25
 
-Classification is table-driven and first-match-wins over the *existing*
-:mod:`block_provenance` fields (``ActorRole`` / ``ToolId``) plus the
-importer's ``Source`` token — no new schema:
+Classification is table-driven and first-match-wins over the
+:mod:`block_provenance` fields (``ActorRole`` / ``ToolId`` /
+``ContentSource``) plus the importer's ``Source`` token:
 
-    1. ``ActorRole`` in :data:`OPERATOR_ROLES`                 -> operator
-    2. ``ActorRole`` / ``ToolId`` / ``Source`` marks an ingest -> external-ingest
-    3. agent provenance **and** affirmative verification       -> agent-verified
-    4. agent provenance                                        -> agent-inferred
-    5. no provenance at all                                    -> unknown
+    1. ``ActorRole`` in :data:`OPERATOR_ROLES`                  -> operator
+    2. ``ActorRole`` / ``ToolId`` / ``Source`` marks an ingest,
+       or ``ContentSource: external``                           -> external-ingest
+    3. agent provenance **and** affirmative verification        -> agent-verified
+    4. agent provenance                                         -> agent-inferred
+    5. no provenance at all                                     -> unknown
 
 Rule 2 outranks rule 3 on purpose: affirmative evidence that content came
 from outside the governed store dominates any verification marker travelling
 with that same content.
+
+**The T-001 content tag demotes only.** ``ContentSource: external`` joins
+rule 2 because it is affirmative evidence of *lower* trust. ``agent`` and
+``user`` deliberately change nothing: reading ``user`` as ``operator``
+would hand a free trust promotion to whoever wrote the bytes — the same
+self-declaration weakness noted at the bottom of this module, but with no
+compensating value, since the actor fields already answer "who wrote it".
+So the tag can move a block down the ladder and never up it.
 
 **Absence is neutral.** A block with no provenance fields scores
 :data:`UNKNOWN` = ``1.0`` — the gate's governing rule is that only
@@ -51,7 +60,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from .block_provenance import extract_provenance
+from .block_provenance import CONTENT_SOURCE_EXTERNAL, extract_provenance, read_content_source
 
 # --- the ordered class vocabulary -------------------------------------------
 
@@ -194,10 +203,13 @@ def classify_provenance(
     tool = _norm(provenance.get("tool_id"))
     actor = _norm(provenance.get("actor_id"))
     source = _norm(block.get("Source"))
+    # Fail-closed reader: an out-of-vocabulary tag yields None, so a crafted
+    # value can only ever reach "no signal", never a class of its choosing.
+    content_source = read_content_source(block)
 
     if role in OPERATOR_ROLES:
         return OPERATOR
-    if role in EXTERNAL_ROLES or _is_external_token(tool) or _is_external_token(source):
+    if role in EXTERNAL_ROLES or content_source == CONTENT_SOURCE_EXTERNAL or _is_external_token(tool) or _is_external_token(source):
         return EXTERNAL_INGEST
     if not (role or tool or actor):
         return UNKNOWN

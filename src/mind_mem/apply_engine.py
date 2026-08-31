@@ -29,6 +29,7 @@ from .block_parser import get_by_id, parse_file
 from .block_store import (
     SNAPSHOT_FILES,
     MarkdownBlockStore,
+    _atomic_write,
     _is_in_excluded_dir,
     _read_manifest,  # noqa: F401 — re-exported; tests import from apply_engine
     _safe_copy,  # noqa: F401 — re-exported; tests import from apply_engine
@@ -597,40 +598,49 @@ def _op_append_block(filepath, op, store=None):
 
 
 def _op_insert_after_block(filepath, op):
-    """Insert block after target block ID."""
+    """Insert block after target block ID.
+
+    Commits through ``FileLock`` + :func:`_atomic_write` — the same
+    temp-file + ``os.replace`` path every other op in this module ends
+    up on — so the read-modify-write is serialized against concurrent
+    writers and a failure partway through emitting the new content
+    cannot leave the corpus file truncated. A raw ``open(filepath, "w")``
+    truncates the destination the instant it opens it, which turns any
+    mid-write error into corpus loss with no rollback source.
+    """
     target = op.get("target")
     patch = op.get("patch", "")
     if not target or not patch:
         return False, "insert_after_block: missing target or patch"
 
-    with open(filepath, "r") as f:
-        lines = f.readlines()
+    with FileLock(filepath):
+        with open(filepath, "r", encoding="utf-8") as f:
+            lines = f.readlines()
 
-    # Find end of target block (next block header or EOF)
-    target_pattern = re.compile(rf"^\[{re.escape(target)}\]")
-    found = False
-    insert_at = None
+        # Find end of target block (next block header or EOF)
+        target_pattern = re.compile(rf"^\[{re.escape(target)}\]")
+        found = False
+        insert_at = None
 
-    for i, line in enumerate(lines):
-        if target_pattern.match(line):
-            found = True
-            continue
-        if found and re.match(r"^\[[A-Z]+-[^\]]+\]\s*$", line):
-            insert_at = i
-            break
+        for i, line in enumerate(lines):
+            if target_pattern.match(line):
+                found = True
+                continue
+            if found and re.match(r"^\[[A-Z]+-[^\]]+\]\s*$", line):
+                insert_at = i
+                break
 
-    if not found:
-        return False, f"insert_after_block: target {target} not found"
+        if not found:
+            return False, f"insert_after_block: target {target} not found"
 
-    if insert_at is None:
-        insert_at = len(lines)
+        if insert_at is None:
+            insert_at = len(lines)
 
-    # Insert patch
-    patch_lines = [line + "\n" for line in patch.split("\n")]
-    lines[insert_at:insert_at] = ["\n"] + patch_lines
+        # Insert patch
+        patch_lines = [line + "\n" for line in patch.split("\n")]
+        lines[insert_at:insert_at] = ["\n"] + patch_lines
 
-    with open(filepath, "w") as f:
-        f.writelines(lines)
+        _atomic_write(filepath, "".join(lines))
     return True, f"insert_after_block: inserted after {target}"
 
 
@@ -853,7 +863,13 @@ def _op_set_status(filepath, op, ws=None, store=None):
 
 
 def _op_replace_range(filepath, op):
-    """Replace content between start/end markers within a block."""
+    """Replace content between start/end markers within a block.
+
+    Commits through ``FileLock`` + :func:`_atomic_write`, for the same
+    reason as :func:`_op_insert_after_block`: the destination must not be
+    opened for writing until a complete replacement file exists, or a
+    failure partway through the write truncates the corpus.
+    """
     target = op.get("target")
     range_spec = op.get("range", {})
     patch = op.get("patch", "")
@@ -863,36 +879,36 @@ def _op_replace_range(filepath, op):
     if not target or not start_marker or not end_marker:
         return False, "replace_range: missing target, range.start, or range.end"
 
-    with open(filepath, "r") as f:
-        lines = f.readlines()
+    with FileLock(filepath):
+        with open(filepath, "r", encoding="utf-8") as f:
+            lines = f.readlines()
 
-    target_pattern = re.compile(rf"^\[{re.escape(target)}\]")
-    in_target = False
-    start_line = None
-    end_line = None
+        target_pattern = re.compile(rf"^\[{re.escape(target)}\]")
+        in_target = False
+        start_line = None
+        end_line = None
 
-    for i, line in enumerate(lines):
-        if target_pattern.match(line):
-            in_target = True
-            continue
-        if in_target and re.match(r"^\[[A-Z]+-[^\]]+\]\s*$", line):
-            break
-        if in_target:
-            if start_marker in line and start_line is None:
-                start_line = i
-            if end_marker in line and start_line is not None:
-                end_line = i
+        for i, line in enumerate(lines):
+            if target_pattern.match(line):
+                in_target = True
+                continue
+            if in_target and re.match(r"^\[[A-Z]+-[^\]]+\]\s*$", line):
                 break
+            if in_target:
+                if start_marker in line and start_line is None:
+                    start_line = i
+                if end_marker in line and start_line is not None:
+                    end_line = i
+                    break
 
-    if start_line is None or end_line is None:
-        return False, f"replace_range: markers not found in {target}"
+        if start_line is None or end_line is None:
+            return False, f"replace_range: markers not found in {target}"
 
-    # Replace lines between markers (exclusive of end marker line)
-    patch_lines = [line + "\n" for line in patch.split("\n")]
-    lines[start_line:end_line] = patch_lines
+        # Replace lines between markers (exclusive of end marker line)
+        patch_lines = [line + "\n" for line in patch.split("\n")]
+        lines[start_line:end_line] = patch_lines
 
-    with open(filepath, "w") as f:
-        f.writelines(lines)
+        _atomic_write(filepath, "".join(lines))
     return True, f"replace_range: replaced {end_line - start_line} lines in {target}"
 
 

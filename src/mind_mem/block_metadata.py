@@ -16,15 +16,15 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 
-from .block_provenance import PROVENANCE_FIELDS, sanitize_provenance_value
+from .block_provenance import PROVENANCE_FIELDS, clean_provenance_value
 from .connection_manager import ConnectionManager
 from .observability import get_logger
 
 _log = get_logger("block_metadata")
 
-# Provenance columns (roadmap Group E) — snake_case, all nullable TEXT so
-# the migration is purely additive: existing rows read back as NULL and
-# existing DBs are upgraded in place via idempotent ALTER TABLE.
+# Provenance columns (roadmap Group E + T-001) — snake_case, all nullable
+# TEXT so the migration is purely additive: existing rows read back as NULL
+# and existing DBs are upgraded in place via idempotent ALTER TABLE.
 _PROVENANCE_COLUMNS: tuple[str, ...] = tuple(PROVENANCE_FIELDS.keys())
 
 
@@ -47,7 +47,8 @@ class BlockMetadataManager:
         actor_role TEXT,
         session_id TEXT,
         tool_id TEXT,
-        purpose TEXT
+        purpose TEXT,
+        content_source TEXT
     );
     """
 
@@ -239,17 +240,29 @@ class BlockMetadataManager:
         session_id: str | None = None,
         tool_id: str | None = None,
         purpose: str | None = None,
+        content_source: str | None = None,
     ) -> bool:
-        """Record provenance for a block (roadmap Group E). All fields optional.
+        """Record provenance for a block (Group E + T-001). All optional.
 
         Only the fields provided (non-None, non-blank after sanitization)
         are written; existing values for omitted fields are preserved.
         Values are single-line by contract and capped at
         :data:`~mind_mem.block_provenance.MAX_PROVENANCE_VALUE_LEN` chars.
 
+        *content_source* is vocabulary-bound
+        (:data:`~mind_mem.block_provenance.CONTENT_SOURCES`) and rejected
+        loudly. That is deliberately the ONE exception to this manager's
+        graceful-degradation contract: swallowing a bad trust tag the way
+        a DB error is swallowed would leave the caller believing a source
+        class was recorded when none was.
+
         Returns True when a write happened, False when nothing was
         provided or the DB is unavailable (graceful degradation, matching
         the rest of this manager).
+
+        Raises:
+            ValueError: *content_source* is outside the vocabulary. Raised
+                before any DB work, so nothing partial is written.
         """
         provided = {
             "actor_id": actor_id,
@@ -257,13 +270,14 @@ class BlockMetadataManager:
             "session_id": session_id,
             "tool_id": tool_id,
             "purpose": purpose,
+            "content_source": content_source,
         }
         updates: dict[str, str] = {}
         for col in _PROVENANCE_COLUMNS:
             raw = provided[col]
             if raw is None:
                 continue
-            value = sanitize_provenance_value(str(raw))
+            value = clean_provenance_value(col, str(raw))
             if value:
                 updates[col] = value
         if not updates:
@@ -288,8 +302,8 @@ class BlockMetadataManager:
         """Return recorded provenance for a block; ``{}`` when none.
 
         Keys are the snake_case caller-facing names (``actor_id``,
-        ``actor_role``, ``session_id``, ``tool_id``, ``purpose``); only
-        non-null, non-empty fields are included.
+        ``actor_role``, ``session_id``, ``tool_id``, ``purpose``,
+        ``content_source``); only non-null, non-empty fields are included.
         """
         cols = ", ".join(_PROVENANCE_COLUMNS)
         try:

@@ -220,6 +220,31 @@ class TierManager:
         self._ensure_schema()
 
     # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def close(self) -> None:
+        """Release the underlying ConnectionManager.
+
+        Without this the class had no way to give its descriptors back:
+        ``__init__`` opens a ConnectionManager and nothing ever closed it, so
+        every instance held the db, its ``-wal`` and its ``-shm`` for the life
+        of the process. ``BlockMetadata`` in the sibling module already had
+        this method, so the omission here was an oversight, not a design
+        choice.
+
+        Idempotent: closing twice is safe, because a caller using the context
+        manager may also close explicitly.
+        """
+        self._conn_mgr.close()
+
+    def __enter__(self) -> "TierManager":
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 

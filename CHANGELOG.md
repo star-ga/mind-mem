@@ -4,6 +4,108 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+* **Content-provenance tags on block writes (T-001) — `ContentSource`
+  ∈ `{agent, user, external}`.** Group E already records *who* wrote a
+  block (`ActorId` / `ActorRole` / `SessionId` / `ToolId` / `Purpose`).
+  This is the orthogonal axis: what class of source the *content itself*
+  came from. The two can disagree, and the disagreement is the point — an
+  agent faithfully recording a scraped page is `ActorRole: planner` **and**
+  `ContentSource: external`, and only the second field says the text is
+  untrusted.
+
+  It is one more entry in the existing `PROVENANCE_FIELDS` map rather
+  than a parallel mechanism, so every consumer of that map picks it up
+  at once: `block_store` canonical field order, the `block_meta` sidecar
+  (additive nullable column, idempotent `ALTER TABLE` for pre-existing
+  DBs), `capture` / `propose_update` writes into `SIGNALS.md`, and
+  surfacing through both the BM25 and FTS5 recall paths.
+
+  Three rules follow from it being read as a trust signal, not a label:
+
+  - **No default.** An omitted tag stays absent. Defaulting to `agent`
+    would mint a trusted-looking claim on behalf of every legacy and
+    lazy caller; absence is already the corpus's neutral, never-promoting
+    state, so absent-and-explicit beats silently-assumed.
+  - **Loud rejection.** `normalize_content_source` raises on any value
+    outside the vocabulary instead of coercing to the nearest legal
+    token, and there is no fuzzy matching — coercion in a trust field
+    turns a typo into a trust decision. `propose_update` converts that
+    into an error envelope and writes nothing; `capture` validates the
+    whole batch *before* opening `SIGNALS.md`, so a refused tag cannot
+    leave a truncated block behind.
+  - **Fail-closed read.** `read_content_source` never raises: the corpus
+    is hand-editable Markdown, so an out-of-vocabulary value reads back
+    as `None` (unknown, therefore untrusted), never as a recognised
+    class. Someone who can write the field can reach "unknown" or a real
+    token, and nothing else.
+
+  The tag **demotes only**. `ContentSource: external` joins the
+  external-ingest rule in `provenance_class` (debiting the validity
+  component) **when no operator role is present** — rule 1 matches
+  `ActorRole: operator` first, so a block carrying both still scores
+  `operator`. The guardrail path is ordered ahead of that rule, so the
+  refusal is unconditional even though the score is not.
+  ahead of the operator rule, so a crafted `ActorRole: operator` cannot
+  launder a self-declared external payload into a trigger-bearing
+  guardrail. `agent` and `user` deliberately change no classification:
+  reading `user` as `operator` would hand a free trust promotion to
+  whoever wrote the bytes, and the actor fields already answer "who".
+
+  Named `ContentSource`, not `Source`: that field is already the
+  importer's origin token (`Source: imported:slack`), matched by prefix
+  in two modules that would silently change behaviour if it meant two
+  things. Fully backward compatible — untagged blocks parse, render and
+  recall byte-identically. (`tests/test_content_source_provenance.py`,
+  47 tests.)
+
+* **Novel-term gate (`mind_mem.novel_term_gate`) — the local-vs-source
+  confidence signal for the client-side anticipation cache (Group J).**
+  Serving a query out of a local bundle instead of the governed store is
+  only safe while the local corpus can plausibly answer it. The gate is
+  that check and nothing else: it returns a verdict on whether a
+  local-cache hit may be served, or whether the caller must fall through.
+
+  The rule is the one the roadmap specifies. Compute the novel-stem ratio
+  — the fraction of the query's *distinct* stems absent from the cached
+  corpus — and suppress the local hit when that ratio **exceeds** the
+  configured threshold (default 0.45). "Exceeds" is strict, so a ratio
+  sitting exactly on the threshold is served; that boundary is pinned by
+  a test rather than left to a reader's guess. The ratio is only trusted
+  once the corpus holds at least `min_corpus_stems` distinct stems
+  (default 200), because below that floor it measures the accidents of a
+  cold cache rather than the query.
+
+  Both degenerate inputs resolve toward the store, never toward a blind
+  hit: a corpus under the floor, and a query with no usable stems.
+  Suppressing a good local hit costs one round-trip; serving a bad one
+  puts wrong context in the window, so the asymmetry decides the default.
+
+  Two details that the obvious implementation gets wrong. Stems come from
+  the existing recall tokenizer (`_recall_tokenization.tokenize`) rather
+  than a second tokenizer of its own — a gate that judged novelty in a
+  different vocabulary than the cache is indexed under would be reasoning
+  about stems the cache does not have. And text is NFC-normalised before
+  tokenizing, so a decomposed and a precomposed spelling of the same word
+  do not stem apart and read as novel purely because of how they were
+  encoded. That the shared tokenizer drops non-Latin script entirely is
+  marked in the source with its upgrade path: such a query yields no
+  stems and therefore falls through to the store, which is the safe
+  outcome, but the fix belongs in the tokenizer for the recall index and
+  the gate together, not in the gate alone.
+
+  Determinism is load-bearing here, so the module is a pure function of
+  `(query, cached-context)`: no clock, no randomness, no I/O, no model
+  call, stdlib only. Thresholds arrive as a frozen config validated at
+  construction — the gate never reweights itself — which makes every
+  verdict recomputable from what the retrieval log records.
+
+  Nothing imports it yet. The anticipation-cache consumer is still open,
+  and the gate ships ahead of it precisely because that consumer needs it
+  to be safe; no existing recall path changes behaviour.
+  (`tests/test_novel_term_gate.py`, 23 tests.)
+
 ### Security
 
 * **Alert destinations are constrained (T-004).** `alerting.py` POSTs
@@ -75,7 +177,81 @@ All notable changes to MIND-Mem are documented in this file.
   assumed: no rate-limit bucket and no token to leak into it, and no
   schema endpoint to gate.
 
+* **Audit logs can be made append-only by the kernel, and say so
+  honestly when they cannot (T-007).** The hash-chained ledger and the
+  two forensic JSONL trails made tampering *detectable*; the OS-level
+  append-only flag makes an in-place rewrite *refused by the kernel*. It
+  raises the bar; it does not make tampering impossible, and must not be
+  described as if it did: on Linux `CAP_LINUX_IMMUTABLE` clears the flag
+  with `chattr -a`, and the `chflags` path sets `UF_APPEND`, a *user*
+  flag the file's owner can clear unprivileged. The hash chain remains
+  the guarantee; this is a second, weaker layer. Until now it was only
+  an operator runbook (`docs/append-only-audit-logs.md`) with no code
+  behind it. New `mind_mem.append_only` applies it —
+  `chattr +a` on Linux, `chflags uappnd` on macOS/BSD.
+
+  Setting it usually fails: it needs `CAP_LINUX_IMMUTABLE` (root) and a
+  filesystem that implements it, which tmpfs, NFS and SMB do not, and
+  Windows has no equivalent at all. So the entire contract is about the
+  refusal. `ensure_append_only` reports `enforced=True` only after
+  reading the file back and confirming it now refuses an in-place
+  write; every other outcome returns a status that says
+  `NOT append-only` and names the reason — prefixed `WARNING:` when an
+  attempt was made and refused, unprefixed when the operator asked for
+  `off`. A tool's exit code
+  is explicitly not evidence — a shim called `chattr` on PATH, or an
+  overlay that accepts the ioctl and drops it, both exit 0 — which is
+  the same defect as the private key that printed `(private, 0600)`
+  after a chmod the filesystem had refused, and is pinned by its own
+  test. Windows is a clean no-op, not a crash.
+
+  `MIND_MEM_AUDIT_APPEND_ONLY` selects `try` (default: attempt, report,
+  never raise), `require` (fail closed — an unverifiable flag raises
+  `AppendOnlyUnavailable`, so a deployment that must not run unhardened
+  does not) or `off` (do not touch the file, and still report it as
+  unprotected). A typo in that variable is refused rather than
+  silently read as `off`.
+
+  Capability is detected by probing — is `os.chflags` bound, is
+  `chattr` on PATH — never by the platform name, because a FAT volume
+  under Linux and an NFS mount under macOS both break that shortcut.
+  The tests exercise the no-mechanism, refused and already-flagged
+  paths on any runner as a non-root user, which is the case that
+  *cannot* set the flag.
+
+  Not called from the write paths, deliberately: an unprivileged
+  service cannot set the flag, so a per-append call would only produce
+  warnings. This is a privileged setup call for an installer or
+  operator, and log rotation still follows the runbook. Its optional
+  `create=` path opens `O_NOFOLLOW`: a dangling symlink at an audit
+  path would otherwise be followed, and the caller would go on to
+  harden and trust a file of someone else's choosing.
+
 ### Fixed
+
+* **Apply-engine text-range ops could truncate a corpus file.**
+  `insert_after_block` and `replace_range` were the last two `_op_*`
+  handlers still committing with a raw `open(filepath, "w")` +
+  `writelines`. That call truncates the destination the instant it
+  opens it, so every failure between the truncate and the final flush
+  — an unencodable byte in the patch, ENOSPC, a killed process — left
+  the corpus file short or empty, and the pre-apply snapshot is the
+  only thing that could have brought it back. Both now take
+  `FileLock` over the whole read-modify-write and commit through
+  `block_store._atomic_write` (temp file + `os.replace`), which is the
+  same primitive `BlockStore.write_block` uses, so the destination is
+  not opened for writing until a complete replacement file exists on
+  the same filesystem. Reads in both handlers also pin
+  `encoding="utf-8"` rather than inheriting the host locale.
+
+  The regression test injects a real fault rather than a mock: a lone
+  surrogate in the patch text is unencodable by every strict codec, so
+  the encode raises partway through emitting the new content. Against
+  the old implementation the file came back with the tail of the block
+  gone; it now comes back byte-identical. `_safe_resolve` was already
+  applied to both ops at the single `execute_op` entry point — the
+  suite now pins that too, for `../` and for an in-workspace symlink
+  pointing out.
 
 * **Two tests asserted the runner rather than the product.**
   `test_unreadable_note_is_reported` intercepted `open()` by comparing
