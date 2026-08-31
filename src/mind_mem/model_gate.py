@@ -21,6 +21,15 @@ operator can force-load a checkpoint they know is safe (e.g. for
 recovery / development) — this still records the override in the
 gate ledger so the WARNING is auditable.
 
+The override is deliberately *one-shot*: an entry written by the
+override path never carries ``audit_passed: true``, and an entry
+carrying ``trust_without_audit: true`` never satisfies the
+``trusted_fresh`` fast path. Otherwise one unblock would record
+"this manifest passed an audit" for bytes no audit ever saw, and
+every later default check would sail through on it — closing
+threat 2 above forever. Re-running the audit is the only way back
+to a trusted entry.
+
 Registry format (``~/.mind-mem/model_gate.json``)::
 
     {
@@ -57,6 +66,7 @@ REASON_AUDITED_NOW = "audited_now"
 REASON_DRIFT_RE_AUDITED = "drift_re_audited"
 REASON_AUDIT_FAILED = "audit_failed"
 REASON_AUDIT_FAILED_OVERRIDE = "audit_failed_override"
+REASON_DRIFT_OVERRIDE = "drift_override"
 REASON_NEVER_AUDITED_OVERRIDE = "never_audited_override"
 REASON_PATH_NOT_FOUND = "path_not_found"
 
@@ -169,7 +179,8 @@ def gate_check(
     Behaviour:
       * If the path doesn't exist → ``passed=False``,
         ``reason=path_not_found``.
-      * If the path is in the registry, the recorded ``manifest_sha256``
+      * If the path is in the registry, the entry was written by an
+        audit (not by an override), the recorded ``manifest_sha256``
         matches the current one, and ``audit_passed`` is True →
         ``passed=True``, ``reason=trusted_fresh``.
       * If the path is in the registry but the recorded sha256
@@ -182,9 +193,19 @@ def gate_check(
       * If the audit fails and ``trust_without_audit=True`` →
         ``passed=True``, ``reason=audit_failed_override`` and the
         registry records ``trust_without_audit=True`` (auditable).
+      * If the checkpoint drifted and ``trust_without_audit=True`` is
+        passed → ``passed=True``, ``reason=drift_override``; the new
+        manifest is recorded with ``audit_passed=None``, because no
+        audit has ever seen these bytes.
       * If the path is never-audited and ``trust_without_audit=True``
         is passed → registry records the override, returns
         ``reason=never_audited_override``.
+
+    Invariant: no ``trust_without_audit=True`` call ever writes
+    ``audit_passed=True``, and no entry carrying
+    ``trust_without_audit=True`` is ever served from the
+    ``trusted_fresh`` fast path. An override buys exactly one load;
+    the next default check re-audits.
     """
     from mind_mem.model_audit import audit_model
 
@@ -201,7 +222,18 @@ def gate_check(
     reg = _load_registry()
     entry = reg.get(str(root))
 
-    if entry and entry.get("manifest_sha256") == current_sha and entry.get("audit_passed"):
+    # ``trust_without_audit`` is in this condition on purpose: an entry
+    # written by the override path has no audit behind it, so serving
+    # it here would turn a one-shot operator unblock into a permanent
+    # pass. The write path below never records ``audit_passed=True``
+    # beside an override any more, but a ledger written by an older
+    # build (or hand-edited) can still hold that pair — this refuses
+    # it and re-audits.
+    entry_is_audit_clean = bool(
+        entry and not entry.get("trust_without_audit") and entry.get("manifest_sha256") == current_sha and entry.get("audit_passed")
+    )
+
+    if entry_is_audit_clean and entry is not None:  # second clause narrows for the type checker
         # Fast path — checkpoint is unchanged since the last clean
         # audit. No need to re-hash the world.
         return GateDecision(
@@ -244,17 +276,30 @@ def gate_check(
         )
 
     # Override path — the operator forced load without an audit.
-    # Either there's no entry yet (never_audited_override) or the
-    # last entry failed (audit_failed_override). Distinguish so the
-    # ledger reflects intent.
-    if entry is None or entry.get("audit_passed") is None:
-        reason = REASON_NEVER_AUDITED_OVERRIDE
-        audit_passed: bool | None = None
+    # Nothing here may record ``audit_passed=True``: these exact bytes
+    # have not been audited, and a True beside this manifest is what
+    # the fast path above trusts. Only a recorded *failure* that
+    # belongs to these bytes is carried forward — that is real
+    # evidence, and keeping it makes repeated overrides idempotent.
+    audit_passed: bool | None
+    prior_summary = entry.get("audit_report_summary") if entry else None
+    if drift:
+        # The stored verdict describes different bytes; it says
+        # nothing about the checkpoint being loaded now.
+        reason = REASON_DRIFT_OVERRIDE
+        audit_passed = None
         summary = {}
-    else:
+    elif entry is not None and entry.get("audit_passed") is False:
         reason = REASON_AUDIT_FAILED_OVERRIDE
-        audit_passed = bool(entry.get("audit_passed"))
-        summary = entry.get("audit_report_summary", {})
+        audit_passed = False
+        summary = prior_summary if isinstance(prior_summary, dict) else {}
+    else:
+        # No entry, an entry with no verdict, or an entry claiming a
+        # pass that no audit of these bytes can back (a ledger written
+        # by an older build) — all three mean "never audited".
+        reason = REASON_NEVER_AUDITED_OVERRIDE
+        audit_passed = None
+        summary = {}
 
     reg[str(root)] = {
         "audited_at": _now_iso(),

@@ -19,19 +19,41 @@ import os
 from fastmcp.server.dependencies import get_access_token
 
 from mind_mem.observability import get_logger, metrics
+from mind_mem.scopes import ADMIN_SCOPES  # the single definition
 
 _log = get_logger("mcp_server")
 
 
+# ACL COVERAGE INVARIANT (pinned by tests/test_acl_tool_coverage.py):
+# ``ADMIN_TOOLS | USER_TOOLS`` must equal exactly the set of tool names
+# registered on the FastMCP instance in ``mind_mem.mcp.server``.
+#
+#   • A registered tool in NEITHER set is unreachable, not merely
+#     unprivileged: ``mcp_tool_observe``'s terminal ``not in USER_TOOLS``
+#     branch rejects the call with "is not in ACL policy" before the body
+#     runs, and the ``MIND_MEM_ACL_DISABLED`` escape re-applies the same
+#     unknown-tool rejection, so no configuration can reach it.
+#   • A name in either set with no registered tool is a stale grant that
+#     would silently pre-authorise a future tool of that name at that
+#     scope, with no review.
+#
+# So: classify every tool into exactly one set in the same change that
+# registers it. (The stale entries ``write_memory``, ``apply_proposal``,
+# ``reindex_vectors``, ``search_memory`` and ``list_memory`` were dropped
+# for the second reason — no tool of those names is registered.)
+# The four read-only arch-mind wrappers are ADMIN, not USER. Classifying the
+# 13 unclassified tools was the fix; granting user scope a NEW capability was
+# not. These shell out to the arch-mind binary against any ABSOLUTE path on the
+# host, and arch_check_rules reports path:line findings and distinguishes a
+# missing rules file — a directory-listing and file-existence oracle outside the
+# workspace. They were unreachable at every scope before, so admin-scoping keeps
+# the ACL complete without widening anything.
 ADMIN_TOOLS = frozenset(
     {
-        "write_memory",
-        "apply_proposal",
         "approve_apply",
         "reject_proposal",
         "rollback_proposal",
         "delete_memory_item",
-        "reindex_vectors",
         "propose_update",
         "reindex",
         "export_memory",
@@ -54,6 +76,32 @@ ADMIN_TOOLS = frozenset(
         "reject_edge",
         # Entity observation writes mutate the entity registry.
         "entity_add_observation",
+        # Consolidated dispatchers that can reach an admin capability.
+        # Both invoke their callee through ``__wrapped__``, which strips
+        # ``@mcp_tool_observe`` — the only place per-tool ACL runs — so
+        # the DISPATCHER name is the sole remaining gate and must carry
+        # the scope of its most privileged branch:
+        #   staged_change → propose_update / approve_apply /
+        #                   rollback_proposal (all admin).
+        #   memory_verify → verify_chain (admin), plus verify_merkle and
+        #                   mind_mem_verify (user); admin wins.
+        # ``graph`` is user-scope by contrast because its one admin
+        # branch calls ``enforce_capability_acl("graph_add_edge")``
+        # itself before dispatching.
+        "staged_change",
+        "memory_verify",
+        # arch-mind wrappers that MUTATE the arch-mind evidence store at
+        # a caller-supplied repository path — baseline.json for
+        # arch_baseline, chained session_start / session_end evidence
+        # nodes for the session pair. The read-only arch_* wrappers are
+        # user-scope; see USER_TOOLS.
+        "arch_baseline",
+        "arch_history",
+        "arch_delta",
+        "arch_check_rules",
+        "arch_metric_explain",
+        "arch_session_start",
+        "arch_session_end",
     }
 )
 
@@ -87,8 +135,6 @@ USER_TOOLS = frozenset(
         "vault_sync",
         "vault_scan",
         "agent_inject",
-        "search_memory",
-        "list_memory",
         "list_contradictions",
         "scan",
         "hybrid_search",
@@ -147,10 +193,34 @@ USER_TOOLS = frozenset(
         # block kind, and a dead end warns without ever blocking.
         "resume_brief",
         "check_dead_ends",
+        # v3.2.0 consolidated dispatchers. These are registered in
+        # ``mcp.tools.public`` but were never classified, so the
+        # unknown-tool branch rejected every call to them — the
+        # consolidated surface was advertised and unreachable. Each of
+        # these routes only to user-scope callees, except ``graph``,
+        # whose sole admin branch (``add_edge``) enforces the admin
+        # capability itself. ``staged_change`` and ``memory_verify``
+        # reach admin capabilities with no such guard and are in
+        # ADMIN_TOOLS instead.
+        "graph",
+        "core",
+        "kernels",
+        "compiled_truth",
+        # arch-mind wrappers — read-only analysis only: list the evidence
+        # store, diff two baselines, apply rules to a fixture, explain one
+        # metric. Nothing here writes an evidence node; the three that do
+        # are admin-scoped above.
     }
 )
 
-_ADMIN_SCOPES = frozenset({"admin", "full", "mind-mem:admin"})
+# The ONE admin-scope vocabulary. src/mind_mem/api/rest.py imports this rather
+# than carrying its own literal: the two disagreed (REST accepted only "admin"),
+# and while the REST admin gate was being skipped entirely that difference was
+# invisible. Fixing the gate made it reachable and would have locked every
+# "full"-scoped key out of the REST admin endpoints. Two layers asking different
+# questions about the same word is the defect class this codebase keeps hitting.
+#: Re-exported from :mod:`mind_mem.scopes` (imported at the top of this file).
+_ADMIN_SCOPES = ADMIN_SCOPES  # back-compat for existing in-module references
 
 
 def check_tool_acl(tool_name: str, scope: str) -> str | None:

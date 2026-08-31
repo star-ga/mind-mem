@@ -592,6 +592,21 @@ def _load_jsonl_entries(path: str) -> list[HashEntry]:
 # ---------------------------------------------------------------------------
 
 
+def _validated_timestamp(value: object, idx: int) -> "str | None":
+    """Return a usable timestamp, or raise before anything is written.
+
+    ``None`` is legitimate (the writer falls back to now()); anything that is
+    not a string is not, and must be refused during validation rather than at
+    append time — otherwise it raises partway through the write loop, after
+    earlier entries have already committed.
+    """
+    if value is None or isinstance(value, str):
+        return value
+    raise MigrationError(
+        f"v1 entry {idx} has a non-string timestamp ({type(value).__name__}); refusing to migrate rather than write a partial chain"
+    )
+
+
 def convert_from_v1(old_chain_path: str, new_db_path: str) -> HashChainV2:
     """Migrate a v1 SHA256 audit chain to a v2 SHA3-512 hash chain.
 
@@ -609,7 +624,11 @@ def convert_from_v1(old_chain_path: str, new_db_path: str) -> HashChainV2:
 
     Raises:
         FileNotFoundError: If old_chain_path does not exist.
-        MigrationError: If the v1 file is malformed.
+        MigrationError: If the v1 file is malformed — a line that is not
+            a JSON object, or an entry carrying no ``payload_hash``. The
+            whole file is validated before the destination database is
+            opened, so a rejected migration leaves no half-written chain
+            behind.
     """
     if not os.path.isfile(old_chain_path):
         raise FileNotFoundError(f"v1 chain not found: {old_chain_path}")
@@ -621,24 +640,64 @@ def convert_from_v1(old_chain_path: str, new_db_path: str) -> HashChainV2:
             if not stripped:
                 continue
             try:
-                v1_entries.append(json.loads(stripped))
+                parsed = json.loads(stripped)
             except json.JSONDecodeError as exc:
                 raise MigrationError(f"Malformed JSON at line {line_num}: {exc}") from exc
+            # A v1 line that parses but is not an object (a bare list,
+            # string or number) used to reach ``v1.get(...)`` and escape as
+            # a raw AttributeError, contradicting the documented
+            # MigrationError contract.
+            if not isinstance(parsed, dict):
+                raise MigrationError(f"Malformed v1 entry at line {line_num}: expected a JSON object, got {type(parsed).__name__}")
+            v1_entries.append(parsed)
 
-    new_chain = HashChainV2(new_db_path)
+    # Validate every entry BEFORE opening the destination. The v1
+    # payload_hash is the payload commitment the migrated chain inherits;
+    # an entry without one used to migrate to ``content=""``, and the
+    # resulting ledger then verified as fully intact — a chain that
+    # certifies itself while having dropped what it commits to. Refuse the
+    # migration instead, and refuse it before any of it is written.
+    prepared: list[tuple[str, str, str, Optional[str]]] = []
+    for idx, v1 in enumerate(v1_entries, 1):
+        content = v1.get("payload_hash")
+        if not isinstance(content, str) or not content:
+            raise MigrationError(f"v1 entry {idx} has no usable payload_hash; migrating it would drop the payload commitment it carries")
+        prepared.append(
+            (
+                str(v1.get("target", "unknown")),
+                str(v1.get("operation", "unknown")),
+                content,
+                # Preserve the v1 timestamp so temporal queries still work
+                # on migrated chains. Fall back to now() when absent.
+                # Type-checked HERE, in the validate-everything-first phase,
+                # not discovered at append time: a non-string timestamp reaching
+                # the write loop raises after earlier entries have committed.
+                _validated_timestamp(v1.get("timestamp"), idx),
+            )
+        )
 
-    for v1 in v1_entries:
-        try:
-            block_id = v1.get("target", "unknown")
-            action = v1.get("operation", "unknown")
-            # Use the v1 payload_hash as content; preserves the original digest
-            content = v1.get("payload_hash", "")
-            # Preserve the v1 timestamp so temporal queries still work on
-            # migrated chains. Fall back to now() when absent.
-            original_ts = v1.get("timestamp")
-        except (KeyError, TypeError) as exc:
-            raise MigrationError(f"Cannot read v1 entry: {exc}") from exc
+    # Build into a staging database and swap it in only once EVERY entry has
+    # landed. Appending straight to new_db_path commits entry by entry, so a
+    # failure on entry N leaves 1..N-1 behind: a destination chain that verifies
+    # internally while being silently truncated, which is worse than no chain.
+    # os.replace is atomic on POSIX and Windows.
+    staging = f"{new_db_path}.migrating"
 
-        new_chain.append(block_id, action, content, timestamp=original_ts)
+    def _clear_staging() -> None:
+        for leftover in (staging, f"{staging}-wal", f"{staging}-shm"):
+            try:
+                os.remove(leftover)
+            except OSError:
+                pass
 
-    return new_chain
+    _clear_staging()
+    try:
+        staged = HashChainV2(staging)
+        for block_id, action, content, original_ts in prepared:
+            staged.append(block_id, action, content, timestamp=original_ts)
+        os.replace(staging, new_db_path)
+    except BaseException:
+        _clear_staging()
+        raise
+
+    return HashChainV2(new_db_path)

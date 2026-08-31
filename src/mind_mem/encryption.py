@@ -17,7 +17,9 @@ filesystem read access can recover indexed content from recall.db.
 
 Key management:
 - Key derived from passphrase via PBKDF2-HMAC-SHA256 (600k iterations)
-- Salt stored in workspace/.mind-mem-keys/salt (32 bytes)
+- Salt stored in workspace/.mind-mem-keys/salt (32 bytes), written atomically
+- A salt file of the wrong length is reported, never silently regenerated —
+  regenerating it would make every existing ciphertext unreadable forever
 - Key never written to disk
 - Key rotation via re-encryption with new passphrase
 
@@ -28,7 +30,7 @@ Usage:
     plaintext = mgr.decrypt(ciphertext)
     mgr.encrypt_file("path/to/file.md")
 
-Zero external deps — hashlib, hmac, os, struct (all stdlib).
+Zero external deps — hashlib, hmac, os, struct, tempfile (all stdlib).
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ import hashlib
 import hmac
 import os
 import struct
+import tempfile
 
 from .mind_filelock import FileLock
 from .observability import get_logger, metrics
@@ -78,6 +81,59 @@ def _reject_oversized_file(path: str, max_bytes: int) -> None:
         raise ValueError(f"file {path!r} ({size} bytes) exceeds {max_bytes} byte cap")
 
 
+def _fsync_dir(directory: str) -> None:
+    """Best-effort fsync of a directory so a rename inside it is durable.
+
+    Not supported everywhere (Windows refuses to open a directory), hence
+    best-effort: durability is an improvement on the rename, never a
+    precondition for it.
+    """
+    try:
+        dir_fd = os.open(directory, os.O_RDONLY)
+    except OSError:  # nosec B110 — directories are not openable on all platforms
+        return
+    try:
+        os.fsync(dir_fd)
+    except OSError:  # nosec B110 — best-effort durability
+        pass
+    finally:
+        os.close(dir_fd)
+
+
+def _write_key_material(path: str, data: bytes) -> None:
+    """Write key material to ``path`` atomically and owner-only.
+
+    The salt is the one piece of key material that cannot be recomputed
+    from anything else, so it must never be observable in a half-written
+    state: a torn write leaves a wrong-length salt that a later run cannot
+    distinguish from deliberate corruption. Stage into a temp file in the
+    same directory (``mkstemp`` creates it 0600), fsync it, then
+    ``os.replace`` — atomic on POSIX and Windows — and fsync the directory
+    so the rename itself survives a crash. Any failure removes the temp
+    file and leaves the existing salt, if any, untouched.
+    """
+    directory = os.path.dirname(path) or "."
+    fd, tmp_path = tempfile.mkstemp(prefix=".salt-", dir=directory)
+    try:
+        try:
+            written = os.write(fd, data)
+            # A short write is the exact failure this helper exists to
+            # prevent — surface it instead of committing a truncated file.
+            if written != len(data):
+                raise OSError(f"short write to {tmp_path!r}: {written}/{len(data)} bytes")
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:  # nosec B110 — temp file already gone
+            pass
+        raise
+    _fsync_dir(directory)
+
+
 # File header magic bytes
 _MAGIC = b"MMENC1"  # mind-mem encrypted v1
 
@@ -115,6 +171,14 @@ def _xor_bytes(data: bytes, keystream: bytes) -> bytes:
     return bytes(a ^ b for a, b in zip(data, keystream))
 
 
+def _discard_previous_salt(keys_dir: str) -> None:
+    """Remove the retained rotation salt. Safe when it is absent."""
+    try:
+        os.remove(os.path.join(keys_dir, "salt.previous"))
+    except OSError:
+        pass
+
+
 class EncryptionManager:
     """Optional encryption layer for mind-mem workspaces.
 
@@ -130,7 +194,8 @@ class EncryptionManager:
             passphrase: User passphrase for key derivation.
 
         Raises:
-            ValueError: If passphrase is too short (< 8 chars).
+            ValueError: If passphrase is too short (< 8 chars), or if the
+                workspace salt file exists but has the wrong length.
         """
         if len(passphrase) < 8:
             raise ValueError("Passphrase must be at least 8 characters")
@@ -147,6 +212,7 @@ class EncryptionManager:
             pass
 
         self._salt = self._get_or_create_salt()
+        self._passphrase = passphrase
         self._key = _pbkdf2(passphrase, self._salt)
 
         # Derive separate keys for encryption and MAC
@@ -154,7 +220,20 @@ class EncryptionManager:
         self._mac_key = hmac.new(self._key, b"authenticate", hashlib.sha256).digest()
 
     def _get_or_create_salt(self) -> bytes:
-        """Get or create the workspace salt."""
+        """Load the workspace salt, minting one only when none exists.
+
+        A salt file that exists but is not exactly ``_SALT_SIZE`` bytes is
+        NEVER overwritten. The salt is half the key material and cannot be
+        recovered from anything else, so replacing a damaged one with fresh
+        entropy destroys every ciphertext in the workspace *and* disguises
+        the loss: each later ``decrypt`` fails MAC verification and reports
+        tampering, pointing the operator at an attacker instead of at their
+        own truncated file. Fail closed and name the file, so the salt that
+        is still on disk can be restored from backup.
+
+        Raises:
+            ValueError: If the salt file exists with the wrong length.
+        """
         salt_path = os.path.join(self._keys_dir, "salt")
         with FileLock(salt_path):
             if os.path.isfile(salt_path):
@@ -162,14 +241,21 @@ class EncryptionManager:
                     salt = f.read()
                 if len(salt) == _SALT_SIZE:
                     return salt
+                _log.error(
+                    "encryption_salt_corrupt",
+                    path=salt_path,
+                    expected_bytes=_SALT_SIZE,
+                    actual_bytes=len(salt),
+                )
+                raise ValueError(
+                    f"salt file {salt_path!r} is {len(salt)} bytes, expected {_SALT_SIZE}: "
+                    "refusing to overwrite key material, which would make every "
+                    "already-encrypted file permanently unreadable. Restore the file "
+                    "from backup, or delete it if nothing was encrypted under it."
+                )
 
             salt = os.urandom(_SALT_SIZE)
-            with open(salt_path, "wb") as f:
-                f.write(salt)
-            try:
-                os.chmod(salt_path, 0o600)  # owner-only
-            except OSError:  # nosec B110 — best-effort on chmod-less FS
-                pass
+            _write_key_material(salt_path, salt)
             _log.info("encryption_salt_created")
             return salt
 
@@ -195,6 +281,28 @@ class EncryptionManager:
         mac = hmac.new(self._mac_key, mac_input, hashlib.sha256).digest()
 
         return _MAGIC + nonce + ciphertext + mac
+
+    def _previous_keys(self) -> "tuple[bytes, bytes] | None":
+        """(mac_key, enc_key) from the retained rotation salt, or None.
+
+        Present only while a rotation is in flight or crashed partway. Read
+        fresh each time rather than cached: a rotation completing in another
+        process removes the file, and a stale cache would keep offering a key
+        that should no longer decrypt anything.
+        """
+        path = os.path.join(self._keys_dir, "salt.previous")
+        try:
+            with open(path, "rb") as fh:
+                salt = fh.read()
+        except OSError:
+            return None
+        if len(salt) != _SALT_SIZE:
+            return None
+        key = _pbkdf2(self._passphrase, salt)
+        return (
+            hmac.new(key, b"authenticate", hashlib.sha256).digest(),
+            hmac.new(key, b"encrypt", hashlib.sha256).digest(),
+        )
 
     def decrypt(self, data: bytes) -> bytes:
         """Decrypt data.
@@ -224,6 +332,18 @@ class EncryptionManager:
         # Verify MAC (constant-time comparison)
         expected_mac = hmac.new(self._mac_key, nonce + ciphertext, hashlib.sha256).digest()
         if not hmac.compare_digest(mac, expected_mac):
+            # Before declaring tampering, try the retained previous key. It
+            # exists only while a rotation is in flight (or crashed partway),
+            # and it is exactly the case where a file legitimately carries the
+            # OLD key while `salt` already names the new one. Reporting
+            # "data may be tampered" for a half-finished rotation sends the
+            # operator hunting an attacker instead of re-running the rotation.
+            previous = self._previous_keys()
+            if previous is not None:
+                prev_mac_key, prev_enc_key = previous
+                prev_expected = hmac.new(prev_mac_key, nonce + ciphertext, hashlib.sha256).digest()
+                if hmac.compare_digest(mac, prev_expected):
+                    return _xor_bytes(ciphertext, _keystream(prev_enc_key, nonce, len(ciphertext)))
             raise ValueError("MAC verification failed — data may be tampered")
 
         ks = _keystream(self._enc_key, nonce, len(ciphertext))
@@ -371,6 +491,22 @@ class EncryptionManager:
                     os.fsync(fh.fileno())
                 staged.append((resolved, tmp_path))
 
+            # Phase 2.5 — retain the OUTGOING salt before the first swap.
+            #
+            # Phase 3 replaces files one at a time. The moment the first
+            # os.replace lands, the corpus holds a MIX: some files under the
+            # new key, the rest under the old, while ``salt`` still names the
+            # old one. A crash there used to leave data that NEITHER key could
+            # read in full — irreversible loss, not a stalled operation. The
+            # comment below Phase 4 claimed "no files have the new ciphertext
+            # yet", which stops being true after a single swap.
+            #
+            # Keeping the outgoing salt makes every intermediate state
+            # recoverable: decrypt falls back to it, so a half-rotated corpus
+            # reads correctly under either key and the rotation can simply be
+            # re-run.
+            _write_key_material(os.path.join(self._keys_dir, "salt.previous"), self._salt)
+
             # Phase 3 — atomically swap each file in. os.replace is
             # atomic on POSIX and Windows.
             for final_path, tmp_path in staged:
@@ -382,12 +518,11 @@ class EncryptionManager:
             # still valid (no files have the new ciphertext yet);
             # a crash after and the new salt matches the new files.
             salt_path = os.path.join(self._keys_dir, "salt")
-            tmp_salt = salt_path + ".rotate.tmp"
-            with open(tmp_salt, "wb") as fh:
-                fh.write(new_salt)
-                fh.flush()
-                os.fsync(fh.fileno())
-            os.replace(tmp_salt, salt_path)
+            _write_key_material(salt_path, new_salt)
+            # The rotation is complete, so the previous salt is no longer
+            # needed to read anything. Dropping it here — and ONLY here —
+            # keeps the recovery window exactly as long as the risk.
+            _discard_previous_salt(self._keys_dir)
         except Exception:
             # Best-effort cleanup of any temp files we staged.
             for _, tmp_path in staged:

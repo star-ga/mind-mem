@@ -22,12 +22,20 @@ It is written *after* ``recall()`` has returned, and it writes no block, so
 
 What the chain proves, stated narrowly: no row was **altered or removed** after
 it was written — a truncated tail fails against the head sidecar, an edited row
-fails against its successor's link. It does not prove **completeness**. An
+fails against its successor's link, and an emptied ledger or a removed sidecar
+fails as well, because the head comparison is unconditional rather than skipped
+whenever one of the two files is gone. It does not prove **completeness**. An
 append that never happened leaves no gap to detect, so a run whose write failed
 is absent rather than visibly missing; the call site logs
 ``served_ledger_append_failed`` and returns the answer regardless, because an
 auxiliary record must not break recall. "Proof of what was served" is therefore
 a claim about every row present, not a claim that every run has one.
+
+Nor is it a claim that the ledger itself survived. Rows and seal both live in
+``.mind-mem-ledger``, so deleting the directory outright is indistinguishable
+from a workspace where the ledger never ran. Closing that needs an anchor kept
+somewhere this module does not write, and inventing one here would be a second
+place to keep the truth.
 
 **Nothing on the scoring path may read it.** Frequency-of-serving is derivable
 from any served-set ledger; that is harmless only while it cannot flow backward
@@ -105,6 +113,9 @@ LEDGER_RELPATH = os.path.join(".mind-mem-ledger", "served.jsonl")
 #: Sidecar holding the current chain head. The last row has no successor to
 #: bind it, so without this its ``index_anchor`` / ``scoring_instant`` would be
 #: editable until the next append. Not a row field — the schema is nine.
+#: Once a row exists the sidecar is REQUIRED, not merely consulted when
+#: present: a seal whose absence is tolerated is the seal an editor removes
+#: first, and tolerating it turns "delete one file" into a clean pass.
 HEAD_RELPATH = os.path.join(".mind-mem-ledger", "served.head")
 
 #: ``mind-mem.json`` section. Absent means off; only ``true`` means on.
@@ -350,12 +361,21 @@ def _write_row(workspace: str | Path, row: ServedRun) -> None:
         handle.write(row_hash(row) + "\n")
 
 
-def _read_head(workspace: str | Path) -> str:
+def _read_head(workspace: str | Path) -> Optional[str]:
+    """The recorded head, or ``None`` when the sidecar is **absent**.
+
+    Absent and empty are different facts and must stay distinguishable.
+    Collapsing both to ``""`` is what let a deleted sidecar read as "no head
+    to check against": the caller's truthiness test then skipped the head
+    comparison entirely, so removing the seal removed the check with it. A
+    present-but-blank file is not a missing seal, it is an overwritten one,
+    and it fails the comparison like any other wrong value.
+    """
     try:
         with open(_head_path(workspace), encoding="utf-8") as handle:
             return handle.read().strip()
     except OSError:
-        return ""
+        return None
 
 
 def _check_row(row: ServedRun, index: int) -> str:
@@ -393,7 +413,7 @@ def _link_breaks(rows: Sequence[ServedRun]) -> list[int]:
     return out
 
 
-def _locate_break(rows: Sequence[ServedRun], breaks: list[int], stored_head: str) -> int:
+def _locate_break(rows: Sequence[ServedRun], breaks: list[int], stored_head: Optional[str]) -> int:
     """Name the edited row from the break pattern.
 
     A chain link seals the row BEFORE it, so a naive report always accuses the
@@ -406,7 +426,10 @@ def _locate_break(rows: Sequence[ServedRun], breaks: list[int], stored_head: str
       culprit is *j*.
     * on the last row the successor does not exist, so the head sidecar plays
       its part: a head that still matches the row means the row is intact and
-      the edit is behind it.
+      the edit is behind it. A head that is missing or blank carries no such
+      information — falsy here means "cannot disambiguate", never "nothing to
+      answer for"; :func:`verify_served_chain` convicts the missing seal on
+      its own account.
     """
     first = breaks[0]
     if first + 1 in breaks:
@@ -420,9 +443,24 @@ def verify_served_chain(workspace: str | Path) -> ChainVerdict:
     """Walk the chain and name the FIRST row that cannot be trusted.
 
     Reads no clock, so a verification run is reproducible on any host on any
-    day. Two passes: the self-checking invariants first (position, digest vs
-    ids, ``run_id`` vs its three inputs), then the links — which seal the
-    fields no invariant covers, ``index_anchor`` and ``scoring_instant``.
+    day. Three passes: the self-checking invariants first (position, digest vs
+    ids, ``run_id`` vs its three inputs), then the links, then the head sidecar
+    — which seals the fields no invariant and no successor covers, the last
+    row's ``index_anchor`` and ``scoring_instant``.
+
+    The sidecar comparison is **unconditional**, and both halves of that matter:
+
+    * it runs when the ledger holds NO rows. A recorded head with nothing left
+      to hash means every row was removed, which is the one deletion the row
+      chain cannot see — an emptied file has no seq gap and no broken link.
+    * it runs when the sidecar is ABSENT. Skipping the check because the seal
+      is gone makes deleting the seal the way to unseal the tail, which is
+      exactly what the seal exists to prevent.
+
+    The residual hole is named rather than papered over: removing the ledger
+    AND the sidecar together leaves a directory indistinguishable from one
+    where the ledger never ran, because both records live inside it. Detecting
+    that needs an anchor kept somewhere else, which this module does not own.
     """
     try:
         rows = read_served_runs(workspace)
@@ -442,8 +480,27 @@ def verify_served_chain(workspace: str | Path) -> ChainVerdict:
         return ChainVerdict(ok=False, rows_checked=culprit, bad_seq=culprit, reason=reason, head="")
 
     head = row_hash(rows[-1]) if rows else GENESIS_ROW_HASH
-    if rows and stored_head and stored_head != head:
-        last = len(rows) - 1
+    last = len(rows) - 1
+    if stored_head is None:
+        if rows:
+            return ChainVerdict(
+                ok=False,
+                rows_checked=last,
+                bad_seq=last,
+                reason=f"row {last}: the head sidecar is missing — the last row is unsealed",
+                head=head,
+            )
+        return ChainVerdict(ok=True, rows_checked=0, bad_seq=None, reason="", head=head)
+    if stored_head != head:
+        if not rows:
+            recorded = stored_head or "blank"
+            return ChainVerdict(
+                ok=False,
+                rows_checked=0,
+                bad_seq=None,
+                reason=f"the ledger is empty but the recorded head is {recorded} — the rows were removed",
+                head=head,
+            )
         return ChainVerdict(
             ok=False,
             rows_checked=last,

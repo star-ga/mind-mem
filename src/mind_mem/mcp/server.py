@@ -20,8 +20,6 @@ surface below them in trace output.
 
 from __future__ import annotations
 
-import os
-
 from fastmcp import FastMCP
 
 from mind_mem.mcp import resources as _resources
@@ -160,27 +158,52 @@ _tools_public.register(mcp)
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
+def _http_auth_is_enforceable() -> bool:
+    """True when the MCP HTTP transport will actually verify a credential.
+
+    Deliberately derived from :func:`_build_http_auth_tokens` — the very
+    map :func:`main` hands to FastMCP's ``StaticTokenVerifier`` — so the
+    startup gate and request-time enforcement cannot drift apart about
+    what "authentication is configured" means. Asking the environment a
+    second, hand-rolled question is exactly what let a credential-free
+    listener pass the gate; see :func:`_enforce_http_auth_or_localhost`.
+    """
+    return bool(_build_http_auth_tokens())
+
+
 def _enforce_http_auth_or_localhost(host: str, allow_unauthenticated_localhost: bool) -> None:
     """v3.7.0 H4: refuse to expose the MCP HTTP transport without auth.
 
-    The previous behaviour logged a warning and started anyway, leaving
+    The pre-v3.7.0 behaviour logged a warning and started anyway, leaving
     every mutating MCP tool reachable from any client that could reach
-    the listening socket. The contract now: either auth is configured
-    (``MIND_MEM_TOKEN`` / ``MIND_MEM_ADMIN_TOKEN`` /
-    ``OIDC_ISSUER+OIDC_AUDIENCE``), or the operator passes
-    ``--allow-unauthenticated-localhost`` AND binds to a loopback
-    interface. Anything else exits non-zero before the listener opens.
+    the listening socket. The contract now: either the transport can
+    really verify a credential (a non-empty ``MIND_MEM_TOKEN`` or
+    ``MIND_MEM_ADMIN_TOKEN``, asked via :func:`_http_auth_is_enforceable`),
+    or the operator passes ``--allow-unauthenticated-localhost`` AND binds
+    to a loopback interface. Anything else exits non-zero before the
+    listener opens.
+
+    ``OIDC_ISSUER`` + ``OIDC_AUDIENCE`` deliberately do **not** satisfy
+    this gate. There is no OIDC verifier on the MCP transport: the JWT
+    path lives in the separate ``mind_mem.api.rest`` FastAPI app and
+    nothing under ``mind_mem.mcp`` imports it. Treating the presence of
+    those two variables as authentication let
+    ``OIDC_ISSUER=... OIDC_AUDIENCE=... mind-mem-mcp --transport http
+    --host 0.0.0.0`` publish every tool on every interface with no
+    credential check — and skip the loopback-bind check below — while
+    the startup log called the deployment authenticated. Empty-string
+    tokens are excluded for the same reason: they never reach the
+    verifier map either.
     """
-    has_token = _check_token() is not None
-    has_admin = os.environ.get("MIND_MEM_ADMIN_TOKEN") is not None
-    has_oidc = os.environ.get("OIDC_ISSUER") is not None and os.environ.get("OIDC_AUDIENCE") is not None
-    if has_token or has_admin or has_oidc:
+    if _http_auth_is_enforceable():
         return
     if not allow_unauthenticated_localhost:
         raise SystemExit(
             "mind-mem-mcp: refusing to start HTTP transport without authentication.\n"
-            "  Set MIND_MEM_TOKEN or MIND_MEM_ADMIN_TOKEN, configure OIDC,\n"
-            "  or pass --allow-unauthenticated-localhost (binds 127.0.0.1 only)."
+            "  Set a non-empty MIND_MEM_TOKEN or MIND_MEM_ADMIN_TOKEN,\n"
+            "  or pass --allow-unauthenticated-localhost (binds 127.0.0.1 only).\n"
+            "  OIDC_ISSUER/OIDC_AUDIENCE configure the REST API only — the MCP\n"
+            "  transport cannot verify JWTs, so they do not count as auth here."
         )
     if host not in _LOOPBACK_HOSTS:
         raise SystemExit(
@@ -238,7 +261,7 @@ def main() -> None:
 
     if args.transport == "http":
         _enforce_http_auth_or_localhost(args.host, args.allow_unauthenticated_localhost)
-        if args.allow_unauthenticated_localhost and _check_token() is None and os.environ.get("MIND_MEM_ADMIN_TOKEN") is None:
+        if args.allow_unauthenticated_localhost and not _http_auth_is_enforceable():
             os.environ[ALLOW_UNAUTH_ENV] = "1"
 
     if args.transport == "http" and _check_token() and not os.environ.get("MIND_MEM_ADMIN_TOKEN"):

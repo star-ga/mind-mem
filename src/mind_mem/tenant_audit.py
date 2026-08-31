@@ -169,6 +169,23 @@ def reset() -> None:
         _tenants.clear()
 
 
+def _record_count(chain: Any) -> int:
+    """Best-effort entry count for chains whose ``verify()`` reports none.
+
+    :class:`audit_chain.AuditChain` returns ``(is_valid, errors)`` — no
+    record count — so read it from ``entries()`` when the impl exposes a
+    callable one. Never raises: a count is reporting detail, and losing
+    it must not turn a successful verification into a failed one.
+    """
+    entries = getattr(chain, "entries", None)
+    if not callable(entries):
+        return 0
+    try:
+        return len(entries())
+    except Exception:
+        return 0
+
+
 def verify_tenant(
     tenant_id: str,
     *,
@@ -192,13 +209,30 @@ def verify_tenant(
     records = 0
     try:
         result = handle.chain.verify()
-        # audit_chain.AuditChain.verify returns a dict; fall back
-        # gracefully for custom chain impls.
+        # audit_chain.AuditChain.verify returns the pair (is_valid,
+        # errors); custom chain impls may return a summary dict or a
+        # bare bool. Handle all three — never fall through to
+        # bool(result) for the pair, because EVERY non-empty tuple is
+        # truthy, so (False, ["prev_hash mismatch"]) would export a
+        # tampered chain as verified.
         if isinstance(result, dict):
             ok = bool(result.get("verified", True))
             records = int(result.get("records", 0))
+        elif isinstance(result, tuple):
+            ok = bool(result[0]) if result else False
+            raw_errors = result[1] if len(result) > 1 else None
+            errors = [str(e) for e in raw_errors] if isinstance(raw_errors, (list, tuple)) else []
+            if not ok:
+                _log.warning(
+                    "tenant_audit_chain_invalid",
+                    tenant_id=tenant_id,
+                    errors=len(errors),
+                    first_error=errors[0] if errors else "",
+                )
+            records = _record_count(handle.chain)
         else:
             ok = bool(result)
+            records = _record_count(handle.chain)
     except Exception as exc:
         _log.warning("tenant_audit_verify_failed", tenant_id=tenant_id, error=str(exc))
         ok = False

@@ -353,7 +353,38 @@ def _load_contradicted_party_ids(workspace: str) -> set[str]:
     party_ids: set[str] = set()
     for block in blocks:
         for key, value in block.items():
-            if key.startswith("_") or not isinstance(value, str):
+            if key.startswith("_"):
                 continue
-            party_ids.update(_PARTY_ID_RE.findall(value))
+            party_ids |= _party_ids_in(value)
     return party_ids
+
+
+def _party_ids_in(value: Any) -> set[str]:
+    """Every party id reachable inside one parsed field value.
+
+    :func:`mind_mem.block_parser.parse_file` renders a ``Key:``-then-``- item``
+    field as a Python **list**, and a ``ConstraintSignatures:``/``Ops:`` section
+    as a list of **dicts** — so a str-only walk silently skips exactly the
+    fields the contradiction log puts its parties in (``Objects:`` and
+    ``Evidence:``, written by ``intel_scan.write_contradictions``). Walk str,
+    list/tuple and dict; anything else contributes nothing.
+
+    Nested dict keys are filtered on the same leading-underscore rule as the
+    top level, keeping parser-internal metadata (``_id``, ``_entities``) out:
+    a contradiction entry's own ``C-...`` id is not a party to itself.
+    """
+    if isinstance(value, str):
+        return set(_PARTY_ID_RE.findall(value))
+    if isinstance(value, (list, tuple)):
+        found: set[str] = set()
+        for item in value:
+            found |= _party_ids_in(item)
+        return found
+    if isinstance(value, dict):
+        nested: set[str] = set()
+        for key, sub_value in value.items():
+            if isinstance(key, str) and key.startswith("_"):
+                continue
+            nested |= _party_ids_in(sub_value)
+        return nested
+    return set()

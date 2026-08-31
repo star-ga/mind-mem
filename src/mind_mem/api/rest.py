@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from contextvars import ContextVar
 from typing import Annotated, Any, cast
 
@@ -28,6 +29,7 @@ try:
 except ImportError as _err:  # pragma: no cover
     raise ImportError("mind-mem REST API requires the 'api' extra: pip install 'mind-mem[api]'") from _err
 
+from mind_mem import __version__ as _PACKAGE_VERSION
 from mind_mem.mcp.infra.constants import MCP_SCHEMA_VERSION
 from mind_mem.mcp.infra.http_auth import (
     ALLOW_UNAUTH_ENV,
@@ -67,6 +69,45 @@ def _oidc_admin_scope_names() -> tuple[str, ...]:
     return tuple(parts)
 
 
+#: Process-wide cache of OIDC providers, keyed by issuer configuration.
+#: Bounded, and holds only configuration-derived objects — nothing whose
+#: owner can go away — so it cannot pin per-request or per-thread state.
+_OIDC_PROVIDER_CACHE: dict[tuple[str, str, str, str], Any] = {}
+_OIDC_PROVIDER_LOCK = threading.Lock()
+_OIDC_PROVIDER_CACHE_MAX = 8
+
+
+def _oidc_provider(issuer: str, client_id: str, client_secret: str, audience: str) -> Any:
+    """Return the process-cached ``OIDCProvider`` for this configuration.
+
+    ``OIDCProvider`` caches the issuer's JWKS on the *instance*
+    (``self._jwks``) and its docstring promises that cache lives "for the
+    lifetime of the process" — but both call sites built a fresh provider
+    per call, so the cache was per-request and every authenticated
+    request made its own blocking 10-second-timeout HTTPS fetch to the
+    IdP. When the IdP then throttled, verification failed and the caller
+    saw a silent 401.
+
+    Keyed on the four configuration values so rotating any of them yields
+    a new provider (never a stale JWKS) rather than requiring a restart.
+    Past ``_OIDC_PROVIDER_CACHE_MAX`` distinct configurations the cache is
+    dropped wholesale: a deployment has one configuration, and a bound is
+    cheaper than an eviction policy nobody will tune.
+    """
+    from mind_mem.api.auth import OIDCConfig, OIDCProvider  # noqa: PLC0415
+
+    key = (issuer, client_id, client_secret, audience)
+    with _OIDC_PROVIDER_LOCK:
+        cached = _OIDC_PROVIDER_CACHE.get(key)
+        if cached is not None:
+            return cached
+        if len(_OIDC_PROVIDER_CACHE) >= _OIDC_PROVIDER_CACHE_MAX:
+            _OIDC_PROVIDER_CACHE.clear()
+        provider = OIDCProvider(OIDCConfig(issuer=issuer, client_id=client_id, client_secret=client_secret, audience=audience))
+        _OIDC_PROVIDER_CACHE[key] = provider
+        return provider
+
+
 def _verify_oidc_token(token: str) -> tuple[str, tuple[str, ...]] | None:
     """Validate *token* as an OIDC JWT. Returns (agent_id, scopes) or None.
 
@@ -83,19 +124,13 @@ def _verify_oidc_token(token: str) -> tuple[str, tuple[str, ...]] | None:
         # dragging in python-jose for every bearer token.
         return None
     try:
-        from mind_mem.api.auth import AuthError, OIDCConfig, OIDCProvider  # noqa: PLC0415
+        from mind_mem.api.auth import AuthError  # noqa: PLC0415
     except ImportError:
         return None
 
     client_id = os.environ.get("OIDC_CLIENT_ID", "")
     client_secret = os.environ.get("OIDC_CLIENT_SECRET", "")
-    config = OIDCConfig(
-        issuer=issuer,
-        client_id=client_id,
-        client_secret=client_secret,
-        audience=audience,
-    )
-    provider = OIDCProvider(config)
+    provider = _oidc_provider(issuer, client_id, client_secret, audience)
     try:
         claims = provider.verify(token)
     except AuthError:
@@ -190,25 +225,100 @@ def _verify_bearer(token: str | None) -> tuple[bool, str, tuple[str, ...]]:
 
 
 def _resolve_api_key_store_record(raw_key: str) -> dict | None:
-    """Verify an mmk_* API key and return its record, or None."""
+    """Verify an mmk_* API key and return its record, or None.
+
+    Propagates :class:`APIKeyStoreUnavailable` rather than folding a
+    broken store into "no such key": a configured-but-unopenable store
+    is an operator problem (503), not a bad credential (401).
+    """
     store = _get_api_key_store()
     if store is None:
         return None
     return cast(dict[str, Any] | None, store.verify(raw_key))
 
 
+class APIKeyStoreUnavailable(RuntimeError):
+    """``MIND_MEM_API_KEY_DB`` is set but the store could not be opened."""
+
+
+#: Process-wide cache of API-key stores, keyed by (db path, production).
+#: Bounded and configuration-derived; holds no per-request state.
+_API_KEY_STORE_CACHE: dict[tuple[str, bool], Any] = {}
+_API_KEY_STORE_LOCK = threading.Lock()
+_API_KEY_STORE_CACHE_MAX = 8
+
+
 def _get_api_key_store() -> Any:
-    """Lazily load the APIKeyStore if configured."""
+    """Return the process-cached ``APIKeyStore``, or ``None`` if unconfigured.
+
+    ``None`` now means exactly one thing: ``MIND_MEM_API_KEY_DB`` is
+    unset. It used to mean that *or* "the store is configured but failed
+    to open", because a bare ``except Exception`` returned ``None`` and
+    recorded nothing. ``APIKeyStore.__init__`` does real I/O —
+    ``os.makedirs`` plus a connect and ``CREATE TABLE`` — so an
+    unwritable parent directory silently 401'd every ``mmk_*`` key and
+    made ``GET /v1/admin/api_keys`` answer 501 "API key store not
+    configured (set MIND_MEM_API_KEY_DB)" while the variable held
+    exactly that path, pointing the operator away from the real cause.
+    Construction failure now raises :class:`APIKeyStoreUnavailable` and
+    is logged with the failing path and the exception type.
+
+    Also cached: the store was rebuilt (and a sqlite file opened) on
+    every key-authenticated request.
+
+    Raises:
+        APIKeyStoreUnavailable: the path is configured but unusable.
+    """
     db_path = os.environ.get("MIND_MEM_API_KEY_DB")
     if not db_path:
         return None
+    production = os.environ.get("MIND_MEM_ENV", "production") == "production"
+    key = (db_path, production)
+    with _API_KEY_STORE_LOCK:
+        cached = _API_KEY_STORE_CACHE.get(key)
+        if cached is not None:
+            return cached
     try:
         from mind_mem.api.api_keys import APIKeyStore  # noqa: PLC0415
 
-        production = os.environ.get("MIND_MEM_ENV", "production") == "production"
-        return APIKeyStore(db_path, production=production)
-    except Exception:
-        return None
+        store = APIKeyStore(db_path, production=production)
+    except Exception as exc:
+        from mind_mem.observability import get_logger as _get_logger  # noqa: PLC0415
+
+        _get_logger("rest").error(
+            "api_key_store_unavailable",
+            path=db_path,
+            error=type(exc).__name__,
+        )
+        raise APIKeyStoreUnavailable(f"cannot open API key store at {db_path!r} ({type(exc).__name__})") from exc
+    with _API_KEY_STORE_LOCK:
+        if len(_API_KEY_STORE_CACHE) >= _API_KEY_STORE_CACHE_MAX:
+            _API_KEY_STORE_CACHE.clear()
+        _API_KEY_STORE_CACHE[key] = store
+    return store
+
+
+def _require_api_key_store() -> Any:
+    """Admin-route helper: the store, or an HTTP error naming the real cause.
+
+    Splits the two states ``_get_api_key_store`` used to conflate:
+    503 when the configured store cannot be opened (with the path and
+    exception type — these routes are already behind the admin gate),
+    501 only when nothing is configured at all.
+    """
+    try:
+        store = _get_api_key_store()
+    except APIKeyStoreUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    if store is None:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="API key store not configured (set MIND_MEM_API_KEY_DB)",
+        )
+    return store
 
 
 def _has_admin_scope(token: str | None, oidc_scopes: tuple[str, ...] = ()) -> bool:
@@ -248,7 +358,12 @@ def _api_key_has_admin_scope(token: str | None) -> bool:
     if record is None:
         return False
     scopes: list[str] = record.get("scopes", [])
-    return "admin" in scopes
+    # One definition, no fallback: mind_mem.scopes has no dependencies, so a
+    # REST-only install resolves it without the MCP extra. A duplicated literal
+    # here would silently diverge the day either copy changes.
+    from ..scopes import ADMIN_SCOPES
+
+    return bool(set(scopes) & ADMIN_SCOPES)
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +384,16 @@ def _require_auth(
     deps don't propagate back to the request context, so request.state
     is the authoritative handoff.
     """
-    valid, agent_id, oidc_scopes = _verify_bearer(token)
+    try:
+        valid, agent_id, oidc_scopes = _verify_bearer(token)
+    except APIKeyStoreUnavailable as exc:
+        # The credential may well be valid; we cannot tell. 401 would
+        # blame the caller for an operator-side failure (and send them
+        # off rotating a working key).
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="API key store unavailable",
+        ) from exc
     if not valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -281,26 +405,53 @@ def _require_auth(
     return token
 
 
+def _admin_gate_is_configured() -> bool:
+    """Return True when :func:`_require_admin` must enforce admin scope.
+
+    Deliberately composed from :func:`_auth_is_configured` — the
+    predicate the startup bind gate uses — rather than restating the
+    list of mechanisms. The two *were* written out separately and
+    drifted: the bind gate counted ``MIND_MEM_API_KEY_DB`` and this one
+    did not, so an API-key-only deployment started as "authenticated,
+    bind allowed" while every admin endpoint ran with its scope check
+    skipped. Any valid low-privilege ``mmk_*`` key could then mint
+    itself an admin key through ``POST /v1/admin/api_keys``. Composing
+    the predicates makes that class of drift impossible: a mechanism
+    added to the bind gate can never go missing here.
+
+    The extra ``is not None`` terms are a fail-closed superset covering
+    present-but-empty misconfiguration (e.g. ``OIDC_ISSUER=""``), which
+    the bind gate reads as "no auth" but which must still resolve the
+    admin gate *closed*.
+    """
+    if _auth_is_configured():
+        return True
+    return (
+        _check_token() is not None
+        or os.environ.get("MIND_MEM_ADMIN_TOKEN") is not None
+        or os.environ.get("MIND_MEM_API_KEY_DB") is not None
+        or (os.environ.get("OIDC_ISSUER") is not None and os.environ.get("OIDC_AUDIENCE") is not None)
+    )
+
+
 def _require_admin(
     request: Request,
     token: Annotated[str | None, Depends(_require_auth)],
 ) -> str | None:
     """Dependency: require admin-scope token (bearer, mmk_*, or OIDC JWT).
 
-    The gate is enforced when *any* admin auth mechanism is configured:
+    The gate is enforced whenever *any* auth mechanism is configured —
     ``MIND_MEM_TOKEN`` (user-tier), ``MIND_MEM_ADMIN_TOKEN`` (static
-    admin), or OIDC (``OIDC_ISSUER`` + ``OIDC_AUDIENCE``). Using
-    ``_check_token()`` alone (MIND_MEM_TOKEN) was wrong: a deployment
-    that skips MIND_MEM_TOKEN but sets MIND_MEM_ADMIN_TOKEN would
-    silently bypass the admin check. Same bug applied pre-v3.2.1 for
-    OIDC-only deployments.
+    admin), ``MIND_MEM_API_KEY_DB`` (per-agent ``mmk_*`` keys), or OIDC
+    (``OIDC_ISSUER`` + ``OIDC_AUDIENCE``) — see
+    :func:`_admin_gate_is_configured`. Using ``_check_token()`` alone
+    (MIND_MEM_TOKEN) was wrong: a deployment that skips MIND_MEM_TOKEN
+    but sets MIND_MEM_ADMIN_TOKEN would silently bypass the admin
+    check. Same bug applied pre-v3.2.1 for OIDC-only deployments, and
+    again for API-key-only deployments until the two configuration
+    predicates were composed instead of duplicated.
     """
-    token_configured = (
-        _check_token() is not None
-        or os.environ.get("MIND_MEM_ADMIN_TOKEN") is not None
-        or (os.environ.get("OIDC_ISSUER") is not None and os.environ.get("OIDC_AUDIENCE") is not None)
-    )
-    if token_configured:
+    if _admin_gate_is_configured():
         oidc_scopes: tuple[str, ...] = getattr(request.state, "oidc_scopes", ())
         is_admin = _has_admin_scope(token, oidc_scopes=oidc_scopes) or _api_key_has_admin_scope(token)
         if not is_admin:
@@ -311,10 +462,34 @@ def _require_admin(
     return token
 
 
-def _rate_limit(request: Request, token: Annotated[str | None, Depends(_require_auth)]) -> None:
-    """Dependency: enforce per-client sliding-window rate limit."""
-    client_id = _client_id_from_token(token) or request.client.host if request.client else "unknown"
-    limiter: SlidingWindowRateLimiter = _get_client_rate_limiter(client_id)
+def _rate_limit_bucket(request: Request, token: str | None) -> str:
+    """Pick the sliding-window bucket key for this request.
+
+    A token identifies a client better than an address does (one client
+    behind a proxy still gets its own bucket), so it wins when present.
+    With no token there is nothing client-specific in
+    :func:`_client_id_from_token` — it returns the constant
+    ``"anonymous"`` — so the *address* is the only per-client signal left
+    and must be used instead of collapsing every caller into one bucket.
+
+    The old expression, ``_client_id_from_token(token) or
+    request.client.host if request.client else "unknown"``, parsed as
+    ``(_client_id_from_token(token) or request.client.host) if
+    request.client else "unknown"``: `or` binds tighter than the
+    conditional, and its left arm is never falsy, so the host branch was
+    unreachable. Under
+    ``MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST=1`` every caller shared
+    the ``"anonymous"`` bucket, and one client's burst returned 429 to
+    all the others — the starvation per-client buckets exist to prevent.
+    """
+    if token is not None:
+        return _client_id_from_token(token)
+    return request.client.host if request.client else "unknown"
+
+
+def _enforce_rate_limit(bucket: str) -> None:
+    """Raise 429 when *bucket* is over its sliding window."""
+    limiter: SlidingWindowRateLimiter = _get_client_rate_limiter(bucket)
     allowed, retry_after = limiter.allow()
     if not allowed:
         raise HTTPException(
@@ -322,6 +497,27 @@ def _rate_limit(request: Request, token: Annotated[str | None, Depends(_require_
             detail="Rate limit exceeded",
             headers={"Retry-After": str(int(retry_after + 1))},
         )
+
+
+def _rate_limit(request: Request, token: Annotated[str | None, Depends(_require_auth)]) -> None:
+    """Dependency: enforce per-client sliding-window rate limit (auth required)."""
+    _enforce_rate_limit(_rate_limit_bucket(request, token))
+
+
+def _public_rate_limit(
+    request: Request,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
+) -> None:
+    """Rate limit for routes that must stay reachable without a token.
+
+    Same sliding window and same bucket rule as :func:`_rate_limit`, but
+    it does not depend on :func:`_require_auth`, so an unauthenticated
+    caller gets a 429 rather than a 401. Used by the liveness endpoint
+    and by the OIDC callback, which is how a caller *becomes*
+    authenticated and therefore cannot require a validated token.
+    """
+    token = str(credentials.credentials) if credentials is not None else None
+    _enforce_rate_limit(_rate_limit_bucket(request, token))
 
 
 # ---------------------------------------------------------------------------
@@ -486,7 +682,12 @@ def create_app(workspace: str | None = None) -> FastAPI:
     application = FastAPI(
         title="mind-mem REST API",
         description="REST API that mirrors the mind-mem MCP tool surface.",
-        version="3.2.1",
+        # The package version, not a hand-maintained constant: three
+        # different versions used to be advertised at once (this string,
+        # the health endpoint's "3.2.0", and the real package version),
+        # so a client capability-gating on either number negotiated
+        # against a value frozen years before the code it was talking to.
+        version=_PACKAGE_VERSION,
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
@@ -597,24 +798,48 @@ def create_app(workspace: str | None = None) -> FastAPI:
         "/v1/health",
         tags=["observability"],
         summary="Workspace health and schema version",
+        # Deliberately reachable without a token — this is the liveness
+        # probe, and an orchestrator that cannot call it restarts a
+        # healthy server. It is rate limited by source address so it
+        # cannot be used as a free amplifier, and the parts of the body
+        # that describe the host (the workspace path and whether it
+        # exists) are withheld from unauthenticated callers.
+        dependencies=[Depends(_public_rate_limit)],
     )
-    def health() -> JSONResponse:
+    def health(
+        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
+    ) -> JSONResponse:
         ws = _active_workspace(workspace)
-        return JSONResponse(
-            {
-                "_schema_version": MCP_SCHEMA_VERSION,
-                "status": "ok",
-                "workspace": ws,
-                "workspace_exists": os.path.isdir(ws),
-                "schema_version": CURRENT_SCHEMA_VERSION,
-                "api_version": "3.2.0",
-            }
-        )
+        body: dict[str, Any] = {
+            "_schema_version": MCP_SCHEMA_VERSION,
+            "status": "ok",
+            "schema_version": CURRENT_SCHEMA_VERSION,
+            # The real package version. This was a hardcoded "3.2.0" that
+            # had not moved since that release, so it could not even
+            # distinguish a pre-v3.7.0 fail-OPEN server from the current
+            # fail-closed one — while /openapi.json advertised a third,
+            # different number for the same app.
+            "api_version": _PACKAGE_VERSION,
+        }
+        token = str(credentials.credentials) if credentials is not None else None
+        try:
+            authenticated, _agent_id, _scopes = _verify_bearer(token)
+        except APIKeyStoreUnavailable:
+            authenticated = False
+        if authenticated:
+            body["workspace"] = ws
+            body["workspace_exists"] = os.path.isdir(ws)
+        return JSONResponse(body)
 
     @application.get(
         "/v1/metrics",
         tags=["observability"],
         summary="Prometheus metrics exposition (requires prometheus_client)",
+        # The default Prometheus registry includes `mcp_http_auth_failures`
+        # — i.e. whether credential guessing is underway — plus workspace
+        # and traffic shape. Unlike liveness, nothing needs this
+        # anonymously, so it takes the authenticated limiter.
+        dependencies=[Depends(_rate_limit)],
     )
     def metrics_endpoint() -> PlainTextResponse:
         try:
@@ -746,6 +971,13 @@ def create_app(workspace: str | None = None) -> FastAPI:
         "/v1/auth/oidc/callback",
         tags=["auth"],
         summary="Exchange an OIDC access_token for a validated session",
+        # This route intentionally has no auth dependency (it is how a
+        # caller *becomes* authenticated), which made it the one endpoint
+        # an anonymous party could use to drive an outbound IdP request
+        # per HTTP request they sent. It is rate limited per client
+        # instead, by source address — `_public_rate_limit` does not
+        # require a token.
+        dependencies=[Depends(_public_rate_limit)],
     )
     def oidc_callback(
         credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
@@ -774,15 +1006,9 @@ def create_app(workspace: str | None = None) -> FastAPI:
             )
 
         try:
-            from mind_mem.api.auth import AuthError, OIDCConfig, OIDCProvider  # noqa: PLC0415
+            from mind_mem.api.auth import AuthError  # noqa: PLC0415
 
-            config = OIDCConfig(
-                issuer=oidc_issuer,
-                client_id=oidc_client_id,
-                client_secret=oidc_client_secret,
-                audience=oidc_audience,
-            )
-            provider = OIDCProvider(config)
+            provider = _oidc_provider(oidc_issuer, oidc_client_id, oidc_client_secret, oidc_audience)
             claims = provider.verify(credentials.credentials)
             scopes = provider.extract_scopes(claims)
             agent_id = claims.get("sub", "oidc-user")
@@ -809,12 +1035,7 @@ def create_app(workspace: str | None = None) -> FastAPI:
         body: CreateAPIKeyRequest,
         _token: Annotated[str | None, Depends(_require_admin)],
     ) -> JSONResponse:
-        store = _get_api_key_store()
-        if store is None:
-            raise HTTPException(
-                status_code=status.HTTP_501_NOT_IMPLEMENTED,
-                detail="API key store not configured (set MIND_MEM_API_KEY_DB)",
-            )
+        store = _require_api_key_store()
         raw_key = store.create(
             agent_id=body.agent_id,
             scopes=body.scopes,
@@ -834,12 +1055,7 @@ def create_app(workspace: str | None = None) -> FastAPI:
         _token: Annotated[str | None, Depends(_require_admin)],
         agent_id: str = "",
     ) -> JSONResponse:
-        store = _get_api_key_store()
-        if store is None:
-            raise HTTPException(
-                status_code=status.HTTP_501_NOT_IMPLEMENTED,
-                detail="API key store not configured (set MIND_MEM_API_KEY_DB)",
-            )
+        store = _require_api_key_store()
         keys = store.list_keys(agent_id=agent_id)
         return JSONResponse({"keys": keys})
 
@@ -852,12 +1068,7 @@ def create_app(workspace: str | None = None) -> FastAPI:
         key_id: str,
         _token: Annotated[str | None, Depends(_require_admin)],
     ) -> JSONResponse:
-        store = _get_api_key_store()
-        if store is None:
-            raise HTTPException(
-                status_code=status.HTTP_501_NOT_IMPLEMENTED,
-                detail="API key store not configured (set MIND_MEM_API_KEY_DB)",
-            )
+        store = _require_api_key_store()
         revoked = store.revoke(key_id)
         if not revoked:
             raise HTTPException(
@@ -875,12 +1086,7 @@ def create_app(workspace: str | None = None) -> FastAPI:
         key_id: str,
         _token: Annotated[str | None, Depends(_require_admin)],
     ) -> JSONResponse:
-        store = _get_api_key_store()
-        if store is None:
-            raise HTTPException(
-                status_code=status.HTTP_501_NOT_IMPLEMENTED,
-                detail="API key store not configured (set MIND_MEM_API_KEY_DB)",
-            )
+        store = _require_api_key_store()
         try:
             new_key = store.rotate(key_id)
         except KeyError:
@@ -908,10 +1114,30 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 def _auth_is_configured() -> bool:
-    """Return True when at least one authentication mechanism is set."""
-    if _check_token() is not None:
+    """Return True when at least one authentication mechanism is *usable*.
+
+    Every test here is a truthiness test, matching the code that turns
+    these variables into credentials: ``http_auth._build_http_auth_tokens``
+    registers a token only ``if user_token:`` / ``if admin_token:``, and
+    ``verify_token`` treats an empty ``MIND_MEM_TOKEN`` as no token at
+    all.
+
+    This gate used to test *presence* (``is not None``) for the two
+    static tokens, so ``MIND_MEM_ADMIN_TOKEN=""`` — exported but empty —
+    certified a routable bind as authenticated while no credential
+    existed: :func:`_enforce_fail_closed` returned without raising and
+    every subsequent request 401'd, because the constant-time compare
+    could only match an empty bearer that ``HTTPBearer`` never produces.
+    A gate must not certify a property it did not check, whichever
+    direction the mismatch happens to fail in today.
+
+    Note that :func:`_admin_gate_is_configured` deliberately keeps its
+    extra ``is not None`` terms: that one is a fail-closed *superset*,
+    so present-but-empty must still resolve the admin gate closed.
+    """
+    if _check_token():
         return True
-    if os.environ.get("MIND_MEM_ADMIN_TOKEN") is not None:
+    if os.environ.get("MIND_MEM_ADMIN_TOKEN"):
         return True
     if os.environ.get("MIND_MEM_API_KEY_DB"):
         return True

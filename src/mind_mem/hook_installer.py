@@ -1019,7 +1019,13 @@ def install_mcp_config(
     if spec.mcp_fmt in _MCP_WRITERS_JSON:
         writer = _MCP_WRITERS_JSON[spec.mcp_fmt]
         existing: dict = {}
-        if os.path.isfile(path) and not force:
+        # Always load the existing config, `force` included — same rule
+        # as install_config(). `force` means "write even if nothing
+        # changed", never "discard every other key in the file". These
+        # MCP files are the client's whole config (Zed's settings.json
+        # holds themes/keymaps/languages; a shared mcp.json holds other
+        # servers), so loading {} here silently truncates all of it.
+        if os.path.isfile(path):
             try:
                 with open(path, "r", encoding="utf-8") as fh:
                     loaded = json.load(fh)
@@ -1034,7 +1040,11 @@ def install_mcp_config(
     elif spec.mcp_fmt in _MCP_WRITERS_TEXT:
         writer = _MCP_WRITERS_TEXT[spec.mcp_fmt]
         existing_text = ""
-        if os.path.isfile(path) and not force:
+        # Same rule as the JSON branch above: `force` must not blank the
+        # file. Both TOML writers already replace only the mind-mem
+        # section/entry and preserve everything else, so handing them the
+        # real text is both safe and the only non-destructive option.
+        if os.path.isfile(path):
             try:
                 with open(path, "r", encoding="utf-8") as fh:
                     existing_text = fh.read()

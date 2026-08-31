@@ -50,6 +50,7 @@ from enum import Enum
 from typing import Union
 from uuid import uuid4
 
+from .admission import GovernanceBypassError
 from .observability import get_logger, metrics
 from .preimage import preimage
 from .q1616 import hex_q16_16
@@ -58,6 +59,30 @@ _log = get_logger("evidence_objects")
 
 # Genesis seed — matches audit_chain.py convention
 _GENESIS_HASH = "0" * 64
+
+
+# ---------------------------------------------------------------------------
+# Errors
+# ---------------------------------------------------------------------------
+
+
+class EvidenceChainCompromisedError(GovernanceBypassError):
+    """A chain whose stored history did not load intact refuses to be written.
+
+    :meth:`EvidenceChain._load_from_file` stops at the first record it
+    cannot trust and leaves the in-memory chain **empty** — deliberately,
+    so no caller mistakes a verified prefix for the whole history. That
+    emptiness is exactly what makes an append catastrophic: the next
+    record would take ``_GENESIS_HASH`` as its ``previous_hash`` and be
+    written after the untrusted tail, so the file holds two chains rooted
+    at genesis and the whole history stops verifying rather than merely
+    its tail — the fork ``governance_gate.evict_gate`` documents as the
+    thing that must not happen.
+
+    A subclass of :class:`~mind_mem.admission.GovernanceBypassError`
+    because that is what a refused governed write is; the gate's existing
+    callers already abort on it.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -269,6 +294,14 @@ class EvidenceChain:
     the chain is persisted as JSONL — one JSON object per line.  On
     initialisation with an existing file the chain is loaded and verified.
 
+    A chain whose stored history does not load intact is **frozen**:
+    :meth:`create` and :meth:`export_jsonl` raise
+    :class:`EvidenceChainCompromisedError` instead of operating on the
+    empty in-memory chain a failed load leaves behind.  Appending would
+    fork the ledger at genesis; exporting would present that emptiness as
+    the history.  Reads still work and :meth:`verify_chain` still reports
+    the failure.
+
     Args:
         store_path: Optional path to a JSONL file for persistence.
                     The directory is created if it does not exist.
@@ -278,6 +311,7 @@ class EvidenceChain:
         self._store_path: str | None = store_path
         self._entries: list[EvidenceObject] = []
         self._integrity_compromised: bool = False
+        self._load_failure: str | None = None
         # Serialize concurrent create() calls so the in-memory chain and the
         # on-disk JSONL cannot interleave entries or diverge from each other.
         self._lock = threading.RLock()
@@ -318,8 +352,19 @@ class EvidenceChain:
             The newly created and appended EvidenceObject.
 
         Raises:
+            EvidenceChainCompromisedError: If the stored chain did not load
+                intact. Appending is refused rather than forking the ledger.
             ValueError: If confidence is outside [0.0, 1.0].
         """
+        # Refuse BEFORE validating arguments: a chain that could not be read
+        # in full has no trustworthy tail to link to, so there is no such
+        # thing as a well-formed append to it. `_entries` is empty after a
+        # failed load, so an unguarded append would silently restart the
+        # chain at `_GENESIS_HASH` behind the untrusted records already on
+        # disk. verify_chain() alone is not a guard — nothing on the write
+        # path consults it.
+        self._raise_if_compromised("append to")
+
         if not 0.0 <= confidence <= 1.0:
             raise ValueError(f"confidence must be in [0.0, 1.0], got {confidence!r}")
 
@@ -379,6 +424,20 @@ class EvidenceChain:
         """Return the number of entries currently in the chain."""
         with self._lock:
             return len(self._entries)
+
+    @property
+    def integrity_compromised(self) -> bool:
+        """True when the stored chain did not load intact.
+
+        A frozen chain: reads are served from whatever loaded, but
+        :meth:`create` and :meth:`export_jsonl` refuse.
+        """
+        return self._integrity_compromised
+
+    @property
+    def load_failure(self) -> str | None:
+        """Why the stored chain could not be loaded in full, or None."""
+        return self._load_failure
 
     def verify(self, evidence: EvidenceObject) -> bool:
         """Verify that an evidence object's self-hash matches its fields.
@@ -508,7 +567,14 @@ class EvidenceChain:
 
         Args:
             path: Output file path.
+
+        Raises:
+            EvidenceChainCompromisedError: If the stored chain did not load
+                intact — the in-memory chain is then empty, and writing it
+                out would publish that emptiness as the history (and would
+                truncate the store outright were *path* the store itself).
         """
+        self._raise_if_compromised("export")
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
             for ev in self._entries:
@@ -520,6 +586,11 @@ class EvidenceChain:
 
         Each record is verified for self-hash integrity and chain linkage.
         Raises ValueError if any record fails verification (tamper detected).
+
+        A successful import does **not** unfreeze a chain that was frozen
+        by a failed load: ``store_path`` still points at the file that
+        could not be read, and that file — not the imported one — is what
+        :meth:`create` would append to. Repair the store instead.
 
         Args:
             path: JSONL file path to import.
@@ -556,6 +627,29 @@ class EvidenceChain:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _mark_compromised(self, reason: str) -> None:
+        """Freeze the chain and record why the stored history was rejected.
+
+        Called from :meth:`_load_from_file` only, before it abandons the
+        load. Every reason — tamper, unparseable line, broken linkage, or
+        a size/entry cap — means the same thing for the write path: the
+        real tail of the chain is unknown, so nothing may be appended.
+        """
+        self._integrity_compromised = True
+        self._load_failure = reason
+        metrics.inc("evidence_load_integrity_compromised")
+
+    def _raise_if_compromised(self, operation: str) -> None:
+        """Refuse *operation* when the stored chain did not load intact."""
+        if self._integrity_compromised:
+            raise EvidenceChainCompromisedError(
+                f"EvidenceChain refuses to {operation} {self._store_path!r}: "
+                f"its stored history did not load intact ({self._load_failure}). "
+                "The in-memory chain is empty, so proceeding would fork the "
+                "ledger at the genesis hash and invalidate the whole audit "
+                "history. Repair or archive the stored chain first."
+            )
 
     def _append_to_file(self, ev: EvidenceObject) -> None:
         """Append a single evidence record to the JSONL store file.
@@ -594,7 +688,7 @@ class EvidenceChain:
                         cap=self._MAX_LOAD_ENTRIES,
                         path=path,
                     )
-                    self._integrity_compromised = True
+                    self._mark_compromised(f"entry cap of {self._MAX_LOAD_ENTRIES} exceeded at line {line_num}")
                     return
                 if len(line.encode("utf-8")) > self._MAX_LOAD_LINE_BYTES:
                     _log.warning(
@@ -602,7 +696,7 @@ class EvidenceChain:
                         line=line_num,
                         cap=self._MAX_LOAD_LINE_BYTES,
                     )
-                    self._integrity_compromised = True
+                    self._mark_compromised(f"line {line_num} exceeds the {self._MAX_LOAD_LINE_BYTES}-byte line cap")
                     return
                 stripped = line.strip()
                 if not stripped:
@@ -611,7 +705,7 @@ class EvidenceChain:
                     ev = EvidenceObject.from_dict(json.loads(stripped))
                 except (json.JSONDecodeError, KeyError, ValueError) as exc:
                     _log.warning("evidence_load_parse_error", line=line_num, error=str(exc))
-                    self._integrity_compromised = True
+                    self._mark_compromised(f"line {line_num} is not a readable evidence record")
                     return
                 if not self.verify(ev):
                     _log.warning(
@@ -619,7 +713,7 @@ class EvidenceChain:
                         line=line_num,
                         evidence_id=getattr(ev, "evidence_id", "?"),
                     )
-                    self._integrity_compromised = True
+                    self._mark_compromised(f"hash mismatch at line {line_num} — record was altered")
                     return
                 if previous_hash is not None and ev.previous_hash != previous_hash:
                     _log.warning(
@@ -629,7 +723,7 @@ class EvidenceChain:
                         expected=previous_hash,
                         got=ev.previous_hash,
                     )
-                    self._integrity_compromised = True
+                    self._mark_compromised(f"chain linkage breaks at line {line_num}")
                     return
                 previous_hash = ev.evidence_hash
                 loaded.append(ev)

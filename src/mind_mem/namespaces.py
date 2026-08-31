@@ -36,6 +36,7 @@ Usage:
     ns = NamespaceManager(workspace, agent_id="coder-1")
     ns.can_write("agents/coder-1/decisions/DECISIONS.md")  # True
     ns.can_write("shared/decisions/DECISIONS.md")            # False (read-only)
+    ns.can_write("agents/coder-1/../shared/decisions/D.md")  # False (".." is resolved first)
     ns.resolve_paths("decisions/DECISIONS.md")               # Returns paths in all accessible namespaces
 """
 
@@ -44,6 +45,7 @@ from __future__ import annotations
 import fnmatch
 import json
 import os
+import posixpath
 import re
 from typing import Any
 
@@ -69,6 +71,22 @@ class InvalidAgentIdError(ValueError):
     escape the workspace via path traversal."""
 
 
+def _validate_agent_id(agent_id: str) -> str:
+    """Reject any agent_id that could escape ``<workspace>/agents/``.
+
+    The constructor is not the only entry point: ``init_agent`` takes a
+    *second*, independent agent_id and joins it straight onto the workspace,
+    and ``NamespaceManager(ws)`` (agent_id=None) never runs the regex at all —
+    so a caller could construct an unvalidated manager and then create the
+    five NAMESPACE_DIRS anywhere on disk. Both entry points now enforce the
+    same predicate, in one place, so they cannot drift apart again.
+    """
+    if not isinstance(agent_id, str) or not _AGENT_ID_RE.fullmatch(agent_id):
+        # Don't echo the raw value back — it may contain control bytes.
+        raise InvalidAgentIdError(f"agent_id must match {_AGENT_ID_RE.pattern} (length {len(agent_id)} rejected)")
+    return agent_id
+
+
 # Standard directories that get replicated per namespace
 NAMESPACE_DIRS = [
     "decisions",
@@ -90,6 +108,38 @@ DEFAULT_ACL = {
 }
 
 
+def _normalize_rel_path(path: str) -> str | None:
+    """Normalise a workspace-relative path for ACL matching.
+
+    Folds ``\\`` to ``/`` and resolves ``.`` / ``..`` components textually —
+    producing the same string the filesystem acts on once the path is
+    joined to the workspace root and normalised.
+
+    Returns ``None`` when the path cannot name anything inside the
+    workspace, so callers fail closed instead of prefix-matching a string
+    that resolves somewhere else entirely:
+
+    * a NUL byte (unrepresentable as a filename);
+    * a ``..`` sequence that climbs above the workspace root;
+    * a leading separator — every caller joins the result onto the
+      workspace with ``os.path.join``, and an absolute operand there
+      *discards* the workspace instead of being relative to it.
+    """
+    if "\x00" in path:
+        return None
+    cleaned = path.replace("\\", "/")
+    if cleaned.startswith("/"):
+        return None
+    if not cleaned:
+        return ""
+    normalized = posixpath.normpath(cleaned)
+    if normalized == ".":
+        return ""
+    if normalized == ".." or normalized.startswith("../"):
+        return None
+    return normalized
+
+
 class NamespaceManager:
     """Manages multi-agent namespaces and access control.
 
@@ -99,9 +149,8 @@ class NamespaceManager:
     """
 
     def __init__(self, workspace: str, agent_id: str | None = None) -> None:
-        if agent_id is not None and not _AGENT_ID_RE.fullmatch(agent_id):
-            # Don't echo the raw value back — it may contain control bytes.
-            raise InvalidAgentIdError(f"agent_id must match {_AGENT_ID_RE.pattern} (length {len(agent_id)} rejected)")
+        if agent_id is not None:
+            _validate_agent_id(agent_id)
         self.workspace = os.path.abspath(workspace)
         self.agent_id = agent_id
         self._acl = self._load_acl()
@@ -153,23 +202,67 @@ class NamespaceManager:
     def can_read(self, rel_path: str) -> bool:
         """Check if current agent can read a path."""
         if self.agent_id is None:
-            return True
+            # Workspace-level access is unrestricted *within* the workspace;
+            # it still cannot bless a path that climbs out of it.
+            return _normalize_rel_path(rel_path) is not None
         read_ns = self._agent_policy.get("read", [])
         return self._path_matches_namespaces(rel_path, read_ns)
 
     def can_write(self, rel_path: str) -> bool:
         """Check if current agent can write to a path."""
-        if self.agent_id is None:
+        if not self._escapes_via_symlink(rel_path):
+            if self.agent_id is None:
+                return _normalize_rel_path(rel_path) is not None
+            write_ns = self._agent_policy.get("write", [])
+            return self._path_matches_namespaces(rel_path, write_ns)
+        return False
+
+    def _escapes_via_symlink(self, rel_path: str) -> bool:
+        """True when *rel_path* resolves outside the workspace through a link.
+
+        Normalising the string closes ``..`` traversal, but it is still a
+        LEXICAL answer, and every downstream operation (``open``, ``copy2``,
+        ``makedirs``) follows symlinks. An agent that can create a link inside
+        its own namespace could therefore name a path this ACL blesses and the
+        filesystem resolves somewhere else entirely — measured: a link under
+        ``agents/coder-1/`` made ``can_write`` return True for a file outside
+        the workspace.
+
+        ``realpath`` is the same question the filesystem will answer. It is
+        asked only after normalisation, and a path whose parents do not exist
+        yet still resolves correctly (``realpath`` is purely lexical for
+        missing components), so this does not reject legitimate new files.
+        """
+        normalised = _normalize_rel_path(rel_path)
+        if normalised is None:
             return True
-        write_ns = self._agent_policy.get("write", [])
-        return self._path_matches_namespaces(rel_path, write_ns)
+        root = os.path.realpath(self.workspace)
+        target = os.path.realpath(os.path.join(self.workspace, normalised))
+        return target != root and not target.startswith(root + os.sep)
 
     def _path_matches_namespaces(self, rel_path: str, namespaces: list[str]) -> bool:
-        """Check if a relative path falls under any of the given namespaces."""
-        normalized = rel_path.replace("\\", "/").lstrip("/")
+        """Check if a relative path falls under any of the given namespaces.
+
+        ``rel_path`` is normalised before matching, so the ACL answers the
+        same question the filesystem will. Without that step a plain
+        ``startswith`` test blesses ``agents/coder-1/../../shared/x`` as
+        living under ``agents/coder-1`` while every downstream resolver
+        (``os.path.normpath`` / ``os.path.realpath``) reads it as
+        ``shared/x`` — the write gate and the containment gate would be
+        answering two different questions. A path that climbs above the
+        workspace root matches nothing.
+        """
+        normalized = _normalize_rel_path(rel_path)
+        if normalized is None:
+            _log.warning("acl_path_escapes_workspace", agent=self.agent_id)
+            return False
         for ns in namespaces:
-            ns_normalized = ns.replace("\\", "/").rstrip("/")
-            if normalized.startswith(ns_normalized + "/") or normalized == ns_normalized:
+            ns_normalized = _normalize_rel_path(ns.rstrip("/"))
+            if not ns_normalized:
+                # Unusable namespace entry (empty, "." or escaping): grants
+                # nothing rather than everything.
+                continue
+            if normalized == ns_normalized or normalized.startswith(ns_normalized + "/"):
                 return True
             # Support glob patterns like "agents/*"
             if "*" in ns_normalized:
@@ -212,9 +305,19 @@ class NamespaceManager:
         return paths
 
     def init_namespace(self, namespace: str) -> list[str]:
-        """Initialize a namespace directory structure. Returns list of created dirs."""
+        """Initialize a namespace directory structure. Returns list of created dirs.
+
+        Raises:
+            ValueError: if ``namespace`` does not name a location inside the
+                workspace. ``os.makedirs`` happily follows ``..`` out of the
+                tree, so containment is checked before anything is created
+                rather than after.
+        """
+        normalized = _normalize_rel_path(namespace)
+        if not normalized:
+            raise ValueError("namespace must name a non-empty path inside the workspace")
         created = []
-        ns_root = os.path.join(self.workspace, namespace)
+        ns_root = os.path.join(self.workspace, normalized)
         for d in NAMESPACE_DIRS:
             path = os.path.join(ns_root, d)
             if not os.path.isdir(path):
@@ -223,7 +326,15 @@ class NamespaceManager:
         return created
 
     def init_agent(self, agent_id: str) -> list[str]:
-        """Initialize namespace for a new agent. Returns created dirs."""
+        """Initialize namespace for a new agent. Returns created dirs.
+
+        Raises:
+            InvalidAgentIdError: if ``agent_id`` is not a flat identifier. This
+                is a *different* value from ``self.agent_id`` and is validated
+                on its own, because a workspace-level manager (agent_id=None)
+                never ran the constructor's guard.
+        """
+        _validate_agent_id(agent_id)
         return self.init_namespace(f"agents/{agent_id}")
 
     def list_agents(self) -> list[str]:

@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+from collections.abc import Mapping
 from typing import Any, Iterable
 
 from ..block_provenance import attach_provenance
@@ -129,16 +131,65 @@ def load_source(system: str, path: str) -> Any:
 # ---------------------------------------------------------------------------
 
 
+# Every codepoint ``str.splitlines`` treats as a line break, plus CR.
+# The corpus is written as text and read back through Python's universal
+# newline translation, so a bare CR in a field value becomes a real line
+# on the way back in — CR is as dangerous as LF here, and the exotic
+# breaks are neutralised for any consumer that splits with ``splitlines``.
+_LINE_BREAKS = "\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029"
+_BREAK_RUN_RE = re.compile(f"[{_LINE_BREAKS}]+")
+
+
+def _as_field_value(text: str) -> str:
+    """Render *text* as ONE physical line of a Markdown block.
+
+    A single-line field is emitted verbatim by
+    ``block_store._render_block``, which neutralises only ``"\n["``. Any
+    other line break in the value therefore lands in the corpus as a
+    real, unindented line, and ``block_parser`` reads a line shaped like
+    ``Key: value`` back as a *field* — last one wins. Foreign dump
+    content reaching such a field could rewrite ``Status`` and walk
+    straight out of quarantine, so every break is flattened to a space
+    before the value is ever rendered.
+
+    Mirrors ``block_provenance.sanitize_provenance_value``, which already
+    does this for the provenance fields, and ``_shared.flatten_metadata``,
+    which already does it for parsed metadata values.
+    """
+    return " ".join(_BREAK_RUN_RE.sub(" ", text).split())
+
+
 def _as_block_value(text: str) -> str:
-    """Render *text* so the Markdown block parser round-trips it.
+    """Render *text* as a multi-line block value the parser reads back safely.
 
     ``block_parser`` only re-attaches a continuation line when it is
     indented by two spaces and does not start a list item, so every line
     after the first is indented and a leading ``-`` bullet is rewritten
     to ``*``. Indentation also guarantees no continuation line can be
     read back as a ``Key: value`` field or an ``[ID]`` block header.
+
+    This is deliberately **not** a round trip, and the format is what
+    forbids one. Three transforms are lossy and none is reversible:
+
+    * blank lines are dropped — the block format cannot represent one
+      inside a value at all (a blank line ends the block);
+    * a leading ``-`` becomes ``*`` — a ``-`` would be re-read as a new
+      list item rather than a continuation;
+    * per-line indentation is stripped on the way in (``.strip()``) and
+      again on the way out (``block_parser`` removes the two-space
+      continuation prefix), so an indented code block comes back flush
+      left.
+
+    So ``parse_file(render(x))`` yields a normalised form of *x*, not
+    *x*. Nothing recomputes a digest from the rendered value —
+    ``ContentHash`` is :func:`_record_digest` over the *record*
+    (system + external_id + text), taken before this function runs — so
+    the losses do not break id stability or idempotent re-import; they
+    cost the corpus copy its paragraph structure and its code-block
+    indentation.
     """
-    lines = text.split("\n")
+    # Split on every break the round-trip can resurrect, not just "\n".
+    lines = _BREAK_RUN_RE.split(text)
     out = [lines[0].strip()]
     for line in lines[1:]:
         stripped = line.strip()
@@ -190,14 +241,19 @@ def build_import_block(record: ImportRecord, *, batch: str = "") -> dict[str, An
             audit-chain entry — that wrote it. Omitted when empty.
     """
     token = provenance_token(record.system)
+    # Every value below that carries dump content is rendered through
+    # _as_field_value: these are single-line fields, and an un-flattened
+    # break in one of them injects a sibling `Key: value` line that the
+    # parser reads back as a real field (last one wins) — including a
+    # second `Status:` that would silently lift the quarantine.
     block: dict[str, Any] = {
         "_id": block_id_for(record),
         "Type": IMPORT_BLOCK_TYPE,
         "Statement": _as_block_value(record.text),
         "Status": QUARANTINE_STATUS,
         TIER_FIELD: QUARANTINE_TIER,
-        "Source": token,
-        "ExternalId": record.external_id,
+        "Source": _as_field_value(token),
+        "ExternalId": _as_field_value(record.external_id),
         "ContentHash": _record_digest(record),
     }
     if batch:
@@ -206,14 +262,14 @@ def build_import_block(record: ImportRecord, *, batch: str = "") -> dict[str, An
     if date:
         block["Date"] = date
     if record.created_at:
-        block["Timestamp"] = record.created_at
+        block["Timestamp"] = _as_field_value(record.created_at)
     if record.metadata:
-        block["Metadata"] = "; ".join(f"{k}={v}" for k, v in sorted(record.metadata.items()))
+        block["Metadata"] = "; ".join(f"{_as_field_value(str(k))}={_as_field_value(str(v))}" for k, v in sorted(record.metadata.items()))
     if record.links:
         # Link targets are kept as a real, readable field (never dropped
         # on the floor). Rendered bare rather than as `[[name]]` so the
         # block parser cannot mistake the value for an inline list.
-        block["Links"] = ", ".join(record.links)
+        block["Links"] = ", ".join(_as_field_value(str(link)) for link in record.links)
     return attach_provenance(
         block,
         actor_id=record.system,
@@ -475,23 +531,75 @@ def run_import(
     return result
 
 
-def _sanitized(record: ImportRecord, workspace: str) -> ImportRecord:
-    """Strip invisible codepoints from record text (prompt-injection channel).
+def _text_size(value: Any) -> int:
+    """Total characters of every string inside a JSON-shaped value.
 
-    Config-gated + default ON via ``ingest.sanitize_codepoints``, exactly
-    as :mod:`mind_mem.inbox` does for folder ingestion. Returns a NEW
-    record; the input is never mutated.
+    Used only to report how many codepoints sanitization removed, so a
+    strip on a non-``text`` field is logged rather than silent.
     """
-    from ..codepoint_sanitize import sanitize_text_for_ingest
+    if isinstance(value, str):
+        return len(value)
+    if isinstance(value, Mapping):
+        return sum(_text_size(k) + _text_size(v) for k, v in value.items())
+    if isinstance(value, (list, tuple)):
+        return sum(_text_size(item) for item in value)
+    return 0
 
-    clean = sanitize_text_for_ingest(record.text, workspace, source=f"import:{record.system}:{record.external_id}")
-    if clean == record.text:
+
+def _sanitized(record: ImportRecord, workspace: str) -> ImportRecord:
+    """Strip invisible codepoints from every untrusted field of *record*.
+
+    Config-gated + default ON via ``ingest.sanitize_codepoints``. Returns
+    a NEW record; the input is never mutated.
+
+    ``text`` is not the whole untrusted surface. :mod:`mind_mem.inbox`
+    sanitizes a whole file body because that body *is* everything it
+    ingests; an ``ImportRecord`` splits the same foreign dump across five
+    fields, and ``metadata`` / ``links`` / ``external_id`` /
+    ``created_at`` are rendered into the block's ``Metadata`` / ``Links``
+    / ``ExternalId`` / ``Timestamp`` fields. ``_as_field_value`` only
+    collapses whitespace there, and Cf codepoints — zero-width spaces,
+    bidi overrides, Unicode tag characters — are not whitespace, so they
+    reached the corpus verbatim while the ``Statement`` beside them was
+    clean. :func:`~mind_mem.codepoint_sanitize.sanitize_structure` (the
+    same call ``ingestion_pipeline`` already makes) covers the nested
+    shapes.
+    """
+    from ..codepoint_sanitize import (
+        sanitize_enabled_for_workspace,
+        sanitize_structure,
+        sanitize_text_for_ingest,
+    )
+
+    if not sanitize_enabled_for_workspace(workspace):
+        return record
+
+    source = f"import:{record.system}:{record.external_id}"
+    clean_text = sanitize_text_for_ingest(record.text, workspace, source=source)
+    original_fields: dict[str, Any] = {
+        "external_id": record.external_id,
+        "created_at": record.created_at,
+        "metadata": dict(record.metadata),
+        "links": list(record.links),
+    }
+    clean_fields: dict[str, Any] = sanitize_structure(original_fields)
+
+    # sanitize_text_for_ingest already logged the ``text`` strip; report
+    # the other fields separately so neither channel goes unrecorded.
+    removed = _text_size(original_fields) - _text_size(clean_fields)
+    if removed:
+        _log.warning(
+            "invisible_codepoints_stripped",
+            extra={"removed": removed, "source": f"{source}:fields"},
+        )
+
+    if clean_text == record.text and not removed and clean_fields == original_fields:
         return record
     return ImportRecord(
         system=record.system,
-        external_id=record.external_id,
-        text=clean,
-        metadata=record.metadata,
-        created_at=record.created_at,
-        links=record.links,
+        external_id=str(clean_fields["external_id"]),
+        text=clean_text,
+        metadata=clean_fields["metadata"],
+        created_at=str(clean_fields["created_at"]),
+        links=tuple(clean_fields["links"]),
     )
