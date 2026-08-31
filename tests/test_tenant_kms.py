@@ -163,9 +163,10 @@ class TestProductionCryptoRemediation:
     running the non-production fallback AEAD."""
 
     def test_message_names_an_extra_that_exists(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from pathlib import Path
-
-        import tomllib
+        # Same 3.10 trap as tests/test_documented_surfaces_exist.py: a
+        # bare `import tomllib` is a ModuleNotFoundError on a supported
+        # interpreter.
+        from _toml_compat import declared_extras
 
         from mind_mem import tenant_kms as kms
 
@@ -176,14 +177,17 @@ class TestProductionCryptoRemediation:
 
         assert "pip install cryptography" in message
 
-        pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
-        if pyproject.is_file():
-            extras = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"].get("optional-dependencies", {})
-            # The reason the old instruction was wrong, pinned: there is
-            # no such extra to install. If one is ever declared, this
-            # assertion is the prompt to point the message back at it.
-            assert "encrypted" not in extras
-            assert "mind-mem[encrypted]" not in message
+        extras = declared_extras()
+        if extras is None:
+            # Was `if pyproject.is_file():` — on a tree without it the
+            # body simply never ran and the test passed having checked
+            # nothing. Skip loudly instead of passing vacuously.
+            pytest.skip("cannot read pyproject.toml (installed tree, or no TOML parser)")
+        # The reason the old instruction was wrong, pinned: there is no
+        # such extra to install. If one is ever declared, this assertion
+        # is the prompt to point the message back at it.
+        assert "encrypted" not in extras
+        assert "mind-mem[encrypted]" not in message
 
     def test_guard_is_silent_when_cryptography_present(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from mind_mem import tenant_kms as kms

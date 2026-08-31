@@ -4,7 +4,96 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
-*(nothing yet)*
+### Security
+
+* **Alert destinations are constrained (T-004).** `alerting.py` POSTs
+  governance signals — contradiction payloads, block IDs, the absolute
+  workspace path — to URLs read from `mind-mem.json`. That config is not
+  reliably operator-authored: workspaces get cloned, shared, and
+  committed. Any URL in it previously became an outbound request from
+  the mind-mem host, which is both an exfiltration channel and an SSRF
+  primitive against endpoints reachable only from that host.
+
+  New `mind_mem.alert_urls` applies two layers. With no configuration at
+  all, SSRF-shaped destinations are refused: loopback, link-local
+  (169.254.0.0/16 — the cloud-metadata range), RFC1918, CGNAT,
+  multicast, reserved and unspecified addresses, plus non-HTTP schemes
+  and URLs embedding credentials. No legitimate SaaS webhook resolves
+  there, so a correctly configured operator notices nothing. Setting
+  `MIND_MEM_ALERT_URL_ALLOWLIST` additionally pins delivery to named
+  hosts, and is authoritative when set — a publicly routable host that
+  is not listed is refused. `MIND_MEM_ALERT_ALLOW_ANY=true` restores the
+  previous behaviour for the genuine case of a self-hosted receiver on a
+  private network.
+
+  Destinations are checked at sink construction *and* immediately before
+  every send: a name that resolved publicly when the sink was built can
+  resolve into an internal range later. A resolve-then-connect gap
+  remains — urllib resolves the name again — and is marked in the source
+  with its upgrade path rather than left implicit.
+
+  Two details worth naming because the obvious implementation gets them
+  wrong: allowlist matching is label-wise, so `notexample.com` does not
+  match an `example.com` entry the way `str.endswith` would allow; and
+  CGNAT (100.64.0.0/10) is *not* `is_private` on every supported
+  CPython, so it carries its own check instead of riding on that flag.
+
+  Fixed alongside: the Slack branch of `get_alert_router` was not
+  wrapped in `try`, so a single malformed `slack_webhook_url` raised out
+  of router construction and denied every caller its LogSink too.
+
+* **Rate-limit bucket keys no longer carry token material (N-12).** The
+  sliding-window bucket was `token[-16:]`, putting a suffix of a live
+  credential into the limiter's dict keys and from there into every log
+  line, metric label and 429 diagnostic that echoes a bucket — and for a
+  token shorter than 16 characters it returned the whole secret
+  verbatim. The key is now `sha256(token)[:16]`, which identifies a
+  client exactly as well and carries none of it.
+
+* **OpenAPI schema is gated on a routable bind (N-13).** `/docs`,
+  `/redoc` and `/openapi.json` were served unconditionally, handing an
+  unauthenticated scanner a complete map of the admin surface. They now
+  switch off once the server is authenticated *and* bound somewhere
+  reachable. A loopback bind keeps them, `MIND_MEM_API_DOCS=on|off`
+  overrides in either direction, and an unknown bind (`create_app`
+  called directly by a test or an ASGI factory) keeps them, since
+  silently losing the schema is the worse surprise.
+
+* **The gRPC transport fails closed on a routable bind.** Closing the
+  roadmap's "gRPC surface audit", which was gated on the REST changes
+  settling. REST refuses to open a network port without authentication;
+  this surface — which has *no* authentication to configure, no TLS, and
+  reaches `approve`/`rollback` through `**kwargs` — would bind `0.0.0.0`
+  for anyone who set `MIND_MEM_GRPC_HOST`, with only a source comment
+  saying an operator "should" front it with TLS. The same mistake as
+  REST, failing the opposite way. `_enforce_grpc_bind()` now refuses a
+  non-loopback bind unless `MIND_MEM_GRPC_ALLOW_INSECURE_BIND=true`, and
+  runs before `grpc` is imported so a refusal cannot leave a socket
+  listening for the lifetime of the traceback.
+
+  The other two REST items have no analogue here, checked rather than
+  assumed: no rate-limit bucket and no token to leak into it, and no
+  schema endpoint to gate.
+
+### Fixed
+
+* **Two tests asserted the runner rather than the product.**
+  `test_unreadable_note_is_reported` intercepted `open()` by comparing
+  path *strings*, but `VaultBridge.scan` realpaths its root — so on
+  macOS, where the temp dir is `/var/...` and its realpath is
+  `/private/var/...`, the interception never matched, the
+  PermissionError was never raised, and the test failed on every macOS
+  and Windows runner. It now compares `normcase(realpath(...))`.
+  Verified by reproducing the same condition on Linux with a symlinked
+  vault root, not by re-running the platform that already passed.
+
+* **`tomllib` is 3.11+, but `requires-python` is `>=3.10`.** Two tests
+  imported it bare and turned the 3.10 job red. New `tests/_toml_compat`
+  resolves `tomllib` → `tomli` → `None`, `tomli` is installed on 3.10
+  via the `test` extra so the assertions genuinely run there, and a
+  vacuous `if pyproject.is_file():` guard — under which the assertions
+  simply never executed and the test passed having checked nothing — now
+  skips loudly instead.
 
 ## [5.0.0] - 2026-08-30
 

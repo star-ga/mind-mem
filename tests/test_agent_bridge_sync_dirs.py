@@ -74,15 +74,32 @@ class TestSyncDirs:
             bridge.scan(sync_dirs=["../"])
 
     def test_unreadable_note_is_reported(self, vault: Path, monkeypatch) -> None:
-        """The note is still skipped — but the operator hears about it."""
+        """The note is still skipped — but the operator hears about it.
+
+        The interception compares *resolved* paths, not path strings.
+        ``VaultBridge.scan`` realpaths its root, so on macOS — where the
+        temp dir is ``/var/...`` and its realpath is ``/private/var/...``
+        — a string compare never matched, the PermissionError was never
+        raised, and the test asserted the runner's path layout instead of
+        the product's behaviour. ``normcase`` covers the same mismatch on
+        Windows.
+        """
         from mind_mem import agent_bridge
 
-        blocked = os.path.join(str(vault), "notes", "b.md")
+        def _key(path):
+            try:
+                return os.path.normcase(os.path.realpath(path))
+            except (TypeError, ValueError, OSError):
+                # open() also accepts an int fd, which has no path.
+                return None
+
+        blocked_path = os.path.join(str(vault), "notes", "b.md")
+        blocked = _key(blocked_path)
         real_open = builtins.open
 
         def _open(path, *args, **kwargs):
-            if str(path) == blocked:
-                raise PermissionError(13, "Permission denied", blocked)
+            if _key(path) == blocked:
+                raise PermissionError(13, "Permission denied", blocked_path)
             return real_open(path, *args, **kwargs)
 
         warnings: list[tuple[str, dict]] = []

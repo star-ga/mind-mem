@@ -144,3 +144,79 @@ class TestGeneratedServicerRegistration:
 
         assert registered is True
         assert calls == [(server, servicer)]
+
+
+class TestInsecureBindIsRefused:
+    """The gRPC surface fails closed on a routable bind, like REST does.
+
+    REST refuses to bind a network port without authentication
+    (``_enforce_fail_closed``). This transport has *no* authentication to
+    configure at all, no TLS, and drives governance mutations
+    (approve/rollback) — so the same mistake was strictly worse here, and
+    the only thing standing against it was a comment. An operator who
+    sets ``MIND_MEM_GRPC_HOST=0.0.0.0`` must now say plainly that they
+    mean it.
+    """
+
+    def test_loopback_binds_are_permitted(self, monkeypatch) -> None:
+        from mind_mem.api.grpc_server import _enforce_grpc_bind
+
+        monkeypatch.delenv("MIND_MEM_GRPC_ALLOW_INSECURE_BIND", raising=False)
+        for host in ("127.0.0.1", "localhost", "::1", "[::1]"):
+            _enforce_grpc_bind(host)  # must not raise
+
+    def test_routable_bind_is_refused(self, monkeypatch) -> None:
+        import pytest as _pytest
+
+        from mind_mem.api.grpc_server import _enforce_grpc_bind
+
+        monkeypatch.delenv("MIND_MEM_GRPC_ALLOW_INSECURE_BIND", raising=False)
+        for host in ("0.0.0.0", "::", "10.0.0.5", "203.0.113.9"):
+            with _pytest.raises(RuntimeError, match="MIND_MEM_GRPC_ALLOW_INSECURE_BIND"):
+                _enforce_grpc_bind(host)
+
+    def test_explicit_acknowledgement_permits_it(self, monkeypatch) -> None:
+        from mind_mem.api.grpc_server import _enforce_grpc_bind
+
+        monkeypatch.setenv("MIND_MEM_GRPC_ALLOW_INSECURE_BIND", "true")
+        _enforce_grpc_bind("0.0.0.0")  # must not raise
+
+    def test_serve_enforces_before_binding(self, monkeypatch) -> None:
+        """The gate must run before the port is opened, not after.
+
+        A check that fires after ``add_insecure_port`` would leave the
+        socket listening for the lifetime of the traceback.
+
+        ``grpc`` is stubbed for the duration: with the real package this
+        test would otherwise reach ``server.wait_for_termination()`` and
+        hang forever if the gate ever regressed — the failure mode a
+        regression test must not have.
+        """
+        import sys
+        import types
+
+        import pytest as _pytest
+
+        from mind_mem.api import grpc_server
+
+        events: list[str] = []
+
+        class _Server:
+            def add_insecure_port(self, target):
+                events.append(f"bind:{target}")
+
+            def start(self):
+                events.append("start")
+
+            def wait_for_termination(self):  # pragma: no cover - must never run
+                raise AssertionError("serve() bound a routable port despite the gate")
+
+        stub = types.ModuleType("grpc")
+        stub.server = lambda *a, **k: _Server()  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "grpc", stub)
+        monkeypatch.delenv("MIND_MEM_GRPC_ALLOW_INSECURE_BIND", raising=False)
+        monkeypatch.setenv("MIND_MEM_GRPC_HOST", "0.0.0.0")
+
+        with _pytest.raises(RuntimeError, match="MIND_MEM_GRPC_ALLOW_INSECURE_BIND"):
+            grpc_server.serve(50099)
+        assert not events, f"serve() reached {events} before refusing the bind"

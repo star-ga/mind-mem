@@ -105,6 +105,19 @@ class TestWebhookSink:
 
     def test_accepts_http_and_https(self) -> None:
         WebhookSink("https://example.com/alert")
+        WebhookSink("http://example.com:9000/alert")
+
+    def test_loopback_receiver_requires_explicit_opt_out(self, monkeypatch) -> None:
+        """T-004: a local receiver is legitimate but must be asked for.
+
+        An unconstrained config could otherwise point governance alerts
+        at a local admin port -- ollama on :11434, or mind-mem's own REST
+        surface -- so loopback is refused until the operator says so.
+        """
+        monkeypatch.delenv("MIND_MEM_ALERT_ALLOW_ANY", raising=False)
+        with pytest.raises(ValueError):
+            WebhookSink("http://localhost:9000/alert")
+        monkeypatch.setenv("MIND_MEM_ALERT_ALLOW_ANY", "true")
         WebhookSink("http://localhost:9000/alert")
 
     @patch("mind_mem.alerting.urllib.request.urlopen")

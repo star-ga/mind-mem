@@ -15,6 +15,7 @@ Launch via: mm serve [--port 8080] [--host 127.0.0.1]
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import threading
@@ -159,11 +160,18 @@ def _extract_bearer(
 
 
 def _client_id_from_token(token: str | None) -> str:
-    """Derive a stable per-client identifier from the bearer token."""
+    """Derive a stable per-client identifier from the bearer token.
+
+    N-12: a truncated token is not a "non-sensitive" key. The old
+    ``token[-16:]`` put a suffix of live credential material into the
+    rate limiter's dict keys, and from there into every log line, metric
+    label and 429 diagnostic that echoes a bucket — and for a token
+    shorter than 16 characters it returned the whole secret verbatim. A
+    digest identifies a client exactly as well and carries none of it.
+    """
     if token is None:
         return "anonymous"
-    # Use last 16 chars as a non-sensitive bucket key
-    return token[-16:] if len(token) >= 16 else token
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
 
 
 def _verify_bearer(token: str | None) -> tuple[bool, str, tuple[str, ...]]:
@@ -665,6 +673,77 @@ def _parse_tool_json(raw: str) -> Any:
 # ---------------------------------------------------------------------------
 
 
+# These four live above ``create_app`` rather than beside the launcher
+# they otherwise belong to: the module ends with a module-level
+# ``app = create_app()``, so anything the constructor consults must
+# already be bound by the time that line executes.
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def _auth_is_configured() -> bool:
+    """Return True when at least one authentication mechanism is *usable*.
+
+    Every test here is a truthiness test, matching the code that turns
+    these variables into credentials: ``http_auth._build_http_auth_tokens``
+    registers a token only ``if user_token:`` / ``if admin_token:``, and
+    ``verify_token`` treats an empty ``MIND_MEM_TOKEN`` as no token at
+    all.
+
+    This gate used to test *presence* (``is not None``) for the two
+    static tokens, so ``MIND_MEM_ADMIN_TOKEN=""`` — exported but empty —
+    certified a routable bind as authenticated while no credential
+    existed: :func:`_enforce_fail_closed` returned without raising and
+    every subsequent request 401'd, because the constant-time compare
+    could only match an empty bearer that ``HTTPBearer`` never produces.
+    A gate must not certify a property it did not check, whichever
+    direction the mismatch happens to fail in today.
+
+    Note that :func:`_admin_gate_is_configured` deliberately keeps its
+    extra ``is not None`` terms: that one is a fail-closed *superset*,
+    so present-but-empty must still resolve the admin gate closed.
+    """
+    if _check_token():
+        return True
+    if os.environ.get("MIND_MEM_ADMIN_TOKEN"):
+        return True
+    if os.environ.get("MIND_MEM_API_KEY_DB"):
+        return True
+    if os.environ.get("OIDC_ISSUER") and os.environ.get("OIDC_AUDIENCE"):
+        return True
+    return False
+
+
+BIND_HOST_ENV = "MIND_MEM_BIND_HOST"
+
+
+def _docs_enabled(host: str | None = None) -> bool:
+    """Whether ``/docs``, ``/redoc`` and ``/openapi.json`` are served.
+
+    N-13: the schema enumerates every route, including the admin ones,
+    to any unauthenticated caller. On a loopback bind that is a
+    development convenience worth keeping. On a routable bind, once the
+    server is authenticated, it is free reconnaissance — so the docs go
+    away and the API keeps working.
+
+    ``MIND_MEM_API_DOCS=on|off`` overrides in both directions. With no
+    known bind (``create_app`` called directly by a test or an ASGI
+    factory) the docs stay on: there is nothing to judge, and silently
+    dropping the schema would be a worse surprise than serving it.
+    """
+    override = os.environ.get("MIND_MEM_API_DOCS", "").strip().lower()
+    if override in ("1", "true", "on", "yes"):
+        return True
+    if override in ("0", "false", "off", "no"):
+        return False
+    if host is None:
+        host = os.environ.get(BIND_HOST_ENV, "").strip()
+    if not host:
+        return True
+    if host.strip("[]").lower() in _LOOPBACK_HOSTS:
+        return True
+    return not _auth_is_configured()
+
+
 def create_app(workspace: str | None = None) -> FastAPI:
     """Create and return the configured FastAPI application.
 
@@ -688,9 +767,10 @@ def create_app(workspace: str | None = None) -> FastAPI:
         # so a client capability-gating on either number negotiated
         # against a value frozen years before the code it was talking to.
         version=_PACKAGE_VERSION,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        # N-13: gated — see _docs_enabled().
+        docs_url="/docs" if _docs_enabled() else None,
+        redoc_url="/redoc" if _docs_enabled() else None,
+        openapi_url="/openapi.json" if _docs_enabled() else None,
     )
 
     # ------------------------------------------------------------------
@@ -1110,42 +1190,6 @@ app = create_app()
 # ---------------------------------------------------------------------------
 
 
-_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
-
-
-def _auth_is_configured() -> bool:
-    """Return True when at least one authentication mechanism is *usable*.
-
-    Every test here is a truthiness test, matching the code that turns
-    these variables into credentials: ``http_auth._build_http_auth_tokens``
-    registers a token only ``if user_token:`` / ``if admin_token:``, and
-    ``verify_token`` treats an empty ``MIND_MEM_TOKEN`` as no token at
-    all.
-
-    This gate used to test *presence* (``is not None``) for the two
-    static tokens, so ``MIND_MEM_ADMIN_TOKEN=""`` — exported but empty —
-    certified a routable bind as authenticated while no credential
-    existed: :func:`_enforce_fail_closed` returned without raising and
-    every subsequent request 401'd, because the constant-time compare
-    could only match an empty bearer that ``HTTPBearer`` never produces.
-    A gate must not certify a property it did not check, whichever
-    direction the mismatch happens to fail in today.
-
-    Note that :func:`_admin_gate_is_configured` deliberately keeps its
-    extra ``is not None`` terms: that one is a fail-closed *superset*,
-    so present-but-empty must still resolve the admin gate closed.
-    """
-    if _check_token():
-        return True
-    if os.environ.get("MIND_MEM_ADMIN_TOKEN"):
-        return True
-    if os.environ.get("MIND_MEM_API_KEY_DB"):
-        return True
-    if os.environ.get("OIDC_ISSUER") and os.environ.get("OIDC_AUDIENCE"):
-        return True
-    return False
-
-
 def _enforce_fail_closed(host: str, allow_unauthenticated_localhost: bool) -> None:
     """v3.7.0 H4: refuse to bind a network port without authentication.
 
@@ -1203,6 +1247,8 @@ def run(
     _enforce_fail_closed(host, allow_unauthenticated_localhost)
     if allow_unauthenticated_localhost and not _auth_is_configured():
         os.environ[ALLOW_UNAUTH_ENV] = "1"
+    # N-13: create_app() has no view of the bind, so publish it here.
+    os.environ[BIND_HOST_ENV] = host
 
     server_app = create_app(workspace)
     uvicorn.run(server_app, host=host, port=port)

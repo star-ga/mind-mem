@@ -57,6 +57,10 @@ test = [
     # property-based tests live in tests/test_mic_map_fuzz.py and
     # importorskip-fence on absence so this is a soft floor.
     "hypothesis>=6.0,<7.0",
+    # tomllib is stdlib only from 3.11, but requires-python is >=3.10 and
+    # the matrix runs 3.10. Tests that read pyproject.toml need a real
+    # parser there rather than a silent skip.
+    "tomli>=2.0,<3.0 ; python_version < '3.11'",
 ]
 api = [
     "fastapi>=0.110,<1.0",

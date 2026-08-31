@@ -20,7 +20,10 @@ Design notes:
   process-wide workspace. ``tenant_id`` is consequently *rejected*
   rather than accepted and silently served from the wrong corpus (see
   :func:`handle_recall` and :func:`handle_governance`), and
-  :func:`serve` binds loopback only.
+  :func:`serve` binds loopback only — and now *enforces* it:
+  a non-loopback ``MIND_MEM_GRPC_HOST`` is refused unless the operator
+  sets ``MIND_MEM_GRPC_ALLOW_INSECURE_BIND=true``, mirroring the REST
+  layer's fail-closed bind check.
 
 There is no ``mm`` subcommand for this surface. An operator starts it
 in their own process::
@@ -247,6 +250,42 @@ def _register_generated_services(server: Any, servicer: Any) -> bool:
     return True
 
 
+_GRPC_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def _enforce_grpc_bind(host: str) -> None:
+    """Refuse a routable bind on this unauthenticated transport.
+
+    The REST layer refuses to open a network port without authentication
+    (``rest._enforce_fail_closed``). This surface is strictly more
+    exposed -- no auth to configure, no TLS, and ``approve``/``rollback``
+    reachable through ``**kwargs`` -- and yet the only thing standing
+    against ``MIND_MEM_GRPC_HOST=0.0.0.0`` was a comment saying an
+    operator "should" front it with TLS. Same mistake as REST, failing
+    the opposite way.
+
+    Loopback binds pass. Anything else requires
+    ``MIND_MEM_GRPC_ALLOW_INSECURE_BIND=true``, so exposing the HITL gate
+    to the network is something an operator states rather than something
+    they reach by setting a hostname.
+    """
+    import os as _os
+
+    if host.strip("[]").lower() in _GRPC_LOOPBACK_HOSTS:
+        return
+    if _os.environ.get("MIND_MEM_GRPC_ALLOW_INSECURE_BIND", "").strip().lower() in ("1", "true", "yes"):
+        _log.warning("grpc_insecure_bind_acknowledged", host=host)
+        return
+    raise RuntimeError(
+        f"mind-mem gRPC: refusing to bind {host!r}.\n"
+        "  This transport has no authentication and no TLS, and it drives\n"
+        "  governance mutations (approve/rollback), so a routable bind lets\n"
+        "  any reachable party defeat the HITL gate.\n"
+        "  Use MIND_MEM_GRPC_HOST=127.0.0.1, or set\n"
+        "  MIND_MEM_GRPC_ALLOW_INSECURE_BIND=true to accept that risk."
+    )
+
+
 def serve(port: int = 50051) -> None:
     """Start a blocking gRPC server on ``port``.
 
@@ -261,7 +300,12 @@ def serve(port: int = 50051) -> None:
     # Actual .serve-and-block happens in the operator's
     # grpc_generated adapter; we surface the servicer as the mount
     # point so they don't re-implement the handlers.
+    import os as _os
     from concurrent import futures
+
+    # Before grpc is even imported: a check that runs after
+    # add_insecure_port would leave the socket listening.
+    _enforce_grpc_bind(_os.environ.get("MIND_MEM_GRPC_HOST", "127.0.0.1"))
 
     import grpc  # type: ignore
 
@@ -277,8 +321,6 @@ def serve(port: int = 50051) -> None:
     # reachable party defeat the HITL gate. Operators who genuinely need a
     # non-loopback bind must opt in explicitly via MIND_MEM_GRPC_HOST (and
     # should front it with TLS + token auth).
-    import os as _os
-
     host = _os.environ.get("MIND_MEM_GRPC_HOST", "127.0.0.1")
     server.add_insecure_port(f"{host}:{port}")
     server.start()
@@ -287,6 +329,7 @@ def serve(port: int = 50051) -> None:
 
 __all__ = [
     "TENANT_UNSUPPORTED",
+    "_enforce_grpc_bind",
     "RecallRequest",
     "RecallResponse",
     "GovernanceRequest",

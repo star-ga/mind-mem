@@ -1479,8 +1479,20 @@ doesn't accidentally implement them.
 - [x] **N-05: `/v1/health` workspace path stripped** when unauth.
 - [x] **N-06: `/v1/metrics` Prometheus gated** behind auth / localhost.
 - [x] **N-07: OIDC callback omits scopes**; issuer allowlisted.
-- [ ] **T-004: Webhook/Slack alerting URL allowlist** — open;
-  operator-supplied alert URLs still unconstrained. Tracked.
+- [x] **T-004: Webhook/Slack alerting URL allowlist** — new
+  `alert_urls.py`. Two layers: SSRF-shaped destinations (loopback,
+  link-local/cloud-metadata, RFC1918, CGNAT, multicast, reserved) are
+  refused with no configuration at all, and `MIND_MEM_ALERT_URL_ALLOWLIST`
+  pins delivery to named hosts when set — authoritative, so a routable
+  host that is not listed is still refused. Checked at sink construction
+  *and* immediately before each send, because a name that resolved
+  publicly when the sink was built can resolve into an internal range
+  later. `MIND_MEM_ALERT_ALLOW_ANY=true` restores the open behaviour for
+  a self-hosted receiver. Allowlist matching is label-wise: a naive
+  `endswith` would have let `notexample.com` through an `example.com`
+  entry. Fixed alongside: the Slack branch of `get_alert_router` was
+  unguarded, so one bad URL raised out of router construction and took
+  the LogSink down with it.
 - [x] **T-005: `--token` CLI arg rejected** — env-only.
 - [ ] **T-001 (partial): Content-provenance tags on block writes** —
   `source ∈ {agent, user, external}` frontmatter NOT yet added to
@@ -1488,14 +1500,26 @@ doesn't accidentally implement them.
 
 #### Nice-to-have in v3.2.x (low priority, low UX cost)
 
-- [x] **N-08: `decrypt_file` audit trail** (`decrypted_files.jsonl`)
-  — open; admin-tool forensic coverage gap. Tracked.
+- [x] **N-08: `decrypt_file` audit trail** — `mcp/tools/encryption.py`
+  appends ts + path + actor + mode to `memory/decrypted_files.jsonl`;
+  covered by `tests/test_decrypt_file_audit_trail.py`. (The box and the
+  sentence beside it disagreed for four months: the item shipped in
+  v4.0.15 while its own text still read "open".)
 - [x] **N-10: FTS5 token sanitiser Unicode** — `re.UNICODE` applied.
 - [x] **N-11: `export_memory` size cap** — `max_blocks` validated.
-- [ ] **N-12: REST rate-limit bucket key sha256** — open; not
-  practically exploitable (operator controls tokens). Tracked.
-- [ ] **N-13: OpenAPI docs gated** when token configured + non-local
-  — open. Tracked.
+- [x] **N-12: REST rate-limit bucket key sha256** — `token[-16:]` put a
+  suffix of live credential material into the limiter's dict keys and
+  from there into every log line, metric label and 429 diagnostic that
+  echoes a bucket; for a token under 16 characters it returned the whole
+  secret verbatim. Now `sha256(token)[:16]`.
+- [x] **N-13: OpenAPI docs gated** — `_docs_enabled()` drops `/docs`,
+  `/redoc` and `/openapi.json` on an authenticated, non-loopback bind,
+  where the schema is a free map of the admin surface for an
+  unauthenticated scanner. Loopback keeps them (development
+  convenience); `MIND_MEM_API_DOCS=on|off` overrides both ways; an
+  unknown bind keeps them, since silently dropping the schema would be
+  the worse surprise. The gate's helpers sit above `create_app` because
+  the module ends in a module-level `app = create_app()`.
 - [ ] **T-007: OS-level append-only audit log** (`chattr +a` /
   `chflags uappnd`) — open. Tracked.
 - [ ] **T-009: Threat-model `online_trainer.py` separately.** Was
@@ -1514,9 +1538,21 @@ multi-tenant scale)
   Decision deferred until we have a multi-tenant deploy target.
 - [ ] **WORM audit chain.** Beyond append-only flag — separate
   storage class, only relevant for compliance customers.
-- [ ] **gRPC surface audit.** `src/mind_mem/api/grpc_server.py`
-  parallels REST; same auth/rate-limit hygiene needs to be applied
-  once REST changes settle.
+- [x] **gRPC surface audit.** Done once the REST changes settled
+  (N-12/N-13, above). The finding: REST *refuses* to open a network port
+  without authentication, while this surface — which has no
+  authentication to configure, no TLS, and reaches `approve`/`rollback`
+  through `**kwargs` — would bind `0.0.0.0` for anyone who set
+  `MIND_MEM_GRPC_HOST`, with only a source comment saying they "should"
+  front it with TLS. The same mistake as REST, failing the opposite way.
+  `_enforce_grpc_bind()` now refuses a non-loopback bind unless
+  `MIND_MEM_GRPC_ALLOW_INSECURE_BIND=true`, and runs before `grpc` is
+  imported so a refusal cannot leave a socket listening.
+
+  Not applicable, having checked rather than assumed: there is no
+  rate-limit bucket and no token on this surface to leak (the N-12
+  shape), and no schema endpoint to gate (the N-13 shape) — the
+  dataclasses are the schema of record and ship no generated code.
 
 #### Don't bother (would hurt UX more than they help)
 

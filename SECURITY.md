@@ -83,6 +83,10 @@ to `127.0.0.1` by default.
 | Concurrent SQLite write corruption | WAL journal mode, `busy_timeout=3000`, `timeout=5` on all connections, serialised writer via `threading.Lock` | Active |
 | Hardcoded credentials in Docker deployment | `docker-compose.yml` uses required env var references (`${VAR:?…}`) — fails fast if secrets not set | Active (v3.2.0+) |
 | Kernel name path escape (`get_mind_kernel`) | Regex `^[a-zA-Z0-9_-]{1,64}$` gating before `os.path.join` | Active |
+| SSRF / exfiltration via configured alert URLs | `alert_urls.assert_destination_allowed()` refuses loopback, link-local (cloud metadata), RFC1918, CGNAT, multicast and reserved destinations; optional `MIND_MEM_ALERT_URL_ALLOWLIST` pins delivery to named hosts | Active (T-004) |
+| Credential material in rate-limit bucket keys | Bucket key is `sha256(token)[:16]`, never a slice of the token | Active (N-12) |
+| API surface disclosure to unauthenticated scanners | `/docs`, `/redoc`, `/openapi.json` are dropped on an authenticated, non-loopback bind (`MIND_MEM_API_DOCS` overrides) | Active (N-13) |
+| Network-exposed gRPC defeating the HITL gate | `_enforce_grpc_bind()` refuses a non-loopback bind on the unauthenticated gRPC transport unless explicitly acknowledged | Active (gRPC audit) |
 
 ### Dependencies
 
@@ -130,6 +134,27 @@ All external inputs are validated at system boundaries:
 - Token auth enforced when `MIND_MEM_TOKEN` is set
 - Proposal budget limits: 3 per run, 6 per day, 30 backlog max
 - File watcher debounce at 2 seconds
+- Alert webhooks may not target internal address ranges
+- OpenAPI schema is not served on an authenticated, routable bind
+
+### Security-relevant environment variables
+
+Every one of these is **env-only** and deliberately so: a workspace file
+must never be able to widen its own permissions, so none of them can be
+set from `mind-mem.json`.
+
+| Variable | Effect |
+|----------|--------|
+| `MIND_MEM_TOKEN` / `MIND_MEM_ADMIN_TOKEN` | Bearer credentials. Empty is treated as unset. |
+| `MIND_MEM_ACL_DISABLED` | Opt out of the default-on ACL gate (N-01/T-002). |
+| `MIND_MEM_VAULT_ALLOWLIST` | `:`-separated vault roots. `vault_scan`/`vault_sync` refuse when unset (T-006). |
+| `MIND_MEM_VAULT_ALLOW_ANY` | Restores the pre-T-006 open vault behaviour. Not recommended. |
+| `MIND_MEM_ALERT_URL_ALLOWLIST` | Comma-separated hosts alerts may be delivered to. When set it is authoritative: a publicly routable host that is not listed is still refused (T-004). |
+| `MIND_MEM_ALERT_ALLOW_ANY` | Allows alert delivery to internal address ranges — the real case being a self-hosted receiver on a private network (T-004). |
+| `MIND_MEM_API_DOCS` | `on`/`off`, forcing the OpenAPI surface either way regardless of bind (N-13). |
+| `MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST` | Skip auth; permitted only on a loopback bind. |
+| `MIND_MEM_GRPC_HOST` | gRPC bind interface. Non-loopback is refused unless the variable below is set. |
+| `MIND_MEM_GRPC_ALLOW_INSECURE_BIND` | Accept an unauthenticated, TLS-less gRPC bind on a routable interface. |
 
 ---
 

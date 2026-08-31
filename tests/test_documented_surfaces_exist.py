@@ -108,12 +108,14 @@ class TestHnswKindIndexDocs:
 
 
 def _declared_extras() -> set[str]:
-    import tomllib
+    # Via the compat shim: a bare `import tomllib` here is a
+    # ModuleNotFoundError on 3.10, which requires-python still supports.
+    from _toml_compat import declared_extras
 
-    pyproject = _REPO / "pyproject.toml"
-    if not pyproject.is_file():
-        pytest.skip("running from an installed tree without pyproject.toml")
-    return set(tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"].get("optional-dependencies", {}))
+    extras = declared_extras()
+    if extras is None:
+        pytest.skip("cannot read pyproject.toml (installed tree, or no TOML parser)")
+    return extras
 
 
 class TestInboxRemediationMessages:

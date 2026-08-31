@@ -46,6 +46,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from .alert_urls import AlertUrlError, assert_destination_allowed, validate_alert_url
 from .observability import get_logger, metrics
 
 _log = get_logger("alerting")
@@ -139,12 +140,22 @@ class WebhookSink(AlertSink):
     name = "webhook"
 
     def __init__(self, url: str, *, timeout: float = 5.0) -> None:
-        if not url.startswith(("http://", "https://")):
-            raise ValueError(f"WebhookSink: invalid URL scheme {url!r}")
+        # T-004: shape AND destination are checked here so a bad URL in
+        # mind-mem.json surfaces at startup, not on the first alert.
+        validate_alert_url(url)
+        assert_destination_allowed(url)
         self._url = url
         self._timeout = float(timeout)
 
     def send(self, alert: Alert) -> bool:
+        # A name that resolved publicly at construction can resolve into
+        # an internal range later, so re-check rather than trusting the
+        # constructor's verdict.
+        try:
+            assert_destination_allowed(self._url)
+        except AlertUrlError as exc:
+            _log.warning("webhook_destination_refused", error=str(exc))
+            return False
         body = json.dumps(alert.as_dict()).encode("utf-8")
         req = urllib.request.Request(
             self._url,
@@ -178,14 +189,20 @@ class SlackSink(AlertSink):
     }
 
     def __init__(self, url: str, *, timeout: float = 5.0) -> None:
-        if not url.startswith(("http://", "https://")):
-            raise ValueError(f"SlackSink: invalid URL scheme {url!r}")
+        # T-004: same two-stage check as WebhookSink.
+        validate_alert_url(url)
+        assert_destination_allowed(url)
         if "hooks.slack.com" not in url:
             _log.warning("slack_sink_unexpected_url", url=url)
         self._url = url
         self._timeout = float(timeout)
 
     def send(self, alert: Alert) -> bool:
+        try:
+            assert_destination_allowed(self._url)
+        except AlertUrlError as exc:
+            _log.warning("slack_destination_refused", error=str(exc))
+            return False
         color = self._COLOR.get(alert.severity, "#808080")
         text = f"*[mind-mem {alert.severity.upper()}]* {alert.event}"
         payload = {
@@ -299,7 +316,13 @@ def get_alert_router(workspace: str) -> AlertRouter:
             _log.warning("invalid_webhook_url", error=str(exc))
     slack = cfg.get("slack_webhook_url")
     if isinstance(slack, str) and slack.strip():
-        router.add_sink(SlackSink(slack.strip()))
+        try:
+            router.add_sink(SlackSink(slack.strip()))
+        except ValueError as exc:
+            # Previously unguarded: a bad slack_webhook_url raised out of
+            # get_alert_router and broke every caller, including ones
+            # that only wanted the LogSink.
+            _log.warning("invalid_slack_webhook_url", error=str(exc))
     return router
 
 
