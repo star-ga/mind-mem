@@ -1,7 +1,25 @@
 """Generate the HuggingFace model-card README for mind-mem-4b.
 
-The version is read from ``src/mind_mem/__init__.py``; eval scores are
-loaded from ``train-output/eval_report.json`` when present.
+Two versions matter here and they are NOT the same number:
+
+* ``package_version`` -- what the repo is at right now, read from
+  ``src/mind_mem/__init__.py``.
+* ``trained_on_version`` -- the source tree the CHECKPOINT was actually
+  trained on.
+
+They used to be one variable, which meant the card claimed the model was
+"trained on the mind-mem v{package_version} source tree" no matter how
+far the package had moved past the checkpoint. Regenerating it at
+package 5.0.0 would have published, on a public model card, that a
+Qwen3.5-4B checkpoint trained on the v4.0.0 corpus was trained on 5.0.0.
+
+The tool count had the same shape: five hardcoded "81"s in prose while
+this very file said "96 MCP tools" a hundred lines lower. The live count
+now comes from ``scripts/count_mcp_tools.py``, the authoritative counter,
+and the count the MODEL knows is separate from it -- the card states the
+gap instead of hiding it.
+
+Eval scores are loaded from ``train-output/eval_report.json`` when present.
 """
 
 from __future__ import annotations
@@ -31,17 +49,25 @@ tags:
 pipeline_tag: text-generation
 ---
 
-# mind-mem-4b (v{version})
+# mind-mem-4b (trained on v{trained_on_version})
 
 A governance-aware memory-assistant model for [mind-mem](https://github.com/star-ga/mind-mem) — an auditable, contradiction-safe memory layer for coding agents (MCP-compatible).
 
-This checkpoint is **fully trained mind-mem:4b** (every one of the ~4 B parameters trained, no LoRA), trained on the mind-mem v{version} source tree: all **81 MCP tool signatures** (24 new in the v3.4 → v3.9 surface — incl. `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, `reindex_dirty`, MIC/MAP wire format, governance hooks, kernels), block-type schemas (with the new `TransformHash` field, v3.9), full CHANGELOG history through v{version}, the docs/ tree, and curated end-to-end governance workflow transcripts.
+This checkpoint is **fully trained mind-mem:4b** (every one of the ~4 B parameters trained, no LoRA), trained on the mind-mem v{trained_on_version} source tree: all **{trained_on_tools} MCP tool signatures** (24 new in the v3.4 → v3.9 surface — incl. `compile_truth_walkthrough`, `recall_with_persona`, `pipeline_status`, `reindex_dirty`, MIC/MAP wire format, governance hooks, kernels), block-type schemas (with the new `TransformHash` field, v3.9), full CHANGELOG history through v{trained_on_version}, the docs/ tree, and curated end-to-end governance workflow transcripts.
+
+> **Surface drift, stated plainly.** This checkpoint knows
+> **{trained_on_tools}** MCP tools, from the v{trained_on_version} tree. The live
+> mind-mem package is **v{package_version}** and exposes **{current_tools}** tools.
+> The newer ones still execute normally when called — only *proactive*
+> suggestion of them is affected, because the 4b is the swappable
+> KG-extraction / dispatch model and is never on the recall-scoring path
+> (that is the `mind/*.mind` kernels plus Python).
 
 ## What's new in v3.9 vs. v3.0
 
 | Axis | v3.0 | v3.9 | Delta |
 |---|---|---|---|
-| MCP tools | 57 | **81** | +24 |
+| MCP tools | 57 | **{trained_on_tools}** | +24 |
 | Block fields | base | base + `TransformHash` | +1 schema field |
 | Transports | MCP only | MCP + HTTP + inbox + daemon | +3 surfaces |
 | Backends | Markdown, sqlite-vec | Markdown, sqlite-vec, replicated Postgres | +1 routing layer |
@@ -51,7 +77,7 @@ The v3.0 fine-tune did not know about any of these surfaces; this revision resto
 
 ## What it knows about
 
-- **81 MCP tools** — exact signatures, arg types, return envelopes, scope requirements (incl. v3.9 walkthrough/persona/pipeline/reindex tools).
+- **{trained_on_tools} MCP tools** — exact signatures, arg types, return envelopes, scope requirements (incl. v3.9 walkthrough/persona/pipeline/reindex tools).
 - **Block schemas** — including the v3.9 `TransformHash` field (CapitalCase canonical, lowercase tolerated by Postgres / sqlite-vec).
 - **Governance workflows** — propose → list_contradictions → approve_apply → verify_chain → rollback with BeliefStore + FieldAuditor + AuditChain wiring.
 - **Drift detection** — live `DriftDetector` semantic pass alongside the lexical `DRIFT.md` pass.
@@ -120,16 +146,16 @@ Prior checkpoints are preserved as HF revision tags (e.g. `revision="v3.0.0"` fo
 
 ## Corpus
 
-Built deterministically from the mind-mem v{version} source tree. Running `python3 train/build_corpus.py` in the repo reproduces the exact training JSONL byte-for-byte. Nine disjoint sources scanned across **21 source files** (the v3.4+ tool layout splits the registry across `mcp/tools/*.py`):
+Built deterministically from the mind-mem v{trained_on_version} source tree. Running `python3 train/build_corpus.py` in the repo reproduces the exact training JSONL byte-for-byte. Nine disjoint sources scanned across **21 source files** (the v3.4+ tool layout splits the registry across `mcp/tools/*.py`):
 
-1. MCP tool docstrings (`mcp_server.py` + `mcp/tools/*.py` — **81 distinct tools** harvested via the `@mcp_tool_observe` and `@tool` decorators)
+1. MCP tool docstrings (`mcp_server.py` + `mcp/tools/*.py` — **{trained_on_tools} distinct tools** harvested via the `@mcp_tool_observe` and `@tool` decorators)
 2. Block-type schemas (templates + field lists, including the v3.9 `TransformHash` field)
-3. CHANGELOG entries (v1.0 → v{version})
+3. CHANGELOG entries (v1.0 → v{trained_on_version})
 4. docs/ prose (setup, usage, api-reference, architecture, roadmap)
 5. Curated multi-turn governance workflow transcripts
 6. Governance-workflow paraphrases (multiple phrasings per scenario)
 7. Direct tool-name citations (interrogative + imperative forms, multiple answer phrasings)
-8. **Intent pool** (v3.9.2): curated paraphrased intent prompts per all 81 tools where the user prompt deliberately omits the tool name and the assistant must surface it. This source is the load-bearing teacher of "intent → tool name" retrieval.
+8. **Intent pool** (v3.9.2): curated paraphrased intent prompts per all {trained_on_tools} tools where the user prompt deliberately omits the tool name and the assistant must surface it. This source is the load-bearing teacher of "intent → tool name" retrieval.
 9. **v3.9 surface facts** (v3.9.2): direct teaching of `TransformHash`, `stamp_transform_hash`, `reextract_dirty_blocks`, the six HTTP REST endpoints, the daemon's dream-cycle scheduler, the inbox file-drop ingestion path, and the replicated-Postgres primary/round-robin routing rules.
 
 **4 204 training examples total** (vs 1 952 in v3.9.1, ~393 in v3.0). All nine sources are local to the repo — **no external LLM calls, no web scraping, no synthetic data from a teacher model.** The training data is auditable.
@@ -192,7 +218,7 @@ Apache-2.0 (same as the mind-mem Python package).
 
 ## Changelog
 
-- **v{version} ({today}):** Full retrain of mind-mem:4b on the
+- **v{trained_on_version} ({today}):** Full retrain of mind-mem:4b on the
   v3.12.0 corpus (NVIDIA H200 SXM, full-FT bf16). Adds the v3.11
   typed-lineage edges (`cites` / `implements` / `refines` /
   `contradicts` / `cooccurrence`), v3.12 strict quality-gate
@@ -215,7 +241,7 @@ Apache-2.0 (same as the mind-mem Python package).
   author  = {{STARGA, Inc.}},
   title   = {{mind-mem-4b: governance-aware memory-assistant for coding agents}},
   year    = 2026,
-  version = {{v{version}}},
+  version = {{v{trained_on_version}}},
   url     = {{https://huggingface.co/star-ga/mind-mem-4b}}
 }}
 ```
@@ -287,25 +313,59 @@ def _load_train_metrics() -> dict[str, str]:
     }
 
 
+def _current_tool_count() -> str:
+    """Live MCP tool count from the authoritative counter.
+
+    Hardcoding it is what produced a card claiming 81 tools while this
+    same file said 96 further down. If the counter cannot run, say so in
+    the card rather than printing a number nobody checked.
+    """
+    import subprocess
+
+    script = Path(__file__).resolve().parents[1] / "scripts" / "count_mcp_tools.py"
+    if not script.is_file():
+        return "unknown"
+    try:
+        out = subprocess.run(["python3", str(script)], capture_output=True, text=True, timeout=120, check=True).stdout.strip().splitlines()
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    for line in reversed(out):
+        if line.strip().isdigit():
+            return line.strip()
+    return "unknown"
+
+
 def main() -> None:
     init_path = Path(os.environ.get("MM_INIT_PATH", str(Path(__file__).resolve().parents[1] / "src" / "mind_mem" / "__init__.py")))
-    version = os.environ.get("MM_VERSION_OVERRIDE", "3.9.0")
+    package_version = os.environ.get("MM_VERSION_OVERRIDE", "3.9.0")
     if init_path.is_file() and not os.environ.get("MM_VERSION_OVERRIDE"):
         for line in init_path.read_text().splitlines():
             if line.startswith("__version__"):
-                version = line.split("=", 1)[1].strip().strip('"').strip("'")
+                package_version = line.split("=", 1)[1].strip().strip('"').strip("'")
                 break
+    # What the CHECKPOINT was trained on -- deliberately NOT the package
+    # version. Bump these two together, and only when a retrain actually
+    # ships.
+    trained_on_version = os.environ.get("MM_TRAINED_ON_VERSION", "4.0.0")
+    trained_on_tools = os.environ.get("MM_TRAINED_ON_TOOLS", "84")
+    current_tools = _current_tool_count()
     today = dt.date.today().isoformat()
     OUT.write_text(
         MODEL_CARD.format(
-            version=version,
+            package_version=package_version,
+            trained_on_version=trained_on_version,
+            trained_on_tools=trained_on_tools,
+            current_tools=current_tools,
             today=today,
             **_load_eval_scores(),
             **_load_train_metrics(),
         ),
         encoding="utf-8",
     )
-    print(f"wrote model card for v{version} → {OUT}")
+    print(
+        f"wrote model card: package v{package_version}, checkpoint trained on "
+        f"v{trained_on_version} ({trained_on_tools} tools); live surface {current_tools} tools → {OUT}"
+    )
 
 
 if __name__ == "__main__":
