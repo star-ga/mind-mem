@@ -115,8 +115,16 @@ def test_a_mode_the_filesystem_refused_is_reported_not_claimed(tmp_path: Path, m
     finally:
         os.umask(old_umask)
 
+    # The property is "a mode the filesystem refused is REPORTED, not
+    # claimed" -- so assert the ACTUAL mode appears, not a hardcoded one.
+    # The monkeypatch forces 0644, but Windows ignores the creation mode
+    # entirely and lands 0666, and the product correctly reports that:
+    # "permissions 0666, NOT owner-only - this filesystem refused 0600".
+    # Hardcoding 0644 tested the patch, not the product.
+    actual = f"{stat.S_IMODE(path.stat().st_mode):04o}"
     assert not description.startswith("private, 0600")
-    assert "0644" in description
+    assert actual in description, f"description must name the real mode {actual}: {description!r}"
+    assert actual != "0600", "the forced-refusal setup did not actually refuse 0600"
     assert "NOT owner-only" in description
     assert "WARNING" in description
 
