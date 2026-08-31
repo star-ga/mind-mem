@@ -10,6 +10,7 @@ import stat
 from typing import Any, Generator
 
 import pytest
+from _platform_compat import is_root
 
 fastapi = pytest.importorskip("fastapi", reason="fastapi not installed; skipping REST API tests")
 
@@ -103,7 +104,7 @@ def test_verify_oidc_token_reuses_the_cached_provider(monkeypatch: pytest.Monkey
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory permissions")
+@pytest.mark.skipif(is_root(), reason="root ignores directory permissions")
 def test_unopenable_api_key_store_is_not_reported_as_unconfigured(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """A configured-but-unopenable store must not masquerade as unset.
 

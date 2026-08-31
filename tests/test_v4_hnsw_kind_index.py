@@ -8,6 +8,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from _platform_compat import is_root
 
 from mind_mem.v4 import FeatureDisabledError
 from mind_mem.v4.hnsw_kind_index import FLAG as HNSW_FLAG
@@ -185,9 +186,8 @@ def test_knn_does_not_write_to_the_index(hnsw_on: Path) -> None:
 def test_knn_works_against_a_readonly_index(hnsw_on: Path) -> None:
     """First query against a read-only index.db raised
     OperationalError('attempt to write a readonly database')."""
-    import os
 
-    if os.geteuid() == 0:  # pragma: no cover - root ignores the mode bits
+    if is_root():  # pragma: no cover - root ignores the mode bits
         pytest.skip("running as root; file mode does not deny writes")
     register_block_embedding(hnsw_on, "B-1", "entity", [1.0, 0.0])
     db = hnsw_on / "index.db"

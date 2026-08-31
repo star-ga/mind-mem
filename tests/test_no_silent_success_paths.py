@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _platform_compat import is_root
 
 # ---------------------------------------------------------------------------
 # audit_chain -- an unreadable ledger tail is not an empty ledger
@@ -306,7 +307,7 @@ def test_unreadable_frame_source_is_warned_about(tmp_path: Path, monkeypatch: py
     process cannot read was indistinguishable from a workspace that
     declares none.
     """
-    if os.geteuid() == 0:
+    if is_root():
         pytest.skip("root ignores the permission bits this test relies on")
 
     from mind_mem import frame_fields

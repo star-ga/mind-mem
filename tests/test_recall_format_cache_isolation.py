@@ -102,16 +102,18 @@ def test_the_cached_payload_is_the_blocks_shape_regardless_of_the_first_caller(
     the test names the MECHANISM (what got stored) and not merely a symptom
     that some other layer could coincidentally repair.
     """
-    from datetime import UTC, datetime
+    # datetime.UTC is 3.11+, but requires-python is >=3.10 and the matrix
+    # runs 3.10. timezone.utc is the same instant on every supported version.
+    from datetime import datetime, timezone
 
     from mind_mem.recall_cache import get_cache, make_cache_key
 
     # The instant is resolved inside _recall_impl, so it is bracketed here
     # rather than guessed: sampling only after the call would miss the key by a
     # day on a run that crosses UTC midnight.
-    before = datetime.now(UTC).date().isoformat()
+    before = datetime.now(timezone.utc).date().isoformat()
     cached_recall_module._recall_impl(QUERY, limit=5, backend="bm25", format="bundle")
-    after = datetime.now(UTC).date().isoformat()
+    after = datetime.now(timezone.utc).date().isoformat()
 
     cache = get_cache(None)
     stored = None
