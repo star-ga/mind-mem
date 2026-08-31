@@ -150,7 +150,7 @@ cross-model review.
 Builds on **v3.12.1** (2026-05-10) — patched eval, model card honesty.
 Builds on **v3.12.0** (2026-05-09) — strict quality gate, lineage→staleness.
 Builds on **v3.11.0** (2026-05-08) — typed lineage edges, recall explainability.
-Builds on **v3.9.0** — 4000+ tests, native MCP for 17 AI clients, **84 tools**,
+Builds on **v3.9.0** — 4000+ tests, native MCP for 17 AI clients, **96 tools**,
 Postgres+pgvector, full-fine-tune local model, at-rest encryption, tier
 decay, governance alerting, MIC/MAP wire format, HTTP transport, daemon,
 inbox ingestion, pipeline hash, persona projection, Kahn walkthrough.
@@ -164,7 +164,7 @@ src/mind_mem/           — Main package (src layout; flat modules, not
     alerting.py, governance_gate.py — governance: contradiction/drift
                           detection, proposals, audit chain, alerting hooks
   _recall_core.py, hybrid_recall.py, recall_vector.py — retrieval core
-  mcp_server.py         — MCP server monolith (97 tools, 8 resources)
+  mcp_server.py         — MCP server monolith (96 tools, 8 resources)
   mcp/                  — per-domain MCP tool modules (mcp.tools.*)
   ingestion_pipeline.py, inbox.py, entity_ingest.py — auto-ingestion
   skill_opt/            — Skill optimization
@@ -188,7 +188,7 @@ src/mind_mem/           — Main package (src layout; flat modules, not
   federation.py         — VClock + conflict log + MergeStrategy (v4.0.0)
   self_editing.py       — block_edits + propose/approve/reject (v4.0.0)
   pq.py                 — Product Quantization M=32 K=256 (v4.0.0)
-  hnsw_kind_index.py    — sqlite-vec HNSW + brute-force fallback (v4.0.0)
+  hnsw_kind_index.py    — kind-partitioned kNN, brute-force cosine (v4.0.0)
   circuit_breaker.py    — CircuitBreaker + @circuit_breaker (v4.0.0)
   backpressure.py       — BackpressureController + hysteresis (v4.0.0)
   health.py             — health_check + 7 probes + register (v4.0.0)
@@ -234,7 +234,7 @@ docs/                   — User + integration docs (35+ files)
   Cursor, Windsurf, Zed, OpenClaw, and 8 more). See
   `docs/client-integrations.md`.
 
-### MCP Tools (97)
+### MCP Tools (96)
 Grouped surfaces (full list in `docs/api-reference.md` and
 `src/mind_mem/mcp_server.py`):
 recall, hybrid_search, prefetch, propose_update, approve_apply,

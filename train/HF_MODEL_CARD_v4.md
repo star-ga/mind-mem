@@ -49,7 +49,7 @@ revision pointer, prior revisions pinned at `v4.1.0`, `v4.0.0-base`,
 
 ## What v4 knows
 
-v4 knows all 84 MCP tools from v3.x, plus the following v4 surfaces:
+v4 knows all 96 MCP tools from v3.x, plus the following v4 surfaces:
 
 **Cognition**
 - `tier_memory` — block tier promotion, `StaleVersionError`, CAS
@@ -84,8 +84,10 @@ v4 knows all 84 MCP tools from v3.x, plus the following v4 surfaces:
   `block_edits` table; no direct mutation path
 - `pq` — `PQCodec.train` / `.encode` / `.decode` / `.save` / `.load`,
   `M=32` `K=256` defaults
-- `hnsw_kind_index` — `build_kind_index` / `query_kind_index`,
-  `sqlite-vec` detection with brute-force fallback
+- `hnsw_kind_index` — `register_block_embedding` / `knn_by_kind` /
+  `ensure_hnsw_schema` / `backend_status`; brute-force cosine over the
+  kind partition is the only backend (`backend_status` reports
+  `sqlite_vec_available` as readiness, never as the serving path)
 - `circuit_breaker` — `CircuitBreaker` constructor args
   (`failure_threshold`, `recovery_timeout`, `half_open_probes`),
   `CircuitState` values (`CLOSED`/`OPEN`/`HALF_OPEN`),

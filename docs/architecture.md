@@ -8,7 +8,7 @@ MIND-Mem is a persistent, auditable, contradiction-safe memory system for coding
 
 ```mermaid
 graph TB
-    subgraph MCP["MCP Server (97 tools)"]
+    subgraph MCP["MCP Server (96 tools)"]
         direction LR
         recall[recall]
         propose[propose_update]

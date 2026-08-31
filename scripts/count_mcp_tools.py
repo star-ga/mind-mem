@@ -75,10 +75,20 @@ def _tool_names(path: Path) -> list[str]:
 
 
 def count_tools() -> int:
-    total = 0
+    """Number of DISTINCT tool names the server exposes.
+
+    Summing per-file counts double-counts any name defined in two files, and
+    one is: ``recall`` appears in both ``public.py`` and ``recall.py``. FastMCP
+    registers it once (it logs "Component already exists: tool:recall"), so the
+    sum reported 97 where the server exposes 96 — and the README was then
+    written to match the wrong number, so ``--check-docs`` passed by agreeing
+    with a doc that agreed with the bug. Counting the set is the same question
+    the server answers.
+    """
+    names: set[str] = set()
     for path in _tool_source_files():
-        total += len(_tool_names(path))
-    return total
+        names.update(_tool_names(path))
+    return len(names)
 
 
 # Surfaces a reader can reach: the shipped README, the docs tree, and the

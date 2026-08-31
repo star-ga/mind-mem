@@ -61,6 +61,11 @@ PLUGIN_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 # installed package 10 checks / 8 issues, all 8 MISSING.
 TEMPLATE_DIR = os.path.join(SCRIPT_DIR, "templates")
 
+# Prefix stamped on a `created` entry that records package data the install
+# does NOT ship. It is a hole in the workspace, not a creation -- main()
+# partitions on this prefix so the count and the exit status both say so.
+MISSING_MARKER = "MISSING (not shipped in this install): "
+
 DIRS = [
     "decisions",
     "tasks",
@@ -333,7 +338,10 @@ def init(
         schema:  Postgres schema name (``backend="postgres"`` only).
 
     Returns:
-        ``(created, skipped)`` lists of relative-path descriptions.
+        ``(created, skipped)`` lists of relative-path descriptions. An
+        entry in ``created`` starting with :data:`MISSING_MARKER` records
+        package data this install does not ship -- the file was NOT
+        created and the workspace is incomplete.
 
     Raises:
         ValueError: ``backend`` is unknown or ``postgres`` lacks a ``dsn``.
@@ -370,7 +378,7 @@ def init(
             # Never silent -- this is how the packaging defect above stayed
             # invisible: a workspace missing its whole corpus scaffold still
             # reported a successful init.
-            created.append(f"MISSING (not shipped in this install): {target_rel}")
+            created.append(f"{MISSING_MARKER}{target_rel}")
             continue
         os.makedirs(os.path.dirname(target), mode=0o700, exist_ok=True)
         shutil.copy2(src, target)
@@ -388,7 +396,7 @@ def init(
             # was built without it -- exactly what happened to validate.sh, which
             # pyproject's package-data did not match, so every pip-installed workspace
             # was created with no validator and still reported success.
-            created.append(f"MISSING (not shipped in this install): maintenance/{script}")
+            created.append(f"{MISSING_MARKER}maintenance/{script}")
             continue
         shutil.copy2(src, dst)
         if script == "validate.sh":
@@ -491,9 +499,16 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))  # exits 2 with a usage message
 
-    if created:
-        print(f"Created ({len(created)}):")
-        for item in created:
+    # A MISSING entry rides in `created` so it can never be dropped, but it
+    # is the opposite of a creation: counting it as one told an automated
+    # caller that a workspace with no corpus scaffold -- possibly no
+    # validator either -- was fully built. Split them here.
+    missing = [item for item in created if item.startswith(MISSING_MARKER)]
+    actually_created = [item for item in created if not item.startswith(MISSING_MARKER)]
+
+    if actually_created:
+        print(f"Created ({len(actually_created)}):")
+        for item in actually_created:
             print(f"  + {item}")
 
     if skipped:
@@ -514,6 +529,14 @@ def main(argv: list[str] | None = None) -> int:
             print(f"\nWARNING: could not ensure Postgres schema ({schema}): {err}", file=sys.stderr)
             print("The config was still written; provision the DB and re-run with --ensure-schema, ", file=sys.stderr)
             print("or run 'mm doctor --rebuild-cache' once the backend is reachable.", file=sys.stderr)
+
+    if missing:
+        print(f"\nNOT created ({len(missing)}) -- this install does not ship them:", file=sys.stderr)
+        for item in missing:
+            print(f"  ! {item[len(MISSING_MARKER) :]}", file=sys.stderr)
+        print("\nThe workspace is INCOMPLETE. Reinstall mind-mem from a build that ships its", file=sys.stderr)
+        print("package data, then re-run this command; existing files are never overwritten.", file=sys.stderr)
+        return 1
 
     print(f"\nDone. Run 'bash maintenance/validate.sh {ws}' to verify.")
     return 0

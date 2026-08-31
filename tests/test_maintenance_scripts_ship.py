@@ -86,3 +86,27 @@ def test_every_template_the_map_needs_is_present_and_shipped() -> None:
     globs = _package_data_globs()
     unshipped = [n for n in sorted(set(TEMPLATE_MAP.values())) if not any(fnmatch.fnmatch(os.path.join("templates", n), g) for g in globs)]
     assert not unshipped, f"templates not matched by package-data {globs}; they would be missing from the wheel: {unshipped}"
+
+
+def test_the_admin_scope_vocabulary_has_exactly_one_definition() -> None:
+    """Both surfaces must resolve to the SAME object, not equal copies.
+
+    api/rest.py once accepted only the literal "admin" while mcp/infra/acl.py
+    accepted {"admin", "full", "mind-mem:admin"}; a `full`-scoped key was
+    admin to one surface and not the other. The first repair imported across
+    with a try/except that fell back to a DUPLICATED LITERAL -- which
+    reinstates the divergence the moment either copy is edited. Identity, not
+    equality: two frozensets that happen to match today would pass an equality
+    check and still drift tomorrow.
+    """
+    from mind_mem.mcp.infra.acl import ADMIN_SCOPES as via_acl
+    from mind_mem.scopes import ADMIN_SCOPES as canonical
+
+    assert via_acl is canonical, "acl must re-export the canonical set, not define its own"
+
+    src = os.path.join(SCRIPT_DIR, "api", "rest.py")
+    with open(src, encoding="utf-8") as handle:
+        rest_source = handle.read()
+    assert "from ..scopes import ADMIN_SCOPES" in rest_source, "rest.py must import the canonical set"
+    for literal in ('"full"', '"mind-mem:admin"'):
+        assert literal not in rest_source, f"rest.py re-declares {literal}; the vocabulary must live in one place"

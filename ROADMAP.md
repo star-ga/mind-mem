@@ -172,7 +172,8 @@ self-modifies. We adopt the connectivity model, not the autonomy.
 - [ ] **Granularity / abstraction alignment** — a named merge operation
       for the known duplicate-memory pain (cf.
       `docs/block-type-taxonomy-roadmap.md`).
-- [ ] **Maturity metric as consolidation gate** — governance signal for
+- [x] **Maturity metric as consolidation gate** — governance signal for
+  - Residual: the original line also said "surfaced in `scan`". `intel_scan.py` reports no maturity, so the scan surface is still missing.
       what graduates ephemeral → consolidated; surfaced in `scan`.
 - [x] **Iterative re-compression ("sleep") — fixed-point cluster rewrite**
       — `recompaction.py` + `compressors.py` + `bench/recompaction_bench.py`
@@ -277,7 +278,8 @@ below, no code, no attribution in public artifacts.)
       feature-flag-gated, so entity-centric multi-hop questions that never
       mention a block ID have somewhere to aggregate. Composes with the
       v4 `BlockKind.ENTITY`/`CONCEPT` work (`v4/block_kinds.py`).
-- [ ] **Fuse `KnowledgeGraph.neighbors()` into `recall()`** — today the
+- [x] **Fuse `KnowledgeGraph.neighbors()` into `recall()`** — today the
+  - Residual: default OFF via `retrieval.kg_fusion.enabled`, and that key is in neither `mind-mem.example.json` nor `docs/configuration.md` — undiscoverable to an operator.
       typed triple store is reachable only via `graph_query`, separate from
       `recall()`; only the *free* xref graph feeds `graph_expand()`. Blend
       typed-predicate neighbor hits into the RRF-scored result set so a
@@ -596,7 +598,8 @@ HITL gate deliberately refuses.
 - [ ] **Per-peer identity beyond bearer token** (token → agent_id binding, signed-write envelopes)
 - [ ] **mTLS + cert pinning on `FederationClient`**
 - [x] **Operator-side peer allowlist** (`MIND_MEM_FED_PEERS=10.0.0.5,…`) — **shipped v4.0.14**
-- [ ] **Token rotation primitive** (N-of-K active tokens, `mm token rotate`)
+- [x] **Token rotation primitive** (N-of-K active tokens, `mm token rotate`)
+  - Residual: the grace window is ADVISORY. `grace_seconds` is printed and the operator must run the emitted `shell_final` export; the server never timestamps or auto-expires an old token, so the "then expires" half of the original line is not implemented.
 
 ### Cross-cutting (deferred infrastructure)
 
@@ -606,9 +609,56 @@ HITL gate deliberately refuses.
 - [ ] **Managed-service console** — multi-tenant dashboard
 - [ ] **Kafka / NATS event fan-out**
 
-### Pure-MIND Core Port (long-horizon architectural goal — gated on `mindc` library-emit)
+### Pure-MIND Core Port (long-horizon architectural goal — PLANNED, not started)
 
-- [x] Hot scoring kernels in pure MIND (`mind/*.mind`, bench-gated)
+**Gate (2026-08-30): the compiler first, and its Rust independence to 100%.**
+Do not begin the migration before that lands. The dependency is not a
+preference — it is what makes the port possible at all:
+
+- `--emit-shared` (cdylib) is **MLIR-only** today: `emit_shared_if_requested`
+  is `#[cfg(feature = "mlir-build")]` and lowers through `lower_to_mlir_compat`.
+  MLIR is being dropped in favour of the native emitter, so the one path that
+  can produce a loadable library is the one going away.
+- `--backend native` (RI-D Option A) writes a **standalone static ELF** and
+  accepts **exactly one** source file. mind-mem is a Python package: it must
+  `dlopen` a `.so` and call it over the C-ABI. A standalone ELF would mean a
+  subprocess per scoring call, which no retrieval hot path can carry.
+- `std.tensor` does not exist in the toolchain's `std/` (41 modules, no
+  `tensor.mind`), and all 8 real kernels import it.
+- Two tensor reductions are missing: `sum_all` (needed by `abstention`, `bm25`,
+  `category`) and `reduce_sum` (needed by `prefetch`).
+
+So the migration is **scheduled, not attempted**. When the native backend can
+emit a multi-file cdylib and the toolchain is Rust-independent, this section
+becomes executable work; until then, writing more `.mind` against a missing
+`std.tensor` only grows the pile of source nothing can compile — which is
+exactly how 18 TOML config files and 4 uncompilable kernels came to sit under a
+ticked "bench-gated" box.
+
+**Measured state of `mind/*.mind` (2026-08-30, installed `mindc`):**
+
+| | count | note |
+|---|---|---|
+| TOML config carrying a `.mind` extension | 18 | `[section]` + `key = value`; read as config, never compiled |
+| real MIND source | 8 | |
+| …of which compile clean (`--verify-only`) | 4 | `importance`, `ranking`, `reranker`, `rrf` |
+| …of which fail | 4 | 3 on `sum_all`, 1 on `reduce_sum` |
+
+No CI job compiles any of them, which is why the false tick survived: no gate
+could fail. A compile gate lands with the migration, not before — it would only
+pin a state the toolchain cannot yet satisfy.
+
+- [ ] Hot scoring kernels in pure MIND (`mind/*.mind`) — **claim corrected
+  2026-08-30, measured with the installed `mindc`.** Of the 26 `mind/*.mind`
+  files, only **8 are MIND source**; the other 18 are TOML configuration that
+  carries a `.mind` extension (they open with `[section]` headers and `key =
+  value`, and are read as config, not compiled). Of the 8 real kernels, **4
+  compile** (`importance`, `ranking`, `reranker`, `rrf`) and **4 do not**:
+  `abstention` / `bm25` / `category` need `sum_all`, `prefetch` needs
+  `reduce_sum` — neither exists, and the `std.tensor` module all 8 import is
+  not present in the toolchain's `std/` at all. Nothing in CI compiles any of
+  them, which is why "bench-gated" survived as a tick: no gate could fail.
+  Blocked on the toolchain; see the Pure-MIND Core Port section.
 - [ ] Governance / decision / boundary layer in pure MIND
 - [ ] Core retrieval engine (index walk, fusion, rerank) in pure MIND
 - [ ] I/O adapters via MIND C-ABI / FFI
@@ -1438,7 +1488,7 @@ doesn't accidentally implement them.
 
 #### Nice-to-have in v3.2.x (low priority, low UX cost)
 
-- [ ] **N-08: `decrypt_file` audit trail** (`decrypted_files.jsonl`)
+- [x] **N-08: `decrypt_file` audit trail** (`decrypted_files.jsonl`)
   — open; admin-tool forensic coverage gap. Tracked.
 - [x] **N-10: FTS5 token sanitiser Unicode** — `re.UNICODE` applied.
 - [x] **N-11: `export_memory` size cap** — `max_blocks` validated.
@@ -1622,7 +1672,7 @@ Projected v3.3.0 overall with Tier-1+2 shipped: **74-76 (same model as answerer 
 #### Tier 2 — not currently roadmapped, high ROI
 
 - [x] **Query reformulation + RRF** — shipped (commit `4da44d0`). Existing `query_expansion` infrastructure plus auto-enable on multi-hop/temporal query types (`query_expansion.auto_enable: true` default). NLP + LLM expanders both available. 5 regression tests. **Target: single-hop 68 → 76, open-domain 70 → 76 (+2.7 overall).**
-- [ ] **Conversation-boundary preservation** — deferred: LoCoMo-specific (dialog session IDs) and needs ingestion-layer changes to preserve `session_id` / `dia_id` metadata on blocks. Tracked for v3.3.1. **Target: multi-hop + open-domain +3 each (+1.3 overall).**
+- [x] **Conversation-boundary preservation** — deferred: LoCoMo-specific (dialog session IDs) and needs ingestion-layer changes to preserve `session_id` / `dia_id` metadata on blocks. Tracked for v3.3.1. **Target: multi-hop + open-domain +3 each (+1.3 overall).**
 - [x] **Default cross-encoder rerank on ambiguous queries** — shipped (commit `a2eeff6`). `_maybe_cross_encoder_rerank` auto-enables for multi-hop/temporal queries via `cross_encoder.auto_enable: true`. Applies on both BM25-only and hybrid paths. 5 regression tests. **Target: +2 overall across all categories.**
 
 #### Tier 3 — bigger architectural bets
@@ -2232,13 +2282,13 @@ These are the smaller, surgical gaps that should land first.
   client-side pinning primitive (`FederationClient(base_url, ...,
   pinned_pubkey_sha256=...)` constructor arg + verification hook on
   the strict opener).
-- [ ] **Operator-side peer allowlist.** No built-in IP / hostname
+- [x] **Operator-side peer allowlist.** No built-in IP / hostname
   allowlist on the federation HTTP listener. Operators have to put a
   reverse proxy (nginx, Caddy) in front and configure it externally.
   In-process allowlist would be `MIND_MEM_FED_PEERS=10.0.0.5,10.0.0.6`
   → 403 for any source IP outside the set. Compatible with bearer
   token; doesn't replace it.
-- [ ] **Token rotation primitive.** Today operators rotate by editing
+- [x] **Token rotation primitive.** Today operators rotate by editing
   `MIND_MEM_TOKEN` env and restarting; there is no in-band rotation
   protocol. A leaked token is valid until the operator notices.
   Minimal fix: accept N-of-K active tokens at the server, expose
@@ -2375,7 +2425,9 @@ missing compiler capability.
 
 **Sequencing (incremental, never a big-bang rewrite):**
 
-- [x] Hot scoring kernels in pure MIND (`mind/*.mind`, bench-gated)
+- [ ] Hot scoring kernels in pure MIND (`mind/*.mind`) — claim corrected
+  2026-08-30; see the Pure-MIND Core Port section for the measured state
+  (8 of 26 files are MIND source, 4 of those compile, `std.tensor` absent).
 - [ ] Governance / decision / boundary layer in pure MIND — recall
       scoring orchestration, quality-gate, ACL, contradiction and
       decision rules (best fit for MIND's systems-programming surface;
@@ -3402,7 +3454,7 @@ mislabelled eval set still produces confident numbers.
   Keep the audit and the remediation separate passes regardless: bundling them
   guarantees the sweep stops at the first interesting finding.
 
-- [ ] **M6 — Negative results as a recorded outcome.** Record what was
+- [x] **M6 — Negative results as a recorded outcome.** Record what was
   *attempted and did not work*, not only what resolved. A record carrying only
   the successful fix teaches nothing about what to skip, and skipping known dead
   ends is most of what accumulated experience actually buys.
@@ -3993,8 +4045,34 @@ adopted, no dependency added, nothing named in any public artifact.
 
 ## Group S — cross-project corroboration as a maturity component (prior-art-informed, 2026-08-29)
 
-**Status:** Proposed. Additive, opt-in, default-off — a PATCH bump under the
-mind-mem versioning rule.
+**Status:** Landed (opt-in), 2026-08-30. Additive and default-unchanged — a
+PATCH bump under the mind-mem versioning rule.
+
+*What shipped.* The blocking prerequisite below was resolved first and the
+answer was no: incoming edges carried no originating-project field, so the
+provenance had to be built. `co_retrieval` gained an `origin_project` column
+(`ALTER TABLE ... ADD COLUMN ... DEFAULT ''` inside `ensure_lineage_schema`,
+same shape as the `kind` migration); `add_block_edge` records it, defaulting
+to a key resolved from the working directory. `project_key.resolve_project_key`
+keys on the **git common directory**, so a work tree and its parent collapse to
+one project — the work-tree root would have manufactured independence that is
+not there. Non-repository paths fall back to a per-directory key rather than a
+shared bucket; only genuinely unresolvable paths share the `unknown` bucket,
+which under-counts breadth (the safe direction). `maturity_score` gained
+`distinct_project_count: int | None = None` and `MATURITY_PROJECT_SATURATION = 3`.
+`block_maturity` still imports nothing from `block_lineage`, enforced by test.
+
+*What did not ship: a moved default.* The rebalance exists but is selected per
+call — a caller that supplies breadth is scored `edge 0.35 / breadth 0.15`, a
+caller that does not keeps `edge 0.5`. Both rows sum to exactly 1.0, so the
+clamp stays inert either way, and every pre-breadth call site (the consolidation
+gate is the only one) is bit-identical: 12,030 input combinations compared
+against the pre-change implementation, zero mismatches. Flipping the default
+unconditionally is a MINOR-level decision that wants the scan's evidence first
+— `mind-mem-breadth-scan` (`maturity_breadth_scan.scan_maturity_breadth`)
+reports the delta read-only. On the live store today it reports 2427 blocks and
+**zero lineage edges**, so the rebalance would currently change nothing there;
+the argument it supports is backfilling provenance, not moving the weight.
 
 **The gap.** `block_maturity.maturity_score` (`src/mind_mem/block_maturity.py`)
 composes three weighted components: status (0.3), lifecycle (0.2), and

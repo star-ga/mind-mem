@@ -197,7 +197,7 @@ Apache-2.0 (same as the mind-mem Python package).
   typed-lineage edges (`cites` / `implements` / `refines` /
   `contradicts` / `cooccurrence`), v3.12 strict quality-gate
   surface, lineage→staleness BFS propagator, and the
-  `block_staleness` table. **84 MCP tools** (84 = 81 v3.9 + 3 v3.11
+  `block_staleness` table. **96 MCP tools** (84 = 81 v3.9 + 3 v3.11
   surfaces: `validate_block`, `block_lineage`, `add_block_edge`).
   Corpus: 4 392 examples. **Patched eval: 95/95 = 100 %** across
   ten categories (two probes softened — see Known model errors).

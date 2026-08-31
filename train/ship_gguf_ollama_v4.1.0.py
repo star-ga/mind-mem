@@ -41,7 +41,7 @@ V4_1_0_SYSTEM = (
     "propose_update writes a block; propagate_lineage_staleness lives in "
     "src/mind_mem/lineage_staleness.py and writes penalty scores into the "
     "block_staleness table that the recall reranker consults at retrieval time. "
-    "Surface scope = 84 MCP tools, 21 v4 modules under feature flags."
+    "Surface scope = 96 MCP tools, 21 v4 modules under feature flags."
 )
 
 SMOKE_PROBES = [

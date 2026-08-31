@@ -4,7 +4,67 @@ All notable changes to MIND-Mem are documented in this file.
 
 ## [Unreleased]
 
-## [5.0.0] - 2026-08-29
+*(nothing yet)*
+
+## [5.0.0] - 2026-08-30
+
+### Added
+
+* **Corroboration breadth as a maturity component (opt-in).**
+  `maturity_score` counted *how many* incoming lineage edges a block had and
+  never asked *where they came from*, so five edges asserted inside one
+  repository during one campaign scored exactly like five arriving from five
+  independent ones — closer to one observation restated than to five
+  observations. Edges now carry provenance: `co_retrieval` gained an
+  `origin_project` column (additive, idempotent, defaulted, so pre-existing
+  rows stay legal and simply carry no provenance), `add_block_edge` records it,
+  and `block_lineage.distinct_project_counts` counts the distinct projects
+  among a block's incoming edges. `maturity_score` takes an optional
+  `distinct_project_count`, saturating at `MATURITY_PROJECT_SATURATION = 3`
+  because the signal is independence and independence saturates fast.
+  `block_maturity` still imports nothing from `block_lineage` — breadth is
+  caller-supplied, exactly as the edge count is, and the score stays stateless
+  per block.
+
+  A project is keyed on the **git common directory**, not the work-tree root:
+  a linked work tree and its parent share an object store and are not
+  independent observers, so keying on the root would have manufactured breadth
+  that does not exist. Where the `git` binary is unavailable the same common
+  directory is recovered by walking the filesystem, so one repository written
+  from a git-having and a git-less host is not counted as two projects.
+  Directories outside any repository key on the nearest ancestor holding a
+  project marker (`pyproject.toml`, `package.json`, `Cargo.toml`, `go.mod`, …)
+  rather than on the leaf, which would mint a project per subdirectory and per
+  fresh scratch cwd; genuinely unresolvable paths share the `unknown` bucket,
+  which under-counts. Under-counting is the direction preferred throughout, and
+  every rung but one fails that way: an unmarked non-repository tree can still
+  read two sibling directories as two projects. That residue is documented in
+  `project_key` rather than claimed away — a signal asserting one-sidedness it
+  does not have is worse than one that names its edge. Resolution is memoised
+  and cannot raise into the write path.
+
+* **`mind-mem-breadth-scan`** (`maturity_breadth_scan.scan_maturity_breadth`)
+  reports what the breadth rebalance *would* do to a corpus — per-block and
+  aggregate score deltas — strictly read-only, opening the index `mode=ro` and
+  changing no default.
+
+### Changed
+
+* **Nothing on the default scoring path.** The breadth weight is taken out of
+  the edge component's rather than added on top (`edge 0.35 / breadth 0.15`
+  against `edge 0.5`), so the components still sum to exactly 1.0 and the final
+  clamp stays inert; a fifth weight stacked on four would have made the clamp
+  load-bearing and quietly compressed the existing components. Which profile
+  applies is decided per call by whether the caller supplies breadth, so every
+  existing call site scores exactly as before — verified across 12,030 input
+  combinations against the pre-change implementation, compared on the float's
+  bits, zero mismatches.
+
+* `apply_min_maturity_filter` stays breadth-blind by design. It is a post-rank
+  filter running after a pipeline that carries no lineage data; widening it to
+  fetch provenance would turn it into a second query path. Operators who need
+  corroboration-aware filtering inject a precomputed value into the `Maturity`
+  field, the same escape hatch that already covers edge-aware filtering.
 
 ### Fixed
 
@@ -141,7 +201,10 @@ All notable changes to MIND-Mem are documented in this file.
 
 ### Changed — BREAKING (attestation hashes)
 
-* **The `RECALL_ATTEST_v1` preimage now binds the run's `scoring_instant`.**
+* **The preimage tag is now `RECALL_ATTEST_v2`, and it binds the run's
+  `scoring_instant` AND a rank-ordered `results_digest` of the served set.**
+  The tag bump is itself breaking: `from_dict` rejects any other tag, so a
+  record written under `RECALL_ATTEST_v1` does not load.
   Every previously-emitted `attestation_hash` changes, and
   `RecallAttestation.from_dict` **rejects** a dict that predates the field rather
   than reviving it into a record that would silently report itself internally
@@ -193,9 +256,12 @@ All notable changes to MIND-Mem are documented in this file.
   hash, because the preimage described the result set only by its
   `result_count`. Binding the resolved instant closes that, and makes an
   attested run replayable by passing its date back to `recall()`. Known limit,
-  now documented in the module rather than implied: cardinality is still the
-  only set-shaped field, so the structural fix remains a served-ids-in-rank-order
-  digest (roadmap RA.1).
+  now closed rather than merely documented: cardinality was once the only
+  set-shaped field, and the structural fix — a served-ids-in-rank-order digest
+  (roadmap RA.1) — is what `results_digest` now is. `from_dict` requires
+  `scoring_instant`, `results_digest` and `query_hash` together, so a record
+  missing any of them is refused rather than revived into one that would report
+  itself internally consistent while describing a different result set.
 
 * **`scoring_instant` is part of the recall cache key**, so two instants are
   two different answers rather than one served under the other's attestation.
@@ -5343,7 +5409,7 @@ Fix options:
 - `memory_mesh`: peer registry capped at 10k, sync log becomes `deque(maxlen=10_000)`, LWW conflict resolution now parses timestamps via `datetime.fromisoformat` instead of lexicographic string compare (UTC tz-aware).
 - `hook_installer.privacy_filter`: regex set extended with Anthropic (`sk-ant-…`) and xAI (`xai-…`) key patterns before observation persistence.
 - `hook_installer.install_config`: non-destructive by default. JSON configs are parsed + merged; text configs append a marker block once; re-running is idempotent. `force=True` restores legacy overwrite behaviour.
-- `encryption.rotate_key`: 4-phase crash-safe rotation (decrypt-all → stage temp files → atomic swap → commit new salt). A mid-rotation crash can no longer leave the workspace split between old-salt and new-ciphertext.
+- `encryption.rotate_key`: 4-phase rotation (decrypt-all → stage temp files → atomic swap → commit new salt). **Corrected 5.0.0:** the original claim that a mid-rotation crash "can no longer leave the workspace split between old-salt and new-ciphertext" was false — the swap phase replaces files one at a time, so from the first `os.replace` the corpus holds a mix while `salt` still names the old key, and neither key read it in full. 5.0.0 retains the outgoing salt as `salt.previous` for the duration of the rotation and `decrypt` falls back to it, so every intermediate state is readable and the rotation can simply be re-run. Verified against a simulated crash with 2 of 4 files swapped: 4/4 readable.
 - `encryption.encrypt_file`: skips empty input so a zero-byte plaintext can't get stuck behind a permanent magic-byte header.
 - `causal_graph.add_edge`: cycle check and INSERT share one `BEGIN IMMEDIATE` transaction — concurrent complementary edge additions can no longer both pass the cycle check.
 - `causal_graph.causal_chain`: opens a single SQLite connection for the whole DFS instead of one per recursion step.

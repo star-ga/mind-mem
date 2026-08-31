@@ -37,11 +37,11 @@ Package is a flat `src/mind_mem/` — there is no `governance/` subpackage.
 | Tier decay (TTL + idle demotion) | `src/mind_mem/memory_tiers.py` (`TierPolicy`, `run_promotion_cycle`) | RA.0 collapsed three tier ladders to this one and deleted the other two. |
 | Delta-based snapshot rollback | `src/mind_mem/block_store.py` (`MANIFEST.json` write/read) | MANIFEST.json for O(manifest) restore. |
 
-### MCP server (97 tools, 8 resources)
+### MCP server (96 tools, 8 resources)
 
 | Component | Source | Notes |
 |---|---|---|
-| MCP server entry | `src/mind_mem/mcp_server.py` | 97 tools across recall / write / governance / observability / audit. |
+| MCP server entry | `src/mind_mem/mcp_server.py` | 96 tools across recall / write / governance / observability / audit. |
 | Native MCP integration (18 clients) | `src/mind_mem/hook_installer.py` | `mm install-all` wires Claude Code, Claude Desktop, Codex CLI, Gemini CLI, GitHub Copilot CLI, Cursor, Windsurf, Zed, OpenClaw + 9 more. |
 | Multi-backend LLM extractor | `src/mind_mem/llm_extractor.py` | ollama / openai-compatible / vLLM / exllamav2 backends selected by `backend="auto"`. |
 

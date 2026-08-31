@@ -292,24 +292,38 @@ codec.save(workspace / "pq.bin")
 codec = PQCodec.load(workspace / "pq.bin")
 ```
 
-Used automatically by `hnsw_kind_index` when `v4.pq` is enabled.
+The codec is standalone. Nothing else in v4 consumes PQ codes yet —
+in particular `hnsw_kind_index` does not, in either flag combination.
 
 ### `hnsw_kind_index.py`
 
 Flag: `v4.hnsw_kind_index`
 
-HNSW index on the `kind` column (`M=16`, `efc=200`). Accelerates
-graph-walk kernel queries that filter by kind before scoring.
+Kind-filtered kNN over a `block_kind_embeddings` table (`block_id`,
+`kind`, packed float32 `payload`, `dim`), with a `kind` index so a query
+touches only its own partition.
 
-At startup, detects whether `sqlite-vec` is installed and uses its HNSW
-implementation. Falls back to brute-force cosine scan when `sqlite-vec`
-is absent. Behaviour is identical in both paths; only throughput differs.
+**There is no ANN backend.** Despite the module name, `knn_by_kind` runs
+a brute-force cosine scan over the kind partition on every install — the
+correct answer, at O(n). `sqlite-vec` is *not* used to serve queries;
+`backend_status(workspace)` reports `backend: "brute_force"` always, and
+reports `sqlite_vec_available` separately as a readiness signal for the
+ANN work that is still to be built. The module docstring records what
+that work needs (a per-dimension `vec0` table populated on the write
+path, a sync watermark, and an equivalence gate against the brute-force
+result) and why a partial version would be a faster wrong answer.
 
 ```python
-from mind_mem.hnsw_kind_index import build_kind_index, query_kind_index
+from mind_mem.v4.hnsw_kind_index import (
+    backend_status,
+    knn_by_kind,
+    register_block_embedding,
+)
 
-build_kind_index(workspace)  # call once after bulk inserts
-results = query_kind_index(workspace, kind="entity", query_vec=vec, top_k=10)
+register_block_embedding(workspace, block_id, kind="entity", embedding=vec)
+# [(block_id, cosine_distance)], ascending distance, at most k
+results = knn_by_kind(workspace, kind="entity", query=vec, k=10)
+backend_status(workspace)["backend"]  # -> "brute_force"
 ```
 
 ### `circuit_breaker.py`
@@ -490,8 +504,8 @@ To opt in incrementally:
 }
 ```
 
-Enable `v4.pq` and `v4.hnsw_kind_index` together — PQ codes are consumed
-by the HNSW index. Enabling one without the other is valid but suboptimal.
+`v4.pq` and `v4.hnsw_kind_index` are independent: the kind index stores
+raw float32 vectors and never reads PQ codes. Enable whichever you need.
 
 ---
 

@@ -18,6 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries",
     "Typing :: Typed",
 ]
@@ -61,6 +62,16 @@ api = [
     "fastapi>=0.110,<1.0",
     "uvicorn[standard]>=0.30,<1.0",
     "python-jose[cryptography]>=3.3,<4.0",
+    # Not optional for this surface, despite belonging to the MCP stack:
+    # api/rest.py imports mind_mem.mcp.infra.http_auth at module scope, and
+    # that chain reaches fastmcp. Without it `pip install mind-mem[api]`
+    # installs a REST server that raises ModuleNotFoundError on import --
+    # verified by blocking fastmcp and importing api.rest.
+    "fastmcp>=3.2.0",
+    # api/auth.py guards its httpx import, so OIDC degrades rather than
+    # crashing without it; but an `[api]` install that cannot do OIDC while
+    # the module advertises it is a half-installed surface.
+    "httpx>=0.27,<1.0",
 ]
 postgres = [
     "psycopg[binary]>=3.2,<4.0",
@@ -116,6 +127,7 @@ mind-mem-backup = "mind_mem.backup_restore:main"
 mind-mem-compact = "mind_mem.compaction:main"
 mind-mem-resolve = "mind_mem.conflict_resolver:main"
 mind-mem-baseline = "mind_mem.baseline_snapshot:_cli"
+mind-mem-breadth-scan = "mind_mem.maturity_breadth_scan:main"
 mind-mem-verify = "mind_mem.verify_cli:main"
 mind-mem-chat = "mind_mem.chat_cli:main"
 mind-mem-bench-tasks = "mind_mem.bench.repo_task_cli:main"
