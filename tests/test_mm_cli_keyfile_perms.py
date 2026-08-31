@@ -23,7 +23,7 @@ import stat
 from pathlib import Path
 
 import pytest
-from _platform_compat import posix_creation_modes_honored
+from _platform_compat import assert_owner_only, posix_creation_modes_honored
 
 from mind_mem.mm_cli import _cmd_sign_model, _write_private_key
 
@@ -93,8 +93,9 @@ def test_the_key_is_owner_only_even_under_a_permissive_umask(tmp_path: Path, mon
         os.umask(old_umask)
 
     assert path.read_bytes() == _SECRET
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
-    assert description == "private, 0600"
+    assert_owner_only(path)
+    if posix_creation_modes_honored(str(path.parent)):
+        assert description == "private, 0600"
 
 
 @pytest.mark.unit
@@ -127,5 +128,6 @@ def test_an_existing_permissive_key_file_is_replaced_not_reused(tmp_path: Path) 
     os.chmod(path, 0o666)
     description = _write_private_key(path, _SECRET)
     assert path.read_bytes() == _SECRET
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
-    assert description == "private, 0600"
+    assert_owner_only(path)
+    if posix_creation_modes_honored(str(path.parent)):
+        assert description == "private, 0600"

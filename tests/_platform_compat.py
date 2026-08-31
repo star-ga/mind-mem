@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 
-__all__ = ["is_root", "posix_creation_modes_honored"]
+__all__ = ["assert_owner_only", "is_root", "posix_creation_modes_honored"]
 
 
 def is_root() -> bool:
@@ -62,3 +62,29 @@ def posix_creation_modes_honored(tmp_dir) -> bool:
             os.unlink(probe)
         except OSError:  # pragma: no cover
             pass
+
+
+def assert_owner_only(path) -> None:
+    """Assert *path* is mode 0600, where the filesystem can express that.
+
+    Six tests asserted ``S_IMODE(...) == 0o600`` directly. On Windows a
+    file created with 0o600 reports 0o666 -- there are no POSIX mode bits
+    -- so those assertions were testing the runner, not the product, and
+    reddened every Windows job.
+
+    They failed ONE AT A TIME because CI runs pytest with ``-x``
+    (ci.yml:99,104): the run stops at the first failure, so fixing one
+    only revealed the next. Hence a single shared helper rather than six
+    separate guards.
+
+    Where modes are honoured this asserts exactly what it did before.
+    Where they are not, it still asserts the file exists and is readable
+    -- it degrades to a weaker check, never to nothing.
+    """
+    import stat as _stat
+
+    path = os.fspath(path)
+    assert os.path.isfile(path), f"{path} does not exist"
+    if posix_creation_modes_honored(os.path.dirname(path) or "."):
+        mode = _stat.S_IMODE(os.stat(path).st_mode)
+        assert mode == 0o600, f"expected owner-only 0600, got {mode:04o}"
