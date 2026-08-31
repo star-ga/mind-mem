@@ -32,7 +32,26 @@ def vault() -> Iterator[Path]:
 
 class TestSyncDirs:
     def test_missing_sync_dir_is_an_error(self, vault: Path) -> None:
-        """'Notes' is not 'notes' — that must not read as an empty vault."""
+        """A named sync_dir that does not exist must not read as an empty vault."""
+        bridge = VaultBridge(vault_root=str(vault))
+        with pytest.raises(FileNotFoundError, match="sync_dir not found"):
+            bridge.scan(sync_dirs=["definitely-not-a-directory"])
+
+    def test_a_case_mismatched_sync_dir_is_an_error(self, vault: Path) -> None:
+        """'Notes' is not 'notes' — where the filesystem agrees.
+
+        Skipped on a case-INSENSITIVE filesystem, which macOS and Windows use by
+        default: there ``Notes`` genuinely resolves to ``notes``, the scan
+        legitimately succeeds, and asserting a raise tests the host rather than
+        the product. Detected by probing the actual vault rather than by
+        branching on sys.platform, since either filesystem can be mounted
+        anywhere.
+        """
+        probe = vault / "notes"
+        if not probe.is_dir():  # pragma: no cover - fixture guarantees it
+            pytest.skip("fixture layout changed")
+        if (vault / "NOTES").is_dir():
+            pytest.skip("case-insensitive filesystem: 'Notes' and 'notes' are one directory")
         bridge = VaultBridge(vault_root=str(vault))
         with pytest.raises(FileNotFoundError, match="sync_dir not found"):
             bridge.scan(sync_dirs=["Notes"])

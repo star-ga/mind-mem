@@ -100,8 +100,18 @@ class TestDeferredCooldownReadsUtcTimestamps:
         assert with_z[0] == without_z[0] is False
 
     def test_explicit_offset_is_converted_not_rejected(self) -> None:
-        local_form = (datetime.now(timezone.utc) - timedelta(hours=11)).astimezone(timezone(timedelta(hours=-11)))
-        ok, _ = _cooldown_for(local_form.strftime("%Y-%m-%dT%H:%M:%S%z"))
+        # The offset is written as ``-11:00``, not via ``%z``. strftime emits
+        # the colon-less ``-1100`` form, which datetime.fromisoformat rejects on
+        # older interpreters and which strftime itself renders differently
+        # across platforms -- so the test was asserting the host's strftime
+        # rather than the product's timestamp handling, and failed on macOS and
+        # Windows while passing on Linux. The property under test is that an
+        # EXPLICIT offset is converted rather than rejected; spelling the offset
+        # out tests exactly that, everywhere.
+        moment = datetime.now(timezone.utc) - timedelta(hours=11)
+        local_form = moment.astimezone(timezone(timedelta(hours=-11)))
+        stamp = local_form.strftime("%Y-%m-%dT%H:%M:%S") + "-11:00"
+        ok, _ = _cooldown_for(stamp)
         assert not ok
 
     def test_expired_cooldown_still_clears(self) -> None:

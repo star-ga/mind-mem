@@ -8,7 +8,6 @@ Each one fails against the pre-fix source.
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import stat
@@ -204,8 +203,16 @@ def test_init_tracing_noops_when_only_the_otel_api_is_installed(monkeypatch: pyt
 def test_sdk_probe_is_separate_from_the_api_probe() -> None:
     from mind_mem import telemetry
 
-    expected = telemetry._HAS_OTEL and importlib.util.find_spec("opentelemetry.sdk.trace") is not None
+    # Probe through the product's own helper, never bare. A bare
+    # importlib.util.find_spec("opentelemetry.sdk.trace") RAISES when
+    # opentelemetry is installed without its sdk -- the exact defect this test
+    # exists to guard against, reproduced inside the guard. It failed on every
+    # macOS and Windows runner for that reason.
+    expected = telemetry._HAS_OTEL and telemetry._has_module("opentelemetry.sdk.trace")
     assert telemetry._HAS_OTEL_SDK is expected
+    # The separation is the point: the sdk flag may never be true while the api
+    # flag is false, and neither may raise on any host.
+    assert not (telemetry._HAS_OTEL_SDK and not telemetry._HAS_OTEL)
 
 
 # ---------------------------------------------------------------------------
