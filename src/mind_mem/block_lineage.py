@@ -61,6 +61,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Iterable
 
+from .project_key import resolve_project_key
 from .retrieval_graph import _connect, ensure_graph_tables
 
 __all__ = [
@@ -70,8 +71,11 @@ __all__ = [
     "LINEAGE_NODE_CAP",
     "LineageEdge",
     "LineageResult",
+    "NO_ORIGIN_PROJECT",
     "add_block_edge",
     "block_lineage",
+    "distinct_project_count",
+    "distinct_project_counts",
     "edge_aware_boost",
     "ensure_lineage_schema",
     "lineage_adjacency",
@@ -91,6 +95,12 @@ KIND_DECAY: dict[str, float] = {
 
 LINEAGE_DEPTH_CAP: int = 3
 LINEAGE_NODE_CAP: int = 1000
+
+#: Value stored in ``co_retrieval.origin_project`` when an edge carries no
+#: provenance.  It is the column default, so it is also what every row
+#: written before the provenance migration holds.  Rows carrying it are
+#: excluded from breadth counts — unknown provenance is not a project.
+NO_ORIGIN_PROJECT: str = ""
 
 
 @dataclass(frozen=True)
@@ -131,9 +141,13 @@ class LineageResult:
 
 
 def ensure_lineage_schema(workspace: str) -> None:
-    """Add ``kind`` column to ``co_retrieval`` if missing.
+    """Add the ``kind`` and ``origin_project`` columns to ``co_retrieval``.
 
-    Idempotent — safe to call on every process startup.
+    Idempotent — safe to call on every process startup.  Both migrations
+    are ``ALTER TABLE ... ADD COLUMN`` with a default, so every row that
+    predates them stays legal and readable without any data movement:
+    an edge written before provenance existed simply carries the empty
+    :data:`NO_ORIGIN_PROJECT` marker.
     """
 
     ensure_graph_tables(workspace)
@@ -142,8 +156,11 @@ def ensure_lineage_schema(workspace: str) -> None:
         cols = {row[1] for row in conn.execute("PRAGMA table_info(co_retrieval)").fetchall()}
         if "kind" not in cols:
             conn.execute("ALTER TABLE co_retrieval ADD COLUMN kind TEXT NOT NULL DEFAULT 'cooccurrence'")
+        if "origin_project" not in cols:
+            conn.execute("ALTER TABLE co_retrieval ADD COLUMN origin_project TEXT NOT NULL DEFAULT ''")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_co_ret_kind_src ON co_retrieval (kind, mem1_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_co_ret_kind_dst ON co_retrieval (kind, mem2_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_co_ret_origin_dst ON co_retrieval (mem2_id, origin_project)")
         conn.commit()
     finally:
         conn.close()
@@ -156,11 +173,24 @@ def add_block_edge(
     kind: str,
     *,
     weight: float = 1.0,
+    origin_project: str | None = None,
 ) -> None:
     """Record an explicit typed lineage edge from ``src`` to ``dst``.
 
     Edges are deduplicated by ``(mem1_id, mem2_id, kind)``: re-adding
     the same edge bumps ``hit_count`` and refreshes ``updated_at``.
+
+    Args:
+        origin_project: Which project this assertion originates from —
+            the provenance corroboration *breadth* is counted over.
+            ``None`` (default) resolves it from the process working
+            directory via :func:`mind_mem.project_key.resolve_project_key`,
+            because the originating project is the repository the writing
+            session is working in, not the workspace the store lives in
+            (a fleet sharing one store would otherwise report one
+            project for every writer).  Pass an explicit key to override,
+            or :data:`NO_ORIGIN_PROJECT` to record no provenance at all.
+            Resolution never raises into this write path.
     """
 
     if kind not in ALLOWED_KINDS:
@@ -170,14 +200,29 @@ def add_block_edge(
     if src == dst:
         raise ValueError("src and dst must differ (no self-loops)")
 
+    project = resolve_project_key() if origin_project is None else str(origin_project)
+
     ensure_lineage_schema(workspace)
     conn = _connect(workspace)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
     try:
+        # `origin_project` follows the same first-writer-wins rule as `kind`:
+        # a row that has no provenance yet (pre-migration rows, and rows
+        # written by the co-occurrence logger) adopts the incoming key, and a
+        # row that already names a project keeps it.
+        #
+        # deferred: an edge re-asserted from a *second* project keeps only the
+        # first key, so breadth under-counts that case — the conservative
+        # direction. It is not the ONLY direction available -- see the resolution
+        # ladder in project_key: an unmarked non-repository tree can still read
+        # two sibling directories as two projects -- but it is the one this path
+        # takes. Upgrade
+        # path: carry the set in a side table keyed (mem1_id, mem2_id, project)
+        # rather than widening this row, which would change the primary key.
         conn.execute(
             """
-            INSERT INTO co_retrieval (mem1_id, mem2_id, weight, hit_count, updated_at, kind)
-            VALUES (?, ?, ?, 1, ?, ?)
+            INSERT INTO co_retrieval (mem1_id, mem2_id, weight, hit_count, updated_at, kind, origin_project)
+            VALUES (?, ?, ?, 1, ?, ?, ?)
             ON CONFLICT(mem1_id, mem2_id) DO UPDATE SET
                 hit_count = hit_count + 1,
                 updated_at = excluded.updated_at,
@@ -185,13 +230,86 @@ def add_block_edge(
                 kind = CASE
                     WHEN co_retrieval.kind = 'cooccurrence' THEN excluded.kind
                     ELSE co_retrieval.kind
+                END,
+                origin_project = CASE
+                    WHEN co_retrieval.origin_project = '' THEN excluded.origin_project
+                    ELSE co_retrieval.origin_project
                 END
             """,
-            (src, dst, float(weight), now, kind),
+            (src, dst, float(weight), now, kind, project),
         )
         conn.commit()
     finally:
         conn.close()
+
+
+def distinct_project_counts(
+    workspace: str,
+    block_ids: list[str] | None = None,
+    *,
+    kind_filter: str | None = None,
+) -> dict[str, int]:
+    """Count distinct originating projects among each block's incoming edges.
+
+    "Incoming" has the same meaning as in :func:`edge_aware_boost`: a row
+    whose ``mem2_id`` is the block, i.e. another block pointing at this
+    one.  Edges with no recorded provenance (:data:`NO_ORIGIN_PROJECT`)
+    are excluded — unknown provenance is not evidence of a project.
+
+    Args:
+        workspace: Workspace root path.
+        block_ids: Restrict to these blocks.  ``None`` (default) counts
+            every block that has at least one provenance-carrying
+            incoming edge — and is the right call for a whole-corpus
+            sweep, since each id here becomes a bind parameter and
+            SQLite caps how many one statement may carry.
+        kind_filter: Restrict to one edge kind.  ``None`` counts all
+            kinds, matching the untyped incoming-edge count that
+            :func:`mind_mem.block_maturity.maturity_score` is given.
+
+    Returns:
+        ``block_id -> distinct project count``.  A block with no
+        provenance-carrying incoming edge is absent from the mapping
+        (equivalently, counts zero).
+    """
+    if kind_filter is not None and kind_filter not in ALLOWED_KINDS:
+        raise ValueError(f"kind_filter must be one of {sorted(ALLOWED_KINDS)} or None, got {kind_filter!r}")
+    if block_ids is not None and not block_ids:
+        return {}
+
+    ensure_lineage_schema(workspace)
+    conn = _connect(workspace)
+    try:
+        clauses = ["origin_project != ?"]
+        params: list[object] = [NO_ORIGIN_PROJECT]
+        if kind_filter is not None:
+            clauses.append("kind = ?")
+            params.append(kind_filter)
+        if block_ids is not None:
+            id_set = sorted(set(block_ids))
+            clauses.append(f"mem2_id IN ({','.join('?' * len(id_set))})")
+            params.extend(id_set)
+        rows = conn.execute(
+            "SELECT mem2_id, COUNT(DISTINCT origin_project) FROM co_retrieval "  # nosec B608 — every interpolated fragment is "?" bind placeholders; values go in params
+            f"WHERE {' AND '.join(clauses)} GROUP BY mem2_id",
+            tuple(params),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return {str(dst): int(count) for dst, count in rows}
+
+
+def distinct_project_count(
+    workspace: str,
+    block_id: str,
+    *,
+    kind_filter: str | None = None,
+) -> int:
+    """Distinct originating projects among *block_id*'s incoming edges."""
+    if not block_id:
+        raise ValueError("block_id must be non-empty")
+    return distinct_project_counts(workspace, [block_id], kind_filter=kind_filter).get(block_id, 0)
 
 
 def _outgoing(workspace: str, block_id: str, *, kind_filter: str | None = None) -> list[tuple[str, str]]:
