@@ -22,6 +22,7 @@ from mind_mem.api.auth import AuthError, OIDCConfig, OIDCProvider  # noqa: E402
 _ISSUER = "https://test.example.com"
 _AUDIENCE = "mind-mem-api"
 _CLIENT_ID = "test-client"
+_JWKS_URI = "https://keys.test.example.com/oauth2/v3/certs"
 
 # Minimal RSA-like test key generated with python-jose for tests only.
 # We use HS256 (symmetric) so tests stay dependency-free and fast;
@@ -49,13 +50,27 @@ def _make_token(
     return jwt.encode(payload, _SECRET, algorithm="HS256")
 
 
-def _provider(issuer: str = _ISSUER, audience: str = _AUDIENCE) -> OIDCProvider:
+def _json_response(payload: dict) -> MagicMock:
+    """A minimal stand-in for an httpx response carrying *payload*."""
+    response = MagicMock()
+    response.json.return_value = payload
+    response.raise_for_status = MagicMock()
+    return response
+
+
+def _discovery_then_jwks(jwks: dict) -> list[MagicMock]:
+    """Responses for the two GETs a key fetch makes: discovery, then keys."""
+    return [_json_response({"jwks_uri": _JWKS_URI}), _json_response(jwks)]
+
+
+def _provider(issuer: str = _ISSUER, audience: str = _AUDIENCE, jwks_uri: str = "") -> OIDCProvider:
     """Return an OIDCProvider that never hits the network (JWKS mocked)."""
     config = OIDCConfig(
         issuer=issuer,
         client_id=_CLIENT_ID,
         client_secret="secret",
         audience=audience,
+        jwks_uri=jwks_uri,
     )
     provider = OIDCProvider(config)
     # Inject a fake JWKS dict; the actual key material is irrelevant because
@@ -70,23 +85,30 @@ def _provider(issuer: str = _ISSUER, audience: str = _AUDIENCE) -> OIDCProvider:
 
 
 class TestOIDCConfig:
-    def test_jwks_uri_appends_well_known(self) -> None:
+    def test_discovery_uri_appends_well_known(self) -> None:
+        # OIDC Discovery 1.0 puts the provider configuration here; the JWKS
+        # endpoint is a field *inside* that document, never a path derived
+        # from the issuer (real providers serve keys from another host).
         config = OIDCConfig(
             issuer="https://login.example.com",
             client_id="c",
             client_secret="s",
             audience="a",
         )
-        assert config.jwks_uri == "https://login.example.com/.well-known/jwks.json"
+        assert config.discovery_uri == "https://login.example.com/.well-known/openid-configuration"
 
-    def test_jwks_uri_strips_trailing_slash(self) -> None:
+    def test_discovery_uri_strips_trailing_slash(self) -> None:
         config = OIDCConfig(
             issuer="https://login.example.com/",
             client_id="c",
             client_secret="s",
             audience="a",
         )
-        assert config.jwks_uri == "https://login.example.com/.well-known/jwks.json"
+        assert config.discovery_uri == "https://login.example.com/.well-known/openid-configuration"
+
+    def test_jwks_uri_is_unset_by_default(self) -> None:
+        config = OIDCConfig(issuer="https://login.example.com", client_id="c", client_secret="s", audience="a")
+        assert config.jwks_uri == ""
 
     def test_default_scopes(self) -> None:
         config = OIDCConfig(issuer="https://x", client_id="c", client_secret="s", audience="a")
@@ -107,38 +129,41 @@ class TestOIDCProviderInit:
 
     def test_jwks_fetch_succeeds(self) -> None:
         fake_jwks = {"keys": [{"kty": "RSA", "kid": "1", "n": "abc", "e": "AQAB"}]}
-        mock_response = MagicMock()
-        mock_response.json.return_value = fake_jwks
-        mock_response.raise_for_status = MagicMock()
 
-        with patch("httpx.get", return_value=mock_response):
+        with patch("httpx.get", side_effect=_discovery_then_jwks(fake_jwks)):
             provider = _provider()
             provider._jwks = None  # force refetch
-            provider._fetch_jwks()
             assert provider._fetch_jwks() == fake_jwks
 
     def test_jwks_fetch_failure_raises_auth_error(self) -> None:
         import httpx
 
+        # Pin the JWKS endpoint so the failure under test is the key fetch
+        # itself, not discovery (covered separately).
         with patch("httpx.get", side_effect=httpx.ConnectError("refused")):
-            provider = _provider()
+            provider = _provider(jwks_uri=_JWKS_URI)
             provider._jwks = None
             with pytest.raises(AuthError, match="Failed to fetch JWKS"):
                 provider._fetch_jwks()
 
-    def test_jwks_cached_after_first_call(self) -> None:
-        fake_jwks = {"keys": []}
-        mock_response = MagicMock()
-        mock_response.json.return_value = fake_jwks
-        mock_response.raise_for_status = MagicMock()
+    def test_discovery_fetch_failure_raises_auth_error(self) -> None:
+        import httpx
 
-        with patch("httpx.get", return_value=mock_response) as mock_get:
+        with patch("httpx.get", side_effect=httpx.ConnectError("refused")):
+            provider = _provider()
+            provider._jwks = None
+            with pytest.raises(AuthError, match="discovery document"):
+                provider._fetch_jwks()
+
+    def test_jwks_cached_after_first_call(self) -> None:
+        with patch("httpx.get", side_effect=_discovery_then_jwks({"keys": []})) as mock_get:
             provider = _provider()
             provider._jwks = None
             provider._get_jwks()
+            calls_after_first = mock_get.call_count
             provider._get_jwks()
             # Second call must NOT hit the network again
-            mock_get.assert_called_once()
+            assert mock_get.call_count == calls_after_first
 
 
 # ---------------------------------------------------------------------------

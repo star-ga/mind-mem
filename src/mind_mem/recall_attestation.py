@@ -252,10 +252,18 @@ def derive_legs(
             ran.add(LEG_VECTOR)
         else:
             degraded.add(LEG_VECTOR)
-    # A vector leg that was never requested must not appear as degraded even if
-    # a stray marker leaked one in — degradation is only meaningful relative to
-    # what the run asked for.
-    elif not vector_requested and LEG_VECTOR in degraded and not (marker_names_vector or pg_fallback):
+    # A vector leg that was never requested must not appear as degraded just
+    # because a stray marker leaked one in — degradation is only meaningful
+    # relative to what the run asked for. ``pg_fallback`` is the one signal
+    # that survives an unrequested leg: it is recorded per-hit provenance
+    # saying a dense leg really was attempted server-side and served BM25.
+    #
+    # The condition used to also require ``not marker_names_vector``, which is
+    # by construction true here (``marker_names_vector`` IS ``LEG_VECTOR in
+    # degraded`` at this point, and nothing outside the ``vector_requested``
+    # branch adds to ``degraded``), so the discard could never run and the
+    # comment described behaviour the code did not have.
+    elif LEG_VECTOR in degraded and not pg_fallback:
         degraded.discard(LEG_VECTOR)
 
     # Graph leg: recorded per-hit provenance.

@@ -215,13 +215,29 @@ def _turn_text(raw: Any) -> str:
     return ""
 
 
+def _turn_content(turn: Mapping[str, Any]) -> str:
+    """First non-empty content field of *turn*, in ``_CONTENT_KEYS`` order.
+
+    Resolution is by *value*, not by key presence: an exporter that emits
+    ``{"content": null, "text": "…"}`` carries its payload under the
+    alternate key, and a chained ``turn.get("content", turn.get("text"))``
+    would return the null and drop the turn. Mirrors the ``or``-chaining
+    the mem0 parser uses.
+    """
+    for key in _CONTENT_KEYS:
+        text = _turn_text(turn.get(key))
+        if text:
+            return text
+    return ""
+
+
 def _session_records(session: Mapping[str, Any], turns: Sequence[Any], fallback: str) -> list[ImportRecord]:
     label = first_str(session, ("session_id", "id", "conversation_id", "name", "title")) or fallback
     records: list[ImportRecord] = []
     for index, turn in enumerate(turns):
         if not isinstance(turn, Mapping):
             raise ImportParseError(f"chat turn #{index} of session {label!r} must be a JSON object, got {type(turn).__name__}")
-        text = _turn_text(turn.get("content", turn.get("text", turn.get("message", turn.get("value")))))
+        text = _turn_content(turn)
         if not text:
             continue
         role = first_str(turn, _ROLE_KEYS) or "unknown"
@@ -255,6 +271,22 @@ def _looks_like_turn(entry: Any) -> bool:
     return isinstance(entry, Mapping) and any(key in entry for key in _ROLE_KEYS + _CONTENT_KEYS)
 
 
+def _looks_like_session(entry: Any) -> bool:
+    """True when *entry* is shaped like a session wrapper, not a turn.
+
+    Non-raising counterpart of :func:`_turns_of`, used only to classify a
+    top-level list. ``"message"`` is both a content key and a turn-array
+    key, so a turn carrying structured parts under ``message`` must not
+    be mistaken for a session: an entry that is itself turn-shaped stays
+    a turn.
+    """
+    if not isinstance(entry, Mapping):
+        return False
+    if not any(isinstance(entry.get(key), list) for key in MESSAGE_KEYS):
+        return False
+    return not _looks_like_turn(entry)
+
+
 def parse_chat_json(payload: Any) -> tuple[ImportRecord, ...]:
     """Parse a chat-session transcript into one record per turn.
 
@@ -265,8 +297,17 @@ def parse_chat_json(payload: Any) -> tuple[ImportRecord, ...]:
     """
     if isinstance(payload, list):
         entries: list[Any] = payload
-        if entries and all(_looks_like_turn(e) for e in entries):
-            return tuple(_session_records({}, entries, "session"))
+        # A turn list, not a session list, when no entry carries a turn
+        # array and at least one is turn-shaped. Requiring EVERY entry to
+        # be turn-shaped rejected a transcript holding one metadata or
+        # tool-call record among real turns — and then blamed entry #0,
+        # a valid turn, in the diagnostic. The per-turn consumer already
+        # skips a record it cannot read text from.
+        if entries and not any(_looks_like_session(e) for e in entries) and any(_looks_like_turn(e) for e in entries):
+            turn_records = _session_records({}, entries, "session")
+            if not turn_records:
+                raise ImportParseError(f"chat transcript has {len(entries)} turn(s) but none carry any text")
+            return tuple(turn_records)
         records: list[ImportRecord] = []
         for index, entry in enumerate(entries):
             if not isinstance(entry, Mapping):
@@ -276,7 +317,9 @@ def parse_chat_json(payload: Any) -> tuple[ImportRecord, ...]:
                 raise ImportParseError(f"chat transcript entry #{index} has no turn array (looked for: {', '.join(MESSAGE_KEYS)})")
             records.extend(_session_records(entry, turns, f"session-{index}"))
         if not records:
-            raise ImportParseError("chat transcript is an empty list")
+            if not entries:
+                raise ImportParseError("chat transcript is an empty list")
+            raise ImportParseError(f"chat transcript has {len(entries)} session(s) but no turn carries any text")
         return tuple(records)
 
     mapping = require_mapping(payload, "chatjson")
@@ -291,7 +334,10 @@ def parse_chat_json(payload: Any) -> tuple[ImportRecord, ...]:
     if turns is None:
         known = ", ".join(sorted(str(k) for k in mapping.keys())) or "none"
         raise ImportParseError(f"chat transcript has no turn array (looked for: {', '.join(MESSAGE_KEYS)}; top-level keys: {known})")
-    return tuple(_session_records(mapping, turns, "session"))
+    session_records = _session_records(mapping, turns, "session")
+    if not session_records:
+        raise ImportParseError(f"chat transcript has {len(turns)} turn(s) but none carry any text")
+    return tuple(session_records)
 
 
 def resolve_links(records: Iterable[ImportRecord]) -> dict[str, str]:

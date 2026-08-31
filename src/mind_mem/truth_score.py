@@ -25,8 +25,15 @@ where evidence aggregates:
 * **Access freshness** — blocks the recall layer surfaces without
   user correction gain a small mass (implicit "this was useful").
 
-Pure function — no I/O. The caller feeds in whatever contradiction
+No I/O and no hidden state: the caller feeds in whatever contradiction
 graph it already has (``governance_gate`` already maintains one).
+
+The one impurity is deliberate — the age term needs "now", and by
+default reads the wall clock, so the same block scored on two different
+days (or under two different clocks) yields two different values. Pass
+``now=<aware datetime>`` to pin it and get a reproducible score; that is
+the form to use anywhere the score is recorded in an artifact rather
+than displayed.
 
 Exposed on recall results as ``block.truth_score`` when
 ``retrieval.truth_score.enabled`` is true in ``mind-mem.json``.
@@ -67,14 +74,17 @@ _DEFAULT_AGE_HALF_LIFE_DAYS = 180.0
 _CONTRADICTION_WEIGHT = 0.18
 
 
-def _days_since(date_str: str | None) -> float | None:
+def _days_since(date_str: str | None, now: datetime | None = None) -> float | None:
     if not date_str:
         return None
     try:
         dt = datetime.strptime(str(date_str)[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
         return None
-    delta = datetime.now(timezone.utc) - dt
+    reference = now if now is not None else datetime.now(timezone.utc)
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=timezone.utc)
+    delta = reference - dt
     return max(0.0, delta.days)
 
 
@@ -96,6 +106,7 @@ def truth_score(
     *,
     contradiction_votes: list[dict] | None = None,
     age_half_life_days: float = _DEFAULT_AGE_HALF_LIFE_DAYS,
+    now: datetime | None = None,
 ) -> float:
     """Compute a [0, 1] probabilistic truth estimate for a block.
 
@@ -108,6 +119,10 @@ def truth_score(
             harder). Empty / None skips the contradiction term.
         age_half_life_days: Half-life for the age decay term. Shorter
             values push older blocks to lower scores faster.
+        now: Reference instant for the age term. Defaults to the wall
+            clock, which makes the result depend on the day it is
+            computed; pass an aware ``datetime`` to pin it and get a
+            reproducible score. A naive value is read as UTC.
 
     Returns:
         A value in [0.01, 0.99] — clamped so downstream callers can
@@ -117,7 +132,7 @@ def truth_score(
 
     # Age term — decay from the block's own date field.
     created = block.get("Created") or block.get("Date")
-    days = _days_since(created)
+    days = _days_since(created, now)
     age_mult = _age_factor(days, age_half_life_days) if days is not None else 1.0
 
     # Contradiction term — each vote subtracts proportional mass.
@@ -154,12 +169,17 @@ def annotate_results(
     *,
     contradiction_graph: dict[str, list[dict]] | None = None,
     age_half_life_days: float = _DEFAULT_AGE_HALF_LIFE_DAYS,
+    now: datetime | None = None,
 ) -> list[dict]:
     """Attach ``truth_score`` to every result in-place (and return).
 
     ``contradiction_graph`` maps ``block_id`` → list of vote dicts for
     blocks that contradict it. Callers with an existing governance
     graph pass theirs; the scorer doesn't build its own.
+
+    ``now`` is forwarded to :func:`truth_score`; supplying it makes the
+    whole annotation pass reproducible (one instant for every result,
+    rather than one clock read per block).
     """
     if not results:
         return results
@@ -171,6 +191,7 @@ def annotate_results(
             r,
             contradiction_votes=votes_for.get(bid, []),
             age_half_life_days=age_half_life_days,
+            now=now,
         )
         annotated += 1
     _log.info("truth_score_annotated", count=annotated)

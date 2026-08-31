@@ -10,9 +10,9 @@ Usage:
     python3 maintenance/block_parser.py tasks/TASKS.md --active-only --json
 
 As library:
-    from .block_parser import parse_file, parse_blocks
+    from .block_parser import parse_file, parse_blocks, get_active
     blocks = parse_file("decisions/DECISIONS.md")
-    active = [b for b in blocks if b.get("Status") == "active"]
+    active = get_active(blocks)
 """
 
 from __future__ import annotations
@@ -547,7 +547,12 @@ def _coerce_value(s: str) -> Any:
 
 
 def parse_file(filepath: str, *, strict: bool = False) -> list[dict]:
-    """Parse blocks from a file path. Files >100KB are truncated.
+    """Parse blocks from a file path.
+
+    The whole file is read. Only a file over the ``MAX_PARSE_SIZE`` DoS
+    guard (64 MB) is truncated, and then only at a block boundary and with
+    a loud warning naming the dropped bytes — parsing never silently
+    discards blocks inside the cap.
 
     Args:
         filepath: Path to the markdown file.
@@ -709,8 +714,24 @@ def deduplicate_chunks(results: list[dict]) -> list[dict]:
 
 
 def get_active(blocks: list[dict], status_field: str = "Status", active_value: str = "active") -> list[dict]:
-    """Filter blocks to only active ones."""
-    return [b for b in blocks if b.get(status_field) == active_value]
+    """Filter blocks to only active ones.
+
+    Status spelling is normalised on both sides — surrounding whitespace
+    stripped, case folded — because a real corpus holds ``Active`` beside
+    ``active`` and they are one state. This is the same normalisation the
+    servability check (``enums.is_servable``) and the admissibility gate
+    (``admissibility.is_admissible_status``) already apply; an exact-case
+    comparison here would withhold from ``active_only`` recall a block
+    those layers would happily serve.
+    """
+    want = active_value.strip().lower() if isinstance(active_value, str) else active_value
+
+    def _matches(value: object) -> bool:
+        if isinstance(value, str) and isinstance(want, str):
+            return value.strip().lower() == want
+        return bool(value == want)
+
+    return [b for b in blocks if _matches(b.get(status_field))]
 
 
 def get_by_id(blocks: list[dict], block_id: str) -> dict | None:

@@ -15,6 +15,7 @@ Exit codes: 0 = applied, 1 = failed (rolled back), 2 = validation error
 
 import difflib
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -340,10 +341,21 @@ def check_preconditions(ws):
         report.append(f"validate: ERROR ({e})")
         return False, report
 
-    # P3: intel_scan.py (from installation, not workspace)
-    intel_scan = os.path.join(_script_dir, "intel_scan.py")
-    if not os.path.isfile(intel_scan):
-        report.append("intel_scan: SKIP (script not found)")
+    # P3: intel_scan, run as a module (from installation, not workspace).
+    #
+    # The gate must probe the same thing the subprocess below needs --
+    # importability of ``mind_mem.intel_scan`` -- not the presence of an
+    # ``intel_scan.py`` file next to this one. Those are different questions:
+    # a deployment that ships the package without source files beside it
+    # (zipimport/zipapp, pyc-only) answers "no file" while ``python -m
+    # mind_mem.intel_scan`` would have run perfectly, and the apply pipeline
+    # then proceeds with the critical-findings scan silently never run.
+    try:
+        intel_scan_spec = importlib.util.find_spec("mind_mem.intel_scan")
+    except (ImportError, ValueError):  # pragma: no cover — defensive
+        intel_scan_spec = None
+    if intel_scan_spec is None:
+        report.append("intel_scan: SKIP (module not importable)")
         return True, report
     try:
         result = subprocess.run(  # nosec B603 — fixed argument list using sys.executable; no user input in args; shell=False (default)
@@ -436,7 +448,10 @@ def write_receipt(snap_dir, proposal, ts, pre_checks, status="in_progress"):
     ops_desc = ", ".join(op.get("op", "?") for op in proposal.get("Ops", []))
     lines = [
         f"[AR-{ts}]",
-        f"Date: {datetime.now().strftime('%Y-%m-%d')}",
+        # UTC, like every other stamp this module writes into a durable
+        # artifact: a local calendar date next to a UTC ``last_apply_ts``
+        # dates the same apply to two different days on a far-from-UTC host.
+        f"Date: {_utc_now().strftime('%Y-%m-%d')}",
         f"Proposal: {proposal.get('ProposalId', '?')}",
         f"Action: {ops_desc}",
         f"Result: {status}",
@@ -1072,7 +1087,13 @@ def check_deferred_cooldown(ws, proposal):
     if not target:
         return True, "No target"
 
-    cutoff = datetime.now() - timedelta(days=cooldown_days)
+    # Both sides must be timezone-aware UTC. ``Created:`` is authored outside
+    # this package and routinely carries the "Z" designator, which
+    # ``fromisoformat`` parses into an AWARE datetime on 3.11+; comparing that
+    # against a naive local cutoff raises TypeError, the handler below swallows
+    # it, and the cooldown silently passes every proposal that spelled its
+    # timestamp the documented way. Same hazard as check_no_touch_window.
+    cutoff = _utc_now() - timedelta(days=cooldown_days)
 
     for pfile in PROPOSED_FILES:
         path = os.path.join(ws, pfile)
@@ -1083,7 +1104,7 @@ def check_deferred_cooldown(ws, proposal):
             if b.get("Status") in ("rejected", "deferred") and b.get("TargetBlock") == target:
                 created = b.get("Created", "")
                 try:
-                    created_dt = datetime.fromisoformat(created)
+                    created_dt = _parse_audit_ts(created)
                     if created_dt > cutoff:
                         pid = b.get("ProposalId")
                         return False, (f"Target {target} has {b.get('Status')} proposal {pid} within {cooldown_days}d cooldown")
@@ -1340,7 +1361,10 @@ def _apply_proposal_locked(ws, proposal, proposal_id, source_file, lock):
         print(f"\n  WAL: Replayed {replayed} pending entry(ies) from prior crash")
 
     # 4. Create snapshot AFTER WAL recovery (O1: snapshot before any mutation)
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    # UTC: this ts names the snapshot directory AND is the receipt id quoted
+    # back on rollback, so it is a durable audit identifier and follows the
+    # module's UTC contract rather than the host's local wall clock.
+    ts = _utc_now().strftime("%Y%m%d-%H%M%S")
     print(f"\n--- Creating Snapshot: {ts} ---")
     # Record pre-apply file listing for orphan detection
     pre_apply_files = _list_workspace_files(ws)
@@ -1603,7 +1627,7 @@ def _mark_proposal_status(source_file, proposal_id, new_status, *, reason=""):
         return False
 
 
-def rollback(ws, receipt_ts, reason=""):
+def rollback(ws, receipt_ts, reason="", strict=False):
     """Rollback from a receipt timestamp.
 
     Args:
@@ -1613,6 +1637,14 @@ def rollback(ws, receipt_ts, reason=""):
             MCP-tool layer (``rollback_proposal``); empty strings are
             permitted here so internal callers (tests, snapshots) keep
             working without the discipline gate.
+        strict: when ``True``, a restored workspace that fails the
+            post-rollback precondition checks makes this return ``False``.
+            Default ``False`` keeps the return value meaning "the restore
+            happened" for the MCP layer, which uses it to decide whether to
+            flush the recall cache — a stale cache over a restored tree is
+            worse than a validation warning. The CLI opts in, so an
+            automated caller reading only the exit code is never told a
+            workspace that fails validation is sound.
     """
     ws = os.path.realpath(ws)
     # Sanitize receipt_ts: must match YYYYMMDD-HHMMSS format (no traversal)
@@ -1635,9 +1667,22 @@ def rollback(ws, receipt_ts, reason=""):
 
     # Re-run checks
     print("\n--- Post-rollback checks ---")
-    ok, report = check_preconditions(ws)
+    postcheck_ok, report = check_preconditions(ws)
     for r in report:
         print(f"  {r}")
+    if not postcheck_ok:
+        # check_preconditions shells out to the validator and the intel scan;
+        # discarding its verdict here meant a rollback whose restored corpus
+        # fails validation reported exactly like a clean one. Announced on
+        # stdout (the MCP layer captures stdout into its `log`) and on stderr
+        # (for the operator), and carried into the closing banner below.
+        warning = (
+            "WARNING: post-rollback validation FAILED — the workspace was restored, "
+            "but the restored corpus does not pass the precondition checks above."
+        )
+        print(warning)
+        print(warning, file=sys.stderr)
+        _log.warning("rollback_postcheck_failed", receipt_ts=receipt_ts)
 
     # Update receipt — guarded by FileLock so concurrent rollbacks of the
     # same receipt don't interleave Reason: lines on top of each other.
@@ -1692,8 +1737,27 @@ def rollback(ws, receipt_ts, reason=""):
                 file=sys.stderr,
             )
             return False
+    else:
+        # Reachable without anyone deleting anything: a precondition failure
+        # inside apply_proposal restores the snapshot and returns BEFORE
+        # write_receipt, leaving intelligence/applied/<ts>/ with no receipt.
+        # Rolling that ts back restores the files but has no Proposal: id to
+        # reconcile the governance record against — a legitimate outcome, but
+        # it must not print the same banner as a fully reconciled rollback.
+        msg = (
+            f"WARNING: no APPLY_RECEIPT.md in {snap_dir} — files were restored, but no "
+            "proposal status was reconciled and no rollback record was appended."
+        )
+        print(msg)
+        print(msg, file=sys.stderr)
+        _log.warning("rollback_receipt_missing", receipt_ts=receipt_ts, snap_dir=snap_dir)
 
-    print(f"\n═══ ROLLED BACK from {receipt_ts} ═══")
+    if not postcheck_ok:
+        print(f"\n═══ ROLLED BACK from {receipt_ts} — POST-ROLLBACK VALIDATION FAILED ═══")
+        if strict:
+            return False
+    else:
+        print(f"\n═══ ROLLED BACK from {receipt_ts} ═══")
     return True
 
 
@@ -1715,7 +1779,10 @@ if __name__ == "__main__":
     os.chdir(ws)
 
     if args.rollback:
-        ok = rollback(ws, args.rollback)
+        # strict: exit non-zero when the restored workspace fails validation,
+        # so a CI step that reads only the exit code cannot mistake a corpus
+        # that still fails its checks for a sound one.
+        ok = rollback(ws, args.rollback, strict=True)
         sys.exit(0 if ok else 1)
 
     if not args.proposal_id:

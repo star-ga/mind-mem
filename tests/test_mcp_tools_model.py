@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import struct
 from pathlib import Path
 
@@ -199,3 +200,69 @@ class TestVerifyModelTool:
         result = json.loads(verify_model_tool(""))
         assert "error" in result
         assert "non-empty" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# Generated private-key permissions
+# ---------------------------------------------------------------------------
+
+
+posix_only = pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits")
+
+
+class TestGeneratedPrivateKeyPermissions:
+    @posix_only
+    def test_key_is_created_owner_only_not_narrowed_afterwards(
+        self,
+        tiny_ckpt: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The mode must come from the create call, not a follow-up chmod.
+
+        Disabling ``os.chmod`` leaves only the permissions the file was
+        created with. ``write_bytes`` creates ``0666 & ~umask`` — under the
+        common 022 umask that is a world-readable signing key for the width
+        of the chmod that used to follow.
+        """
+        monkeypatch.setattr(os, "chmod", lambda *a, **kw: None)
+        prefix = str(tmp_path / "created")
+        # Pin the umask so the assertion does not depend on the runner's:
+        # under 022 the old create-then-chmod order lands 0644.
+        previous_umask = os.umask(0o022)
+        try:
+            result = json.loads(sign_model_tool(str(tiny_ckpt), generate_key_prefix=prefix))
+        finally:
+            os.umask(previous_umask)
+
+        assert result["ok"] is True
+        mode = (tmp_path / "created.sk").stat().st_mode & 0o777
+        assert mode == 0o600, f"private key created with mode {mode:04o}"
+
+    @posix_only
+    def test_unsecurable_key_fails_and_is_not_left_behind(
+        self,
+        tiny_ckpt: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A filesystem that refuses to narrow the key must fail the call.
+
+        Reproduced with a pre-existing wide-mode key file (``O_CREAT``'s
+        mode applies only to a newly created file, exactly as a fixed-fmask
+        mount behaves) plus a chmod that will not take.
+        """
+        sk_path = tmp_path / "stuck.sk"
+        sk_path.write_bytes(b"\x00" * 32)
+        os.chmod(sk_path, 0o644)
+
+        def _refuse(*args: object, **kwargs: object) -> None:
+            raise OSError(1, "Operation not permitted")
+
+        monkeypatch.setattr(os, "fchmod", _refuse)
+
+        result = json.loads(sign_model_tool(str(tiny_ckpt), generate_key_prefix=str(tmp_path / "stuck")))
+
+        assert result["ok"] is False
+        assert "private key" in result["error"]
+        assert not sk_path.exists(), "a private key we could not secure was left on disk"

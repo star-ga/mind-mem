@@ -27,6 +27,14 @@ import time
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from .observability import get_logger
+
+_log = get_logger("ledger_anchor")
+
+
+class AnchorHistoryDamagedError(RuntimeError):
+    """Raised by :meth:`AnchorHistory.all` (strict) on an unreadable record."""
+
 
 @dataclass(frozen=True)
 class AnchorEntry:
@@ -49,7 +57,15 @@ class AnchorEntry:
 
 
 class AnchorHistory:
-    """Append-only JSONL history of anchored Merkle roots."""
+    """Append-only JSONL history of anchored Merkle roots.
+
+    A line the reader cannot turn back into an :class:`AnchorEntry` is
+    *damage*, not absence: dropping it silently shortens the history and
+    makes :meth:`latest` hand back the preceding anchor as if it were
+    current. Every unreadable line is therefore reported — as a warning
+    log on each read, through :meth:`problems`, and as a hard error from
+    :meth:`all` when the caller asks for ``strict=True``.
+    """
 
     def __init__(self, path: str) -> None:
         if not path or not path.strip():
@@ -91,20 +107,28 @@ class AnchorHistory:
                 os.fsync(fh.fileno())
         return entry
 
-    def all(self) -> list[AnchorEntry]:
+    def _scan(self) -> tuple[list[AnchorEntry], list[str]]:
+        """Read the log once, returning ``(entries, problems)``.
+
+        *problems* holds one ``"line N: <reason>"`` string per record
+        that could not be reconstructed.
+        """
         if not os.path.isfile(self._path):
-            return []
+            return [], []
         out: list[AnchorEntry] = []
+        problems: list[str] = []
         with open(self._path, "r", encoding="utf-8", errors="replace") as fh:
-            for line in fh:
+            for lineno, line in enumerate(fh, 1):
                 stripped = line.strip()
                 if not stripped:
                     continue
                 try:
                     data = json.loads(stripped)
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as exc:
+                    problems.append(f"line {lineno}: not valid JSON ({exc.msg})")
                     continue
                 if not isinstance(data, dict):
+                    problems.append(f"line {lineno}: expected a JSON object, got {type(data).__name__}")
                     continue
                 try:
                     out.append(
@@ -117,12 +141,45 @@ class AnchorHistory:
                             status=str(data.get("status", "pending")),
                         )
                     )
-                except (KeyError, ValueError, TypeError):
-                    continue
-        return out
+                except (KeyError, ValueError, TypeError) as exc:
+                    problems.append(f"line {lineno}: malformed anchor record ({type(exc).__name__}: {exc})")
+        if problems:
+            _log.warning(
+                "anchor_history_damaged",
+                path=self._path,
+                damaged=len(problems),
+                readable=len(out),
+                first=problems[0],
+            )
+        return out, problems
 
-    def latest(self) -> Optional[AnchorEntry]:
-        entries = self.all()
+    def problems(self) -> list[str]:
+        """Unreadable records in the log, one description per damaged line."""
+        return self._scan()[1]
+
+    def all(self, *, strict: bool = False) -> list[AnchorEntry]:
+        """Every readable anchor, oldest first.
+
+        Args:
+            strict: raise :class:`AnchorHistoryDamagedError` instead of
+                skipping when any record is unreadable. Callers that
+                treat this file as an audit trail — rather than as a
+                best-effort cache — should pass ``True``.
+        """
+        entries, problems = self._scan()
+        if problems and strict:
+            raise AnchorHistoryDamagedError(f"{self._path}: {len(problems)} unreadable record(s): {'; '.join(problems[:3])}")
+        return entries
+
+    def latest(self, *, strict: bool = False) -> Optional[AnchorEntry]:
+        """Most recent readable anchor.
+
+        With ``strict=False`` a damaged tail silently yields the previous
+        anchor, which a caller comparing today's Merkle root would read
+        as a self-consistent older answer — pass ``strict=True`` to make
+        that damage an error instead.
+        """
+        entries = self.all(strict=strict)
         return entries[-1] if entries else None
 
 
@@ -143,4 +200,4 @@ def anchor_root(
     )
 
 
-__all__ = ["AnchorEntry", "AnchorHistory", "anchor_root"]
+__all__ = ["AnchorEntry", "AnchorHistory", "AnchorHistoryDamagedError", "anchor_root"]

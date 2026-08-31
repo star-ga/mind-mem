@@ -94,13 +94,37 @@ class AuditReport:
 # --- Individual checks -------------------------------------------------------
 
 
+def _config_candidates(root: Path) -> list[Path]:
+    """Config files to inspect, de-duplicated and in a stable order.
+
+    ``generation_config.json`` matches two of the globs below, so the raw
+    concatenation lists it twice; ``rglob`` order is also filesystem
+    dependent. Sorting a set fixes both — the same checkpoint must produce
+    the same evidence on every machine.
+    """
+    found = set(root.rglob("config.json")) | set(root.rglob("*_config.json")) | set(root.rglob("generation_config.json"))
+    return sorted(found)
+
+
 def check_remote_code_hooks(root: Path) -> CheckResult:
-    """Fail if any config file has auto_map or trust_remote_code=true."""
+    """Fail if any config file has auto_map or trust_remote_code=true.
+
+    A config that cannot be read or parsed is *flagged*, not skipped. This
+    check's PASS means "inspected every config, found no hooks"; silently
+    dropping the unreadable ones would let it assert that over zero files,
+    and an unparseable ``config.json`` is exactly what an author would ship
+    to hide an ``auto_map`` from a scanner that a loader still honours.
+    """
     hits: list[str] = []
-    for cfg in list(root.rglob("config.json")) + list(root.rglob("*_config.json")) + list(root.rglob("generation_config.json")):
+    candidates = _config_candidates(root)
+    for cfg in candidates:
         try:
-            data = json.loads(cfg.read_text())
-        except Exception:
+            data = json.loads(cfg.read_text(encoding="utf-8"))
+        except Exception as exc:
+            hits.append(f"{cfg.name}: unreadable ({exc})")
+            continue
+        if not isinstance(data, dict):
+            hits.append(f"{cfg.name}: not a JSON object ({type(data).__name__})")
             continue
         if "auto_map" in data:
             hits.append(f"{cfg.name}: auto_map -> {data['auto_map']}")
@@ -109,7 +133,11 @@ def check_remote_code_hooks(root: Path) -> CheckResult:
     return CheckResult(
         name="remote_code_hooks",
         passed=not hits,
-        detail="no auto_map or trust_remote_code flags" if not hits else f"{len(hits)} hook(s) found",
+        detail=(
+            f"{len(candidates)} config file(s) parsed, no auto_map or trust_remote_code flags"
+            if not hits
+            else f"{len(hits)} problem(s) found"
+        ),
         evidence=hits,
     )
 
@@ -287,8 +315,13 @@ def check_tokenizer_injection(root: Path) -> CheckResult:
     surface is: added_tokens, special_tokens, post_processor templates, and
     chat_template strings, where a malicious author can smuggle content that
     the *model sees* every turn or that tooling *renders* at load time.
+
+    A tokenizer file that cannot be read or parsed is flagged rather than
+    skipped: "no suspicious strings" must mean the file was inspected, not
+    that it defeated the reader.
     """
     hits: list[str] = []
+    scanned = 0
 
     def scan_value(source: str, value: Any) -> None:
         if isinstance(value, str):
@@ -308,21 +341,31 @@ def check_tokenizer_injection(root: Path) -> CheckResult:
             for i, v in enumerate(value):
                 scan_value(f"{source}[{i}]", v)
 
-    for tok_file in list(root.rglob("tokenizer.json")):
+    for tok_file in sorted(root.rglob("tokenizer.json")):
         try:
-            data = json.loads(tok_file.read_text())
-        except Exception:
+            data = json.loads(tok_file.read_text(encoding="utf-8"))
+        except Exception as exc:
+            hits.append(f"{tok_file.name}: unreadable ({exc})")
             continue
+        if not isinstance(data, dict):
+            hits.append(f"{tok_file.name}: not a JSON object ({type(data).__name__})")
+            continue
+        scanned += 1
         # High-risk sections only — skip model.vocab and model.merges.
         for field_name in ("added_tokens", "post_processor", "normalizer", "pre_tokenizer", "decoder"):
             if field_name in data:
                 scan_value(f"{tok_file.name}:{field_name}", data[field_name])
 
-    for cfg_file in list(root.rglob("tokenizer_config.json")) + list(root.rglob("special_tokens_map.json")):
+    for cfg_file in sorted(set(root.rglob("tokenizer_config.json")) | set(root.rglob("special_tokens_map.json"))):
         try:
-            data = json.loads(cfg_file.read_text())
-        except Exception:
+            data = json.loads(cfg_file.read_text(encoding="utf-8"))
+        except Exception as exc:
+            hits.append(f"{cfg_file.name}: unreadable ({exc})")
             continue
+        if not isinstance(data, dict):
+            hits.append(f"{cfg_file.name}: not a JSON object ({type(data).__name__})")
+            continue
+        scanned += 1
         for field_name, value in data.items():
             # These are all attack-surface fields — tokenizer_config.json is
             # small and entirely operator-visible, so every field matters.
@@ -331,7 +374,11 @@ def check_tokenizer_injection(root: Path) -> CheckResult:
     return CheckResult(
         name="tokenizer_injection",
         passed=not hits,
-        detail="no embedded URLs or shell patterns in tokenizer metadata" if not hits else f"{len(hits)} suspicious string(s)",
+        detail=(
+            f"{scanned} tokenizer file(s) scanned, no embedded URLs or shell patterns in tokenizer metadata"
+            if not hits
+            else f"{len(hits)} problem(s) found"
+        ),
         evidence=hits[:20],  # cap noise
     )
 

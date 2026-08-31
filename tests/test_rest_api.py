@@ -120,8 +120,23 @@ class TestHealth:
         assert data["workspace_exists"] is True
 
     def test_health_api_version(self, client: TestClient) -> None:
+        """api_version must track the package, not a frozen constant.
+
+        It was hardcoded "3.2.0" while the app declared "3.2.1" and the
+        package was something else again — three numbers for one server.
+        Comparing against __version__ (rather than a second literal) is
+        what keeps them from drifting apart again.
+        """
+        from mind_mem import __version__
+
         data = _json(client.get("/v1/health"))
-        assert data["api_version"] == "3.2.0"
+        assert data["api_version"] == __version__
+
+    def test_health_openapi_version_matches_health_version(self, client: TestClient) -> None:
+        from mind_mem import __version__
+
+        assert _json(client.get("/openapi.json"))["info"]["version"] == __version__
+        assert _json(client.get("/v1/health"))["api_version"] == __version__
 
 
 # ---------------------------------------------------------------------------
@@ -317,19 +332,51 @@ class TestRateLimit:
 
         from mind_mem.mcp.infra.rate_limit import SlidingWindowRateLimiter, _rate_limiters, _rate_limiters_lock
 
-        # Inject a pre-exhausted limiter for the anonymous client bucket
+        # Inject a pre-exhausted limiter for THIS client's bucket. With no
+        # token the bucket key is the source address — a token would key
+        # on its last 16 characters instead.
         tight_limiter = SlidingWindowRateLimiter(max_calls=1, window_seconds=60)
         tight_limiter.allow()  # consume the single slot
 
         with _rate_limiters_lock:
-            # Keys are last-16-chars of token; anonymous = "anonymous"
-            _rate_limiters["anonymous"] = tight_limiter
+            _rate_limiters["10.0.0.7"] = tight_limiter
 
         app = create_app(workspace)
-        with TestClient(app, raise_server_exceptions=False) as tc:
+        with TestClient(app, raise_server_exceptions=False, client=("10.0.0.7", 5000)) as tc:
             resp = tc.post("/v1/recall", json={"query": "test"})
             assert resp.status_code == 429
             assert "Retry-After" in resp.headers
+
+    def test_unauthenticated_clients_do_not_share_one_rate_limit_bucket(self, workspace: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        """One anonymous client's burst must not 429 every other one.
+
+        With no token, `_client_id_from_token` returns the constant
+        "anonymous", and the old bucket expression could never reach
+        `request.client.host` (`or` binds tighter than the conditional,
+        and its left arm is never falsy). So under
+        MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST — the mode
+        `mm serve --allow-unauthenticated-localhost` exists for — every
+        local caller shared one bucket and starved each other.
+        """
+        monkeypatch.delenv("MIND_MEM_TOKEN", raising=False)
+        monkeypatch.delenv("MIND_MEM_ADMIN_TOKEN", raising=False)
+        monkeypatch.setenv("MIND_MEM_ALLOW_UNAUTHENTICATED_LOCALHOST", "1")
+        monkeypatch.setenv("MIND_MEM_WORKSPACE", workspace)
+
+        from mind_mem.mcp.infra.rate_limit import SlidingWindowRateLimiter, _rate_limiters, _rate_limiters_lock
+
+        exhausted = SlidingWindowRateLimiter(max_calls=1, window_seconds=60)
+        exhausted.allow()
+        with _rate_limiters_lock:
+            _rate_limiters.pop("anonymous", None)
+            _rate_limiters.pop("10.0.0.9", None)
+            _rate_limiters["10.0.0.8"] = exhausted
+
+        app = create_app(workspace)
+        with TestClient(app, raise_server_exceptions=False, client=("10.0.0.8", 5000)) as noisy:
+            assert noisy.post("/v1/recall", json={"query": "test"}).status_code == 429
+        with TestClient(app, raise_server_exceptions=False, client=("10.0.0.9", 5000)) as quiet:
+            assert quiet.post("/v1/recall", json={"query": "test"}).status_code == 200
 
 
 # ---------------------------------------------------------------------------

@@ -16,7 +16,10 @@ task and is dropped with a counted reason.
 Each arm runs ``repeats`` times in independent trees.  A candidate whose own
 grading disagrees with itself between two identical runs is dropped as
 ``nondeterministic_grading`` -- it cannot be a benchmark task, because the
-score would move without the agent doing anything.
+score would move without the agent doing anything.  ``repeats`` is therefore
+floored at ``MIN_REPEATS`` (2) and ``validate`` refuses anything smaller: a
+single run per arm has nothing to disagree with, so the check would report
+stable vacuously while the artifact went on advertising it.
 
 Determinism: the child environment is *constructed*, never inherited, so a
 stray ``MIND_MEM_PG_DSN`` in the parent shell cannot reach a run and cannot
@@ -53,6 +56,17 @@ _DURATION = re.compile(r"\d+\.\d+s\b")
 #: Statuses that count as "the test passed".  ``XPASS`` is deliberately not
 #: here: an unexpectedly-passing xfail is not a demonstrated fix.
 _PASSING = frozenset({"PASSED"})
+
+#: Fewest runs per arm that can establish the determinism property.
+#:
+#: ``_arm`` compares every repeat after the first against the first, so with a
+#: single run that comparison is ``all()`` over an empty sequence -- True
+#: unconditionally -- and the ``nondeterministic_grading`` drop becomes
+#: unreachable.  The check does not weaken at ``repeats=1``; it disappears,
+#: silently, while :func:`validate`'s docstring and the published artifact both
+#: go on asserting it.  A run that cannot deliver the guarantee is refused at
+#: the boundary rather than producing a task set that claims one it never had.
+MIN_REPEATS = 2
 
 
 @dataclass(frozen=True)
@@ -299,6 +313,11 @@ def _arm(
     Each repeat gets a freshly extracted tree and a fresh HOME so nothing a
     run leaves behind (a property-test example database, a cache) can steer
     the next one.  ``stable`` is False if any repeat disagreed.
+
+    ``stable`` is only *evidence* of stability when at least two runs happened:
+    one run has nothing to disagree with and reports True vacuously.  Callers
+    that publish the property must not hand this fewer than
+    :data:`MIN_REPEATS`; :func:`validate` enforces that at its own boundary.
     """
     results: list[RunResult] = []
     for index in range(max(1, repeats)):
@@ -328,7 +347,20 @@ def validate(
     property-based fuzz test in this repository flipped between generations
     and changed the artifact's hash, which is exactly the failure the file
     claims not to have.
+
+    Raises ``ValueError`` when *repeats* is below :data:`MIN_REPEATS`.  That is
+    the only honest response: the drop above is a property of the returned task
+    set, and a single run per arm cannot establish it -- ``_arm`` compares the
+    repeats after the first against the first, so one run reports stable
+    vacuously and the drop becomes unreachable.  Silently accepting the value
+    would emit an artifact whose own prose asserts a guarantee the run did not
+    perform, and ``repeats=0`` would additionally record a run count (``0``)
+    that never happened, since the loop floor executes once regardless.
+    Failing at the boundary costs one command; a hollow task set costs every
+    conclusion drawn from it.
     """
+    if int(repeats) < MIN_REPEATS:
+        raise ValueError(f"repeats={repeats} cannot establish nondeterministic_grading; at least {MIN_REPEATS} runs per arm are required")
     tests = list(candidate.added_test_files)
     try:
         parent, parent_stable = _arm(

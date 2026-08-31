@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -141,3 +142,81 @@ class TestVerifyTenant:
             root_secret=b"x" * 32,
         )
         assert result["verified"] is False
+
+
+class _TupleChain:
+    """Chain stand-in with the real AuditChain contract: (is_valid, errors)."""
+
+    def __init__(self, ok: bool) -> None:
+        self._ok = ok
+
+    def verify(self) -> tuple:
+        return (self._ok, [] if self._ok else ["Line 3 (seq 3): prev_hash mismatch"])
+
+
+class TestVerifyTenantPairResult:
+    """A chain reporting (is_valid, errors) must not be read as truthy.
+
+    Every non-empty tuple is truthy, so ``bool(result)`` reports
+    ``(False, [...])`` — a tampered chain — as verified.
+    """
+
+    def test_pair_false_is_reported_unverified(self, tmp_path: Path) -> None:
+        def factory(tenant_id: str, base_path: str) -> _TupleChain:
+            return _TupleChain(ok=False)
+
+        tenant_audit.register_chain_factory(factory)
+        try:
+            result = tenant_audit.verify_tenant("acme", base_path=str(tmp_path), root_secret=b"x" * 32)
+        finally:
+            tenant_audit._factory = None  # type: ignore[attr-defined]
+        assert result["verified"] is False
+
+    def test_pair_true_is_reported_verified(self, tmp_path: Path) -> None:
+        def factory(tenant_id: str, base_path: str) -> _TupleChain:
+            return _TupleChain(ok=True)
+
+        tenant_audit.register_chain_factory(factory)
+        try:
+            result = tenant_audit.verify_tenant("acme", base_path=str(tmp_path), root_secret=b"x" * 32)
+        finally:
+            tenant_audit._factory = None  # type: ignore[attr-defined]
+        assert result["verified"] is True
+
+
+class TestVerifyTenantDefaultChain:
+    """End-to-end over the real audit chain the default factory builds."""
+
+    @staticmethod
+    def _seed(tmp_path: Path, count: int):
+        tenant_audit._factory = None  # type: ignore[attr-defined]  # exercise _default_factory
+        handle = tenant_audit.get_chain("acme", base_path=str(tmp_path), root_secret=b"x" * 32)
+        for i in range(count):
+            handle.chain.append("create_block", f"note-{i}.md", agent="tester", reason="seed")
+        return handle
+
+    @staticmethod
+    def _chain_file(tmp_path: Path) -> Path:
+        return next(tmp_path.rglob("chain.jsonl"))
+
+    def test_clean_chain_reports_record_count(self, tmp_path: Path) -> None:
+        self._seed(tmp_path, 2)
+        result = tenant_audit.verify_tenant("acme", base_path=str(tmp_path), root_secret=b"x" * 32)
+        assert result["verified"] is True
+        assert result["records"] == 2
+
+    def test_broken_prev_hash_linkage_is_not_verified(self, tmp_path: Path) -> None:
+        self._seed(tmp_path, 3)
+        path = self._chain_file(tmp_path)
+        lines = path.read_text(encoding="utf-8").splitlines()
+        entry = json.loads(lines[2])
+        entry["prev_hash"] = "0" * 64
+        lines[2] = json.dumps(entry, separators=(",", ":"))
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        # Ground truth: the chain itself knows it is broken.
+        assert tenant_audit.get_chain("acme", base_path=str(tmp_path), root_secret=b"x" * 32).chain.verify()[0] is False
+
+        result = tenant_audit.verify_tenant("acme", base_path=str(tmp_path), root_secret=b"x" * 32)
+        assert result["verified"] is False
+        assert result["records"] == 3

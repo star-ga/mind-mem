@@ -210,3 +210,64 @@ def test_message_is_withheld_from_recall_until_released(workspace: str) -> None:
     assert [h for h in released_hits if h.get("_id", "").startswith("MSG-")], (
         "control leg failed: recall cannot find the message even when active, so leg 2 proves nothing about the quarantine"
     )
+
+
+# ---------------------------------------------------------------------------
+# ``since`` across the two stamp spellings
+# ---------------------------------------------------------------------------
+
+
+def _fake_corpus(monkeypatch: pytest.MonkeyPatch, blocks: list[dict]) -> None:
+    """Serve *blocks* to ``read_inbox`` without touching a real workspace."""
+    import mind_mem.storage as storage
+
+    monkeypatch.setattr(storage, "iter_blocks", lambda ws, active_only=False: list(blocks))
+
+
+def test_since_dashed_date_excludes_earlier_compact_stamp(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A raw string compare orders these backwards.
+
+    At index 4 a compact stamp holds a digit (0x30+) and a dashed date
+    holds ``-`` (0x2D), so ``'20260101T000000Z' >= '2026-12-31'`` is True
+    and a January message survived a December lower bound.
+    """
+    _fake_corpus(
+        monkeypatch,
+        [{"_id": "MSG-20260101T000000Z-aa", "type": MESSAGE_TYPE, "Statement": "january", "Timestamp": "20260101T000000Z"}],
+    )
+    assert read_inbox("/nonexistent", since="2026-12-31") == []
+
+
+def test_since_compact_stamp_keeps_later_dashed_date_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The mirror case: a dated block must not be dropped by a compact bound."""
+    _fake_corpus(
+        monkeypatch,
+        [{"_id": "MSG-1", "type": MESSAGE_TYPE, "Statement": "dated", "Date": "2026-01-05"}],
+    )
+    kept = read_inbox("/nonexistent", since="20260101T000000Z")
+    assert [m["Statement"] for m in kept] == ["dated"]
+
+
+def test_since_date_only_bound_means_midnight(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_corpus(
+        monkeypatch,
+        [
+            {"_id": "MSG-a", "type": MESSAGE_TYPE, "Statement": "same day", "Timestamp": "20260315T093000Z"},
+            {"_id": "MSG-b", "type": MESSAGE_TYPE, "Statement": "day before", "Timestamp": "20260314T235959Z"},
+        ],
+    )
+    kept = read_inbox("/nonexistent", since="2026-03-15")
+    assert [m["Statement"] for m in kept] == ["same day"]
+
+
+def test_since_same_spelling_is_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Compact-vs-compact keeps behaving exactly as before."""
+    _fake_corpus(
+        monkeypatch,
+        [
+            {"_id": "MSG-a", "type": MESSAGE_TYPE, "Statement": "after", "Timestamp": "20260315T000001Z"},
+            {"_id": "MSG-b", "type": MESSAGE_TYPE, "Statement": "before", "Timestamp": "20260314T000000Z"},
+        ],
+    )
+    kept = read_inbox("/nonexistent", since="20260315T000000Z")
+    assert [m["Statement"] for m in kept] == ["after"]

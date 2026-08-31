@@ -145,9 +145,14 @@ class WAL:
         Pending entries indicate a crash during write. We rollback them
         to restore the pre-write state.
 
-        Returns number of entries replayed.
+        Returns the number of entries that were **actually** rolled back.
+        A ``rollback`` that restored nothing (missing entry file, target
+        escaping the workspace) is not counted and is logged as a
+        failure, so a caller cannot report "workspace restored" over a
+        half-written file that was never touched.
         """
         replayed = 0
+        failed = 0
         if not os.path.isdir(self.wal_dir):
             return 0
 
@@ -158,34 +163,59 @@ class WAL:
             try:
                 with open(entry_path, "r", encoding="utf-8") as f:
                     entry = json.load(f)
-            except (json.JSONDecodeError, OSError):
+            except (json.JSONDecodeError, OSError) as exc:
+                # A WAL record truncated by the very crash this log exists
+                # to recover from must not vanish silently — recovery for
+                # that entry is impossible, so say so.
+                failed += 1
+                _log.error("wal_entry_unreadable", entry=fname, error=str(exc))
                 continue
 
             if entry.get("status") == "pending":
                 entry_id = entry.get("id", fname[:-5])
-                self.rollback(entry_id)
-                replayed += 1
-                _log.info("wal_replay_rollback", entry_id=entry_id)
+                if self.rollback(entry_id):
+                    replayed += 1
+                    _log.info("wal_replay_rollback", entry_id=entry_id)
+                else:
+                    failed += 1
+                    _log.error("wal_replay_failed", entry_id=entry_id, entry=fname)
 
-        if replayed:
-            _log.info("wal_replay_complete", entries=replayed)
+        if replayed or failed:
+            _log.info("wal_replay_complete", entries=replayed, failed=failed)
         return replayed
 
     def pending_count(self) -> int:
-        """Count pending WAL entries."""
+        """Count pending WAL entries (readable ones only).
+
+        Entries too damaged to parse are reported by
+        :meth:`unreadable_count` instead — they are not "clean", they are
+        unrecoverable, and lumping them in here would let a caller treat a
+        corrupt log as an empty one.
+        """
+        return self._scan()[0]
+
+    def unreadable_count(self) -> int:
+        """Count WAL entries that cannot be parsed (truncated / corrupt)."""
+        return self._scan()[1]
+
+    def _scan(self) -> tuple[int, int]:
+        """Return ``(pending, unreadable)`` counts for the WAL directory."""
         if not os.path.isdir(self.wal_dir):
-            return 0
-        count = 0
+            return 0, 0
+        pending = 0
+        unreadable = 0
         for fname in os.listdir(self.wal_dir):
-            if fname.endswith(".json"):
-                try:
-                    with open(os.path.join(self.wal_dir, fname), "r") as f:
-                        entry = json.load(f)
-                    if entry.get("status") == "pending":
-                        count += 1
-                except (json.JSONDecodeError, OSError):
-                    pass
-        return count
+            if not fname.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(self.wal_dir, fname), "r", encoding="utf-8") as f:
+                    entry = json.load(f)
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                unreadable += 1
+                continue
+            if isinstance(entry, dict) and entry.get("status") == "pending":
+                pending += 1
+        return pending, unreadable
 
 
 # ---------------------------------------------------------------------------
@@ -193,32 +223,57 @@ class WAL:
 # ---------------------------------------------------------------------------
 
 
-def backup_workspace(workspace: str, output: str) -> str:
+def backup_workspace(workspace: str, output: str, *, allow_empty: bool = False) -> str:
     """Create a tar.gz backup of the workspace.
 
     Args:
         workspace: Path to workspace
         output: Output file path (.tar.gz)
+        allow_empty: Permit an archive that captured nothing. Off by
+            default: a workspace holding none of ``BACKUP_DIRS`` /
+            ``BACKUP_FILES`` is almost always a mistyped path, and an
+            empty archive is only discovered at restore time.
 
     Returns:
         Path to created backup file
+
+    Raises:
+        FileNotFoundError: *workspace* is not a directory.
+        ValueError: nothing matched and ``allow_empty`` is False. The
+            partial archive is removed so it cannot be mistaken for a
+            real backup.
     """
     ws = os.path.abspath(workspace)
     output = os.path.abspath(output)
 
+    if not os.path.isdir(ws):
+        raise FileNotFoundError(f"workspace is not a directory: {ws}")
+
+    archived: list[str] = []
     with tarfile.open(output, "w:gz") as tar:
         for d in BACKUP_DIRS:
             path = os.path.join(ws, d)
             if os.path.isdir(path):
                 tar.add(path, arcname=d)
+                archived.append(d)
 
         for f in BACKUP_FILES:
             path = os.path.join(ws, f)
             if os.path.isfile(path):
                 tar.add(path, arcname=f)
+                archived.append(f)
+
+    if not archived and not allow_empty:
+        _log.error("backup_empty", workspace=ws, output=output)
+        try:
+            os.unlink(output)
+        except OSError:  # nosec B110 — best effort; the raise below is the signal
+            pass
+        expected = ", ".join(list(BACKUP_DIRS) + BACKUP_FILES)
+        raise ValueError(f"backup captured nothing from {ws} — no corpus directory or config file found (expected one of: {expected})")
 
     size = os.path.getsize(output)
-    _log.info("backup_created", output=output, size_bytes=size)
+    _log.info("backup_created", output=output, size_bytes=size, members=len(archived))
     metrics.inc("backups_created")
     return output
 
@@ -370,6 +425,11 @@ def main() -> None:
     bp = sub.add_parser("backup", help="Create workspace backup")
     bp.add_argument("workspace", help="Workspace path")
     bp.add_argument("--output", "-o", help="Output file (default: mind-mem-backup-<date>.tar.gz)")
+    bp.add_argument(
+        "--allow-empty",
+        action="store_true",
+        help="Write the archive even when the workspace holds nothing to back up (default: fail)",
+    )
 
     # Export
     ep = sub.add_parser("export", help="Export blocks as JSONL")
@@ -391,8 +451,14 @@ def main() -> None:
     if args.command == "backup":
         ws = os.path.abspath(args.workspace)
         output = args.output or f"mind-mem-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}.tar.gz"
-        path = backup_workspace(ws, output)
-        print(f"Backup created: {path} ({os.path.getsize(path)} bytes)")
+        try:
+            path = backup_workspace(ws, output, allow_empty=args.allow_empty)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"Backup failed: {exc}")
+            raise SystemExit(1) from exc
+        with tarfile.open(path, "r:gz") as tar:
+            members = len(tar.getnames())
+        print(f"Backup created: {path} ({os.path.getsize(path)} bytes, {members} entr{'y' if members == 1 else 'ies'})")
 
     elif args.command == "export":
         ws = os.path.abspath(args.workspace)
@@ -414,12 +480,21 @@ def main() -> None:
     elif args.command == "wal-replay":
         ws = os.path.abspath(args.workspace)
         wal = WAL(ws)
-        pending = wal.pending_count()
-        if pending == 0:
+        pending, unreadable = wal._scan()
+        if pending == 0 and unreadable == 0:
             print("No pending WAL entries. Workspace is clean.")
         else:
             replayed = wal.replay()
-            print(f"Replayed {replayed} pending WAL entry(ies). Workspace restored to consistent state.")
+            if replayed == pending and unreadable == 0:
+                print(f"Replayed {replayed} pending WAL entry(ies). Workspace restored to consistent state.")
+            else:
+                print(f"Replayed {replayed} of {pending} pending WAL entry(ies).")
+                if unreadable:
+                    print(f"WARNING: {unreadable} WAL entry(ies) are unreadable (truncated or corrupt) and could not be recovered.")
+                if replayed < pending:
+                    print(f"WARNING: {pending - replayed} pending entry(ies) could not be rolled back.")
+                print(f"Workspace may be inconsistent — inspect {wal.wal_dir} before continuing.")
+                raise SystemExit(1)
 
     else:
         parser.print_help()

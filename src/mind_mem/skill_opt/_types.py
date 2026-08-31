@@ -162,6 +162,16 @@ class SkillScore:
         }
 
 
+#: Smallest panel a two-thirds vote can be taken over. Below it the
+#: fraction degenerates: an empty panel satisfies ``0 >= 0`` and a
+#: single voter is 100% of the electorate, so a mutation reviewed by
+#: nobody — or by exactly one model — would clear a "supermajority"
+#: gate. How large the panel SHOULD be is policy and lives in
+#: ``SkillOptConfig.min_critics``; this is the floor below which the
+#: vote means nothing at all.
+MIN_CRITIC_VOTES = 2
+
+
 @dataclass(frozen=True)
 class ValidationResult:
     """Outcome of validating a mutation against the original."""
@@ -176,12 +186,17 @@ class ValidationResult:
 
     @property
     def accepted(self) -> bool:
+        """True only on a real two-thirds vote of a real panel."""
         if not self.improved:
             return False
         if self.regression_categories:
             return False
+        if len(self.critic_votes) < MIN_CRITIC_VOTES:
+            return False
         yes = sum(1 for v in self.critic_votes.values() if v)
-        return yes >= len(self.critic_votes) * 2 / 3
+        # Integer form of ``yes >= 2/3 of the panel`` — same threshold,
+        # without the binary-float rounding on thirds.
+        return yes * 3 >= len(self.critic_votes) * 2
 
     def as_dict(self) -> dict[str, Any]:
         return {

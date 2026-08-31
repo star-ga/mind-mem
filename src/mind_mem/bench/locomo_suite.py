@@ -25,9 +25,10 @@ Honesty rails (this harness is the honesty item):
   * both recall protocols (``recall_any@k`` AND ``recall_all@k``) at every k
     are always computed — neither is cherry-picked;
   * the scorecard discloses the **sample size**, the exercised **backend**
-    (declared-vs-effective probe), and **whether the vector/embedder leg was
-    exercised** — a config-less fallback can never be reported as the full
-    stack;
+    (declared-vs-effective probe), and **whether the vector/embedder dependency
+    is installed** — the probe reports availability, not use, so it is labelled
+    as availability; the leg is exercised only when the config enables it, and a
+    config-less fallback can never be reported as the full stack;
   * only numbers this harness measured go in the results table;
   * the repo's prior LoCoMo figures are LLM-judge *answer-quality* scores — a
     **different metric** measured by an external judge — and are NOT restated
@@ -295,12 +296,17 @@ def render_scorecard(
     if probe is not None:
         lines.append(f"- **Declared backend:** `{probe.declared_backend}`")
         lines.append(f"- **Effective backend (probed):** `{probe.effective_backend}`")
-        lines.append(f"- **Vector/embedder leg exercised:** `{probe.vector_available}`")
+        # The probe answers "is the embedder package importable", not
+        # "did this run use it" — the default config leaves vector
+        # disabled, so labelling it as an exercised leg would report a
+        # BM25-only run as the full stack. Same wording as the
+        # LongMemEval scorecard, which reports the same field.
+        lines.append(f"- **Vector deps available (installed, not necessarily used):** `{probe.vector_available}`")
         lines.append(f"- **Config SHA-256 (16):** `{probe.config_sha256}`")
         if probe.notes:
             lines.append(f"- **Probe notes:** {probe.notes}")
     else:
-        lines.append("- **Vector/embedder leg exercised:** `unknown` (no probe — nothing scored)")
+        lines.append("- **Vector deps available:** `unknown` (no probe — nothing scored)")
     lines.append(f"- **Embedder:** {embedder}")
     lines.append(f"- **k (retrieval depth):** {k}")
     lines.append("- **Retrieval granularity:** whole session (turns concatenated), untruncated at ingest")
@@ -348,7 +354,8 @@ def render_scorecard(
     lines.append(
         "- **Sample size + pipeline disclosed.** The disclosure block above states how many "
         "questions were scored, the effective backend (probed, not assumed), and whether the "
-        "vector/embedder leg was exercised — a config-less fallback can never be reported as "
+        "vector/embedder dependency is installed — availability, not use: the leg is exercised "
+        "only when the config enables it, and a config-less fallback can never be reported as "
         "the full stack."
     )
     lines.append(

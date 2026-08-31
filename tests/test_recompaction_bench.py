@@ -77,6 +77,65 @@ def test_probes_present_zero_when_nothing_survives():
     assert probes_present({"XYZ123"}, "no matching content here") == 0.0
 
 
+# --- probe presence is TOKEN-level, never raw substring ----------------------
+#
+# Regression guard: `p in text` credited a rewrite for a fact it dropped
+# ("5" is a substring of "59", "Mind" of "Mindless"). Because
+# recompaction_score = fact_retention * convergence_rate, that inflated the
+# one number this module exists to publish, and inverted the conservative
+# bias the whole proxy is defensible for.
+
+
+def test_probes_present_does_not_credit_digit_inside_longer_number():
+    assert probes_present({"5"}, "there were 59 items") == 0.0
+
+
+def test_probes_present_does_not_credit_word_inside_longer_word():
+    assert probes_present({"Mind"}, "a Mindless rewrite") == 0.0
+
+
+def test_probes_present_does_not_credit_number_inside_grouped_number():
+    # "1,469" is a different fact from a bare "469".
+    assert probes_present({"469"}, "there are 1,469 blocks") == 0.0
+
+
+def test_probes_present_dropped_facts_score_zero_end_to_end():
+    """The audited case: a rewrite that drops every fact must not score 1.0."""
+    probes = extract_probes("cluster 5 of 9 in Mind")
+    assert probes == {"5", "9", "Mind"}
+    assert probes_present(probes, "as of 2025 there were 59 Mindless items") == 0.0
+
+
+def test_probes_present_still_credits_whole_token_matches():
+    probes = {"1469", "Nikolai", "PRJ-mind", "2026-07-10"}
+    text = "Nikolai closed PRJ-mind on 2026-07-10 with 1469 blocks."
+    assert probes_present(probes, text) == 1.0
+
+
+def test_probes_present_matches_probe_that_starts_on_punctuation():
+    # A quoted probe whose edges are not word characters gets no boundary
+    # guard on that edge — it must still match where it really occurs.
+    assert probes_present({"(beta)"}, "the tag(beta) survived") == 1.0
+
+
+def test_probes_present_identity_rewrite_is_always_perfect():
+    """Self-consistency: an unchanged rewrite loses nothing.
+
+    The echo control depends on this — if boundary matching ever reported a
+    probe missing from the very text it was extracted from, the harness would
+    invent fact loss and every score would be wrong in the other direction.
+    """
+    samples = [
+        "Deployed 2026-07-10: 1,469 blocks, D-20260213-001, PRJ-mind, v1.2.3.",
+        'The flag "recompaction_score" was 0.98 across 30 clusters (see MIND-42).',
+        "1,469a 3.14 _id block_id 007 ISO 2026-01-02T03:04Z",
+    ]
+    for text in samples:
+        probes = extract_probes(text)
+        assert probes
+        assert probes_present(probes, text) == 1.0, text
+
+
 # --- load_clusters -----------------------------------------------------------
 
 
@@ -591,3 +650,98 @@ def test_main_empty_model_raises_value_error(test_db):
     emptiness is checked before any request is made."""
     with pytest.raises(ValueError):
         main(["--db", test_db, "--model", "", "--clusters", "1"])
+
+
+# --- similarity units --------------------------------------------------------
+
+
+def _make_floor_db(path: str, cosine: float) -> None:
+    """Two unit vectors whose cosine similarity is exactly *cosine*.
+
+    The two bodies share no tokens, so the lexical fallback can never
+    cluster them: a cluster here is proof the VECTOR path produced it.
+    """
+    import math
+
+    import sqlite_vec
+
+    conn = sqlite3.connect(path)
+    conn.enable_load_extension(True)
+    sqlite_vec.load(conn)
+    conn.enable_load_extension(False)
+    conn.execute(
+        """CREATE TABLE blocks (
+            id TEXT PRIMARY KEY, type TEXT, file TEXT, line INTEGER, status TEXT,
+            date TEXT, speaker TEXT, tags TEXT, dia_id TEXT, parent_id TEXT, json_blob TEXT
+        )"""
+    )
+    conn.execute("CREATE VIRTUAL TABLE vec_blocks USING vec0(block_id TEXT PRIMARY KEY, embedding FLOAT[3])")
+    rows = [
+        ("F-001", [1.0, 0.0, 0.0], "kangaroo trombone sandstone"),
+        ("F-002", [cosine, math.sqrt(1.0 - cosine * cosine), 0.0], "velvet paprika xylophone"),
+    ]
+    for bid, vec, body in rows:
+        conn.execute(
+            "INSERT INTO blocks (id, type, file, line, status, date, speaker, tags, dia_id, parent_id, json_blob) "
+            "VALUES (?, 'decision', 'x.md', 1, 'active', '2026-01-01', '', '', '', '', ?)",
+            (bid, f'{{"_id": "{bid}", "body": "{body}"}}'),
+        )
+        conn.execute("INSERT INTO vec_blocks(block_id, embedding) VALUES (?, ?)", (bid, sqlite_vec.serialize_float32(vec)))
+    conn.commit()
+    conn.close()
+
+
+def test_similarity_floor_is_a_real_cosine(tmp_path):
+    """A pair sitting exactly on _SIMILARITY_FLOOR must cluster.
+
+    sqlite-vec's `distance` column is L2 (the vec0 table declares no
+    `distance_metric=`), so the old `1 - distance / 2` scored this pair at
+    0.526 and dropped it: the constant documented as a 0.55 cosine floor
+    behaved like cos >= 0.595. Scoring from the vectors makes the constant
+    mean what it says.
+    """
+    from mind_mem.bench.recompaction_bench import _SIMILARITY_FLOOR
+
+    path = str(tmp_path / "floor.db")
+    _make_floor_db(path, _SIMILARITY_FLOOR)
+    clusters = load_clusters(path, k=2, min_size=2)
+    ids = [{b["_id"] for b in c} for c in clusters]
+    assert any({"F-001", "F-002"} <= s for s in ids), f"pair at the documented cosine floor was not clustered: {ids}"
+
+
+def test_similarity_floor_still_excludes_below_floor(tmp_path):
+    """And a pair just under the floor must still be excluded."""
+    from mind_mem.bench.recompaction_bench import _SIMILARITY_FLOOR
+
+    path = str(tmp_path / "below.db")
+    _make_floor_db(path, _SIMILARITY_FLOOR - 0.05)
+    clusters = load_clusters(path, k=2, min_size=2)
+    ids = [{b["_id"] for b in c} for c in clusters]
+    assert not any({"F-001", "F-002"} <= s for s in ids), f"pair below the cosine floor was clustered: {ids}"
+
+
+def test_cosine_is_normalisation_independent(tmp_path):
+    """Scaling a vector must not change its cosine similarity.
+
+    The L2-derived formula was magnitude-sensitive: a vector scaled by 3
+    moved `distance` far enough to fall below the floor even though its
+    direction — and therefore its cosine — was unchanged.
+    """
+    import math
+
+    import sqlite_vec
+
+    from mind_mem.bench.recompaction_bench import _SIMILARITY_FLOOR, _cosine, _decode_embedding
+
+    unit = [1.0, 0.0, 0.0]
+    c = _SIMILARITY_FLOOR
+    partner = [c, math.sqrt(1.0 - c * c), 0.0]
+    scaled = [v * 3.0 for v in partner]
+    dec = lambda v: _decode_embedding(sqlite_vec.serialize_float32(v))  # noqa: E731
+    assert _cosine(dec(unit), dec(partner)) == pytest.approx(c, abs=1e-6)
+    assert _cosine(dec(unit), dec(scaled)) == pytest.approx(c, abs=1e-6)
+    # Degenerate inputs score 0.0 rather than raising.
+    assert _cosine([], dec(unit)) == 0.0
+    assert _cosine(dec([0.0, 0.0, 0.0]), dec(unit)) == 0.0
+    assert _decode_embedding(b"abc") == []
+    assert _decode_embedding(None) == []

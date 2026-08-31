@@ -26,6 +26,24 @@ from ._helpers import get_logger, metrics
 _log = get_logger("mcp_server")
 
 
+def _index_db_path(ws: str) -> str:
+    """Absolute path of the recall index DB for workspace *ws*.
+
+    Routes through :mod:`mind_mem.sqlite_index`, which owns ``DB_REL_PATH``
+    and is the only writer of this database. These tools used to join their
+    own directory/filename literal, a layout nothing in the product ever
+    writes, so every read below found no file and the tools reported an
+    empty corpus while still answering ``success``. Deriving the path from
+    the writer keeps reader and writer from drifting apart again.
+
+    Imported lazily to keep this module import-cheap, matching the rest of
+    the file.
+    """
+    from mind_mem.sqlite_index import _db_path
+
+    return _db_path(ws)
+
+
 @mcp_tool_observe
 def plan_consolidation(
     importance_threshold: float = 0.25,
@@ -68,7 +86,7 @@ def plan_consolidation(
 
     import sqlite3 as _sqlite3
 
-    db_path = os.path.join(ws, ".sqlite_index", "index.db")
+    db_path = _index_db_path(ws)
     blocks: list[BlockCognition] = []
     if os.path.isfile(db_path):
         conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
@@ -101,6 +119,8 @@ def plan_consolidation(
                     continue
         finally:
             conn.close()
+    else:
+        _log.warning("consolidation_index_missing", tool="plan_consolidation", path=db_path)
 
     payload: dict[str, Any] = {
         "config": {
@@ -196,7 +216,7 @@ def propagate_staleness(seed_block_ids: str, max_hops: int = 3) -> str:
         return json.dumps({"error": "max_hops must be in [0, 8]"})
 
     adjacency: dict[str, list[str]] = {}
-    db_path = os.path.join(ws, ".sqlite_index", "index.db")
+    db_path = _index_db_path(ws)
     if os.path.isfile(db_path):
         conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
         conn.row_factory = _sqlite3.Row
@@ -207,6 +227,8 @@ def propagate_staleness(seed_block_ids: str, max_hops: int = 3) -> str:
                 adjacency.setdefault(r["dst"], []).append(r["src"])
         finally:
             conn.close()
+    else:
+        _log.warning("consolidation_index_missing", tool="propagate_staleness", path=db_path)
 
     plan = _propagate(seeds, adjacency, max_hops=max_hops)
     return json.dumps(
@@ -237,7 +259,7 @@ def project_profile(name: str = "", top_k: int = 10) -> str:
     project_name = name.strip() or os.path.basename(os.path.realpath(ws))
 
     blocks: list[dict] = []
-    db_path = os.path.join(ws, ".sqlite_index", "index.db")
+    db_path = _index_db_path(ws)
     if os.path.isfile(db_path):
         conn = _sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30.0)
         conn.row_factory = _sqlite3.Row
@@ -264,6 +286,8 @@ def project_profile(name: str = "", top_k: int = 10) -> str:
                 blocks.append(entry)
         finally:
             conn.close()
+    else:
+        _log.warning("consolidation_index_missing", tool="project_profile", path=db_path)
 
     profile = build_profile(blocks, name=project_name, top_k=top_k)
     return json.dumps({**profile.as_dict(), "_schema_version": "1.0"}, indent=2)

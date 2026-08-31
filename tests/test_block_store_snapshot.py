@@ -78,3 +78,70 @@ class TestStoreDiff:
         store.restore(str(snap_dir))
         remaining = store.diff(str(snap_dir))
         assert remaining == [], f"diff should be empty after restore, got: {remaining}"
+
+
+class TestRestoreWithDamagedSnapshot:
+    """A manifest entry whose snapshot copy is gone cannot be restored.
+
+    The old code copied nothing, warned about nothing, and still counted
+    the entry in ``file_count`` — so a rollback that left the mutated
+    corpus in place logged as a complete restore.
+    """
+
+    def _damage(self, ws: Path, snap_dir: Path) -> None:
+        store = MarkdownBlockStore(str(ws))
+        store.snapshot(str(snap_dir))
+        (snap_dir / "decisions" / "DECISIONS.md").unlink()
+        (ws / "decisions" / "DECISIONS.md").write_text("[D-001]\nStatement: mutated\n\n---\n")
+
+    def test_missing_source_is_reported_not_counted_as_restored(self, ws: Path, snap_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from mind_mem import block_store as bs
+
+        self._damage(ws, snap_dir)
+        events: list[tuple[str, str, dict]] = []
+        monkeypatch.setattr(
+            bs._log,
+            "warning",
+            lambda event, **kw: events.append(("warning", event, kw)),
+        )
+        monkeypatch.setattr(
+            bs._log,
+            "info",
+            lambda event, **kw: events.append(("info", event, kw)),
+        )
+
+        MarkdownBlockStore(str(ws)).restore(str(snap_dir))
+
+        warned = [kw for lvl, event, kw in events if lvl == "warning" and event == "restore_missing_snapshot_source"]
+        assert [kw["entry"] for kw in warned] == ["decisions/DECISIONS.md"]
+
+        (summary,) = [kw for lvl, event, kw in events if lvl == "info" and event == "block_store_restore"]
+        assert summary["missing"] == 1
+        assert summary["complete"] is False
+        # AGENTS.md really was restored; DECISIONS.md was not. The count must
+        # not include the entry nothing was copied for.
+        assert summary["file_count"] == 1
+
+    def test_intact_restore_still_reports_complete(self, ws: Path, snap_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from mind_mem import block_store as bs
+
+        store = MarkdownBlockStore(str(ws))
+        store.snapshot(str(snap_dir))
+        (ws / "decisions" / "DECISIONS.md").write_text("[D-001]\nStatement: mutated\n\n---\n")
+
+        events: list[dict] = []
+        monkeypatch.setattr(bs._log, "info", lambda event, **kw: events.append({"event": event, **kw}))
+        store.restore(str(snap_dir))
+
+        (summary,) = [e for e in events if e["event"] == "block_store_restore"]
+        assert summary["missing"] == 0
+        assert summary["complete"] is True
+        assert summary["file_count"] == 2
+        assert "initial" in (ws / "decisions" / "DECISIONS.md").read_text()
+
+    def test_unrestorable_file_is_not_deleted_as_an_orphan(self, ws: Path, snap_dir: Path) -> None:
+        """The live file stays: the snapshot is damaged, not the workspace."""
+        self._damage(ws, snap_dir)
+        MarkdownBlockStore(str(ws)).restore(str(snap_dir))
+        assert (ws / "decisions" / "DECISIONS.md").is_file()
+        assert "mutated" in (ws / "decisions" / "DECISIONS.md").read_text()

@@ -126,8 +126,12 @@ def parse_front_matter(text: str) -> tuple[dict[str, str], str]:
         return {}, text
     body = text[match.end() :]
     out: dict[str, str] = {}
-    prefix = ""
-    prefix_indent = 0
+    # (indent of the parent key, parent key) for every open nesting level,
+    # outermost first. Returning to a shallower indent pops the levels it
+    # closed and no more: clearing the whole prefix instead would write a
+    # depth-1 sibling as a bare top-level key and silently overwrite the
+    # real top-level field of that name.
+    open_keys: list[tuple[int, str]] = []
     pending_list_key = ""
     for line in match.group(1).splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
@@ -136,6 +140,10 @@ def parse_front_matter(text: str) -> tuple[dict[str, str], str]:
         stripped = line.strip()
         if stripped.startswith("- "):
             if pending_list_key:
+                # The key cap applies here too — a `k:` / `- item` pair
+                # mints a key just as a scalar line does.
+                if pending_list_key not in out and len(out) >= _MAX_FRONT_MATTER_KEYS:
+                    continue
                 item = stripped[2:].strip().strip('"').strip("'")
                 existing = out.get(pending_list_key, "")
                 joined = f"{existing},{item}" if existing else item
@@ -146,13 +154,12 @@ def parse_front_matter(text: str) -> tuple[dict[str, str], str]:
         raw_key, raw_value = stripped.split(":", 1)
         key = raw_key.strip()
         value = raw_value.strip().strip('"').strip("'")
-        if prefix and indent <= prefix_indent:
-            prefix = ""
-            prefix_indent = 0
+        while open_keys and indent <= open_keys[-1][0]:
+            open_keys.pop()
+        prefix = "".join(f"{parent}." for _, parent in open_keys)
         if not value:
-            prefix = f"{key}." if not prefix else f"{prefix}{key}."
-            prefix_indent = indent
-            pending_list_key = f"{prefix[:-1]}"
+            open_keys.append((indent, key))
+            pending_list_key = f"{prefix}{key}"
             continue
         pending_list_key = ""
         if len(out) >= _MAX_FRONT_MATTER_KEYS:

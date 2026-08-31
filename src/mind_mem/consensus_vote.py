@@ -62,11 +62,19 @@ class ConsensusDecision:
 
 @dataclass
 class Vote:
-    """One agent's vote. ``choice`` is the block ID / key being chosen."""
+    """One agent's vote. ``choice`` is the block ID / key being chosen.
+
+    ``trust_weight`` defaults to ``None`` = UNSPECIFIED, which is what
+    sends the vote to the namespace config for its weight. A concrete
+    default (1.0) would shadow every configured trust weight, leaving
+    the namespace lookup dead for exactly the votes it exists to serve.
+    ``0`` is also treated as unspecified — an agent is excluded by
+    configuring ``trust_weight: 0`` on its namespace, not on its vote.
+    """
 
     agent_id: str
     choice: str
-    trust_weight: float = 1.0
+    trust_weight: float | None = None
     rationale: str | None = None
 
 
@@ -94,8 +102,11 @@ def tally_votes(
 ) -> dict[str, float]:
     """Return ``{choice: weighted_total}``.
 
-    Votes without a ``trust_weight`` pull their weight from
-    ``namespace_config[agent_id].trust_weight``, defaulting to 1.0.
+    Votes without a ``trust_weight`` (``None``, or a non-positive value)
+    pull their weight from ``namespace_config[agent_id].trust_weight``,
+    defaulting to 1.0 — so a configured trust weight actually applies to
+    an ordinary ``Vote(agent_id, choice)``, and a namespace weight of 0
+    keeps that agent out of the tally.
     Agent-level duplicate votes (same agent voting twice for the same
     choice) are counted once — the highest trust_weight wins, so
     a later re-vote can only strengthen a prior conviction.
@@ -104,7 +115,10 @@ def tally_votes(
     latest: dict[tuple[str, str], float] = {}
     for v in votes:
         key = (v.agent_id, v.choice)
-        weight = v.trust_weight if v.trust_weight > 0 else _resolve_trust_weight(namespace_config, v.agent_id)
+        if v.trust_weight is None or v.trust_weight <= 0:
+            weight = _resolve_trust_weight(namespace_config, v.agent_id)
+        else:
+            weight = float(v.trust_weight)
         if weight <= 0:
             continue
         if key not in latest or weight > latest[key]:
@@ -133,7 +147,8 @@ def reach_consensus(
             this, ``reason="insufficient_votes"`` and caller falls
             back to human review.
         namespace_config: Maps ``agent_id`` → namespace settings. Used
-            to look up ``trust_weight`` when the ``Vote`` itself omits.
+            to look up ``trust_weight`` when the ``Vote`` itself omits
+            it (the default), including to exclude an agent with 0.
 
     Returns:
         :class:`ConsensusDecision` — caller audits ``reason`` before

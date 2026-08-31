@@ -133,10 +133,19 @@ class TestMCPHttpStartupRefusesWithoutAuth(unittest.TestCase):
         os.environ["MIND_MEM_ADMIN_TOKEN"] = "x" * 32
         self._enforce("0.0.0.0", allow_flag=False)
 
-    def test_oidc_alone_starts(self):
+    def test_oidc_alone_refuses_because_mcp_cannot_verify_jwts(self):
+        # This case used to assert the opposite. It was wrong: the MCP
+        # transport has no OIDC verifier (the JWT path lives in the
+        # separate ``mind_mem.api.rest`` app), so accepting the mere
+        # presence of these two variables started a wide-open listener
+        # on every interface with ``mcp.auth`` still ``None``. OIDC is
+        # REST-only configuration and must not satisfy the MCP gate.
+        # Full coverage in tests/test_mcp_http_gate_matches_enforcement.py.
         os.environ["OIDC_ISSUER"] = "https://idp.example.com"
         os.environ["OIDC_AUDIENCE"] = "mind-mem"
-        self._enforce("0.0.0.0", allow_flag=False)
+        with self.assertRaises(SystemExit) as cm:
+            self._enforce("0.0.0.0", allow_flag=False)
+        self.assertIn("refusing to start", str(cm.exception))
 
 
 class TestRestRunFailClosed(unittest.TestCase):

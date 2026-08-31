@@ -64,6 +64,16 @@ def _read_flag_block(workspace: str) -> dict[str, Any]:
     the process-level resolver (``MIND_MEM_CONFIG`` / cwd / user config)
     is consulted, so a CLI caller can flip the flag without editing a
     workspace. Never raises — an unreadable config means OFF.
+
+    "Unreadable" is where a *present* workspace file differs from an absent
+    one, and the difference is the whole guarantee. A workspace with no
+    ``mind-mem.json``, or one that simply does not mention the flag, is a
+    workspace with no opinion, and the process-level resolver supplies one.
+    A workspace file that exists and cannot be parsed is a workspace whose
+    opinion could not be READ, and falling through to the environment there
+    would let ``MIND_MEM_CONFIG`` turn the feature ON against an
+    authoritative statement nobody has seen. It returns ``{}`` instead, which
+    resolves to OFF — the direction the docstring has always promised.
     """
     path = os.path.join(os.path.abspath(workspace), "mind-mem.json")
     if os.path.isfile(path):
@@ -72,7 +82,7 @@ def _read_flag_block(workspace: str) -> dict[str, Any]:
                 data = json.load(handle)
         except (OSError, ValueError, UnicodeDecodeError) as exc:
             _log.warning("world_staleness_config_unreadable", path=path, error=str(exc))
-            data = {}
+            return {}
         v4 = data.get("v4") if isinstance(data, dict) else None
         if isinstance(v4, dict) and isinstance(v4.get(FEATURE_FLAG), dict):
             return dict(v4[FEATURE_FLAG])
@@ -82,12 +92,31 @@ def _read_flag_block(workspace: str) -> dict[str, Any]:
     return dict(sub) if isinstance(sub, dict) else {}
 
 
-def _coerce_int(raw: Any, default: int, *, minimum: int) -> int:
+def _coerce_int(raw: Any, default: int, *, minimum: int, knob: str) -> int:
+    """Validated int for one knob, falling back to *default* WITH a warning.
+
+    The fallback is the documented behaviour — a config typo must never take
+    ``scan()`` down. The warning is what makes it honest: without it,
+    ``"max_file_bytes": "10MB"`` or ``"max_reported": 0`` reverts in silence
+    and the operator goes on believing the value they wrote is in force.
+    *knob* names the offending key so the log line points at the line to fix.
+    """
     try:
         value = int(raw)
     except (TypeError, ValueError):
+        if raw is not None:
+            _log.warning("world_staleness_config_invalid", knob=knob, value=repr(raw), fallback=default)
         return default
-    return value if value >= minimum else default
+    if value < minimum:
+        _log.warning(
+            "world_staleness_config_below_minimum",
+            knob=knob,
+            value=value,
+            minimum=minimum,
+            fallback=default,
+        )
+        return default
+    return value
 
 
 def resolve_world_config(workspace: str) -> WorldStalenessConfig:
@@ -129,9 +158,9 @@ def resolve_world_config(workspace: str) -> WorldStalenessConfig:
         roots=tuple(roots),
         missing_roots=tuple(missing),
         inline=True if inline is None else bool(inline),
-        max_ref_drift=_coerce_int(sub.get("max_ref_drift"), 0, minimum=0),
-        max_file_bytes=_coerce_int(sub.get("max_file_bytes"), DEFAULT_MAX_FILE_BYTES, minimum=1),
-        max_reported=_coerce_int(sub.get("max_reported"), DEFAULT_MAX_REPORTED, minimum=1),
+        max_ref_drift=_coerce_int(sub.get("max_ref_drift"), 0, minimum=0, knob="max_ref_drift"),
+        max_file_bytes=_coerce_int(sub.get("max_file_bytes"), DEFAULT_MAX_FILE_BYTES, minimum=1, knob="max_file_bytes"),
+        max_reported=_coerce_int(sub.get("max_reported"), DEFAULT_MAX_REPORTED, minimum=1, knob="max_reported"),
     )
 
 

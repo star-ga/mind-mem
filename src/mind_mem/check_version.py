@@ -68,10 +68,17 @@ def main() -> int:
         status = ver or "NOT FOUND"
         print(f"  {source}: {status}")
 
-    found = {v for v in versions.values() if v is not None}
-    if len(found) == 0:
-        print("\nERROR: No version strings found")
+    # Every source must resolve. Comparing only the readings that
+    # happened to work means two unreadable sources leave one version in
+    # the set and the mismatch branch can never fire — the checker would
+    # report consensus from a single reading.
+    missing = [source for source, ver in versions.items() if ver is None]
+    if missing:
+        print(f"\nERROR: No version string found in: {', '.join(missing)}")
+        print("(run from the repository root — paths are resolved against the working directory)")
         return 1
+
+    found = {v for v in versions.values() if v is not None}
     if len(found) > 1:
         print(f"\nERROR: Version mismatch: {found}")
         return 1

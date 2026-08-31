@@ -75,6 +75,7 @@ __all__ = [
     "DECISIONS_FILE",
     "RECOGNISED_STATUSES",
     "UNADMITTED",
+    "UNREADABLE_STATUS",
     "RELEASE_FIELD",
     "admissible",
     "admit_corpus",
@@ -101,6 +102,23 @@ DECISIONS_FILE: Final = "decisions/DECISIONS.md"
 #: in the corpus answers. Diagnostic only — an unresolvable id is dropped,
 #: and the run is NOT marked degraded.
 UNRESOLVED_METRIC: Final = "recall_unresolved_ids"
+
+#: What :func:`_parse_statuses` writes for a ``Status`` the parser produced
+#: as a **populated non-string** — a list, a mapping, a number.
+#:
+#: The live-status map is ``id -> str`` because that is the shape the indexed
+#: legs' ``status`` column has, so the raw object cannot be carried through it.
+#: Collapsing an unreadable status to ``""`` would be a lie in the fail-OPEN
+#: direction: ``""`` means *unstated*, which :func:`is_admissible_status`
+#: serves. This value is deliberately outside :data:`RECOGNISED_STATUSES`, so
+#: the same predicate withholds it — the stale-index path then reaches the same
+#: verdict as the direct-parse path, which is the entire reason
+#: :func:`live_statuses` exists.
+#:
+#: A collision with an operator-written status is harmless: an unrecognised
+#: status is withheld either way. It cannot collide with the ``allow`` widening,
+#: which only ever carries recognised lifecycle statuses.
+UNREADABLE_STATUS: Final = "!unreadable"
 
 
 #: Statuses meaning "this block has not passed the governance gate".
@@ -426,6 +444,16 @@ def _parse_statuses(paths: Sequence[str]) -> dict[str, str]:
     the caller is deciding admissibility, and an unreadable corpus file
     must not take recall down. Its blocks simply keep whatever status
     the leg already carried, which the allow-list then judges.
+
+    A non-string ``Status`` is classified by :func:`is_admissible_status`
+    itself rather than by a second copy of its rules here, so the two cannot
+    drift: whatever the direct-parse path would serve maps to the unstated
+    spelling ``""``, and whatever it would withhold maps to
+    :data:`UNREADABLE_STATUS`. Flattening both to ``""`` — as this did — was
+    fail-OPEN on precisely the path :func:`live_statuses` exists to make
+    fail-closed: a block whose ``Status`` parsed as ``["quarantined"]`` is
+    withheld when recall reads the corpus directly, and was SERVED once a
+    stale index sent it through here.
     """
     from .block_parser import parse_file
 
@@ -437,9 +465,13 @@ def _parse_statuses(paths: Sequence[str]) -> dict[str, str]:
             continue
         for block in blocks:
             bid = _block_id(block)
-            if bid:
-                raw = block.get("Status")
-                statuses[bid] = raw if isinstance(raw, str) else ""
+            if not bid:
+                continue
+            raw = block.get("Status")
+            if isinstance(raw, str):
+                statuses[bid] = raw
+            else:
+                statuses[bid] = "" if is_admissible_status(raw) else UNREADABLE_STATUS
     return statuses
 
 

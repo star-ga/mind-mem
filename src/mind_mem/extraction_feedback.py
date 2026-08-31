@@ -14,10 +14,16 @@ Copyright STARGA, Inc.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import tempfile
 import time
 from typing import Any
+
+from .observability import get_logger
+
+_log = get_logger("extraction_feedback")
 
 
 def default_feedback_path(workspace: str | None = None) -> str:
@@ -42,26 +48,78 @@ class ExtractionFeedback:
         self._load()
 
     def _load(self) -> None:
-        if os.path.isfile(self.path):
-            try:
-                with open(self.path) as f:
-                    data = json.load(f)
-                self.records = data.get("records", [])
-                self._stats = data.get("stats", {})
-            except (OSError, json.JSONDecodeError):
-                self.records = []
-                self._stats = {}
+        if not os.path.isfile(self.path):
+            return
+        try:
+            # encoding= is explicit: on Windows the locale codepage is the
+            # default, and one non-cp1252 byte would raise straight out of
+            # __init__.
+            with open(self.path, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            self._quarantine(f"{type(exc).__name__}: {exc}")
+            return
+        if not isinstance(data, dict):
+            self._quarantine("feedback file does not hold a JSON object")
+            return
+        records = data.get("records", [])
+        stats = data.get("stats", {})
+        self.records = records if isinstance(records, list) else []
+        self._stats = stats if isinstance(stats, dict) else {}
+
+    def _quarantine(self, reason: str) -> None:
+        """Move an unreadable feedback file aside instead of overwriting it.
+
+        The next :meth:`_save` truncate-writes this path, so leaving a
+        damaged file in place destroys the only copy of the history with
+        no trace at all — and ``should_skip_extraction`` then answers
+        ``False`` forever because ``total`` restarts below its threshold.
+        Renaming keeps the remains and makes the loss visible.
+        """
+        backup = f"{self.path}.corrupt"
+        try:
+            os.replace(self.path, backup)
+        except OSError as exc:
+            _log.warning(
+                "extraction_feedback_quarantine_failed",
+                path=self.path,
+                reason=reason,
+                error=str(exc),
+            )
+        else:
+            _log.warning(
+                "extraction_feedback_unreadable",
+                path=self.path,
+                reason=reason,
+                moved_to=backup,
+            )
+        self.records = []
+        self._stats = {}
 
     def _save(self) -> None:
-        os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
+        directory = os.path.dirname(self.path) or "."
+        os.makedirs(directory, exist_ok=True)
         data = {
             "version": 1,
             "records": self.records[-500:],  # keep last 500
             "stats": self._stats,
             "last_updated": time.time(),
         }
-        with open(self.path, "w") as f:
-            json.dump(data, f, indent=2)
+        # Write beside the target and rename over it. A truncate-write
+        # here fires every 10 records; a process killed mid-dump would
+        # leave a half-written file that no longer parses, and the whole
+        # measured history would be dropped on the next load.
+        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".extraction-feedback-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, self.path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+            raise
 
     def record(
         self,

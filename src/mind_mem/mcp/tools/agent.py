@@ -23,7 +23,7 @@ import os
 
 from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _check_workspace, _workspace
-from ._helpers import _change_stream
+from ._helpers import _change_stream, _kg_path
 
 
 def _vault_allowlist() -> list[str]:
@@ -177,12 +177,16 @@ def vault_sync(
     if not ok:
         return json.dumps({"error": reason})
 
-    # Resolve KG path only when include_links is requested.
+    # Resolve KG path only when include_links is requested. The DB lives
+    # at <ws>/memory/knowledge_graph.db -- use the shared helper every
+    # graph tool uses rather than re-deriving the path here, which is how
+    # this looked for <ws>/knowledge_graph.db (a location the product
+    # never writes) and silently produced link-free notes.
     kg_path: str | None = None
     if include_links:
         ws = _workspace()
         if ws:
-            candidate = os.path.join(ws, "knowledge_graph.db")
+            candidate = _kg_path(ws)
             if os.path.isfile(candidate):
                 kg_path = candidate
 

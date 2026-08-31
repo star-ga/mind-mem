@@ -22,13 +22,23 @@ _log = get_logger("ffi")
 
 # --- Library loading ---
 
-# Search paths for the compiled MIND kernel library. Covers both:
-#   (a) packaged install — ``<package>/lib/libmindmem.so`` (co-located
-#       with the Python sources when shipped as a wheel).
-#   (b) editable dev install — ``<repo>/lib/libmindmem.so`` where the
-#       repo layout is ``repo/src/mind_mem/`` and ``repo/lib/`` holds
-#       the compiled artifact one level above ``src/``.
+# Search paths for the compiled MIND kernel library, in probe order:
+#   (a) ``<package>/lib/`` — co-located with the Python sources. This is
+#       the path the "packaged install" case names, and it needs
+#       ``Path(__file__).parent``: ``.parent`` is already the package
+#       directory, so ``.parent.parent`` is the directory *containing*
+#       the package (``site-packages/lib``), not ``<package>/lib``.
+#   (b) ``<parent-of-package>/lib/`` — kept because it is what the
+#       previous probe order actually looked at; in a src-layout
+#       checkout that is ``repo/src/lib``.
+#   (c) ``<repo>/lib/`` — editable dev install, where the layout is
+#       ``repo/src/mind_mem/`` and ``repo/lib/`` holds the artifact.
+# No wheel ships a .so today (see pyproject package-data), so in
+# practice the kernel is checkout-only and its absence is the
+# documented pure-Python path, not a failure.
 _LIB_SEARCH_PATHS = [
+    Path(__file__).parent / "lib" / "libmindmem.so",
+    Path(__file__).parent / "lib" / "libmindmem.dylib",
     Path(__file__).parent.parent / "lib" / "libmindmem.so",
     Path(__file__).parent.parent / "lib" / "libmindmem.dylib",
     Path(__file__).parent.parent.parent / "lib" / "libmindmem.so",
@@ -109,12 +119,25 @@ class MindMemKernel:
                 # Restrict to allowed directories (prevent arbitrary .so loading)
                 resolved = Path(env_path).resolve()
                 allowed = [
+                    Path(__file__).parent / "lib",
                     Path(__file__).parent.parent / "lib",
                     Path(__file__).parent.parent.parent / "lib",
                 ]
                 in_allowed = any(resolved == d.resolve() or str(resolved).startswith(str(d.resolve()) + os.sep) for d in allowed)
                 if in_allowed and resolved.exists():
                     self._lib = ctypes.CDLL(str(resolved), mode=_LAZY)
+                else:
+                    # Say why the explicit override was dropped. Falling
+                    # through in silence left the operator staring at
+                    # "library not found" with no hint that the path they
+                    # set was seen and rejected — or, worse, quietly
+                    # running a different library than the one they named.
+                    _log.warning(
+                        "ffi_env_lib_rejected",
+                        path=str(resolved),
+                        reason=("outside allowed directories" if not in_allowed else "file does not exist"),
+                        allowed=[str(d) for d in allowed],
+                    )
 
             if self._lib is None:
                 for p in _LIB_SEARCH_PATHS:
@@ -167,17 +190,29 @@ class MindMemKernel:
         except AttributeError:
             pass  # Unprotected build (dev/CI fallback)
 
-        # Version check: compare .so version against Python __version__
+        # Version check: compare .so version against Python __version__.
+        # The exported symbol is ``mindmem_version``; ``mindmem_get_version``
+        # is probed second only in case an older build used that name. The
+        # gate used to look for the second name alone, which no build
+        # exports, so it never ran at all.
         self._so_version: str | None = None
-        try:
-            self._lib.mindmem_get_version.argtypes = []
-            self._lib.mindmem_get_version.restype = ctypes.c_char_p
-            raw = self._lib.mindmem_get_version()
+        self._version_compatible: bool | None = None
+        for symbol in ("mindmem_version", "mindmem_get_version"):
+            try:
+                fn = getattr(self._lib, symbol)
+            except AttributeError:
+                continue  # Build doesn't export this version symbol
+            fn.argtypes = []
+            fn.restype = ctypes.c_char_p
+            try:
+                raw = fn()
+            except (OSError, ValueError):
+                _log.warning("ffi_version_symbol_unreadable", symbol=symbol)
+                break
             if raw:
                 self._so_version = raw.decode("utf-8", errors="replace")
-                _check_version_compat(self._so_version)
-        except AttributeError:
-            pass  # Build doesn't export version symbol
+                self._version_compatible = _check_version_compat(self._so_version)
+            break
 
     def is_protected(self) -> bool:
         """Return True if the loaded library includes runtime protection."""
@@ -186,6 +221,18 @@ class MindMemKernel:
     def so_version(self) -> str | None:
         """Return the version string reported by the .so, or None."""
         return self._so_version
+
+    def version_compatible(self) -> bool | None:
+        """Return the verdict of the major.minor version check.
+
+        ``True``/``False`` once a version symbol was read, ``None`` when
+        the library exports none (nothing to compare, so nothing is
+        claimed). Loading is deliberately not refused on ``False`` — the
+        mismatch is reported, and it is the caller's call whether a
+        drifted kernel is acceptable or whether to fall back to the pure
+        Python path.
+        """
+        return self._version_compatible
 
     def rrf_fuse_py(
         self,

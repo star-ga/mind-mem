@@ -243,14 +243,36 @@ class MerkleTree:
 
         Verifies that the stored root hash matches the hash recomputed from
         the imported leaves. A mismatch indicates tampering or a corrupted
-        export; callers should treat the import as failed.
+        export; the import is rejected with ``ValueError``.
+
+        ``root_hash`` is *required*: export_json always writes it (``''``
+        for an empty tree), so an absent or non-string field means the
+        payload was edited. Treating it as optional would let a tamperer
+        swap the whole leaf set simply by deleting one field, which is
+        exactly the substitution this check exists to catch.
+
+        The receiver is only mutated once the recomputed root matches, so
+        a caller that catches the error still holds the tree it had before
+        the failed import rather than the leaves it just refused to trust.
         """
         payload = json.loads(data)
-        leaves = [(entry["block_id"], entry["content_hash"]) for entry in payload["leaves"]]
+        if not isinstance(payload, dict):
+            raise ValueError(f"Merkle import: payload must be a JSON object, got {type(payload).__name__}")
+        raw_leaves = payload.get("leaves")
+        if not isinstance(raw_leaves, list):
+            raise ValueError("Merkle import: payload is missing the 'leaves' array")
+        if "root_hash" not in payload:
+            raise ValueError("Merkle import: payload is missing the 'root_hash' field")
+        expected_root = payload["root_hash"]
+        if not isinstance(expected_root, str):
+            raise ValueError(f"Merkle import: 'root_hash' must be a string, got {type(expected_root).__name__}")
+
+        leaves = [(entry["block_id"], entry["content_hash"]) for entry in raw_leaves]
+        candidate = self._build_tree(leaves)
+        candidate_root = candidate.hash if candidate is not None else ""
+        if expected_root != candidate_root:
+            raise ValueError(f"Merkle import root mismatch: stored={expected_root[:16]}… recomputed={candidate_root[:16]}…")
         self.build(leaves)
-        expected_root = payload.get("root_hash", "")
-        if expected_root and expected_root != self.root_hash:
-            raise ValueError(f"Merkle import root mismatch: stored={expected_root[:16]}… recomputed={self.root_hash[:16]}…")
 
     # ------------------------------------------------------------------
     # Private helpers

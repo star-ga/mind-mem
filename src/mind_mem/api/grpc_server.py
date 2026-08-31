@@ -6,24 +6,58 @@ minimal gRPC stub that exposes the same recall / governance surface
 as the REST layer.
 
 Design notes:
-* Protocol shape is defined inline as typed dataclasses — operators
-  who need real ``.proto`` files generate them at deploy time from
-  the mind-mem mirror repo (see ``docs/grpc-proto.md``).
+* Protocol shape is defined inline as typed dataclasses and *they are
+  the schema of record*. This repo ships no ``.proto`` file and no
+  generated code; an operator who wants real protobufs mirrors these
+  dataclasses by hand and drops the protoc output in as
+  ``mind_mem.api.grpc_generated`` (see :func:`serve`).
 * No grpcio dependency at import time. The handler functions are
   plain Python and take dicts; a thin gRPC servicer adapts them in
   :func:`serve` when grpcio is available.
-* Auth + tenant routing reuse the REST layer's primitives
-  (``api_keys.APIKeyStore``, ``workspace.use_workspace``).
+* **No authentication and no tenant routing.** Unlike the REST layer,
+  this transport runs no API-key check and never enters
+  ``mcp.infra.workspace.use_workspace`` — every call resolves the
+  process-wide workspace. ``tenant_id`` is consequently *rejected*
+  rather than accepted and silently served from the wrong corpus (see
+  :func:`handle_recall` and :func:`handle_governance`), and
+  :func:`serve` binds loopback only.
 
-Gated behind ``mind-mem[grpc]`` extra. Operator runs::
+There is no ``mm`` subcommand for this surface. An operator starts it
+in their own process::
 
-    mm serve-grpc --port 50051
+    python -c "from mind_mem.api.grpc_server import serve; serve(50051)"
+
+or, under their own supervision (systemd, a k8s Deployment), imports
+the handler functions and binds them in their own server loop.
+Requires ``grpcio``, which mind-mem does not depend on.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Callable
+
+from mind_mem.observability import get_logger
+
+_log = get_logger("grpc_server")
+
+#: Why a populated ``tenant_id`` is refused instead of ignored. This transport
+#: has no per-tenant routing: it never enters ``use_workspace``, so every call
+#: resolves the one process-wide workspace. Accepting the field and dropping it
+#: would answer a scoped request from an unscoped corpus — and answer it with
+#: ``ok``. Fail closed until real routing exists.
+TENANT_UNSUPPORTED = (
+    "tenant_id is not supported by the gRPC transport: it performs no "
+    "per-tenant routing and would serve the request from the process-wide "
+    "workspace. Omit tenant_id, or use a transport that scopes the workspace."
+)
+
+
+def _reject_unsupported_tenant(tenant_id: str | None) -> None:
+    """Raise if the caller asked for a tenant this transport cannot honour."""
+    if tenant_id:
+        raise ValueError(TENANT_UNSUPPORTED)
+
 
 # ---------------------------------------------------------------------------
 # Typed request / response dataclasses — shape the .proto mirrors.
@@ -82,9 +116,15 @@ def handle_recall(request: RecallRequest) -> RecallResponse:
 
     Pulled out of the servicer so the same function can be exercised
     from tests + reused by REST / MCP / gRPC transports.
+
+    Raises:
+        ValueError: If ``request.tenant_id`` is set. :class:`RecallResponse`
+            has no error channel, so a request this transport cannot scope
+            fails loudly rather than returning another tenant's corpus.
     """
     import time
 
+    _reject_unsupported_tenant(request.tenant_id)
     t0 = time.perf_counter()
     from mind_mem.mcp.tools.recall import _recall_impl
 
@@ -101,9 +141,17 @@ def handle_recall(request: RecallRequest) -> RecallResponse:
 
 
 def handle_governance(request: GovernanceRequest) -> GovernanceResponse:
-    """Route a governance op to the existing MCP tool impl."""
+    """Route a governance op to the existing MCP tool impl.
+
+    A populated ``tenant_id`` is refused (see :data:`TENANT_UNSUPPORTED`) —
+    these operations mutate the governed corpus, so running them against the
+    process-wide workspace because the requested tenant could not be honoured
+    is the one outcome worth failing closed on.
+    """
     import json
 
+    if request.tenant_id:
+        return GovernanceResponse(ok=False, payload="", error=TENANT_UNSUPPORTED)
     ops = {
         "propose": ("mind_mem.mcp.tools.governance", "propose_update"),
         "approve": ("mind_mem.mcp.tools.governance", "approve_apply"),
@@ -151,7 +199,9 @@ def _build_servicer() -> Any:
     try:
         import grpc  # type: ignore  # noqa: F401
     except ImportError as exc:
-        raise RuntimeError("mind-mem gRPC server requires the 'grpcio' package. Install with: pip install 'mind-mem[grpc]'") from exc
+        # 'grpcio' is not a mind-mem dependency and there is no extra that
+        # pulls it in — name the package the operator actually installs.
+        raise RuntimeError("mind-mem gRPC server requires 'grpcio'. Install with: pip install grpcio") from exc
 
     # The real .proto-generated servicer classes live in
     # ``mind_mem.api.grpc_generated`` — shipped as a sibling package
@@ -170,12 +220,42 @@ def _build_servicer() -> Any:
     return _Servicer()
 
 
+def _register_generated_services(server: Any, servicer: Any) -> bool:
+    """Mount the operator-supplied generated servicer on ``server``.
+
+    ``mind_mem.api.grpc_generated`` is not shipped by this package — it is
+    the protoc output an operator drops in alongside it — so its absence is
+    a supported state, not an error. It is *not* a silent one: without it
+    the server binds a port and answers ``UNIMPLEMENTED`` to every RPC, and
+    nothing on the server side would otherwise say why.
+
+    Returns:
+        True when services were registered, False when the generated
+        package is absent.
+    """
+    try:
+        from mind_mem.api import grpc_generated  # type: ignore
+    except ImportError as exc:
+        _log.warning(
+            "grpc_generated_missing",
+            detail=str(exc),
+            effect="no services registered — every RPC will answer UNIMPLEMENTED",
+            remedy="generate protoc output from the dataclasses in this module and install it as mind_mem.api.grpc_generated",
+        )
+        return False
+    grpc_generated.register(server, servicer)
+    return True
+
+
 def serve(port: int = 50051) -> None:
     """Start a blocking gRPC server on ``port``.
 
     Requires ``grpcio`` installed. Operators that prefer their own
     supervision (systemd, k8s Deployment) import the handler
     functions directly and bind them in their own server loop.
+
+    There is no ``mm`` subcommand that calls this; see the module
+    docstring for how to launch it.
     """
     servicer = _build_servicer()
     # Actual .serve-and-block happens in the operator's
@@ -187,14 +267,10 @@ def serve(port: int = 50051) -> None:
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=16))
     # Real gRPC needs generated servicer classes. Since those are
-    # operator-provided, we just start the server and log. When the
-    # grpc_generated module exists, it registers itself.
-    try:
-        from mind_mem.api import grpc_generated  # type: ignore
-    except ImportError:
-        pass
-    else:
-        grpc_generated.register(server, servicer)
+    # operator-provided, a missing package is logged (not swallowed) and
+    # the server still starts, so an operator running their own registration
+    # against this process is unaffected.
+    _register_generated_services(server, servicer)
     # Bind loopback by default, NOT [::] (all interfaces). This gRPC surface
     # has no TLS and no auth interceptor and drives governance mutations
     # (approve/rollback) via **kwargs, so exposing it network-wide lets any
@@ -210,6 +286,7 @@ def serve(port: int = 50051) -> None:
 
 
 __all__ = [
+    "TENANT_UNSUPPORTED",
     "RecallRequest",
     "RecallResponse",
     "GovernanceRequest",

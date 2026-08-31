@@ -1,10 +1,11 @@
 """Tests for mind-mem encryption at rest."""
 
 import os
+import stat
 
 import pytest
 
-from mind_mem.encryption import _MAGIC, EncryptionManager, _pbkdf2
+from mind_mem.encryption import _MAGIC, _SALT_SIZE, EncryptionManager, _pbkdf2
 
 
 @pytest.fixture
@@ -201,3 +202,107 @@ class TestKeyManagement:
     def test_key_rotation_short_passphrase(self, workspace, mgr):
         with pytest.raises(ValueError, match="at least 8"):
             mgr.rotate_key("short", [])
+
+
+class TestSaltIntegrity:
+    """A damaged salt must never be silently replaced.
+
+    The salt is half the key material and cannot be recomputed. Minting a
+    fresh one over a truncated file destroys every ciphertext in the
+    workspace and then misreports the loss as tampering.
+    """
+
+    @staticmethod
+    def _salt_path(workspace):
+        return os.path.join(workspace, ".mind-mem-keys", "salt")
+
+    def test_truncated_salt_is_not_overwritten(self, workspace):
+        mgr1 = EncryptionManager(workspace, "test-passphrase-12345")
+        ciphertext = mgr1.encrypt(b"irreplaceable corpus content")
+
+        salt_path = self._salt_path(workspace)
+        with open(salt_path, "rb") as f:
+            original = f.read()
+        assert len(original) == _SALT_SIZE
+
+        # Simulate a truncated / partially written salt file.
+        with open(salt_path, "r+b") as f:
+            f.truncate(16)
+
+        with pytest.raises(ValueError, match="refusing to overwrite key material"):
+            EncryptionManager(workspace, "test-passphrase-12345")
+
+        # The surviving bytes are still on disk — nothing was regenerated.
+        with open(salt_path, "rb") as f:
+            assert f.read() == original[:16]
+
+        # And once the operator restores the salt, the old ciphertext is
+        # readable again: the failure was recoverable, not terminal.
+        with open(salt_path, "wb") as f:
+            f.write(original)
+        mgr2 = EncryptionManager(workspace, "test-passphrase-12345")
+        assert mgr2.decrypt(ciphertext) == b"irreplaceable corpus content"
+
+    def test_empty_salt_file_is_reported_not_replaced(self, workspace):
+        EncryptionManager(workspace, "test-passphrase-12345")
+        salt_path = self._salt_path(workspace)
+        with open(salt_path, "wb"):
+            pass
+
+        with pytest.raises(ValueError, match="0 bytes, expected 32"):
+            EncryptionManager(workspace, "test-passphrase-12345")
+        assert os.path.getsize(salt_path) == 0
+
+    def test_oversized_salt_file_is_reported_not_replaced(self, workspace):
+        EncryptionManager(workspace, "test-passphrase-12345")
+        salt_path = self._salt_path(workspace)
+        junk = b"\xab" * (_SALT_SIZE + 8)
+        with open(salt_path, "wb") as f:
+            f.write(junk)
+
+        with pytest.raises(ValueError, match="refusing to overwrite key material"):
+            EncryptionManager(workspace, "test-passphrase-12345")
+        with open(salt_path, "rb") as f:
+            assert f.read() == junk
+
+    def test_salt_creation_is_atomic_no_partial_file(self, workspace, monkeypatch):
+        """An interrupted salt write leaves no salt at all, never a short one."""
+        keys_dir = os.path.join(workspace, ".mind-mem-keys")
+
+        def boom(src, dst):
+            raise OSError("simulated disk failure during salt commit")
+
+        monkeypatch.setattr("mind_mem.encryption.os.replace", boom)
+        with pytest.raises(OSError, match="simulated disk failure"):
+            EncryptionManager(workspace, "test-passphrase-12345")
+
+        assert not os.path.exists(os.path.join(keys_dir, "salt"))
+        # No staged temp file left behind to be mistaken for key material.
+        assert os.listdir(keys_dir) == []
+
+    def test_created_salt_is_owner_only_with_no_leftovers(self, workspace):
+        EncryptionManager(workspace, "test-passphrase-12345")
+        keys_dir = os.path.join(workspace, ".mind-mem-keys")
+        salt_path = self._salt_path(workspace)
+
+        assert os.path.getsize(salt_path) == _SALT_SIZE
+        assert os.listdir(keys_dir) == ["salt"]
+        if os.name == "posix":
+            assert stat.S_IMODE(os.stat(salt_path).st_mode) == 0o600
+
+    def test_rotated_salt_is_owner_only(self, workspace):
+        mgr = EncryptionManager(workspace, "old-passphrase-12345")
+        path = os.path.join(workspace, "data.md")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("sensitive content")
+        mgr.encrypt_file(path)
+
+        mgr.rotate_key("new-passphrase-12345", [path])
+
+        salt_path = self._salt_path(workspace)
+        assert os.path.getsize(salt_path) == _SALT_SIZE
+        if os.name == "posix":
+            assert stat.S_IMODE(os.stat(salt_path).st_mode) == 0o600
+        # The rotated salt is the one a fresh manager loads.
+        mgr2 = EncryptionManager(workspace, "new-passphrase-12345")
+        assert mgr2.decrypt_file(path) == b"sensitive content"

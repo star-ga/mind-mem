@@ -5,9 +5,12 @@ LoCoMo temporal questions collapse on the full bench (regression to
 chronological anchor — retrieved blocks have dates in metadata, but
 the answerer sees only the excerpt text.
 
-This module prepends a compact ``[Stored N days ago • 2026-04-15]``
-tag to each block's excerpt before evidence packing, giving the
-answerer an explicit timeline reference for every piece of evidence.
+This module prepends a compact ``[Block date: 2026-04-15]`` tag to
+each block's excerpt before evidence packing, giving the answerer an
+explicit timeline reference for every piece of evidence. (v3.5.0
+replaced the earlier ``[Stored N days ago • <date>]`` wording, which
+answerers read as the event date; the age in whole days is still
+returned out-of-band as ``_temporal_delta_days``.)
 
 The anchor date (``now``) defaults to the system clock but can be
 overridden for deterministic benches.
@@ -121,9 +124,10 @@ def annotate_with_temporal_metadata(
     excerpt_key: str = "excerpt",
     max_days: int = 3650,  # ~10 years — tight default per security audit
 ) -> list[dict[str, Any]]:
-    """Return copies of ``blocks`` with ``[Stored N days ago • YYYY-MM-DD]``
+    """Return copies of ``blocks`` with ``[Block date: YYYY-MM-DD]``
     prefixed to each excerpt. Blocks without a parseable date are left
-    unchanged.
+    unchanged. The age in whole days is not in the tag; it is returned
+    on each annotated copy as ``_temporal_delta_days``.
 
     Args:
         blocks: retrieval hits.
@@ -140,11 +144,10 @@ def annotate_with_temporal_metadata(
     """
     if not blocks:
         return []
-    # ``(ref - dt).days`` floors to whole days; blocks created < 24h ago
-    # therefore show as ``[Stored 0 days ago • <date>]``, which is
-    # factually correct but callers inferring age in hours should read
-    # ``_temporal_delta_days`` (still 0) and the ``<date>`` string, not
-    # rely on the tag alone.
+    # ``(ref - dt).days`` floors to whole days, so a block created
+    # < 24h ago has a delta of 0. The tag carries only the date (see
+    # the v3.5.0 note below), so any caller that needs the age reads
+    # ``_temporal_delta_days`` on the returned copy.
     ref = now or datetime.now(timezone.utc)
     if ref.tzinfo is None:
         ref = ref.replace(tzinfo=timezone.utc)
@@ -178,7 +181,7 @@ def annotate_with_temporal_metadata(
         cp = dict(b)
         # Target the existing text field rather than creating a new
         # ``excerpt`` when only ``Statement`` is present — prevents
-        # schema drift for downstream consumers (Gemini audit 2026-04-22).
+        # schema drift for downstream consumers (external audit 2026-04-22).
         if cp.get(excerpt_key):
             target_key = excerpt_key
         elif cp.get("Statement"):

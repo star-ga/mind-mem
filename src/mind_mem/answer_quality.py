@@ -125,11 +125,27 @@ def _normalise_answer(ans: str) -> str:
 
 @dataclass
 class ConsistencyResult:
+    """Outcome of a self-consistency vote.
+
+    ``total_samples`` is how many samples produced a usable answer;
+    ``requested_samples`` is how many were asked for. They differ when an
+    answerer raised or returned a non-string / blank answer, and
+    ``dropped_samples`` names that shortfall explicitly — without it a
+    collapsed run (1 survivor, unanimous) was indistinguishable from a
+    genuine unanimous run.
+    """
+
     winner: str
     votes: int
     total_samples: int
     confidence: float
     all_answers: list[str] = field(default_factory=list)
+    requested_samples: int = 0
+
+    @property
+    def dropped_samples(self) -> int:
+        """Requested samples that yielded no usable answer."""
+        return max(0, self.requested_samples - self.total_samples)
 
 
 def self_consistency(
@@ -146,8 +162,14 @@ def self_consistency(
     output (operator ensures their adapter honours the seed — most
     modern APIs support it via ``seed`` or a temperature bump).
 
-    Returns the plurality answer plus vote counts and a
-    ``confidence`` in [0, 1] = ``votes / samples``.
+    Returns the plurality answer plus vote counts and a ``confidence`` in
+    [0, 1] = ``votes / samples`` — the REQUESTED sample count, not the
+    surviving one. Dividing by the survivors made a collapsed run look
+    certain: with ``samples=5`` and four answerer failures the single
+    surviving answer scored 1.0, beating a genuine 3/5, so a
+    ``confidence >= 0.8`` gate fired hardest exactly when sampling had
+    fallen apart. ``ConsistencyResult.dropped_samples`` reports the
+    shortfall.
     """
     if samples < 1:
         raise ValueError("samples must be ≥1")
@@ -161,9 +183,24 @@ def self_consistency(
             continue
         if isinstance(raw, str) and raw.strip():
             raw_answers.append(raw)
+        else:
+            # Silently dropped before: a non-str or blank answer is a
+            # failed sample too, and it must be as visible as a raised one.
+            _log.warning(
+                "self_consistency_sample_unusable",
+                seed=base_seed + i,
+                answer_type=type(raw).__name__,
+            )
 
     if not raw_answers:
-        return ConsistencyResult(winner="", votes=0, total_samples=0, confidence=0.0, all_answers=[])
+        return ConsistencyResult(
+            winner="",
+            votes=0,
+            total_samples=0,
+            confidence=0.0,
+            all_answers=[],
+            requested_samples=samples,
+        )
 
     buckets: Counter[str] = Counter(_normalise_answer(a) for a in raw_answers)
     norm_winner, votes = buckets.most_common(1)[0]
@@ -175,8 +212,9 @@ def self_consistency(
         winner=winner,
         votes=votes,
         total_samples=len(raw_answers),
-        confidence=votes / len(raw_answers),
+        confidence=votes / samples,
         all_answers=raw_answers,
+        requested_samples=samples,
     )
 
 

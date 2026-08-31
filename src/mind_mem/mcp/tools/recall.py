@@ -101,31 +101,18 @@ def _recall_impl(
     _raw_config = _load_config(ws)
     _cache_cfg = _raw_config.get("cache", {}) if isinstance(_raw_config, dict) else {}
 
-    def _inner_with_format(query, limit, backend, active_only, **kwargs):
-        raw_json = _recall_impl_uncached(
+    def _inner(query, limit, backend, active_only, **kwargs):
+        return _recall_impl_uncached(
             query,
             limit=limit,
             active_only=active_only,
             backend=backend,
             scoring_instant=resolved_instant,
         )
-        if format == "blocks":
-            return raw_json
-        # format="bundle": re-parse JSON → build_bundle → re-serialize.
-        try:
-            from mind_mem.evidence_bundle import build_bundle
-
-            parsed = json.loads(raw_json)
-            results = parsed.get("results", []) if isinstance(parsed, dict) else []
-            bundle = build_bundle(query, results)
-            return json.dumps(bundle.to_dict(), default=str)
-        except Exception as exc:  # pragma: no cover — fallback to blocks
-            _log.warning("recall_bundle_format_failed", error=str(exc))
-            return raw_json
 
     if isinstance(_cache_cfg, dict) and _cache_cfg.get("enabled", True):
         raw = cached_recall(
-            _inner_with_format,
+            _inner,
             query,
             limit=limit,
             backend=backend,
@@ -135,8 +122,22 @@ def _recall_impl(
             scoring_instant=instant_iso,
         )
     else:
-        raw_result = _inner_with_format(query, limit=limit, active_only=active_only, backend=backend)
+        raw_result = _inner(query, limit=limit, active_only=active_only, backend=backend)
         raw = str(raw_result) if raw_result is not None else ""
+
+    # ``format`` is a PRESENTATION choice over one retrieval, so it is applied
+    # POST-cache — the same rail the attestation and explain blocks below run
+    # on, and for the same reason. ``recall_cache.make_cache_key`` derives the
+    # key from (query, namespace, limit, backend, active_only, scoring_instant)
+    # only; ``format`` is not in it and cannot be added from here. Converting
+    # inside the cached region therefore stored one caller's chosen shape under
+    # a key the other shape also hashes to, and the next caller was served the
+    # wrong envelope for the whole TTL window — a bundle client getting a raw
+    # blocks envelope with no facts/relations/timeline, or the reverse.
+    # Deriving the bundle here keeps exactly one shape (blocks) in the cache
+    # and re-derives the other per request.
+    if format == "bundle" and raw:
+        raw = _apply_bundle_format(query, raw)
 
     # v4.4.0 Finding 2 — derive the per-run recall attestation POST-cache,
     # mirroring the explain pattern below. The recall-cache key omits the
@@ -197,6 +198,33 @@ def _current_vector_flags(ws: str, backend: str) -> tuple[bool, bool]:
     except Exception as exc:  # pragma: no cover — defensive
         _log.warning("recall_attestation_vector_flags_failed", error=str(exc))
         return False, False
+
+
+def _apply_bundle_format(query: str, raw_json: str) -> str:
+    """Re-shape a blocks envelope into the ``format="bundle"`` envelope.
+
+    Runs post-cache so the cached payload is always the blocks shape and the
+    two formats cannot be served for one another: ``format`` is not part of
+    the recall-cache key, so a bundle built inside the cached region is stored
+    under a key a ``format="blocks"`` request hashes to identically.
+
+    Applied *before* the attestation / explain / served-ledger blocks so their
+    existing behaviour on a bundle is unchanged — each of them already inspects
+    the envelope for a ``results`` list and no-ops on the bundle shape.
+
+    Failure degrades to the blocks envelope rather than raising: the caller
+    asked a question and an answer in the wrong shape beats no answer.
+    """
+    try:
+        from mind_mem.evidence_bundle import build_bundle
+
+        parsed = json.loads(raw_json)
+        results = parsed.get("results", []) if isinstance(parsed, dict) else []
+        bundle = build_bundle(query, results)
+        return json.dumps(bundle.to_dict(), default=str)
+    except Exception as exc:  # pragma: no cover — fallback to blocks
+        _log.warning("recall_bundle_format_failed", error=str(exc))
+        return raw_json
 
 
 def _apply_attestation(raw_json: str, backend: str, scoring_instant: str, query: str) -> str:
@@ -732,7 +760,14 @@ def hybrid_search(
 
 @mcp_tool_observe
 def find_similar(block_id: str, limit: int = 5) -> str:
-    """Find blocks similar to a given block using vector similarity."""
+    """Find blocks co-retrieved with a given block (co-occurrence, not embeddings).
+
+    This is the one-line description agents route on, so it states the actual
+    method: the ranking comes from ``block_meta.db`` co-occurrence counts, and
+    a block that has never been co-retrieved returns an empty list even when
+    semantically near neighbours exist. For semantic nearest-neighbour search
+    use ``recall`` with ``backend="hybrid"``.
+    """
     if not _re_mod.match(r"^[A-Z]+-[a-zA-Z0-9_.-]+$", block_id):
         return json.dumps({"error": f"Invalid block_id format: {block_id}"})
     ws = _workspace()

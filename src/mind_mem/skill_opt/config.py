@@ -5,13 +5,29 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
 DEFAULT_FLEET_MODELS: dict[str, list[str]] = {
-    # Model IDs verified 2026-05-27 (see ~/CLAUDE.md model table). Stale
-    # IDs return 404 from the upstream provider so this is REPLACE-don't-
-    # keep on rename. Must stay in sync with FLEET_MODELS in fleet_bridge.py.
+    # A STARTING DEFAULT, not a verified-live roster. Nothing in this package
+    # probes whether a listed seat is reachable, correctly named or billed, so
+    # do not read this list as a health claim: upstream vendors rename and
+    # retire model IDs on their own schedule, and an ID that has gone stale
+    # since this list was last touched fails only at request time.
+    #
+    # That failure is quiet. A dead seat comes back as a FleetResponse with
+    # ``error`` set, and the consumers drop errored responses rather than
+    # raising, so a fleet where EVERY seat is dead is indistinguishable from a
+    # fleet that simply found nothing to say — a run over dead seats still
+    # exits 0 with a zero consensus score. Treat a suspiciously empty critique
+    # set as a possible transport failure, not as a verdict on the skill.
+    #
+    # Override per workspace with ``skill_opt.fleet_models`` in
+    # ``mind-mem.json`` (see :func:`load_config`) rather than editing this
+    # list, which lives inside the installed package. A key here that has no
+    # entry in ``FLEET_MODELS`` in ``fleet_bridge.py`` is silently skipped
+    # when the bridge builds its providers, so the two must stay in sync.
     "test_execution": ["grok-4.3", "mistral-large-latest"],
     "critique": [
         "deepseek-v4-pro",
@@ -31,9 +47,41 @@ DEFAULT_SKILL_SOURCES: dict[str, str] = {
     "gemini": "~/.gemini",
 }
 
-ORCHESTRATOR_PATH = os.path.expanduser("~/.claude/plugins/marketplaces/claude-code-ultimate/multi-llm-orchestrator")
+#: Environment variable that relocates the multi-LLM orchestrator package.
+#:
+#: The default below is a development-machine layout: a plugin directory that
+#: exists outside the installed ``mind_mem`` package and ships with nothing.
+#: It is the ONLY source of fleet access (``fleet_bridge._load_orchestrator``
+#: puts it on ``sys.path`` and imports ``providers`` / ``config`` from it), so
+#: on any machine without that exact directory the whole ``skill_opt`` feature
+#: is unreachable. Making it an environment variable is what keeps the
+#: remediation OUTSIDE the installed package — an operator points this at
+#: their own checkout instead of editing site-packages source.
+ORCHESTRATOR_PATH_ENV = "MIND_MEM_ORCHESTRATOR_PATH"
 
-ENV_PATH = os.path.expanduser("~/.claude-ultimate/.env")
+#: Fallback used when :data:`ORCHESTRATOR_PATH_ENV` is unset or empty.
+DEFAULT_ORCHESTRATOR_PATH = "~/.claude/plugins/marketplaces/claude-code-ultimate/multi-llm-orchestrator"
+
+
+def resolve_orchestrator_path(env: Mapping[str, str] | None = None) -> str:
+    """Resolve the orchestrator directory from *env* (default ``os.environ``).
+
+    An empty or missing variable falls back to
+    :data:`DEFAULT_ORCHESTRATOR_PATH` — an exported-but-empty value must not
+    resolve the import root to the current working directory, which would put
+    whatever the process happens to be sitting in ahead of every other entry
+    on ``sys.path``. The result is ``expanduser``-ed so an operator can write
+    ``~/...`` exactly as the default does.
+    """
+    source = (os.environ if env is None else env).get(ORCHESTRATOR_PATH_ENV) or DEFAULT_ORCHESTRATOR_PATH
+    return os.path.expanduser(source)
+
+
+#: Resolved once at import time, because ``fleet_bridge`` binds this name with
+#: ``from .config import ORCHESTRATOR_PATH``; mutating this module attribute
+#: later would not reach that binding. Set :data:`ORCHESTRATOR_PATH_ENV`
+#: before importing ``mind_mem``.
+ORCHESTRATOR_PATH = resolve_orchestrator_path()
 
 
 @dataclass(frozen=True)

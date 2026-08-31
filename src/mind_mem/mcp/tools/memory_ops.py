@@ -92,6 +92,29 @@ def _is_markdown_backend(ws: str) -> bool:
         return True
 
 
+def _store_block_is_active(block: dict) -> bool:
+    """Activity of a store-resident block, on the Markdown branch's terms.
+
+    ``memory_health`` reports one ``total_active`` field, so both branches
+    must answer the same question or the number is not comparable across
+    backends. The Status half therefore delegates to the very function the
+    Markdown branch uses, :func:`block_parser.get_active` — spelling it out
+    a second time is how the two drifted: the store branch read
+    ``str(Status or "active").lower() == "active"``, which treated a
+    MISSING ``Status`` as active, so a deactivated row whose metadata omits
+    the field was counted.
+
+    A store row additionally carries the column-derived ``_active`` flag
+    (``block_store_postgres._row_to_block``), which ``Status`` never
+    reflects — a row deactivated in the store but whose metadata still says
+    ``active`` must not be counted. Both must hold; a store that surfaces
+    no flag has no opinion.
+    """
+    if not bool(block.get("_active", True)):
+        return False
+    return bool(get_active([block]))
+
+
 @mcp_tool_observe
 def index_stats() -> str:
     """Block counts, index staleness, vector coverage, and MIND kernel status."""
@@ -234,7 +257,12 @@ def reindex(include_vectors: bool = False) -> str:
 
 @mcp_tool_observe
 def delete_memory_item(block_id: str) -> str:
-    """Delete a block by ID from its source .md file (admin-scope)."""
+    """Delete a block by ID from the workspace's blocks of record (admin-scope).
+
+    Backend-aware: the Markdown / encrypted corpus is edited in place
+    (line-splice + atomic replace, with a recovery journal); every other
+    backend deletes through its own block store.
+    """
     ws = _workspace()
     ws_err = _check_workspace(ws)
     if ws_err:
@@ -246,6 +274,46 @@ def delete_memory_item(block_id: str) -> str:
                 "_schema_version": MCP_SCHEMA_VERSION,
                 "error": f"Invalid block ID format: {block_id}",
             }
+        )
+
+    # Audit bug #5: on a non-Markdown backend (e.g. Postgres) the block of
+    # record lives in the store; the local corpus files are empty init
+    # templates. The Markdown line-splicing below would then report
+    # "Source file not found" / "Block not found in DECISIONS.md" while the
+    # block stayed in the store — a delete that reports the ID as wrong and
+    # removes nothing. Route through the store, which owns its own deletion
+    # journal (``deleted_blocks``).
+    if not _is_markdown_backend(ws):
+        backend = _backend_name(ws)
+        try:
+            removed = get_block_store(ws).delete_block(block_id)
+        except Exception as exc:
+            _log.warning("mcp_delete_memory_item_store_failed", block_id=block_id, error=str(exc))
+            return json.dumps(
+                {
+                    "_schema_version": MCP_SCHEMA_VERSION,
+                    "error": f"Delete failed on the {backend} block store: {exc}",
+                    "block_id": block_id,
+                }
+            )
+        if not removed:
+            return json.dumps(
+                {
+                    "_schema_version": MCP_SCHEMA_VERSION,
+                    "error": f"Block {block_id} not found in the block store.",
+                    "block_id": block_id,
+                }
+            )
+        metrics.inc("mcp_delete_memory_item")
+        _log.info("mcp_delete_memory_item", block_id=block_id, backend=backend)
+        return json.dumps(
+            {
+                "_schema_version": MCP_SCHEMA_VERSION,
+                "status": "deleted",
+                "block_id": block_id,
+                "backend": backend,
+            },
+            indent=2,
         )
 
     filepath = _find_block_file(ws, block_id)
@@ -576,11 +644,17 @@ def memory_health() -> str:
             store_blocks = []
         for block in store_blocks:
             src = str(block.get("_source_file", "") or "")
+            # The Markdown branch skips ``*_ARCHIVE.md`` outright, so an
+            # archived block counts in neither total nor active there.
+            # Skip the store's equivalents too, or the two branches count
+            # different populations under the same field name.
+            if src.rsplit("/", 1)[-1].endswith("_ARCHIVE.md"):
+                continue
             subdir = src.split("/", 1)[0] if "/" in src else ""
             bucket = subdir if subdir in corpus_stats else "other"
             stat = corpus_stats.setdefault(bucket, {"total": 0, "active": 0})
             stat["total"] += 1
-            is_active = str(block.get("Status", "active")).lower() == "active"
+            is_active = _store_block_is_active(block)
             if is_active:
                 stat["active"] += 1
             total_blocks += 1

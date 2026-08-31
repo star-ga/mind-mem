@@ -102,6 +102,7 @@ __all__ = [
     "guardrail_provenance_refusal",
     "load_guardrails",
     "match_guardrails",
+    "normalise_status",
     "parse_guardrail_block",
 ]
 
@@ -137,6 +138,11 @@ _TRIGGER_FIELDS: tuple[tuple[str, str], ...] = (
 #: Statuses that keep a guardrail live.  Anything else (deprecated,
 #: archived, superseded) is parsed but never fires.
 _LIVE_STATUSES = frozenset({"", "active", "wip"})
+
+#: Separator used to render a multi-valued ``Status`` field back to text.
+#: A multi-valued status names no single state, so the joined form is
+#: deliberately *not* in :data:`_LIVE_STATUSES` — it fails closed.
+_STATUS_JOIN = ", "
 
 #: Provenance classes that may never mint a guardrail.  Only affirmative
 #: evidence of *external* origin disqualifies a block: ``unknown`` (a
@@ -322,6 +328,39 @@ class GuardrailProvenanceError(GuardrailSpecError):
     """
 
 
+def normalise_status(raw: Any) -> str:
+    """Canonical text of a block ``Status`` field.
+
+    The block parser has a list-field convention: a field written as a
+    bare ``Status:`` line followed by ``- active`` renders as the *list*
+    ``["active"]``, while ``Status: active`` renders as the string
+    ``"active"``.  Both spell one state, so both must read as one state
+    here — stringifying the list gives ``"['active']"``, which matches no
+    known status and would silently drop a live guardrail over how its
+    author spaced a line.
+
+    A bare ``Status:`` with nothing under it parses as ``[]`` and means
+    *unstated*, exactly like an absent field — the same reading
+    :func:`mind_mem.admissibility.is_admissible_status` gives it.
+
+    A multi-valued status is joined rather than picked from: it names no
+    single state this code can read, so it falls through to fail-closed
+    (not live) instead of guessing which entry wins.
+
+    Args:
+        raw: The block's ``Status`` value as the parser produced it.
+
+    Returns:
+        The status as plain text (``""`` when unstated).
+    """
+    if raw is None:
+        return ""
+    if isinstance(raw, (list, tuple)):
+        parts = [str(item).strip() for item in raw if str(item).strip()]
+        return parts[0] if len(parts) == 1 else _STATUS_JOIN.join(parts)
+    return str(raw).strip()
+
+
 def _norm_marker(value: Any) -> str:
     """Lower-cased, stripped ``str`` view of a corpus value (``""`` for None)."""
     if value is None:
@@ -436,7 +475,7 @@ def parse_guardrail_block(block: Mapping[str, Any]) -> Guardrail:
         trigger=trigger,
         source_file=str(block.get("_source_file", "")),
         line=line,
-        status=str(block.get("Status", "")),
+        status=normalise_status(block.get("Status")),
         block=MappingProxyType(dict(block)),
     )
 
@@ -467,6 +506,14 @@ def load_guardrails(workspace: str, policy: GuardrailPolicy | None = None) -> tu
             _log.warning("guardrail_source_escaped_workspace", source=rel_path)
             continue
         if not os.path.isfile(candidate):
+            # A source the operator configured but that is not there is
+            # invisible otherwise: every prohibition it declares is simply
+            # absent from every recall, byte-identical to a workspace that
+            # declares none.  The shipped default is exempt — no workspace
+            # initialiser creates ``guardrails/GUARDRAILS.md``, so its
+            # absence is the normal state and warning on it would be noise.
+            if rel_path not in DEFAULT_GUARDRAIL_FILES:
+                _log.warning("guardrail_source_missing", source=rel_path, resolved=candidate)
             continue
         try:
             blocks = parse_file(candidate)
@@ -487,6 +534,16 @@ def load_guardrails(workspace: str, policy: GuardrailPolicy | None = None) -> tu
                 _log.warning("guardrail_block_rejected", source=rel_path, error=str(exc))
                 continue
             if not guardrail.is_live():
+                # Expected for a retired guardrail, so this is debug rather
+                # than a warning — but it is never silent: a status the
+                # parser rendered in a shape this code cannot read looks
+                # exactly like a deliberate retirement from the outside.
+                _log.debug(
+                    "guardrail_not_live",
+                    source=rel_path,
+                    block_id=guardrail.block_id,
+                    status=guardrail.status,
+                )
                 continue
             found.setdefault(guardrail.block_id, guardrail)
 

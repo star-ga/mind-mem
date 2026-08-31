@@ -107,7 +107,9 @@ class TestOIDCCallback:
         monkeypatch.setenv("OIDC_ISSUER", "https://example.com")
         monkeypatch.setenv("OIDC_CLIENT_ID", "cid")
         monkeypatch.setenv("OIDC_AUDIENCE", "aud")
-        fake_claims = {"sub": "user-abc", "scope": "openid email"}
+        # ``aud`` is required by verify() — a real token for this relying
+        # party always carries it, so the mock must too.
+        fake_claims = {"sub": "user-abc", "aud": "aud", "scope": "openid email"}
 
         with patch("mind_mem.api.auth.OIDCProvider._get_jwks", return_value={"keys": []}):
             with patch("mind_mem.api.auth.jwt.decode", return_value=fake_claims):

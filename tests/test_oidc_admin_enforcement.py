@@ -50,9 +50,19 @@ def oidc_client(workspace: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) 
         yield tc
 
 
+#: Audience these tests configure the provider with (see ``oidc_client``).
+_AUDIENCE = "mind-mem-api"
+
+
 def _mock_jwt(claims: dict) -> Any:
-    """Context manager that makes OIDCProvider.verify return *claims*."""
-    return patch("mind_mem.api.auth.jwt.decode", return_value=claims)
+    """Context manager that makes OIDCProvider.verify return *claims*.
+
+    The configured ``aud`` is filled in unless the test states its own:
+    ``verify()`` requires the claim (a token with no ``aud`` is rejected,
+    because "validate only when present" is not a validation), so a mock
+    that omits it would be a token no issuer would ever mint.
+    """
+    return patch("mind_mem.api.auth.jwt.decode", return_value={"aud": _AUDIENCE, **claims})
 
 
 def _mock_jwks() -> Any:

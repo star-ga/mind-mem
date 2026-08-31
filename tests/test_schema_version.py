@@ -173,5 +173,66 @@ class TestMigrateWorkspace(unittest.TestCase):
         self.assertTrue(os.path.isdir(os.path.join(self.td, "intelligence", "proposed")))
 
 
+class TestMigrationFailureIsReported(unittest.TestCase):
+    """A step that could not be applied must not be reported as applied.
+
+    The v2.0 -> v2.1 step used to swallow OSError/JSONDecodeError, so a
+    read-only workspace, a full disk or one corrupt byte of JSON left the
+    legacy keys in place while the CLI printed "Migrated 2.0.0 -> 2.1.0".
+    """
+
+    def setUp(self):
+        self.td = tempfile.mkdtemp()
+        self.config_path = os.path.join(self.td, "mind-mem.json")
+        with open(self.config_path, "w", encoding="utf-8") as f:
+            json.dump({"schema_version": "2.0.0", "self_correcting_mode": True}, f)
+        os.makedirs(os.path.join(self.td, "memory"), exist_ok=True)
+        self.state_path = os.path.join(self.td, "memory", "intel-state.json")
+
+    def tearDown(self):
+        shutil.rmtree(self.td, ignore_errors=True)
+
+    def _corrupt_intel_state(self):
+        with open(self.state_path, "w", encoding="utf-8") as f:
+            f.write("{not json")
+
+    def test_failed_step_is_not_counted_as_migrated(self):
+        self._corrupt_intel_state()
+        result = migrate_workspace(self.td)
+        self.assertTrue(result["failed"])
+        self.assertEqual(result["steps"], [])
+        self.assertFalse(result["migrated"])
+
+    def test_failed_step_does_not_claim_the_target_version(self):
+        self._corrupt_intel_state()
+        result = migrate_workspace(self.td)
+        self.assertEqual(result["to_version"], "2.0.0")
+        self.assertNotEqual(result["to_version"], CURRENT_SCHEMA_VERSION)
+
+    def test_failed_step_leaves_the_workspace_on_the_old_version(self):
+        """So the next run retries instead of skipping a half-done step."""
+        self._corrupt_intel_state()
+        migrate_workspace(self.td)
+        with open(self.config_path, encoding="utf-8") as f:
+            config = json.load(f)
+        self.assertEqual(config["schema_version"], "2.0.0")
+        self.assertIn("self_correcting_mode", config)
+
+    def test_successful_step_still_reports_success(self):
+        with open(self.state_path, "w", encoding="utf-8") as f:
+            json.dump({"self_correcting_mode": False}, f)
+        result = migrate_workspace(self.td)
+        self.assertEqual(result["failed"], [])
+        self.assertTrue(result["migrated"])
+        self.assertEqual(result["to_version"], CURRENT_SCHEMA_VERSION)
+        with open(self.config_path, encoding="utf-8") as f:
+            config = json.load(f)
+        self.assertEqual(config["schema_version"], CURRENT_SCHEMA_VERSION)
+        self.assertIn("governance_mode", config)
+        with open(self.state_path, encoding="utf-8") as f:
+            state = json.load(f)
+        self.assertIn("governance_mode", state)
+
+
 if __name__ == "__main__":
     unittest.main()

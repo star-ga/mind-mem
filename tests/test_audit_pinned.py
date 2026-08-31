@@ -280,3 +280,50 @@ class TestReportToDict:
         assert loaded["passed"] is True
         assert len(loaded["findings"]) == 1
         assert loaded["findings"][0]["audit_passed"] is True
+
+
+# ---------------------------------------------------------------------------
+# Tilde-expanded config path (regression)
+# ---------------------------------------------------------------------------
+
+
+class TestConfigPathExpansion:
+    """``load_pinned_models`` expands ``~``; the ``config_present`` probe did
+    not, so a ``~``-prefixed path (quoted CI value, Makefile variable,
+    subprocess argv) loaded its pins while the report claimed there was no
+    config at all."""
+
+    def test_tilde_config_path_is_reported_present(
+        self,
+        tmp_path: Path,
+        clean_ckpt: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.setenv("USERPROFILE", str(home))  # Windows
+        _write_config(home, {"audit_pinned_models": [str(clean_ckpt)]})
+
+        report = audit_pinned("~/mind-mem.json", workspace=tmp_path)
+
+        assert report.config_present is True
+        assert len(report.findings) == 1
+        assert report.findings[0].exists is True
+
+    def test_tilde_config_path_text_report_is_not_no_config(
+        self,
+        tmp_path: Path,
+        clean_ckpt: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.setenv("USERPROFILE", str(home))
+        _write_config(home, {"audit_pinned_models": []})
+
+        report = audit_pinned("~/mind-mem.json", workspace=tmp_path)
+
+        assert report.config_present is True
+        assert "no mind-mem.json found" not in format_pinned_report_text(report)

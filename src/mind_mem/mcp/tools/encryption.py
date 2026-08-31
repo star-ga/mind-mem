@@ -26,13 +26,36 @@ from ..infra.observability import mcp_tool_observe
 from ..infra.workspace import _workspace
 
 
+def _current_actor() -> str:
+    """Authenticated agent id for the calling context, or ``"anonymous"``.
+
+    ``current_agent_id`` lives in :mod:`mind_mem.api.rest` — the same
+    module ``governance_gate`` resolves it from. It was previously
+    imported from ``mcp.infra.observability``, which defines no such
+    name, so the ImportError was swallowed and every audit record was
+    written as ``"anonymous"`` regardless of who called.
+
+    Resolved lazily and defensively: the REST layer is an optional extra
+    (``pip install 'mind-mem[api]'``), and direct callers (CLI, tests,
+    library use) legitimately have no identity set. Attribution is
+    best-effort by design — it must never block the decrypt audit append.
+    """
+    try:
+        from mind_mem.api.rest import current_agent_id  # noqa: PLC0415
+
+        return current_agent_id.get("anonymous") or "anonymous"
+    except Exception:
+        # No REST layer loaded, or no identity in this context.
+        return "anonymous"
+
+
 def _append_decrypt_audit(ws: str, path: str, *, mode: str) -> None:
     """Append a forensic record of a decrypt operation to
     ``memory/decrypted_files.jsonl`` (alert N-08, roadmap v4.0.15).
 
     Pattern mirrors ``block_store._append_deletion_receipt``: append-only
-    JSONL with timestamp + path + actor (best-effort from agent_id
-    context) + mode (``read`` for ``decrypt_file``, ``in_place`` for
+    JSONL with timestamp + path + actor (best-effort, via
+    :func:`_current_actor`) + mode (``read`` for ``decrypt_file``, ``in_place`` for
     ``decrypt_file_in_place``). Failure to append is logged but does
     not block the decrypt itself — forensic audit must be opportunistic,
     never a denial-of-service vector for legitimate operators.
@@ -50,24 +73,7 @@ def _append_decrypt_audit(ws: str, path: str, *, mode: str) -> None:
     log_path = os.path.join(log_dir, "decrypted_files.jsonl")
     try:
         os.makedirs(log_dir, exist_ok=True)
-        # Best-effort actor attribution — read from the agent-id
-        # ContextVar that ``mcp/infra/observability`` populates per call.
-        actor = "anonymous"
-        try:
-            from mind_mem.mcp.infra.observability import current_agent_id  # type: ignore
-
-            actor = current_agent_id.get("anonymous") or "anonymous"
-        except Exception:  # nosec B110 — see rationale below.
-            # Actor attribution is best-effort: ``current_agent_id`` is a
-            # ContextVar populated by the REST + MCP layer. Direct callers
-            # (CLI, tests, library use) won't have it set; ImportError when
-            # the observability module isn't reachable in test fixtures is
-            # also expected. Falling through to ``actor = "anonymous"`` is
-            # the correct behaviour — we still write the audit record,
-            # just without a richer actor than the default. Re-raising
-            # would block the legitimate decrypt audit-trail append.
-            # Audited 2026-05-20 for alert #193.
-            pass
+        actor = _current_actor()
         record = {
             "ts": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "path": path,

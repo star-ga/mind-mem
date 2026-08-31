@@ -12,9 +12,11 @@ This module decides *how* they enter a recall response:
 2. **Bounded displacement.**  At most ``policy.max_surfaced`` guardrails
    are injected (hard cap :data:`~mind_mem.guardrails.MAX_SURFACED_HARD_CAP`),
    and the response keeps its original length, so the number of ranked hits
-   pushed out is *at most* ``max_surfaced`` — never the whole page.  A
-   guardrail that the ranker had already returned is promoted in place and
-   displaces nothing.
+   pushed out is *at most* ``max_surfaced``.  A guardrail that the ranker had
+   already returned is promoted in place and displaces nothing.  A page
+   *shorter* than ``max_surfaced`` can be displaced entirely — length is the
+   bound that holds unconditionally, and it is the response's own length, not
+   the guardrail count.
 3. **Marked as a constraint.**  Surfaced hits carry ``guardrail: True``
    plus ``guardrail_severity`` / ``guardrail_triggers`` /
    ``guardrail_constraint`` / ``surfaced_by`` so the consumer can render
@@ -145,12 +147,23 @@ def apply_guardrail_surfacing(
 
     head_ids = {str(h.get("_id", "")) for h in surfaced}
     tail = [h for h in hits if str(h.get("_id", "")) not in head_ids]
-    budget = max(len(hits), len(surfaced))
+    # The response never grows. The ONE documented exception is an empty page:
+    # a constraint must fire even when recall found nothing, and there is no
+    # length to preserve. ``max(len(hits), len(surfaced))`` also covered that
+    # case, but it covered far more — every page SHORTER than the number of
+    # firing guardrails. With the default bound of 3, a caller asking for one
+    # hit got three, overrunning both its own page size and any downstream
+    # max-results budget, one step after the pipeline's own ``[:limit]``.
+    budget = len(hits) if hits else len(surfaced)
     result = (surfaced + tail)[:budget]
+    # ``budget`` can now be smaller than the head, so the surviving-tail count
+    # needs the clamp: a bare ``budget - len(surfaced)`` goes negative there and
+    # would report more displaced hits than the page ever held.
+    kept_tail = max(0, budget - len(surfaced))
     _log.info(
         "guardrails_surfaced",
         count=len(surfaced),
         promoted=len(hits) - len(tail),
-        displaced=max(0, len(tail) - (budget - len(surfaced))),
+        displaced=len(tail) - kept_tail,
     )
     return result

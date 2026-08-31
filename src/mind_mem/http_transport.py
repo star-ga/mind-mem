@@ -881,10 +881,15 @@ def build_handler(
             if not active:
                 return False
             # Constant-time comparison against EVERY active token (audit
-            # S-1). hmac.compare_digest short-circuits at the byte level
-            # internally; OR-ing the results across the set keeps the
-            # overall result constant-time-ish per token.
-            return any(hmac.compare_digest(sent, t) for t in active)
+            # S-1). The list comprehension is the load-bearing part: with a
+            # generator, ``any`` returns on the first True, so the number of
+            # compare_digest calls would be 1 for a token at index 0 and
+            # len(active) for a miss — leaking the matched token's position
+            # through timing. Materialising the list runs exactly one
+            # comparison per active token whatever the answer is; each
+            # comparison is itself constant-time.
+            results = [hmac.compare_digest(sent, t) for t in active]
+            return any(results)
 
         # -- peer allowlist (roadmap v4.0.x federation hardening) -------
         def _peer_allowed(self) -> bool:

@@ -6,7 +6,14 @@ Entirely optional — disabled by default. Requires sentence-transformers.
 
 from __future__ import annotations
 
-_CE_MODEL = None
+import threading
+from typing import Any
+
+#: Loaded cross-encoders, keyed by ``(model, device)``.  The key is the
+#: whole point: a single-slot cache silently hands the first caller's model
+#: to every later one, so a benchmark comparing two models measures one.
+_CE_MODELS: dict[tuple[str, str], Any] = {}
+_CE_LOAD_LOCK = threading.Lock()
 _CE_AVAILABLE = None
 
 
@@ -27,14 +34,31 @@ class CrossEncoderReranker:
     """CPU-friendly cross-encoder reranker."""
 
     def __init__(self, model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2", device: str = "cpu"):
+        """Load (or reuse) the requested cross-encoder.
+
+        Models are cached per ``(model, device)`` for the life of the
+        process, so asking for a different model or device really loads
+        it instead of returning whatever the first caller loaded. The
+        pair that was actually loaded is recorded on :attr:`model_name`
+        and :attr:`device` — scores attributed to a model must be
+        traceable to the model that produced them.
+        """
         if not _check_available():
             raise ImportError("sentence-transformers required for cross-encoder")
         from sentence_transformers import CrossEncoder
 
-        global _CE_MODEL
-        if _CE_MODEL is None:
-            _CE_MODEL = CrossEncoder(model, device=device)
-        self._model = _CE_MODEL
+        self.model_name = model
+        self.device = device
+        key = (model, device)
+        cached = _CE_MODELS.get(key)
+        if cached is None:
+            with _CE_LOAD_LOCK:
+                # Re-check: another thread may have loaded it while we waited.
+                cached = _CE_MODELS.get(key)
+                if cached is None:
+                    cached = CrossEncoder(model, device=device)
+                    _CE_MODELS[key] = cached
+        self._model = cached
 
     def rerank(
         self,

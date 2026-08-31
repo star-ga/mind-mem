@@ -14,6 +14,9 @@ Usage:
     python3 -m mind_mem.cron_runner /path/to/workspace --job all
     python3 -m mind_mem.cron_runner /path/to/workspace --job transcript_scan
     python3 -m mind_mem.cron_runner --install-cron
+
+Exit codes: 0 = every dispatched job succeeded, 1 = at least one job failed,
+2 = the workspace config exists but could not be read (nothing was dispatched).
 """
 
 from __future__ import annotations
@@ -76,7 +79,13 @@ ALL_JOBS = list(JOB_DEFS.keys())
 
 
 def load_config(workspace: str) -> dict:
-    """Load mind-mem.json from workspace. Returns defaults if missing/unreadable."""
+    """Load mind-mem.json from workspace. Returns defaults if missing/unreadable.
+
+    A ``{}`` return is deliberately ambiguous — it means "no config to apply",
+    which is the right *default* but the wrong *fail direction* for a file that
+    exists and could not be parsed. Callers that act on the config must ask
+    :func:`config_read_error` first.
+    """
     config_path = os.path.join(workspace, "mind-mem.json")
     try:
         with open(config_path) as f:
@@ -84,6 +93,33 @@ def load_config(workspace: str) -> dict:
     except (FileNotFoundError, json.JSONDecodeError, OSError) as exc:
         _log.warning("config_load_failed", path=config_path, error=str(exc))
         return {}
+
+
+def config_read_error(workspace: str) -> str | None:
+    """Why the workspace config could not be read, or ``None`` when it is fine.
+
+    An **absent** config is not an error: the built-in defaults apply and every
+    job runs, which is what a fresh workspace wants. A config that **exists but
+    does not parse** is a different state entirely, and ``load_config`` cannot
+    tell the two apart — both come back as ``{}``, and ``{}`` reads as
+    "everything enabled". An operator who disabled a job and later left a
+    trailing comma in the file would get every job spawned on the next tick:
+    the exact opposite of the configuration on disk, reported as success.
+
+    The runner uses this to fail closed — an unreadable toggle file means run
+    nothing, not run everything.
+    """
+    config_path = os.path.join(workspace, "mind-mem.json")
+    if not os.path.isfile(config_path):
+        return None
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            parsed = json.load(f)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return f"{type(exc).__name__}: {exc}"
+    if not isinstance(parsed, dict):
+        return f"top-level JSON value is {type(parsed).__name__}, expected an object"
+    return None
 
 
 def is_job_enabled(config: dict, job_name: str) -> bool:
@@ -195,6 +231,19 @@ def main() -> int:
     if args.install_cron:
         print_cron_instructions(workspace)
         return 0
+
+    # Fail closed: a config file that exists but cannot be parsed must not be
+    # treated as "no config" (which enables every job). Dispatching 120s-budget
+    # subprocesses against a configuration nobody could read is the wrong
+    # direction for a toggle file whose whole purpose is to say what NOT to run.
+    cfg_error = config_read_error(workspace)
+    if cfg_error is not None:
+        _log.error("config_unreadable", workspace=workspace, error=cfg_error)
+        print(
+            f"mind-mem cron: refusing to run — {os.path.join(workspace, 'mind-mem.json')} "
+            f"exists but could not be read ({cfg_error}). No jobs dispatched."
+        )
+        return 2
 
     config = load_config(workspace)
     jobs = ALL_JOBS if args.job == "all" else [args.job]

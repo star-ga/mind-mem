@@ -304,3 +304,20 @@ class TestTemporalMetadata:
         blocks = [{"excerpt": "fact", "created_at": "2026-04-15"}]
         out = annotate_with_temporal_metadata(blocks, now=self._now())
         assert out[0]["_temporal_delta_days"] == 6
+
+    def test_documented_tag_is_the_tag_that_is_emitted(self):
+        """The docs of a public entry point must name the real format.
+
+        v3.5.0 changed the emitted tag but left both docstrings
+        promising ``[Stored N days ago - <date>]``, so anyone matching
+        the documented format matched nothing.
+        """
+        import mind_mem.temporal_metadata as temporal_metadata
+
+        blocks = [{"excerpt": "fact", "created_at": "2026-04-15"}]
+        out = annotate_with_temporal_metadata(blocks, now=self._now())
+        emitted = out[0]["excerpt"]
+        label = emitted[: emitted.index(":") + 1]  # "[Block date:"
+
+        assert label in (annotate_with_temporal_metadata.__doc__ or "")
+        assert label in (temporal_metadata.__doc__ or "")

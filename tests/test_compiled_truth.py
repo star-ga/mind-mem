@@ -425,3 +425,76 @@ class TestConstants:
         assert "person" in VALID_ENTITY_TYPES
         assert "tool" in VALID_ENTITY_TYPES
         assert "topic" in VALID_ENTITY_TYPES
+
+
+# ---------------------------------------------------------------------------
+# Evidence bodies that contain their own "### " lines (2026-08-29 audit)
+# ---------------------------------------------------------------------------
+
+
+class TestEvidenceBodyWithMarkdownHeadings:
+    """An H3 inside an observation must not truncate the entry.
+
+    ``parse_truth_page`` splits on every line starting ``### ``; a chunk
+    that is not an evidence header is a continuation of the observation
+    above it. Dropping it lost the tail of an append-only trail, and the
+    next ``add_evidence`` -> recompile -> save persisted the truncation.
+    """
+
+    def _round_trip(self, observation: str) -> str:
+        entry = EvidenceEntry(
+            timestamp="2026-04-10T12:00:00+00:00",
+            source="memory/2026-04-10.md",
+            observation=observation,
+            confidence="high",
+        )
+        page = CompiledTruthPage(
+            entity_id="PRJ-test",
+            entity_type="project",
+            compiled_section="body",
+            evidence_entries=[entry],
+            last_compiled="2026-04-10T00:00:00+00:00",
+            version=1,
+        )
+        parsed = parse_truth_page(format_truth_page(page))
+        assert len(parsed.evidence_entries) == 1
+        return parsed.evidence_entries[0].observation
+
+    def test_heading_inside_observation_survives(self):
+        observation = "line one\n### Findings\nthe important part"
+        assert self._round_trip(observation) == observation
+
+    def test_blank_lines_around_the_heading_survive(self):
+        observation = "line one\n\n### Findings\n\nthe important part"
+        assert self._round_trip(observation) == observation
+
+    def test_several_headings_survive(self):
+        observation = "intro\n### One\na\n### Two\nb"
+        assert self._round_trip(observation) == observation
+
+    def test_following_entry_is_still_parsed(self):
+        first = EvidenceEntry(
+            timestamp="2026-04-10T12:00:00+00:00",
+            source="a.md",
+            observation="head\n### Detail\ntail",
+            confidence="high",
+        )
+        second = EvidenceEntry(
+            timestamp="2026-04-11T12:00:00+00:00",
+            source="b.md",
+            observation="plain",
+            confidence="low",
+            superseded=True,
+        )
+        page = CompiledTruthPage(
+            entity_id="PRJ-test",
+            entity_type="project",
+            compiled_section="body",
+            evidence_entries=[first, second],
+            last_compiled="2026-04-10T00:00:00+00:00",
+            version=1,
+        )
+        parsed = parse_truth_page(format_truth_page(page))
+        assert [e.observation for e in parsed.evidence_entries] == [first.observation, second.observation]
+        assert [e.superseded for e in parsed.evidence_entries] == [False, True]
+        assert [e.source for e in parsed.evidence_entries] == ["a.md", "b.md"]

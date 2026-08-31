@@ -24,6 +24,9 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .context_core import LoadedCore
+from .observability import get_logger
+
+_log = get_logger("core_export")
 
 # ---------------------------------------------------------------------------
 # JSON-LD export
@@ -373,12 +376,22 @@ def export_to_okf(core: LoadedCore) -> dict[str, Any]:
 # in PyYAML; OKF frontmatter for our units is exactly that shape.
 _YAML_SAFE = re.compile(r"^[A-Za-z0-9 ._:/+@#-]+$")
 
+#: Characters that must never appear raw inside the double-quoted form.
+#: The frontmatter reader is line-based, so a raw newline inside a quoted
+#: scalar ends the value mid-string: a multi-line ``Statement`` (ordinary
+#: corpus content -- ``block_parser`` joins indented continuation lines with
+#: ``\n``) round-tripped as its first line plus a stray quote.
+_YAML_ESCAPE = {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+#: Inverse of :data:`_YAML_ESCAPE`, keyed by the character after the backslash.
+_YAML_UNESCAPE = {"\\": "\\", '"': '"', "n": "\n", "r": "\r", "t": "\t"}
+
 
 def _yaml_scalar(value: str) -> str:
     s = str(value)
     if s and _YAML_SAFE.fullmatch(s) and not s.startswith((" ", "-")):
         return s
-    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return '"' + "".join(_YAML_ESCAPE.get(ch, ch) for ch in s) + '"'
 
 
 def _concept_filename(unit: Mapping[str, Any]) -> str:
@@ -531,7 +544,10 @@ def _parse_okf_frontmatter(text: str) -> dict[str, Any]:
     """Parse the tiny YAML subset our bundle writer emits (string scalars +
     list-of-string under a key). Tolerant of files other producers wrote in
     the same shape; ignores body content."""
-    lines = text.splitlines()
+    # A UTF-8 BOM is not whitespace -- ``str.strip()`` leaves U+FEFF in place --
+    # so a BOM-prefixed bundle failed the ``---`` probe, parsed to ``{}``, and
+    # every concept in it was dropped by the importer.
+    lines = text.lstrip("\ufeff").splitlines()
     if not lines or lines[0].strip() != "---":
         return {}
     fm: dict[str, Any] = {}
@@ -572,10 +588,28 @@ def _parse_okf_frontmatter(text: str) -> dict[str, Any]:
 
 
 def _unquote(s: str) -> str:
+    """Undo :func:`_yaml_scalar`'s quoting.
+
+    A single left-to-right pass, not a chain of ``str.replace`` calls: the
+    sequential form cannot tell an escaped backslash from the start of the
+    next escape, and it left ``\\n`` as two literal characters where the
+    writer meant a newline.
+    """
     s = s.strip()
-    if len(s) >= 2 and s[0] == s[-1] == '"':
-        return s[1:-1].replace('\\"', '"').replace("\\\\", "\\")
-    return s
+    if not (len(s) >= 2 and s[0] == s[-1] == '"'):
+        return s
+    body = s[1:-1]
+    out: list[str] = []
+    i = 0
+    while i < len(body):
+        ch = body[i]
+        if ch == "\\" and i + 1 < len(body):
+            out.append(_YAML_UNESCAPE.get(body[i + 1], body[i + 1]))
+            i += 2
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
 
 
 def import_okf_bundle(bundle_dir: str | Path) -> list[dict[str, Any]]:
@@ -591,11 +625,23 @@ def import_okf_bundle(bundle_dir: str | Path) -> list[dict[str, Any]]:
     """
     root = Path(bundle_dir)
     blocks: list[dict[str, Any]] = []
+    skipped: list[str] = []
     for md in sorted(root.rglob("*.md")):
         if md.name in ("index.md", "log.md"):
             continue
         fm = _parse_okf_frontmatter(md.read_text(encoding="utf-8"))
         if not fm.get("type"):
+            # A dropped concept must be visible. `type` is OKF's only required
+            # field, so its absence is either a genuinely non-conformant file
+            # or -- the case that bit us -- frontmatter this reader failed to
+            # recognise, in which case EVERY concept in the bundle is dropped
+            # and the import returns [] while reporting success.
+            _log.warning(
+                "okf_concept_skipped",
+                path=str(md),
+                reason="no_frontmatter" if not fm else "missing_type",
+            )
+            skipped.append(str(md.relative_to(root)))
             continue
         concept_id = str(md.relative_to(root).with_suffix(""))
         block: dict[str, Any] = {"type": str(fm["type"])}
@@ -619,6 +665,10 @@ def import_okf_bundle(bundle_dir: str | Path) -> list[dict[str, Any]]:
             bid = f"{prefix}{concept_id}"
         block["_id"] = bid
         blocks.append(block)
+    if skipped and not blocks:
+        # Every candidate concept was dropped: that is a failed import wearing
+        # the shape of an empty-but-successful one.
+        _log.warning("okf_import_empty", bundle=str(root), skipped=len(skipped))
     return blocks
 
 

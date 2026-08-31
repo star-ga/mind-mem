@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from mind_mem.block_lineage import add_block_edge
 from mind_mem.v4 import FeatureDisabledError
 from mind_mem.v4.cognitive_kernel import KernelHit, KernelKind, KernelResult, mind_recall
 from mind_mem.v4.kernels import (  # noqa: F401  — import to trigger auto-registration
@@ -132,13 +133,25 @@ def test_surprise_weighted_missing_embedding_uses_mild(cfg_on: Path, fake_v3_rec
 # ---------------------------------------------------------------------------
 
 
+def _lineage_db(workspace: Path) -> Path:
+    """Path of the lineage graph database inside *workspace*.
+
+    Spelled out literally (not imported from the source under test) so
+    that if the production writer ever moves, these tests fail loudly
+    instead of silently following the reader to the wrong file.
+    """
+    d = workspace / ".mind-mem-index"
+    d.mkdir(parents=True, exist_ok=True)
+    return d / "recall.db"
+
+
 def _make_co_retrieval(workspace: Path, edges: list[tuple[str, str, str]] | None = None) -> None:
     """Create a v3.11-style co_retrieval table.
 
     edges: list of (mem1_id, mem2_id, kind). When None, only the table
     schema is created (no rows).
     """
-    db = workspace / "index.db"
+    db = _lineage_db(workspace)
     with sqlite3.connect(db) as conn:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS co_retrieval ("
@@ -195,7 +208,7 @@ def test_contradicts_first_degrades_without_table(cfg_on: Path, fake_v3_recall: 
 @pytest.mark.unit
 def test_contradicts_first_degrades_on_untyped_lineage(cfg_on: Path, fake_v3_recall: list[dict]) -> None:
     """A v2.6.0 graph with no `kind` column degrades cleanly."""
-    db = cfg_on / "index.db"
+    db = _lineage_db(cfg_on)
     with sqlite3.connect(db) as conn:
         conn.execute("CREATE TABLE co_retrieval (mem1_id TEXT, mem2_id TEXT, weight REAL DEFAULT 1.0)")
         conn.commit()
@@ -303,6 +316,48 @@ def test_graph_walk_no_seeds_no_default_hits(cfg_on: Path, monkeypatch: pytest.M
 
 
 # ---------------------------------------------------------------------------
+# Lineage database location (regression)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_lineage_strategies_read_the_product_lineage_database(cfg_on: Path, fake_v3_recall: list[dict]) -> None:
+    """Edges written by the product's own lineage writer must be visible.
+
+    Regression: the three lineage strategies opened ``<workspace>/index.db``,
+    a file no lineage writer ever touches. The typed ``co_retrieval`` graph is
+    written to ``<workspace>/.mind-mem-index/recall.db``, so on a real
+    workspace every lineage strategy silently degraded to DEFAULT while
+    reporting a plausible-looking result.
+
+    This test writes through :func:`add_block_edge` rather than hand-building
+    a table, so it pins the reader to wherever the writer actually writes --
+    a hand-built fixture can be moved to match a broken reader, a real write
+    cannot.
+    """
+    ws = str(cfg_on)
+    add_block_edge(ws, "B-1", "B-99", "contradicts")
+    add_block_edge(ws, "B-3", "B-100", "cites")
+
+    lineage = lineage_first_kernel(ws, "q")
+    assert lineage.metadata.get("degraded") is not True
+    assert lineage.metadata["nonzero"] == 2
+    lineage_by_id = {h.block_id: h.score for h in lineage.hits}
+    assert lineage_by_id["B-1"] == pytest.approx(0.9 * 1.1)
+    assert lineage_by_id["B-3"] == pytest.approx(0.5 * 1.1)
+
+    contra = contradicts_first_kernel(ws, "q")
+    assert contra.metadata.get("degraded") is not True
+    contra_by_id = {h.block_id: h.score for h in contra.hits}
+    assert contra_by_id["B-1"] == pytest.approx(1.9)  # contradicts endpoint
+    assert contra_by_id["B-3"] == pytest.approx(0.5)  # cites -- no boost
+
+    walk = graph_walk_kernel(ws, "q", max_hops=2, max_nodes=20)
+    assert walk.metadata.get("degraded") is not True
+    assert {h.block_id for h in walk.hits} >= {"B-1", "B-99", "B-3", "B-100"}
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher round-trip
 # ---------------------------------------------------------------------------
 
@@ -347,3 +402,46 @@ def test_flag_off_blocks_dispatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv("MIND_MEM_CONFIG", str(tmp_path / "mind-mem.json"))
     with pytest.raises(FeatureDisabledError):
         mind_recall("/tmp/ws", "q", kernel=KernelKind.LINEAGE_FIRST)
+
+
+# ---------------------------------------------------------------------------
+# Connection lifetime
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("kernel_kind", [KernelKind.LINEAGE_FIRST, KernelKind.CONTRADICTS_FIRST, KernelKind.GRAPH_WALK])
+def test_corrupt_lineage_db_does_not_leak_connection(
+    cfg_on: Path,
+    fake_v3_recall: list[dict],
+    monkeypatch: pytest.MonkeyPatch,
+    kernel_kind: KernelKind,
+) -> None:
+    """A raising table-probe must not strand an open sqlite connection.
+
+    The probe used to sit in the guard expression, i.e. before the
+    try/finally that closes the connection, so a corrupt ``recall.db``
+    leaked one connection (and its .db/-wal/-shm descriptors) per call.
+    """
+    from mind_mem.retrieval_graph import _db_path
+
+    db = Path(_db_path(str(cfg_on)))
+    db.parent.mkdir(parents=True, exist_ok=True)
+    db.write_bytes(b"this is definitely not a sqlite database" * 40)
+
+    opened: list[sqlite3.Connection] = []
+    real_connect = sqlite3.connect
+
+    def _recording_connect(*args: object, **kwargs: object) -> sqlite3.Connection:
+        conn = real_connect(*args, **kwargs)  # type: ignore[arg-type]
+        opened.append(conn)
+        return conn
+
+    monkeypatch.setattr(sqlite3, "connect", _recording_connect)
+
+    with pytest.raises(sqlite3.DatabaseError):
+        mind_recall(str(cfg_on), "q", kernel=kernel_kind)
+
+    assert len(opened) == 1, "expected exactly one lineage connection"
+    with pytest.raises(sqlite3.ProgrammingError):
+        opened[0].execute("SELECT 1")

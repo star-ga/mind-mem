@@ -78,7 +78,12 @@ class TestCheckRemoteCodeHooks:
     def test_malformed_config_does_not_crash(self, clean_ckpt: Path) -> None:
         (clean_ckpt / "config.json").write_text("{not valid json")
         result = check_remote_code_hooks(clean_ckpt)
-        assert result.passed  # malformed configs skipped, not flagged
+        # Does not crash — and does not report PASS either. A config this
+        # check could not read is a config it did not inspect, and a loader
+        # may still be more forgiving about it than json.loads is; asserting
+        # "no auto_map" over an unread file is a pass over zero evidence.
+        assert not result.passed
+        assert any("unreadable" in e for e in result.evidence)
 
 
 # ---------------------------------------------------------------------------

@@ -108,3 +108,45 @@ def test_three_way_merge_audit_log_emits_hashes(tmp_path: Path, federation_enabl
 
     expected = hashlib.sha256(b"caller-supplied-bytes").hexdigest()
     assert rec.merged_payload_sha256 == expected
+
+
+def test_three_way_merge_audit_does_not_publish_constant_input_hashes(tmp_path: Path, federation_enabled, caplog):
+    """The left/right digests must not be sha256(b"") dressed up as evidence.
+
+    ConflictReport is a frozen dataclass of logical clocks with no payload
+    fields, and no caller can attach one, so ``getattr(report,
+    "left_payload", None)`` was always None -> b"" -> the constant
+    e3b0c442...  Publishing that in an audit record asserts "both inputs
+    were empty", which is the one thing the #528 comparison must never
+    say by accident.
+    """
+    import hashlib
+    import logging
+
+    from mind_mem.v4 import federation as fed
+
+    td = str(tmp_path)
+    block_id = "B-issue528-002"
+    fed.record_agent_write(td, block_id, agent_id="alice")
+    fed.record_agent_write(td, block_id, agent_id="alice")
+    fed.record_agent_write(td, block_id, agent_id="bob")
+    assert fed.detect_conflict(td, block_id) is not None
+
+    caplog.set_level(logging.INFO, logger="mind_mem.federation")
+    fed.resolve_conflict(
+        td,
+        block_id,
+        strategy=fed.MergeStrategy.THREE_WAY_MERGE,
+        merger=lambda r: b"caller-supplied-bytes",
+    )
+    rec = next(r for r in caplog.records if r.getMessage() == "three_way_merge_resolved")
+
+    empty_sha = hashlib.sha256(b"").hexdigest()
+    assert rec.left_payload_sha256 != empty_sha
+    assert rec.right_payload_sha256 != empty_sha
+    assert rec.left_payload_sha256 is None
+    assert rec.right_payload_sha256 is None
+    assert rec.input_payloads_available is False
+    # The one digest that IS real stays real, alongside a matching length.
+    assert rec.merged_payload_sha256 == hashlib.sha256(b"caller-supplied-bytes").hexdigest()
+    assert rec.merged_payload_bytes == len(b"caller-supplied-bytes")

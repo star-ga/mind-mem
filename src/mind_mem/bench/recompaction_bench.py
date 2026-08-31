@@ -14,7 +14,9 @@ that never converges scores 0; one that converges but drops facts scores low.
 Fact retention is a **regex-derived fact-retention proxy, not an LLM judge**:
 probes (numbers, quoted identifiers, capitalized entities, dates) are
 extracted from the source blocks via regex, then checked for token-level
-presence in the rewrite. What this misses: a semantically faithful paraphrase
+presence in the rewrite — whole tokens only, never bare substrings, so a
+rewrite cannot be credited for "5" because it happens to say "59" (see
+:func:`probes_present`). What this misses: a semantically faithful paraphrase
 of a fact (e.g. "1,469 blocks" -> "roughly fifteen hundred blocks") counts as
 a *loss* under this proxy. That is a known conservative bias — for a
 data-loss check, conservative is the right direction; it can only
@@ -30,10 +32,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sqlite3
+import struct
 import sys
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any
 
 from ..compressors import CompressorError, EchoCompressor, OllamaCompressor
@@ -49,7 +54,15 @@ _log = get_logger("recompaction_bench")
 
 _DEFAULT_K = 5
 _DEFAULT_MIN_SIZE = 2
-_SIMILARITY_FLOOR = 0.55  # cosine similarity; below this, neighbors don't cluster
+# Cosine similarity; below this, neighbors don't cluster. This really is a
+# cosine number: `_cluster_via_vectors` scores candidates with `_cosine` on
+# the stored vectors, NOT by rescaling sqlite-vec's `distance` column. That
+# column is L2 (the vec0 table at recall_vector.py declares `embedding
+# FLOAT[N]` with no `distance_metric=`, and sqlite-vec's default is L2), so
+# the old `1 - distance / 2` read an L2 value through a cosine formula: a
+# pair sitting exactly on this floor scored 0.526 and was dropped, making
+# the effective floor cos >= 0.595 and non-linear in this constant.
+_SIMILARITY_FLOOR = 0.55
 
 
 # --- fact-retention proxy ----------------------------------------------------
@@ -82,14 +95,64 @@ def extract_probes(text: str) -> set[str]:
     return probes
 
 
+_ASCII_WORD_RE = re.compile(r"[A-Za-z0-9_]")
+
+
+@lru_cache(maxsize=8192)
+def _probe_pattern(probe: str) -> re.Pattern[str]:
+    """Compile a token-boundary-anchored matcher for a word-shaped *probe*.
+
+    The boundary guard is applied only on an edge that is itself an ASCII word
+    character, so a probe that legitimately begins or ends on punctuation (a
+    quoted phrase like ``(beta)``) still matches where it really occurs. Every
+    probe :func:`extract_probes` yields sits on a word boundary in its own
+    source text, so an unmodified rewrite always re-matches its own probes.
+    """
+    left = r"(?<![A-Za-z0-9_])" if _ASCII_WORD_RE.match(probe[:1]) else ""
+    right = r"(?![A-Za-z0-9_])" if _ASCII_WORD_RE.match(probe[-1:]) else ""
+    return re.compile(left + re.escape(probe) + right)
+
+
+def _is_numeric_probe(probe: str) -> bool:
+    """True when *probe* is a whole number or ISO date rather than a word token."""
+    return bool(_NUMBER_RE.fullmatch(probe) or _DATE_RE.fullmatch(probe))
+
+
+def _numeric_tokens(text: str) -> frozenset[str]:
+    """Every number/date token in *text*, tokenized exactly as probes are extracted."""
+    return frozenset(_NUMBER_RE.findall(text)) | frozenset(_DATE_RE.findall(text))
+
+
 def probes_present(probes: set[str], text: str) -> float:
-    """Fraction of *probes* that still appear as substrings of *text*.
+    """Fraction of *probes* that survive in *text* as whole tokens.
+
+    Presence is deliberately NOT raw substring containment. ``"5" in "59"`` and
+    ``"Mind" in "Mindless"`` are both true as substrings, which would credit a
+    rewrite for a fact it actually dropped — inverting the conservative bias
+    this proxy is defensible for. Instead:
+
+    * a number/date probe must reappear as a complete number token, so ``469``
+      is *not* retained by a rewrite that only mentions ``1,469``;
+    * every other probe must match on ASCII word boundaries.
+
+    Both rules stay self-consistent with :func:`extract_probes` — probes are
+    extracted on word boundaries and numbers via the same tokenizer used here —
+    so an unmodified rewrite still scores exactly ``1.0`` (the echo control
+    depends on that), while the residual error can only under-credit.
 
     Vacuously ``1.0`` when there are no probes to check (nothing to lose).
     """
     if not probes:
         return 1.0
-    hits = sum(1 for p in probes if p in text)
+    numeric_probes = {p for p in probes if _is_numeric_probe(p)}
+    tokens: frozenset[str] = _numeric_tokens(text) if numeric_probes else frozenset()
+    hits = 0
+    for probe in probes:
+        if probe in numeric_probes:
+            if probe in tokens:
+                hits += 1
+        elif _probe_pattern(probe).search(text):
+            hits += 1
     return hits / len(probes)
 
 
@@ -128,6 +191,40 @@ def _vec_table_has_extension(conn: sqlite3.Connection) -> bool:
         return False
 
 
+def _decode_embedding(blob: object) -> list[float]:
+    """Decode a sqlite-vec ``FLOAT[N]`` blob into floats.
+
+    vec0 stores little-endian float32. A value that is not a blob, or whose
+    length is not a multiple of 4, is not one — return ``[]`` so the caller
+    scores it as "no similarity" instead of raising mid-benchmark.
+    """
+    if not isinstance(blob, (bytes, bytearray, memoryview)):
+        return []
+    raw = bytes(blob)
+    if not raw or len(raw) % 4:
+        return []
+    return list(struct.unpack(f"<{len(raw) // 4}f", raw))
+
+
+def _cosine(left: list[float], right: list[float]) -> float:
+    """Cosine similarity of two decoded embeddings; 0.0 when undefined.
+
+    Computed from the vectors rather than derived from sqlite-vec's L2
+    ``distance`` column, so the result is a true cosine whether or not the
+    embedding provider normalises its output. (``1 - d**2 / 2`` recovers
+    cosine from L2 only for unit vectors, and nothing here can check that
+    precondition.) Summation order is fixed, so the score is deterministic.
+    """
+    if not left or not right or len(left) != len(right):
+        return 0.0
+    dot = math.fsum(x * y for x, y in zip(left, right))
+    norm_left = math.sqrt(math.fsum(x * x for x in left))
+    norm_right = math.sqrt(math.fsum(y * y for y in right))
+    if norm_left == 0.0 or norm_right == 0.0:
+        return 0.0
+    return dot / (norm_left * norm_right)
+
+
 def _block_dict(conn: sqlite3.Connection, block_id: str) -> dict[str, Any] | None:
     row = conn.execute("SELECT json_blob FROM blocks WHERE id = ?", (block_id,)).fetchone()
     if row is None or not row[0]:
@@ -146,9 +243,16 @@ def _cluster_via_vectors(conn: sqlite3.Connection, k: int, min_size: int) -> lis
     cluster from its *k* nearest neighbors above :data:`_SIMILARITY_FLOOR`
     cosine similarity that are also unassigned. Every block belongs to at
     most one cluster.
+
+    sqlite-vec supplies the candidate ordering via its ``distance`` column
+    (L2 — the vec0 table declares no ``distance_metric=``); the cosine floor
+    is applied by :func:`_cosine` on the stored vectors, so the constant
+    means what its comment says regardless of whether the embedding
+    provider normalises.
     """
     all_ids = [r[0] for r in conn.execute("SELECT block_id FROM vec_blocks ORDER BY block_id")]
     embeddings: dict[str, bytes] = dict(conn.execute("SELECT block_id, embedding FROM vec_blocks"))
+    decoded: dict[str, list[float]] = {bid: _decode_embedding(blob) for bid, blob in embeddings.items()}
 
     assigned: set[str] = set()
     id_clusters: list[list[str]] = []
@@ -163,11 +267,14 @@ def _cluster_via_vectors(conn: sqlite3.Connection, k: int, min_size: int) -> lis
         # ties on block_id in Python so the result stays fully deterministic
         # even when two neighbors are equidistant.
         neighbor_rows.sort(key=lambda row: (row[1], row[0]))
+        anchor_vec = decoded.get(anchor, [])
         member_ids = [anchor]
-        for bid, distance in neighbor_rows:
+        # `distance` orders the candidates (it is the index's L2 metric) but
+        # does NOT score them: the floor is a cosine, so score with `_cosine`.
+        for bid, _distance in neighbor_rows:
             if bid == anchor or bid in assigned:
                 continue
-            similarity = 1.0 - distance / 2.0
+            similarity = _cosine(anchor_vec, decoded.get(bid, []))
             if similarity >= _SIMILARITY_FLOOR:
                 member_ids.append(bid)
         if len(member_ids) >= min_size:

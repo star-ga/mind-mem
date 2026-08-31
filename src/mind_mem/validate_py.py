@@ -157,6 +157,18 @@ class Validator:
             self.fail(f"Failed to parse {rel_path}")
             return []
 
+        if not blocks:
+            # Every check below is a comprehension over `blocks`, so at
+            # length zero they are all vacuously true: a corpus file wiped
+            # by a bad write would report a full row of PASSes ("All 0
+            # Decisions IDs match ...", "present in all 0 blocks"). Say
+            # what is actually known -- nothing -- and assert nothing.
+            # A zero-block file is the normal state of a freshly
+            # initialised workspace, so this is a warning rather than a
+            # failure; it is never a pass.
+            self.warn(f"{label}: {rel_path} declares 0 blocks - per-block checks skipped (nothing to assert)")
+            return []
+
         # ID format
         id_re = re.compile(id_pattern)
         bad_ids = [b["_id"] for b in blocks if not id_re.match(b.get("_id", ""))]
@@ -288,6 +300,10 @@ class Validator:
                 _log.debug("provenance_parse_skipped path=%s: %s", path, exc)
                 continue
             fname = os.path.basename(rel)
+            if not blocks:
+                # 0 >= 0 would otherwise report "all 0 blocks have Sources".
+                self.warn(f"{fname}: declares 0 blocks - provenance checks skipped (nothing to assert)")
+                continue
             with_sources = sum(1 for b in blocks if b.get("Sources"))
             if with_sources >= len(blocks):
                 self.pass_(f"{fname}: all {len(blocks)} blocks have Sources:")
@@ -348,8 +364,18 @@ class Validator:
                         _log.debug("cross_ref_scan_skipped path=%s: %s", fpath, exc)
 
         dangling = referenced - defined
-        if not dangling:
-            self.pass_("All cross-references resolve to defined IDs")
+        if not referenced:
+            # Same vacuity as the block checks above: `dangling` is
+            # `referenced - defined`, so with nothing referenced it is empty
+            # for the one reason that proves nothing, and the section
+            # reported "All cross-references resolve to defined IDs" over a
+            # corpus it never found a single reference in. A wiped corpus
+            # scored the same PASS as a healthy one. Warn (not fail) — a
+            # workspace can legitimately hold no cross-references — but
+            # never claim an integrity property that was not tested.
+            self.warn("0 cross-references found in the scanned corpus - nothing to resolve (no integrity claim made)")
+        elif not dangling:
+            self.pass_(f"All {len(referenced)} cross-references resolve to defined IDs")
         else:
             for d in sorted(dangling):
                 self.fail(f"MISSING: {d} (referenced but not defined)")
@@ -375,6 +401,13 @@ class Validator:
             blocks = parse_file(dec_path)
         except Exception as e:
             self.fail(f"Failed to parse decisions/DECISIONS.md: {e}")
+            return
+
+        if not blocks:
+            # Same vacuity as _check_blocks: with no decisions, all four
+            # V2.x lists stay empty and the section would claim four
+            # passes about coverage it never examined.
+            self.warn("decisions/DECISIONS.md declares 0 blocks - signature checks skipped (nothing to assert)")
             return
 
         required_tags = {"integrity", "security", "memory", "retrieval"}

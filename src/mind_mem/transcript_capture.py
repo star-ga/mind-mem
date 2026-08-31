@@ -54,8 +54,39 @@ TRANSCRIPT_PATTERNS: list[tuple[re.Pattern, str, str]] = [
 XREF_PATTERN = re.compile(r"\b[A-Z]+-\d{8}-\d{3}\b")
 
 
+def _content_text(raw: object) -> str:
+    """Text carried by a transcript ``content`` value.
+
+    Accepts the three shapes a transcript line uses: a plain string, a
+    list of content blocks (``{"type": "text", "text": ...}`` or bare
+    strings), or a nested turn object whose own ``content`` holds one of
+    the first two. Anything else (tool_use / tool_result / thinking
+    blocks, numbers, None) contributes nothing.
+    """
+    if isinstance(raw, str):
+        return raw
+    if isinstance(raw, list):
+        out = ""
+        for block in raw:
+            if isinstance(block, dict) and block.get("type") == "text":
+                out += str(block.get("text", "")) + "\n"
+            elif isinstance(block, str):
+                out += block + "\n"
+        return out
+    if isinstance(raw, dict):
+        return _content_text(raw.get("content"))
+    return ""
+
+
 def parse_transcript(jsonl_path: str) -> list[dict]:
     """Parse a JSONL transcript file into message dicts.
+
+    A conversational line stores its turn under ``message`` as an object
+    (``{"role": ..., "content": ...}``), not as a string — reading only
+    ``message`` when it is a ``str`` dropped every real user and
+    assistant turn and left only the bookkeeping lines that happen to
+    carry a top-level ``content`` string, so a ``--role user`` scan
+    matched nothing while reporting success.
 
     Args:
         jsonl_path: Path to the .jsonl transcript file
@@ -64,6 +95,7 @@ def parse_transcript(jsonl_path: str) -> list[dict]:
         List of message dicts with role, content, and line number
     """
     messages = []
+    skipped = 0
     with open(jsonl_path, "r", encoding="utf-8") as f:
         for i, line in enumerate(f, 1):
             line = line.strip()
@@ -72,31 +104,42 @@ def parse_transcript(jsonl_path: str) -> list[dict]:
             try:
                 msg = json.loads(line)
             except json.JSONDecodeError:
+                skipped += 1
+                continue
+            if not isinstance(msg, dict):
+                skipped += 1
                 continue
 
-            # Extract text content from various message formats
-            content = ""
-            if isinstance(msg.get("content"), str):
-                content = msg["content"]
-            elif isinstance(msg.get("content"), list):
-                # Claude API format: content is list of blocks
-                for block in msg["content"]:
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        content += block.get("text", "") + "\n"
-                    elif isinstance(block, str):
-                        content += block + "\n"
-            elif isinstance(msg.get("message"), str):
-                content = msg["message"]
+            # Extract text content: top-level first, then the nested turn.
+            content = _content_text(msg.get("content"))
+            role = msg.get("role")
+            nested = msg.get("message")
+            if isinstance(nested, dict):
+                if not content:
+                    content = _content_text(nested)
+                if not isinstance(role, str) or not role:
+                    role = nested.get("role")
+            elif isinstance(nested, str) and not content:
+                content = nested
 
             if content.strip():
+                if not isinstance(role, str) or not role:
+                    role = msg.get("type") if isinstance(msg.get("type"), str) else None
                 messages.append(
                     {
                         "line": i,
-                        "role": msg.get("role", msg.get("type", "unknown")),
+                        "role": role or "unknown",
                         "content": content.strip(),
                     }
                 )
+            else:
+                # Lines with no readable text (tool calls, snapshots,
+                # attachments) are expected — count them so a transcript
+                # that yields nothing is visibly a parse miss, not a
+                # quiet success.
+                skipped += 1
 
+    _log.info("transcript_parsed", path=jsonl_path, messages=len(messages), skipped=skipped)
     return messages
 
 

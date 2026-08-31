@@ -252,12 +252,21 @@ def generate_resolution_proposals(workspace: str, resolutions: list[dict] | None
             try:
                 with open(proposed_path, "r", encoding="utf-8") as fh:
                     existing = fh.read()
-                pat = re.compile(rf"R-{re.escape(date_compact)}-(\d{{3,}})")
-                nums = [int(m.group(1)) for m in pat.finditer(existing)]
-                if nums:
-                    start_idx = max(nums) + 1
-            except OSError:
-                pass
+            except OSError as exc:
+                # The file exists but cannot be read, so the highest id
+                # already in it is unknown. Falling back to 1 and appending
+                # would re-mint R-<date>-001.. over live ids and break
+                # everything keyed on proposal_id (apply, rollback, the
+                # audit trail). Refuse loudly instead of corrupting it.
+                _log.error("resolution_proposals_id_scan_failed", path=proposed_path, error=str(exc))
+                raise OSError(
+                    f"cannot read {proposed_path} to determine the next proposal id; "
+                    "refusing to append proposals that would duplicate existing ids"
+                ) from exc
+            pat = re.compile(rf"R-{re.escape(date_compact)}-(\d{{3,}})")
+            nums = [int(m.group(1)) for m in pat.finditer(existing)]
+            if nums:
+                start_idx = max(nums) + 1
         with open(proposed_path, "a", encoding="utf-8") as f:
             for i, res in enumerate(auto, start_idx):
                 proposal_id = f"R-{date_compact}-{i:03d}"

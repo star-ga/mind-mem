@@ -26,6 +26,16 @@ _log = get_logger("schema_version")
 
 CURRENT_SCHEMA_VERSION = "2.1.0"
 
+
+class MigrationError(RuntimeError):
+    """A migration step could not be applied.
+
+    Raised instead of swallowing the underlying ``OSError`` /
+    ``JSONDecodeError``: a read-only workspace, a full disk or one
+    corrupt byte of JSON must not be reported as a completed migration.
+    """
+
+
 # Ordered list of migrations. Each entry is (from_version, to_version, description, callable).
 # Migrations are applied in order; each must be idempotent.
 _MIGRATIONS: list[tuple[str, str, str, Callable[[str], None]]] = []
@@ -70,7 +80,12 @@ def check_migration_needed(workspace: str) -> list[str]:
 def migrate_workspace(workspace: str) -> dict:
     """Perform safe, idempotent migrations on a workspace.
 
-    Returns dict with keys: migrated (bool), from_version, to_version, steps (list of applied step descriptions).
+    Returns dict with keys: migrated (bool — whether any step actually
+    applied), from_version, to_version (the version genuinely reached,
+    NOT the target, when a step failed), steps (applied step
+    descriptions) and failed (descriptions of the step that raised,
+    empty on success). Migration stops at the first failing step
+    because later steps build on it.
     """
     workspace = os.path.abspath(workspace)
     from_version = get_workspace_version(workspace)
@@ -84,30 +99,48 @@ def migrate_workspace(workspace: str) -> dict:
             "from_version": from_version,
             "to_version": from_version,
             "steps": [],
+            "failed": [],
         }
 
     applied: list[str] = []
+    failed: list[str] = []
+    reached = from_version
 
     for from_v, to_v, desc, fn in _MIGRATIONS:
         to_t = _version_tuple(to_v)
         if from_t < to_t:
             _log.info("migrate_step", workspace=workspace, step=desc)
-            fn(workspace)
+            try:
+                fn(workspace)
+            except Exception as exc:
+                # Report the step that did not apply instead of
+                # appending it to ``steps`` and returning the target
+                # version: an unwritable or corrupt workspace stays on
+                # its old schema, and a caller told otherwise will read
+                # the legacy keys and re-migrate on every run. Later
+                # steps build on this one, so stop here.
+                _log.error("migrate_step_failed", workspace=workspace, step=desc, error=str(exc))
+                failed.append(f"{from_v} -> {to_v}: {desc} — {exc}")
+                break
             applied.append(f"{from_v} -> {to_v}: {desc}")
+            reached = to_v
 
+    to_version = reached if failed else CURRENT_SCHEMA_VERSION
     _log.info(
         "migrate_done",
         workspace=workspace,
         from_version=from_version,
-        to_version=CURRENT_SCHEMA_VERSION,
+        to_version=to_version,
         steps=len(applied),
+        failed=len(failed),
     )
 
     return {
-        "migrated": True,
+        "migrated": bool(applied),
         "from_version": from_version,
-        "to_version": CURRENT_SCHEMA_VERSION,
+        "to_version": to_version,
         "steps": applied,
+        "failed": failed,
     }
 
 
@@ -147,8 +180,27 @@ def _migrate_v2_to_v21(workspace: str) -> None:
 
     Backfill script for workspaces created before the terminology change.
     Idempotent: skips if governance_mode already present.
+
+    intel-state.json is migrated FIRST because mind-mem.json carries the
+    ``schema_version`` bump: if the second half fails, the workspace is
+    still recorded as 2.0.0 and the next run retries the whole step,
+    instead of being stamped 2.1.0 with half the rename applied.
     """
-    # Migrate mind-mem.json
+    # Migrate intel-state.json
+    state_path = os.path.join(workspace, "memory", "intel-state.json")
+    if os.path.isfile(state_path):
+        try:
+            with open(state_path, "r", encoding="utf-8") as f:
+                state = json.load(f)
+            if "self_correcting_mode" in state and "governance_mode" not in state:
+                state["governance_mode"] = state.pop("self_correcting_mode")
+                with open(state_path, "w", encoding="utf-8") as f:
+                    json.dump(state, f, indent=2)
+                    f.write("\n")
+        except (json.JSONDecodeError, OSError) as exc:
+            raise MigrationError(f"{state_path}: {exc}") from exc
+
+    # Migrate mind-mem.json (carries the schema_version bump — last)
     config_path = os.path.join(workspace, "mind-mem.json")
     if os.path.isfile(config_path):
         try:
@@ -165,22 +217,8 @@ def _migrate_v2_to_v21(workspace: str) -> None:
                 with open(config_path, "w", encoding="utf-8") as f:
                     json.dump(config, f, indent=2)
                     f.write("\n")
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    # Migrate intel-state.json
-    state_path = os.path.join(workspace, "memory", "intel-state.json")
-    if os.path.isfile(state_path):
-        try:
-            with open(state_path, "r", encoding="utf-8") as f:
-                state = json.load(f)
-            if "self_correcting_mode" in state and "governance_mode" not in state:
-                state["governance_mode"] = state.pop("self_correcting_mode")
-                with open(state_path, "w", encoding="utf-8") as f:
-                    json.dump(state, f, indent=2)
-                    f.write("\n")
-        except (json.JSONDecodeError, OSError):
-            pass
+        except (json.JSONDecodeError, OSError) as exc:
+            raise MigrationError(f"{config_path}: {exc}") from exc
 
 
 # Register migrations in order
@@ -193,7 +231,7 @@ _MIGRATIONS.append(("2.0.0", "2.1.0", "Rename self_correcting_mode to governance
 # ---------------------------------------------------------------------------
 
 
-def main() -> None:
+def main() -> int:
     ws = sys.argv[1] if len(sys.argv) > 1 else "."
     ws = os.path.abspath(ws)
 
@@ -205,7 +243,7 @@ def main() -> None:
     needed = check_migration_needed(ws)
     if not needed:
         print("No migration needed.")
-        return
+        return 0
 
     print(f"\nMigration steps ({len(needed)}):")
     for step in needed:
@@ -219,6 +257,15 @@ def main() -> None:
     else:
         print("\nNo changes applied.")
 
+    if result["failed"]:
+        # Exit non-zero: the workspace is still on ``to_version``, so a
+        # script that chained on this must not proceed as if migrated.
+        print(f"\nFAILED — workspace is still at {result['to_version']}:")
+        for step in result["failed"]:
+            print(f"  ! {step}")
+        return 1
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

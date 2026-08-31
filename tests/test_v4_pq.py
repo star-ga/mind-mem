@@ -324,4 +324,64 @@ def test_set_codebook_trainer_swaps_implementation(cfg_on: Path) -> None:
 
 
 # Sequence type-import for the fake_trainer signature above.
-from collections.abc import Sequence  # noqa: E402  (used in test fixture)
+from collections.abc import Sequence  # noqa: E402, I001  (late on purpose, used in the test fixture above)
+
+
+# ---------------------------------------------------------------------------
+# Mixed-dimension training sets / corrupt stored codebooks
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_train_rejects_mixed_dimension_training_set(cfg_on: Path) -> None:
+    """A stray vector must not be dropped in silence.
+
+    Reference dim comes from vector 0, so a short vector at the front used
+    to discard every real vector while still reporting success.
+    """
+    cfg = PQConfig(subvectors=2, centroids=4)
+    rng = random.Random(3)
+    points: list[list[float]] = [_gauss_vector(rng, 2)] + [_gauss_vector(rng, 4) for _ in range(6)]
+    with pytest.raises(ValueError, match="must share one dimension"):
+        train_codebook(points, cfg)
+
+
+@pytest.mark.unit
+def test_train_rejects_trailing_mixed_dimension_vector(cfg_on: Path) -> None:
+    cfg = PQConfig(subvectors=2, centroids=4)
+    rng = random.Random(4)
+    points: list[list[float]] = [_gauss_vector(rng, 4) for _ in range(4)] + [_gauss_vector(rng, 6)]
+    with pytest.raises(ValueError, match="vector 4 has 6"):
+        train_codebook(points, cfg)
+
+
+@pytest.mark.unit
+def test_load_codebook_returns_none_when_payload_truncated(cfg_on: Path) -> None:
+    """A payload that disagrees with its own shape columns is unreadable.
+
+    Previously it deserialised to a centroid-less codebook, which encodes
+    every vector to ``b""`` and scores every block ``+inf`` — PQ search
+    silently returning nothing while every call reports success.
+    """
+    cfg = PQConfig(subvectors=2, centroids=4)
+    rng = random.Random(9)
+    cb = train_codebook([_gauss_vector(rng, 4) for _ in range(8)], cfg)
+    store_codebook(cfg_on, "default", cb)
+
+    with sqlite3.connect(cfg_on / "index.db") as conn:
+        (payload,) = conn.execute("SELECT payload FROM pq_codebook WHERE name = 'default'").fetchone()
+        conn.execute("UPDATE pq_codebook SET payload = ? WHERE name = 'default'", (payload[:-4],))
+        conn.commit()
+
+    assert load_codebook(cfg_on, "default") is None
+
+
+@pytest.mark.unit
+def test_empty_codebook_still_round_trips_through_sqlite(cfg_on: Path) -> None:
+    """The one legitimately empty shape stays loadable, and stays empty."""
+    empty = train_codebook([], PQConfig(subvectors=2, centroids=4))
+    assert empty.centroids == ()
+    store_codebook(cfg_on, "empty", empty)
+    loaded = load_codebook(cfg_on, "empty")
+    assert loaded is not None
+    assert loaded.centroids == ()

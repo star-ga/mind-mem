@@ -29,6 +29,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Optional
 
+from .observability import get_logger
+
+_log = get_logger("agent_bridge")
+
 # ---------------------------------------------------------------------------
 # AgentFormatter
 # ---------------------------------------------------------------------------
@@ -324,20 +328,29 @@ class VaultBridge:
         Args:
             sync_dirs: Optional list of vault subdirectories to include.
                 When None, the entire vault (minus :attr:`excludes`) is
-                scanned.
+                scanned. An EMPTY list selects nothing, and a name that
+                is not a directory in the vault is an error — a silently
+                dropped sync_dir (a case typo, say) makes a sync of zero
+                notes look exactly like an empty vault.
+
+        Raises:
+            FileNotFoundError: vault root missing, or a requested
+                ``sync_dirs`` entry is not a directory in the vault.
+            ValueError: a ``sync_dirs`` entry escapes the vault root.
         """
         root = os.path.realpath(self.vault_root)
         if not os.path.isdir(root):
             raise FileNotFoundError(f"vault root not found: {root}")
 
         roots: list[str] = []
-        if sync_dirs:
+        if sync_dirs is not None:
             for d in sync_dirs:
                 full = os.path.realpath(os.path.join(root, d))
                 if not full.startswith(root + os.sep) and full != root:
                     raise ValueError(f"sync_dir {d!r} escapes vault root")
-                if os.path.isdir(full):
-                    roots.append(full)
+                if not os.path.isdir(full):
+                    raise FileNotFoundError(f"sync_dir not found in vault: {d!r}")
+                roots.append(full)
         else:
             roots = [root]
 
@@ -357,7 +370,16 @@ class VaultBridge:
                     try:
                         with open(full, "r", encoding="utf-8", errors="replace") as _fh:
                             text = _fh.read()
-                    except OSError:
+                    except OSError as exc:
+                        # Skipping is right (one bad note must not abort a
+                        # vault walk) but silence is not: the note would
+                        # simply never appear in the sync.
+                        _log.warning(
+                            "vault_note_unreadable",
+                            path=rel,
+                            error_type=type(exc).__name__,
+                            error=str(exc),
+                        )
                         continue
                     fm, body = _parse_frontmatter(text)
                     block_id = fm.get("id") or _id_from_filename(full)

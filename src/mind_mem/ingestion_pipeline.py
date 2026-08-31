@@ -31,6 +31,14 @@ from .codepoint_sanitize import sanitize_structure
 
 @dataclass
 class IngestionStats:
+    """Counters an operator watches to tell a quiet queue from a broken one.
+
+    ``rejected`` counts events the endpoint refused outright — unknown
+    path, oversized body, undecodable or non-object JSON, over-nested
+    structure. It is distinct from ``backpressure_drops``, which counts
+    well-formed events dropped because the queue was full.
+    """
+
     accepted: int = 0
     rejected: int = 0
     backpressure_drops: int = 0
@@ -74,6 +82,17 @@ class IngestionQueue:
         with self._lock:
             self._stats.accepted += 1
         return True
+
+    def reject(self, count: int = 1) -> None:
+        """Record *count* refused events (malformed / oversized / unroutable).
+
+        Callers that turn an event away before it can be offered must
+        record it here — otherwise a producer emitting nothing but
+        malformed events leaves ``rejected`` at 0 and the queue reads as
+        merely idle.
+        """
+        with self._lock:
+            self._stats.rejected += int(count)
 
     def drain(self, max_items: int = 64) -> list[dict]:
         drained: list[dict] = []
@@ -172,7 +191,9 @@ def serve_webhook(
     Returns ``(server_thread, stop_fn)``. Callers invoke ``stop_fn()``
     to shut the server down cleanly. Requests that exceed 1 MiB are
     refused with HTTP 413 so the endpoint cannot be used as a memory
-    DoS vector.
+    DoS vector. Every refusal (404 / 413 / 400) bumps
+    ``ingestion.stats().rejected`` so a misconfigured producer is
+    visible in the counters rather than looking like an idle queue.
 
     ``sanitize`` (default ``True``) strips invisible-Unicode codepoints
     (zero-width chars, Unicode tag chars, bidi controls — a
@@ -190,11 +211,13 @@ def serve_webhook(
 
         def do_POST(self) -> None:
             if self.path != "/ingest":
+                ingestion.reject()
                 self.send_response(404)
                 self.end_headers()
                 return
             length = int(self.headers.get("Content-Length", "0") or 0)
             if length > 1_048_576:
+                ingestion.reject()
                 self.send_response(413)
                 self.end_headers()
                 return
@@ -202,10 +225,12 @@ def serve_webhook(
             try:
                 event = json.loads(raw.decode("utf-8"))
             except (json.JSONDecodeError, UnicodeDecodeError):
+                ingestion.reject()
                 self.send_response(400)
                 self.end_headers()
                 return
             if not isinstance(event, dict):
+                ingestion.reject()
                 self.send_response(400)
                 self.end_headers()
                 return
@@ -213,6 +238,7 @@ def serve_webhook(
                 try:
                     event = sanitize_structure(event)
                 except ValueError:  # nesting deeper than the sanitizer's cap
+                    ingestion.reject()
                     self.send_response(400)
                     self.end_headers()
                     return

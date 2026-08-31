@@ -11,14 +11,25 @@ structured verdict. Eight rules, all deterministic and content-based:
     5. ``stopwords_only``  — every token is a stopword (no semantic
                              content).
     6. ``near_duplicate``  — Levenshtein-style similarity to a recent
-                             block (within 24h) is >= 0.97.
+                             block (within 24h) is >= 0.97. This is the one
+                             rule that needs something beyond the candidate
+                             text: without a ``recent`` window to compare
+                             against there is nothing to be a duplicate *of*,
+                             so it is reported in ``skipped_rules`` rather
+                             than silently dropped from ``checked_rules``.
     7. ``injection_marker``— matches a known prompt-injection pattern.
     8. ``ok``              — no rule fired (the happy path).
 
 Default mode is *advisory*: every rule is logged but the verdict still
 ``accept``\\ s. Hard-fail is opt-in via ``strict=True`` keyword OR a
 workspace ``QualityGateConfig(mode="strict")`` OR the workspace config
-``mind-mem.json`` setting ``quality_gate_mode = "strict"``.
+``mind-mem.json`` setting ``{"quality_gate": {"mode": "strict"}}``.
+That key is nested, and the nesting is the whole point: the only reader
+is ``mcp.infra.config._get_quality_gate_mode``, which looks up
+``cfg["quality_gate"]["mode"]``. A flat ``quality_gate_mode`` — which
+this docstring used to advertise — is read by nothing, so an operator
+who writes it changes no behaviour while believing the gate is
+enforcing.
 
 The rules are STARGA-native — chosen from first principles to address
 the failure modes mind-mem has actually hit in production (empty
@@ -90,6 +101,11 @@ class QualityGateVerdict:
     advisory: list[str] = field(default_factory=list)
     checked_rules: list[str] = field(default_factory=list)
     forced: bool = False
+    #: Rules that could not run because the caller supplied no input for
+    #: them. A rule that did not run must not look like a rule that passed,
+    #: and it must not vanish either — ``checked_rules`` + ``skipped_rules``
+    #: always accounts for every rule in the module docstring.
+    skipped_rules: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -98,6 +114,7 @@ class QualityGateVerdict:
             "advisory": list(self.advisory),
             "checked_rules": list(self.checked_rules),
             "forced": self.forced,
+            "skipped_rules": list(self.skipped_rules),
         }
 
 
@@ -181,7 +198,9 @@ def validate_block(
             ``strict=True``.
         recent: iterable of ``(text, timestamp)`` tuples to check the
             near-duplicate rule against. ``timestamp`` must be
-            timezone-aware.
+            timezone-aware. Omitting it does not make rule 6 pass — the
+            rule cannot run without a comparison window, and the verdict
+            reports it under ``skipped_rules``.
         now: override "now" for testing the duplicate window.
 
     Returns:
@@ -194,6 +213,7 @@ def validate_block(
     reasons: list[str] = []
     advisory: list[str] = []
     checked: list[str] = []
+    skipped: list[str] = []
 
     def _fail(rule: str, message: str) -> None:
         checked.append(rule)
@@ -249,7 +269,10 @@ def validate_block(
     else:
         _pass("stopwords_only")
 
-    # 6. near_duplicate
+    # 6. near_duplicate — the only rule that needs more than the candidate
+    # text. With no `recent` window there is nothing to compare against, so
+    # the rule did not run: say so instead of letting it disappear from the
+    # report, which read as "every rule passed" when one never executed.
     if recent:
         is_dup, ratio = _near_duplicate(text, recent, now=now)
         if is_dup and ratio is not None:
@@ -259,6 +282,8 @@ def validate_block(
             )
         else:
             _pass("near_duplicate")
+    else:
+        skipped.append("near_duplicate")
 
     # 7. injection_marker
     if _has_injection_marker(text):
@@ -273,6 +298,7 @@ def validate_block(
             advisory=advisory + reasons,
             checked_rules=checked,
             forced=True,
+            skipped_rules=skipped,
         )
 
     accept = not reasons
@@ -282,4 +308,5 @@ def validate_block(
         advisory=advisory,
         checked_rules=checked,
         forced=False,
+        skipped_rules=skipped,
     )

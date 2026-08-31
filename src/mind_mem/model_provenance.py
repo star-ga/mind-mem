@@ -19,7 +19,10 @@ Python) or ``--allow-extra <slug>`` (in CLI).
 
 When ``config.json`` does not declare ``base_model`` the check passes
 with a "no base_model declared" status — HF does not require the
-field, and pretrain checkpoints legitimately omit it.
+field, and pretrain checkpoints legitimately omit it. A ``config.json``
+that is present but cannot be read at all (truncated, unreadable, not a
+JSON object) is a different state and fails: the allowlist could not be
+applied, so the bundle has not been cleared.
 """
 
 from __future__ import annotations
@@ -103,6 +106,9 @@ class ProvenanceFinding:
     ``passed`` is ``True`` when either:
       * ``base_model`` is missing (pretrain or undeclared), OR
       * ``base_model`` namespace matches an allowlisted publisher.
+
+    A ``config.json`` that is present but unreadable is neither of those
+    — it is a bundle whose claim could not be checked — and fails.
     """
 
     passed: bool
@@ -126,19 +132,35 @@ def _slug_set(publishers: tuple[Publisher, ...]) -> dict[str, str]:
     return out
 
 
-def _read_base_model(root: Path) -> str | None:
-    """Extract ``base_model`` from ``config.json`` (or return ``None``)."""
+def _read_base_model(root: Path) -> tuple[str | None, str]:
+    """Extract the ``base_model`` claim from ``config.json``.
+
+    Returns ``(base_model, error)``.
+
+    ``(None, "")`` means the claim was genuinely never made: no
+    ``config.json`` at all, or one that declares nothing readable under
+    ``base_model``. A non-empty error means a ``config.json`` **is**
+    present and could not be read as a declaration at all — that is not
+    the same claim, and reporting it as "undeclared" would hand a pass to
+    exactly the bundle a tamperer ships (a truncated or unreadable config
+    skips the namespace allowlist entirely).
+    """
     cfg = root / "config.json"
     if not cfg.is_file():
-        return None
+        return None, ""
     try:
-        data = json.loads(cfg.read_text())
-    except (json.JSONDecodeError, OSError):
-        return None
+        data = json.loads(cfg.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as exc:
+        return None, f"config.json present but unreadable ({type(exc).__name__})"
+    if not isinstance(data, dict):
+        return None, "config.json present but not a JSON object"
     base = data.get("base_model")
+    # A field that is absent, null, empty or not a string declares no
+    # upstream publisher — indistinguishable from a pretrain checkpoint,
+    # and the remaining six checks still fire on it.
     if isinstance(base, str) and base.strip():
-        return base.strip()
-    return None
+        return base.strip(), ""
+    return None, ""
 
 
 def check_provenance(
@@ -162,7 +184,13 @@ def check_provenance(
         for slug in allow_extra:
             slug_map[slug.lower()] = f"operator-allowlist:{slug}"
 
-    base = _read_base_model(root)
+    base, config_error = _read_base_model(root)
+    if config_error:
+        return ProvenanceFinding(
+            passed=False,
+            detail=config_error,
+            evidence=[config_error, f"config_path={str(root / 'config.json')!r}"],
+        )
     if base is None:
         return ProvenanceFinding(
             passed=True,

@@ -1660,6 +1660,50 @@ def _cmd_audit_model(args: argparse.Namespace) -> int:
     return 0 if report.passed else 1
 
 
+def _write_private_key(path: Path, data: bytes) -> str:
+    """Write a raw secret key owner-only, and report what it ACTUALLY got.
+
+    Two problems with ``write_bytes`` + a best-effort ``chmod``: the file
+    exists world-readable for the window between them (it is created under
+    the process umask), and a ``chmod`` that fails — EPERM on FAT/exFAT/NFS
+    or a container mount, and on Windows where only the read-only bit is
+    honoured — was swallowed while the CLI still printed "0600".
+
+    So: create with 0600 in the ``open`` call (no window), then read the
+    mode back and describe it truthfully. Returns the description to print.
+    """
+    import stat as _stat
+
+    # A pre-existing file keeps its own mode through O_CREAT, so replace it.
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(data)
+
+    def _mode() -> int | None:
+        try:
+            return _stat.S_IMODE(os.stat(path).st_mode)
+        except OSError:
+            return None
+
+    mode = _mode()
+    if mode is not None and mode != 0o600:
+        # The filesystem ignored the creation mode; try once to repair it.
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+        mode = _mode()
+    if mode == 0o600:
+        return "private, 0600"
+    if mode is None:
+        return "private, permissions UNVERIFIED"
+    return f"WARNING: permissions {mode:04o}, NOT owner-only — this filesystem refused 0600"
+
+
 def _read_keyfile(path: str, expected_len: int, kind: str) -> bytes:
     """Read a raw Ed25519 key file and validate its length."""
     p = Path(os.path.expanduser(path))
@@ -1690,13 +1734,9 @@ def _cmd_sign_model(args: argparse.Namespace) -> int:
         sk, pk = generate_keypair()
         sk_path = Path(os.path.expanduser(args.generate_key + ".sk"))
         pk_path = Path(os.path.expanduser(args.generate_key + ".pub"))
-        sk_path.write_bytes(sk)
-        try:
-            os.chmod(sk_path, 0o600)
-        except OSError:
-            pass  # Windows / non-POSIX FS — best effort
+        perms = _write_private_key(sk_path, sk)
         pk_path.write_bytes(pk)
-        print(f"generated keypair: {sk_path} (private, 0600), {pk_path} (public)", file=sys.stderr)
+        print(f"generated keypair: {sk_path} ({perms}), {pk_path} (public)", file=sys.stderr)
     elif args.key_file:
         try:
             sk = _read_keyfile(args.key_file, ED25519_PRIVATE_KEY_BYTES, "private key")
@@ -1946,10 +1986,19 @@ def _cmd_audit_pinned(args: argparse.Namespace) -> int:
         format_pinned_report_text,
     )
 
+    # Expand ``~`` BEFORE abspath. os.path.abspath does not expand it, it
+    # joins with the cwd, so "~/ci/mind-mem.json" became
+    # "<cwd>/~/ci/mind-mem.json" and the dirname handed to audit_pinned
+    # carried a literal "~" segment. Path.expanduser() there could not
+    # rescue it — it only expands a *leading* tilde — so every relative
+    # pin resolved under a directory that does not exist, was reported
+    # missing, and a missing pin is a SKIP that still exits 0. The gate
+    # said PASS having audited nothing.
+    cfg_path = os.path.abspath(os.path.expanduser(args.config))
     try:
         report = audit_pinned(
-            config_path=args.config,
-            workspace=os.path.dirname(os.path.abspath(args.config)) or ".",
+            config_path=cfg_path,
+            workspace=os.path.dirname(cfg_path) or ".",
         )
     except PinnedConfigError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -1973,6 +2022,97 @@ def _cmd_audit_pinned(args: argparse.Namespace) -> int:
                 return 2
 
     return 0 if report.passed else 1
+
+
+def _cmd_bind(args: argparse.Namespace) -> int:
+    """Write (or re-write) the governance spec binding for a workspace.
+
+    This is the command that arms ``GovernanceGate`` step 1. Without a
+    ``.spec_binding.json`` next to ``mind-mem.json`` the gate's spec-hash
+    check is inert: it logs one ``unbound_config`` warning per gate and
+    admits every write, so an edit to ``governance_mode``,
+    ``mcp_acl.admin_tools`` or ``proposal_budget`` is never detected.
+    ``SpecBindingManager.bind`` existed but nothing in the shipped CLI or
+    MCP surface called it, so unarmed was not an unusual state — it was
+    the only state the shipped tooling could produce.
+
+    Re-binding a config that has *drifted* is deliberately not automatic:
+    doing it silently would launder an unreviewed (or hostile) config
+    edit into a fresh attestation. Drift exits 3 and names the reason;
+    ``--rebind`` is the operator saying they reviewed it.
+    """
+    from mind_mem.spec_binding import SpecBindingCorruptedError, SpecBindingManager
+
+    workspace = os.path.realpath(os.path.expanduser(args.workspace)) if args.workspace else _workspace()
+    config_path = os.path.abspath(os.path.expanduser(args.config)) if args.config else os.path.join(workspace, "mind-mem.json")
+
+    def _emit(payload: dict[str, Any], human: str, code: int) -> int:
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(human, file=sys.stderr if code else sys.stdout)
+        return code
+
+    if not os.path.isfile(config_path):
+        return _emit(
+            {"bound": False, "config_path": config_path, "error": "config_missing"},
+            f"error: no config to bind at {config_path}",
+            2,
+        )
+
+    mgr = SpecBindingManager(config_path)
+    try:
+        existing = mgr.get_binding()
+    except SpecBindingCorruptedError as exc:
+        if not args.rebind:
+            return _emit(
+                {"bound": False, "config_path": config_path, "error": "binding_corrupted", "detail": str(exc)},
+                f"error: existing binding is corrupted: {exc}\nreview it, then re-run with --rebind to replace it",
+                3,
+            )
+        existing = None
+
+    if existing is not None and not args.rebind:
+        valid, reason = mgr.verify()
+        if valid:
+            return _emit(
+                {
+                    "bound": True,
+                    "changed": False,
+                    "config_path": config_path,
+                    "spec_hash": existing.spec_hash,
+                },
+                f"already bound, config unchanged\n  config:    {config_path}\n  spec_hash: {existing.spec_hash}",
+                0,
+            )
+        return _emit(
+            {
+                "bound": True,
+                "changed": False,
+                "config_path": config_path,
+                "error": "drifted",
+                "detail": reason,
+            },
+            (
+                f"error: config has drifted from its binding: {reason}\n"
+                "review the change, then re-run with --rebind to attest the new config"
+            ),
+            3,
+        )
+
+    binding = mgr.rebind(config_path) if existing is not None or args.rebind else mgr.bind(config_path)
+    binding_file = os.path.join(os.path.dirname(config_path), ".spec_binding.json")
+    return _emit(
+        {
+            "bound": True,
+            "changed": True,
+            "config_path": config_path,
+            "spec_hash": binding.spec_hash,
+            "bound_at": binding.bound_at.isoformat(),
+        },
+        (f"bound\n  config:    {config_path}\n  spec_hash: {binding.spec_hash}\n  binding:   {binding_file}"),
+        0,
+    )
 
 
 def _cmd_doctor(args: argparse.Namespace) -> int:
@@ -3018,6 +3158,36 @@ def build_parser() -> argparse.ArgumentParser:
     g_remove.add_argument("path")
     g_remove.add_argument("--json", action="store_true")
     g_remove.set_defaults(func=_cmd_gate_remove)
+
+    # bind — arm the governance gate's spec-hash check for a workspace
+    p_bind = sub.add_parser(
+        "bind",
+        help=(
+            "Attest the current mind-mem.json by writing .spec_binding.json. "
+            "Until this runs, GovernanceGate's spec-hash check is inert and "
+            "config tampering is not detected. Exits 3 on drift unless --rebind."
+        ),
+    )
+    p_bind.add_argument(
+        "--workspace",
+        default=None,
+        help="Workspace to bind (default: $MIND_MEM_WORKSPACE or cwd).",
+    )
+    p_bind.add_argument(
+        "--config",
+        default=None,
+        help="Config to bind (default: <workspace>/mind-mem.json).",
+    )
+    p_bind.add_argument(
+        "--rebind",
+        action="store_true",
+        help=(
+            "Replace an existing binding. Required to attest a config that has "
+            "drifted — re-binding is an explicit review decision, never automatic."
+        ),
+    )
+    p_bind.add_argument("--json", action="store_true")
+    p_bind.set_defaults(func=_cmd_bind)
 
     # audit-pinned — release-CI gate that audits every pinned model
     p_pinned = sub.add_parser(

@@ -130,6 +130,38 @@ class TestParsers:
         with pytest.raises(ImportParseError, match="documents"):
             parse_payload("chroma", {"ids": ["a"]})
 
+    def test_chroma_rejects_short_metadatas(self) -> None:
+        """A short 'metadatas' array is the same malformedness as a short
+        'ids' array, and used to be absorbed silently: the tail documents
+        imported with {} metadata and therefore no created_at, so they
+        landed as blocks with no Date and nothing said so."""
+        with pytest.raises(ImportParseError, match="inconsistent"):
+            parse_payload(
+                "chroma",
+                {
+                    "ids": ["a", "b", "c"],
+                    "documents": ["one", "two", "three"],
+                    "metadatas": [{"src": "x", "created_at": "2026-01-01"}],
+                },
+            )
+
+    def test_chroma_rejects_long_metadatas(self) -> None:
+        with pytest.raises(ImportParseError, match="inconsistent"):
+            parse_payload(
+                "chroma",
+                {
+                    "ids": ["a"],
+                    "documents": ["one"],
+                    "metadatas": [{"src": "x"}, {"src": "y"}],
+                },
+            )
+
+    def test_chroma_accepts_absent_metadatas(self) -> None:
+        """Absent is not malformed — only a present-but-misaligned array is."""
+        records = parse_payload("chroma", {"ids": ["a"], "documents": ["one"]})
+        assert len(records) == 1
+        assert records[0].metadata == {}
+
     def test_mem0_drops_empty_memory(self) -> None:
         raw = json.loads(Path(MEM0_DUMP).read_text(encoding="utf-8"))
         assert len(raw["results"]) == 4  # fixture carries one empty placeholder
@@ -411,3 +443,98 @@ def test_cli_dry_run(workspace: str, monkeypatch, capsys) -> None:
     assert payload["dry_run"] is True
     assert payload["imported"] == EXPECTED_RECORDS["letta"]
     assert not (Path(workspace) / IMPORTED_CORPUS_FILE).exists()
+
+
+def test_as_block_value_is_normalising_not_round_tripping(tmp_path):
+    """Pin the three lossy transforms the docstring now names.
+
+    The docstring used to promise the parser "round-trips it"; it does
+    not, and the format forbids it. This test is the executable form of
+    the corrected docstring, so the claim cannot silently drift back.
+    """
+    from mind_mem.block_parser import parse_file
+    from mind_mem.importers.engine import _as_block_value
+
+    source = "Deploy steps:\n\n- step one\n- step two\n\n    indented code line\n\nDone."
+    rendered = _as_block_value(source)
+    path = tmp_path / "X.md"
+    path.write_text("[B-1]\nType: decision\nStatement: " + rendered + "\n\n", encoding="utf-8")
+    read_back = parse_file(str(path))[0]["Statement"]
+
+    assert read_back != source, "docstring claimed a round trip that the format cannot provide"
+    assert read_back == "Deploy steps:\n* step one\n* step two\nindented code line\nDone."
+    # And each named loss individually:
+    assert "\n\n" not in read_back  # blank lines dropped
+    assert "- step one" not in read_back and "* step one" in read_back  # bullet rewritten
+    assert "    indented" not in read_back  # indentation stripped
+
+
+_INVISIBLES = "​‮\U000e0060\U000e0061\U000e0062"
+
+
+def test_sanitizer_covers_metadata_links_and_ids(tmp_path):
+    """Every untrusted field, not just ``text``, is stripped at the boundary.
+
+    ``_as_field_value`` collapses whitespace only, and Cf codepoints are
+    not whitespace, so invisibles in ``metadata`` / ``links`` /
+    ``external_id`` / ``created_at`` used to land in the corpus verbatim
+    beside a clean ``Statement``.
+    """
+    from mind_mem.importers.engine import _sanitized
+    from mind_mem.importers.records import ImportRecord
+
+    record = ImportRecord(
+        system="mem0",
+        external_id="ext" + _INVISIBLES + "-1",
+        text="clean statement" + _INVISIBLES,
+        metadata={"desc" + _INVISIBLES: "value" + _INVISIBLES},
+        created_at="2026-01-01T00:00:00" + _INVISIBLES,
+        links=("target" + _INVISIBLES,),
+    )
+    clean = _sanitized(record, str(tmp_path))
+
+    for bad in _INVISIBLES:
+        assert bad not in clean.text
+        assert bad not in clean.external_id
+        assert bad not in clean.created_at
+        assert not any(bad in k or bad in v for k, v in clean.metadata.items())
+        assert not any(bad in link for link in clean.links)
+    # Visible content survives untouched.
+    assert clean.external_id == "ext-1"
+    assert clean.metadata == {"desc": "value"}
+    assert clean.links == ("target",)
+    assert clean.created_at == "2026-01-01T00:00:00"
+
+
+def test_sanitized_metadata_reaches_the_rendered_block(tmp_path):
+    """End-to-end: the Metadata/Links fields written to the block are clean."""
+    from mind_mem.importers.engine import _sanitized, build_import_block
+    from mind_mem.importers.records import ImportRecord
+
+    record = ImportRecord(
+        system="mem0",
+        external_id="e1",
+        text="body",
+        metadata={"description": "hi" + _INVISIBLES},
+        links=("note" + _INVISIBLES,),
+    )
+    block = build_import_block(_sanitized(record, str(tmp_path)))
+    rendered = "".join(str(v) for v in block.values())
+    for bad in _INVISIBLES:
+        assert bad not in rendered, f"invisible codepoint {bad!r} survived into the block"
+
+
+def test_sanitizer_gate_off_leaves_every_field_untouched(tmp_path, monkeypatch):
+    """The config gate still turns the whole pass off, not just the text half."""
+    from mind_mem.importers.engine import _sanitized
+    from mind_mem.importers.records import ImportRecord
+
+    monkeypatch.setenv("MIND_MEM_SANITIZE_CODEPOINTS", "0")
+    record = ImportRecord(
+        system="mem0",
+        external_id="e" + _INVISIBLES,
+        text="t" + _INVISIBLES,
+        metadata={"k": "v" + _INVISIBLES},
+        links=("l" + _INVISIBLES,),
+    )
+    assert _sanitized(record, str(tmp_path)) is record

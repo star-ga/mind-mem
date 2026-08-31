@@ -164,3 +164,35 @@ class TestEnableResolution:
 
     def test_explicit_on(self) -> None:
         assert is_truth_score_enabled({"retrieval": {"truth_score": {"enabled": True}}}) is True
+
+
+class TestReproducibleClock:
+    """The age term reads the wall clock, so the same block scores
+    differently on different days. ``now=`` pins it."""
+
+    def test_same_block_same_now_is_stable_across_reference_days(self) -> None:
+        block = {"Status": "active", "Created": "2026-01-01"}
+        day_a = datetime(2026, 3, 1, tzinfo=timezone.utc)
+        day_b = datetime(2027, 3, 1, tzinfo=timezone.utc)
+        # Pinned to the same instant → identical score regardless of when
+        # the call happens.
+        assert truth_score(block, now=day_a) == truth_score(block, now=day_a)
+        # Different instants → the age term actually moves, so the pin is
+        # load-bearing rather than ignored.
+        assert truth_score(block, now=day_a) > truth_score(block, now=day_b)
+
+    def test_naive_now_is_read_as_utc(self) -> None:
+        block = {"Status": "active", "Created": "2026-01-01"}
+        aware = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        naive = datetime(2026, 6, 1)
+        assert truth_score(block, now=naive) == truth_score(block, now=aware)
+
+    def test_default_now_matches_explicit_utc_now(self) -> None:
+        block = {"Status": "active", "Created": _days_ago(90)}
+        assert truth_score(block) == truth_score(block, now=datetime.now(timezone.utc))
+
+    def test_annotate_results_forwards_now(self) -> None:
+        pinned_at = datetime(2026, 3, 1, tzinfo=timezone.utc)
+        block = {"Status": "active", "Created": "2026-01-01"}
+        annotated = annotate_results([{"_id": "R-1", **block}], now=pinned_at)
+        assert annotated[0]["truth_score"] == truth_score(block, now=pinned_at)

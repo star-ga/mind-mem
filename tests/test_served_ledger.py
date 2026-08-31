@@ -649,3 +649,138 @@ def test_a_short_digest_is_refused_because_run_id_has_no_separators(tmp_path: Pa
     with pytest.raises(ValueError, match="64-character lowercase hex"):
         append_served_run(ws, **kwargs)
     assert read_served_runs(ws) == ()
+
+
+# ---------------------------------------------------------------------------
+# T16 (cont.) — the head sidecar is a REQUIRED seal, not an optional one
+#
+# Two escapes, both of which verified clean before this section existed:
+#
+#   * empty the ledger and every row is gone with no seq gap and no broken
+#     link to show for it, because there is no row left to check. The recorded
+#     head was the only witness, and it was consulted only ``if rows``.
+#   * delete the sidecar and the last row's ``index_anchor`` /
+#     ``scoring_instant`` become editable — no successor binds them, no
+#     internal invariant covers them, and the head comparison was skipped
+#     whenever the head was falsy. Removing the seal removed the check.
+# ---------------------------------------------------------------------------
+
+
+def _head_file(ws: str) -> Path:
+    from mind_mem.served_ledger import HEAD_RELPATH
+
+    return Path(ws) / HEAD_RELPATH
+
+
+def _three_row_ledger(tmp_path: Path, name: str) -> str:
+    ws = _ws(tmp_path, enabled=True) if name == "on" else _ws(tmp_path / name, enabled=True)
+    for n in range(3):
+        _append(ws, [f"D-{n}"], question=f"q{n}")
+    assert verify_served_chain(ws).ok is True
+    return ws
+
+
+def test_t16_emptying_the_whole_ledger_fails_against_the_recorded_head(tmp_path: Path) -> None:
+    """Deleting *every* row is the deletion the row chain cannot see.
+
+    A shortened tail is caught because the surviving rows still hash to
+    something the sidecar disagrees with. Truncate to nothing and there is no
+    surviving row at all — the recorded head is the only remaining witness,
+    so it has to be read whether or not any row is left to compare it to.
+    """
+    ws = _three_row_ledger(tmp_path, "on")
+    recorded = _head_file(ws).read_text(encoding="utf-8").strip()
+    Path(ledger_path(ws)).write_text("", encoding="utf-8")
+
+    assert read_served_runs(ws) == (), "the ledger is genuinely empty — the verdict must not come from a surviving row"
+    verdict = verify_served_chain(ws)
+    assert verdict.ok is False, "an emptied ledger verified clean against a head that names three rows"
+    assert recorded in verdict.reason
+    assert verdict.rows_checked == 0
+
+
+def test_t16_removing_the_ledger_file_fails_against_the_recorded_head(tmp_path: Path) -> None:
+    """Unlinking the file is the same tamper as blanking it, and reads the same."""
+    ws = _three_row_ledger(tmp_path, "unlinked")
+    Path(ledger_path(ws)).unlink()
+
+    verdict = verify_served_chain(ws)
+    assert verdict.ok is False
+    assert "removed" in verdict.reason
+
+
+def test_t16_deleting_the_head_sidecar_does_not_unseal_the_last_row(tmp_path: Path) -> None:
+    """The seal an attacker deletes first must not be the seal that is optional.
+
+    This asserts the MECHANISM, not just the verdict: with the sidecar gone,
+    the tampered final row passes ``_check_row`` and produces no link break,
+    so nothing else in the walk can convict it. If the missing-sidecar branch
+    were removed, these same two edits would verify clean — which is exactly
+    what they did before.
+    """
+    from mind_mem.served_ledger import _check_row, _link_breaks
+
+    ws = _ws(tmp_path, enabled=True)
+    _append(ws, ["D-1"], question="a")
+    _append(ws, ["D-2"], question="b")
+    _head_file(ws).unlink()
+    _tamper(ws, 1, "index_anchor", "1" * 64)
+    _tamper(ws, 1, "scoring_instant", "1999-01-01")
+
+    rows = read_served_runs(ws)
+    assert rows[1].index_anchor == "1" * 64 and rows[1].scoring_instant == "1999-01-01"
+    assert [_check_row(row, i) for i, row in enumerate(rows)] == ["", ""], "an internal invariant caught it — the probe would be vacuous"
+    assert _link_breaks(rows) == [], "a link caught it — the probe would be vacuous"
+
+    verdict = verify_served_chain(ws)
+    assert verdict.ok is False, "the last row's anchor and instant were rewritten and the chain still verified"
+    assert verdict.bad_seq == 1
+
+
+def test_t16_the_head_sidecar_is_required_even_with_nothing_tampered(tmp_path: Path) -> None:
+    """Absence of the seal is itself the finding.
+
+    Tolerating a missing sidecar "because nothing else looks wrong" is what
+    makes deleting it a free move: the tamper it hides is invisible by
+    construction, so the verdict cannot wait for corroboration.
+    """
+    ws = _three_row_ledger(tmp_path, "unsealed")
+    _head_file(ws).unlink()
+
+    verdict = verify_served_chain(ws)
+    assert verdict.ok is False
+    assert "sidecar" in verdict.reason
+    assert verdict.bad_seq == 2
+
+
+def test_t16_a_blanked_head_sidecar_is_a_wrong_seal_not_a_missing_check(tmp_path: Path) -> None:
+    """Present-but-empty is an overwritten seal, and an empty string is a value.
+
+    Collapsing "absent" and "blank" to ``""`` let either one turn the head
+    comparison off. They are different facts: one is a seal that was removed,
+    the other a seal that was rewritten, and neither is permission to skip.
+    """
+    ws = _ws(tmp_path, enabled=True)
+    _append(ws, ["D-1"], question="a")
+    _append(ws, ["D-2"], question="b")
+    _head_file(ws).write_text("", encoding="utf-8")
+    _tamper(ws, 1, "scoring_instant", "1999-01-01")
+
+    verdict = verify_served_chain(ws)
+    assert verdict.ok is False
+    assert verdict.bad_seq == 1
+
+
+def test_a_workspace_that_never_ran_the_ledger_still_verifies(tmp_path: Path) -> None:
+    """The other side of the same coin — no rows AND no seal is not a tamper.
+
+    Failing here would make an untouched workspace look attacked, which is the
+    over-correction the head check has to avoid. The honest limit is stated in
+    the module docstring: rows and seal both live in one directory, so removing
+    it whole is indistinguishable from never having written to it.
+    """
+    ws = _ws(tmp_path, enabled=True)
+    verdict = verify_served_chain(ws)
+    assert verdict.ok is True, verdict.reason
+    assert verdict.rows_checked == 0
+    assert verdict.head == GENESIS_ROW_HASH

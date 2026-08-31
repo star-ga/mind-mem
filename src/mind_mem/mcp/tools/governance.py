@@ -14,13 +14,14 @@ Extracted from ``mcp_server.py`` per docs/v3.2.0-mcp-decomposition-plan.md
 
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import os
 import re as _re_mod
 import sqlite3
 from typing import Any
 
-from mind_mem.block_parser import get_active, parse_file
+from mind_mem.block_parser import get_active, parse_blocks, parse_file
 from mind_mem.storage import iter_active_blocks
 
 from ..infra.constants import MCP_SCHEMA_VERSION
@@ -41,6 +42,144 @@ _log = get_logger("mcp_server")
 # on those backends (audit bugs #3 / #10). Kept in sync with
 # ``mind_mem.storage._MARKDOWN_BACKENDS``.
 _MARKDOWN_BACKENDS: frozenset[str] = frozenset({"markdown", "encrypted"})
+
+
+# --------------------------------------------------------------------------
+# Quality-gate near-duplicate window
+# --------------------------------------------------------------------------
+#
+# ``quality_gate`` rule 6 (near_duplicate) is the only rule that needs more
+# than the candidate text, and it stayed dead in the product because no
+# caller ever built the window to compare against: this module called
+# ``validate_block(statement, strict=...)`` and the preview tool called
+# ``validate_block(text, strict=..., force=...)``, so ``recent`` was always
+# ``None`` and the rule never executed. Building the window here — at the
+# enforcement point — is what turns it on; ``mcp.tools.quality`` imports the
+# same function so the preview and the enforcer compare against the same
+# prior proposals rather than two different ideas of "recent".
+#
+# Bounds so this is cheap enough for the propose_update hot path: SIGNALS.md
+# is append-only, so anything inside the 24h window is in the tail.
+#
+# Measured on an 8.5 MB / 18k-block SIGNALS.md: ~21 ms to build the window,
+# and *flat* in file size (1 MB measured the same) because of the tail cap,
+# plus ~26 ms worst case for the 400-way SequenceMatcher sweep when nothing
+# matches. For scale, ``append_signals`` already reads the whole file and
+# regexes it on every proposal — 16 ms on the same corpus, and that one grows
+# linearly. So this adds a bounded cost beside an unbounded one.
+_RECENT_TAIL_BYTES = 256 * 1024
+_RECENT_MAX_BLOCKS = 400
+_RECENT_LOOKBACK_DAYS = 2
+
+
+def _recent_statements(ws: str, *, now: _dt.datetime | None = None) -> list[tuple[str, _dt.datetime]]:
+    """Prior proposal texts from ``intelligence/SIGNALS.md``, oldest first.
+
+    Feeds ``quality_gate.validate_block(recent=...)``. Each pair is
+    ``(text, timestamp)``; the caller's 24h cutoff does the final filtering.
+
+    Two properties are deliberate and bound what the rule can see:
+
+    * **Timestamp granularity.** ``capture.append_signals`` now records a
+      ``Captured:`` field holding the full UTC instant, and this reader
+      prefers it. Blocks written before that field existed carry only
+      ``Date: YYYY-MM-DD``, and those still fall back to the *start* of
+      their day -- which reads as up to 24 h older than the write, making
+      the effective retention ``24h - time-of-day`` rather than the
+      documented 24 h. That is understated by calling it "near a day
+      boundary": a block written at 22:00 is already 22 h old to this
+      reader the moment it lands. The direction is conservative (the rule
+      under-fires, never rejects something genuinely out of window), but
+      only legacy blocks are affected now.
+    * **Excerpt, not the raw statement.** ``capture.append_signals`` stores
+      the statement truncated to 500 chars with newlines collapsed, which is
+      exactly what a re-run of the same proposal would store again — so an
+      identical re-proposal matches at ratio 1.0. A candidate longer than
+      500 chars is compared against a truncated prior and scores lower, i.e.
+      the rule under-reports for over-long statements. Again a false
+      negative, which is where the rule already was.
+
+    This complements rather than duplicates the exact-``ContentHash``
+    dedupe already in ``append_signals``: that one catches byte-identical
+    re-runs, this one catches the near misses it lets through.
+
+    Never raises — a missing, unreadable or malformed SIGNALS.md yields an
+    empty window, and an empty window is reported by the gate as a *skipped*
+    rule, not a passed one.
+    """
+    path = os.path.join(ws, "intelligence", "SIGNALS.md")
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as fh:
+            truncated = size > _RECENT_TAIL_BYTES
+            if truncated:
+                fh.seek(size - _RECENT_TAIL_BYTES)
+            raw = fh.read().decode("utf-8", errors="replace")
+        if truncated:
+            # A byte-offset seek can land mid-block; drop everything before
+            # the first block header so no half-parsed block enters the
+            # window. Losing the partial block is fine — it is the oldest
+            # one in the tail, and the tail is already an over-approximation
+            # of the 24h window.
+            cut = raw.find("\n[")
+            raw = raw[cut + 1 :] if cut != -1 else ""
+        blocks = parse_blocks(raw)
+    except FileNotFoundError:
+        # The ordinary case: a workspace that has never staged a signal.
+        return []
+    except OSError as exc:
+        _log.debug("quality_gate_recent_window_unavailable", path=path, error=str(exc))
+        return []
+    except Exception as exc:  # noqa: BLE001 — see below
+        # This runs on the write path, ahead of the gate. If building the
+        # window can raise, a malformed SIGNALS.md stops every proposal —
+        # strictly worse than the missing rule this function exists to
+        # restore. So: report, degrade to an empty window, and let the
+        # verdict say near_duplicate was *skipped*. Loud, because unlike a
+        # missing file this one is a bug worth reading.
+        _log.warning(
+            "quality_gate_recent_window_failed",
+            path=path,
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        return []
+
+    cutoff_day = (now or _dt.datetime.now(_dt.timezone.utc)).date() - _dt.timedelta(days=_RECENT_LOOKBACK_DAYS)
+    window: list[tuple[str, _dt.datetime]] = []
+    for block in blocks:
+        text = block.get("Excerpt") or block.get("Statement")
+        date_raw = block.get("Date")
+        if not isinstance(text, str) or not text.strip():
+            continue
+        if not isinstance(date_raw, str):
+            continue
+        # Prefer the full instant when the writer recorded one. `Date:` alone
+        # places the block at 00:00 of its day, so it reads as up to 24h older
+        # than it is and the effective retention becomes (24h - time-of-day of
+        # the write) rather than the documented 24h. `Captured:` (added in
+        # capture.append_signals) removes the guesswork; blocks written before
+        # that field existed still parse via the day fallback below.
+        stamp: _dt.datetime | None = None
+        captured_raw = block.get("Captured")
+        if isinstance(captured_raw, str) and captured_raw.strip():
+            try:
+                parsed = _dt.datetime.fromisoformat(captured_raw.strip())
+            except ValueError:
+                parsed = None
+            if parsed is not None:
+                # A naive value means an unknown offset; read it as UTC, which
+                # is what the writer emits.
+                stamp = parsed if parsed.tzinfo else parsed.replace(tzinfo=_dt.timezone.utc)
+        if stamp is None:
+            try:
+                stamp = _dt.datetime.strptime(date_raw.strip(), "%Y-%m-%d").replace(tzinfo=_dt.timezone.utc)
+            except ValueError:
+                continue
+        if stamp.date() < cutoff_day:
+            continue
+        window.append((text, stamp))
+    return window[-_RECENT_MAX_BLOCKS:]
 
 
 @mcp_tool_observe
@@ -149,7 +288,10 @@ def propose_update(
     _qg_mode = _get_quality_gate_mode(ws)
     if _qg_mode != "off":
         _qg_is_strict = _qg_mode == "strict"
-        _qg_verdict = validate_block(statement, strict=_qg_is_strict)
+        # `recent` is what makes rule 6 (near_duplicate) run at all. Without
+        # it the rule reports as skipped and a re-proposal that is 97%+
+        # identical to one staged an hour ago sails through.
+        _qg_verdict = validate_block(statement, strict=_qg_is_strict, recent=_recent_statements(ws))
         if not _qg_verdict.accept:
             # Increment aggregate rejection counter.
             metrics.inc("quality_gate_rejections")

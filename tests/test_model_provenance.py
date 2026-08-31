@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -130,6 +131,44 @@ class TestMissingBaseModel:
         # Non-string base_model is treated as "not declared" — the
         # safetensors header check + remote-code check still fire.
         assert result.passed
+
+
+class TestUnreadableConfig:
+    """A config that cannot be read is not the same claim as no config.
+
+    Regression: a truncated / unreadable / non-object ``config.json`` used
+    to collapse into the "no base_model declared" pass, so a bundle
+    carrying exactly that skipped the namespace allowlist and the audit
+    still reported seven of seven.
+    """
+
+    def test_truncated_config_fails(self, tmp_path: Path) -> None:
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "config.json").write_text('{"base_model": "evil-org/x', encoding="utf-8")
+        result = check_provenance(tmp_path)
+        assert not result.passed
+        assert "unreadable" in result.detail
+        assert result.evidence
+
+    def test_json_scalar_config_fails(self, tmp_path: Path) -> None:
+        (tmp_path / "config.json").write_text('"just a string"', encoding="utf-8")
+        result = check_provenance(tmp_path)
+        assert not result.passed
+        assert "not a JSON object" in result.detail
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX-only")
+    def test_unreadable_mode_config_fails(self, tmp_path: Path) -> None:
+        cfg = tmp_path / "config.json"
+        cfg.write_text('{"base_model": "Qwen/Qwen3-8B"}', encoding="utf-8")
+        cfg.chmod(0o000)
+        try:
+            if os.access(cfg, os.R_OK):  # running as root — mode says nothing
+                pytest.skip("cannot make a file unreadable as this user")
+            result = check_provenance(tmp_path)
+        finally:
+            cfg.chmod(0o644)
+        assert not result.passed
+        assert "unreadable" in result.detail
 
 
 # ---------------------------------------------------------------------------

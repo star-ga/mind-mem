@@ -87,3 +87,60 @@ class TestHealthHandler:
         assert resp.status == "ok"
         assert resp.workspace == "/tmp/ws"
         assert resp.schema_version
+
+
+class TestTenantIsNotSilentlyDropped:
+    """``tenant_id`` is on the wire shape but this transport cannot route it.
+
+    The module never enters ``use_workspace``, so a scoped request would be
+    answered from the process-wide workspace — and answered with ``ok``.
+    Both handlers must refuse instead of dropping the field.
+    """
+
+    def test_recall_with_tenant_raises_before_touching_the_corpus(self) -> None:
+        import pytest
+
+        with patch("mind_mem.mcp.tools.recall._recall_impl", return_value='{"results": []}') as spy:
+            with pytest.raises(ValueError, match="tenant_id is not supported"):
+                handle_recall(RecallRequest(query="hello", tenant_id="acme"))
+        spy.assert_not_called()
+
+    def test_recall_without_tenant_still_works(self) -> None:
+        with patch("mind_mem.mcp.tools.recall._recall_impl", return_value='{"results": []}'):
+            resp = handle_recall(RecallRequest(query="hello"))
+        assert resp.payload == '{"results": []}'
+
+    def test_governance_with_tenant_is_refused_without_dispatching(self) -> None:
+        with patch("mind_mem.mcp.tools.governance.approve_apply", return_value='{"applied": true}') as spy:
+            resp = handle_governance(GovernanceRequest(operation="approve", args={"proposal_id": "P-1"}, tenant_id="acme"))
+        spy.assert_not_called()
+        assert resp.ok is False
+        assert "tenant_id is not supported" in (resp.error or "")
+
+
+class TestGeneratedServicerRegistration:
+    def test_missing_generated_package_is_logged_not_swallowed(self) -> None:
+        from mind_mem.api import grpc_server
+
+        with patch.object(grpc_server, "_log") as log:
+            registered = grpc_server._register_generated_services(object(), object())
+
+        assert registered is False
+        log.warning.assert_called_once()
+        assert log.warning.call_args.args[0] == "grpc_generated_missing"
+
+    def test_present_generated_package_is_registered(self) -> None:
+        import sys
+        import types
+
+        from mind_mem.api import grpc_server
+
+        calls: list[tuple[object, object]] = []
+        stub = types.ModuleType("mind_mem.api.grpc_generated")
+        stub.register = lambda server, servicer: calls.append((server, servicer))  # type: ignore[attr-defined]
+        server, servicer = object(), object()
+        with patch.dict(sys.modules, {"mind_mem.api.grpc_generated": stub}):
+            registered = grpc_server._register_generated_services(server, servicer)
+
+        assert registered is True
+        assert calls == [(server, servicer)]

@@ -16,10 +16,13 @@ This module is a minimal KEK/DEK façade:
   old one available for decrypting already-ciphertext'd rows.
 
 Dependencies: uses ``cryptography`` when installed (AEAD via
-AES-GCM-256). Falls back to an HMAC-based KDF + ``chacha20``-style
-software AEAD via stdlib only — acceptable for dev/test, not
-production. Operators who actually deploy this must install
-``mind-mem[encrypted]``.
+AES-GCM-256). Falls back to an HMAC-based KDF plus a stdlib-only
+encrypt-then-MAC construction — a SHAKE-256 keystream XORed with the
+plaintext, tagged with HMAC-SHA256 (**not** ChaCha20, and not a
+standard AEAD) — acceptable for dev/test, not production. Operators who
+actually deploy this must install the ``cryptography`` package itself
+(``pip install cryptography``); there is no ``mind-mem`` extra that
+pulls it in.
 """
 
 from __future__ import annotations
@@ -236,7 +239,7 @@ def require_production_crypto() -> None:
     """
     if not _has_cryptography():
         raise RuntimeError(
-            "mind-mem tenant_kms requires the 'cryptography' package for production use. Install with: pip install 'mind-mem[encrypted]'"
+            "mind-mem tenant_kms requires the 'cryptography' package for production use. Install with: pip install cryptography"
         )
 
 

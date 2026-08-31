@@ -9,7 +9,7 @@ instead of silently filling RAM.
 Policy::
 
     Queue full  →  drop-oldest (keep the newest signal)
-    Per-client  →  token-bucket rate limit
+    Per-client  →  token-bucket rate limit, one bucket per ``client_id``
 
 This runs in-process (no asyncio / threading surprises — the queue
 uses a ``collections.deque`` with a ``threading.Lock``). Callers can
@@ -26,17 +26,23 @@ Config::
         "drop_policy": "oldest",
         "rate_limit": {
           "tokens_per_second": 20,
-          "burst": 40
+          "burst": 40,
+          "max_clients": 1024
         }
       }
     }
+
+``tokens_per_second`` / ``burst`` are the allowance **each** client gets.
+``max_clients`` bounds how many distinct ``client_id`` values keep their
+own bucket — see :class:`_PerClientRateLimiter` for what that bound is and
+is not.
 """
 
 from __future__ import annotations
 
 import threading
 import time
-from collections import deque
+from collections import OrderedDict, deque
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
@@ -49,8 +55,8 @@ _log = get_logger("streaming")
 class IngestEvent:
     """One unit of work on the back-pressure queue.
 
-    ``payload`` is the block to ingest; ``client_id`` is used for
-    per-client rate limiting and telemetry attribution.
+    ``payload`` is the block to ingest; ``client_id`` keys the rate
+    limiter (one token bucket per client) and attributes telemetry.
     """
 
     payload: dict[str, Any]
@@ -68,6 +74,11 @@ class EnqueueResult:
     dropped_event: IngestEvent | None = None
 
 
+#: Default cap on how many distinct ``client_id`` values keep their own
+#: bucket. See :class:`_PerClientRateLimiter`.
+DEFAULT_MAX_TRACKED_CLIENTS = 1024
+
+
 class _TokenBucket:
     """Minimal mpsc-safe token bucket."""
 
@@ -80,6 +91,16 @@ class _TokenBucket:
         self._last_refill = time.monotonic()
         self._lock = threading.Lock()
 
+    @property
+    def rate(self) -> float:
+        """Refill rate in tokens per second."""
+        return self._rate
+
+    @property
+    def burst(self) -> float:
+        """Maximum tokens the bucket holds."""
+        return self._burst
+
     def try_consume(self, n: float = 1.0) -> bool:
         with self._lock:
             now = time.monotonic()
@@ -89,6 +110,51 @@ class _TokenBucket:
                 self._tokens -= n
                 return True
             return False
+
+
+class _PerClientRateLimiter:
+    """One token bucket per ``client_id``, all minted from one template.
+
+    The queue is multi-producer. A single shared bucket therefore counts
+    every producer's traffic against every other producer, so one noisy
+    client rate-limits the whole fleet — the cross-client denial of
+    service ``client_id`` exists to prevent. Each client gets its own
+    allowance instead.
+
+    The key space is producer-supplied, so it is bounded: past
+    ``max_clients`` distinct ids the least-recently-used bucket is
+    evicted. That bound is a **memory** guard, not an authentication one.
+    A producer free to invent a fresh ``client_id`` per event is not
+    throttled by per-client accounting at all — it never was, under any
+    keying — so authenticate the id upstream if that matters.
+    """
+
+    def __init__(self, template: _TokenBucket, *, max_clients: int = DEFAULT_MAX_TRACKED_CLIENTS) -> None:
+        if max_clients <= 0:
+            raise ValueError("max_clients must be > 0")
+        self._rate = template.rate
+        self._burst = template.burst
+        self._max_clients = int(max_clients)
+        self._buckets: OrderedDict[str, _TokenBucket] = OrderedDict()
+        self._lock = threading.Lock()
+
+    @property
+    def tracked_clients(self) -> int:
+        """How many clients currently hold a bucket."""
+        with self._lock:
+            return len(self._buckets)
+
+    def try_consume(self, client_id: str, n: float = 1.0) -> bool:
+        with self._lock:
+            bucket = self._buckets.get(client_id)
+            if bucket is None:
+                if len(self._buckets) >= self._max_clients:
+                    self._buckets.popitem(last=False)
+                bucket = _TokenBucket(self._rate, self._burst)
+            self._buckets[client_id] = bucket
+            self._buckets.move_to_end(client_id)
+        # Consume outside the registry lock — the bucket carries its own.
+        return bucket.try_consume(n)
 
 
 class StreamingIngestQueue:
@@ -105,13 +171,20 @@ class StreamingIngestQueue:
         capacity: int = 1024,
         *,
         rate_limit: _TokenBucket | None = None,
+        max_clients: int = DEFAULT_MAX_TRACKED_CLIENTS,
     ) -> None:
+        """Build the queue.
+
+        ``rate_limit`` is a *template*: its rate and burst become the
+        allowance handed to each ``client_id`` separately, not one
+        allowance shared across all producers.
+        """
         if capacity <= 0:
             raise ValueError("capacity must be > 0")
         self._capacity = int(capacity)
         self._queue: deque[IngestEvent] = deque()
         self._lock = threading.Lock()
-        self._rate_limit = rate_limit
+        self._rate_limit = None if rate_limit is None else _PerClientRateLimiter(rate_limit, max_clients=max_clients)
 
     @property
     def capacity(self) -> int:
@@ -122,7 +195,8 @@ class StreamingIngestQueue:
 
     def enqueue(self, event: IngestEvent) -> EnqueueResult:
         # Rate-limit first — denied producers don't even touch the queue.
-        if self._rate_limit is not None and not self._rate_limit.try_consume():
+        # Keyed by client so one producer cannot spend another's allowance.
+        if self._rate_limit is not None and not self._rate_limit.try_consume(event.client_id):
             _log.info("streaming_rate_limited", client=event.client_id)
             return EnqueueResult(accepted=False, reason="rate_limited")
 
@@ -176,6 +250,7 @@ def build_queue_from_config(config: dict[str, Any] | None) -> StreamingIngestQue
     capacity = int(streaming.get("capacity", 1024))
     rl_cfg = streaming.get("rate_limit") or {}
     bucket: _TokenBucket | None = None
+    max_clients = DEFAULT_MAX_TRACKED_CLIENTS
     if isinstance(rl_cfg, dict) and rl_cfg:
         try:
             bucket = _TokenBucket(
@@ -184,7 +259,18 @@ def build_queue_from_config(config: dict[str, Any] | None) -> StreamingIngestQue
             )
         except ValueError as exc:
             _log.warning("streaming_rate_limit_disabled", error=str(exc))
-    return StreamingIngestQueue(capacity=capacity, rate_limit=bucket)
+        # Parsed separately from the bucket on purpose: a bad client cap is
+        # a reason to fall back to the default cap, never a reason to drop
+        # the rate limit that a valid bucket above just established.
+        try:
+            max_clients = int(rl_cfg.get("max_clients", DEFAULT_MAX_TRACKED_CLIENTS))
+        except (TypeError, ValueError) as exc:
+            _log.warning("streaming_max_clients_defaulted", error=str(exc))
+            max_clients = DEFAULT_MAX_TRACKED_CLIENTS
+        if max_clients <= 0:
+            _log.warning("streaming_max_clients_defaulted", error=f"max_clients must be > 0, got {max_clients}")
+            max_clients = DEFAULT_MAX_TRACKED_CLIENTS
+    return StreamingIngestQueue(capacity=capacity, rate_limit=bucket, max_clients=max_clients)
 
 
 __all__ = [

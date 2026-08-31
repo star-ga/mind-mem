@@ -25,11 +25,19 @@ expectation about whether memory would help on it.
 
 THE ONLY PRE-EXCLUSION (safety, not outcome)
 --------------------------------------------
-A candidate whose added test source names a **shared production service**
+A candidate whose **test-side patch** names a **shared production service**
 is excluded before anything is executed -- see ``SHARED_SERVICE_PATTERN``.
 This box runs a production Postgres and a pinned GPU model; the benchmark
 must not touch either.  Every other exclusion is decided by *executing*
 the task, never by guessing from its text.
+
+The scanned set is deliberately the *executed* set: every path in
+``test_patch_paths`` (the whole ``tests/`` delta plus the root conftest, all
+of which the validation harness lays onto the parent tree, and which pytest
+imports at collection time).  Scanning only the added ``tests/test_*.py``
+files left the hole this exclusion exists to close -- a commit that adds a
+benign test and *modifies* ``tests/conftest.py`` to add a psycopg fixture
+passed the exclusion and then ran that fixture against the live server.
 
 Every git call here is read-only plumbing with a fixed argv and
 ``shell=False``; nothing this module builds is ever handed to a shell.
@@ -50,7 +58,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Iterable, Sequence
 
-#: Added-test source naming a shared production service.  Matching candidates
+#: Test-side source naming a shared production service.  Matching candidates
 #: are excluded before execution: this host runs a production Postgres on
 #: 127.0.0.1:5432 and a GPU-pinned local model, and a benchmark that mutates
 #: either is not a benchmark, it is an outage.
@@ -220,10 +228,17 @@ def _numstat_index(repo: str, head: str) -> dict[str, dict[str, tuple[int, int]]
     return per
 
 
-def _added_test_sources(repo: str, sha: str, test_files: Iterable[str]) -> str:
-    """Concatenate the added test files as they exist *at* ``sha``."""
+def _test_patch_sources(repo: str, sha: str, patch_paths: Iterable[str]) -> str:
+    """Concatenate every file of the test-side patch as it exists *at* ``sha``.
+
+    This is the text the shared-service exclusion reads, and it must cover
+    exactly what the harness later executes: the whole ``test_patch_paths``
+    set is copied onto the parent tree, and pytest imports ``conftest.py``
+    from it at collection.  Reading only the *added* ``test_*.py`` files
+    scanned a strict subset of what runs.
+    """
     chunks = []
-    for path in test_files:
+    for path in patch_paths:
         try:
             chunks.append(git(repo, "show", f"{sha}:{path}"))
         except subprocess.CalledProcessError:  # pragma: no cover - defensive
@@ -245,7 +260,11 @@ def _build_candidate(
     src_changed = tuple(sorted(p for st, p in files if st in ("A", "M") and is_src_path(p)))
     if not added_tests or not src_changed or not parent:
         return None
-    source = _added_test_sources(repo, sha, added_tests)
+    # Scan the executed set, not the selected-on set: `patch_paths` is a
+    # superset of `added_tests` (every added tests/test_*.py is test infra)
+    # and is precisely what repo_task_validation writes into the extracted
+    # tree before the run.
+    source = _test_patch_sources(repo, sha, patch_paths)
     hit = SHARED_SERVICE_PATTERN.search(source)
     churn = [numstat.get(path, (0, 0)) for path in src_changed]
     return Candidate(

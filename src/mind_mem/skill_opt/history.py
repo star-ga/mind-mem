@@ -6,8 +6,14 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import weakref
 from datetime import datetime, timezone
+from types import TracebackType
 from typing import Any, Optional
+
+#: Terminal status for a run whose store went away before ``complete_run``.
+#: Distinct from ``"running"`` (in flight) and from ``"completed"``.
+INTERRUPTED_STATUS = "interrupted"
 
 _SCHEMA = """\
 CREATE TABLE IF NOT EXISTS optimization_runs (
@@ -58,17 +64,79 @@ CREATE INDEX IF NOT EXISTS idx_mutations_skill ON mutations(skill_id);
 """
 
 
+def _finalize_store(conn: sqlite3.Connection, open_runs: set[str]) -> None:
+    """Close *conn*, first stamping a terminal status on unfinished runs.
+
+    ``start_run`` commits ``status='running'`` before any work happens, and
+    the work can raise. Without this, a store that goes away between
+    ``start_run`` and ``complete_run`` leaves the row saying "running"
+    forever, so a later reader cannot tell a live run from a dead one.
+
+    Runs at garbage-collection time *and* at interpreter exit (that is why
+    this is a :func:`weakref.finalize` callback and not ``__del__``), which
+    covers the case that actually bites: a CLI process dying on an uncaught
+    exception mid-run, where no ``finally`` at the call site ever executes.
+    Everything is defensive — a finalizer must not raise, least of all
+    during shutdown.
+    """
+    try:
+        if open_runs:
+            now = datetime.now(timezone.utc).isoformat()
+            for run_id in sorted(open_runs):
+                conn.execute(
+                    "UPDATE optimization_runs SET status=?, completed_at=? WHERE run_id=? AND status='running'",
+                    (INTERRUPTED_STATUS, now, run_id),
+                )
+            conn.commit()
+            open_runs.clear()
+    except Exception:  # nosec B110 — finalizers must never raise
+        pass
+    try:
+        conn.close()
+    except Exception:  # nosec B110 — finalizers must never raise
+        pass
+
+
 class HistoryStore:
-    """Persistent storage for optimization runs, results, and mutations."""
+    """Persistent storage for optimization runs, results, and mutations.
+
+    Owns a long-lived SQLite connection, so use it as a context manager —
+    ``with HistoryStore(path) as store:`` — or call :meth:`close` from a
+    ``finally``. A store that is dropped without either still finalises
+    itself (see :func:`_finalize_store`): the connection is closed and any
+    run started but never completed is stamped
+    ``status='interrupted'`` rather than being left claiming to be running.
+    """
 
     def __init__(self, db_path: str) -> None:
         os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
+        # Runs this store opened and has not closed. Handed to the
+        # finalizer by value so the callback holds no reference to self —
+        # a finalizer that kept the object alive would never fire.
+        self._open_runs: set[str] = set()
+        # Registered against *self*: the finalize object holds strong refs to
+        # its arguments, so registering against the connection would keep that
+        # connection alive forever and the callback would only ever fire at
+        # interpreter exit. Weak on self, strong on what it needs to clean up.
+        self._finalizer = weakref.finalize(self, _finalize_store, self._conn, self._open_runs)
 
     def close(self) -> None:
-        self._conn.close()
+        """Close the connection. Idempotent; safe to call after a drop."""
+        self._finalizer()
+
+    def __enter__(self) -> HistoryStore:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        self.close()
 
     def start_run(
         self,
@@ -83,6 +151,10 @@ class HistoryStore:
             (run_id, skill_id, content_hash, now, json.dumps(config or {})),
         )
         self._conn.commit()
+        # Tracked from the moment the 'running' row is durable, so a crash
+        # anywhere in the work that follows still resolves to a terminal
+        # status when the store is finalised.
+        self._open_runs.add(run_id)
 
     def complete_run(
         self,
@@ -98,6 +170,7 @@ class HistoryStore:
             (now, status, score_before, score_after, int(mutation_accepted), run_id),
         )
         self._conn.commit()
+        self._open_runs.discard(run_id)
 
     def store_test_result(
         self,

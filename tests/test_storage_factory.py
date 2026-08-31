@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import logging
 import os
 
 import pytest
@@ -149,3 +151,122 @@ def test_postgres_replicas_filtered_to_strings(tmp_path):
         },
     )
     assert isinstance(store, PostgresBlockStore)
+
+
+# ---------------------------------------------------------------------------
+# A malformed config must be diagnosable, and must not mean two things
+# ---------------------------------------------------------------------------
+
+
+class _RecordingHandler(logging.Handler):
+    """Capture records from the storage logger.
+
+    ``observability.StructuredLogger`` sets ``propagate = False`` and owns
+    its own stderr handler, so pytest's ``caplog`` (which hooks the root
+    logger) never sees these records. Attach directly instead.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.WARNING)
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+    @property
+    def events(self) -> str:
+        return " ".join(r.getMessage() for r in self.records)
+
+
+@contextlib.contextmanager
+def _storage_warnings():
+    logger = logging.getLogger("mind-mem.storage")
+    handler = _RecordingHandler()
+    logger.addHandler(handler)
+    try:
+        yield handler
+    finally:
+        logger.removeHandler(handler)
+
+
+def test_corrupt_config_is_logged_not_silently_downgraded(tmp_path):
+    """A corrupt mind-mem.json downgrades a Postgres workspace to Markdown.
+
+    _load_workspace_config caught OSError/JSONDecodeError/UnicodeDecodeError
+    with a bare `pass`, so a corrupt-or-unreadable config was
+    indistinguishable from no config at all: get_block_store returned a
+    MarkdownBlockStore and the team's decisions went to
+    decisions/DECISIONS.md instead of the database, with no warning at
+    any level.
+    """
+    from mind_mem.storage import _backend_name, _load_workspace_config
+
+    # One trailing comma — valid-looking, unparseable.
+    (tmp_path / "mind-mem.json").write_text('{"block_store": {"backend": "postgres", "dsn": "x"},}', encoding="utf-8")
+
+    with _storage_warnings() as captured:
+        assert _load_workspace_config(str(tmp_path)) == {}
+        assert _backend_name(str(tmp_path)) == "markdown"
+    assert "workspace_config_unreadable" in captured.events, f"downgrade was silent; captured: {captured.events!r}"
+
+
+def test_config_that_is_not_an_object_is_logged(tmp_path):
+    from mind_mem.storage import _load_workspace_config
+
+    (tmp_path / "mind-mem.json").write_text("[1, 2, 3]", encoding="utf-8")
+    with _storage_warnings() as captured:
+        assert _load_workspace_config(str(tmp_path)) == {}
+    assert "workspace_config_not_an_object" in captured.events
+
+
+def test_valid_config_logs_nothing(tmp_path):
+    """Anti-noise: a good config must not emit a warning."""
+    from mind_mem.storage import _backend_name, _load_workspace_config
+
+    (tmp_path / "mind-mem.json").write_text('{"block_store": {"backend": "markdown"}}', encoding="utf-8")
+    with _storage_warnings() as captured:
+        assert _load_workspace_config(str(tmp_path)) == {"block_store": {"backend": "markdown"}}
+        assert _backend_name(str(tmp_path)) == "markdown"
+    assert captured.records == []
+
+
+def test_router_and_constructor_agree_on_a_malformed_block_store_section(tmp_path):
+    """`{"block_store": "postgres"}` used to give two different wrong answers.
+
+    _backend_name checked `isinstance(bs_cfg, dict)` and returned
+    "markdown" (so reindex/governance quietly read the LOCAL corpus),
+    while get_block_store called `.get` on the string and raised
+    AttributeError — not the ValueError its docstring promises.
+    """
+    import pytest as _pytest
+
+    from mind_mem.storage import _backend_name, get_block_store
+
+    (tmp_path / "mind-mem.json").write_text('{"block_store": "postgres"}', encoding="utf-8")
+
+    with _storage_warnings() as captured:
+        with _pytest.raises(ValueError, match="block_store must be an object"):
+            get_block_store(str(tmp_path))
+        assert _backend_name(str(tmp_path)) == "markdown"
+    assert "block_store_config_malformed" in captured.events
+
+
+def test_non_string_backend_is_rejected_by_the_constructor(tmp_path):
+    import pytest as _pytest
+
+    from mind_mem.storage import _backend_name, get_block_store
+
+    cfg = {"block_store": {"backend": 7}}
+    with _pytest.raises(ValueError, match="backend must be a string"):
+        get_block_store(str(tmp_path), config=cfg)
+    assert _backend_name(str(tmp_path), config=cfg) == "markdown"
+
+
+def test_absent_and_null_block_store_sections_still_default(tmp_path):
+    """The zero-config and explicit-null paths are unaffected."""
+    from mind_mem.block_store import MarkdownBlockStore
+    from mind_mem.storage import _backend_name, get_block_store
+
+    for cfg in ({}, {"block_store": None}, {"block_store": {}}):
+        assert isinstance(get_block_store(str(tmp_path), config=cfg), MarkdownBlockStore)
+        assert _backend_name(str(tmp_path), config=cfg) == "markdown"

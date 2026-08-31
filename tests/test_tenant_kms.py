@@ -154,3 +154,39 @@ class TestLegacyWireFormatCompat:
 
         with pytest.raises(ValueError, match="did not match"):
             WrappedDEK.from_b64("aaaaaaaa")  # valid b64, invalid both formats
+
+
+class TestProductionCryptoRemediation:
+    """The guard's instruction has to name something installable. It used to
+    say ``pip install 'mind-mem[encrypted]'``; no such extra is declared in
+    pyproject.toml, so an operator following it installs nothing and keeps
+    running the non-production fallback AEAD."""
+
+    def test_message_names_an_extra_that_exists(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from pathlib import Path
+
+        import tomllib
+
+        from mind_mem import tenant_kms as kms
+
+        monkeypatch.setattr(kms, "_has_cryptography", lambda: False)
+        with pytest.raises(RuntimeError) as exc:
+            kms.require_production_crypto()
+        message = str(exc.value)
+
+        assert "pip install cryptography" in message
+
+        pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+        if pyproject.is_file():
+            extras = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"].get("optional-dependencies", {})
+            # The reason the old instruction was wrong, pinned: there is
+            # no such extra to install. If one is ever declared, this
+            # assertion is the prompt to point the message back at it.
+            assert "encrypted" not in extras
+            assert "mind-mem[encrypted]" not in message
+
+    def test_guard_is_silent_when_cryptography_present(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from mind_mem import tenant_kms as kms
+
+        monkeypatch.setattr(kms, "_has_cryptography", lambda: True)
+        kms.require_production_crypto()  # must not raise

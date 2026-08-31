@@ -2,16 +2,21 @@
 
 Drop any file into a configured ``inbox/`` directory and mind-mem
 classifies it by extension and routes to the right ingestion path.
-The text path is stdlib-only; image / audio / PDF paths are gated
-behind optional extras that the operator opts into.
+The text path is stdlib-only. The multimodal paths are NOT: image and
+audio are routed and then refused — no embedder or transcriber ships,
+and there is no extra to install that adds one — while PDF works if
+``pypdf`` is importable, which no mind-mem extra installs either. There
+is no ``mind-mem[multimodal]`` extra; ``pyproject.toml`` declares no such
+extra, so telling an operator to install one sends them to a pip
+warning and a no-op. The handlers below name the package that is
+actually missing instead.
 
 Routing rules (file extension → handler)::
 
     .txt .md .json .csv .log .xml .yaml .yml  → text → markdown block
-    .png .jpg .jpeg .gif .webp                → ImageBlock  (extras: multimodal)
-    .mp3 .wav .flac .m4a                      → AudioBlock  (extras: multimodal)
-    .pdf                                      → text extract → markdown block
-                                                                (extras: multimodal)
+    .png .jpg .jpeg .gif .webp                → image  (not implemented)
+    .mp3 .wav .flac .m4a                      → audio  (not implemented)
+    .pdf                                      → text extract  (needs pypdf)
 
 Files are processed atomically — moved to ``inbox/_processed/<ts>/``
 on success or ``inbox/_failed/<ts>/`` (with a sidecar ``.error.txt``)
@@ -57,9 +62,10 @@ _log = logging.getLogger("mind_mem.inbox")
 # Routing table — declarative; lazy-imports keep heavy deps optional.
 # ---------------------------------------------------------------------------
 
-# (extension → handler-name). Handlers live below; image/audio/pdf
-# raise a clear error pointing at the [multimodal] extra when their
-# optional dep is missing.
+# (extension → handler-name). Handlers live below. The multimodal
+# handlers raise NotImplementedError naming what is actually missing;
+# they must not name a `mind-mem[...]` extra, because none of them has
+# one — see the module docstring.
 ROUTING_TABLE: dict[str, str] = {
     # Text
     ".txt": "text",
@@ -70,18 +76,18 @@ ROUTING_TABLE: dict[str, str] = {
     ".xml": "text",
     ".yaml": "text",
     ".yml": "text",
-    # Image (multimodal extra)
+    # Image (multimodal; routed, then refused — no embedder ships)
     ".png": "image",
     ".jpg": "image",
     ".jpeg": "image",
     ".gif": "image",
     ".webp": "image",
-    # Audio (multimodal extra)
+    # Audio (multimodal; routed, then refused — no transcriber ships)
     ".mp3": "audio",
     ".wav": "audio",
     ".flac": "audio",
     ".m4a": "audio",
-    # Document (multimodal extra)
+    # Document (multimodal; works only when pypdf is importable)
     ".pdf": "pdf",
 }
 
@@ -183,27 +189,31 @@ def ingest_text_file(workspace: str, file_path: str) -> str:
 
 def _ingest_image(workspace: str, file_path: str) -> str:
     raise NotImplementedError(
-        "image ingestion requires the optional `multimodal` extra "
-        "(`pip install 'mind-mem[multimodal]'` — pulls in CLIP/SigLIP). "
-        "v3.9 ships the routing scaffold; image embedding wires in v3.10."
+        "image ingestion is not implemented. The inbox routes image drops to "
+        "this multimodal handler, but no image embedder ships and no extra "
+        "installs one -- there is no such extra to install. Convert the image "
+        "to text yourself and drop that instead."
     )
 
 
 def _ingest_audio(workspace: str, file_path: str) -> str:
     raise NotImplementedError(
-        "audio ingestion requires the optional `multimodal` extra "
-        "(`pip install 'mind-mem[multimodal]'` — pulls in Whisper). "
-        "v3.9 ships the routing scaffold; audio transcription wires in v3.10."
+        "audio ingestion is not implemented. The inbox routes audio drops to "
+        "this multimodal handler, but no transcriber ships and no extra "
+        "installs one -- there is no such extra to install. Transcribe the "
+        "audio yourself and drop the transcript instead."
     )
 
 
 def _ingest_pdf(workspace: str, file_path: str) -> str:
-    # Try pypdf if installed; otherwise raise the same clear error.
+    # Try pypdf if installed; otherwise name the package that is missing.
     try:
         import pypdf  # type: ignore[import-untyped]
     except ImportError as exc:
         raise NotImplementedError(
-            "PDF ingestion requires the optional `multimodal` extra (`pip install 'mind-mem[multimodal]'` — pulls in pypdf)."
+            "PDF ingestion (the multimodal document path) requires pypdf, which "
+            "mind-mem does not depend on and no extra installs. "
+            "Install with: pip install pypdf"
         ) from exc
 
     reader = pypdf.PdfReader(file_path)

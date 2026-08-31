@@ -124,9 +124,19 @@ class MindMemAdapter:
 
     ``config`` (defaults to a benchmark-mode preset) is written verbatim to
     the workspace's ``mind-mem.json`` and hashed into the probe. The probe's
-    ``effective_backend`` comes from mind-mem's own ``_load_backend`` on the
-    built workspace — so it reflects what recall will *actually* dispatch to,
-    not what the caller hoped for.
+    ``effective_backend`` starts from mind-mem's own ``_load_backend`` on the
+    built workspace, and is then reconciled against the disk state that
+    actually decides the dispatch — so it reflects what recall will *really*
+    run, not what the caller hoped for.
+
+    That second step is the whole point of the probe. ``_load_backend``
+    answers from the config value alone: for ``backend: "sqlite"`` it returns
+    the string ``"sqlite"`` having touched no disk, so declared and effective
+    would be the same value by construction and ``PipelineProbe.mismatch``
+    could never fire on the default path. ``query_index`` meanwhile falls
+    back to the Markdown BM25 scan whenever the index db file is absent — so
+    a ``build_index`` that raised would otherwise publish
+    ``pipeline_mismatch: false`` for a whole run that never touched the index.
     """
 
     name = "mind_mem"
@@ -165,7 +175,7 @@ class MindMemAdapter:
         with open(os.path.join(ws, "mind-mem.json"), "w", encoding="utf-8") as f:
             _json.dump(cfg, f)
 
-        effective, vector_available, notes = self._probe_backend(ws, declared)
+        effective, vector_available, notes, extra = self._probe_backend(ws, declared)
 
         probe = PipelineProbe(
             adapter=self.name,
@@ -174,13 +184,17 @@ class MindMemAdapter:
             vector_available=vector_available,
             config_sha256=config_sha256(cfg),
             notes=notes,
-            extra={"n_sessions": len(sessions)},
+            extra={"n_sessions": len(sessions), **extra},
         )
         return _MindMemState(workspace=ws, id_map=id_map, probe=probe)
 
-    def _probe_backend(self, ws: str, declared: str) -> tuple[str, bool, str]:
-        """Resolve what recall will actually dispatch to on this workspace."""
+    def _probe_backend(self, ws: str, declared: str) -> tuple[str, bool, str, dict[str, Any]]:
+        """Resolve what recall will actually dispatch to on this workspace.
+
+        Returns ``(effective_backend, vector_available, notes, extra)``.
+        """
         notes: list[str] = []
+        extra: dict[str, Any] = {}
         # Build the SQLite index if that is the configured backend, so the
         # probe reflects the path a real query takes.
         if declared == "sqlite":
@@ -205,6 +219,14 @@ class MindMemAdapter:
         except Exception as exc:  # pragma: no cover - defensive
             notes.append(f"load_backend_failed:{type(exc).__name__}")
 
+        if effective == "sqlite":
+            # _load_backend said "sqlite" from the config string alone. Ask
+            # the disk whether the index it names is actually there, because
+            # that — not the config — is what query_index branches on.
+            effective, index_extra, index_notes = self._reconcile_sqlite_index(ws)
+            extra.update(index_extra)
+            notes.extend(index_notes)
+
         vector_available = False
         try:
             import importlib.util
@@ -213,7 +235,38 @@ class MindMemAdapter:
         except Exception:  # pragma: no cover - defensive
             vector_available = False
 
-        return effective, vector_available, "; ".join(notes)
+        return effective, vector_available, "; ".join(notes), extra
+
+    @staticmethod
+    def _reconcile_sqlite_index(ws: str) -> tuple[str, dict[str, Any], list[str]]:
+        """Downgrade a claimed ``sqlite`` backend to what the disk supports.
+
+        ``query_index`` falls back to the Markdown BM25 scan when the index
+        db file does not exist, so an absent index means the run measured the
+        scan no matter what the config says — report ``"scan"`` and let the
+        mismatch tripwire fire. A present-but-empty index still dispatches to
+        sqlite, so it stays ``"sqlite"``; the row count is published in
+        ``extra`` and flagged in ``notes`` instead of being disguised as a
+        different backend.
+        """
+        notes: list[str] = []
+        try:
+            from ..sqlite_index import index_status
+
+            status = index_status(ws)
+        except Exception as exc:  # pragma: no cover - defensive
+            notes.append(f"index_status_failed:{type(exc).__name__}")
+            return "sqlite", {"index_probe": "failed"}, notes
+
+        exists = bool(status.get("exists"))
+        blocks = int(status.get("blocks") or 0)
+        extra: dict[str, Any] = {"index_exists": exists, "index_blocks": blocks}
+        if not exists:
+            notes.append("sqlite_index_missing:recall falls back to markdown scan")
+            return "scan", extra, notes
+        if blocks == 0:
+            notes.append("sqlite_index_empty:0 blocks indexed")
+        return "sqlite", extra, notes
 
     def query(self, q: str, state: _MindMemState, k: int) -> list[dict[str, Any]]:
         from ..recall import recall

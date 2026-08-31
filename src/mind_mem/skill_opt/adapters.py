@@ -7,7 +7,14 @@ import os
 import re
 from typing import Any, Protocol, runtime_checkable
 
+from ..observability import get_logger
 from ._types import SkillSpec
+
+_log = get_logger("skill_opt.adapters")
+
+# Frontmatter lives at the head of the file; this only bounds how much of
+# a pathological file is read to find it.
+_FRONTMATTER_PROBE_BYTES = 262_144
 
 
 def _parse_yaml_frontmatter(text: str) -> tuple[dict[str, Any], str]:
@@ -67,6 +74,28 @@ def _parse_inline_list(val: str) -> list[str]:
     return items
 
 
+def _frontmatter_keys(path: str) -> set[str]:
+    """Keys of the YAML frontmatter at the head of *path* (empty if none).
+
+    An unreadable or non-UTF-8 file yields no keys — and says so, because
+    a file dropped from discovery without a word is later reported as a
+    missing skill name rather than as the read fault it is.
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            head = f.read(_FRONTMATTER_PROBE_BYTES)
+    except (OSError, UnicodeDecodeError) as exc:
+        _log.warning(
+            "skill_file_unreadable",
+            path=path,
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
+        return set()
+    meta, _ = _parse_yaml_frontmatter(head)
+    return set(meta)
+
+
 @runtime_checkable
 class SkillAdapter(Protocol):
     """Parse and serialize skill files in a specific format."""
@@ -114,7 +143,7 @@ class OpenClawSkillAdapter:
         paths: list[str] = []
         for entry in sorted(os.listdir(root)):
             skill_path = os.path.join(root, entry, "SKILL.md")
-            if os.path.isfile(skill_path):
+            if os.path.isfile(skill_path) and self.can_handle(skill_path):
                 paths.append(skill_path)
         return paths
 
@@ -125,7 +154,17 @@ class ClaudeAgentAdapter:
     format_id = "agent-md"
 
     def can_handle(self, path: str) -> bool:
-        return path.endswith(".md") and "agents" in path
+        """True for a Claude Code agent DEFINITION file.
+
+        An agent definition is a ``.md`` file whose frontmatter declares
+        ``name``/``description``. Location alone is not the format: the
+        agents directory also holds prose (constitutions, rubrics) that
+        must never become an optimization target.
+        """
+        base = os.path.basename(path)
+        if not base.endswith(".md") or base.startswith("."):
+            return False
+        return bool(_frontmatter_keys(path) & {"name", "description"})
 
     def parse(self, path: str) -> SkillSpec:
         with open(path, encoding="utf-8") as f:
@@ -147,10 +186,13 @@ class ClaudeAgentAdapter:
         return content
 
     def discover(self, root: str) -> list[str]:
+        # Route through can_handle so discovery and the predicate answer
+        # the same question — a looser rule here silently enumerates
+        # non-agent markdown as optimizable skills.
         root = os.path.expanduser(root)
         if not os.path.isdir(root):
             return []
-        return sorted(os.path.join(root, f) for f in os.listdir(root) if f.endswith(".md") and not f.startswith("."))
+        return sorted(p for p in (os.path.join(root, f) for f in sorted(os.listdir(root))) if self.can_handle(p))
 
 
 class CodexSkillAdapter:
@@ -252,7 +294,18 @@ def discover_all(sources: dict[str, str]) -> list[SkillSpec]:
         for path in adapter.discover(expanded):
             try:
                 specs.append(adapter.parse(path))
-            except (OSError, ValueError):
+            except (OSError, ValueError) as exc:
+                # UnicodeDecodeError (a ValueError) and permission errors
+                # land here. Dropping a skill silently turns an encoding
+                # or permission fault into a "Skill not found" further
+                # down the CLI, so say which file and why.
+                _log.warning(
+                    "skill_discovery_failed",
+                    source=source_key,
+                    path=path,
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
                 continue
     return specs
 

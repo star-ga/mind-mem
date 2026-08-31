@@ -100,9 +100,13 @@ SANCTIONED_WRITE_BLOCK_CALLERS: dict[tuple[str, str], str] = {
     # would silently become a second control arm and the benchmark would
     # report a null result it caused itself.
     ("src/mind_mem/bench/ab_seed.py", "write_seed"): LOCAL,
-    # --- the enforcement point itself, and the two delegating adapters.
+    # --- the enforcement point itself, and the three delegating adapters.
     ("src/mind_mem/block_store_postgres_replica.py", "ReplicatedPostgresBlockStore.write_block"): IMPLEMENTATION,
     ("src/mind_mem/storage/sharded_pg.py", "ShardedPostgresBlockStore.write_block"): IMPLEMENTATION,
+    # The at-rest-encryption wrapper. Enforces the receipt itself before
+    # it unseals the target file, then forwards to the inner store (which
+    # enforces again); it mints nothing and opens no scope of its own.
+    ("src/mind_mem/block_store_encrypted.py", "EncryptedBlockStore.write_block"): IMPLEMENTATION,
 }
 
 #: ``write_block`` definitions exempt from the ``require_admission`` rule.

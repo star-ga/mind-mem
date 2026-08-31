@@ -1,10 +1,25 @@
 # Copyright 2026 STARGA, Inc.
 """GovernanceGate — single choke-point for all block writes.
 
-Every block write must pass through this gate.  The gate verifies
-spec-hash consistency, creates an evidence object, and appends an entry
-to the SHA3-512 hash chain.  If the spec-hash has drifted the gate raises
-GovernanceBypassError and the write is blocked.
+Every block write must pass through this gate.  The gate creates an
+evidence object and appends an entry to the SHA3-512 hash chain, and —
+*when the workspace carries a spec binding* — verifies spec-hash
+consistency first, raising GovernanceBypassError and blocking the write
+if the hash has drifted.
+
+That conditional is load-bearing and is not a detail: the spec-hash step
+only runs where ``.spec_binding.json`` exists, and **no workspace is born
+with one**.  ``init_workspace`` does not write one, so on a fresh
+workspace the gate does **not** detect an edit to ``mind-mem.json``
+(``governance_mode``, ``mcp_acl.admin_tools``, ``proposal_budget``); it
+logs one ``governance_gate.unbound_config`` warning per gate and admits.
+Arm it with ``mm bind`` (``mm_cli._cmd_bind`` →
+:meth:`SpecBindingManager.bind`); ``mm verify`` then reports the binding
+as present and current.  ``mm bind`` refuses to re-attest a config that
+has already drifted unless ``--rebind`` is passed, so re-binding cannot
+silently launder an unreviewed config edit.  Do not read the paragraph
+above as "config tampering is caught by default" — until ``mm bind`` has
+run for that workspace, it is not.
 
 Callers do not use :meth:`GovernanceGate.admit` directly — they open an
 *admission scope*, which admits the write and publishes an
@@ -192,6 +207,11 @@ class GovernanceGate:
         self._admit_lock = threading.RLock()
         # Set by close(); an evicted gate must refuse, not fork. See close().
         self._closed = False
+        # One warning per gate for an unbound config — see admit() step 1.
+        # Per gate, not per admit: the condition is a property of the
+        # workspace, and repeating it on every write would train operators
+        # to filter it out.
+        self._warned_unbound = False
 
     # ------------------------------------------------------------------
     # Public API
@@ -269,7 +289,13 @@ class GovernanceGate:
         records the admission but authorises no write.
 
         Steps:
-        1. Verify spec-hash is current.  Raise GovernanceBypassError if drifted.
+        1. Verify spec-hash is current, **if a binding exists**.  Raise
+           GovernanceBypassError if it has drifted.  With no binding on
+           disk this step is skipped (one ``unbound_config`` warning per
+           gate) — see the module docstring for why that is the default.
+           A binding that exists but is unparseable is *not* treated as
+           absent: ``get_binding()`` raises SpecBindingCorruptedError out
+           of here and the write is blocked.
         2. Create an evidence object for the action.
         3. Append a hash-chain entry.
 
@@ -302,9 +328,29 @@ class GovernanceGate:
                     f"GovernanceGate for {self._ws!r} was retired (its workspace is gone); refusing to admit {block_id!r}"
                 )
 
-            # Step 1 — spec-hash check (only when a binding exists)
+            # Step 1 — spec-hash check (only when a binding exists).
+            # No binding means this step is inert: config tampering is NOT
+            # detected for this workspace. That was previously a debug log,
+            # which made an unarmed gate indistinguishable from an armed one
+            # in any normal deployment — and no workspace is created with a
+            # binding, so unarmed is the default state, not the exception.
+            # Warn once per gate instead so the gap is visible; the warning
+            # names `mm bind` because that is the fix.
             spec_hash = self._current_spec_hash()
             if spec_hash is None:
+                if not self._warned_unbound:
+                    self._warned_unbound = True
+                    _log.warning(
+                        "governance_gate.unbound_config",
+                        workspace=self._ws,
+                        config_path=self._config_path,
+                        msg=(
+                            "no spec binding for this config; admitting without a "
+                            "spec-hash check — edits to mind-mem.json will not be "
+                            "detected until a binding is written. Run `mm bind` "
+                            "for this workspace to arm it."
+                        ),
+                    )
                 _log.debug("governance_gate.no_binding", block_id=block_id, action=action)
             else:
                 valid, reason = self._spec_mgr.verify()

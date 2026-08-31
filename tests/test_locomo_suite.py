@@ -193,12 +193,17 @@ def test_scorer_aggregate_over_fixture():
 # --------------------------------------------------------------------------
 
 
-def test_render_scorecard_discloses_sample_size_and_vector_leg():
+def test_render_scorecard_discloses_sample_size_and_vector_deps():
     result = run_suite("bm25_baseline", _load(), k=5, turns="all")
     card = render_scorecard(result, dataset_path="locomo.json", k=5, embedder="none (BM25-only)", sampling="full set")
     assert "LoCoMo recall scorecard" in card
     assert "Questions evaluated:** 5" in card
-    assert "Vector/embedder leg exercised:" in card
+    assert "Vector deps available" in card
+    # The probe answers "is the embedder importable", so the scorecard
+    # must not claim the leg ran: with the default zero-dep config no
+    # embedder is constructed, and the box the harness runs on may well
+    # have `sentence_transformers` installed.
+    assert "leg exercised" not in card
     # honesty rails
     assert "recall_any@k" in card and "recall_all@k" in card
     assert "No prior recall number is reproduced" in card
@@ -229,6 +234,31 @@ def test_scorecard_empty_scores_is_honest():
     card = render_scorecard(result, dataset_path="locomo.json", k=5, embedder="none")
     assert "No questions scored" in card
     assert "nothing scored" in card
+    assert "leg exercised" not in card
+
+
+def test_scorecard_never_claims_an_unexercised_vector_leg():
+    """A BM25-only run must not be reported as the full stack.
+
+    ``PipelineProbe.vector_available`` is ``find_spec(...) is not None``
+    — the package being installed, which says nothing about whether the
+    run built an embedder. The scorecard reports it as availability.
+    """
+    from mind_mem.bench.eval_scorer import score_question
+
+    probe = PipelineProbe(
+        adapter="mind_mem",
+        declared_backend="sqlite",
+        effective_backend="sqlite",
+        vector_available=True,  # installed on this box...
+        config_sha256="deadbeefdeadbeef",
+    )
+    score = score_question("q", "category_1", ["1"], {"1"}, 1.0)
+    result = SuiteResult("mind_mem", "all", [score], [probe], 1, 0, 0.1)
+    card = render_scorecard(result, dataset_path="locomo.json", k=5, embedder="none (BM25-only)")
+    # ...but never constructed, so the scorecard may not say it ran.
+    assert "leg exercised" not in card
+    assert "Vector deps available (installed, not necessarily used):** `True`" in card
 
 
 # --------------------------------------------------------------------------

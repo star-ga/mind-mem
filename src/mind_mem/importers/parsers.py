@@ -86,6 +86,12 @@ def _parse_chroma_collection(payload: Mapping[str, Any], prefix: str) -> list[Im
     metadatas = payload.get("metadatas")
     if metadatas is not None and not isinstance(metadatas, list):
         raise ImportParseError(f"chroma 'metadatas' must be a list, got {type(metadatas).__name__}")
+    # Same malformedness as a short 'ids' array, so it gets the same
+    # answer. A short 'metadatas' used to be absorbed silently: the tail
+    # documents imported with {} metadata and therefore no created_at,
+    # so they landed as blocks with no Date and nothing said so.
+    if isinstance(metadatas, list) and len(metadatas) != len(documents):
+        raise ImportParseError(f"chroma dump is inconsistent: {len(metadatas)} metadatas vs {len(documents)} documents")
 
     records: list[ImportRecord] = []
     for index, document in enumerate(documents):

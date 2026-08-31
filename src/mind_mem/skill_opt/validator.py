@@ -7,12 +7,35 @@ import hashlib
 import os
 from datetime import datetime, timezone
 
-from ._types import Mutation, SkillSpec, TestCase, ValidationResult
+from ..observability import get_logger
+from ._types import Mutation, SkillScore, SkillSpec, TestCase, ValidationResult
 from .analyzer import aggregate_analysis, analyze_skill
 from .config import SkillOptConfig
 from .fleet_bridge import FleetBridge
 from .scorer import aggregate_critiques
 from .test_runner import run_tests
+
+_log = get_logger("skill_opt.validator")
+
+# Per-rubric baseline scores for the ORIGINAL skill may be carried on
+# ``Mutation.critic_consensus`` under this prefix (``pre_rubric:safety``).
+# Without them the pre-mutation rubric breakdown is simply not available
+# — ``Mutation`` only ever carries the single overall consensus scalar.
+RUBRIC_BASELINE_PREFIX = "pre_rubric:"
+
+
+def _rubric_baseline(mutation: Mutation, original_score: SkillScore | None) -> dict[str, float]:
+    """Per-rubric scores of the ORIGINAL skill, or {} when unavailable."""
+    if original_score is not None and original_score.by_rubric:
+        return dict(original_score.by_rubric)
+    baseline: dict[str, float] = {}
+    for key, value in mutation.critic_consensus.items():
+        if key.startswith(RUBRIC_BASELINE_PREFIX):
+            try:
+                baseline[key[len(RUBRIC_BASELINE_PREFIX) :]] = float(value)
+            except (TypeError, ValueError):
+                continue
+    return baseline
 
 
 async def validate_mutation(
@@ -21,8 +44,23 @@ async def validate_mutation(
     test_cases: list[TestCase],
     fleet: FleetBridge,
     config: SkillOptConfig,
+    *,
+    original_score: SkillScore | None = None,
 ) -> ValidationResult:
-    """Re-run tests with the mutated skill and compare scores."""
+    """Re-run tests with the mutated skill and compare scores.
+
+    Args:
+        original_score: Scores of the ORIGINAL skill. Supplying it is what
+            makes the per-rubric regression check possible: without a
+            per-rubric baseline (here, or as ``pre_rubric:*`` entries on
+            ``mutation.critic_consensus``) the mutation's per-rubric means
+            have nothing like-for-like to be compared against, and no
+            regression is claimed either way.
+
+    ``improved`` additionally requires the critic panel to have reached
+    ``config.min_critics`` distinct models — a rewrite is never called an
+    improvement on a panel smaller than the configured minimum.
+    """
     mutated_spec = SkillSpec(
         skill_id=original.skill_id,
         system=original.system,
@@ -35,7 +73,13 @@ async def validate_mutation(
     )
 
     results = await run_tests(mutated_spec, test_cases, fleet)
-    critiques = await analyze_skill(mutated_spec, results, fleet, min_critics=config.min_critics)
+    critiques = await analyze_skill(
+        mutated_spec,
+        results,
+        fleet,
+        min_critics=config.min_critics,
+        test_cases=test_cases,
+    )
 
     now = datetime.now(timezone.utc).isoformat()
     new_score = aggregate_critiques(
@@ -45,15 +89,40 @@ async def validate_mutation(
         timestamp=now,
     )
 
+    analysis = aggregate_analysis(critiques, min_critics=config.min_critics)
+    critics_sufficient = bool(analysis["critics_sufficient"])
+    if not critics_sufficient:
+        _log.warning(
+            "mutation_evidence_below_min_critics",
+            skill_id=original.skill_id,
+            mutation_id=mutation.mutation_id,
+            required=config.min_critics,
+            observed=analysis["n_critics"],
+        )
+
     pre_score = mutation.critic_consensus.get("pre_mutation_score", 0.0)
-    improved = new_score.overall - pre_score >= config.improvement_threshold
+    improved = critics_sufficient and new_score.overall - pre_score >= config.improvement_threshold
 
+    # Compare the mutation's per-rubric means against the ORIGINAL's
+    # per-rubric means. Comparing them against the original's single
+    # OVERALL score instead flags every intrinsically-low category as a
+    # regression and misses a category that genuinely collapsed.
+    baseline_by_rubric = _rubric_baseline(mutation, original_score)
     regression_categories: list[str] = []
-    for key, old_val in new_score.by_rubric.items():
-        if old_val < pre_score - config.regression_threshold:
-            regression_categories.append(key)
+    if baseline_by_rubric:
+        for key, new_val in new_score.by_rubric.items():
+            old_val = baseline_by_rubric.get(key)
+            if old_val is not None and new_val < old_val - config.regression_threshold:
+                regression_categories.append(key)
+        regression_categories.sort()
+    else:
+        _log.warning(
+            "rubric_baseline_unavailable",
+            skill_id=original.skill_id,
+            mutation_id=mutation.mutation_id,
+            detail="per-rubric regression not assessed: no pre-mutation rubric scores",
+        )
 
-    aggregate_analysis(critiques)
     critic_votes: dict[str, bool] = {}
     for model in {c.critic_model for c in critiques}:
         model_scores = [c.overall_score for c in critiques if c.critic_model == model]

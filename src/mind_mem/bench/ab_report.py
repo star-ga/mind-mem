@@ -15,7 +15,9 @@ Two refusals keep the pooling honest rather than convenient:
 
 * artifacts produced under **different budgets or different agents** are
   not comparable and are refused, because pooling them would silently mix
-  two experiments into one headline;
+  two experiments into one headline -- and so is an artifact that does not
+  **state** its budget, agent or task-set digest, because a field left
+  unstated would otherwise read as agreement with every other run;
 * a task appearing in **more than one artifact** is refused, because
   counting a pair twice inflates the discordant count that the whole
   significance claim rests on.
@@ -38,7 +40,21 @@ from .ab_stats import summarise
 COMPARABILITY_KEYS: tuple[str, ...] = ("budget", "agent", "task_set_sha256")
 
 #: Keys every A/B run artifact carries; their absence means "not one of ours".
-REQUIRED_ARTIFACT_KEYS: tuple[str, ...] = ("budget", "summary", "results", "counts", "spend")
+#: ``agent`` and ``task_set`` are here because the comparability check reads
+#: them: an artifact that does not state them cannot be shown to be the same
+#: experiment, and defaulting absence to ``{}`` made two unrelated runs match.
+#: ``excluded`` is here because :func:`pool_exclusions` reads it directly, and
+#: a bare ``KeyError`` is not a refusal a caller can act on.
+REQUIRED_ARTIFACT_KEYS: tuple[str, ...] = (
+    "budget",
+    "summary",
+    "results",
+    "counts",
+    "spend",
+    "agent",
+    "task_set",
+    "excluded",
+)
 
 
 class ReportError(ValueError):
@@ -88,18 +104,41 @@ def pairs_of(artifact: Mapping[str, Any]) -> tuple[Pair, ...]:
 
 
 def comparability_signature(artifact: Mapping[str, Any]) -> dict[str, Any]:
-    """What must match for two runs to be halves of one experiment."""
+    """What must match for two runs to be halves of one experiment.
+
+    A field the artifact does not state comes back empty; emptiness is not
+    a match, so callers go through :func:`unstated_comparability_fields`
+    (as :func:`assert_comparable` does) before comparing two signatures.
+    """
+    task_set = artifact.get("task_set")
     return {
         "budget": artifact.get("budget", {}),
         "agent": artifact.get("agent", {}),
-        "task_set_sha256": artifact.get("task_set", {}).get("sha256", ""),
+        "task_set_sha256": task_set.get("sha256", "") if isinstance(task_set, Mapping) else "",
     }
+
+
+def unstated_comparability_fields(artifact: Mapping[str, Any]) -> tuple[str, ...]:
+    """Which comparability fields the artifact does not actually state.
+
+    An absent or empty field is not agreement: two runs of different agents
+    over different task sets, neither carrying the metadata, produced one
+    identical signature and pooled into a single headline delta.
+    """
+    signature = comparability_signature(artifact)
+    return tuple(name for name in COMPARABILITY_KEYS if not signature[name])
 
 
 def assert_comparable(artifacts: Sequence[Mapping[str, Any]], labels: Sequence[str]) -> None:
     """Refuse to pool runs that were not the same experiment."""
     seen: dict[str, str] = {}
     for artifact, label in zip(artifacts, labels):
+        unstated = unstated_comparability_fields(artifact)
+        if unstated:
+            raise ReportError(
+                f"{label} does not state {', '.join(unstated)}; an unstated field is not agreement, "
+                "so this artifact cannot be shown to be the same experiment as the others"
+            )
         key = json.dumps(comparability_signature(artifact), sort_keys=True, ensure_ascii=False)
         seen.setdefault(key, label)
     if len(seen) > 1:
@@ -197,6 +236,9 @@ POOLED_DOC: dict[str, str] = {
         "Paired outcomes concatenated across stated strata, each run as its own process. One pair per task, taken from "
         "the per-stratum artifact; nothing is re-graded and no task may appear twice."
     ),
-    "refusals": "Artifacts differing in budget, agent or task-set digest are refused, as is a task present in two artifacts.",
+    "refusals": (
+        "Artifacts differing in budget, agent or task-set digest are refused, as is one that does not state them, "
+        "as is a task present in two artifacts."
+    ),
     "statistics": "Paired McNemar exact, two-sided. Below 6 discordant pairs no split can reach p<=0.05; such a delta is noise.",
 }

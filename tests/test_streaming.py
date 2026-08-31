@@ -160,3 +160,52 @@ class TestConcurrency:
         assert len(drained) == 2000
         ids = sorted(e.payload["i"] for e in drained)
         assert ids == list(range(2000))
+
+
+class TestRateLimitIsPerClient:
+    """``client_id`` must key the limiter, not just decorate the log line.
+
+    With one shared bucket, a single noisy producer spends the allowance
+    for every other producer — the cross-client denial of service the
+    per-client policy exists to prevent.
+    """
+
+    def test_one_client_cannot_spend_anothers_allowance(self) -> None:
+        bucket = _TokenBucket(tokens_per_second=0.001, burst=1)
+        q = StreamingIngestQueue(capacity=10, rate_limit=bucket)
+
+        assert q.enqueue(IngestEvent(payload={"n": 1}, client_id="noisy")).accepted is True
+        # Same client, allowance spent.
+        assert q.enqueue(IngestEvent(payload={"n": 2}, client_id="noisy")).accepted is False
+        # Different client, untouched allowance.
+        assert q.enqueue(IngestEvent(payload={"n": 3}, client_id="quiet")).accepted is True
+
+    def test_each_client_gets_the_configured_burst(self) -> None:
+        bucket = _TokenBucket(tokens_per_second=0.001, burst=3)
+        q = StreamingIngestQueue(capacity=100, rate_limit=bucket)
+        for client in ("a", "b"):
+            for i in range(3):
+                assert q.enqueue(IngestEvent(payload={"i": i}, client_id=client)).accepted, f"{client} slot {i}"
+            assert q.enqueue(IngestEvent(payload={"i": 3}, client_id=client)).accepted is False
+
+    def test_tracked_client_count_is_bounded(self) -> None:
+        bucket = _TokenBucket(tokens_per_second=1000, burst=10)
+        q = StreamingIngestQueue(capacity=1000, rate_limit=bucket, max_clients=4)
+        for i in range(50):
+            q.enqueue(IngestEvent(payload={"i": i}, client_id=f"client-{i}"))
+        assert q._rate_limit is not None
+        assert q._rate_limit.tracked_clients == 4
+
+    def test_bad_max_clients_keeps_the_rate_limit(self) -> None:
+        q = build_queue_from_config(
+            {
+                "streaming": {
+                    "enabled": True,
+                    "capacity": 8,
+                    "rate_limit": {"tokens_per_second": 0.001, "burst": 1, "max_clients": 0},
+                }
+            }
+        )
+        assert q is not None
+        assert q.enqueue(IngestEvent(payload={"n": 1}, client_id="a")).accepted is True
+        assert q.enqueue(IngestEvent(payload={"n": 2}, client_id="a")).accepted is False

@@ -245,31 +245,49 @@ def parse_truth_page(markdown: str) -> CompiledTruthPage:
     # --- Evidence entries ---
     entries: list[EvidenceEntry] = []
     if evidence_text.strip():
-        # Split on ### headers
+        # Split on ### headers. The split fires on ANY line starting
+        # "### ", including one inside an observation body, so a chunk
+        # that does not carry an evidence header is a continuation of
+        # the observation above it — never a discardable fragment. The
+        # trail is append-only; dropping it would silently truncate an
+        # entry and the truncation would be persisted by the next
+        # recompile-and-save.
         chunks = re.split(r"(?=^### )", evidence_text.strip(), flags=re.MULTILINE)
+        pending: tuple[str, re.Match[str]] | None = None
+        pending_body: list[str] = []
+
+        def _flush() -> None:
+            if pending is None:
+                return
+            first_line, hdr_match = pending
+            entries.append(
+                EvidenceEntry(
+                    timestamp=hdr_match.group(1),
+                    source=hdr_match.group(3),
+                    observation="".join(pending_body).strip(),
+                    confidence=hdr_match.group(2).lower(),
+                    superseded="~~SUPERSEDED~~" in first_line,
+                )
+            )
+
         for chunk in chunks:
-            chunk = chunk.strip()
-            if not chunk:
+            if not chunk.strip():
                 continue
             first_line, _, rest = chunk.partition("\n")
             hdr_match = _EVIDENCE_HEADER_RE.match(first_line.strip())
-            if not hdr_match:
+            if hdr_match is None:
+                if pending is None:
+                    # Prose between the section heading and the first
+                    # entry — it belongs to no entry.
+                    _log.debug("compiled_truth_orphan_chunk", chars=len(chunk))
+                    continue
+                pending_body.append(chunk)
                 continue
-            timestamp = hdr_match.group(1)
-            confidence = hdr_match.group(2).lower()
-            source = hdr_match.group(3)
-            superseded = "~~SUPERSEDED~~" in first_line
-            observation = rest.strip()
+            _flush()
+            pending = (first_line, hdr_match)
+            pending_body = [rest]
 
-            entries.append(
-                EvidenceEntry(
-                    timestamp=timestamp,
-                    source=source,
-                    observation=observation,
-                    confidence=confidence,
-                    superseded=superseded,
-                )
-            )
+        _flush()
 
     return CompiledTruthPage(
         entity_id=entity_id,

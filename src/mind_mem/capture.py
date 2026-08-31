@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import contextlib
+import datetime as _dt
 import hashlib
 import os
 import re
@@ -325,6 +326,14 @@ def append_signals(workspace: str, signals: list[dict], date_str: str) -> int:
                 sanitized = sanitized.replace("\n[", "\n ")
                 f.write(f"\n[{sig_id}]\n")
                 f.write(f"Date: {date_str}\n")
+                # Full UTC instant beside the day. `Date:` is day-granular, so a
+                # reader can only place the block at 00:00 of its day, which
+                # makes it look up to 24h older than it is -- the recency window
+                # in mcp/tools/governance.py then has an effective retention of
+                # (24h - time-of-day of the write) and silently under-fires.
+                # Additive: the field is generated here, never user input, and
+                # readers that do not know it ignore it.
+                f.write(f"Captured: {_dt.datetime.now(_dt.timezone.utc).isoformat(timespec='seconds')}\n")
                 f.write(f"Type: auto-capture-{sig['type']}\n")
                 f.write(f"Source: memory/{date_str}.md:{sig['line']}\n")
                 f.write(f"Confidence: {sig.get('confidence', 'medium')}\n")

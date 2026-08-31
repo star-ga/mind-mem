@@ -154,13 +154,15 @@ def probe_block_count(workspace: str) -> WorkspaceHealth:
 
             status = index_status(workspace)
             blocks = int(status.get("blocks", 0))
-            if blocks > 0 or status.get("schema_built", True) is not False:
-                # Trust the index count when the FTS schema is built. When the
-                # schema is not built yet the index reports 0 — fall through to
-                # a corpus count so a freshly-written-but-unindexed corpus is
-                # not mislabelled empty.
-                if blocks > 0:
-                    return WorkspaceHealth(workspace, backend, configured, blocks)
+            # A positive index count is trusted: nothing else can have put
+            # those rows there. A count of ZERO is never trusted, whether or
+            # not the FTS schema reports itself built — an unbuilt schema,
+            # a stale index and a genuinely empty store all report 0, and
+            # only the corpus walk below tells them apart. Reading
+            # ``schema_built`` here to decide would be reading it to
+            # mislabel a populated workspace empty.
+            if blocks > 0:
+                return WorkspaceHealth(workspace, backend, configured, blocks)
         except Exception as exc:  # pragma: no cover - defensive
             return WorkspaceHealth(workspace, backend, configured, -1, str(exc))
 

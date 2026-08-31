@@ -69,6 +69,10 @@ class VerifyReport:
     checks: dict[str, bool] = field(default_factory=dict)
     messages: list[str] = field(default_factory=list)
     exit_code: int = EXIT_OK
+    #: Artifacts a check looked for and did not find. Always populated,
+    #: independently of ``ok`` — a lenient run stays green, but a machine
+    #: consumer can still see that nothing was actually verified.
+    missing: list[str] = field(default_factory=list)
 
     def record(self, name: str, ok: bool, detail: str = "") -> None:
         self.checks[name] = ok
@@ -79,6 +83,22 @@ class VerifyReport:
         if not ok:
             self.ok = False
 
+    def record_absent(self, name: str, artifact: str, detail: str, *, strict: bool) -> None:
+        """Record a check whose artifact is not on disk.
+
+        Lenient (default): passes — an empty workspace is legitimately
+        clean. Strict: fails with :data:`EXIT_GENERIC` so a CI gate that
+        expects a written-to workspace cannot read "nothing to verify" as
+        "verified". Either way the artifact lands in :attr:`missing`.
+        """
+        self.missing.append(artifact)
+        if strict:
+            self.record(name, False, f"{detail} — required by --strict")
+            if self.exit_code == EXIT_OK:
+                self.exit_code = EXIT_GENERIC
+        else:
+            self.record(name, True, detail)
+
     def as_dict(self) -> dict:
         return {
             "workspace": self.workspace,
@@ -86,6 +106,7 @@ class VerifyReport:
             "checks": self.checks,
             "messages": self.messages,
             "exit_code": self.exit_code,
+            "missing": self.missing,
         }
 
 
@@ -94,7 +115,7 @@ class VerifyReport:
 # ---------------------------------------------------------------------------
 
 
-def check_hash_chain(workspace: str, report: VerifyReport) -> None:
+def check_hash_chain(workspace: str, report: VerifyReport, *, strict: bool = False) -> None:
     """Walk the hash chain and confirm every entry's self-hash + linkage.
 
     Opens the ledger read-only so auditing never mutates the schema, even
@@ -102,8 +123,15 @@ def check_hash_chain(workspace: str, report: VerifyReport) -> None:
     """
     db_path = os.path.join(workspace, "memory", "hash_chain_v2.db")
     if not os.path.isfile(db_path):
-        # An empty workspace with no writes yet is still valid.
-        report.record("hash_chain", True, "no ledger present (empty workspace)")
+        # An empty workspace with no writes yet is still valid — unless
+        # the caller asked for strict, in which case a deleted ledger
+        # must not read the same as one that was never written.
+        report.record_absent(
+            "hash_chain",
+            "memory/hash_chain_v2.db",
+            "no ledger present (empty workspace)",
+            strict=strict,
+        )
         return
     try:
         chain = HashChainV2.open_readonly(db_path)
@@ -125,19 +153,20 @@ def check_hash_chain(workspace: str, report: VerifyReport) -> None:
             report.exit_code = EXIT_CHAIN
 
 
-def check_spec_binding(workspace: str, report: VerifyReport) -> None:
+def check_spec_binding(workspace: str, report: VerifyReport, *, strict: bool = False) -> None:
     """Confirm the governance spec hash matches the stored binding."""
     config_path = os.path.join(workspace, "mind-mem.json")
     if not os.path.isfile(config_path):
-        report.record("spec_binding", True, "no config present")
+        report.record_absent("spec_binding", "mind-mem.json", "no config present", strict=strict)
         return
     mgr = SpecBindingManager(config_path)
     binding_path = os.path.join(workspace, ".spec_binding.json")
     if not os.path.isfile(binding_path):
-        report.record(
+        report.record_absent(
             "spec_binding",
-            True,
+            ".spec_binding.json",
             "no binding — not yet attested (optional)",
+            strict=strict,
         )
         return
     try:
@@ -155,11 +184,16 @@ def check_spec_binding(workspace: str, report: VerifyReport) -> None:
             report.exit_code = EXIT_SPEC
 
 
-def check_evidence_chain(workspace: str, report: VerifyReport) -> None:
+def check_evidence_chain(workspace: str, report: VerifyReport, *, strict: bool = False) -> None:
     """Load the evidence JSONL and check every entry + linkage."""
     path = os.path.join(workspace, "memory", "evidence_chain.jsonl")
     if not os.path.isfile(path):
-        report.record("evidence_chain", True, "no evidence ledger present")
+        report.record_absent(
+            "evidence_chain",
+            "memory/evidence_chain.jsonl",
+            "no evidence ledger present",
+            strict=strict,
+        )
         return
     chain = EvidenceChain(store_path=path)
     ok, broken = chain.verify_chain()
@@ -297,8 +331,15 @@ def verify_workspace(
     workspace: str,
     *,
     snapshot: Optional[str] = None,
+    strict: bool = False,
 ) -> VerifyReport:
-    """Run every verification check against *workspace* and return a report."""
+    """Run every verification check against *workspace* and return a report.
+
+    ``strict`` turns every absent artifact into a failure. Without it a
+    workspace whose ledgers were deleted verifies exactly like a fresh
+    one: the messages disclose the state, but ``ok`` / ``exit_code`` —
+    the layer a CI gate reads — cannot tell the two apart.
+    """
     workspace = os.path.realpath(workspace)
     report = VerifyReport(workspace=workspace, ok=True)
 
@@ -307,9 +348,9 @@ def verify_workspace(
         report.exit_code = EXIT_GENERIC
         return report
 
-    check_hash_chain(workspace, report)
-    check_spec_binding(workspace, report)
-    check_evidence_chain(workspace, report)
+    check_hash_chain(workspace, report, strict=strict)
+    check_spec_binding(workspace, report, strict=strict)
+    check_evidence_chain(workspace, report, strict=strict)
     check_snapshot(workspace, report, snapshot=snapshot)
 
     return report
@@ -344,19 +385,32 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit a JSON report instead of human-readable output.",
     )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help=(
+            "Fail (exit 1) when an expected artifact is absent — the hash chain, "
+            "the evidence chain or the spec binding. Use this in a CI gate: without "
+            "it a workspace whose ledgers were deleted verifies green."
+        ),
+    )
     return parser
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    report = verify_workspace(args.workspace, snapshot=args.snapshot)
+    report = verify_workspace(args.workspace, snapshot=args.snapshot, strict=args.strict)
 
     if args.json:
         print(json.dumps(report.as_dict(), indent=2))
     else:
         for line in report.messages:
             print(line)
+        if report.missing and not args.strict:
+            print()
+            print(f"note: {len(report.missing)} artifact(s) absent, not verified: {', '.join(report.missing)}")
+            print("      run with --strict to treat an absent artifact as a failure")
         print()
         print("OK" if report.ok else f"FAIL (exit={report.exit_code})")
 

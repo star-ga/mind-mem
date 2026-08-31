@@ -99,6 +99,36 @@ class TestGetActive(unittest.TestCase):
     def test_empty_list(self):
         self.assertEqual(get_active([]), [])
 
+    def test_status_spelling_is_normalised(self):
+        """A corpus holds ``Active`` beside ``active``; both are one state.
+
+        Regression: the filter compared exact-case, so a block written
+        ``Status: Active`` never entered the active_only candidate pool
+        even though is_servable/is_admissible_status both serve it.
+        """
+        blocks = [
+            {"_id": "D-001", "Status": "Active"},
+            {"_id": "D-002", "Status": " active "},
+            {"_id": "D-003", "Status": "ACTIVE"},
+            {"_id": "D-004", "Status": "superseded"},
+            {"_id": "D-005"},
+        ]
+        active = get_active(blocks)
+        self.assertEqual([b["_id"] for b in active], ["D-001", "D-002", "D-003"])
+
+    def test_agrees_with_is_servable(self):
+        """The filter must not withhold what the servability check serves."""
+        from mind_mem.enums import is_servable
+
+        for spelling in ("active", "Active", "ACTIVE", " Active "):
+            with self.subTest(spelling=spelling):
+                block = {"_id": "D-001", "Status": spelling}
+                self.assertEqual(
+                    bool(get_active([block])),
+                    is_servable(spelling),
+                    f"get_active disagrees with is_servable for {spelling!r}",
+                )
+
 
 class TestGetById(unittest.TestCase):
     def test_finds_block(self):

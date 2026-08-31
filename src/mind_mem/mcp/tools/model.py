@@ -15,6 +15,7 @@ underlying functions which already raise structured errors.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -24,6 +25,48 @@ from ..infra.observability import mcp_tool_observe
 from ._helpers import get_logger, metrics
 
 _log = get_logger("mcp_server")
+
+
+def _write_private_key(sk_path: Path, sk: bytes) -> None:
+    """Write a raw private key that is owner-only from the first byte.
+
+    ``Path.write_bytes`` opens with the default ``0666 & ~umask``, so under
+    the common 022 umask the signing key exists world-readable for the
+    width of the chmod that follows it. Create it ``0600`` in the same
+    syscall instead, then confirm the mode that actually landed: an
+    ``O_CREAT`` mode applies only to a newly created file, and a mount with
+    a fixed fmask (or a squashing NFS export) ignores it outright. A key
+    whose permissions cannot be restricted is removed rather than kept —
+    reporting a successful signing while leaving a 0644 private key on a
+    shared host is the state worth refusing.
+
+    Raises:
+        OSError: The key could not be written, or could not be restricted
+            to owner-only. Nothing is left on disk in that case.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(sk_path, flags, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(sk)
+            fh.flush()
+            if os.name != "posix":
+                return
+            mode = os.fstat(fh.fileno()).st_mode & 0o777
+            if not mode & 0o077:
+                return
+            try:
+                os.fchmod(fh.fileno(), 0o600)
+            except OSError as exc:
+                raise PermissionError(f"cannot restrict private key {sk_path} to owner-only: {exc}") from exc
+            mode = os.fstat(fh.fileno()).st_mode & 0o777
+            if mode & 0o077:
+                raise PermissionError(f"private key {sk_path} landed with mode {mode:04o}; this filesystem will not make it owner-only")
+    except BaseException:
+        # Never leave a private key on disk at a mode we could not secure.
+        with contextlib.suppress(OSError):
+            os.unlink(sk_path)
+        raise
 
 
 def _reject_bad_path(path: str, field: str = "path") -> str | None:
@@ -120,8 +163,12 @@ def sign_model_tool(
         path: Filesystem path to a local model directory.
         key_file: Path to a raw 32-byte Ed25519 private key file.
         generate_key_prefix: When set, generate a fresh keypair, write
-            ``<prefix>.sk`` (mode 0600) + ``<prefix>.pub`` to disk, and
-            sign with it. Mutually exclusive with ``key_file``.
+            ``<prefix>.sk`` (created mode 0600, never wider for an
+            instant) + ``<prefix>.pub`` to disk, and sign with it. If the
+            filesystem will not hold the key at owner-only permissions the
+            key is deleted and the call fails — it never reports success
+            over a world-readable signing key. Mutually exclusive with
+            ``key_file``.
         write_sidecars: When True (default) write
             ``MODEL_MANIFEST.txt`` / ``.sig`` / ``MODEL_PUBKEY.pub``
             next to the checkpoint root.
@@ -156,11 +203,17 @@ def sign_model_tool(
         sk, pk = generate_keypair()
         sk_path = Path(os.path.expanduser(generate_key_prefix + ".sk"))
         pk_path = Path(os.path.expanduser(generate_key_prefix + ".pub"))
-        sk_path.write_bytes(sk)
         try:
-            os.chmod(sk_path, 0o600)
-        except OSError:
-            pass  # Windows / non-POSIX FS — best effort
+            _write_private_key(sk_path, sk)
+        except OSError as exc:
+            return json.dumps(
+                {
+                    "_schema_version": MCP_SCHEMA_VERSION,
+                    "ok": False,
+                    "error": f"could not write private key securely: {exc}",
+                },
+                indent=2,
+            )
         pk_path.write_bytes(pk)
     else:
         sk_path = Path(os.path.expanduser(key_file))

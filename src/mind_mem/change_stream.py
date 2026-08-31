@@ -16,9 +16,24 @@ evolve independently:
         "payload":   <arbitrary JSON-serialisable dict>,
     }
 
-Bounded per-subscriber queues keep a slow listener from stalling the
-whole bus. When a queue overflows we shed the oldest event and bump a
-``dropped`` counter so operators can detect subscriber lag.
+Delivery is two-sided, and the difference matters when reading the
+counters:
+
+* **push** — ``publish`` calls every listener synchronously, in the
+  publishing thread, while the bus lock is held. Every published event
+  reaches every live listener; none is ever dropped on this path, and a
+  slow listener DOES stall the bus (the bounded queue below does not
+  protect against that — only a listener that returns promptly does).
+* **pull** — the same event is also retained in the subscriber's bounded
+  queue, which :meth:`ChangeStream.poll` drains. This is the half the
+  ``dropped`` / ``queue_depth`` counters describe: an event that ages out
+  of a full queue before it was polled is shed (oldest first) and counted.
+
+So a subscriber that consumes by polling shows real lag in ``dropped``,
+while a callback-only subscriber never polls and will accumulate shed
+events as a matter of course — its consumption is the callback, not the
+queue. Read ``dropped`` against ``poll`` usage, never as "events the
+listener missed".
 """
 
 from __future__ import annotations
@@ -63,7 +78,16 @@ class _Subscription:
 
 @dataclass(frozen=True)
 class StreamStats:
-    """Snapshot of stream-wide counters for observability."""
+    """Snapshot of stream-wide counters for observability.
+
+    ``delivered`` counts synchronous listener invocations — the push half,
+    where nothing is ever dropped. ``dropped`` and ``queue_depth`` describe
+    the pull half only: events shed from a full subscriber queue before
+    :meth:`ChangeStream.poll` drained it, and the events still waiting
+    there. A subscriber that never polls sheds one event per publish past
+    the queue cap by design, so ``dropped`` is a lag signal only for
+    polling subscribers.
+    """
 
     subscribers: int
     published: int
@@ -87,14 +111,15 @@ class ChangeStream:
     """Thread-safe in-process pub/sub bus.
 
     Listeners register a callback; `publish` delivers the event to every
-    listener under a lock. Callbacks that raise are isolated: their
-    exception is logged via the per-subscription drop counter, not
-    propagated to other subscribers.
+    listener under a lock, and also queues it for :meth:`poll`. Callbacks
+    that raise are isolated: the exception is counted in
+    ``listener_errors`` (not in ``dropped`` — the event was delivered) and
+    is not propagated to other subscribers.
 
     Args:
-        max_queue_depth: Per-subscriber backlog cap. Events beyond the
-            cap shed the oldest element first so the newest data
-            always reaches a recovering subscriber.
+        max_queue_depth: Per-subscriber backlog cap for the pull surface.
+            Events beyond the cap shed the oldest element first so the
+            newest data always reaches a recovering subscriber.
     """
 
     def __init__(self, *, max_queue_depth: int = 1024) -> None:
@@ -113,7 +138,8 @@ class ChangeStream:
     # ------------------------------------------------------------------
 
     def subscribe(self, listener: Listener) -> int:
-        """Register *listener* and return an opaque subscription id."""
+        """Register *listener*; the returned id addresses :meth:`poll` and
+        :meth:`unsubscribe`."""
         with self._lock:
             self._subs.append(_Subscription(listener=listener, queue=deque(maxlen=self._max_depth)))
             return len(self._subs) - 1
@@ -125,6 +151,31 @@ class ChangeStream:
                 self._subs[sub_id] = None  # keep ids stable
                 return True
             return False
+
+    def poll(self, sub_id: int, max_events: int | None = None) -> list[ChangeEvent]:
+        """Drain up to *max_events* queued events for *sub_id*, oldest first.
+
+        The missing half of the bounded-queue design: without a drain the
+        queue could only ever fill, so ``dropped`` counted one shed event
+        per publish past the cap for every subscriber — a function of
+        publish volume that said nothing about subscriber health. A
+        subscriber that polls keeps its queue short, and a ``dropped``
+        above zero then means it genuinely fell behind.
+
+        Returns an empty list for an unknown or unsubscribed id (polling a
+        subscription that is gone is not an error).
+        """
+        with self._lock:
+            if not (0 <= sub_id < len(self._subs)):
+                return []
+            sub = self._subs[sub_id]
+            if sub is None:
+                return []
+            if max_events is None:
+                count = len(sub.queue)
+            else:
+                count = max(0, min(int(max_events), len(sub.queue)))
+            return [sub.queue.popleft() for _ in range(count)]
 
     # ------------------------------------------------------------------
     # Publish
@@ -144,6 +195,10 @@ class ChangeStream:
                     continue
                 # deque maxlen auto-sheds; count the drop exactly once
                 # per shed (before the append performs the actual shed).
+                # This is a PULL-side drop: the shed event was still
+                # delivered to the listener below. See the module
+                # docstring — it is a lag signal only for a subscriber
+                # that drains its queue with poll().
                 if len(sub.queue) == sub.queue.maxlen:
                     sub.dropped += 1
                     self._dropped += 1

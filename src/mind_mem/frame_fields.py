@@ -24,6 +24,7 @@ parser it delegates file reading to.
 from __future__ import annotations
 
 import os
+import stat
 from dataclasses import dataclass
 from typing import Any, Sequence
 
@@ -184,6 +185,12 @@ def load_blocks(workspace: str, sources: Sequence[str], prefix: str) -> tuple[di
     source that escapes the workspace root is refused, an unreadable source
     is skipped with a warning, and one bad file never takes the rest down.
     Order follows *sources*, then file order — deterministic, no clock.
+
+    A source that simply does not exist is skipped silently: a workspace
+    that declares no frames file is the default state, not an anomaly. An
+    unreadable one (no permission on the file or its parent) is a
+    different fact and is warned about — ``os.path.isfile`` answers False
+    to both, which is why the stat is spelled out.
     """
     workspace_real = os.path.realpath(workspace)
     root = workspace_real + os.sep
@@ -193,7 +200,14 @@ def load_blocks(workspace: str, sources: Sequence[str], prefix: str) -> tuple[di
         if not (candidate == workspace_real or candidate.startswith(root)):
             _log.warning("frame_source_escaped_workspace", source=rel_path)
             continue
-        if not os.path.isfile(candidate):
+        try:
+            st = os.stat(candidate)
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            _log.warning("frame_source_unreadable", source=rel_path, error=str(exc))
+            continue
+        if not stat.S_ISREG(st.st_mode):
             continue
         try:
             blocks = parse_file(candidate)

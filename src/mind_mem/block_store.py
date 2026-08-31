@@ -879,6 +879,14 @@ class MarkdownBlockStore:
 
         ``intelligence/applied/`` is always skipped to prevent deleting
         active snapshots during a restore.
+
+        A restore is best-effort against a damaged snapshot: a manifest
+        entry whose snapshot copy is missing cannot be put back, and the
+        workspace keeps whatever the ops left there. Those entries are
+        logged individually as ``restore_missing_snapshot_source`` and
+        counted in the ``missing`` field of the ``block_store_restore``
+        record, which also carries ``complete`` — do not read a restore as
+        a completed rollback without checking it.
         """
         ws = self._workspace
         manifest_data = _read_manifest(snap_dir)
@@ -886,6 +894,11 @@ class MarkdownBlockStore:
             manifest = manifest_data.get("files", [])
             cleanup_inventory = manifest_data.get("cleanup_inventory", {})
             safe_manifest: list[str] = []
+            #: Manifest entries whose snapshot copy is gone — restore cannot
+            #: put those files back, so they are reported, never counted as
+            #: restored.
+            missing: list[str] = []
+            restored = 0
             for rel_posix in manifest:
                 rel_path = rel_posix.replace("/", os.sep)
                 try:
@@ -901,12 +914,30 @@ class MarkdownBlockStore:
                 if os.path.exists(src):  # nosec — src is the resolved absolute path returned by _safe_child_path; path traversal already rejected above
                     os.makedirs(os.path.dirname(dst), exist_ok=True)  # nosec — dst validated by _safe_child_path
                     shutil.copy2(src, dst)  # nosec — both src and dst validated by _safe_child_path
+                    restored += 1
+                else:
+                    # The manifest names a file the snapshot no longer holds
+                    # (a partially removed / truncated snapshot dir). There is
+                    # nothing to copy back, so whatever the ops left at that
+                    # path stays. Name it and count it: reporting these as
+                    # restored is how a rollback that did not roll back gets
+                    # logged as complete.
+                    #
+                    # The entry deliberately stays in ``safe_manifest``.
+                    # Dropping it would make _cleanup_orphans_from_manifest
+                    # treat the live workspace file as an orphan and delete
+                    # it — destroying content the snapshot recorded as present
+                    # on the strength of a damaged snapshot.
+                    missing.append(rel_posix)
+                    _log.warning("restore_missing_snapshot_source", snap_dir=snap_dir, entry=rel_posix)
             _cleanup_orphans_from_manifest(ws, safe_manifest, cleanup_inventory)
             _log.info(
                 "block_store_restore",
                 snap_dir=snap_dir,
-                file_count=len(safe_manifest),  # nosec — safe_manifest contains only validated rel_posix values
+                file_count=restored,
                 skipped=len(manifest) - len(safe_manifest),
+                missing=len(missing),
+                complete=not missing,
             )
             return
 

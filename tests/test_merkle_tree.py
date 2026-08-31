@@ -341,3 +341,66 @@ class TestSerialization:
         assert "root_hash" in data
         assert "leaves" in data
         assert len(data["leaves"]) == 4
+
+
+# ---------------------------------------------------------------------------
+# 10. import_json tamper check (regression)
+# ---------------------------------------------------------------------------
+
+
+class TestImportTamperCheck:
+    """The root-hash comparison used to be guarded by ``if expected_root and``,
+    so an export with the field stripped (or blanked) replaced the entire leaf
+    set without the verification the docstring promises."""
+
+    def test_import_rejects_payload_with_root_hash_stripped(self, four_blocks: list[tuple[str, str]]) -> None:
+        tree = MerkleTree()
+        tree.build(four_blocks)
+        payload = json.loads(tree.export_json())
+        payload["leaves"] = [{"block_id": "evil", "content_hash": "0" * 64}]
+        del payload["root_hash"]
+
+        restored = MerkleTree()
+        with pytest.raises(ValueError, match="root_hash"):
+            restored.import_json(json.dumps(payload))
+
+    def test_import_rejects_payload_with_blank_root_hash(self, four_blocks: list[tuple[str, str]]) -> None:
+        tree = MerkleTree()
+        tree.build(four_blocks)
+        payload = json.loads(tree.export_json())
+        payload["leaves"] = [{"block_id": "evil", "content_hash": "0" * 64}]
+        payload["root_hash"] = ""
+
+        restored = MerkleTree()
+        with pytest.raises(ValueError, match="root mismatch"):
+            restored.import_json(json.dumps(payload))
+
+    def test_rejected_import_leaves_previous_tree_intact(self, four_blocks: list[tuple[str, str]]) -> None:
+        """A refused import must not leave the receiver holding the leaves it
+        just refused to trust."""
+        tree = MerkleTree()
+        tree.build(four_blocks)
+        good_root = tree.root_hash
+
+        payload = json.loads(tree.export_json())
+        payload["leaves"] = [{"block_id": "evil", "content_hash": "0" * 64}]
+        with pytest.raises(ValueError):
+            tree.import_json(json.dumps(payload))
+
+        assert tree.root_hash == good_root
+        assert tree.size == 4
+
+    def test_empty_tree_round_trips(self) -> None:
+        """The empty tree exports root_hash '' — requiring the field must not
+        break that round trip."""
+        tree = MerkleTree()
+        tree.build([])
+        restored = MerkleTree()
+        restored.import_json(tree.export_json())
+        assert restored.size == 0
+        assert restored.root_hash == ""
+
+    def test_import_rejects_payload_without_leaves(self) -> None:
+        restored = MerkleTree()
+        with pytest.raises(ValueError, match="leaves"):
+            restored.import_json(json.dumps({"root_hash": ""}))

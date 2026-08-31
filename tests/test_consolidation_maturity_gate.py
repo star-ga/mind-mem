@@ -282,8 +282,11 @@ MCP_GOLDEN = (
 def mcp_workspace(tmp_path):
     ws = tmp_path / "ws"
     (ws / "decisions").mkdir(parents=True)
-    (ws / ".sqlite_index").mkdir(parents=True)
-    conn = sqlite3.connect(ws / ".sqlite_index" / "index.db")
+    # Canonical index layout, owned by mind_mem.sqlite_index.DB_REL_PATH.
+    # The fixture used to build ".sqlite_index/index.db", a path nothing in
+    # the product writes, so these tests passed against a phantom corpus.
+    (ws / ".mind-mem-index").mkdir(parents=True)
+    conn = sqlite3.connect(ws / ".mind-mem-index" / "recall.db")
     conn.executescript(
         "CREATE TABLE blocks (id TEXT PRIMARY KEY, type TEXT, file TEXT, line INTEGER, "
         "status TEXT, date TEXT, speaker TEXT, tags TEXT, dia_id TEXT, parent_id TEXT, json_blob TEXT);"

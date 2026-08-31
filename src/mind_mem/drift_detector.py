@@ -26,7 +26,6 @@ import re
 import sqlite3
 from datetime import datetime
 
-from .block_parser import parse_file
 from .observability import get_logger, metrics
 
 _log = get_logger("drift_detector")
@@ -38,6 +37,19 @@ _log = get_logger("drift_detector")
 # silently blind. The store's blocks of record are now reached through the
 # shared :func:`mind_mem.storage.iter_active_blocks` primitive, while the
 # default Markdown / SQLite path stays byte-for-byte unchanged.
+#
+# The same blindness had a second, quieter shape on the ``encrypted``
+# backend. Its blocks of record ARE the corpus files, so it takes the
+# corpus branch — but ``encrypt_workspace`` / the ``encrypt_file`` tool
+# rewrite those files in place as ciphertext, and ``parse_file`` decodes
+# ciphertext with ``errors="replace"``, finds no ``[ID]`` header and
+# returns zero blocks *without raising*. ``scan()`` then saw fewer than
+# two blocks and reported a clean run over a corpus full of decisions,
+# with nothing to tell "encrypted" apart from "empty". The per-file
+# reader is therefore chosen by
+# :func:`mind_mem.storage._corpus_parse_fn` — the same reader the shared
+# corpus walk uses — which is plain ``parse_file`` for ``markdown`` and a
+# decrypting reader once ciphertext is actually on disk.
 
 
 def _is_markdown_backend(workspace: str) -> bool:
@@ -49,6 +61,12 @@ def _is_markdown_backend(workspace: str) -> bool:
     unchanged. :func:`mind_mem.storage.iter_active_blocks` owns the single
     source of truth for the same backend classification; this mirrors the
     identical helper used by ``dream_cycle`` / ``sqlite_index``.
+
+    True means **corpus-resident**, not **plaintext**: the ``encrypted``
+    backend keeps its blocks in these very files as ciphertext, so a caller
+    that takes this branch still has to read them through the backend's
+    reader (:func:`mind_mem.storage._corpus_parse_fn`) rather than assuming
+    ``parse_file``.
     """
     # Lazy import: avoids an import cycle (storage -> block_store -> ...) at
     # module-import time and matches the lazy ``from .storage import``
@@ -254,27 +272,51 @@ class DriftDetector:
     def _load_blocks(self) -> list[dict]:
         """Load all decision blocks from the workspace.
 
-        Backend-aware (audit bug 12): for the Markdown / encrypted backend
-        the decision blocks live in ``decisions/DECISIONS.md`` and are read
-        via :func:`parse_file` exactly as before (the default SQLite path is
-        unchanged). For a non-Markdown backend (e.g. Postgres) the decisions
-        are blocks of record in the configured store, so they are read
-        through the shared :func:`mind_mem.storage.iter_active_blocks`
-        primitive and filtered to decision blocks — otherwise drift analysis
-        is blind to the store's contents.
+        Backend-aware (audit bug 12): for a corpus-resident backend the
+        decision blocks live in ``decisions/DECISIONS.md`` and are read from
+        that file, with the per-file reader supplied by the storage layer —
+        plain :func:`~mind_mem.block_parser.parse_file` for ``markdown`` (the
+        default SQLite path, unchanged), a decrypting reader for an
+        ``encrypted`` corpus that has actually been migrated to ciphertext.
+        For a non-corpus backend (e.g. Postgres) the decisions are blocks of
+        record in the configured store, so they are read through the shared
+        :func:`mind_mem.storage.iter_active_blocks` primitive and filtered to
+        decision blocks — otherwise drift analysis is blind to the store's
+        contents.
+
+        Raises:
+            ValueError: the corpus is sealed and the passphrase is unset.
+            ~mind_mem.block_store.BlockStoreError: the corpus is sealed and
+                the passphrase does not open it. Both fail loudly instead of
+                returning ``[]``: a drift scan that cannot read the decisions
+                must not be reported as a scan that found no drift.
         """
-        if not _is_markdown_backend(self.workspace):
+        from .storage import _MARKDOWN_BACKENDS, _backend_name, _corpus_parse_fn
+
+        backend = _backend_name(self.workspace)
+        if backend not in _MARKDOWN_BACKENDS:
             from .storage import iter_active_blocks
 
             return [b for b in iter_active_blocks(self.workspace) if _is_decision_block(b)]
+
+        # Chosen OUTSIDE the try below, exactly as the shared corpus walk
+        # does it: "sealed corpus, no key" is a workspace-level refusal and
+        # must not be swallowed by the per-file tolerance, which exists to
+        # skip one unparseable file. A wrong/rotated passphrase surfaces as
+        # BlockStoreError, which is deliberately not a ValueError for the
+        # same reason.
+        read = _corpus_parse_fn(self.workspace, backend)
 
         blocks: list[dict] = []
         decisions_path = os.path.join(self.workspace, "decisions", "DECISIONS.md")
         if os.path.isfile(decisions_path):
             try:
-                blocks.extend(parse_file(decisions_path))
-            except (OSError, ValueError):
-                pass
+                blocks.extend(read(decisions_path))
+            except (OSError, ValueError) as exc:
+                # Tolerated: one unreadable/unparseable plaintext file. Logged
+                # rather than silent — the audit's finding was that nothing
+                # distinguished "no decisions" from "decisions unreadable".
+                _log.warning("drift_decisions_unreadable", file="decisions/DECISIONS.md", error=str(exc))
         return blocks
 
     @staticmethod

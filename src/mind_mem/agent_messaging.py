@@ -71,6 +71,39 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
+#: Width of the canonical stamp, ``YYYYMMDDHHMMSS``.
+_STAMP_WIDTH = 14
+
+
+def _normalise_stamp(raw: object) -> str:
+    """Canonicalise a stamp to ``YYYYMMDDHHMMSS`` so compares are ordered.
+
+    Two spellings meet here: :func:`build_message_block` writes the compact
+    ``YYYYMMDDTHHMMSSZ`` ``Timestamp``, while the wider corpus convention
+    is a dashed ``YYYY-MM-DD`` ``Date``. A raw string compare across them
+    is not merely imprecise, it is inverted — at index 4 the compact stamp
+    holds a digit (0x30+) and the dashed date holds ``-`` (0x2D), so every
+    compact stamp sorts above every dashed date of the same year, and a
+    ``since`` in one spelling silently mis-filters blocks in the other.
+    Dropping the separators and right-padding puts both on one scale.
+
+    A date-only value pads to midnight, i.e. ``since="2026-12-31"`` means
+    "from the start of that day". Any timezone suffix is truncated rather
+    than applied: the corpus writes UTC and dated blocks carry no zone.
+
+    A value that does not begin with an 8-digit date is returned stripped
+    but otherwise unchanged, so an unrecognised format still compares
+    against itself exactly as before.
+    """
+    text = str(raw).strip()
+    if not text or not text[:4].isdigit():
+        return text
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if len(digits) < 8:
+        return text
+    return digits[:_STAMP_WIDTH].ljust(_STAMP_WIDTH, "0")
+
+
 def build_message_block(
     text: str,
     *,
@@ -209,8 +242,12 @@ def read_inbox(
       * when *to* is set, keep messages addressed to *to* plus broadcasts
         (no ``To`` field), so a recipient sees its own mail + broadcasts;
       * when *since* is set, keep messages whose ``Timestamp`` (or ``Date``)
-        is >= *since* (ISO-8601 string compare — works for both the
-        ``YYYYMMDDTHHMMSSZ`` stamp and ``YYYY-MM-DD`` dates).
+        is >= *since*. Both sides are canonicalised to ``YYYYMMDDHHMMSS``
+        first (see :func:`_normalise_stamp`), so the compact
+        ``YYYYMMDDTHHMMSSZ`` stamp and a dashed ``YYYY-MM-DD`` date can be
+        mixed freely in either position — a raw string compare across the
+        two spellings orders them backwards. A date-only *since* means
+        midnight of that day.
 
     Returns at most *limit* blocks, newest-first.
     """
@@ -230,11 +267,12 @@ def read_inbox(
         messages = [b for b in messages if not b.get("To") or str(b.get("To")) == to]
 
     if since:
+        bound = _normalise_stamp(since)
 
         def _stamp(b: dict) -> str:
-            return str(b.get("Timestamp") or b.get("Date") or "")
+            return _normalise_stamp(b.get("Timestamp") or b.get("Date") or "")
 
-        messages = [b for b in messages if _stamp(b) >= since]
+        messages = [b for b in messages if _stamp(b) >= bound]
 
     # Newest-first by Timestamp (falls back to id, which is timestamp-prefixed).
     messages.sort(

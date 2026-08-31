@@ -16,16 +16,20 @@ them into hard faults):
 3. **Tamper telemetry** — when strict mode is off, mismatches emit a
    structured log event (``protection.integrity_mismatch``) so
    governance dashboards can alert.
-4. **Import-path guard** — refuses to load if the package directory is
-   world-writable on POSIX (prevents trivial file-swap).
+4. **Import-path guard** — a world-writable package directory on POSIX
+   is reported as a warning and, under ``MIND_MEM_INTEGRITY=strict``,
+   refuses the import (prevents trivial file-swap).
 5. **Frozen constants** — critical thresholds (``AUTH_HEADER``,
    ``AUDIT_TAG``) exposed as immutable module attributes so patches
    visible in source are detectable.
 
-The manifest is *optional* — in development or editable installs
-there's no manifest and all checks return ``ok=True`` silently. Wheels
-built via the release workflow (`scripts/build_integrity_manifest.py`)
-bake the manifest in.
+The manifest is *optional* — in development or editable installs there
+is no manifest and the hash layer has nothing to check. The remaining
+layers still report: an absent manifest is silent, but a manifest that
+is present and unreadable is a warning like any other, because deleting
+or truncating one must never be a way to turn a strict-mode check into a
+pass. Wheels built via the release workflow
+(`scripts/build_integrity_manifest.py`) bake the manifest in.
 """
 
 from __future__ import annotations
@@ -109,18 +113,27 @@ def _manifest_path() -> Path:
     return _package_root() / _MANIFEST_FILENAME
 
 
-def _load_manifest() -> dict[str, str] | None:
+def _load_manifest() -> tuple[dict[str, str] | None, str]:
+    """Load the baked integrity manifest.
+
+    Returns ``(files, error)``. ``(None, "")`` means no manifest is baked
+    in — the ordinary editable install or source checkout. A non-empty
+    error means a manifest **is** present and could not be read; that is
+    an attack shape, not a dev convenience (deleting or truncating the
+    manifest must not be a way to turn a strict-mode check into a pass),
+    so it is reported rather than folded into the absent case.
+    """
     path = _manifest_path()
     if not path.is_file():
-        return None
+        return None, ""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    files = data.get("files")
+    except (OSError, json.JSONDecodeError) as exc:
+        return None, f"integrity manifest present but unreadable: {type(exc).__name__}"
+    files = data.get("files") if isinstance(data, dict) else None
     if not isinstance(files, dict):
-        return None
-    return {k: v for k, v in files.items() if isinstance(v, str)}
+        return None, "integrity manifest present but malformed: no 'files' mapping"
+    return {k: v for k, v in files.items() if isinstance(v, str)}, ""
 
 
 def _world_writable(path: Path) -> bool:
@@ -145,42 +158,47 @@ def verify_integrity() -> IntegrityReport:
             f"package directory is world-writable: {root}",
         )
 
-    manifest = _load_manifest()
-    if manifest is None:
-        return IntegrityReport(
-            ok=True,
-            mode=mode,
-            manifest_present=False,
-            checked=0,
-            warnings=tuple(warnings),
-        )
+    manifest, manifest_error = _load_manifest()
+    if manifest_error:
+        warnings.append(manifest_error)
 
     mismatched: list[str] = []
     missing: list[str] = []
+    extra: list[str] = []
     checked = 0
 
-    for rel, expected in manifest.items():
-        path = root / rel
-        if not path.is_file():
-            missing.append(rel)
-            continue
-        actual = _sha256(path)
-        checked += 1
-        if actual != expected:
-            mismatched.append(rel)
+    # A missing manifest is normal (dev/editable install) and leaves the
+    # hash layer with nothing to check — but the other layers still have a
+    # verdict to deliver. Returning early here would skip both the
+    # warnings rule below and the strict-mode raise, which is how a
+    # world-writable package directory and an unreadable manifest both
+    # reported ``ok=True`` under MIND_MEM_INTEGRITY=strict.
+    if manifest is not None:
+        for rel, expected in manifest.items():
+            path = root / rel
+            if not path.is_file():
+                missing.append(rel)
+                continue
+            actual = _sha256(path)
+            checked += 1
+            if actual != expected:
+                mismatched.append(rel)
 
-    manifest_keys = set(manifest.keys())
-    discovered = {str(p.relative_to(root)).replace(os.sep, "/") for p in root.rglob("*.py") if p.is_file()}
-    # Only report "extra" critical files — unexpected additions to the
-    # tracked set. Ignore freshly-added modules outside the manifest.
-    extra = sorted(rel for rel in _CRITICAL_MODULES if rel in discovered and rel not in manifest_keys)
+        manifest_keys = set(manifest.keys())
+        discovered = {str(p.relative_to(root)).replace(os.sep, "/") for p in root.rglob("*.py") if p.is_file()}
+        # Only report "extra" critical files — unexpected additions to the
+        # tracked set. Ignore freshly-added modules outside the manifest.
+        extra = sorted(rel for rel in _CRITICAL_MODULES if rel in discovered and rel not in manifest_keys)
 
     ok = not mismatched and not missing and not warnings
 
     report = IntegrityReport(
         ok=ok,
         mode=mode,
-        manifest_present=True,
+        # The file is on disk even when it could not be parsed; saying
+        # "no manifest" there would describe a corrupt manifest as an
+        # editable install.
+        manifest_present=manifest is not None or bool(manifest_error),
         checked=checked,
         mismatched=tuple(mismatched),
         missing=tuple(missing),

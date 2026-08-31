@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from pathlib import Path
 
@@ -148,3 +149,73 @@ def test_register_replaces_on_duplicate(hnsw_on: Path) -> None:
     out = knn_by_kind(hnsw_on, "entity", [1.0, 0.0])
     # New embedding wins; distance 1 - cos(1, -1) = 2.
     assert out[0][1] == pytest.approx(2.0, abs=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# HNSW — backend honesty + read-path purity (regression)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_backend_status_reports_the_backend_that_actually_serves(hnsw_on: Path) -> None:
+    """backend_status used to answer 'sqlite_vec' whenever the extension
+    loaded, while every query was served by the brute-force scan — a health
+    surface reporting an ANN index that ran no queries."""
+    register_block_embedding(hnsw_on, "B-1", "entity", [1.0, 0.0])
+    s = backend_status(hnsw_on)
+    assert s["backend"] == "brute_force"
+    # Extension availability is still reported, just as its own signal.
+    assert isinstance(s["sqlite_vec_available"], bool)
+
+
+@pytest.mark.unit
+def test_knn_does_not_write_to_the_index(hnsw_on: Path) -> None:
+    """The read path used to CREATE VIRTUAL TABLE bke_vec on first touch —
+    a table it never queried, and a write that fails outright on a
+    read-only index."""
+    register_block_embedding(hnsw_on, "B-1", "entity", [1.0, 0.0])
+    assert knn_by_kind(hnsw_on, "entity", [1.0, 0.0]) != []
+
+    with sqlite3.connect(hnsw_on / "index.db") as conn:
+        names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master").fetchall()}
+    assert not any(n.startswith("bke_vec") for n in names), f"read path wrote tables: {sorted(names)}"
+
+
+@pytest.mark.unit
+def test_knn_works_against_a_readonly_index(hnsw_on: Path) -> None:
+    """First query against a read-only index.db raised
+    OperationalError('attempt to write a readonly database')."""
+    import os
+
+    if os.geteuid() == 0:  # pragma: no cover - root ignores the mode bits
+        pytest.skip("running as root; file mode does not deny writes")
+    register_block_embedding(hnsw_on, "B-1", "entity", [1.0, 0.0])
+    db = hnsw_on / "index.db"
+    db.chmod(0o444)
+    try:
+        out = knn_by_kind(hnsw_on, "entity", [1.0, 0.0])
+    finally:
+        db.chmod(0o644)
+    assert [r[0] for r in out] == ["B-1"]
+
+
+@pytest.mark.unit
+def test_knn_warns_when_every_row_is_skipped_on_dimension(hnsw_on: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """A dimension mismatch across the whole partition returns [] — the same
+    answer as an empty partition. Say which one it is, or an embedder swap
+    looks like an empty index."""
+    register_block_embedding(hnsw_on, "B-1", "entity", [1.0, 0.0, 0.0])
+    with caplog.at_level(logging.WARNING, logger="mind_mem.v4.hnsw_kind_index"):
+        out = knn_by_kind(hnsw_on, "entity", [1.0] * 128)
+    assert out == []
+    assert "skipped_dim_mismatch=1" in caplog.text
+    assert "query_dim=128" in caplog.text
+
+
+@pytest.mark.unit
+def test_knn_silent_when_partition_is_genuinely_empty(hnsw_on: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """The warning must distinguish the two cases, not fire on both."""
+    register_block_embedding(hnsw_on, "B-1", "entity", [1.0, 0.0])
+    with caplog.at_level(logging.WARNING, logger="mind_mem.v4.hnsw_kind_index"):
+        assert knn_by_kind(hnsw_on, "concept", [1.0, 0.0]) == []
+    assert "skipped_dim_mismatch" not in caplog.text

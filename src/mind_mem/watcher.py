@@ -70,8 +70,20 @@ class FileWatcher:
         return changed | deleted
 
     def start(self) -> None:
-        """Start watching in a background daemon thread."""
+        """Start watching in a background daemon thread.
+
+        Refuses to start while a previous loop is still finishing (a
+        :meth:`stop` whose join timed out): a second loop over the same
+        workspace would double-fire the reindex callback.
+        """
         if self._running:
+            return
+        previous = self._thread
+        if previous is not None and previous.is_alive():
+            _log.warning(
+                "watcher_start_refused_previous_still_running",
+                workspace=self.workspace,
+            )
             return
         self._running = True
         # Initial scan to populate mtimes (no callback on first scan)
@@ -96,14 +108,48 @@ class FileWatcher:
         self._thread.start()
         _log.info("watcher_started", workspace=self.workspace, interval=self.interval)
 
-    def stop(self) -> None:
-        """Stop the watcher."""
+    def stop(self, timeout: float | None = None) -> bool:
+        """Stop the watcher and wait for its loop to finish.
+
+        Returns ``True`` when the loop actually finished, ``False`` when
+        it was still running at the deadline. The join result is the
+        whole point: the callback is typically an incremental reindex,
+        which on a large workspace routinely outlasts ``interval + 1``
+        seconds — dropping the thread handle there reported "stopped"
+        while a writer was still active in the index, with nothing left
+        on the object able to say so.
+
+        The handle is kept on timeout, so :attr:`is_running` stays
+        ``True`` and a later ``stop()`` can wait again.
+        """
         self._running = False
-        if self._thread:
-            self._thread.join(timeout=self.interval + 1)
-            self._thread = None
+        thread = self._thread
+        if thread is None:
+            return True
+        deadline = self.interval + 1 if timeout is None else timeout
+        thread.join(timeout=deadline)
+        if thread.is_alive():
+            _log.warning(
+                "watcher_stop_timeout",
+                workspace=self.workspace,
+                timeout=deadline,
+                msg="Watch loop still running after join timeout; callback may still be writing.",
+            )
+            return False
+        self._thread = None
         _log.info("watcher_stopped")
+        return True
 
     @property
     def is_running(self) -> bool:
-        return self._running
+        """True while the watch loop may still be executing.
+
+        Reads the thread as well as the flag: after a ``stop()`` whose
+        join timed out the loop is still inside the callback, and a
+        caller trusting the flag alone would believe the workspace was
+        released.
+        """
+        if self._running:
+            return True
+        thread = self._thread
+        return thread is not None and thread.is_alive()

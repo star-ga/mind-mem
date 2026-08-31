@@ -209,8 +209,15 @@ def audit_pinned(
     from mind_mem.model_audit import audit_model
     from mind_mem.model_signing import verify_model
 
-    pinned = load_pinned_models(config_path)
-    report = PinnedAuditReport(config_present=Path(config_path).is_file())
+    # Expand once, here, and hand the *expanded* path to every reader.
+    # ``load_pinned_models`` expands internally; when the caller's raw
+    # string carried a ``~`` (quoted CI value, Makefile variable,
+    # subprocess argv) the un-expanded copy used for ``config_present``
+    # reported "no config" for a file that had just been loaded — a gate
+    # that says PASS while reporting it audited nothing.
+    cfg_path = Path(config_path).expanduser()
+    pinned = load_pinned_models(cfg_path)
+    report = PinnedAuditReport(config_present=cfg_path.is_file())
     workspace_path = Path(workspace).expanduser()
 
     for entry in pinned:

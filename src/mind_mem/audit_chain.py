@@ -34,8 +34,11 @@ from .observability import get_logger, metrics
 
 _log = get_logger("audit_chain")
 
-# Genesis block seed — fixed, never changes
-_GENESIS_HASH = "0" * 64  # SHA256 of "mind-mem-genesis"
+# Genesis block seed — fixed, never changes. Sixty-four ASCII zeros: a
+# well-known constant anchor, NOT the digest of any string. export()
+# writes this literal into the exported payload so an external
+# verifier reads the anchor rather than recomputing it.
+_GENESIS_HASH = "0" * 64
 
 VALID_OPERATIONS = frozenset(
     {
@@ -233,6 +236,28 @@ class AuditEntry:
         return AuditEntry.compute_entry_hash_v3(seq, timestamp, operation, target, agent, reason, payload_hash, prev_hash)
 
 
+class AuditChainCorruptedError(OSError):
+    """The ledger tail exists but cannot be read, so the next link is unknown.
+
+    Subclasses :class:`OSError` because that is what the condition means to
+    a caller: the chain on disk could not be read back, whether the file
+    refused the read or its last line is not an entry. Existing governed
+    writers that already convert a ledger-write failure into their own
+    refusal (``importers.quarantine`` catches ``OSError``/``ValueError``
+    and raises ``ImportQuarantineError``) therefore keep working, instead
+    of a fresh exception class slipping past their handler.
+
+    Raised by :meth:`AuditChain.append`. An unreadable or unparsable last
+    line is *not* the same thing as an empty chain: collapsing the two
+    makes the next append restart at ``seq 1`` with the genesis
+    ``prev_hash`` on top of the entries already on disk. That forks the
+    linkage silently — the writer gets an ordinary :class:`AuditEntry`
+    back and only a later :meth:`AuditChain.verify` reveals that the
+    append-only ledger has been growing across a break. Appending fails
+    closed instead; run ``verify()`` to locate the damage.
+    """
+
+
 class AuditChain:
     """Append-only hash-chained audit ledger.
 
@@ -248,7 +273,14 @@ class AuditChain:
         os.makedirs(self._audit_dir, exist_ok=True)
 
     def _last_entry(self) -> AuditEntry | None:
-        """Read the last entry from the chain file."""
+        """Read the last entry from the chain file.
+
+        ``None`` means the chain genuinely holds no entry — no file, or a
+        file with no non-blank line. A tail that exists but cannot be read
+        or parsed raises :class:`AuditChainCorruptedError` rather than
+        returning ``None``; see that class for why the two cases must not
+        collapse into one.
+        """
         if not os.path.isfile(self._chain_path):
             return None
         last_line = ""
@@ -258,14 +290,17 @@ class AuditChain:
                     stripped = line.strip()
                     if stripped:
                         last_line = stripped
-        except OSError:
-            return None
+        except (OSError, UnicodeDecodeError) as exc:
+            raise AuditChainCorruptedError(f"cannot read audit chain {self._chain_path}: {exc}") from exc
         if not last_line:
             return None
         try:
             return AuditEntry.from_dict(json.loads(last_line))
-        except (json.JSONDecodeError, KeyError):
-            return None
+        except (json.JSONDecodeError, KeyError) as exc:
+            raise AuditChainCorruptedError(
+                f"last line of audit chain {self._chain_path} is not a readable entry ({exc}); "
+                "refusing to append on top of a broken link — run verify() to locate the damage"
+            ) from exc
 
     def _next_seq(self, last: AuditEntry | None) -> int:
         """Get the next sequence number."""
@@ -298,6 +333,9 @@ class AuditChain:
 
         Raises:
             ValueError: If operation is not valid.
+            AuditChainCorruptedError: If the existing chain's last entry
+                cannot be read or parsed. The append is refused rather
+                than restarted at seq 1 on top of the damaged tail.
         """
         if operation not in VALID_OPERATIONS:
             raise ValueError(f"Invalid operation '{operation}'. Must be one of: {sorted(VALID_OPERATIONS)}")

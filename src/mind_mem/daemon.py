@@ -262,6 +262,12 @@ def run_daemon(workspace: str, *, dry_run: bool = False, once: bool = False) -> 
 
     ``once=True`` runs every enabled task one time and exits. Useful
     for test harnesses and one-shot operator runs.
+
+    Exit codes: ``0`` every enabled task ran (or the daemon is disabled in
+    config, which is a deliberate state, not a fault); ``1`` nothing ran —
+    no task is enabled — or, under ``once``, at least one task failed. A
+    failure under ``once`` must not exit 0: cron and CI read that as a
+    clean maintenance run.
     """
     enabled, tasks = load_daemon_config(workspace)
     if not enabled:
@@ -285,11 +291,17 @@ def run_daemon(workspace: str, *, dry_run: bool = False, once: bool = False) -> 
     daemon = Daemon(workspace, dry_run=dry_run)
 
     if once:
-        # Run each task synchronously, exactly once, then exit.
+        # Run each task synchronously, exactly once, then exit. Failures are
+        # counted, not just printed: --once is what cron and CI call, and a
+        # zero exit code there means "maintenance ran clean". Returning 0
+        # after every task raised would record a successful run.
+        failed: list[str] = []
         for task in enabled_tasks:
             runner = _TASK_RUNNERS.get(task.name)
             if runner is None:
                 _log.warning("daemon_unknown_task_once", extra={"task": task.name})
+                print(f"  [once] {task.name}: FAILED — no runner registered for this task")
+                failed.append(task.name)
                 continue
             try:
                 summary = runner(workspace, task.extras)
@@ -297,6 +309,10 @@ def run_daemon(workspace: str, *, dry_run: bool = False, once: bool = False) -> 
             except Exception as exc:
                 print(f"  [once] {task.name}: FAILED — {exc}")
                 _log.error("daemon_once_failed", extra={"task": task.name, "error": str(exc)})
+                failed.append(task.name)
+        if failed:
+            print(f"mind-mem daemon: {len(failed)} of {len(enabled_tasks)} task(s) failed — {', '.join(failed)}")
+            return 1
         return 0
 
     daemon.start(enabled_tasks)

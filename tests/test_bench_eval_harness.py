@@ -247,6 +247,76 @@ def test_run_suite_per_type_limits_pool(tmp_path):
     assert types == {"single-session-user", "preference"}
 
 
+def test_run_suite_accounts_for_every_dropped_question():
+    """Regression: the eligibility filter dropped questions uncounted.
+
+    ``evaluated`` is the denominator of a published recall number, so
+    every question that left the dataset on the way to it has to show up
+    somewhere; previously nothing recorded the drop at all.
+    """
+    ds = _synthetic_dataset() + [
+        {
+            "question_id": "q4",
+            "question": "no gold session",
+            "question_type": "single-session-user",
+            "answer_session_ids": [],
+            "haystack_sessions": [],
+        },
+    ]
+    result = run_suite("bm25_baseline", ds, k=5, turns="all")
+    assert result.dataset_size == 4
+    assert result.excluded_abstention == 1  # q3_abs
+    assert result.excluded_no_gold == 1  # q4
+    assert result.eligible == 2
+    assert result.evaluated == 2
+    assert result.dataset_size == result.excluded_abstention + result.excluded_no_gold + result.eligible
+
+
+def test_blank_question_is_skipped_and_still_counted():
+    ds = _synthetic_dataset() + [
+        {
+            "question_id": "q5",
+            "question": "",
+            "question_type": "single-session-user",
+            "answer_session_ids": ["s_gold_5"],
+            "haystack_session_ids": ["s_gold_5"],
+            "haystack_sessions": [[{"role": "user", "content": "hello"}]],
+        },
+    ]
+    result = run_suite("bm25_baseline", ds, k=5, turns="all")
+    assert result.eligible == 3
+    assert result.skipped == 1
+    assert result.evaluated == 2
+
+
+def test_scorecard_reconciles_evaluated_against_the_dataset():
+    ds = _synthetic_dataset()
+    result = run_suite("bm25_baseline", ds, k=5, turns="all")
+    card = render_scorecard(result, dataset_path="longmemeval_s.json", k=5, embedder="none (BM25-only)")
+    assert "**Dataset questions:** 3" in card
+    assert "1 abstention" in card
+    assert "2 eligible" in card
+    assert "**Questions evaluated:** 2" in card
+
+
+def test_scorecard_omits_accounting_when_it_was_not_measured():
+    """A hand-built SuiteResult (and the LoCoMo driver, which shares this
+    dataclass) carries no accounting — the scorecard must not invent a
+    reconciliation from the zero defaults."""
+    from mind_mem.bench.longmemeval_suite import SuiteResult
+
+    probe = PipelineProbe("bm25_baseline", "bm25_inmemory", "bm25_inmemory", False, "abc")
+    score = score_question("q1", "t1", ["g"], {"g"}, 1.0)
+    card = render_scorecard(
+        SuiteResult("bm25_baseline", "all", [score], [probe], 1, 0, 0.1),
+        dataset_path="x.json",
+        k=5,
+        embedder="none",
+    )
+    assert "Dataset questions" not in card
+    assert "**Questions evaluated:** 1" in card
+
+
 def test_scorecard_sampling_line_present():
     a = score_question("q1", "t1", ["g"], {"g"}, 1.0)
     from mind_mem.bench.longmemeval_suite import SuiteResult

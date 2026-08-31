@@ -118,6 +118,16 @@ class SuiteResult:
     evaluated: int
     skipped: int
     elapsed_s: float
+    #: Denominator accounting. ``evaluated`` is a recall number's
+    #: denominator, so every question that left the dataset on the way to
+    #: it has to be counted somewhere — otherwise the scorecard prints
+    #: "full set" beside a smaller N and nothing reconciles the two.
+    #: Defaulted so a hand-built SuiteResult (and the LoCoMo driver,
+    #: which shares this dataclass) stays valid.
+    dataset_size: int = 0
+    eligible: int = 0
+    excluded_abstention: int = 0
+    excluded_no_gold: int = 0
 
     @property
     def any_mismatch(self) -> bool:
@@ -148,7 +158,23 @@ def run_suite(
     """
     adapter = get_adapter(adapter_name)
 
-    pool = [q for q in dataset if not str(q.get("question_id", "")).endswith("_abs") and q.get("answer_session_ids")]
+    # Eligibility filter, counted. An abstention question (``*_abs``)
+    # names no gold session and a question with no ``answer_session_ids``
+    # has nothing to retrieve, so recall@k is undefined for both and they
+    # are excluded on the merits — but excluding them silently moved the
+    # denominator of a published number with no record of by how much.
+    pool: list[dict[str, Any]] = []
+    excluded_abstention = 0
+    excluded_no_gold = 0
+    for q in dataset:
+        if str(q.get("question_id", "")).endswith("_abs"):
+            excluded_abstention += 1
+            continue
+        if not q.get("answer_session_ids"):
+            excluded_no_gold += 1
+            continue
+        pool.append(q)
+    eligible = len(pool)
     if per_type > 0:
         pool = stratified_sample(pool, per_type, seed)
     elif sample and sample < len(pool):
@@ -165,8 +191,11 @@ def run_suite(
 
     for i, q in enumerate(pool):
         query = q.get("question", "")
+        # ``gold`` is non-empty by construction — the eligibility filter
+        # above already dropped every question without answer_session_ids,
+        # so only a blank question string can be skipped here.
         gold = {str(g) for g in q.get("answer_session_ids", [])}
-        if not query or not gold:
+        if not query:
             skipped += 1
             continue
         docs = build_session_docs(q, turns)
@@ -200,6 +229,10 @@ def run_suite(
         evaluated=len(scores),
         skipped=skipped,
         elapsed_s=round(time.time() - t0, 2),
+        dataset_size=len(dataset),
+        eligible=eligible,
+        excluded_abstention=excluded_abstention,
+        excluded_no_gold=excluded_no_gold,
     )
 
 
@@ -238,6 +271,12 @@ def render_scorecard(result: SuiteResult, *, dataset_path: str, k: int, embedder
     lines.append(f"- **k (retrieval depth):** {k}")
     lines.append("- **Token budget:** whole-session document, untruncated at ingest")
     lines.append(f"- **Dataset:** LongMemEval-S (`{os.path.basename(dataset_path)}`), turns=`{result.turns}`")
+    if result.dataset_size:
+        lines.append(f"- **Dataset questions:** {result.dataset_size}")
+        lines.append(
+            f"- **Excluded before scoring:** {result.excluded_abstention} abstention (`*_abs`) "
+            f"+ {result.excluded_no_gold} without gold session ids → {result.eligible} eligible"
+        )
     lines.append(f"- **Questions evaluated:** {result.evaluated} (skipped {result.skipped})")
     lines.append(f"- **Wall clock:** {result.elapsed_s}s")
     lines.append(f"- **Hardware:** {platform.machine()} / {platform.system()} / py{platform.python_version()}")

@@ -71,12 +71,32 @@ class TestWithManifest:
         assert report.ok is False
         assert "apply_engine.py" in report.missing
 
-    def test_malformed_manifest_returns_none(self, fake_package: Path) -> None:
+    def test_malformed_manifest_is_reported_not_silently_passed(self, fake_package: Path) -> None:
+        """A manifest on disk that will not parse is an attack shape.
+
+        It used to collapse into the "no manifest baked in" case and pass
+        silently, so deleting or truncating the manifest after swapping a
+        module turned even strict mode into a clean bill of health.
+        """
         (fake_package / protection._MANIFEST_FILENAME).write_text("{not json", encoding="utf-8")
         report = protection.verify_integrity()
-        # Falls back to no-manifest behaviour — silent pass.
+        assert report.ok is False
+        assert report.manifest_present is True
+        assert report.checked == 0
+        assert any("unreadable" in w for w in report.warnings)
+
+    def test_manifest_without_files_mapping_is_reported(self, fake_package: Path) -> None:
+        (fake_package / protection._MANIFEST_FILENAME).write_text('{"version": 1}', encoding="utf-8")
+        report = protection.verify_integrity()
+        assert report.ok is False
+        assert report.manifest_present is True
+        assert any("malformed" in w for w in report.warnings)
+
+    def test_absent_manifest_stays_silent(self, fake_package: Path) -> None:
+        report = protection.verify_integrity()
         assert report.ok is True
         assert report.manifest_present is False
+        assert report.warnings == ()
 
 
 class TestStrictMode:
@@ -90,6 +110,40 @@ class TestStrictMode:
         monkeypatch.setenv(protection._STRICT_ENV, "strict")
         with pytest.raises(RuntimeError, match="integrity check failed"):
             protection.verify_integrity()
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX-only")
+    def test_strict_raises_on_world_writable_package_dir(self, fake_package: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Layer 4 must actually refuse the load.
+
+        With no manifest baked in — every editable install and every wheel
+        built without one — the check used to return early and report
+        ``ok=True`` while carrying the world-writable warning it had just
+        collected.
+        """
+        fake_package.chmod(0o777)
+        monkeypatch.setenv(protection._STRICT_ENV, "strict")
+        try:
+            with pytest.raises(RuntimeError, match="integrity check failed"):
+                protection.verify_integrity()
+        finally:
+            fake_package.chmod(0o755)
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX-only")
+    def test_strict_raises_on_unreadable_manifest(self, fake_package: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        (fake_package / protection._MANIFEST_FILENAME).write_text("{not json", encoding="utf-8")
+        monkeypatch.setenv(protection._STRICT_ENV, "strict")
+        with pytest.raises(RuntimeError, match="integrity check failed"):
+            protection.verify_integrity()
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX-only")
+    def test_world_writable_is_not_ok_even_when_failing_open(self, fake_package: Path) -> None:
+        fake_package.chmod(0o777)
+        try:
+            report = protection.verify_integrity()
+        finally:
+            fake_package.chmod(0o755)
+        assert report.ok is False
+        assert any("world-writable" in w for w in report.warnings)
 
     def test_strict_env_truthy_values(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for value in ("1", "true", "yes", "STRICT"):

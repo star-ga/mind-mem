@@ -24,11 +24,26 @@ Usage:
 
 from __future__ import annotations
 
+import errno
 import os
 import sys
 import threading
 import time
 from types import TracebackType
+
+#: errnos that mean "this filesystem does not implement advisory locking".
+#: Not the same as "the lock is taken" (EWOULDBLOCK/EAGAIN), which must
+#: never be swallowed. Some names are platform-specific, hence getattr.
+_UNSUPPORTED_LOCK_ERRNOS: frozenset[int] = frozenset(
+    code
+    for code in (
+        getattr(errno, "ENOLCK", None),
+        getattr(errno, "EOPNOTSUPP", None),
+        getattr(errno, "ENOTSUP", None),
+        getattr(errno, "ENOSYS", None),
+    )
+    if code is not None
+)
 
 
 class LockTimeout(Exception):
@@ -83,10 +98,13 @@ class FileLock:
                 raise LockTimeout(f"Lock timeout ({self.timeout}s) for: {self.lock_path}")
         self._owns_thread_lock = True
 
-        # Layer 2: Acquire cross-process file lock
+        # Layer 2: Acquire cross-process file lock. BaseException, not
+        # Exception: a KeyboardInterrupt landing inside the acquire poll
+        # loop must still hand back the thread lock, or this lock_path is
+        # dead for every other thread in the process.
         try:
             self._acquire_file_lock(start)
-        except Exception:
+        except BaseException:
             self._owns_thread_lock = False
             tlock.release()
             raise
@@ -96,10 +114,6 @@ class FileLock:
         while True:
             try:
                 fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-                os.write(fd, f"{os.getpid()}\n".encode())
-                self._lock_fd = fd
-                self._os_lock(fd)
-                return
             except FileExistsError:
                 if self._is_stale():
                     self._break_stale()
@@ -111,6 +125,37 @@ class FileLock:
                 if self.timeout > 0 and elapsed >= self.timeout:
                     raise LockTimeout(f"Lock timeout ({self.timeout}s) for: {self.lock_path}")
                 time.sleep(self.poll_interval)
+                continue
+
+            # The lockfile now exists on disk and names THIS live pid, so it
+            # can never be judged stale by another acquirer. Anything that
+            # fails from here on must undo it, or the lock is wedged for the
+            # lifetime of this process — every later acquire would find a
+            # live-pid lockfile and block to LockTimeout.
+            try:
+                os.write(fd, f"{os.getpid()}\n".encode())
+                self._os_lock(fd)
+            except BaseException:
+                self._discard_lock_file(fd)
+                raise
+            self._lock_fd = fd
+            return
+
+    def _discard_lock_file(self, fd: int) -> None:
+        """Close ``fd`` and remove the lockfile, ignoring cleanup errors.
+
+        Used on the failure path of :meth:`_acquire_file_lock`, where the
+        original error is about to be re-raised and must not be masked.
+        """
+        self._lock_fd = None
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.unlink(self.lock_path)
+        except OSError:
+            pass
 
     def release(self) -> None:
         """Release the lock."""
@@ -118,10 +163,17 @@ class FileLock:
         if self._lock_fd is not None:
             try:
                 self._os_unlock(self._lock_fd)
-                os.close(self._lock_fd)
             except OSError:
                 pass
-            self._lock_fd = None
+            finally:
+                # close() runs even if the unlock failed — otherwise a
+                # filesystem that errors on LOCK_UN leaks a descriptor per
+                # release for the lifetime of the process.
+                try:
+                    os.close(self._lock_fd)
+                except OSError:
+                    pass
+                self._lock_fd = None
         try:
             os.unlink(self.lock_path)
         except OSError:
@@ -186,16 +238,34 @@ class FileLock:
             return False
 
     def _os_lock(self, fd: int) -> None:
-        """Apply OS-level exclusive lock if available."""
+        """Apply OS-level exclusive lock if available.
+
+        OS-level locking is an *upgrade* on top of the O_CREAT|O_EXCL
+        lockfile, not the primary mechanism. A filesystem that does not
+        implement it (some NFS/FUSE/network mounts return ENOLCK,
+        EOPNOTSUPP or ENOSYS) therefore degrades to lockfile-only
+        exclusion rather than failing the acquire — the portability
+        fallback this module documents. Every other error, including the
+        EWOULDBLOCK that means another process really does hold the lock,
+        propagates to the caller.
+        """
         try:
             import fcntl
 
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as e:
+                if e.errno not in _UNSUPPORTED_LOCK_ERRNOS:
+                    raise
         except ImportError:
             try:
                 import msvcrt
 
-                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
+                try:
+                    msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
+                except OSError as e:
+                    if e.errno not in _UNSUPPORTED_LOCK_ERRNOS:
+                        raise
             except ImportError:
                 pass
 
