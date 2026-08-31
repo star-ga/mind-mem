@@ -47,9 +47,11 @@ from __future__ import annotations
 
 import datetime as _dt
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..observability import get_logger
 from .feature_flags import require_enabled
 
 __all__ = [
@@ -65,6 +67,8 @@ __all__ = [
     "get_edit",
 ]
 
+
+_log = get_logger("v4.self_editing")
 
 FLAG: str = "self_editing"
 
@@ -88,6 +92,27 @@ class Edit:
     status: str
     approved_at: str | None
     approver: str | None
+
+
+# ---------------------------------------------------------------------------
+# Connection discipline
+# ---------------------------------------------------------------------------
+#
+# Every connection in this module is opened as::
+#
+#     with closing(sqlite3.connect(...)) as conn, conn:
+#
+# ``with conn`` commits (or rolls back) and leaves the handle OPEN, and a
+# ``sqlite3.Connection`` is kept alive by its own prepared-statement cache — a
+# reference cycle — so refcounting never reclaims it and the process keeps a
+# descriptor on ``index.db`` and its ``-wal``/``-shm`` sidecars until the cyclic
+# collector runs. A leak everywhere, and on Windows an open handle makes
+# ``os.unlink`` fail, so the workspace directory cannot be removed.
+#
+# ``closing`` is the OUTER manager on purpose: the managers unwind in reverse,
+# so the commit-or-rollback happens BEFORE the close. ``close()`` alone never
+# commits and rolls back an open transaction. See ``hash_chain_v2._session``
+# for the same discipline expressed as a method.
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +144,7 @@ def ensure_edit_schema(workspace: str | Path) -> None:
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db, timeout=30) as conn:
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
         conn.executescript(_SCHEMA_SQL)
         conn.commit()
 
@@ -147,17 +172,32 @@ def propose_edit(
     ensure_edit_schema(workspace)
     db = Path(workspace) / "index.db"
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
-    with sqlite3.connect(db, timeout=30) as conn:
-        # Snapshot the current content into old_content for the audit log.
-        old_row = (
-            conn.execute(
-                "SELECT content FROM blocks WHERE id = ?",
-                (block_id,),
-            ).fetchone()
-            if _table_exists(conn, "blocks")
-            else None
-        )
-        old_content = old_row[0] if old_row else None
+    # Snapshot the CURRENT content into old_content for the audit log. This
+    # is the seed of the version chain (block_versioning.block_history makes
+    # it version 1), so a NULL here is not benign: content_as_of() then
+    # returns None for every instant before the first applied edit, and
+    # recall(..., as_of=…) reads that None as "this block has no recorded
+    # edits" and serves today's content as historical.
+    old_content = _current_block_content(workspace, block_id)
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
+        if old_content is None:
+            # Legacy fallback: the v4 index.db ``blocks`` table. Nothing in
+            # this package inserts rows there, so it is normally empty —
+            # kept only so a workspace that DOES populate it is not lost.
+            old_row = (
+                conn.execute(
+                    "SELECT content FROM blocks WHERE id = ?",
+                    (block_id,),
+                ).fetchone()
+                if _table_exists(conn, "blocks")
+                else None
+            )
+            old_content = old_row[0] if old_row else None
+        if old_content is None:
+            # Never silent: the proposal is still recorded (refusing it
+            # would block edits on a block the store cannot resolve), but
+            # its version chain will start from an unknown revision.
+            _log.warning("self_edit_old_content_unavailable", block_id=block_id)
         cursor = conn.execute(
             "INSERT INTO block_edits (block_id, old_content, new_content, reason, proposed_at, status) VALUES (?, ?, ?, ?, ?, ?)",
             (block_id, old_content, new_content, reason, now, EditStatus.PENDING),
@@ -195,7 +235,7 @@ def _transition_edit(
     if not db.is_file():
         return None
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
-    with sqlite3.connect(db, timeout=10) as conn:
+    with closing(sqlite3.connect(db, timeout=10)) as conn, conn:
         if not _table_exists(conn, "block_edits"):
             return None
         cursor = conn.execute(
@@ -219,7 +259,7 @@ def get_edit(workspace: str | Path, edit_id: int) -> Edit | None:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return None
-    with sqlite3.connect(db, timeout=30) as conn:
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
         if not _table_exists(conn, "block_edits"):
             return None
         row = conn.execute(
@@ -241,7 +281,7 @@ def list_pending_edits(workspace: str | Path, *, limit: int = 100) -> list[Edit]
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db, timeout=30) as conn:
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
         if not _table_exists(conn, "block_edits"):
             return []
         rows = conn.execute(
@@ -263,7 +303,7 @@ def list_edit_history(workspace: str | Path, block_id: str) -> list[Edit]:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db, timeout=30) as conn:
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
         if not _table_exists(conn, "block_edits"):
             return []
         rows = conn.execute(
@@ -292,6 +332,35 @@ def _row_to_edit(row: tuple) -> Edit:
         approved_at=row[7],
         approver=row[8],
     )
+
+
+def _current_block_content(workspace: str | Path, block_id: str) -> str | None:
+    """Current content of *block_id* from the workspace's blocks of record.
+
+    Reads the configured block store (Markdown corpus by default,
+    Postgres when configured) — the only place a block's live content
+    actually lives. Returns ``None`` when the block cannot be resolved or
+    carries no content field; the caller logs that rather than recording
+    an indistinguishable NULL.
+    """
+    try:
+        from ..storage import get_block_store
+
+        block = get_block_store(str(workspace)).get_by_id(block_id)
+    except Exception as exc:  # store unreachable / not configured
+        _log.debug("self_edit_block_lookup_failed", block_id=block_id, error=str(exc))
+        return None
+    if not block:
+        return None
+    # ``Statement`` is the canonical content field of a mind-mem block and
+    # what the stores themselves index as content
+    # (``block_store_postgres._block_to_row``); ``content`` covers stores
+    # that surface the rendered text directly.
+    for key in ("Statement", "content"):
+        value = block.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
 
 
 def _table_exists(conn: sqlite3.Connection, name: str) -> bool:

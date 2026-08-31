@@ -5,25 +5,29 @@ Multi-LLM v4 audit (3/4 model consensus 2026-05-10) flagged the
 adding an HNSW index keyed by ``(kind, embedding)`` so kind-filtered
 ANN runs in O(log n) instead.
 
-Backend selection is detected at runtime:
-
-    sqlite-vec installed → wraps ``vec0`` virtual table with
-                           per-kind partition columns; full HNSW
-                           via the C extension's vec_distance_cosine
-    sqlite-vec absent    → degraded path: returns the same
-                           kind-filtered ID list ``list_blocks_by_kind``
-                           already produces, just behind the v4 surface
-                           so callers can swap in HNSW later by flipping
-                           a flag
-
-The interface stays the same in both cases:
+Interface:
 
     register_block_embedding(workspace, block_id, kind, embedding)
     knn_by_kind(workspace, kind, query_embedding, k=10) -> [(bid, dist)]
 
-When sqlite-vec is missing, ``knn_by_kind`` falls back to brute-force
-scoring against any embeddings already stored — slow at scale but
-correct, which is the main contract.
+deferred: the ANN backend is NOT built yet. ``knn_by_kind`` runs a
+brute-force cosine scan over the kind partition on every install — the
+correct answer, at O(n). An earlier revision of this module detected
+sqlite-vec, created a placeholder ``vec0`` table, then returned the
+brute-force result anyway, so ``backend_status`` advertised an ANN
+backend that never ran a single query; the placeholder is gone and the
+status surface now reports what actually serves the query.
+upgrade path: a real vec0 backend needs (1) a per-dimension virtual
+table — vec0 schemas are dim-specific — populated on the *write* path
+in ``register_block_embedding``, never lazily on the read path, (2) a
+sync watermark so rows registered while the extension was unloadable
+can't silently vanish from the ANN answer, and (3) an equivalence gate
+against ``_knn_brute_force`` over random vectors. Until all three
+exist, a vec0 query would be a faster wrong answer.
+
+``backend_status`` reports ``sqlite_vec_available`` separately, so a
+deployment can still see whether the extension is installed and ready
+for that work.
 
 Feature-flag gated under ``v4.hnsw_kind_index``. v3.x callers see no
 behaviour change.
@@ -33,10 +37,12 @@ Copyright STARGA, Inc.
 
 from __future__ import annotations
 
+import logging
 import math
 import sqlite3
 import struct
 from collections.abc import Sequence
+from contextlib import closing
 from pathlib import Path
 
 from .feature_flags import require_enabled
@@ -51,6 +57,30 @@ __all__ = [
 
 
 FLAG: str = "hnsw_kind_index"
+
+_log = logging.getLogger("mind_mem.v4.hnsw_kind_index")
+
+
+# Every connection below is opened as ``with closing(sqlite3.connect(...)) as
+# conn:`` wrapping an inner ``with conn:``. Both halves are load-bearing and the
+# nesting order is not arbitrary:
+#
+# * the inner ``with conn`` commits on success / rolls back on an exception —
+#   ``close()`` alone does neither, and closing a connection with an open write
+#   transaction discards it;
+# * the outer ``closing`` actually releases the descriptor. A bare
+#   ``with sqlite3.connect(...) as conn`` — what this module used to do — commits
+#   and then leaves the handle open, which its ``__exit__`` documents. Nothing
+#   reclaims it afterwards either: a ``sqlite3.Connection`` and its
+#   prepared-statement cache reference each other, so the object is unreachable
+#   only to the cyclic collector, not to refcounting. Until a collection happens
+#   the process holds an open descriptor on ``index.db`` and on its ``-wal`` /
+#   ``-shm`` sidecars, and on Windows those handles make the workspace
+#   undeletable.
+#
+# These are module-level functions called once per operation, so there is no
+# long-lived connection here to keep open deliberately — every one of them is
+# opened, used, and closed within a single call.
 
 
 # ---------------------------------------------------------------------------
@@ -74,20 +104,30 @@ def _try_load_sqlite_vec(conn: sqlite3.Connection) -> bool:
 
 
 def backend_status(workspace: str | Path) -> dict[str, object]:
-    """Return what backend will run kNN: ``sqlite_vec`` or ``brute_force``.
+    """Report which backend actually runs kNN, and what is available.
 
-    Useful for callers that want to surface a deployment health flag
-    (e.g. "ANN backend installed" / "fallback active").
+    ``backend`` is the one that will serve the next ``knn_by_kind``
+    call. Today that is always ``brute_force``: no ANN backend is
+    implemented (see the module docstring), so reporting anything else
+    would tell a deployment health check that an index is doing work
+    nothing does.
+
+    ``sqlite_vec_available`` is the separate, honest signal — whether
+    the extension loads here — for callers tracking readiness for the
+    ANN work rather than current behaviour.
     """
     require_enabled(FLAG)
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    backend = "brute_force"
-    with sqlite3.connect(db, timeout=30) as conn:
-        if _try_load_sqlite_vec(conn):
-            backend = "sqlite_vec"
-    return {"backend": backend, "workspace": str(workspace)}
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            available = _try_load_sqlite_vec(conn)
+    return {
+        "backend": "brute_force",
+        "sqlite_vec_available": available,
+        "workspace": str(workspace),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -107,18 +147,18 @@ CREATE INDEX IF NOT EXISTS idx_block_kind_embeddings_kind
 
 
 def ensure_hnsw_schema(workspace: str | Path) -> None:
-    """Idempotent. Creates the ``block_kind_embeddings`` table that the
-    brute-force fallback reads from. When sqlite-vec is installed at
-    runtime, the same table acts as the source-of-truth for the vec0
-    virtual-table population (separate sync step lands when sqlite-vec
-    is the chosen production backend)."""
+    """Idempotent. Creates the ``block_kind_embeddings`` table that
+    :func:`knn_by_kind` scans. It is also the source-of-truth a future
+    vec0 backend would be populated from — see the module docstring for
+    what that backend still needs before it can be trusted."""
     require_enabled(FLAG)
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db, timeout=30) as conn:
-        conn.executescript(_SCHEMA_SQL)
-        conn.commit()
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            conn.executescript(_SCHEMA_SQL)
+            conn.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -145,12 +185,13 @@ def register_block_embedding(
     ensure_hnsw_schema(workspace)
     db = Path(workspace) / "index.db"
     payload = struct.pack(f"<{len(embedding)}f", *embedding)
-    with sqlite3.connect(db, timeout=30) as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO block_kind_embeddings (block_id, kind, payload, dim) VALUES (?, ?, ?, ?)",
-            (block_id, kind, payload, len(embedding)),
-        )
-        conn.commit()
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO block_kind_embeddings (block_id, kind, payload, dim) VALUES (?, ?, ?, ?)",
+                (block_id, kind, payload, len(embedding)),
+            )
+            conn.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -168,12 +209,18 @@ def knn_by_kind(
     """Return up to ``k`` (block_id, cosine_distance) pairs for blocks
     of the given kind, ordered by ascending distance.
 
-    Distance is ``1 - cos_sim``; range ``[0, 2]``. When sqlite-vec is
-    installed, the kNN runs against the HNSW index; otherwise a brute-
-    force sequential scan over the kind partition.
+    Distance is ``1 - cos_sim``; range ``[0, 2]``. A brute-force
+    sequential scan over the kind partition — see the module docstring
+    for why there is no ANN path yet.
 
-    Empty result for missing schema / no embeddings of that kind /
-    non-positive k.
+    Empty result for: missing schema, no embeddings of that kind,
+    non-positive k, a zero-norm query, or every stored vector in the
+    partition being skipped (dimension mismatch against the query, or
+    zero norm). The last case is the one that looks like an empty
+    partition but isn't — it is logged as a warning naming the counts,
+    because after an embedder swap it is the whole index, not one row.
+
+    Read-only: this path never writes to ``index.db``.
     """
     require_enabled(FLAG)
     if k <= 0 or not query:
@@ -181,12 +228,14 @@ def knn_by_kind(
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db, timeout=30) as conn:
-        if not _table_exists(conn, "block_kind_embeddings"):
-            return []
-        if _try_load_sqlite_vec(conn):
-            return _knn_sqlite_vec(conn, kind, query, k)
-        return _knn_brute_force(conn, kind, query, k)
+    # Read-only path: the inner ``with conn`` has nothing to commit, but it
+    # is kept so the shape is identical everywhere and a future statement here
+    # cannot silently become an uncommitted write.
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            if not _table_exists(conn, "block_kind_embeddings"):
+                return []
+            return _knn_brute_force(conn, kind, query, k)
 
 
 def _knn_brute_force(
@@ -205,43 +254,41 @@ def _knn_brute_force(
     qnorm = math.sqrt(sum(v * v for v in query))
     if qnorm == 0.0:
         return []
+    skipped_dim = 0
+    skipped_unusable = 0  # unpack failure or zero norm — no direction to score
     for bid, payload, dim in rows:
         if int(dim) != qlen:
+            skipped_dim += 1
             continue
         try:
             vec = struct.unpack(f"<{dim}f", payload)
         except struct.error:
+            skipped_unusable += 1
             continue
         vnorm = math.sqrt(sum(v * v for v in vec))
         if vnorm == 0.0:
+            skipped_unusable += 1
             continue
         dot = sum(a * b for a, b in zip(query, vec))
         cos_sim = dot / (qnorm * vnorm)
         cos_sim = max(-1.0, min(1.0, cos_sim))
         scored.append((bid, 1.0 - cos_sim))
+    if skipped_dim:
+        # A dimension mismatch returns fewer rows — or, when it takes the
+        # whole partition, an empty list indistinguishable from "no such
+        # kind". After an embedder swap that is the whole index, not one
+        # row, so name the counts rather than letting it read as empty.
+        _log.warning(
+            "%s kind=%s query_dim=%d rows=%d skipped_dim_mismatch=%d skipped_unusable=%d",
+            "hnsw_knn_all_rows_skipped" if not scored else "hnsw_knn_rows_skipped",
+            kind,
+            qlen,
+            len(rows),
+            skipped_dim,
+            skipped_unusable,
+        )
     scored.sort(key=lambda r: r[1])
     return scored[:k]
-
-
-def _knn_sqlite_vec(
-    conn: sqlite3.Connection,
-    kind: str,
-    query: Sequence[float],
-    k: int,
-) -> list[tuple[str, float]]:
-    """sqlite-vec virtual-table backed kNN.
-
-    The vec0 virtual table is populated lazily from the
-    ``block_kind_embeddings`` source table. Population is idempotent;
-    each call ensures the staging is consistent.
-    """
-    # Lazy create / sync.
-    conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS bke_vec USING vec0(embedding float[1])")
-    # We stage rows one-at-a-time because vec0 schemas are dim-specific
-    # and we accept variable-dim embeddings (rare today, but cheap to
-    # honour). For now: brute-force fallback when dims are heterogeneous;
-    # use vec0 when one dim dominates.
-    return _knn_brute_force(conn, kind, query, k)
 
 
 # ---------------------------------------------------------------------------

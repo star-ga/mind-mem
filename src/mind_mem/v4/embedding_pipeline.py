@@ -42,14 +42,23 @@ Copyright STARGA, Inc.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import json
 import math
 import sqlite3
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 
+from ..observability import get_logger
 from .feature_flags import require_enabled
+
+_log = get_logger("v4.embedding_pipeline")
+
+#: The v3 recall index, relative to the workspace. Its ``blocks`` table
+#: has no ``content`` column — block text is rebuilt from ``json_blob``.
+_RECALL_DB_REL = ".mind-mem-index/recall.db"
 
 __all__ = [
     "FLAG",
@@ -135,40 +144,115 @@ def derive_embeddings(
 ) -> dict[str, list[float]]:
     """Auto-derive embeddings for the given block IDs from their content.
 
-    Reads block content from the v3 ``blocks(id, content)`` table.
-    Missing blocks are skipped (no key in the output). Empty content
-    rows produce zero vectors so callers can detect the degenerate
-    case.
+    Block text is looked up in two places, in order:
 
-    Returns ``{block_id: embedding}``. Empty dict when the database
-    or the blocks table is missing — fail-soft same as the rest of
-    the v4 read surface.
+    1. ``<workspace>/index.db``, table ``blocks(id, content)`` — the
+       caller-populated table this module was written against. Nothing
+       in the v3 write path fills it, so on a stock deployment it is
+       absent or empty.
+    2. ``<workspace>/.mind-mem-index/recall.db`` — the real v3 index.
+       Its ``blocks`` table has no ``content`` column, so the text is
+       rebuilt from the field values in ``json_blob``.
+
+    Missing blocks are skipped (no key in the output). Empty content
+    rows produce zero vectors so callers can detect the degenerate case.
+
+    Returns ``{block_id: embedding}``. When neither source holds any of
+    the requested ids the result is an empty dict — fail-soft like the
+    rest of the v4 read surface, but logged rather than silent, because
+    at the call site "no content anywhere" and "nothing to embed" look
+    identical and only one of them is a broken deployment.
     """
     require_enabled(FLAG)
-    out: dict[str, list[float]] = {}
-    db = Path(workspace) / "index.db"
-    if not db.is_file():
-        return out
     ids = list(block_ids)
     if not ids:
-        return out
-    with sqlite3.connect(db, timeout=30) as conn:
-        if not _table_exists(conn, "blocks"):
-            return out
-        # Pull content for the requested ids.
-        placeholders = ",".join("?" * len(ids))
-        rows = conn.execute(
-            f"SELECT id, content FROM blocks WHERE id IN ({placeholders})",  # nosec B608 — placeholders is solely "?,?,..,?"; ids are bound parameters
-            ids,
-        ).fetchall()
-    for bid, content in rows:
-        out[bid] = _active_embedder(content or "", dim)
-    return out
+        return {}
+    root = Path(workspace)
+    contents = _content_from_index_db(root / "index.db", ids)
+    missing = [bid for bid in ids if bid not in contents]
+    if missing:
+        contents.update(_content_from_recall_db(root / _RECALL_DB_REL, missing))
+    if not contents:
+        _log.warning(
+            "embedding_pipeline_no_content",
+            workspace=str(root),
+            requested=len(ids),
+            msg="No block content found in index.db(blocks) or the v3 recall index; no embeddings derived.",
+        )
+        return {}
+    return {bid: _active_embedder(text or "", dim) for bid, text in contents.items()}
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _content_from_index_db(db: Path, ids: list[str]) -> dict[str, str]:
+    """Content rows from a caller-populated ``blocks(id, content)`` table."""
+    if not db.is_file():
+        return {}
+    with contextlib.closing(sqlite3.connect(db, timeout=30)) as conn:
+        if not _table_exists(conn, "blocks"):
+            return {}
+        placeholders = ",".join("?" * len(ids))
+        try:
+            rows = conn.execute(
+                f"SELECT id, content FROM blocks WHERE id IN ({placeholders})",  # nosec B608 — placeholders is solely "?,?,..,?"; ids are bound parameters
+                ids,
+            ).fetchall()
+        except sqlite3.OperationalError:
+            # A ``blocks`` table without a ``content`` column — this is
+            # the v3 index schema, handled by _content_from_recall_db.
+            return {}
+    return {bid: (content or "") for bid, content in rows}
+
+
+def _content_from_recall_db(db: Path, ids: list[str]) -> dict[str, str]:
+    """Block text rebuilt from the v3 recall index (``blocks.json_blob``)."""
+    if not db.is_file():
+        return {}
+    with contextlib.closing(sqlite3.connect(db, timeout=30)) as conn:
+        if not _table_exists(conn, "blocks"):
+            return {}
+        placeholders = ",".join("?" * len(ids))
+        try:
+            rows = conn.execute(
+                f"SELECT id, json_blob FROM blocks WHERE id IN ({placeholders})",  # nosec B608 — placeholders is solely "?,?,..,?"; ids are bound parameters
+                ids,
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return {}
+    return {bid: _blob_text(blob) for bid, blob in rows}
+
+
+def _blob_text(json_blob: str | None) -> str:
+    """Flatten a stored block into embeddable text.
+
+    Field order follows the stored JSON (insertion order), so the same
+    row always renders the same string — the embedder must be
+    deterministic on a given corpus. Bookkeeping keys (``_id``,
+    ``_line``, ...) are dropped; they carry no content signal.
+    """
+    if not json_blob:
+        return ""
+    try:
+        blob = json.loads(json_blob)
+    except (json.JSONDecodeError, ValueError):
+        return ""
+    if not isinstance(blob, dict):
+        return ""
+    parts: list[str] = []
+    for key, value in blob.items():
+        if key.startswith("_"):
+            continue
+        if isinstance(value, str):
+            parts.append(value)
+        elif isinstance(value, (list, tuple)):
+            parts.extend(str(v) for v in value if isinstance(v, (str, int, float)))
+        elif isinstance(value, (int, float)):
+            parts.append(str(value))
+    return "\n".join(p for p in parts if p)
 
 
 def _table_exists(conn: sqlite3.Connection, name: str) -> bool:

@@ -50,6 +50,7 @@ import json
 import sqlite3
 import threading
 from collections.abc import Callable
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -148,6 +149,26 @@ CREATE INDEX IF NOT EXISTS idx_block_metadata_updated
 _MIGRATION_SQL: str = "ALTER TABLE block_metadata ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''"
 
 
+# Every connection below is opened as ``closing(sqlite3.connect(...))``
+# wrapping an inner ``with conn:``, and the nesting order is load-bearing.
+#
+# A connection used directly as a context manager commits (or, on an
+# exception, rolls back) and then leaves the handle OPEN — its ``__exit__``
+# does exactly that and nothing more. Refcounting does not clean up
+# afterwards either: a ``sqlite3.Connection`` holds a prepared-statement
+# cache which holds the connection back, so every connection sits in a
+# reference cycle and is reclaimed only if and when the cyclic collector
+# happens to run. Until then the process keeps descriptors on ``index.db``
+# and on its ``-wal`` / ``-shm`` sidecars — a descriptor leak on every
+# platform, and on Windows an open handle also makes ``os.unlink`` /
+# ``rmdir`` on the workspace fail.
+#
+# ``closing`` on the outside and the transaction context on the inside means
+# the inner block commits-or-rolls-back FIRST and the close happens after.
+# The reverse order would be a correctness bug: ``close()`` never commits,
+# so closing first would silently discard the transaction.
+
+
 def ensure_metadata_schema(workspace: str | Path) -> None:
     """Idempotent. Creates the ``block_metadata`` table and runs in-place
     migrations for pre-round-4 schemas missing ``updated_at``."""
@@ -155,14 +176,15 @@ def ensure_metadata_schema(workspace: str | Path) -> None:
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db, timeout=30) as conn:
-        conn.executescript(_SCHEMA_SQL)
-        try:
-            conn.execute(_MIGRATION_SQL)
-        except sqlite3.OperationalError:
-            # Column already exists — newer schema; nothing to do.
-            pass
-        conn.commit()
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            conn.executescript(_SCHEMA_SQL)
+            try:
+                conn.execute(_MIGRATION_SQL)
+            except sqlite3.OperationalError:
+                # Column already exists — newer schema; nothing to do.
+                pass
+            conn.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -201,24 +223,25 @@ def set_block_metadata(
         _log.warning("vocabulary_flagged", block_id=block_id, field=v.field, value=v.value)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
     db = Path(workspace) / "index.db"
-    with sqlite3.connect(db, timeout=30) as conn:
-        conn.execute(
-            "INSERT INTO block_metadata "
-            "(block_id, tags, ttl_seconds, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?) "
-            "ON CONFLICT(block_id) DO UPDATE SET "
-            "tags = excluded.tags, "
-            "ttl_seconds = excluded.ttl_seconds, "
-            "updated_at = excluded.updated_at",
-            (block_id, json.dumps(safe_tags), ttl_seconds, now, now),
-        )
-        # Pull the canonical created_at back out so the returned
-        # dataclass reflects the persisted (potentially older) timestamp.
-        row = conn.execute(
-            "SELECT created_at, updated_at FROM block_metadata WHERE block_id = ?",
-            (block_id,),
-        ).fetchone()
-        conn.commit()
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            conn.execute(
+                "INSERT INTO block_metadata "
+                "(block_id, tags, ttl_seconds, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(block_id) DO UPDATE SET "
+                "tags = excluded.tags, "
+                "ttl_seconds = excluded.ttl_seconds, "
+                "updated_at = excluded.updated_at",
+                (block_id, json.dumps(safe_tags), ttl_seconds, now, now),
+            )
+            # Pull the canonical created_at back out so the returned
+            # dataclass reflects the persisted (potentially older) timestamp.
+            row = conn.execute(
+                "SELECT created_at, updated_at FROM block_metadata WHERE block_id = ?",
+                (block_id,),
+            ).fetchone()
+            conn.commit()
     created_at = row[0] if row else now
     updated_at = row[1] if row else now
     return BlockMetadata(
@@ -235,19 +258,20 @@ def get_block_metadata(workspace: str | Path, block_id: str) -> BlockMetadata | 
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return None
-    with sqlite3.connect(db, timeout=30) as conn:
-        if not _table_exists(conn, "block_metadata"):
-            return None
-        # ``updated_at`` may be missing on pre-round-4 schemas that
-        # haven't run the migration yet — fall back to ``created_at``.
-        cols = {row[1] for row in conn.execute("PRAGMA table_info(block_metadata)")}
-        has_updated = "updated_at" in cols
-        select = (
-            "SELECT block_id, tags, ttl_seconds, created_at, updated_at FROM block_metadata WHERE block_id = ?"
-            if has_updated
-            else "SELECT block_id, tags, ttl_seconds, created_at FROM block_metadata WHERE block_id = ?"
-        )
-        row = conn.execute(select, (block_id,)).fetchone()
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            if not _table_exists(conn, "block_metadata"):
+                return None
+            # ``updated_at`` may be missing on pre-round-4 schemas that
+            # haven't run the migration yet — fall back to ``created_at``.
+            cols = {row[1] for row in conn.execute("PRAGMA table_info(block_metadata)")}
+            has_updated = "updated_at" in cols
+            select = (
+                "SELECT block_id, tags, ttl_seconds, created_at, updated_at FROM block_metadata WHERE block_id = ?"
+                if has_updated
+                else "SELECT block_id, tags, ttl_seconds, created_at FROM block_metadata WHERE block_id = ?"
+            )
+            row = conn.execute(select, (block_id,)).fetchone()
     if row is None:
         return None
     try:
@@ -269,12 +293,18 @@ def delete_block_metadata(workspace: str | Path, block_id: str) -> bool:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return False
-    with sqlite3.connect(db, timeout=30) as conn:
-        if not _table_exists(conn, "block_metadata"):
-            return False
-        cursor = conn.execute("DELETE FROM block_metadata WHERE block_id = ?", (block_id,))
-        conn.commit()
-    return cursor.rowcount > 0
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            if not _table_exists(conn, "block_metadata"):
+                return False
+            cursor = conn.execute("DELETE FROM block_metadata WHERE block_id = ?", (block_id,))
+            # Read rowcount while the connection is still open. It is fixed
+            # the moment the DELETE executes, so the value is unchanged —
+            # this just keeps the result off a cursor whose connection has
+            # since been closed.
+            deleted = cursor.rowcount > 0
+            conn.commit()
+    return deleted
 
 
 def list_blocks_by_tag(
@@ -296,13 +326,14 @@ def list_blocks_by_tag(
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db, timeout=30) as conn:
-        if not _table_exists(conn, "block_metadata"):
-            return []
-        rows = conn.execute(
-            "SELECT block_id FROM block_metadata WHERE json_extract(tags, '$.' || ?) = ? LIMIT ?",
-            (key, value, int(limit)),
-        ).fetchall()
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            if not _table_exists(conn, "block_metadata"):
+                return []
+            rows = conn.execute(
+                "SELECT block_id FROM block_metadata WHERE json_extract(tags, '$.' || ?) = ? LIMIT ?",
+                (key, value, int(limit)),
+            ).fetchall()
     return [r[0] for r in rows]
 
 

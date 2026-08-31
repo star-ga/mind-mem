@@ -18,13 +18,29 @@ decision.
 Strategies fall back gracefully when their signal is absent:
 
   - lineage_first / contradicts_first / graph_walk degrade to
-    DEFAULT when the lineage graph table does not exist yet.
+    DEFAULT when the lineage graph table does not exist yet. They read
+    the ``co_retrieval`` graph from the workspace
+    ``.mind-mem-index/recall.db`` written by mind_mem.retrieval_graph /
+    mind_mem.block_lineage.
   - surprise_weighted degrades to DEFAULT when no embedding centroid
     is supplied (the embedding pipeline that produces centroids lands
     in a separate v4 commit; for now callers pass the centroid in).
 
 Feature-flag gated under ``v4.cognitive_kernel`` (the same flag the
 registry uses). v3.x callers see no behaviour change.
+
+**Importing this module is what registers the strategies.** The
+registry lives in :mod:`mind_mem.v4.cognitive_kernel`, and that module
+does not import this one, so::
+
+    from mind_mem.v4.cognitive_kernel import mind_recall
+    mind_recall(ws, "q", kernel="graph_walk")   # KeyError
+
+raises until ``mind_mem.v4.kernels`` has been imported at least once.
+Callers that want the four named strategies must import it explicitly::
+
+    import mind_mem.v4.kernels  # noqa: F401 — registers the strategies
+    from mind_mem.v4.cognitive_kernel import mind_recall
 
 Copyright STARGA, Inc.
 """
@@ -36,13 +52,13 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Sequence
 
+from ..retrieval_graph import _db_path as _lineage_db_path
 from .cognitive_kernel import (
     DEFAULT_KERNEL,
     KernelHit,
     KernelKind,
     KernelResult,
 )
-from .feature_flags import is_enabled
 from .surprise_retrieval import compute_surprise
 
 __all__ = [
@@ -66,13 +82,56 @@ def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
     return row is not None
 
 
-def _open(workspace: str) -> sqlite3.Connection | None:
-    """Return a read-only connection to the workspace ``index.db`` or
-    ``None`` if the database doesn't exist yet (degraded path)."""
-    db = Path(workspace) / "index.db"
+def _open_lineage(workspace: str) -> sqlite3.Connection | None:
+    """Return a connection to the workspace lineage graph database, or
+    ``None`` if it doesn't exist yet (degraded path).
+
+    The typed ``co_retrieval`` graph is **not** in the ``index.db`` the
+    other v4 modules use for block state -- it is written by
+    :mod:`mind_mem.retrieval_graph` / :mod:`mind_mem.block_lineage` into
+    ``<workspace>/.mind-mem-index/recall.db``. The path is resolved
+    through the writer's own helper so this reader can never drift away
+    from wherever the writer puts it.
+
+    The path is only ever *read*: unlike the writer's ``_connect`` this
+    never creates the directory or the file, so calling a lineage
+    strategy on a workspace that has no graph yet degrades instead of
+    leaving an empty database behind.
+    """
+    db = Path(_lineage_db_path(workspace))
     if not db.is_file():
         return None
     return sqlite3.connect(db, timeout=30)
+
+
+def _open_lineage_graph(workspace: str) -> sqlite3.Connection | None:
+    """Open the lineage database *and* confirm ``co_retrieval`` is present.
+
+    Returns ``None`` on the two degraded cases the strategies document —
+    no database file, or a database without the graph table — and a live
+    connection otherwise.
+
+    The table probe used to run inside each caller's guard expression
+    (``if conn is None or not _table_exists(conn, ...)``), i.e. *before*
+    the ``try/finally`` that closes the connection. A corrupt
+    ``recall.db`` makes that first query raise, so every call leaked one
+    connection — and with it the ``.db``/``-wal``/``-shm`` descriptors,
+    which on Windows blocks deleting or replacing the workspace. Opening
+    and probing are one operation here so there is no window in which a
+    connection exists outside a handler that closes it.
+    """
+    conn = _open_lineage(workspace)
+    if conn is None:
+        return None
+    try:
+        has_table = _table_exists(conn, "co_retrieval")
+    except BaseException:
+        conn.close()
+        raise
+    if not has_table:
+        conn.close()
+        return None
+    return conn
 
 
 # ---------------------------------------------------------------------------
@@ -142,16 +201,15 @@ def lineage_first_kernel(
 ) -> KernelResult:
     """Promote candidates that have outgoing lineage edges; demote leaves.
 
-    Reads the v3.11 ``co_retrieval`` lineage table. Each candidate's
+    Reads the v3.11 ``co_retrieval`` lineage table (in the workspace
+    ``.mind-mem-index/recall.db``, not ``index.db``). Each candidate's
     score becomes ``base_score * (1 + edge_count / 10)`` so a block
     with many outgoing edges out-ranks an isolated leaf at the same
     raw score. Falls back to DEFAULT when the table is missing.
     """
     base = DEFAULT_KERNEL(workspace, query)
-    conn = _open(workspace)
-    if conn is None or not _table_exists(conn, "co_retrieval"):
-        if conn is not None:
-            conn.close()
+    conn = _open_lineage_graph(workspace)
+    if conn is None:
         return KernelResult(
             kernel=KernelKind.LINEAGE_FIRST,
             hits=base.hits,
@@ -193,7 +251,8 @@ def lineage_first_kernel(
 def contradicts_first_kernel(workspace: str, query: str, **_: Any) -> KernelResult:
     """Surface candidates linked by a ``contradicts`` edge first.
 
-    Reads the v3.11 ``co_retrieval`` table filtered to ``kind =
+    Reads the v3.11 ``co_retrieval`` table (in the workspace
+    ``.mind-mem-index/recall.db``, not ``index.db``) filtered to ``kind =
     'contradicts'``. Candidates that appear on either side of a
     contradicts edge get a +1.0 score boost; the rest stay on
     base_score. Useful for hypothesis-testing recalls where the user
@@ -202,10 +261,8 @@ def contradicts_first_kernel(workspace: str, query: str, **_: Any) -> KernelResu
     Falls back to DEFAULT when the lineage table is missing.
     """
     base = DEFAULT_KERNEL(workspace, query)
-    conn = _open(workspace)
-    if conn is None or not _table_exists(conn, "co_retrieval"):
-        if conn is not None:
-            conn.close()
+    conn = _open_lineage_graph(workspace)
+    if conn is None:
         return KernelResult(
             kernel=KernelKind.CONTRADICTS_FIRST,
             hits=base.hits,
@@ -262,7 +319,8 @@ def graph_walk_kernel(
 ) -> KernelResult:
     """Bounded BFS from seed IDs (or default-kernel hits if no seeds).
 
-    Walks the v3.11 ``co_retrieval`` graph from each seed up to
+    Walks the v3.11 ``co_retrieval`` graph (in the workspace
+    ``.mind-mem-index/recall.db``, not ``index.db``) from each seed up to
     ``max_hops`` away, capped at ``max_nodes`` total. Score is
     ``1.0 / (hop_distance + 1)`` so seeds rank highest, immediate
     neighbours next, and so on.
@@ -270,10 +328,8 @@ def graph_walk_kernel(
     Falls back to DEFAULT when the lineage table is missing.
     """
     base = DEFAULT_KERNEL(workspace, query)
-    conn = _open(workspace)
-    if conn is None or not _table_exists(conn, "co_retrieval"):
-        if conn is not None:
-            conn.close()
+    conn = _open_lineage_graph(workspace)
+    if conn is None:
         return KernelResult(
             kernel=KernelKind.GRAPH_WALK,
             hits=base.hits,
@@ -347,16 +403,19 @@ _registry[KernelKind.CONTRADICTS_FIRST] = contradicts_first_kernel
 _registry[KernelKind.GRAPH_WALK] = graph_walk_kernel
 
 
-# Also auto-import on cognitive_kernel use so callers don't have to
-# remember to import this module separately. The light-weight `is_enabled`
-# probe avoids loading v4 internals on a v3.x-only checkout.
-def _maybe_warmup() -> None:
-    if is_enabled("cognitive_kernel"):
-        # Trigger any lazy imports the strategies depend on.
-        _ = surprise_weighted_kernel  # touch
-        _ = lineage_first_kernel
-        _ = contradicts_first_kernel
-        _ = graph_walk_kernel
-
-
-_maybe_warmup()
+# There is deliberately no "warm-up" hook below this point. A previous
+# ``_maybe_warmup()`` was defined *in this module* and called *from this
+# module*, so it could only ever run once this module had already been
+# imported — the auto-import its own comment promised was structurally
+# impossible, and its body only rebound four already-bound names. It has
+# been removed rather than left as a hook that looks load-bearing.
+#
+# Registration is therefore import-driven, and importing
+# ``mind_mem.v4.cognitive_kernel`` alone is NOT enough: nothing in that
+# module (or in ``mind_mem.v4.__init__``) imports this one, so
+# ``available_kernels()`` returns ``[DEFAULT]`` and ``mind_recall(...,
+# kernel="graph_walk")`` raises KeyError until a caller does::
+#
+#     import mind_mem.v4.kernels  # noqa: F401 — registers the strategies
+#
+# See the module docstring.

@@ -49,9 +49,28 @@ E. compliance-sensitive opt-in extensions
 
 F. anti-patterns explicitly forbidden — see docs/roadmap-v4.md.
 
-The ``v4`` package adds NO behaviour to v3.x code paths until a flag
-flips. Every public symbol is additive; nothing in v3.x imports from
-``mind_mem.v4``. This is the contract.
+The contract, stated precisely:
+
+* Every *flag-gated surface* in this package adds NO behaviour to v3.x
+  code paths until its flag flips — with the flag off it raises
+  ``FeatureDisabledError`` and v3.x behaviour is unchanged.
+* Every public symbol is additive; no v3.x signature changed.
+* ``mind_mem.v4`` is NOT optional at packaging time. Several v3.x
+  modules import from it, so a build that excludes this package breaks
+  v3.x at import time:
+
+  - ``recall_vector`` imports ``v4.circuit_breaker`` at module level and
+    guards every embedding provider with ``CircuitBreaker.guarded_call``
+    — the deliberately *un-gated* entry point (see its docstring), so a
+    dead embedder is short-circuited even with every v4 flag off. This
+    is the one place v4 logic runs on a v3.x path by design.
+  - ``lint`` and ``world_staleness`` import ``v4.feature_flags`` at
+    module level; ``_recall_core``, ``world_staleness_config``,
+    ``knowledge_graph``, ``http_transport`` and ``mcp.tools.graph``
+    import v4 modules at call time.
+
+  All of those either only *read* a flag (and take the v3.x branch when
+  it is off) or sit behind a ``require_enabled`` call of their own.
 
 Copyright STARGA, Inc.
 """

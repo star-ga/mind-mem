@@ -493,3 +493,67 @@ class TestTheChainClosesTheConnectionsItOpens:
             assert chain is not None  # still referenced; nothing was collected
         finally:
             gc.enable()
+
+
+class TestMigrationRejectsMalformedV1:
+    """``convert_from_v1`` documents ``MigrationError`` on a malformed file.
+
+    Two ways it used not to hold: a line that parses to a non-object
+    escaped as a raw AttributeError, and an entry with no ``payload_hash``
+    migrated silently to ``content=""`` — a chain that then verifies as
+    fully intact while having dropped the commitment it exists to carry.
+    """
+
+    def _write(self, path: Path, lines: list[object]) -> str:
+        with open(path, "w", encoding="utf-8") as f:
+            for line in lines:
+                f.write(json.dumps(line) + "\n")
+        return str(path)
+
+    def _entry(self, **overrides: object) -> dict:
+        entry = {
+            "seq": 1,
+            "timestamp": "2026-01-01T00:00:00+00:00",
+            "operation": "create_block",
+            "target": "block-one",
+            "payload_hash": hashlib.sha256(b"some data").hexdigest(),
+        }
+        entry.update(overrides)
+        return entry
+
+    def test_non_object_line_raises_migration_error(self, tmp_path: Path) -> None:
+        v1 = self._write(tmp_path / "v1.jsonl", [self._entry(), []])
+        with pytest.raises(MigrationError, match="expected a JSON object"):
+            convert_from_v1(v1, str(tmp_path / "migrated.db"))
+
+    def test_entry_without_payload_hash_raises_migration_error(self, tmp_path: Path) -> None:
+        entry = self._entry()
+        del entry["payload_hash"]
+        v1 = self._write(tmp_path / "v1.jsonl", [entry])
+        with pytest.raises(MigrationError, match="payload_hash"):
+            convert_from_v1(v1, str(tmp_path / "migrated.db"))
+
+    def test_entry_with_empty_payload_hash_raises_migration_error(self, tmp_path: Path) -> None:
+        v1 = self._write(tmp_path / "v1.jsonl", [self._entry(payload_hash="")])
+        with pytest.raises(MigrationError, match="payload_hash"):
+            convert_from_v1(v1, str(tmp_path / "migrated.db"))
+
+    def test_rejected_migration_leaves_no_partial_chain(self, tmp_path: Path) -> None:
+        """The destination must not exist after a refused migration.
+
+        The old code opened the destination chain first and appended until
+        it hit the bad entry, leaving a truncated ledger on disk.
+        """
+        v1 = self._write(tmp_path / "v1.jsonl", [self._entry(), self._entry(seq=2, payload_hash="")])
+        dest = tmp_path / "migrated.db"
+        with pytest.raises(MigrationError):
+            convert_from_v1(v1, str(dest))
+        assert not dest.exists()
+
+    def test_valid_v1_file_still_migrates(self, tmp_path: Path) -> None:
+        v1 = self._write(tmp_path / "v1.jsonl", [self._entry(), self._entry(seq=2, target="block-two")])
+        chain = convert_from_v1(v1, str(tmp_path / "migrated.db"))
+        assert chain.length == 2
+        ok, bad = chain.verify_chain()
+        assert ok is True and bad == -1
+        assert all(e.content_hash == _sha3(hashlib.sha256(b"some data").hexdigest()) for e in chain.get_latest(10))

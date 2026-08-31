@@ -11,11 +11,37 @@ Promotes blocks from flat to multi-page by attaching a *kind* tag:
     code        — a code-symbol or file reference
     structured  — JSON / table / typed record
 
-The default v3.x flat-block schema has no ``kind`` column. v4 adds one,
-zero-downtime: ``ALTER TABLE ... ADD COLUMN kind TEXT NOT NULL DEFAULT
-'unspecified'`` makes every existing row legal under the new schema
-without any data movement. v3.x reads/writes ignore the column; v4
-readers branch on it.
+**Which database this is.** Every function here operates on
+``<workspace>/index.db`` — the v4 side store shared with
+:mod:`~mind_mem.v4.federation`, :mod:`~mind_mem.v4.self_editing` and the
+rest of the v4 surface. It is **not** the v3 recall index, which lives at
+``.mind-mem-index/recall.db`` (see :mod:`mind_mem.sqlite_index`) and is
+never opened from this module. Read the ALTER below as *this store's*
+schema, not as a migration of the corpus index: on a workspace that has
+never used the v4 surface, ``ensure_block_kind_column`` creates an empty
+``blocks`` table here and adds the column to that, so nothing is copied and
+nothing is at risk — but equally, no existing block gains a kind by calling
+it. Saying otherwise (this docstring used to) would promise a data
+migration the code does not perform.
+
+``ALTER TABLE ... ADD COLUMN kind TEXT NOT NULL DEFAULT 'unspecified'`` is
+still the right shape for the store it does own: any row already present
+stays legal under the new schema with no data movement, and readers that
+predate the column ignore it.
+
+**The primary column has no writer in this package.** ``blocks.kind`` is
+populated only by a caller that writes it directly —
+:func:`set_block_kinds` deliberately writes ``block_kind_tags`` and leaves
+the column alone. Until such a caller exists, :func:`get_block_kind`
+answers :data:`DEFAULT_KIND` and :func:`list_blocks_by_kind` answers ``[]``
+for every workspace, and both are behaving as written rather than failing.
+The multi-label pair (:func:`set_block_kinds` /
+:func:`get_block_kind_tags`) is the surface that round-trips today.
+
+deferred: the single-label column has a reader and no in-package writer —
+upgrade path is either a ``set_block_kind`` that writes the column beside
+the tag set, or dropping the column surface in favour of the tags table
+and having ``get_block_kind`` derive a primary from it.
 
 Two retrieval modes coexist downstream (landed in
 :mod:`mind_mem.v4.long_context_recall`):
@@ -43,6 +69,7 @@ Copyright STARGA, Inc.
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from enum import Enum
 from pathlib import Path
 from typing import Iterable
@@ -102,11 +129,36 @@ DEFAULT_KIND: BlockKind = BlockKind.UNSPECIFIED
 ALLOWED_KINDS: frozenset[str] = frozenset(k.value for k in BlockKind)
 
 
+# Every connection below is opened as ``closing(sqlite3.connect(...)) as conn, conn``.
+# Both context managers are load-bearing and the order is not interchangeable:
+#
+#   * the inner ``conn`` commits on success / rolls back on an exception — that
+#     is the *only* thing a bare ``with sqlite3.connect(...) as conn`` does. Its
+#     ``__exit__`` never closes the handle;
+#   * :func:`contextlib.closing` then closes it. ``close()`` on its own never
+#     commits, so it must run *after* the transaction context exits, which is
+#     exactly what ``with A, B`` guarantees (B exits first).
+#
+# Without the close the handle survives the call. Refcounting cannot reclaim it:
+# a ``sqlite3.Connection`` owns a prepared-statement cache that refers back to
+# the connection, so every one of these sits in a reference cycle and is freed
+# only if and when the cyclic collector happens to run. Until then the process
+# holds a descriptor on ``index.db`` and on its ``-wal`` / ``-shm`` sidecars —
+# an unbounded descriptor leak under a long-lived server, sidecars that never
+# get checkpointed away, and on Windows an open handle that makes ``unlink`` /
+# ``rmdir`` of the workspace fail outright.
+#
+# These functions are module-level with no object to hang a ``_session()``
+# helper on (cf. :meth:`mind_mem.hash_chain_v2.HashChainV2._session`, the same
+# fix in class form), so the close is applied at each call site.
+
+
 # ---------------------------------------------------------------------------
 # Schema migration
 # ---------------------------------------------------------------------------
 
-#: Zero-downtime ALTER that makes every v3.x row legal under v4.
+#: ALTER that makes every existing row of the v4 ``index.db`` ``blocks`` table
+#: legal under the kind schema. Not a v3 migration — see the module docstring.
 _ADD_COLUMN_SQL: str = "ALTER TABLE blocks ADD COLUMN kind TEXT NOT NULL DEFAULT 'unspecified'"
 
 #: Index on the new column so ``list_blocks_by_kind`` doesn't full-scan
@@ -115,7 +167,11 @@ _INDEX_SQL: str = "CREATE INDEX IF NOT EXISTS idx_blocks_kind ON blocks (kind)"
 
 
 def ensure_block_kind_column(workspace: str | Path) -> None:
-    """Add the ``kind`` column to ``blocks`` if absent. Idempotent.
+    """Add the ``kind`` column to the v4 ``blocks`` table if absent. Idempotent.
+
+    Operates on ``<workspace>/index.db``, the v4 side store — NOT on the v3
+    recall index at ``.mind-mem-index/recall.db``. It therefore does not give
+    existing corpus blocks a kind; it prepares this store's schema.
 
     Walks the SQLite ``PRAGMA table_info(blocks)`` cursor and only
     issues the ALTER when ``kind`` is missing — running this on every
@@ -128,9 +184,11 @@ def ensure_block_kind_column(workspace: str | Path) -> None:
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db, timeout=30) as conn:
-        # Ensure the blocks table exists at all (fresh workspaces) so the
-        # ALTER below has something to alter.
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
+        # The v4 store's own ``blocks`` table. On a workspace that has not used
+        # the v4 surface this creates it empty, and the ALTER below then adds
+        # the column to an empty table — the honest description of the common
+        # case, and the reason this function migrates no corpus data.
         conn.execute("CREATE TABLE IF NOT EXISTS blocks (id TEXT PRIMARY KEY, content TEXT)")
         cols = {row[1] for row in conn.execute("PRAGMA table_info(blocks)")}
         if "kind" not in cols:
@@ -145,18 +203,23 @@ def ensure_block_kind_column(workspace: str | Path) -> None:
 
 
 def get_block_kind(workspace: str | Path, block_id: str) -> BlockKind:
-    """Return the kind for a single block.
+    """Return the primary kind recorded for a single block in the v4 store.
 
     Blocks with no row in ``blocks`` (or a missing column) return
     :data:`DEFAULT_KIND`. Unknown stored values also coerce to
     :data:`DEFAULT_KIND` rather than raising — fail-soft so a single
     corrupt row can't kill the recall path.
+
+    No function in this package writes ``blocks.kind``, so on a workspace
+    with no external writer this returns :data:`DEFAULT_KIND` for every id.
+    That is the fallback doing its job, not a lookup failure — for the tags
+    this package does write, use :func:`get_block_kind_tags`.
     """
     require_enabled(FLAG)
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return DEFAULT_KIND
-    with sqlite3.connect(db, timeout=30) as conn:
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
         if not _has_kind_column(conn):
             return DEFAULT_KIND
         row = conn.execute(
@@ -183,6 +246,11 @@ def list_blocks_by_kind(
     or when ``limit`` is non-positive. Order is the SQLite default
     (insertion / rowid) — callers that need a specific order should
     filter against a separate metadata table.
+
+    Reads the same unwritten ``blocks.kind`` column as
+    :func:`get_block_kind`, so with no external writer this is empty for
+    every kind. An empty result here is "nothing is tagged in the column",
+    never "the workspace holds no blocks of that kind".
     """
     require_enabled(FLAG)
     if isinstance(kind, str):
@@ -192,7 +260,7 @@ def list_blocks_by_kind(
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db, timeout=30) as conn:
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
         if not _has_kind_column(conn):
             return []
         rows: Iterable[tuple[str]] = conn.execute(
@@ -262,7 +330,7 @@ def ensure_block_kind_tags_table(workspace: str | Path) -> None:
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db, timeout=30) as conn:
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
         conn.executescript(_TAGS_SCHEMA_SQL)
         conn.commit()
 
@@ -295,7 +363,7 @@ def set_block_kinds(
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db, timeout=30) as conn:
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
         conn.executescript(_TAGS_SCHEMA_SQL)
         conn.execute("DELETE FROM block_kind_tags WHERE block_id = ?", (block_id,))
         if validated:
@@ -323,7 +391,7 @@ def get_block_kind_tags(workspace: str | Path, block_id: str) -> set[BlockKind]:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return set()
-    with sqlite3.connect(db, timeout=30) as conn:
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
         if not _table_exists(conn, "block_kind_tags"):
             return set()
         rows = conn.execute(

@@ -49,10 +49,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
-from .feature_flags import is_enabled, require_enabled
+from .feature_flags import flag_config, is_enabled, require_enabled
 
 __all__ = [
     "FLAG",
+    "MAX_CARDINALITY",
     "Counter",
     "Gauge",
     "Histogram",
@@ -157,13 +158,45 @@ _histograms: dict[str, Histogram] = {}
 _registry_lock = threading.Lock()
 
 #: Cardinality guard — round-4 audit (Mistral / GLM both flagged this).
-#: When the registry exceeds ``MAX_CARDINALITY`` distinct names per
-#: type, additional get-or-create calls return a shared no-op metric
-#: that records nothing rather than blowing up memory. Production
-#: callers can set this via mind-mem.json:
+#: When the registry exceeds the effective cap (see
+#: :func:`_effective_max_cardinality`) distinct names per type,
+#: additional get-or-create calls return a shared no-op metric that
+#: records nothing rather than blowing up memory. This constant is the
+#: default; production callers override it via mind-mem.json:
 #:
 #:     "v4": {"observability": {"enabled": true, "max_cardinality": 5000}}
 MAX_CARDINALITY: int = 10000
+
+#: Memoised config-derived cap. ``None`` means "not resolved yet";
+#: ``(value,)`` holds the resolved override, or ``(None,)`` when the
+#: config does not set one. Resolved at most once per process because
+#: it is read on the get-or-create path; :func:`reset_for_tests` clears
+#: it so a test can install a different config.
+_config_cap: tuple[int | None] | None = None
+
+
+def _effective_max_cardinality() -> int:
+    """Cap in force: ``v4.observability.max_cardinality`` else the constant.
+
+    Read from the flag's own sub-config, which is the knob the comment
+    on :data:`MAX_CARDINALITY` has always advertised. A missing,
+    non-integer or non-positive value falls back to the constant, so a
+    typo cannot silently disable the guard.
+    """
+    global _config_cap
+    if _config_cap is None:
+        value: int | None = None
+        try:
+            raw = flag_config(FLAG).get("max_cardinality")
+        except Exception:
+            # An unreadable config must not break metric registration.
+            raw = None
+        if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0:
+            value = raw
+        _config_cap = (value,)
+    resolved = _config_cap[0]
+    return resolved if resolved is not None else MAX_CARDINALITY
+
 
 #: Sentinel returned by counter/gauge/histogram once the cardinality
 #: cap is hit. Each is shared across all overflow names — recording
@@ -185,7 +218,7 @@ def counter(name: str) -> Counter:
         c = _counters.get(name)
         if c is not None:
             return c
-        if len(_counters) >= MAX_CARDINALITY:
+        if len(_counters) >= _effective_max_cardinality():
             _counters.setdefault("v4.cardinality.dropped_counter", Counter(name="v4.cardinality.dropped_counter")).value += 1
             return _OVERFLOW_COUNTER
         c = Counter(name=name)
@@ -199,7 +232,7 @@ def gauge(name: str) -> Gauge:
         g = _gauges.get(name)
         if g is not None:
             return g
-        if len(_gauges) >= MAX_CARDINALITY:
+        if len(_gauges) >= _effective_max_cardinality():
             _counters.setdefault("v4.cardinality.dropped_gauge", Counter(name="v4.cardinality.dropped_gauge")).value += 1
             return _OVERFLOW_GAUGE
         g = Gauge(name=name)
@@ -213,7 +246,7 @@ def histogram(name: str) -> Histogram:
         h = _histograms.get(name)
         if h is not None:
             return h
-        if len(_histograms) >= MAX_CARDINALITY:
+        if len(_histograms) >= _effective_max_cardinality():
             _counters.setdefault("v4.cardinality.dropped_histogram", Counter(name="v4.cardinality.dropped_histogram")).value += 1
             return _OVERFLOW_HISTOGRAM
         h = Histogram(name=name)
@@ -250,11 +283,13 @@ def snapshot() -> dict[str, Any]:
 
 
 def reset_for_tests() -> None:
-    """Clear the registry. Test-only — never call in production."""
+    """Clear the registry + the memoised cap. Test-only."""
+    global _config_cap
     with _registry_lock:
         _counters.clear()
         _gauges.clear()
         _histograms.clear()
+        _config_cap = None
 
 
 # ---------------------------------------------------------------------------

@@ -61,6 +61,12 @@ class PreviewResult:
             "reason": self.reason,
             "files": list(self.files),
             "truncated_lines": self.truncated_lines,
+            # Emitted ONLY when the cleanup failed. The field's whole purpose is
+            # that a surviving sandbox is visible rather than silent, and it was
+            # not in this dict at all -- so the guarantee was written down and
+            # never delivered. Omitting it on the happy path keeps the common
+            # payload unchanged while making the failure impossible to miss.
+            **({} if self.sandbox_removed else {"sandbox_removed": False}),
         }
 
 
@@ -76,19 +82,34 @@ def preview_diff(workspace: str, item: ReviewItem, *, max_lines: int = MAX_DIFF_
         return PreviewResult(item.proposal_id, False, reason=f"proposal is not valid: {item.validation_errors[0]}")
 
     root = os.path.realpath(workspace)
-    targets = _targets(item)
-    if not targets:
+    declared = _targets(item)
+    if not declared:
         return PreviewResult(item.proposal_id, False, reason="proposal names no files to change")
 
-    missing = [rel for rel in targets if not os.path.isfile(os.path.join(root, rel))]
+    missing = [rel for rel in declared if not os.path.isfile(os.path.join(root, rel))]
     if missing:
         return PreviewResult(item.proposal_id, False, reason=f"file not found in workspace: {missing[0]}")
+
+    # The apply does not always write where the op says. ``_op_append_block``
+    # hands the parsed block to ``store.write_block``, which routes on the
+    # block-id PREFIX and ignores ``op["file"]`` entirely — and nothing in
+    # ``validate_proposal`` ties the two together. Diffing only the declared
+    # files therefore reported "proposal would change nothing" for a proposal
+    # that really does add a block. ``targets`` is the union, so the preview
+    # covers where the write lands rather than where it was announced.
+    #
+    # Deliberately NOT part of the missing-file refusal above: a routed
+    # destination that does not exist yet is a file the apply creates, not a
+    # broken proposal. It is seeded only when it exists, and ``_render``
+    # renders a non-existent "before" as an all-added diff.
+    targets = _with_routed_targets(declared, item)
+    seedable = tuple(rel for rel in targets if os.path.isfile(os.path.join(root, rel)))
 
     from .governance_gate import evict_gate
 
     sandbox = tempfile.mkdtemp(prefix="mind-mem-review-")
     try:
-        _seed(root, sandbox, targets)
+        _seed(root, sandbox, seedable)
         failure = _replay(sandbox, item)
         if failure:
             result = PreviewResult(item.proposal_id, False, reason=failure)
@@ -182,7 +203,46 @@ def _remove_sandbox(path: str) -> bool:
         else:
             shutil.rmtree(path, onerror=_clear_readonly)
     except OSError:
-        shutil.rmtree(path, ignore_errors=True)
+        pass
+    if not os.path.exists(path):
+        return True
+
+    # Second pass: clear the whole tree UP FRONT, then remove.
+    #
+    # The per-entry handler above depends on rmtree routing each failure through
+    # onexc/onerror, and on chmod fixing the entry that actually blocked the
+    # call. That holds on POSIX, where write permission on the PARENT directory
+    # is what governs unlink. It is not reliable on Windows, where the read-only
+    # ATTRIBUTE lives on the entry itself, directory attributes behave
+    # differently again, and a failure need not surface as the entry the handler
+    # is handed. Clearing every entry before asking for removal does not depend
+    # on any of that.
+    #
+    # Deliberately the SECOND pass, not the first: walking the tree costs a
+    # syscall per entry, and the overwhelmingly common case is a sandbox with no
+    # read-only files at all, which the fast path above removes outright.
+    try:
+        # A DIRECTORY needs its execute bit or it cannot be traversed, and
+        # rmtree then fails to read what is inside it. Handing every entry the
+        # same file-shaped mode leaves directories at 0o600 and BREAKS the very
+        # tree this is trying to clear -- measured, not theorised. On Windows
+        # chmod honours only the write bit, so the wider directory mode is inert
+        # there and costs nothing.
+        for root, dirs, files in os.walk(path, topdown=False):
+            for name in files:
+                try:
+                    os.chmod(os.path.join(root, name), stat.S_IWRITE | stat.S_IREAD)
+                except OSError:
+                    pass
+            for name in dirs:
+                try:
+                    os.chmod(os.path.join(root, name), stat.S_IRWXU)
+                except OSError:
+                    pass
+        os.chmod(path, stat.S_IRWXU)
+    except OSError:
+        pass
+    shutil.rmtree(path, ignore_errors=True)
     return not os.path.exists(path)
 
 
@@ -209,6 +269,59 @@ def _is_contained(relative: str) -> bool:
     """True when *relative* cannot climb out of the workspace root."""
     parts = relative.replace("\\", "/").split("/")
     return ".." not in parts and not any(os.path.isabs(part) for part in parts)
+
+
+def _with_routed_targets(declared: Sequence[str], item: ReviewItem) -> tuple[str, ...]:
+    """*declared* plus the files ``append_block`` ops will actually write to.
+
+    ``_op_append_block`` parses its ``patch`` and calls ``store.write_block``,
+    which resolves the destination from the block-id prefix and never looks at
+    ``op["file"]``. A proposal whose op declares one file for a block routed to
+    another wrote into a path the preview neither seeded nor diffed, so it
+    previewed as "would change nothing" while the apply added the block.
+
+    The routing table is imported from the store rather than restated here:
+    a third copy of the prefix map would be a third thing to keep in lockstep,
+    and a preview that disagrees with the apply is the defect this whole module
+    exists to avoid.
+
+    Only ``append_block`` needs this. The other store-routed ops
+    (``update_field``, ``set_status``, ``append_list_item``,
+    ``supersede_decision``) read the block before writing it, so a wrongly
+    declared file leaves the sandbox without that block and the replay refuses
+    with a named reason — visible, not silent.
+
+    Anything that will not parse is skipped: ``_replay`` reports the parse
+    failure with the op index, which is a better message than one invented
+    here.
+    """
+    from .block_parser import parse_blocks
+    from .block_store import _resolve_block_file
+
+    out = list(declared)
+    for op in item.ops:
+        if op.get("op") != "append_block":
+            continue
+        patch = op.get("patch", "")
+        if not isinstance(patch, str) or not patch:
+            continue
+        try:
+            blocks = parse_blocks(patch)
+        except Exception:  # noqa: BLE001 — _replay reports the real reason
+            continue
+        for block in blocks:
+            block_id = str(block.get("_id", ""))
+            if not block_id:
+                continue
+            # Resolved against "" so the map yields the workspace-RELATIVE
+            # path directly; the map's own values are relative by construction.
+            routed = _resolve_block_file("", block_id)
+            if not routed:
+                continue
+            rel = routed.replace(os.sep, "/").lstrip("/")
+            if rel and rel not in out and _is_contained(rel):
+                out.append(rel)
+    return tuple(out)
 
 
 def _seed(root: str, sandbox: str, targets: Sequence[str]) -> None:

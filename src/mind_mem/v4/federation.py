@@ -54,6 +54,7 @@ import datetime as _dt
 import re
 import sqlite3
 from collections.abc import Callable
+from contextlib import closing
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -102,6 +103,19 @@ def _safe(s: object) -> str:
     return _CTRL_RE.sub("", text)
 
 
+def _audit_bytes(value: object) -> bytes:
+    """Normalise an audit payload to the exact bytes that get hashed.
+
+    Hashing and length-reporting must read the *same* value, otherwise a
+    non-``bytes`` payload gets a real digest next to a length of 0.
+    """
+    if value is None:
+        return b""
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return bytes(value)
+    return str(value).encode("utf-8")
+
+
 class MergeStrategy(str, Enum):
     """Conflict resolution policies."""
 
@@ -129,7 +143,16 @@ class ConflictReport:
 
 @dataclass(frozen=True)
 class Resolution:
-    """Outcome of :func:`resolve_conflict`."""
+    """Outcome of :func:`resolve_conflict`.
+
+    ``winner_version`` is the *winning side's own* logical version — under
+    LAST_WRITER_WINS that can be lower than the losing fork's version, since
+    the most recent wall-clock writer is not necessarily the agent with the
+    highest logical clock. It is NOT the version the block converged to: the
+    version vector converges to the pointwise max of the two forks (max + 1
+    for THREE_WAY_MERGE, which produces new bytes). Read the converged value
+    back with :func:`get_version_vector` rather than inferring it from here.
+    """
 
     block_id: str
     winner_agent: str
@@ -137,6 +160,32 @@ class Resolution:
     strategy: MergeStrategy
     merged_payload: bytes | None = None
     """Optional caller payload (e.g. merged content from a 3-way merge)."""
+
+
+# ---------------------------------------------------------------------------
+# Connection discipline
+# ---------------------------------------------------------------------------
+#
+# Every connection in this module is opened as::
+#
+#     with closing(sqlite3.connect(...)) as conn, conn:
+#
+# ``with conn`` commits — or, on an exception, rolls back — and then leaves the
+# handle OPEN; its ``__exit__`` documents exactly that and nothing more. Nothing
+# else reclaims it either: a ``sqlite3.Connection`` is kept alive by its own
+# prepared-statement cache, and that cache refers back to the connection, so the
+# pair is a reference cycle that refcounting never collects — only the cyclic
+# collector does. Until it happens to run, the process holds a descriptor on
+# ``index.db`` and on its ``-wal``/``-shm`` sidecars. That is a descriptor leak
+# on every platform and a correctness bug on Windows, where an open handle makes
+# ``os.unlink`` fail, so a directory holding a workspace cannot be deleted.
+#
+# ``closing`` is deliberately the OUTER manager: the two unwind in reverse, so
+# ``conn.__exit__`` commits or rolls back BEFORE the close. ``close()`` on its
+# own never commits and rolls back an open transaction, so the ordering cannot
+# turn a commit into a rollback. Same shape as ``hash_chain_v2._session``, spelt
+# at the call site because this module is functions, with no object to hang a
+# session helper on.
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +226,7 @@ def ensure_federation_schema(workspace: str | Path) -> None:
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db, timeout=30) as conn:
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
         conn.executescript(_SCHEMA_SQL)
         conn.commit()
 
@@ -197,7 +246,7 @@ def get_version_vector(workspace: str | Path, block_id: str) -> dict[str, int]:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return {}
-    with sqlite3.connect(db, timeout=30) as conn:
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
         if not _table_exists(conn, "block_tier_vclock"):
             return {}
         rows = conn.execute(
@@ -220,7 +269,7 @@ def list_conflicts(workspace: str | Path, *, limit: int = 100) -> list[ConflictR
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db, timeout=30) as conn:
+    with closing(sqlite3.connect(db, timeout=30)) as conn, conn:
         if not _table_exists(conn, "tier_conflict_log"):
             return []
         rows = conn.execute(
@@ -257,7 +306,7 @@ def record_agent_write(workspace: str | Path, block_id: str, agent_id: str) -> i
     ensure_federation_schema(workspace)
     db = Path(workspace) / "index.db"
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
-    with sqlite3.connect(db, timeout=10) as conn:
+    with closing(sqlite3.connect(db, timeout=10)) as conn, conn:
         conn.execute("BEGIN IMMEDIATE")
         row = conn.execute(
             "SELECT version FROM block_tier_vclock WHERE block_id = ? AND agent_id = ?",
@@ -335,12 +384,19 @@ def resolve_conflict(
 
     Strategies:
         LAST_WRITER_WINS   Pick whichever side wrote most recently (by
-                           version vector tip).
+                           ``last_seen_at``).
         HIGHER_VERSION     Pick the side with the larger logical clock.
         THREE_WAY_MERGE    Call ``merger(report)`` and treat its return
                            as the merged payload; winner_agent is set
                            to a synthetic ``"merge:<left>+<right>"``
                            label for audit.
+
+    Whichever strategy runs, both forks converge in ``block_tier_vclock``
+    to a single version that dominates them both, so the resolved pair is
+    a tie for the next :func:`detect_conflict` pass. That converged version
+    is the pointwise max of the two forks (max + 1 for THREE_WAY_MERGE) and
+    is independent of the returned ``winner_version`` — see
+    :class:`Resolution`.
 
     Returns ``None`` when no open conflict exists for ``block_id``.
     """
@@ -363,11 +419,19 @@ def resolve_conflict(
         # concurrent resolver beat us, treat as already-resolved.
         return None
 
+    # The version the block CONVERGES to, which is not always the winning
+    # side's own version. Pick-a-side strategies converge at the pointwise
+    # max of the two forks (dominating both); only THREE_WAY_MERGE mints a
+    # fresh version because it produces bytes neither side had. Keeping this
+    # separate from `winner_version` is load-bearing — see the upsert below.
+    pairwise_max = max(report.left_version, report.right_version)
+
     if strategy is MergeStrategy.HIGHER_VERSION:
         # Highest logical-clock wins. `report.left_agent` is already the
         # max-version agent (detect_conflict sorts by version desc).
         winner_agent = report.left_agent
         winner_version = report.left_version
+        converged_version = pairwise_max
         merged: bytes | None = None
     elif strategy is MergeStrategy.LAST_WRITER_WINS:
         # Latest wall-clock writer wins, by `last_seen_at`. Falls back to
@@ -375,6 +439,7 @@ def resolve_conflict(
         # and LAST_WRITER_WINS used to be implementation-identical; this
         # branch makes them semantically distinct as the public enum implies.
         winner_agent, winner_version = _pick_last_writer(workspace, block_id, report)
+        converged_version = pairwise_max
         merged = None
     elif strategy is MergeStrategy.THREE_WAY_MERGE:
         if merger is None:
@@ -382,13 +447,14 @@ def resolve_conflict(
             # (which is indistinguishable from "no conflict to resolve").
             raise ValueError("THREE_WAY_MERGE requires a merger callable; got None")
         winner_agent = f"merge:{report.left_agent}+{report.right_agent}"
-        winner_version = max(report.left_version, report.right_version) + 1
+        winner_version = pairwise_max + 1
+        converged_version = winner_version
         merged = merger(report)
     else:
         raise ValueError(f"unrecognised MergeStrategy: {strategy!r}")
 
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
-    with sqlite3.connect(db, timeout=10) as conn:
+    with closing(sqlite3.connect(db, timeout=10)) as conn, conn:
         # FP-3 + FP-8: pin the UPDATE to one specific rowid (so stale
         # open rows for the same block but a different version pair are
         # not collateral-damaged), inside BEGIN IMMEDIATE so two
@@ -415,38 +481,68 @@ def resolve_conflict(
         # and returned but never written to the vclock table.
         #
         # The resolution must converge BOTH the synthetic winner_agent
-        # AND the two original forks (left, right) to winner_version,
+        # AND the two original forks (left, right) to `converged_version`,
         # otherwise the merge agent becomes a third high-version writer
         # and the losers still look like independent forks, so
         # detect_conflict would surface a brand-new conflict pair
         # (winner_agent vs left_agent) on the next pass. By advancing
-        # all three rows to winner_version, the vclock reflects the
-        # post-merge truth: every party agrees on the merged version.
+        # all three rows, the vclock reflects the post-resolution truth:
+        # every party agrees on one version.
+        #
+        # `converged_version`, NOT `winner_version`: under LAST_WRITER_WINS
+        # the winner is the most recent wall-clock writer, which is very
+        # often NOT the highest-version agent. Upserting the winner's own
+        # (lower) version through MAX() left the leading fork untouched, so
+        # convergence never happened: detect_conflict immediately re-found
+        # the identical pair, _log_conflict opened a second row for it
+        # (unbounded conflict-log growth), and the re-resolution could name
+        # a different winner than the one already persisted in resolved_to.
+        # `converged_version` dominates both forks, so the MAX() advances
+        # every row and the pair really does collapse to a tie.
+        #
+        # last_seen_at is deliberately NOT touched on the UPDATE path: it
+        # records when an agent last WROTE, and it is the only ordering
+        # LAST_WRITER_WINS reads. Stamping the resolution time onto every
+        # party erased that ordering (all rows tied on `now`, so the next
+        # LAST_WRITER_WINS silently degraded into HIGHER_VERSION). Only a
+        # row that does not exist yet — the synthetic merge agent — takes
+        # `now`, via the INSERT path.
         for agent in (winner_agent, report.left_agent, report.right_agent):
             conn.execute(
                 "INSERT INTO block_tier_vclock (block_id, agent_id, version, last_seen_at) "
                 "VALUES (?, ?, ?, ?) "
                 "ON CONFLICT(block_id, agent_id) DO UPDATE SET "
-                "version = MAX(excluded.version, block_tier_vclock.version), "
-                "last_seen_at = excluded.last_seen_at",
-                (block_id, agent, winner_version, now),
+                "version = MAX(excluded.version, block_tier_vclock.version)",
+                (block_id, agent, converged_version, now),
             )
         conn.commit()
 
     # Issue #528: audit every THREE_WAY_MERGE with caller-supplied
     # merged_payload. The merger callable can return arbitrary bytes
     # unrelated to either input; we don't validate that here (per the
-    # issue, full server-side MergeStrategy is the long-term fix), but
-    # we DO emit a structured log with SHA-256 hashes of left, right,
-    # and merged payloads so operators can audit anomalies.
+    # issue, full server-side MergeStrategy is the long-term fix).
+    #
+    # What the log CAN carry is exact: the merged payload's SHA-256 and
+    # length, because `merged` is right here. The two INPUT digests are a
+    # different matter — :class:`ConflictReport` is a frozen dataclass of
+    # logical clocks (block_id + the two agents and versions) and this
+    # module never reads the block store, so the left/right bytes are not
+    # available on this path. They are therefore reported as ``None``,
+    # not as ``sha256(b"")``: a constant digest in an audit record is
+    # worse than an explicit absence, because it reads as evidence that
+    # both inputs were empty. ``input_payloads_available`` states which
+    # of the two cases produced the record, so the "did the merger return
+    # bytes unrelated to either input?" comparison is either possible or
+    # visibly impossible — never silently wrong.
     if strategy is MergeStrategy.THREE_WAY_MERGE:
         try:
             import hashlib as _hashlib
             import logging as _logging
 
-            left_bytes = getattr(report, "left_payload", None) or b""
-            right_bytes = getattr(report, "right_payload", None) or b""
-            merged_bytes = merged if merged is not None else b""
+            merged_bytes = _audit_bytes(merged)
+            left_payload = getattr(report, "left_payload", None)
+            right_payload = getattr(report, "right_payload", None)
+            have_inputs = left_payload is not None or right_payload is not None
             _logging.getLogger("mind_mem.federation").info(
                 "three_way_merge_resolved",
                 extra={
@@ -455,18 +551,13 @@ def resolve_conflict(
                     "winner_version": winner_version,
                     "left_agent": _safe(report.left_agent),
                     "left_version": report.left_version,
-                    "left_payload_sha256": _hashlib.sha256(
-                        left_bytes if isinstance(left_bytes, (bytes, bytearray)) else str(left_bytes).encode("utf-8")
-                    ).hexdigest(),
+                    "left_payload_sha256": (_hashlib.sha256(_audit_bytes(left_payload)).hexdigest() if have_inputs else None),
                     "right_agent": _safe(report.right_agent),
                     "right_version": report.right_version,
-                    "right_payload_sha256": _hashlib.sha256(
-                        right_bytes if isinstance(right_bytes, (bytes, bytearray)) else str(right_bytes).encode("utf-8")
-                    ).hexdigest(),
-                    "merged_payload_sha256": _hashlib.sha256(
-                        merged_bytes if isinstance(merged_bytes, (bytes, bytearray)) else str(merged_bytes).encode("utf-8")
-                    ).hexdigest(),
-                    "merged_payload_bytes": len(merged_bytes) if isinstance(merged_bytes, (bytes, bytearray)) else 0,
+                    "right_payload_sha256": (_hashlib.sha256(_audit_bytes(right_payload)).hexdigest() if have_inputs else None),
+                    "merged_payload_sha256": _hashlib.sha256(merged_bytes).hexdigest(),
+                    "merged_payload_bytes": len(merged_bytes),
+                    "input_payloads_available": have_inputs,
                 },
             )
         except Exception:  # nosec B110 — audit log emission; swallow keeps merge path unblocked
@@ -502,7 +593,7 @@ def _log_conflict(workspace: str | Path, report: ConflictReport) -> int | None:
     ensure_federation_schema(workspace)
     db = Path(workspace) / "index.db"
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
-    with sqlite3.connect(db, timeout=10) as conn:
+    with closing(sqlite3.connect(db, timeout=10)) as conn, conn:
         conn.execute("BEGIN IMMEDIATE")
         existing = conn.execute(
             "SELECT rowid FROM tier_conflict_log WHERE block_id = ? AND resolution IS NULL "
@@ -551,7 +642,7 @@ def _find_open_conflict_rowid(
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return None
-    with sqlite3.connect(db, timeout=10) as conn:
+    with closing(sqlite3.connect(db, timeout=10)) as conn, conn:
         row = conn.execute(
             "SELECT rowid FROM tier_conflict_log "
             "WHERE block_id = ? AND resolution IS NULL "
@@ -583,7 +674,7 @@ def _pick_last_writer(
     125, ``block_tier_vclock.last_seen_at``).
     """
     db = Path(workspace) / "index.db"
-    with sqlite3.connect(db, timeout=10) as conn:
+    with closing(sqlite3.connect(db, timeout=10)) as conn, conn:
         rows = conn.execute(
             "SELECT agent_id, version, last_seen_at FROM block_tier_vclock WHERE block_id = ? AND agent_id IN (?, ?)",
             (block_id, report.left_agent, report.right_agent),

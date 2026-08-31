@@ -32,6 +32,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -371,15 +373,52 @@ class BeliefStore:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    @contextmanager
+    def _session(self, db_path: str) -> Iterator[sqlite3.Connection]:
+        """Open a connection, commit-or-rollback, then CLOSE it.
+
+        Every statement below goes through here rather than through
+        ``with sqlite3.connect(...) as conn``, because a bare connection
+        used as a context manager commits (or, on an exception, rolls
+        back) and then leaves the handle open — its ``__exit__`` does
+        that and nothing more.
+
+        Refcounting does not clean up after it either: a
+        ``sqlite3.Connection`` holds its prepared-statement cache and
+        that cache holds the connection back, so the object sits in a
+        reference cycle and is reclaimed only if and when the cyclic
+        collector happens to run. Until then the process keeps an open
+        descriptor on the database and on its ``-wal`` / ``-shm``
+        sidecars. This store persists one row per belief and reopens per
+        write, so a single decay pass over N blocks used to strand N
+        descriptors.
+
+        That is a leak on every platform and a correctness bug on
+        Windows, where an open handle makes ``os.unlink`` fail — a
+        directory holding a belief database could not be removed.
+        Closing is also what lets SQLite checkpoint away the sidecars.
+
+        Transaction semantics are unchanged: the inner ``with conn``
+        still commits on success and rolls back on an exception, and it
+        does so *before* the close. ``close()`` on its own never
+        commits, so the ordering cannot turn a rollback into a commit.
+        """
+        conn = sqlite3.connect(db_path)
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+
     def _init_db(self, db_path: str) -> None:
-        with sqlite3.connect(db_path) as conn:
+        with self._session(db_path) as conn:
             conn.execute(_CREATE_TABLE_SQL)
             conn.commit()
 
     def _load_from_db(self) -> None:
         if not self._db_path:
             return
-        with sqlite3.connect(self._db_path) as conn:
+        with self._session(self._db_path) as conn:
             rows = conn.execute(
                 "SELECT block_id, estimate, variance, last_updated, observation_count, source_reliability FROM beliefs"
             ).fetchall()
@@ -400,7 +439,7 @@ class BeliefStore:
         if not self._db_path:
             return
         state = self._beliefs[block_id]
-        with sqlite3.connect(self._db_path) as conn:
+        with self._session(self._db_path) as conn:
             conn.execute(
                 _UPSERT_SQL,
                 (

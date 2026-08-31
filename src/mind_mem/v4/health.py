@@ -37,7 +37,9 @@ Copyright STARGA, Inc.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as _dt
+import json
 import sqlite3
 import threading
 import time
@@ -58,12 +60,42 @@ ModuleStatus = str  # "ok" | "missing" | "disabled" | "error: <msg>"
 
 
 def _probe_feature_flags(_workspace: Path) -> ModuleStatus:
-    """Always tries to read the registry; missing flags → still ok."""
+    """Check the registry **and** the config file it is read from.
+
+    Importing the registry proves nothing on its own: ``ALL_V4_FLAGS`` is a
+    module-level literal, so an import-plus-emptiness test can only ever say
+    "ok". The failure operators actually hit is a ``mind-mem.json`` that does
+    not parse — the flag loader swallows that and returns an empty block, so
+    every v4 surface goes silently OFF while this probe reports a healthy
+    deployment. Resolve the active config and re-read it instead:
+
+        no config file on disk        → "ok"  (plain v3.x deployment)
+        unreadable file / invalid JSON → "error: ..."
+        root or ``v4`` not an object   → "error: ..."
+    """
     try:
-        from .feature_flags import ALL_V4_FLAGS
+        from .feature_flags import ALL_V4_FLAGS, _config_path
 
         if not ALL_V4_FLAGS:
             return "missing"
+        path = _config_path()
+        if not path.is_file():
+            # Absent config is a supported deployment (all v4 flags OFF),
+            # not a fault — the loader's fallback is correct here.
+            return "ok"
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError as e:
+            return f"error: config unreadable at {path}: {e!r}"
+        try:
+            data = json.loads(raw)
+        except ValueError as e:
+            return f"error: config is not valid JSON at {path}: {e!r}"
+        if not isinstance(data, dict):
+            return f"error: config root at {path} is {type(data).__name__}, expected object"
+        v4 = data.get("v4")
+        if v4 is not None and not isinstance(v4, dict):
+            return f"error: config 'v4' block at {path} is {type(v4).__name__}, expected object"
     except Exception as e:
         return f"error: {e!r}"
     return "ok"
@@ -76,7 +108,14 @@ def _probe_block_kinds(workspace: Path) -> ModuleStatus:
     if not db.is_file():
         return "missing"
     try:
-        with sqlite3.connect(db, timeout=30) as conn:
+        # closing(), not ``with sqlite3.connect(...)``: the connection context
+        # manager commits or rolls back and then leaves the handle open, and the
+        # connection's prepared-statement cache references it back, so
+        # refcounting never reclaims it. A liveness probe is polled — a handle
+        # per poll is an unbounded descriptor leak in exactly the process an
+        # operator is watching. Read-only, so there is nothing to commit.
+        with contextlib.closing(sqlite3.connect(db, timeout=30)) as conn:
+            # The set comprehension drains the cursor inside the block.
             cols = {row[1] for row in conn.execute("PRAGMA table_info(blocks)")}
     except sqlite3.Error as e:
         return f"error: {e!r}"
@@ -101,7 +140,10 @@ def _probe_federation(workspace: Path) -> ModuleStatus:
     if not db.is_file():
         return "missing"
     try:
-        with sqlite3.connect(db, timeout=30) as conn:
+        # Read-only, and closed rather than merely committed — see
+        # _probe_block_kinds for why the bare connection context manager is
+        # not enough.
+        with contextlib.closing(sqlite3.connect(db, timeout=30)) as conn:
             row = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='block_tier_vclock'").fetchone()
     except sqlite3.Error as e:
         return f"error: {e!r}"
@@ -142,8 +184,17 @@ def register_health_probe(name: str, fn: Callable[[Path], ModuleStatus]) -> None
     Thread-safe: writes are guarded by an internal lock so a probe
     being installed concurrently with a ``health_check`` call never
     sees a partially-modified registry.
+
+    Rejects a non-string name or a non-callable probe at registration
+    time: ``health_check`` must not be the place a misconfigured probe
+    is discovered, because by then it is already inside the endpoint
+    that promises never to raise.
     """
     global _custom_probes
+    if not isinstance(name, str) or not name:
+        raise TypeError(f"health probe name must be a non-empty str, got {type(name).__name__}")
+    if not callable(fn):
+        raise TypeError(f"health probe {name!r} must be callable, got {type(fn).__name__}")
     with _custom_probes_lock:
         _custom_probes = [(n, f) for (n, f) in _custom_probes if n != name]
         _custom_probes.append((name, fn))
@@ -175,10 +226,18 @@ def health_check(workspace: str | Path) -> dict[str, Any]:
         custom_snapshot = list(_custom_probes)
     for name, fn in _BUILTIN_PROBES + custom_snapshot:
         try:
-            modules[name] = fn(ws)
+            status = fn(ws)
         except BaseException as e:  # noqa: BLE001  (intentional; see docstring)
-            modules[name] = f"error: {e!r}"
-        statuses.append(modules[name])
+            status = f"error: {e!r}"
+        if not isinstance(status, str):
+            # A probe is only contractually a ``ModuleStatus`` — an alias for
+            # ``str`` with no runtime enforcement. Coerce anything else here:
+            # the aggregation below calls ``str.startswith``, and letting that
+            # raise would break the never-raises contract on exactly the
+            # custom-probe misconfiguration this endpoint exists to report.
+            status = f"error: probe {name!r} returned {type(status).__name__}, expected a status str"
+        modules[name] = status
+        statuses.append(status)
 
     if any(s.startswith("error:") for s in statuses):
         agg = "fail"

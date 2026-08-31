@@ -39,6 +39,7 @@ Copyright STARGA, Inc.
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -151,7 +152,13 @@ def versioned_block_ids(workspace: str | Path, *, limit: int = 1000) -> list[str
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db, timeout=30) as conn:
+    # closing(), not ``with sqlite3.connect(...)``: the connection context
+    # manager commits or rolls back and then leaves the handle open, and the
+    # connection's own prepared-statement cache references it back, so nothing
+    # refcounts it away. These are read-only queries with no transaction to
+    # commit, so closing is the whole job. See ``HashChainV2._session`` for the
+    # write-side form (``with conn:`` inside, close in ``finally``).
+    with contextlib.closing(sqlite3.connect(db, timeout=30)) as conn:
         if not _table_exists(conn, "block_edits"):
             return []
         rows = conn.execute(
@@ -168,7 +175,10 @@ def _applied_edits(workspace: str | Path, block_id: str) -> list[tuple]:
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return []
-    with sqlite3.connect(db, timeout=30) as conn:
+    # Read-only; closed rather than merely committed — see versioned_block_ids.
+    # ``fetchall`` runs inside the block, so the rows are materialised before
+    # the connection goes away.
+    with contextlib.closing(sqlite3.connect(db, timeout=30)) as conn:
         if not _table_exists(conn, "block_edits"):
             return []
         return conn.execute(

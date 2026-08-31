@@ -52,10 +52,14 @@ import random
 import sqlite3
 import struct
 from collections.abc import Callable, Sequence
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..observability import get_logger
 from .feature_flags import flag_config, require_enabled
+
+_log = get_logger("v4.pq")
 
 __all__ = [
     "FLAG",
@@ -229,12 +233,22 @@ def _stdlib_train_codebook(training: Sequence[Sequence[float]], cfg: PQConfig) -
     dim = len(training[0])
     if cfg.subvectors <= 0 or dim % cfg.subvectors != 0:
         raise ValueError(f"subvectors ({cfg.subvectors}) must divide dim ({dim}) evenly")
+    # Every training vector must carry the same dimension. Quietly skipping
+    # the odd ones out (the previous behaviour) is worse than it looks: the
+    # reference dimension comes from vector 0, so a single stray vector at
+    # the front discards the whole real training set while training still
+    # reports success. The resulting codebook's subvector_dim then disagrees
+    # with the production vectors, encode() returns b"" for every one of
+    # them, and PQ search returns nothing with no error anywhere.
+    for i, v in enumerate(training):
+        if len(v) != dim:
+            raise ValueError(f"training vectors must share one dimension: vector 0 has {dim} dims, vector {i} has {len(v)}")
     sub_dim = dim // cfg.subvectors
     rng = random.Random(cfg.kmeans_seed)  # nosec B311 — seeded PRNG for deterministic k-means++ init, not cryptographic
 
     codebook: list[tuple[tuple[float, ...], ...]] = []
     for m in range(cfg.subvectors):
-        sub_points = [tuple(v[m * sub_dim : (m + 1) * sub_dim]) for v in training if len(v) == dim]
+        sub_points = [tuple(v[m * sub_dim : (m + 1) * sub_dim]) for v in training]
         centers = _stdlib_kmeans(sub_points, cfg.centroids, cfg.kmeans_iters, rng)
         # Pad with zero-vectors when training set has < K distinct points.
         while len(centers) < cfg.centroids:
@@ -366,15 +380,36 @@ CREATE TABLE IF NOT EXISTS pq_codes (
 """
 
 
+# Every connection below is opened as ``closing(sqlite3.connect(...))``
+# wrapping an inner ``with conn:``, and the nesting order is load-bearing.
+#
+# A connection used directly as a context manager commits (or, on an
+# exception, rolls back) and then leaves the handle OPEN — its ``__exit__``
+# does exactly that and nothing more. Refcounting does not clean up
+# afterwards either: a ``sqlite3.Connection`` holds a prepared-statement
+# cache which holds the connection back, so every connection sits in a
+# reference cycle and is reclaimed only if and when the cyclic collector
+# happens to run. Until then the process keeps descriptors on ``index.db``
+# and on its ``-wal`` / ``-shm`` sidecars — a descriptor leak on every
+# platform, and on Windows an open handle also makes ``os.unlink`` /
+# ``rmdir`` on the workspace fail.
+#
+# ``closing`` on the outside and the transaction context on the inside means
+# the inner block commits-or-rolls-back FIRST and the close happens after.
+# The reverse order would be a correctness bug: ``close()`` never commits,
+# so closing first would silently discard the transaction.
+
+
 def ensure_pq_schema(workspace: str | Path) -> None:
     """Create the PQ tables on first call. Idempotent."""
     require_enabled(FLAG)
     db = Path(workspace) / "index.db"
     if not db.parent.is_dir():
         db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db, timeout=30) as conn:
-        conn.executescript(_SCHEMA_SQL)
-        conn.commit()
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            conn.executescript(_SCHEMA_SQL)
+            conn.commit()
 
 
 def _serialise_codebook(cb: Codebook) -> bytes:
@@ -395,10 +430,27 @@ def _serialise_codebook(cb: Codebook) -> bytes:
 
 
 def _deserialise_codebook(payload: bytes, cfg: PQConfig, sub_dim: int) -> Codebook:
+    """Unpack a stored codebook BLOB into a :class:`Codebook`.
+
+    Raises:
+        ValueError: If ``payload`` is not exactly the length the stored
+            ``(subvectors, centroids, sub_dim)`` triple implies. Returning
+            an empty codebook here would be indistinguishable from a
+            legitimately empty one, so a truncated row would encode every
+            vector to ``b""`` and score every block ``+inf`` — PQ search
+            returning nothing while every call reports success.
+    """
     M, K = cfg.subvectors, cfg.centroids
-    fmt = f"<{M * K * sub_dim}f"
-    if len(payload) != struct.calcsize(fmt):
+    if sub_dim == 0:
+        # The one legitimately empty shape: an empty codebook has
+        # ``subvector_dim == 0`` and serialises to an empty payload.
+        if payload:
+            raise ValueError(f"pq codebook declares sub_dim=0 but carries a {len(payload)}-byte payload")
         return Codebook(cfg=cfg, centroids=tuple())
+    fmt = f"<{M * K * sub_dim}f"
+    expected = struct.calcsize(fmt)
+    if len(payload) != expected:
+        raise ValueError(f"pq codebook payload is {len(payload)} bytes; shape (M={M}, K={K}, sub_dim={sub_dim}) needs {expected}")
     flat = struct.unpack(fmt, payload)
     centroids: list[tuple[tuple[float, ...], ...]] = []
     idx = 0
@@ -416,40 +468,53 @@ def store_codebook(workspace: str | Path, name: str, codebook: Codebook) -> None
     require_enabled(FLAG)
     ensure_pq_schema(workspace)
     db = Path(workspace) / "index.db"
-    with sqlite3.connect(db, timeout=30) as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO pq_codebook (name, subvectors, centroids, sub_dim, payload) VALUES (?, ?, ?, ?, ?)",
-            (
-                name,
-                codebook.cfg.subvectors,
-                codebook.cfg.centroids,
-                codebook.subvector_dim,
-                _serialise_codebook(codebook),
-            ),
-        )
-        conn.commit()
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO pq_codebook (name, subvectors, centroids, sub_dim, payload) VALUES (?, ?, ?, ?, ?)",
+                (
+                    name,
+                    codebook.cfg.subvectors,
+                    codebook.cfg.centroids,
+                    codebook.subvector_dim,
+                    _serialise_codebook(codebook),
+                ),
+            )
+            conn.commit()
 
 
 def load_codebook(workspace: str | Path, name: str) -> Codebook | None:
-    """Return the codebook by name, or ``None`` if absent / unreadable."""
+    """Return the codebook by name, or ``None`` if absent / unreadable.
+
+    "Unreadable" covers a stored row whose payload length disagrees with
+    its own ``(subvectors, centroids, sub_dim)`` columns. Such a row yields
+    ``None`` — the same signal as "absent" — so the documented
+    ``if cb is None: retrain()`` caller retrains instead of proceeding with
+    a codebook that encodes everything to nothing.
+    """
     require_enabled(FLAG)
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return None
-    with sqlite3.connect(db, timeout=30) as conn:
-        row = (
-            conn.execute(
-                "SELECT subvectors, centroids, sub_dim, payload FROM pq_codebook WHERE name = ?",
-                (name,),
-            ).fetchone()
-            if _table_exists(conn, "pq_codebook")
-            else None
-        )
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            row = (
+                conn.execute(
+                    "SELECT subvectors, centroids, sub_dim, payload FROM pq_codebook WHERE name = ?",
+                    (name,),
+                ).fetchone()
+                if _table_exists(conn, "pq_codebook")
+                else None
+            )
     if row is None:
         return None
     M, K, sub_dim, payload = row
     cfg = PQConfig(subvectors=int(M), centroids=int(K))
-    return _deserialise_codebook(payload, cfg, int(sub_dim))
+    try:
+        return _deserialise_codebook(payload, cfg, int(sub_dim))
+    except (ValueError, TypeError, struct.error) as exc:
+        _log.warning("pq_codebook_unreadable", codebook=name, detail=str(exc))
+        return None
 
 
 def store_code(workspace: str | Path, block_id: str, codebook_name: str, code: bytes) -> None:
@@ -457,12 +522,13 @@ def store_code(workspace: str | Path, block_id: str, codebook_name: str, code: b
     require_enabled(FLAG)
     ensure_pq_schema(workspace)
     db = Path(workspace) / "index.db"
-    with sqlite3.connect(db, timeout=30) as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO pq_codes (block_id, codebook, code) VALUES (?, ?, ?)",
-            (block_id, codebook_name, code),
-        )
-        conn.commit()
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO pq_codes (block_id, codebook, code) VALUES (?, ?, ?)",
+                (block_id, codebook_name, code),
+            )
+            conn.commit()
 
 
 def load_code(workspace: str | Path, block_id: str, codebook_name: str) -> bytes | None:
@@ -471,13 +537,14 @@ def load_code(workspace: str | Path, block_id: str, codebook_name: str) -> bytes
     db = Path(workspace) / "index.db"
     if not db.is_file():
         return None
-    with sqlite3.connect(db, timeout=30) as conn:
-        if not _table_exists(conn, "pq_codes"):
-            return None
-        row = conn.execute(
-            "SELECT code FROM pq_codes WHERE block_id = ? AND codebook = ?",
-            (block_id, codebook_name),
-        ).fetchone()
+    with closing(sqlite3.connect(db, timeout=30)) as conn:
+        with conn:
+            if not _table_exists(conn, "pq_codes"):
+                return None
+            row = conn.execute(
+                "SELECT code FROM pq_codes WHERE block_id = ? AND codebook = ?",
+                (block_id, codebook_name),
+            ).fetchone()
     return bytes(row[0]) if row else None
 
 

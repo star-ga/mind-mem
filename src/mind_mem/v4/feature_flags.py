@@ -29,6 +29,17 @@ import os
 from pathlib import Path
 from typing import Final
 
+from ..observability import get_logger
+
+_log = get_logger("v4_feature_flags")
+
+#: Last ``(path, error)`` warned about, so a broken config is reported
+#: loudly but once — every flag lookup re-reads the file, and a caller
+#: that checks a flag per operation must not flood the log with the same
+#: parse error. Cleared on a successful read, so a re-break is reported
+#: again.
+_last_config_warning: tuple[str, str] | None = None
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
@@ -126,17 +137,37 @@ def _config_path() -> Path:
     return user
 
 
-def _load_v4_block() -> dict:
-    """Return the ``v4`` block from active config, or ``{}`` if absent."""
+def _read_v4_block() -> tuple[dict, str]:
+    """Return ``(v4 block, error)`` for the active config.
+
+    ``error`` is ``""`` when the config was read successfully (including
+    the ordinary case of no config file at all) and a short description
+    when it exists but could not be read or parsed. Callers need the
+    difference: an unparseable config turns *every* v4 surface off at
+    once, which is indistinguishable from every flag being unset unless
+    the parse failure is carried out of here.
+    """
+    global _last_config_warning
     p = _config_path()
     if not p.is_file():
-        return {}
+        _last_config_warning = None
+        return {}, ""
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    block = data.get("v4")
-    return block if isinstance(block, dict) else {}
+    except (OSError, ValueError) as exc:
+        error = f"{p}: {exc}"
+        if _last_config_warning != (str(p), str(exc)):
+            _last_config_warning = (str(p), str(exc))
+            _log.warning("v4_config_unreadable", path=str(p), error=str(exc))
+        return {}, error
+    _last_config_warning = None
+    block = data.get("v4") if isinstance(data, dict) else None
+    return (block if isinstance(block, dict) else {}), ""
+
+
+def _load_v4_block() -> dict:
+    """Return the ``v4`` block from active config, or ``{}`` if absent."""
+    return _read_v4_block()[0]
 
 
 # ---------------------------------------------------------------------------
@@ -164,11 +195,23 @@ def require_enabled(flag: str) -> None:
 
     Surfaces should call this at the public-API entry point so callers
     get a clear, structured error instead of silent fallback.
+
+    When the config exists but could not be parsed, the error says so
+    instead of telling the operator to add a flag that is already sitting
+    in the file — the flag is not the problem, the trailing comma is, and
+    a message that names the wrong cause sends the diagnosis the wrong way.
     """
-    if not is_enabled(flag):
+    if is_enabled(flag):
+        return
+    _block, error = _read_v4_block()
+    if error:
         raise FeatureDisabledError(
-            f'mind-mem v4 surface \'{flag}\' is disabled. Enable via mind-mem.json: "v4": {{ "{flag}": {{ "enabled": true }} }}'
+            f"mind-mem v4 surface '{flag}' is off because the active config could not be read ({error}). "
+            "Every v4 surface is off until it parses; fix the file rather than the flag."
         )
+    raise FeatureDisabledError(
+        f'mind-mem v4 surface \'{flag}\' is disabled. Enable via mind-mem.json: "v4": {{ "{flag}": {{ "enabled": true }} }}'
+    )
 
 
 def flag_config(flag: str) -> dict:
@@ -183,9 +226,19 @@ def flag_config(flag: str) -> dict:
     return _load_v4_block().get(flag, {}) or {}
 
 
+def config_error() -> str:
+    """Describe why the active config could not be read — ``""`` when it can.
+
+    Health probes and diagnostics use this to distinguish "every v4 flag
+    is off" from "the config that holds every v4 flag does not parse".
+    """
+    return _read_v4_block()[1]
+
+
 __all__ = [
     "ALL_V4_FLAGS",
     "FeatureDisabledError",
+    "config_error",
     "is_enabled",
     "require_enabled",
     "flag_config",

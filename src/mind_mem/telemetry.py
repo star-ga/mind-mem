@@ -1,7 +1,8 @@
 """mind-mem Telemetry — OpenTelemetry traces + Prometheus metrics.
 
-Optional-dep module. Gracefully no-ops when opentelemetry-api or
-prometheus_client are not installed.
+Optional-dep module. Gracefully no-ops when opentelemetry-api,
+opentelemetry-sdk or prometheus_client are not installed — the api and
+the sdk are separate distributions, and each is probed separately.
 
 Usage:
     from mind_mem.telemetry import init_tracing, init_prometheus, traced
@@ -30,8 +31,41 @@ from typing import Any, Callable, TypeVar
 # Availability probes (zero-import-cost checks)
 # ---------------------------------------------------------------------------
 
-_HAS_OTEL = importlib.util.find_spec("opentelemetry") is not None and importlib.util.find_spec("opentelemetry.trace") is not None
-_HAS_PROM = importlib.util.find_spec("prometheus_client") is not None
+
+# ``opentelemetry.trace`` ships in the opentelemetry-api distribution and is
+# all ``_get_tracer`` needs. ``init_tracing`` additionally imports
+# ``opentelemetry.sdk.*``, which is a SEPARATE distribution
+# (opentelemetry-sdk) and a separate pyproject requirement — api-without-sdk
+# is a supported install shape and a common transitive state, so the two
+# capabilities get two probes. One flag for both made ``init_tracing()``
+# raise ModuleNotFoundError on an api-only host.
+def _has_module(name: str) -> bool:
+    """True when *name* is importable, False on ANY failure.
+
+    ``importlib.util.find_spec`` is not a total function: it propagates
+    ModuleNotFoundError when a parent package is absent, and any exception a
+    custom meta-path finder raises. Calling it bare at import time turns an
+    optional dependency being missing into this module failing to import at
+    all -- which is strictly worse than the ``init_tracing()`` that this file
+    already guards, and worse than the single-probe version it replaced.
+    An availability probe must never be able to raise.
+    """
+    try:
+        return importlib.util.find_spec(name) is not None
+    except Exception:  # noqa: BLE001 — see below
+        # Deliberately broad, and the docstring's "ANY failure" now matches the
+        # code. A narrower tuple contradicted the sentence directly above it:
+        # find_spec executes arbitrary meta-path finders, which may raise
+        # anything at all, and this runs at MODULE SCOPE — an escaping
+        # exception makes the module unimportable, which is the exact failure
+        # this helper exists to prevent. An availability probe that can raise
+        # is not a probe.
+        return False
+
+
+_HAS_OTEL = _has_module("opentelemetry") and _has_module("opentelemetry.trace")
+_HAS_OTEL_SDK = _HAS_OTEL and _has_module("opentelemetry.sdk.trace")
+_HAS_PROM = _has_module("prometheus_client")
 
 # ---------------------------------------------------------------------------
 # Prometheus metrics (lazy-init on first use)
@@ -122,11 +156,15 @@ def init_tracing(endpoint: str | None = None) -> None:
     an OTLP gRPC exporter is configured targeting that endpoint.  Otherwise
     the SDK's NoOp tracer is used (zero overhead).
 
+    No-ops when opentelemetry-sdk is absent — including the api-installed
+    but sdk-missing shape, where the ``opentelemetry.sdk.*`` imports below
+    would otherwise raise ModuleNotFoundError.
+
     Idempotent — repeated calls are no-ops.
     """
     global _tracer, _otel_initialized
 
-    if not _HAS_OTEL:
+    if not _HAS_OTEL_SDK:
         return
 
     with _otel_lock:
@@ -142,8 +180,14 @@ def init_tracing(endpoint: str | None = None) -> None:
         provider = TracerProvider(resource=resource)
 
         if endpoint:
-            _otlp_spec = importlib.util.find_spec("opentelemetry.exporter.otlp.proto.grpc")
-            if _otlp_spec is not None:
+            # Through _has_module, never bare. find_spec RAISES when a parent
+            # package is missing, and this is the deepest dotted probe in the
+            # file: a host with opentelemetry-api and -sdk but no gRPC OTLP
+            # exporter (a real shape -- the `all` extra does not pull `otel`)
+            # would raise ModuleNotFoundError out of a function documented to
+            # no-op gracefully. This is the same defect _has_module was written
+            # to fix, 120 lines above.
+            if _has_module("opentelemetry.exporter.otlp.proto.grpc"):
                 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter  # type: ignore[import-untyped]
 
                 exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)

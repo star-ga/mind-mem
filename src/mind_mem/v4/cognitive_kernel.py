@@ -259,15 +259,23 @@ def mind_recall(
     a flag-on workspace that calls ``mind_recall(...)`` without a
     kernel argument behaves identically to the v3 API.
 
-    Unknown kernel names raise :class:`KeyError` with the list of
-    registered kernels embedded in the message — fail-loud so callers
-    catch typos early.
+    Two different failures, two different exceptions — both fail-loud so
+    callers catch typos early:
+
+    * a string that names no :class:`KernelKind` at all raises
+      :class:`ValueError` listing every valid kernel name;
+    * a valid kind with no strategy registered under it raises
+      :class:`KeyError` listing the kinds that do have one.
 
     Raises :class:`FeatureDisabledError` if the flag is OFF.
     """
     require_enabled(FLAG)
     if isinstance(kernel, str):
-        kernel = KernelKind(kernel)
+        try:
+            kernel = KernelKind(kernel)
+        except ValueError:
+            valid = sorted(k.value for k in KernelKind)
+            raise ValueError(f"unknown kernel {kernel!r}; valid kernels: {valid}") from None
     with _registry_lock:
         strategy = _registry.get(kernel)
     if strategy is None:
