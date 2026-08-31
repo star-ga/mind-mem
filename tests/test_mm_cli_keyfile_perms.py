@@ -23,6 +23,7 @@ import stat
 from pathlib import Path
 
 import pytest
+from _platform_compat import posix_creation_modes_honored
 
 from mind_mem.mm_cli import _cmd_sign_model, _write_private_key
 
@@ -64,7 +65,19 @@ def test_the_cli_line_never_claims_a_mode_the_key_does_not_have(tmp_path: Path, 
         assert int(claimed.group(1), 8) == mode, f"CLI claimed {claimed.group(1)} for a file that is {mode:04o}"
     else:
         assert "WARNING" in line
-    assert mode == 0o600  # and the key is in fact owner-only
+    # The property this test is NAMED for -- the CLI never claims a mode the
+    # key does not have -- is asserted above and holds on every platform.
+    # This last line is different: it asserts POSIX creation-mode semantics.
+    # chmod is patched to raise and umask is 0, so the creation mode is the
+    # only protection left, and Windows has no POSIX mode bits -- os.open
+    # with 0o600 reports 0o666 there. Probing the filesystem, not
+    # sys.platform, since a mode-ignoring volume can be mounted anywhere.
+    if posix_creation_modes_honored(tmp_path):
+        assert mode == 0o600  # and the key is in fact owner-only
+    else:
+        # On such a filesystem the requirement is "report, don't claim" --
+        # which is exactly what the claimed-vs-mode check above enforces.
+        assert claimed is None or int(claimed.group(1), 8) == mode
 
 
 @pytest.mark.unit
