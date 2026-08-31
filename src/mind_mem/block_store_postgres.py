@@ -148,23 +148,32 @@ _import_lock = threading.Lock()
 def _require_psycopg() -> tuple[Any, Any]:
     """Return (psycopg, psycopg_pool), importing once and caching."""
     global _psycopg, _psycopg_pool
-    if _psycopg is not None:
+    # BOTH globals gate the cache, and NEITHER is assigned until BOTH
+    # imports succeed. Assigning _psycopg as soon as it imported meant a
+    # missing psycopg_pool left the module half-initialised: the first call
+    # raised the right ImportError, and every call after it short-circuited
+    # on the already-set _psycopg and returned (psycopg, None) WITHOUT
+    # raising. The caller then ran ConnectionPool(...) on None and got
+    # "TypeError: 'NoneType' object is not callable" -- which mind-mem-recall
+    # swallowed as "backend error, falling back to scan", so recall silently
+    # degraded to a linear scan and answered with unrelated blocks instead of
+    # naming the missing dependency. A guard that fires once and never again
+    # is worse than no guard.
+    if _psycopg is not None and _psycopg_pool is not None:
         return _psycopg, _psycopg_pool
     with _import_lock:
-        if _psycopg is not None:
+        if _psycopg is not None and _psycopg_pool is not None:
             return _psycopg, _psycopg_pool
         try:
             import psycopg as _ps
-
-            _psycopg = _ps
         except ModuleNotFoundError as exc:
             raise ImportError('The PostgreSQL backend requires psycopg. Install it with: pip install "mind-mem[postgres]"') from exc
         try:
             from psycopg_pool import ConnectionPool as _CP
-
-            _psycopg_pool = _CP
         except ModuleNotFoundError as exc:
             raise ImportError('The PostgreSQL backend requires psycopg_pool. Install it with: pip install "mind-mem[postgres]"') from exc
+        # Publish only once both halves are in hand.
+        _psycopg, _psycopg_pool = _ps, _CP
     return _psycopg, _psycopg_pool
 
 
