@@ -13,9 +13,6 @@ import json
 from pathlib import Path
 
 import pytest
-
-from mind_mem.bench.eval_adapter import PipelineProbe
-from mind_mem.bench.eval_scorer import aggregate
 from locomo_suite import (
     DatasetNotFoundError,
     build_session_docs,
@@ -27,6 +24,9 @@ from locomo_suite import (
     resolve_data_path,
     run_suite,
 )
+
+from mind_mem.bench.eval_adapter import PipelineProbe
+from mind_mem.bench.eval_scorer import aggregate
 from mind_mem.bench.longmemeval_suite import SuiteResult
 
 FIXTURE = Path(__file__).parent / "fixtures" / "locomo_mini.json"

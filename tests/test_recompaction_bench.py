@@ -14,7 +14,6 @@ from contextlib import redirect_stdout
 from typing import Any
 
 import pytest
-
 from recompaction_bench import (
     BenchResult,
     ClusterRecord,
@@ -27,6 +26,7 @@ from recompaction_bench import (
     main,
     probes_present,
 )
+
 from mind_mem.compressors import CompressorError, EchoCompressor
 from mind_mem.recompaction import RecompactionConfig
 
@@ -730,7 +730,6 @@ def test_cosine_is_normalisation_independent(tmp_path):
     import math
 
     import sqlite_vec
-
     from recompaction_bench import _SIMILARITY_FLOOR, _cosine, _decode_embedding
 
     unit = [1.0, 0.0, 0.0]

@@ -192,10 +192,7 @@ class TestRemovedV4SurfacesAreMarkedHistorical:
         """Pins the claim the banner makes, against the tree rather than prose."""
         import importlib.util
 
-        alive = [
-            n for n in _REMOVED_V4_SURFACES
-            if importlib.util.find_spec(f"mind_mem.v4.{n}") is not None
-        ]
+        alive = [n for n in _REMOVED_V4_SURFACES if importlib.util.find_spec(f"mind_mem.v4.{n}") is not None]
         assert not alive, f"banner says these were removed, but they import: {alive}"
 
     def test_live_docs_do_not_teach_a_removed_surface(self) -> None:

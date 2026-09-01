@@ -316,9 +316,7 @@ def anchor_root(chain: str = "local", tx_hash: str = "", block_height: int = 0) 
         leaves = []
 
     if not leaves:
-        return json.dumps(
-            {"ok": False, "error": "no block index available -- run 'mind-mem-scan' first"}
-        )
+        return json.dumps({"ok": False, "error": "no block index available -- run 'mind-mem-scan' first"})
 
     tree = MerkleTree()
     tree.build(leaves)

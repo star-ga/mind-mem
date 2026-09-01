@@ -48,7 +48,7 @@ class TestVersionExemptionIsScopedToTheClaim:
 
 
 class TestAModifierDoesNotHideACount:
-    """"89 distinct tools" is a claim, and the gate used to miss it.
+    """ "89 distinct tools" is a claim, and the gate used to miss it.
 
     `_CLAIM_RE` requires the count and the noun to be adjacent (or separated
     only by "MCP"), so a single modifier hid real drift: README,

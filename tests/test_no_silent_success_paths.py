@@ -389,4 +389,3 @@ def test_init_main_returns_zero_on_a_complete_install(tmp_path: Path, capsys: py
 
     assert rc == 0
     assert "Done." in captured.out
-

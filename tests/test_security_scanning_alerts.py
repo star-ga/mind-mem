@@ -144,4 +144,3 @@ def test_federation_safe_helper_coerces_non_str_for_alert_192() -> None:
     # any subsequent regex bug must not re-allow CR/LF.
     assert "\r" not in _safe("\r\n" + "\x01" * 10 + "\r\n")
     assert "\n" not in _safe("\r\n" + "\x01" * 10 + "\r\n")
-

@@ -55,8 +55,7 @@ def ws(tmp_path):
     )
     for bid, h in (("DEC-20200101-001", "a" * 64), ("DEC-20200101-002", "b" * 64)):
         conn.execute(
-            "INSERT INTO blocks VALUES (?, 'decision', 'decisions/DECISIONS.md', 1, 'active', "
-            "'2020-01-01', '', '', '', '', '{}')",
+            "INSERT INTO blocks VALUES (?, 'decision', 'decisions/DECISIONS.md', 1, 'active', '2020-01-01', '', '', '', '', '{}')",
             (bid,),
         )
         conn.execute("INSERT INTO index_meta VALUES (?, ?)", (bid, h))
