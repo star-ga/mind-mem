@@ -188,7 +188,14 @@ def test_text_binary_text_canonical(g: Graph) -> None:
 # ---------------------------------------------------------------------------
 
 
-@settings(max_examples=200, deadline=500)
+# deadline=None, not a bigger number: a per-example deadline asserts how fast
+# the RUNNER is, not what the parser does. The sibling cases above already
+# use 2000ms 'generous for CI runners' and this one still flaked on a
+# Windows job at 827ms. Raising it again just moves the next flake. The
+# property under test is 'no unhandled exception on arbitrary bytes';
+# elapsed time is not part of that claim, and max_examples still bounds
+# the total work.
+@settings(max_examples=200, deadline=None)
 @given(st.binary(max_size=8192))
 def test_micb_arbitrary_bytes_never_unhandled(data: bytes) -> None:
     """Any byte string either parses successfully (rare) or raises
@@ -204,7 +211,14 @@ def test_micb_arbitrary_bytes_never_unhandled(data: bytes) -> None:
         raise AssertionError(f"parse_micb leaked unhandled {type(exc).__name__}: {exc!r}") from exc
 
 
-@settings(max_examples=200, deadline=500)
+# deadline=None, not a bigger number: a per-example deadline asserts how fast
+# the RUNNER is, not what the parser does. The sibling cases above already
+# use 2000ms 'generous for CI runners' and this one still flaked on a
+# Windows job at 827ms. Raising it again just moves the next flake. The
+# property under test is 'no unhandled exception on arbitrary bytes';
+# elapsed time is not part of that claim, and max_examples still bounds
+# the total work.
+@settings(max_examples=200, deadline=None)
 @given(st.text(max_size=4096))
 def test_mic2_arbitrary_text_never_unhandled(data: str) -> None:
     """Same contract for the text parser."""
