@@ -136,6 +136,7 @@ def _version_qualifies(line: str, match: "re.Match[str]") -> bool:
     hi = min(len(line), match.end() + _VERSION_PROXIMITY)
     return _LINE_VERSIONED.search(line, lo, hi) is not None
 
+
 # "89 distinct tools" / "89 distinct tool names". A modifier between the count
 # and the noun defeats _CLAIM_RE (which requires them adjacent, or separated only
 # by "MCP"), and this is not hypothetical: README, docs/api-reference.md and

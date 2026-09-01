@@ -232,10 +232,7 @@ def _workflow_path_references() -> set[str]:
     if not wf.is_dir():
         return set()
     out: set[str] = set()
-    text = "\n".join(
-        f.read_text(encoding="utf-8", errors="replace")
-        for f in sorted(wf.rglob("*.y*ml"))
-    )
+    text = "\n".join(f.read_text(encoding="utf-8", errors="replace") for f in sorted(wf.rglob("*.y*ml")))
     for path in SRC.rglob("*.py"):
         if "__pycache__" in path.parts:
             continue

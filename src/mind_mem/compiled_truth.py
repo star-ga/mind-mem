@@ -304,6 +304,52 @@ def parse_truth_page(markdown: str) -> CompiledTruthPage:
 # ---------------------------------------------------------------------------
 
 
+class TruthPagePathError(ValueError):
+    """An ``entity_id`` that does not name a page inside the workspace."""
+
+
+def _compiled_page_path(workspace: str, entity_id: str) -> str:
+    """Resolve ``{workspace}/entities/compiled/{entity_id}.md``, safely.
+
+    ``entity_id`` reaches this from an MCP tool argument, so it is untrusted
+    input pasted straight into a filesystem path. Before 5.0.0 it was joined
+    unchecked, and `../../../SECRET` resolved OUTSIDE the workspace: at USER
+    scope, `compiled_truth_load` would read and return any `.md` file on the
+    host, and `compiled_truth_add_evidence` would write one. The pair of
+    distinct "not found" / "failed to load" answers also made it a
+    file-existence oracle for arbitrary paths.
+
+    Two checks, deliberately both:
+
+    * **Shape** -- an entity id is a NAME, not a path. Anything carrying a
+      separator, a parent reference, a NUL, or an absolute/drive prefix is
+      refused outright. This is the check that explains itself in the error.
+    * **Containment** -- resolve with ``realpath`` and require the result to sit
+      under the compiled directory, separator-anchored so a sibling sharing a
+      name prefix cannot pass. This is the check that survives a SYMLINK, which
+      no amount of string inspection can catch.
+
+    Raises:
+        TruthPagePathError: when the id does not name a page inside the store.
+    """
+    if not isinstance(entity_id, str) or not entity_id.strip():
+        raise TruthPagePathError("entity_id must be a non-empty string")
+    if "\x00" in entity_id:
+        raise TruthPagePathError("entity_id must not contain a NUL byte")
+    if "/" in entity_id or "\\" in entity_id or os.sep in entity_id:
+        raise TruthPagePathError(f"entity_id must be a bare name, not a path: {entity_id!r}")
+    if entity_id in (".", "..") or entity_id.startswith("."):
+        raise TruthPagePathError(f"entity_id must not be a path reference: {entity_id!r}")
+    if os.path.isabs(entity_id) or (len(entity_id) > 1 and entity_id[1] == ":"):
+        raise TruthPagePathError(f"entity_id must not be absolute: {entity_id!r}")
+
+    base = os.path.realpath(os.path.join(workspace, _COMPILED_DIR))
+    candidate = os.path.realpath(os.path.join(base, f"{entity_id}.md"))
+    if candidate != base and not candidate.startswith(base + os.sep):
+        raise TruthPagePathError(f"entity_id resolves outside the compiled-truth store: {entity_id!r}")
+    return candidate
+
+
 def load_truth_page(workspace: str, entity_id: str) -> CompiledTruthPage | None:
     """Load a compiled truth page from disk.
 
@@ -316,7 +362,7 @@ def load_truth_page(workspace: str, entity_id: str) -> CompiledTruthPage | None:
     Returns:
         The parsed page, or ``None`` if the file does not exist.
     """
-    path = os.path.join(workspace, _COMPILED_DIR, f"{entity_id}.md")
+    path = _compiled_page_path(workspace, entity_id)
     if not os.path.isfile(path):
         _log.debug("truth_page_not_found", entity_id=entity_id, path=path)
         return None
@@ -345,7 +391,9 @@ def save_truth_page(workspace: str, page: CompiledTruthPage) -> str:
     dir_path = os.path.join(workspace, _COMPILED_DIR)
     os.makedirs(dir_path, exist_ok=True)
 
-    file_path = os.path.join(dir_path, f"{page.entity_id}.md")
+    # Same guard on the WRITE side: an unchecked entity_id here meant an
+    # arbitrary `.md` file anywhere on the host could be overwritten.
+    file_path = _compiled_page_path(workspace, page.entity_id)
     content = format_truth_page(page)
 
     with open(file_path, "w", encoding="utf-8") as fh:

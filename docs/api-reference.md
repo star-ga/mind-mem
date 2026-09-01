@@ -124,6 +124,49 @@ python3 mcp_server.py --workspace /path/to/workspace
 | `list_mind_kernels` | List available `.mind` kernel configs | — |
 | `get_mind_kernel` | Read a specific kernel configuration | `name` |
 
+#### Audit & Evidence
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `verify_merkle` | Verify a block's Merkle inclusion against the live tree | `block_id`, `content_hash` |
+| `verify_chain` | Verify the SHA3-512 governance hash chain end to end | — |
+| `mind_mem_verify` | Verify a workspace (optionally against a snapshot) | `snapshot` |
+| `list_evidence` | List evidence-chain records | filter parameters |
+| `anchor_root` | Record the CURRENT Merkle root in the local external-anchor trail. Computes the root from the live index — it takes no root argument, because anchoring a caller-supplied root would anchor the caller's claim rather than the store's state. Records `status="pending"` when no external poster is wired (ADMIN) | `chain`, `tx_hash`, `block_height` |
+| `anchor_history` | List recorded external anchors, newest last, with any integrity `problems` — a damaged trail line is reported, never silently skipped | `limit` |
+
+#### Entity Observations
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `entity_observations` | Return an entity's accreted observation facts (read-only) | `entity` |
+| `entity_add_observation` | Append an accreted fact to an entity's observation list (ADMIN) | `entity`, observation fields |
+
+#### Typed-Edge Proposals
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `list_edge_proposals` | List typed-edge proposals, optionally filtered by status | `status` |
+| `reject_edge` | Reject a staged typed-edge proposal. No edge is written (ADMIN) | `proposal_id` |
+
+#### arch-mind Governance Wrappers
+
+Thin wrappers over the external `arch-mind` binary, which scores a repository's
+structural metrics and chains each session into a tamper-evident log. **All
+seven are ADMIN-scope**, including the read-only ones: they shell out against an
+absolute path on the host, so they are a directory-listing and file-existence
+oracle outside the workspace.
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `arch_baseline` | Initialise the arch-mind store at a repo with a baseline event | `repo` |
+| `arch_session_start` | Open an arch-mind session evidence node | `repo` |
+| `arch_session_end` | Close the open arch-mind session at a repo | `repo` |
+| `arch_delta` | Per-metric delta between two arch-mind baselines | `repo`, baseline ids |
+| `arch_check_rules` | Apply a `rules.mind` to a fresh arch-mind scan | `repo`, rules path |
+| `arch_history` | List events in the arch-mind store at a repo | `repo` |
+| `arch_metric_explain` | Per-metric human-readable breakdown for a fixture | `metric` |
+
 ### Configuration
 
 The server reads `mind-mem.json` from the workspace root:
